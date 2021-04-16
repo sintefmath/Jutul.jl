@@ -16,4 +16,5 @@ include("assembly.jl")
 include("benchmarks.jl")
 
 include("porousmedia.jl")
+include("equation_helpers.jl")
 end # module
