@@ -8,10 +8,10 @@ function half_face_flux(mob, p, G)
 end
 
 function half_face_flux!(flux, mob, p, G::MRSTSimGraph)
-    half_face_flux!(flux, mob, p, G.self, G.cells, G.HalfFaceData)
+    half_face_flux!(flux, mob, p, G.HalfFaceData)
 end
 
-function half_face_flux!(flux, mob, p, self, cells, fd::Vector{HalfFaceData{Float64, Int64}})
+function half_face_flux!(flux, mob, p, fd::Vector{HalfFaceData{Float64, Int64}})
     Threads.@threads for i in eachindex(flux)
         flux[i] = tp_flux(fd[i].self, fd[i].other, fd[i].T, mob, p)
     end

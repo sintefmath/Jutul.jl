@@ -41,7 +41,7 @@ function bench_half_face_flux_kernel(name::String, doGPU = CUDA.functional())
     self = G.self
     cells = G.cells
     hf = G.HalfFaceData
-    println("CPU kernel, float")
+    println("CPU kernel, Float64")
     @time begin
         event = kernel(flux, cv, cv, hf, ndrange=m)
         wait(event)
@@ -55,7 +55,7 @@ function bench_half_face_flux_kernel(name::String, doGPU = CUDA.functional())
         cvAD2[i] = ForwardDiff.Dual(cv[i], 1.0)
     end
     fluxAD = similar(cvAD, 2*nf)
-    println("CPU kernel, AD")
+    println("CPU kernel, AD (Dual)")
     @time begin
         event = kernel(fluxAD, cvAD, cvAD2, hf, ndrange=m)
         wait(event)
