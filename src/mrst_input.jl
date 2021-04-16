@@ -23,6 +23,14 @@ struct MRSTPlotData
     data::Vector
 end
 
+
+function get_minimal_grid(mat_path::String)
+    exported = MAT.matread(string("data/testgrids/", filename, ".mat"))
+    normals = exported["G"]["faces"]["normals"]./exported["G"]["faces"]["areas"];
+
+end
+
+
 function read_sim_graph(filename::String)
     vars = MAT.matread(filename)
     f = vec(vars["faces"]);

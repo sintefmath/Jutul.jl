@@ -1,4 +1,5 @@
 export TervGrid, MRSTGrid, MinimalTPFAGrid, TPFAHalfFaceData
+export get_cell_faces, get_facepos
 
 abstract type TervGrid end
 
@@ -19,9 +20,6 @@ struct MinimalTPFAGrid{R<:AbstractFloat, I<:Integer} <: TervGrid
     pv::AbstractArray{R}
 end
 
-function get_minimal_grid(G)
-
-end
 
 # Member functions, TPFA grid
 function number_of_cells(G::MinimalTPFAGrid)
@@ -38,4 +36,30 @@ end
 
 function get_pore_volume(G::MinimalTPFAGrid)
     return G.pore_volume
+end
+
+function get_cell_faces(N)
+    nc = maximum(N)
+    # Find faces in each array
+    t = typeof(N[1])
+    cell_faces = [Vector{t}() for i = 1:nc]
+    for i in 1:size(N, 1)
+        for j = 1:size(N, 2)
+            push!(cell_faces[N[i, j]], i)
+        end
+    end
+    # Sort each of them
+    for i in cell_faces
+        sort!(cell_faces)
+    end
+    return cell_faces
+end
+
+function get_facepos(N)
+    cell_faces = get_cell_faces(N)
+    
+    counts = [length(x) for x in cell_faces]
+    facePos = cumsum([1; counts])
+    faces = reduce(vcat, cell_faces)
+    return (faces, facePos)
 end
