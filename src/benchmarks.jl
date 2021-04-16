@@ -1,10 +1,14 @@
 export bench_half_face_flux, bench_half_face_flux_kernel
 
-function bench_half_face_flux(name::String)
+function bench_half_face_flux(name)
     # G = read_sim_graph(string("testgrids/", name, ".mat"))
-    G = read_sim_graph(name)
-    nc = G.ncells
-    nf = G.nfaces
+    if isa(name, String)
+        G = get_minimal_tpfa_grid_from_mrst(name)
+    else
+        G = name
+    end
+    nc = number_of_cells(G)
+    nf = number_of_faces(G)
     cv = rand(nc)
     eq = rand(nc)
     fv = rand(nf)

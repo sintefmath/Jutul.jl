@@ -1,6 +1,6 @@
 export TervGrid, MRSTGrid, MinimalTPFAGrid, TPFAHalfFaceData
 export get_cell_faces, get_facepos, get_cell_neighbors
-
+export number_of_cells, number_of_faces
 abstract type TervGrid end
 
 
@@ -27,11 +27,11 @@ function number_of_cells(G::MinimalTPFAGrid)
 end
 
 function number_of_faces(G::MinimalTPFAGrid)
-    return number_of_half_faces(G)/2
+    return div(number_of_half_faces(G), 2)
 end
 
 function number_of_half_faces(G::MinimalTPFAGrid)
-    return length(G.TPFAHalfFaceData)
+    return length(G.conn_data)
 end
 
 function get_pore_volume(G::MinimalTPFAGrid)
