@@ -26,11 +26,14 @@ function bench_half_face_flux(name)
     @time half_face_flux!(fluxAD, cvAD, cvAD, G)
 end
 
-function bench_half_face_flux_kernel(name::String, doGPU = CUDA.functional())
-    # G = read_sim_graph(string("testgrids/", name, ".mat"))
-    G = read_sim_graph(name)
-    nc = G.ncells
-    nf = G.nfaces
+function bench_half_face_flux_kernel(name, doGPU = CUDA.functional())
+    if isa(name, String)
+        G = get_minimal_tpfa_grid_from_mrst(name)
+    else
+        G = name
+    end
+    nc = number_of_cells(G)
+    nf = number_of_faces(G)
     cv = rand(nc)
     eq = rand(nc)
     fv = rand(nf)
@@ -42,9 +45,7 @@ function bench_half_face_flux_kernel(name::String, doGPU = CUDA.functional())
     kernel = half_face_flux_kernel(CPU(), cpu_bz)
 
     m = 2*nf
-    self = G.self
-    cells = G.cells
-    hf = G.HalfFaceData
+    hf = G.conn_data
     println("CPU kernel, Float64")
     @time begin
         event = kernel(flux, cv, cv, hf, ndrange=m)
