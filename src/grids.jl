@@ -1,5 +1,5 @@
 export TervGrid, MRSTGrid, MinimalTPFAGrid, TPFAHalfFaceData
-export get_cell_faces, get_facepos
+export get_cell_faces, get_facepos, get_cell_neighbors
 
 abstract type TervGrid end
 
@@ -38,21 +38,39 @@ function get_pore_volume(G::MinimalTPFAGrid)
     return G.pore_volume
 end
 
-function get_cell_faces(N)
-    nc = maximum(N)
-    # Find faces in each array
+function get_cell_faces(N, nc = maximum(N))
+    # Create array of arrays where each entry contains the faces of that cell
     t = typeof(N[1])
     cell_faces = [Vector{t}() for i = 1:nc]
     for i in 1:size(N, 1)
         for j = 1:size(N, 2)
-            push!(cell_faces[N[i, j]], i)
+            push!(cell_faces[N[i, j]], j)
         end
     end
     # Sort each of them
     for i in cell_faces
-        sort!(cell_faces)
+        sort!(i)
     end
     return cell_faces
+end
+
+function get_cell_neighbors(N, nc = maximum(N), includeSelf = true)
+    # Find faces in each array
+    t = typeof(N[1])
+    cell_neigh = [Vector{t}() for i = 1:nc]
+    for i in 1:size(N, 2)
+        push!(cell_neigh[N[1, i]], N[2, i])
+        push!(cell_neigh[N[2, i]], N[1, i])
+    end
+    # Sort each of them
+    for i in eachindex(cell_neigh)
+        loc = cell_neigh[i]
+        if includeSelf
+            push!(loc, i)
+        end
+        sort!(loc)
+    end
+    return cell_neigh
 end
 
 function get_facepos(N)
