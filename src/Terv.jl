@@ -15,4 +15,5 @@ include("static_structures.jl")
 include("assembly.jl")
 include("benchmarks.jl")
 
+include("porousmedia.jl")
 end # module
