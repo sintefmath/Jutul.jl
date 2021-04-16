@@ -25,7 +25,7 @@ struct MRSTPlotData
 end
 
 
-function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true)
+function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing)
     if relative_path
         fn = string("data/testgrids/", name, ".mat")
     else
@@ -48,12 +48,17 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true)
     face_areas = vec(exported["G"]["faces"]["areas"][internal_faces])
     face_normals = exported["G"]["faces"]["normals"][internal_faces, :]./face_areas
     face_normals = copy(face_normals')
-    
-    perm = copy((exported["rock"]["perm"])')
+    if isnothing(perm)
+        perm = copy((exported["rock"]["perm"])')
+    end
 
     # Deal with cell data
-    poro = vec(exported["rock"]["poro"])
-    volumes = vec(exported["G"]["cells"]["volumes"])
+    if isnothing(poro)
+        poro = vec(exported["rock"]["poro"])
+    end
+    if isnothing(volumes)
+        volumes = vec(exported["G"]["cells"]["volumes"])
+    end
     pv = poro.*volumes
     nc = length(pv)
 
