@@ -13,11 +13,15 @@ struct TPFAHalfFaceData{R<:Real,I<:Integer}
 end
 
 # TPFA grid
+"Minimal struct for TPFA-like grid. Just connection data and pore-volumes"
 struct MinimalTPFAGrid{R<:AbstractFloat, I<:Integer} <: TervGrid
     conn_data::AbstractArray{TPFAHalfFaceData{R,I}}
     pv::AbstractArray{R}
 end
 
+function get_minimal_grid(G)
+
+end
 
 # Member functions, TPFA grid
 function number_of_cells(G::MinimalTPFAGrid)
