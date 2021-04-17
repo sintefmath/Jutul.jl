@@ -1,24 +1,12 @@
 
 
-
-struct HalfFaceData{R<:Real,I<:Integer}
-    T::R
-    self::I
-    other::I
-end
-
-function get_sparsity(G::MRSTSimGraph)
-    n = G.ncells
-    e = ones(length(G.cells));
-    A = SparseMatrixCSC(n, n, G.facePos, G.cells, e)
-    A = A + sparse(1.0I, n, n)
-    return A
-end
-
-function get_incomp_matrix(G::MRSTSimGraph)
-    n = G.ncells
-    get_incomp_matrix(G.ncells, G.HalfFaceData)
-end
+#function get_sparsity(G::MRSTSimGraph)
+#    n = G.ncells
+#    e = ones(length(G.cells));
+#    A = SparseMatrixCSC(n, n, G.facePos, G.cells, e)
+#    A = A + sparse(1.0I, n, n)
+#    return A
+#end
 
 function get_incomp_matrix(G::MinimalTPFAGrid)
     n = number_of_cells(G)
