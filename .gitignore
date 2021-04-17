@@ -26,3 +26,6 @@ Manifest.toml
 # MATLAB and data
 *.mat
 data/
+
+# VSCode / editor
+*.vscode/
