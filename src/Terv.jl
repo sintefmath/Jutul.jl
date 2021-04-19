@@ -15,6 +15,10 @@ include("static_structures.jl")
 include("assembly.jl")
 include("benchmarks.jl")
 
+
+include("abstracts.jl")
+include("multiphase.jl")
+
 include("porousmedia.jl")
 include("equation_helpers.jl")
 end # module

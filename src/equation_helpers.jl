@@ -18,7 +18,6 @@ function setup_conservationlaw(G::TervGrid, nder = 0, hasAcc = true; T=Float64)
     end
     flux = allocate_vector_ad(2*nf, nder, T=T)
     ConservationLaw(acc, flux)
-    # ConservationLaw{T}(acc, flux)
 end
 
 function allocate_residual(G::TervGrid, Law::ConservationLaw)
