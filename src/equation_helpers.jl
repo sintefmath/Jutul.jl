@@ -11,6 +11,10 @@ function setup_conservationlaw(G::TervGrid, nder = 0, hasAcc = true; T=Float64)
     # Should be made into a normal constructor when I figure out the syntax
     nc = number_of_cells(G)
     nf = number_of_half_faces(G)
+    setup_conservationlaw(nc, nf, nder, hasAcc, T = T)
+end
+
+function setup_conservationlaw(nc, nf, nder = 0, hasAcc = true; T=Float64)
     if hasAcc
         acc = allocate_vector_ad(nc, nder, T=T)
     else
