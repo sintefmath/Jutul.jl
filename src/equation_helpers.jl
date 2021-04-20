@@ -40,6 +40,12 @@ function allocate_vector_ad(n::R, nder = 0; T = Float64, diag_pos = nothing) whe
     end
 end
 
+function allocate_vector_ad(v::AbstractVector, nder = 0; T = Float64, diag_pos = nothing)
+    # create a copy of a vector as AD
+    v_AD = allocate_vector_ad(length(v), nder, T = T, diag_pos = diag_pos)
+    update_values!(v_AD, v)
+end
+
 function get_ad_unit_scalar(v::T, nder, diag_pos = nothing) where {T<:Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
     if nder > 0
