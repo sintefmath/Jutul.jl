@@ -16,15 +16,19 @@ function number_of_phases(sys::MultiPhaseSystem)
 end
 
 ## 
-function allocate_storage(model::TervModel)
-    d = Dict()
-    allocate_storage!(d, model)
-    return d
-end
+#function init_state(model)
+#    d = dict()
+#    init_state!(d, model)
+#    return d
+#end
+#
+#function init_state!(model)
+#    sys = model.system
+#    sys::MultiPhaseSystem
+#    d = dict()
+#    init_state!(d, model)
+#end
 
-function allocate_storage!(d, model::TervModel)
-    allocate_storage!(d, model.G, model.system)
-end
 
 function allocate_storage!(d, G, sys::MultiPhaseSystem)
     nph = number_of_phases(sys)
@@ -52,12 +56,15 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
     end
 end
 
+function update_equations!(system, storage)
+
+end
+
 ## Systems
 # Immiscible multiphase system
 struct ImmiscibleSystem <: MultiPhaseSystem
     phases::AbstractVector
 end
-
 
 # Single-phase
 struct SinglePhaseSystem <: MultiPhaseSystem

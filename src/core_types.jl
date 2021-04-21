@@ -43,6 +43,16 @@ struct SimulationModel <: TervModel
     context::TervContext
 end
 
+function allocate_storage(model::TervModel)
+    d = Dict()
+    allocate_storage!(d, model)
+    return d
+end
+
+function allocate_storage!(d, model::TervModel)
+    allocate_storage!(d, model.G, model.system)
+end
+
 function SimulationModel(G, system; formulation = FullyImplicit(), 
                                  primary_variables = DefaultPrimaryVariables(), 
                                  context = DefaultContext())

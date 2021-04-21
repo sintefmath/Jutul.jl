@@ -22,4 +22,6 @@ include("multiphase.jl")
 
 include("porousmedia.jl")
 include("equation_helpers.jl")
+
+include("simulator.jl")
 end # module
