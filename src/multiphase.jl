@@ -45,10 +45,12 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
     r = zeros(n_dof)
     lsys = LinearizedSystem(jac, r, dx)
     d["LinearizedSystem"] = lsys
+    # hasAcc = !isa(sys, SinglePhaseSystem) # and also incompressible!!
+    hasAcc = true
     for phaseNo in eachindex(phases)
         ph = phases[phaseNo]
         sname = get_short_name(ph)
-        law = ConservationLaw(G, lsys, npartials)
+        law = ConservationLaw(G, lsys, npartials, hasAcc)
         d[string("ConservationLaw_", sname)] = law
         d[string("Mobility_", sname)] = allocate_vector_ad(nc, npartials)
         # d[string("Accmulation_", sname)] = allocate_vector_ad(nc, npartials)
@@ -56,20 +58,27 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
     end
 end
 
-function update_equations!(model, storage)
+function update_equations!(model, storage; dt = nothing)
     sys = model.system;
     sys::MultiPhaseSystem
 
     state = storage["state"]
     state0 = storage["state0"]
+    
 
     p = state["Pressure"]
+    p0 = state0["Pressure"]
+    pv = model.G.pv
+
     phases = get_phases(sys)
     for phase in phases
         sname = get_short_name(phase)
+
+        rho = storage["parameters"][string("Density_", sname)]
         law = storage[string("ConservationLaw_", sname)]
         mob = storage[string("Mobility_", sname)]
         half_face_flux!(law.half_face_flux, mob, p, model.G)
+        law.accumulation .= pv.*(rho.(p) - rho.(p0))./dt
     end
 end
 
