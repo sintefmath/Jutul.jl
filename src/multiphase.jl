@@ -28,17 +28,24 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
     npartials = nph
     nc = number_of_cells(G)
     nhf = number_of_half_faces(G)
-    for ph in phases
+
+    A_p = get_incomp_matrix(G)
+    jac = repeat(A_p, nph, nph)
+
+    n_dof = nc*nph
+    dx = zeros(n_dof)
+    r = zeros(n_dof)
+    lsys = LinearizedSystem(jac, r, dx)
+    d["LinearizedSystem"] = lsys
+    for phaseNo in eachindex(phases)
+        ph = phases[phaseNo]
         sname = get_short_name(ph)
-        law = ConservationLaw(G, npartials)
+        law = ConservationLaw(G, lsys, npartials)
         d[string("ConservationLaw_", sname)] = law
         d[string("Mobility_", sname)] = allocate_vector_ad(nc, npartials)
         d[string("Accmulation_", sname)] = allocate_vector_ad(nc, npartials)
         d[string("Flux_", sname)] = allocate_vector_ad(nhf, npartials)
     end
-    jac = get_incomp_matrix(G)
-    d["Jacobian"] = repeat(jac, nph, nph)
-    d["Residual"] = zeros(nc*nph)
 end
 
 ## Systems
