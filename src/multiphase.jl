@@ -30,7 +30,7 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
     nhf = number_of_half_faces(G)
     for ph in phases
         sname = get_short_name(ph)
-        law = setup_conservationlaw(G, npartials)
+        law = ConservationLaw(G, npartials)
         d[string("ConservationLaw_", sname)] = law
         d[string("Mobility_", sname)] = allocate_vector_ad(nc, npartials)
         d[string("Accmulation_", sname)] = allocate_vector_ad(nc, npartials)

@@ -3,18 +3,18 @@ export allocate_vector_ad, get_ad_unit_scalar, update_values!
 export allocate_residual, allocate_jacobian
 
 struct ConservationLaw
-    accumulation
-    half_face_flux
+    accumulation::AbstractArray
+    half_face_flux::AbstractArray
 end
 
-function setup_conservationlaw(G::TervGrid, nder = 0, hasAcc = true; T=Float64)
-    # Should be made into a normal constructor when I figure out the syntax
+function ConservationLaw(G::TervGrid, nder::Integer = 0, hasAcc = true; T=Float64)
+    # Create conservation law for a given grid with a number of partials
     nc = number_of_cells(G)
     nf = number_of_half_faces(G)
-    setup_conservationlaw(nc, nf, nder, hasAcc, T = T)
+    ConservationLaw(nc, nf, nder, hasAcc, T = T)
 end
 
-function setup_conservationlaw(nc, nf, nder = 0, hasAcc = true; T=Float64)
+function ConservationLaw(nc::Integer, nf::Integer, nder::Integer = 0, hasAcc = true; T=Float64)
     if hasAcc
         acc = allocate_vector_ad(nc, nder, T=T)
     else
