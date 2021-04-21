@@ -1,5 +1,8 @@
 using Terv
 G = get_minimal_tpfa_grid_from_mrst("pico")
+nc = number_of_cells(G)
+nf = number_of_faces(G)
+
 
 p0 = 100*1e5 # 100 bar
 mu = 1e-3    # 1 cP
@@ -13,7 +16,7 @@ storage = allocate_storage(model)
 
 # System state
 state0 = Dict()
-state0["Pressure"] = repeat([100*1e5]) # 100
+state0["Pressure"] = repeat([100*1e5], nc) # 100
 
 state = deepcopy(state0)
 # Assign in primary variable
@@ -27,4 +30,5 @@ parameters["Viscosity_L"] = mu
 
 storage["parameters"] = parameters
 
-newton_step(model, storage)
+update_equations!(model, storage)
+# newton_step(model, storage)

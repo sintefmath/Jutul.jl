@@ -2,7 +2,7 @@ export MultiPhaseSystem, ImmiscibleMultiPhaseSystem, SinglePhaseSystem
 export LiquidPhase, VaporPhase
 export number_of_phases, get_short_name, get_name
 
-export allocate_storage
+export allocate_storage, update_equations!
 # Abstract multiphase system
 abstract type MultiPhaseSystem <: TervSystem end
 
@@ -51,13 +51,26 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
         law = ConservationLaw(G, lsys, npartials)
         d[string("ConservationLaw_", sname)] = law
         d[string("Mobility_", sname)] = allocate_vector_ad(nc, npartials)
-        d[string("Accmulation_", sname)] = allocate_vector_ad(nc, npartials)
-        d[string("Flux_", sname)] = allocate_vector_ad(nhf, npartials)
+        # d[string("Accmulation_", sname)] = allocate_vector_ad(nc, npartials)
+        # d[string("Flux_", sname)] = allocate_vector_ad(nhf, npartials)
     end
 end
 
-function update_equations!(system, storage)
+function update_equations!(model, storage)
+    sys = model.system;
+    sys::MultiPhaseSystem
 
+    state = storage["state"]
+    state0 = storage["state0"]
+
+    p = state["Pressure"]
+    phases = get_phases(sys)
+    for phase in phases
+        sname = get_short_name(phase)
+        law = storage[string("ConservationLaw_", sname)]
+        mob = storage[string("Mobility_", sname)]
+        half_face_flux!(law.half_face_flux, mob, p, model.G)
+    end
 end
 
 ## Systems

@@ -40,7 +40,7 @@ function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0, hasAcc = true; T=
     ConservationLaw(nc, nf, accpos, fluxpos, nder, hasAcc, T = T)
 end
 
-function ConservationLaw(nc::Integer, nf::Integer, 
+function ConservationLaw(nc::Integer, nhf::Integer, 
                          accpos::AbstractArray, fluxpos::AbstractArray, 
                          nder::Integer = 0, hasAcc = true; T=Float64)
     if hasAcc
@@ -48,7 +48,7 @@ function ConservationLaw(nc::Integer, nf::Integer,
     else
         acc = nothing
     end
-    flux = allocate_vector_ad(2*nf, nder, T=T)
+    flux = allocate_vector_ad(nhf, nder, T=T)
     ConservationLaw(acc, flux, accpos, fluxpos)
 end
 
