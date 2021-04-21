@@ -15,9 +15,10 @@ include("static_structures.jl")
 include("assembly.jl")
 include("benchmarks.jl")
 include("linsolve.jl")
+include("formulations.jl")
+include("models.jl")
 
-
-include("abstracts.jl")
+include("core_types.jl")
 include("multiphase.jl")
 
 include("porousmedia.jl")

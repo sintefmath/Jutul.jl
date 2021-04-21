@@ -10,3 +10,7 @@ end
 struct SharedMemoryContext <: CPUTervContext
 
 end
+
+struct DefaultContext <: CPUTervContext
+
+end
