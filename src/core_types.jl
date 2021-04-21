@@ -36,16 +36,17 @@ abstract type TervEquation end
 abstract type TervModel end
 # Concrete models follow
 struct SimulationModel <: TervModel
+    G::TervGrid
     system::TervSystem
     formulation::TervFormulation
     primary_variables::TervPrimaryVariables
     context::TervContext
 end
 
-function SimulationModel(system; formulation = FullyImplicit(), 
+function SimulationModel(G, system; formulation = FullyImplicit(), 
                                  primary_variables = DefaultPrimaryVariables(), 
                                  context = DefaultContext())
-    return SimulationModel(system, formulation, primary_variables, context)
+    return SimulationModel(G, system, formulation, primary_variables, context)
 end
 
 

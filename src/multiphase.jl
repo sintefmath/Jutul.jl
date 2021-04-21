@@ -16,10 +16,14 @@ function number_of_phases(sys::MultiPhaseSystem)
 end
 
 ## 
-function allocate_storage(G, sys)
+function allocate_storage(model::TervModel)
     d = Dict()
-    allocate_storage!(d, G, sys)
+    allocate_storage!(d, model)
     return d
+end
+
+function allocate_storage!(d, model::TervModel)
+    allocate_storage!(d, model.G, model.system)
 end
 
 function allocate_storage!(d, G, sys::MultiPhaseSystem)
