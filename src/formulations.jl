@@ -1,1 +1,0 @@
-struct FullyImplicit <: TervFormulation end

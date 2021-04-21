@@ -1,9 +1,37 @@
 export TervSystem, DefaultPrimaryVariables, TervPrimaryVariables
-export SimulationModel, TervPrimaryVariables, DefaultPrimaryVariables
+export SimulationModel, TervPrimaryVariables, DefaultPrimaryVariables, TervFormulation
 
 
 # Physical system
 abstract type TervSystem end
+# Context
+abstract type TervContext end
+abstract type GPUTervContext <: TervContext end
+abstract type CPUTervContext <: TervContext end
+
+
+struct SingleCUDAContext <: GPUTervContext
+
+end
+
+struct SharedMemoryContext <: CPUTervContext
+
+end
+
+struct DefaultContext <: CPUTervContext
+
+end
+# Formulation
+abstract type TervFormulation end
+struct FullyImplicit <: TervFormulation end
+# Primary variables
+abstract type TervPrimaryVariables end
+struct DefaultPrimaryVariables <: TervPrimaryVariables end
+
+# Equations
+abstract type TervEquation end
+
+
 # Models 
 abstract type TervModel end
 # Concrete models follow
@@ -20,12 +48,5 @@ function SimulationModel(system; formulation = FullyImplicit(),
     return SimulationModel(system, formulation, primary_variables, context)
 end
 
-# Formulation
-abstract type TervFormulation end
-struct FullyImplicit <: TervFormulation end
 
 
-abstract type TervEquation end
-
-abstract type TervPrimaryVariables end
-struct DefaultPrimaryVariables <: TervPrimaryVariables end
