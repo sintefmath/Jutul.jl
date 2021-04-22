@@ -1,5 +1,7 @@
 using Terv
-G = get_minimal_tpfa_grid_from_mrst("pico")
+casename = "pico"
+# casename = "spe10"
+G = get_minimal_tpfa_grid_from_mrst(casename)
 nc = number_of_cells(G)
 nf = number_of_faces(G)
 
@@ -21,7 +23,8 @@ model = SimulationModel(G, sys)
 storage = allocate_storage(model)
 
 # System state
-p = repeat([100*1e5], nc) # 100
+p = repeat([p0], nc) # 100
+src = sources = [SourceTerm(1, [1.0]), SourceTerm(nc, [-1.0])]
 
 state0 = Dict()
 state0["Pressure"] = p
@@ -39,11 +42,16 @@ parameters["Viscosity_L"] = mu
 parameters["Density_L"] = rhoL
 storage["parameters"] = parameters
 
-update_equations!(model, storage, dt = 1)
+update_equations!(model, storage, dt = 1, sources = src)
 update_linearized_system!(model, storage)
 
 # newton_step(model, storage)
 ref = Terv.get_incomp_matrix(G)
 
 law = storage["ConservationLaw_L"]
-jac = storage["LinearizedSystem"].jac
+lsys = storage["LinearizedSystem"]
+r = lsys.r
+jac = lsys.jac
+
+dx = jac\r
+dx/bar

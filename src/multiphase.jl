@@ -2,6 +2,7 @@ export MultiPhaseSystem, ImmiscibleMultiPhaseSystem, SinglePhaseSystem
 export LiquidPhase, VaporPhase
 export number_of_phases, get_short_name, get_name
 export update_linearized_system!
+export SourceTerm
 
 export allocate_storage, update_equations!
 # Abstract multiphase system
@@ -16,6 +17,10 @@ function number_of_phases(sys::MultiPhaseSystem)
     return length(get_phases(sys))
 end
 
+struct SourceTerm{R<:Real,I<:Integer}
+    cell::I
+    values::AbstractVector{R}
+end
 ## 
 #function init_state(model)
 #    d = dict()
@@ -58,7 +63,7 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
     end
 end
 
-function update_equations!(model, storage; dt = nothing)
+function update_equations!(model, storage; dt = nothing, sources = nothing)
     sys = model.system;
     sys::MultiPhaseSystem
 
@@ -71,7 +76,8 @@ function update_equations!(model, storage; dt = nothing)
     pv = model.G.pv
 
     phases = get_phases(sys)
-    for phase in phases
+    for phNo in eachindex(phases)
+        phase = phases[phNo]
         sname = get_short_name(phase)
         # Parameters - fluid properties
         rho = storage["parameters"][string("Density_", sname)]
@@ -80,9 +86,14 @@ function update_equations!(model, storage; dt = nothing)
         law = storage[string("ConservationLaw_", sname)]
         mob = storage[string("Mobility_", sname)]
         mob .= 1/mu
-        
+
         half_face_flux!(law.half_face_flux, mob, p, model.G)
         law.accumulation .= pv.*(rho.(p) - rho.(p0))./dt
+        if !isnothing(sources)
+            for src in sources
+                law.accumulation[src.cell] += src.values[phNo]
+            end
+        end
     end
 end
 
