@@ -5,6 +5,8 @@ using LinearAlgebra
 using BenchmarkTools
 using ForwardDiff
 using KernelAbstractions, CUDA, CUDAKernels
+# Main types
+include("core_types.jl")
 
 # MRST stuff
 include("mrst_input.jl")
@@ -20,7 +22,6 @@ include("models.jl")
 include("equation_helpers.jl")
 
 
-include("core_types.jl")
 include("multiphase.jl")
 
 include("porousmedia.jl")

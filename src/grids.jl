@@ -1,7 +1,6 @@
-export TervGrid, MRSTGrid, MinimalTPFAGrid, TPFAHalfFaceData
+export MRSTGrid, MinimalTPFAGrid, TPFAHalfFaceData
 export get_cell_faces, get_facepos, get_cell_neighbors
 export number_of_cells, number_of_faces, number_of_half_faces
-abstract type TervGrid end
 
 
 # Helpers follow

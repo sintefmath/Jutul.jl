@@ -1,6 +1,5 @@
-export TervSystem, DefaultPrimaryVariables, TervPrimaryVariables
+export TervSystem, TervGrid, DefaultPrimaryVariables, TervPrimaryVariables
 export SimulationModel, TervPrimaryVariables, DefaultPrimaryVariables, TervFormulation
-
 
 # Physical system
 abstract type TervSystem end
@@ -21,6 +20,9 @@ end
 struct DefaultContext <: CPUTervContext
 
 end
+# Grids
+abstract type TervGrid end
+
 # Formulation
 abstract type TervFormulation end
 struct FullyImplicit <: TervFormulation end
