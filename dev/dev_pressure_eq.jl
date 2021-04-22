@@ -14,7 +14,7 @@ cl = 1e-5/bar
 pRef = 100*bar
 rhoLS = 1000
 
-rhoL = (p) -> rhoLS*exp((p - pRef)*cl)
+rhoL = (p) -> rhoLS.*exp.((p .- pRef).*cl)
 
 
 phase = LiquidPhase()

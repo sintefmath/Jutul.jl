@@ -66,6 +66,7 @@ end
 function update_equations!(model, storage; dt = nothing, sources = nothing)
     sys = model.system;
     sys::MultiPhaseSystem
+    G = model.G
 
     state = storage["state"]
     state0 = storage["state0"]
@@ -85,10 +86,10 @@ function update_equations!(model, storage; dt = nothing, sources = nothing)
         # Storage structure
         law = storage[string("ConservationLaw_", sname)]
         mob = storage[string("Mobility_", sname)]
-        mob .= 1/mu
+        @time mob .= 1/mu
 
-        half_face_flux!(law.half_face_flux, mob, p, model.G)
-        law.accumulation .= pv.*(rho.(p) - rho.(p0))./dt
+        @time half_face_flux!(law.half_face_flux, mob, p, G)
+        @time law.accumulation .= pv.*(rho(p) - rho(p0))./dt
         if !isnothing(sources)
             for src in sources
                 law.accumulation[src.cell] += src.values[phNo]
