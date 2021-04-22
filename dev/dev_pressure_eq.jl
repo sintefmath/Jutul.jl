@@ -47,16 +47,20 @@ storage["parameters"] = parameters
 tol = 1e-6
 maxIt = 10
 for i = 1:maxIt
-    update_equations!(model, storage, dt = 1, sources = src)
-    update_linearized_system!(model, storage)
-    lsys = storage["LinearizedSystem"]
-
-    e = norm(lsys.r, Inf)
-    @printf("It %d: |R| = %e\n", i, e)
+    e, tol = newton_step(model, storage, dt = 1, sources = src, iteration = i)
     if e < tol
         break
     end
-    solve!(lsys)
+    # update_equations!(model, storage, dt = 1, sources = src)
+    #update_linearized_system!(model, storage)
+    #lsys = storage["LinearizedSystem"]
 
-    state["Pressure"] += lsys.dx
+    #e = norm(lsys.r, Inf)
+    #@printf("It %d: |R| = %e\n", i, e)
+    #if e < tol
+    #    break
+    #end
+    #solve!(lsys)
+
+    #state["Pressure"] += lsys.dx
 end
