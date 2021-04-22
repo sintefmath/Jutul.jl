@@ -9,7 +9,7 @@ struct ConservationLaw <: TervEquation
     half_face_flux_jac_pos::AbstractArray # Equal length to half face flux
 end
 
-function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0, hasAcc = true; T=Float64, jacobian_row_offset = 0)
+function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; T=Float64, jacobian_row_offset = 0)
     # Create conservation law for a given grid with a number of partials
     nc = number_of_cells(G)
     nf = number_of_half_faces(G)
@@ -37,17 +37,13 @@ function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0, hasAcc = true; T=
             fluxpos[derno, i] = pos[jac.rowval[pos] .== other + (derno-1)*nc][1]
         end
     end
-    ConservationLaw(nc, nf, accpos, fluxpos, nder, hasAcc, T = T)
+    ConservationLaw(nc, nf, accpos, fluxpos, nder, T = T)
 end
 
 function ConservationLaw(nc::Integer, nhf::Integer, 
                          accpos::AbstractArray, fluxpos::AbstractArray, 
-                         nder::Integer = 0, hasAcc = true; T=Float64)
-    if hasAcc
-        acc = allocate_vector_ad(nc, nder, T=T)
-    else
-        acc = nothing
-    end
+                         nder::Integer = 0; T=Float64)
+    acc = allocate_vector_ad(nc, nder, T=T)
     flux = allocate_vector_ad(nhf, nder, T=T)
     ConservationLaw(acc, flux, accpos, fluxpos)
 end

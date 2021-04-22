@@ -46,11 +46,10 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
     lsys = LinearizedSystem(jac, r, dx)
     d["LinearizedSystem"] = lsys
     # hasAcc = !isa(sys, SinglePhaseSystem) # and also incompressible!!
-    hasAcc = true
     for phaseNo in eachindex(phases)
         ph = phases[phaseNo]
         sname = get_short_name(ph)
-        law = ConservationLaw(G, lsys, npartials, hasAcc)
+        law = ConservationLaw(G, lsys, npartials)
         d[string("ConservationLaw_", sname)] = law
         d[string("Mobility_", sname)] = allocate_vector_ad(nc, npartials)
         # d[string("Accmulation_", sname)] = allocate_vector_ad(nc, npartials)
