@@ -1,6 +1,7 @@
 export MultiPhaseSystem, ImmiscibleMultiPhaseSystem, SinglePhaseSystem
 export LiquidPhase, VaporPhase
 export number_of_phases, get_short_name, get_name
+export update_linearized_system!
 
 export allocate_storage, update_equations!
 # Abstract multiphase system
@@ -78,6 +79,47 @@ function update_equations!(model, storage; dt = nothing)
         mob = storage[string("Mobility_", sname)]
         half_face_flux!(law.half_face_flux, mob, p, model.G)
         law.accumulation .= pv.*(rho.(p) - rho.(p0))./dt
+    end
+end
+
+function update_linearized_system!(model::TervModel, storage)
+    sys = model.system;
+    sys::MultiPhaseSystem
+
+    lsys = storage["LinearizedSystem"]
+    phases = get_phases(sys)
+    for phase in phases
+        sname = get_short_name(phase)
+        law = storage[string("ConservationLaw_", sname)]
+        update_linearized_system!(model.G, lsys, law)
+    end
+end
+
+function update_linearized_system!(G, lsys::LinearizedSystem, law::ConservationLaw)
+    apos = law.accumulation_jac_pos
+    jac = lsys.jac
+    r = lsys.r
+    # Fill in diagonal
+    for i = 1:size(apos, 2)
+        r[i] = law.accumulation[i].value
+        for derNo = 1:size(apos, 1)
+            index = apos[derNo, i]
+
+            jac.nzval[index] = law.accumulation[i].partials[derNo]
+        end
+    end
+    # Fill in off-diagonal
+    fpos = law.half_face_flux_jac_pos
+    for i = 1:size(fpos, 2)
+        cell_index = G.conn_data[i].self
+        r[cell_index] += law.half_face_flux[i].value
+        for derNo = 1:size(apos, 1)
+            index = fpos[derNo, i]
+            diag_index = apos[derNo, cell_index]
+            df_di = law.half_face_flux[i].partials[derNo]
+            jac.nzval[index] = -df_di
+            jac.nzval[diag_index] += df_di
+        end
     end
 end
 

@@ -40,6 +40,10 @@ parameters["Density_L"] = rhoL
 storage["parameters"] = parameters
 
 update_equations!(model, storage, dt = 1)
-
+update_linearized_system!(model, storage)
 
 # newton_step(model, storage)
+ref = Terv.get_incomp_matrix(G)
+
+law = storage["ConservationLaw_L"]
+jac = storage["LinearizedSystem"].jac

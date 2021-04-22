@@ -17,11 +17,13 @@ include("benchmarks.jl")
 include("linsolve.jl")
 include("models.jl")
 
+include("equation_helpers.jl")
+
+
 include("core_types.jl")
 include("multiphase.jl")
 
 include("porousmedia.jl")
-include("equation_helpers.jl")
 
 include("simulator.jl")
 end # module
