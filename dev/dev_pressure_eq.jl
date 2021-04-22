@@ -1,4 +1,6 @@
 using Terv
+using LinearAlgebra
+using Printf
 casename = "pico"
 # casename = "spe10"
 G = get_minimal_tpfa_grid_from_mrst(casename)
@@ -42,16 +44,19 @@ parameters["Viscosity_L"] = mu
 parameters["Density_L"] = rhoL
 storage["parameters"] = parameters
 
-update_equations!(model, storage, dt = 1, sources = src)
-update_linearized_system!(model, storage)
+tol = 1e-6
+maxIt = 10
+for i = 1:maxIt
+    update_equations!(model, storage, dt = 1, sources = src)
+    update_linearized_system!(model, storage)
+    lsys = storage["LinearizedSystem"]
 
-# newton_step(model, storage)
-ref = Terv.get_incomp_matrix(G)
+    e = norm(lsys.r, Inf)
+    @printf("It %d: |R| = %e\n", i, e)
+    if e < tol
+        break
+    end
+    solve!(lsys)
 
-law = storage["ConservationLaw_L"]
-lsys = storage["LinearizedSystem"]
-r = lsys.r
-jac = lsys.jac
-
-dx = jac\r
-dx/bar
+    state["Pressure"] += lsys.dx
+end
