@@ -62,10 +62,10 @@ end
 function allocate_vector_ad(n::R, nder = 0; T = Float64, diag_pos = nothing) where {R<:Integer}
     # allocate a n length zero vector with space for derivatives
     if nder == 0
-        return Vector{T}(0, n)
+        return zeros(T, n)
     else
         d = get_ad_unit_scalar(T(0.0), nder, diag_pos)
-        return Vector{typeof(d)}(undef, n)
+        return repeat([d], n)
     end
 end
 
@@ -78,11 +78,11 @@ end
 function get_ad_unit_scalar(v::T, nder, diag_pos = nothing) where {T<:Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
     if nder > 0
-        v = ForwardDiff.Dual{T}(v, ntuple(x -> T(x == diag_pos), nder))
+        v = ForwardDiff.Dual{T}(v, ntuple(x -> T.(x == diag_pos), nder))
     end
     return v
 end
 
 function update_values!(v::AbstractArray, next::AbstractArray)
-    v .= v - value(v) + next
+    v .= v - value.(v) + next
 end
