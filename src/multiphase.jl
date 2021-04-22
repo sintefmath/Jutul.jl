@@ -73,10 +73,14 @@ function update_equations!(model, storage; dt = nothing)
     phases = get_phases(sys)
     for phase in phases
         sname = get_short_name(phase)
-
+        # Parameters - fluid properties
         rho = storage["parameters"][string("Density_", sname)]
+        mu = storage["parameters"][string("Viscosity_", sname)]
+        # Storage structure
         law = storage[string("ConservationLaw_", sname)]
         mob = storage[string("Mobility_", sname)]
+        mob .= 1/mu
+        
         half_face_flux!(law.half_face_flux, mob, p, model.G)
         law.accumulation .= pv.*(rho.(p) - rho.(p0))./dt
     end
