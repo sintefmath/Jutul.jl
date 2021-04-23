@@ -5,6 +5,7 @@ using LinearAlgebra
 using BenchmarkTools
 using ForwardDiff
 using KernelAbstractions, CUDA, CUDAKernels
+using Logging
 # Main types
 include("core_types.jl")
 

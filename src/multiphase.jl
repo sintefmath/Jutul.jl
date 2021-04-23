@@ -71,7 +71,6 @@ function update_equations!(model, storage; dt = nothing, sources = nothing)
     state = storage["state"]
     state0 = storage["state0"]
     
-
     p = state["Pressure"]
     p0 = state0["Pressure"]
     pv = model.G.pv
@@ -86,15 +85,23 @@ function update_equations!(model, storage; dt = nothing, sources = nothing)
         # Storage structure
         law = storage[string("ConservationLaw_", sname)]
         mob = storage[string("Mobility_", sname)]
-        @time mob .= 1/mu
+        acc = law.accumulation
 
+        @time mob .= 1/mu
+        @debug "Computing half-face fluxes."
         @time half_face_flux!(law.half_face_flux, mob, p, G)
-        @time law.accumulation .= pv.*(rho(p) - rho(p0))./dt
+        @debug "Computing accumulation terms."
+        @time acc .= (pv./dt).*(rho(p) .- rho(p0))
         if !isnothing(sources)
-            for src in sources
-                law.accumulation[src.cell] += src.values[phNo]
-            end
+            @debug "Inserting source terms."
+            @time insert_sources(acc, sources, phNo)
         end
+    end
+end
+
+function insert_sources(acc, sources, phNo)
+    for src in sources
+        acc[src.cell] += src.values[phNo]
     end
 end
 
