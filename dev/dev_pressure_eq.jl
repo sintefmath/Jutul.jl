@@ -15,8 +15,8 @@ function perform_test(casename)
     pRef = 100*bar
     rhoLS = 1000
 
-    rhoL = (p) -> rhoLS.*exp.((p .- pRef).*cl)
-
+    rhoL = (p) -> rhoLS*exp((p - pRef)*cl)
+    @code_warntype rhoL(1.0)
 
     phase = LiquidPhase()
     sys = SinglePhaseSystem(phase)

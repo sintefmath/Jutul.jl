@@ -91,7 +91,7 @@ function update_equations!(model, storage; dt = nothing, sources = nothing)
         @debug "Computing half-face fluxes."
         @time half_face_flux!(law.half_face_flux, mob, p, G)
         @debug "Computing accumulation terms."
-        @time acc .= (pv./dt).*(rho(p) .- rho(p0))
+        @time @. acc = (pv/dt)*(rho(p) - rho(p0))
         if !isnothing(sources)
             @debug "Inserting source terms."
             @time insert_sources(acc, sources, phNo)
