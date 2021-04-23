@@ -55,6 +55,7 @@ function perform_test(casename)
             break
         end
     end
+    display(storage["LinearizedSystem"].jac)
 end
 
 # casename = "pico"

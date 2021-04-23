@@ -106,33 +106,39 @@ function update_linearized_system!(model::TervModel, storage)
 end
 
 function update_linearized_system!(G, lsys::LinearizedSystem, law::ConservationLaw)
-    apos = law.accumulation_jac_pos
-    jac = lsys.jac
-    r = lsys.r
+    apos = law.accumulation_jac_pos::AbstractArray
+    jac = lsys.jac::AbstractSparseMatrix
+    r = lsys.r::AbstractVector
     # Fill in diagonal
-    for i = 1:size(apos, 2)
-        r[i] = law.accumulation[i].value
-        for derNo = 1:size(apos, 1)
-            index = apos[derNo, i]
-
-            jac.nzval[index] = law.accumulation[i].partials[derNo]
-        end
-    end
+    fill_accumulation!(jac, r, law.accumulation, apos)
     # Fill in off-diagonal
     fpos = law.half_face_flux_jac_pos
+    fill_fluxes(jac, r, G.conn_data, law.half_face_flux, apos, fpos)
+end
+
+function fill_accumulation!(jac, r, acc, apos)
+    for i = 1:size(apos, 2)
+        r[i] = acc[i].value
+        for derNo = 1:size(apos, 1)
+            index = apos[derNo, i]
+            jac.nzval[index] = acc[i].partials[derNo]
+        end
+    end
+end
+
+function fill_fluxes(jac, r, conn_data, half_face_flux, apos, fpos)
     for i = 1:size(fpos, 2)
-        cell_index = G.conn_data[i].self
-        r[cell_index] += law.half_face_flux[i].value
+        cell_index = conn_data[i].self
+        r[cell_index] += half_face_flux[i].value
         for derNo = 1:size(apos, 1)
             index = fpos[derNo, i]
             diag_index = apos[derNo, cell_index]
-            df_di = law.half_face_flux[i].partials[derNo]
+            df_di = half_face_flux[i].partials[derNo]
             jac.nzval[index] = -df_di
             jac.nzval[diag_index] += df_di
         end
     end
 end
-
 ## Systems
 # Immiscible multiphase system
 struct ImmiscibleSystem <: MultiPhaseSystem

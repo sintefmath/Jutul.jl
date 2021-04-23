@@ -2,13 +2,19 @@ export newton_step
 using Printf
 
 function newton_step(model, storage; dt = nothing, linsolve = nothing, sources = nothing, iteration = nan)
-    t_asm = @elapsed update_equations!(model, storage, dt = dt, sources = sources)
+
+    # Update the equations themselves - the AD bit
+    t_asm = @elapsed begin 
+        update_equations!(model, storage, dt = dt, sources = sources)
+    end
     @debug "Assembled equations in $t_asm seconds."
-    t_lsys = @elapsed update_linearized_system!(model, storage)
+    # Update the linearized system
+    t_lsys = @elapsed begin
+        @time update_linearized_system!(model, storage)
+    end
     @debug "Updated linear system in $t_lsys seconds."
 
     lsys = storage["LinearizedSystem"]
-
     e = norm(lsys.r, Inf)
     @printf("It %d: |R| = %e\n", iteration, e)
 
