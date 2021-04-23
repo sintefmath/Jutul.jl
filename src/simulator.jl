@@ -10,7 +10,7 @@ function newton_step(model, storage; dt = nothing, linsolve = nothing, sources =
     @debug "Assembled equations in $t_asm seconds."
     # Update the linearized system
     t_lsys = @elapsed begin
-        @time update_linearized_system!(model, storage)
+        update_linearized_system!(model, storage)
     end
     @debug "Updated linear system in $t_lsys seconds."
 

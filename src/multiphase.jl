@@ -106,9 +106,9 @@ function update_linearized_system!(model::TervModel, storage)
 end
 
 function update_linearized_system!(G, lsys::LinearizedSystem, law::ConservationLaw)
-    apos = law.accumulation_jac_pos::AbstractArray
-    jac = lsys.jac::AbstractSparseMatrix
-    r = lsys.r::AbstractVector
+    apos = law.accumulation_jac_pos
+    jac = lsys.jac
+    r = lsys.r
     # Fill in diagonal
     fill_accumulation!(jac, r, law.accumulation, apos)
     # Fill in off-diagonal
@@ -117,9 +117,9 @@ function update_linearized_system!(G, lsys::LinearizedSystem, law::ConservationL
 end
 
 function fill_accumulation!(jac, r, acc, apos)
-    for i = 1:size(apos, 2)
+    @inbounds Threads.@threads for i = 1:size(apos, 2)
         r[i] = acc[i].value
-        for derNo = 1:size(apos, 1)
+        @inbounds for derNo = 1:size(apos, 1)
             index = apos[derNo, i]
             jac.nzval[index] = acc[i].partials[derNo]
         end
@@ -127,10 +127,10 @@ function fill_accumulation!(jac, r, acc, apos)
 end
 
 function fill_fluxes(jac, r, conn_data, half_face_flux, apos, fpos)
-    for i = 1:size(fpos, 2)
+    @inbounds Threads.@threads for i = 1:size(fpos, 2)
         cell_index = conn_data[i].self
         r[cell_index] += half_face_flux[i].value
-        for derNo = 1:size(apos, 1)
+        @inbounds for derNo = 1:size(apos, 1)
             index = fpos[derNo, i]
             diag_index = apos[derNo, cell_index]
             df_di = half_face_flux[i].partials[derNo]

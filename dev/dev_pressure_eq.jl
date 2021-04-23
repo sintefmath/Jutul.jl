@@ -2,7 +2,7 @@ using Terv
 using LinearAlgebra
 using Printf
 ENV["JULIA_DEBUG"] = Terv
-
+# ENV["JULIA_DEBUG"] = nothing
 function perform_test(casename)
     G = get_minimal_tpfa_grid_from_mrst(casename)
     nc = number_of_cells(G)
@@ -55,7 +55,7 @@ function perform_test(casename)
             break
         end
     end
-    display(storage["LinearizedSystem"].jac)
+    # display(storage["LinearizedSystem"].jac)
 end
 
 # casename = "pico"
