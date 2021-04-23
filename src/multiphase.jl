@@ -31,7 +31,11 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
     nhf = number_of_half_faces(G)
 
     A_p = get_incomp_matrix(G)
-    jac = repeat(A_p, nph, nph)
+    if nph == 1
+        jac = A_p
+    else
+        jac = repeat(A_p, nph, nph) # This is super slow even with nph = 1?!
+    end
 
     n_dof = nc*nph
     dx = zeros(n_dof)
