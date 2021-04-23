@@ -18,25 +18,9 @@ function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; T=Float64, jacobi
     fluxpos = zeros(Int64, nder, nf)
     # Note: jacobian_row_offset needs to be added somewhere for multiphase
     jac = lsys.jac
-    for i in 1:nc
-        for derno = 1:nder
-            # Diagonal positions
-            global_pos = (derno-1)*nc + i
-            pos = jac.colptr[global_pos]:jac.colptr[global_pos+1]-1
-            accpos[derno, i] = pos[jac.rowval[pos] .== global_pos][1]
-        end
-    end
-    for i in 1:nf
-        # Off diagonal positions
-        cd = G.conn_data[i]
-        self = cd.self
-        other = cd.other
-        for derno = 1:nder
-            global_pos = (derno-1)*nc + self
-            pos = jac.colptr[global_pos]:jac.colptr[global_pos+1]-1
-            fluxpos[derno, i] = pos[jac.rowval[pos] .== other + (derno-1)*nc][1]
-        end
-    end
+    accumulation_sparse_pos!(accpos, jac)
+    half_face_flux_sparse_pos!(fluxpos, jac, nc, G.conn_data)
+
     ConservationLaw(nc, nf, accpos, fluxpos, nder, T = T)
 end
 
@@ -85,4 +69,35 @@ end
 
 function update_values!(v::AbstractArray, next::AbstractArray)
     v .= v - value.(v) + next
+end
+
+
+function accumulation_sparse_pos!(accpos, jac)
+    nder = size(accpos, 1)
+    nc = size(accpos, 2)
+    for i in 1:nc
+        for derno = 1:nder
+            # Diagonal positions
+            global_pos = (derno-1)*nc + i
+            pos = jac.colptr[global_pos]:jac.colptr[global_pos+1]-1
+            accpos[derno, i] = pos[jac.rowval[pos] .== global_pos][1]
+        end
+    end
+end
+
+function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data)
+    nder = size(fluxpos, 1)
+    nf = size(fluxpos, 2)
+
+    for i in 1:nf
+        # Off diagonal positions
+        cd = conn_data[i]
+        self = cd.self
+        other = cd.other
+        for derno = 1:nder
+            global_pos = (derno-1)*nc + self
+            pos = jac.colptr[global_pos]:jac.colptr[global_pos+1]-1
+            fluxpos[derno, i] = pos[jac.rowval[pos] .== other + (derno-1)*nc][1]
+        end
+    end
 end

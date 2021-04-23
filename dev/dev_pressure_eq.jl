@@ -4,7 +4,10 @@ using Printf
 ENV["JULIA_DEBUG"] = Terv
 # ENV["JULIA_DEBUG"] = nothing
 function perform_test(casename)
+    
     G = get_minimal_tpfa_grid_from_mrst(casename)
+
+    println("Setting up simulation case.")
     nc = number_of_cells(G)
     nf = number_of_faces(G)
 
@@ -46,7 +49,7 @@ function perform_test(casename)
     storage["parameters"] = parameters
 
     lsolve = AMGSolver()
-
+    println("Starting simulation.")
     tol = 1e-6
     maxIt = 10
     for i = 1:maxIt
@@ -55,6 +58,7 @@ function perform_test(casename)
             break
         end
     end
+    println("Simulation complete.")
     # display(storage["LinearizedSystem"].jac)
 end
 

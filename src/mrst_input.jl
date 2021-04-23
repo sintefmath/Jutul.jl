@@ -18,10 +18,12 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     else
         fn = name
     end
+    @debug "Reading MAT file $fn..."
     exported = MAT.matread(fn)
+    @debug "File read complete. Unpacking data..."
+
     N = exported["G"]["faces"]["neighbors"]
     N = Int64.(N)
-    
     internal_faces = (N[:, 2] .> 0) .& (N[:, 1] .> 0)
     N = copy(N[internal_faces, :]')
     
@@ -49,6 +51,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     pv = poro.*volumes
     nc = length(pv)
 
+    @debug "Data unpack complete. Starting transmissibility calculations."
     # Deal with face data
     T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
     T = compute_face_trans(T_hf, N)
@@ -73,6 +76,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
             faceData[fpos] = t(T[face], dz, cell, other)
         end
     end
+    @debug "Setting up TPFA grid."
     sg = MinimalTPFAGrid(faceData, pv)
 end
 
