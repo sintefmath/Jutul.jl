@@ -16,7 +16,7 @@ function perform_test(casename)
     rhoLS = 1000
 
     rhoL = (p) -> rhoLS*exp((p - pRef)*cl)
-    @code_warntype rhoL(1.0)
+    # @code_warntype rhoL(1.0)
 
     phase = LiquidPhase()
     sys = SinglePhaseSystem(phase)
@@ -45,25 +45,15 @@ function perform_test(casename)
     parameters["Density_L"] = rhoL
     storage["parameters"] = parameters
 
+    lsolve = AMGSolver()
+
     tol = 1e-6
     maxIt = 10
     for i = 1:maxIt
-        e, tol = newton_step(model, storage, dt = 1, sources = src, iteration = i)
+        e, tol = newton_step(model, storage, dt = 1, sources = src, iteration = i, linsolve = lsolve)
         if e < tol
             break
         end
-        # update_equations!(model, storage, dt = 1, sources = src)
-        #update_linearized_system!(model, storage)
-        #lsys = storage["LinearizedSystem"]
-
-        #e = norm(lsys.r, Inf)
-        #@printf("It %d: |R| = %e\n", i, e)
-        #if e < tol
-        #    break
-        #end
-        #solve!(lsys)
-
-        #state["Pressure"] += lsys.dx
     end
 end
 

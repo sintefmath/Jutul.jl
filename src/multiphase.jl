@@ -21,19 +21,6 @@ struct SourceTerm{R<:Real,I<:Integer}
     cell::I
     values::AbstractVector{R}
 end
-## 
-#function init_state(model)
-#    d = dict()
-#    init_state!(d, model)
-#    return d
-#end
-#
-#function init_state!(model)
-#    sys = model.system
-#    sys::MultiPhaseSystem
-#    d = dict()
-#    init_state!(d, model)
-#end
 
 
 function allocate_storage!(d, G, sys::MultiPhaseSystem)
@@ -87,14 +74,14 @@ function update_equations!(model, storage; dt = nothing, sources = nothing)
         mob = storage[string("Mobility_", sname)]
         acc = law.accumulation
 
-        @time mob .= 1/mu
-        @debug "Computing half-face fluxes."
-        @time half_face_flux!(law.half_face_flux, mob, p, G)
-        @debug "Computing accumulation terms."
-        @time @. acc = (pv/dt)*(rho(p) - rho(p0))
+        mob .= 1/mu
+        # @debug "Computing half-face fluxes."
+        half_face_flux!(law.half_face_flux, mob, p, G)
+        # @debug "Computing accumulation terms."
+        @. acc = (pv/dt)*(rho(p) - rho(p0))
         if !isnothing(sources)
-            @debug "Inserting source terms."
-            @time insert_sources(acc, sources, phNo)
+            # @debug "Inserting source terms."
+            insert_sources(acc, sources, phNo)
         end
     end
 end
