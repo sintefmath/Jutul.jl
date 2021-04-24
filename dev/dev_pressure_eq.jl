@@ -45,8 +45,8 @@ function perform_test(casename)
     storage["state"] = state
     # Model parameters
     parameters = Dict()
-    parameters["Viscosity_L"] = mu
-    parameters["Density_L"] = rhoL
+    parameters[subscript("Viscosity", phase)] = mu
+    parameters[subscript("Density", phase)] = rhoL
     storage["parameters"] = parameters
     # Linear solver
     lsolve = AMGSolver()

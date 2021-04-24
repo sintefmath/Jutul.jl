@@ -1,6 +1,6 @@
 export MultiPhaseSystem, ImmiscibleMultiPhaseSystem, SinglePhaseSystem
 export LiquidPhase, VaporPhase
-export number_of_phases, get_short_name, get_name
+export number_of_phases, get_short_name, get_name, subscript
 export update_linearized_system!
 export SourceTerm
 
@@ -12,6 +12,7 @@ abstract type MultiPhaseSystem <: TervSystem end
 function get_phases(sys::MultiPhaseSystem)
     return sys.phases
 end
+
 
 function number_of_phases(sys::MultiPhaseSystem)
     return length(get_phases(sys))
@@ -47,8 +48,8 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
         ph = phases[phaseNo]
         sname = get_short_name(ph)
         law = ConservationLaw(G, lsys, npartials)
-        d[string("ConservationLaw_", sname)] = law
-        d[string("Mobility_", sname)] = allocate_vector_ad(nc, npartials)
+        d[subscript("ConservationLaw", ph)] = law
+        d[subscript("Mobility", ph)] = allocate_vector_ad(nc, npartials)
         # d[string("Accmulation_", sname)] = allocate_vector_ad(nc, npartials)
         # d[string("Flux_", sname)] = allocate_vector_ad(nhf, npartials)
     end
@@ -71,18 +72,18 @@ function update_equations!(model, storage; dt = nothing, sources = nothing)
         phase = phases[phNo]
         sname = get_short_name(phase)
         # Parameters - fluid properties
-        rho = storage["parameters"][string("Density_", sname)]
-        mu = storage["parameters"][string("Viscosity_", sname)]
+        rho = storage["parameters"][subscript("Density", phase)]
+        mu = storage["parameters"][subscript("Viscosity", phase)]
         # Storage structure
-        law = storage[string("ConservationLaw_", sname)]
-        mob = storage[string("Mobility_", sname)]
+        law = storage[subscript("ConservationLaw", phase)]
+        mob = storage[subscript("Mobility", phase)]
         acc = law.accumulation
 
         mob .= 1/mu
         # @debug "Computing half-face fluxes."
-        half_face_flux!(law.half_face_flux, mob, p, G)
+        @time half_face_flux!(law.half_face_flux, mob, p, G)
         # @debug "Computing accumulation terms."
-        @. acc = (pv/dt)*(rho(p) - rho(p0))
+        @time @. acc = (pv/dt)*(rho(p) - rho(p0))
         if !isnothing(sources)
             # @debug "Inserting source terms."
             insert_sources(acc, sources, phNo)
@@ -90,9 +91,9 @@ function update_equations!(model, storage; dt = nothing, sources = nothing)
     end
 end
 
-function insert_sources(acc, sources, phNo)
+@inline function insert_sources(acc, sources, phNo)
     for src in sources
-        acc[src.cell] += src.values[phNo]
+        @inbounds acc[src.cell] += src.values[phNo]
     end
 end
 
@@ -104,7 +105,7 @@ function update_linearized_system!(model::TervModel, storage)
     phases = get_phases(sys)
     for phase in phases
         sname = get_short_name(phase)
-        law = storage[string("ConservationLaw_", sname)]
+        law = storage[subscript("ConservationLaw", phase)]
         update_linearized_system!(model.G, lsys, law)
     end
 end
@@ -170,6 +171,9 @@ function get_short_name(phase::AbstractPhase)
     return get_name(phase)[1:1]
 end
 
+function subscript(prefix::String, phase::AbstractPhase)
+    return string(prefix, "_", get_short_name(phase))
+end
 # Liquid phase
 struct LiquidPhase <: AbstractPhase end
 
