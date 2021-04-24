@@ -4,7 +4,8 @@ using Printf
 # Turn on debugging to show output and timing
 ENV["JULIA_DEBUG"] = Terv
 # ENV["JULIA_DEBUG"] = nothing
-function perform_test(casename)
+casename = "pico"
+# function perform_test(casename)
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
     G = get_minimal_tpfa_grid_from_mrst(casename)
@@ -30,31 +31,22 @@ function perform_test(casename)
     storage = allocate_storage(model)
 
     # System state
-    p = repeat([p0], nc) # 100
     src = sources = [SourceTerm(1, [1.0]), SourceTerm(nc, [-1.0])]
     # State is dict with pressure in each cell
-    state0 = Dict()
-    state0["Pressure"] = p
-    # Need two states for time-stepping - current step, previous step
-    state = deepcopy(state0)
-    # Assign in primary variable
-    pAD = allocate_vector_ad(state0["Pressure"], 1, diag_pos = 1)
-    state["Pressure"] = pAD
-
-    storage["state0"] = state0
-    storage["state"] = state
+    state0 = setup_state(model, p0)
     # Model parameters
-    parameters = Dict()
+    parameters = setup_parameters(model)
     parameters[subscript("Viscosity", phase)] = mu
     parameters[subscript("Density", phase)] = rhoL
-    storage["parameters"] = parameters
+
+    sim = Simulator(model, state0 = state0, parameters = parameters)
     # Linear solver
     lsolve = AMGSolver()
     println("Starting simulation.")
     tol = 1e-6
     maxIt = 10
     for i = 1:maxIt
-        e, tol = newton_step(model, storage, dt = 1, sources = src, iteration = i, linsolve = lsolve)
+        e, tol = newton_step(sim, dt = 1, sources = src, iteration = i, linsolve = lsolve)
         if e < tol
             break
         end
@@ -62,6 +54,6 @@ function perform_test(casename)
     println("Simulation complete.")
     # Uncomment to see final Jacobian
     # display(storage["LinearizedSystem"].jac)
-end
+# end
 
-perform_test("pico")
+perform_test(casename)

@@ -3,6 +3,7 @@ export LiquidPhase, VaporPhase
 export number_of_phases, get_short_name, get_name, subscript
 export update_linearized_system!
 export SourceTerm
+export setup_state, setup_state!
 
 export allocate_storage, update_equations!
 # Abstract multiphase system
@@ -23,6 +24,99 @@ struct SourceTerm{R<:Real,I<:Integer}
     values::AbstractVector{R}
 end
 
+
+## Systems
+# Immiscible multiphase system
+struct ImmiscibleSystem <: MultiPhaseSystem
+    phases::AbstractVector
+end
+
+# Single-phase
+struct SinglePhaseSystem <: MultiPhaseSystem
+    phase
+end
+
+function get_phases(sys::SinglePhaseSystem)
+    return [sys.phase]
+end
+
+function number_of_phases(::SinglePhaseSystem)
+    return 1
+end
+
+## Phases
+# Abstract phase
+abstract type AbstractPhase end
+
+function get_short_name(phase::AbstractPhase)
+    return get_name(phase)[1:1]
+end
+
+function subscript(prefix::String, phase::AbstractPhase)
+    return string(prefix, "_", get_short_name(phase))
+end
+# Liquid phase
+struct LiquidPhase <: AbstractPhase end
+
+function get_name(::LiquidPhase)
+    return "Liquid"
+end
+
+# Vapor phases
+struct VaporPhase <: AbstractPhase end
+
+function get_name(::VaporPhase)
+    return "Vapor"
+end
+
+## Main implementation
+function setup_state(model, arg...)
+    d = Dict{String, Any}()
+    setup_state!(d, model, model.G, model.system, arg...)
+    return d
+end
+
+function setup_state!(d, model, G, sys::MultiPhaseSystem, pressure::Union{Real, AbstractVector})
+    nc = number_of_cells(G)
+    if isa(pressure, AbstractVector)
+        p = deepcopy(pressure)
+        @assert length(pressure) == nc
+    else
+        p = repeat([pressure], nc)
+    end
+    d["Pressure"] = p
+    phases = get_phases(sys)
+    for phase in phases
+        d[subscript("PhaseMass", phase)] = similar(p)
+    end
+end
+
+function convert_state_ad(model, state)
+    stateAD = deepcopy(state)
+    vars = String.(keys(state))
+
+    primary = get_primary_variable_names(model)
+    n_partials = length(primary)
+    for i in 1:n_partials
+        p = primary[i]
+        display(p)
+        display(stateAD)
+        stateAD[p] = allocate_vector_ad(stateAD[p], n_partials, diag_pos = i)
+    end
+    secondary = setdiff(vars, primary)
+    for s in secondary
+        stateAD[s] = allocate_vector_ad(stateAD[s], n_partials)
+    end
+    return stateAD
+end
+
+function number_of_primary_variables(model)
+    return length(get_primary_variable_names(model))
+end
+
+function get_primary_variable_names(model)
+    return ["Pressure"]
+end
 
 function allocate_storage!(d, G, sys::MultiPhaseSystem)
     nph = number_of_phases(sys)
@@ -49,9 +143,13 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
         sname = get_short_name(ph)
         law = ConservationLaw(G, lsys, npartials)
         d[subscript("ConservationLaw", ph)] = law
+        # Mobility of phase
         d[subscript("Mobility", ph)] = allocate_vector_ad(nc, npartials)
-        # d[string("Accmulation_", sname)] = allocate_vector_ad(nc, npartials)
-        # d[string("Flux_", sname)] = allocate_vector_ad(nhf, npartials)
+        # Mass density of phase
+        d[subscript("Density", ph)] = allocate_vector_ad(nc, npartials)
+        # Mobility * Density. We compute store this separately since density
+        # and mobility are both used in other spots
+        d[subscript("MassMobility", ph)] = allocate_vector_ad(nc, npartials)
     end
 end
 
@@ -67,13 +165,13 @@ function update_equations!(model, storage; dt = nothing, sources = nothing)
     p0 = state0["Pressure"]
     pv = model.G.pv
 
+    param = storage["parameters"]
     phases = get_phases(sys)
     for phNo in eachindex(phases)
         phase = phases[phNo]
         sname = get_short_name(phase)
         # Parameters - fluid properties
-        rho = storage["parameters"][subscript("Density", phase)]
-        mu = storage["parameters"][subscript("Viscosity", phase)]
+        rho = param[subscript("Density", phase)]
         # Storage structure
         law = storage[subscript("ConservationLaw", phase)]
         mob = storage[subscript("Mobility", phase)]
@@ -81,14 +179,50 @@ function update_equations!(model, storage; dt = nothing, sources = nothing)
 
         mob .= 1/mu
         # @debug "Computing half-face fluxes."
-        @time half_face_flux!(law.half_face_flux, mob, p, G)
+        
         # @debug "Computing accumulation terms."
-        @time @. acc = (pv/dt)*(rho(p) - rho(p0))
         if !isnothing(sources)
             # @debug "Inserting source terms."
             insert_sources(acc, sources, phNo)
         end
     end
+end
+
+function update_properties!(model, storage, phase::AbstractPhase)
+    state = storage["state"]    
+    p = state["Pressure"]
+    # Parameters 
+    param = storage["parameters"]
+    rho_fn = param[subscript("Density", phase)]
+    mu = param[subscript("Viscosity", phase)]
+
+    # Stored properties
+    mob = storage[subscript("Mobility", phase)]
+    rho = storage[subscript("Density", phase)]
+    mobrho = storage[subscript("MassMobility", phase)]
+
+    # Assign the values
+    mob .= 1/mu
+    rho .= rho_fn(p)
+    mobrho .= mob.*rho
+end
+
+function update_accumulation!(model, storage, phase::AbstractPhase)
+    law = storage[subscript("ConservationLaw", phase)]
+    mob = storage[subscript("Mobility", phase)]
+    
+    rho = param[subscript("Density", phase)]
+    acc = law.accumulation
+
+    @time @. acc = (pv/dt)*(rho(p) - rho(p0))
+end
+
+function update_half_face_flux!(model, storage, phase::AbstractPhase)
+    p = state["Pressure"]
+    law = storage[subscript("ConservationLaw", phase)]
+    mob = storage[subscript("Mobility", phase)]
+
+    @time half_face_flux!(law.half_face_flux, mob, p, G)
 end
 
 @inline function insert_sources(acc, sources, phNo)
@@ -144,47 +278,3 @@ function fill_fluxes(jac, r, conn_data, half_face_flux, apos, fpos)
         end
     end
 end
-## Systems
-# Immiscible multiphase system
-struct ImmiscibleSystem <: MultiPhaseSystem
-    phases::AbstractVector
-end
-
-# Single-phase
-struct SinglePhaseSystem <: MultiPhaseSystem
-    phase
-end
-
-function get_phases(sys::SinglePhaseSystem)
-    return [sys.phase]
-end
-
-function number_of_phases(::SinglePhaseSystem)
-    return 1
-end
-
-## Phases
-# Abstract phase
-abstract type AbstractPhase end
-
-function get_short_name(phase::AbstractPhase)
-    return get_name(phase)[1:1]
-end
-
-function subscript(prefix::String, phase::AbstractPhase)
-    return string(prefix, "_", get_short_name(phase))
-end
-# Liquid phase
-struct LiquidPhase <: AbstractPhase end
-
-function get_name(::LiquidPhase)
-    return "Liquid"
-end
-
-# Vapor phases
-struct VaporPhase <: AbstractPhase end
-
-function get_name(::VaporPhase)
-    return "Vapor"
-end
-

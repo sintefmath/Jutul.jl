@@ -1,5 +1,6 @@
 export TervSystem, TervGrid, DefaultPrimaryVariables, TervPrimaryVariables
 export SimulationModel, TervPrimaryVariables, DefaultPrimaryVariables, TervFormulation
+export setup_parameters
 
 # Physical system
 abstract type TervSystem end
@@ -36,6 +37,7 @@ abstract type TervEquation end
 
 # Models 
 abstract type TervModel end
+
 # Concrete models follow
 struct SimulationModel <: TervModel
     G::TervGrid
@@ -63,3 +65,6 @@ end
 
 
 
+function setup_parameters(model)
+    return Dict{String, Any}()
+end
