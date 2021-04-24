@@ -50,7 +50,4 @@ end
     return m*t_ij*dp
 end
 
-@inline function value(x)
-    return ForwardDiff.value(x)
-end
 

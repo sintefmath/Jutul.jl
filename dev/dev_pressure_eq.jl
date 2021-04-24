@@ -3,8 +3,10 @@ using LinearAlgebra
 using Printf
 using Makie
 using ForwardDiff
-# Turn on debugging to show output and timing
-ENV["JULIA_DEBUG"] = Terv
+# Turn on debugging to show output and timing.
+# Turn on by uncommenting or running the following:
+# ENV["JULIA_DEBUG"] = Terv
+# To disable the debug output:
 # ENV["JULIA_DEBUG"] = nothing
 casename = "pico"
 function perform_test(casename)
@@ -32,7 +34,10 @@ function perform_test(casename)
     model = SimulationModel(G, sys)
 
     # System state
-    src = sources = [SourceTerm(1, [1.0]), SourceTerm(nc, [-1.0])]
+    timesteps = [1.0, 2.0]*3600*24 # 1 day, 2 days
+    tot_time = sum(timesteps)
+    irate = sum(G.pv)/tot_time
+    src = sources = [SourceTerm(1, [irate]), SourceTerm(nc, [-irate])]
     # State is dict with pressure in each cell
     state0 = setup_state(model, p0)
     # Model parameters
@@ -46,15 +51,10 @@ function perform_test(casename)
     println("Starting simulation.")
     tol = 1e-6
     maxIt = 10
-    for i = 1:maxIt
-        e, tol = newton_step(sim, dt = 1, sources = src, iteration = i, linsolve = lsolve)
-        if e < tol
-            break
-        end
-    end
-    println("Simulation complete.")
-    
-    p = ForwardDiff.value.(sim.storage["state"]["Pressure"])
+
+    states = simulate(sim, timesteps, sources = src, linsolve = lsolve)
+    s = states[end]
+    p = s["Pressure"]
     plot_mrstdata(mrst_data["G"], p/bar)
 
     # Uncomment to see final Jacobian

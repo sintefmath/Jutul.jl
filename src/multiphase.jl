@@ -213,7 +213,7 @@ function update_accumulation!(model, storage, phase::AbstractPhase, dt)
 
     acc = law.accumulation
 
-    @time @. acc = (pv/dt)*(rho - rho_fn(p0))
+    @. acc = (pv/dt)*(rho - rho_fn(p0))
 end
 
 function update_half_face_flux!(model, storage, phase::AbstractPhase)
@@ -221,7 +221,7 @@ function update_half_face_flux!(model, storage, phase::AbstractPhase)
     law = storage[subscript("ConservationLaw", phase)]
     mmob = storage[subscript("MassMobility", phase)]
 
-    @time half_face_flux!(law.half_face_flux, mmob, p, model.G)
+    half_face_flux!(law.half_face_flux, mmob, p, model.G)
 end
 
 @inline function insert_sources(acc, sources, phNo)

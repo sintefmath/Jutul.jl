@@ -1,4 +1,4 @@
-export newton_step
+export newton_step, simulate
 export Simulator, TervSimulator
 using Printf
 
@@ -46,6 +46,25 @@ function newton_step(model, storage; dt = nothing, linsolve = nothing, sources =
     return (e, tol)
 end
 
-# function simulate(model, state0, timesteps; dt = nothing, linsolve = nothing, sources = nothing, iteration = nan)
-#
-# end
+function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations = 10, outputStates = true, sources = nothing, linsolve = nothing)
+    states = []
+    no_steps = length(timesteps)
+    @info "Starting simulation"
+    for (step_no, dt) in enumerate(timesteps)
+        @info "Solving step $step_no/$no_steps of length $dt seconds."
+        done = false
+        for i = 1:maxIterations
+            e, tol = newton_step(sim, dt = dt, iteration = i, sources = sources, linsolve = linsolve)
+            done = e < tol
+            if done
+                break
+            end
+        end
+        @assert done "Timestep $step_no did not complete in $maxIterations iterations"
+        if outputStates
+            push!(states, value(sim.storage["state"]))
+        end
+    end
+    return states
+    @info "Simulation complete."
+end

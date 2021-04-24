@@ -1,6 +1,7 @@
 export ConservationLaw, setup_conservationlaw
 export allocate_vector_ad, get_ad_unit_scalar, update_values!
 export allocate_residual, allocate_jacobian
+export value
 
 struct ConservationLaw <: TervEquation
     accumulation::AbstractArray
@@ -100,4 +101,16 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data)
             fluxpos[derno, i] = pos[jac.rowval[pos] .== other + (derno-1)*nc][1]
         end
     end
+end
+
+@inline function value(x)
+    return ForwardDiff.value(x)
+end
+
+function value(d::Dict)
+    v = copy(d)
+    for key in keys(v)
+        v[key] = value.(v[key])
+    end
+    return v
 end
