@@ -1,6 +1,8 @@
 using Terv
 using LinearAlgebra
 using Printf
+using Makie
+using ForwardDiff
 # Turn on debugging to show output and timing
 ENV["JULIA_DEBUG"] = Terv
 # ENV["JULIA_DEBUG"] = nothing
@@ -8,7 +10,7 @@ casename = "pico"
 function perform_test(casename)
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
-    G = get_minimal_tpfa_grid_from_mrst(casename)
+    G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
 
     println("Setting up simulation case.")
     nc = number_of_cells(G)
@@ -51,6 +53,10 @@ function perform_test(casename)
         end
     end
     println("Simulation complete.")
+    
+    p = ForwardDiff.value.(sim.storage["state"]["Pressure"])
+    plot_mrstdata(mrst_data["G"], p/bar)
+
     # Uncomment to see final Jacobian
     # display(storage["LinearizedSystem"].jac)
 end

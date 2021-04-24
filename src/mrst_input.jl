@@ -1,9 +1,9 @@
 using MAT # .MAT file loading
 export readSimGraph, getSparsity, getIncompMatrix
 export readPatchPlot
-export get_minimal_tpfa_grid_from_mrst
+export get_minimal_tpfa_grid_from_mrst, plot_mrstdata
 using SparseArrays # Sparse pattern
-
+using Makie
 
 struct MRSTPlotData
     faces::Array
@@ -12,7 +12,7 @@ struct MRSTPlotData
 end
 
 
-function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing)
+function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false)
     if relative_path
         fn = string("data/testgrids/", name, ".mat")
     else
@@ -78,6 +78,11 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     end
     @debug "Setting up TPFA grid."
     sg = MinimalTPFAGrid(faceData, pv)
+    if extraout
+        return (sg, exported)
+    else
+        return sg
+    end
 end
 
 function read_patch_plot(filename::String)
@@ -86,4 +91,21 @@ function read_patch_plot(filename::String)
     v = vars["vertices"];
     d = vec(vars["data"])
     MRSTPlotData(f, v, d)
+end
+
+function plot_mrstdata(mrst_grid, data)
+    if any([t == "cartGrid" for t in mrst_grid["type"]])
+        cartDims = Int64.(mrst_grid["cartDims"])
+        if mrst_grid["griddim"] == 2 || cartDims[end] == 1
+            f = Figure()
+            ax = Axis(f[1, 1])
+            hm = heatmap!(ax, reshape(data, cartDims[1], cartDims[2]))
+            Colorbar(f[1, 2], hm, width = 20)
+            f
+        else
+            println("3D Cartesian plot not implemented.")
+        end
+    else
+        println("Non-Cartesian plot not implemented.")
+    end
 end
