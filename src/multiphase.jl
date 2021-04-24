@@ -97,13 +97,13 @@ function convert_state_ad(model, state)
 
     primary = get_primary_variable_names(model)
     n_partials = length(primary)
+    # Loop over primary variables and set them to AD, with ones at the correct diagonal
     for i in 1:n_partials
         p = primary[i]
-        display(p)
-        display(stateAD)
         stateAD[p] = allocate_vector_ad(stateAD[p], n_partials, diag_pos = i)
     end
     secondary = setdiff(vars, primary)
+    # Loop over secondary variables and initialize as AD with zero partials
     for s in secondary
         stateAD[s] = allocate_vector_ad(stateAD[s], n_partials)
     end
@@ -169,21 +169,15 @@ function update_equations!(model, storage; dt = nothing, sources = nothing)
     phases = get_phases(sys)
     for phNo in eachindex(phases)
         phase = phases[phNo]
-        sname = get_short_name(phase)
-        # Parameters - fluid properties
-        rho = param[subscript("Density", phase)]
-        # Storage structure
         law = storage[subscript("ConservationLaw", phase)]
-        mob = storage[subscript("Mobility", phase)]
-        acc = law.accumulation
 
-        mob .= 1/mu
-        # @debug "Computing half-face fluxes."
-        
-        # @debug "Computing accumulation terms."
+        update_properties!(model, storage, phase)
+        update_accumulation!(model, storage, phase, dt)
+        update_half_face_flux!(model, storage, phase)
+
         if !isnothing(sources)
             # @debug "Inserting source terms."
-            insert_sources(acc, sources, phNo)
+            insert_sources(law.accumulation, sources, phNo)
         end
     end
 end
@@ -202,27 +196,32 @@ function update_properties!(model, storage, phase::AbstractPhase)
     mobrho = storage[subscript("MassMobility", phase)]
 
     # Assign the values
-    mob .= 1/mu
-    rho .= rho_fn(p)
-    mobrho .= mob.*rho
+    @. mob = 1/mu
+    @. rho = rho_fn(p)
+    @. mobrho = mob*rho
 end
 
-function update_accumulation!(model, storage, phase::AbstractPhase)
+function update_accumulation!(model, storage, phase::AbstractPhase, dt)
     law = storage[subscript("ConservationLaw", phase)]
     mob = storage[subscript("Mobility", phase)]
-    
-    rho = param[subscript("Density", phase)]
+    rho = storage[subscript("Density", phase)]
+    pv = model.G.pv
+
+    # Currently a hack, this should be cached in state
+    rho_fn = storage["parameters"][subscript("Density", phase)]
+    p0 = storage["state0"]["Pressure"]
+
     acc = law.accumulation
 
-    @time @. acc = (pv/dt)*(rho(p) - rho(p0))
+    @time @. acc = (pv/dt)*(rho - rho_fn(p0))
 end
 
 function update_half_face_flux!(model, storage, phase::AbstractPhase)
-    p = state["Pressure"]
+    p = storage["state"]["Pressure"]
     law = storage[subscript("ConservationLaw", phase)]
-    mob = storage[subscript("Mobility", phase)]
+    mmob = storage[subscript("MassMobility", phase)]
 
-    @time half_face_flux!(law.half_face_flux, mob, p, G)
+    @time half_face_flux!(law.half_face_flux, mmob, p, model.G)
 end
 
 @inline function insert_sources(acc, sources, phNo)

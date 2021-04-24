@@ -5,7 +5,7 @@ using Printf
 ENV["JULIA_DEBUG"] = Terv
 # ENV["JULIA_DEBUG"] = nothing
 casename = "pico"
-# function perform_test(casename)
+function perform_test(casename)
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
     G = get_minimal_tpfa_grid_from_mrst(casename)
@@ -26,9 +26,8 @@ casename = "pico"
     # Single-phase liquid system (compressible pressure equation)
     phase = LiquidPhase()
     sys = SinglePhaseSystem(phase)
-    # Model with allocated storage. Will be moved into function at some point
+    # Simulation model wraps grid and system together with context (which will be used for GPU etc)
     model = SimulationModel(G, sys)
-    storage = allocate_storage(model)
 
     # System state
     src = sources = [SourceTerm(1, [1.0]), SourceTerm(nc, [-1.0])]
@@ -54,6 +53,6 @@ casename = "pico"
     println("Simulation complete.")
     # Uncomment to see final Jacobian
     # display(storage["LinearizedSystem"].jac)
-# end
+end
 
 perform_test(casename)
