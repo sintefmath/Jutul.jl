@@ -30,14 +30,10 @@ function solve!(sys::LinearizedSystem, solver::AMGSolver)
         @debug "Set up AMG in $t_amg seconds."
         solver.preconditioner = aspreconditioner(solver.hierarchy)
     end
-    # Define tolerance as absolute tolerance for GMRES via reltol.
-    # Limit lower bound to 1e-3*reltol in case system is already solved.
-    tol = solver.reltol*max(norm(sys.r, Inf), 1e-3)
-    
     t_solve = @elapsed begin 
-        gmres!(sys.dx, sys.jac, -sys.r, abstol = tol, Pl = solver.preconditioner)
+        gmres!(sys.dx, sys.jac, -sys.r, reltol = solver.reltol, maxiter = 20, Pl = solver.preconditioner, verbose = true)
     end
-    @debug "Solved linear system to $tol in $t_solve seconds."
+    @debug "Solved linear system to $solver.reltol in $t_solve seconds."
 end
 
 function solve!(sys::LinearizedSystem, linsolve = nothing)

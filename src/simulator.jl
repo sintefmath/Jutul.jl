@@ -43,7 +43,7 @@ function newton_step(model, storage; dt = nothing, linsolve = nothing, sources =
     solve!(lsys, linsolve)
 
     storage["state"]["Pressure"] += lsys.dx
-    tol = 1e-6
+    tol = 1e-3
     return (e, tol)
 end
 
@@ -55,14 +55,18 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
         t_str =  Dates.canonicalize(Dates.CompoundPeriod(Second(dt)))
         @info "Solving step $step_no/$no_steps of length $t_str."
         done = false
-        for i = 1:maxIterations
-            e, tol = newton_step(sim, dt = dt, iteration = i, sources = sources, linsolve = linsolve)
+        for it = 1:maxIterations
+            e, tol = newton_step(sim, dt = dt, iteration = it, sources = sources, linsolve = linsolve)
             done = e < tol
             if done
                 break
             end
+            if e > 1e10 || isinf(e) || isnan(e)
+                @assert "Timestep $step_no diverged."
+                break
+            end
         end
-        @assert done "Timestep $step_no did not complete in $maxIterations iterations"
+        @assert done "Timestep $step_no did not complete in $maxIterations iterations."
         if outputStates
             push!(states, value(sim.storage["state"]))
         end
