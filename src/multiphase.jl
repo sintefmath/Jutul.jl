@@ -156,20 +156,8 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
     end
 end
 
-function update_equations!(model, storage; dt = nothing, sources = nothing)
-    sys = model.system;
-    sys::MultiPhaseSystem
-    G = model.grid
-
-    state = storage["state"]
-    state0 = storage["state0"]
-    
-    p = state["Pressure"]
-    p0 = state0["Pressure"]
-    pv = G.pv
-
-    param = storage["parameters"]
-    phases = get_phases(sys)
+function update_equations!(model::SimulationModel{G, S}, storage; dt = nothing, sources = nothing) where {G<:MinimalTPFAGrid, S<:MultiPhaseSystem}
+    phases = get_phases(model.system)
     for phNo in eachindex(phases)
         phase = phases[phNo]
         law = storage[subscript("ConservationLaw", phase)]
