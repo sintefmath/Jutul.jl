@@ -1,6 +1,7 @@
 export newton_step, simulate
 export Simulator, TervSimulator
 using Printf
+using Dates
 
 
 abstract type TervSimulator end
@@ -51,7 +52,8 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
     no_steps = length(timesteps)
     @info "Starting simulation"
     for (step_no, dt) in enumerate(timesteps)
-        @info "Solving step $step_no/$no_steps of length $dt seconds."
+        t_str =  Dates.canonicalize(Dates.CompoundPeriod(Second(dt)))
+        @info "Solving step $step_no/$no_steps of length $t_str."
         done = false
         for i = 1:maxIterations
             e, tol = newton_step(sim, dt = dt, iteration = i, sources = sources, linsolve = linsolve)
