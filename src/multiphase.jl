@@ -72,7 +72,7 @@ end
 ## Main implementation
 function setup_state(model, arg...)
     d = Dict{String, Any}()
-    setup_state!(d, model, model.G, model.system, arg...)
+    setup_state!(d, model, model.grid, model.system, arg...)
     return d
 end
 
@@ -156,14 +156,14 @@ end
 function update_equations!(model, storage; dt = nothing, sources = nothing)
     sys = model.system;
     sys::MultiPhaseSystem
-    G = model.G
+    G = model.grid
 
     state = storage["state"]
     state0 = storage["state0"]
     
     p = state["Pressure"]
     p0 = state0["Pressure"]
-    pv = model.G.pv
+    pv = G.pv
 
     param = storage["parameters"]
     phases = get_phases(sys)
@@ -205,7 +205,7 @@ function update_accumulation!(model, storage, phase::AbstractPhase, dt)
     law = storage[subscript("ConservationLaw", phase)]
     mob = storage[subscript("Mobility", phase)]
     rho = storage[subscript("Density", phase)]
-    pv = model.G.pv
+    pv = model.grid.pv
 
     # Currently a hack, this should be cached in state
     rho_fn = storage["parameters"][subscript("Density", phase)]
@@ -221,7 +221,7 @@ function update_half_face_flux!(model, storage, phase::AbstractPhase)
     law = storage[subscript("ConservationLaw", phase)]
     mmob = storage[subscript("MassMobility", phase)]
 
-    half_face_flux!(law.half_face_flux, mmob, p, model.G)
+    half_face_flux!(law.half_face_flux, mmob, p, model.grid)
 end
 
 @inline function insert_sources(acc, sources, phNo)
@@ -239,7 +239,7 @@ function update_linearized_system!(model::TervModel, storage)
     for phase in phases
         sname = get_short_name(phase)
         law = storage[subscript("ConservationLaw", phase)]
-        update_linearized_system!(model.G, lsys, law)
+        update_linearized_system!(model.grid, lsys, law)
     end
 end
 

@@ -26,7 +26,11 @@ abstract type TervGrid end
 
 # Formulation
 abstract type TervFormulation end
-struct FullyImplicit <: TervFormulation end
+struct FullyImplicit <: TervFormulation 
+    primary_variables
+end
+
+
 # Primary variables
 abstract type TervPrimaryVariables end
 struct DefaultPrimaryVariables <: TervPrimaryVariables end
@@ -39,12 +43,14 @@ abstract type TervEquation end
 abstract type TervModel end
 
 # Concrete models follow
-struct SimulationModel <: TervModel
-    G::TervGrid
-    system::TervSystem
-    formulation::TervFormulation
-    primary_variables::TervPrimaryVariables
-    context::TervContext
+struct SimulationModel{G<:TervGrid, 
+                       S<:TervSystem,
+                       F<:TervFormulation,
+                       C<:TervContext} <: TervModel
+    grid::G
+    system::S
+    formulation::F
+    context::C
 end
 
 function allocate_storage(model::TervModel)
@@ -54,13 +60,13 @@ function allocate_storage(model::TervModel)
 end
 
 function allocate_storage!(d, model::TervModel)
-    allocate_storage!(d, model.G, model.system)
+    allocate_storage!(d, model.grid, model.system)
 end
 
-function SimulationModel(G, system; formulation = FullyImplicit(), 
-                                 primary_variables = DefaultPrimaryVariables(), 
+function SimulationModel(G, system;
+                                 formulation = FullyImplicit(DefaultPrimaryVariables()), 
                                  context = DefaultContext())
-    return SimulationModel(G, system, formulation, primary_variables, context)
+    return SimulationModel(G, system, formulation, context)
 end
 
 
