@@ -9,7 +9,7 @@ using ForwardDiff
 # To disable the debug output:
 # ENV["JULIA_DEBUG"] = nothing
 casename = "pico"
-function perform_test(casename)
+function perform_test(casename, doPlot = false)
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
@@ -36,8 +36,9 @@ function perform_test(casename)
     # System state
     timesteps = [1.0, 2.0]*3600*24 # 1 day, 2 days
     tot_time = sum(timesteps)
-    irate = sum(G.pv)/tot_time
-    src = sources = [SourceTerm(1, [irate]), SourceTerm(nc, [-irate])]
+    irate = 0.05*sum(G.pv)/tot_time
+    src = sources = [SourceTerm(1, [irate]), 
+                     SourceTerm(nc, [-irate])]
     # State is dict with pressure in each cell
     state0 = setup_state(model, p0)
     # Model parameters
@@ -55,10 +56,12 @@ function perform_test(casename)
     states = simulate(sim, timesteps, sources = src, linsolve = lsolve)
     s = states[end]
     p = s["Pressure"]
-    plot_mrstdata(mrst_data["G"], p/bar)
+    if doPlot
+        @time plot_mrstdata(mrst_data["G"], p/bar)
+    end
 
     # Uncomment to see final Jacobian
     # display(storage["LinearizedSystem"].jac)
 end
-
-perform_test(casename)
+doPlot = false
+perform_test(casename, doPlot)

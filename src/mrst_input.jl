@@ -65,7 +65,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     faceData = Vector{t}(undef, nhf)
 
     for cell = 1:nc
-        for fpos = facePos[cell]:(facePos[cell+1]-1)
+        @inbounds for fpos = facePos[cell]:(facePos[cell+1]-1)
             face = faces[fpos]
             if N[1, face] == cell
                 other = N[2, face]
