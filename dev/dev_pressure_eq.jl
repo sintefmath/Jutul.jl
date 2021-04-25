@@ -10,7 +10,7 @@ using ForwardDiff
 # ENV["JULIA_DEBUG"] = nothing
 casename = "pico"
 
-function perform_test(casename, doPlot = false)
+function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
@@ -35,9 +35,9 @@ function perform_test(casename, doPlot = false)
     model = SimulationModel(G, sys)
 
     # System state
-    timesteps = [1.0, 2.0]*3600*24 # 1 day, 2 days
+    timesteps = tstep*3600*24 # 1 day, 2 days
     tot_time = sum(timesteps)
-    irate = 0.05*sum(G.pv)/tot_time
+    irate = pvfrac*sum(G.pv)/tot_time
     src = sources = [SourceTerm(1, [irate]), 
                      SourceTerm(nc, [-irate])]
     # State is dict with pressure in each cell
@@ -54,8 +54,12 @@ function perform_test(casename, doPlot = false)
     states = simulate(sim, timesteps, sources = src, linsolve = lsolve)
     s = states[end]
     p = s["Pressure"]
+    @printf("Final pressure ranges from %f to %f bar.", maximum(p)/bar, minimum(p)/bar)
     if doPlot
-        @time plot_mrstdata(mrst_data["G"], p/bar)
+        # Rescale for better plot with volume
+        p_plot = (p .- minimum(p))./(maximum(p) - minimum(p))
+
+        @time plot_mrstdata(mrst_data["G"], p_plot)
     end
 
     # Uncomment to see final Jacobian
