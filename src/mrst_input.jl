@@ -101,11 +101,7 @@ function plot_mrstdata(mrst_grid, data)
     if any([t == "cartGrid" for t in mrst_grid["type"]])
         cartDims = Int64.(mrst_grid["cartDims"])
         if mrst_grid["griddim"] == 2 || cartDims[end] == 1
-            f = Figure()
-            ax = Axis(f[1, 1])
-            hm = heatmap!(ax, reshape(data, cartDims[1], cartDims[2]))
-            Colorbar(f[1, 2], hm, width = 20)
-            f
+            heatmap(reshape(data, cartDims[1], cartDims[2]))
         else
             println("3D Cartesian plot not implemented.")
         end
