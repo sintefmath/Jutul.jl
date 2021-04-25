@@ -72,7 +72,11 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
             else
                 other = N[1, face]
             end
-            dz = cell_centroids[3, cell] - cell_centroids[3, other]
+            if size(cell_centroids, 1) == 3
+                dz = cell_centroids[3, cell] - cell_centroids[3, other]
+            else
+                dz = 0
+            end
             faceData[fpos] = t(T[face], dz, cell, other)
         end
     end
