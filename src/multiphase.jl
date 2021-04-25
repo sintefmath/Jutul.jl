@@ -217,7 +217,7 @@ end
 
 @inline function insert_sources(acc, sources, phNo)
     for src in sources
-        @inbounds acc[src.cell] += src.values[phNo]
+        @inbounds acc[src.cell] -= src.values[phNo]
     end
 end
 
