@@ -9,6 +9,7 @@ using ForwardDiff
 # To disable the debug output:
 # ENV["JULIA_DEBUG"] = nothing
 casename = "pico"
+
 function perform_test(casename, doPlot = false)
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
@@ -48,11 +49,8 @@ function perform_test(casename, doPlot = false)
 
     sim = Simulator(model, state0 = state0, parameters = parameters)
     # Linear solver
-    lsolve = AMGSolver()
+    lsolve = AMGSolver("RugeStuben", 1e-3)
     println("Starting simulation.")
-    tol = 1e-6
-    maxIt = 10
-
     states = simulate(sim, timesteps, sources = src, linsolve = lsolve)
     s = states[end]
     p = s["Pressure"]
