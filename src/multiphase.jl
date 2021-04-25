@@ -251,7 +251,7 @@ function update_linearized_system!(G, lsys::LinearizedSystem, law::ConservationL
     fill_accumulation!(jac, r, law.accumulation, apos)
     # Fill in off-diagonal
     fpos = law.half_face_flux_jac_pos
-    fill_fluxes(jac, r, G.conn_data, law.half_face_flux, apos, fpos)
+    fill_half_face_fluxes(jac, r, G.conn_pos, G.conn_data, law.half_face_flux, apos, fpos)
 end
 
 function fill_accumulation!(jac, r, acc, apos)
@@ -264,16 +264,17 @@ function fill_accumulation!(jac, r, acc, apos)
     end
 end
 
-function fill_fluxes(jac, r, conn_data, half_face_flux, apos, fpos)
-    @inbounds Threads.@threads for i = 1:size(fpos, 2)
-        cell_index = conn_data[i].self
-        r[cell_index] += half_face_flux[i].value
-        @inbounds for derNo = 1:size(apos, 1)
-            index = fpos[derNo, i]
-            diag_index = apos[derNo, cell_index]
-            df_di = half_face_flux[i].partials[derNo]
-            jac.nzval[index] = -df_di
-            jac.nzval[diag_index] += df_di
+function fill_half_face_fluxes(jac, r, conn_pos, conn_data, half_face_flux, apos, fpos)
+    @inbounds Threads.@threads for cell_index = 1:length(apos)
+        for i = conn_pos[cell_index]:(conn_pos[cell_index+1]-1)
+            r[cell_index] += half_face_flux[i].value
+            @inbounds for derNo = 1:size(apos, 1)
+                index = fpos[derNo, i]
+                diag_index = apos[derNo, cell_index]
+                df_di = half_face_flux[i].partials[derNo]
+                jac.nzval[index] = -df_di
+                jac.nzval[diag_index] += df_di
+            end
         end
     end
 end
