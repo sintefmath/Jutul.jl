@@ -49,8 +49,8 @@ struct SimulationModel{G<:TervGrid,
                        C<:TervContext} <: TervModel
     grid::G
     system::S
-    formulation::F
     context::C
+    formulation::F
 end
 
 function allocate_storage(model::TervModel)
@@ -66,7 +66,7 @@ end
 function SimulationModel(G, system;
                                  formulation = FullyImplicit(DefaultPrimaryVariables()), 
                                  context = DefaultContext())
-    return SimulationModel(G, system, formulation, context)
+    return SimulationModel(G, system, context, formulation)
 end
 
 
