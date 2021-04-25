@@ -115,6 +115,10 @@ function number_of_primary_variables(model)
 end
 
 function get_primary_variable_names(model)
+    return get_primary_variable_names(model, model.formulation.primary_variables)
+end
+
+function get_primary_variable_names(model::SimulationModel{G, S}, ::DefaultPrimaryVariables) where {G<:Any, S<:SinglePhaseSystem}
     return ["Pressure"]
 end
 
@@ -137,7 +141,6 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
     r = zeros(n_dof)
     lsys = LinearizedSystem(jac, r, dx)
     d["LinearizedSystem"] = lsys
-    # hasAcc = !isa(sys, SinglePhaseSystem) # and also incompressible!!
     for phaseNo in eachindex(phases)
         ph = phases[phaseNo]
         sname = get_short_name(ph)
