@@ -22,7 +22,26 @@ end
 
 function MinimalTPFAGrid(conn_data, pv)
     cno = [i.self for i in conn_data]
-    cpos = cumsum([1, [sum(cno .== j) for j in 1:length(pv)]...])
+    # Slow code for the same thing:
+    # counts = [sum(cno .== j) for j in 1:length(pv)]
+    nc = length(pv)
+    counts = similar(cno, nc)
+    index = 1
+    cell = 1
+
+    while cell < nc + 1
+        count = 0
+        while cno[index] == cell
+            count += 1
+            index += 1
+            if index > length(cno)
+                break
+            end
+        end
+        counts[cell] = count
+        cell += 1
+    end
+    cpos = cumsum(vcat([1], counts))
     return MinimalTPFAGrid(conn_data, cpos, pv)
 end
 
