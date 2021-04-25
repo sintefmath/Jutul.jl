@@ -54,16 +54,18 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     states = simulate(sim, timesteps, sources = src, linsolve = lsolve)
     s = states[end]
     p = s["Pressure"]
-    @printf("Final pressure ranges from %f to %f bar.", maximum(p)/bar, minimum(p)/bar)
+    @printf("Final pressure ranges from %f to %f bar.\n", maximum(p)/bar, minimum(p)/bar)
     if doPlot
         # Rescale for better plot with volume
         p_plot = (p .- minimum(p))./(maximum(p) - minimum(p))
 
         @time plot_mrstdata(mrst_data["G"], p_plot)
     end
-
     # Uncomment to see final Jacobian
     # display(storage["LinearizedSystem"].jac)
+    return sim
 end
 doPlot = false
-perform_test(casename, doPlot)
+sim = perform_test(casename, doPlot)
+
+println("All done.")
