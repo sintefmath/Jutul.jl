@@ -31,9 +31,10 @@ function solve!(sys::LinearizedSystem, solver::AMGSolver)
         solver.preconditioner = aspreconditioner(solver.hierarchy)
     end
     t_solve = @elapsed begin 
-        gmres!(sys.dx, sys.jac, -sys.r, reltol = solver.reltol, maxiter = 20, Pl = solver.preconditioner, verbose = true)
+        gmres!(sys.dx, sys.jac, -sys.r, reltol = solver.reltol, maxiter = 20, 
+                                        Pl = solver.preconditioner, verbose = false)
     end
-    @debug "Solved linear system to $solver.reltol in $t_solve seconds."
+    @debug "Solved linear system to $(solver.reltol) in $t_solve seconds."
 end
 
 function solve!(sys::LinearizedSystem, linsolve = nothing)

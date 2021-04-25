@@ -38,12 +38,21 @@ function newton_step(model, storage; dt = nothing, linsolve = nothing, sources =
 
     lsys = storage["LinearizedSystem"]
     e = norm(lsys.r, Inf)
-    @printf("It %d: |R| = %e\n", iteration, e)
-
-    solve!(lsys, linsolve)
-
-    storage["state"]["Pressure"] += lsys.dx
     tol = 1e-3
+    if e < tol
+        do_solve = iteration == 1
+        cstr = " -> Converged."
+    else
+        do_solve = true
+        cstr = ""
+    end
+    s = @sprintf("It %d: |R| = %e%s\n", iteration, e, cstr)
+    @info s
+
+    if do_solve
+        solve!(lsys, linsolve)
+        storage["state"]["Pressure"] += lsys.dx
+    end
     return (e, tol)
 end
 
