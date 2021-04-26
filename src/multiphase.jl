@@ -123,7 +123,9 @@ function get_primary_variable_names(model::SimulationModel{G, S}, ::DefaultPrima
     return ["Pressure"]
 end
 
-function allocate_storage!(d, G, sys::MultiPhaseSystem)
+function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+    G = model.grid
+    sys = model.system
     nph = number_of_phases(sys)
     phases = get_phases(sys)
     npartials = nph

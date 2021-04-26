@@ -70,13 +70,12 @@ function allocate_storage(model::TervModel)
 end
 
 function allocate_storage!(d, model::TervModel)
-    allocate_storage!(d, model.grid, model.system)
+    # Do nothing for Any.
 end
 
 function transfer(context::TervContext, v)
     return v
 end
-
 
 function transfer(context::SingleCUDAContext, v::AbstractArray{I}) where {I<:Integer}
     return CuArray{context.index_t}(v)
@@ -98,14 +97,16 @@ end
 
 function transfer_storage_to_context(context::SingleCUDAContext, storage)
     return storage
-    #F = context.float_t
-    #dual_type = ForwardDiff.Dual{F, F, 1}
-    #new_storage = Dict()
-    #for key in keys(storage)
+    # F = context.float_t
+    # dual_type = ForwardDiff.Dual{F, F, 1}
+    # new_storage = Dict()
+    # for key in keys(storage)
     #    display(key)
     #    display(storage[key])
-    #    tmp = dual_type.(storage[key])
-    #    new_storage[key] = CuArray{}(tmp)
+    #    old = storage[key]
+    #    display(old)
+    #    tmp = dual_type.(old)
+    #    new_storage[key] = cu(tmp)
     # end
     # return new_storage
 end
@@ -114,15 +115,13 @@ end
 function SimulationModel(G, system;
                                  formulation = FullyImplicit(DefaultPrimaryVariables()), 
                                  context = DefaultContext())
-    return SimulationModel(G, system, context, formulation)
+    grid = transfer_grid_to_context(context, G)
+    return SimulationModel(grid, system, context, formulation)
 end
 
 
 # context stuff
-function transfer_model_to_context(model::SimulationModel)
-    grid = transfer_grid_to_context(model.context, model.grid)
-    return SimulationModel(grid, model.system, model.context, model.formulation)
-end
+
 
 
 function setup_parameters(model)
