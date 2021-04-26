@@ -96,6 +96,21 @@ function transfer_storage_to_context(context::TervContext, storage)
 end
 
 
+function transfer_storage_to_context(context::SingleCUDAContext, storage)
+    return storage
+    #F = context.float_t
+    #dual_type = ForwardDiff.Dual{F, F, 1}
+    #new_storage = Dict()
+    #for key in keys(storage)
+    #    display(key)
+    #    display(storage[key])
+    #    tmp = dual_type.(storage[key])
+    #    new_storage[key] = CuArray{}(tmp)
+    # end
+    # return new_storage
+end
+
+
 function SimulationModel(G, system;
                                  formulation = FullyImplicit(DefaultPrimaryVariables()), 
                                  context = DefaultContext())
@@ -106,7 +121,7 @@ end
 # context stuff
 function transfer_model_to_context(model::SimulationModel)
     grid = transfer_grid_to_context(model.context, model.grid)
-    return typeof(model)(grid, model.system, model.context, model.formulation)
+    return SimulationModel(grid, model.system, model.context, model.formulation)
 end
 
 

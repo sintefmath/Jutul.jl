@@ -69,7 +69,7 @@ function get_ad_unit_scalar(v::T, nder, diag_pos = nothing) where {T<:Real}
 end
 
 function update_values!(v::AbstractArray, next::AbstractArray)
-    v .= v - value.(v) + next
+    @. v = v - value(v) + next
 end
 
 
