@@ -4,7 +4,7 @@ export setup_parameters
 
 export SingleCUDAContext, SharedMemoryContext, DefaultContext
 
-export transfer_storage_to_context
+export transfer_storage_to_context, transfer
 
 # Physical system
 abstract type TervSystem end
@@ -73,6 +73,18 @@ function allocate_storage!(d, model::TervModel)
     allocate_storage!(d, model.grid, model.system)
 end
 
+function transfer(context::TervContext, v)
+    return v
+end
+
+
+function transfer(context::SingleCUDAContext, v::AbstractArray{I}) where {I<:Integer}
+    return CuArray{context.index_t}(v)
+end
+
+function transfer(context::SingleCUDAContext, v::AbstractArray{I}) where {I<:AbstractFloat}
+    return CuArray{context.float_t}(v)
+end
 
 function transfer_storage_to_context(model::TervModel, storage)
     new_storage = transfer_storage_to_context(model.context, storage)

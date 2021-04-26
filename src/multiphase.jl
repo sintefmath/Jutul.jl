@@ -84,6 +84,7 @@ function setup_state!(d, model, G, sys::MultiPhaseSystem, pressure::Union{Real, 
     else
         p = repeat([pressure], nc)
     end
+    p = transfer(model.context, p)
     d["Pressure"] = p
     phases = get_phases(sys)
     for phase in phases
