@@ -15,6 +15,8 @@ function Simulator(model; state0 = setup_state(model), parameters = setup_parame
     storage["parameters"] = parameters
     storage["state0"] = state0
     storage["state"] = convert_state_ad(model, state0)
+    model = transfer_model_to_context(model)
+    storage = transfer_storage_to_context(model, storage)
     Simulator(model, storage)
 end
 
@@ -24,7 +26,6 @@ end
 
 
 function newton_step(model, storage; dt = nothing, linsolve = nothing, sources = nothing, iteration = nan)
-
     # Update the equations themselves - the AD bit
     t_asm = @elapsed begin 
         update_equations!(model, storage, dt = dt, sources = sources)

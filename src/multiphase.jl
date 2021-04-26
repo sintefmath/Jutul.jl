@@ -156,7 +156,8 @@ function allocate_storage!(d, G, sys::MultiPhaseSystem)
     end
 end
 
-function update_equations!(model::SimulationModel{G, S}, storage; dt = nothing, sources = nothing) where {G<:MinimalTPFAGrid, S<:MultiPhaseSystem}
+function update_equations!(model::SimulationModel{G, S}, storage; 
+    dt = nothing, sources = nothing) where {G<:MinimalTPFAGrid, S<:MultiPhaseSystem}
     phases = get_phases(model.system)
     for phNo in eachindex(phases)
         phase = phases[phNo]

@@ -2,6 +2,7 @@ export MRSTGrid, MinimalTPFAGrid, TPFAHalfFaceData
 export get_cell_faces, get_facepos, get_cell_neighbors
 export number_of_cells, number_of_faces, number_of_half_faces
 
+export transfer_grid_to_context
 
 # Helpers follow
 "Minimal struct for TPFA connections (transmissibility + dz + cell pair)"
@@ -10,6 +11,10 @@ struct TPFAHalfFaceData{R<:Real,I<:Integer}
     dz::R
     self::I
     other::I
+end
+
+function TPFAHalfFaceData{R, I}(target::TPFAHalfFaceData) where {R<:Real, I<:Integer}
+    return TPFAHalfFaceData(R(target.T), R(target.dz), I(target.self), I(target.other))
 end
 
 # TPFA grid
@@ -104,4 +109,20 @@ function get_facepos(N)
     facePos = cumsum([1; counts])
     faces = reduce(vcat, cell_faces)
     return (faces, facePos)
+end
+
+function transfer_grid_to_context(context::SingleCUDAContext, grid::MinimalTPFAGrid)
+    F = context.float_t
+    I = context.index_t
+    # Next line should be something like
+    # conn_data = CuArray{TPFAHalfFaceData{F, I}}(grid.conn_data)
+    # once convert is implemented...
+    conn_data = CuArray(TPFAHalfFaceData{F, I}.(grid.conn_data))
+    pv = CuArray{F}(grid.pv)
+    conn_pos = CuArray{I}(grid.conn_pos)
+    return MinimalTPFAGrid(conn_data, conn_pos, pv)
+end
+
+function transfer_grid_to_context(::DefaultContext, grid)
+    return grid
 end
