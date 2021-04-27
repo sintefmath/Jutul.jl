@@ -14,11 +14,9 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
-
     println("Setting up simulation case.")
     nc = number_of_cells(G)
     nf = number_of_faces(G)
-
     # Parameters
     bar = 1e5
     p0 = 100*bar # 100 bar
@@ -59,13 +57,16 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
         # Rescale for better plot with volume
         p_plot = (p .- minimum(p))./(maximum(p) - minimum(p))
 
-        @time plot_mrstdata(mrst_data["G"], p_plot)
+        @time ax = plot_mrstdata(mrst_data["G"], p_plot)
+    else
+        ax = nothing
     end
+    ax
     # Uncomment to see final Jacobian
-    # display(storage["LinearizedSystem"].jac)
-    return sim
+    # display(sim.storage["LinearizedSystem"].jac)
+    return (sim, ax)
 end
 doPlot = false
-sim = perform_test(casename, doPlot)
-
+sim, ax = perform_test(casename, doPlot)
+ax
 println("All done.")
