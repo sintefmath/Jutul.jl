@@ -24,16 +24,26 @@ function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; jacobian_row_offs
     accumulation_sparse_pos!(accpos, jac)
     half_face_flux_sparse_pos!(fluxpos, jac, nc, G.conn_data)
 
-    ConservationLaw(nc, nf, accpos, fluxpos, nder, T = F)
+    ConservationLaw(nc, nf, accpos, fluxpos, nder, context = context)
 end
 
 function ConservationLaw(nc::Integer, nhf::Integer, 
                          accpos::AbstractArray, fluxpos::AbstractArray, 
-                         nder::Integer = 0; T=Float64)
-    acc = allocate_vector_ad(nc, nder, T=T)
-    flux = allocate_vector_ad(nhf, nder, T=T)
+                         nder::Integer = 0; context = DefaultContext())
+    acc = allocate_vector_ad(nc, nder, context = DefaultContext())
+    flux = allocate_vector_ad(nhf, nder, context = DefaultContext())
     ConservationLaw(acc, flux, accpos, fluxpos)
 end
+
+#function ConservationLaw(context::TervContext, nc, nhf, accpos, fluxpos, nder)
+#    F = float_type(context)
+#    fluxpos = transfer(context, fluxpos)
+#    accpos = transfer(context, accpos)
+#    acc = adapt(CuArray, allocate_vector_ad(nc, nder, T = F))
+#    flux = adapt(CuArray, allocate_vector_ad(nhf, nder, T = F))
+#
+#    return ConservationLaw(acc, flux, accpos, fluxpos)
+# end
 
 function allocate_residual(G::TervGrid, Law::ConservationLaw)
     r = similar(Law.accumulation, number_of_cells(G))
@@ -46,19 +56,20 @@ function allocate_jacobian(G::TervGrid, Law::ConservationLaw)
 end
 
 
-function allocate_vector_ad(n::R, nder = 0; T = Float64, diag_pos = nothing) where {R<:Integer}
+function allocate_vector_ad(n::R, nder = 0; context::TervContext = DefaultContext(), diag_pos = nothing) where {R<:Integer}
     # allocate a n length zero vector with space for derivatives
+    T = float_type(context)
     if nder == 0
         return zeros(T, n)
     else
         d = get_ad_unit_scalar(T(0.0), nder, diag_pos)
-        return repeat([d], n)
+        return allocate_vector(context, d, n)
     end
 end
 
-function allocate_vector_ad(v::AbstractVector, nder = 0; T = Float64, diag_pos = nothing)
+function allocate_vector_ad(v::AbstractVector, nder = 0; context = DefaultContext(), diag_pos = nothing)
     # create a copy of a vector as AD
-    v_AD = allocate_vector_ad(length(v), nder, T = T, diag_pos = diag_pos)
+    v_AD = allocate_vector_ad(length(v), nder, context = context, diag_pos = diag_pos)
     update_values!(v_AD, v)
 end
 

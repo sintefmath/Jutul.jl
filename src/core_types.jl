@@ -88,6 +88,18 @@ function allocate_storage!(d, model::TervModel)
     # Do nothing for Any.
 end
 
+function allocate_vector(context::TervContext, value::T, n) where {T<:Real}
+    v = Vector{T}(undef, n)
+    fill!(v, value)
+    return v
+end
+
+function allocate_vector(context::SingleCUDAContext, value::T, n) where {T<:Real}
+    v = CuVector{T}(undef, n)
+    fill!(v, value)
+    return v
+end
+
 function transfer(context::TervContext, v)
     return v
 end

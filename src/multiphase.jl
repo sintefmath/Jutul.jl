@@ -158,6 +158,8 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
         # and mobility are both used in other spots
         d[subscript("MassMobility", ph)] = allocate_vector_ad(nc, npartials)
     end
+    # Transfer linearized system afterwards since the above manipulations are
+    # easier to do on CPU
     d["LinearizedSystem"] = transfer(context, lsys)
 end
 
