@@ -256,8 +256,6 @@ function update_accumulation!(model, storage, phase::AbstractPhase, dt)
     mass = storage[subscript("TotalMass", phase)]
     mass0 = storage[subscript("TotalMass0", phase)]
 
-    display(mass)
-    display(mass0)
     acc = law.accumulation
     @. acc = (mass - mass0)/dt
 end
