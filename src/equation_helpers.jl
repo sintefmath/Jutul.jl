@@ -67,7 +67,7 @@ function allocate_vector_ad(n::R, nder = 0; context::TervContext = DefaultContex
     # allocate a n length zero vector with space for derivatives
     T = float_type(context)
     if nder == 0
-        return zeros(T, n)
+        return allocate_vector(context, T(0), n)
     else
         d = get_ad_unit_scalar(T(0.0), nder, diag_pos)
         return allocate_vector(context, d, n)
