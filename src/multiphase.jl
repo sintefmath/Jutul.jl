@@ -126,6 +126,8 @@ end
 function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
     G = model.grid
     sys = model.system
+    context = model.context
+
     nph = number_of_phases(sys)
     phases = get_phases(sys)
     npartials = nph
@@ -143,11 +145,10 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     dx = zeros(n_dof)
     r = zeros(n_dof)
     lsys = LinearizedSystem(jac, r, dx)
-    d["LinearizedSystem"] = lsys
     for phaseNo in eachindex(phases)
         ph = phases[phaseNo]
         sname = get_short_name(ph)
-        law = ConservationLaw(G, lsys, npartials)
+        law = ConservationLaw(G, lsys, npartials, context = context)
         d[subscript("ConservationLaw", ph)] = law
         # Mobility of phase
         d[subscript("Mobility", ph)] = allocate_vector_ad(nc, npartials)
@@ -157,6 +158,7 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
         # and mobility are both used in other spots
         d[subscript("MassMobility", ph)] = allocate_vector_ad(nc, npartials)
     end
+    d["LinearizedSystem"] = transfer(context, lsys)
 end
 
 function update_equations!(model::SimulationModel{G, S}, storage; 
