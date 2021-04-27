@@ -188,19 +188,44 @@ function update_properties!(model, storage, phase::AbstractPhase)
     p = state["Pressure"]
     # Parameters 
     param = storage["parameters"]
-    rho_fn = param[subscript("Density", phase)]
+    rho_def = param[subscript("Density", phase)]
     mu = param[subscript("Viscosity", phase)]
 
     # Stored properties
-    mob = storage[subscript("Mobility", phase)]
-    rho = storage[subscript("Density", phase)]
+    rho = update_density!(model, storage, phase)
+    mob = update_mobility!(model, storage, phase)
     mobrho = storage[subscript("MassMobility", phase)]
 
     # Assign the values
     @. mob = 1/mu
-    @. rho = rho_fn(p)
+    @. rho = rho_def(p)
     @. mobrho = mob*rho
 end
+
+function update_mobility!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:SinglePhaseSystem}
+    mob = storage[subscript("Mobility", phase)]
+    mu = storage["parameters"][subscript("Viscosity", phase)]
+    @. mob = 1/mu
+    return mob
+end
+
+function update_density!(model, storage, phase::AbstractPhase)
+    param = storage["parameters"]
+    state = storage["state"]    
+    p = state["Pressure"]
+    
+    d = subscript("Density", phase)
+    rho = storage[d]
+    r = param[d]
+    if isa(r, NamedTuple)
+        @. rho = r.rhoS*exp((p - r.pRef)*r.c)
+    else
+        # Function handle
+        @. rho = r(p)
+    end
+    return rho
+end
+
 
 function update_accumulation!(model, storage, phase::AbstractPhase, dt)
     law = storage[subscript("ConservationLaw", phase)]
