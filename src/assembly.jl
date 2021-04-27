@@ -29,7 +29,7 @@ function half_face_flux!(flux, mob, p, G::TervGrid)
     half_face_flux!(flux, mob, p, G.conn_data)
 end
 
-function half_face_flux!(flux, mob, p, fd::Vector{TPFAHalfFaceData{Float64, Int64}})
+function half_face_flux!(flux, mob, p, fd::Vector{TPFAHalfFaceData{F, I}}) where {F<:AbstractFloat, I<:Integer}
     Threads.@threads for i in eachindex(flux)
         flux[i] = tp_flux(fd[i].self, fd[i].other, fd[i].T, mob, p)
     end
