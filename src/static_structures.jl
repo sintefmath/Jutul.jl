@@ -14,9 +14,17 @@ function get_incomp_matrix(G::MinimalTPFAGrid)
 end
 
 function get_incomp_matrix(n, hfd)
-    I = [x.self for x in hfd]
-    J = [x.other for x in hfd]
-    V = [x.T for x in hfd]
+    # map is efficient on GPU 
+    I = map(x -> x.self, hfd)
+    J = map(x -> x.other, hfd)
+    V = map(x -> x.T, hfd)
+    # I = [x.self for x in hfd]
+    # J = [x.other for x in hfd]
+    # V = [x.T for x in hfd]
+
+    # I = vec(I)
+    # J = vec(J)
+    # V = vec(V)
 
     d = zeros(n)
     for i in eachindex(I)
@@ -25,4 +33,31 @@ function get_incomp_matrix(n, hfd)
     A = sparse(I, J, -V, n, n)
     A = A + spdiagm(d)
     return A
+end
+
+function get_sparsity_pattern(G::MinimalTPFAGrid)
+    n = number_of_cells(G)
+    get_sparsity_pattern(n, G.conn_data)
+end
+
+function get_sparsity_pattern(n, hfd)
+    # map is efficient on GPU 
+    I = map(x -> x.self, hfd)
+    J = map(x -> x.other, hfd)
+    V = map(x -> x.T, hfd)
+
+    D = [i for i in 1:n]
+
+    I = vcat(I, D)
+    J = vcat(J, D)
+    V = vcat(V, ones(n))
+
+    A = sparse(I, J, V, n, n)
+    return A
+end
+
+function get_sparsity_pattern(n, hfd::CuArray)
+    # Do this on CPU
+    tmp = Array(hfd)
+    return get_sparsity_pattern(n, tmp)
 end

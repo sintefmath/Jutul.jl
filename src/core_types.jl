@@ -142,7 +142,7 @@ end
 function SimulationModel(G, system;
                                  formulation = FullyImplicit(DefaultPrimaryVariables()), 
                                  context = DefaultContext())
-    grid = transfer_grid_to_context(context, G)
+    grid = transfer(context, G)
     return SimulationModel(grid, system, context, formulation)
 end
 

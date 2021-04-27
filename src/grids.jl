@@ -2,7 +2,7 @@ export MRSTGrid, MinimalTPFAGrid, TPFAHalfFaceData
 export get_cell_faces, get_facepos, get_cell_neighbors
 export number_of_cells, number_of_faces, number_of_half_faces
 
-export transfer_grid_to_context
+export transfer
 
 # Helpers follow
 "Minimal struct for TPFA connections (transmissibility + dz + cell pair)"
@@ -111,7 +111,7 @@ function get_facepos(N)
     return (faces, facePos)
 end
 
-function transfer_grid_to_context(context::SingleCUDAContext, grid::MinimalTPFAGrid)
+function transfer(context::SingleCUDAContext, grid::MinimalTPFAGrid)
     F = context.float_t
     I = context.index_t
     # Next line should be something like
@@ -123,6 +123,6 @@ function transfer_grid_to_context(context::SingleCUDAContext, grid::MinimalTPFAG
     return MinimalTPFAGrid(conn_data, conn_pos, pv)
 end
 
-function transfer_grid_to_context(::DefaultContext, grid)
+function transfer(::DefaultContext, grid)
     return grid
 end

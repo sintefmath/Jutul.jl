@@ -21,8 +21,10 @@ function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; jacobian_row_offs
     fluxpos = zeros(I, nder, nf)
     # Note: jacobian_row_offset needs to be added somewhere for multiphase
     jac = lsys.jac
+    # Note: We copy this back to host if it is on GPU to avoid rewriting these functions for CuArrays
+    conn_data = Array(G.conn_data)
     accumulation_sparse_pos!(accpos, jac)
-    half_face_flux_sparse_pos!(fluxpos, jac, nc, G.conn_data)
+    half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data)
 
     # Once positions are figured out (in a CPU context since Jacobian is not yet transferred)
     # we copy over the data to target device (or do nothing if we are on CPU)

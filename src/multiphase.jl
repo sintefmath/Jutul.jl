@@ -135,7 +135,7 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     nc = number_of_cells(G)
     nhf = number_of_half_faces(G)
 
-    A_p = get_incomp_matrix(G)
+    A_p = get_sparsity_pattern(G)
     if nph == 1
         jac = A_p
     else
