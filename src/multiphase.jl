@@ -93,6 +93,7 @@ function setup_state!(d, model, G, sys::MultiPhaseSystem, pressure::Union{Real, 
 end
 
 function convert_state_ad(model, state)
+    context = model.context
     stateAD = deepcopy(state)
     vars = String.(keys(state))
 
@@ -101,12 +102,12 @@ function convert_state_ad(model, state)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
     for i in 1:n_partials
         p = primary[i]
-        stateAD[p] = allocate_vector_ad(stateAD[p], n_partials, diag_pos = i)
+        stateAD[p] = allocate_vector_ad(stateAD[p], n_partials, diag_pos = i, context = context)
     end
     secondary = setdiff(vars, primary)
     # Loop over secondary variables and initialize as AD with zero partials
     for s in secondary
-        stateAD[s] = allocate_vector_ad(stateAD[s], n_partials)
+        stateAD[s] = allocate_vector_ad(stateAD[s], n_partials, context = context)
     end
     return stateAD
 end
@@ -145,18 +146,19 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     dx = zeros(n_dof)
     r = zeros(n_dof)
     lsys = LinearizedSystem(jac, r, dx)
+    alloc = (n) -> allocate_vector_ad(n, npartials, context = context)
     for phaseNo in eachindex(phases)
         ph = phases[phaseNo]
         sname = get_short_name(ph)
         law = ConservationLaw(G, lsys, npartials, context = context)
         d[subscript("ConservationLaw", ph)] = law
         # Mobility of phase
-        d[subscript("Mobility", ph)] = allocate_vector_ad(nc, npartials)
+        d[subscript("Mobility", ph)] = alloc(nc)
         # Mass density of phase
-        d[subscript("Density", ph)] = allocate_vector_ad(nc, npartials)
+        d[subscript("Density", ph)] = alloc(nc)
         # Mobility * Density. We compute store this separately since density
         # and mobility are both used in other spots
-        d[subscript("MassMobility", ph)] = allocate_vector_ad(nc, npartials)
+        d[subscript("MassMobility", ph)] = alloc(nc)
     end
     # Transfer linearized system afterwards since the above manipulations are
     # easier to do on CPU

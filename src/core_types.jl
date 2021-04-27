@@ -108,7 +108,7 @@ function transfer(context::SingleCUDAContext, v::AbstractArray{I}) where {I<:Int
     return CuArray{context.index_t}(v)
 end
 
-function transfer(context::SingleCUDAContext, v::AbstractArray{I}) where {I<:AbstractFloat}
+function transfer(context::SingleCUDAContext, v::AbstractArray{F}) where {F<:AbstractFloat}
     return CuArray{context.float_t}(v)
 end
 

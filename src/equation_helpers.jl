@@ -24,14 +24,19 @@ function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; jacobian_row_offs
     accumulation_sparse_pos!(accpos, jac)
     half_face_flux_sparse_pos!(fluxpos, jac, nc, G.conn_data)
 
+    # Once positions are figured out (in a CPU context since Jacobian is not yet transferred)
+    # we copy over the data to target device (or do nothing if we are on CPU)
+    accpos = transfer(context, accpos)
+    fluxpos = transfer(context, fluxpos)
+
     ConservationLaw(nc, nf, accpos, fluxpos, nder, context = context)
 end
 
 function ConservationLaw(nc::Integer, nhf::Integer, 
                          accpos::AbstractArray, fluxpos::AbstractArray, 
                          nder::Integer = 0; context = DefaultContext())
-    acc = allocate_vector_ad(nc, nder, context = DefaultContext())
-    flux = allocate_vector_ad(nhf, nder, context = DefaultContext())
+    acc = allocate_vector_ad(nc, nder, context = context)
+    flux = allocate_vector_ad(nhf, nder, context = context)
     ConservationLaw(acc, flux, accpos, fluxpos)
 end
 
