@@ -35,6 +35,16 @@ function half_face_flux!(flux, mob, p, fd::Vector{TPFAHalfFaceData{F, I}}) where
     end
 end
 
+function half_face_flux!(flux, mob, p, fd::CuVector{TPFAHalfFaceData{F, I}}) where {F<:AbstractFloat, I<:Integer}
+    gpu_bz = 256
+    kernel_gpu = half_face_flux_kernel(CUDADevice(), gpu_bz)
+    m = length(fd)
+    @time begin
+        event = kernel_gpu(flux, mob, p, fd, ndrange=m)
+        wait(event)
+    end
+end
+
 @kernel function half_face_flux_kernel(flux, @Const(mob), @Const(p), @Const(fd))
     i = @index(Global)
     @inbounds flux[i] = tp_flux(fd[i].self, fd[i].other, fd[i].T, mob, p)
