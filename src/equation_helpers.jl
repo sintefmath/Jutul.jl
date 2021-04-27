@@ -10,19 +10,21 @@ struct ConservationLaw <: TervEquation
     half_face_flux_jac_pos::AbstractArray # Equal length to half face flux
 end
 
-function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; T=Float64, jacobian_row_offset = 0)
+function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; jacobian_row_offset = 0, context = DefaultContext())
+    F = float_type(context)
+    I = index_type(context)
     # Create conservation law for a given grid with a number of partials
     nc = number_of_cells(G)
     nf = number_of_half_faces(G)
 
-    accpos = zeros(Int64, nder, nc)
-    fluxpos = zeros(Int64, nder, nf)
+    accpos = zeros(I, nder, nc)
+    fluxpos = zeros(I, nder, nf)
     # Note: jacobian_row_offset needs to be added somewhere for multiphase
     jac = lsys.jac
     accumulation_sparse_pos!(accpos, jac)
     half_face_flux_sparse_pos!(fluxpos, jac, nc, G.conn_data)
 
-    ConservationLaw(nc, nf, accpos, fluxpos, nder, T = T)
+    ConservationLaw(nc, nf, accpos, fluxpos, nder, T = F)
 end
 
 function ConservationLaw(nc::Integer, nhf::Integer, 
