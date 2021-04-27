@@ -13,6 +13,14 @@ abstract type TervContext end
 abstract type GPUTervContext <: TervContext end
 abstract type CPUTervContext <: TervContext end
 
+function float_type(c::TervContext)
+    return Float64
+end
+
+function index_type(c::TervContext)
+    return Int64
+end
+
 
 struct SingleCUDAContext <: GPUTervContext
     float_t::Type
@@ -23,6 +31,13 @@ struct SingleCUDAContext <: GPUTervContext
     end
 end
 
+function float_type(c::SingleCUDAContext)
+    return c.float_t
+end
+
+function index_type(c::SingleCUDAContext)
+    return c.index_t
+end
 
 struct SharedMemoryContext <: CPUTervContext
 
