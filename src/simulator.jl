@@ -15,6 +15,7 @@ function Simulator(model; state0 = setup_state(model), parameters = setup_parame
     storage["parameters"] = parameters
     storage["state0"] = state0
     storage["state"] = convert_state_ad(model, state0)
+    initialize_storage!(storage, model)
     storage = transfer_storage_to_context(model.context, storage)
     Simulator(model, storage)
 end
@@ -51,7 +52,7 @@ function newton_step(model, storage; dt = nothing, linsolve = nothing, sources =
 
     if do_solve
         solve!(lsys, linsolve)
-        storage["state"]["Pressure"] += lsys.dx
+        update_state!(model, storage)
     end
     return (e, tol)
 end

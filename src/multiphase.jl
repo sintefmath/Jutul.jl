@@ -92,6 +92,12 @@ function setup_state!(d, model, G, sys::MultiPhaseSystem, pressure::Union{Real, 
     end
 end
 
+function update_state!(model, storage)
+    lsys = storage["LinearizedSystem"]
+    storage["state"]["Pressure"] += lsys.dx
+end
+
+
 function convert_state_ad(model, state)
     context = model.context
     stateAD = deepcopy(state)
@@ -147,6 +153,7 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     r = zeros(n_dof)
     lsys = LinearizedSystem(jac, r, dx)
     alloc = (n) -> allocate_vector_ad(n, npartials, context = context)
+    alloc_value = (n) -> allocate_vector_ad(n, 0, context = context)
     for phaseNo in eachindex(phases)
         ph = phases[phaseNo]
         sname = get_short_name(ph)
@@ -159,20 +166,31 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
         # Mobility * Density. We compute store this separately since density
         # and mobility are both used in other spots
         d[subscript("MassMobility", ph)] = alloc(nc)
+        d[subscript("TotalMass", ph)] = alloc(nc)
+        d[subscript("TotalMass0", ph)] = alloc_value(nc)
     end
     # Transfer linearized system afterwards since the above manipulations are
     # easier to do on CPU
     d["LinearizedSystem"] = transfer(context, lsys)
 end
 
+function initialize_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+    update_properties!(model, d)
+    for ph in get_phases(model.system)
+        m = d[subscript("TotalMass", ph)]
+        m0 = d[subscript("TotalMass0", ph)]
+        @. m0 = value(m)
+    end
+end
+
 function update_equations!(model::SimulationModel{G, S}, storage; 
     dt = nothing, sources = nothing) where {G<:MinimalTPFAGrid, S<:MultiPhaseSystem}
+    update_properties!(model, storage)
     phases = get_phases(model.system)
     for phNo in eachindex(phases)
         phase = phases[phNo]
         law = storage[subscript("ConservationLaw", phase)]
 
-        update_properties!(model, storage, phase)
         update_accumulation!(model, storage, phase, dt)
         update_half_face_flux!(model, storage, phase)
 
@@ -183,35 +201,26 @@ function update_equations!(model::SimulationModel{G, S}, storage;
     end
 end
 
-function update_properties!(model, storage, phase::AbstractPhase)
-    state = storage["state"]    
-    p = state["Pressure"]
-    # Parameters 
-    param = storage["parameters"]
-    rho_def = param[subscript("Density", phase)]
-    mu = param[subscript("Viscosity", phase)]
-
-    # Stored properties
-    rho = update_density!(model, storage, phase)
-    mob = update_mobility!(model, storage, phase)
-    mobrho = storage[subscript("MassMobility", phase)]
-
-    # Assign the values
-    @. mob = 1/mu
-    @. rho = rho_def(p)
-    @. mobrho = mob*rho
+function update_properties!(model, storage)
+    for phase in get_phases(model.system)
+        # Update a few values
+        update_density!(model, storage, phase)
+        update_mobility!(model, storage, phase)
+        update_mass_mobility!(model, storage, phase)
+        update_total_mass!(model, storage, phase)
+    end
 end
 
+# Updates of various cell properties follows
 function update_mobility!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:SinglePhaseSystem}
     mob = storage[subscript("Mobility", phase)]
     mu = storage["parameters"][subscript("Viscosity", phase)]
     @. mob = 1/mu
-    return mob
 end
 
 function update_density!(model, storage, phase::AbstractPhase)
     param = storage["parameters"]
-    state = storage["state"]    
+    state = storage["state"]
     p = state["Pressure"]
     
     d = subscript("Density", phase)
@@ -226,20 +235,31 @@ function update_density!(model, storage, phase::AbstractPhase)
     return rho
 end
 
+function update_total_mass!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:SinglePhaseSystem}
+    pv = model.grid.pv
+    rho = storage[subscript("Density", phase)]
+    totMass = storage[subscript("TotalMass", phase)]
+    @. totMass = rho*pv
+end
 
-function update_accumulation!(model, storage, phase::AbstractPhase, dt)
-    law = storage[subscript("ConservationLaw", phase)]
+function update_mass_mobility!(model, storage, phase::AbstractPhase)
+    mobrho = storage[subscript("MassMobility", phase)]
     mob = storage[subscript("Mobility", phase)]
     rho = storage[subscript("Density", phase)]
-    pv = model.grid.pv
+    # Assign the values
+    @. mobrho = mob*rho
+end
 
-    # Currently a hack, this should be cached in state
-    rho_fn = storage["parameters"][subscript("Density", phase)]
-    p0 = storage["state0"]["Pressure"]
+# Update of discretization terms
+function update_accumulation!(model, storage, phase::AbstractPhase, dt)
+    law = storage[subscript("ConservationLaw", phase)]
+    mass = storage[subscript("TotalMass", phase)]
+    mass0 = storage[subscript("TotalMass0", phase)]
 
+    display(mass)
+    display(mass0)
     acc = law.accumulation
-
-    @. acc = (pv/dt)*(rho - rho_fn(p0))
+    @. acc = (mass - mass0)/dt
 end
 
 function update_half_face_flux!(model, storage, phase::AbstractPhase)
@@ -250,12 +270,14 @@ function update_half_face_flux!(model, storage, phase::AbstractPhase)
     half_face_flux!(law.half_face_flux, mmob, p, model.grid)
 end
 
+# Source terms, etc
 @inline function insert_sources(acc, sources, phNo)
     for src in sources
         @inbounds acc[src.cell] -= src.values[phNo]
     end
 end
 
+# Updating of linearized system
 function update_linearized_system!(model::TervModel, storage)
     sys = model.system;
     sys::MultiPhaseSystem
@@ -280,6 +302,7 @@ function update_linearized_system!(G, lsys::LinearizedSystem, law::ConservationL
     fill_half_face_fluxes(jac, r, G.conn_pos, G.conn_data, law.half_face_flux, apos, fpos)
 end
 
+"Fill acculation term onto diagonal with pre-determined access pattern into jac"
 function fill_accumulation!(jac, r, acc, apos)
     @inbounds Threads.@threads for i = 1:size(apos, 2)
         r[i] = acc[i].value
@@ -290,6 +313,7 @@ function fill_accumulation!(jac, r, acc, apos)
     end
 end
 
+"Fill fluxes onto diagonal with pre-determined access pattern into jac. Essentially performs Div ( flux )"
 function fill_half_face_fluxes(jac, r, conn_pos, conn_data, half_face_flux, apos, fpos)
     @inbounds Threads.@threads for cell_index = 1:length(apos)
         for i = conn_pos[cell_index]:(conn_pos[cell_index+1]-1)
