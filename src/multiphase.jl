@@ -393,7 +393,7 @@ end
         v += df_di
     end
     diag_index = apos[derNo, col]
-    @atomic nzval[diag_index] += v
+    nzval[diag_index] += v # Should this be atomic?
     nothing
 end
 

@@ -26,6 +26,10 @@ end
 
 function newton_step(model, storage; dt = nothing, linsolve = nothing, sources = nothing, iteration = nan)
     # Update the equations themselves - the AD bit
+    if isa(model.context, SingleCUDAContext)
+        # No idea why this is needed, but it is.
+        CUDA.synchronize()
+    end
     t_asm = @elapsed begin 
         update_equations!(model, storage, dt = dt, sources = sources)
     end

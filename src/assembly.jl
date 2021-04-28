@@ -39,10 +39,8 @@ end
 function half_face_flux!(flux, mob, p, conn_data, context, ::KernelAllowed)
     kernel = half_face_flux_kernel(context.device, context.block_size)
     m = length(conn_data)
-    @time begin
-        event = kernel(flux, mob, p, conn_data, ndrange=m)
-        wait(event)
-    end
+    event = kernel(flux, mob, p, conn_data, ndrange=m)
+    wait(event)
 end
 
 @kernel function half_face_flux_kernel(flux, @Const(mob), @Const(p), @Const(fd))

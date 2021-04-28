@@ -73,7 +73,7 @@ end
 
 function solve!(sys::LinearizedSystem, solver::CuSparseSolver)
     J = sys.jac
-    r = -sys.r
+    r = sys.r
     n = length(r)
 
     t_solve = @elapsed begin
@@ -94,6 +94,6 @@ function solve!(sys::LinearizedSystem, solver::CuSparseSolver)
         (x, stats) = bicgstab(J, r, M = op)
     end
     @debug "Solved linear system to with message '$stats.status' in $t_solve seconds."
-    sys.dx .= x
+    sys.dx .= -x
 end
 
