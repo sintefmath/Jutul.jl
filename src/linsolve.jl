@@ -1,6 +1,6 @@
 export LinearizedSystem, solve!, AMGSolver, transfer
 
-using IterativeSolvers, AlgebraicMultigrid, Adapt
+using IterativeSolvers, AlgebraicMultigrid
 
 struct LinearizedSystem
     jac
@@ -15,8 +15,8 @@ end
 function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
     F = context.float_t
     # Transfer types
-    r = adapt(CuArray{F}, lsys.r)
-    dx = adapt(CuArray{F}, lsys.dx)
+    r = CuArray{F}(lsys.r)
+    dx = CuArray{F}(lsys.dx)
     jac = CUDA.CUSPARSE.CuSparseMatrixCSC{F}(lsys.jac)
     return LinearizedSystem(jac, r, dx)
 end
