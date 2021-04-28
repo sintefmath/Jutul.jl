@@ -365,11 +365,10 @@ function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux::CuArray, apos, 
     d = size(apos)
     kernel = fill_half_face_fluxes_val_kernel(CUDADevice(), 256)
     event_val = kernel(r, half_face_flux, conn_pos, ndrange = d[2])
+    wait(event_val)
 
     kernel = fill_half_face_fluxes_jac_kernel(CUDADevice(), 256)
     event_jac = kernel(jac.nzVal, half_face_flux, apos, fpos, conn_pos, ndrange = d)
-
-    wait(event_val)
     wait(event_jac)
 end
 

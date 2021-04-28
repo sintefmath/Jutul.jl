@@ -38,7 +38,8 @@ function newton_step(model, storage; dt = nothing, linsolve = nothing, sources =
     @debug "Updated linear system in $t_lsys seconds."
 
     lsys = storage["LinearizedSystem"]
-    e = norm(lsys.r, Inf)
+    # e = norm(lsys.r, Inf)
+    e = norm(lsys.r) # 2-norm supported by CUDA
     tol = 1e-3
     if e < tol
         do_solve = iteration == 1
@@ -72,7 +73,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
                 break
             end
             if e > 1e10 || isinf(e) || isnan(e)
-                @assert "Timestep $step_no diverged."
+                @assert false "Timestep $step_no diverged."
                 break
             end
         end

@@ -1,6 +1,8 @@
-export LinearizedSystem, solve!, AMGSolver, transfer
+export LinearizedSystem, solve!, AMGSolver, CuSparseSolver, transfer
 
-using IterativeSolvers, AlgebraicMultigrid
+using SparseArrays, LinearOperators
+using IterativeSolvers, Krylov, AlgebraicMultigrid
+using CUDA, CUDA.CUSPARSE
 
 struct LinearizedSystem
     jac
@@ -12,6 +14,14 @@ function LinearizedSystem(context::TervContext, jac, r, dx)
     return LinearizedSystem(jac, r, dx)
 end
 
+function solve!(sys::LinearizedSystem, linsolve = nothing)
+    if isnothing(linsolve)
+        sys.dx .= -(sys.jac\sys.r)
+    else
+        solve!(sys, linsolve)
+    end
+end
+
 function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
     F = context.float_t
     # Transfer types
@@ -21,6 +31,7 @@ function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
     return LinearizedSystem(jac, r, dx)
 end
 
+# AMG solver (Julia-native)
 mutable struct AMGSolver 
     method
     reltol
@@ -50,10 +61,39 @@ function solve!(sys::LinearizedSystem, solver::AMGSolver)
     @debug "Solved linear system to $(solver.reltol) in $t_solve seconds."
 end
 
-function solve!(sys::LinearizedSystem, linsolve = nothing)
-    if isnothing(linsolve)
-        sys.dx .= -(sys.jac\sys.r)
-    else
-        solve!(sys, linsolve)
-    end
+# CUDA solvers
+mutable struct CuSparseSolver
+    method
+    storage
 end
+
+function CuSparseSolver(method = "Chol")
+    CuSparseSolver(method, nothing)
+end
+
+function solve!(sys::LinearizedSystem, solver::CuSparseSolver)
+    J = sys.jac
+    r = -sys.r
+    n = length(r)
+
+    t_solve = @elapsed begin
+        prec = ilu02(J, 'O')
+        
+        function ldiv!(y, prec, x)
+            # Perform inversion of upper and lower part of ILU preconditioner
+            copyto!(y, x)
+            sv2!('N', 'L', 'N', 1.0, prec, y, 'O')
+            sv2!('N', 'U', 'U', 1.0, prec, y, 'O')
+            return y
+        end
+        
+        y = similar(r)
+        T = eltype(r)
+        op = LinearOperator(T, n, n, false, false, x -> ldiv!(y, prec, x))
+        
+        (x, stats) = bicgstab(J, r, M = op)
+    end
+    @debug "Solved linear system to with message '$stats.status' in $t_solve seconds."
+    sys.dx .= x
+end
+
