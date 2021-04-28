@@ -64,11 +64,12 @@ end
 # CUDA solvers
 mutable struct CuSparseSolver
     method
+    reltol
     storage
 end
 
-function CuSparseSolver(method = "Chol")
-    CuSparseSolver(method, nothing)
+function CuSparseSolver(method = "Chol", reltol = 1e-6)
+    CuSparseSolver(method, reltol, nothing)
 end
 
 function solve!(sys::LinearizedSystem, solver::CuSparseSolver)
@@ -91,9 +92,9 @@ function solve!(sys::LinearizedSystem, solver::CuSparseSolver)
         T = eltype(r)
         op = LinearOperator(T, n, n, false, false, x -> ldiv!(y, prec, x))
         
-        (x, stats) = bicgstab(J, r, M = op)
+        (x, stats) = bicgstab(J, r, M = op, rtol = solver.reltol)
     end
-    @debug "Solved linear system to with message '$stats.status' in $t_solve seconds."
+    @debug "Solved linear system to with message '$(stats.status)' in $t_solve seconds."
     sys.dx .= -x
 end
 
