@@ -92,7 +92,7 @@ function solve!(sys::LinearizedSystem, solver::CuSparseSolver)
         T = eltype(r)
         op = LinearOperator(T, n, n, false, false, x -> ldiv!(y, prec, x))
         
-        (x, stats) = bicgstab(J, r, M = op, rtol = solver.reltol)
+        (x, stats) = dqgmres(J, r, M = op, rtol = solver.reltol, verbose = 0, itmax=20)
     end
     @debug "Solved linear system to with message '$(stats.status)' in $t_solve seconds."
     sys.dx .= -x
