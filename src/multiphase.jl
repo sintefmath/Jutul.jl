@@ -303,7 +303,7 @@ function update_linearized_system!(G, lsys::LinearizedSystem, law::ConservationL
     fill_accumulation!(jac, r, law.accumulation, apos)
     # Fill in off-diagonal
     fpos = law.half_face_flux_jac_pos
-    fill_half_face_fluxes(jac, r, G.conn_pos, G.conn_data, law.half_face_flux, apos, fpos)
+    fill_half_face_fluxes(jac, r, G.conn_pos, law.half_face_flux, apos, fpos)
 end
 
 "Fill acculation term onto diagonal with pre-determined access pattern into jac"
@@ -335,7 +335,7 @@ function fill_accumulation_jac!(nzval, acc, apos, col)
 end
 
 "Fill fluxes onto diagonal with pre-determined access pattern into jac. Essentially performs Div ( flux )"
-function fill_half_face_fluxes(jac, r, conn_pos, conn_data, half_face_flux, apos, fpos)
+function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos)
     Threads.@threads for col = 1:length(apos)
         @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
             # Update diagonal value
