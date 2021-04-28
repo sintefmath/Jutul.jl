@@ -1,4 +1,5 @@
 export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
+export fapply!
 
 function jacobian!(jac, mass, flux, G)
     
@@ -31,7 +32,7 @@ end
 
 function half_face_flux!(flux, mob, p, fd::Vector{TPFAHalfFaceData{F, I}}) where {F<:AbstractFloat, I<:Integer}
     Threads.@threads for i in eachindex(flux)
-        flux[i] = tp_flux(fd[i].self, fd[i].other, fd[i].T, mob, p)
+        @inbounds flux[i] = tp_flux(fd[i].self, fd[i].other, fd[i].T, mob, p)
     end
 end
 
@@ -60,4 +61,19 @@ end
     return m*t_ij*dp
 end
 
+"Apply a function to each element in the fastest possible manner."
+function fapply!(out, f, inputs...)
+    # Example:
+    # x, y, z equal length
+    # then fapply!(z, *, x, y) is equal to a parallel call of
+    # z .= x.*y
+    # If JuliaLang Issue #19777 gets resolved we can get rid of fapply!
+    Threads.@threads for i in eachindex(out)
+        @inbounds out[i] = f(map((x) -> x[i], inputs)...)
+    end
+end
 
+function fapply!(out::CuArray, f, inputs...)
+    # Specialize fapply for GPU to get automatic kernel computation
+    @. out = f(inputs...)
+end

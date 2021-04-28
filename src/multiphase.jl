@@ -185,14 +185,16 @@ end
 
 function update_equations!(model::SimulationModel{G, S}, storage; 
     dt = nothing, sources = nothing) where {G<:MinimalTPFAGrid, S<:MultiPhaseSystem}
-    update_properties!(model, storage)
+    println("Computing properties:")
+    @time update_properties!(model, storage)
     phases = get_phases(model.system)
     for phNo in eachindex(phases)
         phase = phases[phNo]
         law = storage[subscript("ConservationLaw", phase)]
-
-        update_accumulation!(model, storage, phase, dt)
-        update_half_face_flux!(model, storage, phase)
+        println("Computing accumulation term:")
+        @time update_accumulation!(model, storage, phase, dt)
+        println("Computing fluxes:")
+        @time update_half_face_flux!(model, storage, phase)
 
         if !isnothing(sources)
             # @debug "Inserting source terms."
@@ -215,7 +217,7 @@ end
 function update_mobility!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:SinglePhaseSystem}
     mob = storage[subscript("Mobility", phase)]
     mu = storage["parameters"][subscript("Viscosity", phase)]
-    @. mob = 1/mu
+    fapply!(mob, () -> 1/mu)
 end
 
 function update_density!(model, storage, phase::AbstractPhase)
@@ -227,11 +229,12 @@ function update_density!(model, storage, phase::AbstractPhase)
     rho = storage[d]
     r = param[d]
     if isa(r, NamedTuple)
-        @. rho = r.rhoS*exp((p - r.pRef)*r.c)
+        f_rho = (p) -> r.rhoS*exp((p - r.pRef)*r.c)
     else
         # Function handle
-        @. rho = r(p)
+        f_rho = r
     end
+    fapply!(rho, f_rho, p)
     return rho
 end
 
@@ -239,7 +242,7 @@ function update_total_mass!(model::SimulationModel{G, S}, storage, phase::Abstra
     pv = model.grid.pv
     rho = storage[subscript("Density", phase)]
     totMass = storage[subscript("TotalMass", phase)]
-    @. totMass = rho*pv
+    fapply!(totMass, *, rho, pv)
 end
 
 function update_mass_mobility!(model, storage, phase::AbstractPhase)
@@ -247,7 +250,7 @@ function update_mass_mobility!(model, storage, phase::AbstractPhase)
     mob = storage[subscript("Mobility", phase)]
     rho = storage[subscript("Density", phase)]
     # Assign the values
-    @. mobrho = mob*rho
+    fapply!(mobrho, *, mob, rho)
 end
 
 # Update of discretization terms
@@ -255,9 +258,7 @@ function update_accumulation!(model, storage, phase::AbstractPhase, dt)
     law = storage[subscript("ConservationLaw", phase)]
     mass = storage[subscript("TotalMass", phase)]
     mass0 = storage[subscript("TotalMass0", phase)]
-
-    acc = law.accumulation
-    @. acc = (mass - mass0)/dt
+    fapply!(law.accumulation, (m, m0) -> (m - m0)/dt, mass, mass0)
 end
 
 function update_half_face_flux!(model, storage, phase::AbstractPhase)
@@ -313,9 +314,9 @@ end
 
 "Fill fluxes onto diagonal with pre-determined access pattern into jac. Essentially performs Div ( flux )"
 function fill_half_face_fluxes(jac, r, conn_pos, conn_data, half_face_flux, apos, fpos)
-    @inbounds Threads.@threads for cell_index = 1:length(apos)
-        for i = conn_pos[cell_index]:(conn_pos[cell_index+1]-1)
-            r[cell_index] += half_face_flux[i].value
+    Threads.@threads for cell_index = 1:length(apos)
+        @inbounds for i = conn_pos[cell_index]:(conn_pos[cell_index+1]-1)
+            @inbounds r[cell_index] += half_face_flux[i].value
             @inbounds for derNo = 1:size(apos, 1)
                 index = fpos[derNo, i]
                 diag_index = apos[derNo, cell_index]
