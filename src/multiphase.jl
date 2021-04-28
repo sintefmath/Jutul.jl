@@ -368,10 +368,10 @@ function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, con
     d = size(apos)
     kernel = fill_half_face_fluxes_val_kernel(context.device, context.block_size)
     event_val = kernel(r, half_face_flux, conn_pos, ndrange = d[2])
-    wait(event_val)
 
     kernel = fill_half_face_fluxes_jac_kernel(context.device, context.block_size)
     event_jac = kernel(get_nzval(jac), half_face_flux, apos, fpos, conn_pos, ndrange = d)
+    wait(event_val)
     wait(event_jac)
 end
 
