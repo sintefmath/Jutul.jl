@@ -1,6 +1,6 @@
 export TervSystem, TervGrid, DefaultPrimaryVariables, TervPrimaryVariables
 export SimulationModel, TervPrimaryVariables, DefaultPrimaryVariables, TervFormulation
-export setup_parameters
+export setup_parameters, kernel_compatibility
 
 export SingleCUDAContext, SharedMemoryContext, DefaultContext
 
@@ -12,6 +12,12 @@ abstract type TervSystem end
 abstract type TervContext end
 abstract type GPUTervContext <: TervContext end
 abstract type CPUTervContext <: TervContext end
+# Traits for context
+abstract type KernelSupport end
+struct KernelAllowed <: KernelSupport end
+struct KernelDisallowed <: KernelSupport end
+
+kernel_compatibility(::Any) = KernelDisallowed()
 
 function float_type(c::TervContext)
     return Float64
@@ -21,16 +27,22 @@ function index_type(c::TervContext)
     return Int64
 end
 
-
+# CUDA context - everything on the single CUDA device attached to machine
 struct SingleCUDAContext <: GPUTervContext
     float_t::Type
     index_t::Type
+    block_size
+    device
 
-    function SingleCUDAContext(float_t::Type = Float32, index_t::Type = Int32)
-        return new(float_t, index_t)
+    function SingleCUDAContext(float_t::Type = Float32, index_t::Type = Int32, block_size = 256)
+        @assert CUDA.functional() "CUDA must be functional for this context."
+        return new(float_t, index_t, block_size, CUDADevice())
     end
 end
 
+kernel_compatibility(::SingleCUDAContext) = KernelAllowed()
+
+# For many GPUs we want to use single precision. Specialize interfaces accordingly.
 function float_type(c::SingleCUDAContext)
     return c.float_t
 end
@@ -40,8 +52,16 @@ function index_type(c::SingleCUDAContext)
 end
 
 struct SharedMemoryContext <: CPUTervContext
-
+    block_size
+    device
+    function SharedMemoryContext(block_size = Threads.nthreads())
+        # Remark: No idea what block_size means here.
+        return new(block_size, CPU())
+    end
 end
+
+kernel_compatibility(::SharedMemoryContext) = KernelAllowed()
+
 
 struct DefaultContext <: CPUTervContext
 

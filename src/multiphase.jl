@@ -265,7 +265,7 @@ function update_half_face_flux!(model, storage, phase::AbstractPhase)
     law = storage[subscript("ConservationLaw", phase)]
     mmob = storage[subscript("MassMobility", phase)]
 
-    half_face_flux!(law.half_face_flux, mmob, p, model.grid)
+    half_face_flux!(model, law.half_face_flux, mmob, p)
 end
 
 # Source terms, etc

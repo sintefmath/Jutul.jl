@@ -23,22 +23,24 @@ function half_face_flux(mob, p, G)
     return flux
 end
 
-function half_face_flux!(flux, mob, p, G::TervGrid)
-    half_face_flux!(flux, mob, p, G.conn_data)
+function half_face_flux!(model, flux, mob, p)
+    half_face_flux!(flux, mob, p, model.grid.conn_data, model.context, kernel_compatibility(model.context))
 end
 
-function half_face_flux!(flux, mob, p, fd::Vector{TPFAHalfFaceData{F, I}}) where {F<:AbstractFloat, I<:Integer}
+"Half face flux using standard loop"
+function half_face_flux!(flux, mob, p, conn_data, context, ::KernelDisallowed)
     Threads.@threads for i in eachindex(flux)
-        @inbounds flux[i] = tp_flux(fd[i].self, fd[i].other, fd[i].T, mob, p)
+        c = conn_data[i]
+        @inbounds flux[i] = tp_flux(c.self, c.other, c.T, mob, p)
     end
 end
 
-function half_face_flux!(flux, mob, p, fd::CuVector{TPFAHalfFaceData{F, I}}) where {F<:AbstractFloat, I<:Integer}
-    gpu_bz = 256
-    kernel_gpu = half_face_flux_kernel(CUDADevice(), gpu_bz)
-    m = length(fd)
+"Half face flux using kernel (GPU/CPU)"
+function half_face_flux!(flux, mob, p, conn_data, context, ::KernelAllowed)
+    kernel = half_face_flux_kernel(context.device, context.block_size)
+    m = length(conn_data)
     @time begin
-        event = kernel_gpu(flux, mob, p, fd, ndrange=m)
+        event = kernel(flux, mob, p, conn_data, ndrange=m)
         wait(event)
     end
 end
