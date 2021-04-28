@@ -276,6 +276,12 @@ end
     end
 end
 
+@inline function insert_sources(acc::CuArray, sources, phNo)
+    s = cu(map(x -> x.values[phNo], sources))
+    i = cu(map(x -> x.cell, sources))
+    @. acc[i] -= s
+end
+
 # Updating of linearized system
 function update_linearized_system!(model::TervModel, storage)
     sys = model.system;
