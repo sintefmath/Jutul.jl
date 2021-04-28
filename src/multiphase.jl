@@ -6,6 +6,8 @@ export SourceTerm
 export setup_state, setup_state!
 
 export allocate_storage, update_equations!
+
+using CUDA
 # Abstract multiphase system
 abstract type MultiPhaseSystem <: TervSystem end
 
@@ -312,17 +314,33 @@ function fill_accumulation!(jac, r, acc, apos)
     end
 end
 
+@kernel function fill_accumulation_jac_kernel(nzval, @Const(acc), @Const(apos))
+    derNo, col = @index(Global, NTuple)
+    index = apos[derNo, col]
+    nzval[index] = acc[col].partials[derNo]
+end
+
+function fill_accumulation!(jac, r, acc::CuArray, apos)
+    @. r = value(acc)
+    kernel = fill_accumulation_jac_kernel(CUDADevice(),256)
+    event = kernel(jac.nzVal, acc, apos, ndrange = size(apos))
+    wait(event)
+end
+
 function fill_accumulation_jac!(nzval, acc, apos, col)
     @inbounds for derNo = 1:size(apos, 1)
         index = apos[derNo, col]
         nzval[index] = acc[col].partials[derNo]
     end
 end
+
 "Fill fluxes onto diagonal with pre-determined access pattern into jac. Essentially performs Div ( flux )"
 function fill_half_face_fluxes(jac, r, conn_pos, conn_data, half_face_flux, apos, fpos)
     Threads.@threads for col = 1:length(apos)
         @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
-            @inbounds r[col] += half_face_flux[i].value
+            # Update diagonal value
+            r[col] += half_face_flux[i].value
+            # Fill inn Jacobian values
             fill_half_face_fluxes_jac!(half_face_flux, jac.nzval, apos, fpos, col, i)
         end
     end

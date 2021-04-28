@@ -47,7 +47,7 @@ function half_face_flux!(flux, mob, p, fd::CuVector{TPFAHalfFaceData{F, I}}) whe
 end
 
 @kernel function half_face_flux_kernel(flux, @Const(mob), @Const(p), @Const(fd))
-    i = @index(Global)
+    i = @index(Global, Linear)
     @inbounds flux[i] = tp_flux(fd[i].self, fd[i].other, fd[i].T, mob, p)
 end
 
