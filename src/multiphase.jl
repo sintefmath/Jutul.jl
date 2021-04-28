@@ -291,27 +291,30 @@ function update_linearized_system!(model::TervModel, storage)
     for phase in phases
         sname = get_short_name(phase)
         law = storage[subscript("ConservationLaw", phase)]
-        update_linearized_system!(model.grid, lsys, law)
+        update_linearized_system!(model, lsys, law)
     end
 end
 
-function update_linearized_system!(G, lsys::LinearizedSystem, law::ConservationLaw)
+function update_linearized_system!(model, lsys::LinearizedSystem, law::ConservationLaw)
+    G = model.grid
+    context = model.context
+    ker_compat = kernel_compatibility(context)
     apos = law.accumulation_jac_pos
     jac = lsys.jac
     r = lsys.r
     # Fill in diagonal
-    fill_accumulation!(jac, r, law.accumulation, apos)
+    fill_accumulation!(jac, r, law.accumulation, apos, context, ker_compat)
     # Fill in off-diagonal
     fpos = law.half_face_flux_jac_pos
-    fill_half_face_fluxes(jac, r, G.conn_pos, law.half_face_flux, apos, fpos)
+    fill_half_face_fluxes(jac, r, G.conn_pos, law.half_face_flux, apos, fpos, context, ker_compat)
 end
 
 # Accumulation: Base implementation
 "Fill acculation term onto diagonal with pre-determined access pattern into jac"
-function fill_accumulation!(jac, r, acc, apos)
+function fill_accumulation!(jac, r, acc, apos, context, ::KernelDisallowed)
     @inbounds Threads.@threads for col = 1:size(apos, 2)
         r[col] = acc[col].value
-        fill_accumulation_jac!(jac.nzval, acc, apos, col)
+        fill_accumulation_jac!(get_nzval(jac), acc, apos, col)
     end
 end
 
@@ -330,22 +333,22 @@ end
     nzval[index] = acc[col].partials[derNo]
 end
 
-function fill_accumulation!(jac, r, acc::CuArray, apos)
+function fill_accumulation!(jac, r, acc, apos, context, ::KernelAllowed)
     @. r = value(acc)
-    kernel = fill_accumulation_jac_kernel(CUDADevice(), 256)
-    event = kernel(jac.nzVal, acc, apos, ndrange = size(apos))
+    kernel = fill_accumulation_jac_kernel(context.device, context.block_size)
+    event = kernel(get_nzval(jac), acc, apos, ndrange = size(apos))
     wait(event)
 end
 
 # Fluxes: Base implementation
 "Fill fluxes onto diagonal with pre-determined access pattern into jac. Essentially performs Div ( flux )"
-function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos)
+function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, context, ::KernelDisallowed)
     Threads.@threads for col = 1:length(apos)
         @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
             # Update diagonal value
             r[col] += half_face_flux[i].value
             # Fill inn Jacobian values
-            fill_half_face_fluxes_jac!(jac.nzval, half_face_flux, apos, fpos, col, i)
+            fill_half_face_fluxes_jac!(get_nzval(jac), half_face_flux, apos, fpos, col, i)
         end
     end
 end
@@ -361,14 +364,14 @@ function fill_half_face_fluxes_jac!(nzval, half_face_flux, apos, fpos, col, i)
 end
 
 # Kernel / CUDA version follows
-function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux::CuArray, apos, fpos)
+function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, context, ::KernelAllowed)
     d = size(apos)
-    kernel = fill_half_face_fluxes_val_kernel(CUDADevice(), 256)
+    kernel = fill_half_face_fluxes_val_kernel(context.device, context.block_size)
     event_val = kernel(r, half_face_flux, conn_pos, ndrange = d[2])
     wait(event_val)
 
-    kernel = fill_half_face_fluxes_jac_kernel(CUDADevice(), 256)
-    event_jac = kernel(jac.nzVal, half_face_flux, apos, fpos, conn_pos, ndrange = d)
+    kernel = fill_half_face_fluxes_jac_kernel(context.device, context.block_size)
+    event_jac = kernel(get_nzval(jac), half_face_flux, apos, fpos, conn_pos, ndrange = d)
     wait(event_jac)
 end
 
@@ -392,4 +395,13 @@ end
     diag_index = apos[derNo, col]
     @atomic nzval[diag_index] += v
     nothing
+end
+
+@inline function get_nzval(jac)
+    return jac.nzval
+end
+
+@inline function get_nzval(jac::AbstractCuSparseMatrix)
+    # Why does CUDA and Base differ on capitalization?
+    return jac.nzVal
 end
