@@ -185,16 +185,13 @@ end
 
 function update_equations!(model::SimulationModel{G, S}, storage; 
     dt = nothing, sources = nothing) where {G<:MinimalTPFAGrid, S<:MultiPhaseSystem}
-    println("Computing properties:")
-    @time update_properties!(model, storage)
+    update_properties!(model, storage)
     phases = get_phases(model.system)
     for phNo in eachindex(phases)
         phase = phases[phNo]
         law = storage[subscript("ConservationLaw", phase)]
-        println("Computing accumulation term:")
-        @time update_accumulation!(model, storage, phase, dt)
-        println("Computing fluxes:")
-        @time update_half_face_flux!(model, storage, phase)
+        update_accumulation!(model, storage, phase, dt)
+        update_half_face_flux!(model, storage, phase)
 
         if !isnothing(sources)
             # @debug "Inserting source terms."
@@ -309,15 +306,18 @@ end
 
 "Fill acculation term onto diagonal with pre-determined access pattern into jac"
 function fill_accumulation!(jac, r, acc, apos)
-    @inbounds Threads.@threads for i = 1:size(apos, 2)
-        r[i] = acc[i].value
-        @inbounds for derNo = 1:size(apos, 1)
-            index = apos[derNo, i]
-            jac.nzval[index] = acc[i].partials[derNo]
-        end
+    @inbounds Threads.@threads for col = 1:size(apos, 2)
+        r[col] = acc[col].value
+        fill_accumulation_jac!(jac.nzval, acc, apos, col)
     end
 end
 
+function fill_accumulation_jac!(nzval, acc, apos, col)
+    @inbounds for derNo = 1:size(apos, 1)
+        index = apos[derNo, col]
+        nzval[index] = acc[col].partials[derNo]
+    end
+end
 "Fill fluxes onto diagonal with pre-determined access pattern into jac. Essentially performs Div ( flux )"
 function fill_half_face_fluxes(jac, r, conn_pos, conn_data, half_face_flux, apos, fpos)
     Threads.@threads for cell_index = 1:length(apos)
