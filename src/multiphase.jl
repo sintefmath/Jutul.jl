@@ -320,16 +320,20 @@ function fill_accumulation_jac!(nzval, acc, apos, col)
 end
 "Fill fluxes onto diagonal with pre-determined access pattern into jac. Essentially performs Div ( flux )"
 function fill_half_face_fluxes(jac, r, conn_pos, conn_data, half_face_flux, apos, fpos)
-    Threads.@threads for cell_index = 1:length(apos)
-        @inbounds for i = conn_pos[cell_index]:(conn_pos[cell_index+1]-1)
-            @inbounds r[cell_index] += half_face_flux[i].value
-            @inbounds for derNo = 1:size(apos, 1)
-                index = fpos[derNo, i]
-                diag_index = apos[derNo, cell_index]
-                df_di = half_face_flux[i].partials[derNo]
-                jac.nzval[index] = -df_di
-                jac.nzval[diag_index] += df_di
-            end
+    Threads.@threads for col = 1:length(apos)
+        @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
+            @inbounds r[col] += half_face_flux[i].value
+            fill_half_face_fluxes_jac!(half_face_flux, jac.nzval, apos, fpos, col, i)
         end
+    end
+end
+
+function fill_half_face_fluxes_jac!(half_face_flux, nzval, apos, fpos, col, i)
+    @inbounds for derNo = 1:size(apos, 1)
+        index = fpos[derNo, i]
+        diag_index = apos[derNo, col]
+        df_di = half_face_flux[i].partials[derNo]
+        nzval[index] = -df_di
+        nzval[diag_index] += df_di
     end
 end
