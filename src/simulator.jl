@@ -16,7 +16,6 @@ function Simulator(model; state0 = setup_state(model), parameters = setup_parame
     storage["state0"] = state0
     storage["state"] = convert_state_ad(model, state0)
     initialize_storage!(storage, model)
-    storage = transfer_storage_to_context(model.context, storage)
     Simulator(model, storage)
 end
 

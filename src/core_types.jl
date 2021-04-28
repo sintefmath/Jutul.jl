@@ -112,32 +112,6 @@ function transfer(context::SingleCUDAContext, v::AbstractArray{F}) where {F<:Abs
     return CuArray{context.float_t}(v)
 end
 
-function transfer_storage_to_context(model::TervModel, storage)
-    new_storage = transfer_storage_to_context(model.context, storage)
-    return new_storage
-end
-
-function transfer_storage_to_context(context::TervContext, storage)
-    return storage
-end
-
-
-function transfer_storage_to_context(context::SingleCUDAContext, storage)
-    return storage
-    # F = context.float_t
-    # dual_type = ForwardDiff.Dual{F, F, 1}
-    # new_storage = Dict()
-    # for key in keys(storage)
-    #    display(key)
-    #    display(storage[key])
-    #    old = storage[key]
-    #    display(old)
-    #    tmp = dual_type.(old)
-    #    new_storage[key] = cu(tmp)
-    # end
-    # return new_storage
-end
-
 
 function SimulationModel(G, system;
                                  formulation = FullyImplicit(DefaultPrimaryVariables()), 
@@ -145,11 +119,6 @@ function SimulationModel(G, system;
     grid = transfer(context, G)
     return SimulationModel(grid, system, context, formulation)
 end
-
-
-# context stuff
-
-
 
 function setup_parameters(model)
     return Dict{String, Any}()

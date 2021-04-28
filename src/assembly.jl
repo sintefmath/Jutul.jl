@@ -1,9 +1,6 @@
 export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
 export fapply!
 
-function jacobian!(jac, mass, flux, G)
-    
-end
 
 function residual!(r, CL, G)
     if isnothing(CL.accumulation)
