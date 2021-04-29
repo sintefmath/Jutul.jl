@@ -303,12 +303,12 @@ function update_linearized_system!(model, lsys::LinearizedSystem, law::Conservat
     jac = lsys.jac
     r = lsys.r
     # Fill in diagonal
-    @info "Accumulation fillin"
-    @time fill_accumulation!(jac, r, law.accumulation, apos, context, ker_compat)
+    # @info "Accumulation fillin"
+    fill_accumulation!(jac, r, law.accumulation, apos, context, ker_compat)
     # Fill in off-diagonal
     fpos = law.half_face_flux_jac_pos
-    @info "Half face flux fillin"
-    @time fill_half_face_fluxes(jac, r, G.conn_pos, law.half_face_flux, apos, fpos, context, ker_compat)
+    # @info "Half face flux fillin"
+    fill_half_face_fluxes(jac, r, G.conn_pos, law.half_face_flux, apos, fpos, context, ker_compat)
 end
 
 # Accumulation: Base implementation
@@ -332,7 +332,6 @@ end
 function fill_accumulation!(jac, r, acc, apos, context, ::KernelAllowed)
     @. r = value(acc)
     jz = get_nzval(jac)
-    # Only single derivative!
     @inbounds for i = 1:size(apos, 1)
         jz[apos[i, :]] = map((x) -> x.partials[i], acc)
     end
@@ -378,65 +377,71 @@ function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, con
     d = size(apos)
     Jz = get_nzval(jac)
 
-    println(":: HF, value")
-    @time begin
+    # println(":: HF, value")
+    begin
         ncol = d[2]
         kernel = fill_half_face_fluxes_val_kernel(context.device, context.block_size, ncol)
         event_val = kernel(r, half_face_flux, conn_pos, ndrange = ncol)
-        wait(event_val)
+        # wait(event_val)
     end
-    println(":: HF, offdiag")
-    @time begin
-        @inbounds for i = 1:size(fpos, 1)
-            Jz[fpos[i, :]] = map((x) -> x.partials[i], half_face_flux)
+
+    # println(":: HF, offdiag")
+    if true
+        begin
+            @inbounds for i = 1:size(fpos, 1)
+                Jz[fpos[i, :]] = map((x) -> -x.partials[i], half_face_flux)
+            end
         end
-    end
-    println(":: HF, diag")
-    @time begin
-        kernel = fill_half_face_fluxes_jac_diag_kernel(context.device, context.block_size, d)
-        event_jac = kernel(Jz, half_face_flux, apos, conn_pos, ndrange = d)
+        # println(":: HF, diag")
+        begin
+            kernel = fill_half_face_fluxes_jac_diag_kernel(context.device, context.block_size, d)
+            event_jac = kernel(Jz, half_face_flux, apos, conn_pos, ndrange = d)
+            # wait(event_jac)
+        end
+        wait(event_val)
         wait(event_jac)
-     end
-    
-     println(":: HF, full kernel")
-    @time begin
-        kernel = fill_half_face_fluxes_jac_kernel(context.device, context.block_size, d)
-        event_jac = kernel(Jz, half_face_flux, apos, fpos, conn_pos, ndrange = d)
-        wait(event_jac)
+    else
+        println(":: HF, full kernel")
+        @time begin
+            kernel = fill_half_face_fluxes_jac_kernel(context.device, context.block_size, d)
+            event_jac = kernel(Jz, half_face_flux, apos, fpos, conn_pos, ndrange = d)
+            wait(event_jac)
+        end
     end
 end
 
 @kernel function fill_half_face_fluxes_val_kernel(r, @Const(half_face_flux), @Const(conn_pos))
     col = @index(Global, Linear)
-    for i = conn_pos[col]:(conn_pos[col+1]-1)
+    v = 0
+    @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
         # Update diagonal value
-        r[col] += half_face_flux[i].value
+        v += half_face_flux[i].value
     end
+    @inbounds r[col] += v
 end
 
 
 @kernel function fill_half_face_fluxes_jac_diag_kernel(nzval, @Const(half_face_flux), @Const(apos), @Const(conn_pos))
     derNo, col = @index(Global, NTuple)
-    diag_index = apos[derNo, col]
     v = 0
-    for i = conn_pos[col]:(conn_pos[col+1]-1)
+    @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
         v += half_face_flux[i].partials[derNo]
     end
-    nzval[diag_index] += v
+    @inbounds nzval[apos[derNo, col]] += v
     nothing
 end
 
 @kernel function fill_half_face_fluxes_jac_kernel(nzval, @Const(half_face_flux), @Const(apos), @Const(fpos), @Const(conn_pos))
     derNo, col = @index(Global, NTuple)
     v = 0
-    for i = conn_pos[col]:(conn_pos[col+1]-1)
+    @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
         index = fpos[derNo, i]
         df_di = half_face_flux[i].partials[derNo]
         nzval[index] = -df_di
         v += df_di
     end
-    diag_index = apos[derNo, col]
-    nzval[diag_index] += v # Should this be atomic?
+    @inbounds diag_index = apos[derNo, col]
+    @inbounds nzval[diag_index] += v # Should this be atomic?
     nothing
 end
 
