@@ -303,57 +303,67 @@ function update_linearized_system!(model, lsys::LinearizedSystem, law::Conservat
     jac = lsys.jac
     r = lsys.r
     # Fill in diagonal
-    fill_accumulation!(jac, r, law.accumulation, apos, context, ker_compat)
+    @info "Accumulation fillin"
+    @time fill_accumulation!(jac, r, law.accumulation, apos, context, ker_compat)
     # Fill in off-diagonal
     fpos = law.half_face_flux_jac_pos
-    fill_half_face_fluxes(jac, r, G.conn_pos, law.half_face_flux, apos, fpos, context, ker_compat)
+    @info "Half face flux fillin"
+    @time fill_half_face_fluxes(jac, r, G.conn_pos, law.half_face_flux, apos, fpos, context, ker_compat)
 end
 
 # Accumulation: Base implementation
 "Fill acculation term onto diagonal with pre-determined access pattern into jac"
 function fill_accumulation!(jac, r, acc, apos, context, ::KernelDisallowed)
+    nzval = get_nzval(jac)
+    nder = size(apos, 1)
     @inbounds Threads.@threads for col = 1:size(apos, 2)
         r[col] = acc[col].value
-        fill_accumulation_jac!(get_nzval(jac), acc, apos, col)
+        fill_accumulation_jac!(nzval, acc, apos, col, nder)
     end
 end
 
 
-function fill_accumulation_jac!(nzval, acc, apos, col)
-    @inbounds for derNo = 1:size(apos, 1)
-        index = apos[derNo, col]
-        nzval[index] = acc[col].partials[derNo]
+@inline function fill_accumulation_jac!(nzval, acc, apos, col, nder)
+    @inbounds for derNo = 1:nder
+        nzval[apos[derNo, col]] = acc[col].partials[derNo]
     end
 end
 # Kernel / CUDA version follows
+function fill_accumulation!(jac, r, acc, apos, context, ::KernelAllowed)
+    @. r = value(acc)
+    jz = get_nzval(jac)
+    # Only single derivative!
+    @inbounds for i = 1:size(apos, 1)
+        jz[apos[i, :]] = map((x) -> x.partials[i], acc)
+    end
+    # kernel = fill_accumulation_jac_kernel(context.device, context.block_size)
+    # event = kernel(jz, acc, apos, ndrange = size(apos))
+    # wait(event)
+end
+
 "Kernel for filling Jacobian from accumulation term"
 @kernel function fill_accumulation_jac_kernel(nzval, @Const(acc), @Const(apos))
     derNo, col = @index(Global, NTuple)
-    index = apos[derNo, col]
-    nzval[index] = acc[col].partials[derNo]
-end
-
-function fill_accumulation!(jac, r, acc, apos, context, ::KernelAllowed)
-    @. r = value(acc)
-    kernel = fill_accumulation_jac_kernel(context.device, context.block_size)
-    event = kernel(get_nzval(jac), acc, apos, ndrange = size(apos))
-    wait(event)
+    @inbounds nzval[apos[derNo, col]] = acc[col].partials[derNo]
+    # i = @index(Global, Linear)
+    # @inbounds nzval[apos[1, i]] = acc[i].partials[1]
 end
 
 # Fluxes: Base implementation
 "Fill fluxes onto diagonal with pre-determined access pattern into jac. Essentially performs Div ( flux )"
 function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, context, ::KernelDisallowed)
+    Jz = get_nzval(jac)
     Threads.@threads for col = 1:length(apos)
         @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
             # Update diagonal value
             r[col] += half_face_flux[i].value
             # Fill inn Jacobian values
-            fill_half_face_fluxes_jac!(get_nzval(jac), half_face_flux, apos, fpos, col, i)
+            fill_half_face_fluxes_jac!(Jz, half_face_flux, apos, fpos, col, i)
         end
     end
 end
 
-function fill_half_face_fluxes_jac!(nzval, half_face_flux, apos, fpos, col, i)
+@inline function fill_half_face_fluxes_jac!(nzval, half_face_flux, apos, fpos, col, i)
     @inbounds for derNo = 1:size(apos, 1)
         index = fpos[derNo, i]
         diag_index = apos[derNo, col]
@@ -366,13 +376,34 @@ end
 # Kernel / CUDA version follows
 function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, context, ::KernelAllowed)
     d = size(apos)
-    kernel = fill_half_face_fluxes_val_kernel(context.device, context.block_size)
-    event_val = kernel(r, half_face_flux, conn_pos, ndrange = d[2])
+    Jz = get_nzval(jac)
 
-    kernel = fill_half_face_fluxes_jac_kernel(context.device, context.block_size)
-    event_jac = kernel(get_nzval(jac), half_face_flux, apos, fpos, conn_pos, ndrange = d)
-    wait(event_val)
-    wait(event_jac)
+    println(":: HF, value")
+    @time begin
+        ncol = d[2]
+        kernel = fill_half_face_fluxes_val_kernel(context.device, context.block_size, ncol)
+        event_val = kernel(r, half_face_flux, conn_pos, ndrange = ncol)
+        wait(event_val)
+    end
+    println(":: HF, offdiag")
+    @time begin
+        @inbounds for i = 1:size(fpos, 1)
+            Jz[fpos[i, :]] = map((x) -> x.partials[i], half_face_flux)
+        end
+    end
+    println(":: HF, diag")
+    @time begin
+        kernel = fill_half_face_fluxes_jac_diag_kernel(context.device, context.block_size, d)
+        event_jac = kernel(Jz, half_face_flux, apos, conn_pos, ndrange = d)
+        wait(event_jac)
+     end
+    
+     println(":: HF, full kernel")
+    @time begin
+        kernel = fill_half_face_fluxes_jac_kernel(context.device, context.block_size, d)
+        event_jac = kernel(Jz, half_face_flux, apos, fpos, conn_pos, ndrange = d)
+        wait(event_jac)
+    end
 end
 
 @kernel function fill_half_face_fluxes_val_kernel(r, @Const(half_face_flux), @Const(conn_pos))
@@ -381,6 +412,18 @@ end
         # Update diagonal value
         r[col] += half_face_flux[i].value
     end
+end
+
+
+@kernel function fill_half_face_fluxes_jac_diag_kernel(nzval, @Const(half_face_flux), @Const(apos), @Const(conn_pos))
+    derNo, col = @index(Global, NTuple)
+    diag_index = apos[derNo, col]
+    v = 0
+    for i = conn_pos[col]:(conn_pos[col+1]-1)
+        v += half_face_flux[i].partials[derNo]
+    end
+    nzval[diag_index] += v
+    nothing
 end
 
 @kernel function fill_half_face_fluxes_jac_kernel(nzval, @Const(half_face_flux), @Const(apos), @Const(fpos), @Const(conn_pos))

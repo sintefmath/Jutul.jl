@@ -27,6 +27,12 @@ function index_type(c::TervContext)
     return Int64
 end
 
+
+"Synchronize backend after allocations if needed"
+function synchronize(::TervContext)
+    # Do nothing
+end
+
 # CUDA context - everything on the single CUDA device attached to machine
 struct SingleCUDAContext <: GPUTervContext
     float_t::Type
@@ -41,6 +47,10 @@ struct SingleCUDAContext <: GPUTervContext
 end
 
 kernel_compatibility(::SingleCUDAContext) = KernelAllowed()
+
+function synchronize(::SingleCUDAContext)
+    CUDA.synchronize()
+end
 
 # For many GPUs we want to use single precision. Specialize interfaces accordingly.
 function float_type(c::SingleCUDAContext)
@@ -66,6 +76,7 @@ kernel_compatibility(::SharedMemoryContext) = KernelAllowed()
 struct DefaultContext <: CPUTervContext
 
 end
+
 # Grids
 abstract type TervGrid end
 

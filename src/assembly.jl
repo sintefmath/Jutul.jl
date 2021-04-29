@@ -37,8 +37,8 @@ end
 
 "Half face flux using kernel (GPU/CPU)"
 function half_face_flux!(flux, mob, p, conn_data, context, ::KernelAllowed)
-    kernel = half_face_flux_kernel(context.device, context.block_size)
     m = length(conn_data)
+    kernel = half_face_flux_kernel(context.device, context.block_size, m)
     event = kernel(flux, mob, p, conn_data, ndrange=m)
     wait(event)
 end
