@@ -64,7 +64,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     t = TPFAHalfFaceData{float_type, index_type}
     faceData = Vector{t}(undef, nhf)
 
-    for cell = 1:nc
+    Threads.@threads for cell = 1:nc
         @inbounds for fpos = facePos[cell]:(facePos[cell+1]-1)
             face = faces[fpos]
             if N[1, face] == cell
