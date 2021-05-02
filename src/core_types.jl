@@ -80,10 +80,27 @@ function degrees_of_freedom_per_unit(::ScalarPrimaryVariable)
 end
 
 
-function initialize_primary_variable(state, model, pvar::ScalarPrimaryVariable, offset, n_partials)
+function initialize_primary_variable_ad(state, model, pvar::ScalarPrimaryVariable, offset, n_partials)
     name = get_name(pvar)
     v_n = state[name]
     state[name] = allocate_array_ad(state[name], n_partials, diag_pos = offset + 1, context = model.context)
+    return state
+end
+
+function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVariable, val)
+    n = number_of_degrees_of_freedom(model, pvar)
+    name = get_name(pvar)
+    if isa(val, Dict)
+        val = val[name]
+    end
+
+    if isa(val, AbstractVector)
+        V = deepcopy(val)
+        @assert length(val) == n
+    else
+        V = repeat([val], n)
+    end
+    state[name] = transfer(model.context, V)
     return state
 end
 

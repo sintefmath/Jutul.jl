@@ -1,4 +1,4 @@
-export MultiPhaseSystem, ImmiscibleMultiPhaseSystem, SinglePhaseSystem
+export MultiPhaseSystem, ImmiscibleSystem, SinglePhaseSystem
 export LiquidPhase, VaporPhase
 export number_of_phases, get_short_name, get_name, subscript
 export update_linearized_system!
@@ -31,6 +31,10 @@ end
 # Immiscible multiphase system
 struct ImmiscibleSystem <: MultiPhaseSystem
     phases::AbstractVector
+end
+
+function ImmiscibleSystem(phases)
+    @assert length(phases) > 1 "System should have at least two phases. For single-phase, use SinglePhaseSystem instead."
 end
 
 # Single-phase
@@ -73,24 +77,21 @@ end
 
 ## Main implementation
 function setup_state(model, arg...)
-    d = Dict{String, Any}()
-    setup_state!(d, model, model.grid, model.system, arg...)
-    return d
+    state = Dict{String, Any}()
+    setup_state!(state, model, model.grid, model.system, arg...)
+    return state
 end
 
-function setup_state!(d, model, G, sys::MultiPhaseSystem, pressure::Union{Real, AbstractVector})
-    nc = number_of_cells(G)
-    if isa(pressure, AbstractVector)
-        p = deepcopy(pressure)
-        @assert length(pressure) == nc
-    else
-        p = repeat([pressure], nc)
+function setup_state!(state, model, G, sys::MultiPhaseSystem, init_values)
+    pvars = get_primary_variables(model)
+    for pvar in get_primary_variables(model)
+        initialize_primary_variable_value(state, model, pvar, init_values)
     end
-    p = transfer(model.context, p)
-    d["Pressure"] = p
+
+    nc = number_of_cells(model.grid)
     phases = get_phases(sys)
     for phase in phases
-        d[subscript("PhaseMass", phase)] = similar(p)
+        state[subscript("PhaseMass", phase)] = transfer(model.context, zeros(nc))
     end
 end
 
@@ -121,7 +122,7 @@ function convert_state_ad(model, state)
     n_partials = sum(counts)
     offset = 0
     for (i, pvar) in enumerate(primary)
-        stateAD = initialize_primary_variable(stateAD, model, pvar, offset, n_partials)
+        stateAD = initialize_primary_variable_ad(stateAD, model, pvar, offset, n_partials)
         offset += counts[i]
     end
     primary_names = get_primary_variable_names(model)
@@ -170,6 +171,10 @@ function get_primary_variables(model::SimulationModel)
 end
 
 function select_primary_variables(system::SinglePhaseSystem, formulation, discretization)
+    return [Pressure()]
+end
+
+function select_primary_variables(system::ImmiscibleSystem, formulation, discretization)
     return [Pressure()]
 end
 

@@ -39,7 +39,8 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     src = sources = [SourceTerm(1, [irate]), 
                      SourceTerm(nc, [-irate])]
     # State is dict with pressure in each cell
-    state0 = setup_state(model, p0)
+    init = Dict("Pressure" => p0)
+    state0 = setup_state(model, init)
     # Model parameters
     parameters = setup_parameters(model)
     parameters[subscript("Viscosity", phase)] = mu
