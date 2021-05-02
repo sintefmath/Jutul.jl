@@ -18,14 +18,6 @@ function get_incomp_matrix(n, hfd)
     I = map(x -> x.self, hfd)
     J = map(x -> x.other, hfd)
     V = map(x -> x.T, hfd)
-    # I = [x.self for x in hfd]
-    # J = [x.other for x in hfd]
-    # V = [x.T for x in hfd]
-
-    # I = vec(I)
-    # J = vec(J)
-    # V = vec(V)
-
     d = zeros(n)
     for i in eachindex(I)
         d[I[i]] += V[i]
