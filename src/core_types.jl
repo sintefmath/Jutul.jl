@@ -18,6 +18,25 @@ end
 abstract type TervDiscretization end
 struct DefaultDiscretization <: TervDiscretization end
 
+# Primary variables
+abstract type TervPrimaryVariables end
+
+function number_of_units(model, ::TervPrimaryVariables)
+    # By default, each primary variable exists on all cells of a "grid"
+    return number_of_cells(model.grid)
+end
+
+abstract type ScalarPrimaryVariable <: TervPrimaryVariables end
+
+function variables_per_unit(::ScalarPrimaryVariable)
+    return 1
+end
+
+
+abstract type GroupedPrimaryVariables <: TervPrimaryVariables end
+
+# abstract type PrimaryVariableConstraint end
+
 # Context
 abstract type TervContext end
 abstract type GPUTervContext <: TervContext end
@@ -94,11 +113,6 @@ abstract type TervGrid end
 abstract type TervFormulation end
 struct FullyImplicit <: TervFormulation
 end
-
-
-# Primary variables
-abstract type TervPrimaryVariables end
-# struct DefaultPrimaryVariables <: TervPrimaryVariables end
 
 # Equations
 abstract type TervEquation end

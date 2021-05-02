@@ -120,14 +120,32 @@ function convert_state_ad(model, state)
     return stateAD
 end
 
+# Primary variable logic
+
+# Pressure as primary variable
+struct Pressure <: ScalarPrimaryVariable
+    name
+end
+
+function Pressure(name = "Pressure")
+    new(name)
+end
+
+function get_names(v::ScalarPrimaryVariable)
+    return v.name
+end
+
 function number_of_primary_variables(model)
     return length(get_primary_variable_names(model))
 end
 
 function get_primary_variable_names(model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
-    return ["Pressure"]
+    return map((x) -> get_names(x), model.primary_variables)
 end
 
+function select_primary_variables(system::SinglePhaseSystem, formulation, discretization)
+    return [Pressure()]
+end
 
 function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
     G = model.grid
