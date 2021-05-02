@@ -30,13 +30,47 @@ function number_of_degrees_of_freedom(model, pvars::TervPrimaryVariables)
     return number_of_units(model, pvars)*degrees_of_freedom_per_unit(pvars)
 end
 
+function absolute_increment_limit(::TervPrimaryVariables) nothing end
+function relative_increment_limit(::TervPrimaryVariables) nothing end
+function maximum_value(::TervPrimaryVariables) nothing end
+function minimum_value(::TervPrimaryVariables) nothing end
+
 function update_state!(state, p::TervPrimaryVariables, model, dx)
     names = get_names(p)
     nu = number_of_units(model, p)
+    abs_max = absolute_increment_limit(p)
+    rel_max = relative_increment_limit(p)
+    maxval = maximum_value(p)
+    minval = minimum_value(p)
+
     for (index, name) in enumerate(names)
         offset = nu*(index-1)
-        state[name] += dx[1:nu .+ offset]
+        v = state[name]
+        dv = view(dx, (1:nu) .+ offset)
+        @. v = update_value(v, dv, abs_max, rel_max, minval, maxval)
     end
+end
+
+function update_value(v, dv, abs_change, rel_change, minval, maxval)
+    s = sign(dv)
+    if !isnothing(abs_change)
+        dv = s*min(abs(dv), abs_change)
+    end
+    if !isnothing(rel_change)
+        dmax = rel_change*abs(v)
+        dv = s*min(abs(dv), dmax)
+    end
+    if !isnothing(minval) && dv < 0
+        if value(v) + dv < minval
+            dv = minval - value(v)
+        end
+    end
+    if !isnothing(maxval) && dv > 0
+        if value(v) + dv > maxval
+            dv = maxval - value(v)
+        end
+    end
+    v += dv
 end
 
 abstract type ScalarPrimaryVariable <: TervPrimaryVariables end
