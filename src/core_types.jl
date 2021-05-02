@@ -26,12 +26,32 @@ function number_of_units(model, ::TervPrimaryVariables)
     return number_of_cells(model.grid)
 end
 
+function number_of_degrees_of_freedom(model, pvars::TervPrimaryVariables)
+    return number_of_units(model, pvars)*degrees_of_freedom_per_unit(pvars)
+end
+
+function update_state!(state, p::TervPrimaryVariables, model, dx)
+    names = get_names(p)
+    nu = number_of_units(model, p)
+    for (index, name) in enumerate(names)
+        offset = nu*(index-1)
+        state[name] += dx[1:nu .+ offset]
+    end
+end
+
 abstract type ScalarPrimaryVariable <: TervPrimaryVariables end
 
-function variables_per_unit(::ScalarPrimaryVariable)
+function degrees_of_freedom_per_unit(::ScalarPrimaryVariable)
     return 1
 end
 
+
+function initialize_primary_variable(state, model, pvar::ScalarPrimaryVariable, offset, n_partials)
+    name = get_name(pvar)
+    v_n = state[name]
+    state[name] = allocate_array_ad(state[name], n_partials, diag_pos = offset + 1, context = model.context)
+    return state
+end
 
 abstract type GroupedPrimaryVariables <: TervPrimaryVariables end
 

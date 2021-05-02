@@ -96,7 +96,16 @@ end
 
 function update_state!(model, storage)
     lsys = storage["LinearizedSystem"]
-    storage["state"]["Pressure"] += lsys.dx
+    state = storage["state"]
+
+    offset = 0
+    primary = get_primary_variables(model)
+    for p in primary
+        n = number_of_degrees_of_freedom(model, p)
+        rng = (1:n) .+ offset
+        update_state!(state, p, model, view(lsys.dx, rng))
+        offset += n
+    end
 end
 
 
@@ -105,14 +114,22 @@ function convert_state_ad(model, state)
     stateAD = deepcopy(state)
     vars = String.(keys(state))
 
-    primary = get_primary_variable_names(model)
-    n_partials = length(primary)
+    primary = get_primary_variables(model)
+    # n_partials = length(primary)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
-    for i in 1:n_partials
-        p = primary[i]
-        stateAD[p] = allocate_array_ad(stateAD[p], n_partials, diag_pos = i, context = context)
+    counts = map((x) -> degrees_of_freedom_per_unit(x), primary)
+    n_partials = sum(counts)
+    offset = 0
+    for (i, pvar) in enumerate(primary)
+        stateAD = initialize_primary_variable(stateAD, model, pvar, offset, n_partials)
+        offset += counts[i]
     end
-    secondary = setdiff(vars, primary)
+    primary_names = get_primary_variable_names(model)
+    #for i in 1:n_partials
+    #    p = primary[i]
+    #    stateAD[p] = allocate_array_ad(stateAD[p], n_partials, diag_pos = i, context = context)
+    #end
+    secondary = setdiff(vars, primary_names)
     # Loop over secondary variables and initialize as AD with zero partials
     for s in secondary
         stateAD[s] = allocate_array_ad(stateAD[s], n_partials, context = context)
@@ -132,15 +149,24 @@ function Pressure()
 end
 
 function get_names(v::ScalarPrimaryVariable)
+    return [get_name(v)]
+end
+
+function get_name(v::ScalarPrimaryVariable)
     return v.name
 end
 
 function number_of_primary_variables(model)
+    # TODO: Bit of a mess (number of primary variables, vs number of actual primary variables realized on grid. Fix.)
     return length(get_primary_variable_names(model))
 end
 
 function get_primary_variable_names(model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
-    return map((x) -> get_names(x), model.primary_variables)
+    return map((x) -> get_name(x), get_primary_variables(model))
+end
+
+function get_primary_variables(model::SimulationModel)
+    return model.primary_variables
 end
 
 function select_primary_variables(system::SinglePhaseSystem, formulation, discretization)
