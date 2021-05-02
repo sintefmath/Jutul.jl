@@ -8,6 +8,16 @@ export transfer_storage_to_context, transfer
 
 # Physical system
 abstract type TervSystem end
+
+
+function select_primary_variables(system::TervSystem, formulation, discretization)
+    return nothing
+end
+
+# Discretization - currently unused
+abstract type TervDiscretization end
+struct DefaultDiscretization <: TervDiscretization end
+
 # Context
 abstract type TervContext end
 abstract type GPUTervContext <: TervContext end
@@ -82,14 +92,13 @@ abstract type TervGrid end
 
 # Formulation
 abstract type TervFormulation end
-struct FullyImplicit <: TervFormulation 
-    primary_variables
+struct FullyImplicit <: TervFormulation
 end
 
 
 # Primary variables
 abstract type TervPrimaryVariables end
-struct DefaultPrimaryVariables <: TervPrimaryVariables end
+# struct DefaultPrimaryVariables <: TervPrimaryVariables end
 
 # Equations
 abstract type TervEquation end
@@ -102,11 +111,14 @@ abstract type TervModel end
 struct SimulationModel{G<:TervGrid, 
                        S<:TervSystem,
                        F<:TervFormulation,
-                       C<:TervContext} <: TervModel
+                       C<:TervContext,
+                       D<:TervDiscretization} <: TervModel
     grid::G
     system::S
     context::C
     formulation::F
+    discretization::D
+    primary_variables
 end
 
 function allocate_storage(model::TervModel)
@@ -145,10 +157,12 @@ end
 
 
 function SimulationModel(G, system;
-                                 formulation = FullyImplicit(DefaultPrimaryVariables()), 
-                                 context = DefaultContext())
+                                 formulation = FullyImplicit(), 
+                                 context = DefaultContext(),
+                                 discretization = DefaultDiscretization())
     grid = transfer(context, G)
-    return SimulationModel(grid, system, context, formulation)
+    primary = select_primary_variables(system, formulation, discretization)
+    return SimulationModel(grid, system, context, formulation, discretization, primary)
 end
 
 function setup_parameters(model)
