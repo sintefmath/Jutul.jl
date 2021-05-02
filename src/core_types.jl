@@ -96,12 +96,34 @@ function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVari
 
     if isa(val, AbstractVector)
         V = deepcopy(val)
-        @assert length(val) == n
+        @assert length(val) == n "Variable was neither scalar nor the expected dimension"
     else
         V = repeat([val], n)
     end
     state[name] = transfer(model.context, V)
     return state
+end
+
+
+function get_names(v::ScalarPrimaryVariable)
+    return [get_name(v)]
+end
+
+function get_name(v::ScalarPrimaryVariable)
+    return v.name
+end
+
+function number_of_primary_variables(model)
+    # TODO: Bit of a mess (number of primary variables, vs number of actual primary variables realized on grid. Fix.)
+    return length(get_primary_variable_names(model))
+end
+
+function get_primary_variable_names(model::SimulationModel)
+    return map((x) -> get_name(x), get_primary_variables(model))
+end
+
+function get_primary_variables(model::SimulationModel)
+    return model.primary_variables
 end
 
 abstract type GroupedPrimaryVariables <: TervPrimaryVariables end

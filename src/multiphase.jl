@@ -116,7 +116,6 @@ function convert_state_ad(model, state)
     vars = String.(keys(state))
 
     primary = get_primary_variables(model)
-    # n_partials = length(primary)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
     counts = map((x) -> degrees_of_freedom_per_unit(x), primary)
     n_partials = sum(counts)
@@ -126,10 +125,6 @@ function convert_state_ad(model, state)
         offset += counts[i]
     end
     primary_names = get_primary_variable_names(model)
-    #for i in 1:n_partials
-    #    p = primary[i]
-    #    stateAD[p] = allocate_array_ad(stateAD[p], n_partials, diag_pos = i, context = context)
-    #end
     secondary = setdiff(vars, primary_names)
     # Loop over secondary variables and initialize as AD with zero partials
     for s in secondary
@@ -148,26 +143,14 @@ end
 function Pressure()
     Pressure("Pressure")
 end
-
-function get_names(v::ScalarPrimaryVariable)
-    return [get_name(v)]
+# Saturations as primary variable
+struct Saturations <: GroupedPrimaryVariables
+    name
+    phases
 end
 
-function get_name(v::ScalarPrimaryVariable)
-    return v.name
-end
-
-function number_of_primary_variables(model)
-    # TODO: Bit of a mess (number of primary variables, vs number of actual primary variables realized on grid. Fix.)
-    return length(get_primary_variable_names(model))
-end
-
-function get_primary_variable_names(model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
-    return map((x) -> get_name(x), get_primary_variables(model))
-end
-
-function get_primary_variables(model::SimulationModel)
-    return model.primary_variables
+function Saturations(phases::AbstractArray)
+    Saturations("Saturations", phases)
 end
 
 function select_primary_variables(system::SinglePhaseSystem, formulation, discretization)
@@ -175,7 +158,7 @@ function select_primary_variables(system::SinglePhaseSystem, formulation, discre
 end
 
 function select_primary_variables(system::ImmiscibleSystem, formulation, discretization)
-    return [Pressure()]
+    return [Pressure(), Saturations(system.phases)]
 end
 
 function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
