@@ -4,7 +4,7 @@ export setup_parameters, kernel_compatibility
 
 export SingleCUDAContext, SharedMemoryContext, DefaultContext
 
-export transfer_storage_to_context, transfer
+export transfer_storage_to_context, transfer, allocate_array
 
 # Physical system
 abstract type TervSystem end
@@ -145,14 +145,17 @@ function allocate_storage!(d, model::TervModel)
     # Do nothing for Any.
 end
 
-function allocate_vector(context::TervContext, value::T, n) where {T<:Real}
-    v = Vector{T}(undef, n)
+
+function allocate_array(context::TervContext, value::T, n...) where {T<:Real}
+    N = length(n)
+    v = Array{T, N}(undef, n...)
     fill!(v, value)
     return v
 end
 
-function allocate_vector(context::SingleCUDAContext, value::T, n) where {T<:Real}
-    v = CuVector{T}(undef, n)
+function allocate_array(context::SingleCUDAContext, value::T, n...) where {T<:Real}
+    N = length(n)
+    v = CuArray{T, N}(undef, n...)
     fill!(v, value)
     return v
 end

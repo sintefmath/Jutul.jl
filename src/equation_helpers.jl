@@ -1,5 +1,5 @@
 export ConservationLaw, setup_conservationlaw
-export allocate_vector_ad, get_ad_unit_scalar, update_values!
+export allocate_array_ad, get_ad_unit_scalar, update_values!
 export allocate_residual, allocate_jacobian
 export value
 
@@ -37,8 +37,8 @@ end
 function ConservationLaw(nc::Integer, nhf::Integer, 
                          accpos::AbstractArray, fluxpos::AbstractArray, 
                          nder::Integer = 0; context = DefaultContext())
-    acc = allocate_vector_ad(nc, nder, context = context)
-    flux = allocate_vector_ad(nhf, nder, context = context)
+    acc = allocate_array_ad(nc, nder, context = context)
+    flux = allocate_array_ad(nhf, nder, context = context)
     ConservationLaw(acc, flux, accpos, fluxpos)
 end
 
@@ -63,20 +63,20 @@ function allocate_jacobian(G::TervGrid, Law::ConservationLaw)
 end
 
 
-function allocate_vector_ad(n::R, nder = 0; context::TervContext = DefaultContext(), diag_pos = nothing) where {R<:Integer}
+function allocate_array_ad(n::R, nder = 0; context::TervContext = DefaultContext(), diag_pos = nothing) where {R<:Integer}
     # allocate a n length zero vector with space for derivatives
     T = float_type(context)
     if nder == 0
-        return allocate_vector(context, T(0), n)
+        return allocate_array(context, T(0), n)
     else
         d = get_ad_unit_scalar(T(0.0), nder, diag_pos)
-        return allocate_vector(context, d, n)
+        return allocate_array(context, d, n)
     end
 end
 
-function allocate_vector_ad(v::AbstractVector, nder = 0; context = DefaultContext(), diag_pos = nothing)
+function allocate_array_ad(v::AbstractVector, nder = 0; context = DefaultContext(), diag_pos = nothing)
     # create a copy of a vector as AD
-    v_AD = allocate_vector_ad(length(v), nder, context = context, diag_pos = diag_pos)
+    v_AD = allocate_array_ad(length(v), nder, context = context, diag_pos = diag_pos)
     update_values!(v_AD, v)
 end
 

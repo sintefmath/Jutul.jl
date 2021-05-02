@@ -110,12 +110,12 @@ function convert_state_ad(model, state)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
     for i in 1:n_partials
         p = primary[i]
-        stateAD[p] = allocate_vector_ad(stateAD[p], n_partials, diag_pos = i, context = context)
+        stateAD[p] = allocate_array_ad(stateAD[p], n_partials, diag_pos = i, context = context)
     end
     secondary = setdiff(vars, primary)
     # Loop over secondary variables and initialize as AD with zero partials
     for s in secondary
-        stateAD[s] = allocate_vector_ad(stateAD[s], n_partials, context = context)
+        stateAD[s] = allocate_array_ad(stateAD[s], n_partials, context = context)
     end
     return stateAD
 end
@@ -127,8 +127,8 @@ struct Pressure <: ScalarPrimaryVariable
     name
 end
 
-function Pressure(name = "Pressure")
-    new(name)
+function Pressure()
+    Pressure("Pressure")
 end
 
 function get_names(v::ScalarPrimaryVariable)
@@ -169,8 +169,8 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     dx = zeros(n_dof)
     r = zeros(n_dof)
     lsys = LinearizedSystem(jac, r, dx)
-    alloc = (n) -> allocate_vector_ad(n, npartials, context = context)
-    alloc_value = (n) -> allocate_vector_ad(n, 0, context = context)
+    alloc = (n) -> allocate_array_ad(n, npartials, context = context)
+    alloc_value = (n) -> allocate_array_ad(n, 0, context = context)
     for phaseNo in eachindex(phases)
         ph = phases[phaseNo]
         sname = get_short_name(ph)
