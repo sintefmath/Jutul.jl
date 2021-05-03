@@ -36,9 +36,9 @@ end
 
 function ConservationLaw(nc::Integer, nhf::Integer, 
                          accpos::AbstractArray, fluxpos::AbstractArray, 
-                         nder::Integer = 0; context = DefaultContext())
-    acc = allocate_array_ad(nc, nder, context = context)
-    flux = allocate_array_ad(nhf, nder, context = context)
+                         npartials::Integer = 0; context = DefaultContext())
+    acc = allocate_array_ad(nc, context = context, npartials = npartials)
+    flux = allocate_array_ad(nhf, context = context, npartials = npartials)
     ConservationLaw(acc, flux, accpos, fluxpos)
 end
 
@@ -63,27 +63,27 @@ function allocate_jacobian(G::TervGrid, Law::ConservationLaw)
 end
 
 
-function allocate_array_ad(n::R, nder = 0; context::TervContext = DefaultContext(), diag_pos = nothing) where {R<:Integer}
+function allocate_array_ad(n::R; context::TervContext = DefaultContext(), diag_pos = nothing, npartials = 1) where {R<:Integer}
     # allocate a n length zero vector with space for derivatives
     T = float_type(context)
-    if nder == 0
-        return allocate_array(context, T(0), n)
+    if npartials == 0
+        return allocate_array(context, T(0), n...)
     else
-        d = get_ad_unit_scalar(T(0.0), nder, diag_pos)
-        return allocate_array(context, d, n)
+        d = get_ad_unit_scalar(T(0.0), npartials, diag_pos)
+        return allocate_array(context, d, n...)
     end
 end
 
-function allocate_array_ad(v::AbstractVector, nder = 0; context = DefaultContext(), diag_pos = nothing)
+function allocate_array_ad(v::AbstractVector; context = DefaultContext(), diag_pos = nothing, npartials = 1)
     # create a copy of a vector as AD
-    v_AD = allocate_array_ad(length(v), nder, context = context, diag_pos = diag_pos)
+    v_AD = allocate_array_ad(length(v), context = context, diag_pos = diag_pos, npartials = npartials)
     update_values!(v_AD, v)
 end
 
-function get_ad_unit_scalar(v::T, nder, diag_pos = nothing) where {T<:Real}
+function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing) where {T<:Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
-    if nder > 0
-        v = ForwardDiff.Dual{T}(v, ntuple(x -> T.(x == diag_pos), nder))
+    if npartials > 0
+        v = ForwardDiff.Dual{T}(v, ntuple(x -> T.(x == diag_pos), npartials))
     end
     return v
 end

@@ -128,7 +128,7 @@ function convert_state_ad(model, state)
     secondary = setdiff(vars, primary_names)
     # Loop over secondary variables and initialize as AD with zero partials
     for s in secondary
-        stateAD[s] = allocate_array_ad(stateAD[s], n_partials, context = context)
+        stateAD[s] = allocate_array_ad(stateAD[s], context = context, npartials = n_partials)
     end
     return stateAD
 end
@@ -212,8 +212,8 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     dx = zeros(n_dof)
     r = zeros(n_dof)
     lsys = LinearizedSystem(jac, r, dx)
-    alloc = (n) -> allocate_array_ad(n, npartials, context = context)
-    alloc_value = (n) -> allocate_array_ad(n, 0, context = context)
+    alloc = (n) -> allocate_array_ad(n, context = context, npartials = npartials)
+    alloc_value = (n) -> allocate_array_ad(n, context = context, npartials = 0)
     for phaseNo in eachindex(phases)
         ph = phases[phaseNo]
         sname = get_short_name(ph)

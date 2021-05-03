@@ -79,10 +79,10 @@ function degrees_of_freedom_per_unit(::ScalarPrimaryVariable)
     return 1
 end
 
-function initialize_primary_variable_ad(state, model, pvar::ScalarPrimaryVariable, offset, n_partials)
+function initialize_primary_variable_ad(state, model, pvar::ScalarPrimaryVariable, offset, npartials)
     name = get_name(pvar)
     v_n = state[name]
-    state[name] = allocate_array_ad(state[name], n_partials, diag_pos = offset + 1, context = model.context)
+    state[name] = allocate_array_ad(state[name], diag_pos = offset + 1, context = model.context, npartials = npartials)
     return state
 end
 
