@@ -87,6 +87,14 @@ function allocate_array_ad(v::AbstractVector; context = DefaultContext(), diag_p
     update_values!(v_AD, v)
 end
 
+function allocate_array_ad(v::AbstractMatrix; context = DefaultContext(), diag_pos = nothing, npartials = 1)
+    # create a copy of a vector as AD
+    v_AD = allocate_array_ad(size(v)..., context = context, diag_pos = diag_pos, npartials = npartials)
+    update_values!(v_AD, v)
+end
+
+
+
 function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing) where {T<:Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
     if npartials > 0

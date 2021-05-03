@@ -119,6 +119,7 @@ function convert_state_ad(model, state)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
     counts = map((x) -> degrees_of_freedom_per_unit(x), primary)
     n_partials = sum(counts)
+    @debug "Found $n_partials primary variables."
     offset = 0
     for (i, pvar) in enumerate(primary)
         stateAD = initialize_primary_variable_ad(stateAD, model, pvar, offset, n_partials)
@@ -151,6 +152,20 @@ end
 
 function Saturations(phases::AbstractArray)
     Saturations("Saturations", phases)
+end
+
+function initialize_primary_variable_ad(state, model, pvar::Saturations, offset, npartials)
+    name = get_name(pvar)
+    nph = length(pvar.phases)
+    # nph - 1 primary variables, with the last saturation being initially zero AD
+    dp = vcat((1:nph-1) .+ offset, 0)
+    v = state[name]
+    v = allocate_array_ad(v, diag_pos = dp, context = model.context, npartials = npartials)
+    for i in 1:size(v, 2)
+        v[end, i] = 1 - sum(v[1:end-1, i])
+    end
+    state[name] = v
+    return state
 end
 
 function initialize_primary_variable_value(state, model, pvar::Saturations, val)
