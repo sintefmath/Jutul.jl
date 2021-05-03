@@ -240,19 +240,18 @@ function allocate_storage!(d, model::TervModel)
     # Do nothing for Any.
 end
 
-
-function allocate_array(context::TervContext, value::T, n...) where {T<:Real}
-    N = length(n)
-    v = Array{T, N}(undef, n...)
-    fill!(v, value)
-    return v
+function convert(context::TervContext, v)
+    return Array(v)
 end
 
-function allocate_array(context::SingleCUDAContext, value::T, n...) where {T<:Real}
-    N = length(n)
-    v = CuArray{T, N}(undef, n...)
-    fill!(v, value)
-    return v
+function convert(context::SingleCUDAContext, v)
+    return CuArray(v)
+end
+
+
+function allocate_array(context::TervContext, value::T, n...) where {T<:Real}
+    tmp = convert(context, [value])
+    return repeat(tmp, n...)
 end
 
 function transfer(context::TervContext, v)
