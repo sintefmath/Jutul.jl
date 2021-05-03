@@ -93,6 +93,12 @@ function setup_state!(state, model, G, sys::MultiPhaseSystem, init_values)
     for phase in phases
         state[subscript("PhaseMass", phase)] = transfer(model.context, zeros(nc))
     end
+    if !isa(sys, SinglePhaseSystem)
+        s = state["Saturations"]
+        for (i, phase) in enumerate(phases)
+            state[subscript("Saturation", phase)] = view(s, i, :)
+        end
+    end
 end
 
 function update_state!(model, storage)
@@ -292,6 +298,16 @@ function update_mobility!(model::SimulationModel{G, S}, storage, phase::Abstract
     fapply!(mob, () -> 1/mu)
 end
 
+function update_mobility!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:ImmiscibleSystem}
+    p = storage["parameters"]
+    mob = storage[subscript("Mobility", phase)]
+    s = storage["state"][subscript("Saturation", phase)]
+    N = p[subscript("CoreyExponent", phase)]
+    kr = s.^N
+    mu = p[subscript("Viscosity", phase)]
+    fapply!(mob, (kr) -> kr/mu, kr)
+end
+
 function update_density!(model, storage, phase::AbstractPhase)
     param = storage["parameters"]
     state = storage["state"]
@@ -315,6 +331,14 @@ function update_total_mass!(model::SimulationModel{G, S}, storage, phase::Abstra
     rho = storage[subscript("Density", phase)]
     totMass = storage[subscript("TotalMass", phase)]
     fapply!(totMass, *, rho, pv)
+end
+
+function update_total_mass!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:ImmiscibleSystem}
+    pv = model.grid.pv
+    rho = storage[subscript("Density", phase)]
+    s = storage["state"][subscript("Saturation", phase)]
+    totMass = storage[subscript("TotalMass", phase)]
+    fapply!(totMass, *, rho, pv, s)
 end
 
 function update_mass_mobility!(model, storage, phase::AbstractPhase)
