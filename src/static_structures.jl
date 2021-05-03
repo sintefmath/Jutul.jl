@@ -1,12 +1,4 @@
-
-
-#function get_sparsity(G::MRSTSimGraph)
-#    n = G.ncells
-#    e = ones(length(G.cells));
-#    A = SparseMatrixCSC(n, n, G.facePos, G.cells, e)
-#    A = A + sparse(1.0I, n, n)
-#    return A
-#end
+export get_sparsity_pattern
 
 function get_incomp_matrix(G::MinimalTPFAGrid)
     n = number_of_cells(G)
@@ -27,12 +19,12 @@ function get_incomp_matrix(n, hfd)
     return A
 end
 
-function get_sparsity_pattern(G::MinimalTPFAGrid)
+function get_sparsity_pattern(G::MinimalTPFAGrid, arg...)
     n = number_of_cells(G)
-    get_sparsity_pattern(n, G.conn_data)
+    get_sparsity_pattern(n, G.conn_data, arg...)
 end
 
-function get_sparsity_pattern(n, hfd)
+function get_sparsity_pattern(n, hfd, nrows = 1, ncols = 1)
     # map is efficient on GPU 
     I = map(x -> x.self, hfd)
     J = map(x -> x.other, hfd)
@@ -44,7 +36,17 @@ function get_sparsity_pattern(n, hfd)
     J = vcat(J, D)
     V = vcat(V, ones(n))
 
-    A = sparse(I, J, V, n, n)
+    if nrows > 1
+        I = vcat(map((x) -> (x-1)*n .+ I, 1:nrows)...)
+        J = repeat(J, nrows)
+        V = repeat(V, nrows)
+    end
+    if ncols > 1
+        I = repeat(I, ncols)
+        J = vcat(map((x) -> (x-1)*n .+ J, 1:ncols)...)
+        V = repeat(V, ncols)
+    end
+    A = sparse(I, J, V, n*nrows, n*ncols)
     return A
 end
 
