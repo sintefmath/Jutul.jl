@@ -252,11 +252,11 @@ function convert(context::SingleCUDAContext, v)
     return CuArray(v)
 end
 
-
 function allocate_array(context::TervContext, value, n...)
-    tmp = convert(context, [value])
+    tmp = convert(context, value)
     return repeat(tmp, n...)
 end
+
 
 function transfer(context::TervContext, v)
     return v
