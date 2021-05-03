@@ -240,6 +240,10 @@ function allocate_storage!(d, model::TervModel)
     # Do nothing for Any.
 end
 
+function convert(context::TervContext, v::Real)
+    return convert(context, [v])
+end
+
 function convert(context::TervContext, v)
     return Array(v)
 end
@@ -249,7 +253,7 @@ function convert(context::SingleCUDAContext, v)
 end
 
 
-function allocate_array(context::TervContext, value::T, n...) where {T<:Real}
+function allocate_array(context::TervContext, value, n...)
     tmp = convert(context, [value])
     return repeat(tmp, n...)
 end
