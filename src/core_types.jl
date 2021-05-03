@@ -79,7 +79,6 @@ function degrees_of_freedom_per_unit(::ScalarPrimaryVariable)
     return 1
 end
 
-
 function initialize_primary_variable_ad(state, model, pvar::ScalarPrimaryVariable, offset, n_partials)
     name = get_name(pvar)
     v_n = state[name]
@@ -87,7 +86,7 @@ function initialize_primary_variable_ad(state, model, pvar::ScalarPrimaryVariabl
     return state
 end
 
-function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVariable, val)
+function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVariable, val::Union{Dict, AbstractFloat})
     n = number_of_degrees_of_freedom(model, pvar)
     name = get_name(pvar)
     if isa(val, Dict)
@@ -118,13 +117,7 @@ function number_of_primary_variables(model)
     return length(get_primary_variable_names(model))
 end
 
-function get_primary_variable_names(model::SimulationModel)
-    return map((x) -> get_name(x), get_primary_variables(model))
-end
 
-function get_primary_variables(model::SimulationModel)
-    return model.primary_variables
-end
 
 abstract type GroupedPrimaryVariables <: TervPrimaryVariables end
 
@@ -226,6 +219,15 @@ struct SimulationModel{G<:TervGrid,
     formulation::F
     discretization::D
     primary_variables
+end
+
+
+function get_primary_variable_names(model::SimulationModel)
+    return map((x) -> get_name(x), get_primary_variables(model))
+end
+
+function get_primary_variables(model::SimulationModel)
+    return model.primary_variables
 end
 
 function allocate_storage(model::TervModel)

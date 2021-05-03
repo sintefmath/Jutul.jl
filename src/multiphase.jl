@@ -33,9 +33,9 @@ struct ImmiscibleSystem <: MultiPhaseSystem
     phases::AbstractVector
 end
 
-function ImmiscibleSystem(phases)
-    @assert length(phases) > 1 "System should have at least two phases. For single-phase, use SinglePhaseSystem instead."
-end
+# function ImmiscibleSystem(phases)
+#    @assert length(phases) > 1 "System should have at least two phases. For single-phase, use SinglePhaseSystem instead."
+# end
 
 # Single-phase
 struct SinglePhaseSystem <: MultiPhaseSystem
@@ -151,6 +151,35 @@ end
 
 function Saturations(phases::AbstractArray)
     Saturations("Saturations", phases)
+end
+
+function initialize_primary_variable_value(state, model, pvar::Saturations, val)
+    name = get_name(pvar)
+    if isa(val, Dict)
+        val = val[name]
+    end
+    val::AbstractVecOrMat # Should be a vector or a matrix
+    V = deepcopy(val)
+    @assert size(V, 1) == number_of_phases(model.system)
+    n = number_of_units(model, pvar)
+    if isa(V, AbstractVector)
+        V = repeat(V, 1, n)
+    end
+    @assert size(V, 2) == n
+    state[name] = transfer(model.context, V)
+    return state
+end
+
+function degrees_of_freedom_per_unit(v::Saturations)
+    return length(v.phases) - 1
+end
+
+function get_names(v::Saturations)
+    return map((x) -> subscript(v.name, x), v.phases[1:end-1])
+end
+
+function get_name(v::Saturations)
+    return v.name
 end
 
 function select_primary_variables(system::SinglePhaseSystem, formulation, discretization)
