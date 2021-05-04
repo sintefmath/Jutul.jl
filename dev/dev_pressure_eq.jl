@@ -36,8 +36,8 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     timesteps = tstep*3600*24 # 1 day, 2 days
     tot_time = sum(timesteps)
     irate = pvfrac*sum(G.pv)/tot_time
-    src = sources = [SourceTerm(1, [irate]), 
-                     SourceTerm(nc, [-irate])]
+    src = sources = [SourceTerm(1, irate), 
+                     SourceTerm(nc, -irate)]
     # State is dict with pressure in each cell
     init = Dict("Pressure" => p0)
     state0 = setup_state(model, init)
