@@ -13,17 +13,18 @@ end
 function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; jacobian_row_offset = 0, context = DefaultContext(), equations_per_unit = 1)
     F = float_type(context)
     I = index_type(context)
+    nu = equations_per_unit
     # Create conservation law for a given grid with a number of partials
     nc = number_of_cells(G)
     nf = number_of_half_faces(G)
 
-    accpos = zeros(I, nder, nc)
-    fluxpos = zeros(I, nder, nf)
+    accpos = zeros(I, nu*nder, nc)
+    fluxpos = zeros(I, nu*nder, nf)
     # Note: jacobian_row_offset needs to be added somewhere for multiphase
     jac = lsys.jac
     # Note: We copy this back to host if it is on GPU to avoid rewriting these functions for CuArrays
     conn_data = Array(G.conn_data)
-    accumulation_sparse_pos!(accpos, jac)
+    accumulation_sparse_pos!(accpos, jac, nu)
     half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data)
 
     # Once positions are figured out (in a CPU context since Jacobian is not yet transferred)
@@ -91,15 +92,19 @@ function update_values!(v::AbstractArray, next::AbstractArray)
 end
 
 
-function accumulation_sparse_pos!(accpos, jac)
-    nder = size(accpos, 1)
+function accumulation_sparse_pos!(accpos, jac, nu)
+    n = size(accpos, 1)
     nc = size(accpos, 2)
+    nder = convert(eltype(accpos), n/nu)
     for i in 1:nc
-        for derno = 1:nder
+        for col = 1:nder
             # Diagonal positions
-            global_pos = (derno-1)*nc + i
-            pos = jac.colptr[global_pos]:jac.colptr[global_pos+1]-1
-            accpos[derno, i] = pos[jac.rowval[pos] .== global_pos][1]
+            col_pos = (col-1)*nc + i
+            pos = jac.colptr[col_pos]:jac.colptr[col_pos+1]-1
+            for row = 1:nu
+                row_pos = (row-1)*nc + i
+                accpos[(row-1)*nder + col, i] = pos[jac.rowval[pos] .== row_pos][1]
+            end
         end
     end
 end
