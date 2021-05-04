@@ -102,8 +102,8 @@ function accumulation_sparse_pos!(accpos, jac, nu, nder)
             col_pos = (col-1)*nc + i
             pos = jac.colptr[col_pos]:jac.colptr[col_pos+1]-1
             for row = 1:nu
-                row_pos = (row-1)*nc + i
-                accpos[(row-1)*nder + col, i] = pos[jac.rowval[pos] .== row_pos][1]
+                row_ix = (row-1)*nc + i
+                accpos[(row-1)*nder + col, i] = pos[jac.rowval[pos] .== row_ix][1]
             end
         end
     end
@@ -119,10 +119,15 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, nu, nder)
         cd = conn_data[i]
         self = cd.self
         other = cd.other
-        for derno = 1:nder
-            global_pos = (derno-1)*nc + self
-            pos = jac.colptr[global_pos]:jac.colptr[global_pos+1]-1
-            fluxpos[derno, i] = pos[jac.rowval[pos] .== other + (derno-1)*nc][1]
+
+        for col = 1:nder
+            # Diagonal positions
+            col_pos = (col-1)*nc + self
+            pos = jac.colptr[col_pos]:jac.colptr[col_pos+1]-1
+            for row = 1:nu
+                row_ix = other + (col-1)*nc
+                fluxpos[(row-1)*nder + col, i] = pos[jac.rowval[pos] .== row_ix][1]
+            end
         end
     end
 end
