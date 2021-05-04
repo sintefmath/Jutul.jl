@@ -101,10 +101,19 @@ function plot_mrstdata(mrst_grid, data)
     if any([t == "cartGrid" for t in mrst_grid["type"]])
         cartDims = Int64.(mrst_grid["cartDims"])
         if mrst_grid["griddim"] == 2 || cartDims[end] == 1
-            ax = heatmap(reshape(data, cartDims...), colormap = :lightrainbow)
+            fig = Figure()
+
+            Axis(fig[1, 1])
+            heatmap!(reshape(data, cartDims[1:2]...))
+            ul = (minimum(data), maximum(data))
+            @show ul
+            # vertical colorbars
+            Colorbar(fig[1, 2], limits = ul)
+            ax = fig
         else
             ax = volume(reshape(data, cartDims...), algorithm = :mip, colormap = :jet)
         end
+        plot
     else
         println("Non-Cartesian plot not implemented.")
         ax = nothing
