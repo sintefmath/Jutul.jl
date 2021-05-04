@@ -23,7 +23,14 @@ end
 
 struct SourceTerm{R<:Real,I<:Integer}
     cell::I
-    values::AbstractVector{R}
+    value::R
+    fractional_flow
+    composition
+end
+
+function SourceTerm(cell, value; fractional_flow = [1.0], compositions = nothing)
+    @assert sum(fractional_flow) == 1.0 "Fractional flow for source term in cell $cell must sum to 1."
+    SourceTerm(cell, value, fractional_flow, compositions)
 end
 
 
@@ -274,13 +281,7 @@ function update_equations!(model::SimulationModel{G, S}, storage;
     dt = nothing, sources = nothing) where {G<:MinimalTPFAGrid, S<:MultiPhaseSystem}
     update_properties!(model, storage)
     acc = update_accumulation!(model, storage, dt)
-    phases = get_phases(model.system)
-    for phNo in eachindex(phases)
-        if !isnothing(sources)
-            # @debug "Inserting source terms."
-            insert_sources(acc, sources, phNo)
-        end
-    end
+    insert_sources!(model, storage, sources)
     update_half_face_flux!(model, storage)
 end
 
@@ -384,13 +385,33 @@ function update_half_face_flux!(model, storage)
 end
 
 # Source terms, etc
-@inline function insert_sources(acc, sources, phNo)
+function insert_sources!(model, storage, sources)
+    if isnothing(sources)
+        return
+    end
+    acc = storage["MassConservation"].accumulation
+    mob = storage["Mobility"]
+    phases = get_phases(model.system)
     for src in sources
-        @inbounds acc[src.cell] -= src.values[phNo]
+        v = src.value
+        c = src.cell
+        mobt = sum(mob[:, c])
+        if v > 0
+            for index in eachindex(phases)
+                f = src.fractional_flow[index]
+                @inbounds acc[index, c] -= mobt*v*f
+            end
+        else
+            for index in eachindex(phases)
+                f = mob[index, c]/mobt
+                @inbounds acc[index, c] -= v*f
+            end
+        end
     end
 end
 
 @inline function insert_sources(acc::CuArray, sources, phNo)
+    @assert false "Not updated."
     s = cu(map(x -> x.values[phNo], sources))
     i = cu(map(x -> x.cell, sources))
     @. acc[i] -= s
