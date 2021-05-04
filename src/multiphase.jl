@@ -283,14 +283,14 @@ function update_mobility!(model::SimulationModel{G, S}, storage) where {G<:Any, 
     fapply!(mob, () -> 1/mu)
 end
 
-function update_mobility!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:ImmiscibleSystem}
+function update_mobility!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:ImmiscibleSystem}
     p = storage["parameters"]
-    mob = storage[subscript("Mobility", phase)]
-    s = storage["state"][subscript("Saturation", phase)]
-    N = p[subscript("CoreyExponent", phase)]
-    kr = s.^N
-    mu = p[subscript("Viscosity", phase)]
-    fapply!(mob, (kr) -> kr/mu, kr)
+    mob = storage["Mobility"]
+    n = p["CoreyExponents"]
+    mu = p["Viscosity"]
+
+    s = storage["state"]["Saturations"]
+    @. mob = s^n/mu
 end
 
 function update_density!(model, storage)
@@ -321,6 +321,15 @@ function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any
     totMass = storage["TotalMass"]
     fapply!(totMass, *, rho, pv)
 end
+
+function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:ImmiscibleSystem}
+    pv = model.grid.pv
+    rho = storage["Density"]
+    totMass = storage["TotalMass"]
+    s = storage["state"]["Saturations"]
+    fapply!(totMass, *, rho, pv, s)
+end
+
 
 function update_total_mass!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:ImmiscibleSystem}
     pv = model.grid.pv
@@ -404,7 +413,6 @@ function fill_accumulation!(jac, r, acc, apos, context, ::KernelDisallowed)
         fill_accumulation_jac!(nzval, acc, apos, col, nder)
     end
 end
-
 
 @inline function fill_accumulation_jac!(nzval, acc, apos, col, nder)
     @inbounds for derNo = 1:nder
