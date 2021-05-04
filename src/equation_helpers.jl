@@ -24,8 +24,8 @@ function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; jacobian_row_offs
     jac = lsys.jac
     # Note: We copy this back to host if it is on GPU to avoid rewriting these functions for CuArrays
     conn_data = Array(G.conn_data)
-    accumulation_sparse_pos!(accpos, jac, nu)
-    half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data)
+    accumulation_sparse_pos!(accpos, jac, nu, nder)
+    half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, nu, nder)
 
     # Once positions are figured out (in a CPU context since Jacobian is not yet transferred)
     # we copy over the data to target device (or do nothing if we are on CPU)
@@ -92,10 +92,10 @@ function update_values!(v::AbstractArray, next::AbstractArray)
 end
 
 
-function accumulation_sparse_pos!(accpos, jac, nu)
+function accumulation_sparse_pos!(accpos, jac, nu, nder)
     n = size(accpos, 1)
     nc = size(accpos, 2)
-    nder = convert(eltype(accpos), n/nu)
+    @assert nder == n/nu
     for i in 1:nc
         for col = 1:nder
             # Diagonal positions
@@ -109,9 +109,10 @@ function accumulation_sparse_pos!(accpos, jac, nu)
     end
 end
 
-function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data)
-    nder = size(fluxpos, 1)
+function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, nu, nder)
+    n = size(fluxpos, 1)
     nf = size(fluxpos, 2)
+    @assert nder == n/nu
 
     for i in 1:nf
         # Off diagonal positions
