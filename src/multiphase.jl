@@ -394,35 +394,41 @@ function update_linearized_system!(model, lsys::LinearizedSystem, law::Conservat
     context = model.context
     ker_compat = kernel_compatibility(context)
     apos = law.accumulation_jac_pos
+    neq = number_of_equations_per_unit(law)
     jac = lsys.jac
     r = lsys.r
     # Fill in diagonal
     # @info "Accumulation fillin"
-    fill_accumulation!(jac, r, law.accumulation, apos, context, ker_compat)
+    fill_accumulation!(jac, r, law.accumulation, apos, neq, context, ker_compat)
     # Fill in off-diagonal
     fpos = law.half_face_flux_jac_pos
     # @info "Half face flux fillin"
-    fill_half_face_fluxes(jac, r, G.conn_pos, law.half_face_flux, apos, fpos, context, ker_compat)
+    fill_half_face_fluxes(jac, r, G.conn_pos, law.half_face_flux, apos, fpos, neq, context, ker_compat)
 end
 
 # Accumulation: Base implementation
 "Fill acculation term onto diagonal with pre-determined access pattern into jac"
-function fill_accumulation!(jac, r, acc, apos, context, ::KernelDisallowed)
+function fill_accumulation!(jac, r, acc, apos, neq, context, ::KernelDisallowed)
     nzval = get_nzval(jac)
-    nder = size(apos, 1)
-    @inbounds Threads.@threads for col = 1:size(apos, 2)
-        r[col] = acc[col].value
-        fill_accumulation_jac!(nzval, acc, apos, col, nder)
+    dim = size(apos, 1)
+    nder = dim ÷ neq
+    @inbounds Threads.@threads for cell = 1:size(apos, 2)
+        r[cell] = acc[cell].value
+        fill_accumulation_jac!(nzval, acc, apos, cell, nder, neq)
     end
 end
 
-@inline function fill_accumulation_jac!(nzval, acc, apos, col, nder)
-    @inbounds for derNo = 1:nder
-        nzval[apos[derNo, col]] = acc[col].partials[derNo]
+@inline function fill_accumulation_jac!(nzval, acc, apos, cell, nder, neq)
+    for eqNo = 1:neq
+        a = acc[eqNo, cell]
+        for derNo = 1:nder
+            nzval[apos[derNo + (eqNo-1)*nder, cell]] = a.partials[derNo]
+        end
     end
 end
 # Kernel / CUDA version follows
-function fill_accumulation!(jac, r, acc, apos, context, ::KernelAllowed)
+function fill_accumulation!(jac, r, acc, apos, neq, context, ::KernelAllowed)
+    @assert false "Not updated"
     @. r = value(acc)
     jz = get_nzval(jac)
     @inbounds for i = 1:size(apos, 1)
@@ -443,25 +449,30 @@ end
 
 # Fluxes: Base implementation
 "Fill fluxes onto diagonal with pre-determined access pattern into jac. Essentially performs Div ( flux )"
-function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, context, ::KernelDisallowed)
+function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, neq, context, ::KernelDisallowed)
     Jz = get_nzval(jac)
-    Threads.@threads for col = 1:length(apos)
-        @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
-            # Update diagonal value
-            r[col] += half_face_flux[i].value
-            # Fill inn Jacobian values
-            fill_half_face_fluxes_jac!(Jz, half_face_flux, apos, fpos, col, i)
-        end
-    end
-end
+    nc = size(apos, 2)
+    n = size(apos, 1)
+    nder = n ÷ neq
+    # Threads.@threads for cell = 1:nc
+    for cell = 1:nc
+        for i = conn_pos[cell]:(conn_pos[cell+1]-1)
+            for eqNo = 1:neq
+                # Update diagonal value
+                f = half_face_flux[eqNo, i]
+                r[cell + (eqNo-1)*nc] += f.value
+                # Fill inn Jacobian values
+                for derNo = 1:nder
+                    i_pos = derNo + (eqNo-1)*nder
 
-@inline function fill_half_face_fluxes_jac!(nzval, half_face_flux, apos, fpos, col, i)
-    @inbounds for derNo = 1:size(apos, 1)
-        index = fpos[derNo, i]
-        diag_index = apos[derNo, col]
-        df_di = half_face_flux[i].partials[derNo]
-        nzval[index] = -df_di
-        nzval[diag_index] += df_di
+                    index = fpos[i_pos, i]
+                    diag_index = apos[i_pos, cell]
+                    df_di = f.partials[derNo]
+                    Jz[index] = -df_di
+                    Jz[diag_index] += df_di
+                end
+            end
+        end
     end
 end
 

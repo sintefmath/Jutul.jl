@@ -44,7 +44,7 @@ function ConservationLaw(nc::Integer, nhf::Integer,
 end
 
 function number_of_equations_per_unit(e::ConservationLaw)
-    return size(e.flux, 1)
+    return size(e.half_face_flux, 1)
 end
 
 function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), diag_pos = nothing, npartials = 1) where {R<:Integer}
