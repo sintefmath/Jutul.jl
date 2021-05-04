@@ -253,8 +253,6 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     lsys = LinearizedSystem(jac, r, dx)
     alloc = (n) -> allocate_array_ad(nph, n, context = context, npartials = npartials)
     alloc_value = (n) -> allocate_array_ad(nph, n, context = context, npartials = 0)
-    law = ConservationLaw(G, lsys, npartials, context = context, equations_per_unit = nph)
-    d["MassConservation"] = law
     # Mobility of phase
     d["Mobility"] = alloc(nc)
     # Mass density of phase
@@ -265,9 +263,20 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     d["TotalMass"] = alloc(nc)
     d["TotalMass0"] = alloc_value(nc)
 
+    # Set up governing equations storage
+    allocate_equations!(d, model, lsys, npartials)
+
     # Transfer linearized system afterwards since the above manipulations are
     # easier to do on CPU
     d["LinearizedSystem"] = transfer(context, lsys)
+end
+
+function allocate_equations!(d, model::SimulationModel{T, S}, lsys, npartials) where {T<:Any, S<:MultiPhaseSystem}
+    nph = number_of_phases(model.system)
+    eqs = Dict()
+    law = ConservationLaw(model.grid, lsys, npartials, context = model.context, equations_per_unit = nph)
+    eqs["MassConservation"] = law
+    d["Equations"] = eqs
 end
 
 function initialize_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
@@ -368,7 +377,7 @@ end
 
 # Update of discretization terms
 function update_accumulation!(model, storage, dt)
-    law = storage["MassConservation"]
+    law = storage["Equations"]["MassConservation"]
     acc = law.accumulation
     mass = storage["TotalMass"]
     mass0 = storage["TotalMass0"]
@@ -377,7 +386,7 @@ function update_accumulation!(model, storage, dt)
 end
 
 function update_half_face_flux!(model, storage)
-    law = storage["MassConservation"]
+    law = storage["Equations"]["MassConservation"]
     p = storage["state"]["Pressure"]
     mmob = storage["MassMobility"]
 
@@ -389,7 +398,7 @@ function insert_sources!(model, storage, sources)
     if isnothing(sources)
         return
     end
-    acc = storage["MassConservation"].accumulation
+    acc = storage["Equations"]["MassConservation"].accumulation
     mob = storage["Mobility"]
     phases = get_phases(model.system)
     for src in sources
@@ -423,7 +432,8 @@ function update_linearized_system!(model::TervModel, storage)
     sys::MultiPhaseSystem
 
     lsys = storage["LinearizedSystem"]
-    update_linearized_system!(model, lsys, storage["MassConservation"])
+    mb = storage["Equations"]["MassConservation"]
+    update_linearized_system!(model, lsys, mb)
 end
 
 function update_linearized_system!(model, lsys::LinearizedSystem, law::ConservationLaw)
