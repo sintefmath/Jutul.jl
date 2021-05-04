@@ -37,9 +37,13 @@ end
 function ConservationLaw(nc::Integer, nhf::Integer, 
                          accpos::AbstractArray, fluxpos::AbstractArray, 
                          npartials::Integer = 0; context = DefaultContext(), units = 1)
-    acc = allocate_array_ad(nc, units, context = context, npartials = npartials)
-    flux = allocate_array_ad(nhf, units, context = context, npartials = npartials)
+    acc = allocate_array_ad(units, nc, context = context, npartials = npartials)
+    flux = allocate_array_ad(units, nhf, context = context, npartials = npartials)
     ConservationLaw(acc, flux, accpos, fluxpos)
+end
+
+function number_of_equations_per_unit(e::ConservationLaw)
+    return size(e.flux, 1)
 end
 
 function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), diag_pos = nothing, npartials = 1) where {R<:Integer}

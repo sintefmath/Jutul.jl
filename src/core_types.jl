@@ -203,6 +203,15 @@ end
 # Equations
 abstract type TervEquation end
 
+function number_of_equations_per_unit(::TervEquation)
+    # Default: One equation per unit (= cell,  face, ...)
+    return 1
+end
+
+function number_of_equations(model, e::TervEquation)
+    # Default: Equations are per cell
+    return number_of_equations_per_unit(e)*number_of_cells(model.grid)
+end
 
 # Models 
 abstract type TervModel end
