@@ -51,7 +51,7 @@ function update_state!(state, p::TervPrimaryVariables, model, dx)
     end
 end
 
-function update_value(v, dv, abs_change, rel_change, minval, maxval)
+@inline function choose_increment(v, dv, abs_change, rel_change, minval, maxval)
     s = sign(dv)
     if !isnothing(abs_change)
         dv = s*min(abs(dv), abs_change)
@@ -70,7 +70,11 @@ function update_value(v, dv, abs_change, rel_change, minval, maxval)
             dv = maxval - value(v)
         end
     end
-    v += dv
+    return dv
+end
+
+function update_value(v, dv, arg...)
+    return v + choose_increment(v, dv, arg...)
 end
 
 abstract type ScalarPrimaryVariable <: TervPrimaryVariables end
@@ -104,11 +108,11 @@ function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVari
 end
 
 
-function get_names(v::ScalarPrimaryVariable)
+function get_names(v::TervPrimaryVariables)
     return [get_name(v)]
 end
 
-function get_name(v::ScalarPrimaryVariable)
+function get_name(v::TervPrimaryVariables)
     return v.name
 end
 

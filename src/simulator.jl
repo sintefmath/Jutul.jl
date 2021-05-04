@@ -88,3 +88,18 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
     return states
     @info "Simulation complete."
 end
+
+
+function update_state!(model, storage)
+    lsys = storage["LinearizedSystem"]
+    state = storage["state"]
+
+    offset = 0
+    primary = get_primary_variables(model)
+    for p in primary
+        n = number_of_degrees_of_freedom(model, p)
+        rng = (1:n) .+ offset
+        update_state!(state, p, model, view(lsys.dx, rng))
+        offset += n
+    end
+end

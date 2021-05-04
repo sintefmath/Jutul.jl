@@ -101,19 +101,6 @@ function setup_state!(state, model, G, sys::MultiPhaseSystem, init_values)
     end
 end
 
-function update_state!(model, storage)
-    lsys = storage["LinearizedSystem"]
-    state = storage["state"]
-
-    offset = 0
-    primary = get_primary_variables(model)
-    for p in primary
-        n = number_of_degrees_of_freedom(model, p)
-        rng = (1:n) .+ offset
-        update_state!(state, p, model, view(lsys.dx, rng))
-        offset += n
-    end
-end
 
 
 function convert_state_ad(model, state)
@@ -154,11 +141,29 @@ end
 struct Saturations <: GroupedPrimaryVariables
     name
     phases
+    dsMax
 end
 
-function Saturations(phases::AbstractArray)
-    Saturations("Saturations", phases)
+function Saturations(phases::AbstractArray, dsMax = 0.2)
+    Saturations("Saturations", phases, dsMax)
 end
+
+
+function degrees_of_freedom_per_unit(v::Saturations)
+    return length(v.phases) - 1
+end
+
+#function get_names(v::Saturations)
+#    return map((x) -> subscript(v.name, x), v.phases[1:end-1])
+# end
+
+function get_name(v::Saturations)
+    return v.name
+end
+
+@inline function maximum_value(::Saturations) 1 end
+@inline function minimum_value(::Saturations) 0 end
+@inline function absolute_increment_limit(p::Saturations) p.dsMax end
 
 function initialize_primary_variable_ad(state, model, pvar::Saturations, offset, npartials)
     name = get_name(pvar)
@@ -191,16 +196,27 @@ function initialize_primary_variable_value(state, model, pvar::Saturations, val)
     return state
 end
 
-function degrees_of_freedom_per_unit(v::Saturations)
-    return length(v.phases) - 1
-end
+function update_state!(state, p::Saturations, model, dx)
+    name = get_name(p)
+    nu = number_of_units(model, p)
+    nph = degrees_of_freedom_per_unit(p) + 1
+    
+    abs_max = absolute_increment_limit(p)
+    maxval = maximum_value(p)
+    minval = minimum_value(p)
 
-function get_names(v::Saturations)
-    return map((x) -> subscript(v.name, x), v.phases[1:end-1])
-end
-
-function get_name(v::Saturations)
-    return v.name
+    s = state[name]
+    for cell = 1:nu
+        dlast = 0
+        for ph = 1:(nph-1)
+            v = value(s[ph, cell])
+            dv = dx[cell + (ph-1)*nu]
+            dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
+            dlast -= dv
+            s[ph, cell] += dv
+        end
+        s[nph, cell] += dlast
+    end
 end
 
 function select_primary_variables(system::SinglePhaseSystem, formulation, discretization)
