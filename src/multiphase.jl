@@ -375,12 +375,7 @@ function update_linearized_system!(model::TervModel, storage)
     sys::MultiPhaseSystem
 
     lsys = storage["LinearizedSystem"]
-    phases = get_phases(sys)
-    for phase in phases
-        sname = get_short_name(phase)
-        law = storage[subscript("ConservationLaw", phase)]
-        update_linearized_system!(model, lsys, law)
-    end
+    update_linearized_system!(model, lsys, storage["MassConservation"])
 end
 
 function update_linearized_system!(model, lsys::LinearizedSystem, law::ConservationLaw)
