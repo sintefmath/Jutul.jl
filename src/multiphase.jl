@@ -222,12 +222,7 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     nc = number_of_cells(G)
     nhf = number_of_half_faces(G)
 
-    A_p = get_sparsity_pattern(G)
-    if nph == 1
-        jac = A_p
-    else
-        jac = repeat(A_p, nph, nph) # This is super slow even with nph = 1?!
-    end
+    jac = get_sparsity_pattern(G, nph, nph)
 
     n_dof = nc*nph
     dx = zeros(n_dof)
@@ -262,18 +257,15 @@ end
 function update_equations!(model::SimulationModel{G, S}, storage; 
     dt = nothing, sources = nothing) where {G<:MinimalTPFAGrid, S<:MultiPhaseSystem}
     update_properties!(model, storage)
+    acc = update_accumulation!(model, storage, dt)
     phases = get_phases(model.system)
     for phNo in eachindex(phases)
-        phase = phases[phNo]
-        law = storage[subscript("ConservationLaw", phase)]
-        update_accumulation!(model, storage, phase, dt)
-        update_half_face_flux!(model, storage, phase)
-
         if !isnothing(sources)
             # @debug "Inserting source terms."
-            insert_sources(law.accumulation, sources, phNo)
+            insert_sources(acc, sources, phNo)
         end
     end
+    update_half_face_flux!(model, storage)
 end
 
 function update_properties!(model, storage)
@@ -347,17 +339,19 @@ function update_mass_mobility!(model, storage)
 end
 
 # Update of discretization terms
-function update_accumulation!(model, storage, phase::AbstractPhase, dt)
-    law = storage[subscript("ConservationLaw", phase)]
-    mass = storage[subscript("TotalMass", phase)]
-    mass0 = storage[subscript("TotalMass0", phase)]
-    fapply!(law.accumulation, (m, m0) -> (m - m0)/dt, mass, mass0)
+function update_accumulation!(model, storage, dt)
+    law = storage["MassConservation"]
+    acc = law.accumulation
+    mass = storage["TotalMass"]
+    mass0 = storage["TotalMass0"]
+    fapply!(acc, (m, m0) -> (m - m0)/dt, mass, mass0)
+    return acc
 end
 
-function update_half_face_flux!(model, storage, phase::AbstractPhase)
+function update_half_face_flux!(model, storage)
+    law = storage["MassConservation"]
     p = storage["state"]["Pressure"]
-    law = storage[subscript("ConservationLaw", phase)]
-    mmob = storage[subscript("MassMobility", phase)]
+    mmob = storage["MassMobility"]
 
     half_face_flux!(model, law.half_face_flux, mmob, p)
 end
