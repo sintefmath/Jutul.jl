@@ -71,13 +71,24 @@ function allocate_array_ad(v::AbstractVector; context = DefaultContext(), diag_p
     update_values!(v_AD, v)
 end
 
+
+function convergence_criterion(model, storage, eq::ConservationLaw, lsys::LinearizedSystem; dt = 1)
+    n = number_of_equations_per_unit(eq)
+    nc = number_of_cells(model.grid)
+    pv = model.grid.pv
+    e = zeros(n)
+    for i = 1:n
+        e[i] = mapreduce((pv, e) -> abs(dt*e/pv), max, pv, lsys.r[(1:nc) .+ (i-1)*nc])
+    end
+    return (e, 1.0)
+end
+
+# Allocators 
 function allocate_array_ad(v::AbstractMatrix; context = DefaultContext(), diag_pos = nothing, npartials = 1)
     # create a copy of a vector as AD
     v_AD = allocate_array_ad(size(v)..., context = context, diag_pos = diag_pos, npartials = npartials)
     update_values!(v_AD, v)
 end
-
-
 
 function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing) where {T<:Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
