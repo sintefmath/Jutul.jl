@@ -10,7 +10,7 @@ struct ConservationLaw <: TervEquation
     half_face_flux_jac_pos::AbstractArray # Equal length to half face flux
 end
 
-function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; jacobian_row_offset = 0, context = DefaultContext())
+function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; jacobian_row_offset = 0, context = DefaultContext(), equations_per_unit = 1)
     F = float_type(context)
     I = index_type(context)
     # Create conservation law for a given grid with a number of partials
@@ -31,14 +31,14 @@ function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; jacobian_row_offs
     accpos = transfer(context, accpos)
     fluxpos = transfer(context, fluxpos)
 
-    ConservationLaw(nc, nf, accpos, fluxpos, nder, context = context)
+    ConservationLaw(nc, nf, accpos, fluxpos, nder, context = context, equations_per_unit = equations_per_unit)
 end
 
 function ConservationLaw(nc::Integer, nhf::Integer, 
                          accpos::AbstractArray, fluxpos::AbstractArray, 
-                         npartials::Integer = 0; context = DefaultContext(), units = 1)
-    acc = allocate_array_ad(units, nc, context = context, npartials = npartials)
-    flux = allocate_array_ad(units, nhf, context = context, npartials = npartials)
+                         npartials::Integer = 0; context = DefaultContext(), equations_per_unit = 1)
+    acc = allocate_array_ad(equations_per_unit, nc, context = context, npartials = npartials)
+    flux = allocate_array_ad(equations_per_unit, nhf, context = context, npartials = npartials)
     ConservationLaw(acc, flux, accpos, fluxpos)
 end
 

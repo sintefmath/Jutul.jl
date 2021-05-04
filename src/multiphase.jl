@@ -233,23 +233,20 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     dx = zeros(n_dof)
     r = zeros(n_dof)
     lsys = LinearizedSystem(jac, r, dx)
-    alloc = (n) -> allocate_array_ad(n, context = context, npartials = npartials)
-    alloc_value = (n) -> allocate_array_ad(n, context = context, npartials = 0)
-    for phaseNo in eachindex(phases)
-        ph = phases[phaseNo]
-        sname = get_short_name(ph)
-        law = ConservationLaw(G, lsys, npartials, context = context)
-        d[subscript("ConservationLaw", ph)] = law
-        # Mobility of phase
-        d[subscript("Mobility", ph)] = alloc(nc)
-        # Mass density of phase
-        d[subscript("Density", ph)] = alloc(nc)
-        # Mobility * Density. We compute store this separately since density
-        # and mobility are both used in other spots
-        d[subscript("MassMobility", ph)] = alloc(nc)
-        d[subscript("TotalMass", ph)] = alloc(nc)
-        d[subscript("TotalMass0", ph)] = alloc_value(nc)
-    end
+    alloc = (n) -> allocate_array_ad(nph, n, context = context, npartials = npartials)
+    alloc_value = (n) -> allocate_array_ad(nph, n, context = context, npartials = 0)
+    law = ConservationLaw(G, lsys, npartials, context = context, equations_per_unit = nph)
+    d["MassConservation"] = law
+    # Mobility of phase
+    d["Mobility"] = alloc(nc)
+    # Mass density of phase
+    d["Density"] = alloc(nc)
+    # Mobility * Density. We compute store this separately since density
+    # and mobility are both used in other spots
+    d["MassMobility"] = alloc(nc)
+    d["TotalMass"] = alloc(nc)
+    d["TotalMass0"] = alloc_value(nc)
+
     # Transfer linearized system afterwards since the above manipulations are
     # easier to do on CPU
     d["LinearizedSystem"] = transfer(context, lsys)
@@ -257,11 +254,9 @@ end
 
 function initialize_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
     update_properties!(model, d)
-    for ph in get_phases(model.system)
-        m = d[subscript("TotalMass", ph)]
-        m0 = d[subscript("TotalMass0", ph)]
-        @. m0 = value(m)
-    end
+    m = d["TotalMass"]
+    m0 = d["TotalMass0"]
+    @. m0 = value(m)
 end
 
 function update_equations!(model::SimulationModel{G, S}, storage; 
@@ -282,18 +277,16 @@ function update_equations!(model::SimulationModel{G, S}, storage;
 end
 
 function update_properties!(model, storage)
-    for phase in get_phases(model.system)
-        # Update a few values
-        update_density!(model, storage, phase)
-        update_mobility!(model, storage, phase)
-        update_mass_mobility!(model, storage, phase)
-        update_total_mass!(model, storage, phase)
-    end
+    update_density!(model, storage)
+    update_mobility!(model, storage)
+    update_mass_mobility!(model, storage)
+    update_total_mass!(model, storage)
 end
 
 # Updates of various cell properties follows
-function update_mobility!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:SinglePhaseSystem}
-    mob = storage[subscript("Mobility", phase)]
+function update_mobility!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:SinglePhaseSystem}
+    phase = model.system.phase
+    mob = storage["Mobility"]
     mu = storage["parameters"][subscript("Viscosity", phase)]
     fapply!(mob, () -> 1/mu)
 end
@@ -308,28 +301,32 @@ function update_mobility!(model::SimulationModel{G, S}, storage, phase::Abstract
     fapply!(mob, (kr) -> kr/mu, kr)
 end
 
-function update_density!(model, storage, phase::AbstractPhase)
+function update_density!(model, storage)
     param = storage["parameters"]
     state = storage["state"]
     p = state["Pressure"]
-    
-    d = subscript("Density", phase)
-    rho = storage[d]
-    r = param[d]
-    if isa(r, NamedTuple)
-        f_rho = (p) -> r.rhoS*exp((p - r.pRef)*r.c)
-    else
-        # Function handle
-        f_rho = r
+    rho = storage["Density"]
+    phases = get_phases(model.system)
+    for (i, phase) in enumerate(phases)
+        d = subscript("Density", phase)
+        rho_i = view(rho, i, :)
+        # rho = storage[d]
+        r = param[d]
+        if isa(r, NamedTuple)
+            f_rho = (p) -> r.rhoS*exp((p - r.pRef)*r.c)
+        else
+            # Function handle
+            f_rho = r
+        end
+        fapply!(rho_i, f_rho, p)
     end
-    fapply!(rho, f_rho, p)
     return rho
 end
 
-function update_total_mass!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:SinglePhaseSystem}
+function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:SinglePhaseSystem}
     pv = model.grid.pv
-    rho = storage[subscript("Density", phase)]
-    totMass = storage[subscript("TotalMass", phase)]
+    rho = storage["Density"]
+    totMass = storage["TotalMass"]
     fapply!(totMass, *, rho, pv)
 end
 
@@ -341,10 +338,10 @@ function update_total_mass!(model::SimulationModel{G, S}, storage, phase::Abstra
     fapply!(totMass, *, rho, pv, s)
 end
 
-function update_mass_mobility!(model, storage, phase::AbstractPhase)
-    mobrho = storage[subscript("MassMobility", phase)]
-    mob = storage[subscript("Mobility", phase)]
-    rho = storage[subscript("Density", phase)]
+function update_mass_mobility!(model, storage)
+    mobrho = storage["MassMobility"]
+    mob = storage["Mobility"]
+    rho = storage["Density"]
     # Assign the values
     fapply!(mobrho, *, mob, rho)
 end
