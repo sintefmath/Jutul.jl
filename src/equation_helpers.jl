@@ -36,32 +36,11 @@ end
 
 function ConservationLaw(nc::Integer, nhf::Integer, 
                          accpos::AbstractArray, fluxpos::AbstractArray, 
-                         npartials::Integer = 0; context = DefaultContext())
-    acc = allocate_array_ad(nc, context = context, npartials = npartials)
-    flux = allocate_array_ad(nhf, context = context, npartials = npartials)
+                         npartials::Integer = 0; context = DefaultContext(), units = 1)
+    acc = allocate_array_ad(nc, units, context = context, npartials = npartials)
+    flux = allocate_array_ad(nhf, units, context = context, npartials = npartials)
     ConservationLaw(acc, flux, accpos, fluxpos)
 end
-
-#function ConservationLaw(context::TervContext, nc, nhf, accpos, fluxpos, nder)
-#    F = float_type(context)
-#    fluxpos = transfer(context, fluxpos)
-#    accpos = transfer(context, accpos)
-#    acc = adapt(CuArray, allocate_vector_ad(nc, nder, T = F))
-#    flux = adapt(CuArray, allocate_vector_ad(nhf, nder, T = F))
-#
-#    return ConservationLaw(acc, flux, accpos, fluxpos)
-# end
-
-function allocate_residual(G::TervGrid, Law::ConservationLaw)
-    r = similar(Law.accumulation, number_of_cells(G))
-    return r
-end
-
-function allocate_jacobian(G::TervGrid, Law::ConservationLaw)
-    jac = get_incomp_matrix(G) # Just a hack for the time being
-    return jac
-end
-
 
 function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), diag_pos = nothing, npartials = 1) where {R<:Integer}
     # allocate a n length zero vector with space for derivatives
