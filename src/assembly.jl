@@ -29,9 +29,11 @@ end
 
 "Half face flux using standard loop"
 function half_face_flux!(flux, mob, p, conn_data, context, ::KernelDisallowed)
-    Threads.@threads for i in eachindex(flux)
+    Threads.@threads for i in eachindex(conn_data)
         c = conn_data[i]
-        @inbounds flux[i] = tp_flux(c.self, c.other, c.T, mob, p)
+        for phaseNo = 1:size(mob, 1)
+            @inbounds flux[phaseNo, i] = tp_flux(c.self, c.other, c.T, view(mob, phaseNo, :), p)
+        end
     end
 end
 

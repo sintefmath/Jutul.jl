@@ -323,11 +323,13 @@ function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any
 end
 
 function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:ImmiscibleSystem}
-    pv = model.grid.pv
+    pv = model.grid.pv'
     rho = storage["Density"]
     totMass = storage["TotalMass"]
     s = storage["state"]["Saturations"]
-    fapply!(totMass, *, rho, pv, s)
+
+    @. totMass = rho*pv*s
+    # fapply!(totMass, *, rho, pv, s)
 end
 
 
