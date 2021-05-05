@@ -408,7 +408,7 @@ function insert_sources!(model, storage, sources)
         if v > 0
             for index in eachindex(phases)
                 f = src.fractional_flow[index]
-                @inbounds acc[index, c] -= mobt*v*f
+                @inbounds acc[index, c] -= v*f
             end
         else
             for index in eachindex(phases)
