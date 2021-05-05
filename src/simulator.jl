@@ -75,26 +75,30 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
     for (step_no, dt) in enumerate(timesteps)
         t_str =  Dates.canonicalize(Dates.CompoundPeriod(Second(dt)))
         @info "Solving step $step_no/$no_steps of length $t_str."
-        done = false
-        for it = 1:maxIterations
-            e, tol = newton_step(sim, dt = dt, iteration = it, sources = sources, linsolve = linsolve)
-            done = e < tol
-            if done
-                break
-            end
-            if e > 1e10 || isinf(e) || isnan(e)
-                @assert false "Timestep $step_no diverged."
-                break
-            end
-        end
-        @assert done "Timestep $step_no did not complete in $maxIterations iterations."
-        update_after_step!(sim)
+        solve_ministep(sim, dt, maxIterations, linsolve, sources)
         if outputStates
             push!(states, value(sim.storage["state"]))
         end
     end
     return states
     @info "Simulation complete."
+end
+
+function solve_ministep(sim, dt, maxIterations, linsolve, sources)
+    done = false
+    for it = 1:maxIterations
+        e, tol = newton_step(sim, dt = dt, iteration = it, sources = sources, linsolve = linsolve)
+        done = e < tol
+        if done
+            break
+        end
+        if e > 1e10 || isinf(e) || isnan(e)
+            @assert false "Timestep $step_no diverged."
+            break
+        end
+    end
+    @assert done "Timestep $step_no did not complete in $maxIterations iterations."
+    update_after_step!(sim)
 end
 
 function update_after_step!(sim)
