@@ -88,6 +88,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
             end
         end
         @assert done "Timestep $step_no did not complete in $maxIterations iterations."
+        update_after_step!(sim)
         if outputStates
             push!(states, value(sim.storage["state"]))
         end
@@ -96,6 +97,14 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
     @info "Simulation complete."
 end
 
+function update_after_step!(sim)
+    storage = sim.storage
+    state = storage["state"]
+    state0 = storage["state0"]
+    for key in keys(state)
+        @. state0[key] = value(state[key])
+    end
+end
 
 function update_state!(model, storage)
     lsys = storage["LinearizedSystem"]
