@@ -54,7 +54,7 @@ function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), dia
         A = allocate_array(context, T(0), n...)
     else
         if isa(diag_pos, AbstractVector)
-            @assert n[1] == length(diag_pos)
+            @assert n[1] == length(diag_pos) "diag_pos must be specified for all columns."
             d = map(x -> get_ad_unit_scalar(T(0.0), npartials, x), diag_pos)
             A = allocate_array(context, d, 1, n[2:end]...)
         else
@@ -133,11 +133,13 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, nu, nder)
 
         for col = 1:nder
             # Diagonal positions
-            col_pos = (col-1)*nc + self
+            col_pos = (col-1)*nc + other
             pos = jac.colptr[col_pos]:jac.colptr[col_pos+1]-1
+            rowval = jac.rowval[pos]
             for row = 1:nu
-                row_ix = other + (col-1)*nc
-                fluxpos[(row-1)*nder + col, i] = pos[jac.rowval[pos] .== row_ix][1]
+                row_ix = self + (row-1)*nc
+                fluxpos[(row-1)*nder + col, i] = pos[rowval .== row_ix][1]
+                @printf("Matching %d %d to %d\n", row_ix, col_pos, pos[rowval .== row_ix][1])
             end
         end
     end

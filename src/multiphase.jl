@@ -457,10 +457,13 @@ end
 "Fill acculation term onto diagonal with pre-determined access pattern into jac"
 function fill_accumulation!(jac, r, acc, apos, neq, context, ::KernelDisallowed)
     nzval = get_nzval(jac)
+    nc = size(apos, 2)
     dim = size(apos, 1)
     nder = dim ÷ neq
-    @inbounds Threads.@threads for cell = 1:size(apos, 2)
-        r[cell] = acc[cell].value
+    @inbounds Threads.@threads for cell = 1:nc
+        for eq = 1:neq
+            r[cell + (eq-1)*nc] = acc[eq, cell].value
+        end
         fill_accumulation_jac!(nzval, acc, apos, cell, nder, neq)
     end
 end
