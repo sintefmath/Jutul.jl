@@ -338,7 +338,7 @@ end
 function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:SinglePhaseSystem}
     pv = model.grid.pv
     rho = storage["Density"]
-    totMass = storage["TotalMass"]
+    totMass = storage["state"]["TotalMass"]
     fapply!(totMass, *, rho, pv)
 end
 
