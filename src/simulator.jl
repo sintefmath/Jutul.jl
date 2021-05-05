@@ -50,14 +50,14 @@ function newton_step(model, storage; dt = nothing, linsolve = nothing, sources =
         errors, tscale = convergence_criterion(model, storage, eqs[key], lsys, dt = dt)
         for (index, e) in enumerate(errors)
             s = @sprintf("It %d: |R_%d| = %e\n", iteration, index, e)
-            @info s
+            @debug s
         end
         converged = converged && all(errors .< tol*tscale)
         e = maximum([e, maximum(errors)])
     end
     if converged
         do_solve = iteration == 1
-        @info "Step converged."
+        @debug "Step converged."
     else
         do_solve = true
     end
