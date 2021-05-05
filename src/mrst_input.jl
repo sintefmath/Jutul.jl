@@ -138,9 +138,8 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         tellheight = false, width = 200)
     
     sl_x = Slider(fig[2, 2], range = 1:length(states), startvalue = 1)
-    # point = @lift($(sl_x.value))
     point = sl_x.value
-    
+
     ax = Axis(fig[1, 2])
     # datakeys[1]
     func = Node{Any}("Pressure")

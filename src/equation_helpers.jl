@@ -3,6 +3,8 @@ export allocate_array_ad, get_ad_unit_scalar, update_values!
 export allocate_residual, allocate_jacobian
 export value
 
+# using Printf
+
 struct ConservationLaw <: TervEquation
     accumulation::AbstractArray
     half_face_flux::AbstractArray
@@ -139,7 +141,7 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, nu, nder)
             for row = 1:nu
                 row_ix = self + (row-1)*nc
                 fluxpos[(row-1)*nder + col, i] = pos[rowval .== row_ix][1]
-                @printf("Matching %d %d to %d\n", row_ix, col_pos, pos[rowval .== row_ix][1])
+                # @printf("Matching %d %d to %d\n", row_ix, col_pos, pos[rowval .== row_ix][1])
             end
         end
     end

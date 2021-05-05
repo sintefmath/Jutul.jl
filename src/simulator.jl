@@ -62,8 +62,6 @@ function newton_step(model, storage; dt = nothing, linsolve = nothing, sources =
         do_solve = true
     end
     if do_solve
-        solve!(lsys, linsolve)
-        update_state!(model, storage)
         t_solve = @elapsed solve!(lsys, linsolve)
         @debug "Solved linear system in $t_solve seconds."
         t_upd = @elapsed update_state!(model, storage)
