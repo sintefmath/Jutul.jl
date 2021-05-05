@@ -77,10 +77,27 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
     states = []
     no_steps = length(timesteps)
     @info "Starting simulation"
-    for (step_no, dt) in enumerate(timesteps)
-        t_str =  Dates.canonicalize(Dates.CompoundPeriod(Second(dt)))
+    for (step_no, dT) in enumerate(timesteps)
+        t_str =  Dates.canonicalize(Dates.CompoundPeriod(Second(dT)))
         @info "Solving step $step_no/$no_steps of length $t_str."
-        solve_ministep(sim, dt, maxIterations, linsolve, sources)
+        dt = dT
+        done = false
+        t_local = 0
+        cut_count = 0
+        while !done
+            ok = solve_ministep(sim, dt, maxIterations, linsolve, sources)
+            if ok
+                t_local += dt
+                if t_local >= dT
+                    break
+                end
+            else
+                @warn "Cutting time-step."
+                @assert cut_count < 5
+                dt = min(dt/2, dT - t_local)
+                cut_count += 1
+            end
+        end
         if outputStates
             push!(states, value(sim.storage["state"]))
         end
@@ -102,8 +119,11 @@ function solve_ministep(sim, dt, maxIterations, linsolve, sources)
             break
         end
     end
-    @assert done "Timestep $step_no did not complete in $maxIterations iterations."
-    update_after_step!(sim)
+    # @assert done "Timestep did not complete in $maxIterations iterations."
+    if done
+        update_after_step!(sim)
+    end
+    return done
 end
 
 function update_after_step!(sim)
