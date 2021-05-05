@@ -137,11 +137,15 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         menu2;
         tellheight = false, width = 200)
     
+    sl_x = Slider(fig[2, 2], range = 1:length(states), startvalue = 1)
+    # point = @lift($(sl_x.value))
+    point = sl_x.value
+    
     ax = Axis(fig[1, 2])
     # datakeys[1]
     func = Node{Any}("Pressure")
     # ys = @lift($func.(0:0.3:10))
-    ys = @lift(select_data(mrst_grid, data[$func]))
+    ys = @lift(select_data(mrst_grid, states[$point][$func]))
     # scat = scatter!(ax, ys, markersize = 10px, color = ys)
     # scat = scatter!(ax, ys, markersize = 10px, color = ys)
     scat = heatmap!(ax, ys)
@@ -153,9 +157,11 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         func[] = s
         autolimits!(ax)
     end
-    on(menu2.selection) do s
+        on(menu2.selection) do s
     end
     menu2.is_open = true
+
+
     fig
     return fig
 end
