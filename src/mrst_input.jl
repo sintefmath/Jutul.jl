@@ -1,7 +1,7 @@
 using MAT # .MAT file loading
 export readSimGraph, getSparsity, getIncompMatrix
 export readPatchPlot
-export get_minimal_tpfa_grid_from_mrst, plot_mrstdata
+export get_minimal_tpfa_grid_from_mrst, plot_mrstdata, plot_interactive
 using SparseArrays # Sparse pattern
 using Makie
 
@@ -119,4 +119,60 @@ function plot_mrstdata(mrst_grid, data)
         ax = nothing
     end
     return ax
+end
+
+function plot_interactive(mrst_grid, states; plot_type = nothing)
+    fig = Figure()
+    data = states[1]
+    datakeys = collect(keys(data))
+    menu = Menu(fig, options = datakeys)
+
+    
+    funcs = [sqrt, x->x^2, sin, cos]
+    menu2 = Menu(fig, options = zip(["Square Root", "Square", "Sine", "Cosine"], funcs))
+    fig[1, 1] = vgrid!(
+        Label(fig, "Property", width = nothing),
+        menu,
+        Label(fig, "Function", width = nothing),
+        menu2;
+        tellheight = false, width = 200)
+    
+    ax = Axis(fig[1, 2])
+    # datakeys[1]
+    func = Node{Any}("Pressure")
+    # ys = @lift($func.(0:0.3:10))
+    ys = @lift(select_data(mrst_grid, data[$func]))
+    # scat = scatter!(ax, ys, markersize = 10px, color = ys)
+    scat = scatter!(ax, ys, markersize = 10px, color = ys)
+    # scat = plotter!(ax, mrst_grid, ys)
+    cb = Colorbar(fig[1, 3], scat, vertical = true, label = "COLORBARLABEL", width = 30)
+    @show cb
+
+    on(menu.selection) do s
+        func[] = s
+        autolimits!(ax)
+    end
+    on(menu2.selection) do s
+    end
+    menu2.is_open = true
+    fig
+    return fig
+end
+
+function select_data(G, d::Vector)
+    d
+end
+function select_data(G, d::Matrix)
+    d[1, :]
+end
+
+function plotter!(ax, G, data)
+    cartDims = Int64.(G["cartDims"])
+    if G["griddim"] == 2 || cartDims[end] == 1
+    p = heatmap!(ax, data)
+        # p = heatmap!(ax, reshape(data, cartDims[1:2]...))
+    else
+        p = volume!(ax, reshape(data, cartDims...), algorithm = :mip)
+    end
+    return p
 end
