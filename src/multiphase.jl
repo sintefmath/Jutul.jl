@@ -96,16 +96,8 @@ function setup_state!(state, model, G, sys::MultiPhaseSystem, init_values)
     end
 
     nc = number_of_cells(model.grid)
-    phases = get_phases(sys)
-    for phase in phases
-        state[subscript("PhaseMass", phase)] = transfer(model.context, zeros(nc))
-    end
-    if !isa(sys, SinglePhaseSystem)
-        s = state["Saturations"]
-        for (i, phase) in enumerate(phases)
-            state[subscript("Saturation", phase)] = view(s, i, :)
-        end
-    end
+    nph = number_of_phases(sys)
+    state["TotalMass"] = transfer(model.context, zeros(nph, nc))
 end
 
 
@@ -260,8 +252,8 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     # Mobility * Density. We compute store this separately since density
     # and mobility are both used in other spots
     d["MassMobility"] = alloc(nc)
-    d["TotalMass"] = alloc(nc)
-    d["TotalMass0"] = alloc_value(nc)
+    # d["TotalMass"] = alloc(nc)
+    # d["TotalMass0"] = alloc_value(nc)
 
     # Set up governing equations storage
     allocate_equations!(d, model, lsys, npartials)
@@ -280,9 +272,11 @@ function allocate_equations!(d, model::SimulationModel{T, S}, lsys, npartials) w
 end
 
 function initialize_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+    state = d["state"]
+    state0 = d["state0"]
     update_properties!(model, d)
-    m = d["TotalMass"]
-    m0 = d["TotalMass0"]
+    m = state["TotalMass"]
+    m0 = state0["TotalMass"]
     @. m0 = value(m)
 end
 
@@ -349,10 +343,11 @@ function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any
 end
 
 function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:ImmiscibleSystem}
+    state = storage["state"]
     pv = model.grid.pv'
     rho = storage["Density"]
-    totMass = storage["TotalMass"]
-    s = storage["state"]["Saturations"]
+    totMass = state["TotalMass"]
+    s = state["Saturations"]
 
     @. totMass = rho*pv*s
     # fapply!(totMass, *, rho, pv, s)
@@ -377,10 +372,12 @@ end
 
 # Update of discretization terms
 function update_accumulation!(model, storage, dt)
+    state = storage["state"]
+    state0 = storage["state0"]
     law = storage["Equations"]["MassConservation"]
     acc = law.accumulation
-    mass = storage["TotalMass"]
-    mass0 = storage["TotalMass0"]
+    mass = state["TotalMass"]
+    mass0 = state0["TotalMass"]
     fapply!(acc, (m, m0) -> (m - m0)/dt, mass, mass0)
     return acc
 end
