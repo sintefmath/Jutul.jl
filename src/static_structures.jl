@@ -24,8 +24,22 @@ function get_sparsity_pattern(G::MinimalTPFAGrid, arg...)
     get_sparsity_pattern(n, G.conn_data, arg...)
 end
 
+function to_sparse(i, j, v, n, m)
+    return sparse(i, j, v, n, m)
+end
+
+function to_sparse(i::CuArray, j::CuArray, v::CuArray, n, m)
+    id = Array(i)
+    jd = Array(j)
+    vd = Array(j)
+    A = sparse(id, jd, vd, n, m)
+    A = CUDA.CUSPARSE.CuSparseMatrixCSC(A)
+    #  CUDA.CUSPARSE.sparse(i, j, v, n, m)
+end
+
 function get_sparsity_pattern(n, hfd, nrows = 1, ncols = 1)
-    # map is efficient on GPU 
+    # map is efficient on GPU
+    hfd = Array(hfd)
     I = map(x -> x.self, hfd)
     J = map(x -> x.other, hfd)
     V = map(x -> x.T, hfd)
@@ -46,7 +60,7 @@ function get_sparsity_pattern(n, hfd, nrows = 1, ncols = 1)
         J = vcat(map((x) -> (x-1)*n .+ J, 1:ncols)...)
         V = repeat(V, ncols)
     end
-    A = sparse(I, J, V, n*nrows, n*ncols)
+    A = to_sparse(I, J, V, n*nrows, n*ncols)
     return A
 end
 
