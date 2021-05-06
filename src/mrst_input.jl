@@ -161,15 +161,6 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     end
     menu2.is_open = true
 
-    fig[2, 1] = buttongrid = GridLayout(tellwidth = false)
-    rewind = Button(fig, label = "⏪")
-    prev =   Button(fig, label = "◀️")
-    play =   Button(fig, label = "⏯️")
-    next =   Button(fig, label = "▶️")
-    ffwd =   Button(fig, label = "⏩")
-
-    buttons = buttongrid[1, 1:5] = [rewind, prev, play, next, ffwd]
-
     function change_index(ix)
         tmp = max(min(ix, nstates), 1)
         sl_x.selected_index = tmp
@@ -181,18 +172,36 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         change_index(state_index.val + inc)
     end
 
+    fig[2, 1] = buttongrid = GridLayout(tellwidth = false)
+    rewind = Button(fig, label = "⏪")
     on(rewind.clicks) do n
         increment_index(-nstates)
     end
+    prev =   Button(fig, label = "◀️")
     on(prev.clicks) do n
         increment_index(-1)
     end
+    play =   Button(fig, label = "⏯️")
+    on(play.clicks) do n
+        
+        increment_index()
+    end
+    next =   Button(fig, label = "▶️")
     on(next.clicks) do n
         increment_index()
     end
+    ffwd =   Button(fig, label = "⏩")
     on(ffwd.clicks) do n
         increment_index(nstates)
     end
+    buttons = buttongrid[1, 1:5] = [rewind, prev, play, next, ffwd]
+
+
+
+
+
+
+
     
     fig
     return fig
