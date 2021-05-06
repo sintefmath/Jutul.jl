@@ -127,6 +127,7 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     datakeys = collect(keys(data))
     state_index = Node{Int64}(1)
     prop_name = Node{String}(datakeys[1])
+    looping = Node{Bool}(false)
 
     menu = Menu(fig, options = datakeys)
     nstates = length(states)
@@ -173,6 +174,25 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         change_index(state_index.val + inc)
     end
 
+    function loop(is_looping)
+        # looping = !looping
+        println("Loop function called")
+        @show is_looping
+        if is_looping
+            for i = state_index.val:nstates
+                newindex = increment_index()
+                if newindex > nstates
+                    break
+                end
+                force_update!()
+                sleep(1/30)
+            end
+        end
+        looping = false
+    end
+
+    @lift(loop($looping))
+
     fig[2, 1] = buttongrid = GridLayout(tellwidth = false)
     rewind = Button(fig, label = "⏪")
     on(rewind.clicks) do n
@@ -186,15 +206,7 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     play = Button(fig, label = "⏯️")
     looping = false
     on(play.clicks) do n
-        looping = !looping
-        if looping
-            for i = state_index.val:nstates
-                newindex = increment_index()
-                state_index[] = newindex
-                sleep(1/30)
-            end
-        end
-        looping = false
+        looping = true
     end
     next =   Button(fig, label = "▶️")
     on(next.clicks) do n
@@ -205,13 +217,6 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         increment_index(nstates)
     end
     buttons = buttongrid[1, 1:5] = [rewind, prev, play, next, ffwd]
-
-
-
-
-
-
-
     
     fig
     return fig
