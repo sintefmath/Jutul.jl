@@ -125,6 +125,9 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     fig = Figure()
     data = states[1]
     datakeys = collect(keys(data))
+    state_index = Node{Int64}(1)
+    func = Node{String}(datakeys[1])
+
     menu = Menu(fig, options = datakeys)
     nstates = length(states)
     
@@ -137,14 +140,13 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         menu2;
         tellheight = false, width = 200)
     
-    sl_x = Slider(fig[2, 2], range = 1:length(states), startvalue = 1)
-    point = sl_x.value
+    sl_x = Slider(fig[2, 2], range = 1:nstates, startvalue = state_index)
+    # point = sl_x.value
 
     ax = Axis(fig[1, 2])
     # datakeys[1]
-    func = Node{Any}("Pressure")
     # ys = @lift($func.(0:0.3:10))
-    ys = @lift(select_data(mrst_grid, states[$point][$func]))
+    ys = @lift(select_data(mrst_grid, states[$state_index][$func]))
     # scat = scatter!(ax, ys, markersize = 10px, color = ys)
     # scat = scatter!(ax, ys, markersize = 10px, color = ys)
     scat = heatmap!(ax, ys)
@@ -169,8 +171,14 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     buttons = buttongrid[1, 1:5] = [rewind, back, play, next, ffwd]
 
     on(next.clicks) do n
-        sl_x.value = min(sl_x.value + 1, nstates)
-        notify(point)
+        # sl_x.value = min(sl_x.value + 1, nstates)
+        tmp = min(state_index.val + 1, nstates)
+        sl_x.value = tmp
+        state_index[] = tmp
+
+        # state_index.val = min(state_index.val + 1, nstates)
+        # sl_x.value = state_index.val
+        # notify(state_index)
     end
     fig
     return fig
