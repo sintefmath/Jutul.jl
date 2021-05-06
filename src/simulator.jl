@@ -119,7 +119,8 @@ function solve_ministep(sim, dt, maxIterations, linsolve, sources)
     end
     # @assert done "Timestep did not complete in $maxIterations iterations."
     if done
-        update_after_step!(sim)
+        t_finalize = @elapsed update_after_step!(sim)
+        @debug "Finalized in $t_finalize seconds."
     end
     return done
 end
