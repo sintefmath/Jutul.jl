@@ -336,7 +336,7 @@ function update_density!(model, storage)
 end
 
 function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:SinglePhaseSystem}
-    pv = model.grid.pv
+    pv = model.grid.pv'
     rho = storage["Density"]
     totMass = storage["state"]["TotalMass"]
     fapply!(totMass, *, rho, pv)
@@ -397,18 +397,22 @@ function insert_sources!(model, storage, sources)
     end
     acc = storage["Equations"]["MassConservation"].accumulation
     mob = storage["Mobility"]
-    phases = get_phases(model.system)
+    insert_phase_sources(mob, acc, sources)
+end
+
+function insert_phase_sources(mob, acc, sources)
+    nph = size(acc, 1)
     for src in sources
         v = src.value
         c = src.cell
         mobt = sum(mob[:, c])
         if v > 0
-            for index in eachindex(phases)
+            for index in 1:nph
                 f = src.fractional_flow[index]
                 @inbounds acc[index, c] -= v*f
             end
         else
-            for index in eachindex(phases)
+            for index in 1:nph
                 f = mob[index, c]/mobt
                 @inbounds acc[index, c] -= v*f
             end
@@ -416,7 +420,7 @@ function insert_sources!(model, storage, sources)
     end
 end
 
-@inline function insert_sources(acc::CuArray, sources, phNo)
+@inline function insert_phase_sources(mob::CuArray, acc::CuArray, sources)
     @assert false "Not updated."
     s = cu(map(x -> x.values[phNo], sources))
     i = cu(map(x -> x.cell, sources))
