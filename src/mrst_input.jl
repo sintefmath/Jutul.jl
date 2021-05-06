@@ -127,7 +127,7 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     datakeys = collect(keys(data))
     state_index = Node{Int64}(1)
     prop_name = Node{String}(datakeys[1])
-    looping = Node{Bool}(false)
+    loop_mode = Node{Int64}(0)
 
     menu = Menu(fig, options = datakeys)
     nstates = length(states)
@@ -150,9 +150,9 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     ys = @lift(select_data(mrst_grid, states[$state_index][$prop_name]))
     # scat = scatter!(ax, ys, markersize = 10px, color = ys)
     # scat = scatter!(ax, ys, markersize = 10px, color = ys)
-    scat = heatmap!(ax, ys)
+    scat = heatmap!(ax, ys, label = "COLORBARLABEL")
     # scat = plotter!(ax, mrst_grid, ys)
-    cb = Colorbar(fig[1, 3], scat, vertical = true, label = "COLORBARLABEL", width = 30)
+    cb = Colorbar(fig[1, 3], scat, vertical = true, width = 30)
 
     on(menu.selection) do s
         prop_name[] = s
@@ -174,24 +174,30 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         change_index(state_index.val + inc)
     end
 
-    function loop(is_looping)
+    function loop(a)
         # looping = !looping
-        println("Loop function called")
-        @show is_looping
-        if is_looping
-            for i = state_index.val:nstates
+        # println("Loop function called")
+        @show loop_mode
+        if loop_mode.val > 0
+            # println("Doing loop")
+            start = state_index.val
+            if start == nstates
+                start = 1
+            end
+            for i = start:nstates
+                @show i
                 newindex = increment_index()
                 if newindex > nstates
                     break
                 end
+                notify(state_index)
                 force_update!()
                 sleep(1/30)
             end
         end
-        looping = false
     end
 
-    @lift(loop($looping))
+    @lift(loop($loop_mode))
 
     fig[2, 1] = buttongrid = GridLayout(tellwidth = false)
     rewind = Button(fig, label = "⏪")
@@ -204,9 +210,8 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     end
 
     play = Button(fig, label = "⏯️")
-    looping = false
     on(play.clicks) do n
-        looping = true
+        loop_mode[] = loop_mode.val + 1
     end
     next =   Button(fig, label = "▶️")
     on(next.clicks) do n
