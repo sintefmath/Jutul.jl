@@ -166,6 +166,7 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         sl_x.selected_index = tmp
         state_index[] = tmp
         notify(state_index)
+        return tmp
     end
 
     function increment_index(inc = 1)
@@ -177,20 +178,29 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     on(rewind.clicks) do n
         increment_index(-nstates)
     end
-    prev =   Button(fig, label = "◀️")
+    prev = Button(fig, label = "◀️")
     on(prev.clicks) do n
         increment_index(-1)
     end
-    play =   Button(fig, label = "⏯️")
+
+    play = Button(fig, label = "⏯️")
+    looping = false
     on(play.clicks) do n
-        
-        increment_index()
+        looping = !looping
+        if looping
+            for i = state_index.val:nstates
+                newindex = increment_index()
+                state_index[] = newindex
+                sleep(1/30)
+            end
+        end
+        looping = false
     end
     next =   Button(fig, label = "▶️")
     on(next.clicks) do n
         increment_index()
     end
-    ffwd =   Button(fig, label = "⏩")
+    ffwd = Button(fig, label = "⏩")
     on(ffwd.clicks) do n
         increment_index(nstates)
     end
