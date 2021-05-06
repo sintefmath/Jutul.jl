@@ -126,7 +126,7 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     data = states[1]
     datakeys = collect(keys(data))
     menu = Menu(fig, options = datakeys)
-
+    nstates = length(states)
     
     funcs = [sqrt, x->x^2, sin, cos]
     menu2 = Menu(fig, options = zip(["Square Root", "Square", "Sine", "Cosine"], funcs))
@@ -150,7 +150,6 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     scat = heatmap!(ax, ys)
     # scat = plotter!(ax, mrst_grid, ys)
     cb = Colorbar(fig[1, 3], scat, vertical = true, label = "COLORBARLABEL", width = 30)
-    @show cb
 
     on(menu.selection) do s
         func[] = s
@@ -160,7 +159,19 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     end
     menu2.is_open = true
 
+    fig[2, 1] = buttongrid = GridLayout(tellwidth = false)
+    rewind = Button(fig, label = "⏪")
+    back =   Button(fig, label = "◀️")
+    play =   Button(fig, label = "⏯️")
+    next =   Button(fig, label = "▶️")
+    ffwd =   Button(fig, label = "⏩")
 
+    buttons = buttongrid[1, 1:5] = [rewind, back, play, next, ffwd]
+
+    on(next.clicks) do n
+        sl_x.value = min(sl_x.value + 1, nstates)
+        notify(point)
+    end
     fig
     return fig
 end
