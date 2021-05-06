@@ -129,6 +129,18 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     prop_name = Node{String}(datakeys[1])
     loop_mode = Node{Int64}(0)
 
+    function change_index(ix)
+        tmp = max(min(ix, nstates), 1)
+        sl_x.selected_index = tmp
+        state_index[] = tmp
+        notify(state_index)
+        return tmp
+    end
+
+    function increment_index(inc = 1)
+        change_index(state_index.val + inc)
+    end
+
     menu = Menu(fig, options = datakeys)
     nstates = length(states)
     
@@ -143,7 +155,9 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     
     sl_x = Slider(fig[2, 2], range = 1:nstates, value = state_index, snap = true)
     # point = sl_x.value
-
+    on(sl_x.selected_index) do n
+        state_index[] = sl_x.selected_index.val
+    end
     ax = Axis(fig[1, 2])
     # datakeys[1]
     # ys = @lift($func.(0:0.3:10))
@@ -162,42 +176,33 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     end
     menu2.is_open = true
 
-    function change_index(ix)
-        tmp = max(min(ix, nstates), 1)
-        sl_x.selected_index = tmp
-        state_index[] = tmp
-        notify(state_index)
-        return tmp
-    end
-
-    function increment_index(inc = 1)
-        change_index(state_index.val + inc)
-    end
 
     function loop(a)
         # looping = !looping
         # println("Loop function called")
-        @show loop_mode
-        if loop_mode.val > 0
-            # println("Doing loop")
-            start = state_index.val
-            if start == nstates
-                start = 1
-            end
-            for i = start:nstates
-                @show i
-                newindex = increment_index()
-                if newindex > nstates
-                    break
+        if false
+            @show loop_mode
+            if loop_mode.val > 0
+                # println("Doing loop")
+                start = state_index.val
+                if start == nstates
+                    start = 1
                 end
-                notify(state_index)
-                force_update!()
-                sleep(1/30)
+                for i = start:nstates
+                    @show i
+                    newindex = increment_index()
+                    if newindex > nstates
+                        break
+                    end
+                    notify(state_index)
+                    force_update!()
+                    sleep(1/30)
+                end
             end
         end
     end
 
-    @lift(loop($loop_mode))
+    # @lift(loop($loop_mode))
 
     fig[2, 1] = buttongrid = GridLayout(tellwidth = false)
     rewind = Button(fig, label = "⏪")
@@ -211,7 +216,8 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
 
     play = Button(fig, label = "⏯️")
     on(play.clicks) do n
-        loop_mode[] = loop_mode.val + 1
+        println("Play button is not implemented.")
+        # loop_mode[] = loop_mode.val + 1
     end
     next =   Button(fig, label = "▶️")
     on(next.clicks) do n
