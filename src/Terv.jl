@@ -18,7 +18,6 @@ include("static_structures.jl")
 include("assembly.jl")
 include("benchmarks.jl")
 include("linsolve.jl")
-include("models.jl")
 
 include("equation_helpers.jl")
 

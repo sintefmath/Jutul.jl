@@ -262,6 +262,20 @@ function get_primary_variables(model::SimulationModel)
     return model.primary_variables
 end
 
+function setup_state(model, arg...)
+    state = Dict{String, Any}()
+    setup_state!(state, model, arg...)
+    return state
+end
+
+function setup_state!(state, model, init_values)
+    pvars = get_primary_variables(model)
+    for pvar in get_primary_variables(model)
+        initialize_primary_variable_value(state, model, pvar, init_values)
+    end
+    add_extra_state_fields!(state, model)
+end
+
 function allocate_storage(model::TervModel)
     d = Dict()
     allocate_storage!(d, model)

@@ -83,23 +83,11 @@ function get_name(::VaporPhase)
 end
 
 ## Main implementation
-function setup_state(model, arg...)
-    state = Dict{String, Any}()
-    setup_state!(state, model, model.domain, model.system, arg...)
-    return state
-end
-
-function setup_state!(state, model, G, sys::MultiPhaseSystem, init_values)
-    pvars = get_primary_variables(model)
-    for pvar in get_primary_variables(model)
-        initialize_primary_variable_value(state, model, pvar, init_values)
-    end
-
+function add_extra_state_fields!(state, model::SimulationModel{G, S}) where {G<:Any, S<:MultiPhaseSystem}
     nc = number_of_cells(model.domain)
-    nph = number_of_phases(sys)
+    nph = number_of_phases(model.system)
     state["TotalMass"] = transfer(model.context, zeros(nph, nc))
 end
-
 
 
 function convert_state_ad(model, state)
