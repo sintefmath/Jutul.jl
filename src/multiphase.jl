@@ -89,31 +89,6 @@ function add_extra_state_fields!(state, model::SimulationModel{G, S}) where {G<:
     state["TotalMass"] = transfer(model.context, zeros(nph, nc))
 end
 
-
-function convert_state_ad(model, state)
-    context = model.context
-    stateAD = deepcopy(state)
-    vars = String.(keys(state))
-
-    primary = get_primary_variables(model)
-    # Loop over primary variables and set them to AD, with ones at the correct diagonal
-    counts = map((x) -> degrees_of_freedom_per_unit(x), primary)
-    n_partials = sum(counts)
-    @debug "Found $n_partials primary variables."
-    offset = 0
-    for (i, pvar) in enumerate(primary)
-        stateAD = initialize_primary_variable_ad(stateAD, model, pvar, offset, n_partials)
-        offset += counts[i]
-    end
-    primary_names = get_primary_variable_names(model)
-    secondary = setdiff(vars, primary_names)
-    # Loop over secondary variables and initialize as AD with zero partials
-    for s in secondary
-        stateAD[s] = allocate_array_ad(stateAD[s], context = context, npartials = n_partials)
-    end
-    return stateAD
-end
-
 # Primary variable logic
 
 # Pressure as primary variable

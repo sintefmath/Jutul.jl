@@ -237,54 +237,9 @@ function number_of_equations(model, e::TervEquation)
 end
 
 # Models 
-abstract type TervModel end
+include("models.jl")
 
-# Concrete models follow
-struct SimulationModel{O<:TervDomain, 
-                       S<:TervSystem,
-                       F<:TervFormulation,
-                       C<:TervContext,
-                       D<:TervDiscretization} <: TervModel
-    domain::O
-    system::S
-    context::C
-    formulation::F
-    discretization::D
-    primary_variables
-end
-
-
-function get_primary_variable_names(model::SimulationModel)
-    return map((x) -> get_name(x), get_primary_variables(model))
-end
-
-function get_primary_variables(model::SimulationModel)
-    return model.primary_variables
-end
-
-function setup_state(model, arg...)
-    state = Dict{String, Any}()
-    setup_state!(state, model, arg...)
-    return state
-end
-
-function setup_state!(state, model, init_values)
-    pvars = get_primary_variables(model)
-    for pvar in get_primary_variables(model)
-        initialize_primary_variable_value(state, model, pvar, init_values)
-    end
-    add_extra_state_fields!(state, model)
-end
-
-function allocate_storage(model::TervModel)
-    d = Dict()
-    allocate_storage!(d, model)
-    return d
-end
-
-function allocate_storage!(d, model::TervModel)
-    # Do nothing for Any.
-end
+# Transfer operators
 
 function context_convert(context::TervContext, v::Real)
     return context_convert(context, [v])
@@ -298,12 +253,6 @@ function context_convert(context::SingleCUDAContext, v::AbstractArray)
     return CuArray(v)
 end
 
-function allocate_array(context::TervContext, value, n...)
-    tmp = context_convert(context, value)
-    return repeat(tmp, n...)
-end
-
-
 function transfer(context::TervContext, v)
     return v
 end
@@ -316,16 +265,3 @@ function transfer(context::SingleCUDAContext, v::AbstractArray{F}) where {F<:Abs
     return CuArray{context.float_t}(v)
 end
 
-
-function SimulationModel(G, system;
-                                 formulation = FullyImplicit(), 
-                                 context = DefaultContext(),
-                                 discretization = DefaultDiscretization())
-    grid = transfer(context, G)
-    primary = select_primary_variables(system, formulation, discretization)
-    return SimulationModel(grid, system, context, formulation, discretization, primary)
-end
-
-function setup_parameters(model)
-    return Dict{String, Any}()
-end
