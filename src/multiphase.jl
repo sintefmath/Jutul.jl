@@ -85,7 +85,7 @@ end
 ## Main implementation
 function setup_state(model, arg...)
     state = Dict{String, Any}()
-    setup_state!(state, model, model.grid, model.system, arg...)
+    setup_state!(state, model, model.domain, model.system, arg...)
     return state
 end
 
@@ -95,7 +95,7 @@ function setup_state!(state, model, G, sys::MultiPhaseSystem, init_values)
         initialize_primary_variable_value(state, model, pvar, init_values)
     end
 
-    nc = number_of_cells(model.grid)
+    nc = number_of_cells(model.domain)
     nph = number_of_phases(sys)
     state["TotalMass"] = transfer(model.context, zeros(nph, nc))
 end
@@ -227,7 +227,7 @@ function select_primary_variables(system::ImmiscibleSystem, formulation, discret
 end
 
 function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
-    G = model.grid
+    G = model.domain
     sys = model.system
     context = model.context
 
@@ -266,7 +266,7 @@ end
 function allocate_equations!(d, model::SimulationModel{T, S}, lsys, npartials) where {T<:Any, S<:MultiPhaseSystem}
     nph = number_of_phases(model.system)
     eqs = Dict()
-    law = ConservationLaw(model.grid, lsys, npartials, context = model.context, equations_per_unit = nph)
+    law = ConservationLaw(model.domain, lsys, npartials, context = model.context, equations_per_unit = nph)
     eqs["MassConservation"] = law
     d["Equations"] = eqs
 end
@@ -281,7 +281,7 @@ function initialize_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:
 end
 
 function update_equations!(model::SimulationModel{G, S}, storage; 
-    dt = nothing, sources = nothing) where {G<:MinimalTPFAGrid, S<:MultiPhaseSystem}
+    dt = nothing, sources = nothing) where {G<:MinimalTPFADomain, S<:MultiPhaseSystem}
     update_properties!(model, storage)
     acc = update_accumulation!(model, storage, dt)
     insert_sources!(model, storage, sources)
@@ -335,8 +335,10 @@ function update_density!(model, storage)
     return rho
 end
 
+function get_pore_volume(model) model.domain.pv' end
+
 function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:SinglePhaseSystem}
-    pv = model.grid.pv'
+    pv = get_pore_volume(model)
     rho = storage["Density"]
     totMass = storage["state"]["TotalMass"]
     fapply!(totMass, *, rho, pv)
@@ -344,7 +346,7 @@ end
 
 function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:ImmiscibleSystem}
     state = storage["state"]
-    pv = model.grid.pv'
+    pv = get_pore_volume(model)
     rho = storage["Density"]
     totMass = state["TotalMass"]
     s = state["Saturations"]
@@ -355,7 +357,7 @@ end
 
 
 function update_total_mass!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:ImmiscibleSystem}
-    pv = model.grid.pv
+    pv = get_pore_volume(model)
     rho = storage[subscript("Density", phase)]
     s = storage["state"][subscript("Saturation", phase)]
     totMass = storage[subscript("TotalMass", phase)]
@@ -438,7 +440,7 @@ function update_linearized_system!(model::TervModel, storage)
 end
 
 function update_linearized_system!(model, lsys::LinearizedSystem, law::ConservationLaw)
-    G = model.grid
+    G = model.domain
     context = model.context
     ker_compat = kernel_compatibility(context)
     apos = law.accumulation_jac_pos

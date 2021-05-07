@@ -1,4 +1,4 @@
-export TervSystem, TervGrid, DefaultPrimaryVariables, TervPrimaryVariables
+export TervSystem, TervDomain, DefaultPrimaryVariables, TervPrimaryVariables
 export SimulationModel, TervPrimaryVariables, DefaultPrimaryVariables, TervFormulation
 export setup_parameters, kernel_compatibility
 
@@ -22,8 +22,8 @@ struct DefaultDiscretization <: TervDiscretization end
 abstract type TervPrimaryVariables end
 
 function number_of_units(model, ::TervPrimaryVariables)
-    # By default, each primary variable exists on all cells of a "grid"
-    return number_of_cells(model.grid)
+    # By default, each primary variable exists on all cells of a discretized domain
+    return number_of_cells(model.domain)
 end
 
 function number_of_degrees_of_freedom(model, pvars::TervPrimaryVariables)
@@ -215,8 +215,8 @@ struct DefaultContext <: CPUTervContext
 
 end
 
-# Grids
-abstract type TervGrid end
+# Domains
+abstract type TervDomain end
 
 # Formulation
 abstract type TervFormulation end
@@ -233,19 +233,19 @@ end
 
 function number_of_equations(model, e::TervEquation)
     # Default: Equations are per cell
-    return number_of_equations_per_unit(e)*number_of_cells(model.grid)
+    return number_of_equations_per_unit(e)*number_of_cells(model.domain)
 end
 
 # Models 
 abstract type TervModel end
 
 # Concrete models follow
-struct SimulationModel{G<:TervGrid, 
+struct SimulationModel{O<:TervDomain, 
                        S<:TervSystem,
                        F<:TervFormulation,
                        C<:TervContext,
                        D<:TervDiscretization} <: TervModel
-    grid::G
+    domain::O
     system::S
     context::C
     formulation::F

@@ -1,6 +1,6 @@
 export get_sparsity_pattern
 
-function get_incomp_matrix(G::MinimalTPFAGrid)
+function get_incomp_matrix(G::MinimalTPFADomain)
     n = number_of_cells(G)
     get_incomp_matrix(n, G.conn_data)
 end
@@ -19,7 +19,7 @@ function get_incomp_matrix(n, hfd)
     return A
 end
 
-function get_sparsity_pattern(G::MinimalTPFAGrid, arg...)
+function get_sparsity_pattern(G::MinimalTPFADomain, arg...)
     n = number_of_cells(G)
     get_sparsity_pattern(n, G.conn_data, arg...)
 end

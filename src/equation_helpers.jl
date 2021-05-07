@@ -12,7 +12,7 @@ struct ConservationLaw <: TervEquation
     half_face_flux_jac_pos::AbstractArray # Equal length to half face flux
 end
 
-function ConservationLaw(G::TervGrid, lsys, nder::Integer = 0; jacobian_row_offset = 0, context = DefaultContext(), equations_per_unit = 1)
+function ConservationLaw(G::TervDomain, lsys, nder::Integer = 0; jacobian_row_offset = 0, context = DefaultContext(), equations_per_unit = 1)
     F = float_type(context)
     I = index_type(context)
     nu = equations_per_unit
@@ -76,8 +76,8 @@ end
 
 function convergence_criterion(model, storage, eq::ConservationLaw, lsys::LinearizedSystem; dt = 1)
     n = number_of_equations_per_unit(eq)
-    nc = number_of_cells(model.grid)
-    pv = model.grid.pv
+    nc = number_of_cells(model.domain)
+    pv = model.domain.pv
     e = zeros(n)
     for i = 1:n
         e[i] = mapreduce((pv, e) -> abs(dt*e/pv), max, pv, lsys.r[(1:nc) .+ (i-1)*nc])

@@ -1,4 +1,4 @@
-export MRSTGrid, MinimalTPFAGrid, TPFAHalfFaceData
+export MRSTGrid, MinimalTPFADomain, TPFAHalfFaceData
 export get_cell_faces, get_facepos, get_cell_neighbors
 export number_of_cells, number_of_faces, number_of_half_faces
 
@@ -17,15 +17,17 @@ function TPFAHalfFaceData{R, I}(target::TPFAHalfFaceData) where {R<:Real, I<:Int
     return TPFAHalfFaceData(R(target.T), R(target.dz), I(target.self), I(target.other))
 end
 
+
+abstract type DarcyDomain <: TervDomain end
 # TPFA grid
 "Minimal struct for TPFA-like grid. Just connection data and pore-volumes"
-struct MinimalTPFAGrid{R<:AbstractFloat, I<:Integer} <: TervGrid
+struct MinimalTPFADomain{R<:AbstractFloat, I<:Integer} <: DarcyDomain
     conn_data::AbstractArray{TPFAHalfFaceData{R,I}}
     conn_pos::AbstractArray{I}
     pv::AbstractArray{R}
 end
 
-function MinimalTPFAGrid(conn_data, pv)
+function MinimalTPFADomain(conn_data, pv)
     cno = [i.self for i in conn_data]
     # Slow code for the same thing:
     # counts = [sum(cno .== j) for j in 1:length(pv)]
@@ -47,23 +49,23 @@ function MinimalTPFAGrid(conn_data, pv)
         cell += 1
     end
     cpos = cumsum(vcat([1], counts))
-    return MinimalTPFAGrid(conn_data, cpos, pv)
+    return MinimalTPFADomain(conn_data, cpos, pv)
 end
 
 # Member functions, TPFA grid
-function number_of_cells(G::MinimalTPFAGrid)
+function number_of_cells(G::MinimalTPFADomain)
     return length(G.pv)
 end
 
-function number_of_faces(G::MinimalTPFAGrid)
+function number_of_faces(G::MinimalTPFADomain)
     return div(number_of_half_faces(G), 2)
 end
 
-function number_of_half_faces(G::MinimalTPFAGrid)
+function number_of_half_faces(G::MinimalTPFADomain)
     return length(G.conn_data)
 end
 
-function get_pore_volume(G::MinimalTPFAGrid)
+function get_pore_volume(G::MinimalTPFADomain)
     return G.pore_volume
 end
 
@@ -111,7 +113,7 @@ function get_facepos(N)
     return (faces, facePos)
 end
 
-function transfer(context::SingleCUDAContext, grid::MinimalTPFAGrid)
+function transfer(context::SingleCUDAContext, grid::MinimalTPFADomain)
     F = context.float_t
     I = context.index_t
     # Next line should be something like
@@ -120,7 +122,7 @@ function transfer(context::SingleCUDAContext, grid::MinimalTPFAGrid)
     conn_data = CuArray(TPFAHalfFaceData{F, I}.(grid.conn_data))
     pv = CuArray{F}(grid.pv)
     conn_pos = CuArray{I}(grid.conn_pos)
-    return MinimalTPFAGrid(conn_data, conn_pos, pv)
+    return MinimalTPFADomain(conn_data, conn_pos, pv)
 end
 
 function transfer(::DefaultContext, grid)

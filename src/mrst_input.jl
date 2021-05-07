@@ -81,7 +81,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
         end
     end
     @debug "Setting up TPFA grid."
-    sg = MinimalTPFAGrid(faceData, pv)
+    sg = MinimalTPFADomain(faceData, pv)
     if extraout
         return (sg, exported)
     else
@@ -159,13 +159,8 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         state_index[] = sl_x.selected_index.val
     end
     ax = Axis(fig[1, 2])
-    # datakeys[1]
-    # ys = @lift($func.(0:0.3:10))
     ys = @lift(select_data(mrst_grid, states[$state_index][$prop_name]))
-    # scat = scatter!(ax, ys, markersize = 10px, color = ys)
-    # scat = scatter!(ax, ys, markersize = 10px, color = ys)
     scat = heatmap!(ax, ys, label = "COLORBARLABEL")
-    # scat = plotter!(ax, mrst_grid, ys)
     cb = Colorbar(fig[1, 3], scat, vertical = true, width = 30)
 
     on(menu.selection) do s
@@ -175,7 +170,6 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         on(menu2.selection) do s
     end
     menu2.is_open = true
-
 
     function loop(a)
         # looping = !looping
@@ -244,7 +238,7 @@ end
 function plotter!(ax, G, data)
     cartDims = Int64.(G["cartDims"])
     if G["griddim"] == 2 || cartDims[end] == 1
-    p = heatmap!(ax, data)
+        p = heatmap!(ax, data)
         # p = heatmap!(ax, reshape(data, cartDims[1:2]...))
     else
         p = volume!(ax, reshape(data, cartDims...), algorithm = :mip)
