@@ -45,6 +45,23 @@ function ConservationLaw(nc::Integer, nhf::Integer,
     ConservationLaw(acc, flux, accpos, fluxpos)
 end
 
+function update_linearized_system!(lsys::LinearizedSystem, model, law::ConservationLaw)
+    G = model.domain
+    context = model.context
+    ker_compat = kernel_compatibility(context)
+    apos = law.accumulation_jac_pos
+    neq = number_of_equations_per_unit(law)
+    jac = lsys.jac
+    r = lsys.r
+    # Fill in diagonal
+    # @info "Accumulation fillin"
+    fill_accumulation!(jac, r, law.accumulation, apos, neq, context, ker_compat)
+    # Fill in off-diagonal
+    fpos = law.half_face_flux_jac_pos
+    # @info "Half face flux fillin"
+    fill_half_face_fluxes(jac, r, G.conn_pos, law.half_face_flux, apos, fpos, neq, context, ker_compat)
+end
+
 function number_of_equations_per_unit(e::ConservationLaw)
     return size(e.half_face_flux, 1)
 end

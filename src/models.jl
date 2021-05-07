@@ -99,6 +99,15 @@ function update_equations!(model, storage)
     # Do nothing
 end
 
+function update_linearized_system!(model::TervModel, storage)
+    equations = storage["Equations"]
+    lsys = storage["LinearizedSystem"]
+    for (key, eq) in equations
+        update_linearized_system!(lsys, model, eq)
+    end
+end
+
+
 function setup_parameters(model)
     return Dict{String, Any}()
 end
