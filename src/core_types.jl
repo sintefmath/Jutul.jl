@@ -254,10 +254,6 @@ function number_of_equations(model, e::TervEquation)
     return number_of_equations_per_unit(e)*number_of_cells(model.domain)
 end
 
-# Models 
-include("models.jl")
-include("multimodel.jl")
-
 # Transfer operators
 
 function context_convert(context::TervContext, v::Real)

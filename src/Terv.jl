@@ -9,6 +9,11 @@ using Logging
 # Main types
 include("core_types.jl")
 
+# Models 
+include("models.jl")
+include("multimodel.jl")
+
+# include("models.jl")
 # MRST stuff
 include("mrst_input.jl")
 # Grids, types

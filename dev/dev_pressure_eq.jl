@@ -43,8 +43,8 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     state0 = setup_state(model, init)
     # Model parameters
     parameters = setup_parameters(model)
-    parameters[subscript("Viscosity", phase)] = mu
-    parameters[subscript("Density", phase)] = rhoL
+    parameters["Viscosity"] = [mu]
+    parameters["Density"] = [rhoL]
 
     sim = Simulator(model, state0 = state0, parameters = parameters)
     # Linear solver
@@ -52,7 +52,7 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     println("Starting simulation.")
     states = simulate(sim, timesteps, sources = src, linsolve = lsolve)
     s = states[end]
-    p = s["Pressure"]
+    p = s.Pressure
     @printf("Final pressure ranges from %f to %f bar.\n", maximum(p)/bar, minimum(p)/bar)
     if doPlot
         # Rescale for better plot with volume
