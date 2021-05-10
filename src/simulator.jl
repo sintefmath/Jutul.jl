@@ -7,7 +7,7 @@ using Dates
 abstract type TervSimulator end
 struct Simulator <: TervSimulator
     model::TervModel
-    storage::Dict{String, Any}
+    storage::NamedTuple
 end
 
 function Simulator(model; state0 = setup_state(model), parameters = setup_parameters(model))
@@ -15,6 +15,9 @@ function Simulator(model; state0 = setup_state(model), parameters = setup_parame
     storage["parameters"] = parameters
     storage["state0"] = state0
     storage["state"] = convert_state_ad(model, state0)
+    # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
+    # This allows for much faster lookup in the simulation itself.
+    storage = convert_to_immutable_storage(storage)
     initialize_storage!(storage, model)
     Simulator(model, storage)
 end
@@ -40,8 +43,8 @@ function newton_step(model, storage; dt = nothing, linsolve = nothing, sources =
     end
     @debug "Updated linear system in $t_lsys seconds."
 
-    lsys = storage["LinearizedSystem"]
-    eqs = storage["Equations"]
+    lsys = storage.LinearizedSystem
+    eqs = storage.Equations
     tol = 1e-3
 
     converged = true
@@ -127,16 +130,16 @@ end
 
 function update_after_step!(sim)
     storage = sim.storage
-    state = storage["state"]
-    state0 = storage["state0"]
+    state = storage.state
+    state0 = storage.state0
     for key in keys(state)
         @. state0[key] = value(state[key])
     end
 end
 
 function update_state!(model, storage)
-    lsys = storage["LinearizedSystem"]
-    state = storage["state"]
+    lsys = storage.LinearizedSystem
+    state = storage.state
 
     offset = 0
     primary = get_primary_variables(model)

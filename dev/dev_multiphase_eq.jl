@@ -48,8 +48,7 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     # Model parameters
     parameters = setup_parameters(model)
     parameters["CoreyExponent_L"] = 2
-    parameters["Density_L"] = rhoL
-    parameters["Density_V"] = rhoL
+    parameters["Density"] = [rhoL, rhoL]
     # Repeat same properties
     parameters["CoreyExponents"] = [2, 3]
     parameters["Viscosity"] = [mu, mu/2]

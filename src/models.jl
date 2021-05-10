@@ -100,10 +100,10 @@ function update_equations!(model, storage)
 end
 
 function update_linearized_system!(model::TervModel, storage)
-    equations = storage["Equations"]
-    lsys = storage["LinearizedSystem"]
-    for (key, eq) in equations
-        update_linearized_system!(lsys, model, eq)
+    equations = storage.Equations
+    lsys = storage.LinearizedSystem
+    for key in keys(equations)
+        update_linearized_system!(lsys, model, equations[key])
     end
 end
 
