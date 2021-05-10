@@ -539,12 +539,3 @@ end
     @inbounds nzval[diag_index] += v # Should this be atomic?
     nothing
 end
-
-@inline function get_nzval(jac)
-    return jac.nzval
-end
-
-@inline function get_nzval(jac::AbstractCuSparseMatrix)
-    # Why does CUDA and Base differ on capitalization?
-    return jac.nzVal
-end

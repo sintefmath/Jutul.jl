@@ -14,6 +14,17 @@ function LinearizedSystem(context::TervContext, jac, r, dx)
     return LinearizedSystem(jac, r, dx)
 end
 
+
+@inline function get_nzval(jac)
+    return jac.nzval
+end
+
+@inline function get_nzval(jac::AbstractCuSparseMatrix)
+    # Why does CUDA and Base differ on capitalization?
+    return jac.nzVal
+end
+
+
 function solve!(sys::LinearizedSystem, linsolve = nothing)
     if isnothing(linsolve)
         sys.dx .= -(sys.jac\sys.r)
