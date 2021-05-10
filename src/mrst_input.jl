@@ -126,7 +126,7 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     data = states[1]
     datakeys = collect(keys(data))
     state_index = Node{Int64}(1)
-    prop_name = Node{String}(datakeys[1])
+    prop_name = Node{String}(String(datakeys[1]))
     loop_mode = Node{Int64}(0)
 
     function change_index(ix)
@@ -159,7 +159,7 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         state_index[] = sl_x.selected_index.val
     end
     ax = Axis(fig[1, 2])
-    ys = @lift(select_data(mrst_grid, states[$state_index][$prop_name]))
+    ys = @lift(select_data(mrst_grid, states[$state_index][Symbol($prop_name)]))
     scat = heatmap!(ax, ys, label = "COLORBARLABEL")
     cb = Colorbar(fig[1, 3], scat, vertical = true, width = 30)
 

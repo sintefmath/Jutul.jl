@@ -100,7 +100,8 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
             end
         end
         if outputStates
-            push!(states, value(sim.storage.state))
+            store_output!(states, sim)
+            # push!(states, value(sim.storage.state))
         end
     end
     return states
@@ -135,6 +136,16 @@ function update_after_step!(sim)
     for key in keys(state)
         @. state0[key] = value(state[key])
     end
+end
+
+function store_output!(states, sim)
+    storage = sim.storage
+    state = storage.state
+    state_out = deepcopy(storage.state0)
+    for key in keys(state)
+        @. state_out[key] = value(state[key])
+    end
+    push!(states, state_out)
 end
 
 function update_state!(model, storage)

@@ -65,10 +65,6 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     @printf("Final liquid saturation ranges from %f to %f.\n", maximum(sl), minimum(sl))
 
     if doPlot
-        # Rescale for better plot with volume
-        p_plot = (p .- minimum(p))./(maximum(p) - minimum(p))
-        # @time ax = plot_mrstdata(mrst_data["G"], p_plot)
-        # @time ax = plot_mrstdata(mrst_data["G"], sl)
         ax = plot_interactive(mrst_data["G"], states)
     else
         ax = nothing
