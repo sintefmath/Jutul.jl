@@ -27,4 +27,8 @@ include("multiphase.jl")
 include("porousmedia.jl")
 
 include("simulator.jl")
+
+include("utils.jl")
+# Various add-ons
+include("TervTestSystems.jl")
 end # module
