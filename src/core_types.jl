@@ -160,6 +160,12 @@ struct KernelAllowed <: KernelSupport end
 struct KernelDisallowed <: KernelSupport end
 
 kernel_compatibility(::Any) = KernelDisallowed()
+# Trait if we are to use broadcasting
+abstract type BroadcastSupport end
+struct BroadcastAllowed <: BroadcastSupport end
+struct BroadcastDisallowed <: BroadcastSupport end
+broadcast_compatibility(::Any) = BroadcastAllowed()
+
 
 function float_type(c::TervContext)
     return Float64
@@ -203,18 +209,26 @@ function index_type(c::SingleCUDAContext)
     return c.index_t
 end
 
-struct SharedMemoryContext <: CPUTervContext
+"Context that uses KernelAbstractions for GPU parallelization"
+struct SharedMemoryKernelContext <: CPUTervContext
     block_size
     device
-    function SharedMemoryContext(block_size = Threads.nthreads())
+    function SharedMemoryKernelContext(block_size = Threads.nthreads())
         # Remark: No idea what block_size means here.
         return new(block_size, CPU())
     end
 end
 
-kernel_compatibility(::SharedMemoryContext) = KernelAllowed()
+kernel_compatibility(::SharedMemoryKernelContext) = KernelAllowed()
 
+"Context that uses threads etc to accelerate loops"
+struct SharedMemoryContext <: CPUTervContext
+    
+end
 
+broadcast_compatibility(::SharedMemoryContext) = BroadcastDisallowed()
+
+"Default context - not really intended for threading"
 struct DefaultContext <: CPUTervContext
 
 end
@@ -242,6 +256,7 @@ end
 
 # Models 
 include("models.jl")
+include("multimodel.jl")
 
 # Transfer operators
 
