@@ -21,7 +21,7 @@ include("linsolve.jl")
 
 include("equation_helpers.jl")
 
-
+include("equations/conservation.jl")
 include("multiphase.jl")
 
 include("porousmedia.jl")

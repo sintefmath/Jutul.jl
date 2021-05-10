@@ -59,9 +59,9 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     states = simulate(sim, timesteps, sources = src)
     # @show states
     s = states[end]
-    p = s["Pressure"]
+    p = s.Pressure
     @printf("Final pressure ranges from %f to %f bar.\n", maximum(p)/bar, minimum(p)/bar)
-    sl = s["Saturations"][1, :]
+    sl = s.Saturations[1, :]
     @printf("Final liquid saturation ranges from %f to %f.\n", maximum(sl), minimum(sl))
 
     if doPlot

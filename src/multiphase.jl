@@ -93,21 +93,21 @@ end
 
 # Pressure as primary variable
 struct Pressure <: ScalarPrimaryVariable
-    name
+    symbol
 end
 
 function Pressure()
-    Pressure("Pressure")
+    Pressure(:Pressure)
 end
 # Saturations as primary variable
 struct Saturations <: GroupedPrimaryVariables
-    name
+    symbol
     phases
     dsMax
 end
 
 function Saturations(phases::AbstractArray, dsMax = 0.2)
-    Saturations("Saturations", phases, dsMax)
+    Saturations(:Saturations, phases, dsMax)
 end
 
 
@@ -118,10 +118,6 @@ end
 #function get_names(v::Saturations)
 #    return map((x) -> subscript(v.name, x), v.phases[1:end-1])
 # end
-
-function get_name(v::Saturations)
-    return v.name
-end
 
 @inline function maximum_value(::Saturations) 1 end
 @inline function minimum_value(::Saturations) 0 end
@@ -159,7 +155,6 @@ function initialize_primary_variable_value(state, model, pvar::Saturations, val)
 end
 
 function update_state!(state, p::Saturations, model, dx)
-    name = get_name(p)
     nu = number_of_units(model, p)
     nph = degrees_of_freedom_per_unit(p) + 1
     
@@ -167,7 +162,7 @@ function update_state!(state, p::Saturations, model, dx)
     maxval = maximum_value(p)
     minval = minimum_value(p)
 
-    s = state[name]
+    s = state[get_symbol(p)]
     for cell = 1:nu
         dlast = 0
         for ph = 1:(nph-1)

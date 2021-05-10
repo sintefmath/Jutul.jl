@@ -45,7 +45,7 @@ function update_state!(state, p::TervPrimaryVariables, model, dx)
 
     for (index, name) in enumerate(names)
         offset = nu*(index-1)
-        v = state[name]
+        v = state[Symbol(name)] # TODO: Figure out this.
         dv = view(dx, (1:nu) .+ offset)
         @. v = update_value(v, dv, abs_max, rel_max, minval, maxval)
     end
@@ -131,8 +131,12 @@ function get_names(v::TervPrimaryVariables)
     return [get_name(v)]
 end
 
+function get_symbol(v::TervPrimaryVariables)
+    return v.symbol
+end
+
 function get_name(v::TervPrimaryVariables)
-    return v.name
+    return String(get_symbol(v))
 end
 
 function number_of_primary_variables(model)
