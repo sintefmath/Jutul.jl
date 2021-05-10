@@ -27,6 +27,7 @@ end
 
 function solve!(sys::LinearizedSystem, linsolve = nothing)
     if isnothing(linsolve)
+        @assert length(sys.dx) < 50000
         sys.dx .= -(sys.jac\sys.r)
     else
         solve!(sys, linsolve)

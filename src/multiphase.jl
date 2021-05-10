@@ -163,9 +163,9 @@ function update_state!(state, p::Saturations, model, dx)
     minval = minimum_value(p)
 
     s = state[get_symbol(p)]
-    for cell = 1:nu
+    Threads.@threads for cell = 1:nu
         dlast = 0
-        for ph = 1:(nph-1)
+        @inbounds for ph = 1:(nph-1)
             v = value(s[ph, cell])
             dv = dx[cell + (ph-1)*nu]
             dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
