@@ -30,5 +30,5 @@ include("simulator.jl")
 
 include("utils.jl")
 # Various add-ons
-include("TervTestSystems.jl")
+include("test_systems.jl")
 end # module
