@@ -101,7 +101,6 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
         end
         if outputStates
             store_output!(states, sim)
-            # push!(states, value(sim.storage.state))
         end
     end
     return states
