@@ -75,6 +75,32 @@ function number_of_partials_per_unit(e::ConservationLaw)
     return size(e.accumulation_jac_pos, 1) ÷ number_of_equations_per_unit(e)
 end
 
+function declare_sparsity(model, e::ConservationLaw)
+    hfd = Array(model.domain.conn_data)
+    n = number_of_units(model, e)
+    # Fluxes
+    I = map(x -> x.self, hfd)
+    J = map(x -> x.other, hfd)
+    # Diagonals
+    D = [i for i in 1:n]
+
+    I = vcat(I, D)
+    J = vcat(J, D)
+
+    nrows = number_of_equations_per_unit(e)
+    ncols = number_of_partials_per_unit(e)
+    if nrows > 1
+        I = vcat(map((x) -> (x-1)*n .+ I, 1:nrows)...)
+        J = repeat(J, nrows)
+    end
+    if ncols > 1
+        I = repeat(I, ncols)
+        J = vcat(map((x) -> (x-1)*n .+ J, 1:ncols)...)
+    end
+
+    return (I, J)
+end
+
 function convergence_criterion(model, storage, eq::ConservationLaw, lsys::LinearizedSystem; dt = 1)
     n = number_of_equations_per_unit(eq)
     nc = number_of_cells(model.domain)

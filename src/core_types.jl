@@ -248,10 +248,24 @@ function number_of_equations_per_unit(::TervEquation)
     return 1
 end
 
+function number_of_units(model, e::TervEquation)
+    # Default: Equations are per cell
+    return number_of_cells(model.domain)
+end
+
 function number_of_equations(model, e::TervEquation)
     # Default: Equations are per cell
-    return number_of_equations_per_unit(e)*number_of_cells(model.domain)
+    return number_of_equations_per_unit(e)*number_of_units(model, e)
 end
+
+"""
+Give out I, J arrays of equal length for a given equation attached
+to the given model.
+"""
+function declare_sparsity(model, e::TervEquation)
+    return ([], [])
+end
+
 
 """
 Update an equation so that it knows where to store its derivatives

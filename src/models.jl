@@ -80,6 +80,39 @@ function allocate_storage!(d, model::TervModel)
     align_equations_to_linearized_system!(eqs, lsys, model)
 end
 
+function allocate_linearized_system!(d, model::TervModel)
+    # Linearized system is going to have dimensions of
+    # total number of equations x total number of primary variables
+    @debug "Allocating lsys"
+
+    ndof = 0
+    for pvar in get_primary_variables(model)
+        ndof += number_of_degrees_of_freedom(model, pvar)
+    end
+
+    eqs = d["Equations"]
+    I = []
+    J = []
+    nrows = 0
+    for (k, eq) in eqs
+        @show eq
+        @show eqs
+        i, j = declare_sparsity(model, eq)
+        push!(I, i .+ nrows) # Row indices, offset by the size of preceeding equations
+        push!(J, j)          # Column indices
+        nrows += number_of_equations(model, eq)
+    end
+    I = vcat(I...)
+    J = vcat(J...)
+    vt = float_type(model.context)
+    V = zeros(vt, length(I))
+
+    jac = sparse(I, J, V, nrows, ndof)
+    lsys = LinearizedSystem(jac)
+    d["LinearizedSystem"] = transfer(model.context, lsys)
+    return lsys
+end
+
 function align_equations_to_linearized_system!(equations, lsys, model)
     for key in keys(equations)
         align_to_linearized_system!(equations[key], lsys, model)

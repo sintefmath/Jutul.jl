@@ -203,22 +203,25 @@ function allocate_properties!(d, model::SimulationModel{T, S}) where {T<:Any, S<
     d["MassMobility"] = alloc(nc)
 end
 
-function allocate_linearized_system!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
-    G = model.domain
-    nph = number_of_phases(model.system)
-    nc = number_of_cells(G)
-
-    jac = get_sparsity_pattern(G, nph, nph)
-
-    n_dof = nc*nph
-    dx = zeros(n_dof)
-    r = zeros(n_dof)
-    lsys = LinearizedSystem(jac, r, dx)
-    d["LinearizedSystem"] = transfer(model.context, lsys)
-    return lsys
-end
+#function allocate_linearized_system!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+#    @debug "Allocating lsys mphase"
+#
+#    G = model.domain
+#    nph = number_of_phases(model.system)
+#    nc = number_of_cells(G)
+#
+#    jac = get_sparsity_pattern(G, nph, nph)
+#
+#    n_dof = nc*nph
+#    dx = zeros(n_dof)
+#    r = zeros(n_dof)
+#    lsys = LinearizedSystem(jac, r, dx)
+#    d["LinearizedSystem"] = transfer(model.context, lsys)
+#    return lsys
+# end
 
 function allocate_equations!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+    @debug "Allocating equations mphase"
     nph = number_of_phases(model.system)
     npartials = nph
     eqs = Dict()

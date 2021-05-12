@@ -14,6 +14,13 @@ function LinearizedSystem(context::TervContext, jac, r, dx)
     return LinearizedSystem(jac, r, dx)
 end
 
+function LinearizedSystem(jac)
+    n_dof = size(jac, 1)
+    @assert n_dof == size(jac, 2)
+    dx = zeros(n_dof)
+    r = zeros(n_dof)
+    return LinearizedSystem(jac, r, dx)
+end
 
 @inline function get_nzval(jac)
     return jac.nzval
