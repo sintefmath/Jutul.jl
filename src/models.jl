@@ -40,7 +40,6 @@ function setup_state(model::TervModel, arg...)
 end
 
 function setup_state!(state, model::TervModel, init_values)
-    pvars = get_primary_variables(model)
     for pvar in get_primary_variables(model)
         initialize_primary_variable_value(state, model, pvar, init_values)
     end
@@ -51,8 +50,6 @@ end
 function add_extra_state_fields!(state, model::TervModel)
     # Do nothing
 end
-
-
 
 function allocate_storage(model::TervModel)
     d = Dict()
@@ -98,8 +95,16 @@ function allocate_array(context::TervContext, value, n...)
     return repeat(tmp, n...)
 end
 # Equations logic follows
-function allocate_equations!(d, model, lsys, npartials)
+function allocate_equations!(d, model)
     d["Equations"] = Dict()
+end
+
+function allocate_storage!(d, model)
+    allocate_properties!(d, model)
+    # Set up governing equations storage
+    allocate_equations!(d, model)
+    lsys = allocate_linearized_system!(d, model)
+    align_equations_to_linearized_system(d, model, lsys)
 end
 
 function update_equations!(model, storage)
@@ -113,7 +118,6 @@ function update_linearized_system!(model::TervModel, storage)
         update_linearized_system!(lsys, model, equations[key])
     end
 end
-
 
 function setup_parameters(model)
     return Dict{String, Any}()

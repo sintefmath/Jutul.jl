@@ -5,25 +5,17 @@ struct ConservationLaw <: TervEquation
     half_face_flux_jac_pos::AbstractArray # Equal length to half face flux
 end
 
-function ConservationLaw(G::TervDomain, lsys, nder::Integer = 0; jacobian_row_offset = 0, context = DefaultContext(), equations_per_unit = 1)
-    F = float_type(context)
+function ConservationLaw(G::TervDomain, nder::Integer = 0; jacobian_row_offset = 0, context = DefaultContext(), equations_per_unit = 1)
     I = index_type(context)
     nu = equations_per_unit
     # Create conservation law for a given grid with a number of partials
     nc = number_of_cells(G)
     nf = number_of_half_faces(G)
 
+    # Will be filled in later
     accpos = zeros(I, nu*nder, nc)
     fluxpos = zeros(I, nu*nder, nf)
-    # Note: jacobian_row_offset needs to be added somewhere for multiphase
-    jac = lsys.jac
-    # Note: We copy this back to host if it is on GPU to avoid rewriting these functions for CuArrays
-    conn_data = Array(G.conn_data)
-    accumulation_sparse_pos!(accpos, jac, nu, nder)
-    half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, nu, nder)
 
-    # Once positions are figured out (in a CPU context since Jacobian is not yet transferred)
-    # we copy over the data to target device (or do nothing if we are on CPU)
     accpos = transfer(context, accpos)
     fluxpos = transfer(context, fluxpos)
 
@@ -36,6 +28,22 @@ function ConservationLaw(nc::Integer, nhf::Integer,
     acc = allocate_array_ad(equations_per_unit, nc, context = context, npartials = npartials)
     flux = allocate_array_ad(equations_per_unit, nhf, context = context, npartials = npartials)
     ConservationLaw(acc, flux, accpos, fluxpos)
+end
+
+"Update positions of law's derivatives in global Jacobian"
+function align_to_linearized_system!(law::ConservationLaw, lsys::LinearizedSystem)
+    # Note: jacobian_row_offset needs to be added somewhere for multiphase
+    jac = lsys.jac
+    # Note: We copy this back to host if it is on GPU to avoid rewriting these functions for CuArrays
+    conn_data = Array(G.conn_data)
+    accpos = Array(law.accumulation_jac_pos)
+    fluxpos = Array(law.half_face_flux_jac_pos)
+
+    accumulation_sparse_pos!(accpos, jac, nu, nder)
+    half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, nu, nder)
+
+    law.accumulation_jac_pos .= accpos
+    law.half_face_flux_jac_pos .= fluxpos
 end
 
 function update_linearized_system!(lsys::LinearizedSystem, model, law::ConservationLaw)

@@ -104,7 +104,6 @@ end
 
 function initialize_primary_variable_ad(state, model, pvar::ScalarPrimaryVariable, offset, npartials)
     name = get_name(pvar)
-    v_n = state[name]
     state[name] = allocate_array_ad(state[name], diag_pos = offset + 1, context = model.context, npartials = npartials)
     return state
 end
@@ -253,6 +252,8 @@ function number_of_equations(model, e::TervEquation)
     # Default: Equations are per cell
     return number_of_equations_per_unit(e)*number_of_cells(model.domain)
 end
+
+function align_to_linearized_system!(::TervEquation, ::LinearizedSystem) end
 
 # Transfer operators
 

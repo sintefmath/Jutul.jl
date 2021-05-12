@@ -184,7 +184,7 @@ function select_primary_variables(system::ImmiscibleSystem, formulation, discret
     return [Pressure(), Saturations(system.phases)]
 end
 
-function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+function allocate_properties!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
     G = model.domain
     sys = model.system
     context = model.context
@@ -202,9 +202,6 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     # Mobility * Density. We compute store this separately since density
     # and mobility are both used in other spots
     d["MassMobility"] = alloc(nc)
-
-    # Set up governing equations storage
-    allocate_equations!(d, model, lsys, npartials)
 end
 
 function allocate_linearized_system!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
