@@ -22,26 +22,18 @@ function Simulator(model; state0 = setup_state(model), parameters = setup_parame
     Simulator(model, storage)
 end
 
-function newton_step(simulator::TervSimulator; vararg...)
-    newton_step(simulator.model, simulator.storage; vararg...)
+function newton_step!(simulator::TervSimulator; vararg...)
+    newton_step!(simulator.storage, simulator.model; vararg...)
 end
 
 
-function newton_step(model, storage; dt = nothing, linsolve = nothing, sources = nothing, iteration = nan)
+function newton_step!(storage, model; dt = nothing, linsolve = nothing, forces = nothing, iteration = nan)
     # Update the equations themselves - the AD bit
     if isa(model.context, SingleCUDAContext)
         # No idea why this is needed, but it is.
         CUDA.synchronize()
     end
-    t_asm = @elapsed begin 
-        update_equations!(storage, model, dt = dt, sources = sources)
-    end
-    @debug "Assembled equations in $t_asm seconds."
-    # Update the linearized system
-    t_lsys = @elapsed begin
-        update_linearized_system!(storage, model)
-    end
-    @debug "Updated linear system in $t_lsys seconds."
+    update!(storage, model, dt, forces)
 
     lsys = storage.LinearizedSystem
     eqs = storage.Equations
@@ -74,7 +66,7 @@ function newton_step(model, storage; dt = nothing, linsolve = nothing, sources =
     return (e, tol)
 end
 
-function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations = 10, outputStates = true, sources = nothing, linsolve = nothing)
+function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations = 10, outputStates = true, forces = nothing, linsolve = nothing)
     states = []
     no_steps = length(timesteps)
     @info "Starting simulation"
@@ -86,7 +78,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
         t_local = 0
         cut_count = 0
         while !done
-            ok = solve_ministep(sim, dt, maxIterations, linsolve, sources)
+            ok = solve_ministep(sim, dt, maxIterations, linsolve, forces)
             if ok
                 t_local += dt
                 if t_local >= dT
@@ -107,10 +99,10 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
     @info "Simulation complete."
 end
 
-function solve_ministep(sim, dt, maxIterations, linsolve, sources)
+function solve_ministep(sim, dt, maxIterations, linsolve, forces)
     done = false
     for it = 1:maxIterations
-        e, tol = newton_step(sim, dt = dt, iteration = it, sources = sources, linsolve = linsolve)
+        e, tol = newton_step!(sim, dt = dt, iteration = it, forces = forces, linsolve = linsolve)
         done = e < tol
         if done
             break

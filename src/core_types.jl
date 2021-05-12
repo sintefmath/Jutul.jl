@@ -288,6 +288,19 @@ Update a linearized system based on the values and derivatives in the equation.
 """
 function update_linearized_system!(lsys, model, eq::TervEquation) end
 
+"""
+Update equation based on currently stored properties
+"""
+function update_equation!(eqs::TervEquation, storage, model, dt)
+
+end
+
+"""
+Update an equation with the effect of a force. The default behavior
+for any force we do not know about is to assume that the force does
+not impact this particular equation.
+"""
+function apply_forces_to_equation!(storage, model, eq, force) end
 # Transfer operators
 
 function context_convert(context::TervContext, v::Real)

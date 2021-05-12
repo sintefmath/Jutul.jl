@@ -2,7 +2,7 @@ export MultiPhaseSystem, ImmiscibleSystem, SinglePhaseSystem
 export LiquidPhase, VaporPhase
 export number_of_phases, get_short_name, get_name, subscript
 export update_linearized_system!
-export SourceTerm
+export SourceTerm, build_forces
 export setup_state, setup_state!
 
 export allocate_storage, update_equations!
@@ -21,18 +21,23 @@ function number_of_phases(sys::MultiPhaseSystem)
     return length(get_phases(sys))
 end
 
-struct SourceTerm{R<:Real,I<:Integer}
-    cell::I
-    value::R
+struct SourceTerm
+    cell
+    value
     fractional_flow
     composition
 end
 
 function SourceTerm(cell, value; fractional_flow = [1.0], compositions = nothing)
     @assert sum(fractional_flow) == 1.0 "Fractional flow for source term in cell $cell must sum to 1."
+    cell::Integer
+    value::AbstractFloat
     SourceTerm(cell, value, fractional_flow, compositions)
 end
 
+function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:Any, S<:MultiPhaseSystem}
+    return (sources = sources,)
+end
 
 ## Systems
 # Immiscible multiphase system
@@ -185,6 +190,8 @@ function select_primary_variables(system::ImmiscibleSystem, formulation, discret
 end
 
 function allocate_properties!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+    @debug "Allocating props mphase"
+
     G = model.domain
     sys = model.system
     context = model.context
@@ -235,14 +242,6 @@ function initialize_storage!(storage, model::SimulationModel{T, S}) where {T<:An
     m = storage.state.TotalMass
     m0 = storage.state0.TotalMass
     @. m0 = value(m)
-end
-
-function update_equations!(storage, model::SimulationModel{G, S}; 
-    dt = nothing, sources = nothing) where {G<:MinimalTPFADomain, S<:MultiPhaseSystem}
-    update_properties!(storage, model)
-    update_accumulation!(storage, model, dt)
-    insert_sources!(storage, model, sources)
-    update_half_face_flux!(storage, model)
 end
 
 function update_properties!(storage, model)
@@ -326,10 +325,9 @@ function update_mass_mobility!(storage, model)
 end
 
 # Update of discretization terms
-function update_accumulation!(storage, model, dt)
+function update_accumulation!(law, storage, model, dt)
     state = storage.state
     state0 = storage.state0
-    law = storage.Equations.MassConservation
     acc = law.accumulation
     mass = state.TotalMass
     mass0 = state0.TotalMass
@@ -337,22 +335,23 @@ function update_accumulation!(storage, model, dt)
     return acc
 end
 
-function update_half_face_flux!(storage, model)
-    law = storage.Equations.MassConservation
+function update_half_face_flux!(law, storage, model)
     p = storage.state.Pressure
     mmob = storage.MassMobility
 
     half_face_flux!(model, law.half_face_flux, mmob, p)
 end
 
-# Source terms, etc
-function insert_sources!(storage, model, sources)
-    if isnothing(sources)
-        return
-    end
-    acc = storage.Equations.MassConservation.accumulation
+function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
+    @assert false "Not implemented yet"
+end
+
+
+function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:ImmiscibleSystem}
+    @debug "Applying source terms"
+    acc = eq.accumulation
     mob = storage.Mobility
-    insert_phase_sources(mob, acc, sources)
+    insert_phase_sources(mob, acc, force)
 end
 
 function insert_phase_sources(mob, acc, sources)
@@ -381,8 +380,6 @@ end
     i = cu(map(x -> x.cell, sources))
     @. acc[i] -= s
 end
-
-
 
 # Accumulation: Base implementation
 "Fill acculation term onto diagonal with pre-determined access pattern into jac"

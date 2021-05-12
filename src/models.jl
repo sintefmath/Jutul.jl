@@ -154,8 +154,25 @@ function allocate_equations!(d, model)
     d["Equations"] = Dict()
 end
 
-function update_equations!(storage, model)
-    # Do nothing
+function update!(storage, model::TervModel, dt, forces)
+    t_asm = @elapsed begin 
+        update_properties!(storage, model)
+        update_equations!(storage, model, dt)
+        apply_forces!(storage, model, dt, forces)
+    end
+    @debug "Assembled equations in $t_asm seconds."
+    # Update the linearized system
+    t_lsys = @elapsed begin
+        update_linearized_system!(storage, model)
+    end
+    @debug "Updated linear system in $t_lsys seconds."
+end
+
+function update_equations!(storage, model, dt = nothing)
+    equations = storage.Equations
+    for key in keys(equations)
+        update_equation!(storage, model, equations[key], dt)
+    end
 end
 
 function update_linearized_system!(storage, model::TervModel)
@@ -166,6 +183,25 @@ function update_linearized_system!(storage, model::TervModel)
     end
 end
 
+"""
+Apply a set of forces to all equations. Equations that don't support a given force
+will just ignore them, thanks to the power of multiple dispatch.
+"""
+function apply_forces!(storage, model::TervModel, dt, forces::NamedTuple)
+    equations = storage.Equations
+    for key in keys(equations)
+        eq = equations[key]
+        for fkey in keys(forces)
+            force = forces[fkey]
+            apply_forces_to_equation!(storage, model, eq, force)
+        end
+    end
+end
+
 function setup_parameters(model)
     return Dict{String, Any}()
+end
+
+function build_forces(model::TervModel)
+    return NamedTuple()
 end
