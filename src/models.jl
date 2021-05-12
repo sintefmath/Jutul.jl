@@ -154,11 +154,11 @@ function allocate_equations!(d, model)
     d["Equations"] = Dict()
 end
 
-function update_equations!(model, storage)
+function update_equations!(storage, model)
     # Do nothing
 end
 
-function update_linearized_system!(model::TervModel, storage)
+function update_linearized_system!(storage, model::TervModel)
     equations = storage.Equations
     lsys = storage.LinearizedSystem
     for key in keys(equations)

@@ -34,12 +34,12 @@ function newton_step(model, storage; dt = nothing, linsolve = nothing, sources =
         CUDA.synchronize()
     end
     t_asm = @elapsed begin 
-        update_equations!(model, storage, dt = dt, sources = sources)
+        update_equations!(storage, model, dt = dt, sources = sources)
     end
     @debug "Assembled equations in $t_asm seconds."
     # Update the linearized system
     t_lsys = @elapsed begin
-        update_linearized_system!(model, storage)
+        update_linearized_system!(storage, model)
     end
     @debug "Updated linear system in $t_lsys seconds."
 

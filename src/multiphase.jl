@@ -230,38 +230,36 @@ function allocate_equations!(d, model::SimulationModel{T, S}) where {T<:Any, S<:
     d["Equations"] = eqs
 end
 
-function initialize_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
-    state = d.state
-    state0 = d.state0
-    update_properties!(model, d)
-    m = state.TotalMass
-    m0 = state0.TotalMass
+function initialize_storage!(storage, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+    update_properties!(storage, model)
+    m = storage.state.TotalMass
+    m0 = storage.state0.TotalMass
     @. m0 = value(m)
 end
 
-function update_equations!(model::SimulationModel{G, S}, storage; 
+function update_equations!(storage, model::SimulationModel{G, S}; 
     dt = nothing, sources = nothing) where {G<:MinimalTPFADomain, S<:MultiPhaseSystem}
-    update_properties!(model, storage)
-    update_accumulation!(model, storage, dt)
-    insert_sources!(model, storage, sources)
-    update_half_face_flux!(model, storage)
+    update_properties!(storage, model)
+    update_accumulation!(storage, model, dt)
+    insert_sources!(storage, model, sources)
+    update_half_face_flux!(storage, model)
 end
 
-function update_properties!(model, storage)
-    update_density!(model, storage)
-    update_mobility!(model, storage)
-    update_mass_mobility!(model, storage)
-    update_total_mass!(model, storage)
+function update_properties!(storage, model)
+    update_density!(storage, model)
+    update_mobility!(storage, model)
+    update_mass_mobility!(storage, model)
+    update_total_mass!(storage, model)
 end
 
 # Updates of various cell properties follows
-function update_mobility!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:SinglePhaseSystem}
+function update_mobility!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
     mob = storage.Mobility
     mu = storage.parameters.Viscosity[1]
     fapply!(mob, () -> 1/mu)
 end
 
-function update_mobility!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:ImmiscibleSystem}
+function update_mobility!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:ImmiscibleSystem}
     p = storage.parameters
     mob = storage.Mobility
     n = p.CoreyExponents
@@ -271,7 +269,7 @@ function update_mobility!(model::SimulationModel{G, S}, storage) where {G<:Any, 
     @. mob = s^n/mu
 end
 
-function update_density!(model, storage)
+function update_density!(storage, model)
     rho_input = storage.parameters.Density
     state = storage.state
     p = state.Pressure
@@ -292,14 +290,14 @@ end
 
 function get_pore_volume(model) model.domain.pv' end
 
-function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:SinglePhaseSystem}
+function update_total_mass!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
     pv = get_pore_volume(model)
     rho = storage.Density
     totMass = storage.state.TotalMass
     fapply!(totMass, *, rho, pv)
 end
 
-function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:ImmiscibleSystem}
+function update_total_mass!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:ImmiscibleSystem}
     state = storage.state
     pv = get_pore_volume(model)
     rho = storage.Density
@@ -311,7 +309,7 @@ function update_total_mass!(model::SimulationModel{G, S}, storage) where {G<:Any
 end
 
 
-function update_total_mass!(model::SimulationModel{G, S}, storage, phase::AbstractPhase) where {G<:Any, S<:ImmiscibleSystem}
+function update_total_mass!(storage, model::SimulationModel{G, S}, phase::AbstractPhase) where {G<:Any, S<:ImmiscibleSystem}
     pv = get_pore_volume(model)
     rho = storage[subscript("Density", phase)]
     s = storage.state[subscript("Saturation", phase)]
@@ -319,7 +317,7 @@ function update_total_mass!(model::SimulationModel{G, S}, storage, phase::Abstra
     fapply!(totMass, *, rho, pv, s)
 end
 
-function update_mass_mobility!(model, storage)
+function update_mass_mobility!(storage, model)
     mobrho = storage.MassMobility
     mob = storage.Mobility
     rho = storage.Density
@@ -328,7 +326,7 @@ function update_mass_mobility!(model, storage)
 end
 
 # Update of discretization terms
-function update_accumulation!(model, storage, dt)
+function update_accumulation!(storage, model, dt)
     state = storage.state
     state0 = storage.state0
     law = storage.Equations.MassConservation
@@ -339,7 +337,7 @@ function update_accumulation!(model, storage, dt)
     return acc
 end
 
-function update_half_face_flux!(model, storage)
+function update_half_face_flux!(storage, model)
     law = storage.Equations.MassConservation
     p = storage.state.Pressure
     mmob = storage.MassMobility
@@ -348,7 +346,7 @@ function update_half_face_flux!(model, storage)
 end
 
 # Source terms, etc
-function insert_sources!(model, storage, sources)
+function insert_sources!(storage, model, sources)
     if isnothing(sources)
         return
     end
