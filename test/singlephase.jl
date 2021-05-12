@@ -4,10 +4,8 @@ using Test
 function test_single_phase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0])
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
-    G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
-    println("Setting up simulation case.")
+    G = get_minimal_tpfa_grid_from_mrst(casename)
     nc = number_of_cells(G)
-    nf = number_of_faces(G)
     # Parameters
     bar = 1e5
     p0 = 100*bar # 100 bar
@@ -27,8 +25,8 @@ function test_single_phase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0])
     timesteps = tstep*3600*24 # 1 day, 2 days
     tot_time = sum(timesteps)
     irate = pvfrac*sum(G.pv)/tot_time
-    src = sources = [SourceTerm(1, irate), 
-                     SourceTerm(nc, -irate)]
+    src = [SourceTerm(1, irate), 
+           SourceTerm(nc, -irate)]
     # State is dict with pressure in each cell
     init = Dict("Pressure" => p0)
     state0 = setup_state(model, init)
@@ -40,10 +38,10 @@ function test_single_phase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0])
     sim = Simulator(model, state0 = state0, parameters = parameters)
     # Linear solver
     lsolve = AMGSolver("RugeStuben", 1e-3)
-    println("Starting simulation.")
-    states = simulate(sim, timesteps, sources = src, linsolve = lsolve)
+    simulate(sim, timesteps, sources = src, linsolve = lsolve)
     # We just return true. The test at the moment just makes sure that the simulation runs.
     return true
 end
-@test test_single_phase()
-
+@testset "Single-phase" begin
+    @test test_single_phase()
+end
