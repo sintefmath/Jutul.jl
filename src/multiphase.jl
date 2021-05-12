@@ -273,8 +273,7 @@ function update_density!(model, storage)
     state = storage.state
     p = state.Pressure
     rho = storage.Density
-    phases = get_phases(model.system)
-    for (i, phase) in enumerate(phases)
+    for i in 1:number_of_phases(model.system)
         rho_i = view(rho, i, :)
         r = rho_input[i]
         if isa(r, NamedTuple)

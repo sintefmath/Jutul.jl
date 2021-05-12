@@ -46,7 +46,9 @@ function setup_state!(state, model::TervModel, init_values)
     add_extra_state_fields!(state, model)
 end
 
-"Add variables that are not primary (e.g. total masses) but need to be in state."
+"""
+Add variables that are not primary (e.g. total masses) but need to be in state.
+"""
 function add_extra_state_fields!(state, model::TervModel)
     # Do nothing
 end
