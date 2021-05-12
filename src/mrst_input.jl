@@ -14,7 +14,7 @@ end
 
 function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false)
     if relative_path
-        fn = string("data/testgrids/", name, ".mat")
+        fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     else
         fn = name
     end
