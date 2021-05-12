@@ -190,19 +190,11 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     context = model.context
 
     nph = number_of_phases(sys)
-    phases = get_phases(sys)
     npartials = nph
     nc = number_of_cells(G)
-    nhf = number_of_half_faces(G)
-
-    jac = get_sparsity_pattern(G, nph, nph)
-
-    n_dof = nc*nph
-    dx = zeros(n_dof)
-    r = zeros(n_dof)
-    lsys = LinearizedSystem(jac, r, dx)
     alloc = (n) -> allocate_array_ad(nph, n, context = context, npartials = npartials)
-    alloc_value = (n) -> allocate_array_ad(nph, n, context = context, npartials = 0)
+    lsys = allocate_linearized_system!(d, model)
+
     # Mobility of phase
     d["Mobility"] = alloc(nc)
     # Mass density of phase
@@ -210,15 +202,24 @@ function allocate_storage!(d, model::SimulationModel{T, S}) where {T<:Any, S<:Mu
     # Mobility * Density. We compute store this separately since density
     # and mobility are both used in other spots
     d["MassMobility"] = alloc(nc)
-    # d.TotalMass = alloc(nc)
-    # d["TotalMass0"] = alloc_value(nc)
 
     # Set up governing equations storage
     allocate_equations!(d, model, lsys, npartials)
+end
 
-    # Transfer linearized system afterwards since the above manipulations are
-    # easier to do on CPU
-    d["LinearizedSystem"] = transfer(context, lsys)
+function allocate_linearized_system!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+    G = model.domain
+    nph = number_of_phases(model.system)
+    nc = number_of_cells(G)
+
+    jac = get_sparsity_pattern(G, nph, nph)
+
+    n_dof = nc*nph
+    dx = zeros(n_dof)
+    r = zeros(n_dof)
+    lsys = LinearizedSystem(jac, r, dx)
+    d["LinearizedSystem"] = transfer(model.context, lsys)
+    return lsys
 end
 
 function allocate_equations!(d, model::SimulationModel{T, S}, lsys, npartials) where {T<:Any, S<:MultiPhaseSystem}
@@ -241,7 +242,7 @@ end
 function update_equations!(model::SimulationModel{G, S}, storage; 
     dt = nothing, sources = nothing) where {G<:MinimalTPFADomain, S<:MultiPhaseSystem}
     update_properties!(model, storage)
-    acc = update_accumulation!(model, storage, dt)
+    update_accumulation!(model, storage, dt)
     insert_sources!(model, storage, sources)
     update_half_face_flux!(model, storage)
 end
@@ -255,7 +256,6 @@ end
 
 # Updates of various cell properties follows
 function update_mobility!(model::SimulationModel{G, S}, storage) where {G<:Any, S<:SinglePhaseSystem}
-    phase = model.system.phase
     mob = storage.Mobility
     mu = storage.parameters.Viscosity[1]
     fapply!(mob, () -> 1/mu)
