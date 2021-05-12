@@ -83,8 +83,6 @@ end
 function allocate_linearized_system!(d, model::TervModel)
     # Linearized system is going to have dimensions of
     # total number of equations x total number of primary variables
-    @debug "Allocating lsys"
-
     ndof = 0
     for pvar in get_primary_variables(model)
         ndof += number_of_degrees_of_freedom(model, pvar)
@@ -95,8 +93,6 @@ function allocate_linearized_system!(d, model::TervModel)
     J = []
     nrows = 0
     for (k, eq) in eqs
-        @show eq
-        @show eqs
         i, j = declare_sparsity(model, eq)
         push!(I, i .+ nrows) # Row indices, offset by the size of preceeding equations
         push!(J, j)          # Column indices
@@ -119,7 +115,11 @@ function align_equations_to_linearized_system!(equations, lsys, model)
     end
 end
 
-"Convert a state containing regular numbers to a state with AD (Dual) status"
+"""
+Convert a state containing variables as arrays of doubles
+to a state where those arrays contain the same value as Dual types.
+The dual type is currently taken from ForwardDiff.
+"""
 function convert_state_ad(model, state)
     context = model.context
     stateAD = deepcopy(state)
@@ -148,11 +148,11 @@ function allocate_array(context::TervContext, value, n...)
     tmp = context_convert(context, value)
     return repeat(tmp, n...)
 end
+
 # Equations logic follows
 function allocate_equations!(d, model)
     d["Equations"] = Dict()
 end
-
 
 function update_equations!(model, storage)
     # Do nothing

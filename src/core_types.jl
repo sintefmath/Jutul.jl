@@ -273,6 +273,12 @@ in the given linearized system.
 """
 function align_to_linearized_system!(::TervEquation, lsys, model) end
 
+
+"""
+Update a linearized system based on the values and derivatives in the equation.
+"""
+function update_linearized_system!(lsys::LinearizedSystem, model, eq::TervEquation) end
+
 # Transfer operators
 
 function context_convert(context::TervContext, v::Real)
