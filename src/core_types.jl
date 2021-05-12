@@ -243,18 +243,27 @@ end
 # Equations
 abstract type TervEquation end
 
+"""
+Get the number of equations per unit. For example, mass balance of two
+components will have two equations per grid cell (= unit)
+"""
 function number_of_equations_per_unit(::TervEquation)
     # Default: One equation per unit (= cell,  face, ...)
     return 1
 end
 
+"""
+Get the number of units (e.g. cells) that the equation is defined on.
+"""
 function number_of_units(model, e::TervEquation)
     # Default: Equations are per cell
     return number_of_cells(model.domain)
 end
 
+"""
+Get the total number of equations on the domain of model.
+"""
 function number_of_equations(model, e::TervEquation)
-    # Default: Equations are per cell
     return number_of_equations_per_unit(e)*number_of_units(model, e)
 end
 
