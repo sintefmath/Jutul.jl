@@ -253,7 +253,11 @@ function number_of_equations(model, e::TervEquation)
     return number_of_equations_per_unit(e)*number_of_cells(model.domain)
 end
 
-function align_to_linearized_system!(::TervEquation, ::LinearizedSystem) end
+"""
+Update an equation so that it knows where to store its derivatives
+in the given linearized system.
+"""
+function align_to_linearized_system!(::TervEquation, lsys, model) end
 
 # Transfer operators
 

@@ -193,7 +193,6 @@ function allocate_properties!(d, model::SimulationModel{T, S}) where {T<:Any, S<
     npartials = nph
     nc = number_of_cells(G)
     alloc = (n) -> allocate_array_ad(nph, n, context = context, npartials = npartials)
-    lsys = allocate_linearized_system!(d, model)
 
     # Mobility of phase
     d["Mobility"] = alloc(nc)
@@ -219,10 +218,11 @@ function allocate_linearized_system!(d, model::SimulationModel{T, S}) where {T<:
     return lsys
 end
 
-function allocate_equations!(d, model::SimulationModel{T, S}, lsys, npartials) where {T<:Any, S<:MultiPhaseSystem}
+function allocate_equations!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
     nph = number_of_phases(model.system)
+    npartials = nph
     eqs = Dict()
-    law = ConservationLaw(model.domain, lsys, npartials, context = model.context, equations_per_unit = nph)
+    law = ConservationLaw(model.domain, npartials, context = model.context, equations_per_unit = nph)
     eqs["MassConservation"] = law
     d["Equations"] = eqs
 end

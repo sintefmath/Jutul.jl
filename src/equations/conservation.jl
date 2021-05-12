@@ -31,16 +31,20 @@ function ConservationLaw(nc::Integer, nhf::Integer,
 end
 
 "Update positions of law's derivatives in global Jacobian"
-function align_to_linearized_system!(law::ConservationLaw, lsys::LinearizedSystem)
+function align_to_linearized_system!(law::ConservationLaw, lsys::LinearizedSystem, model)
     # Note: jacobian_row_offset needs to be added somewhere for multiphase
     jac = lsys.jac
     # Note: We copy this back to host if it is on GPU to avoid rewriting these functions for CuArrays
-    conn_data = Array(G.conn_data)
+    conn_data = Array(model.domain.conn_data)
     accpos = Array(law.accumulation_jac_pos)
     fluxpos = Array(law.half_face_flux_jac_pos)
 
-    accumulation_sparse_pos!(accpos, jac, nu, nder)
-    half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, nu, nder)
+    @show accpos
+    neq = number_of_equations_per_unit(law)
+    nder = number_of_partials_per_unit(law)
+    nc = size(law.accumulation, 2)
+    accumulation_sparse_pos!(accpos, jac, neq, nder)
+    half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder)
 
     law.accumulation_jac_pos .= accpos
     law.half_face_flux_jac_pos .= fluxpos
@@ -67,6 +71,10 @@ function number_of_equations_per_unit(e::ConservationLaw)
     return size(e.half_face_flux, 1)
 end
 
+function number_of_partials_per_unit(e::ConservationLaw)
+    return size(e.accumulation_jac_pos, 1) ÷ number_of_equations_per_unit(e)
+end
+
 function convergence_criterion(model, storage, eq::ConservationLaw, lsys::LinearizedSystem; dt = 1)
     n = number_of_equations_per_unit(eq)
     nc = number_of_cells(model.domain)
@@ -78,16 +86,16 @@ function convergence_criterion(model, storage, eq::ConservationLaw, lsys::Linear
     return (e, 1.0)
 end
 
-function accumulation_sparse_pos!(accpos, jac, nu, nder)
+function accumulation_sparse_pos!(accpos, jac, neq, nder)
     n = size(accpos, 1)
     nc = size(accpos, 2)
-    @assert nder == n/nu
+    @assert nder == n/neq
     for i in 1:nc
         for col = 1:nder
             # Diagonal positions
             col_pos = (col-1)*nc + i
             pos = jac.colptr[col_pos]:jac.colptr[col_pos+1]-1
-            for row = 1:nu
+            for row = 1:neq
                 row_ix = (row-1)*nc + i
                 accpos[(row-1)*nder + col, i] = pos[jac.rowval[pos] .== row_ix][1]
             end
@@ -95,23 +103,23 @@ function accumulation_sparse_pos!(accpos, jac, nu, nder)
     end
 end
 
-function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, nu, nder)
+function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder)
     n = size(fluxpos, 1)
     nf = size(fluxpos, 2)
-    @assert nder == n/nu
+    @assert nder == n/neq
 
     for i in 1:nf
         # Off diagonal positions
-        cd = conn_data[i]
-        self = cd.self
-        other = cd.other
+        cdi = conn_data[i]
+        self = cdi.self
+        other = cdi.other
 
         for col = 1:nder
             # Diagonal positions
             col_pos = (col-1)*nc + other
             pos = jac.colptr[col_pos]:jac.colptr[col_pos+1]-1
             rowval = jac.rowval[pos]
-            for row = 1:nu
+            for row = 1:neq
                 row_ix = self + (row-1)*nc
                 fluxpos[(row-1)*nder + col, i] = pos[rowval .== row_ix][1]
                 # @printf("Matching %d %d to %d\n", row_ix, col_pos, pos[rowval .== row_ix][1])

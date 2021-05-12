@@ -57,12 +57,31 @@ function allocate_storage(model::TervModel)
     return d
 end
 
+"""
+Initialize the already allocated storage at the beginning of a simulation.
+Use this to e.g. set up extra stuff in state0 needed for initializing the simulation loop.
+"""
 function initialize_storage!(d, model::TervModel)
-    # Do nothimg
+    # Do nothing
 end
 
+"""
+Allocate storage for a given model. The storage consists of all dynamic quantities used in
+the simulation. The default implementation allocates properties, equations and linearized system.
+"""
 function allocate_storage!(d, model::TervModel)
-    # Do nothing for Any.
+    allocate_properties!(d, model) 
+    eqs = allocate_equations!(d, model)
+    lsys = allocate_linearized_system!(d, model)
+    # We have the equations and the linearized system.
+    # Give the equations a chance to figure out their place in the Jacobians.
+    align_equations_to_linearized_system!(eqs, lsys, model)
+end
+
+function align_equations_to_linearized_system!(equations, lsys, model)
+    for key in keys(equations)
+        align_to_linearized_system!(equations[key], lsys, model)
+    end
 end
 
 "Convert a state containing regular numbers to a state with AD (Dual) status"
@@ -99,13 +118,6 @@ function allocate_equations!(d, model)
     d["Equations"] = Dict()
 end
 
-function allocate_storage!(d, model)
-    allocate_properties!(d, model)
-    # Set up governing equations storage
-    allocate_equations!(d, model)
-    lsys = allocate_linearized_system!(d, model)
-    align_equations_to_linearized_system(d, model, lsys)
-end
 
 function update_equations!(model, storage)
     # Do nothing
