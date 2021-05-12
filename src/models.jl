@@ -1,4 +1,5 @@
 abstract type TervModel end
+export update_state_dependents!
 
 # Concrete models follow
 struct SimulationModel{O<:TervDomain, 
@@ -154,7 +155,12 @@ function allocate_equations!(d, model)
     d["Equations"] = Dict()
 end
 
-function update!(storage, model::TervModel, dt, forces)
+"""
+Perform updates of everything that depends on the state.
+
+This includes properties, governing equations and the linearized system
+"""
+function update_state_dependents!(storage, model::TervModel, dt, forces)
     t_asm = @elapsed begin 
         update_properties!(storage, model)
         update_equations!(storage, model, dt)

@@ -33,7 +33,8 @@ function newton_step!(storage, model; dt = nothing, linsolve = nothing, forces =
         # No idea why this is needed, but it is.
         CUDA.synchronize()
     end
-    update!(storage, model, dt, forces)
+    # Update the properties, equations and linearized system
+    update_state_dependents!(storage, model, dt, forces)
 
     lsys = storage.LinearizedSystem
     eqs = storage.Equations
