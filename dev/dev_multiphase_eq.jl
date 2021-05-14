@@ -18,7 +18,6 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
     println("Setting up simulation case.")
     nc = number_of_cells(G)
-    nf = number_of_faces(G)
     # Parameters
     bar = 1e5
     p0 = 100*bar # 100 bar
@@ -40,8 +39,9 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     tot_time = sum(timesteps)
     irate = pvfrac*sum(G.pv)/tot_time
     @show irate
-    src = sources = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
-                     SourceTerm(nc, -irate)]
+    src = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
+           SourceTerm(nc, -irate)]
+    forces = build_forces(model, sources = src)
     # State is dict with pressure in each cell
     init = Dict("Pressure" => p0, "Saturations" => [0.0, 1.0])
     state0 = setup_state(model, init)
@@ -56,8 +56,8 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     sim = Simulator(model, state0 = state0, parameters = parameters)
     # Linear solver
     println("Starting simulation.")
-    states = simulate(sim, timesteps, sources = src)
-    # @show states
+    states = simulate(sim, timesteps, forces = forces)
+    @show states
     s = states[end]
     p = s.Pressure
     @printf("Final pressure ranges from %f to %f bar.\n", maximum(p)/bar, minimum(p)/bar)
