@@ -189,7 +189,7 @@ function select_primary_variables(system::ImmiscibleSystem, formulation, discret
     return [Pressure(), Saturations(system.phases)]
 end
 
-function allocate_properties!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+function allocate_properties!(props, storage, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
     G = model.domain
     sys = model.system
     context = model.context
@@ -200,12 +200,12 @@ function allocate_properties!(d, model::SimulationModel{T, S}) where {T<:Any, S<
     alloc = (n) -> allocate_array_ad(nph, n, context = context, npartials = npartials)
 
     # Mobility of phase
-    d["Mobility"] = alloc(nc)
+    props["Mobility"] = alloc(nc)
     # Mass density of phase
-    d["Density"] = alloc(nc)
+    props["Density"] = alloc(nc)
     # Mobility * Density. We compute store this separately since density
     # and mobility are both used in other spots
-    d["MassMobility"] = alloc(nc)
+    props["MassMobility"] = alloc(nc)
 end
 
 #function allocate_linearized_system!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
@@ -225,14 +225,12 @@ end
 #    return lsys
 # end
 
-function allocate_equations!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
-    @debug "Allocating equations mphase"
+function allocate_equations!(eqs, storage, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
     nph = number_of_phases(model.system)
     npartials = nph
-    eqs = Dict()
     law = ConservationLaw(model.domain, npartials, context = model.context, equations_per_unit = nph)
     eqs["MassConservation"] = law
-    d["Equations"] = eqs
+    return eqs
 end
 
 function initialize_storage!(storage, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
@@ -255,14 +253,14 @@ end
 
 # Updates of various cell properties follows
 function update_mobility!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
-    mob = storage.Mobility
+    mob = storage.properties.Mobility
     mu = storage.parameters.Viscosity[1]
     fapply!(mob, () -> 1/mu)
 end
 
 function update_mobility!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:ImmiscibleSystem}
     p = storage.parameters
-    mob = storage.Mobility
+    mob = storage.properties.Mobility
     n = p.CoreyExponents
     mu = p.Viscosity
 
@@ -274,7 +272,7 @@ function update_density!(storage, model)
     rho_input = storage.parameters.Density
     state = storage.state
     p = state.Pressure
-    rho = storage.Density
+    rho = storage.properties.Density
     for i in 1:number_of_phases(model.system)
         rho_i = view(rho, i, :)
         r = rho_input[i]
@@ -293,7 +291,7 @@ function get_pore_volume(model) model.domain.pv' end
 
 function update_total_mass!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
     pv = get_pore_volume(model)
-    rho = storage.Density
+    rho = storage.properties.Density
     totMass = storage.state.TotalMass
     fapply!(totMass, *, rho, pv)
 end
@@ -301,7 +299,7 @@ end
 function update_total_mass!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:ImmiscibleSystem}
     state = storage.state
     pv = get_pore_volume(model)
-    rho = storage.Density
+    rho = storage.properties.Density
     totMass = state.TotalMass
     s = state.Saturations
 
@@ -309,19 +307,11 @@ function update_total_mass!(storage, model::SimulationModel{G, S}) where {G<:Any
     # fapply!(totMass, *, rho, pv, s)
 end
 
-
-function update_total_mass!(storage, model::SimulationModel{G, S}, phase::AbstractPhase) where {G<:Any, S<:ImmiscibleSystem}
-    pv = get_pore_volume(model)
-    rho = storage[subscript("Density", phase)]
-    s = storage.state[subscript("Saturation", phase)]
-    totMass = storage[subscript("TotalMass", phase)]
-    fapply!(totMass, *, rho, pv, s)
-end
-
 function update_mass_mobility!(storage, model)
-    mobrho = storage.MassMobility
-    mob = storage.Mobility
-    rho = storage.Density
+    props = storage.properties
+    mobrho = props.MassMobility
+    mob = props.Mobility
+    rho = props.Density
     # Assign the values
     fapply!(mobrho, *, mob, rho)
 end
@@ -339,7 +329,7 @@ end
 
 function update_half_face_flux!(law, storage, model)
     p = storage.state.Pressure
-    mmob = storage.MassMobility
+    mmob = storage.properties.MassMobility
 
     half_face_flux!(model, law.half_face_flux, mmob, p)
 end
@@ -347,7 +337,7 @@ end
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
     @debug "Applying source terms"
     acc = eq.accumulation
-    mob = storage.Mobility
+    mob = storage.properties.Mobility
     insert_phase_sources(mob, acc, force)
 end
 

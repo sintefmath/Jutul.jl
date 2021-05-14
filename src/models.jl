@@ -61,6 +61,14 @@ function add_extra_state_fields!(state, model::TervModel)
 end
 
 """
+Initialize the already allocated storage at the beginning of a simulation.
+Use this to e.g. set up extra stuff in state0 needed for initializing the simulation loop.
+"""
+function initialize_storage!(storage, model::TervModel)
+    # Do nothing
+end
+
+"""
 Allocate storage for the model. You should overload allocate_storage! if you have a custom
 definition.
 """
@@ -71,31 +79,35 @@ function allocate_storage(model::TervModel)
 end
 
 """
-Initialize the already allocated storage at the beginning of a simulation.
-Use this to e.g. set up extra stuff in state0 needed for initializing the simulation loop.
-"""
-function initialize_storage!(storage, model::TervModel)
-    # Do nothing
-end
-
-"""
 Allocate storage for a given model. The storage consists of all dynamic quantities used in
 the simulation. The default implementation allocates properties, equations and linearized system.
 """
 function allocate_storage!(storage, model::TervModel)
-    allocate_properties!(storage, model) 
-    eqs = allocate_equations!(storage, model)
-    lsys = allocate_linearized_system!(storage, model)
+    storage["properties"] = allocate_properties(storage, model) 
+    storage["equations"] = allocate_equations(storage, model)
+    storage["LinearizedSystem"] = allocate_linearized_system!(storage, model)
     # We have the equations and the linearized system.
     # Give the equations a chance to figure out their place in the Jacobians.
-    align_equations_to_linearized_system!(eqs, lsys, model)
+    align_equations_to_linearized_system!(storage, model)
 end
 
-function allocate_properties!(storage, model::TervModel)
+function allocate_properties(storage, model::TervModel)
+    props = Dict()
+    allocate_properties!(props, storage, model)
+    return props
+end
+
+function allocate_properties!(props, storage, model::TervModel)
     # Default: No properties
 end
 
-function allocate_equations!(storage, model::TervModel)
+function allocate_equations(storage, model::TervModel)
+    eqs = Dict()
+    allocate_equations!(eqs, storage, model)
+    return eqs
+end
+
+function allocate_equations!(eqs, storage, model::TervModel)
     # Default: No equations.
 end
 
@@ -106,10 +118,10 @@ function allocate_linearized_system!(storage, model::TervModel)
     for pvar in get_primary_variables(model)
         ndof += number_of_degrees_of_freedom(model, pvar)
     end
-    if !haskey(storage, "Equations")
+    if !haskey(storage, "equations")
         error("Unable to allocate linearized system - no equations found.")
     end
-    eqs = storage["Equations"]
+    eqs = storage["equations"]
     I = []
     J = []
     nrows = 0
@@ -128,6 +140,10 @@ function allocate_linearized_system!(storage, model::TervModel)
     lsys = LinearizedSystem(jac)
     storage["LinearizedSystem"] = transfer(model.context, lsys)
     return lsys
+end
+
+function align_equations_to_linearized_system!(storage, model::TervModel)
+    align_equations_to_linearized_system!(storage["equations"], storage["LinearizedSystem"], model)
 end
 
 function align_equations_to_linearized_system!(equations, lsys, model)
@@ -195,14 +211,14 @@ function update_state_dependents!(storage, model::TervModel, dt, forces)
 end
 
 function update_equations!(storage, model, dt = nothing)
-    equations = storage.Equations
+    equations = storage.equations
     for key in keys(equations)
         update_equation!(storage, model, equations[key], dt)
     end
 end
 
 function update_linearized_system!(storage, model::TervModel)
-    equations = storage.Equations
+    equations = storage.equations
     lsys = storage.LinearizedSystem
     for key in keys(equations)
         update_linearized_system!(lsys, model, equations[key])
@@ -214,7 +230,7 @@ Apply a set of forces to all equations. Equations that don't support a given for
 will just ignore them, thanks to the power of multiple dispatch.
 """
 function apply_forces!(storage, model::TervModel, dt, forces::NamedTuple)
-    equations = storage.Equations
+    equations = storage.equations
     for key in keys(equations)
         eq = equations[key]
         for fkey in keys(forces)

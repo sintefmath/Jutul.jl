@@ -39,7 +39,6 @@ function align_to_linearized_system!(law::ConservationLaw, lsys::LinearizedSyste
     accpos = Array(law.accumulation_jac_pos)
     fluxpos = Array(law.half_face_flux_jac_pos)
 
-    @show accpos
     neq = number_of_equations_per_unit(law)
     nder = number_of_partials_per_unit(law)
     nc = size(law.accumulation, 2)

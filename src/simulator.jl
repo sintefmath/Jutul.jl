@@ -32,7 +32,7 @@ function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces 
     update_state_dependents!(storage, model, dt, forces)
 
     lsys = storage.LinearizedSystem
-    eqs = storage.Equations
+    eqs = storage.equations
     tol = 1e-3
 
     converged = true
