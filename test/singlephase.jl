@@ -1,7 +1,7 @@
 using Terv
 using Test
 
-function test_single_phase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0])
+function test_single_phase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0]; lsolve = nothing)
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
     G = get_minimal_tpfa_grid_from_mrst(casename)
@@ -39,11 +39,15 @@ function test_single_phase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0])
 
     sim = Simulator(model, state0 = state0, parameters = parameters)
     # Linear solver
-    lsolve = AMGSolver("RugeStuben", 1e-3)
     simulate(sim, timesteps, forces = forces, linsolve = lsolve)
     # We just return true. The test at the moment just makes sure that the simulation runs.
     return true
 end
 @testset "Single-phase" begin
     @test test_single_phase()
+end
+
+@testset "Single-phase linear solvers" begin
+    @test test_single_phase(lsolve = AMGSolver("RugeStuben", 1e-3))
+    @test test_single_phase(lsolve = AMGSolver("SmoothedAggregation", 1e-3))
 end
