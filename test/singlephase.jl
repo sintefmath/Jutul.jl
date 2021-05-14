@@ -27,6 +27,8 @@ function test_single_phase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0])
     irate = pvfrac*sum(G.pv)/tot_time
     src = [SourceTerm(1, irate), 
            SourceTerm(nc, -irate)]
+    forces = build_forces(model, sources = src)
+
     # State is dict with pressure in each cell
     init = Dict("Pressure" => p0)
     state0 = setup_state(model, init)
@@ -38,7 +40,7 @@ function test_single_phase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0])
     sim = Simulator(model, state0 = state0, parameters = parameters)
     # Linear solver
     lsolve = AMGSolver("RugeStuben", 1e-3)
-    simulate(sim, timesteps, sources = src, linsolve = lsolve)
+    simulate(sim, timesteps, forces = forces, linsolve = lsolve)
     # We just return true. The test at the moment just makes sure that the simulation runs.
     return true
 end

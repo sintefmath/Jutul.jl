@@ -29,6 +29,8 @@ function test_twophase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0])
     irate = pvfrac*sum(G.pv)/tot_time
     src  = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
             SourceTerm(nc, -irate)]
+    forces = build_forces(model, sources = src)
+
     # State is dict with pressure in each cell
     init = Dict("Pressure" => p0, "Saturations" => [0.0, 1.0])
     state0 = setup_state(model, init)
@@ -39,7 +41,7 @@ function test_twophase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0])
     parameters["Viscosity"] = [mu, mu/2]
 
     sim = Simulator(model, state0 = state0, parameters = parameters)
-    simulate(sim, timesteps, sources = src)
+    simulate(sim, timesteps, forces = forces)
     return true
 end
 @testset "Multiphase" begin

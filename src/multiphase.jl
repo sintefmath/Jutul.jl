@@ -343,11 +343,6 @@ function update_half_face_flux!(law, storage, model)
 end
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
-    @assert false "Not implemented yet"
-end
-
-
-function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:ImmiscibleSystem}
     @debug "Applying source terms"
     acc = eq.accumulation
     mob = storage.Mobility
