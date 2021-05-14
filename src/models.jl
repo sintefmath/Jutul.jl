@@ -106,7 +106,9 @@ function allocate_linearized_system!(storage, model::TervModel)
     for pvar in get_primary_variables(model)
         ndof += number_of_degrees_of_freedom(model, pvar)
     end
-
+    if !haskey(storage, "Equations")
+        error("Unable to allocate linearized system - no equations found.")
+    end
     eqs = storage["Equations"]
     I = []
     J = []
