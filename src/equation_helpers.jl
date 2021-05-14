@@ -1,6 +1,5 @@
-export ConservationLaw, setup_conservationlaw
+export ConservationLaw
 export allocate_array_ad, get_ad_unit_scalar, update_values!
-export allocate_residual, allocate_jacobian
 export value
 
 # using Printf
