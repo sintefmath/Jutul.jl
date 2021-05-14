@@ -27,7 +27,7 @@ function perform_step!(simulator::TervSimulator; vararg...)
 end
 
 
-function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces = nothing, iteration = nan)
+function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces = nothing, iteration = NaN)
     # Update the properties, equations and linearized system
     update_state_dependents!(storage, model, dt, forces)
 
