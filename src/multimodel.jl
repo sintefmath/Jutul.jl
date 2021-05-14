@@ -57,7 +57,7 @@ function setup_parameters(model::MultiModel)
 end
 
 function convert_state_ad(model::MultiModel, state)
-    for (i, key) in enumerate(keys(model.models))
+    for key in keys(model.models)
         m = model.models[key]
         state[key] = convert_state_ad(m, state[key])
     end

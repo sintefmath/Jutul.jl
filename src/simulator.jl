@@ -22,17 +22,12 @@ function Simulator(model; state0 = setup_state(model), parameters = setup_parame
     Simulator(model, storage)
 end
 
-function newton_step!(simulator::TervSimulator; vararg...)
-    newton_step!(simulator.storage, simulator.model; vararg...)
+function perform_step!(simulator::TervSimulator; vararg...)
+    perform_step!(simulator.storage, simulator.model; vararg...)
 end
 
 
-function newton_step!(storage, model; dt = nothing, linsolve = nothing, forces = nothing, iteration = nan)
-    # Update the equations themselves - the AD bit
-    if isa(model.context, SingleCUDAContext)
-        # No idea why this is needed, but it is.
-        CUDA.synchronize()
-    end
+function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces = nothing, iteration = nan)
     # Update the properties, equations and linearized system
     update_state_dependents!(storage, model, dt, forces)
 
@@ -62,7 +57,6 @@ function newton_step!(storage, model; dt = nothing, linsolve = nothing, forces =
         @debug "Solved linear system in $t_solve seconds."
         t_upd = @elapsed update_state!(model, storage)
         @debug "Updated state $t_upd seconds."
-
     end
     return (e, tol)
 end
@@ -103,7 +97,7 @@ end
 function solve_ministep(sim, dt, maxIterations, linsolve, forces)
     done = false
     for it = 1:maxIterations
-        e, tol = newton_step!(sim, dt = dt, iteration = it, forces = forces, linsolve = linsolve)
+        e, tol = perform_step!(sim, dt = dt, iteration = it, forces = forces, linsolve = linsolve)
         done = e < tol
         if done
             break

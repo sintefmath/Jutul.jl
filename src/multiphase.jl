@@ -242,6 +242,10 @@ function initialize_storage!(storage, model::SimulationModel{T, S}) where {T<:An
     m = storage.state.TotalMass
     m0 = storage.state0.TotalMass
     @. m0 = value(m)
+    if isa(model.context, SingleCUDAContext)
+        # No idea why this is needed, but it is.
+        CUDA.synchronize()
+    end
 end
 
 function update_properties!(storage, model)
