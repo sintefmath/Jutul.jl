@@ -1,22 +1,6 @@
 export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
 export fapply!
 
-
-function residual!(r, CL, G)
-    if isnothing(CL.accumulation)
-        for i in eachindex(r)
-            r[i] = 0
-        end
-    else
-        for i in eachindex(r)
-            r[i] = value(CL.accumulation[i])
-        end
-    end
-    for conn in eachindex(G.conn_data)
-        r[conn.self] += value(flux[conn])
-    end
-end
-
 function half_face_flux(mob, p, G)
     flux = similar(p, 2*G.nfaces)
     half_face_flux!(flux, mob, p, G)
