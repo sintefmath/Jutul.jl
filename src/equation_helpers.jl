@@ -1,8 +1,6 @@
 export ConservationLaw
 export allocate_array_ad, get_ad_unit_scalar, update_values!
-export value
-
-# using Printf
+export value, find_sparse_position
 
 function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), diag_pos = nothing, npartials = 1) where {R<:Integer}
     # allocate a n length zero vector with space for derivatives
@@ -59,4 +57,13 @@ function value(d::Dict)
         v[key] = value.(v[key])
     end
     return v
+end
+
+function find_sparse_position(A::SparseMatrixCSC, row, col)
+    for pos = A.colptr[col]:A.colptr[col+1]-1
+        if A.rowval[pos] == row
+            return pos
+        end
+    end
+    return 0
 end

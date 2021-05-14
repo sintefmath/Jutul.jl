@@ -244,7 +244,7 @@ function initialize_storage!(storage, model::SimulationModel{T, S}) where {T<:An
     end
 end
 
-function update_properties!(storage, model)
+function update_properties!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:MultiPhaseSystem}
     update_density!(storage, model)
     update_mobility!(storage, model)
     update_mass_mobility!(storage, model)

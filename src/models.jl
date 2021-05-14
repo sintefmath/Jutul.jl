@@ -210,6 +210,10 @@ function update_state_dependents!(storage, model::TervModel, dt, forces)
     @debug "Updated linear system in $t_lsys seconds."
 end
 
+function update_properties!(storage, model)
+    # No default properties
+end
+
 function update_equations!(storage, model, dt = nothing)
     equations = storage.equations
     for key in keys(equations)
