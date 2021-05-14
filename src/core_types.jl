@@ -43,9 +43,9 @@ function update_state!(state, p::TervPrimaryVariables, model, dx)
     maxval = maximum_value(p)
     minval = minimum_value(p)
 
-    for (index, name) in enumerate(names)
+    for (index, nm) in enumerate(names)
         offset = nu*(index-1)
-        v = state[Symbol(name)] # TODO: Figure out this.
+        v = state[Symbol(nm)] # TODO: Figure out this.
         dv = view(dx, (1:nu) .+ offset)
         @. v = update_value(v, dv, abs_max, rel_max, minval, maxval)
     end
