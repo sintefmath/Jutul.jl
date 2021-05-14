@@ -244,6 +244,10 @@ function apply_forces!(storage, model::TervModel, dt, forces::NamedTuple)
     end
 end
 
+function apply_forces!(storage, model::TervModel, dt, ::Nothing)
+
+end
+
 function setup_parameters(model)
     return Dict{String, Any}()
 end

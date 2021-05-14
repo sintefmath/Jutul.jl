@@ -286,7 +286,24 @@ function align_to_linearized_system!(::TervEquation, lsys, model) end
 """
 Update a linearized system based on the values and derivatives in the equation.
 """
-function update_linearized_system!(lsys, model, eq::TervEquation) end
+function update_linearized_system!(lsys, model, equation::TervEquation)
+    # TODO: Generalize to non-scalar equation per unit setting
+    r = lsys.r
+    jac = lsys.jac
+    nz = get_nzval(jac)
+    # The default implementation assumes that the equation has equation and equation_jac_pos
+    # and equation_r_pos as properties
+    eq = equation.equation
+    jpos = equation.equation_jac_pos
+    rpos = equation.equation_r_pos
+    for eqNo in 1:length(eq)
+        e = eq[eqNo]
+        r[rpos[eqNo]] = value(e)
+        for derNo = 1:size(jpos, 1)
+            nz[jpos[derNo, eqNo]] = e.partials[derNo]
+        end
+    end
+end
 
 """
 Update equation based on currently stored properties
@@ -301,6 +318,22 @@ for any force we do not know about is to assume that the force does
 not impact this particular equation.
 """
 function apply_forces_to_equation!(storage, model, eq, force) end
+
+
+function convergence_criterion(model, storage, eq::TervEquation, lsys::LinearizedSystem; dt = 1)
+    n = number_of_equations_per_unit(eq)
+    pos = eq.equation_r_pos
+    # nc = number_of_cells(model.domain)
+    # pv = model.domain.pv
+    e = zeros(n)
+    for i = 1:n
+        x = view(lsys.r, pos[i, :])
+        e[i] = norm(x, Inf)
+    end
+    return (e, 1.0)
+end
+
+
 # Transfer operators
 
 function context_convert(context::TervContext, v::Real)
