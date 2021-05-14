@@ -109,11 +109,9 @@ function solve_ministep(sim, dt, maxIterations, linsolve, forces)
             break
         end
         if e > 1e10 || isinf(e) || isnan(e)
-            @assert false "Timestep $step_no diverged."
             break
         end
     end
-    # @assert done "Timestep did not complete in $maxIterations iterations."
     if done
         t_finalize = @elapsed update_after_step!(sim)
         @debug "Finalized in $t_finalize seconds."
