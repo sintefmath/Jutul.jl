@@ -31,7 +31,7 @@ function allocate_equations!(storage, model::MultiModel, lsys, npartials)
     @assert false "Needs implementation"
 end
 
-function allocate_linearized_system!(storage, model::TervModel)
+function allocate_linearized_system!(storage, model::MultiModel)
     @assert false "Needs implementation"
 end
 
@@ -69,15 +69,15 @@ function convert_state_ad(model::MultiModel, state)
     end
 end
 
-function update_properties!(storage, model)
+function update_properties!(storage, model::MultiModel)
     submodels_storage_apply!(storage, model, update_properties!)
 end
 
-function update_equations!(storage, model, dt)
+function update_equations!(storage, model::MultiModel, dt)
     submodels_storage_apply!(storage, model, update_equations!, dt)
 end
 
-function apply_forces!(storage, model, forces)
+function apply_forces!(storage, model::MultiModel, forces)
     for key in keys(model.models)
         apply_forces!(storage[key], model.models[key], forces[key])
     end
