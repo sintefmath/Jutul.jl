@@ -81,6 +81,14 @@ function allocate_storage!(d, model::TervModel)
     align_equations_to_linearized_system!(eqs, lsys, model)
 end
 
+function allocate_properties!(d, model::TervModel)
+    # Default: No properties
+end
+
+function allocate_equations!(d, model::TervModel)
+    # Default: No equations.
+end
+
 function allocate_linearized_system!(d, model::TervModel)
     # Linearized system is going to have dimensions of
     # total number of equations x total number of primary variables

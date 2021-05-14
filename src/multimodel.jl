@@ -14,27 +14,34 @@ end
 
 
 function setup_state!(state, model::MultiModel, init_values)
-    
+    error("Mutating version of setup_state not supported for multimodel.")
 end
 
-function initialize_storage!(d, model::MultiModel)
-    # Do nothing
+function initialize_storage!(storage, model::MultiModel)
+    submodels_storage_apply!(storage, model, initialize_storage!)
 end
 
-function allocate_storage!(d, model::MultiModel)
-    
+function allocate_storage!(storage, model::MultiModel)
+    for key in keys(model.models)
+        storage[key] = allocate_storage(model.models[key])
+    end
 end
 
-function allocate_equations!(d, model::MultiModel, lsys, npartials)
-    
+function allocate_equations!(storage, model::MultiModel, lsys, npartials)
+    @assert false "Needs implementation"
 end
 
-function update_equations!(model::MultiModel, storage)
-    # Do nothing
+function allocate_linearized_system!(storage, model::TervModel)
+    @assert false "Needs implementation"
 end
 
-function update_linearized_system!(model::MultiModel, storage)
-    
+function update_equations!(storage, model::MultiModel, arg...)
+    # Might need to update this part
+    submodels_storage_apply!(storage, model, update_linearized_system!, arg...)
+end
+
+function update_linearized_system!(storage, model::MultiModel, arg...)
+    submodels_storage_apply!(storage, model, update_linearized_system!, arg...)
 end
 
 function setup_state(model::MultiModel, subs...)
@@ -58,11 +65,29 @@ end
 
 function convert_state_ad(model::MultiModel, state)
     for key in keys(model.models)
-        m = model.models[key]
-        state[key] = convert_state_ad(m, state[key])
+        state[key] = convert_state_ad(model.models[key], state[key])
     end
 end
 
-function newton_step(model::MultiModel, storage; dt = nothing, linsolve = nothing, forces = nothing, iteration = NaN)
+function update_properties!(storage, model)
+    submodels_storage_apply!(storage, model, update_properties!)
+end
 
+function update_equations!(storage, model, dt)
+    submodels_storage_apply!(storage, model, update_equations!, dt)
+end
+
+function apply_forces!(storage, model, forces)
+    for key in keys(model.models)
+        apply_forces!(storage[key], model.models[key], forces[key])
+    end
+end
+
+
+function submodels_storage_apply!(storage, model, f!, arg...)
+    for key in keys(model.models)
+        @show key
+        @show storage
+        f!(storage[key], model.models[key], arg...)
+    end
 end

@@ -190,8 +190,6 @@ function select_primary_variables(system::ImmiscibleSystem, formulation, discret
 end
 
 function allocate_properties!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
-    @debug "Allocating props mphase"
-
     G = model.domain
     sys = model.system
     context = model.context
