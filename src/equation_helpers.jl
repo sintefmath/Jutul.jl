@@ -26,8 +26,6 @@ function allocate_array_ad(v::AbstractVector; context = DefaultContext(), diag_p
     update_values!(v_AD, v)
 end
 
-
-
 # Allocators 
 function allocate_array_ad(v::AbstractMatrix; context = DefaultContext(), diag_pos = nothing, npartials = 1)
     # create a copy of a vector as AD

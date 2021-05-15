@@ -275,6 +275,14 @@ function declare_sparsity(model, e::TervEquation)
     return ([], [])
 end
 
+"""
+Give out I, J arrays of equal length for a the impact of a model A on
+a given equation E that is attached to some other model B. The sparsity
+is then that of ∂E / ∂P where P are the primary variables of A.
+"""
+function declare_cross_model_sparsity(model, other_model, others_equation::TervEquation)
+    return ([], [])
+end
 
 """
 Update an equation so that it knows where to store its derivatives
@@ -320,7 +328,7 @@ not impact this particular equation.
 function apply_forces_to_equation!(storage, model, eq, force) end
 
 
-function convergence_criterion(model, storage, eq::TervEquation, lsys::LinearizedSystem; dt = 1)
+function convergence_criterion(model, storage, eq::TervEquation, lsys; dt = 1)
     n = number_of_equations_per_unit(eq)
     pos = eq.equation_r_pos
     # nc = number_of_cells(model.domain)
