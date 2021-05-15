@@ -8,10 +8,11 @@ modelA = SimulationModel(A, sys)
 modelB = SimulationModel(B, sys)
 
 ## Test the first model
-
+sourceA = ScalarTestForce(1.0)
+forcesA = build_forces(modelA, sources = sourceA)
 state0A = setup_state(modelA, Dict("XVar"=>1.0))
 sim = Simulator(modelA, state0 = state0A)
-states = simulate(sim, [1.0])
+states = simulate(sim, [1.0], forces = forcesA)
 
 
 

@@ -1,10 +1,15 @@
-export ScalarTestSystem, ScalarTestDomain
+export ScalarTestSystem, ScalarTestDomain, ScalarTestForce
 
 struct ScalarTestSystem <: TervSystem end
 
 struct ScalarTestDomain <: TervDomain end
 
 function number_of_cells(::ScalarTestDomain) 1 end
+
+# Driving force for the test equation
+struct ScalarTestForce 
+    value
+end
 
 # Equations
 struct ScalarTestEquation <: TervEquation
@@ -40,6 +45,14 @@ function update_equation!(storage, model, eq::ScalarTestEquation, dt)
     X = storage.state.XVar
     X0 = storage.state0.XVar
     @. eq.equation = (X - X0)/dt
+end
+
+function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:ScalarTestDomain, S<:ScalarTestSystem}
+    return (sources = sources,)
+end
+
+function apply_forces_to_equation!(storage, model, eq::ScalarTestEquation, force::ScalarTestForce)
+    @. eq.equation -= force.value
 end
 
 struct XVar <: ScalarPrimaryVariable

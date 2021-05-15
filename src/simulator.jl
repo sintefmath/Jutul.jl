@@ -1,4 +1,4 @@
-export newton_step, simulate
+export simulate, perform_step!
 export Simulator, TervSimulator
 using Printf
 using Dates
