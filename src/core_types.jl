@@ -1,16 +1,16 @@
-export TervSystem, TervDomain, DefaultPrimaryVariables, TervPrimaryVariables
-export SimulationModel, TervPrimaryVariables, DefaultPrimaryVariables, TervFormulation
+export TervSystem, TervDomain, TervPrimaryVariables
+export SimulationModel, TervPrimaryVariables, TervFormulation
 export setup_parameters, kernel_compatibility
 
 export SingleCUDAContext, SharedMemoryContext, DefaultContext
 
-export transfer_storage_to_context, transfer, allocate_array
+export  transfer, allocate_array
 
 # Physical system
 abstract type TervSystem end
 
 
-function select_primary_variables(system::TervSystem, formulation, discretization)
+function select_primary_variables(domain, system::TervSystem, formulation)
     return nothing
 end
 
@@ -235,6 +235,11 @@ end
 # Domains
 abstract type TervDomain end
 
+struct DiscretizedDomain
+    grid
+    discretizations
+    units
+end
 # Formulation
 abstract type TervFormulation end
 struct FullyImplicit <: TervFormulation

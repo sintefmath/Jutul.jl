@@ -5,24 +5,21 @@ export update_state_dependents!
 struct SimulationModel{O<:TervDomain, 
                        S<:TervSystem,
                        F<:TervFormulation,
-                       C<:TervContext,
-                       D<:TervDiscretization} <: TervModel
+                       C<:TervContext} <: TervModel
     domain::O
     system::S
     context::C
     formulation::F
-    discretization::D
     primary_variables
 end
 
 
-function SimulationModel(G, system;
+function SimulationModel(domain, system;
     formulation = FullyImplicit(), 
-    context = DefaultContext(),
-    discretization = DefaultDiscretization())
-    grid = transfer(context, G)
-    primary = select_primary_variables(system, formulation, discretization)
-    return SimulationModel(grid, system, context, formulation, discretization, primary)
+    context = DefaultContext())
+    domain = transfer(context, domain)
+    primary = select_primary_variables(domain, system, formulation)
+    return SimulationModel(domain, system, context, formulation, primary)
 end
 
 

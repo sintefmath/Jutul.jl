@@ -63,6 +63,6 @@ function XVar()
     XVar(:XVar)
 end
 
-function select_primary_variables(system::ScalarTestSystem, formulation, discretization)
+function select_primary_variables(domain, system::ScalarTestSystem, formulation)
     return [XVar()]
 end
