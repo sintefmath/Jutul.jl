@@ -1,27 +1,4 @@
-abstract type TervModel end
 export update_state_dependents!
-
-# Concrete models follow
-struct SimulationModel{O<:TervDomain, 
-                       S<:TervSystem,
-                       F<:TervFormulation,
-                       C<:TervContext} <: TervModel
-    domain::O
-    system::S
-    context::C
-    formulation::F
-    primary_variables
-end
-
-
-function SimulationModel(domain, system;
-    formulation = FullyImplicit(), 
-    context = DefaultContext())
-    domain = transfer(context, domain)
-    primary = select_primary_variables(domain, system, formulation)
-    return SimulationModel(domain, system, context, formulation, primary)
-end
-
 
 function get_primary_variable_names(model::SimulationModel)
     return map((x) -> get_name(x), get_primary_variables(model))
@@ -147,35 +124,6 @@ function align_equations_to_linearized_system!(equations, lsys, model)
     for key in keys(equations)
         align_to_linearized_system!(equations[key], lsys, model)
     end
-end
-
-"""
-Convert a state containing variables as arrays of doubles
-to a state where those arrays contain the same value as Dual types.
-The dual type is currently taken from ForwardDiff.
-"""
-function convert_state_ad(model, state)
-    context = model.context
-    stateAD = deepcopy(state)
-    vars = String.(keys(state))
-
-    primary = get_primary_variables(model)
-    # Loop over primary variables and set them to AD, with ones at the correct diagonal
-    counts = map((x) -> degrees_of_freedom_per_unit(x), primary)
-    n_partials = sum(counts)
-    @debug "Found $n_partials primary variables."
-    offset = 0
-    for (i, pvar) in enumerate(primary)
-        stateAD = initialize_primary_variable_ad(stateAD, model, pvar, offset, n_partials)
-        offset += counts[i]
-    end
-    primary_names = get_primary_variable_names(model)
-    secondary = setdiff(vars, primary_names)
-    # Loop over secondary variables and initialize as AD with zero partials
-    for s in secondary
-        stateAD[s] = allocate_array_ad(stateAD[s], context = context, npartials = n_partials)
-    end
-    return stateAD
 end
 
 function allocate_array(context::TervContext, value, n...)

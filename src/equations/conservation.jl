@@ -1,3 +1,5 @@
+export ConservationLaw
+
 struct ConservationLaw <: TervEquation
     accumulation::AbstractArray
     half_face_flux::AbstractArray

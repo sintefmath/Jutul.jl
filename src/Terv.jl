@@ -24,7 +24,9 @@ include("assembly.jl")
 include("benchmarks.jl")
 include("linsolve.jl")
 
-include("equation_helpers.jl")
+include("context.jl")
+include("equations.jl")
+include("ad.jl")
 
 include("equations/conservation.jl")
 include("multiphase.jl")
