@@ -41,8 +41,8 @@ end
 """
 Main function for storage that allocates and initializes storage for a simulation
 """
-function setup_simulation_storage(model::TervModel; state0 = setup_state(model), parameters = setup_parameters(model))
-    storage = allocate_storage(model)
+function setup_simulation_storage(model::TervModel; state0 = setup_state(model), parameters = setup_parameters(model), kwargs...)
+    storage = allocate_storage(model, kwargs...)
     storage[:parameters] = parameters
     storage[:state0] = state0
     storage[:state] = convert_state_ad(model, state0)
@@ -54,7 +54,7 @@ Allocate storage for the model. You should overload allocate_storage! if you hav
 definition.
 """
 function allocate_storage(model::TervModel)
-    d = Dict()
+    d = Dict{Symbol, Any}()
     allocate_storage!(d, model)
     return d
 end
@@ -71,13 +71,15 @@ end
 Allocate storage for a given model. The storage consists of all dynamic quantities used in
 the simulation. The default implementation allocates properties, equations and linearized system.
 """
-function allocate_storage!(storage, model::TervModel)
+function allocate_storage!(storage, model::TervModel; setup_linearized_system = true)
     storage[:properties] = allocate_properties(storage, model) 
     storage[:equations] = allocate_equations(storage, model)
-    storage[:LinearizedSystem] = allocate_linearized_system!(storage, model)
-    # We have the equations and the linearized system.
-    # Give the equations a chance to figure out their place in the Jacobians.
-    align_equations_to_linearized_system!(storage, model)
+    if setup_linearized_system
+        storage[:LinearizedSystem] = allocate_linearized_system!(storage, model)
+        # We have the equations and the linearized system.
+        # Give the equations a chance to figure out their place in the Jacobians.
+        align_equations_to_linearized_system!(storage, model)
+    end
 end
 
 function allocate_properties(storage, model::TervModel)

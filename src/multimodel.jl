@@ -56,7 +56,9 @@ function setup_simulation_storage(model::MultiModel; state0 = setup_state(model)
     storage = Dict()
     for key in keys(model.models)
         m = model.models[key]
-        storage[key] = setup_simulation_storage(m, state0 = state0[key], parameters = parameters[key])
+        storage[key] = setup_simulation_storage(m,  state0 = state0[key], 
+                                                    parameters = parameters[key], 
+                                                    setup_linearized_system = false)
     end
     allocate_cross_model_coupling(storage, model)
     allocate_linearized_system!(storage, model)
@@ -86,8 +88,6 @@ function allocate_cross_model_coupling(storage, model::MultiModel)
         end
     end
     storage[:cross_terms] = crossd
-    display(crossd)
-    @assert false "Needs implementation"
 end
 
 function allocate_linearized_system!(storage, model::MultiModel)
