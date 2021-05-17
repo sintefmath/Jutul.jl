@@ -42,10 +42,6 @@ function setup_simulation_storage(model::TervModel; state0 = setup_state(model),
     storage["parameters"] = parameters
     storage["state0"] = state0
     storage["state"] = convert_state_ad(model, state0)
-    # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
-    # This allows for much faster lookup in the simulation itself.
-    storage = convert_to_immutable_storage(storage)
-    initialize_storage!(storage, model)
     return storage
 end
 

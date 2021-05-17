@@ -4,6 +4,42 @@ struct MultiModel <: TervModel
     models::NamedTuple
 end
 
+abstract type CrossModelTerm end
+
+"""
+A cross model term where the dependency is injective and the term is additive:
+(each addition to a unit in the target only depends one unit from the source, 
+and is added into that position upon application)
+"""
+struct InjectiveCrossModelTerm
+    impacted_units
+    crossterm
+    cross_jac_pos
+    function InjectiveCrossModelTerm(target_eq, target_model, source_model)
+        context = target_model.context
+        overlap = get_domain_intersection(domain_unit(target_eq), target_model, source_model)
+
+        I = index_type(context)
+        # Infer Unit from target_eq
+        equations_per_unit = number_of_equations_per_unit(target_eq)
+        partials_per_unit = number_of_partials_per_unit(target_eq)
+        noverlap = length(overlap)
+
+        c_term = allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = partials_per_unit)
+        jac_pos = zeros(I, equations_per_unit*partials_per_unit, noverlap)
+        # crossterm = allocate
+        new(c_term, overlap, jac_pos)
+    end
+end
+
+function get_domain_intersection(u::TervUnit, target_model::TervModel, source_model::TervModel)
+    return get_domain_intersection(u, target_model.domain, source_model.domain)
+end
+
+function get_domain_intersection(u::TervUnit, target_d::TervDomain, source_d::TervDomain)
+    nothing
+end
+
 function number_of_models(model::MultiModel)
     return length(model.models)
 end
@@ -22,15 +58,44 @@ function setup_simulation_storage(model::MultiModel; state0 = setup_state(model)
         m = model.models[key]
         storage[key] = setup_simulation_storage(m, state0 = state0[key], parameters = parameters[key])
     end
-    return convert_to_immutable_storage(storage)
+    allocate_cross_model_coupling(storage, model)
+    allocate_linearized_system!(storage, model)
+    return storage
 end
 
-function allocate_equations!(storage, model::MultiModel, lsys, npartials)
+function allocate_cross_model_coupling(storage, model::MultiModel)
+    crossd = Dict{Tuple{Symbol, Symbol}, Any}()
+    models = model.models
+    for target in keys(models)
+        for source in keys(models)
+            if target == source
+                continue
+            end
+            target_model = models[target]
+            source_model = models[source]
+            d = Dict()
+            for (key, eq) in storage[target]["equations"]
+                ct = InjectiveCrossModelTerm(eq, target_model, source_model)
+                if length(ct.impacted_units) == 0
+                    # Just insert nothing, so we can easily spot no overlap
+                    ct = nothing
+                end
+                d[key] = ct
+            end
+            crossd[(target, source)] = d
+        end
+    end
+    storage["cross_terms"] = crossd
+    display(crossd)
     @assert false "Needs implementation"
 end
 
 function allocate_linearized_system!(storage, model::MultiModel)
     @assert false "Needs implementation"
+end
+
+function initialize_storage!(storage, model::MultiModel)
+    submodels_storage_apply!(storage, model, initialize_storage!)
 end
 
 function update_equations!(storage, model::MultiModel, arg...)

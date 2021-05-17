@@ -42,6 +42,13 @@ function number_of_equations(model, e::TervEquation)
 end
 
 """
+Get the number of partials
+"""
+function number_of_partials_per_unit(e::TervEquation)
+    return length(e.equation[1].partials)
+end
+
+"""
 Give out I, J arrays of equal length for a given equation attached
 to the given model.
 """

@@ -6,6 +6,11 @@ struct ScalarTestDomain <: TervDomain end
 
 function number_of_cells(::ScalarTestDomain) 1 end
 
+function get_domain_intersection(u::TervUnit, target_d::ScalarTestDomain, source_d::ScalarTestDomain)
+    # This domain always interacts with instances of itself, and nothing else
+    return 1
+end
+
 # Driving force for the test equation
 struct ScalarTestForce 
     value

@@ -12,13 +12,17 @@ end
 
 function Simulator(model; state0 = setup_state(model), parameters = setup_parameters(model))
     storage = setup_simulation_storage(model, state0 = state0, parameters = parameters)
+    # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
+    # This allows for much faster lookup in the simulation itself.
+    storage = convert_to_immutable_storage(storage)
+    # Initialize for first time usage
+    initialize_storage!(storage, model)
     Simulator(model, storage)
 end
 
 function perform_step!(simulator::TervSimulator; vararg...)
     perform_step!(simulator.storage, simulator.model; vararg...)
 end
-
 
 function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces = nothing, iteration = NaN)
     # Update the properties, equations and linearized system

@@ -7,7 +7,7 @@ struct ConservationLaw <: TervEquation
     half_face_flux_jac_pos::AbstractArray # Equal length to half face flux
 end
 
-function ConservationLaw(G::TervDomain, nder::Integer = 0;context = DefaultContext(), equations_per_unit = 1)
+function ConservationLaw(G::TervDomain, nder::Integer = 0; context = DefaultContext(), equations_per_unit = 1)
     I = index_type(context)
     nu = equations_per_unit
     # Create conservation law for a given grid with a number of partials
@@ -72,7 +72,7 @@ function number_of_equations_per_unit(e::ConservationLaw)
 end
 
 function number_of_partials_per_unit(e::ConservationLaw)
-    return size(e.accumulation_jac_pos, 1) ÷ number_of_equations_per_unit(e)
+    return length(e.accumulation[1].partials)
 end
 
 function declare_sparsity(model, e::ConservationLaw)
