@@ -102,15 +102,10 @@ function allocate_equations!(eqs, storage, model::TervModel)
     # Default: No equations.
 end
 
-function allocate_linearized_system!(storage, model::TervModel)
-    # Linearized system is going to have dimensions of
-    # total number of equations x total number of primary variables
+function get_sparse_arguments(storage, model)
     ndof = 0
     for pvar in get_primary_variables(model)
         ndof += number_of_degrees_of_freedom(model, pvar)
-    end
-    if !haskey(storage, :equations)
-        error("Unable to allocate linearized system - no equations found.")
     end
     eqs = storage[:equations]
     I = []
@@ -126,8 +121,17 @@ function allocate_linearized_system!(storage, model::TervModel)
     J = vcat(J...)
     vt = float_type(model.context)
     V = zeros(vt, length(I))
+    return (I, J, V, nrows, ndof)
+end
 
-    jac = sparse(I, J, V, nrows, ndof)
+function allocate_linearized_system!(storage, model::TervModel)
+    # Linearized system is going to have dimensions of
+    # total number of equations x total number of primary variables
+    if !haskey(storage, :equations)
+        error("Unable to allocate linearized system - no equations found.")
+    end
+    I, J, V, nrows, ncols = get_sparse_arguments(storage, model)
+    jac = sparse(I, J, V, nrows, ncols)
     lsys = LinearizedSystem(jac)
     storage[:LinearizedSystem] = transfer(model.context, lsys)
     return lsys
