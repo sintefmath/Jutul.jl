@@ -1,6 +1,10 @@
 export update_state_dependents!
 
-function get_primary_variable_names(model::SimulationModel)
+#function get_primary_variable_names(model::SimulationModel)
+#    return map((x) -> get_name(x), get_primary_variables(model))
+#end
+
+function get_primary_variable_symbols(model::SimulationModel)
     return map((x) -> get_name(x), get_primary_variables(model))
 end
 
@@ -12,7 +16,7 @@ end
 Set up a state. You likely want to overload setup_state! instead of this one.
 """
 function setup_state(model::TervModel, arg...)
-    state = Dict{String, Any}()
+    state = Dict{Symbol, Any}()
     setup_state!(state, model, arg...)
     return state
 end
@@ -39,9 +43,9 @@ Main function for storage that allocates and initializes storage for a simulatio
 """
 function setup_simulation_storage(model::TervModel; state0 = setup_state(model), parameters = setup_parameters(model))
     storage = allocate_storage(model)
-    storage["parameters"] = parameters
-    storage["state0"] = state0
-    storage["state"] = convert_state_ad(model, state0)
+    storage[:parameters] = parameters
+    storage[:state0] = state0
+    storage[:state] = convert_state_ad(model, state0)
     return storage
 end
 
@@ -68,9 +72,9 @@ Allocate storage for a given model. The storage consists of all dynamic quantiti
 the simulation. The default implementation allocates properties, equations and linearized system.
 """
 function allocate_storage!(storage, model::TervModel)
-    storage["properties"] = allocate_properties(storage, model) 
-    storage["equations"] = allocate_equations(storage, model)
-    storage["LinearizedSystem"] = allocate_linearized_system!(storage, model)
+    storage[:properties] = allocate_properties(storage, model) 
+    storage[:equations] = allocate_equations(storage, model)
+    storage[:LinearizedSystem] = allocate_linearized_system!(storage, model)
     # We have the equations and the linearized system.
     # Give the equations a chance to figure out their place in the Jacobians.
     align_equations_to_linearized_system!(storage, model)
@@ -103,10 +107,10 @@ function allocate_linearized_system!(storage, model::TervModel)
     for pvar in get_primary_variables(model)
         ndof += number_of_degrees_of_freedom(model, pvar)
     end
-    if !haskey(storage, "equations")
+    if !haskey(storage, :equations)
         error("Unable to allocate linearized system - no equations found.")
     end
-    eqs = storage["equations"]
+    eqs = storage[:equations]
     I = []
     J = []
     nrows = 0
@@ -123,12 +127,12 @@ function allocate_linearized_system!(storage, model::TervModel)
 
     jac = sparse(I, J, V, nrows, ndof)
     lsys = LinearizedSystem(jac)
-    storage["LinearizedSystem"] = transfer(model.context, lsys)
+    storage[:LinearizedSystem] = transfer(model.context, lsys)
     return lsys
 end
 
 function align_equations_to_linearized_system!(storage, model::TervModel)
-    align_equations_to_linearized_system!(storage["equations"], storage["LinearizedSystem"], model)
+    align_equations_to_linearized_system!(storage[:equations], storage[:LinearizedSystem], model)
 end
 
 function align_equations_to_linearized_system!(equations, lsys, model)
@@ -144,7 +148,7 @@ end
 
 # Equations logic follows
 function allocate_equations!(d, model)
-    d["Equations"] = Dict()
+    d[:Equations] = Dict()
 end
 
 """
@@ -205,7 +209,7 @@ function apply_forces!(storage, model, dt, ::Nothing)
 end
 
 function setup_parameters(model)
-    return Dict{String, Any}()
+    return Dict{Symbol, Any}()
 end
 
 function build_forces(model::TervModel)

@@ -33,13 +33,13 @@ function test_twophase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0])
     forces = build_forces(model, sources = src)
 
     # State is dict with pressure in each cell
-    init = Dict("Pressure" => p0, "Saturations" => [0.0, 1.0])
+    init = Dict(:Pressure => p0, :Saturations => [0.0, 1.0])
     state0 = setup_state(model, init)
     # Model parameters
     parameters = setup_parameters(model)
-    parameters["Density"] = [rhoL, rhoL]
-    parameters["CoreyExponents"] = [2, 3]
-    parameters["Viscosity"] = [mu, mu/2]
+    parameters[:Density] = [rhoL, rhoL]
+    parameters[:CoreyExponents] = [2, 3]
+    parameters[:Viscosity] = [mu, mu/2]
 
     sim = Simulator(model, state0 = state0, parameters = parameters)
     simulate(sim, timesteps, forces = forces)

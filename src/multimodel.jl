@@ -74,7 +74,7 @@ function allocate_cross_model_coupling(storage, model::MultiModel)
             target_model = models[target]
             source_model = models[source]
             d = Dict()
-            for (key, eq) in storage[target]["equations"]
+            for (key, eq) in storage[target][:equations]
                 ct = InjectiveCrossModelTerm(eq, target_model, source_model)
                 if length(ct.impacted_units) == 0
                     # Just insert nothing, so we can easily spot no overlap
@@ -85,7 +85,7 @@ function allocate_cross_model_coupling(storage, model::MultiModel)
             crossd[(target, source)] = d
         end
     end
-    storage["cross_terms"] = crossd
+    storage[:cross_terms] = crossd
     display(crossd)
     @assert false "Needs implementation"
 end

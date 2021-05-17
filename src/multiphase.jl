@@ -91,7 +91,7 @@ end
 function add_extra_state_fields!(state, model::SimulationModel{G, S}) where {G<:Any, S<:MultiPhaseSystem}
     nc = number_of_cells(model.domain)
     nph = number_of_phases(model.system)
-    state["TotalMass"] = transfer(model.context, zeros(nph, nc))
+    state[:TotalMass] = transfer(model.context, zeros(nph, nc))
 end
 
 # Primary variable logic
@@ -129,7 +129,7 @@ end
 @inline function absolute_increment_limit(p::Saturations) p.dsMax end
 
 function initialize_primary_variable_ad(state, model, pvar::Saturations, offset, npartials)
-    name = get_name(pvar)
+    name = get_symbol(pvar)
     nph = length(pvar.phases)
     # nph - 1 primary variables, with the last saturation being initially zero AD
     dp = vcat((1:nph-1) .+ offset, 0)
@@ -143,7 +143,7 @@ function initialize_primary_variable_ad(state, model, pvar::Saturations, offset,
 end
 
 function initialize_primary_variable_value(state, model, pvar::Saturations, val)
-    name = get_name(pvar)
+    name = get_symbol(pvar)
     if isa(val, Dict)
         val = val[name]
     end
@@ -200,12 +200,12 @@ function allocate_properties!(props, storage, model::SimulationModel{T, S}) wher
     alloc = (n) -> allocate_array_ad(nph, n, context = context, npartials = npartials)
 
     # Mobility of phase
-    props["Mobility"] = alloc(nc)
+    props[:Mobility] = alloc(nc)
     # Mass density of phase
-    props["Density"] = alloc(nc)
+    props[:Density] = alloc(nc)
     # Mobility * Density. We compute store this separately since density
     # and mobility are both used in other spots
-    props["MassMobility"] = alloc(nc)
+    props[:MassMobility] = alloc(nc)
 end
 
 #function allocate_linearized_system!(d, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
@@ -229,7 +229,7 @@ function allocate_equations!(eqs, storage, model::SimulationModel{T, S}) where {
     nph = number_of_phases(model.system)
     npartials = nph
     law = ConservationLaw(model.domain, npartials, context = model.context, equations_per_unit = nph)
-    eqs["MassConservation"] = law
+    eqs[:MassConservation] = law
     return eqs
 end
 
