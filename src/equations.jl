@@ -12,6 +12,13 @@ end
 
 
 """
+Return the domain unit the equation is associated with
+"""
+function domain_unit(::TervEquation)
+    return Cells()
+end
+
+"""
 Get the number of equations per unit. For example, mass balance of two
 components will have two equations per grid cell (= unit)
 """
@@ -21,11 +28,10 @@ function number_of_equations_per_unit(::TervEquation)
 end
 
 """
-Get the number of units (e.g. cells) that the equation is defined on.
+Get the number of units (e.g. the number of cells) that the equation is defined on.
 """
 function number_of_units(model, e::TervEquation)
-    # Default: Equations are per cell
-    return number_of_cells(model.domain)
+    return count_units(model.domain, domain_unit(e))
 end
 
 """
