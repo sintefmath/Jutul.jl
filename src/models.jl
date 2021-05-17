@@ -42,7 +42,7 @@ end
 Main function for storage that allocates and initializes storage for a simulation
 """
 function setup_simulation_storage(model::TervModel; state0 = setup_state(model), parameters = setup_parameters(model), kwargs...)
-    storage = allocate_storage(model, kwargs...)
+    storage = allocate_storage(model; kwargs...)
     storage[:parameters] = parameters
     storage[:state0] = state0
     storage[:state] = convert_state_ad(model, state0)
@@ -53,9 +53,9 @@ end
 Allocate storage for the model. You should overload allocate_storage! if you have a custom
 definition.
 """
-function allocate_storage(model::TervModel)
+function allocate_storage(model::TervModel; kwarg...)
     d = Dict{Symbol, Any}()
-    allocate_storage!(d, model)
+    allocate_storage!(d, model; kwarg...)
     return d
 end
 
