@@ -1,9 +1,9 @@
 export get_sparsity_pattern
 
-function get_incomp_matrix(G::MinimalTPFADomain)
-    n = number_of_cells(G)
-    get_incomp_matrix(n, G.conn_data)
-end
+#function get_incomp_matrix(G::MinimalTPFADomain)
+#    n = number_of_cells(G)
+#    get_incomp_matrix(n, G.conn_data)
+#end
 
 function get_incomp_matrix(n, hfd)
     # map is efficient on GPU 
@@ -19,10 +19,10 @@ function get_incomp_matrix(n, hfd)
     return A
 end
 
-function get_sparsity_pattern(G::MinimalTPFADomain, arg...)
-    n = number_of_cells(G)
-    get_sparsity_pattern(n, G.conn_data, arg...)
-end
+#function get_sparsity_pattern(G::MinimalTPFADomain, arg...)
+#    n = number_of_cells(G)
+#    get_sparsity_pattern(n, G.conn_data, arg...)
+#end
 
 function to_sparse(i, j, v, n, m)
     return sparse(i, j, v, n, m)

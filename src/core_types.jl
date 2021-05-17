@@ -1,6 +1,7 @@
 export TervSystem, TervDomain, TervPrimaryVariables
 export SimulationModel, TervPrimaryVariables, TervFormulation
 export setup_parameters, kernel_compatibility
+export Cells, Nodes, Faces
 
 export SingleCUDAContext, SharedMemoryContext, DefaultContext
 
@@ -84,6 +85,17 @@ struct DiscretizedDomain
     units
 end
 
+function DiscretizedDomain(grid, disc)
+    units = declare_units(grid)
+    u = Dict{TervUnit, Int64} # Is this a good definition?
+    for unit in units
+        num = unit[2]
+        @assert num >= 0 "Units must have non-negative sizes."
+        u[unit[1]] = u[num]
+    end
+    DiscretizedDomain(grid, disc, u) 
+end
+
 # Formulation
 abstract type TervFormulation end
 struct FullyImplicit <: TervFormulation end
@@ -113,5 +125,12 @@ function SimulationModel(domain, system;
     primary = select_primary_variables(domain, system, formulation)
     return SimulationModel(domain, system, context, formulation, primary)
 end
+## Grid
+abstract type TervGrid end
 
+## Discretized units
+abstract type TervUnit end
 
+struct Cells <: TervUnit end
+struct Faces <: TervUnit end
+struct Nodes <: TervUnit end

@@ -1,6 +1,4 @@
 using MAT # .MAT file loading
-export readSimGraph, getSparsity, getIncompMatrix
-export readPatchPlot
 export get_minimal_tpfa_grid_from_mrst, plot_mrstdata, plot_interactive
 using SparseArrays # Sparse pattern
 using Makie

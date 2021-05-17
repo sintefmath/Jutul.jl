@@ -1,4 +1,4 @@
-export MRSTGrid, MinimalTPFADomain, TPFAHalfFaceData
+export MinimalTPFAGrid, TPFAHalfFaceData
 export get_cell_faces, get_facepos, get_cell_neighbors
 export number_of_cells, number_of_faces, number_of_half_faces
 
@@ -17,57 +17,70 @@ function TPFAHalfFaceData{R, I}(target::TPFAHalfFaceData) where {R<:Real, I<:Int
     return TPFAHalfFaceData(R(target.T), R(target.dz), I(target.self), I(target.other))
 end
 
-
-abstract type DarcyDomain <: TervDomain end
+abstract type PorousMediumGrid <: TervGrid end
+abstract type ReservoirGrid <: PorousMediumGrid end
 # TPFA grid
 "Minimal struct for TPFA-like grid. Just connection data and pore-volumes"
-struct MinimalTPFADomain{R<:AbstractFloat, I<:Integer} <: DarcyDomain
-    conn_data::AbstractArray{TPFAHalfFaceData{R,I}}
-    conn_pos::AbstractArray{I}
-    pv::AbstractArray{R}
-end
-
-function MinimalTPFADomain(conn_data, pv)
-    cno = [i.self for i in conn_data]
-    # Slow code for the same thing:
-    # counts = [sum(cno .== j) for j in 1:length(pv)]
-    nc = length(pv)
-    counts = similar(cno, nc)
-    index = 1
-    cell = 1
-
-    while cell < nc + 1
-        count = 0
-        while cno[index] == cell
-            count += 1
-            index += 1
-            if index > length(cno)
-                break
-            end
-        end
-        counts[cell] = count
-        cell += 1
+struct MinimalTPFAGrid{R<:AbstractFloat, I<:Integer} <: ReservoirGrid
+    pore_volumes::AbstractVector{R}
+    neighborship::AbstractArray{I}
+    # conn_data::AbstractArray{TPFAHalfFaceData{R,I}}
+    # conn_pos::AbstractArray{I}
+    # pv::AbstractArray{R}
+    function MinimalTPFAGrid(pv, N)
+        @assert size(N, 1) == 2
+        @assert all(pv .> 0) "Pore volumes must be positive"
+        new{eltype(pv), eltype(N)}(pv, N)
     end
-    cpos = cumsum(vcat([1], counts))
-    return MinimalTPFADomain(conn_data, cpos, pv)
 end
+
+struct TPFADiscretization <: TervDiscretization
+    conn_data
+    conn_pos
+    function TPFADiscretization(conn_data, nc)
+        cno = [i.self for i in conn_data]
+        # Slow code for the same thing:
+        # counts = [sum(cno .== j) for j in 1:length(pv)]
+        # nc = length(pv)
+        counts = similar(cno, nc)
+        index = 1
+        cell = 1
+    
+        while cell < nc + 1
+            count = 0
+            while cno[index] == cell
+                count += 1
+                index += 1
+                if index > length(cno)
+                    break
+                end
+            end
+            counts[cell] = count
+            cell += 1
+        end
+        cpos = cumsum(vcat([1], counts))
+        new(conn_data, cpos)
+    end    
+end
+
+# Need to add: units etc for the new grid, and then replace the following functions
 
 # Member functions, TPFA grid
-function number_of_cells(G::MinimalTPFADomain)
-    return length(G.pv)
-end
+# function number_of_cells(G::MinimalTPFADomain)
+#     return length(G.pv)
+# end
 
-function number_of_faces(G::MinimalTPFADomain)
-    return div(number_of_half_faces(G), 2)
-end
+# function number_of_faces(G::MinimalTPFADomain)
+#     return div(number_of_half_faces(G), 2)
+# end
 
-function number_of_half_faces(G::MinimalTPFADomain)
-    return length(G.conn_data)
-end
+# function number_of_half_faces(G::MinimalTPFADomain)
+#     return length(G.conn_data)
+# end
 
-function get_pore_volume(G::MinimalTPFADomain)
-    return G.pore_volume
-end
+# function get_pore_volume(G::MinimalTPFADomain)
+#     return G.pore_volume
+# end
 
 function get_cell_faces(N, nc = maximum(N))
     # Create array of arrays where each entry contains the faces of that cell
@@ -113,7 +126,8 @@ function get_facepos(N)
     return (faces, facePos)
 end
 
-function transfer(context::SingleCUDAContext, grid::MinimalTPFADomain)
+function transfer(context::SingleCUDAContext, domain)
+    error("Not yet reimplemented")
     F = context.float_t
     I = context.index_t
     # Next line should be something like

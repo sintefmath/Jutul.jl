@@ -17,7 +17,9 @@ include("multimodel.jl")
 # MRST stuff
 include("mrst_input.jl")
 # Grids, types
-include("grids.jl")
+include("domains.jl")
+include("porousmedia_grids.jl")
+
 # Meat and potatoes
 include("static_structures.jl")
 include("assembly.jl")
