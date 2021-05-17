@@ -77,12 +77,11 @@ function update_equations!(storage, model::MultiModel, dt)
     submodels_storage_apply!(storage, model, update_equations!, dt)
 end
 
-function apply_forces!(storage, model::MultiModel, dt, forces)
+function apply_forces!(storage, model::MultiModel, dt, forces::Dict)
     for key in keys(model.models)
-        apply_forces!(storage[key], model.models[key], forces[key])
+        apply_forces!(storage[key], model.models[key], dt, forces[key])
     end
 end
-
 
 function submodels_storage_apply!(storage, model, f!, arg...)
     for key in keys(model.models)

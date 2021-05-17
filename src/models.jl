@@ -204,7 +204,7 @@ function apply_forces!(storage, model::TervModel, dt, forces::NamedTuple)
     end
 end
 
-function apply_forces!(storage, model::TervModel, dt, ::Nothing)
+function apply_forces!(storage, model, dt, ::Nothing)
 
 end
 
