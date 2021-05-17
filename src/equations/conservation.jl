@@ -50,7 +50,7 @@ function align_to_linearized_system!(law::ConservationLaw, lsys::LinearizedSyste
     law.half_face_flux_jac_pos .= fluxpos
 end
 
-function update_linearized_system!(lsys::LinearizedSystem, model, law::ConservationLaw)
+function update_linearized_system_subset!(lsys::LinearizedSystem, model, law::ConservationLaw)
     cpos = model.domain.discretizations.KGrad.conn_pos
     context = model.context
     ker_compat = kernel_compatibility(context)

@@ -191,7 +191,7 @@ function update_linearized_system!(storage, model::TervModel)
     equations = storage.equations
     lsys = storage.LinearizedSystem
     for key in keys(equations)
-        update_linearized_system!(lsys, model, equations[key])
+        update_linearized_system_subset!(lsys, model, equations[key])
     end
 end
 

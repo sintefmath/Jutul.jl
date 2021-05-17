@@ -75,7 +75,7 @@ function align_to_linearized_system!(::TervEquation, lsys, model) end
 """
 Update a linearized system based on the values and derivatives in the equation.
 """
-function update_linearized_system!(lsys, model, equation::TervEquation)
+function update_linearized_system_subset!(lsys, model, equation::TervEquation)
     # TODO: Generalize to non-scalar equation per unit setting
     r = lsys.r
     jac = lsys.jac
