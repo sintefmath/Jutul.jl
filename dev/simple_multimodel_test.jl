@@ -26,9 +26,7 @@ model = MultiModel((A = modelA, B = modelB))
 
 parameters = setup_parameters(model)
 
-##
-# state0B = setup_state(modelA, Dict("XVar"=>0.0))
+## Set up joint state and simulate
 state0 = setup_state(model, Dict("XVar"=>1.0), Dict("XVar"=>0.0))
-## Simulate
 sim = Simulator(model, state0 = state0, parameters = parameters)
 states = simulate(sim, [1.0])
