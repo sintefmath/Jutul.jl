@@ -106,7 +106,7 @@ function number_of_primary_variables(model)
 end
 
 ## Initialization
-function initialize_primary_variable_ad(state, model, pvar::ScalarPrimaryVariable, offset, npartials)
+function initialize_primary_variable_ad(state::Dict, model, pvar::ScalarPrimaryVariable, offset, npartials)
     name = get_name(pvar)
     state[name] = allocate_array_ad(state[name], diag_pos = offset + 1, context = model.context, npartials = npartials)
     return state

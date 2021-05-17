@@ -7,6 +7,10 @@ function count_units(D::TervDomain, ::Cells)
     1
 end
 
+function count_units(D::DiscretizedDomain, unit::Cells)
+    D.units[unit]
+end
+
 function count_units(D::DiscretizedDomain, unit)
     D.units[unit]
 end
