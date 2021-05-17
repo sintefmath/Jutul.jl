@@ -12,19 +12,17 @@ function get_primary_variable_names(model::MultiModel)
 
 end
 
-
 function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
 end
 
-function initialize_storage!(storage, model::MultiModel)
-    submodels_storage_apply!(storage, model, initialize_storage!)
-end
-
-function allocate_storage!(storage, model::MultiModel)
+function setup_simulation_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model))
+    storage = Dict()
     for key in keys(model.models)
-        storage[key] = allocate_storage(model.models[key])
+        m = model.models[key]
+        storage[key] = setup_simulation_storage(m, state0 = state0[key], parameters = parameters[key])
     end
+    return convert_to_immutable_storage(storage)
 end
 
 function allocate_equations!(storage, model::MultiModel, lsys, npartials)
@@ -64,9 +62,11 @@ function setup_parameters(model::MultiModel)
 end
 
 function convert_state_ad(model::MultiModel, state)
+    stateAD = deepcopy(state)
     for key in keys(model.models)
-        state[key] = convert_state_ad(model.models[key], state[key])
+        stateAD[key] = convert_state_ad(model.models[key], state[key])
     end
+    return stateAD
 end
 
 function update_properties!(storage, model::MultiModel)
