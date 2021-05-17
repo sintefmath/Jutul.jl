@@ -107,14 +107,14 @@ end
 
 ## Initialization
 function initialize_primary_variable_ad(state::Dict, model, pvar::ScalarPrimaryVariable, offset, npartials)
-    name = get_name(pvar)
+    name = get_symbol(pvar)
     state[name] = allocate_array_ad(state[name], diag_pos = offset + 1, context = model.context, npartials = npartials)
     return state
 end
 
 function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVariable, val::Union{Dict, AbstractFloat})
     n = number_of_degrees_of_freedom(model, pvar)
-    name = get_name(pvar)
+    name = get_symbol(pvar)
     if isa(val, Dict)
         val = val[name]
     end
@@ -135,9 +135,10 @@ to a state where those arrays contain the same value as Dual types.
 The dual type is currently taken from ForwardDiff.
 """
 function convert_state_ad(model, state)
+    @show state
     context = model.context
     stateAD = deepcopy(state)
-    vars = String.(keys(state))
+    vars = keys(state)
 
     primary = get_primary_variables(model)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
@@ -149,8 +150,8 @@ function convert_state_ad(model, state)
         stateAD = initialize_primary_variable_ad(stateAD, model, pvar, offset, n_partials)
         offset += counts[i]
     end
-    primary_names = get_primary_variable_names(model)
-    secondary = setdiff(vars, primary_names)
+    primary_symb = get_primary_variable_symbols(model)
+    secondary = setdiff(vars, primary_symb)
     # Loop over secondary variables and initialize as AD with zero partials
     for s in secondary
         stateAD[s] = allocate_array_ad(stateAD[s], context = context, npartials = n_partials)
