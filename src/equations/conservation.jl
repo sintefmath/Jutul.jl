@@ -36,7 +36,7 @@ end
 function align_to_linearized_system!(law::ConservationLaw, lsys::LinearizedSystem, model; row_offset = 0, col_offset = 0)
     jac = lsys.jac
     # Note: We copy this back to host if it is on GPU to avoid rewriting these functions for CuArrays
-    conn_data = Array(model.domain.conn_data)
+    conn_data = Array(model.domain.discretizations.KGrad.conn_data)
     accpos = Array(law.accumulation_jac_pos)
     fluxpos = Array(law.half_face_flux_jac_pos)
 
@@ -51,7 +51,7 @@ function align_to_linearized_system!(law::ConservationLaw, lsys::LinearizedSyste
 end
 
 function update_linearized_system!(lsys::LinearizedSystem, model, law::ConservationLaw)
-    G = model.domain
+    cpos = model.domain.discretizations.KGrad.conn_pos
     context = model.context
     ker_compat = kernel_compatibility(context)
     apos = law.accumulation_jac_pos
@@ -64,7 +64,7 @@ function update_linearized_system!(lsys::LinearizedSystem, model, law::Conservat
     # Fill in off-diagonal
     fpos = law.half_face_flux_jac_pos
     # @info "Half face flux fillin"
-    fill_half_face_fluxes(jac, r, G.conn_pos, law.half_face_flux, apos, fpos, neq, context, ker_compat)
+    fill_half_face_fluxes(jac, r, cpos, law.half_face_flux, apos, fpos, neq, context, ker_compat)
 end
 
 function number_of_equations_per_unit(e::ConservationLaw)
@@ -76,7 +76,7 @@ function number_of_partials_per_unit(e::ConservationLaw)
 end
 
 function declare_sparsity(model, e::ConservationLaw)
-    hfd = Array(model.domain.conn_data)
+    hfd = Array(model.domain.discretizations.KGrad.conn_data)
     n = number_of_units(model, e)
     # Fluxes
     I = map(x -> x.self, hfd)
@@ -104,7 +104,7 @@ end
 function convergence_criterion(model, storage, eq::ConservationLaw, lsys::LinearizedSystem; dt = 1)
     n = number_of_equations_per_unit(eq)
     nc = number_of_cells(model.domain)
-    pv = model.domain.pv
+    pv = get_pore_volume(model)
     e = zeros(n)
     for i = 1:n
         e[i] = mapreduce((pv, e) -> abs(dt*e/pv), max, pv, lsys.r[(1:nc) .+ (i-1)*nc])

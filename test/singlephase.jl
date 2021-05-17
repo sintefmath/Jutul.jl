@@ -22,9 +22,10 @@ function test_single_phase(casename = "pico", pvfrac=0.05, tstep = [1.0, 2.0]; l
     model = SimulationModel(G, sys)
 
     # System state
+    pv = model.domain.grid.pore_volumes
     timesteps = tstep*3600*24 # 1 day, 2 days
     tot_time = sum(timesteps)
-    irate = pvfrac*sum(G.pv)/tot_time
+    irate = pvfrac*sum(pv)/tot_time
     src = [SourceTerm(1, irate), 
            SourceTerm(nc, -irate)]
     forces = build_forces(model, sources = src)

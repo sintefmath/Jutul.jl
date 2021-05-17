@@ -79,7 +79,7 @@ end
 # Domains
 abstract type TervDomain end
 
-struct DiscretizedDomain
+struct DiscretizedDomain <: TervDomain
     grid
     discretizations
     units
@@ -87,11 +87,11 @@ end
 
 function DiscretizedDomain(grid, disc)
     units = declare_units(grid)
-    u = Dict{TervUnit, Int64} # Is this a good definition?
+    u = Dict{Any, Int64}() # Is this a good definition?
     for unit in units
         num = unit[2]
-        @assert num >= 0 "Units must have non-negative sizes."
-        u[unit[1]] = u[num]
+        @assert num >= 0 "Units must have non-negative counts."
+        u[unit[1]] = num
     end
     DiscretizedDomain(grid, disc, u) 
 end

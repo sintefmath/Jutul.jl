@@ -287,7 +287,7 @@ function update_density!(storage, model)
     return rho
 end
 
-function get_pore_volume(model) model.domain.pv' end
+function get_pore_volume(model) model.domain.grid.pore_volumes' end
 
 function update_total_mass!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
     pv = get_pore_volume(model)

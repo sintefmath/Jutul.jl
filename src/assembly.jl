@@ -8,7 +8,8 @@ function half_face_flux(mob, p, G)
 end
 
 function half_face_flux!(model, flux, mob, p)
-    half_face_flux!(flux, mob, p, model.domain.conn_data, model.context, kernel_compatibility(model.context))
+    cd = model.domain.discretizations.KGrad.conn_data
+    half_face_flux!(flux, mob, p, cd, model.context, kernel_compatibility(model.context))
 end
 
 "Half face flux using standard loop"

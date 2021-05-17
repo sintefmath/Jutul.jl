@@ -79,11 +79,16 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
         end
     end
     @debug "Setting up TPFA grid."
-    sg = MinimalTPFADomain(faceData, pv)
+    # sg = MinimalTPFAGrid(faceData, pv)
+    sg = MinimalTPFAGrid(pv, N)
+    tpfa = TwoPointFlux(faceData, nc)
+    disc = (KGrad = tpfa, Upstream = SinglePointUpstream())
+    D = DiscretizedDomain(sg, disc)
+
     if extraout
-        return (sg, exported)
+        return (D, exported)
     else
-        return sg
+        return D
     end
 end
 

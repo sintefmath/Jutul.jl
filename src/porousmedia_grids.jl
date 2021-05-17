@@ -2,6 +2,8 @@ export MinimalTPFAGrid, TPFAHalfFaceData
 export get_cell_faces, get_facepos, get_cell_neighbors
 export number_of_cells, number_of_faces, number_of_half_faces
 
+export TwoPointFlux, SinglePointUpstream
+
 export transfer
 
 # Helpers follow
@@ -34,10 +36,14 @@ struct MinimalTPFAGrid{R<:AbstractFloat, I<:Integer} <: ReservoirGrid
     end
 end
 
-struct TPFADiscretization <: TervDiscretization
+struct SinglePointUpstream <: TervDiscretization
+
+end
+
+struct TwoPointFlux <: TervDiscretization
     conn_data
     conn_pos
-    function TPFADiscretization(conn_data, nc)
+    function TwoPointFlux(conn_data, nc)
         cno = [i.self for i in conn_data]
         # Slow code for the same thing:
         # counts = [sum(cno .== j) for j in 1:length(pv)]
@@ -63,8 +69,13 @@ struct TPFADiscretization <: TervDiscretization
     end    
 end
 
-# Need to add: units etc for the new grid, and then replace the following functions
 
+# Need to add: units etc for the new grid, and then replace the following functions
+function declare_units(G::MinimalTPFAGrid)
+    c = (Cells(), length(G.pore_volumes))  # Cells equal to number of pore volumes
+    f = (Faces(), size(G.neighborship, 2)) # Faces
+    return [c, f]
+end
 # Member functions, TPFA grid
 # function number_of_cells(G::MinimalTPFADomain)
 #     return length(G.pv)
@@ -81,6 +92,7 @@ end
 # function get_pore_volume(G::MinimalTPFADomain)
 #     return G.pore_volume
 # end
+
 
 function get_cell_faces(N, nc = maximum(N))
     # Create array of arrays where each entry contains the faces of that cell
