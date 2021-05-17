@@ -86,8 +86,6 @@ end
 
 function submodels_storage_apply!(storage, model, f!, arg...)
     for key in keys(model.models)
-        @show key
-        @show storage
         f!(storage[key], model.models[key], arg...)
     end
 end
