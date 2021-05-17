@@ -11,14 +11,7 @@ struct Simulator <: TervSimulator
 end
 
 function Simulator(model; state0 = setup_state(model), parameters = setup_parameters(model))
-    storage = allocate_storage(model)
-    storage["parameters"] = parameters
-    storage["state0"] = state0
-    storage["state"] = convert_state_ad(model, state0)
-    # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
-    # This allows for much faster lookup in the simulation itself.
-    storage = convert_to_immutable_storage(storage)
-    initialize_storage!(storage, model)
+    storage = setup_simulation_storage(model, state0 = state0, parameters = parameters)
     Simulator(model, storage)
 end
 

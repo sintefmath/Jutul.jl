@@ -35,11 +35,18 @@ function add_extra_state_fields!(state, model::TervModel)
 end
 
 """
-Initialize the already allocated storage at the beginning of a simulation.
-Use this to e.g. set up extra stuff in state0 needed for initializing the simulation loop.
+Main function for storage that allocates and initializes storage for a simulation
 """
-function initialize_storage!(storage, model::TervModel)
-    # Do nothing
+function setup_simulation_storage(model::TervModel; state0 = setup_state(model), parameters = setup_parameters(model))
+    storage = allocate_storage(model)
+    storage["parameters"] = parameters
+    storage["state0"] = state0
+    storage["state"] = convert_state_ad(model, state0)
+    # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
+    # This allows for much faster lookup in the simulation itself.
+    storage = convert_to_immutable_storage(storage)
+    initialize_storage!(storage, model)
+    return storage
 end
 
 """
@@ -50,6 +57,14 @@ function allocate_storage(model::TervModel)
     d = Dict()
     allocate_storage!(d, model)
     return d
+end
+
+"""
+Initialize the already allocated storage at the beginning of a simulation.
+Use this to e.g. set up extra stuff in state0 needed for initializing the simulation loop.
+"""
+function initialize_storage!(storage, model::TervModel)
+    # Do nothing
 end
 
 """
