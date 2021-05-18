@@ -2,6 +2,13 @@ export MultiModel
 
 struct MultiModel <: TervModel
     models::NamedTuple
+    groups::Vector
+    function MultiModel(models; groups = collect(1:length(models)))
+        @assert maximum(groups) <= length(models)
+        @assert minimum(groups) > 0
+        @assert length(groups) == length(models)
+        new(models, groups)
+    end
 end
 
 abstract type CrossModelTerm end
@@ -12,23 +19,30 @@ A cross model term where the dependency is injective and the term is additive:
 and is added into that position upon application)
 """
 struct InjectiveCrossModelTerm
-    impacted_units
-    crossterm
+    impact # 2 by N - first row is target, second is source
+    units # tuple - first tuple is target, second is source
+    crossterm_target
+    crossterm_source
     cross_jac_pos
     function InjectiveCrossModelTerm(target_eq, target_model, source_model)
         context = target_model.context
-        overlap = get_domain_intersection(domain_unit(target_eq), target_model, source_model)
+        target_unit = domain_unit(target_eq)
+        overlap, source_unit = get_domain_intersection(target_unit, target_model, source_model)
 
         I = index_type(context)
         # Infer Unit from target_eq
         equations_per_unit = number_of_equations_per_unit(target_eq)
-        partials_per_unit = number_of_partials_per_unit(target_eq)
+        # npartials_target = number_of_partials_per_unit(target_eq)
+        npartials_target = number_of_partials_per_unit(target_model, target_unit)
+        npartials_source = number_of_partials_per_unit(source_model, source_unit)
+        # Need to count partials in source as well
+        
         noverlap = length(overlap)
 
         c_term = allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = partials_per_unit)
         jac_pos = zeros(I, equations_per_unit*partials_per_unit, noverlap)
         # crossterm = allocate
-        new(c_term, overlap, jac_pos)
+        new(overlap, c_term_target, c_term_source, jac_pos)
     end
 end
 
@@ -36,8 +50,13 @@ function get_domain_intersection(u::TervUnit, target_model::TervModel, source_mo
     return get_domain_intersection(u, target_model.domain, source_model.domain)
 end
 
+"""
+For a given unit in domain target_d, find any indices into that unit that is connected to
+any units in source_d. The interface is limited to a single unit-unit impact.
+The return value is a tuple of indices and the corresponding unit
+"""
 function get_domain_intersection(u::TervUnit, target_d::TervDomain, source_d::TervDomain)
-    nothing
+    (nothing, Cells())
 end
 
 function number_of_models(model::MultiModel)
@@ -91,6 +110,45 @@ function allocate_cross_model_coupling(storage, model::MultiModel)
 end
 
 function allocate_linearized_system!(storage, model::MultiModel)
+    groups = model.groups
+    models = model.models
+    ugroups = unique(groups)
+    ng = length(ugroups)
+    if ng == 1
+        # All Jacobians are grouped together and we assemble as a single linearized system
+        I = []
+        J = []
+        V = []
+        mkeys = keys(models)
+        nmodels = length(mkeys)
+        rowcounts = zeros(Int64, nmodels)
+        colcounts = zeros(Int64, nmodels)
+
+        rowoffset = 0
+        coloffset = 0
+        for (ix, key) in enumerate(mkeys)
+            m = models[key]
+            s = storage[key]
+            i, j, v, n, m = get_sparse_arguments(s, m)
+            rowcounts[ix] = n
+            colcounts[ix] = m
+            push!(I, i .+ rowoffset)
+            push!(J, j .+ coloffset)
+            push!(V, v)
+
+        end
+        # jac = sparse(I, J, V, )
+    else
+        # We have multiple groups. Store as Matrix of sparse matrices
+        jac = Matrix{Any}(ng, ng)
+        row_offset = 0
+        col_offset = 0
+        for g in 1:ng
+
+        end
+    end
+
+
     @assert false "Needs implementation"
 end
 

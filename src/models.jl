@@ -12,6 +12,16 @@ function get_primary_variables(model::SimulationModel)
     return model.primary_variables
 end
 
+function number_of_partials_per_unit(model::SimulationModel, unit::TervUnit)
+    n = 0
+    for p in get_primary_variables(model)
+        if associated_unit(p) == unit
+            n += 1
+        end
+    end
+    return n
+end
+
 """
 Set up a state. You likely want to overload setup_state! instead of this one.
 """

@@ -5,9 +5,14 @@ function select_primary_variables(domain, system::TervSystem, formulation)
     return nothing
 end
 
-function number_of_units(model, ::TervPrimaryVariables)
+function number_of_units(model, pv::TervPrimaryVariables)
     # By default, each primary variable exists on all cells of a discretized domain
-    return number_of_cells(model.domain)
+    return count_units(model.domain, associated_unit(pv))
+end
+
+function associated_unit(::TervPrimaryVariables)
+    # The default unit for all primary variables is Cells()
+    return Cells()
 end
 
 function number_of_degrees_of_freedom(model, pvars::TervPrimaryVariables)
@@ -142,6 +147,7 @@ function convert_state_ad(model, state)
 
     primary = get_primary_variables(model)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
+    # TODO: Filter this based on the units of each primary variable.
     counts = map((x) -> degrees_of_freedom_per_unit(x), primary)
     n_partials = sum(counts)
     @debug "Found $n_partials primary variables."

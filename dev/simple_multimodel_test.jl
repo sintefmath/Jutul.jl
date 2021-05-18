@@ -22,7 +22,7 @@ simB = Simulator(modelB, state0 = state0B)
 statesB = simulate(simB, [1.0], forces = forcesB)
 
 ## Make a multimodel
-model = MultiModel((A = modelA, B = modelB))
+model = MultiModel((A = modelA, B = modelB), groups = [1, 1])
 
 parameters = setup_parameters(model)
 
