@@ -116,14 +116,12 @@ not impact this particular equation.
 function apply_forces_to_equation!(storage, model, eq, force) end
 
 
-function convergence_criterion(model, storage, eq::TervEquation, lsys; dt = 1)
+function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
     n = number_of_equations_per_unit(eq)
-    pos = eq.equation_r_pos
-    # nc = number_of_cells(model.domain)
-    # pv = model.domain.pv
+    m = length(r) ÷ n
     e = zeros(n)
     for i = 1:n
-        x = view(lsys.r, pos[i, :])
+        x = view(r, ((i-1)*m+1):(i*m))
         e[i] = norm(x, Inf)
     end
     return (e, 1.0)

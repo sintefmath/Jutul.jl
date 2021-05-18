@@ -101,13 +101,13 @@ function declare_sparsity(model, e::ConservationLaw)
     return (I, J, n, m)
 end
 
-function convergence_criterion(model, storage, eq::ConservationLaw, lsys::LinearizedSystem; dt = 1)
+function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
     n = number_of_equations_per_unit(eq)
     nc = number_of_cells(model.domain)
     pv = get_pore_volume(model)
     e = zeros(n)
     for i = 1:n
-        e[i] = mapreduce((pv, e) -> abs(dt*e/pv), max, pv, lsys.r[(1:nc) .+ (i-1)*nc])
+        e[i] = mapreduce((pv, e) -> abs(dt*e/pv), max, pv, r[(1:nc) .+ (i-1)*nc])
     end
     return (e, 1.0)
 end

@@ -38,14 +38,19 @@ function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces 
 
     converged = true
     e = 0
+    offset = 0
     for key in keys(eqs)
-        errors, tscale = convergence_criterion(model, storage, eqs[key], lsys, dt = dt)
+        eq = eqs[key]
+        n = number_of_equations(model, eq)
+        r_v = view(lsys.r, (1:n) .+ offset)
+        errors, tscale = convergence_criterion(model, storage, eq, r_v, dt = dt)
         for (index, e) in enumerate(errors)
             s = @sprintf("It %d: |R_%d| = %e\n", iteration, index, e)
             @debug s
         end
         converged = converged && all(errors .< tol*tscale)
         e = maximum([e, maximum(errors)])
+        offset += n
     end
     if converged
         do_solve = iteration == 1
