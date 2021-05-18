@@ -33,7 +33,7 @@ struct ScalarTestEquation <: TervEquation
 end
 
 function declare_sparsity(model, e::ScalarTestEquation)
-    return (1, 1)
+    return (1, 1, 1, 1)
 end
 
 function align_to_linearized_system!(eq::ScalarTestEquation, lsys::LinearizedSystem, model; row_offset = 0, col_offset = 0)

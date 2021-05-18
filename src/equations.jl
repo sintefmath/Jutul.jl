@@ -53,7 +53,7 @@ Give out I, J arrays of equal length for a given equation attached
 to the given model.
 """
 function declare_sparsity(model, e::TervEquation)
-    return ([], [])
+    return ([], [], NaN, NaN)
 end
 
 """
@@ -61,9 +61,9 @@ Give out I, J arrays of equal length for a the impact of a model A on
 a given equation E that is attached to some other model B. The sparsity
 is then that of ∂E / ∂P where P are the primary variables of A.
 """
-function declare_cross_model_sparsity(model, other_model, others_equation::TervEquation)
-    return ([], [])
-end
+# function declare_cross_model_sparsity(model, other_model, others_equation::TervEquation)
+#    return ([], [])
+# end
 
 """
 Update an equation so that it knows where to store its derivatives

@@ -19,11 +19,14 @@ A cross model term where the dependency is injective and the term is additive:
 and is added into that position upon application)
 """
 struct InjectiveCrossModelTerm
-    impact # 2 by N - first row is target, second is source
-    units  # tuple - first tuple is target, second is source
-    crossterm_target # The cross-term, with AD values taken relative to the target
-    crossterm_source # Same cross-term, AD values taken relative to the source
-    cross_jac_pos    # Positions that map crossterm_source C into the off-diagonal block ∂C/∂S where S are impacted primary variables of source
+    impact             # 2 by N - first row is target, second is source
+    units              # tuple - first tuple is target, second is source
+    crossterm_target   # The cross-term, with AD values taken relative to the target
+    crossterm_source   # Same cross-term, AD values taken relative to the source
+    cross_jac_pos      # Positions that map crossterm_source C into the off-diagonal block ∂C/∂S where S are impacted primary variables of source
+    equations_per_unit # Number of equations per impact
+    npartials_target   # Number of partials per equation (in target)
+    npartials_source   # (in source)
     function InjectiveCrossModelTerm(target_eq, target_model, source_model)
         context = target_model.context
         target_unit = domain_unit(target_eq)
@@ -33,6 +36,7 @@ struct InjectiveCrossModelTerm
         I = index_type(context)
         # Infer Unit from target_eq
         equations_per_unit = number_of_equations_per_unit(target_eq)
+
         npartials_target = number_of_partials_per_unit(target_model, target_unit)
         npartials_source = number_of_partials_per_unit(source_model, source_unit)
         
@@ -43,17 +47,37 @@ struct InjectiveCrossModelTerm
 
         jac_pos = zeros(I, equations_per_unit*npartials_source, noverlap)
         # Units and overlap - target, then source
-        units = (target_unit, source_unit)
-        overlap = hcat(target_impact, source_impact)
-        new(overlap, units, c_term_target, c_term_source, jac_pos)
+        units = (target = target_unit, source = source_unit)
+        overlap = (target = target_impact, source = source_impact)
+        new(overlap, units, c_term_target, c_term_source, jac_pos, equations_per_unit, npartials_target, npartials_target)
     end
 end
 
 function declare_sparsity(target_model, source_model, x::InjectiveCrossModelTerm)
-    i = x.impact[1, :]
-    j = x.impact[2, :]
+    n_partials = x.npartials_source
+    n_eqs = x.equations_per_unit
+    nunits_source = count_units(source_model.domain, x.units[2])
 
-    return (i, j, n, m)
+    @show x.impact
+    target_impact = x.impact.target
+    source_impact = x.impact.source
+
+    n_impact = length(target_impact)
+
+    I = []
+    J = []
+    for eqno in 1:n_eqs
+        for derno in 1:n_partials
+            push!(I, target_impact .+ (eqno-1)*n_impact)
+            push!(J, source_impact .+ (derno-1)*nunits_source)
+        end
+    end
+    I = vcat(I...)
+    J = vcat(J...)
+
+    n = n_eqs*n_impact
+    m = n_partials*nunits_source
+    return (I, J, n, m)
 end
 function get_domain_intersection(u::TervUnit, target_model::TervModel, source_model::TervModel)
     return get_domain_intersection(u, target_model.domain, source_model.domain)
@@ -124,6 +148,8 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
     models = model.models
     target_model = models[target]
     source_model = models[source]
+    F = float_type(source_model.context)
+
     if target == source
         # These are the main diagonal blocks each model knows how to produce themselves
         sarg = get_sparse_arguments(storage[target], target_model)
@@ -131,8 +157,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # Source differs from target. We need to get sparsity from cross model terms.
         I = []
         J = []
-        nrows = 0
-        ncols = 0
+        ncols = number_of_degrees_of_freedom(source_model)
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         equations = storage[target][:equations]
@@ -141,11 +166,16 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         for (key, eq) in equations
             x = cross_terms[key]
             if !isnothing(x)
-                i, j, v, n, m = declare_sparsity(target_model, source_model, x)
+                i, j, = declare_sparsity(target_model, source_model, x)
+                push!(I, i .+ row_offset)
+                push!(J, j)
             end
             row_offset += number_of_equations(target_model, eq)
         end
-        # ct = storage[source]# ??
+        I = vcat(I...)
+        J = vcat(J...)
+        V = zeros(F, length(I))
+        sarg = (I, J, V, row_offset, ncols)
     end
     return sarg
 end

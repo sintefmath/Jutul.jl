@@ -15,6 +15,13 @@ function associated_unit(::TervPrimaryVariables)
     return Cells()
 end
 
+function number_of_degrees_of_freedom(model::TervModel)
+    ndof = 0
+    for pvar in get_primary_variables(model)
+        ndof += number_of_degrees_of_freedom(model, pvar)
+    end
+end
+
 function number_of_degrees_of_freedom(model, pvars::TervPrimaryVariables)
     return number_of_units(model, pvars)*degrees_of_freedom_per_unit(pvars)
 end
