@@ -1,4 +1,4 @@
-export update_state_dependents!
+export update_state_dependents!, check_convergence
 
 #function get_primary_variable_names(model::SimulationModel)
 #    return map((x) -> get_name(x), get_primary_variables(model))
@@ -206,6 +206,34 @@ function update_linearized_system!(lsys, equations, model::TervModel; row_offset
         n = number_of_equations(model, eq)
         update_linearized_system_subset!(lsys, model, eq, r_subset = (row_offset+1):(row_offset+n))
         row_offset += n
+    end
+end
+
+function check_convergence(storage, model; iteration = nothing, extra_out = false, kwarg...)
+    lsys = storage.LinearizedSystem
+    eqs = storage.equations
+    tol = 1e-3
+
+    converged = true
+    e = 0
+    offset = 0
+    for key in keys(eqs)
+        eq = eqs[key]
+        n = number_of_equations(model, eq)
+        r_v = view(lsys.r, (1:n) .+ offset)
+        errors, tscale = convergence_criterion(model, storage, eq, r_v; kwarg...)
+        for (index, e) in enumerate(errors)
+            s = @sprintf("It %d: |%s_%d| = %e\n", iteration, String(key), index, e)
+            @debug s
+        end
+        converged = converged && all(errors .< tol*tscale)
+        e = maximum([e, maximum(errors)])
+        offset += n
+    end
+    if extra_out
+        return (converged, e, tol)
+    else
+        return converged
     end
 end
 

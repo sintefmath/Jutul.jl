@@ -32,26 +32,8 @@ function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces 
         update_linearized_system!(storage, model)
     end
     @debug "Updated linear system in $t_lsys seconds."
-    lsys = storage.LinearizedSystem
-    eqs = storage.equations
-    tol = 1e-3
 
-    converged = true
-    e = 0
-    offset = 0
-    for key in keys(eqs)
-        eq = eqs[key]
-        n = number_of_equations(model, eq)
-        r_v = view(lsys.r, (1:n) .+ offset)
-        errors, tscale = convergence_criterion(model, storage, eq, r_v, dt = dt)
-        for (index, e) in enumerate(errors)
-            s = @sprintf("It %d: |R_%d| = %e\n", iteration, index, e)
-            @debug s
-        end
-        converged = converged && all(errors .< tol*tscale)
-        e = maximum([e, maximum(errors)])
-        offset += n
-    end
+    converged, e, tol = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
     if converged
         do_solve = iteration == 1
         @debug "Step converged."
@@ -59,6 +41,7 @@ function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces 
         do_solve = true
     end
     if do_solve
+        lsys = storage.LinearizedSystem
         t_solve = @elapsed solve!(lsys, linsolve)
         @debug "Solved linear system in $t_solve seconds."
         t_upd = @elapsed update_state!(model, storage)
