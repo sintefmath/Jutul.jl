@@ -159,7 +159,7 @@ function initialize_primary_variable_value(state, model, pvar::Saturations, val)
     return state
 end
 
-function update_state!(state, p::Saturations, model, dx)
+function update_primary_variable!(state, p::Saturations, model, dx)
     nu = number_of_units(model, p)
     nph = degrees_of_freedom_per_unit(p) + 1
     

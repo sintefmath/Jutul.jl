@@ -335,6 +335,22 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
     end
 end
 
+function update_state!(storage, model::MultiModel)
+    dx = storage.LinearizedSystem.dx
+    models = model.models
+
+    offset = 0
+    for key in keys(models)
+        m = models[key]
+        s = storage[key]
+        @show m
+        ndof = number_of_degrees_of_freedom(m)
+        dx_v = view(dx, (offset+1):(offset+ndof))
+        update_state!(s.state, dx_v, m)
+        offset += ndof
+    end
+end
+
 function apply_forces!(storage, model::MultiModel, dt, forces::Dict)
     for key in keys(model.models)
         apply_forces!(storage[key], model.models[key], dt, forces[key])

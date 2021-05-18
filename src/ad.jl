@@ -38,7 +38,7 @@ function relative_increment_limit(::TervPrimaryVariables) nothing end
 function maximum_value(::TervPrimaryVariables) nothing end
 function minimum_value(::TervPrimaryVariables) nothing end
 
-function update_state!(state, p::TervPrimaryVariables, model, dx)
+function update_primary_variable!(state, p::TervPrimaryVariables, model, dx)
     names = get_names(p)
     nu = number_of_units(model, p)
     abs_max = absolute_increment_limit(p)

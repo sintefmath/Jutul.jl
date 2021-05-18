@@ -120,15 +120,18 @@ function store_output!(states, sim)
 end
 
 function update_state!(storage, model::TervModel)
-    lsys = storage.LinearizedSystem
+    dx = storage.LinearizedSystem.dx
     state = storage.state
+    update_state!(state, dx, model)
+end
 
+function update_state!(state, dx, model::TervModel)
     offset = 0
     primary = get_primary_variables(model)
     for p in primary
         n = number_of_degrees_of_freedom(model, p)
         rng = (1:n) .+ offset
-        update_state!(state, p, model, view(lsys.dx, rng))
+        update_primary_variable!(state, p, model, view(dx, rng))
         offset += n
     end
 end
