@@ -3,11 +3,15 @@ export MultiModel
 struct MultiModel <: TervModel
     models::NamedTuple
     groups::Vector
-    function MultiModel(models; groups = collect(1:length(models)))
+    context::TervContext
+    function MultiModel(models; groups = collect(1:length(models)), context = DefaultContext())
         @assert maximum(groups) <= length(models)
         @assert minimum(groups) > 0
         @assert length(groups) == length(models)
-        new(models, groups)
+        for m in models
+            @assert context == m.context
+        end
+        new(models, groups, context)
     end
 end
 
@@ -58,7 +62,6 @@ function declare_sparsity(target_model, source_model, x::InjectiveCrossModelTerm
     n_eqs = x.equations_per_unit
     nunits_source = count_units(source_model.domain, x.units[2])
 
-    @show x.impact
     target_impact = x.impact.target
     source_impact = x.impact.source
 
@@ -180,38 +183,43 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
     return sarg
 end
 
+function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol})
+    I = []
+    J = []
+    V = []
+    row_offset = 0
+    col_offset = 0
+    for target in targets
+        col_offset = 0
+        n = 0
+        for source in sources
+            i, j, v, n, m = get_sparse_arguments(storage, model, target, source)
+            push!(I, i .+ row_offset)
+            push!(J, j .+ col_offset)
+            push!(V, v)
+            col_offset += m
+        end
+        row_offset += n
+    end
+    I = vcat(I...)
+    J = vcat(J...)
+    V = vcat(V...)
+    return (I, J, V, row_offset, col_offset)
+end
 
 function allocate_linearized_system!(storage, model::MultiModel)
+    F = float_type(model.context)
+
     groups = model.groups
     models = model.models
     ugroups = unique(groups)
     ng = length(ugroups)
+
+    candidates = [i for i in keys(models)]
     if ng == 1
         # All Jacobians are grouped together and we assemble as a single linearized system
-        I = []
-        J = []
-        V = []
-        mkeys = keys(models)
-        nmodels = length(mkeys)
-        rowcounts = zeros(Int64, nmodels)
-        colcounts = zeros(Int64, nmodels)
-
-        rowoffset = 0
-        coloffset = 0
-        for (tix, target) in enumerate(mkeys)
-            for (six, source) in enumerate(mkeys)
-                # m = models[key]
-                # s = storage[key]
-                i, j, v, n, m = get_sparse_arguments(storage, model, target, source)
-                # rowcounts[ix] = n
-                # colcounts[ix] = m
-                # push!(I, i .+ rowoffset)
-                # push!(J, j .+ coloffset)
-                # push!(V, v)
-            end
-            # i, j, v, n, m = get_sparse_arguments(storage, model, :A, :B)
-        end
-        # jac = sparse(I, J, V, )
+        I, J, V, n, m = get_sparse_arguments(storage, model, candidates, candidates)
+        jac = sparse(I, J, V, n, m)
     else
         # We have multiple groups. Store as Matrix of sparse matrices
         jac = Matrix{Any}(ng, ng)

@@ -120,7 +120,6 @@ function get_sparse_arguments(storage, model)
     nrows = 0
     for (k, eq) in eqs
         S = declare_sparsity(model, eq)
-        @show S
         i = S[1]
         j = S[2]
         push!(I, i .+ nrows) # Row indices, offset by the size of preceeding equations
