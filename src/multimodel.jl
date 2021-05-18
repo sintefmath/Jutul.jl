@@ -220,18 +220,22 @@ function allocate_linearized_system!(storage, model::MultiModel)
         # All Jacobians are grouped together and we assemble as a single linearized system
         I, J, V, n, m = get_sparse_arguments(storage, model, candidates, candidates)
         jac = sparse(I, J, V, n, m)
+        lsys = LinearizedSystem(jac)
     else
         # We have multiple groups. Store as Matrix of sparse matrices
+        @assert false "Needs implementation"
         jac = Matrix{Any}(ng, ng)
-        row_offset = 0
-        col_offset = 0
-        for g in 1:ng
-
+        # row_offset = 0
+        # col_offset = 0
+        for rowg in 1:ng
+            t = candidates[groups .== rowg]
+            for colg in 1:ng
+                s = candidates[groups .== colg]
+                I, J, V, n, m = get_sparse_arguments(storage, model, t, s)
+            end
         end
     end
-
-
-    @assert false "Needs implementation"
+    return lsys
 end
 
 function initialize_storage!(storage, model::MultiModel)
