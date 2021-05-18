@@ -28,5 +28,6 @@ parameters = setup_parameters(model)
 
 ## Set up joint state and simulate
 state0 = setup_state(model, Dict(:XVar=>1.0), Dict(:XVar=>0.0))
+forces = Dict(:A => forcesA, :B => forcesB)
 sim = Simulator(model, state0 = state0, parameters = parameters)
-states = simulate(sim, [1.0])
+states = simulate(sim, [1.0], forces = forces)
