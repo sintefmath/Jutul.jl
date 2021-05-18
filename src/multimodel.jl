@@ -100,7 +100,7 @@ function allocate_cross_model_coupling(storage, model::MultiModel)
             d = Dict()
             for (key, eq) in storage[target][:equations]
                 ct = InjectiveCrossModelTerm(eq, target_model, source_model)
-                if length(ct.impacted_units) == 0
+                if length(ct.impact) == 0
                     # Just insert nothing, so we can easily spot no overlap
                     ct = nothing
                 end

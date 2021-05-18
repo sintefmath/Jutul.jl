@@ -7,8 +7,8 @@ struct ScalarTestDomain <: TervDomain end
 function number_of_cells(::ScalarTestDomain) 1 end
 
 function get_domain_intersection(u::TervUnit, target_d::ScalarTestDomain, source_d::ScalarTestDomain)
-    # This domain always interacts with instances of itself, and nothing else
-    return 1
+    # This domain always interacts with the single cell in instances of itself, and nothing else
+    return (1, 1, Cells())
 end
 
 # Driving force for the test equation
@@ -43,7 +43,7 @@ end
 
 # Model features
 function allocate_equations!(eqs, storage, model::SimulationModel{G, S}) where {G<:ScalarTestDomain, S<:ScalarTestSystem}
-    eqs["TestEquation"] = ScalarTestEquation(model.domain, 1, context = model.context)
+    eqs[:TestEquation] = ScalarTestEquation(model.domain, 1, context = model.context)
 end
 
 function update_equation!(storage, model, eq::ScalarTestEquation, dt)
