@@ -49,6 +49,12 @@ struct InjectiveCrossModelTerm
     end
 end
 
+function declare_sparsity(target_model, source_model, x::InjectiveCrossModelTerm)
+    i = x.impact[1, :]
+    j = x.impact[2, :]
+
+    return (i, j, n, m)
+end
 function get_domain_intersection(u::TervUnit, target_model::TervModel, source_model::TervModel)
     return get_domain_intersection(u, target_model.domain, source_model.domain)
 end
@@ -116,12 +122,29 @@ end
 
 function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol)
     models = model.models
+    target_model = models[target]
+    source_model = models[source]
     if target == source
-        m = models[target]
-        s = storage[target]
-        sarg = get_sparse_arguments(s, m)
+        # These are the main diagonal blocks each model knows how to produce themselves
+        sarg = get_sparse_arguments(storage[target], target_model)
     else
-        crossd = storage[:cross_terms][target][source]
+        # Source differs from target. We need to get sparsity from cross model terms.
+        I = []
+        J = []
+        nrows = 0
+        ncols = 0
+        # Loop over target equations and get the sparsity of the sources for each equation - with
+        # derivative positions that correspond to that of the source
+        equations = storage[target][:equations]
+        cross_terms = storage[:cross_terms][target][source]
+        row_offset = 0
+        for (key, eq) in equations
+            x = cross_terms[key]
+            if !isnothing(x)
+                i, j, v, n, m = declare_sparsity(target_model, source_model, x)
+            end
+            row_offset += number_of_equations(target_model, eq)
+        end
         # ct = storage[source]# ??
     end
     return sarg
@@ -145,15 +168,17 @@ function allocate_linearized_system!(storage, model::MultiModel)
 
         rowoffset = 0
         coloffset = 0
-        for (ix, key) in enumerate(mkeys)
-            m = models[key]
-            s = storage[key]
-            i, j, v, n, m = get_sparse_arguments(s, m)
-            rowcounts[ix] = n
-            colcounts[ix] = m
-            push!(I, i .+ rowoffset)
-            push!(J, j .+ coloffset)
-            push!(V, v)
+        for (tix, target) in enumerate(mkeys)
+            for (six, source) in enumerate(mkeys)
+                # m = models[key]
+                # s = storage[key]
+                i, j, v, n, m = get_sparse_arguments(storage, model, target, source)
+                # rowcounts[ix] = n
+                # colcounts[ix] = m
+                # push!(I, i .+ rowoffset)
+                # push!(J, j .+ coloffset)
+                # push!(V, v)
+            end
             # i, j, v, n, m = get_sparse_arguments(storage, model, :A, :B)
         end
         # jac = sparse(I, J, V, )

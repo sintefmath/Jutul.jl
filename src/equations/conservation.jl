@@ -89,6 +89,7 @@ function declare_sparsity(model, e::ConservationLaw)
 
     nrows = number_of_equations_per_unit(e)
     ncols = number_of_partials_per_unit(e)
+    nunits = number_of_units(model, e)
     if nrows > 1
         I = vcat(map((x) -> (x-1)*n .+ I, 1:nrows)...)
         J = repeat(J, nrows)
@@ -97,8 +98,9 @@ function declare_sparsity(model, e::ConservationLaw)
         I = repeat(I, ncols)
         J = vcat(map((x) -> (x-1)*n .+ J, 1:ncols)...)
     end
-
-    return (I, J)
+    n = number_of_equations(model, e)
+    m = nunits*ncols
+    return (I, J, n, m)
 end
 
 function convergence_criterion(model, storage, eq::ConservationLaw, lsys::LinearizedSystem; dt = 1)
