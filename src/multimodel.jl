@@ -308,6 +308,33 @@ function update_equations!(storage, model::MultiModel, dt)
     submodels_storage_apply!(storage, model, update_equations!, dt)
 end
 
+function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = false, kwarg...)
+    converged = true
+    err = 0
+    offset = 0
+    r = storage.LinearizedSystem.r
+    for key in keys(model.models)
+        @debug "Checking convergence for submodel $key:"
+        s = storage[key]
+        m = model.models[key]
+        eqs = s.equations
+
+        n = number_of_degrees_of_freedom(m)
+        ix = offset .+ (1:n)
+        r_v = view(r, ix)
+        conv, e, = check_convergence(r_v, eqs, s, m; extra_out = true, tol = tol, kwarg...)
+        # Outer model has converged when all submodels are converged
+        converged = converged && conv
+        err = max(e, err)
+        offset += n
+    end
+    if extra_out
+        return (converged, err, tol)
+    else
+        return converged
+    end
+end
+
 function apply_forces!(storage, model::MultiModel, dt, forces::Dict)
     for key in keys(model.models)
         apply_forces!(storage[key], model.models[key], dt, forces[key])

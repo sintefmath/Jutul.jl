@@ -209,18 +209,20 @@ function update_linearized_system!(lsys, equations, model::TervModel; row_offset
     end
 end
 
-function check_convergence(storage, model; iteration = nothing, extra_out = false, kwarg...)
+function check_convergence(storage, model; kwarg...)
     lsys = storage.LinearizedSystem
     eqs = storage.equations
-    tol = 1e-3
+    check_convergence(lsys.r, eqs, storage, model; kwarg...)
+end
 
+function check_convergence(r, eqs, storage, model; iteration = nothing, extra_out = false, tol = 1e-3, kwarg...)
     converged = true
     e = 0
     offset = 0
     for key in keys(eqs)
         eq = eqs[key]
         n = number_of_equations(model, eq)
-        r_v = view(lsys.r, (1:n) .+ offset)
+        r_v = view(r, (1:n) .+ offset)
         errors, tscale = convergence_criterion(model, storage, eq, r_v; kwarg...)
         for (index, e) in enumerate(errors)
             s = @sprintf("It %d: |%s_%d| = %e\n", iteration, String(key), index, e)
