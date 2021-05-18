@@ -178,11 +178,6 @@ function update_state_dependents!(storage, model::TervModel, dt, forces)
         apply_forces!(storage, model, dt, forces)
     end
     @debug "Assembled equations in $t_asm seconds."
-    # Update the linearized system
-    t_lsys = @elapsed begin
-        update_linearized_system!(storage, model)
-    end
-    @debug "Updated linear system in $t_lsys seconds."
 end
 
 function update_properties!(storage, model)

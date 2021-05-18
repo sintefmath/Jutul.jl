@@ -25,9 +25,13 @@ function perform_step!(simulator::TervSimulator; vararg...)
 end
 
 function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces = nothing, iteration = NaN)
-    # Update the properties, equations and linearized system
+    # Update the properties and equations
     update_state_dependents!(storage, model, dt, forces)
-
+    # Update the linearized system
+    t_lsys = @elapsed begin
+        update_linearized_system!(storage, model)
+    end
+    @debug "Updated linear system in $t_lsys seconds."
     lsys = storage.LinearizedSystem
     eqs = storage.equations
     tol = 1e-3

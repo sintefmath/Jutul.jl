@@ -50,14 +50,12 @@ function align_to_linearized_system!(law::ConservationLaw, lsys::LinearizedSyste
     law.half_face_flux_jac_pos .= fluxpos
 end
 
-function update_linearized_system_subset!(lsys::LinearizedSystem, model, law::ConservationLaw)
+function update_linearized_system_subset!(jac, r, model, law::ConservationLaw)
     cpos = model.domain.discretizations.KGrad.conn_pos
     context = model.context
     ker_compat = kernel_compatibility(context)
     apos = law.accumulation_jac_pos
     neq = number_of_equations_per_unit(law)
-    jac = lsys.jac
-    r = lsys.r
     # Fill in diagonal
     # @info "Accumulation fillin"
     fill_accumulation!(jac, r, law.accumulation, apos, neq, context, ker_compat)
