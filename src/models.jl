@@ -194,11 +194,18 @@ function update_equations!(storage, model, dt = nothing)
     end
 end
 
-function update_linearized_system!(storage, model::TervModel)
+function update_linearized_system!(storage, model::TervModel; kwarg...)
     equations = storage.equations
     lsys = storage.LinearizedSystem
+    update_linearized_system!(lsys, equations, model; kwarg...)
+end
+
+function update_linearized_system!(lsys, equations, model::TervModel; row_offset = 0)
     for key in keys(equations)
-        update_linearized_system_subset!(lsys, model, equations[key])
+        eq = equations[key]
+        n = number_of_equations(model, eq)
+        update_linearized_system_subset!(lsys, model, eq, r_subset = (row_offset+1):(row_offset+n))
+        row_offset += n
     end
 end
 

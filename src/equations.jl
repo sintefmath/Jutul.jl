@@ -75,8 +75,12 @@ function align_to_linearized_system!(::TervEquation, lsys, model) end
 """
 Update a linearized system based on the values and derivatives in the equation.
 """
-function update_linearized_system_subset!(lsys, model, equation::TervEquation)
-    r = lsys.r
+function update_linearized_system_subset!(lsys, model, equation::TervEquation; r_subset = nothing)
+    if isnothing(r_subset)
+        r = lsys.r
+    else
+        r = view(lsys.r, r_subset)
+    end
     jac = lsys.jac
     update_linearized_system_subset!(jac, r, model, equation)
 end

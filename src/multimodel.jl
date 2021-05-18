@@ -161,7 +161,6 @@ function align_equations_to_linearized_system!(storage, model::MultiModel; row_o
         row_offset += ndof
         col_offset += ndof # Assuming that each model by itself forms a well-posed, square Jacobian...
     end
-    @assert false "Not implemented"
 end
 
 function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol)
