@@ -263,3 +263,10 @@ end
 function build_forces(model::TervModel)
     return NamedTuple()
 end
+
+function solve_update!(storage, model::TervModel; linsolve = nothing)
+    lsys = storage.LinearizedSystem
+    t_solve = @elapsed solve!(lsys, linsolve)
+    t_update = @elapsed update_state!(storage, model)
+    return (t_solve, t_update)
+end

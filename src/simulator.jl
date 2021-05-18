@@ -41,11 +41,9 @@ function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces 
         do_solve = true
     end
     if do_solve
-        lsys = storage.LinearizedSystem
-        t_solve = @elapsed solve!(lsys, linsolve)
+        t_solve, t_update = solve_update!(storage, model::TervModel; linsolve = linsolve)
         @debug "Solved linear system in $t_solve seconds."
-        t_upd = @elapsed update_state!(model, storage)
-        @debug "Updated state $t_upd seconds."
+        @debug "Updated state $t_update seconds."
     end
     return (e, tol)
 end
@@ -121,7 +119,7 @@ function store_output!(states, sim)
     push!(states, state_out)
 end
 
-function update_state!(model, storage)
+function update_state!(storage, model::TervModel)
     lsys = storage.LinearizedSystem
     state = storage.state
 
