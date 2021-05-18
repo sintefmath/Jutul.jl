@@ -146,13 +146,15 @@ function allocate_linearized_system!(storage, model::TervModel)
     return lsys
 end
 
-function align_equations_to_linearized_system!(storage, model::TervModel)
-    align_equations_to_linearized_system!(storage[:equations], storage[:LinearizedSystem], model)
+function align_equations_to_linearized_system!(storage, model::TervModel; kwarg...)
+    align_equations_to_linearized_system!(storage[:equations], storage[:LinearizedSystem], model; kwarg...)
 end
 
-function align_equations_to_linearized_system!(equations, lsys, model)
+function align_equations_to_linearized_system!(equations, lsys, model; row_offset = 0, col_offset = 0)
     for key in keys(equations)
-        align_to_linearized_system!(equations[key], lsys, model)
+        eq = equations[key]
+        align_to_linearized_system!(eq, lsys, model, row_offset = row_offset, col_offset = col_offset)
+        row_offset += number_of_equations(model, eq)
     end
 end
 

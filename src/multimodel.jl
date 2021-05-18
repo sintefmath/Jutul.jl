@@ -117,6 +117,7 @@ function setup_simulation_storage(model::MultiModel; state0 = setup_state(model)
     end
     allocate_cross_model_coupling(storage, model)
     allocate_linearized_system!(storage, model)
+    align_equations_to_linearized_system!(storage, model)
     return storage
 end
 
@@ -243,12 +244,11 @@ function initialize_storage!(storage, model::MultiModel)
 end
 
 function update_equations!(storage, model::MultiModel, arg...)
-    # Might need to update this part
-    submodels_storage_apply!(storage, model, update_linearized_system!, arg...)
+    submodels_storage_apply!(storage, model, update_equations!, arg...)
 end
 
-function update_linearized_system!(storage, model::MultiModel, arg...)
-    submodels_storage_apply!(storage, model, update_linearized_system!, arg...)
+function update_linearized_system!(storage, model::MultiModel)
+    @assert false "Not implemented"
 end
 
 function setup_state(model::MultiModel, subs...)
