@@ -262,8 +262,15 @@ function update_equations!(storage, model::MultiModel, arg...)
     submodels_storage_apply!(storage, model, update_equations!, arg...)
 end
 
-function update_linearized_system!(storage, model::MultiModel)
-    @assert false "Not implemented"
+function update_linearized_system!(storage, model::MultiModel; row_offset = 0)
+    lsys = storage.LinearizedSystem
+    for key in keys(model.models)
+        m = model.models[key]
+        s = storage[key]
+        eqs = s.equations
+        update_linearized_system!(lsys, eqs, m; row_offset = row_offset)
+        row_offset += number_of_degrees_of_freedom(m)
+    end
 end
 
 function setup_state(model::MultiModel, subs...)
