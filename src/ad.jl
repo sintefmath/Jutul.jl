@@ -20,6 +20,7 @@ function number_of_degrees_of_freedom(model::TervModel)
     for pvar in get_primary_variables(model)
         ndof += number_of_degrees_of_freedom(model, pvar)
     end
+    return ndof
 end
 
 function number_of_degrees_of_freedom(model, pvars::TervPrimaryVariables)
