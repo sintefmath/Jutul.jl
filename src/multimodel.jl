@@ -351,6 +351,11 @@ function update_state!(storage, model::MultiModel)
     end
 end
 
+function update_after_step!(storage, model::MultiModel)
+    submodels_storage_apply!(storage, model, update_after_step!)
+end
+
+
 function apply_forces!(storage, model::MultiModel, dt, forces::Dict)
     for key in keys(model.models)
         apply_forces!(storage[key], model.models[key], dt, forces[key])

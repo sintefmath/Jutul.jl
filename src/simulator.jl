@@ -101,37 +101,13 @@ function solve_ministep(sim, dt, maxIterations, linsolve, forces)
 end
 
 function update_after_step!(sim)
-    storage = sim.storage
-    state = storage.state
-    state0 = storage.state0
-    for key in keys(state)
-        @. state0[key] = value(state[key])
-    end
+    update_after_step!(sim.storage, sim.model)
 end
 
 function store_output!(states, sim)
     storage = sim.storage
-    state = storage.state
+    # As this point state0 = state without AD.
     state_out = deepcopy(storage.state0)
-    for key in keys(state)
-        @. state_out[key] = value(state[key])
-    end
     push!(states, state_out)
 end
 
-function update_state!(storage, model::TervModel)
-    dx = storage.LinearizedSystem.dx
-    state = storage.state
-    update_state!(state, dx, model)
-end
-
-function update_state!(state, dx, model::TervModel)
-    offset = 0
-    primary = get_primary_variables(model)
-    for p in primary
-        n = number_of_degrees_of_freedom(model, p)
-        rng = (1:n) .+ offset
-        update_primary_variable!(state, p, model, view(dx, rng))
-        offset += n
-    end
-end
