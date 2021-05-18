@@ -20,29 +20,32 @@ and is added into that position upon application)
 """
 struct InjectiveCrossModelTerm
     impact # 2 by N - first row is target, second is source
-    units # tuple - first tuple is target, second is source
-    crossterm_target
-    crossterm_source
-    cross_jac_pos
+    units  # tuple - first tuple is target, second is source
+    crossterm_target # The cross-term, with AD values taken relative to the target
+    crossterm_source # Same cross-term, AD values taken relative to the source
+    cross_jac_pos    # Positions that map crossterm_source C into the off-diagonal block ∂C/∂S where S are impacted primary variables of source
     function InjectiveCrossModelTerm(target_eq, target_model, source_model)
         context = target_model.context
         target_unit = domain_unit(target_eq)
-        overlap, source_unit = get_domain_intersection(target_unit, target_model, source_model)
-
+        target_impact, source_impact, source_unit = get_domain_intersection(target_unit, target_model, source_model)
+        noverlap = length(target_impact)
+        @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
         I = index_type(context)
         # Infer Unit from target_eq
         equations_per_unit = number_of_equations_per_unit(target_eq)
-        # npartials_target = number_of_partials_per_unit(target_eq)
         npartials_target = number_of_partials_per_unit(target_model, target_unit)
         npartials_source = number_of_partials_per_unit(source_model, source_unit)
-        # Need to count partials in source as well
         
-        noverlap = length(overlap)
+        alloc = (n) -> allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = n)
 
-        c_term = allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = partials_per_unit)
-        jac_pos = zeros(I, equations_per_unit*partials_per_unit, noverlap)
-        # crossterm = allocate
-        new(overlap, c_term_target, c_term_source, jac_pos)
+        c_term_target = alloc(npartials_target)
+        c_term_source = alloc(npartials_source)
+
+        jac_pos = zeros(I, equations_per_unit*npartials_source, noverlap)
+        # Units and overlap - target, then source
+        units = (target_unit, source_unit)
+        overlap = hcat(target_impact, source_impact)
+        new(overlap, units, c_term_target, c_term_source, jac_pos)
     end
 end
 
@@ -56,7 +59,7 @@ any units in source_d. The interface is limited to a single unit-unit impact.
 The return value is a tuple of indices and the corresponding unit
 """
 function get_domain_intersection(u::TervUnit, target_d::TervDomain, source_d::TervDomain)
-    (nothing, Cells())
+    (nothing, nothing, Cells())
 end
 
 function number_of_models(model::MultiModel)
