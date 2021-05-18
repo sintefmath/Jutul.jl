@@ -88,9 +88,10 @@ function setup_simulation_storage(model::MultiModel; state0 = setup_state(model)
 end
 
 function allocate_cross_model_coupling(storage, model::MultiModel)
-    crossd = Dict{Tuple{Symbol, Symbol}, Any}()
+    crossd = Dict{Symbol, Any}()
     models = model.models
     for target in keys(models)
+        sources = Dict{Symbol, Any}()
         for source in keys(models)
             if target == source
                 continue
@@ -106,11 +107,26 @@ function allocate_cross_model_coupling(storage, model::MultiModel)
                 end
                 d[key] = ct
             end
-            crossd[(target, source)] = d
+            sources[source] = d
         end
+        crossd[target] = sources
     end
     storage[:cross_terms] = crossd
 end
+
+function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol)
+    models = model.models
+    if target == source
+        m = models[target]
+        s = storage[target]
+        sarg = get_sparse_arguments(s, m)
+    else
+        crossd = storage[:cross_terms][target][source]
+        # ct = storage[source]# ??
+    end
+    return sarg
+end
+
 
 function allocate_linearized_system!(storage, model::MultiModel)
     groups = model.groups
@@ -138,7 +154,7 @@ function allocate_linearized_system!(storage, model::MultiModel)
             push!(I, i .+ rowoffset)
             push!(J, j .+ coloffset)
             push!(V, v)
-
+            # i, j, v, n, m = get_sparse_arguments(storage, model, :A, :B)
         end
         # jac = sparse(I, J, V, )
     else
