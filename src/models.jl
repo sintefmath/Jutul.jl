@@ -297,3 +297,8 @@ function update_after_step!(storage, model::TervModel)
         @. state0[key] = value(state[key])
     end
 end
+
+function get_output_state(storage, model::TervModel)
+    # As this point (after a converged step) state0 should be state without AD.
+    return deepcopy(storage.state0)
+end

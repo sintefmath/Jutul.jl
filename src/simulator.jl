@@ -105,9 +105,6 @@ function update_after_step!(sim)
 end
 
 function store_output!(states, sim)
-    storage = sim.storage
-    # As this point state0 = state without AD.
-    state_out = deepcopy(storage.state0)
+    state_out = get_output_state(sim.storage, sim.model)
     push!(states, state_out)
 end
-
