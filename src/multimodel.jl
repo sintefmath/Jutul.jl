@@ -148,6 +148,22 @@ function allocate_cross_model_coupling(storage, model::MultiModel)
     storage[:cross_terms] = crossd
 end
 
+function align_equations_to_linearized_system!(storage, model::MultiModel; row_offset = 0, col_offset = 0)
+    models = model.models
+    lsys = storage[:LinearizedSystem]
+    for key in keys(models)
+        submodel = models[key]
+        eqs = storage[key][:equations]
+        nrow_end = align_equations_to_linearized_system!(eqs, lsys, submodel, row_offset = row_offset, col_offset = col_offset)
+        nrow = nrow_end - row_offset
+        ndof = number_of_degrees_of_freedom(submodel)
+        @assert nrow == ndof "Submodels must have equal number of equations and degrees of freedom. Found $nrow equations and $ndof variables for submodel $key"
+        row_offset += ndof
+        col_offset += ndof # Assuming that each model by itself forms a well-posed, square Jacobian...
+    end
+    @assert false "Not implemented"
+end
+
 function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol)
     models = model.models
     target_model = models[target]
@@ -236,7 +252,7 @@ function allocate_linearized_system!(storage, model::MultiModel)
             end
         end
     end
-    return lsys
+    storage[:LinearizedSystem] = lsys
 end
 
 function initialize_storage!(storage, model::MultiModel)

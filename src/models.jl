@@ -156,6 +156,7 @@ function align_equations_to_linearized_system!(equations, lsys, model; row_offse
         align_to_linearized_system!(eq, lsys, model, row_offset = row_offset, col_offset = col_offset)
         row_offset += number_of_equations(model, eq)
     end
+    row_offset
 end
 
 function allocate_array(context::TervContext, value, n...)
