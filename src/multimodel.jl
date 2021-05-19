@@ -86,6 +86,13 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
     end
 end
 
+function apply_cross_term!(eq, ct, model_t, model_s, arg...)
+    ix = ct.impact.target
+    d = get_diagonal_part(eq)
+    # TODO: Why is this allocating?
+    d[:, ix] += ct.crossterm_target
+end
+
 function declare_sparsity(target_model, source_model, x::InjectiveCrossTerm)
     n_partials = x.npartials_source
     n_eqs = x.equations_per_unit
@@ -358,9 +365,7 @@ function update_cross_terms!(storage, model::MultiModel, arg...)
 end
 
 function update_cross_terms_for_pair!(storage, model, source::Symbol, target::Symbol, arg...)
-    models = model.models
-    all_cross_terms = storage[:cross_terms]
-    cross_terms = all_cross_terms[target][source]
+    cross_terms = storage[:cross_terms][target][source]
 
     storage_t, storage_s = get_submodel_storage(storage, target, source)
     model_t, model_s = get_submodels(model, target, source)
@@ -376,9 +381,34 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq, target_storage, source_s
     error("Cross term must be specialized for your equation and models.")
 end
 
-function apply_cross_terms!(storage, model::MultiModel, arg...)
-    @assert false "Needs implementation"
+function update_cross_term!(::Nothing, arg...)
+    # Do nothing.
 end
+
+function apply_cross_terms!(storage, model::MultiModel, arg...)
+    models = model.models
+    for target in keys(models)
+        for source in keys(models)
+            if source != target
+                apply_cross_terms_for_pair!(storage, model, source, target, arg...)
+            end
+        end
+    end
+end
+
+function apply_cross_terms_for_pair!(storage, model, source::Symbol, target::Symbol, arg...)
+    cross_terms = storage[:cross_terms][target][source]
+
+    storage_t, = get_submodel_storage(storage, target)
+    model_t, model_s = get_submodels(model, target, source)
+
+    eqs = storage_t[:equations]
+    for ekey in keys(eqs)
+        ct = cross_terms[ekey]
+        apply_cross_term!(eqs[ekey], ct, model_t, model_s, arg...)
+    end
+end
+
 
 function update_linearized_system!(storage, model::MultiModel; row_offset = 0)
     lsys = storage.LinearizedSystem

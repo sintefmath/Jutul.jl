@@ -158,3 +158,6 @@ function update_equation!(law::ConservationLaw, storage, model, dt)
     update_half_face_flux!(law, storage, model)
 end
 
+function get_diagonal_part(eq::ConservationLaw)
+    return eq.accumulation
+end
