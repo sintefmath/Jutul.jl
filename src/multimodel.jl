@@ -4,6 +4,7 @@ struct MultiModel <: TervModel
     models::NamedTuple
     groups::Vector
     context::TervContext
+    number_of_degrees_of_freedom
     function MultiModel(models; groups = collect(1:length(models)), context = DefaultContext())
         nm = length(models)
         @assert maximum(groups) <= nm
@@ -12,7 +13,8 @@ struct MultiModel <: TervModel
         for m in models
             @assert context == m.context
         end
-        new(models, groups, context)
+        ndof = map(number_of_degrees_of_freedom, models)
+        new(models, groups, context, ndof)
     end
 end
 
@@ -180,13 +182,14 @@ end
 
 function align_equations_to_linearized_system!(storage, model::MultiModel; row_offset = 0, col_offset = 0)
     models = model.models
+    ndofs = model.number_of_degrees_of_freedom
     lsys = storage[:LinearizedSystem]
     for key in keys(models)
         submodel = models[key]
         eqs = storage[key][:equations]
         nrow_end = align_equations_to_jacobian!(eqs, lsys.jac, submodel, row_offset = row_offset, col_offset = col_offset)
         nrow = nrow_end - row_offset
-        ndof = number_of_degrees_of_freedom(submodel)
+        ndof = ndofs[key]
         @assert nrow == ndof "Submodels must have equal number of equations and degrees of freedom. Found $nrow equations and $ndof variables for submodel $key"
         row_offset += ndof
         col_offset += ndof # Assuming that each model by itself forms a well-posed, square Jacobian...
@@ -195,6 +198,8 @@ end
 
 function align_cross_terms_to_linearized_system!(storage, model::MultiModel; row_offset = 0, col_offset = 0)
     models = model.models
+    ndofs = model.number_of_degrees_of_freedom
+
     lsys = storage[:LinearizedSystem]
     cross_terms = storage[:cross_terms]
 
@@ -214,9 +219,9 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; row
                 # Same number of rows as target, same number of columns as source
             end
             # Increment col and row offset
-            col_offset += number_of_degrees_of_freedom(source_model)
+            col_offset += ndofs[source]
         end
-        row_offset += number_of_degrees_of_freedom(target_model)
+        row_offset += ndofs[target]
     end
 end
 
