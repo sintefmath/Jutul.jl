@@ -228,3 +228,6 @@ function value(d::Dict)
     return v
 end
 
+@inline function as_value(x)
+    mappedarray(value, x)
+end
