@@ -5,9 +5,10 @@ struct MultiModel <: TervModel
     groups::Vector
     context::TervContext
     function MultiModel(models; groups = collect(1:length(models)), context = DefaultContext())
-        @assert maximum(groups) <= length(models)
+        nm = length(models)
+        @assert maximum(groups) <= nm
         @assert minimum(groups) > 0
-        @assert length(groups) == length(models)
+        @assert length(groups) == nm
         for m in models
             @assert context == m.context
         end
@@ -15,14 +16,14 @@ struct MultiModel <: TervModel
     end
 end
 
-abstract type CrossModelTerm end
+abstract type CrossTerm end
 
 """
 A cross model term where the dependency is injective and the term is additive:
 (each addition to a unit in the target only depends one unit from the source, 
 and is added into that position upon application)
 """
-struct InjectiveCrossModelTerm
+struct InjectiveCrossTerm <: CrossTerm
     impact             # 2 by N - first row is target, second is source
     units              # tuple - first tuple is target, second is source
     crossterm_target   # The cross-term, with AD values taken relative to the target
@@ -31,7 +32,7 @@ struct InjectiveCrossModelTerm
     equations_per_unit # Number of equations per impact
     npartials_target   # Number of partials per equation (in target)
     npartials_source   # (in source)
-    function InjectiveCrossModelTerm(target_eq, target_model, source_model)
+    function InjectiveCrossTerm(target_eq, target_model, source_model)
         context = target_model.context
         target_unit = domain_unit(target_eq)
         target_impact, source_impact, source_unit = get_domain_intersection(target_unit, target_model, source_model)
@@ -57,7 +58,13 @@ struct InjectiveCrossModelTerm
     end
 end
 
-function declare_sparsity(target_model, source_model, x::InjectiveCrossModelTerm)
+function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, source::TervModel; row_offset = 0, col_offset = 0)
+    jpos = ct.cross_jac_pos
+    @assert false "Needs implementation"
+
+end
+
+function declare_sparsity(target_model, source_model, x::InjectiveCrossTerm)
     n_partials = x.npartials_source
     n_eqs = x.equations_per_unit
     nunits_source = count_units(source_model.domain, x.units[2])
@@ -82,6 +89,8 @@ function declare_sparsity(target_model, source_model, x::InjectiveCrossModelTerm
     m = n_partials*nunits_source
     return (I, J, n, m)
 end
+
+
 function get_domain_intersection(u::TervUnit, target_model::TervModel, source_model::TervModel)
     return get_domain_intersection(u, target_model.domain, source_model.domain)
 end
@@ -115,13 +124,14 @@ function setup_simulation_storage(model::MultiModel; state0 = setup_state(model)
                                                     parameters = parameters[key], 
                                                     setup_linearized_system = false)
     end
-    allocate_cross_model_coupling(storage, model)
+    allocate_cross_terms(storage, model)
     allocate_linearized_system!(storage, model)
     align_equations_to_linearized_system!(storage, model)
+    align_cross_terms_to_linearized_system!(storage, model)
     return storage
 end
 
-function allocate_cross_model_coupling(storage, model::MultiModel)
+function allocate_cross_terms(storage, model::MultiModel)
     crossd = Dict{Symbol, Any}()
     models = model.models
     for target in keys(models)
@@ -134,7 +144,7 @@ function allocate_cross_model_coupling(storage, model::MultiModel)
             source_model = models[source]
             d = Dict()
             for (key, eq) in storage[target][:equations]
-                ct = InjectiveCrossModelTerm(eq, target_model, source_model)
+                ct = InjectiveCrossTerm(eq, target_model, source_model)
                 if length(ct.impact) == 0
                     # Just insert nothing, so we can easily spot no overlap
                     ct = nothing
@@ -154,7 +164,7 @@ function align_equations_to_linearized_system!(storage, model::MultiModel; row_o
     for key in keys(models)
         submodel = models[key]
         eqs = storage[key][:equations]
-        nrow_end = align_equations_to_linearized_system!(eqs, lsys, submodel, row_offset = row_offset, col_offset = col_offset)
+        nrow_end = align_equations_to_jacobian!(eqs, lsys.jac, submodel, row_offset = row_offset, col_offset = col_offset)
         nrow = nrow_end - row_offset
         ndof = number_of_degrees_of_freedom(submodel)
         @assert nrow == ndof "Submodels must have equal number of equations and degrees of freedom. Found $nrow equations and $ndof variables for submodel $key"
@@ -162,6 +172,52 @@ function align_equations_to_linearized_system!(storage, model::MultiModel; row_o
         col_offset += ndof # Assuming that each model by itself forms a well-posed, square Jacobian...
     end
 end
+
+function align_cross_terms_to_linearized_system!(storage, model::MultiModel; row_offset = 0, col_offset = 0)
+    models = model.models
+    lsys = storage[:LinearizedSystem]
+    cross_terms = storage[:cross_terms]
+    for target in keys(models)
+        target_model = models[target]
+        for source in keys(models)
+            if source == target
+                continue
+            end
+            ct = cross_terms[target][source]
+            source_model = models[source]
+            eqs = storage[target][:equations]
+            align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, row_offset = row_offset, col_offset = col_offset)
+        end
+    end
+end
+
+
+function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, target::TervModel, source::TervModel; row_offset = 0, col_offset = 0)
+    for ekey in keys(equations)
+        eq = equations[ekey]
+        ct = crossterms[ekey]
+        if !isnothing(ct)
+            align_to_jacobian!(ct, lsys.jac, target, source, row_offset = row_offset, col_offset = col_offset)
+        end
+        row_offset += number_of_equations(target, eq)
+    end
+end
+
+#function align_cross_terms_to_linearized_system!(crossterms, lsys, model; row_offset = 0, col_offset = 0)
+#    models = model.models
+
+    #for target in keys(models)
+    #    for source in keys(models)
+    #    end
+    #end
+    #for key in keys(equations)
+        # eq = equations[key]
+        # align_to_linearized_system!(eq, lsys, model, row_offset = row_offset, col_offset = col_offset)
+        # row_offset += number_of_equations(model, eq)
+    #end
+    #row_offset
+#end
+
 
 function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol)
     models = model.models
