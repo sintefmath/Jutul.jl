@@ -103,7 +103,8 @@ function allocate_properties!(props, storage, model::TervModel)
 end
 
 function allocate_equations(storage, model::TervModel)
-    eqs = Dict()
+    # We use ordered dict since equation alignment with primary variables matter.
+    eqs = OrderedDict()
     allocate_equations!(eqs, storage, model)
     return eqs
 end

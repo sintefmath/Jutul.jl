@@ -1,7 +1,5 @@
 export simulate, perform_step!
 export Simulator, TervSimulator
-using Printf
-using Dates
 
 
 abstract type TervSimulator end

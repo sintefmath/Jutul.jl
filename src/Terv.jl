@@ -6,6 +6,11 @@ using BenchmarkTools
 using ForwardDiff
 using KernelAbstractions, CUDA, CUDAKernels
 using Logging
+using MappedArrays
+using Printf
+using Dates
+using DataStructures
+
 # Main types
 include("core_types.jl")
 
