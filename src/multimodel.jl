@@ -93,6 +93,25 @@ function apply_cross_term!(eq, ct, model_t, model_s, arg...)
     d[:, ix] += ct.crossterm_target
 end
 
+
+function update_jacobian_subset!(jac, model_t, model_s, ct::CrossTerm)
+    q = ct.crossterm_source
+    jpos = ct.cross_jac_pos
+    nunits = size(ct.cross_jac_pos, 2)
+    ne = ct.equations_per_unit
+    nder = ct.npartials_source 
+    nz = get_nzval(jac)
+    for overlap_no = 1:nunits
+        for eqNo = 1:ne
+            qi = q[eqNo, overlap_no]
+            for derNo = 1:nder
+                p = (eqNo-1)*nder + derNo
+                nz[jpos[p, overlap_no]] = qi.partials[derNo]
+            end
+        end
+    end
+end
+
 function declare_sparsity(target_model, source_model, x::InjectiveCrossTerm)
     n_partials = x.npartials_source
     n_eqs = x.equations_per_unit
@@ -412,15 +431,35 @@ end
 
 function update_linearized_system!(storage, model::MultiModel; row_offset = 0)
     lsys = storage.LinearizedSystem
-    for key in keys(model.models)
-        m = model.models[key]
+    models = model.models
+    for key in keys(models)
+        m = models[key]
         s = storage[key]
         eqs = s.equations
         update_linearized_system!(lsys, eqs, m; row_offset = row_offset)
         row_offset += number_of_degrees_of_freedom(m)
     end
     # Then, update cross terms
-    @assert false "Needs implementation"
+    for target in keys(models)
+        for source in keys(models)
+            if source != target
+                update_linearized_system_crossterms!(lsys, storage, model, source, target)
+            end
+        end
+    end
+end
+
+function update_linearized_system_crossterms!(lsys, storage, model::MultiModel, source, target)
+    cross_terms = storage[:cross_terms][target][source]
+
+    storage_t, = get_submodel_storage(storage, target)
+    model_t, model_s = get_submodels(model, target, source)
+
+    eqs = storage_t[:equations]
+    for ekey in keys(eqs)
+        ct = cross_terms[ekey]
+        update_jacobian_subset!(lsys.jac, model_t, model_s, ct::CrossTerm)
+    end
 end
 
 function setup_state(model::MultiModel, subs...)
