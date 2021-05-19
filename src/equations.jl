@@ -67,9 +67,9 @@ is then that of ∂E / ∂P where P are the primary variables of A.
 
 """
 Update an equation so that it knows where to store its derivatives
-in the given linearized system.
+in the Jacobian representation.
 """
-function align_to_linearized_system!(::TervEquation, lsys, model) end
+function align_to_jacobian!(::TervEquation, jac, model) end
 
 
 """

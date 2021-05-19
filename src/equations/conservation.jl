@@ -33,8 +33,7 @@ function ConservationLaw(nc::Integer, nhf::Integer,
 end
 
 "Update positions of law's derivatives in global Jacobian"
-function align_to_linearized_system!(law::ConservationLaw, lsys::LinearizedSystem, model; row_offset = 0, col_offset = 0)
-    jac = lsys.jac
+function align_to_jacobian!(law::ConservationLaw, jac, model; row_offset = 0, col_offset = 0)
     # Note: We copy this back to host if it is on GPU to avoid rewriting these functions for CuArrays
     conn_data = Array(model.domain.discretizations.KGrad.conn_data)
     accpos = Array(law.accumulation_jac_pos)

@@ -148,13 +148,15 @@ function allocate_linearized_system!(storage, model::TervModel)
 end
 
 function align_equations_to_linearized_system!(storage, model::TervModel; kwarg...)
-    align_equations_to_linearized_system!(storage[:equations], storage[:LinearizedSystem], model; kwarg...)
+    eqs = storage[:equations]
+    jac = storage[:LinearizedSystem].jac
+    align_equations_to_jacobian!(eqs, jac, model; kwarg...)
 end
 
-function align_equations_to_linearized_system!(equations, lsys, model; row_offset = 0, col_offset = 0)
+function align_equations_to_jacobian!(equations, jac, model; row_offset = 0, col_offset = 0)
     for key in keys(equations)
         eq = equations[key]
-        align_to_linearized_system!(eq, lsys, model, row_offset = row_offset, col_offset = col_offset)
+        align_to_jacobian!(eq, jac, model, row_offset = row_offset, col_offset = col_offset)
         row_offset += number_of_equations(model, eq)
     end
     row_offset
