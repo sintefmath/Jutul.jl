@@ -348,22 +348,27 @@ end
 
 function update_cross_terms!(storage, model::MultiModel, arg...)
     models = model.models
-    all_cross_terms = storage[:cross_terms]
     for target in keys(models)
-        target_model = models[target]
         for source in keys(models)
-            source_model = models[source]
-            source_storage = storage[source]
             if source != target
-                target_storage = storage[target]
-                cross_terms = all_cross_terms[target][source]
-                eqs = storage[target][:equations]
-                for ekey in keys(eqs)
-                    ct = cross_terms[ekey]
-                    update_cross_term!(ct, eqs[ekey], target_storage, source_storage, target_model, source_model, arg...)
-                end
+                update_cross_terms_for_pair!(storage, model, source, target, arg...)
             end
         end
+    end
+end
+
+function update_cross_terms_for_pair!(storage, model, source::Symbol, target::Symbol, arg...)
+    models = model.models
+    all_cross_terms = storage[:cross_terms]
+    cross_terms = all_cross_terms[target][source]
+
+    storage_t, storage_s = get_submodel_storage(storage, target, source)
+    model_t, model_s = get_submodels(model, target, source)
+
+    eqs = storage_t[:equations]
+    for ekey in keys(eqs)
+        ct = cross_terms[ekey]
+        update_cross_term!(ct, eqs[ekey], storage_t, storage_s, model_t, model_s, arg...)
     end
 end
 
@@ -484,4 +489,12 @@ function get_output_state(storage, model::MultiModel)
         out[key] = get_output_state(storage[key], models[key])
     end
     return out
+end
+
+function get_submodel_storage(storage, arg...)
+    map((x) -> storage[x], arg)
+end
+
+function get_submodels(model, arg...)
+    map((x) -> model.models[x], arg)
 end
