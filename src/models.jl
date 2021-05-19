@@ -51,11 +51,11 @@ end
 """
 Main function for storage that allocates and initializes storage for a simulation
 """
-function setup_simulation_storage(model::TervModel; state0 = setup_state(model), parameters = setup_parameters(model), kwargs...)
-    storage = allocate_storage(model; kwargs...)
+function setup_simulation_storage(model::TervModel; state0 = setup_state(model), parameters = setup_parameters(model), tag = nothing, kwargs...)
+    storage = allocate_storage(model, tag = tag; kwargs...)
     storage[:parameters] = parameters
     storage[:state0] = state0
-    storage[:state] = convert_state_ad(model, state0)
+    storage[:state] = convert_state_ad(model, state0, tag)
     return storage
 end
 
@@ -81,9 +81,9 @@ end
 Allocate storage for a given model. The storage consists of all dynamic quantities used in
 the simulation. The default implementation allocates properties, equations and linearized system.
 """
-function allocate_storage!(storage, model::TervModel; setup_linearized_system = true)
-    storage[:properties] = allocate_properties(storage, model) 
-    storage[:equations] = allocate_equations(storage, model)
+function allocate_storage!(storage, model::TervModel; setup_linearized_system = true, kwarg...)
+    storage[:properties] = allocate_properties(storage, model; kwarg...) 
+    storage[:equations] = allocate_equations(storage, model; kwarg...) 
     if setup_linearized_system
         storage[:LinearizedSystem] = allocate_linearized_system!(storage, model)
         # We have the equations and the linearized system.
@@ -92,24 +92,24 @@ function allocate_storage!(storage, model::TervModel; setup_linearized_system = 
     end
 end
 
-function allocate_properties(storage, model::TervModel)
+function allocate_properties(storage, model::TervModel; kwarg...)
     props = Dict()
-    allocate_properties!(props, storage, model)
+    allocate_properties!(props, storage, model; kwarg...)
     return props
 end
 
-function allocate_properties!(props, storage, model::TervModel)
+function allocate_properties!(props, storage, model::TervModel; tag = nothing)
     # Default: No properties
 end
 
-function allocate_equations(storage, model::TervModel)
+function allocate_equations(storage, model::TervModel; kwarg...)
     # We use ordered dict since equation alignment with primary variables matter.
     eqs = OrderedDict()
-    allocate_equations!(eqs, storage, model)
+    allocate_equations!(eqs, storage, model; kwarg...)
     return eqs
 end
 
-function allocate_equations!(eqs, storage, model::TervModel)
+function allocate_equations!(eqs, storage, model::TervModel; tag = nothing)
     # Default: No equations.
 end
 

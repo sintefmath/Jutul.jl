@@ -148,7 +148,6 @@ to a state where those arrays contain the same value as Dual types.
 The dual type is currently taken from ForwardDiff.
 """
 function convert_state_ad(model, state, tag = nothing)
-    @show state
     context = model.context
     stateAD = deepcopy(state)
     vars = keys(state)

@@ -189,7 +189,7 @@ function select_primary_variables(domain, system::ImmiscibleSystem, formulation)
     return [Pressure(), Saturations(system.phases)]
 end
 
-function allocate_properties!(props, storage, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+function allocate_properties!(props, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
     G = model.domain
     sys = model.system
     context = model.context
@@ -197,7 +197,7 @@ function allocate_properties!(props, storage, model::SimulationModel{T, S}) wher
     nph = number_of_phases(sys)
     npartials = nph
     nc = number_of_cells(G)
-    alloc = (n) -> allocate_array_ad(nph, n, context = context, npartials = npartials)
+    alloc = (n) -> allocate_array_ad(nph, n, context = context, npartials = npartials; kwarg...)
 
     # Mobility of phase
     props[:Mobility] = alloc(nc)
@@ -225,10 +225,10 @@ end
 #    return lsys
 # end
 
-function allocate_equations!(eqs, storage, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
+function allocate_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
     nph = number_of_phases(model.system)
     npartials = nph
-    law = ConservationLaw(model.domain, npartials, context = model.context, equations_per_unit = nph)
+    law = ConservationLaw(model.domain, npartials, context = model.context, equations_per_unit = nph; kwarg...)
     eqs[:MassConservation] = law
     return eqs
 end

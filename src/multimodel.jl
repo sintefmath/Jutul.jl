@@ -34,7 +34,7 @@ struct InjectiveCrossTerm <: CrossTerm
     equations_per_unit # Number of equations per impact
     npartials_target   # Number of partials per equation (in target)
     npartials_source   # (in source)
-    function InjectiveCrossTerm(target_eq, target_model, source_model)
+    function InjectiveCrossTerm(target_eq, target_model, source_model; target = nothing, source = nothing)
         context = target_model.context
         target_unit = domain_unit(target_eq)
         target_impact, source_impact, source_unit = get_domain_intersection(target_unit, target_model, source_model)
@@ -47,10 +47,10 @@ struct InjectiveCrossTerm <: CrossTerm
         npartials_target = number_of_partials_per_unit(target_model, target_unit)
         npartials_source = number_of_partials_per_unit(source_model, source_unit)
         
-        alloc = (n) -> allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = n)
+        alloc = (n, t) -> allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = n, tag = t)
 
-        c_term_target = alloc(npartials_target)
-        c_term_source = alloc(npartials_source)
+        c_term_target = alloc(npartials_target, target)
+        c_term_source = alloc(npartials_source, source)
 
         jac_pos = zeros(I, equations_per_unit*npartials_source, noverlap)
         # Units and overlap - target, then source
@@ -170,7 +170,8 @@ function setup_simulation_storage(model::MultiModel; state0 = setup_state(model)
         m = model.models[key]
         storage[key] = setup_simulation_storage(m,  state0 = state0[key], 
                                                     parameters = parameters[key], 
-                                                    setup_linearized_system = false)
+                                                    setup_linearized_system = false,
+                                                    tag = key)
     end
     allocate_cross_terms(storage, model)
     allocate_linearized_system!(storage, model)
@@ -192,7 +193,7 @@ function allocate_cross_terms(storage, model::MultiModel)
             source_model = models[source]
             d = Dict()
             for (key, eq) in storage[target][:equations]
-                ct = declare_cross_term(eq, target_model, source_model)
+                ct = declare_cross_term(eq, target_model, source_model, target = target, source = source)
                 d[key] = ct
             end
             sources[source] = d
@@ -202,8 +203,8 @@ function allocate_cross_terms(storage, model::MultiModel)
     storage[:cross_terms] = crossd
 end
 
-function declare_cross_term(eq::TervEquation, target_model, source_model)
-    ct = InjectiveCrossTerm(eq, target_model, source_model)
+function declare_cross_term(eq::TervEquation, target_model, source_model; kwarg...)
+    ct = InjectiveCrossTerm(eq, target_model, source_model; kwarg...)
     if length(ct.impact[1]) == 0
         # Declare nothing, so we can easily spot no overlap
         ct = nothing
@@ -479,14 +480,6 @@ function setup_parameters(model::MultiModel)
         p[key] = setup_parameters(m)
     end
     return p
-end
-
-function convert_state_ad(model::MultiModel, state)
-    stateAD = deepcopy(state)
-    for key in keys(model.models)
-        stateAD[key] = convert_state_ad(model.models[key], state[key])
-    end
-    return stateAD
 end
 
 function update_properties!(storage, model::MultiModel)

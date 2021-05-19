@@ -20,11 +20,11 @@ end
 struct ScalarTestEquation <: TervEquation
     equation
     equation_jac_pos
-    function ScalarTestEquation(G::TervDomain, npartials::Integer; context = DefaultContext())
+    function ScalarTestEquation(G::TervDomain, npartials::Integer; context = DefaultContext(), kwarg...)
         I = index_type(context)
         nc = number_of_cells(G)
         @assert nc == 1 # We use nc for clarity of the interface - but it should always be one!
-        e = allocate_array_ad(1, nc, context = context, npartials = npartials)
+        e = allocate_array_ad(1, nc, context = context, npartials = npartials; kwarg...)
         v = zeros(I, npartials, nc)
         new(e, v)
     end
@@ -39,8 +39,8 @@ function align_to_jacobian!(eq::ScalarTestEquation, jac, model; row_offset = 0, 
 end
 
 # Model features
-function allocate_equations!(eqs, storage, model::SimulationModel{G, S}) where {G<:ScalarTestDomain, S<:ScalarTestSystem}
-    eqs[:TestEquation] = ScalarTestEquation(model.domain, 1, context = model.context)
+function allocate_equations!(eqs, storage, model::SimulationModel{G, S}; kwarg...) where {G<:ScalarTestDomain, S<:ScalarTestSystem}
+    eqs[:TestEquation] = ScalarTestEquation(model.domain, 1, context = model.context; kwarg...)
 end
 
 function update_equation!(eq::ScalarTestEquation, storage, model, dt)
