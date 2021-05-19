@@ -153,7 +153,7 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, row_
     end
 end
 
-function update_equation!(storage, model, law::ConservationLaw, dt)
+function update_equation!(law::ConservationLaw, storage, model, dt)
     update_accumulation!(law, storage, model, dt)
     update_half_face_flux!(law, storage, model)
 end

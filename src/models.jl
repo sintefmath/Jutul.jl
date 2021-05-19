@@ -193,7 +193,7 @@ end
 function update_equations!(storage, model, dt = nothing)
     equations = storage.equations
     for key in keys(equations)
-        update_equation!(storage, model, equations[key], dt)
+        update_equation!(equations[key], storage, model, dt)
     end
 end
 

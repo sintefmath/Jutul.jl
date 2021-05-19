@@ -43,7 +43,7 @@ function allocate_equations!(eqs, storage, model::SimulationModel{G, S}) where {
     eqs[:TestEquation] = ScalarTestEquation(model.domain, 1, context = model.context)
 end
 
-function update_equation!(storage, model, eq::ScalarTestEquation, dt)
+function update_equation!(eq::ScalarTestEquation, storage, model, dt)
     X = storage.state.XVar
     X0 = storage.state0.XVar
     @. eq.equation = (X - X0)/dt

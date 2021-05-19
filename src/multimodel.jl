@@ -166,11 +166,7 @@ function allocate_cross_terms(storage, model::MultiModel)
             source_model = models[source]
             d = Dict()
             for (key, eq) in storage[target][:equations]
-                ct = InjectiveCrossTerm(eq, target_model, source_model)
-                if length(ct.impact) == 0
-                    # Just insert nothing, so we can easily spot no overlap
-                    ct = nothing
-                end
+                ct = declare_cross_term(eq, target_model, source_model)
                 d[key] = ct
             end
             sources[source] = d
@@ -178,6 +174,15 @@ function allocate_cross_terms(storage, model::MultiModel)
         crossd[target] = sources
     end
     storage[:cross_terms] = crossd
+end
+
+function declare_cross_term(eq::TervEquation, target_model, source_model)
+    ct = InjectiveCrossTerm(eq, target_model, source_model)
+    if length(ct.impact[1]) == 0
+        # Declare nothing, so we can easily spot no overlap
+        ct = nothing
+    end
+    return ct
 end
 
 function align_equations_to_linearized_system!(storage, model::MultiModel; row_offset = 0, col_offset = 0)
@@ -207,7 +212,6 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; row
     # Iterate over targets (= rows)
     for target in keys(models)
         target_model = models[target]
-
         col_offset = base_col_offset
         # Iterate over sources (= columns)
         for source in keys(models)
@@ -334,7 +338,42 @@ function initialize_storage!(storage, model::MultiModel)
 end
 
 function update_equations!(storage, model::MultiModel, arg...)
+    # First update all equations
     submodels_storage_apply!(storage, model, update_equations!, arg...)
+    # Then update the cross terms
+    update_cross_terms!(storage, model::MultiModel, arg...)
+    # Finally apply cross terms to the equations
+    apply_cross_terms!(storage, model::MultiModel, arg...)
+end
+
+function update_cross_terms!(storage, model::MultiModel, arg...)
+    models = model.models
+    all_cross_terms = storage[:cross_terms]
+    for target in keys(models)
+        target_model = models[target]
+        for source in keys(models)
+            source_model = models[source]
+            if source != target
+                cross_terms = all_cross_terms[target][source]
+                eqs = storage[target][:equations]
+                for ekey in keys(eqs)
+                    ct = cross_terms[ekey]
+                    update_cross_term!(ct, eqs[ekey], storage, target, source, arg...)
+                end
+            end
+        end
+    end
+    @assert false "Needs implementation"
+end
+
+function update_cross_term!(ct::InjectiveCrossTerm, eq, storage, target, source, dt)
+
+    @assert false "Needs implementation"
+end
+
+
+function apply_cross_terms!(storage, model::MultiModel, arg...)
+    @assert false "Needs implementation"
 end
 
 function update_linearized_system!(storage, model::MultiModel; row_offset = 0)
@@ -346,6 +385,8 @@ function update_linearized_system!(storage, model::MultiModel; row_offset = 0)
         update_linearized_system!(lsys, eqs, m; row_offset = row_offset)
         row_offset += number_of_degrees_of_freedom(m)
     end
+    # Then, update cross terms
+    @assert false "Needs implementation"
 end
 
 function setup_state(model::MultiModel, subs...)
