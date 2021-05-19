@@ -60,8 +60,28 @@ end
 
 function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, source::TervModel; row_offset = 0, col_offset = 0)
     jpos = ct.cross_jac_pos
-    @assert false "Needs implementation"
+    nunits = size(ct.cross_jac_pos, 2)
 
+    nunits_source = count_units(source.domain, ct.units.source)
+
+    impact_target = ct.impact[1]
+    impact_source = ct.impact[2]
+    
+    @assert length(impact_target) == nunits
+    @assert length(impact_source) == nunits
+
+    ne = ct.equations_per_unit
+    nder = ct.npartials_source
+    for overlap_no = 1:nunits
+        for eqNo = 1:ne
+            for derNo = 1:nder
+                p = (eqNo-1)*nder + derNo
+                row = (eqNo-1)*nunits + impact_target[overlap_no]
+                col = (derNo-1)*nunits_source + impact_source[overlap_no]
+                jpos[p, overlap_no] = find_sparse_position(jac, row, col)
+            end
+        end
+    end
 end
 
 function declare_sparsity(target_model, source_model, x::InjectiveCrossTerm)
