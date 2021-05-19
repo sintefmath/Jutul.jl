@@ -353,24 +353,23 @@ function update_cross_terms!(storage, model::MultiModel, arg...)
         target_model = models[target]
         for source in keys(models)
             source_model = models[source]
+            source_storage = storage[source]
             if source != target
+                target_storage = storage[target]
                 cross_terms = all_cross_terms[target][source]
                 eqs = storage[target][:equations]
                 for ekey in keys(eqs)
                     ct = cross_terms[ekey]
-                    update_cross_term!(ct, eqs[ekey], storage, target, source, arg...)
+                    update_cross_term!(ct, eqs[ekey], target_storage, source_storage, target_model, source_model, arg...)
                 end
             end
         end
     end
-    @assert false "Needs implementation"
 end
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq, storage, target, source, dt)
-
-    @assert false "Needs implementation"
+function update_cross_term!(ct::InjectiveCrossTerm, eq, target_storage, source_storage, target, source, dt)
+    error("Cross term must be specialized for your equation and models.")
 end
-
 
 function apply_cross_terms!(storage, model::MultiModel, arg...)
     @assert false "Needs implementation"

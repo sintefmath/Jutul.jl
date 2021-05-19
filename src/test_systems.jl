@@ -57,6 +57,18 @@ function apply_forces_to_equation!(storage, model, eq::ScalarTestEquation, force
     @. eq.equation -= force.value
 end
 
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, target_storage, source_storage, target, source, dt)
+    X_T = target_storage.state.XVar
+    X_S = source_storage.state.XVar
+    function f(X_S, X_T)
+        X_S - X_T
+    end
+    # Source term with AD context from source model - will end up as off-diagonal block
+    @. ct.crossterm_source = f(X_S, value(X_T))
+    # Source term with AD context from target model - will be inserted into equation
+    @. ct.crossterm_target = f(value(X_S), X_T)
+end
+
 struct XVar <: ScalarPrimaryVariable
     symbol
 end
