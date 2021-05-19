@@ -76,8 +76,8 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
         for eqNo = 1:ne
             for derNo = 1:nder
                 p = (eqNo-1)*nder + derNo
-                row = (eqNo-1)*nunits + impact_target[overlap_no]
-                col = (derNo-1)*nunits_source + impact_source[overlap_no]
+                row = (eqNo-1)*nunits + impact_target[overlap_no] + row_offset
+                col = (derNo-1)*nunits_source + impact_source[overlap_no] + col_offset
                 jpos[p, overlap_no] = find_sparse_position(jac, row, col)
             end
         end
@@ -197,17 +197,26 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; row
     models = model.models
     lsys = storage[:LinearizedSystem]
     cross_terms = storage[:cross_terms]
+
+    base_col_offset = col_offset
+    # Iterate over targets (= rows)
     for target in keys(models)
         target_model = models[target]
+
+        col_offset = base_col_offset
+        # Iterate over sources (= columns)
         for source in keys(models)
-            if source == target
-                continue
-            end
-            ct = cross_terms[target][source]
             source_model = models[source]
-            eqs = storage[target][:equations]
-            align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, row_offset = row_offset, col_offset = col_offset)
+            if source != target
+                ct = cross_terms[target][source]
+                eqs = storage[target][:equations]
+                align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, row_offset = row_offset, col_offset = col_offset)
+                # Same number of rows as target, same number of columns as source
+            end
+            # Increment col and row offset
+            col_offset += number_of_degrees_of_freedom(source_model)
         end
+        row_offset += number_of_degrees_of_freedom(target_model)
     end
 end
 
@@ -221,6 +230,7 @@ function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, ta
         end
         row_offset += number_of_equations(target, eq)
     end
+    return row_offset
 end
 
 #function align_cross_terms_to_linearized_system!(crossterms, lsys, model; row_offset = 0, col_offset = 0)
