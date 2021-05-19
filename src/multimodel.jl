@@ -238,22 +238,6 @@ function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, ta
     return row_offset
 end
 
-#function align_cross_terms_to_linearized_system!(crossterms, lsys, model; row_offset = 0, col_offset = 0)
-#    models = model.models
-
-    #for target in keys(models)
-    #    for source in keys(models)
-    #    end
-    #end
-    #for key in keys(equations)
-        # eq = equations[key]
-        # align_to_linearized_system!(eq, lsys, model, row_offset = row_offset, col_offset = col_offset)
-        # row_offset += number_of_equations(model, eq)
-    #end
-    #row_offset
-#end
-
-
 function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol)
     models = model.models
     target_model = models[target]
@@ -393,10 +377,6 @@ end
 
 function update_properties!(storage, model::MultiModel)
     submodels_storage_apply!(storage, model, update_properties!)
-end
-
-function update_equations!(storage, model::MultiModel, dt)
-    submodels_storage_apply!(storage, model, update_equations!, dt)
 end
 
 function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = false, kwarg...)
