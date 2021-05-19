@@ -8,7 +8,13 @@ struct Simulator <: TervSimulator
     storage::NamedTuple
 end
 
-function Simulator(model; state0 = setup_state(model), parameters = setup_parameters(model))
+function Simulator(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true)
+    if isnothing(state0)
+        state0 = setup_state(model)
+    elseif copy_state
+        # Take a deep copy to avoid side effects.
+        state0 = deepcopy(state0)
+    end
     storage = setup_simulation_storage(model, state0 = state0, parameters = parameters)
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
     # This allows for much faster lookup in the simulation itself.
