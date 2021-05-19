@@ -119,9 +119,9 @@ function number_of_primary_variables(model)
 end
 
 ## Initialization
-function initialize_primary_variable_ad(state::Dict, model, pvar::ScalarPrimaryVariable, offset, npartials)
+function initialize_primary_variable_ad(state::Dict, model, pvar::ScalarPrimaryVariable, offset, npartials; kwarg...)
     name = get_symbol(pvar)
-    state[name] = allocate_array_ad(state[name], diag_pos = offset + 1, context = model.context, npartials = npartials)
+    state[name] = allocate_array_ad(state[name], diag_pos = offset + 1, context = model.context, npartials = npartials; kwarg...)
     return state
 end
 
@@ -147,7 +147,7 @@ Convert a state containing variables as arrays of doubles
 to a state where those arrays contain the same value as Dual types.
 The dual type is currently taken from ForwardDiff.
 """
-function convert_state_ad(model, state)
+function convert_state_ad(model, state, tag = nothing)
     @show state
     context = model.context
     stateAD = deepcopy(state)
@@ -161,19 +161,19 @@ function convert_state_ad(model, state)
     @debug "Found $n_partials primary variables."
     offset = 0
     for (i, pvar) in enumerate(primary)
-        stateAD = initialize_primary_variable_ad(stateAD, model, pvar, offset, n_partials)
+        stateAD = initialize_primary_variable_ad(stateAD, model, pvar, offset, n_partials, tag = tag)
         offset += counts[i]
     end
     primary_symb = get_primary_variable_symbols(model)
     secondary = setdiff(vars, primary_symb)
     # Loop over secondary variables and initialize as AD with zero partials
     for s in secondary
-        stateAD[s] = allocate_array_ad(stateAD[s], context = context, npartials = n_partials)
+        stateAD[s] = allocate_array_ad(stateAD[s], context = context, npartials = n_partials, tag = tag)
     end
     return stateAD
 end
 
-function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), diag_pos = nothing, npartials = 1) where {R<:Integer}
+function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), diag_pos = nothing, npartials = 1, kwarg...) where {R<:Integer}
     # allocate a n length zero vector with space for derivatives
     T = float_type(context)
     if npartials == 0
@@ -181,33 +181,33 @@ function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), dia
     else
         if isa(diag_pos, AbstractVector)
             @assert n[1] == length(diag_pos) "diag_pos must be specified for all columns."
-            d = map(x -> get_ad_unit_scalar(T(0.0), npartials, x), diag_pos)
+            d = map(x -> get_ad_unit_scalar(T(0.0), npartials, x; kwarg...), diag_pos)
             A = allocate_array(context, d, 1, n[2:end]...)
         else
-            d = get_ad_unit_scalar(T(0.0), npartials, diag_pos)
+            d = get_ad_unit_scalar(T(0.0), npartials, diag_pos; kwarg...)
             A = allocate_array(context, d, n...)
         end
     end
     return A
 end
 
-function allocate_array_ad(v::AbstractVector; context = DefaultContext(), diag_pos = nothing, npartials = 1)
+function allocate_array_ad(v::AbstractVector; kwarg...)
     # create a copy of a vector as AD
-    v_AD = allocate_array_ad(length(v), context = context, diag_pos = diag_pos, npartials = npartials)
+    v_AD = allocate_array_ad(length(v); kwarg...)
     update_values!(v_AD, v)
 end
 
 # Allocators 
-function allocate_array_ad(v::AbstractMatrix; context = DefaultContext(), diag_pos = nothing, npartials = 1)
+function allocate_array_ad(v::AbstractMatrix; kwarg...)
     # create a copy of a vector as AD
-    v_AD = allocate_array_ad(size(v)..., context = context, diag_pos = diag_pos, npartials = npartials)
+    v_AD = allocate_array_ad(size(v)...; kwarg...)
     update_values!(v_AD, v)
 end
 
-function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing) where {T<:Real}
+function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing; tag = nothing) where {T<:Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
     if npartials > 0
-        v = ForwardDiff.Dual{T}(v, ntuple(x -> T.(x == diag_pos), npartials))
+        v = ForwardDiff.Dual{tag}(v, ntuple(x -> T.(x == diag_pos), npartials))
     end
     return v
 end

@@ -128,13 +128,13 @@ end
 @inline function minimum_value(::Saturations) 0 end
 @inline function absolute_increment_limit(p::Saturations) p.dsMax end
 
-function initialize_primary_variable_ad(state, model, pvar::Saturations, offset, npartials)
+function initialize_primary_variable_ad(state, model, pvar::Saturations, offset, npartials; kwarg...)
     name = get_symbol(pvar)
     nph = length(pvar.phases)
     # nph - 1 primary variables, with the last saturation being initially zero AD
     dp = vcat((1:nph-1) .+ offset, 0)
     v = state[name]
-    v = allocate_array_ad(v, diag_pos = dp, context = model.context, npartials = npartials)
+    v = allocate_array_ad(v, diag_pos = dp, context = model.context, npartials = npartials; kwarg...)
     for i in 1:size(v, 2)
         v[end, i] = 1 - sum(v[1:end-1, i])
     end
