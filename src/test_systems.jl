@@ -61,7 +61,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, targ
     X_T = target_storage.state.XVar
     X_S = source_storage.state.XVar
     function f(X_S, X_T)
-        X_S - X_T
+        X_T - X_S
     end
     # Source term with AD context from source model - will end up as off-diagonal block
     @. ct.crossterm_source = f(X_S, value(X_T))
