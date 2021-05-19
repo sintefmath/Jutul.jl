@@ -26,13 +26,9 @@ statesB = simulate(simB, [1.0], forces = forcesB)
 
 ## Make a multimodel
 model = MultiModel((A = modelA, B = modelB), groups = [1, 1])
-
-parameters = setup_parameters(model)
-
 ## Set up joint state and simulate
 println("Solving A + B")
-
 state0 = setup_state(model, state0A, state0B)
 forces = Dict(:A => forcesA, :B => forcesB)
-sim = Simulator(model, state0 = state0, parameters = parameters)
+sim = Simulator(model, state0 = state0)
 states = simulate(sim, [1.0], forces = forces)
