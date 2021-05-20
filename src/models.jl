@@ -1,9 +1,5 @@
 export update_state_dependents!, check_convergence
 
-#function get_primary_variable_names(model::SimulationModel)
-#    return map((x) -> get_name(x), get_primary_variables(model))
-#end
-
 function get_primary_variable_symbols(model::SimulationModel)
     return map((x) -> get_name(x), get_primary_variables(model))
 end
