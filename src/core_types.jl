@@ -123,6 +123,17 @@ function SimulationModel(domain, system;
     context = DefaultContext())
     domain = transfer(context, domain)
     primary = select_primary_variables(domain, system, formulation)
+    function check_prim(pvar)
+        a = map(associated_unit, pvar)
+        for u in unique(a)
+            ut = typeof(u)
+            deltas =  diff(findall(typeof.(a) .== ut))
+            if any(deltas .!= 1)
+                error("All primary variables of the same type must come sequentially: Error ocurred for $ut:\nPrimary: $pvar\nTypes: $a")
+            end
+        end
+    end
+    check_prim(primary)
     return SimulationModel(domain, system, context, formulation, primary)
 end
 ## Grid
