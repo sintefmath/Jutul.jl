@@ -1,10 +1,13 @@
-function writeMRSTData(G, rock, filename)
+function writeMRSTData(G, rock, filename, W)
+    if nargin < 4
+        W = [];
+    end
     [f, ~] = fileparts(mfilename('fullpath'));
     savepath = fullfile(f, '..', '..', 'data', 'testgrids');
     if ~exist(savepath, 'dir')
         mkdir(savepath);
     end
     fp = fullfile(savepath, [filename, '.mat']);
-    save(fp, 'G', 'rock')
+    save(fp, 'G', 'rock', 'W')
     fprintf('Wrote grid and rock to %s.\n', fp);
 end

@@ -116,7 +116,7 @@ function get_names(v::TervPrimaryVariables)
 end
 
 function get_symbol(v::TervPrimaryVariables)
-    return v.symbol
+    return Symbol(typeof(v))
 end
 
 function get_name(v::TervPrimaryVariables)

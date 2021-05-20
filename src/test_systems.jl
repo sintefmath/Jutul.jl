@@ -1,4 +1,5 @@
 export ScalarTestSystem, ScalarTestDomain, ScalarTestForce
+export XVar
 
 struct ScalarTestSystem <: TervSystem end
 
@@ -69,13 +70,8 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, targ
     @. ct.crossterm_target = f(value(X_S), X_T)
 end
 
-struct XVar <: ScalarPrimaryVariable
-    symbol
-end
+struct XVar <: ScalarPrimaryVariable end
 
-function XVar()
-    XVar(:XVar)
-end
 
 function select_primary_variables(domain, system::ScalarTestSystem, formulation)
     return [XVar()]

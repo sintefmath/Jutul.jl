@@ -7,6 +7,8 @@ export setup_state, setup_state!
 
 export allocate_storage, update_equations!
 
+export Pressure, Saturations
+
 using CUDA
 # Abstract multiphase system
 abstract type MultiPhaseSystem <: TervSystem end
@@ -97,32 +99,21 @@ end
 # Primary variable logic
 
 # Pressure as primary variable
-struct Pressure <: ScalarPrimaryVariable
-    symbol
-end
+struct Pressure <: ScalarPrimaryVariable end
 
-function Pressure()
-    Pressure(:Pressure)
-end
 # Saturations as primary variable
 struct Saturations <: GroupedPrimaryVariables
-    symbol
     phases
     dsMax
 end
 
 function Saturations(phases::AbstractArray, dsMax = 0.2)
-    Saturations(:Saturations, phases, dsMax)
+    Saturations(phases, dsMax)
 end
-
 
 function degrees_of_freedom_per_unit(v::Saturations)
     return length(v.phases) - 1
 end
-
-#function get_names(v::Saturations)
-#    return map((x) -> subscript(v.name, x), v.phases[1:end-1])
-# end
 
 @inline function maximum_value(::Saturations) 1 end
 @inline function minimum_value(::Saturations) 0 end
@@ -186,7 +177,7 @@ function select_primary_variables(domain, system::SinglePhaseSystem, formulation
 end
 
 function select_primary_variables(domain, system::ImmiscibleSystem, formulation)
-    return [Pressure(), Saturations(system.phases)]
+    return [Pressure(), Saturations(get_phases(system))]
 end
 
 function allocate_properties!(props, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}

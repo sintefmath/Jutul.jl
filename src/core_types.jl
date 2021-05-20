@@ -79,8 +79,8 @@ end
 # Domains
 abstract type TervDomain end
 
-struct DiscretizedDomain <: TervDomain
-    grid
+struct DiscretizedDomain{G} <: TervDomain
+    grid::G
     discretizations
     units
 end
