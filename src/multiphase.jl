@@ -105,10 +105,9 @@ struct Pressure <: ScalarPrimaryVariable end
 struct Saturations <: GroupedPrimaryVariables
     phases
     dsMax
-end
-
-function Saturations(phases::AbstractArray, dsMax = 0.2)
-    Saturations(phases, dsMax)
+    function Saturations(phases::AbstractArray, dsMax = 0.2)
+        new(phases, dsMax)
+    end
 end
 
 function degrees_of_freedom_per_unit(v::Saturations)
