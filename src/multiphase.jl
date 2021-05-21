@@ -171,11 +171,11 @@ function update_primary_variable!(state, p::Saturations, model, dx)
     end
 end
 
-function select_primary_variables(domain, system::SinglePhaseSystem, formulation)
+function select_primary_variables(system::SinglePhaseSystem)
     return [Pressure()]
 end
 
-function select_primary_variables(domain, system::ImmiscibleSystem, formulation)
+function select_primary_variables(system::ImmiscibleSystem)
     return [Pressure(), Saturations(get_phases(system))]
 end
 

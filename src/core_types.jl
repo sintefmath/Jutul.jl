@@ -118,7 +118,19 @@ struct SimulationModel{O<:TervDomain,
     primary_variables
 end
 
+# Grids etc
 
+## Grid
+abstract type TervGrid end
+
+## Discretized units
+abstract type TervUnit end
+
+struct Cells <: TervUnit end
+struct Faces <: TervUnit end
+struct Nodes <: TervUnit end
+
+# Sim model
 function SimulationModel(domain, system;
     formulation = FullyImplicit(), 
     context = DefaultContext())
@@ -143,13 +155,3 @@ function SimulationModel(g::TervGrid, system, discretization = nothing; kwarg...
     d = DiscretizedDomain(g, discretization)
     SimulationModel(d, system; kwarg...)
 end
-
-## Grid
-abstract type TervGrid end
-
-## Discretized units
-abstract type TervUnit end
-
-struct Cells <: TervUnit end
-struct Faces <: TervUnit end
-struct Nodes <: TervUnit end

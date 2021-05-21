@@ -62,6 +62,13 @@ Well variables - units that we have exactly one of per well (and usually relates
 """
 struct WellVariables <: TervUnit end
 
+## Well controls
+abstract type WellForce <: TervForce end
+abstract type WellControlForce <: WellForce end
+
+struct InjectorControl <: WellControlForce end
+struct ProducerControl <: WellControlForce end
+
 function declare_units(W::MultiSegmentWell)
     c = (Cells(),         length(W.volumes))
     f = (WellSegments(),  size(W.neighborship, 2))
@@ -90,7 +97,7 @@ end
 
 # Selection of primary variables
 function select_primary_variables(domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
-    p_base = select_primary_variables(nothing, system, arg...)
+    p_base = select_primary_variables(system)
 
     phases = get_phases(system)
     p_w = [SegmentTotalVelocity(), SurfacePhaseRates(phases), BottomHolePressure()]

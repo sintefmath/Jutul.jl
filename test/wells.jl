@@ -42,3 +42,5 @@ n = length(rc)
 dz = awrap(w.dZ)
 WI = awrap(w.WI)
 W = MultiSegmentWell(ones(n), rc, dz = dz, WI = WI)
+wmodel = SimulationModel(W, sys)
+

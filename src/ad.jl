@@ -1,8 +1,8 @@
 # Primary variables
 
 ## Definition
-function select_primary_variables(domain, system::TervSystem, formulation)
-    return nothing
+function select_primary_variables(domain, system, formulation)
+    return select_primary_variables(system)
 end
 
 function number_of_units(model, pv::TervPrimaryVariables)
