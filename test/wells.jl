@@ -16,7 +16,7 @@ sys = SinglePhaseSystem(phase)
 model = SimulationModel(G, sys)
 
 init = Dict(:Pressure => p0)
-state0 = setup_state(model, init)
+state0r = setup_state(model, init)
 
 # Model parameters
 parameters = setup_parameters(model)
@@ -24,7 +24,7 @@ parameters[:Viscosity] = [mu]
 parameters[:Density] = [rhoL]
 
 timesteps = [1.0]
-sim = Simulator(model, state0 = state0, parameters = parameters)
+sim = Simulator(model, state0 = state0r, parameters = parameters)
 simulate(sim, timesteps)
 ## Set up injector
 ix = 1
@@ -48,16 +48,29 @@ function build_well(mrst_data, ix)
     return wmodel
 end
 
-Wi = build_well(mrst_data, 1)
-Wp = build_well(mrst_data, 2)
+# Initial condition for all wells
+w0 = Dict(:Pressure => p0, :SegmentTotalVelocity => 0.0, :SurfacePhaseRates => 0.0, :BottomHolePressure => 0.0)
 
 # Rate injector
+Wi = build_well(mrst_data, 1)
 ifrac = 0.01
 irate = ifrac*sum(sum(G.grid.pore_volumes))/sum(timesteps)
 it = SinglePhaseRateTarget(irate, phase)
-ictrl = InjectorControl(it)
+ictrl = InjectorControl(it, 1.0)
+istate = setup_state(Wi, w0)
 
 # BHP producer
+Wp = build_well(mrst_data, 2)
 pt = BottomHolePressureTarget(pRef/2)
 pctrl = ProducerControl(pt)
+pstate = setup_state(Wp, w0)
 
+
+##
+mmodel = MultiModel((Reservoir = model, Inj = Wi, Prod = Wp))
+# Set up joint state and simulate
+state0 = setup_state(model, state0r, (Inj = istate, Prod = pstate))
+forces = Dict(:Reservoir => nothing, Inj => ictrl, Prod => pctrl)
+
+sim = Simulator(mmodel, state0 = state0)
+states = simulate(sim, [1.0], forces = forces)

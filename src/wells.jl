@@ -1,7 +1,10 @@
 export SegmentTotalVelocity, BottomHolePressure, SurfacePhaseRates
 export WellGrid, MultiSegmentWell
+export SegmentTotalVelocity, BottomHolePressure, SurfacePhaseRates
 
 export InjectorControl, ProducerControl, SinglePhaseRateTarget, BottomHolePressureTarget
+
+export WellSegments, WellVariables, Perforations
 
 abstract type WellGrid <: TervGrid end
 struct MultiSegmentWell <: WellGrid 
@@ -98,17 +101,17 @@ end
 
 # Total velocity in each well segment
 struct SegmentTotalVelocity <: ScalarPrimaryVariable end
-function associated_unit(::SegmentTotalVelocity) WellSegments end
+function associated_unit(::SegmentTotalVelocity) WellSegments() end
 
 # Bottom hole pressure for the well
 struct BottomHolePressure <: ScalarPrimaryVariable end
-function associated_unit(::BottomHolePressure) WellVariables end
+function associated_unit(::BottomHolePressure) WellVariables() end
 
 # Phase rates for well at surface conditions
 struct SurfacePhaseRates <: GroupedPrimaryVariables
     phases
 end
-function associated_unit(::SurfacePhaseRates) WellVariables end
+function associated_unit(::SurfacePhaseRates) WellVariables() end
 
 function degrees_of_freedom_per_unit(v::SurfacePhaseRates)
     return length(v.phases)
