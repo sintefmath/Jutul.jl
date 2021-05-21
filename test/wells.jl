@@ -69,8 +69,8 @@ pstate = setup_state(Wp, w0)
 ##
 mmodel = MultiModel((Reservoir = model, Inj = Wi, Prod = Wp))
 # Set up joint state and simulate
-state0 = setup_state(model, state0r, (Inj = istate, Prod = pstate))
-forces = Dict(:Reservoir => nothing, Inj => ictrl, Prod => pctrl)
+state0 = setup_state(mmodel, Dict(:Reservoir => state0r, :Inj => istate, :Prod => pstate))
+forces = Dict(:Reservoir => nothing, :Inj => ictrl, :Prod => pctrl)
 
 sim = Simulator(mmodel, state0 = state0)
 states = simulate(sim, [1.0], forces = forces)
