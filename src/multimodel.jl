@@ -5,8 +5,11 @@ struct MultiModel <: TervModel
     groups::Vector
     context::TervContext
     number_of_degrees_of_freedom
-    function MultiModel(models; groups = collect(1:length(models)), context = DefaultContext())
+    function MultiModel(models; groups = nothing, context = DefaultContext())
         nm = length(models)
+        if isnothing(groups)
+            groups = ones(Int64, nm)
+        end
         @assert maximum(groups) <= nm
         @assert minimum(groups) > 0
         @assert length(groups) == nm
@@ -463,12 +466,12 @@ function update_linearized_system_crossterms!(lsys, storage, model::MultiModel, 
     end
 end
 
-function setup_state(model::MultiModel, subs...)
-    @assert length(subs) == number_of_models(model)
+function setup_state(model::MultiModel, initializers)
     state = Dict()
-    for (i, key) in enumerate(keys(model.models))
+    for key in keys(model.models)
         m = model.models[key]
-        state[key] = setup_state(m, subs[i])
+        init = initializers[key]
+        state[key] = setup_state(m, init)
     end
     return state
 end

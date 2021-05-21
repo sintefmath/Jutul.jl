@@ -34,7 +34,7 @@ function test_multi()
     # Make a multimodel
     model = MultiModel((A = modelA, B = modelB), groups = [1, 1])
     # Set up joint state and simulate
-    state0 = setup_state(model, state0A, state0B)
+    state0 = setup_state(model, Dict(:A => state0A, :B => state0B))
     forces = Dict(:A => forcesA, :B => forcesB)
     sim = Simulator(model, state0 = state0)
     states = simulate(sim, [1.0], forces = forces)
