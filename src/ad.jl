@@ -135,21 +135,20 @@ function initialize_primary_variable_ad(state, model, pvar, offset, npartials; k
     return state
 end
 
-function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVariable, val::Union{Dict, AbstractFloat})
+function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVariable, val)
     n = number_of_degrees_of_freedom(model, pvar)
-    name = get_symbol(pvar)
-    if isa(val, Dict)
-        val = val[name]
-    end
-
     if isa(val, AbstractVector)
         V = deepcopy(val)
         @assert length(val) == n "Variable was neither scalar nor the expected dimension"
     else
         V = repeat([val], n)
     end
-    state[name] = transfer(model.context, V)
+    state[get_symbol(pvar)] = transfer(model.context, V)
     return state
+end
+
+function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVariable, val::Dict)
+    return initialize_primary_variable_value(state, model, pvar, val[get_symbol(pvar)])
 end
 
 """
