@@ -19,7 +19,8 @@ abstract type TervPrimaryVariables end
 abstract type ScalarPrimaryVariable <: TervPrimaryVariables end
 abstract type GroupedPrimaryVariables <: TervPrimaryVariables end
 
-# abstract type PrimaryVariableConstraint end
+# Driving forces
+abstract type TervForce end
 
 # Context
 abstract type TervContext end
@@ -85,7 +86,7 @@ struct DiscretizedDomain{G} <: TervDomain
     units
 end
 
-function DiscretizedDomain(grid, disc)
+function DiscretizedDomain(grid, disc = nothing)
     units = declare_units(grid)
     u = Dict{Any, Int64}() # Is this a good definition?
     for unit in units
@@ -136,6 +137,13 @@ function SimulationModel(domain, system;
     check_prim(primary)
     return SimulationModel(domain, system, context, formulation, primary)
 end
+
+function SimulationModel(g::TervGrid, system, discretization = nothing; kwarg...)
+    # Simple constructor that assumes 
+    d = DiscretizedDomain(g, discretization)
+    SimulationModel(d, system; kwarg...)
+end
+
 ## Grid
 abstract type TervGrid end
 

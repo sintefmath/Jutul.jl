@@ -23,7 +23,7 @@ function number_of_phases(sys::MultiPhaseSystem)
     return length(get_phases(sys))
 end
 
-struct SourceTerm
+struct SourceTerm <: TervForce
     cell
     value
     fractional_flow
