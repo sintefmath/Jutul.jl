@@ -1,4 +1,5 @@
 export SegmentTotalVelocity, BottomHolePressure, SurfacePhaseRates
+export WellGrid, MultiSegmentWell
 
 abstract type WellGrid <: TervGrid end
 struct MultiSegmentWell <: WellGrid 
@@ -20,7 +21,7 @@ struct MultiSegmentWell <: WellGrid
 
         if isnothing(N)
             @debug "No connectivity. Assuming nicely ordered linear well."
-            N = hcat(0:nc-1, 1:nc)
+            N = vcat((0:nc-1)', (1:nc)')
         end
         if isnothing(dz)
             @warn "No connection dz provided. Using 0. Gravity will not affect this well."
