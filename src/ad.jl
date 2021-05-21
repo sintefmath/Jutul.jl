@@ -150,11 +150,10 @@ function initialize_primary_variable_value(state, model, pvar, val; perform_copy
     nu = number_of_units(model, pvar)
     nv = values_per_unit(pvar)
     
-    if nv == 1
+    if isa(pvar, ScalarPrimaryVariable)
         @assert length(val) == nu
         # Type-assert that this should be scalar, with a vector input
         val::AbstractVector
-        pvar::ScalarPrimaryVariable
     else
         @assert size(val, 1) == nv
         @assert size(val, 2) == nu
@@ -168,7 +167,12 @@ end
 
 # Specialize on Dict to just get the value from that
 function initialize_primary_variable_value(state, model, pvar, val::Dict)
-    return initialize_primary_variable_value(state, model, pvar, val[get_symbol(pvar)])
+    symb = get_symbol(pvar)
+    if !haskey(val, symb)
+        k = keys(val)
+        error("The key $symb must be present to initialize the state. Found symbols: $k")
+    end
+    return initialize_primary_variable_value(state, model, pvar, val[symb])
 end
 
 # Scalar primary variables
@@ -188,7 +192,7 @@ end
 
 function initialize_primary_variable_value(state, model, pvar::GroupedPrimaryVariables, val::Number)
     n = values_per_unit(pvar)
-    return initialize_primary_variable_value(state, model, pvar, repeat(val, n))
+    return initialize_primary_variable_value(state, model, pvar, repeat([val], n))
 end
 
 
