@@ -1,6 +1,8 @@
 export SegmentTotalVelocity, BottomHolePressure, SurfacePhaseRates
 export WellGrid, MultiSegmentWell
 
+export InjectorControl, ProducerControl, SinglePhaseRateTarget, BottomHolePressureTarget
+
 abstract type WellGrid <: TervGrid end
 struct MultiSegmentWell <: WellGrid 
     volumes          # One per cell
@@ -62,12 +64,29 @@ Well variables - units that we have exactly one of per well (and usually relates
 """
 struct WellVariables <: TervUnit end
 
+## Well targets
+abstract type WellTarget end
+struct BottomHolePressureTarget <: WellTarget
+    value::AbstractFloat
+end
+
+struct SinglePhaseRateTarget <: WellTarget
+    value::AbstractFloat
+    phase::AbstractPhase
+end
+
 ## Well controls
 abstract type WellForce <: TervForce end
 abstract type WellControlForce <: WellForce end
 
-struct InjectorControl <: WellControlForce end
-struct ProducerControl <: WellControlForce end
+struct InjectorControl <: WellControlForce
+    target::WellTarget
+    injection_mixture
+end
+
+struct ProducerControl <: WellControlForce
+    target::WellTarget
+end
 
 function declare_units(W::MultiSegmentWell)
     c = (Cells(),         length(W.volumes))

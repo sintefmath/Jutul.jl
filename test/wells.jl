@@ -26,21 +26,38 @@ parameters[:Density] = [rhoL]
 timesteps = [1.0]
 sim = Simulator(model, state0 = state0, parameters = parameters)
 simulate(sim, timesteps)
-## Set up well part
+## Set up injector
 ix = 1
-W_mrst = mrst_data["W"][ix]
-w = convert_to_immutable_storage(W_mrst)
 
-function awrap(x::Any)
-    x
+function build_well(mrst_data, ix)
+    W_mrst = mrst_data["W"][ix]
+    w = convert_to_immutable_storage(W_mrst)
+
+    function awrap(x::Any)
+        x
+    end
+    function awrap(x::Number)
+        [x]
+    end
+    rc = awrap(w.cells)
+    n = length(rc)
+    dz = awrap(w.dZ)
+    WI = awrap(w.WI)
+    W = MultiSegmentWell(ones(n), rc, dz = dz, WI = WI)
+    wmodel = SimulationModel(W, sys)
+    return wmodel
 end
-function awrap(x::Number)
-    [x]
-end
-rc = awrap(w.cells)
-n = length(rc)
-dz = awrap(w.dZ)
-WI = awrap(w.WI)
-W = MultiSegmentWell(ones(n), rc, dz = dz, WI = WI)
-wmodel = SimulationModel(W, sys)
+
+Wi = build_well(mrst_data, 1)
+Wp = build_well(mrst_data, 2)
+
+# Rate injector
+ifrac = 0.01
+irate = ifrac*sum(sum(G.grid.pore_volumes))/sum(timesteps)
+it = SinglePhaseRateTarget(irate, phase)
+ictrl = InjectorControl(it)
+
+# BHP producer
+pt = BottomHolePressureTarget(pRef/2)
+pctrl = ProducerControl(pt)
 
