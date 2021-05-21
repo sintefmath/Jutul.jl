@@ -111,7 +111,11 @@ struct Saturations <: GroupedPrimaryVariables
 end
 
 function degrees_of_freedom_per_unit(v::Saturations)
-    return length(v.phases) - 1
+    return values_per_unit(v) - 1
+end
+
+function values_per_unit(v::Saturations)
+    return length(v.phases)
 end
 
 @inline function maximum_value(::Saturations) 1 end
@@ -129,23 +133,6 @@ function initialize_primary_variable_ad(state, model, pvar::Saturations, offset,
         v[end, i] = 1 - sum(v[1:end-1, i])
     end
     state[name] = v
-    return state
-end
-
-function initialize_primary_variable_value(state, model, pvar::Saturations, val)
-    name = get_symbol(pvar)
-    if isa(val, Dict)
-        val = val[name]
-    end
-    val::AbstractVecOrMat # Should be a vector or a matrix
-    V = deepcopy(val)
-    @assert size(V, 1) == number_of_phases(model.system)
-    n = number_of_units(model, pvar)
-    if isa(V, AbstractVector)
-        V = repeat(V, 1, n)
-    end
-    @assert size(V, 2) == n
-    state[name] = transfer(model.context, V)
     return state
 end
 

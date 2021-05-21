@@ -37,8 +37,18 @@ function number_of_degrees_of_freedom(model, pvars::TervPrimaryVariables)
     return number_of_units(model, pvars)*degrees_of_freedom_per_unit(pvars)
 end
 
+"""
+Number of independent primary variables / degrees of freedom per computational unit.
+"""
 function degrees_of_freedom_per_unit(::ScalarPrimaryVariable)
     return 1
+end
+"""
+Number of values held by a primary variable. Normally this is equal to the number of degrees of freedom,
+but some special primary variables are most conveniently defined by having N values and N-1 independent variables.
+"""
+function values_per_unit(u::TervPrimaryVariables)
+    return degrees_of_freedom_per_unit(u)
 end
 
 ## Update functions
@@ -135,21 +145,52 @@ function initialize_primary_variable_ad(state, model, pvar, offset, npartials; k
     return state
 end
 
-function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVariable, val)
-    n = number_of_degrees_of_freedom(model, pvar)
-    if isa(val, AbstractVector)
-        V = deepcopy(val)
-        @assert length(val) == n "Variable was neither scalar nor the expected dimension"
+function initialize_primary_variable_value(state, model, pvar, val; perform_copy = true)
+    # Add some asserts here
+    nu = number_of_units(model, pvar)
+    nv = values_per_unit(pvar)
+    
+    if nv == 1
+        @assert length(val) == nu
+        # Type-assert that this should be scalar, with a vector input
+        val::AbstractVector
+        pvar::ScalarPrimaryVariable
     else
-        V = repeat([val], n)
+        @assert size(val, 1) == nv
+        @assert size(val, 2) == nu
     end
-    state[get_symbol(pvar)] = transfer(model.context, V)
+    if perform_copy
+        val = deepcopy(val)
+    end
+    state[get_symbol(pvar)] = transfer(model.context, val)
     return state
 end
 
-function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVariable, val::Dict)
+# Specialize on Dict to just get the value from that
+function initialize_primary_variable_value(state, model, pvar, val::Dict)
     return initialize_primary_variable_value(state, model, pvar, val[get_symbol(pvar)])
 end
+
+# Scalar primary variables
+function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVariable, val::Number)
+    V = repeat([val], number_of_units(model, pvar))
+    return initialize_primary_variable_value(state, model, pvar, V)
+end
+
+# Non-scalar primary variables
+function initialize_primary_variable_value(state, model, pvar::GroupedPrimaryVariables, val::AbstractVector)
+    n = values_per_unit(pvar)
+    t = typeof(pvar)
+    @assert length(val) == n "Variable $t should have initializer of length $n"
+    V = repeat(val, 1, number_of_units(model, pvar))
+    return initialize_primary_variable_value(state, model, pvar, V)
+end
+
+function initialize_primary_variable_value(state, model, pvar::GroupedPrimaryVariables, val::Number)
+    n = values_per_unit(pvar)
+    return initialize_primary_variable_value(state, model, pvar, repeat(val, n))
+end
+
 
 """
 Convert a state containing variables as arrays of doubles
