@@ -70,29 +70,11 @@ struct TwoPointFlux <: TervDiscretization
 end
 
 
-# Need to add: units etc for the new grid, and then replace the following functions
 function declare_units(G::MinimalTPFAGrid)
     c = (Cells(), length(G.pore_volumes))  # Cells equal to number of pore volumes
     f = (Faces(), size(G.neighborship, 2)) # Faces
     return [c, f]
 end
-# Member functions, TPFA grid
-# function number_of_cells(G::MinimalTPFADomain)
-#     return length(G.pv)
-# end
-
-# function number_of_faces(G::MinimalTPFADomain)
-#     return div(number_of_half_faces(G), 2)
-# end
-
-# function number_of_half_faces(G::MinimalTPFADomain)
-#     return length(G.conn_data)
-# end
-
-# function get_pore_volume(G::MinimalTPFADomain)
-#     return G.pore_volume
-# end
-
 
 function get_cell_faces(N, nc = maximum(N))
     # Create array of arrays where each entry contains the faces of that cell
