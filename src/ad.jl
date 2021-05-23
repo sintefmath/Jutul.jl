@@ -1,3 +1,44 @@
+export CompactAutoDiffCache
+
+abstract type TervAutoDiffCache end
+struct CompactAutoDiffCache <: TervAutoDiffCache
+    entries
+    unit
+    jacobian_positions
+    equations_per_unit
+    npartials
+    function CompactAutoDiffCache(equations_per_unit, n_units, npartials = 1; unit = Cells(), context = DefaultContext(), kwarg...)
+        I = index_type(context)
+        # Storage for AD variables
+        entries = allocate_array_ad(equations_per_unit, n_units, context = context, npartials = npartials; kwarg...)
+        # Position in sparse matrix - only allocated, then filled in later.
+        # Since partials are all fetched together with the value, we make partials the fastest index.
+        pos = zeros(I, equations_per_unit*npartials, n_units)
+        pos = transfer(context, pos)
+        new(entries, unit, pos, equations_per_unit, npartials)
+    end
+end
+
+@inline function get_entry(c::CompactAutoDiffCache, index, eqNo = 1)
+    c.entries[eqNo, index]
+end
+
+@inline function get_value(c::CompactAutoDiffCache, arg...)
+    value(get_entry(c, arg...))
+end
+
+@inline function get_partial(c::CompactAutoDiffCache, index, eqNo = 1, partial_index = 1)
+    get_entry(c, index, eqNo).partials[partial_index]
+end
+
+@inline function get_jacobian_pos(c::CompactAutoDiffCache, index, eqNo, partial_index)
+    c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index]
+end
+
+@inline function set_jacobian_pos!(c::CompactAutoDiffCache, index, eqNo, partial_index, pos)
+    c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
+end
+
 # Primary variables
 
 ## Definition
