@@ -1,35 +1,31 @@
 export ConservationLaw
 
 struct ConservationLaw <: TervEquation
-    accumulation::AbstractArray
-    half_face_flux::AbstractArray
-    accumulation_jac_pos::AbstractArray   # Usually diagonal entries
-    half_face_flux_jac_pos::AbstractArray # Equal length to half face flux
+    accumulation::TervAutoDiffCache
+    half_face_flux_cells::TervAutoDiffCache
+    half_face_flux_faces::Union{TervAutoDiffCache, Nothing}
+    function ConservationLaw(nc, nhf, neqs = 1, cell_partials = 1, face_partials = 0; cell_unit = Cells(), face_unit = Faces(), kwarg...)
+        alloc = (n, np, unit) -> CompactAutoDiffCache(n, np, unit = unit; kwarg...)
+        acc = alloc(nc, cell_partials, cell_unit)
+        hf_cells = alloc(nhf, cell_partials, cell_unit)
+        if face_partials > 0
+            hf_faces = alloc(nhf, face_partials, face_unit)
+        else
+            hf_faces = nothing
+        end
+        new(acc, hf_cells, hf_faces)
+    end
 end
 
-function ConservationLaw(G::TervDomain, nder::Integer = 0; context = DefaultContext(), equations_per_unit = 1, kwarg...)
-    I = index_type(context)
-    nu = equations_per_unit
-    # Create conservation law for a given grid with a number of partials
-    nc = number_of_cells(G)
-    nf = number_of_half_faces(G)
+function ConservationLaw(model, number_of_equations; cell_unit = Cells(), face_unit = Faces(), kwarg...)
+    D = model.domain
+    nc = count_units(D, cell_unit)
+    nhf = 2*count_units(D, face_unit)
 
-    # Will be filled in later
-    accpos = zeros(I, nu*nder, nc)
-    fluxpos = zeros(I, nu*nder, nf)
+    cell_partials = degrees_of_freedom_per_unit(model, cell_unit)
+    face_partials = degrees_of_freedom_per_unit(model, face_unit)
 
-    accpos = transfer(context, accpos)
-    fluxpos = transfer(context, fluxpos)
-
-    ConservationLaw(nc, nf, accpos, fluxpos, nder, context = context, equations_per_unit = equations_per_unit; kwarg...)
-end
-
-function ConservationLaw(nc::Integer, nhf::Integer, 
-                         accpos::AbstractArray, fluxpos::AbstractArray, 
-                         npartials::Integer = 0; context = DefaultContext(), equations_per_unit = 1, kwarg...)
-    acc = allocate_array_ad(equations_per_unit, nc, context = context, npartials = npartials; kwarg...)
-    flux = allocate_array_ad(equations_per_unit, nhf, context = context, npartials = npartials; kwarg...)
-    ConservationLaw(acc, flux, accpos, fluxpos)
+    ConservationLaw(nc, nhf, number_of_equations, cell_partials, face_partials, cell_unit = cell_unit, face_unit = cell_unit; kwarg...)
 end
 
 "Update positions of law's derivatives in global Jacobian"

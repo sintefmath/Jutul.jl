@@ -65,10 +65,15 @@ function number_of_degrees_of_freedom(model::TervModel)
 end
 
 function number_of_degrees_of_freedom(model::TervModel, u::TervUnit)
+    ndof = degrees_of_freedom_per_unit(model, u)*count_units(model, u)
+    return ndof
+end
+
+function degrees_of_freedom_per_unit(model::TervModel, u::TervUnit)
     ndof = 0
     for pvar in get_primary_variables(model)
         if associated_unit(pvar) == u
-            ndof += number_of_degrees_of_freedom(model, pvar)
+            ndof += degrees_of_freedom_per_unit(pvar)
         end
     end
     return ndof

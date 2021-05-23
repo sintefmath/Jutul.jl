@@ -38,6 +38,23 @@ struct BroadcastAllowed <: BroadcastSupport end
 struct BroadcastDisallowed <: BroadcastSupport end
 broadcast_compatibility(::Any) = BroadcastAllowed()
 
+# Traits etc for matrix ordering
+abstract type TervMatrixLayout end
+"""
+Equations are stored sequentially in rows, derivatives of same type in columns:
+"""
+struct EquationMajorLayout end
+"""
+Domain units sequentially in rows:
+"""
+struct UnitMajorLayout end
+"""
+Same as UnitMajorLayout, but the nzval is a matrix
+"""
+struct BlockMajorLayout end
+
+matrix_layout(::Any) = EquationMajorLayout()
+
 # CUDA context - everything on the single CUDA device attached to machine
 struct SingleCUDAContext <: GPUTervContext
     float_t::Type
