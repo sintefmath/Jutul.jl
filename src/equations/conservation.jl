@@ -30,19 +30,48 @@ end
 
 "Update positions of law's derivatives in global Jacobian"
 function align_to_jacobian!(law::ConservationLaw, jac, model; row_offset = 0, col_offset = 0)
+    conn_data = model.domain.discretizations.KGrad.conn_data
+    acc = law.accumulation
+    hflux_cells = law.half_face_flux_cells
+    hflux_faces = law.half_face_flux_faces
+
+    layout = matrix_layout(model.context)
+    
+    diagonal_alignment!(acc, jac, layout, target_offset = row_offset, source_offset = col_offset)
+    half_face_flux_cells_alignment!(hflux_cells, acc, jac, layout, conn_data, target_offset = row_offset, source_offset = col_offset)
+    if !isnothing(hflux_faces)
+        half_face_flux_faces_alignment!(hflux_faces, jac, layout, target_offset = row_offset, source_offset = col_offset)
+    end
+
     # Note: We copy this back to host if it is on GPU to avoid rewriting these functions for CuArrays
-    conn_data = Array(model.domain.discretizations.KGrad.conn_data)
-    accpos = Array(law.accumulation_jac_pos)
-    fluxpos = Array(law.half_face_flux_jac_pos)
+    # conn_data = Array(conn_data)
+    # accpos = Array(law.accumulation_jac_pos)
+    # fluxpos = Array(law.half_face_flux_jac_pos)
+    # neq = number_of_equations_per_unit(law)
+    # nder = number_of_partials_per_unit(law)
+    # nc = size(law.accumulation, 2)
+    # accumulation_sparse_pos!(accpos, jac, neq, nder, row_offset, col_offset)
+    # half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, row_offset, col_offset)
 
-    neq = number_of_equations_per_unit(law)
-    nder = number_of_partials_per_unit(law)
-    nc = size(law.accumulation, 2)
-    accumulation_sparse_pos!(accpos, jac, neq, nder, row_offset, col_offset)
-    half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, row_offset, col_offset)
+    # law.accumulation_jac_pos .= accpos
+    # law.half_face_flux_jac_pos .= fluxpos
+end
 
-    law.accumulation_jac_pos .= accpos
-    law.half_face_flux_jac_pos .= fluxpos
+function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, conn_data; target_offset = 0, source_offset = 0)
+    nu = acc_cache.number_of_units
+    ne = face_cache.equations_per_unit
+    np = face_cache.npartials
+    for i in 1:length(conn_data)
+        cdi = conn_data[i]
+        self = cdi.self
+        other = cdi.other
+        for e in 1:ne
+            for d = 1:np
+                pos = find_jac_position(jac, self + target_offset, other + source_offset, e, d, nu, nu, ne, np, layout)
+                set_jacobian_pos!(face_cache, i, e, d, pos)
+            end
+        end
+    end
 end
 
 function update_linearized_system_subset!(jac, r, model, law::ConservationLaw)
@@ -124,22 +153,6 @@ function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
     return (e, 1.0)
 end
 
-function accumulation_sparse_pos!(accpos, jac, neq, nder, row_offset = 0, col_offset = 0)
-    n = size(accpos, 1)
-    nc = size(accpos, 2)
-    @assert nder == n/neq
-    for i in 1:nc
-        for col = 1:nder
-            # Diagonal positions
-            col_pos = (col-1)*nc + i + col_offset
-            pos = jac.colptr[col_pos]:jac.colptr[col_pos+1]-1
-            for row = 1:neq
-                row_ix = (row-1)*nc + i + row_offset
-                accpos[(row-1)*nder + col, i] = pos[jac.rowval[pos] .== row_ix][]
-            end
-        end
-    end
-end
 
 function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, row_offset = 0, col_offset = 0)
     n = size(fluxpos, 1)
