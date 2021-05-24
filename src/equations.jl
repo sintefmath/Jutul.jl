@@ -157,5 +157,5 @@ function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
 end
 
 function get_diagonal_part(eq::TervEquation)
-    return eq.equation
+    return get_entries(eq.equation)
 end
