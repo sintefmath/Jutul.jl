@@ -42,6 +42,10 @@ end
     get_entry(c, index, eqNo).partials[partial_index]
 end
 
+@inline function get_partials(c::CompactAutoDiffCache, index, eqNo = 1)
+    get_entry(c, index, eqNo).partials
+end
+
 @inline function get_jacobian_pos(c::CompactAutoDiffCache, index, eqNo, partial_index)
     c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index]
 end
