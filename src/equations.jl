@@ -85,9 +85,54 @@ end
 Give out I, J arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_sparsity(model, e::TervEquation)
-    return ([], [], NaN, NaN)
+function declare_sparsity(model, e::TervEquation, unit = domain_unit(e), layout::EquationMajorLayout = EquationMajorLayout())
+    primitive = declare_pattern(model, e, unit)
+    if isnothing(primitive)
+        return ([], [], NaN, NaN)
+    else
+        I = primitive[1]
+        J = primitive[2]
+        nu = primitive[3]
+    end
+    nrow_blocks = number_of_equations_per_unit(e)
+    ncol_blocks = number_of_partials_per_unit(model, unit)
+    nunits = count_units(model.domain, unit)
+    if nrow_blocks > 1
+        I = vcat(map((x) -> (x-1)*nu .+ I, 1:nrow_blocks)...)
+        J = repeat(J, nrow_blocks)
+    end
+    if ncol_blocks > 1
+        I = repeat(I, ncol_blocks)
+        J = vcat(map((x) -> (x-1)*nu .+ J, 1:ncol_blocks)...)
+    end
+    n = number_of_equations(model, e)
+    m = nunits*ncol_blocks
+    return (I, J, n, m)
 end
+
+function declare_sparsity(model, e::TervEquation, unit = domain_unit(e), layout::BlockMajorLayout = BlockMajorLayout())
+    declare_pattern(model, e, unit)
+end
+
+"""
+Give out source, target arrays of equal length for a given equation attached
+to the given model.
+"""
+function declare_pattern(model, e::TervEquation, unit)
+    return nothing
+end
+
+function declare_pattern(model, e::DiagonalEquation, unit)
+    if unit == domain_unit(e)
+        n = count_units(model.domain, unit)
+        I = collect(1:n)
+        return (I, I, n, n)
+    else
+        out = nothing
+    end
+    return out
+end
+
 
 """
 Give out I, J arrays of equal length for a the impact of a model A on

@@ -65,8 +65,27 @@ function get_diagonal_cache(e::ConservationLaw)
     e.accumulation
 end
 
+function declare_pattern(model, e::ConservationLaw, ::Cells)
+    hfd = Array(model.domain.discretizations.KGrad.conn_data)
+    n = number_of_units(model, e)
+    # Fluxes
+    I = map(x -> x.self, hfd)
+    J = map(x -> x.other, hfd)
+    # Diagonals
+    D = [i for i in 1:n]
 
-function declare_sparsity(model, e::ConservationLaw)
+    I = vcat(I, D)
+    J = vcat(J, D)
+
+    return (I, J, n, n)
+end
+
+function declare_sparsity(model, e::ConservationLaw, ::Faces)
+    @assert false "Not implemented."
+end
+
+
+#= function declare_sparsity(model, e::ConservationLaw)
     hfd = Array(model.domain.discretizations.KGrad.conn_data)
     n = number_of_units(model, e)
     # Fluxes
@@ -93,7 +112,7 @@ function declare_sparsity(model, e::ConservationLaw)
     m = nunits*ncols
     return (I, J, n, m)
 end
-
+ =#
 function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
     n = number_of_equations_per_unit(eq)
     nc = number_of_cells(model.domain)
