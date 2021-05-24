@@ -16,7 +16,7 @@ end
 
 function LinearizedSystem(jac)
     n_dof = size(jac, 1)
-    @assert n_dof == size(jac, 2)
+    @assert n_dof == size(jac, 2) "Expected square system."
     dx = zeros(n_dof)
     r = zeros(n_dof)
     return LinearizedSystem(jac, r, dx)

@@ -109,14 +109,14 @@ function allocate_equations!(eqs, storage, model::TervModel; tag = nothing)
     # Default: No equations.
 end
 
-function get_sparse_arguments(storage, model)
+function get_sparse_arguments(storage, model, layout = matrix_layout(model.context))
     ndof = number_of_degrees_of_freedom(model)
     eqs = storage[:equations]
     I = []
     J = []
     nrows = 0
     for (k, eq) in eqs
-        S = declare_sparsity(model, eq)
+        S = declare_sparsity(model, eq, domain_unit(eq), layout)
         i = S[1]
         j = S[2]
         push!(I, i .+ nrows) # Row indices, offset by the size of preceeding equations

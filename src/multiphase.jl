@@ -279,7 +279,7 @@ end
 function update_accumulation!(law, storage, model, dt)
     state = storage.state
     state0 = storage.state0
-    acc = law.accumulation
+    acc = get_entries(law.accumulation)
     mass = state.TotalMass
     mass0 = state0.TotalMass
     fapply!(acc, (m, m0) -> (m - m0)/dt, mass, mass0)
@@ -290,12 +290,13 @@ function update_half_face_flux!(law, storage, model)
     p = storage.state.Pressure
     mmob = storage.properties.MassMobility
 
-    half_face_flux!(model, law.half_face_flux, mmob, p)
+    flux = get_entries(law.half_face_flux_cells)
+    half_face_flux!(model, flux, mmob, p)
 end
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
     @debug "Applying source terms"
-    acc = eq.accumulation
+    acc = get_entries(eq.accumulation)
     mob = storage.properties.Mobility
     insert_phase_sources(mob, acc, force)
 end

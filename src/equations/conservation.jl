@@ -4,7 +4,8 @@ struct ConservationLaw <: TervEquation
     accumulation::TervAutoDiffCache
     half_face_flux_cells::TervAutoDiffCache
     half_face_flux_faces::Union{TervAutoDiffCache, Nothing}
-    function ConservationLaw(nc, nhf, neqs, cell_partials, face_partials = 0; cell_unit = Cells(), face_unit = Faces(), kwarg...)
+    half_face_cell_pos
+    function ConservationLaw(nc, nhf, neqs, half_face_cell_pos, cell_partials, face_partials = 0; cell_unit = Cells(), face_unit = Faces(), kwarg...)
         alloc = (n, np, unit) -> CompactAutoDiffCache(neqs, n, np, unit = unit; kwarg...)
         acc = alloc(nc, cell_partials, cell_unit)
         hf_cells = alloc(nhf, cell_partials, cell_unit)
@@ -13,7 +14,10 @@ struct ConservationLaw <: TervEquation
         else
             hf_faces = nothing
         end
-        new(acc, hf_cells, hf_faces)
+        @assert length(half_face_cell_pos) == nc + 1
+        @assert half_face_cell_pos[end] == nhf + 1
+        @assert half_face_cell_pos[1] == 1
+        new(acc, hf_cells, hf_faces, half_face_cell_pos)
     end
 end
 
@@ -25,7 +29,8 @@ function ConservationLaw(model, number_of_equations; cell_unit = Cells(), face_u
     cell_partials = degrees_of_freedom_per_unit(model, cell_unit)
     face_partials = degrees_of_freedom_per_unit(model, face_unit)
 
-    ConservationLaw(nc, nhf, number_of_equations, cell_partials, face_partials, cell_unit = cell_unit, face_unit = cell_unit; kwarg...)
+    half_face_cell_pos = model.domain.discretizations.KGrad.conn_pos
+    ConservationLaw(nc, nhf, number_of_equations, half_face_cell_pos, cell_partials, face_partials, cell_unit = cell_unit, face_unit = cell_unit; kwarg...)
 end
 
 "Update positions of law's derivatives in global Jacobian"
@@ -75,20 +80,43 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, con
 end
 
 function update_linearized_system_subset!(jac, r, model, law::ConservationLaw)
-    cpos = model.domain.discretizations.KGrad.conn_pos
-    context = model.context
-    ker_compat = kernel_compatibility(context)
-    apos = law.accumulation_jac_pos
-    neq = number_of_equations_per_unit(law)
-    # Fill in diagonal
-    # @info "Accumulation fillin"
-    fill_accumulation!(jac, r, law.accumulation, apos, neq, context, ker_compat)
-    # Fill in off-diagonal
-    fpos = law.half_face_flux_jac_pos
-    # @info "Half face flux fillin"
-    fill_half_face_fluxes(jac, r, cpos, law.half_face_flux, apos, fpos, neq, context, ker_compat)
+    acc = get_diagonal_cache(law)
+    cell_flux = law.half_face_flux_cells
+    face_flux = law.half_face_flux_faces
+    cpos = law.half_face_cell_pos
+
+    update_linearized_system_subset!(jac, r, model, acc)
+    update_linearized_system_subset_cell_flux!(jac, r, model, acc, cell_flux, cpos)
+    if !isnothing(face_flux)
+        update_linearized_system_subset_face_flux!(jac, r, model, acc, face_flux)
+    end
 end
 
+function update_linearized_system_subset_cell_flux!(jac, r, model, acc, cell_flux, conn_pos)
+    nc = number_of_units(acc)
+    for cell = 1:nc
+        for i = conn_pos[cell]:(conn_pos[cell+1]-1)
+
+
+            
+            for eqNo = 1:neq
+                # Update diagonal value
+                f = half_face_flux[eqNo, i]
+                r[cell + (eqNo-1)*nc] += f.value
+                # Fill inn Jacobian values
+                for derNo = 1:nder
+                    i_pos = derNo + (eqNo-1)*nder
+
+                    index = fpos[i_pos, i]
+                    diag_index = apos[i_pos, cell]
+                    df_di = f.partials[derNo]
+                    Jz[index] = -df_di
+                    Jz[diag_index] += df_di
+                end
+            end
+        end
+    end
+end
 
 function get_diagonal_cache(e::ConservationLaw)
     e.accumulation

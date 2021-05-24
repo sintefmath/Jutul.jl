@@ -20,6 +20,8 @@ struct CompactAutoDiffCache <: TervAutoDiffCache
     end
 end
 
+@inline function number_of_units(c::TervAutoDiffCache) c.number_of_units end
+
 @inline function get_entries(e::TervEquation)
     return get_entries(e.equation)
 end

@@ -85,7 +85,7 @@ end
 Give out I, J arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_sparsity(model, e::TervEquation, unit = domain_unit(e), layout::EquationMajorLayout = EquationMajorLayout())
+function declare_sparsity(model, e::TervEquation, unit, layout::EquationMajorLayout)
     primitive = declare_pattern(model, e, unit)
     if isnothing(primitive)
         return nothing
@@ -110,7 +110,7 @@ function declare_sparsity(model, e::TervEquation, unit = domain_unit(e), layout:
     return (I, J, n, m)
 end
 
-function declare_sparsity(model, e::TervEquation, unit = domain_unit(e), layout::BlockMajorLayout = BlockMajorLayout())
+function declare_sparsity(model, e::TervEquation, unit, ::BlockMajorLayout)
     declare_pattern(model, e, unit)
 end
 
@@ -169,7 +169,7 @@ function update_linearized_system_subset!(lsys, model, equation::TervEquation; r
 end
 
 function update_linearized_system_subset!(jac, r, model, equation::TervEquation)
-    # NOTE: Defalt only updates diagonal part
+    # NOTE: Default only updates diagonal part
     update_linearized_system_subset!(jac, r, model, get_diagonal_cache(equation))
 end
 
