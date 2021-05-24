@@ -50,6 +50,10 @@ end
     c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
 end
 
+@inline function ad_dims(cache::CompactAutoDiffCache)
+    return (cache.number_of_units, cache.equations_per_unit, cache.npartials)
+end
+
 @inline function update_jacobian_entry!(nzval, c::CompactAutoDiffCache, index, eqNo, partial_index)
     @inbounds nzval[get_jacobian_pos(c, index, eqNo, partial_index)] = get_partial(c, index, eqNo, partial_index)
 end
@@ -69,9 +73,7 @@ function update_linearized_system_subset!(jac, r, model, cache::TervAutoDiffCach
 end
 
 function diagonal_alignment!(cache::TervAutoDiffCache, jac, layout; eq_index = 1:cache.number_of_units, target_offset = 0, source_offset = 0)
-    nu = cache.number_of_units
-    ne = cache.equations_per_unit
-    np = cache.npartials
+    nu, ne, np = ad_dims(cache)
     nix = length(eq_index)
     for i in eq_index
         for e in 1:ne

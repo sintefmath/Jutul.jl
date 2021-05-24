@@ -63,9 +63,7 @@ function align_to_jacobian!(law::ConservationLaw, jac, model; row_offset = 0, co
 end
 
 function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, conn_data; target_offset = 0, source_offset = 0)
-    nu = acc_cache.number_of_units
-    ne = face_cache.equations_per_unit
-    np = face_cache.npartials
+    nu, ne, np = ad_dims(acc_cache)
     for i in 1:length(conn_data)
         cdi = conn_data[i]
         self = cdi.self
@@ -88,34 +86,31 @@ function update_linearized_system_subset!(jac, r, model, law::ConservationLaw)
     update_linearized_system_subset!(jac, r, model, acc)
     update_linearized_system_subset_cell_flux!(jac, r, model, acc, cell_flux, cpos)
     if !isnothing(face_flux)
-        update_linearized_system_subset_face_flux!(jac, r, model, acc, face_flux)
+        update_linearized_system_subset_face_flux!(jac, r, model, acc, face_flux, cpos)
     end
 end
 
 function update_linearized_system_subset_cell_flux!(jac, r, model, acc, cell_flux, conn_pos)
-    nc = number_of_units(acc)
+    nc, ne, np = ad_dims(acc)
+    Jz = get_nzval(jac)
     for cell = 1:nc
         for i = conn_pos[cell]:(conn_pos[cell+1]-1)
-
-
-            
-            for eqNo = 1:neq
-                # Update diagonal value
-                f = half_face_flux[eqNo, i]
-                r[cell + (eqNo-1)*nc] += f.value
-                # Fill inn Jacobian values
-                for derNo = 1:nder
-                    i_pos = derNo + (eqNo-1)*nder
-
-                    index = fpos[i_pos, i]
-                    diag_index = apos[i_pos, cell]
-                    df_di = f.partials[derNo]
-                    Jz[index] = -df_di
-                    Jz[diag_index] += df_di
+            for e in 1:ne
+                @inbounds r[cell + ne*(e-1)] += get_value(cell_flux, i, e)
+                for d = 1:np
+                    df_di = get_partial(cell_flux, i, e, d)
+                    apos = get_jacobian_pos(acc, cell, e, d)
+                    fpos = get_jacobian_pos(cell_flux, i, e, d)
+                    @inbounds Jz[apos] += df_di
+                    @inbounds Jz[fpos] = -df_di
                 end
             end
         end
     end
+end
+
+function update_linearized_system_subset_face_flux!(jac, r, model, acc, face_flux, conn_pos)
+    error("Not implemented yet")
 end
 
 function get_diagonal_cache(e::ConservationLaw)
