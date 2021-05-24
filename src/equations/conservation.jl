@@ -5,7 +5,7 @@ struct ConservationLaw <: TervEquation
     half_face_flux_cells::TervAutoDiffCache
     half_face_flux_faces::Union{TervAutoDiffCache, Nothing}
     function ConservationLaw(nc, nhf, neqs, cell_partials, face_partials = 0; cell_unit = Cells(), face_unit = Faces(), kwarg...)
-        alloc = (n, np, unit) -> CompactAutoDiffCache(n, np, unit = unit; kwarg...)
+        alloc = (n, np, unit) -> CompactAutoDiffCache(neqs, n, np, unit = unit; kwarg...)
         acc = alloc(nc, cell_partials, cell_unit)
         hf_cells = alloc(nhf, cell_partials, cell_unit)
         if face_partials > 0
