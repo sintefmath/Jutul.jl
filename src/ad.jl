@@ -20,6 +20,13 @@ struct CompactAutoDiffCache <: TervAutoDiffCache
     end
 end
 
+@inline function get_entries(e::TervEquation)
+    return get_entries(e.equation)
+end
+
+@inline function get_entries(c::CompactAutoDiffCache)
+    return c.entries
+end
 
 @inline function get_entry(c::CompactAutoDiffCache, index, eqNo = 1)
     c.entries[eqNo, index]
@@ -56,11 +63,16 @@ function update_linearized_system_subset!(jac, r, model, cache::TervAutoDiffCach
     end
 end
 
-function diagonal_alignment!(cache::TervAutoDiffCache, jac, ::EquationMajorLayout; eq_index = 1:c.number_of_units)
-    for i in 1:cache.number_of_units
-        for e in 1:cache.equations_per_unit
-            for d = 1:cache.npartials
-                update_jacobian_entry!(nz, cache, i, e, d)
+function diagonal_alignment!(cache::TervAutoDiffCache, jac, layout; eq_index = 1:cache.number_of_units, target_offset = 0, source_offset = 0)
+    nu = cache.number_of_units
+    ne = cache.equations_per_unit
+    np = cache.npartials
+    nix = length(eq_index)
+    for i in eq_index
+        for e in 1:ne
+            for d = 1:np
+                pos = find_jac_position(jac, i + target_offset, i + source_offset, e, d, nix, nu, ne, np, layout)
+                set_jacobian_pos!(cache, i, e, d, pos)
             end
         end
     end

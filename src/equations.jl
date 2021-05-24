@@ -1,6 +1,39 @@
 export allocate_array_ad, get_ad_unit_scalar, update_values!
 export value, find_sparse_position
 
+function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
+                              equation_index, partial_index,        # Index of equation and partial derivative - local index
+                              nunits_target, nunits_source,         # Row and column sizes for each sub-system
+                              eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
+                              ::EquationMajorLayout)
+    row = nunits_target*(equation_index-1) + target_unit_index
+    col = nunits_source*(partial_index-1) + source_unit_index
+    find_sparse_position(A, row, col)
+end
+
+function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
+    equation_index, partial_index,        # Index of equation and partial derivative - local index
+    nunits_target, nunits_source,         # Row and column sizes for each sub-system
+    eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
+    ::UnitMajorLayout)
+    error("Not implemented")
+end
+
+function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
+    equation_index, partial_index,        # Index of equation and partial derivative - local index
+    nunits_target, nunits_source,         # Row and column sizes for each sub-system
+    eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
+    ::BlockMajorLayout)
+    row = target_unit_index
+    col = source_unit_index
+
+    pos = find_sparse_position(A, row, col)
+    # We now have the I+J position.
+    # We assume that the nzval has eqs_per_unit*partials_per_unit rows,
+    # with columns equal to nunits_target * nunits*source
+    return (pos-1)*eqs_per_unit*partials_per_unit + partials_per_unit*(equation_index-1) + partial_index
+end
+
 function find_sparse_position(A::SparseMatrixCSC, row, col)
     for pos = A.colptr[col]:A.colptr[col+1]-1
         if A.rowval[pos] == row
@@ -71,6 +104,11 @@ in the Jacobian representation.
 """
 function align_to_jacobian!(::TervEquation, jac, model) end
 
+
+function align_to_jacobian!(eq::DiagonalEquation, jac, model; row_offset = 0, col_offset = 0)
+    layout = matrix_layout(model.context)
+    diagonal_alignment!(eq.equation, jac, layout, target_offset = row_offset, source_offset = col_offset)
+end
 
 """
 Update a linearized system based on the values and derivatives in the equation.

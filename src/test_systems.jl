@@ -18,7 +18,7 @@ struct ScalarTestForce
 end
 
 # Equations
-struct ScalarTestEquation <: TervEquation
+struct ScalarTestEquation <: DiagonalEquation
     equation
     function ScalarTestEquation(G::TervDomain, npartials::Integer; context = DefaultContext(), kwarg...)
         nc = number_of_cells(G)
@@ -33,10 +33,6 @@ function declare_sparsity(model, e::ScalarTestEquation)
     return (1, 1, 1, 1)
 end
 
-function align_to_jacobian!(eq::ScalarTestEquation, jac, model; row_offset = 0, col_offset = 0)
-    eq.equation_jac_pos .= find_sparse_position(jac, row_offset + 1, col_offset + 1)
-end
-
 # Model features
 function allocate_equations!(eqs, storage, model::SimulationModel{G, S}; kwarg...) where {G<:ScalarTestDomain, S<:ScalarTestSystem}
     eqs[:TestEquation] = ScalarTestEquation(model.domain, 1, context = model.context; kwarg...)
@@ -45,7 +41,8 @@ end
 function update_equation!(eq::ScalarTestEquation, storage, model, dt)
     X = storage.state.XVar
     X0 = storage.state0.XVar
-    @. eq.equation = (X - X0)/dt
+    equation = get_entries(eq)
+    @. equation = (X - X0)/dt
 end
 
 function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:ScalarTestDomain, S<:ScalarTestSystem}
@@ -53,7 +50,8 @@ function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<
 end
 
 function apply_forces_to_equation!(storage, model, eq::ScalarTestEquation, force::ScalarTestForce)
-    @. eq.equation -= force.value
+    equation = get_entries(eq)
+    @. equation -= force.value
 end
 
 function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, target_storage, source_storage, target, source, dt)

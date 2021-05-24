@@ -120,6 +120,7 @@ struct FullyImplicit <: TervFormulation end
 
 # Equations
 abstract type TervEquation end
+abstract type DiagonalEquation <: TervEquation end
 
 # Models
 abstract type TervModel end
