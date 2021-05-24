@@ -55,9 +55,9 @@ end
 Get the number of equations per unit. For example, mass balance of two
 components will have two equations per grid cell (= unit)
 """
-function number_of_equations_per_unit(::TervEquation)
+function number_of_equations_per_unit(e::TervEquation)
     # Default: One equation per unit (= cell,  face, ...)
-    return 1
+    return get_diagonal_cache(e).equations_per_unit
 end
 
 """
@@ -78,7 +78,7 @@ end
 Get the number of partials
 """
 function number_of_partials_per_unit(e::TervEquation)
-    return length(e.equation[1].partials)
+    return get_diagonal_cache(e).npartials
 end
 
 """
@@ -124,9 +124,11 @@ function update_linearized_system_subset!(lsys, model, equation::TervEquation; r
 end
 
 function update_linearized_system_subset!(jac, r, model, equation::TervEquation)
-    e = equation.equation
-    e::TervAutoDiffCache
-    update_linearized_system_subset!(jac, r, model, e)
+    # NOTE: Defalt only updates diagonal part
+    caches = get_caches(equation)
+    for c in caches
+        update_linearized_system_subset!(jac, r, model, c)
+    end
 end
 
 
@@ -156,6 +158,14 @@ function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
     return (e, 1.0)
 end
 
-function get_diagonal_part(eq::TervEquation)
-    return get_entries(eq.equation)
+@inline function get_diagonal_part(eq::TervEquation)
+    return get_entries(get_diagonal_cache(eq))
+end
+
+@inline function get_diagonal_cache(eq::TervEquation)
+    return eq.equation
+end
+
+@inline function get_caches(eq::DiagonalEquation)
+    [get_diagonal_cache(eq)]
 end

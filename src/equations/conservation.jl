@@ -60,13 +60,11 @@ function update_linearized_system_subset!(jac, r, model, law::ConservationLaw)
     fill_half_face_fluxes(jac, r, cpos, law.half_face_flux, apos, fpos, neq, context, ker_compat)
 end
 
-function number_of_equations_per_unit(e::ConservationLaw)
-    return size(e.half_face_flux, 1)
+
+function get_diagonal_cache(e::ConservationLaw)
+    e.accumulation
 end
 
-function number_of_partials_per_unit(e::ConservationLaw)
-    return length(e.accumulation[1].partials)
-end
 
 function declare_sparsity(model, e::ConservationLaw)
     hfd = Array(model.domain.discretizations.KGrad.conn_data)
