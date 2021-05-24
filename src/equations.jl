@@ -88,7 +88,7 @@ to the given model.
 function declare_sparsity(model, e::TervEquation, unit = domain_unit(e), layout::EquationMajorLayout = EquationMajorLayout())
     primitive = declare_pattern(model, e, unit)
     if isnothing(primitive)
-        return ([], [], NaN, NaN)
+        return nothing
     else
         I = primitive[1]
         J = primitive[2]
@@ -170,10 +170,7 @@ end
 
 function update_linearized_system_subset!(jac, r, model, equation::TervEquation)
     # NOTE: Defalt only updates diagonal part
-    caches = get_caches(equation)
-    for c in caches
-        update_linearized_system_subset!(jac, r, model, c)
-    end
+    update_linearized_system_subset!(jac, r, model, get_diagonal_cache(equation))
 end
 
 
@@ -209,8 +206,4 @@ end
 
 @inline function get_diagonal_cache(eq::TervEquation)
     return eq.equation
-end
-
-@inline function get_caches(eq::DiagonalEquation)
-    [get_diagonal_cache(eq)]
 end
