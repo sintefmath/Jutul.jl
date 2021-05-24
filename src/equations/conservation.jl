@@ -96,10 +96,10 @@ function update_linearized_system_subset_cell_flux!(jac, r, model, acc, cell_flu
     for cell = 1:nc
         for i = conn_pos[cell]:(conn_pos[cell+1]-1)
             for e in 1:ne
-                @inbounds r[cell + ne*(e-1)] += get_value(cell_flux, i, e)
-                p = get_partials(cell_flux, i, e)
+                f = get_entry(cell_flux, i, e)
+                @inbounds r[cell + ne*(e-1)] += f.value
                 for d = 1:np
-                    df_di = p[d]
+                    df_di = f.partials[d]
                     apos = get_jacobian_pos(acc, cell, e, d)
                     fpos = get_jacobian_pos(cell_flux, i, e, d)
                     @inbounds Jz[apos] += df_di
