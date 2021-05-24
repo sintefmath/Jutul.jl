@@ -6,6 +6,7 @@ struct CompactAutoDiffCache <: TervAutoDiffCache
     unit
     jacobian_positions
     equations_per_unit
+    number_of_units
     npartials
     function CompactAutoDiffCache(equations_per_unit, n_units, npartials = 1; unit = Cells(), context = DefaultContext(), kwarg...)
         I = index_type(context)
@@ -15,9 +16,10 @@ struct CompactAutoDiffCache <: TervAutoDiffCache
         # Since partials are all fetched together with the value, we make partials the fastest index.
         pos = zeros(I, equations_per_unit*npartials, n_units)
         pos = transfer(context, pos)
-        new(entries, unit, pos, equations_per_unit, npartials)
+        new(entries, unit, pos, equations_per_unit, n_units, npartials)
     end
 end
+
 
 @inline function get_entry(c::CompactAutoDiffCache, index, eqNo = 1)
     c.entries[eqNo, index]
@@ -38,6 +40,32 @@ end
 @inline function set_jacobian_pos!(c::CompactAutoDiffCache, index, eqNo, partial_index, pos)
     c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
 end
+
+@inline function update_jacobian_entry!(nzval, c::CompactAutoDiffCache, index, eqNo, partial_index)
+    @inbounds nzval[get_jacobian_pos(c, index, eqNo, partial_index)] = get_partial(c, index, eqNo, partial_index)
+end
+
+function update_linearized_system_subset!(jac, r, model, cache::TervAutoDiffCache)
+    nz = get_nzval(jac)
+    for i in 1:cache.number_of_units
+        for e in 1:cache.equations_per_unit
+            for d = 1:cache.npartials
+                update_jacobian_entry!(nz, cache, i, e, d)
+            end
+        end
+    end
+end
+
+function diagonal_alignment!(cache::TervAutoDiffCache, jac, ::EquationMajorLayout; eq_index = 1:c.number_of_units)
+    for i in 1:cache.number_of_units
+        for e in 1:cache.equations_per_unit
+            for d = 1:cache.npartials
+                update_jacobian_entry!(nz, cache, i, e, d)
+            end
+        end
+    end
+end
+
 
 # Primary variables
 

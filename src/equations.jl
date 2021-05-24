@@ -86,18 +86,9 @@ function update_linearized_system_subset!(lsys, model, equation::TervEquation; r
 end
 
 function update_linearized_system_subset!(jac, r, model, equation::TervEquation)
-    # TODO: Generalize to non-scalar equation per unit setting
-    nz = get_nzval(jac)
-    # The default implementation assumes that the equation has equation and equation_jac_pos
-    eq = equation.equation
-    jpos = equation.equation_jac_pos
-    for eqNo in 1:length(eq)
-        e = eq[eqNo]
-        r[eqNo] = value(e)
-        for derNo = 1:size(jpos, 1)
-            nz[jpos[derNo, eqNo]] = e.partials[derNo]
-        end
-    end
+    e = equation.equation
+    e::TervAutoDiffCache
+    update_linearized_system_subset!(jac, r, model, e)
 end
 
 

@@ -20,14 +20,12 @@ end
 # Equations
 struct ScalarTestEquation <: TervEquation
     equation
-    equation_jac_pos
     function ScalarTestEquation(G::TervDomain, npartials::Integer; context = DefaultContext(), kwarg...)
-        I = index_type(context)
         nc = number_of_cells(G)
         @assert nc == 1 # We use nc for clarity of the interface - but it should always be one!
-        e = allocate_array_ad(1, nc, context = context, npartials = npartials; kwarg...)
-        v = zeros(I, npartials, nc)
-        new(e, v)
+        ne = 1 # Single, scalar equation
+        e = CompactAutoDiffCache(ne, nc, npartials, context = context; kwarg...)
+        new(e)
     end
 end
 

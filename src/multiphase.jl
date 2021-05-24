@@ -187,8 +187,7 @@ end
 
 function allocate_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
     nph = number_of_phases(model.system)
-    npartials = nph
-    law = ConservationLaw(model.domain, npartials, context = model.context, equations_per_unit = nph; kwarg...)
+    law = ConservationLaw(model, nph)
     eqs[:MassConservation] = law
     return eqs
 end

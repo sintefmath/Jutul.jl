@@ -4,7 +4,7 @@ struct ConservationLaw <: TervEquation
     accumulation::TervAutoDiffCache
     half_face_flux_cells::TervAutoDiffCache
     half_face_flux_faces::Union{TervAutoDiffCache, Nothing}
-    function ConservationLaw(nc, nhf, neqs = 1, cell_partials = 1, face_partials = 0; cell_unit = Cells(), face_unit = Faces(), kwarg...)
+    function ConservationLaw(nc, nhf, neqs, cell_partials, face_partials = 0; cell_unit = Cells(), face_unit = Faces(), kwarg...)
         alloc = (n, np, unit) -> CompactAutoDiffCache(n, np, unit = unit; kwarg...)
         acc = alloc(nc, cell_partials, cell_unit)
         hf_cells = alloc(nhf, cell_partials, cell_unit)
@@ -118,7 +118,7 @@ function accumulation_sparse_pos!(accpos, jac, neq, nder, row_offset = 0, col_of
             pos = jac.colptr[col_pos]:jac.colptr[col_pos+1]-1
             for row = 1:neq
                 row_ix = (row-1)*nc + i + row_offset
-                accpos[(row-1)*nder + col, i] = pos[jac.rowval[pos] .== row_ix][1]
+                accpos[(row-1)*nder + col, i] = pos[jac.rowval[pos] .== row_ix][]
             end
         end
     end
