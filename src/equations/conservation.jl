@@ -16,7 +16,6 @@ struct ConservationLaw <: TervEquation
         end
         @assert length(half_face_cell_pos) == nc + 1
         @assert half_face_cell_pos[end] == nhf + 1 "Expected last entry to be $nhf + 1, map was: $half_face_cell_pos"
-        display(half_face_cell_pos)
         @assert half_face_cell_pos[1] == 1
         new(acc, hf_cells, hf_faces, half_face_cell_pos)
     end
