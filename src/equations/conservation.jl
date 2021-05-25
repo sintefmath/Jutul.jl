@@ -15,7 +15,8 @@ struct ConservationLaw <: TervEquation
             hf_faces = nothing
         end
         @assert length(half_face_cell_pos) == nc + 1
-        @assert half_face_cell_pos[end] == nhf + 1
+        @assert half_face_cell_pos[end] == nhf + 1 "Expected last entry to be $nhf + 1, map was: $half_face_cell_pos"
+        display(half_face_cell_pos)
         @assert half_face_cell_pos[1] == 1
         new(acc, hf_cells, hf_faces, half_face_cell_pos)
     end
@@ -29,7 +30,8 @@ function ConservationLaw(model, number_of_equations; cell_unit = Cells(), face_u
     cell_partials = degrees_of_freedom_per_unit(model, cell_unit)
     face_partials = degrees_of_freedom_per_unit(model, face_unit)
 
-    half_face_cell_pos = model.domain.discretizations.KGrad.conn_pos
+    # half_face_cell_pos = model.domain.discretizations.KGrad.conn_pos
+    half_face_cell_pos = positional_map(model.domain, cell_unit, face_unit)
     ConservationLaw(nc, nhf, number_of_equations, half_face_cell_pos, cell_partials, face_partials, cell_unit = cell_unit, face_unit = cell_unit; kwarg...)
 end
 

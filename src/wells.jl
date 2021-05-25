@@ -4,7 +4,7 @@ export SegmentTotalVelocity, BottomHolePressure, SurfacePhaseRates
 
 export InjectorControl, ProducerControl, SinglePhaseRateTarget, BottomHolePressureTarget
 
-export WellSegments, WellVariables, Perforations
+export WellVariables, Perforations
 
 abstract type WellGrid <: TervGrid end
 struct MultiSegmentWell <: WellGrid 
@@ -20,13 +20,13 @@ struct MultiSegmentWell <: WellGrid
                                                         perforation_cells = nothing,
                                                         reference_depth = 0,
                                                         accumulator_dz = 0)
-        nseg = length(dz)
+        nseg = length(dz) - 1
         nc = length(volumes)
         nr = length(reservoir_cells)
 
         if isnothing(N)
             @debug "No connectivity. Assuming nicely ordered linear well."
-            N = vcat((0:nc-1)', (1:nc)')
+            N = vcat((1:nc-1)', (2:nc)')
         end
         if isnothing(dz)
             @warn "No connection dz provided. Using 0. Gravity will not affect this well."
@@ -43,7 +43,7 @@ struct MultiSegmentWell <: WellGrid
         @assert size(N, 1) == 2
         @assert size(N, 1) == 2
         @assert size(N, 2) == nseg "Topology must have one row per segment"
-        @assert length(dz) == nseg "dz must have one entry per segment"
+        # @assert length(dz) == nseg "dz must have one entry per segment, plus one for the top segment"
         @assert length(WI) == nr  "Must have one well index per perforated cell"
         @assert length(perforation_cells) == nr
 
@@ -58,10 +58,6 @@ end
 Perforations are connections from well cells to reservoir vcells
 """
 struct Perforations <: TervUnit end
-"""
-Well segments - connections between cells inside a well
-"""
-struct WellSegments <: TervUnit end
 """
 Well variables - units that we have exactly one of per well (and usually relates to the surface connection)
 """
@@ -93,7 +89,7 @@ end
 
 function declare_units(W::MultiSegmentWell)
     c = (Cells(),         length(W.volumes))
-    f = (WellSegments(),  size(W.neighborship, 2))
+    f = (Faces(),         size(W.neighborship, 2))
     p = (Perforations(),  length(W.perforations.self))
     w = (WellVariables(), 1)
     return [c, f, p, w]
@@ -101,7 +97,7 @@ end
 
 # Total velocity in each well segment
 struct SegmentTotalVelocity <: ScalarPrimaryVariable end
-function associated_unit(::SegmentTotalVelocity) WellSegments() end
+function associated_unit(::SegmentTotalVelocity) Faces() end
 
 # Bottom hole pressure for the well
 struct BottomHolePressure <: ScalarPrimaryVariable end
