@@ -125,6 +125,7 @@ function get_sparse_arguments(storage, model, layout = matrix_layout(model.conte
                 push!(J, j)          # Column indices
                 nrows += S[3]
             end
+            # TODO: Fix offset for multiple units with primary variables
         end
     end
     I = vcat(I...)

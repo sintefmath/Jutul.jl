@@ -115,30 +115,51 @@ function update_jacobian_subset!(jac, model_t, model_s, ct::CrossTerm)
     end
 end
 
-function declare_sparsity(target_model, source_model, x::InjectiveCrossTerm)
-    n_partials = x.npartials_source
-    n_eqs = x.equations_per_unit
-    nunits_source = count_units(source_model.domain, x.units[2])
+function declare_pattern(target_model, source_model, x::InjectiveCrossTerm, unit)
+    source_unit = x.units.source
+    if unit == source_unit
+        nunits_source = count_units(source_model.domain, source_unit)
 
-    target_impact = x.impact.target
-    source_impact = x.impact.source
+        target_impact = x.impact.target
+        source_impact = x.impact.source
 
-    n_impact = length(target_impact)
+        n_impact = length(target_impact)
 
-    I = []
-    J = []
-    for eqno in 1:n_eqs
-        for derno in 1:n_partials
-            push!(I, target_impact .+ (eqno-1)*n_impact)
-            push!(J, source_impact .+ (derno-1)*nunits_source)
-        end
+        out = (target_impact, source_impact, n_impact, nunits_source)
+    else
+        out = nothing
     end
-    I = vcat(I...)
-    J = vcat(J...)
+    return out
+end
 
-    n = n_eqs*n_impact
-    m = n_partials*nunits_source
-    return (I, J, n, m)
+function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout::EquationMajorLayout)
+    primitive = declare_pattern(target_model, source_model, x, unit)
+    if isnothing(primitive)
+        out = nothing
+    else
+        target_impact = primitive[1]
+        source_impact = primitive[2]
+        n_impact = primitive[3]
+        nunits_source = primitive[4]
+
+        n_partials = x.npartials_source
+        n_eqs = x.equations_per_unit
+        I = []
+        J = []
+        for eqno in 1:n_eqs
+            for derno in 1:n_partials
+                push!(I, target_impact .+ (eqno-1)*n_impact)
+                push!(J, source_impact .+ (derno-1)*nunits_source)
+            end
+        end
+        I = vcat(I...)
+        J = vcat(J...)
+
+        n = n_eqs*n_impact
+        m = n_partials*nunits_source
+        out = (I, J, n, m)
+    end
+    return out
 end
 
 
@@ -276,6 +297,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
     models = model.models
     target_model = models[target]
     source_model = models[source]
+    source_layout = matrix_layout(source_model.context)
     F = float_type(source_model.context)
 
     if target == source
@@ -294,9 +316,15 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         for (key, eq) in equations
             x = cross_terms[key]
             if !isnothing(x)
-                i, j, = declare_sparsity(target_model, source_model, x)
-                push!(I, i .+ row_offset)
-                push!(J, j)
+                col_offset = 0
+                for u in get_units(source_model.domain)
+                    S = declare_sparsity(target_model, source_model, x, u, source_layout)
+                    if !isnothing(S)
+                        push!(I, S[1] .+ row_offset)
+                        push!(J, S[2] .+ col_offset)
+                    end
+                    # TODO: col_offset must be incremented here.
+                end
             end
             row_offset += number_of_equations(target_model, eq)
         end
