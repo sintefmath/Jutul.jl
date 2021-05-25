@@ -44,8 +44,8 @@ function positional_map(grid::TervGrid, source_unit, target_unit)
 end
 
 function positional_map(grid::TervGrid, ::Cells, ::Faces)
-    _, facePos = get_facepos(grid.neighborship)
-    facePos
+    faces, facePos = get_facepos(grid.neighborship)
+    (indices = faces, pos = facePos)
 end
 
 
