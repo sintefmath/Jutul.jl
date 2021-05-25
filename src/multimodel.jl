@@ -29,14 +29,14 @@ A cross model term where the dependency is injective and the term is additive:
 and is added into that position upon application)
 """
 struct InjectiveCrossTerm <: CrossTerm
-    impact             # 2 by N - first row is target, second is source
-    units              # tuple - first tuple is target, second is source
-    crossterm_target   # The cross-term, with AD values taken relative to the target
-    crossterm_source   # Same cross-term, AD values taken relative to the source
-    cross_jac_pos      # Positions that map crossterm_source C into the off-diagonal block ∂C/∂S where S are impacted primary variables of source
-    equations_per_unit # Number of equations per impact
-    npartials_target   # Number of partials per equation (in target)
-    npartials_source   # (in source)
+    impact                 # 2 by N - first row is target, second is source
+    units                  # tuple - first tuple is target, second is source
+    crossterm_target       # The cross-term, with AD values taken relative to the targe
+    crossterm_source       # Same cross-term, AD values taken relative to the source
+    crossterm_source_cache # The cache that holds crossterm_source together with the entries.
+    equations_per_unit     # Number of equations per impact
+    npartials_target       # Number of partials per equation (in target)
+    npartials_source       # (in source)
     function InjectiveCrossTerm(target_eq, target_model, source_model; target = nothing, source = nothing)
         context = target_model.context
         target_unit = domain_unit(target_eq)
@@ -49,44 +49,29 @@ struct InjectiveCrossTerm <: CrossTerm
 
         npartials_target = number_of_partials_per_unit(target_model, target_unit)
         npartials_source = number_of_partials_per_unit(source_model, source_unit)
-        
-        alloc = (n, t) -> allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = n, tag = t)
 
-        c_term_target = alloc(npartials_target, target)
-        c_term_source = alloc(npartials_source, source)
+        c_term_target = allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = npartials_target, tag = target)
+        c_term_source_c = CompactAutoDiffCache(equations_per_unit, noverlap, npartials_source, context = context, tag = source)
+        c_term_source = c_term_source_c.entries
+        # c_term_source = alloc(npartials_source, source)
 
-        jac_pos = zeros(I, equations_per_unit*npartials_source, noverlap)
+        # jac_pos = zeros(I, equations_per_unit*npartials_source, noverlap)
         # Units and overlap - target, then source
         units = (target = target_unit, source = source_unit)
         overlap = (target = target_impact, source = source_impact)
-        new(overlap, units, c_term_target, c_term_source, jac_pos, equations_per_unit, npartials_target, npartials_target)
+        new(overlap, units, c_term_target, c_term_source, c_term_source_c, equations_per_unit, npartials_target, npartials_target)
     end
 end
 
 function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, source::TervModel; row_offset = 0, col_offset = 0)
-    jpos = ct.cross_jac_pos
-    nunits = size(ct.cross_jac_pos, 2)
+    cs = ct.crossterm_source_cache
 
-    nunits_source = count_units(source.domain, ct.units.source)
+    layout = matrix_layout(source.context)
 
     impact_target = ct.impact[1]
     impact_source = ct.impact[2]
-    
-    @assert length(impact_target) == nunits
-    @assert length(impact_source) == nunits
 
-    ne = ct.equations_per_unit
-    nder = ct.npartials_source
-    for overlap_no = 1:nunits
-        for eqNo = 1:ne
-            for derNo = 1:nder
-                p = (eqNo-1)*nder + derNo
-                row = (eqNo-1)*nunits + impact_target[overlap_no] + row_offset
-                col = (derNo-1)*nunits_source + impact_source[overlap_no] + col_offset
-                jpos[p, overlap_no] = find_sparse_position(jac, row, col)
-            end
-        end
-    end
+    injective_alignment!(cs, jac, layout, target_index = impact_target, source_index = impact_source, target_offset = row_offset, source_offset = col_offset)
 end
 
 function apply_cross_term!(eq, ct, model_t, model_s, arg...)
@@ -97,22 +82,8 @@ function apply_cross_term!(eq, ct, model_t, model_s, arg...)
 end
 
 
-function update_jacobian_subset!(jac, model_t, model_s, ct::CrossTerm)
-    q = ct.crossterm_source
-    jpos = ct.cross_jac_pos
-    nunits = size(ct.cross_jac_pos, 2)
-    ne = ct.equations_per_unit
-    nder = ct.npartials_source 
-    nz = get_nzval(jac)
-    for overlap_no = 1:nunits
-        for eqNo = 1:ne
-            qi = q[eqNo, overlap_no]
-            for derNo = 1:nder
-                p = (eqNo-1)*nder + derNo
-                nz[jpos[p, overlap_no]] = qi.partials[derNo]
-            end
-        end
-    end
+function update_linearized_system_subset!(jac, model_t, model_s, ct::InjectiveCrossTerm)
+    update_linearized_system_subset!(jac, nothing, model_s, ct.crossterm_source_cache)
 end
 
 function declare_pattern(target_model, source_model, x::InjectiveCrossTerm, unit)
@@ -490,7 +461,7 @@ function update_linearized_system_crossterms!(lsys, storage, model::MultiModel, 
     eqs = storage_t[:equations]
     for ekey in keys(eqs)
         ct = cross_terms[ekey]
-        update_jacobian_subset!(lsys.jac, model_t, model_s, ct::CrossTerm)
+        update_linearized_system_subset!(lsys.jac, model_t, model_s, ct::CrossTerm)
     end
 end
 

@@ -69,7 +69,9 @@ function update_linearized_system_subset!(jac, r, model, cache::TervAutoDiffCach
         for e in 1:cache.equations_per_unit
             # Note: The residual part needs to be fixed for non-standard alignments
             a = get_entry(cache, i, e)
-            r[i + nu*(e-1)] = a.value
+            if !isnothing(r)
+                r[i + nu*(e-1)] = a.value
+            end
             for d = 1:cache.npartials
                 update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
             end
