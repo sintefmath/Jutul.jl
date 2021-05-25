@@ -88,26 +88,27 @@ to the given model.
 function declare_sparsity(model, e::TervEquation, unit, layout::EquationMajorLayout)
     primitive = declare_pattern(model, e, unit)
     if isnothing(primitive)
-        return nothing
+        out = nothing
     else
         I = primitive[1]
         J = primitive[2]
         nu = primitive[3]
+        nrow_blocks = number_of_equations_per_unit(e)
+        ncol_blocks = number_of_partials_per_unit(model, unit)
+        nunits = count_units(model.domain, unit)
+        if nrow_blocks > 1
+            I = vcat(map((x) -> (x-1)*nu .+ I, 1:nrow_blocks)...)
+            J = repeat(J, nrow_blocks)
+        end
+        if ncol_blocks > 1
+            I = repeat(I, ncol_blocks)
+            J = vcat(map((x) -> (x-1)*nu .+ J, 1:ncol_blocks)...)
+        end
+        n = number_of_equations(model, e)
+        m = nunits*ncol_blocks
+        out = (I, J, n, m)
     end
-    nrow_blocks = number_of_equations_per_unit(e)
-    ncol_blocks = number_of_partials_per_unit(model, unit)
-    nunits = count_units(model.domain, unit)
-    if nrow_blocks > 1
-        I = vcat(map((x) -> (x-1)*nu .+ I, 1:nrow_blocks)...)
-        J = repeat(J, nrow_blocks)
-    end
-    if ncol_blocks > 1
-        I = repeat(I, ncol_blocks)
-        J = vcat(map((x) -> (x-1)*nu .+ J, 1:ncol_blocks)...)
-    end
-    n = number_of_equations(model, e)
-    m = nunits*ncol_blocks
-    return (I, J, n, m)
+    return out
 end
 
 function declare_sparsity(model, e::TervEquation, unit, ::BlockMajorLayout)

@@ -2,6 +2,10 @@ function declare_units(G::TervGrid)
     return [(Cells(), 1)]
 end
 
+function get_units(D::TervDomain)
+    return keys(D.units)
+end
+
 function count_units(D::TervDomain, ::Cells)
     # The default implementation yields a single cell and nothing else.
     1

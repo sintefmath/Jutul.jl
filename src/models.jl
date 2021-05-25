@@ -116,12 +116,16 @@ function get_sparse_arguments(storage, model, layout = matrix_layout(model.conte
     J = []
     nrows = 0
     for (k, eq) in eqs
-        S = declare_sparsity(model, eq, domain_unit(eq), layout)
-        i = S[1]
-        j = S[2]
-        push!(I, i .+ nrows) # Row indices, offset by the size of preceeding equations
-        push!(J, j)          # Column indices
-        nrows += S[3]
+        for u in get_units(model.domain)
+            S = declare_sparsity(model, eq, u, layout)
+            if !isnothing(S)
+                i = S[1]
+                j = S[2]
+                push!(I, i .+ nrows) # Row indices, offset by the size of preceeding equations
+                push!(J, j)          # Column indices
+                nrows += S[3]
+            end
+        end
     end
     I = vcat(I...)
     J = vcat(J...)
