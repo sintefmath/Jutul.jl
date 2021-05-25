@@ -41,9 +41,13 @@ struct InjectiveCrossTerm <: CrossTerm
         context = target_model.context
         target_unit = domain_unit(target_eq)
         target_impact, source_impact, source_unit = get_domain_intersection(target_unit, target_model, source_model)
-        noverlap = length(target_impact)
-        @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
-        I = index_type(context)
+        if isnothing(target_impact)
+            noverlap = 0
+            @assert isnothing(source_impact) "Injective source must have one to one mapping between impact and source."
+        else
+            noverlap = length(target_impact)
+            @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
+        end
         # Infer Unit from target_eq
         equations_per_unit = number_of_equations_per_unit(target_eq)
 
@@ -53,9 +57,7 @@ struct InjectiveCrossTerm <: CrossTerm
         c_term_target = allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = npartials_target, tag = target)
         c_term_source_c = CompactAutoDiffCache(equations_per_unit, noverlap, npartials_source, context = context, tag = source)
         c_term_source = c_term_source_c.entries
-        # c_term_source = alloc(npartials_source, source)
 
-        # jac_pos = zeros(I, equations_per_unit*npartials_source, noverlap)
         # Units and overlap - target, then source
         units = (target = target_unit, source = source_unit)
         overlap = (target = target_impact, source = source_impact)
@@ -200,7 +202,8 @@ end
 
 function declare_cross_term(eq::TervEquation, target_model, source_model; kwarg...)
     ct = InjectiveCrossTerm(eq, target_model, source_model; kwarg...)
-    if length(ct.impact[1]) == 0
+    target_impact = ct.impact.target
+    if isnothing(target_impact) || length(target_impact) == 0
         # Declare nothing, so we can easily spot no overlap
         ct = nothing
     end
