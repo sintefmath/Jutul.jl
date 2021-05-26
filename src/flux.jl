@@ -1,8 +1,11 @@
 export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
+export SPU, TPFA
 
 abstract type TwoPointDiscretization <: TervDiscretization end
 
-abstract type KGradDiscretization <: TervDiscretization end
+abstract type PotentialFlowDiscretization <: TervDiscretization end
+abstract type KGradDiscretization <: PotentialFlowDiscretization end
+
 abstract type UpwindDiscretization <: TervDiscretization end
 
 """
@@ -36,12 +39,12 @@ function get_connection(face, cell, faces, N, T, z)
     return convert_to_immutable_storage(D)
 end
 
-struct TwoPointDarcyFlow{U <:UpwindDiscretization, K <:KGradDiscretization} <: FlowDiscretization
+struct TwoPointPotentialFlow{U <:UpwindDiscretization, K <:PotentialFlowDiscretization} <: FlowDiscretization
     upwind::U
-    kgrad::K
+    grad::K
     conn_pos
     conn_data
-    function TwoPointDarcyFlow(u, k, grid, T = nothing, z = nothing)
+    function TwoPointPotentialFlow(u, k, grid, T = nothing, z = nothing)
         N = grid.neighborship
         faces, face_pos = get_facepos(N)
 

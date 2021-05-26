@@ -59,7 +59,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     else
         z = nothing
     end
-    flow = TwoPointDarcyFlow(SPU(), TPFA(), G, T, z)
+    flow = TwoPointPotentialFlow(SPU(), TPFA(), G, T, z)
     disc = (mass_flow = flow,)
     D = DiscretizedDomain(G, disc)
 
