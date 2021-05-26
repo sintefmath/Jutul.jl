@@ -54,36 +54,46 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
     T = compute_face_trans(T_hf, N)
 
-    nhf = length(T_hf)
-    faces, facePos = get_facepos(N)
+    # nhf = length(T_hf)
+    # faces, facePos = get_facepos(N)
 
-    float_type = typeof(T[1])
-    index_type = typeof(N[1])
-    t = TPFAHalfFaceData{float_type, index_type}
-    faceData = Vector{t}(undef, nhf)
+    # float_type = typeof(T[1])
+    # index_type = typeof(N[1])
+    # t = TPFAHalfFaceData{float_type, index_type}
+    # faceData = Vector{t}(undef, nhf)
 
-    Threads.@threads for cell = 1:nc
-        @inbounds for fpos = facePos[cell]:(facePos[cell+1]-1)
-            face = faces[fpos]
-            if N[1, face] == cell
-                other = N[2, face]
-            else
-                other = N[1, face]
-            end
-            if size(cell_centroids, 1) == 3
-                dz = cell_centroids[3, cell] - cell_centroids[3, other]
-            else
-                dz = 0
-            end
-            faceData[fpos] = t(T[face], dz, cell, other)
-        end
+    # Threads.@threads for cell = 1:nc
+    #     @inbounds for fpos = facePos[cell]:(facePos[cell+1]-1)
+    #         face = faces[fpos]
+    #         if N[1, face] == cell
+    #             other = N[2, face]
+    #         else
+    #             other = N[1, face]
+    #         end
+    #         if size(cell_centroids, 1) == 3
+    #             dz = cell_centroids[3, cell] - cell_centroids[3, other]
+    #         else
+    #             dz = 0
+    #         end
+    #         faceData[fpos] = t(T[face], dz, cell, other)
+    #     end
+    # end
+    # @debug "Setting up TPFA grid."
+    # # sg = MinimalTPFAGrid(faceData, pv)
+    G = MinimalTPFAGrid(pv, N)
+    # tpfa = TwoPointFlux(faceData, nc)
+    if size(cell_centroids, 1) == 3
+        z = cell_centroids[3, :]
+    else
+        z = nothing
     end
-    @debug "Setting up TPFA grid."
-    # sg = MinimalTPFAGrid(faceData, pv)
-    sg = MinimalTPFAGrid(pv, N)
-    tpfa = TwoPointFlux(faceData, nc)
-    disc = (KGrad = tpfa, Upstream = SinglePointUpstream())
-    D = DiscretizedDomain(sg, disc)
+    spu = SPU()
+    tpfa = TPFA()
+    flow = TwoPointDarcyFlow(spu, tpfa, G, T, z)
+    disc = (darcy_flow = flow,)
+    # display(disc)
+    # error()
+    D = DiscretizedDomain(G, disc)
 
     if extraout
         return (D, exported)

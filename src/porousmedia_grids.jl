@@ -1,4 +1,4 @@
-export MinimalTPFAGrid, TPFAHalfFaceData
+export MinimalTPFAGrid#, TPFAHalfFaceData
 export get_cell_faces, get_facepos, get_cell_neighbors
 export number_of_cells, number_of_faces, number_of_half_faces
 
@@ -7,17 +7,17 @@ export TwoPointFlux, SinglePointUpstream
 export transfer
 
 # Helpers follow
-"Minimal struct for TPFA connections (transmissibility + dz + cell pair)"
-struct TPFAHalfFaceData{R<:Real,I<:Integer}
-    T::R
-    dz::R
-    self::I
-    other::I
-end
+# "Minimal struct for TPFA connections (transmissibility + dz + cell pair)"
+# struct TPFAHalfFaceData{R<:Real,I<:Integer}
+#     T::R
+#     dz::R
+#     self::I
+#     other::I
+# end
 
-function TPFAHalfFaceData{R, I}(target::TPFAHalfFaceData) where {R<:Real, I<:Integer}
-    return TPFAHalfFaceData(R(target.T), R(target.dz), I(target.self), I(target.other))
-end
+# function TPFAHalfFaceData{R, I}(target::TPFAHalfFaceData) where {R<:Real, I<:Integer}
+#     return TPFAHalfFaceData(R(target.T), R(target.dz), I(target.self), I(target.other))
+# end
 
 abstract type PorousMediumGrid <: TervGrid end
 abstract type ReservoirGrid <: PorousMediumGrid end
@@ -26,9 +26,6 @@ abstract type ReservoirGrid <: PorousMediumGrid end
 struct MinimalTPFAGrid{R<:AbstractFloat, I<:Integer} <: ReservoirGrid
     pore_volumes::AbstractVector{R}
     neighborship::AbstractArray{I}
-    # conn_data::AbstractArray{TPFAHalfFaceData{R,I}}
-    # conn_pos::AbstractArray{I}
-    # pv::AbstractArray{R}
     function MinimalTPFAGrid(pv, N)
         nc = length(pv)
         pv::AbstractVector
@@ -40,39 +37,41 @@ struct MinimalTPFAGrid{R<:AbstractFloat, I<:Integer} <: ReservoirGrid
     end
 end
 
-struct SinglePointUpstream <: TervDiscretization
-
+function number_of_cells(G::ReservoirGrid)
+    return length(G.pore_volumes)
 end
 
-struct TwoPointFlux <: TervDiscretization
-    conn_data
-    conn_pos
-    function TwoPointFlux(conn_data, nc)
-        cno = [i.self for i in conn_data]
-        # Slow code for the same thing:
-        # counts = [sum(cno .== j) for j in 1:length(pv)]
-        # nc = length(pv)
-        counts = similar(cno, nc)
-        index = 1
-        cell = 1
-    
-        while cell < nc + 1
-            count = 0
-            while cno[index] == cell
-                count += 1
-                index += 1
-                if index > length(cno)
-                    break
-                end
-            end
-            counts[cell] = count
-            cell += 1
-        end
-        cpos = cumsum(vcat([1], counts))
-        new(conn_data, cpos)
-    end    
-end
+# struct SinglePointUpstream <: TervDiscretization
 
+# end
+
+# struct TwoPointFlux <: TervDiscretization
+#     conn_data
+#     conn_pos
+#     function TwoPointFlux(conn_data, nc)
+#         cno = [i.self for i in conn_data]
+#         # Slow code for the same thing:
+#         # counts = [sum(cno .== j) for j in 1:length(pv)]
+#         # nc = length(pv)
+#         counts = similar(cno, nc)
+#         index = 1
+#         cell = 1
+#         while cell < nc + 1
+#             ctr = 0
+#             while cno[index] == cell
+#                 ctr += 1
+#                 index += 1
+#                 if index > length(cno)
+#                     break
+#                 end
+#             end
+#             counts[cell] = ctr
+#             cell += 1
+#         end
+#         cpos = cumsum(vcat([1], counts))
+#         new(conn_data, cpos)
+#     end
+# end
 
 function declare_units(G::MinimalTPFAGrid)
     c = (Cells(), length(G.pore_volumes))  # Cells equal to number of pore volumes

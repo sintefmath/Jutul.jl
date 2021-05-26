@@ -27,7 +27,7 @@ include("porousmedia_grids.jl")
 
 # Meat and potatoes
 include("static_structures.jl")
-include("assembly.jl")
+include("flux.jl")
 include("benchmarks.jl")
 include("linsolve.jl")
 

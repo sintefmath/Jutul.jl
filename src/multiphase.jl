@@ -291,7 +291,8 @@ function update_half_face_flux!(law, storage, model)
     mmob = storage.properties.MassMobility
 
     flux = get_entries(law.half_face_flux_cells)
-    half_face_flux!(model, flux, mmob, p)
+    conn_data = law.flow_discretization
+    half_face_flux!(flux, model, conn_data, mmob, p)
 end
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}

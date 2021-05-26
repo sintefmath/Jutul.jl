@@ -12,7 +12,7 @@ abstract type TervSystem end
 
 # Discretization - currently unused
 abstract type TervDiscretization end
-struct DefaultDiscretization <: TervDiscretization end
+# struct DefaultDiscretization <: TervDiscretization end
 
 # Primary variables
 abstract type TervPrimaryVariables end

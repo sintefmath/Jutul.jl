@@ -4,9 +4,19 @@ struct ConservationLaw <: TervEquation
     accumulation::TervAutoDiffCache
     half_face_flux_cells::TervAutoDiffCache
     half_face_flux_faces::Union{TervAutoDiffCache, Nothing}
-    half_face_cell_pos
-    function ConservationLaw(nc, nhf, neqs, half_face_cell_pos, cell_partials, face_partials = 0; cell_unit = Cells(), face_unit = Faces(), kwarg...)
-        alloc = (n, np, unit) -> CompactAutoDiffCache(neqs, n, np, unit = unit; kwarg...)
+    flow_discretization::FlowDiscretization
+    function ConservationLaw(model, number_of_equations;
+                                            flow_discretization = model.domain.discretizations.darcy_flow,
+                                            cell_unit = Cells(),
+                                            face_unit = Faces(),
+                                            kwarg...)
+        D = model.domain
+        nc = count_units(D, cell_unit)
+        nhf = 2*count_units(D, face_unit)
+    
+        cell_partials = degrees_of_freedom_per_unit(model, cell_unit)
+        face_partials = degrees_of_freedom_per_unit(model, face_unit)
+        alloc = (n, np, unit) -> CompactAutoDiffCache(number_of_equations, n, np, unit = unit; kwarg...)
         acc = alloc(nc, cell_partials, cell_unit)
         hf_cells = alloc(nhf, cell_partials, cell_unit)
         if face_partials > 0
@@ -14,34 +24,21 @@ struct ConservationLaw <: TervEquation
         else
             hf_faces = nothing
         end
-        pos = half_face_cell_pos.pos
-        ind = half_face_cell_pos.indices
-        @assert length(pos) == nc + 1
-        @assert length(ind) == nhf
-        @assert pos[end] == nhf + 1 "Expected last entry to be $nhf + 1, map was: $half_face_cell_pos"
-        @assert pos[1] == 1
-        new(acc, hf_cells, hf_faces, half_face_cell_pos)
+        #pos = half_face_cell_pos.pos
+        #ind = half_face_cell_pos.indices
+        #@assert length(pos) == nc + 1
+        #@assert length(ind) == nhf
+        #@assert pos[end] == nhf + 1 "Expected last entry to be $nhf + 1, map was: $half_face_cell_pos"
+        #@assert pos[1] == 1
+        new(acc, hf_cells, hf_faces, flow_discretization)
     end
-end
-
-function ConservationLaw(model, number_of_equations; cell_unit = Cells(), face_unit = Faces(), kwarg...)
-    D = model.domain
-    nc = count_units(D, cell_unit)
-    nhf = 2*count_units(D, face_unit)
-
-    cell_partials = degrees_of_freedom_per_unit(model, cell_unit)
-    face_partials = degrees_of_freedom_per_unit(model, face_unit)
-
-    # half_face_cell_pos = model.domain.discretizations.KGrad.conn_pos
-    half_face_cell_pos = positional_map(model.domain, cell_unit, face_unit)
-    ConservationLaw(nc, nhf, number_of_equations, half_face_cell_pos, cell_partials, face_partials, cell_unit = cell_unit, face_unit = cell_unit; kwarg...)
 end
 
 "Update positions of law's derivatives in global Jacobian"
 function align_to_jacobian!(law::ConservationLaw, jac, model; row_offset = 0, col_offset = 0)
-
+    fd = law.flow_discretization
     neighborship = model.domain.grid.neighborship
-    facepos = law.half_face_cell_pos
+
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
     hflux_faces = law.half_face_flux_faces
@@ -49,7 +46,7 @@ function align_to_jacobian!(law::ConservationLaw, jac, model; row_offset = 0, co
     layout = matrix_layout(model.context)
     
     diagonal_alignment!(acc, jac, layout, target_offset = row_offset, source_offset = col_offset)
-    half_face_flux_cells_alignment!(hflux_cells, acc, jac, layout, neighborship, facepos, target_offset = row_offset, source_offset = col_offset)
+    half_face_flux_cells_alignment!(hflux_cells, acc, jac, layout, neighborship, fd, target_offset = row_offset, source_offset = col_offset)
     if !isnothing(hflux_faces)
         half_face_flux_faces_alignment!(hflux_faces, jac, layout, target_offset = row_offset, source_offset = col_offset)
     end
@@ -68,14 +65,13 @@ function align_to_jacobian!(law::ConservationLaw, jac, model; row_offset = 0, co
     # law.half_face_flux_jac_pos .= fluxpos
 end
 
-function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, N, face_map; target_offset = 0, source_offset = 0)
+function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, N, flow_disc; target_offset = 0, source_offset = 0)
     nu, ne, np = ad_dims(acc_cache)
-    facepos = face_map.pos
-    faces = face_map.indices
+    facepos = flow_disc.conn_pos
     nc = length(facepos)-1
     for cell in 1:nc
         for f_ix in facepos[cell]:(facepos[cell+1]-1)
-            f = faces[f_ix]
+            f = flow_disc.conn_data[f_ix].face
             if N[1, f] == cell
                 other = N[2, f]
             else
@@ -95,7 +91,7 @@ function update_linearized_system_subset!(jac, r, model, law::ConservationLaw)
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
     face_flux = law.half_face_flux_faces
-    cpos = law.half_face_cell_pos
+    cpos = law.flow_discretization.conn_pos
 
     update_linearized_system_subset!(jac, r, model, acc)
     update_linearized_system_subset_cell_flux!(jac, r, model, acc, cell_flux, cpos)
@@ -104,8 +100,7 @@ function update_linearized_system_subset!(jac, r, model, law::ConservationLaw)
     end
 end
 
-function update_linearized_system_subset_cell_flux!(jac, r, model, acc, cell_flux, conn_data)
-    conn_pos = conn_data.pos
+function update_linearized_system_subset_cell_flux!(jac, r, model, acc, cell_flux, conn_pos)
     nc, ne, np = ad_dims(acc)
     Jz = get_nzval(jac)
     for cell = 1:nc
@@ -134,8 +129,8 @@ function get_diagonal_cache(e::ConservationLaw)
 end
 
 function declare_pattern(model, e::ConservationLaw, ::Cells)
-    hfd = Array(model.domain.discretizations.KGrad.conn_data)
-    face_c = e.half_face_cell_pos
+    df = e.flow_discretization
+    hfd = Array(df.conn_data)
     n = number_of_units(model, e)
     # Fluxes
     I = map(x -> x.self, hfd)
