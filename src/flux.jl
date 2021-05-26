@@ -57,7 +57,7 @@ struct TwoPointPotentialFlow{U <:UpwindDiscretization, K <:PotentialFlowDiscreti
             @debug "No depths (z) provided."
         end
         if !isnothing(T)
-            @assert length(T) == nhf
+            @assert length(T) == nhf ÷ 2
         end
         get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z)
         el = get_el(1, 1) # Could be junk, we just need eltype
