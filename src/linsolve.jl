@@ -15,10 +15,10 @@ function LinearizedSystem(context::TervContext, jac, r, dx)
 end
 
 function LinearizedSystem(jac)
-    n_dof = size(jac, 1)
-    @assert n_dof == size(jac, 2) "Expected square system."
-    dx = zeros(n_dof)
-    r = zeros(n_dof)
+    n, m = size(jac)
+    @assert n == m "Expected square system. Was: $n by $m."
+    dx = zeros(n)
+    r = zeros(n)
     return LinearizedSystem(jac, r, dx)
 end
 
@@ -35,7 +35,9 @@ end
 function solve!(sys::LinearizedSystem, linsolve = nothing)
     if isnothing(linsolve)
         @assert length(sys.dx) < 50000
-        sys.dx .= -(sys.jac\sys.r)
+        J = sys.jac
+        r = sys.r
+        sys.dx .= -(J\r)
     else
         solve!(sys, linsolve)
     end
