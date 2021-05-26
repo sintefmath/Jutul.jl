@@ -344,11 +344,10 @@ function convert_state_ad(model, state, tag = nothing)
         stateAD = initialize_primary_variable_ad(stateAD, model, pvar, offset, n_partials, tag = tag)
         offset += counts[i]
     end
-    primary_symb = get_primary_variable_symbols(model)
-    secondary = setdiff(vars, primary_symb)
+    secondary = get_secondary_variables(model)
     # Loop over secondary variables and initialize as AD with zero partials
-    for s in secondary
-        stateAD[s] = allocate_array_ad(stateAD[s], context = context, npartials = n_partials, tag = tag)
+    for svar in secondary
+        stateAD = initialize_secondary_variable_ad(stateAD, model, svar, n_partials, tag = tag)
     end
     return stateAD
 end

@@ -1,11 +1,15 @@
 export update_state_dependents!, check_convergence
 
-function get_primary_variable_symbols(model::SimulationModel)
-    return map((x) -> get_name(x), get_primary_variables(model))
-end
-
 function get_primary_variables(model::SimulationModel)
     return model.primary_variables
+end
+
+function get_secondary_variables(model::SimulationModel)
+    return model.secondary_variables
+end
+
+function get_variables(model::SimulationModel)
+    return vcat(get_primary_variables(model), get_secondary_variables(model))
 end
 
 function number_of_partials_per_unit(model::SimulationModel, unit::TervUnit)
@@ -31,14 +35,14 @@ end
 Initialize primary variables and other state fields, given initial values as a Dict
 """
 function setup_state!(state, model::TervModel, init_values::Dict)
-    for pvar in get_primary_variables(model)
+    for pvar in get_variables(model)
         initialize_variable_value(state, model, pvar, init_values)
     end
     add_extra_state_fields!(state, model)
 end
 
 """
-Add variables that are not primary (e.g. total masses) but need to be in state.
+Add variables that need to be in state, but are never AD variables (e.g. phase status flag)
 """
 function add_extra_state_fields!(state, model::TervModel)
     # Do nothing

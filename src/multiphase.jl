@@ -7,7 +7,7 @@ export setup_state, setup_state!
 
 export allocate_storage, update_equations!
 
-export Pressure, Saturations
+export Pressure, Saturations, TotalMasses
 
 using CUDA
 # Abstract multiphase system
@@ -121,18 +121,6 @@ end
 @inline function minimum_value(::Saturations) 0 end
 @inline function absolute_increment_limit(p::Saturations) p.dsMax end
 
-# Total component masses
-struct TotalMasses <: GroupedVariables
-    species
-end
-
-function degrees_of_freedom_per_unit(v::TotalMasses)
-    return length(v.species)
-end
-
-@inline function minimum_value(::TotalMasses) 0 end
-
-
 function initialize_primary_variable_ad(state, model, pvar::Saturations, offset, npartials; kwarg...)
     name = get_symbol(pvar)
     nph = length(pvar.phases)
@@ -168,6 +156,30 @@ function update_primary_variable!(state, p::Saturations, model, dx)
         s[nph, cell] += dlast
     end
 end
+
+# Total component masses
+struct TotalMasses <: GroupedVariables
+    species
+end
+
+function degrees_of_freedom_per_unit(v::TotalMasses)
+    return length(v.species)
+end
+
+@inline function minimum_value(::TotalMasses) 0 end
+
+function initialize_variable_value(state, model, pvar::TotalMasses, val::Dict)
+    symb = get_symbol(pvar)
+    if haskey(val, symb)
+        v = val[symb]
+    else
+        # We do not really need to initialize this, as it will be updated elsewhere.
+        v = 0.0
+    end
+    return initialize_variable_value(state, model, pvar, v)
+end
+
+# Selection of variables
 
 function select_primary_variables(system::SinglePhaseSystem)
     return [Pressure()]
@@ -209,8 +221,8 @@ end
 
 function initialize_storage!(storage, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
     update_properties!(storage, model)
-    m = storage.state.TotalMass
-    m0 = storage.state0.TotalMass
+    m = storage.state.TotalMasses
+    m0 = storage.state0.TotalMasses
     @. m0 = value(m)
     if isa(model.context, SingleCUDAContext)
         # No idea why this is needed, but it is.
@@ -222,7 +234,7 @@ function update_properties!(storage, model::SimulationModel{G, S}) where {G<:Any
     update_density!(storage, model)
     update_mobility!(storage, model)
     update_mass_mobility!(storage, model)
-    update_total_mass!(storage, model)
+    update_total_masses!(storage, model)
 end
 
 # Updates of various cell properties follows
@@ -263,20 +275,19 @@ end
 
 function get_pore_volume(model) model.domain.grid.pore_volumes' end
 
-function update_total_mass!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
+function update_total_masses!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
     pv = get_pore_volume(model)
     rho = storage.properties.Density
-    totMass = storage.state.TotalMass
+    totMass = storage.state.TotalMasses
     fapply!(totMass, *, rho, pv)
 end
 
-function update_total_mass!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:ImmiscibleSystem}
+function update_total_masses!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:ImmiscibleSystem}
     state = storage.state
     pv = get_pore_volume(model)
     rho = storage.properties.Density
-    totMass = state.TotalMass
+    totMass = state.TotalMasses
     s = state.Saturations
-
     @. totMass = rho*pv*s
     # fapply!(totMass, *, rho, pv, s)
 end
@@ -295,8 +306,8 @@ function update_accumulation!(law, storage, model, dt)
     state = storage.state
     state0 = storage.state0
     acc = get_entries(law.accumulation)
-    mass = state.TotalMass
-    mass0 = state0.TotalMass
+    mass = state.TotalMasses
+    mass0 = state0.TotalMasses
     fapply!(acc, (m, m0) -> (m - m0)/dt, mass, mass0)
     return acc
 end
