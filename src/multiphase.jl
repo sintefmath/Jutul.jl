@@ -177,6 +177,10 @@ function select_primary_variables(system::ImmiscibleSystem)
     return [Pressure(), Saturations(get_phases(system))]
 end
 
+function select_secondary_variables(system::MultiPhaseSystem)
+    return [TotalMasses(get_phases(system))]
+end
+
 function allocate_properties!(props, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
     G = model.domain
     sys = model.system

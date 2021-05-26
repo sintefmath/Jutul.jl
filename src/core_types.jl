@@ -134,6 +134,7 @@ struct SimulationModel{O<:TervDomain,
     context::C
     formulation::F
     primary_variables
+    secondary_variables
 end
 
 # Grids etc
@@ -154,6 +155,7 @@ function SimulationModel(domain, system;
     context = DefaultContext())
     domain = transfer(context, domain)
     primary = select_primary_variables(domain, system, formulation)
+    secondary = select_secondary_variables(domain, system, formulation)
     function check_prim(pvar)
         a = map(associated_unit, pvar)
         for u in unique(a)
@@ -165,7 +167,7 @@ function SimulationModel(domain, system;
         end
     end
     check_prim(primary)
-    return SimulationModel(domain, system, context, formulation, primary)
+    return SimulationModel(domain, system, context, formulation, primary, secondary)
 end
 
 function SimulationModel(g::TervGrid, system; discretization = nothing, kwarg...)

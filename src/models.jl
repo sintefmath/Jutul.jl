@@ -32,7 +32,7 @@ Initialize primary variables and other state fields, given initial values as a D
 """
 function setup_state!(state, model::TervModel, init_values::Dict)
     for pvar in get_primary_variables(model)
-        initialize_primary_variable_value(state, model, pvar, init_values)
+        initialize_variable_value(state, model, pvar, init_values)
     end
     add_extra_state_fields!(state, model)
 end
