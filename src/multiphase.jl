@@ -121,6 +121,18 @@ end
 @inline function minimum_value(::Saturations) 0 end
 @inline function absolute_increment_limit(p::Saturations) p.dsMax end
 
+# Total component masses
+struct TotalMasses <: GroupedVariables
+    species
+end
+
+function degrees_of_freedom_per_unit(v::TotalMasses)
+    return length(v.species)
+end
+
+@inline function minimum_value(::TotalMasses) 0 end
+
+
 function initialize_primary_variable_ad(state, model, pvar::Saturations, offset, npartials; kwarg...)
     name = get_symbol(pvar)
     nph = length(pvar.phases)
