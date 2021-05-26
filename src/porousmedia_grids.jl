@@ -30,8 +30,12 @@ struct MinimalTPFAGrid{R<:AbstractFloat, I<:Integer} <: ReservoirGrid
     # conn_pos::AbstractArray{I}
     # pv::AbstractArray{R}
     function MinimalTPFAGrid(pv, N)
-        @assert size(N, 1) == 2
-        @assert all(pv .> 0) "Pore volumes must be positive"
+        nc = length(pv)
+        pv::AbstractVector
+        @assert size(N, 1) == 2  "Two neighbors per face"
+        @assert minimum(N) > 0   "Neighborship entries must be positive."
+        @assert maximum(N) <= nc "Neighborship must be limited to number of cells."
+        @assert all(pv .> 0)     "Pore volumes must be positive"
         new{eltype(pv), eltype(N)}(pv, N)
     end
 end
