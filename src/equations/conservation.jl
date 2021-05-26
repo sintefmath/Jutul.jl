@@ -6,7 +6,7 @@ struct ConservationLaw <: TervEquation
     half_face_flux_faces::Union{TervAutoDiffCache, Nothing}
     flow_discretization::FlowDiscretization
     function ConservationLaw(model, number_of_equations;
-                                            flow_discretization = model.domain.discretizations.darcy_flow,
+                                            flow_discretization = model.domain.discretizations.mass_flow,
                                             cell_unit = Cells(),
                                             face_unit = Faces(),
                                             kwarg...)
