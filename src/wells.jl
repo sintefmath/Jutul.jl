@@ -5,53 +5,58 @@ export SegmentTotalVelocity, BottomHolePressure, SurfacePhaseRates
 export InjectorControl, ProducerControl, SinglePhaseRateTarget, BottomHolePressureTarget
 
 export WellVariables, Perforations
+export MixedWellSegmentFlow
+
+
+abstract type WellPotentialFlowDiscretization <: PotentialFlowDiscretization end
+
+"""
+Two point approximation with flux for wells
+"""
+struct MixedWellSegmentFlow <: WellPotentialFlowDiscretization end
 
 abstract type WellGrid <: TervGrid end
 struct MultiSegmentWell <: WellGrid 
     volumes          # One per cell
     perforations     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
-    dz               # One per connection
     neighborship     # Well cell connectivity
-    accumulator_node # "Top" node where scalar well quantities live
+    top              # "Top" node where scalar well quantities live
     function MultiSegmentWell(volumes::AbstractVector, reservoir_cells;
-                                                        dz = nothing,
                                                         WI = nothing,
                                                         N = nothing,
                                                         perforation_cells = nothing,
                                                         reference_depth = 0,
-                                                        accumulator_dz = 0)
-        nseg = length(dz) - 1
-        nc = length(volumes)
+                                                        accumulator_volume = 1e-3*mean(volumes))
+        nv = length(volumes)
+        nc = nv + 1
         nr = length(reservoir_cells)
-
         if isnothing(N)
             @debug "No connectivity. Assuming nicely ordered linear well."
-            N = vcat((1:nc-1)', (2:nc)')
+            N = vcat((1:nv)', (2:nc)')
+        elseif maximum(N) == nv
+            N = vcat([1, 2], N+1)
         end
-        if isnothing(dz)
-            @warn "No connection dz provided. Using 0. Gravity will not affect this well."
-            dz = zeros(nseg)
-        end
+        volumes = vcat([accumulator_volume], volumes)
+        @show volumes
         if isnothing(WI)
             @warn "No well indices provided. Using 1e-12."
-            dz = repeat(1e-12, nr)
+            WI = repeat(1e-12, nr)
         end
         if !isnothing(reservoir_cells) && isnothing(perforation_cells)
-            @assert length(reservoir_cells) == nc "If no perforation cells are given, we must 1->1 correspondence between well volumes and reservoir cells."
-            perforation_cells = collect(1:nc)
+            @assert length(reservoir_cells) == nv "If no perforation cells are given, we must 1->1 correspondence between well volumes and reservoir cells."
+            perforation_cells = collect(2:nc)
         end
         @assert size(N, 1) == 2
-        @assert size(N, 1) == 2
-        @assert size(N, 2) == nseg "Topology must have one row per segment"
         # @assert length(dz) == nseg "dz must have one entry per segment, plus one for the top segment"
         @assert length(WI) == nr  "Must have one well index per perforated cell"
         @assert length(perforation_cells) == nr
 
         perf = (self = perforation_cells, reservoir = reservoir_cells, WI = WI)
-        accumulator = (reference_depth = reference_depth, dz = accumulator_dz)
-        new(volumes, perf, dz, N, accumulator)
+        accumulator = (reference_depth = reference_depth, )
+        new(volumes, perf, N, accumulator)
     end
 end
+
 
 # Well segments
 """

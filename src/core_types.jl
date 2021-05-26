@@ -168,7 +168,7 @@ function SimulationModel(domain, system;
     return SimulationModel(domain, system, context, formulation, primary)
 end
 
-function SimulationModel(g::TervGrid, system, discretization = nothing; kwarg...)
+function SimulationModel(g::TervGrid, system; discretization = nothing, kwarg...)
     # Simple constructor that assumes 
     d = DiscretizedDomain(g, discretization)
     SimulationModel(d, system; kwarg...)

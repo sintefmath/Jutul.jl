@@ -1,5 +1,5 @@
 export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
-export SPU, TPFA
+export SPU, TPFA, TwoPointPotentialFlow
 
 abstract type TwoPointDiscretization <: TervDiscretization end
 
@@ -12,6 +12,8 @@ abstract type UpwindDiscretization <: TervDiscretization end
 Two-point flux approximation.
 """
 struct TPFA <: KGradDiscretization end
+
+
 """
 Single-point upwinding.
 """
@@ -49,8 +51,14 @@ struct TwoPointPotentialFlow{U <:UpwindDiscretization, K <:PotentialFlowDiscreti
         faces, face_pos = get_facepos(N)
 
         nhf = length(faces)
-        nc = number_of_cells(grid)
-
+        nc = length(face_pos) - 1
+        if isnothing(z)
+            @assert length(z) == nc
+            @debug "No depths (z) provided."
+        end
+        if !isnothing(T)
+            @assert length(T) == nhf
+        end
         get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z)
         el = get_el(1, 1) # Could be junk, we just need eltype
         

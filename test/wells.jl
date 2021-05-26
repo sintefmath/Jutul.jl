@@ -39,12 +39,19 @@ function build_well(mrst_data, ix)
     function awrap(x::Number)
         [x]
     end
-    rc = awrap(w.cells)
+    ref_depth = W_mrst["refDepth"]
+    rc = Int64.(awrap(w.cells))
     n = length(rc)
-    dz = awrap(w.dZ)
+    # dz = awrap(w.dZ)
     WI = awrap(w.WI)
-    W = MultiSegmentWell(ones(n), rc, dz = dz, WI = WI)
-    wmodel = SimulationModel(W, sys)
+    W = MultiSegmentWell(ones(n), rc, WI = WI, reference_depth = ref_depth)
+
+    cell_centroids = copy((mrst_data["G"]["cells"]["centroids"])')
+    z = vcat(ref_depth, cell_centroids[3, rc])
+    flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), W, nothing, z)
+    disc = (mass_flow = flow,)
+
+    wmodel = SimulationModel(W, sys, discretization = disc)
     return wmodel
 end
 
@@ -74,3 +81,4 @@ forces = Dict(:Reservoir => nothing, :Inj => ictrl, :Prod => pctrl)
 
 sim = Simulator(mmodel, state0 = state0)
 states = simulate(sim, [1.0], forces = forces)
+
