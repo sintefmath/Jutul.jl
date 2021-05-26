@@ -101,15 +101,15 @@ function declare_units(W::MultiSegmentWell)
 end
 
 # Total velocity in each well segment
-struct SegmentTotalVelocity <: ScalarPrimaryVariable end
+struct SegmentTotalVelocity <: ScalarVariable end
 function associated_unit(::SegmentTotalVelocity) Faces() end
 
 # Bottom hole pressure for the well
-struct BottomHolePressure <: ScalarPrimaryVariable end
+struct BottomHolePressure <: ScalarVariable end
 function associated_unit(::BottomHolePressure) WellVariables() end
 
 # Phase rates for well at surface conditions
-struct SurfacePhaseRates <: GroupedPrimaryVariables
+struct SurfacePhaseRates <: GroupedVariables
     phases
 end
 function associated_unit(::SurfacePhaseRates) WellVariables() end

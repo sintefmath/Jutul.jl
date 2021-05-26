@@ -112,12 +112,12 @@ function select_primary_variables(domain, system, formulation)
     return select_primary_variables(system)
 end
 
-function number_of_units(model, pv::TervPrimaryVariables)
+function number_of_units(model, pv::TervVariables)
     # By default, each primary variable exists on all cells of a discretized domain
     return count_units(model.domain, associated_unit(pv))
 end
 
-function associated_unit(::TervPrimaryVariables)
+function associated_unit(::TervVariables)
     # The default unit for all primary variables is Cells()
     return Cells()
 end
@@ -145,32 +145,32 @@ function degrees_of_freedom_per_unit(model::TervModel, u::TervUnit)
     return ndof
 end
 
-function number_of_degrees_of_freedom(model, pvars::TervPrimaryVariables)
+function number_of_degrees_of_freedom(model, pvars::TervVariables)
     return number_of_units(model, pvars)*degrees_of_freedom_per_unit(pvars)
 end
 
 """
 Number of independent primary variables / degrees of freedom per computational unit.
 """
-function degrees_of_freedom_per_unit(::ScalarPrimaryVariable)
+function degrees_of_freedom_per_unit(::ScalarVariable)
     return 1
 end
 """
 Number of values held by a primary variable. Normally this is equal to the number of degrees of freedom,
 but some special primary variables are most conveniently defined by having N values and N-1 independent variables.
 """
-function values_per_unit(u::TervPrimaryVariables)
+function values_per_unit(u::TervVariables)
     return degrees_of_freedom_per_unit(u)
 end
 
 ## Update functions
 
-function absolute_increment_limit(::TervPrimaryVariables) nothing end
-function relative_increment_limit(::TervPrimaryVariables) nothing end
-function maximum_value(::TervPrimaryVariables) nothing end
-function minimum_value(::TervPrimaryVariables) nothing end
+function absolute_increment_limit(::TervVariables) nothing end
+function relative_increment_limit(::TervVariables) nothing end
+function maximum_value(::TervVariables) nothing end
+function minimum_value(::TervVariables) nothing end
 
-function update_primary_variable!(state, p::TervPrimaryVariables, model, dx)
+function update_primary_variable!(state, p::TervVariables, model, dx)
     names = get_names(p)
     nu = number_of_units(model, p)
     abs_max = absolute_increment_limit(p)
@@ -233,15 +233,15 @@ function update_value(v, dv, arg...)
 end
 
 
-function get_names(v::TervPrimaryVariables)
+function get_names(v::TervVariables)
     return [get_name(v)]
 end
 
-function get_symbol(v::TervPrimaryVariables)
+function get_symbol(v::TervVariables)
     return Symbol(typeof(v))
 end
 
-function get_name(v::TervPrimaryVariables)
+function get_name(v::TervVariables)
     return String(get_symbol(v))
 end
 
@@ -262,7 +262,7 @@ function initialize_primary_variable_value(state, model, pvar, val; perform_copy
     nu = number_of_units(model, pvar)
     nv = values_per_unit(pvar)
     
-    if isa(pvar, ScalarPrimaryVariable)
+    if isa(pvar, ScalarVariable)
         @assert length(val) == nu
         # Type-assert that this should be scalar, with a vector input
         val::AbstractVector
@@ -288,13 +288,13 @@ function initialize_primary_variable_value(state, model, pvar, val::Dict)
 end
 
 # Scalar primary variables
-function initialize_primary_variable_value(state, model, pvar::ScalarPrimaryVariable, val::Number)
+function initialize_primary_variable_value(state, model, pvar::ScalarVariable, val::Number)
     V = repeat([val], number_of_units(model, pvar))
     return initialize_primary_variable_value(state, model, pvar, V)
 end
 
 # Non-scalar primary variables
-function initialize_primary_variable_value(state, model, pvar::GroupedPrimaryVariables, val::AbstractVector)
+function initialize_primary_variable_value(state, model, pvar::GroupedVariables, val::AbstractVector)
     n = values_per_unit(pvar)
     t = typeof(pvar)
     @assert length(val) == n "Variable $t should have initializer of length $n"
@@ -302,7 +302,7 @@ function initialize_primary_variable_value(state, model, pvar::GroupedPrimaryVar
     return initialize_primary_variable_value(state, model, pvar, V)
 end
 
-function initialize_primary_variable_value(state, model, pvar::GroupedPrimaryVariables, val::Number)
+function initialize_primary_variable_value(state, model, pvar::GroupedVariables, val::Number)
     n = values_per_unit(pvar)
     return initialize_primary_variable_value(state, model, pvar, repeat([val], n))
 end

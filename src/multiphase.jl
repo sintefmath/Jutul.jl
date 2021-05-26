@@ -18,7 +18,6 @@ function get_phases(sys::MultiPhaseSystem)
     return sys.phases
 end
 
-
 function number_of_phases(sys::MultiPhaseSystem)
     return length(get_phases(sys))
 end
@@ -99,10 +98,10 @@ end
 # Primary variable logic
 
 # Pressure as primary variable
-struct Pressure <: ScalarPrimaryVariable end
+struct Pressure <: ScalarVariable end
 
 # Saturations as primary variable
-struct Saturations <: GroupedPrimaryVariables
+struct Saturations <: GroupedVariables
     phases
     dsMax
     function Saturations(phases::AbstractArray, dsMax = 0.2)

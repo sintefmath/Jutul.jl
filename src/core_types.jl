@@ -1,5 +1,5 @@
-export TervSystem, TervDomain, TervPrimaryVariables
-export SimulationModel, TervPrimaryVariables, TervFormulation
+export TervSystem, TervDomain, TervVariables
+export SimulationModel, TervVariables, TervFormulation
 export setup_parameters, kernel_compatibility
 export Cells, Nodes, Faces
 
@@ -15,9 +15,9 @@ abstract type TervDiscretization end
 # struct DefaultDiscretization <: TervDiscretization end
 
 # Primary variables
-abstract type TervPrimaryVariables end
-abstract type ScalarPrimaryVariable <: TervPrimaryVariables end
-abstract type GroupedPrimaryVariables <: TervPrimaryVariables end
+abstract type TervVariables end
+abstract type ScalarVariable <: TervVariables end
+abstract type GroupedVariables <: TervVariables end
 
 # Driving forces
 abstract type TervForce end

@@ -66,7 +66,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, targ
     @. ct.crossterm_target = f(value(X_S), X_T)
 end
 
-struct XVar <: ScalarPrimaryVariable end
+struct XVar <: ScalarVariable end
 
 
 function select_primary_variables(domain, system::ScalarTestSystem, formulation)
