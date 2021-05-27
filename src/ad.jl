@@ -119,6 +119,15 @@ end
 function select_secondary_variables(system)
     return []
 end
+
+function select_state_functions(domain, system, formulation)
+    return select_state_functions(system)
+end
+
+function select_state_functions(system)
+    return []
+end
+
 function number_of_units(model, pv::TervVariables)
     # By default, each primary variable exists on all cells of a discretized domain
     return count_units(model.domain, associated_unit(pv))
@@ -153,21 +162,25 @@ function degrees_of_freedom_per_unit(model::TervModel, u::TervUnit)
 end
 
 function number_of_degrees_of_freedom(model, pvars::TervVariables)
-    return number_of_units(model, pvars)*degrees_of_freedom_per_unit(pvars)
+    return number_of_units(model, pvars)*degrees_of_freedom_per_unit(model, pvars)
+end
+
+function value_dim(model, pvars::TervVariables)
+    return (degrees_of_freedom_per_unit(model, pvars), number_of_units(model, pvars))
 end
 
 """
 Number of independent primary variables / degrees of freedom per computational unit.
 """
-function degrees_of_freedom_per_unit(::ScalarVariable)
+function degrees_of_freedom_per_unit(model, ::ScalarVariable)
     return 1
 end
 """
 Number of values held by a primary variable. Normally this is equal to the number of degrees of freedom,
 but some special primary variables are most conveniently defined by having N values and N-1 independent variables.
 """
-function values_per_unit(u::TervVariables)
-    return degrees_of_freedom_per_unit(u)
+function values_per_unit(model, u::TervVariables)
+    return degrees_of_freedom_per_unit(model, u)
 end
 
 ## Update functions
@@ -275,7 +288,7 @@ end
 function initialize_variable_value(state, model, pvar, val; perform_copy = true)
     # Add some asserts here
     nu = number_of_units(model, pvar)
-    nv = values_per_unit(pvar)
+    nv = values_per_unit(model, pvar)
     
     if isa(pvar, ScalarVariable)
         @assert length(val) == nu
@@ -310,7 +323,7 @@ end
 
 # Non-scalar primary variables
 function initialize_variable_value(state, model, pvar::GroupedVariables, val::AbstractVector)
-    n = values_per_unit(pvar)
+    n = values_per_unit(model, pvar)
     t = typeof(pvar)
     @assert length(val) == n "Variable $t should have initializer of length $n"
     V = repeat(val, 1, number_of_units(model, pvar))
@@ -318,7 +331,7 @@ function initialize_variable_value(state, model, pvar::GroupedVariables, val::Ab
 end
 
 function initialize_variable_value(state, model, pvar::GroupedVariables, val::Number)
-    n = values_per_unit(pvar)
+    n = values_per_unit(model, pvar)
     return initialize_variable_value(state, model, pvar, repeat([val], n))
 end
 
@@ -336,7 +349,7 @@ function convert_state_ad(model, state, tag = nothing)
     primary = get_primary_variables(model)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
     # TODO: Filter this based on the units of each primary variable.
-    counts = map((x) -> degrees_of_freedom_per_unit(x), primary)
+    counts = map((x) -> degrees_of_freedom_per_unit(model, x), primary)
     n_partials = sum(counts)
     @debug "Found $n_partials primary variables."
     offset = 0

@@ -14,10 +14,13 @@ abstract type TervSystem end
 abstract type TervDiscretization end
 # struct DefaultDiscretization <: TervDiscretization end
 
-# Primary variables
+# Primary/secondary variables
 abstract type TervVariables end
 abstract type ScalarVariable <: TervVariables end
 abstract type GroupedVariables <: TervVariables end
+
+# Functions of the state
+abstract type TervStateFunction <: TervVariables end
 
 # Driving forces
 abstract type TervForce end
@@ -135,6 +138,7 @@ struct SimulationModel{O<:TervDomain,
     formulation::F
     primary_variables
     secondary_variables
+    state_functions
 end
 
 # Grids etc
@@ -167,7 +171,8 @@ function SimulationModel(domain, system;
         end
     end
     check_prim(primary)
-    return SimulationModel(domain, system, context, formulation, primary, secondary)
+    sf = select_state_functions(domain, system, formulation)
+    return SimulationModel(domain, system, context, formulation, primary, secondary, sf)
 end
 
 function SimulationModel(g::TervGrid, system; discretization = nothing, kwarg...)

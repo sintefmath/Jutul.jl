@@ -43,6 +43,7 @@ include("porousmedia.jl")
 include("simulator.jl")
 
 include("utils.jl")
+include("statefunctions.jl")
 # Various add-ons
 include("test_systems.jl")
 end # module

@@ -102,19 +102,18 @@ struct Pressure <: ScalarVariable end
 
 # Saturations as primary variable
 struct Saturations <: GroupedVariables
-    phases
     dsMax
-    function Saturations(phases::AbstractArray, dsMax = 0.2)
-        new(phases, dsMax)
+    function Saturations(dsMax = 0.2)
+        new(dsMax)
     end
 end
 
-function degrees_of_freedom_per_unit(v::Saturations)
-    return values_per_unit(v) - 1
+function degrees_of_freedom_per_unit(model, v::Saturations)
+    return values_per_unit(model, v) - 1
 end
 
-function values_per_unit(v::Saturations)
-    return length(v.phases)
+function values_per_unit(model, v::Saturations)
+    number_of_phases(model.system)
 end
 
 @inline function maximum_value(::Saturations) 1 end
@@ -136,9 +135,7 @@ function initialize_primary_variable_ad(state, model, pvar::Saturations, offset,
 end
 
 function update_primary_variable!(state, p::Saturations, model, dx)
-    nu = number_of_units(model, p)
-    nph = degrees_of_freedom_per_unit(p) + 1
-    
+    nu, nph = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
     maxval = maximum_value(p)
     minval = minimum_value(p)
@@ -159,11 +156,10 @@ end
 
 # Total component masses
 struct TotalMasses <: GroupedVariables
-    species
 end
 
-function degrees_of_freedom_per_unit(v::TotalMasses)
-    return length(v.species)
+function degrees_of_freedom_per_unit(model::SimulationModel{G, S}, v::TotalMasses) where {G<:Any, S<:MultiPhaseSystem}
+    number_of_phases(model.system)
 end
 
 @inline function minimum_value(::TotalMasses) 0 end
@@ -190,7 +186,13 @@ function select_primary_variables(system::ImmiscibleSystem)
 end
 
 function select_secondary_variables(system::MultiPhaseSystem)
-    return [TotalMasses(get_phases(system))]
+    phases = get_phases(system)
+    return [TotalMasses(phases)]
+end
+
+function select_state_functions(system::MultiPhaseSystem)
+    sys = get_phases(system)
+    [TotalMasses()]
 end
 
 function allocate_properties!(props, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
