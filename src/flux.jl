@@ -52,7 +52,7 @@ struct TwoPointPotentialFlow{U <:UpwindDiscretization, K <:PotentialFlowDiscreti
 
         nhf = length(faces)
         nc = length(face_pos) - 1
-        if isnothing(z)
+        if !isnothing(z)
             @assert length(z) == nc
             @debug "No depths (z) provided."
         end
