@@ -114,7 +114,7 @@ end
 @inline function minimum_value(::Saturations) 0 end
 @inline function absolute_increment_limit(p::Saturations) p.dsMax end
 
-function initialize_primary_variable_ad(state, model, pvar::Saturations, offset, npartials; kwarg...)
+function initialize_primary_variable_ad!(state, model, pvar::Saturations, offset, npartials; kwarg...)
     name = get_symbol(pvar)
     nph = values_per_unit(model, pvar)
     # nph - 1 primary variables, with the last saturation being initially zero AD
@@ -157,7 +157,7 @@ end
 
 @inline function minimum_value(::TotalMasses) 0 end
 
-function initialize_variable_value(state, model, pvar::TotalMasses, val::Dict)
+function initialize_variable_value!(state, model, pvar::TotalMasses, val::Dict)
     symb = get_symbol(pvar)
     if haskey(val, symb)
         v = val[symb]
@@ -165,7 +165,7 @@ function initialize_variable_value(state, model, pvar::TotalMasses, val::Dict)
         # We do not really need to initialize this, as it will be updated elsewhere.
         v = 0.0
     end
-    return initialize_variable_value(state, model, pvar, v)
+    return initialize_variable_value!(state, model, pvar, v)
 end
 
 # Selection of variables
@@ -182,28 +182,6 @@ function select_secondary_variables(system::MultiPhaseSystem)
     return [TotalMasses()]
 end
 
-function select_state_functions(system::MultiPhaseSystem)
-    [TotalMasses()]
-end
-
-function allocate_properties!(props, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
-    G = model.domain
-    sys = model.system
-    context = model.context
-
-    nph = number_of_phases(sys)
-    npartials = nph
-    nc = number_of_cells(G)
-    alloc = (n) -> allocate_array_ad(nph, n, context = context, npartials = npartials; kwarg...)
-
-    # Mobility of phase
-    props[:Mobility] = alloc(nc)
-    # Mass density of phase
-    props[:Density] = alloc(nc)
-    # Mobility * Density. We compute store this separately since density
-    # and mobility are both used in other spots
-    props[:MassMobility] = alloc(nc)
-end
 
 function allocate_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
     nph = number_of_phases(model.system)
@@ -213,7 +191,8 @@ function allocate_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg..
 end
 
 function initialize_storage!(storage, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
-    update_properties!(storage, model)
+    # update_properties!(storage, model)
+    update_state_functions!(storage, model)
     m = storage.state.TotalMasses
     m0 = storage.state0.TotalMasses
     @. m0 = value(m)
@@ -223,76 +202,8 @@ function initialize_storage!(storage, model::SimulationModel{T, S}) where {T<:An
     end
 end
 
-function update_properties!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:MultiPhaseSystem}
-    update_density!(storage, model)
-    update_mobility!(storage, model)
-    update_mass_mobility!(storage, model)
-    update_total_masses!(storage, model)
-end
-
-# Updates of various cell properties follows
-function update_mobility!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
-    mob = storage.properties.Mobility
-    mu = storage.parameters.Viscosity[1]
-    fapply!(mob, () -> 1/mu)
-end
-
-function update_mobility!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:ImmiscibleSystem}
-    p = storage.parameters
-    mob = storage.properties.Mobility
-    n = p.CoreyExponents
-    mu = p.Viscosity
-
-    s = storage.state.Saturations
-    @. mob = s^n/mu
-end
-
-function update_density!(storage, model)
-    rho_input = storage.parameters.Density
-    state = storage.state
-    p = state.Pressure
-    rho = storage.properties.Density
-    for i in 1:number_of_phases(model.system)
-        rho_i = view(rho, i, :)
-        r = rho_input[i]
-        if isa(r, NamedTuple)
-            f_rho = (p) -> r.rhoS*exp((p - r.pRef)*r.c)
-        else
-            # Function handle
-            f_rho = r
-        end
-        fapply!(rho_i, f_rho, p)
-    end
-    return rho
-end
 
 function get_pore_volume(model) model.domain.grid.pore_volumes' end
-
-function update_total_masses!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
-    pv = get_pore_volume(model)
-    rho = storage.properties.Density
-    totMass = storage.state.TotalMasses
-    fapply!(totMass, *, rho, pv)
-end
-
-function update_total_masses!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:ImmiscibleSystem}
-    state = storage.state
-    pv = get_pore_volume(model)
-    rho = storage.properties.Density
-    totMass = state.TotalMasses
-    s = state.Saturations
-    @. totMass = rho*pv*s
-    # fapply!(totMass, *, rho, pv, s)
-end
-
-function update_mass_mobility!(storage, model)
-    props = storage.properties
-    mobrho = props.MassMobility
-    mob = props.Mobility
-    rho = props.Density
-    # Assign the values
-    fapply!(mobrho, *, mob, rho)
-end
 
 # Update of discretization terms
 function update_accumulation!(law, storage, model, dt)

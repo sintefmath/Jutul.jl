@@ -36,7 +36,7 @@ Initialize primary variables and other state fields, given initial values as a D
 """
 function setup_state!(state, model::TervModel, init_values::Dict)
     for pvar in get_variables(model)
-        initialize_variable_value(state, model, pvar, init_values)
+        initialize_variable_value!(state, model, pvar, init_values)
     end
     add_extra_state_fields!(state, model)
 end
@@ -82,7 +82,7 @@ Allocate storage for a given model. The storage consists of all dynamic quantiti
 the simulation. The default implementation allocates properties, equations and linearized system.
 """
 function allocate_storage!(storage, model::TervModel; setup_linearized_system = true, kwarg...)
-    storage[:properties] = allocate_properties(storage, model; kwarg...) 
+    storage[:state_functions] = allocate_state_functions(storage, model; kwarg...) 
     storage[:equations] = allocate_equations(storage, model; kwarg...) 
     if setup_linearized_system
         storage[:LinearizedSystem] = allocate_linearized_system!(storage, model)
@@ -92,14 +92,10 @@ function allocate_storage!(storage, model::TervModel; setup_linearized_system = 
     end
 end
 
-function allocate_properties(storage, model::TervModel; kwarg...)
+function allocate_state_functions(storage, model::TervModel; kwarg...)
     props = Dict()
-    allocate_properties!(props, storage, model; kwarg...)
+    allocate_state_functions!(props, storage, model; kwarg...)
     return props
-end
-
-function allocate_properties!(props, storage, model::TervModel; tag = nothing)
-    # Default: No properties
 end
 
 function allocate_equations(storage, model::TervModel; kwarg...)
@@ -184,15 +180,15 @@ This includes properties, governing equations and the linearized system
 """
 function update_state_dependents!(storage, model::TervModel, dt, forces)
     t_asm = @elapsed begin 
-        update_properties!(storage, model)
+        update_state_functions!(storage, model)
         update_equations!(storage, model, dt)
         apply_forces!(storage, model, dt, forces)
     end
     @debug "Assembled equations in $t_asm seconds."
 end
 
-function update_properties!(storage, model)
-    # No default properties
+function update_state_functions!(storage, model)
+    
 end
 
 function update_equations!(storage, model, dt = nothing)

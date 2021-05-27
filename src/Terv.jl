@@ -37,6 +37,7 @@ include("ad.jl")
 
 include("equations/conservation.jl")
 include("multiphase.jl")
+include("multiphase_sf.jl")
 include("wells.jl")
 include("porousmedia.jl")
 

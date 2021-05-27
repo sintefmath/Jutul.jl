@@ -120,14 +120,6 @@ function select_secondary_variables(system)
     return []
 end
 
-function select_state_functions(domain, system, formulation)
-    return select_state_functions(system)
-end
-
-function select_state_functions(system)
-    return []
-end
-
 function number_of_units(model, pv::TervVariables)
     # By default, each primary variable exists on all cells of a discretized domain
     return count_units(model.domain, associated_unit(pv))
@@ -271,7 +263,7 @@ function number_of_primary_variables(model)
 end
 
 ## Initialization
-function initialize_primary_variable_ad(state, model, pvar, offset, npartials; kwarg...)
+function initialize_primary_variable_ad!(state, model, pvar, offset, npartials; kwarg...)
     initialize_variable_ad(state, model, pvar, npartials, offset + 1; kwarg...)
 end
 
@@ -285,7 +277,7 @@ function initialize_variable_ad(state, model, pvar, npartials, diag_pos; kwarg..
     return state
 end
 
-function initialize_variable_value(state, model, pvar, val; perform_copy = true)
+function initialize_variable_value(model, pvar, val; perform_copy = true)
     # Add some asserts here
     nu = number_of_units(model, pvar)
     nv = values_per_unit(model, pvar)
@@ -301,38 +293,42 @@ function initialize_variable_value(state, model, pvar, val; perform_copy = true)
     if perform_copy
         val = deepcopy(val)
     end
-    state[get_symbol(pvar)] = transfer(model.context, val)
+    return transfer(model.context, val)
+end
+
+function initialize_variable_value!(state, model, pvar, val; kwarg...)
+    state[get_symbol(pvar)] = initialize_variable_value(model, pvar, val; kwarg...)
     return state
 end
 
 # Specialize on Dict to just get the value from that
-function initialize_variable_value(state, model, pvar, val::Dict)
+function initialize_variable_value!(state, model, pvar, val::Dict)
     symb = get_symbol(pvar)
     if !haskey(val, symb)
         k = keys(val)
         error("The key $symb must be present to initialize the state. Found symbols: $k")
     end
-    return initialize_variable_value(state, model, pvar, val[symb])
+    return initialize_variable_value!(state, model, pvar, val[symb])
 end
 
 # Scalar primary variables
-function initialize_variable_value(state, model, pvar::ScalarVariable, val::Number)
+function initialize_variable_value!(state, model, pvar::ScalarVariable, val::Number)
     V = repeat([val], number_of_units(model, pvar))
-    return initialize_variable_value(state, model, pvar, V)
+    return initialize_variable_value!(state, model, pvar, V)
 end
 
 # Non-scalar primary variables
-function initialize_variable_value(state, model, pvar::GroupedVariables, val::AbstractVector)
+function initialize_variable_value!(state, model, pvar::GroupedVariables, val::AbstractVector)
     n = values_per_unit(model, pvar)
     t = typeof(pvar)
     @assert length(val) == n "Variable $t should have initializer of length $n"
     V = repeat(val, 1, number_of_units(model, pvar))
-    return initialize_variable_value(state, model, pvar, V)
+    return initialize_variable_value!(state, model, pvar, V)
 end
 
-function initialize_variable_value(state, model, pvar::GroupedVariables, val::Number)
+function initialize_variable_value!(state, model, pvar::GroupedVariables, val::Number)
     n = values_per_unit(model, pvar)
-    return initialize_variable_value(state, model, pvar, repeat([val], n))
+    return initialize_variable_value!(state, model, pvar, repeat([val], n))
 end
 
 
@@ -354,7 +350,7 @@ function convert_state_ad(model, state, tag = nothing)
     @debug "Found $n_partials primary variables."
     offset = 0
     for (i, pvar) in enumerate(primary)
-        stateAD = initialize_primary_variable_ad(stateAD, model, pvar, offset, n_partials, tag = tag)
+        stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, offset, n_partials, tag = tag)
         offset += counts[i]
     end
     secondary = get_secondary_variables(model)
