@@ -89,12 +89,6 @@ function get_name(::VaporPhase)
 end
 
 ## Main implementation
-function add_extra_state_fields!(state, model::SimulationModel{G, S}) where {G<:Any, S<:MultiPhaseSystem}
-    nc = number_of_cells(model.domain)
-    nph = number_of_phases(model.system)
-    state[:TotalMass] = transfer(model.context, zeros(nph, nc))
-end
-
 # Primary variable logic
 
 # Pressure as primary variable
@@ -122,7 +116,7 @@ end
 
 function initialize_primary_variable_ad(state, model, pvar::Saturations, offset, npartials; kwarg...)
     name = get_symbol(pvar)
-    nph = length(pvar.phases)
+    nph = values_per_unit(model, pvar)
     # nph - 1 primary variables, with the last saturation being initially zero AD
     dp = vcat((1:nph-1) .+ offset, 0)
     v = state[name]
@@ -135,7 +129,7 @@ function initialize_primary_variable_ad(state, model, pvar::Saturations, offset,
 end
 
 function update_primary_variable!(state, p::Saturations, model, dx)
-    nu, nph = value_dim(model, p)
+    nph, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
     maxval = maximum_value(p)
     minval = minimum_value(p)
@@ -155,8 +149,7 @@ function update_primary_variable!(state, p::Saturations, model, dx)
 end
 
 # Total component masses
-struct TotalMasses <: GroupedVariables
-end
+struct TotalMasses <: GroupedVariables end
 
 function degrees_of_freedom_per_unit(model::SimulationModel{G, S}, v::TotalMasses) where {G<:Any, S<:MultiPhaseSystem}
     number_of_phases(model.system)
@@ -182,16 +175,14 @@ function select_primary_variables(system::SinglePhaseSystem)
 end
 
 function select_primary_variables(system::ImmiscibleSystem)
-    return [Pressure(), Saturations(get_phases(system))]
+    return [Pressure(), Saturations()]
 end
 
 function select_secondary_variables(system::MultiPhaseSystem)
-    phases = get_phases(system)
-    return [TotalMasses(phases)]
+    return [TotalMasses()]
 end
 
 function select_state_functions(system::MultiPhaseSystem)
-    sys = get_phases(system)
     [TotalMasses()]
 end
 
