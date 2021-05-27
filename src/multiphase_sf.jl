@@ -29,21 +29,19 @@ end
 Volumetric mobility of each phase
 """
 struct PhaseMobilities <: PhaseStateFunction end
-function update_mobility!(storage, model::SimulationModel{G, S}) where {G, S<:SinglePhaseSystem}
-    mob = storage.properties.Mobility
-    mu = storage.parameters.Viscosity[1]
+
+function update_self!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, state, param) where {G, S<:SinglePhaseSystem}
+    mu = param.Viscosity[1]
     fapply!(mob, () -> 1/mu)
 end
 
-function update_mobility!(storage, model::SimulationModel{G, S}) where {G, S<:ImmiscibleSystem}
-    p = storage.parameters
-    mob = storage.properties.Mobility
-    n = p.CoreyExponents
-    mu = p.Viscosity
-
-    s = storage.state.Saturations
+function update_self!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, state, param) where {G, S<:ImmiscibleSystem}
+    n = param.CoreyExponents
+    mu = param.Viscosity
+    s = state.Saturations
     @. mob = s^n/mu
 end
+
 """
 Mass density of each phase
 """
@@ -65,36 +63,30 @@ function update_self!(rho, tv::PhaseMassDensities, model, state, param)
     end
 end
 
-
 """
 Mobility of the mass of each component, in each phase (TBD how to represent this in general)
 """
 struct MassMobilities <: PhaseAndComponentStateFunction end
-function update_mass_mobility!(storage, model)
-    props = storage.properties
-    mobrho = props.MassMobility
-    mob = props.Mobility
-    rho = props.Density
-    # Assign the values
+
+function update_self!(mobrho, tv::MassMobilities, model, state, param)
+    mobrho = state.MassMobilities
+    mob = state.PhaseMobilities
+    rho = state.PhaseMassDensities
     fapply!(mobrho, *, mob, rho)
 end
 
 """
 Total mass of each component/species/... 
 """
-# struct TotalMasses <: ComponentStateFunction end
-function update_total_masses!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:SinglePhaseSystem}
+function update_self!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, state, param) where {G, S<:SinglePhaseSystem}
     pv = get_pore_volume(model)
-    rho = storage.properties.Density
-    totMass = storage.state.TotalMasses
-    fapply!(totMass, *, rho, pv)
+    rho = state.PhaseMassDensities
+    fapply!(totmass, *, rho, pv)
 end
 
-function update_total_masses!(storage, model::SimulationModel{G, S}) where {G<:Any, S<:ImmiscibleSystem}
-    state = storage.state
+function update_self!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, state, param) where {G, S<:ImmiscibleSystem}
     pv = get_pore_volume(model)
-    rho = storage.properties.Density
-    totMass = state.TotalMasses
+    rho = state.PhaseMassDensities
     s = state.Saturations
-    @. totMass = rho*pv*s
+    @. totmass = rho*pv*s
 end
