@@ -4,16 +4,23 @@ struct SecondaryVariableAsStateFunction{} <: TervStateFunction end
 struct PrimaryVariableAsStateFunction{} <: TervStateFunction end
 
 
-function evaluate!(storage, model, tv::TervVariables)
-    sf_storage = storage.state_functions
-    parameters = storage.parameters
-    s = get_symbol(tv)
-    evaluate!(sf_storage[s], sf_storage, parameters, model, tv)
+
+function update_state_functions!(storage, model)
+    for (sym, sf) in model.state_functions
+        update_state_function!(storage, model, sf, sym)
+    end
 end
 
-function evaluate(v, storage, param, model, sf::TervVariables)
-    @assert false
+function update_state_function!(storage, model, tv::TervVariables, symbol = get_symbol(tv))
+    sf_storage = storage.state_functions
+    self_storage = sf_storage[symbol]
+    parameters = storage.parameters
+    update_self!(self_storage, tv, model, sf_storage, parameters)
 end
+
+# function evaluate(self, storage, param, model, sf::TervVariables)
+#    @assert false
+# end
 
 # Initializers
 function select_state_functions(domain, system, formulation)

@@ -49,11 +49,9 @@ Mass density of each phase
 """
 struct PhaseMassDensities <: PhaseStateFunction end
 
-function update_density!(storage, model)
-    rho_input = storage.parameters.Density
-    state = storage.state
+function update_self!(rho, tv::PhaseMassDensities, model, state, param)
+    rho_input = param.Density
     p = state.Pressure
-    rho = storage.properties.Density
     for i in 1:number_of_phases(model.system)
         rho_i = view(rho, i, :)
         r = rho_input[i]
@@ -65,8 +63,8 @@ function update_density!(storage, model)
         end
         fapply!(rho_i, f_rho, p)
     end
-    return rho
 end
+
 
 """
 Mobility of the mass of each component, in each phase (TBD how to represent this in general)

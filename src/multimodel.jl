@@ -161,14 +161,14 @@ function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
 end
 
-function setup_simulation_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model))
+function allocate_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model))
     storage = Dict()
     for key in keys(model.models)
         m = model.models[key]
-        storage[key] = setup_simulation_storage(m,  state0 = state0[key], 
-                                                    parameters = parameters[key], 
-                                                    setup_linearized_system = false,
-                                                    tag = key)
+        storage[key] = allocate_storage(m,  state0 = state0[key], 
+                                            parameters = parameters[key], 
+                                            setup_linearized_system = false,
+                                            tag = key)
     end
     allocate_cross_terms(storage, model)
     allocate_linearized_system!(storage, model)
@@ -487,8 +487,8 @@ function setup_parameters(model::MultiModel)
     return p
 end
 
-function update_properties!(storage, model::MultiModel)
-    submodels_storage_apply!(storage, model, update_properties!)
+function update_state_functions!(storage, model::MultiModel)
+    submodels_storage_apply!(storage, model, update_state_functions!)
 end
 
 function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = false, kwarg...)

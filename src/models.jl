@@ -49,17 +49,6 @@ function add_extra_state_fields!(state, model::TervModel)
 end
 
 """
-Main function for storage that allocates and initializes storage for a simulation
-"""
-function setup_simulation_storage(model::TervModel; state0 = setup_state(model), parameters = setup_parameters(model), tag = nothing, kwargs...)
-    storage = allocate_storage(model, tag = tag; kwargs...)
-    storage[:parameters] = parameters
-    storage[:state0] = state0
-    storage[:state] = convert_state_ad(model, state0, tag)
-    return storage
-end
-
-"""
 Allocate storage for the model. You should overload allocate_storage! if you have a custom
 definition.
 """
@@ -81,9 +70,18 @@ end
 Allocate storage for a given model. The storage consists of all dynamic quantities used in
 the simulation. The default implementation allocates properties, equations and linearized system.
 """
-function allocate_storage!(storage, model::TervModel; setup_linearized_system = true, kwarg...)
-    storage[:state_functions] = allocate_state_functions(storage, model; kwarg...) 
-    storage[:equations] = allocate_equations(storage, model; kwarg...) 
+function allocate_storage!(storage, model::TervModel; setup_linearized_system = true,
+                                                      state0 = setup_state(model),
+                                                      parameters = setup_parameters(model),
+                                                      tag = nothing,
+                                                      kwarg...)
+    if !isnothing(state0)
+        storage[:parameters] = parameters
+        storage[:state0] = state0
+        storage[:state] = convert_state_ad(model, state0, tag)
+    end
+    storage[:state_functions] = allocate_state_functions(storage, model; tag = tag, kwarg...) 
+    storage[:equations] = allocate_equations(storage, model; tag = tag, kwarg...) 
     if setup_linearized_system
         storage[:LinearizedSystem] = allocate_linearized_system!(storage, model)
         # We have the equations and the linearized system.
@@ -95,6 +93,14 @@ end
 function allocate_state_functions(storage, model::TervModel; kwarg...)
     props = Dict()
     allocate_state_functions!(props, storage, model; kwarg...)
+    if haskey(storage, :state)
+        # Add references to state variables. The state functions
+        # should not be able to tell the difference if another state function
+        # is a primary variable or a dependent variable.
+        for (key, val) in storage[:state]
+            props[key] = val
+        end
+    end
     return props
 end
 
@@ -185,10 +191,6 @@ function update_state_dependents!(storage, model::TervModel, dt, forces)
         apply_forces!(storage, model, dt, forces)
     end
     @debug "Assembled equations in $t_asm seconds."
-end
-
-function update_state_functions!(storage, model)
-    
 end
 
 function update_equations!(storage, model, dt = nothing)

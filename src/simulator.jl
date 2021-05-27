@@ -15,7 +15,7 @@ function Simulator(model; state0 = nothing, parameters = setup_parameters(model)
         # Take a deep copy to avoid side effects.
         state0 = deepcopy(state0)
     end
-    storage = setup_simulation_storage(model, state0 = state0, parameters = parameters)
+    storage = allocate_storage(model, state0 = state0, parameters = parameters)
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
     # This allows for much faster lookup in the simulation itself.
     storage = convert_to_immutable_storage(storage)
