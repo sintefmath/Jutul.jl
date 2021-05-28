@@ -3,29 +3,30 @@ export ConservationLaw
 struct ConservationLaw <: TervEquation
     accumulation::TervAutoDiffCache
     half_face_flux_cells::TervAutoDiffCache
-    half_face_flux_faces::Union{TervAutoDiffCache, Nothing}
+    half_face_flux_faces::Union{TervAutoDiffCache,Nothing}
     flow_discretization::FlowDiscretization
-    function ConservationLaw(model, number_of_equations;
-                                            flow_discretization = model.domain.discretizations.mass_flow,
-                                            cell_unit = Cells(),
-                                            face_unit = Faces(),
-                                            kwarg...)
-        D = model.domain
-        nc = count_units(D, cell_unit)
-        nhf = 2*count_units(D, face_unit)
-    
-        cell_partials = degrees_of_freedom_per_unit(model, cell_unit)
-        face_partials = degrees_of_freedom_per_unit(model, face_unit)
-        alloc = (n, np, unit) -> CompactAutoDiffCache(number_of_equations, n, np, unit = unit; kwarg...)
-        acc = alloc(nc, cell_partials, cell_unit)
-        hf_cells = alloc(nhf, cell_partials, cell_unit)
-        if face_partials > 0
-            hf_faces = alloc(nhf, face_partials, face_unit)
-        else
-            hf_faces = nothing
-        end
-        new(acc, hf_cells, hf_faces, flow_discretization)
+end
+
+function ConservationLaw(model, number_of_equations;
+                            flow_discretization = model.domain.discretizations.mass_flow,
+                            kwarg...)
+    D = model.domain
+    cell_unit = Cells()
+    face_unit = Faces()
+    nc = count_units(D, cell_unit)
+    nhf = 2 * count_units(D, face_unit)
+
+    cell_partials = degrees_of_freedom_per_unit(model, cell_unit)
+    face_partials = degrees_of_freedom_per_unit(model, face_unit)
+    alloc = (n, np, unit) -> CompactAutoDiffCache(number_of_equations, n, np, unit = unit; kwarg...)
+    acc = alloc(nc, cell_partials, cell_unit)
+    hf_cells = alloc(nhf, cell_partials, cell_unit)
+    if face_partials > 0
+        hf_faces = alloc(nhf, face_partials, face_unit)
+    else
+        hf_faces = nothing
     end
+    ConservationLaw(acc, hf_cells, hf_faces, flow_discretization)
 end
 
 "Update positions of law's derivatives in global Jacobian"
@@ -49,9 +50,9 @@ end
 function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, N, flow_disc; target_offset = 0, source_offset = 0)
     nu, ne, np = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
-    nc = length(facepos)-1
+    nc = length(facepos) - 1
     for cell in 1:nc
-        for f_ix in facepos[cell]:(facepos[cell+1]-1)
+        for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
             f = flow_disc.conn_data[f_ix].face
             if N[1, f] == cell
                 other = N[2, f]
@@ -85,10 +86,10 @@ function update_linearized_system_subset_cell_flux!(jac, r, model, acc, cell_flu
     nc, ne, np = ad_dims(acc)
     Jz = get_nzval(jac)
     for cell = 1:nc
-        for i = conn_pos[cell]:(conn_pos[cell+1]-1)
+        for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
                 f = get_entry(cell_flux, i, e)
-                @inbounds r[cell + nc*(e-1)] += f.value
+                @inbounds r[cell + nc * (e - 1)] += f.value
                 for d = 1:np
                     df_di = f.partials[d]
                     apos = get_jacobian_pos(acc, cell, e, d)
@@ -156,15 +157,14 @@ end
     n = number_of_equations(model, e)
     m = nunits*ncols
     return (I, J, n, m)
-end
- =#
+end =#
 function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
     n = number_of_equations_per_unit(eq)
     nc = number_of_cells(model.domain)
     pv = get_pore_volume(model)
     e = zeros(n)
     for i = 1:n
-        e[i] = mapreduce((pv, e) -> abs(dt*e/pv), max, pv, r[(1:nc) .+ (i-1)*nc])
+        e[i] = mapreduce((pv, e) -> abs(dt * e / pv), max, pv, r[(1:nc) .+ (i - 1) * nc])
     end
     return (e, 1.0)
 end
@@ -173,7 +173,7 @@ end
 function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, row_offset = 0, col_offset = 0)
     n = size(fluxpos, 1)
     nf = size(fluxpos, 2)
-    @assert nder == n/neq
+    @assert nder == n / neq
 
     for i in 1:nf
         # Off diagonal positions
@@ -183,12 +183,12 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, row_
 
         for col = 1:nder
             # Diagonal positions
-            col_pos = (col-1)*nc + other + col_offset
-            pos = jac.colptr[col_pos]:jac.colptr[col_pos+1]-1
+            col_pos = (col - 1) * nc + other + col_offset
+            pos = jac.colptr[col_pos]:jac.colptr[col_pos + 1] - 1
             rowval = jac.rowval[pos]
             for row = 1:neq
-                row_ix = self + (row-1)*nc + row_offset
-                fluxpos[(row-1)*nder + col, i] = pos[rowval .== row_ix][1]
+                row_ix = self + (row - 1) * nc + row_offset
+                fluxpos[(row - 1) * nder + col, i] = pos[rowval .== row_ix][1]
                 # @printf("Matching %d %d to %d\n", row_ix, col_pos, pos[rowval .== row_ix][1])
             end
         end
