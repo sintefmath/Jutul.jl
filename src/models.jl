@@ -14,7 +14,7 @@ end
 
 function number_of_partials_per_unit(model::SimulationModel, unit::TervUnit)
     n = 0
-    for (pkey, pvar) in get_primary_variables(model)
+    for pvar in values(get_primary_variables(model))
         if associated_unit(pvar) == unit
             n += 1
         end
@@ -65,8 +65,14 @@ end
 Initialize the already allocated storage at the beginning of a simulation.
 Use this to e.g. set up extra stuff in state0 needed for initializing the simulation loop.
 """
-function initialize_storage!(storage, model::TervModel)
-    # Do nothing
+function initialize_storage!(storage, model::TervModel; initialize_state0 = true)
+    if initialize_state0
+        update_secondary_variables!(storage.state0, storage.parameters, model)
+    end
+    if isa(model.context, SingleCUDAContext)
+        # Needed because of an issue with kernel abstractions.
+        CUDA.synchronize()
+    end
 end
 
 """

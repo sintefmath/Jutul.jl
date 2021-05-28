@@ -1,5 +1,11 @@
 # TervStateFunction
-function update_secondary_variables!(storage, model; state = storage.state, parameters = storage.parameters)
+function update_secondary_variables!(storage, model)
+    state = storage.state
+    parameters = storage.parameters
+    update_secondary_variables!(state, parameters, model)
+end
+
+function update_secondary_variables!(state, parameters, model)
     for (symbol, var) in model.secondary_variables
         update_as_secondary!(state[symbol], var, model, state, parameters)
     end

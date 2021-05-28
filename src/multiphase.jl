@@ -174,19 +174,6 @@ function allocate_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg..
     return eqs
 end
 
-function initialize_storage!(storage, model::SimulationModel{T, S}) where {T<:Any, S<:MultiPhaseSystem}
-    # update_properties!(storage, model)
-    update_secondary_variables!(storage, model)
-    m = storage.state.TotalMasses
-    m0 = storage.state0.TotalMasses
-    @. m0 = value(m)
-    if isa(model.context, SingleCUDAContext)
-        # No idea why this is needed, but it is.
-        CUDA.synchronize()
-    end
-end
-
-
 function get_pore_volume(model) model.domain.grid.pore_volumes' end
 
 # Update of discretization terms

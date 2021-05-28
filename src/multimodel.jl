@@ -365,8 +365,10 @@ function allocate_linearized_system!(storage, model::MultiModel)
     storage[:LinearizedSystem] = lsys
 end
 
-function initialize_storage!(storage, model::MultiModel)
-    submodels_storage_apply!(storage, model, initialize_storage!)
+function initialize_storage!(storage, model::MultiModel; kwarg...)
+    for key in keys(model.models)
+        initialize_storage!(storage[key], model.models[key]; kwarg...)
+    end
 end
 
 function update_equations!(storage, model::MultiModel, arg...)

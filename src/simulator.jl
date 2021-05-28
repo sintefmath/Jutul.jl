@@ -8,7 +8,7 @@ struct Simulator <: TervSimulator
     storage::NamedTuple
 end
 
-function Simulator(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true)
+function Simulator(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true, kwarg...)
     if isnothing(state0)
         state0 = setup_state(model)
     elseif copy_state
@@ -20,7 +20,7 @@ function Simulator(model; state0 = nothing, parameters = setup_parameters(model)
     # This allows for much faster lookup in the simulation itself.
     storage = convert_to_immutable_storage(storage)
     # Initialize for first time usage
-    initialize_storage!(storage, model)
+    initialize_storage!(storage, model; kwarg...)
     Simulator(model, storage)
 end
 
