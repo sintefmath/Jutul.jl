@@ -343,6 +343,7 @@ function convert_state_ad(model, state, tag = nothing)
     for (pkey, pvar) in primary
         u = associated_unit(pvar)
         if last_unit != u
+            @debug "Variables on $(typeof(u)) ($(count_units(model.domain, u)) units in total)"
             # Note: We assume that the variables are sorted by units.
             # This is asserted for in the model constructor.
             last_unit = u
@@ -354,7 +355,7 @@ function convert_state_ad(model, state, tag = nothing)
         # Number of partisl this primary variable contributes
         n_local = degrees_of_freedom_per_unit(model, pvar)
         t = get_unit_tag(tag, u)
-        @debug "$pkey: $n_local/$n_partials ∂_i ∈ $u, i ∈ $(offset+1) → $(offset + n_local)"
+        @debug "$pkey: $n_local/$n_partials ∂_i ∈ $(typeof(u)), i ∈ $(offset+1) → $(offset + n_local)"
         stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = t, offset = offset, context = context)
         offset += n_local
     end
@@ -363,7 +364,7 @@ function convert_state_ad(model, state, tag = nothing)
     @debug "Setting up secondary variables..."
     for (skey, svar) in secondary
         u = associated_unit(svar)
-        @debug "$skey: Defined on $u"
+        @debug "$skey: Defined on $(typeof(u))"
 
         t = get_unit_tag(tag, u)
         n_partials = degrees_of_freedom_per_unit(model, u)
