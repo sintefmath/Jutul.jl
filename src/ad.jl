@@ -193,7 +193,7 @@ function relative_increment_limit(::TervVariables) nothing end
 function maximum_value(::TervVariables) nothing end
 function minimum_value(::TervVariables) nothing end
 
-function update_primary_variable!(state, p::TervVariables, model, dx)
+function update_primary_variable!(state, p::TervVariables, state_symbol, model, dx)
     names = get_names(p)
     nu = number_of_units(model, p)
     abs_max = absolute_increment_limit(p)
@@ -203,7 +203,7 @@ function update_primary_variable!(state, p::TervVariables, model, dx)
 
     for (index, nm) in enumerate(names)
         offset = nu*(index-1)
-        v = state[Symbol(nm)] # TODO: Figure out this.
+        v = state[state_symbol]
         dv = view(dx, (1:nu) .+ offset)
         @. v = update_value(v, dv, abs_max, rel_max, minval, maxval)
     end

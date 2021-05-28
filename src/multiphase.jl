@@ -128,13 +128,13 @@ function initialize_primary_variable_ad!(state, model, pvar::Saturations, offset
     return state
 end
 
-function update_primary_variable!(state, p::Saturations, model, dx)
+function update_primary_variable!(state, p::Saturations, state_symbol, model, dx)
     nph, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
     maxval = maximum_value(p)
     minval = minimum_value(p)
 
-    s = state[get_symbol(p)]
+    s = state[state_symbol]
     Threads.@threads for cell = 1:nu
         dlast = 0
         @inbounds for ph = 1:(nph-1)
@@ -218,7 +218,7 @@ end
 
 function update_half_face_flux!(law, storage, model)
     p = storage.state.Pressure
-    mmob = storage.secondary_variables.MassMobilities
+    mmob = storage.state.MassMobilities
 
     flux = get_entries(law.half_face_flux_cells)
     conn_data = law.flow_discretization
@@ -228,7 +228,7 @@ end
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
     @debug "Applying source terms"
     acc = get_entries(eq.accumulation)
-    mob = storage.secondary_variables.PhaseMobilities
+    mob = storage.state.PhaseMobilities
     insert_phase_sources(mob, acc, force)
 end
 

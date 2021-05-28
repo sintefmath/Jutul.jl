@@ -283,10 +283,10 @@ end
 function update_primary_variables!(primary_storage, dx, model::TervModel)
     offset = 0
     primary = get_primary_variables(model)
-    for p in primary
+    for (pkey, p) in primary
         n = number_of_degrees_of_freedom(model, p)
         rng = (1:n) .+ offset
-        update_primary_variable!(primary_storage, p, model, view(dx, rng))
+        update_primary_variable!(primary_storage, p, pkey, model, view(dx, rng))
         offset += n
     end
 end
