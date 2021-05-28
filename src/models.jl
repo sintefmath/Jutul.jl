@@ -41,13 +41,13 @@ function setup_state!(state, model::TervModel, init_values::Dict)
     for (psym, svar) in get_secondary_variables(model)
         initialize_variable_value!(state, model, svar, psym, init_values, need_value = false)
     end
-    add_extra_state_fields!(state, model)
+    initialize_extra_state_fields!(state, model)
 end
 
 """
 Add variables that need to be in state, but are never AD variables (e.g. phase status flag)
 """
-function add_extra_state_fields!(state, model::TervModel)
+function initialize_extra_state_fields!(state, model::TervModel)
     # Do nothing
 end
 
