@@ -5,7 +5,7 @@ export update_linearized_system!
 export SourceTerm, build_forces
 export setup_state, setup_state!
 
-export allocate_storage, update_equations!
+export setup_storage, update_equations!
 
 export Pressure, Saturations, TotalMasses
 
@@ -157,7 +157,6 @@ end
 @inline function minimum_value(::TotalMasses) 0 end
 
 # Selection of variables
-
 function select_primary_variables!(S, system::SinglePhaseSystem)
     S[:Pressure] = Pressure()
 end
@@ -167,7 +166,7 @@ function select_primary_variables!(S, system::ImmiscibleSystem)
     S[:Saturations] = Saturations()
 end
 
-function allocate_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
+function setup_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
     nph = number_of_phases(model.system)
     law = ConservationLaw(model, nph)
     eqs[:MassConservation] = law

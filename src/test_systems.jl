@@ -13,7 +13,7 @@ function get_domain_intersection(u::TervUnit, target_d::ScalarTestDomain, source
 end
 
 # Driving force for the test equation
-struct ScalarTestForce 
+struct ScalarTestForce
     value
 end
 
@@ -34,7 +34,7 @@ function declare_sparsity(model, e::ScalarTestEquation)
 end
 
 # Model features
-function allocate_equations!(eqs, storage, model::SimulationModel{G, S}; kwarg...) where {G<:ScalarTestDomain, S<:ScalarTestSystem}
+function setup_equations!(eqs, storage, model::SimulationModel{G, S}; kwarg...) where {G<:ScalarTestDomain, S<:ScalarTestSystem}
     eqs[:TestEquation] = ScalarTestEquation(model.domain, 1, context = model.context; kwarg...)
 end
 
@@ -67,7 +67,6 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, targ
 end
 
 struct XVar <: ScalarVariable end
-
 
 function select_primary_variables!(S, system::ScalarTestSystem)
     S[:XVar] = XVar()

@@ -161,23 +161,23 @@ function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
 end
 
-function allocate_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model))
+function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model))
     storage = Dict()
     for key in keys(model.models)
         m = model.models[key]
-        storage[key] = allocate_storage(m,  state0 = state0[key], 
+        storage[key] = setup_storage(m,  state0 = state0[key], 
                                             parameters = parameters[key], 
                                             setup_linearized_system = false,
                                             tag = key)
     end
-    allocate_cross_terms(storage, model)
-    allocate_linearized_system!(storage, model)
+    setup_cross_terms(storage, model)
+    setup_linearized_system!(storage, model)
     align_equations_to_linearized_system!(storage, model)
     align_cross_terms_to_linearized_system!(storage, model)
     return storage
 end
 
-function allocate_cross_terms(storage, model::MultiModel)
+function setup_cross_terms(storage, model::MultiModel)
     crossd = Dict{Symbol, Any}()
     models = model.models
     for target in keys(models)
@@ -334,7 +334,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     return (I, J, V, row_offset, col_offset)
 end
 
-function allocate_linearized_system!(storage, model::MultiModel)
+function setup_linearized_system!(storage, model::MultiModel)
     F = float_type(model.context)
 
     groups = model.groups

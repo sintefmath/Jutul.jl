@@ -15,7 +15,7 @@ function Simulator(model; state0 = nothing, parameters = setup_parameters(model)
         # Take a deep copy to avoid side effects.
         state0 = deepcopy(state0)
     end
-    storage = allocate_storage(model, state0 = state0, parameters = parameters)
+    storage = setup_storage(model, state0 = state0, parameters = parameters)
     # Initialize for first time usage
     initialize_storage!(storage, model; kwarg...)
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)

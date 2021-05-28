@@ -52,12 +52,12 @@ function initialize_extra_state_fields!(state, model::TervModel)
 end
 
 """
-Allocate storage for the model. You should overload allocate_storage! if you have a custom
+Allocate storage for the model. You should overload setup_storage! if you have a custom
 definition.
 """
-function allocate_storage(model::TervModel; kwarg...)
+function setup_storage(model::TervModel; kwarg...)
     d = Dict{Symbol, Any}()
-    allocate_storage!(d, model; kwarg...)
+    setup_storage!(d, model; kwarg...)
     return d
 end
 
@@ -90,7 +90,7 @@ end
 Allocate storage for a given model. The storage consists of all dynamic quantities used in
 the simulation. The default implementation allocates properties, equations and linearized system.
 """
-function allocate_storage!(storage, model::TervModel; setup_linearized_system = true,
+function setup_storage!(storage, model::TervModel; setup_linearized_system = true,
                                                       state0 = setup_state(model),
                                                       parameters = setup_parameters(model),
                                                       tag = nothing,
@@ -101,9 +101,9 @@ function allocate_storage!(storage, model::TervModel; setup_linearized_system = 
         storage[:state] = convert_state_ad(model, state0, tag)
         storage[:primary_variables] = reference_primary_variables(storage, model) 
     end
-    storage[:equations] = allocate_equations(storage, model; tag = tag, kwarg...) 
+    storage[:equations] = setup_equations(storage, model; tag = tag, kwarg...) 
     if setup_linearized_system
-        storage[:LinearizedSystem] = allocate_linearized_system!(storage, model)
+        storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
         # We have the equations and the linearized system.
         # Give the equations a chance to figure out their place in the Jacobians.
         align_equations_to_linearized_system!(storage, model)
@@ -119,14 +119,14 @@ function reference_primary_variables(storage, model::TervModel; kwarg...)
     return primaries
 end
 
-function allocate_equations(storage, model::TervModel; kwarg...)
+function setup_equations(storage, model::TervModel; kwarg...)
     # We use ordered dict since equation alignment with primary variables matter.
     eqs = OrderedDict()
-    allocate_equations!(eqs, storage, model; kwarg...)
+    setup_equations!(eqs, storage, model; kwarg...)
     return eqs
 end
 
-function allocate_equations!(eqs, storage, model::TervModel; tag = nothing)
+function setup_equations!(eqs, storage, model::TervModel; tag = nothing)
     # Default: No equations.
 end
 
@@ -156,7 +156,7 @@ function get_sparse_arguments(storage, model, layout = matrix_layout(model.conte
     return (I, J, V, nrows, ndof)
 end
 
-function allocate_linearized_system!(storage, model::TervModel)
+function setup_linearized_system!(storage, model::TervModel)
     # Linearized system is going to have dimensions of
     # total number of equations x total number of primary variables
     if !haskey(storage, :equations)
@@ -190,7 +190,7 @@ function allocate_array(context::TervContext, value, n...)
 end
 
 # Equations logic follows
-function allocate_equations!(d, model)
+function setup_equations!(d, model)
     d[:Equations] = Dict()
 end
 
