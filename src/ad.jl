@@ -8,10 +8,11 @@ struct CompactAutoDiffCache <: TervAutoDiffCache
     equations_per_unit
     number_of_units
     npartials
-    function CompactAutoDiffCache(equations_per_unit, n_units, npartials = 1; unit = Cells(), context = DefaultContext(), kwarg...)
+    function CompactAutoDiffCache(equations_per_unit, n_units, npartials = 1; unit = Cells(), context = DefaultContext(), tag = nothing, kwarg...)
         I = index_type(context)
         # Storage for AD variables
-        entries = allocate_array_ad(equations_per_unit, n_units, context = context, npartials = npartials; kwarg...)
+        t = get_unit_tag(tag, unit)
+        entries = allocate_array_ad(equations_per_unit, n_units, context = context, npartials = npartials, tag = t; kwarg...)
         # Position in sparse matrix - only allocated, then filled in later.
         # Since partials are all fetched together with the value, we make partials the fastest index.
         pos = zeros(I, equations_per_unit*npartials, n_units)
@@ -338,14 +339,16 @@ function convert_state_ad(model, state, tag = nothing)
     offset = 0
     index = 1
     for (pkey, pvar) in primary
-        stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = tag, offset = offset)
+        t = get_unit_tag(tag, associated_unit(pvar))
+        stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = t, offset = offset)
         offset += counts[index]
         index += 1
     end
     secondary = get_secondary_variables(model)
     # Loop over secondary variables and initialize as AD with zero partials
     for (skey, svar) in secondary
-        stateAD = initialize_secondary_variable_ad(stateAD, model, svar, skey, n_partials, tag = tag)
+        t = get_unit_tag(tag, associated_unit(svar))
+        stateAD = initialize_secondary_variable_ad(stateAD, model, svar, skey, n_partials, tag = t)
     end
     return stateAD
 end
@@ -407,4 +410,12 @@ end
 
 @inline function as_value(x)
     mappedarray(value, x)
+end
+
+function get_unit_tag(basetag, unit)
+    utag = Symbol(unit)
+    if !isnothing(basetag)
+        utag = Symbol(String(basetag)*String(utag))
+    end
+    utag
 end
