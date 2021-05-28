@@ -1,4 +1,6 @@
 using Terv
+ENV["JULIA_DEBUG"] = Terv
+
 ##
 casename = "welltest"
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
@@ -74,10 +76,10 @@ pstate = setup_state(Wp, w0)
 
 
 ##
-mmodel = MultiModel((Reservoir = model, Inj = Wi, Prod = Wp))
+mmodel = MultiModel((Reservoir = model, Injector = Wi, Producer = Wp))
 # Set up joint state and simulate
-state0 = setup_state(mmodel, Dict(:Reservoir => state0r, :Inj => istate, :Prod => pstate))
-forces = Dict(:Reservoir => nothing, :Inj => ictrl, :Prod => pctrl)
+state0 = setup_state(mmodel, Dict(:Reservoir => state0r, :Injector => istate, :Producer => pstate))
+forces = Dict(:Reservoir => nothing, :Injector => ictrl, :Producer => pctrl)
 
 sim = Simulator(mmodel, state0 = state0)
 states = simulate(sim, [1.0], forces = forces)

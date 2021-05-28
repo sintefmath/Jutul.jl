@@ -109,22 +109,18 @@ struct BottomHolePressure <: ScalarVariable end
 function associated_unit(::BottomHolePressure) WellVariables() end
 
 # Phase rates for well at surface conditions
-struct SurfacePhaseRates <: GroupedVariables
-    phases
-end
+struct SurfacePhaseRates <: GroupedVariables end
 function associated_unit(::SurfacePhaseRates) WellVariables() end
 
-function degrees_of_freedom_per_unit(v::SurfacePhaseRates)
-    return length(v.phases)
+function degrees_of_freedom_per_unit(model, v::SurfacePhaseRates)
+    return number_of_phases(model.system)
 end
 
 # Selection of primary variables
 function select_primary_variables!(S, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
-    phases = get_phases(system)
-
-    S[:SegmentTotalVelocity] = SegmentTotalVelocity()
-    S[:SurfacePhaseRates] = SurfacePhaseRates(phases)
-    S[:BottomHolePressure] = BottomHolePressure()
     select_primary_variables!(S, system)
+    S[:SegmentTotalVelocity] = SegmentTotalVelocity()
+    S[:SurfacePhaseRates] = SurfacePhaseRates()
+    S[:BottomHolePressure] = BottomHolePressure()
 end
 
