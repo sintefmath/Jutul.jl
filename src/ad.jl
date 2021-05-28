@@ -131,7 +131,7 @@ end
 
 function degrees_of_freedom_per_unit(model::TervModel, u::TervUnit)
     ndof = 0
-    for pvar in get_primary_variables(model)
+    for pvar in values(get_primary_variables(model))
         if associated_unit(pvar) == u
             ndof += degrees_of_freedom_per_unit(model, pvar)
         end
