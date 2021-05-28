@@ -285,13 +285,17 @@ function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     return state
 end
 
-# Specialize on Dict to just get the value from that
-function initialize_variable_value!(state, model, pvar, symb, val::Dict)
-    if !haskey(val, symb)
+function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict; need_value = true)
+    if haskey(val, symb)
+        value = val[symb]
+    elseif need_value
         k = keys(val)
         error("The key $symb must be present to initialize the state. Found symbols: $k")
+    else
+        # We do not really need to initialize this, as it will be updated elsewhere.
+        value = 0.0
     end
-    return initialize_variable_value!(state, model, pvar, symb, val[symb])
+    return initialize_variable_value!(state, model, pvar, symb, value)
 end
 
 # Scalar primary variables

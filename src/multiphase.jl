@@ -157,16 +157,6 @@ end
 
 @inline function minimum_value(::TotalMasses) 0 end
 
-function initialize_variable_value!(state, model, pvar::TotalMasses, symb, val::Dict)
-    if haskey(val, symb)
-        v = val[symb]
-    else
-        # We do not really need to initialize this, as it will be updated elsewhere.
-        v = 0.0
-    end
-    return initialize_variable_value!(state, model, pvar, symb, v)
-end
-
 # Selection of variables
 
 function select_primary_variables!(S, system::SinglePhaseSystem)

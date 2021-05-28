@@ -35,8 +35,11 @@ end
 Initialize primary variables and other state fields, given initial values as a Dict
 """
 function setup_state!(state, model::TervModel, init_values::Dict)
-    for (psym, pvar) in get_variables(model)
-        initialize_variable_value!(state, model, pvar, psym, init_values)
+    for (psym, pvar) in get_primary_variables(model)
+        initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true)
+    end
+    for (psym, svar) in get_secondary_variables(model)
+        initialize_variable_value!(state, model, svar, psym, init_values, need_value = false)
     end
     add_extra_state_fields!(state, model)
 end
@@ -78,9 +81,9 @@ function allocate_storage!(storage, model::TervModel; setup_linearized_system = 
     if !isnothing(state0)
         storage[:parameters] = parameters
         storage[:state0] = state0
-        storage[:primary_state] = convert_state_ad(model, state0, tag)
+        storage[:state] = convert_state_ad(model, state0, tag)
+        storage[:primary_variables] = reference_primary_variables(storage, model) 
     end
-    storage[:state] = allocate_state(storage, model; tag = tag, kwarg...) 
     storage[:equations] = allocate_equations(storage, model; tag = tag, kwarg...) 
     if setup_linearized_system
         storage[:LinearizedSystem] = allocate_linearized_system!(storage, model)
@@ -90,18 +93,13 @@ function allocate_storage!(storage, model::TervModel; setup_linearized_system = 
     end
 end
 
-function allocate_state(storage, model::TervModel; kwarg...)
-    props = Dict()
-    allocate_secondary_variables!(props, storage, model; kwarg...)
-    if haskey(storage, :primary_state)
-        # Add references to primary variables. The state functions
-        # should not be able to tell the difference if another state function
-        # is a primary variable or a dependent variable.
-        for (key, val) in storage[:primary_state]
-            props[key] = val
-        end
+function reference_primary_variables(storage, model::TervModel; kwarg...)
+    primaries = OrderedDict()
+    state = storage[:state]
+    for key in keys(get_primary_variables(model))
+        primaries[key] = state[key]
     end
-    return props
+    return primaries
 end
 
 function allocate_equations(storage, model::TervModel; kwarg...)
@@ -281,7 +279,7 @@ end
 
 function update_primary_variables!(storage, model::TervModel)
     dx = storage.LinearizedSystem.dx
-    update_primary_variables!(storage.primary_state, dx, model)
+    update_primary_variables!(storage.primary_variables, dx, model)
 end
 
 function update_primary_variables!(primary_storage, dx, model::TervModel)
