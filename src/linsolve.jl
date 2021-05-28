@@ -16,7 +16,7 @@ end
 
 function LinearizedSystem(jac)
     n, m = size(jac)
-    @assert n == m "Expected square system. Was: $n by $m."
+    @assert n == m "Expected square system. Recieved $n (eqs) by $m (variables)."
     dx = zeros(n)
     r = zeros(n)
     return LinearizedSystem(jac, r, dx)
