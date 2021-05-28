@@ -4,7 +4,7 @@ export SegmentTotalVelocity, BottomHolePressure, SurfacePhaseRates
 
 export InjectorControl, ProducerControl, SinglePhaseRateTarget, BottomHolePressureTarget
 
-export WellVariables, Perforations
+export Well, Perforations
 export MixedWellSegmentFlow
 
 
@@ -65,7 +65,7 @@ struct Perforations <: TervUnit end
 """
 Well variables - units that we have exactly one of per well (and usually relates to the surface connection)
 """
-struct WellVariables <: TervUnit end
+struct Well <: TervUnit end
 
 ## Well targets
 abstract type WellTarget end
@@ -95,7 +95,7 @@ function declare_units(W::MultiSegmentWell)
     c = (Cells(),         length(W.volumes))
     f = (Faces(),         size(W.neighborship, 2))
     p = (Perforations(),  length(W.perforations.self))
-    w = (WellVariables(), 1)
+    w = (Well(), 1)
     return [c, f, p, w]
 end
 
@@ -104,12 +104,15 @@ struct SegmentTotalVelocity <: ScalarVariable end
 function associated_unit(::SegmentTotalVelocity) Faces() end
 
 # Bottom hole pressure for the well
-struct BottomHolePressure <: ScalarVariable end
-function associated_unit(::BottomHolePressure) WellVariables() end
+# struct BottomHolePressure <: ScalarVariable end
+# function associated_unit(::BottomHolePressure) Well() end
 
 # Phase rates for well at surface conditions
-struct SurfacePhaseRates <: GroupedVariables end
-function associated_unit(::SurfacePhaseRates) WellVariables() end
+# struct SurfacePhaseRates <: GroupedVariables end
+# function associated_unit(::SurfacePhaseRates) Well() end
+
+struct TotalMassRateWell <: ScalarVariable end
+function associated_unit(::TotalMassRateWell) Well() end
 
 function degrees_of_freedom_per_unit(model, v::SurfacePhaseRates)
     return number_of_phases(model.system)
@@ -119,7 +122,12 @@ end
 function select_primary_variables!(S, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
     select_primary_variables!(S, system)
     S[:SegmentTotalVelocity] = SegmentTotalVelocity()
-    S[:SurfacePhaseRates] = SurfacePhaseRates()
-    S[:BottomHolePressure] = BottomHolePressure()
+    S[:TotalWellMassRate] = TotalMassRateWell()
+    # S[:SurfacePhaseRates] = SurfacePhaseRates()
+    # S[:BottomHolePressure] = BottomHolePressure()
 end
 
+function select_equations!(eqs, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
+    select_equations!(eqs, system)
+    eqs[:pressure_drop] = (WellPressureDropClosure, 1)
+end
