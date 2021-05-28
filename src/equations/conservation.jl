@@ -24,12 +24,6 @@ struct ConservationLaw <: TervEquation
         else
             hf_faces = nothing
         end
-        #pos = half_face_cell_pos.pos
-        #ind = half_face_cell_pos.indices
-        #@assert length(pos) == nc + 1
-        #@assert length(ind) == nhf
-        #@assert pos[end] == nhf + 1 "Expected last entry to be $nhf + 1, map was: $half_face_cell_pos"
-        #@assert pos[1] == 1
         new(acc, hf_cells, hf_faces, flow_discretization)
     end
 end
@@ -50,19 +44,6 @@ function align_to_jacobian!(law::ConservationLaw, jac, model; row_offset = 0, co
     if !isnothing(hflux_faces)
         half_face_flux_faces_alignment!(hflux_faces, jac, layout, target_offset = row_offset, source_offset = col_offset)
     end
-
-    # Note: We copy this back to host if it is on GPU to avoid rewriting these functions for CuArrays
-    # conn_data = Array(conn_data)
-    # accpos = Array(law.accumulation_jac_pos)
-    # fluxpos = Array(law.half_face_flux_jac_pos)
-    # neq = number_of_equations_per_unit(law)
-    # nder = number_of_partials_per_unit(law)
-    # nc = size(law.accumulation, 2)
-    # accumulation_sparse_pos!(accpos, jac, neq, nder, row_offset, col_offset)
-    # half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, row_offset, col_offset)
-
-    # law.accumulation_jac_pos .= accpos
-    # law.half_face_flux_jac_pos .= fluxpos
 end
 
 function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, N, flow_disc; target_offset = 0, source_offset = 0)
