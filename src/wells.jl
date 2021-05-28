@@ -57,7 +57,6 @@ struct MultiSegmentWell <: WellGrid
     end
 end
 
-
 # Well segments
 """
 Perforations are connections from well cells to reservoir vcells

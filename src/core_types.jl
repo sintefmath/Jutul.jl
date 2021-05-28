@@ -138,7 +138,36 @@ struct SimulationModel{O<:TervDomain,
     formulation::F
     primary_variables
     secondary_variables
+    equations
     output_variables
+    function SimulationModel(domain, system;
+                                            formulation = FullyImplicit(), 
+                                            context = DefaultContext(),
+                                            output_level = :PrimaryVariables
+                                            )
+        domain = transfer(context, domain)
+        primary = select_primary_variables(domain, system, formulation)
+        function check_prim(pvar)
+            a = map(associated_unit, values(pvar))
+            for u in unique(a)
+                ut = typeof(u)
+                deltas =  diff(findall(typeof.(a) .== ut))
+                if any(deltas .!= 1)
+                    error("All primary variables of the same type must come sequentially: Error ocurred for $ut:\nPrimary: $pvar\nTypes: $a")
+                end
+            end
+        end
+        check_prim(primary)
+        secondary = select_secondary_variables(domain, system, formulation)
+        equations = select_equations(domain, system, formulation)
+        outputs = select_output_variables(domain, system, formulation, primary, secondary, output_level)
+
+        D = typeof(domain)
+        S = typeof(system)
+        F = typeof(formulation)
+        C = typeof(context)
+        new{D, S, F, C}(domain, system, context, formulation, primary, secondary, equations, outputs)
+    end
 end
 
 # Grids etc
@@ -154,28 +183,6 @@ struct Faces <: TervUnit end
 struct Nodes <: TervUnit end
 
 # Sim model
-function SimulationModel(domain, system;
-                                        formulation = FullyImplicit(), 
-                                        context = DefaultContext(),
-                                        output_level = :PrimaryVariables
-                        )
-    domain = transfer(context, domain)
-    primary = select_primary_variables(domain, system, formulation)
-    function check_prim(pvar)
-        a = map(associated_unit, values(pvar))
-        for u in unique(a)
-            ut = typeof(u)
-            deltas =  diff(findall(typeof.(a) .== ut))
-            if any(deltas .!= 1)
-                error("All primary variables of the same type must come sequentially: Error ocurred for $ut:\nPrimary: $pvar\nTypes: $a")
-            end
-        end
-    end
-    check_prim(primary)
-    secondary = select_secondary_variables(domain, system, formulation)
-    outputs = select_output_variables(domain, system, formulation, primary, secondary, output_level)
-    return SimulationModel(domain, system, context, formulation, primary, secondary, outputs)
-end
 
 function SimulationModel(g::TervGrid, system; discretization = nothing, kwarg...)
     # Simple constructor that assumes 

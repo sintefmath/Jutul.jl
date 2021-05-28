@@ -20,8 +20,9 @@ end
 # Equations
 struct ScalarTestEquation <: DiagonalEquation
     equation
-    function ScalarTestEquation(G::TervDomain, npartials::Integer; context = DefaultContext(), kwarg...)
-        nc = number_of_cells(G)
+    function ScalarTestEquation(model, npartials::Integer; context = DefaultContext(), kwarg...)
+        D = model.domain
+        nc = number_of_cells(D)
         @assert nc == 1 # We use nc for clarity of the interface - but it should always be one!
         ne = 1 # Single, scalar equation
         e = CompactAutoDiffCache(ne, nc, npartials, context = context; kwarg...)
@@ -33,9 +34,9 @@ function declare_sparsity(model, e::ScalarTestEquation)
     return (1, 1, 1, 1)
 end
 
-# Model features
-function setup_equations!(eqs, storage, model::SimulationModel{G, S}; kwarg...) where {G<:ScalarTestDomain, S<:ScalarTestSystem}
-    eqs[:TestEquation] = ScalarTestEquation(model.domain, 1, context = model.context; kwarg...)
+
+function select_equations!(eqs, system::ScalarTestSystem)
+    eqs[:TestEquation] = (ScalarTestEquation, 1)
 end
 
 function update_equation!(eq::ScalarTestEquation, storage, model, dt)

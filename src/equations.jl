@@ -43,6 +43,19 @@ function find_sparse_position(A::SparseMatrixCSC, row, col)
     return 0
 end
 
+function select_equations(domain, system, formulation)
+    eqs = OrderedDict()
+    select_equations!(eqs, domain, system, formulation)
+    return eqs
+end
+
+function select_equations!(eqs, domain, system, formulation)
+    select_equations!(eqs, system)
+end
+
+function select_equations!(eqs, system)
+    # Default: No equations
+end
 
 """
 Return the domain unit the equation is associated with

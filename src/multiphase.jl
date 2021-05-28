@@ -166,11 +166,9 @@ function select_primary_variables!(S, system::ImmiscibleSystem)
     S[:Saturations] = Saturations()
 end
 
-function setup_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
-    nph = number_of_phases(model.system)
-    law = ConservationLaw(model, nph)
-    eqs[:MassConservation] = law
-    return eqs
+function select_equations!(eqs, system::MultiPhaseSystem)
+    nph = number_of_phases(system)
+    eqs[:MassConservation] = (ConservationLaw, nph)
 end
 
 function get_pore_volume(model) model.domain.grid.pore_volumes' end

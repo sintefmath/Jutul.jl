@@ -126,9 +126,20 @@ function setup_equations(storage, model::TervModel; kwarg...)
     return eqs
 end
 
-function setup_equations!(eqs, storage, model::TervModel; tag = nothing)
-    # Default: No equations.
+function setup_equations!(eqs, storage, model::TervModel; kwarg...)
+    for (sym, eq) in model.equations
+        proto = eq[1]
+        num = eq[2]
+        if length(eq) > 2
+            # We recieved extra kw-pairs to pass on
+            extra = eq[3]
+        else
+            extra = []
+        end
+        eqs[sym] = proto(model, num; extra..., kwarg...)
+    end
 end
+
 
 function get_sparse_arguments(storage, model, layout = matrix_layout(model.context))
     ndof = number_of_degrees_of_freedom(model)
@@ -187,11 +198,6 @@ end
 function allocate_array(context::TervContext, value, n...)
     tmp = context_convert(context, value)
     return repeat(tmp, n...)
-end
-
-# Equations logic follows
-function setup_equations!(d, model)
-    d[:Equations] = Dict()
 end
 
 """

@@ -25,7 +25,6 @@ function select_secondary_variables!(S, system::MultiPhaseSystem)
     S[:TotalMasses] = TotalMasses()
 end
 
-
 function minimum_output_variables(system::MultiPhaseSystem, primary_variables)
     [:TotalMasses]
 end
