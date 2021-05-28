@@ -38,19 +38,21 @@ function select_primary_variables!(sf, domain, system, formulation)
 end
 
 function map_level(primary_variables, secondary_variables, output_level)
+    pkeys = [i for i in keys(primary_variables)]
+    skeys = [i for i in keys(secondary_variables)]
     if output_level == :All
-        out = vcat(keys(primary_variables), keys(secondary_variables))
-    elseif output_level == :Primary
-        out = keys(secondary_variables)
-    elseif output_level == :Secondary
-        out = keys(primary_variables)
+        out = vcat(pkeys, skeys)
+    elseif output_level == :PrimaryVariables
+        out = pkeys
+    elseif output_level == :SecondaryVariables
+        out = skeys
     else
         out = [output_level]
     end
 end
 
-function select_outputs(domain, system, formulation, primary_variables, secondary_variables, output_level)
-    outputs = minimum_outputs(domain, system, formulation)
+function select_output_variables(domain, system, formulation, primary_variables, secondary_variables, output_level)
+    outputs = minimum_output_variables(domain, system, formulation, primary_variables, secondary_variables)
     if !isnothing(output_level)
         if isa(output_level, Symbol)
             output_level  = [output_level]

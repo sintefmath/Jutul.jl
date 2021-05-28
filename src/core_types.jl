@@ -157,7 +157,7 @@ struct Nodes <: TervUnit end
 function SimulationModel(domain, system;
                                         formulation = FullyImplicit(), 
                                         context = DefaultContext(),
-                                        output_level = nothing
+                                        output_level = :PrimaryVariables
                         )
     domain = transfer(context, domain)
     primary = select_primary_variables(domain, system, formulation)
@@ -173,7 +173,7 @@ function SimulationModel(domain, system;
     end
     check_prim(primary)
     secondary = select_secondary_variables(domain, system, formulation)
-    outputs = select_outputs(domain, system, formulation, primary, secondary, output_level)
+    outputs = select_output_variables(domain, system, formulation, primary, secondary, output_level)
     return SimulationModel(domain, system, context, formulation, primary, secondary, outputs)
 end
 

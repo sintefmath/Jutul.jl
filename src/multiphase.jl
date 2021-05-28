@@ -167,12 +167,13 @@ function select_primary_variables!(S, system::ImmiscibleSystem)
     S[:Saturations] = Saturations()
 end
 
-function minimum_outputs(domain, system, formulation)
-    minimum_outputs(system)
+function minimum_output_variables(domain, system, formulation, primary_variables, secondary_variables)
+    minimum_output_variables(system, primary_variables)
 end
 
-function minimum_outputs(system)
-    Vector{Symbol}()
+function minimum_output_variables(system, primary_variables)
+    # Default: Output all primary variables
+    keys(primary_variables)
 end
 
 function allocate_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}

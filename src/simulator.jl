@@ -16,11 +16,11 @@ function Simulator(model; state0 = nothing, parameters = setup_parameters(model)
         state0 = deepcopy(state0)
     end
     storage = allocate_storage(model, state0 = state0, parameters = parameters)
+    # Initialize for first time usage
+    initialize_storage!(storage, model; kwarg...)
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
     # This allows for much faster lookup in the simulation itself.
     storage = convert_to_immutable_storage(storage)
-    # Initialize for first time usage
-    initialize_storage!(storage, model; kwarg...)
     Simulator(model, storage)
 end
 
@@ -49,6 +49,7 @@ function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces 
         @debug "Solved linear system in $t_solve seconds."
         @debug "Updated state $t_update seconds."
     end
+    @show keys(storage.state0)
     return (e, tol)
 end
 
