@@ -328,7 +328,6 @@ The dual type is currently taken from ForwardDiff.
 function convert_state_ad(model, state, tag = nothing)
     context = model.context
     stateAD = deepcopy(state)
-    vars = keys(state)
 
     primary = get_primary_variables(model)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
@@ -340,7 +339,7 @@ function convert_state_ad(model, state, tag = nothing)
     index = 1
     for (pkey, pvar) in primary
         t = get_unit_tag(tag, associated_unit(pvar))
-        stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = t, offset = offset)
+        stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = t, offset = offset, context = context)
         offset += counts[index]
         index += 1
     end
@@ -348,7 +347,7 @@ function convert_state_ad(model, state, tag = nothing)
     # Loop over secondary variables and initialize as AD with zero partials
     for (skey, svar) in secondary
         t = get_unit_tag(tag, associated_unit(svar))
-        stateAD = initialize_secondary_variable_ad(stateAD, model, svar, skey, n_partials, tag = t)
+        stateAD = initialize_secondary_variable_ad(stateAD, model, svar, skey, n_partials, tag = t, context = context)
     end
     return stateAD
 end
