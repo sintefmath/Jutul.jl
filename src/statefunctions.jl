@@ -37,6 +37,15 @@ function select_primary_variables!(sf, domain, system, formulation)
     select_primary_variables!(sf, system)
 end
 
+function minimum_output_variables(domain, system, formulation, primary_variables, secondary_variables)
+    minimum_output_variables(system, primary_variables)
+end
+
+function minimum_output_variables(system, primary_variables)
+    # Default: Output all primary variables
+    [i for i in keys(primary_variables)]
+end
+
 function map_level(primary_variables, secondary_variables, output_level)
     pkeys = [i for i in keys(primary_variables)]
     skeys = [i for i in keys(secondary_variables)]

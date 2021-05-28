@@ -49,7 +49,6 @@ function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces 
         @debug "Solved linear system in $t_solve seconds."
         @debug "Updated state $t_update seconds."
     end
-    @show keys(storage.state0)
     return (e, tol)
 end
 
