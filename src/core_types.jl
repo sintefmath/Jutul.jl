@@ -157,11 +157,10 @@ struct Nodes <: TervUnit end
 function SimulationModel(domain, system;
                                         formulation = FullyImplicit(), 
                                         context = DefaultContext(),
-                                        outputs = default_outputs(domain, system, formulation)
+                                        output_level = nothing
                         )
     domain = transfer(context, domain)
     primary = select_primary_variables(domain, system, formulation)
-    convert_variables(primary)
     function check_prim(pvar)
         a = map(associated_unit, values(pvar))
         for u in unique(a)
@@ -174,7 +173,7 @@ function SimulationModel(domain, system;
     end
     check_prim(primary)
     secondary = select_secondary_variables(domain, system, formulation)
-    convert_variables(secondary)
+    outputs = select_outputs(domain, system, formulation, primary, secondary, output_level)
     return SimulationModel(domain, system, context, formulation, primary, secondary, outputs)
 end
 
@@ -182,21 +181,4 @@ function SimulationModel(g::TervGrid, system; discretization = nothing, kwarg...
     # Simple constructor that assumes 
     d = DiscretizedDomain(g, discretization)
     SimulationModel(d, system; kwarg...)
-end
-
-"""
-Convert variables to the internal representation (named tuple).
-"""
-function convert_variables(vars)
-    if !isa(vars, OrderedDict)
-        # If we just get a vector, assume that primary variables have 1 to 1 correspondence
-        # between their type and their name in the model
-        @assert isa(vars, AbstractVector)
-        d = OrderedDict()
-        for v in vars
-            d[Symbol(v)] = v
-        end
-        vars = d
-    end
-    convert_to_immutable_storage(vars)
 end

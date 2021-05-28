@@ -37,13 +37,28 @@ function select_primary_variables!(sf, domain, system, formulation)
     select_primary_variables!(sf, system)
 end
 
-"""
-List of symbols that correspond to output variables (= in state0 as numerical values) 
-"""
-function default_outputs(domain, system, formulation)
-    default_outputs(system)
+function map_level(primary_variables, secondary_variables, output_level)
+    if output_level == :All
+        out = vcat(keys(primary_variables), keys(secondary_variables))
+    elseif output_level == :Primary
+        out = keys(secondary_variables)
+    elseif output_level == :Secondary
+        out = keys(primary_variables)
+    else
+        out = [output_level]
+    end
 end
 
-function default_outputs(system)
-    Vector{Symbol}()
+function select_outputs(domain, system, formulation, primary_variables, secondary_variables, output_level)
+    outputs = minimum_outputs(domain, system, formulation)
+    if !isnothing(output_level)
+        if isa(output_level, Symbol)
+            output_level  = [output_level]
+        end
+        for levels in output_level
+            mapped = map_level(primary_variables, secondary_variables, levels)
+            outputs = vcat(outputs, mapped)
+        end
+    end
+    return outputs
 end

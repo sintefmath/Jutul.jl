@@ -167,6 +167,14 @@ function select_primary_variables!(S, system::ImmiscibleSystem)
     S[:Saturations] = Saturations()
 end
 
+function minimum_outputs(domain, system, formulation)
+    minimum_outputs(system)
+end
+
+function minimum_outputs(system)
+    Vector{Symbol}()
+end
+
 function allocate_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
     nph = number_of_phases(model.system)
     law = ConservationLaw(model, nph)
