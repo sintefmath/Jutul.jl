@@ -1,15 +1,8 @@
 # TervStateFunction
-function update_secondary_variables!(storage, model)
-    for (sym, sf) in model.secondary_variables
-        update_variable_as_secondary!(storage, model, sf, sym)
+function update_secondary_variables!(storage, model; state = storage.state, parameters = storage.parameters)
+    for (symbol, var) in model.secondary_variables
+        update_as_secondary!(state[symbol], var, model, state, parameters)
     end
-end
-
-function update_variable_as_secondary!(storage, model, tv::TervVariables, symbol = get_symbol(tv))
-    sf_storage = storage.secondary_variables
-    self_storage = sf_storage[symbol]
-    parameters = storage.parameters
-    update_as_secondary!(self_storage, tv, model, sf_storage, parameters)
 end
 
 # Initializers

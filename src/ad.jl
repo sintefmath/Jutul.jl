@@ -249,12 +249,12 @@ function number_of_primary_variables(model)
 end
 
 ## Initialization
-function initialize_primary_variable_ad!(state, model, pvar, symb, offset, npartials; kwarg...)
-    initialize_variable_ad(state, model, pvar, symb, npartials, offset + 1; kwarg...)
+function initialize_primary_variable_ad!(arg...; offset = 0, kwarg...)
+    initialize_variable_ad(arg..., offset + 1; kwarg...)
 end
 
-function initialize_secondary_variable_ad(state, model, pvar, symb, npartials; kwarg...)
-    initialize_variable_ad(state, model, pvar, symb, npartials, NaN; kwarg...)
+function initialize_secondary_variable_ad(arg...; kwarg...)
+    initialize_variable_ad(arg..., NaN; kwarg...)
 end
 
 function initialize_variable_ad(state, model, pvar, symb, npartials, diag_pos; kwarg...)
@@ -338,14 +338,14 @@ function convert_state_ad(model, state, tag = nothing)
     offset = 0
     index = 1
     for (pkey, pvar) in primary
-        stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, offset, n_partials, tag = tag)
+        stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = tag, offset = offset)
         offset += counts[index]
         index += 1
     end
     secondary = get_secondary_variables(model)
     # Loop over secondary variables and initialize as AD with zero partials
-    for svar in secondary
-        stateAD = initialize_secondary_variable_ad(stateAD, model, svar, n_partials, tag = tag)
+    for (skey, svar) in secondary
+        stateAD = initialize_secondary_variable_ad(stateAD, model, svar, skey, n_partials, tag = tag)
     end
     return stateAD
 end
