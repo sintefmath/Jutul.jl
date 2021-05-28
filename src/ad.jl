@@ -331,22 +331,42 @@ function convert_state_ad(model, state, tag = nothing)
 
     primary = get_primary_variables(model)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
-    # TODO: Filter this based on the units of each primary variable.
-    counts = map((x) -> degrees_of_freedom_per_unit(model, x), values(primary))
-    n_partials = sum(counts)
-    @debug "Found $n_partials primary variables."
+    # @debug "Found $n_partials primary variables."
+    last_unit = nothing
     offset = 0
-    index = 1
+    if isnothing(tag)
+        @debug "Setting up primary variables..."
+    else
+        @debug "$tag: Setting up primary variables..."
+    end
+    
     for (pkey, pvar) in primary
-        t = get_unit_tag(tag, associated_unit(pvar))
+        u = associated_unit(pvar)
+        if last_unit != u
+            # Note: We assume that the variables are sorted by units.
+            # This is asserted for in the model constructor.
+            last_unit = u
+            # Reset the offset to zero, since we have entered a new group.
+            offset = 0
+        end
+        # Number of partials for this unit
+        n_partials = degrees_of_freedom_per_unit(model, u)
+        # Number of partisl this primary variable contributes
+        n_local = degrees_of_freedom_per_unit(model, pvar)
+        t = get_unit_tag(tag, u)
+        @debug "$pkey: $n_local/$n_partials ∂_i ∈ $u, i ∈ $(offset+1) → $(offset + n_local)"
         stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = t, offset = offset, context = context)
-        offset += counts[index]
-        index += 1
+        offset += n_local
     end
     secondary = get_secondary_variables(model)
     # Loop over secondary variables and initialize as AD with zero partials
+    @debug "Setting up secondary variables..."
     for (skey, svar) in secondary
-        t = get_unit_tag(tag, associated_unit(svar))
+        u = associated_unit(svar)
+        @debug "$skey: Defined on $u"
+
+        t = get_unit_tag(tag, u)
+        n_partials = degrees_of_freedom_per_unit(model, u)
         stateAD = initialize_secondary_variable_ad(stateAD, model, svar, skey, n_partials, tag = t, context = context)
     end
     return stateAD
