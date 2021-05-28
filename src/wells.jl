@@ -119,12 +119,12 @@ function degrees_of_freedom_per_unit(v::SurfacePhaseRates)
 end
 
 # Selection of primary variables
-function select_primary_variables(domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
-    p_base = select_primary_variables(system)
-
+function select_primary_variables!(S, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
     phases = get_phases(system)
-    p_w = [SegmentTotalVelocity(), SurfacePhaseRates(phases), BottomHolePressure()]
 
-    return vcat(p_base, p_w)
+    S[:SegmentTotalVelocity] = SegmentTotalVelocity()
+    S[:SurfacePhaseRates] = SurfacePhaseRates(phases)
+    S[:BottomHolePressure] = BottomHolePressure()
+    select_primary_variables!(S, system)
 end
 

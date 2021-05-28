@@ -29,7 +29,13 @@ end
 
 ## Definition
 function select_primary_variables(domain, system, formulation)
-    return select_primary_variables(system)
+    sf = OrderedDict()
+    select_primary_variables!(sf, domain, system, formulation)
+    return sf
+end
+
+function select_primary_variables!(sf, domain, system, formulation)
+    select_primary_variables!(sf, system)
 end
 
 """

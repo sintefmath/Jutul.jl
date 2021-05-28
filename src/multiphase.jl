@@ -169,12 +169,13 @@ end
 
 # Selection of variables
 
-function select_primary_variables(system::SinglePhaseSystem)
-    return [Pressure()]
+function select_primary_variables!(S, system::SinglePhaseSystem)
+    S[:Pressure] = Pressure()
 end
 
-function select_primary_variables(system::ImmiscibleSystem)
-    return [Pressure(), Saturations()]
+function select_primary_variables!(S, system::ImmiscibleSystem)
+    S[:Pressure] = Pressure()
+    S[:Saturations] = Saturations()
 end
 
 function allocate_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
