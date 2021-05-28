@@ -8,10 +8,6 @@ function get_secondary_variables(model::SimulationModel)
     return model.secondary_variables
 end
 
-function get_variables(model::SimulationModel)
-    return vcat(get_primary_variables(model), get_secondary_variables(model))
-end
-
 function number_of_partials_per_unit(model::SimulationModel, unit::TervUnit)
     n = 0
     for p in get_primary_variables(model)
@@ -35,7 +31,7 @@ end
 Initialize primary variables and other state fields, given initial values as a Dict
 """
 function setup_state!(state, model::TervModel, init_values::Dict)
-    for pvar in get_variables(model)
+    for pvar in get_primary_variables(model)
         initialize_variable_value!(state, model, pvar, init_values)
     end
     add_extra_state_fields!(state, model)
@@ -78,9 +74,9 @@ function allocate_storage!(storage, model::TervModel; setup_linearized_system = 
     if !isnothing(state0)
         storage[:parameters] = parameters
         storage[:state0] = state0
-        storage[:state] = convert_state_ad(model, state0, tag)
+        storage[:primary_state] = convert_state_ad(model, state0, tag)
     end
-    storage[:state_functions] = allocate_state_functions(storage, model; tag = tag, kwarg...) 
+    storage[:state] = allocate_state(storage, model; tag = tag, kwarg...) 
     storage[:equations] = allocate_equations(storage, model; tag = tag, kwarg...) 
     if setup_linearized_system
         storage[:LinearizedSystem] = allocate_linearized_system!(storage, model)
@@ -90,14 +86,14 @@ function allocate_storage!(storage, model::TervModel; setup_linearized_system = 
     end
 end
 
-function allocate_state_functions(storage, model::TervModel; kwarg...)
+function allocate_state(storage, model::TervModel; kwarg...)
     props = Dict()
-    allocate_state_functions!(props, storage, model; kwarg...)
-    if haskey(storage, :state)
-        # Add references to state variables. The state functions
+    allocate_secondary_variables!(props, storage, model; kwarg...)
+    if haskey(storage, :primary_state)
+        # Add references to primary variables. The state functions
         # should not be able to tell the difference if another state function
         # is a primary variable or a dependent variable.
-        for (key, val) in storage[:state]
+        for (key, val) in storage[:primary_state]
             props[key] = val
         end
     end
@@ -186,7 +182,7 @@ This includes properties, governing equations and the linearized system
 """
 function update_state_dependents!(storage, model::TervModel, dt, forces)
     t_asm = @elapsed begin 
-        update_state_functions!(storage, model)
+        update_secondary_variables!(storage, model)
         update_equations!(storage, model, dt)
         apply_forces!(storage, model, dt, forces)
     end
@@ -275,23 +271,22 @@ end
 function solve_update!(storage, model::TervModel; linsolve = nothing)
     lsys = storage.LinearizedSystem
     t_solve = @elapsed solve!(lsys, linsolve)
-    t_update = @elapsed update_state!(storage, model)
+    t_update = @elapsed update_primary_variables!(storage, model)
     return (t_solve, t_update)
 end
 
-function update_state!(storage, model::TervModel)
+function update_primary_variables!(storage, model::TervModel)
     dx = storage.LinearizedSystem.dx
-    state = storage.state
-    update_state!(state, dx, model)
+    update_primary_variables!(storage.primary, dx, model)
 end
 
-function update_state!(state, dx, model::TervModel)
+function update_primary_variables!(primary_storage, dx, model::TervModel)
     offset = 0
     primary = get_primary_variables(model)
     for p in primary
         n = number_of_degrees_of_freedom(model, p)
         rng = (1:n) .+ offset
-        update_primary_variable!(state, p, model, view(dx, rng))
+        update_primary_variable!(primary_storage, p, model, view(dx, rng))
         offset += n
     end
 end
@@ -299,7 +294,7 @@ end
 function update_after_step!(storage, model::TervModel)
     state = storage.state
     state0 = storage.state0
-    for key in keys(state)
+    for key in keys(state0)
         @. state0[key] = value(state[key])
     end
 end

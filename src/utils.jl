@@ -1,6 +1,6 @@
 export convert_to_immutable_storage
 
-function convert_to_immutable_storage(dct::Dict)
+function convert_to_immutable_storage(dct::AbstractDict)
     for (key, value) in dct
         dct[key] = convert_to_immutable_storage(value)
     end

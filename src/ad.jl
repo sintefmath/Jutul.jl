@@ -120,6 +120,17 @@ function select_secondary_variables(system)
     return []
 end
 
+"""
+List of symbols that correspond to output variables (= in state0 as numerical values) 
+"""
+function default_outputs(domain, system, formulation)
+    default_outputs(system)
+end
+
+function default_outputs(system)
+    Vector{Symbol}()
+end
+
 function number_of_units(model, pv::TervVariables)
     # By default, each primary variable exists on all cells of a discretized domain
     return count_units(model.domain, associated_unit(pv))

@@ -487,8 +487,8 @@ function setup_parameters(model::MultiModel)
     return p
 end
 
-function update_state_functions!(storage, model::MultiModel)
-    submodels_storage_apply!(storage, model, update_state_functions!)
+function update_secondary_variables!(storage, model::MultiModel)
+    submodels_storage_apply!(storage, model, update_secondary_variables!)
 end
 
 function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = false, kwarg...)
@@ -518,7 +518,7 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
     end
 end
 
-function update_state!(storage, model::MultiModel)
+function update_primary_variables!(storage, model::MultiModel)
     dx = storage.LinearizedSystem.dx
     models = model.models
 
@@ -528,7 +528,7 @@ function update_state!(storage, model::MultiModel)
         s = storage[key]
         ndof = number_of_degrees_of_freedom(m)
         dx_v = view(dx, (offset+1):(offset+ndof))
-        update_state!(s.state, dx_v, m)
+        update_primary_variables!(s.state, dx_v, m)
         offset += ndof
     end
 end

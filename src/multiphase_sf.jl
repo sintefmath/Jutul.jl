@@ -1,41 +1,45 @@
 export PhaseMassDensities, PhaseMobilities, MassMobilities
 
-abstract type PhaseStateFunction <: TervStateFunction end
-abstract type ComponentStateFunction <: TervStateFunction end
-abstract type PhaseAndComponentStateFunction <: TervStateFunction end
+abstract type PhaseVariable <: GroupedVariables end
+abstract type ComponentVariable <: GroupedVariables end
+abstract type PhaseAndComponentVariable <: GroupedVariables end
 
-function degrees_of_freedom_per_unit(model, sf::PhaseStateFunction) number_of_phases(model.system) end
+function degrees_of_freedom_per_unit(model, sf::PhaseVariable) number_of_phases(model.system) end
 
 # Single-phase specialization
-function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::ComponentStateFunction) where {D, S<:SinglePhaseSystem} 1 end
-function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::PhaseAndComponentStateFunction) where {D, S<:SinglePhaseSystem} 1 end
+function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::ComponentVariable) where {D, S<:SinglePhaseSystem} 1 end
+function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::PhaseAndComponentVariable) where {D, S<:SinglePhaseSystem} 1 end
 
 # Immiscible specialization
-function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::ComponentStateFunction) where {D, S<:ImmiscibleSystem}
+function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::ComponentVariable) where {D, S<:ImmiscibleSystem}
     number_of_phases(model.system)
 end
-function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::PhaseAndComponentStateFunction) where {D, S<:ImmiscibleSystem}
+function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::PhaseAndComponentVariable) where {D, S<:ImmiscibleSystem}
     number_of_phases(model.system)
 end
 
-function select_state_functions!(sf, system::MultiPhaseSystem)
-    sf[:PhaseMassDensities] = PhaseMassDensities()
-    sf[:PhaseMobilities] = PhaseMobilities()
-    sf[:MassMobilities] = MassMobilities()
-    sf[:TotalMasses] = TotalMasses()
+function select_secondary_variables!(S, system::MultiPhaseSystem)
+    S[:PhaseMassDensities] = PhaseMassDensities()
+    S[:PhaseMobilities] = PhaseMobilities()
+    S[:MassMobilities] = MassMobilities()
+    S[:TotalMasses] = TotalMasses()
+end
+
+function default_outputs(system::MultiPhaseSystem)
+    [:TotalMasses]
 end
 
 """
 Volumetric mobility of each phase
 """
-struct PhaseMobilities <: PhaseStateFunction end
+struct PhaseMobilities <: PhaseVariable end
 
-function update_self!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, state, param) where {G, S<:SinglePhaseSystem}
+function update_as_secondary!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, state, param) where {G, S<:SinglePhaseSystem}
     mu = param.Viscosity[1]
     fapply!(mob, () -> 1/mu)
 end
 
-function update_self!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, state, param) where {G, S<:ImmiscibleSystem}
+function update_as_secondary!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, state, param) where {G, S<:ImmiscibleSystem}
     n = param.CoreyExponents
     mu = param.Viscosity
     s = state.Saturations
@@ -45,9 +49,9 @@ end
 """
 Mass density of each phase
 """
-struct PhaseMassDensities <: PhaseStateFunction end
+struct PhaseMassDensities <: PhaseVariable end
 
-function update_self!(rho, tv::PhaseMassDensities, model, state, param)
+function update_as_secondary!(rho, tv::PhaseMassDensities, model, state, param)
     rho_input = param.Density
     p = state.Pressure
     for i in 1:number_of_phases(model.system)
@@ -66,9 +70,9 @@ end
 """
 Mobility of the mass of each component, in each phase (TBD how to represent this in general)
 """
-struct MassMobilities <: PhaseAndComponentStateFunction end
+struct MassMobilities <: PhaseAndComponentVariable end
 
-function update_self!(mobrho, tv::MassMobilities, model, state, param)
+function update_as_secondary!(mobrho, tv::MassMobilities, model, state, param)
     mobrho = state.MassMobilities
     mob = state.PhaseMobilities
     rho = state.PhaseMassDensities
@@ -78,13 +82,13 @@ end
 """
 Total mass of each component/species/... 
 """
-function update_self!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, state, param) where {G, S<:SinglePhaseSystem}
+function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, state, param) where {G, S<:SinglePhaseSystem}
     pv = get_pore_volume(model)
     rho = state.PhaseMassDensities
     fapply!(totmass, *, rho, pv)
 end
 
-function update_self!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, state, param) where {G, S<:ImmiscibleSystem}
+function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, state, param) where {G, S<:ImmiscibleSystem}
     pv = get_pore_volume(model)
     rho = state.PhaseMassDensities
     s = state.Saturations
