@@ -157,15 +157,14 @@ end
 
 @inline function minimum_value(::TotalMasses) 0 end
 
-function initialize_variable_value!(state, model, pvar::TotalMasses, val::Dict)
-    symb = get_symbol(pvar)
+function initialize_variable_value!(state, model, pvar::TotalMasses, symb, val::Dict)
     if haskey(val, symb)
         v = val[symb]
     else
         # We do not really need to initialize this, as it will be updated elsewhere.
         v = 0.0
     end
-    return initialize_variable_value!(state, model, pvar, v)
+    return initialize_variable_value!(state, model, pvar, symb, v)
 end
 
 # Selection of variables
@@ -177,11 +176,6 @@ end
 function select_primary_variables(system::ImmiscibleSystem)
     return [Pressure(), Saturations()]
 end
-
-function select_secondary_variables(system::MultiPhaseSystem)
-    return [TotalMasses()]
-end
-
 
 function allocate_equations!(eqs, storage, model::SimulationModel{T, S}; kwarg...) where {T<:Any, S<:MultiPhaseSystem}
     nph = number_of_phases(model.system)

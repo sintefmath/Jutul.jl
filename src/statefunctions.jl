@@ -27,6 +27,22 @@ function select_secondary_variables!(sf, system)
 
 end
 
+## Definition
+function select_primary_variables(domain, system, formulation)
+    return select_primary_variables(system)
+end
+
+"""
+List of symbols that correspond to output variables (= in state0 as numerical values) 
+"""
+function default_outputs(domain, system, formulation)
+    default_outputs(system)
+end
+
+function default_outputs(system)
+    Vector{Symbol}()
+end
+
 function allocate_secondary_variables!(sf_storage, storage, model; tag = nothing)
     for (sym, sf) in model.secondary_variables
         u = associated_unit(sf)
