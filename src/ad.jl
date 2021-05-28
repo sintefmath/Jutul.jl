@@ -433,9 +433,9 @@ end
 end
 
 function get_unit_tag(basetag, unit)
-    utag = Symbol(unit)
+    utag = Symbol(typeof(unit))
     if !isnothing(basetag)
-        utag = Symbol(String(basetag)*String(utag))
+        utag = Symbol(String(utag)*"∈"*String(basetag))
     end
     utag
 end

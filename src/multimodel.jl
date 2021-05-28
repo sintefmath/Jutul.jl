@@ -54,7 +54,8 @@ struct InjectiveCrossTerm <: CrossTerm
         npartials_target = number_of_partials_per_unit(target_model, target_unit)
         npartials_source = number_of_partials_per_unit(source_model, source_unit)
 
-        c_term_target = allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = npartials_target, tag = target)
+        target_tag = get_unit_tag(target, target_unit)
+        c_term_target = allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = npartials_target, tag = target_tag)
         c_term_source_c = CompactAutoDiffCache(equations_per_unit, noverlap, npartials_source, context = context, tag = source)
         c_term_source = c_term_source_c.entries
 
