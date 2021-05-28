@@ -14,8 +14,8 @@ end
 
 function number_of_partials_per_unit(model::SimulationModel, unit::TervUnit)
     n = 0
-    for p in get_primary_variables(model)
-        if associated_unit(p) == unit
+    for (pkey, pvar) in get_primary_variables(model)
+        if associated_unit(pvar) == unit
             n += 1
         end
     end
@@ -281,7 +281,7 @@ end
 
 function update_primary_variables!(storage, model::TervModel)
     dx = storage.LinearizedSystem.dx
-    update_primary_variables!(storage.primary, dx, model)
+    update_primary_variables!(storage.primary_state, dx, model)
 end
 
 function update_primary_variables!(primary_storage, dx, model::TervModel)

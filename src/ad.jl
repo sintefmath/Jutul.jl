@@ -118,7 +118,7 @@ end
 
 function number_of_degrees_of_freedom(model::TervModel)
     ndof = 0
-    for pvar in get_primary_variables(model)
+    for (pkey, pvar) in get_primary_variables(model)
         ndof += number_of_degrees_of_freedom(model, pvar)
     end
     return ndof
@@ -328,13 +328,15 @@ function convert_state_ad(model, state, tag = nothing)
     primary = get_primary_variables(model)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
     # TODO: Filter this based on the units of each primary variable.
-    counts = map((x) -> degrees_of_freedom_per_unit(model, x), primary)
+    counts = map((x) -> degrees_of_freedom_per_unit(model, x), values(primary))
     n_partials = sum(counts)
     @debug "Found $n_partials primary variables."
     offset = 0
-    for (i, pvar) in enumerate(primary)
-        stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, offset, n_partials, tag = tag)
-        offset += counts[i]
+    index = 1
+    for (pkey, pvar) in primary
+        stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, offset, n_partials, tag = tag)
+        offset += counts[index]
+        index += 1
     end
     secondary = get_secondary_variables(model)
     # Loop over secondary variables and initialize as AD with zero partials

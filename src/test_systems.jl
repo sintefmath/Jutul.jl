@@ -70,5 +70,5 @@ struct XVar <: ScalarVariable end
 
 
 function select_primary_variables!(S, system::ScalarTestSystem)
-    S[:Xvar] = XVar()
+    S[:XVar] = XVar()
 end

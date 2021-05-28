@@ -163,7 +163,7 @@ function SimulationModel(domain, system;
     primary = select_primary_variables(domain, system, formulation)
     convert_variables(primary)
     function check_prim(pvar)
-        a = map(associated_unit, pvar)
+        a = map(associated_unit, values(pvar))
         for u in unique(a)
             ut = typeof(u)
             deltas =  diff(findall(typeof.(a) .== ut))
