@@ -36,7 +36,7 @@ end
 
 
 function select_equations!(eqs, system::ScalarTestSystem)
-    eqs[:TestEquation] = (ScalarTestEquation, 1)
+    eqs[:test_equation] = (ScalarTestEquation, 1)
 end
 
 function update_equation!(eq::ScalarTestEquation, storage, model, dt)

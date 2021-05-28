@@ -168,7 +168,7 @@ end
 
 function select_equations!(eqs, system::MultiPhaseSystem)
     nph = number_of_phases(system)
-    eqs[:MassConservation] = (ConservationLaw, nph)
+    eqs[:mass_conservation] = (ConservationLaw, nph)
 end
 
 function get_pore_volume(model) model.domain.grid.pore_volumes' end
