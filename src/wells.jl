@@ -172,5 +172,5 @@ end
 function select_equations!(eqs, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
     select_equations!(eqs, system)
     eqs[:potential_balance] = (PotentialDropBalanceWell, 1)
-    eqs[:target_closure] = (TargetClosureWell, 1)
+    eqs[:control_equation] = (ControlEquationWell, 1)
 end
