@@ -126,7 +126,14 @@ function setup_equations(storage, model::TervModel; kwarg...)
     return eqs
 end
 
-function setup_equations!(eqs, storage, model::TervModel; kwarg...)
+function setup_equations!(eqs, storage, model::TervModel; tag = nothing, kwarg...)
+    msg = "Setting up $(length(model.equations)) groups of governing equations..."
+    if isnothing(tag)
+        @debug "$msg"
+    else
+        @debug "$tag: $msg"
+    end
+    counter = 1
     for (sym, eq) in model.equations
         proto = eq[1]
         num = eq[2]
@@ -136,7 +143,10 @@ function setup_equations!(eqs, storage, model::TervModel; kwarg...)
         else
             extra = []
         end
-        eqs[sym] = proto(model, num; extra..., kwarg...)
+        e = proto(model, num; extra..., tag = tag, kwarg...)
+        @debug "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on $(number_of_units(model, e)) $(associated_unit(e))"
+        eqs[sym] = e
+        counter += 1
     end
 end
 

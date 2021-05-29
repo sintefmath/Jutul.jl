@@ -351,20 +351,21 @@ function convert_state_ad(model, state, tag = nothing)
     
     for (pkey, pvar) in primary
         u = associated_unit(pvar)
+        # Number of partials for this unit
+        n_partials = degrees_of_freedom_per_unit(model, u)
         if last_unit != u
-            @debug "Variables on $(typeof(u)) ($(count_units(model.domain, u)) units in total)"
+            n_units = count_units(model.domain, u)
+            @debug "Variable group:\n\t$(n_units) $(typeof(u)) with $n_partials partial derivatives each ($(n_partials*n_units) total)."
             # Note: We assume that the variables are sorted by units.
             # This is asserted for in the model constructor.
             last_unit = u
             # Reset the offset to zero, since we have entered a new group.
             offset = 0
         end
-        # Number of partials for this unit
-        n_partials = degrees_of_freedom_per_unit(model, u)
         # Number of partisl this primary variable contributes
         n_local = degrees_of_freedom_per_unit(model, pvar)
         t = get_unit_tag(tag, u)
-        @debug "$pkey: $n_local/$n_partials ∂_i ∈ $(typeof(u)), i ∈ $(offset+1) → $(offset + n_local)"
+        @debug "→ $pkey:\n\t$n_local of $n_partials partials on all $(typeof(u)), covers $(offset+1) → $(offset + n_local)"
         stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = t, offset = offset, context = context)
         offset += n_local
     end
