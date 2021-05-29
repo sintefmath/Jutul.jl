@@ -16,13 +16,12 @@ function ConservationLaw(model, number_of_equations;
     nc = count_units(D, cell_unit)
     nhf = 2 * count_units(D, face_unit)
 
-    cell_partials = degrees_of_freedom_per_unit(model, cell_unit)
     face_partials = degrees_of_freedom_per_unit(model, face_unit)
-    alloc = (n, np, unit) -> CompactAutoDiffCache(number_of_equations, n, np, unit = unit; kwarg...)
-    acc = alloc(nc, cell_partials, cell_unit)
-    hf_cells = alloc(nhf, cell_partials, cell_unit)
+    alloc = (n, unit) -> CompactAutoDiffCache(number_of_equations, n, model, unit = unit; kwarg...)
+    acc = alloc(nc, cell_unit)
+    hf_cells = alloc(nhf, cell_unit)
     if face_partials > 0
-        hf_faces = alloc(nhf, face_partials, face_unit)
+        hf_faces = alloc(nhf, face_unit)
     else
         hf_faces = nothing
     end

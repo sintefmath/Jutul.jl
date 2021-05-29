@@ -70,19 +70,34 @@ function PotentialDropBalanceWell(model, number_of_equations; kwarg...)
     face_unit = Faces()
     nf = count_units(D, face_unit)
 
-    cell_partials = degrees_of_freedom_per_unit(model, cell_unit)
-    face_partials = degrees_of_freedom_per_unit(model, face_unit)
-
-    alloc = (n, np, unit) -> CompactAutoDiffCache(number_of_equations, n, np, unit = unit; kwarg...)
+    alloc = (n, unit) -> CompactAutoDiffCache(number_of_equations, n, model, unit = unit; kwarg...)
     # One potential drop per velocity
-    dp = alloc(nf, face_partials, face_unit)
+    dp = alloc(nf, face_unit)
     # Two cells per face -> 2*nf allocated
-    dp_model_cells = alloc(2*nf, cell_partials, cell_unit)
+    dp_model_cells = alloc(2*nf, cell_unit)
     # One potential drop model per velocity
-    dp_model_faces = alloc(nf, face_partials, face_unit)
+    dp_model_faces = alloc(nf, face_unit)
 
     PotentialDropBalanceWell(dp, dp_model_cells, dp_model_faces)
 end
+
+struct ControlEquationWell <: TervEquation
+    # Equation:
+    #        q_t - target = 0
+    #        p|top cell - target = 0
+    # We need to store derivatives with respect to q_t and the top cell
+    target_well::TervAutoDiffCache
+    target_topcell::TervAutoDiffCache
+    function ControlEquationWell(model, number_of_equations; kwarg...)
+        @assert number_of_equations == 1
+        alloc = (unit) -> CompactAutoDiffCache(number_of_equations, 1, model, unit = unit; kwarg...)
+        # One potential drop per velocity
+        target_well = alloc(Well())
+        target_topcell = alloc(Cells())
+        new(target_well, target_topcell)
+    end
+end
+
 
 # Well segments
 """
@@ -157,4 +172,5 @@ end
 function select_equations!(eqs, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
     select_equations!(eqs, system)
     eqs[:potential_balance] = (PotentialDropBalanceWell, 1)
+    eqs[:target_closure] = (TargetClosureWell, 1)
 end

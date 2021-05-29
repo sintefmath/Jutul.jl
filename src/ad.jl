@@ -8,7 +8,16 @@ struct CompactAutoDiffCache <: TervAutoDiffCache
     equations_per_unit
     number_of_units
     npartials
-    function CompactAutoDiffCache(equations_per_unit, n_units, npartials = 1; unit = Cells(), context = DefaultContext(), tag = nothing, kwarg...)
+    function CompactAutoDiffCache(equations_per_unit, n_units, npartials_or_model = 1; unit = Cells(), context = DefaultContext(), tag = nothing, kwarg...)
+        if isa(npartials_or_model, TervModel)
+            model = npartials_or_model
+            npartials = degrees_of_freedom_per_unit(model, unit)
+        else
+            npartials = npartials_or_model
+        end
+        npartials::Integer
+
+        # TODO: Make a simpler constructor that just takes in model, n-eqs, n-units and unit and figures out everything from that.
         I = index_type(context)
         # Storage for AD variables
         t = get_unit_tag(tag, unit)
