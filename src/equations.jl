@@ -60,7 +60,7 @@ end
 """
 Return the domain unit the equation is associated with
 """
-function domain_unit(::TervEquation)
+function associated_unit(::TervEquation)
     return Cells()
 end
 
@@ -77,7 +77,7 @@ end
 Get the number of units (e.g. the number of cells) that the equation is defined on.
 """
 function number_of_units(model, e::TervEquation)
-    return count_units(model.domain, domain_unit(e))
+    return count_units(model.domain, associated_unit(e))
 end
 
 """
@@ -137,7 +137,7 @@ function declare_pattern(model, e::TervEquation, unit)
 end
 
 function declare_pattern(model, e::DiagonalEquation, unit)
-    if unit == domain_unit(e)
+    if unit == associated_unit(e)
         n = count_units(model.domain, unit)
         I = collect(1:n)
         return (I, I, n, n)

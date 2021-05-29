@@ -39,7 +39,7 @@ struct InjectiveCrossTerm <: CrossTerm
     npartials_source       # (in source)
     function InjectiveCrossTerm(target_eq, target_model, source_model; target = nothing, source = nothing)
         context = target_model.context
-        target_unit = domain_unit(target_eq)
+        target_unit = associated_unit(target_eq)
         target_impact, source_impact, source_unit = get_domain_intersection(target_unit, target_model, source_model)
         if isnothing(target_impact)
             noverlap = 0
