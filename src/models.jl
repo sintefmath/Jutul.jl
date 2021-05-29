@@ -182,17 +182,19 @@ function get_sparse_arguments(storage, model, layout = matrix_layout(model.conte
     I = []
     J = []
     nrows = 0
+    primary_units = get_primary_variable_ordered_units(model)
     for (k, eq) in eqs
-        for u in get_units(model.domain)
+        ncols = 0
+        for u in primary_units
             S = declare_sparsity(model, eq, u, layout)
             if !isnothing(S)
                 i = S[1]
                 j = S[2]
                 push!(I, i .+ nrows) # Row indices, offset by the size of preceeding equations
-                push!(J, j)          # Column indices
+                push!(J, j .+ ncols) # Column indices, offset by the partials in units we have passed
                 nrows += S[3]
             end
-            # TODO: Fix offset for multiple units with primary variables
+            ncols += degrees_of_freedom_per_unit(model, u)
         end
     end
     I = vcat(I...)
