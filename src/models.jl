@@ -12,6 +12,25 @@ function get_variables(model::SimulationModel)
     return merge(get_primary_variables(model), get_secondary_variables(model))
 end
 
+"""
+Get only the units where primary variables are present,
+sorted by their order in the primary variables.
+"""
+function get_primary_variable_ordered_units(model::SimulationModel)
+    out = []
+    current_unit = nothing
+    for p in values(model.primary_variables)
+        u = associated_unit(p)
+        if u != current_unit
+            # Note: We assume that primary variables for the same unit follows
+            # each other. This is currently asserted in the model constructor.
+            push!(out, u)
+            current_unit = u
+        end
+    end
+    return out
+end
+
 function number_of_partials_per_unit(model::SimulationModel, unit::TervUnit)
     n = 0
     for pvar in values(get_primary_variables(model))
