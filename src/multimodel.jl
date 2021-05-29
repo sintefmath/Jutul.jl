@@ -203,10 +203,11 @@ end
 function declare_cross_term(eq::TervEquation, target_model, source_model; kwarg...)
     target_unit = associated_unit(eq)
     intersection = get_domain_intersection(target_unit, target_model, source_model)
-    ct = InjectiveCrossTerm(eq, target_model, source_model, intersection; kwarg...)
     if isnothing(intersection.target)
         # Declare nothing, so we can easily spot no overlap
         ct = nothing
+    else
+        ct = InjectiveCrossTerm(eq, target_model, source_model, intersection; kwarg...)
     end
     return ct
 end
