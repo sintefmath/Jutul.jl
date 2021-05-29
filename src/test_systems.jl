@@ -9,7 +9,7 @@ function number_of_cells(::ScalarTestDomain) 1 end
 
 function get_domain_intersection(u::TervUnit, target_d::ScalarTestDomain, source_d::ScalarTestDomain)
     # This domain always interacts with the single cell in instances of itself, and nothing else
-    return (1, 1, Cells())
+    (target = 1, source = 1, source_unit = Cells())
 end
 
 # Driving force for the test equation

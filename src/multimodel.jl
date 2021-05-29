@@ -37,17 +37,16 @@ struct InjectiveCrossTerm <: CrossTerm
     equations_per_unit     # Number of equations per impact
     npartials_target       # Number of partials per equation (in target)
     npartials_source       # (in source)
-    function InjectiveCrossTerm(target_eq, target_model, source_model; target = nothing, source = nothing)
+    function InjectiveCrossTerm(target_eq, target_model, source_model, intersection = nothing; target = nothing, source = nothing)
         context = target_model.context
         target_unit = associated_unit(target_eq)
-        target_impact, source_impact, source_unit = get_domain_intersection(target_unit, target_model, source_model)
-        if isnothing(target_impact)
-            noverlap = 0
-            @assert isnothing(source_impact) "Injective source must have one to one mapping between impact and source."
-        else
-            noverlap = length(target_impact)
-            @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
+        if isnothing(intersection)
+            intersection = get_domain_intersection(target_unit, target_model, source_model)
         end
+        target_impact, source_impact, source_unit = intersection
+        @assert !isnothing(target_impact) "Cannot declare cross term when there is no overlap between domains."
+        noverlap = length(target_impact)
+        @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
         # Infer Unit from target_eq
         equations_per_unit = number_of_equations_per_unit(target_eq)
 
@@ -147,7 +146,7 @@ any units in source_d. The interface is limited to a single unit-unit impact.
 The return value is a tuple of indices and the corresponding unit
 """
 function get_domain_intersection(u::TervUnit, target_d::TervDomain, source_d::TervDomain)
-    (nothing, nothing, Cells())
+    (target = nothing, source = nothing, source_unit = Cells())
 end
 
 function number_of_models(model::MultiModel)
@@ -202,9 +201,10 @@ function setup_cross_terms(storage, model::MultiModel)
 end
 
 function declare_cross_term(eq::TervEquation, target_model, source_model; kwarg...)
-    ct = InjectiveCrossTerm(eq, target_model, source_model; kwarg...)
-    target_impact = ct.impact.target
-    if isnothing(target_impact) || length(target_impact) == 0
+    target_unit = associated_unit(eq)
+    intersection = get_domain_intersection(target_unit, target_model, source_model)
+    ct = InjectiveCrossTerm(eq, target_model, source_model, intersection; kwarg...)
+    if isnothing(intersection.target)
         # Declare nothing, so we can easily spot no overlap
         ct = nothing
     end

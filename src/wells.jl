@@ -59,35 +59,36 @@ end
 
 struct PotentialDropBalanceWell <: TervEquation
     # Equation: pot_diff(p) - pot_diff_model(v, p)
-    potential_difference::TervAutoDiffCache       # Differentiated with respect to both Cells
-    potential_drop_model_cells::TervAutoDiffCache # Differentiated with respect to Cells
-    potential_drop_model_faces::TervAutoDiffCache # Differentiated with respect to Velocity
+    equation # Differentiated with respect to Velocity
+    equation_cells # Differentiated with respect to Cells
+    function PotentialDropBalanceWell(e::TervAutoDiffCache, ec::TervAutoDiffCache)
+        new(e, ec)
+    end
 end
 
-function PotentialDropBalanceWell(model, number_of_equations; kwarg...)
+function PotentialDropBalanceWell(model::TervModel, number_of_equations::Integer; kwarg...)
     D = model.domain
     cell_unit = Cells()
     face_unit = Faces()
     nf = count_units(D, face_unit)
 
     alloc = (n, unit) -> CompactAutoDiffCache(number_of_equations, n, model, unit = unit; kwarg...)
-    # One potential drop per velocity
-    dp = alloc(nf, face_unit)
+    # One equation per velocity
+    eq = alloc(nf, face_unit)
     # Two cells per face -> 2*nf allocated
-    dp_model_cells = alloc(2*nf, cell_unit)
-    # One potential drop model per velocity
-    dp_model_faces = alloc(nf, face_unit)
+    eq_cells = alloc(2*nf, cell_unit)
 
-    PotentialDropBalanceWell(dp, dp_model_cells, dp_model_faces)
+    PotentialDropBalanceWell(eq, eq_cells)
 end
+function associated_unit(::PotentialDropBalanceWell) Faces() end
 
 struct ControlEquationWell <: TervEquation
     # Equation:
     #        q_t - target = 0
     #        p|top cell - target = 0
-    # We need to store derivatives with respect to q_t and the top cell
-    target_well::TervAutoDiffCache
-    target_topcell::TervAutoDiffCache
+    # We need to store derivatives with respect to q_t (same unit) and the top cell (other unit)
+    equation::TervAutoDiffCache
+    equation_top_cell::TervAutoDiffCache
     function ControlEquationWell(model, number_of_equations; kwarg...)
         @assert number_of_equations == 1
         alloc = (unit) -> CompactAutoDiffCache(number_of_equations, 1, model, unit = unit; kwarg...)
@@ -97,6 +98,8 @@ struct ControlEquationWell <: TervEquation
         new(target_well, target_topcell)
     end
 end
+
+function associated_unit(::ControlEquationWell) Well() end
 
 
 # Well segments
