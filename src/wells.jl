@@ -57,6 +57,33 @@ struct MultiSegmentWell <: WellGrid
     end
 end
 
+struct PotentialDropBalanceWell <: TervEquation
+    # Equation: pot_diff(p) - pot_diff_model(v, p)
+    potential_difference::TervAutoDiffCache       # Differentiated with respect to both Cells
+    potential_drop_model_cells::TervAutoDiffCache # Differentiated with respect to Cells
+    potential_drop_model_faces::TervAutoDiffCache # Differentiated with respect to Velocity
+end
+
+function PotentialDropBalanceWell(model, number_of_equations; kwarg...)
+    D = model.domain
+    cell_unit = Cells()
+    face_unit = Faces()
+    nf = count_units(D, face_unit)
+
+    cell_partials = degrees_of_freedom_per_unit(model, cell_unit)
+    face_partials = degrees_of_freedom_per_unit(model, face_unit)
+
+    alloc = (n, np, unit) -> CompactAutoDiffCache(number_of_equations, n, np, unit = unit; kwarg...)
+    # One potential drop per velocity
+    dp = alloc(nf, face_partials, face_unit)
+    # Two cells per face -> 2*nf allocated
+    dp_model_cells = alloc(2*nf, cell_partials, cell_unit)
+    # One potential drop model per velocity
+    dp_model_faces = alloc(nf, face_partials, face_unit)
+
+    PotentialDropBalanceWell(dp, dp_model_cells, dp_model_faces)
+end
+
 # Well segments
 """
 Perforations are connections from well cells to reservoir vcells
@@ -114,9 +141,9 @@ function associated_unit(::SegmentTotalVelocity) Faces() end
 struct TotalMassRateWell <: ScalarVariable end
 function associated_unit(::TotalMassRateWell) Well() end
 
-function degrees_of_freedom_per_unit(model, v::SurfacePhaseRates)
-    return number_of_phases(model.system)
-end
+# function degrees_of_freedom_per_unit(model, v::SurfacePhaseRates)
+#    return number_of_phases(model.system)
+# end
 
 # Selection of primary variables
 function select_primary_variables!(S, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
@@ -129,5 +156,5 @@ end
 
 function select_equations!(eqs, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
     select_equations!(eqs, system)
-    eqs[:pressure_drop] = (WellPressureDropClosure, 1)
+    eqs[:potential_balance] = (PotentialDropBalanceWell, 1)
 end
