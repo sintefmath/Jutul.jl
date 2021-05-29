@@ -134,6 +134,7 @@ function setup_equations!(eqs, storage, model::TervModel; tag = nothing, kwarg..
         @debug "$tag: $msg"
     end
     counter = 1
+    num_equations_total = 0
     for (sym, eq) in model.equations
         proto = eq[1]
         num = eq[2]
@@ -144,10 +145,15 @@ function setup_equations!(eqs, storage, model::TervModel; tag = nothing, kwarg..
             extra = []
         end
         e = proto(model, num; extra..., tag = tag, kwarg...)
-        @debug "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on $(number_of_units(model, e)) $(associated_unit(e))"
+        ne = number_of_units(model, e)
+        n = num*ne
+
+        @debug "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_unit(e)) for $n equations in total."
         eqs[sym] = e
         counter += 1
+        num_equations_total += n
     end
+    @debug "$num_equations_total equations total distributed over $counter groups."
 end
 
 

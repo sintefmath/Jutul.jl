@@ -348,7 +348,9 @@ function convert_state_ad(model, state, tag = nothing)
     else
         @debug "$tag: Setting up primary variables..."
     end
-    
+    # Bookkeeping for debug output
+    total_number_of_partials = 0
+    total_number_of_groups = 0
     for (pkey, pvar) in primary
         u = associated_unit(pvar)
         # Number of partials for this unit
@@ -361,14 +363,17 @@ function convert_state_ad(model, state, tag = nothing)
             last_unit = u
             # Reset the offset to zero, since we have entered a new group.
             offset = 0
+            total_number_of_groups += 1
         end
-        # Number of partisl this primary variable contributes
+        # Number of partials this primary variable contributes
         n_local = degrees_of_freedom_per_unit(model, pvar)
         t = get_unit_tag(tag, u)
         @debug "→ $pkey:\n\t$n_local of $n_partials partials on all $(typeof(u)), covers $(offset+1) → $(offset + n_local)"
         stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = t, offset = offset, context = context)
         offset += n_local
+        total_number_of_partials += n_local
     end
+    @debug "Primary variables set up: $(number_of_degrees_of_freedom(model)) degrees of freedom\n\t → $total_number_of_partials distinct primary variables over $total_number_of_groups different units."
     secondary = get_secondary_variables(model)
     # Loop over secondary variables and initialize as AD with zero partials
     @debug "Setting up secondary variables..."
