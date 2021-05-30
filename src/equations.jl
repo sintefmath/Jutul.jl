@@ -161,12 +161,22 @@ is then that of ∂E / ∂P where P are the primary variables of A.
 Update an equation so that it knows where to store its derivatives
 in the Jacobian representation.
 """
-function align_to_jacobian!(::TervEquation, jac, model) end
+function align_to_jacobian!(eq::TervEquation, jac, model; equation_offset = 0, variable_offset = 0)
+    punits = get_primary_variable_ordered_units(model)
+    for u in punits
+        align_to_jacobian!(eq, jac, model, u, equation_offset = equation_offset, variable_offset = variable_offset) 
+        variable_offset += number_of_degrees_of_freedom(model, u)
+    end
+end
+
+function align_to_jacobian!(::TervEquation, jac, model, unit; equation_offset = 0, variable_offset = 0) end
 
 
-function align_to_jacobian!(eq::DiagonalEquation, jac, model; equation_offset = 0, variable_offset = 0)
-    layout = matrix_layout(model.context)
-    diagonal_alignment!(eq.equation, jac, layout, target_offset = equation_offset, source_offset = variable_offset)
+function align_to_jacobian!(eq::DiagonalEquation, jac, model, unit; equation_offset = 0, variable_offset = 0)
+    if unit == associated_unit(eq)
+        layout = matrix_layout(model.context)
+        diagonal_alignment!(eq.equation, jac, unit, layout, target_offset = equation_offset, source_offset = variable_offset)
+    end
 end
 
 """

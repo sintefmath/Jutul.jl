@@ -29,19 +29,28 @@ function ConservationLaw(model, number_of_equations;
 end
 
 "Update positions of law's derivatives in global Jacobian"
-function align_to_jacobian!(law::ConservationLaw, jac, model; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
     neighborship = model.domain.grid.neighborship
 
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
-    hflux_faces = law.half_face_flux_faces
 
     layout = matrix_layout(model.context)
     
-    diagonal_alignment!(acc, jac, layout, target_offset = equation_offset, source_offset = variable_offset)
+    diagonal_alignment!(acc, jac, u, layout, target_offset = equation_offset, source_offset = variable_offset)
     half_face_flux_cells_alignment!(hflux_cells, acc, jac, layout, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
+end
+
+function align_to_jacobian!(law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
+    fd = law.flow_discretization
+    neighborship = model.domain.grid.neighborship
+
+    acc = law.accumulation
+    hflux_faces = law.half_face_flux_faces
+    
     if !isnothing(hflux_faces)
+        layout = matrix_layout(model.context)
         half_face_flux_faces_alignment!(hflux_faces, jac, layout, target_offset = equation_offset, source_offset = variable_offset)
     end
 end

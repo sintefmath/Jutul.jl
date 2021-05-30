@@ -72,8 +72,14 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
 
     impact_target = ct.impact[1]
     impact_source = ct.impact[2]
-
-    injective_alignment!(cs, jac, layout, target_index = impact_target, source_index = impact_source, target_offset = equation_offset, source_offset = variable_offset)
+    punits = get_primary_variable_ordered_units(source)
+    for u in punits
+        injective_alignment!(cs, jac, u, layout,
+                                                target_index = impact_target,
+                                                source_index = impact_source,
+                                                target_offset = equation_offset,
+                                                source_offset = variable_offset)
+    end
 end
 
 function apply_cross_term!(eq, ct, model_t, model_s, arg...)
@@ -262,6 +268,7 @@ function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, ta
     for ekey in keys(equations)
         eq = equations[ekey]
         ct = crossterms[ekey]
+        
         if !isnothing(ct)
             align_to_jacobian!(ct, lsys.jac, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
         end
