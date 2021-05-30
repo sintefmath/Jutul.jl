@@ -21,12 +21,14 @@ struct MultiSegmentWell <: WellGrid
     perforations     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     neighborship     # Well cell connectivity
     top              # "Top" node where scalar well quantities live
+    reservoir_symbol # Symbol of the reservoir the well is coupled to
     function MultiSegmentWell(volumes::AbstractVector, reservoir_cells;
                                                         WI = nothing,
                                                         N = nothing,
                                                         perforation_cells = nothing,
                                                         reference_depth = 0,
-                                                        accumulator_volume = 1e-3*mean(volumes))
+                                                        accumulator_volume = 1e-3*mean(volumes),
+                                                        reservoir_symbol = :Reservoir)
         nv = length(volumes)
         nc = nv + 1
         nr = length(reservoir_cells)
@@ -53,7 +55,7 @@ struct MultiSegmentWell <: WellGrid
 
         perf = (self = perforation_cells, reservoir = reservoir_cells, WI = WI)
         accumulator = (reference_depth = reference_depth, )
-        new(volumes, perf, N, accumulator)
+        new(volumes, perf, N, accumulator, reservoir_symbol)
     end
 end
 
