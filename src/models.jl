@@ -193,11 +193,11 @@ function get_sparse_arguments(storage, model, layout = matrix_layout(model.conte
                 push!(I, i .+ numrows) # Row indices, offset by the size of preceeding equations
                 push!(J, j .+ numcols) # Column indices, offset by the partials in units we have passed
             end
-            numcols += degrees_of_freedom_per_unit(model, u)*count_units(model.domain, u)
+            numcols += number_of_degrees_of_freedom(model, u)
         end
         @assert numcols == ndof
         # Number of equations correspond to number of rows
-        numrows += number_of_units(model, eq)
+        numrows += number_of_equations(model, eq)
     end
     I = vcat(I...)
     J = vcat(J...)

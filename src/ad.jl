@@ -135,7 +135,7 @@ function number_of_degrees_of_freedom(model::TervModel)
 end
 
 function number_of_degrees_of_freedom(model::TervModel, u::TervUnit)
-    ndof = degrees_of_freedom_per_unit(model, u)*count_units(model, u)
+    ndof = degrees_of_freedom_per_unit(model, u)*count_units(model.domain, u)
     return ndof
 end
 
