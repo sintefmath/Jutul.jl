@@ -29,7 +29,7 @@ function ConservationLaw(model, number_of_equations;
 end
 
 "Update positions of law's derivatives in global Jacobian"
-function align_to_jacobian!(law::ConservationLaw, jac, model; row_offset = 0, col_offset = 0)
+function align_to_jacobian!(law::ConservationLaw, jac, model; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
     neighborship = model.domain.grid.neighborship
 
@@ -39,10 +39,10 @@ function align_to_jacobian!(law::ConservationLaw, jac, model; row_offset = 0, co
 
     layout = matrix_layout(model.context)
     
-    diagonal_alignment!(acc, jac, layout, target_offset = row_offset, source_offset = col_offset)
-    half_face_flux_cells_alignment!(hflux_cells, acc, jac, layout, neighborship, fd, target_offset = row_offset, source_offset = col_offset)
+    diagonal_alignment!(acc, jac, layout, target_offset = equation_offset, source_offset = variable_offset)
+    half_face_flux_cells_alignment!(hflux_cells, acc, jac, layout, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
     if !isnothing(hflux_faces)
-        half_face_flux_faces_alignment!(hflux_faces, jac, layout, target_offset = row_offset, source_offset = col_offset)
+        half_face_flux_faces_alignment!(hflux_faces, jac, layout, target_offset = equation_offset, source_offset = variable_offset)
     end
 end
 
@@ -169,7 +169,7 @@ function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
 end
 
 
-function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, row_offset = 0, col_offset = 0)
+function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, equation_offset = 0, variable_offset = 0)
     n = size(fluxpos, 1)
     nf = size(fluxpos, 2)
     @assert nder == n / neq
@@ -182,11 +182,11 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, row_
 
         for col = 1:nder
             # Diagonal positions
-            col_pos = (col - 1) * nc + other + col_offset
+            col_pos = (col - 1) * nc + other + variable_offset
             pos = jac.colptr[col_pos]:jac.colptr[col_pos + 1] - 1
             rowval = jac.rowval[pos]
             for row = 1:neq
-                row_ix = self + (row - 1) * nc + row_offset
+                row_ix = self + (row - 1) * nc + equation_offset
                 fluxpos[(row - 1) * nder + col, i] = pos[rowval .== row_ix][1]
                 # @printf("Matching %d %d to %d\n", row_ix, col_pos, pos[rowval .== row_ix][1])
             end

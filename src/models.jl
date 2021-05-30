@@ -226,13 +226,13 @@ function align_equations_to_linearized_system!(storage, model::TervModel; kwarg.
     align_equations_to_jacobian!(eqs, jac, model; kwarg...)
 end
 
-function align_equations_to_jacobian!(equations, jac, model; row_offset = 0, col_offset = 0)
+function align_equations_to_jacobian!(equations, jac, model; equation_offset = 0, variable_offset = 0)
     for key in keys(equations)
         eq = equations[key]
-        align_to_jacobian!(eq, jac, model, row_offset = row_offset, col_offset = col_offset)
-        row_offset += number_of_equations(model, eq)
+        align_to_jacobian!(eq, jac, model, equation_offset = equation_offset, variable_offset = variable_offset)
+        equation_offset += number_of_equations(model, eq)
     end
-    row_offset
+    equation_offset
 end
 
 function allocate_array(context::TervContext, value, n...)
@@ -267,12 +267,12 @@ function update_linearized_system!(storage, model::TervModel; kwarg...)
     update_linearized_system!(lsys, equations, model; kwarg...)
 end
 
-function update_linearized_system!(lsys, equations, model::TervModel; row_offset = 0)
+function update_linearized_system!(lsys, equations, model::TervModel; equation_offset = 0)
     for key in keys(equations)
         eq = equations[key]
         n = number_of_equations(model, eq)
-        update_linearized_system_subset!(lsys, model, eq, r_subset = (row_offset+1):(row_offset+n))
-        row_offset += n
+        update_linearized_system_subset!(lsys, model, eq, r_subset = (equation_offset+1):(equation_offset+n))
+        equation_offset += n
     end
 end
 

@@ -164,9 +164,9 @@ in the Jacobian representation.
 function align_to_jacobian!(::TervEquation, jac, model) end
 
 
-function align_to_jacobian!(eq::DiagonalEquation, jac, model; row_offset = 0, col_offset = 0)
+function align_to_jacobian!(eq::DiagonalEquation, jac, model; equation_offset = 0, variable_offset = 0)
     layout = matrix_layout(model.context)
-    diagonal_alignment!(eq.equation, jac, layout, target_offset = row_offset, source_offset = col_offset)
+    diagonal_alignment!(eq.equation, jac, layout, target_offset = equation_offset, source_offset = variable_offset)
 end
 
 """

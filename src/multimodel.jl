@@ -65,7 +65,7 @@ struct InjectiveCrossTerm <: CrossTerm
     end
 end
 
-function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, source::TervModel; row_offset = 0, col_offset = 0)
+function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, source::TervModel; equation_offset = 0, variable_offset = 0)
     cs = ct.crossterm_source_cache
 
     layout = matrix_layout(source.context)
@@ -73,7 +73,7 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
     impact_target = ct.impact[1]
     impact_source = ct.impact[2]
 
-    injective_alignment!(cs, jac, layout, target_index = impact_target, source_index = impact_source, target_offset = row_offset, source_offset = col_offset)
+    injective_alignment!(cs, jac, layout, target_index = impact_target, source_index = impact_source, target_offset = equation_offset, source_offset = variable_offset)
 end
 
 function apply_cross_term!(eq, ct, model_t, model_s, arg...)
@@ -213,61 +213,61 @@ function declare_cross_term(eq::TervEquation, target_model, source_model; source
     return ct
 end
 
-function align_equations_to_linearized_system!(storage, model::MultiModel; row_offset = 0, col_offset = 0)
+function align_equations_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
     ndofs = model.number_of_degrees_of_freedom
     lsys = storage[:LinearizedSystem]
     for key in keys(models)
         submodel = models[key]
         eqs = storage[key][:equations]
-        nrow_end = align_equations_to_jacobian!(eqs, lsys.jac, submodel, row_offset = row_offset, col_offset = col_offset)
-        nrow = nrow_end - row_offset
+        nrow_end = align_equations_to_jacobian!(eqs, lsys.jac, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
+        nrow = nrow_end - equation_offset
         ndof = ndofs[key]
         @assert nrow == ndof "Submodels must have equal number of equations and degrees of freedom. Found $nrow equations and $ndof variables for submodel $key"
-        row_offset += ndof
-        col_offset += ndof # Assuming that each model by itself forms a well-posed, square Jacobian...
+        equation_offset += ndof
+        variable_offset += ndof # Assuming that each model by itself forms a well-posed, square Jacobian...
     end
 end
 
-function align_cross_terms_to_linearized_system!(storage, model::MultiModel; row_offset = 0, col_offset = 0)
+function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
     ndofs = model.number_of_degrees_of_freedom
 
     lsys = storage[:LinearizedSystem]
     cross_terms = storage[:cross_terms]
 
-    base_col_offset = col_offset
+    base_variable_offset = variable_offset
     # Iterate over targets (= rows)
     for target in keys(models)
         target_model = models[target]
-        col_offset = base_col_offset
+        variable_offset = base_variable_offset
         # Iterate over sources (= columns)
         for source in keys(models)
             source_model = models[source]
             if source != target
                 ct = cross_terms[target][source]
                 eqs = storage[target][:equations]
-                align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, row_offset = row_offset, col_offset = col_offset)
+                align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, equation_offset = equation_offset, variable_offset = variable_offset)
                 # Same number of rows as target, same number of columns as source
             end
             # Increment col and row offset
-            col_offset += ndofs[source]
+            variable_offset += ndofs[source]
         end
-        row_offset += ndofs[target]
+        equation_offset += ndofs[target]
     end
 end
 
 
-function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, target::TervModel, source::TervModel; row_offset = 0, col_offset = 0)
+function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, target::TervModel, source::TervModel; equation_offset = 0, variable_offset = 0)
     for ekey in keys(equations)
         eq = equations[ekey]
         ct = crossterms[ekey]
         if !isnothing(ct)
-            align_to_jacobian!(ct, lsys.jac, target, source, row_offset = row_offset, col_offset = col_offset)
+            align_to_jacobian!(ct, lsys.jac, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
         end
-        row_offset += number_of_equations(target, eq)
+        equation_offset += number_of_equations(target, eq)
     end
-    return row_offset
+    return equation_offset
 end
 
 function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol)
@@ -289,26 +289,26 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # derivative positions that correspond to that of the source
         equations = storage[target][:equations]
         cross_terms = storage[:cross_terms][target][source]
-        row_offset = 0
+        equation_offset = 0
         for (key, eq) in equations
             x = cross_terms[key]
             if !isnothing(x)
-                col_offset = 0
+                variable_offset = 0
                 for u in get_primary_variable_ordered_units(source_model)
                     S = declare_sparsity(target_model, source_model, x, u, source_layout)
                     if !isnothing(S)
-                        push!(I, S[1] .+ row_offset)
-                        push!(J, S[2] .+ col_offset)
+                        push!(I, S[1] .+ equation_offset)
+                        push!(J, S[2] .+ variable_offset)
                     end
-                    col_offset += degrees_of_freedom_per_unit(source_model, u)
+                    variable_offset += degrees_of_freedom_per_unit(source_model, u)
                 end
             end
-            row_offset += number_of_equations(target_model, eq)
+            equation_offset += number_of_equations(target_model, eq)
         end
         I = vcat(I...)
         J = vcat(J...)
         V = zeros(F, length(I))
-        sarg = (I, J, V, row_offset, ncols)
+        sarg = (I, J, V, equation_offset, ncols)
     end
     return sarg
 end
@@ -317,25 +317,25 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     I = []
     J = []
     V = []
-    row_offset = 0
-    col_offset = 0
+    equation_offset = 0
+    variable_offset = 0
     for target in targets
-        col_offset = 0
+        variable_offset = 0
         n = 0
         for source in sources
             i, j, v, n, m = get_sparse_arguments(storage, model, target, source)
-            push!(I, i .+ row_offset)
-            push!(J, j .+ col_offset)
+            push!(I, i .+ equation_offset)
+            push!(J, j .+ variable_offset)
             push!(V, v)
-            col_offset += m
+            variable_offset += m
             @debug "$source → $target: $n rows and $m columns."
         end
-        row_offset += n
+        equation_offset += n
     end
     I = vcat(I...)
     J = vcat(J...)
     V = vcat(V...)
-    return (I, J, V, row_offset, col_offset)
+    return (I, J, V, equation_offset, variable_offset)
 end
 
 function setup_linearized_system!(storage, model::MultiModel)
@@ -356,8 +356,8 @@ function setup_linearized_system!(storage, model::MultiModel)
         # We have multiple groups. Store as Matrix of sparse matrices
         @assert false "Needs implementation"
         jac = Matrix{Any}(ng, ng)
-        # row_offset = 0
-        # col_offset = 0
+        # equation_offset = 0
+        # variable_offset = 0
         for rowg in 1:ng
             t = candidates[groups .== rowg]
             for colg in 1:ng
@@ -441,15 +441,15 @@ function apply_cross_terms_for_pair!(storage, model, source::Symbol, target::Sym
 end
 
 
-function update_linearized_system!(storage, model::MultiModel; row_offset = 0)
+function update_linearized_system!(storage, model::MultiModel; equation_offset = 0)
     lsys = storage.LinearizedSystem
     models = model.models
     for key in keys(models)
         m = models[key]
         s = storage[key]
         eqs = s.equations
-        update_linearized_system!(lsys, eqs, m; row_offset = row_offset)
-        row_offset += number_of_degrees_of_freedom(m)
+        update_linearized_system!(lsys, eqs, m; equation_offset = equation_offset)
+        equation_offset += number_of_degrees_of_freedom(m)
     end
     # Then, update cross terms
     for target in keys(models)
