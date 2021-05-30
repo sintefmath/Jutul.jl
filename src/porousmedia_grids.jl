@@ -74,8 +74,8 @@ end
 # end
 
 function declare_units(G::MinimalTPFAGrid)
-    c = (Cells(), length(G.pore_volumes))  # Cells equal to number of pore volumes
-    f = (Faces(), size(G.neighborship, 2)) # Faces
+    c = (unit = Cells(), count = length(G.pore_volumes))  # Cells equal to number of pore volumes
+    f = (unit = Faces(), count = size(G.neighborship, 2)) # Faces
     return [c, f]
 end
 

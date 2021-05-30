@@ -1,5 +1,5 @@
 function declare_units(G::TervGrid)
-    return [(Cells(), 1)]
+    return [(unit = Cells(), count = 1)]
 end
 
 function get_units(D::TervDomain)

@@ -137,10 +137,10 @@ struct ProducerControl <: WellControlForce
 end
 
 function declare_units(W::MultiSegmentWell)
-    c = (Cells(),         length(W.volumes))
-    f = (Faces(),         size(W.neighborship, 2))
-    p = (Perforations(),  length(W.perforations.self))
-    w = (Well(), 1)
+    c = (unit = Cells(),         count = length(W.volumes))
+    f = (unit = Faces(),         count = size(W.neighborship, 2))
+    p = (unit = Perforations(),  count = length(W.perforations.self))
+    w = (unit = Well(),          count = 1)
     return [c, f, p, w]
 end
 

@@ -41,7 +41,7 @@ struct InjectiveCrossTerm <: CrossTerm
         context = target_model.context
         target_unit = associated_unit(target_eq)
         if isnothing(intersection)
-            intersection = get_domain_intersection(target_unit, target_model, source_model)
+            intersection = get_domain_intersection(target_unit, target_model, source_model, source)
         end
         target_impact, source_impact, source_unit = intersection
         @assert !isnothing(target_impact) "Cannot declare cross term when there is no overlap between domains."
@@ -136,8 +136,8 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
 end
 
 
-function get_domain_intersection(u::TervUnit, target_model::TervModel, source_model::TervModel)
-    return get_domain_intersection(u, target_model.domain, source_model.domain)
+function get_domain_intersection(u::TervUnit, target_model::TervModel, source_model::TervModel, arg...)
+    return get_domain_intersection(u, target_model.domain, source_model.domain, arg...)
 end
 
 """
@@ -145,7 +145,8 @@ For a given unit in domain target_d, find any indices into that unit that is con
 any units in source_d. The interface is limited to a single unit-unit impact.
 The return value is a tuple of indices and the corresponding unit
 """
-function get_domain_intersection(u::TervUnit, target_d::TervDomain, source_d::TervDomain)
+function get_domain_intersection(u::TervUnit, target_d::TervDomain, source_d::TervDomain, source_symbol)
+    source_symbol::Union{Nothing, Symbol}
     (target = nothing, source = nothing, source_unit = Cells())
 end
 
@@ -200,14 +201,14 @@ function setup_cross_terms(storage, model::MultiModel)
     storage[:cross_terms] = crossd
 end
 
-function declare_cross_term(eq::TervEquation, target_model, source_model; kwarg...)
+function declare_cross_term(eq::TervEquation, target_model, source_model; source = nothing, kwarg...)
     target_unit = associated_unit(eq)
-    intersection = get_domain_intersection(target_unit, target_model, source_model)
+    intersection = get_domain_intersection(target_unit, target_model, source_model, source)
     if isnothing(intersection.target)
         # Declare nothing, so we can easily spot no overlap
         ct = nothing
     else
-        ct = InjectiveCrossTerm(eq, target_model, source_model, intersection; kwarg...)
+        ct = InjectiveCrossTerm(eq, target_model, source_model, intersection; source = source, kwarg...)
     end
     return ct
 end
@@ -293,13 +294,13 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
             x = cross_terms[key]
             if !isnothing(x)
                 col_offset = 0
-                for u in get_units(source_model.domain)
+                for u in get_primary_variable_ordered_units(source_model)
                     S = declare_sparsity(target_model, source_model, x, u, source_layout)
                     if !isnothing(S)
                         push!(I, S[1] .+ row_offset)
                         push!(J, S[2] .+ col_offset)
                     end
-                    # TODO: col_offset must be incremented here.
+                    col_offset += degrees_of_freedom_per_unit(source_model, u)
                 end
             end
             row_offset += number_of_equations(target_model, eq)
@@ -327,6 +328,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
             push!(J, j .+ col_offset)
             push!(V, v)
             col_offset += m
+            @debug "$source → $target: $n rows and $m columns."
         end
         row_offset += n
     end

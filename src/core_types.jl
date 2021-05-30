@@ -110,9 +110,9 @@ function DiscretizedDomain(grid, disc = nothing)
     units = declare_units(grid)
     u = Dict{Any, Int64}() # Is this a good definition?
     for unit in units
-        num = unit[2]
+        num = unit.count
         @assert num >= 0 "Units must have non-negative counts."
-        u[unit[1]] = num
+        u[unit.unit] = num
     end
     DiscretizedDomain(grid, disc, u) 
 end
