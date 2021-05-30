@@ -171,7 +171,13 @@ function select_equations!(eqs, system::MultiPhaseSystem)
     eqs[:mass_conservation] = (ConservationLaw, nph)
 end
 
-function get_pore_volume(model) model.domain.grid.pore_volumes' end
+function get_pore_volume(model)
+    get_flow_volume(model.domain.grid)'
+end
+
+function get_flow_volume(grid::MinimalTPFAGrid)
+    grid.pore_volumes
+end
 
 # Update of discretization terms
 function update_accumulation!(law, storage, model, dt)

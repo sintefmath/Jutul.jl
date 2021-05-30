@@ -101,6 +101,11 @@ struct ControlEquationWell <: TervEquation
     end
 end
 
+
+function get_flow_volume(grid::WellGrid)
+    grid.volumes
+end
+
 function associated_unit(::ControlEquationWell) Well() end
 
 

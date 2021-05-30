@@ -21,12 +21,12 @@ init = Dict(:Pressure => p0)
 state0r = setup_state(model, init)
 
 # Model parameters
-parameters = setup_parameters(model)
-parameters[:Viscosity] = [mu]
-parameters[:Density] = [rhoL]
+param_res = setup_parameters(model)
+param_res[:Viscosity] = [mu]
+param_res[:Density] = [rhoL]
 
 timesteps = [1.0]
-sim = Simulator(model, state0 = state0r, parameters = parameters)
+sim = Simulator(model, state0 = state0r, parameters = param_res)
 simulate(sim, timesteps)
 ## Set up injector
 ix = 1
@@ -81,6 +81,13 @@ mmodel = MultiModel((Reservoir = model, Injector = Wi, Producer = Wp))
 state0 = setup_state(mmodel, Dict(:Reservoir => state0r, :Injector => istate, :Producer => pstate))
 forces = Dict(:Reservoir => nothing, :Injector => ictrl, :Producer => pctrl)
 
-sim = Simulator(mmodel, state0 = state0)
+
+parameters = setup_parameters(mmodel)
+parameters[:Reservoir] = param_res
+parameters[:Injector] = param_res
+parameters[:Producer] = param_res
+
+
+sim = Simulator(mmodel, state0 = state0, parameters = parameters)
 states = simulate(sim, [1.0], forces = forces)
 
