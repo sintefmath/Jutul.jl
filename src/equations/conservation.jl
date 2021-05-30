@@ -42,19 +42,6 @@ function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation
     half_face_flux_cells_alignment!(hflux_cells, acc, jac, layout, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
 end
 
-function align_to_jacobian!(law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
-    fd = law.flow_discretization
-    neighborship = model.domain.grid.neighborship
-
-    acc = law.accumulation
-    hflux_faces = law.half_face_flux_faces
-    
-    if !isnothing(hflux_faces)
-        layout = matrix_layout(model.context)
-        half_face_flux_faces_alignment!(hflux_faces, jac, layout, target_offset = equation_offset, source_offset = variable_offset)
-    end
-end
-
 function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, N, flow_disc; target_offset = 0, source_offset = 0)
     nu, ne, np = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
@@ -72,6 +59,33 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, N, 
                     pos = find_jac_position(jac, cell + target_offset, other + source_offset, e, d, nu, nu, ne, np, layout)
                     set_jacobian_pos!(face_cache, f_ix, e, d, pos)
                 end
+            end
+        end
+    end
+end
+
+function align_to_jacobian!(law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
+    fd = law.flow_discretization
+    neighborship = model.domain.grid.neighborship
+
+    hflux_faces = law.half_face_flux_faces
+    
+    if !isnothing(hflux_faces)
+        layout = matrix_layout(model.context)
+        half_face_flux_faces_alignment!(hflux_faces, jac, layout, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
+    end
+end
+
+
+function half_face_flux_faces_alignment!(face_cache, jac, layout, N, flow_disc; target_offset = 0, source_offset = 0)
+    nu, ne, np = ad_dims(face_cache)
+    conn_data = flow_disc.conn_data
+    for index in 1:length(conn_data)
+        face = conn_data[index].face
+        for e in 1:ne
+            for d = 1:np
+                pos = find_jac_position(jac, face + target_offset, face + source_offset, e, d, nu, nu, ne, np, layout)
+                set_jacobian_pos!(face_cache, index, e, d, pos)
             end
         end
     end
