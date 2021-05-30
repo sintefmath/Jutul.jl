@@ -181,27 +181,29 @@ function get_sparse_arguments(storage, model, layout = matrix_layout(model.conte
     eqs = storage[:equations]
     I = []
     J = []
-    nrows = 0
+    numrows = 0
     primary_units = get_primary_variable_ordered_units(model)
-    for (k, eq) in eqs
-        ncols = 0
+    for eq in values(eqs)
+        numcols = 0
         for u in primary_units
             S = declare_sparsity(model, eq, u, layout)
             if !isnothing(S)
                 i = S[1]
                 j = S[2]
-                push!(I, i .+ nrows) # Row indices, offset by the size of preceeding equations
-                push!(J, j .+ ncols) # Column indices, offset by the partials in units we have passed
-                nrows += S[3]
+                push!(I, i .+ numrows) # Row indices, offset by the size of preceeding equations
+                push!(J, j .+ numcols) # Column indices, offset by the partials in units we have passed
             end
-            ncols += degrees_of_freedom_per_unit(model, u)
+            numcols += degrees_of_freedom_per_unit(model, u)*count_units(model.domain, u)
         end
+        @assert numcols == ndof
+        # Number of equations correspond to number of rows
+        numrows += number_of_units(model, eq)
     end
     I = vcat(I...)
     J = vcat(J...)
     vt = float_type(model.context)
     V = zeros(vt, length(I))
-    return (I, J, V, nrows, ndof)
+    return (I, J, V, numrows, ndof)
 end
 
 function setup_linearized_system!(storage, model::TervModel)
@@ -210,7 +212,8 @@ function setup_linearized_system!(storage, model::TervModel)
     if !haskey(storage, :equations)
         error("Unable to allocate linearized system - no equations found.")
     end
-    I, J, V, nrows, ncols = get_sparse_arguments(storage, model)
+    layout = matrix_layout(model.context)
+    I, J, V, nrows, ncols = get_sparse_arguments(storage, model, layout)
     jac = sparse(I, J, V, nrows, ncols)
     lsys = LinearizedSystem(jac)
     storage[:LinearizedSystem] = transfer(model.context, lsys)
