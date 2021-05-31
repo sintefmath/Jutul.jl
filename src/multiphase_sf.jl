@@ -20,10 +20,16 @@ end
 
 function select_secondary_variables!(S, system::MultiPhaseSystem)
     S[:PhaseMassDensities] = PhaseMassDensities()
-    S[:PhaseMobilities] = PhaseMobilities()
-    S[:MassMobilities] = MassMobilities()
     S[:TotalMasses] = TotalMasses()
 end
+
+function select_secondary_variables!(S, domain::DiscretizedDomain{G}, system::MultiPhaseSystem, arg...) where {G <: PorousMediumGrid}
+    select_secondary_variables!(S, system)
+    # For a porous medium, we also need the notion of mobilities.
+    S[:PhaseMobilities] = PhaseMobilities()
+    S[:MassMobilities] = MassMobilities()
+end
+
 
 function minimum_output_variables(system::MultiPhaseSystem, primary_variables)
     [:TotalMasses]
