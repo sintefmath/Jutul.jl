@@ -97,11 +97,12 @@ function update_linearized_system_subset!(nz, r, model, law::ConservationLaw)
     face_flux = law.half_face_flux_faces
     cpos = law.flow_discretization.conn_pos
 
-
-    update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
-    update_linearized_system_subset_cell_flux!(nz, model, acc, cell_flux, cpos)
-    if !isnothing(face_flux)
-        update_linearized_system_subset_face_flux!(nz, r, model, acc, face_flux, cpos)
+    @sync begin 
+        @async update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
+        @async update_linearized_system_subset_cell_flux!(nz, model, acc, cell_flux, cpos)
+        if !isnothing(face_flux)
+            @async update_linearized_system_subset_face_flux!(nz, r, model, acc, face_flux, cpos)
+        end
     end
 end
 
