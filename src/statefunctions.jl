@@ -1,4 +1,4 @@
-using ExprTools
+using ExprTools, LightGraphs
 """
 Designate the function as updating a secondary variable.
 
@@ -11,7 +11,7 @@ If we define the following function annotated with the macro:
 end
 
 The macro also defines: 
-function update_as_secondary!(var::MyVarType, model)
+function get_dependencies(var::MyVarType, model)
    return [:a, :b, :c]
 end
 
@@ -19,7 +19,7 @@ function update_as_secondary!(array_target, var::MyVarType, model, parameters, s
     update_as_secondary!(array_target, var, model, parameters, state.a, state.b, state.c)
 end
 
-Note that the input arguments beyond the 
+Note that the names input arguments beyond the parameter dict matter, as these will be fetched from state.
 """
 macro terv_secondary(ex)
     def = splitdef(ex)
@@ -38,10 +38,11 @@ macro terv_secondary(ex)
     model_sym = args[3]
     @debug "Building evaluator for $variable_sym"
 
-    # Define dependencies function
+    # Define get_dependencies function
     dep_def = deepcopy(def)
+    dep_def[:name] = :get_dependencies
     dep_def[:args] = [variable_sym, model_sym]
-    dep_def[:body] = Symbol(deps)
+    dep_def[:body] = deps
     ex_dep = combinedef(dep_def)
     # Define update_as_secondary! function
     upd_def = deepcopy(def)
@@ -141,4 +142,43 @@ function select_output_variables(domain, system, formulation, primary_variables,
         end
     end
     return outputs
+end
+
+function sort_secondary_variables!(model)
+    primary = model.primary_variables
+    secondary = model.secondary_variables
+    
+    edges = []
+    nodes = []
+    for key in keys(primary)
+        push!(nodes, key)
+        push!(edges, []) # No dependencies for primary variables.
+    end
+    for (key, var) in secondary
+        dep = get_dependencies(var, model)
+        push!(nodes, key)
+        push!(edges, dep)
+    end
+    order = sort_symbols(nodes, edges)
+    np = length(primary)
+    # Skip primary variable indices - these always come first.
+    order = order[order .> np]
+    # Offset by primary variables
+    @. order -= np
+    @. secondary.keys = secondary.keys[order]
+    @. secondary.vals = secondary.vals[order]
+end
+
+function sort_symbols(symbols, deps)
+    @assert length(symbols) == length(deps)
+    n = length(symbols)
+    graph = SimpleDiGraph(n)
+    for (i, dep) in enumerate(deps)
+        for d in dep
+            pos = findall(symbols .== d)[]
+            @assert length(pos) == 1 "Symbol $d must appear exactly once"
+            add_edge!(graph, i, pos)
+        end
+    end
+    reverse(topological_sort_by_dfs(graph))
 end

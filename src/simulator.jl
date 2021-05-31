@@ -9,6 +9,8 @@ struct Simulator <: TervSimulator
 end
 
 function Simulator(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true, kwarg...)
+    # We need to sort the secondary variables according to their dependency ordering before simulating.
+    sort_secondary_variables!(model)
     if isnothing(state0)
         state0 = setup_state(model)
     elseif copy_state
