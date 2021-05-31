@@ -160,7 +160,11 @@ function sort_secondary_variables!(model)
         push!(edges, dep)
     end
     order = sort_symbols(nodes, edges)
+    @debug "Variable ordering determined: $(nodes[order])"
     np = length(primary)
+    for i in 1:np
+        @assert order[i] <= np "Primary variables should come in the first $np entries in ordering. Something is very wrong."
+    end
     # Skip primary variable indices - these always come first.
     order = order[order .> np]
     # Offset by primary variables
