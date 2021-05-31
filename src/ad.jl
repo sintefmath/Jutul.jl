@@ -1,4 +1,4 @@
-export CompactAutoDiffCache
+export CompactAutoDiffCache, as_value
 
 abstract type TervAutoDiffCache end
 struct CompactAutoDiffCache <: TervAutoDiffCache

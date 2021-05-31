@@ -1,13 +1,82 @@
-# TervStateFunction
+using ExprTools
+"""
+Designate the function as updating a secondary variable.
+
+The function is then declared, in addition to helpers that allows
+checking what the dependencies are and unpacking the dependencies from state.
+
+If we define the following function annotated with the macro:
+@terv_secondary function update_as_secondary!(target, var::MyVarType, model, param, a, b, c)
+    @. target = a + b / c
+end
+
+The macro also defines: 
+function update_as_secondary!(var::MyVarType, model)
+   return [:a, :b, :c]
+end
+
+function update_as_secondary!(array_target, var::MyVarType, model, parameters, state)
+    update_as_secondary!(array_target, var, model, parameters, state.a, state.b, state.c)
+end
+
+Note that the input arguments beyond the 
+"""
+macro terv_secondary(ex)
+    def = splitdef(ex)
+    args = def[:args]
+    # Define filters to strip the type spec (if any)
+    function myfilter(x::Symbol)
+        x
+    end
+    function myfilter(x::Expr)
+        x.args[1]
+    end
+
+    deps = map(myfilter, args[5:end])
+    # Pick variable + model
+    variable_sym = args[2]
+    model_sym = args[3]
+    @debug "Building evaluator for $variable_sym"
+
+    # Define dependencies function
+    dep_def = deepcopy(def)
+    dep_def[:args] = [variable_sym, model_sym]
+    dep_def[:body] = Symbol(deps)
+    ex_dep = combinedef(dep_def)
+    # Define update_as_secondary! function
+    upd_def = deepcopy(def)
+    upd_def[:name] = :update_secondary_variable!
+    upd_def[:args] = [:array_target, variable_sym, model_sym, :parameters, :state]
+    # value, var, model, parameters, arg1, arg2
+    tmp = "update_as_secondary!(array_target, "
+    tmp *= String(myfilter(variable_sym))
+    tmp *= ", "
+    tmp *= String(myfilter(model_sym))
+    tmp *= ", parameters"
+
+    for s in deps
+        tmp *= ", state."*String(s)
+    end
+    tmp *= ")"
+    upd_def[:body] = Meta.parse(tmp)
+    ex_upd = combinedef(upd_def)
+
+    quote 
+        $ex
+        $ex_dep
+        $ex_upd
+    end |> esc 
+end
+
 function update_secondary_variables!(storage, model)
     state = storage.state
     parameters = storage.parameters
-    update_secondary_variables!(state, parameters, model)
+    update_secondary_variables!(state, model, parameters)
 end
 
-function update_secondary_variables!(state, parameters, model)
+function update_secondary_variables!(state, model, parameters)
     for (symbol, var) in model.secondary_variables
-        update_as_secondary!(state[symbol], var, model, state, parameters)
+        update_secondary_variable!(state[symbol], var, model, parameters, state)
     end
 end
 

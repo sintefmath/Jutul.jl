@@ -26,6 +26,7 @@ include("domains.jl")
 include("porousmedia_grids.jl")
 
 # Meat and potatoes
+include("statefunctions.jl")
 include("static_structures.jl")
 include("flux.jl")
 include("benchmarks.jl")
@@ -44,7 +45,6 @@ include("porousmedia.jl")
 include("simulator.jl")
 
 include("utils.jl")
-include("statefunctions.jl")
 # Various add-ons
 include("test_systems.jl")
 end # module

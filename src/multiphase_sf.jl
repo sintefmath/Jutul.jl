@@ -34,16 +34,15 @@ Volumetric mobility of each phase
 """
 struct PhaseMobilities <: PhaseVariable end
 
-function update_as_secondary!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, state, param) where {G, S<:SinglePhaseSystem}
+@terv_secondary function update_as_secondary!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, param) where {G, S<:SinglePhaseSystem}
     mu = param.Viscosity[1]
     fapply!(mob, () -> 1/mu)
 end
 
-function update_as_secondary!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, state, param) where {G, S<:ImmiscibleSystem}
+@terv_secondary function update_as_secondary!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, param, Saturations) where {G, S<:ImmiscibleSystem}
     n = param.CoreyExponents
     mu = param.Viscosity
-    s = state.Saturations
-    @. mob = s^n/mu
+    @. mob = Saturations^n/mu
 end
 
 """
@@ -51,9 +50,9 @@ Mass density of each phase
 """
 struct PhaseMassDensities <: PhaseVariable end
 
-function update_as_secondary!(rho, tv::PhaseMassDensities, model, state, param)
+@terv_secondary function update_as_secondary!(rho, tv::PhaseMassDensities, model, param, Pressure)
     rho_input = param.Density
-    p = state.Pressure
+    p = Pressure
     for i in 1:number_of_phases(model.system)
         rho_i = view(rho, i, :)
         r = rho_input[i]
@@ -72,25 +71,18 @@ Mobility of the mass of each component, in each phase (TBD how to represent this
 """
 struct MassMobilities <: PhaseAndComponentVariable end
 
-function update_as_secondary!(mobrho, tv::MassMobilities, model, state, param)
-    mobrho = state.MassMobilities
-    mob = state.PhaseMobilities
-    rho = state.PhaseMassDensities
-    fapply!(mobrho, *, mob, rho)
+@terv_secondary function update_as_secondary!(mobrho, tv::MassMobilities, model, param, PhaseMobilities, PhaseMassDensities)
+    fapply!(mobrho, *, PhaseMobilities, PhaseMassDensities)
 end
 
-"""
-Total mass of each component/species/... 
-"""
-function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, state, param) where {G, S<:SinglePhaseSystem}
+@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities) where {G, S<:SinglePhaseSystem}
     pv = get_pore_volume(model)
-    rho = state.PhaseMassDensities
-    fapply!(totmass, *, rho, pv)
+    fapply!(totmass, *, PhaseMassDensities, pv)
 end
 
-function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, state, param) where {G, S<:ImmiscibleSystem}
+@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities, Saturations) where {G, S<:ImmiscibleSystem}
     pv = get_pore_volume(model)
-    rho = state.PhaseMassDensities
-    s = state.Saturations
+    rho = PhaseMassDensities
+    s = Saturations
     @. totmass = rho*pv*s
 end

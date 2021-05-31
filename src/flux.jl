@@ -94,6 +94,20 @@ function half_face_flux!(flux, mob, p, conn_data, context, ::KernelDisallowed)
     end
 end
 
+
+@inline function tp_flux(c_self::I, c_other::I, t_ij, mob::AbstractArray{R}, p::AbstractArray{R}) where {R<:Real, I<:Integer}
+    dp = p[c_self] - value(p[c_other])
+    if dp > 0
+        m = mob[c_self]
+    else
+        m = value(mob[c_other])
+    end
+    return m*t_ij*dp
+end
+
+
+## GPU stuff, needs revising
+
 "Half face flux using kernel (GPU/CPU)"
 function half_face_flux!(flux, mob, p, conn_data, context, ::KernelAllowed)
     m = length(conn_data)
@@ -105,14 +119,4 @@ end
 @kernel function half_face_flux_kernel(flux, @Const(mob), @Const(p), @Const(fd))
     i = @index(Global, Linear)
     @inbounds flux[i] = tp_flux(fd[i].self, fd[i].other, fd[i].T, mob, p)
-end
-
-@inline function tp_flux(c_self::I, c_other::I, t_ij, mob::AbstractArray{R}, p::AbstractArray{R}) where {R<:Real, I<:Integer}
-    dp = p[c_self] - value(p[c_other])
-    if dp > 0
-        m = mob[c_self]
-    else
-        m = value(mob[c_other])
-    end
-    return m*t_ij*dp
 end

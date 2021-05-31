@@ -90,7 +90,7 @@ function initialize_storage!(storage, model::TervModel; initialize_state0 = true
         state0_eval = convert_to_immutable_storage(storage[:state0])
         param_eval = convert_to_immutable_storage(storage[:parameters])
         # Evaluate everything (with doubles) to make sure that possible 
-        update_secondary_variables!(state0_eval, param_eval, model)
+        update_secondary_variables!(state0_eval, model, param_eval)
         # Create a new state0 with the desired/required outputs and
         # copy over those values before returning them back
         state0 = Dict()
