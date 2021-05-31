@@ -90,8 +90,8 @@ function apply_cross_term!(eq, ct, model_t, model_s, arg...)
 end
 
 
-function update_linearized_system_subset!(jac, model_t, model_s, ct::InjectiveCrossTerm)
-    update_linearized_system_subset!(jac, nothing, model_s, ct.crossterm_source_cache)
+function update_linearized_system_subset!(nz, model_t, model_s, ct::InjectiveCrossTerm)
+    update_linearized_system_subset!(nz, nothing, model_s, ct.crossterm_source_cache)
 end
 
 function declare_pattern(target_model, source_model, x::InjectiveCrossTerm, unit)
@@ -477,7 +477,8 @@ function update_linearized_system_crossterms!(lsys, storage, model::MultiModel, 
     eqs = storage_t[:equations]
     for ekey in keys(eqs)
         ct = cross_terms[ekey]
-        update_linearized_system_subset!(lsys.jac, model_t, model_s, ct::CrossTerm)
+        nz = get_nzval(lsys.jac)
+        update_linearized_system_subset!(nz, model_t, model_s, ct::CrossTerm)
     end
 end
 

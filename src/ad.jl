@@ -72,18 +72,29 @@ end
     @inbounds nzval[get_jacobian_pos(c, index, eqNo, partial_index)] = new_value
 end
 
-function update_linearized_system_subset!(jac, r, model, cache::TervAutoDiffCache)
-    nz = get_nzval(jac)
+function update_linearized_system_subset!(nz, r, model, cache::TervAutoDiffCache)
     nu = cache.number_of_units
-    for i in 1:nu
+    Threads.@threads for i in 1:nu
         for e in 1:cache.equations_per_unit
             # Note: The residual part needs to be fixed for non-standard alignments
             a = get_entry(cache, i, e)
-            if !isnothing(r)
-                r[i + nu*(e-1)] = a.value
-            end
+            @inbounds r[i + nu*(e-1)] = a.value
             for d = 1:cache.npartials
                 update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
+            end
+        end
+    end
+end
+
+function update_linearized_system_subset!(nz, r::Nothing, model, cache::TervAutoDiffCache)
+    nu = cache.number_of_units
+    Threads.@threads for i in 1:nu
+        for e in 1:cache.equations_per_unit
+            # Note: The residual part needs to be fixed for non-standard alignments
+            a = get_entry(cache, i, e)
+            for d = 1:cache.npartials
+                @inbounds ∂ = a.partials[d]
+                update_jacobian_entry!(nz, cache, i, e, d, ∂)
             end
         end
     end

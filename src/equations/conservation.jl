@@ -91,22 +91,21 @@ function half_face_flux_faces_alignment!(face_cache, jac, layout, N, flow_disc; 
     end
 end
 
-function update_linearized_system_subset!(jac, r, model, law::ConservationLaw)
+function update_linearized_system_subset!(nz, r, model, law::ConservationLaw)
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
     face_flux = law.half_face_flux_faces
     cpos = law.flow_discretization.conn_pos
 
-    update_linearized_system_subset!(jac, r, model, acc)
-    update_linearized_system_subset_cell_flux!(jac, r, model, acc, cell_flux, cpos)
+    update_linearized_system_subset!(nz, r, model, acc)
+    update_linearized_system_subset_cell_flux!(nz, r, model, acc, cell_flux, cpos)
     if !isnothing(face_flux)
-        update_linearized_system_subset_face_flux!(jac, r, model, acc, face_flux, cpos)
+        update_linearized_system_subset_face_flux!(nz, r, model, acc, face_flux, cpos)
     end
 end
 
-function update_linearized_system_subset_cell_flux!(jac, r, model, acc, cell_flux, conn_pos)
+function update_linearized_system_subset_cell_flux!(Jz, r, model, acc, cell_flux, conn_pos)
     nc, ne, np = ad_dims(acc)
-    Jz = get_nzval(jac)
     for cell = 1:nc
         for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne

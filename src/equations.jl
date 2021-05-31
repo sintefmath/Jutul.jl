@@ -188,13 +188,13 @@ function update_linearized_system_subset!(lsys, model, equation::TervEquation; r
     else
         r = view(lsys.r, r_subset)
     end
-    jac = lsys.jac
-    update_linearized_system_subset!(jac, r, model, equation)
+    nz = get_nzval(lsys.jac)
+    update_linearized_system_subset!(nz, r, model, equation)
 end
 
-function update_linearized_system_subset!(jac, r, model, equation::TervEquation)
+function update_linearized_system_subset!(nz, r, model, equation::TervEquation)
     # NOTE: Default only updates diagonal part
-    update_linearized_system_subset!(jac, r, model, get_diagonal_cache(equation))
+    update_linearized_system_subset!(nz, r, model, get_diagonal_cache(equation))
 end
 
 
