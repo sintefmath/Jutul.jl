@@ -46,8 +46,6 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, N, 
     nu, ne, np = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
-    for cell in 1:nc
-        for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
     Threads.@threads for cell in 1:nc
         @inbounds for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
             f = flow_disc.conn_data[f_ix].face
@@ -99,28 +97,46 @@ function update_linearized_system_subset!(nz, r, model, law::ConservationLaw)
     face_flux = law.half_face_flux_faces
     cpos = law.flow_discretization.conn_pos
 
-    update_linearized_system_subset!(nz, r, model, acc)
-    update_linearized_system_subset_cell_flux!(nz, r, model, acc, cell_flux, cpos)
+
+    update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
+    update_linearized_system_subset_cell_flux!(nz, model, acc, cell_flux, cpos)
     if !isnothing(face_flux)
         update_linearized_system_subset_face_flux!(nz, r, model, acc, face_flux, cpos)
     end
 end
 
-function update_linearized_system_subset_cell_flux!(Jz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos)
+function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos)
     nc, ne, np = ad_dims(acc)
+    centries = acc.entries
     fentries = cell_flux.entries
     cp = acc.jacobian_positions
+    Threads.@threads for cell = 1:nc
+        for e in 1:ne
+            diag_entry = get_entry(acc, cell, e, centries)
+            @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+                diag_entry -= get_entry(cell_flux, i, e, fentries)
+            end
+
+            @inbounds r[cell + nc*(e-1)] = diag_entry.value
+            for d = 1:np
+                apos = get_jacobian_pos(acc, cell, e, d, cp)
+                @inbounds nz[apos] = diag_entry.partials[d]
+            end
+        end
+    end
+end
+
+function update_linearized_system_subset_cell_flux!(Jz, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos)
+    nc, ne, np = ad_dims(acc)
+    fentries = cell_flux.entries
     fp = cell_flux.jacobian_positions
     Threads.@threads for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
                 f = get_entry(cell_flux, i, e, fentries)
-                @inbounds r[cell + nc * (e - 1)] -= f.value
                 for d = 1:np
                     df_di = f.partials[d]
-                    apos = get_jacobian_pos(acc, cell, e, d, cp)
                     fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
-                    @inbounds Jz[apos] -= df_di
                     @inbounds Jz[fpos] = df_di
                 end
             end
