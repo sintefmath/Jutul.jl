@@ -40,8 +40,8 @@ end
     return c.entries
 end
 
-@inline function get_entry(c::CompactAutoDiffCache{I, D}, index, eqNo = 1) where {I, D}
-    c.entries[eqNo, index]::D
+@inline function get_entry(c::CompactAutoDiffCache{I, D}, index, eqNo, entries = c.entries)::D where {I, D}
+    @inbounds entries[eqNo, index]
 end
 
 @inline function get_value(c::CompactAutoDiffCache, arg...)
@@ -56,31 +56,35 @@ end
     get_entry(c, index, eqNo).partials
 end
 
-@inline function get_jacobian_pos(c::CompactAutoDiffCache{I}, index, eqNo, partial_index) where {I}
-    c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index]::I
+@inline function get_jacobian_pos(c::CompactAutoDiffCache{I}, index, eqNo, partial_index, pos = c.jacobian_positions)::I where {I}
+    @inbounds pos[(eqNo-1)*c.npartials + partial_index, index]
 end
 
 @inline function set_jacobian_pos!(c::CompactAutoDiffCache, index, eqNo, partial_index, pos)
     c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
 end
 
-@inline function ad_dims(cache::CompactAutoDiffCache)
+@inline function ad_dims(cache::CompactAutoDiffCache{I, D})::Tuple{I, I, I} where {I, D}
     return (cache.number_of_units, cache.equations_per_unit, cache.npartials)
 end
 
-@inline function update_jacobian_entry!(nzval, c::CompactAutoDiffCache, index, eqNo, partial_index, new_value = get_partial(c, index, eqNo, partial_index))
-    @inbounds nzval[get_jacobian_pos(c, index, eqNo, partial_index)] = new_value
+@inline function update_jacobian_entry!(nzval, c::CompactAutoDiffCache, index, eqNo, partial_index, 
+                                                                        new_value = get_partial(c, index, eqNo, partial_index),
+                                                                        pos = c.jacobian_positions)
+    @inbounds nzval[get_jacobian_pos(c, index, eqNo, partial_index, pos)] = new_value
 end
 
 function update_linearized_system_subset!(nz, r, model, cache::TervAutoDiffCache)
     nu = cache.number_of_units
+    entries = cache.entries
     Threads.@threads for i in 1:nu
         for e in 1:cache.equations_per_unit
             # Note: The residual part needs to be fixed for non-standard alignments
-            a = get_entry(cache, i, e)
+            a = get_entry(cache, i, e, entries)
             @inbounds r[i + nu*(e-1)] = a.value
             for d = 1:cache.npartials
-                update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
+                @inbounds ∂ = a.partials[d]
+                update_jacobian_entry!(nz, cache, i, e, d, ∂)
             end
         end
     end
@@ -93,7 +97,6 @@ function update_linearized_system_subset!(nz, r::Nothing, model, cache::TervAuto
             # Note: The residual part needs to be fixed for non-standard alignments
             a = get_entry(cache, i, e)
             for d = 1:cache.npartials
-                @inbounds ∂ = a.partials[d]
                 update_jacobian_entry!(nz, cache, i, e, d, ∂)
             end
         end
