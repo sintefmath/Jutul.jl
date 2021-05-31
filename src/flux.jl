@@ -102,7 +102,7 @@ end
     else
         m = value(mob[c_other])
     end
-    return m*t_ij*dp
+    return -m*t_ij*dp
 end
 
 

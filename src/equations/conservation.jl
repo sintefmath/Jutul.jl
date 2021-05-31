@@ -99,8 +99,8 @@ function update_linearized_system_subset!(nz, r, model, law::ConservationLaw)
     face_flux = law.half_face_flux_faces
     cpos = law.flow_discretization.conn_pos
 
-    @time update_linearized_system_subset!(nz, r, model, acc)
-    @time update_linearized_system_subset_cell_flux!(nz, r, model, acc, cell_flux, cpos)
+    update_linearized_system_subset!(nz, r, model, acc)
+    update_linearized_system_subset_cell_flux!(nz, r, model, acc, cell_flux, cpos)
     if !isnothing(face_flux)
         update_linearized_system_subset_face_flux!(nz, r, model, acc, face_flux, cpos)
     end
@@ -115,13 +115,13 @@ function update_linearized_system_subset_cell_flux!(Jz, r, model, acc::CompactAu
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
                 f = get_entry(cell_flux, i, e, fentries)
-                @inbounds r[cell + nc * (e - 1)] += f.value
+                @inbounds r[cell + nc * (e - 1)] -= f.value
                 for d = 1:np
                     df_di = f.partials[d]
                     apos = get_jacobian_pos(acc, cell, e, d, cp)
                     fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
-                    @inbounds Jz[apos] += df_di
-                    @inbounds Jz[fpos] = -df_di
+                    @inbounds Jz[apos] -= df_di
+                    @inbounds Jz[fpos] = df_di
                 end
             end
         end
