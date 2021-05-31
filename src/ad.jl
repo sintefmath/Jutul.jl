@@ -1,13 +1,13 @@
 export CompactAutoDiffCache, as_value
 
 abstract type TervAutoDiffCache end
-struct CompactAutoDiffCache <: TervAutoDiffCache
+struct CompactAutoDiffCache{I, ∂x} <: TervAutoDiffCache where {I <: Integer, ∂x <: Real}
     entries
     unit
     jacobian_positions
-    equations_per_unit
-    number_of_units
-    npartials
+    equations_per_unit::I
+    number_of_units::I
+    npartials::I
     function CompactAutoDiffCache(equations_per_unit, n_units, npartials_or_model = 1; unit = Cells(), context = DefaultContext(), tag = nothing, kwarg...)
         if isa(npartials_or_model, TervModel)
             model = npartials_or_model
@@ -17,16 +17,16 @@ struct CompactAutoDiffCache <: TervAutoDiffCache
         end
         npartials::Integer
 
-        # TODO: Make a simpler constructor that just takes in model, n-eqs, n-units and unit and figures out everything from that.
         I = index_type(context)
         # Storage for AD variables
         t = get_unit_tag(tag, unit)
         entries = allocate_array_ad(equations_per_unit, n_units, context = context, npartials = npartials, tag = t; kwarg...)
+        D = eltype(entries)
         # Position in sparse matrix - only allocated, then filled in later.
         # Since partials are all fetched together with the value, we make partials the fastest index.
         pos = zeros(I, equations_per_unit*npartials, n_units)
         pos = transfer(context, pos)
-        new(entries, unit, pos, equations_per_unit, n_units, npartials)
+        new{I, D}(entries, unit, pos, equations_per_unit, n_units, npartials)
     end
 end
 
@@ -40,8 +40,8 @@ end
     return c.entries
 end
 
-@inline function get_entry(c::CompactAutoDiffCache, index, eqNo = 1)
-    c.entries[eqNo, index]
+@inline function get_entry(c::CompactAutoDiffCache{I, D}, index, eqNo = 1) where {I, D}
+    c.entries[eqNo, index]::D
 end
 
 @inline function get_value(c::CompactAutoDiffCache, arg...)
@@ -56,8 +56,8 @@ end
     get_entry(c, index, eqNo).partials
 end
 
-@inline function get_jacobian_pos(c::CompactAutoDiffCache, index, eqNo, partial_index)
-    c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index]
+@inline function get_jacobian_pos(c::CompactAutoDiffCache{I}, index, eqNo, partial_index) where {I}
+    c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index]::I
 end
 
 @inline function set_jacobian_pos!(c::CompactAutoDiffCache, index, eqNo, partial_index, pos)
