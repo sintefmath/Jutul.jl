@@ -184,3 +184,9 @@ function select_equations!(eqs, domain::DiscretizedDomain{G}, system, arg...) wh
     eqs[:potential_balance] = (PotentialDropBalanceWell, 1)
     eqs[:control_equation] = (ControlEquationWell, 1)
 end
+
+function select_secondary_variables!(S, domain::DiscretizedDomain{G}, system::MultiPhaseSystem, arg...) where {G <: WellGrid}
+    select_secondary_variables!(S, system)
+    # Wells don't use mobilities, but they need the total mass for mass fractions
+    S[:TotalMass] = TotalMass()
+end

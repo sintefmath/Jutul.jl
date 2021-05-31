@@ -144,7 +144,11 @@ function select_output_variables(domain, system, formulation, primary_variables,
     return outputs
 end
 
-function sort_secondary_variables!(model)
+function sort_secondary_variables!(model::TervModel)
+    # Do nothing for general case.
+end
+
+function sort_secondary_variables!(model::SimulationModel)
     primary = model.primary_variables
     secondary = model.secondary_variables
     

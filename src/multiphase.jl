@@ -7,7 +7,7 @@ export setup_state, setup_state!
 
 export setup_storage, update_equations!
 
-export Pressure, Saturations, TotalMasses
+export Pressure, Saturations, TotalMasses, TotalMass
 
 using CUDA
 # Abstract multiphase system
@@ -155,6 +155,10 @@ function degrees_of_freedom_per_unit(model::SimulationModel{G, S}, v::TotalMasse
 end
 
 @inline function minimum_value(::TotalMasses) 0 end
+
+struct TotalMass <: ScalarVariable end
+@inline function minimum_value(::TotalMass) 0 end
+
 
 # Selection of variables
 function select_primary_variables!(S, system::SinglePhaseSystem)

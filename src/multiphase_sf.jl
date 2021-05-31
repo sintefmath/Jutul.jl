@@ -30,7 +30,6 @@ function select_secondary_variables!(S, domain::DiscretizedDomain{G}, system::Mu
     S[:MassMobilities] = MassMobilities()
 end
 
-
 function minimum_output_variables(system::MultiPhaseSystem, primary_variables)
     [:TotalMasses]
 end
@@ -81,6 +80,7 @@ struct MassMobilities <: PhaseAndComponentVariable end
     fapply!(mobrho, *, PhaseMobilities, PhaseMassDensities)
 end
 
+# Total masses
 @terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities) where {G, S<:SinglePhaseSystem}
     pv = get_pore_volume(model)
     fapply!(totmass, *, PhaseMassDensities, pv)
@@ -91,4 +91,10 @@ end
     rho = PhaseMassDensities
     s = Saturations
     @. totmass = rho*pv*s
+end
+
+# Total mass
+@terv_secondary function update_as_secondary!(totmass, tv::TotalMass, model::SimulationModel{G, S}, param, TotalMasses) where {G, S<:MultiPhaseSystem}
+    tmp = TotalMasses'
+    sum!(totmass, tmp)
 end
