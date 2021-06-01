@@ -110,11 +110,11 @@ function values_per_unit(model, v::Saturations)
     number_of_phases(model.system)
 end
 
-@inline function maximum_value(::Saturations) 1 end
-@inline function minimum_value(::Saturations) 0 end
+@inline function maximum_value(::Saturations) 1.0 end
+@inline function minimum_value(::Saturations) 0.0 end
 @inline function absolute_increment_limit(p::Saturations) p.dsMax end
 
-function initialize_primary_variable_ad!(state, model, pvar::Saturations, state_symbol, offset, npartials; kwarg...)
+function initialize_primary_variable_ad!(state, model, pvar::Saturations, state_symbol, npartials; offset = 0, kwarg...)
     nph = values_per_unit(model, pvar)
     # nph - 1 primary variables, with the last saturation being initially zero AD
     dp = vcat((1:nph-1) .+ offset, 0)
@@ -135,6 +135,7 @@ function update_primary_variable!(state, p::Saturations, state_symbol, model, dx
 
     s = state[state_symbol]
     Threads.@threads for cell = 1:nu
+    # for cell = 1:nu
         dlast = 0
         @inbounds for ph = 1:(nph-1)
             v = value(s[ph, cell])
@@ -204,7 +205,6 @@ function update_half_face_flux!(law, storage, model)
 end
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
-    @debug "Applying source terms"
     acc = get_entries(eq.accumulation)
     mob = storage.state.PhaseMobilities
     insert_phase_sources(mob, acc, force)
