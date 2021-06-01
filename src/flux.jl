@@ -115,7 +115,7 @@ end
         # Flux is entering the cell
         m = value(mob[c_other])
     end
-    return -m*kdp
+    return m*kdp
 end
 
 
