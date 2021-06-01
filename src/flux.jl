@@ -129,5 +129,5 @@ end
 
 @kernel function half_face_flux_kernel(flux, @Const(mob), @Const(p), @Const(fd))
     i = @index(Global, Linear)
-    @inbounds flux[i] = tp_flux(fd[i].self, fd[i].other, fd[i].T, mob, p)
+    @inbounds flux[i] = tp_flux(fd[i].self, fd[i].other, fd[i].T, view(mob, phaseNo, :), p)
 end

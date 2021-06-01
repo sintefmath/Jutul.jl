@@ -1,7 +1,7 @@
 using Terv
 using LinearAlgebra
 using Printf
-using Makie
+using GLMakie
 using ForwardDiff
 # Turn on debugging to show output and timing.
 # Turn on by uncommenting or running the following:
@@ -16,6 +16,7 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
+    G = get_minimal_tpfa_grid_from_mrst(casename)
     nc = number_of_cells(G)
     # Parameters
     bar = 1e5
@@ -37,7 +38,7 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     pv = model.domain.grid.pore_volumes
     timesteps = tstep*3600*24 # 1 day, 2 days
     tot_time = sum(timesteps)
-    irate = pvfrac*sum(pv)/tot_time
+    irate = 100*pvfrac*sum(pv)/tot_time
     src  = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
             SourceTerm(nc, -irate)]
     forces = build_forces(model, sources = src)
@@ -70,7 +71,8 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     end
     return (sim, ax)
 end
-doPlot = false
+##
+perform_test(casename)
+##
+doPlot = true
 sim, ax = perform_test(casename, doPlot)
-ax
-println("All done.")

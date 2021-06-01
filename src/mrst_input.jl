@@ -1,3 +1,4 @@
+using GLMakie
 using MAT # .MAT file loading
 export get_minimal_tpfa_grid_from_mrst, plot_mrstdata, plot_interactive
 using SparseArrays # Sparse pattern
@@ -107,8 +108,11 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     data = states[1]
     datakeys = collect(keys(data))
     state_index = Node{Int64}(1)
-    prop_name = Node{String}(String(datakeys[1]))
+    prop_name = Node{Symbol}(datakeys[1])
     loop_mode = Node{Int64}(0)
+
+    menu = Menu(fig, options = datakeys)
+    nstates = length(states)
 
     function change_index(ix)
         tmp = max(min(ix, nstates), 1)
@@ -122,17 +126,14 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         change_index(state_index.val + inc)
     end
 
-    menu = Menu(fig, options = datakeys)
-    nstates = length(states)
-    
-    funcs = [sqrt, x->x^2, sin, cos]
-    menu2 = Menu(fig, options = zip(["Square Root", "Square", "Sine", "Cosine"], funcs))
+    # funcs = [sqrt, x->x^2, sin, cos]
+    # menu2 = Menu(fig, options = zip(["Square Root", "Square", "Sine", "Cosine"], funcs))
     fig[1, 1] = vgrid!(
         Label(fig, "Property", width = nothing),
         menu,
-        Label(fig, "Function", width = nothing),
-        menu2;
-        tellheight = false, width = 200)
+        # Label(fig, "Function", width = nothing),
+        # menu2
+        ; tellheight = false, width = 200)
     
     sl_x = Slider(fig[2, 2], range = 1:nstates, value = state_index, snap = true)
     # point = sl_x.value
@@ -140,7 +141,7 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         state_index[] = sl_x.selected_index.val
     end
     ax = Axis(fig[1, 2])
-    ys = @lift(select_data(mrst_grid, states[$state_index][Symbol($prop_name)]))
+    ys = @lift(select_data(mrst_grid, states[$state_index], $prop_name))
     scat = heatmap!(ax, ys, label = "COLORBARLABEL")
     cb = Colorbar(fig[1, 3], scat, vertical = true, width = 30)
 
@@ -148,9 +149,9 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         prop_name[] = s
         autolimits!(ax)
     end
-        on(menu2.selection) do s
-    end
-    menu2.is_open = true
+    # on(menu2.selection) do s
+    # end
+    # menu2.is_open = true
 
     function loop(a)
         # looping = !looping
@@ -208,12 +209,19 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     return fig
 end
 
-function select_data(G, d::Vector)
+function select_data(G, state, fld)
+    v = state[fld]
+    m = get_vector(G, v)
+    return m
+end
+
+function get_vector(G, d::Vector)
     cartDims = Int64.(G["cartDims"])
     reshape(d, cartDims[1:2]...)
 end
-function select_data(G, d::Matrix)
-    select_data(G, d[1, :])
+
+function get_vector(G, d::Matrix)
+    get_vector(G, d[1, :])
 end
 
 function plotter!(ax, G, data)
