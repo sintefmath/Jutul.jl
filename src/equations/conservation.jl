@@ -206,8 +206,15 @@ function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
     nc = number_of_cells(model.domain)
     pv = get_pore_volume(model)
     e = zeros(n)
+    prm = storage.parameters
     for i = 1:n
-        e[i] = mapreduce((pv, e) -> abs(dt * e / pv), max, pv, r[(1:nc) .+ (i - 1) * nc])
+        if haskey(prm, :ReferenceDensity)
+            rhos = prm.ReferenceDensity[i]
+        else
+            rhos = 1
+        end
+        ri = @view r[(1:nc) .+ (i - 1) * nc]
+        e[i] = mapreduce((pv, e) -> abs((dt/rhos) * e / pv), max, pv, ri)
     end
     return (e, 1.0)
 end
