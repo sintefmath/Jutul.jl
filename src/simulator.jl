@@ -30,15 +30,22 @@ function perform_step!(simulator::TervSimulator; vararg...)
     perform_step!(simulator.storage, simulator.model; vararg...)
 end
 
-function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces = nothing, iteration = NaN)
+function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces = nothing, iteration = NaN, config = simulator_config(sim))
+    timing_out = config[:debug_level] > 1
     # Update the properties and equations
-    update_state_dependents!(storage, model, dt, forces)
+    t_asm = @elapsed begin 
+        update_state_dependents!(storage, model, dt, forces)
+    end
+    if timing_out
+        @debug "Assembled equations in $t_asm seconds."
+    end
     # Update the linearized system
     t_lsys = @elapsed begin
         update_linearized_system!(storage, model)
     end
-    @debug "Updated linear system in $t_lsys seconds."
-
+    if timing_out
+        @debug "Updated linear system in $t_lsys seconds."
+    end
     converged, e, tol = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
     if converged
         do_solve = iteration == 1
@@ -48,8 +55,10 @@ function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces 
     end
     if do_solve
         t_solve, t_update = solve_update!(storage, model::TervModel; linsolve = linsolve)
-        @debug "Solved linear system in $t_solve seconds."
-        @debug "Updated state $t_update seconds."
+        if timing_out
+            @debug "Solved linear system in $t_solve seconds."
+            @debug "Updated state $t_update seconds."
+        end
     end
     return (e, tol)
 end
@@ -60,6 +69,8 @@ function simulator_config(sim)
     cfg[:max_nonlinear_iterations] = 10
     cfg[:linear_solver] = nothing
     cfg[:output_states] = true
+    # Define debug level. If debugging is on, this determines the amount of output.
+    cfg[:debug_level] = 1
     return cfg
 end
 
@@ -77,7 +88,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         t_local = 0
         cut_count = 0
         while !done
-            ok = solve_ministep(sim, dt, maxIterations, linsolve, forces)
+            ok = solve_ministep(sim, dt, maxIterations, linsolve, forces, config)
             if ok
                 t_local += dt
                 if t_local >= dT
@@ -102,10 +113,10 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     @info "Simulation complete."
 end
 
-function solve_ministep(sim, dt, maxIterations, linsolve, forces)
+function solve_ministep(sim, dt, maxIterations, linsolve, forces, cfg)
     done = false
     for it = 1:maxIterations
-        e, tol = perform_step!(sim, dt = dt, iteration = it, forces = forces, linsolve = linsolve)
+        e, tol = perform_step!(sim, dt = dt, iteration = it, forces = forces, linsolve = linsolve, config = cfg)
         done = e < tol
         if done
             break
@@ -117,7 +128,9 @@ function solve_ministep(sim, dt, maxIterations, linsolve, forces)
 
     if done
         t_finalize = @elapsed update_after_step!(sim)
-        @debug "Finalized in $t_finalize seconds."
+        if cfg[:debug_level] > 1
+            @debug "Finalized in $t_finalize seconds."
+        end
     else
         primary = sim.storage.primary_variables
         for f in keys(primary)

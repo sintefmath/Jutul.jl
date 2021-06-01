@@ -246,12 +246,9 @@ Perform updates of everything that depends on the state.
 This includes properties, governing equations and the linearized system
 """
 function update_state_dependents!(storage, model::TervModel, dt, forces)
-    t_asm = @elapsed begin 
-        update_secondary_variables!(storage, model)
-        update_equations!(storage, model, dt)
-        apply_forces!(storage, model, dt, forces)
-    end
-    @debug "Assembled equations in $t_asm seconds."
+    update_secondary_variables!(storage, model)
+    update_equations!(storage, model, dt)
+    apply_forces!(storage, model, dt, forces)
 end
 
 function update_equations!(storage, model, dt = nothing)
