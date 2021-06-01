@@ -37,6 +37,13 @@ struct MinimalTPFAGrid{R<:AbstractFloat, I<:Integer} <: ReservoirGrid
     end
 end
 
+function transfer(context::SingleCUDAContext, grid::MinimalTPFAGrid)
+    pv = transfer(context, grid.pore_volumes)
+    N = transfer(context, grid.neighborship)
+
+    return MinimalTPFAGrid(pv, N)
+end
+
 function number_of_cells(G::ReservoirGrid)
     return length(G.pore_volumes)
 end
@@ -133,19 +140,6 @@ function get_facepos(N)
         faces = reduce(vcat, cell_faces)
     end
     return (faces, facePos)
-end
-
-function transfer(context::SingleCUDAContext, domain)
-    error("Not yet reimplemented")
-    F = context.float_t
-    I = context.index_t
-    # Next line should be something like
-    # conn_data = CuArray{TPFAHalfFaceData{F, I}}(grid.conn_data)
-    # once convert is implemented...
-    conn_data = CuArray(TPFAHalfFaceData{F, I}.(grid.conn_data))
-    pv = CuArray{F}(grid.pv)
-    conn_pos = CuArray{I}(grid.conn_pos)
-    return MinimalTPFADomain(conn_data, conn_pos, pv)
 end
 
 function transfer(::DefaultContext, grid)

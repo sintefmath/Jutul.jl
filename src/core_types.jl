@@ -117,6 +117,22 @@ function DiscretizedDomain(grid, disc = nothing)
     DiscretizedDomain(grid, disc, u) 
 end
 
+function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
+    F = context.float_t
+    I = context.index_t
+    t = (x) -> transfer(context, x)
+
+    g = t(domain.grid)
+    d_cpu = domain.discretizations
+
+    k = keys(d_cpu)
+    val = map(t, values(d_cpu))
+    d = (;zip(k, val)...)
+    u = domain.units
+    return DiscretizedDomain(g, d, u)
+end
+
+
 # Formulation
 abstract type TervFormulation end
 struct FullyImplicit <: TervFormulation end

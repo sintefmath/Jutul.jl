@@ -46,30 +46,41 @@ struct TwoPointPotentialFlow{U <:UpwindDiscretization, K <:PotentialFlowDiscreti
     grad::K
     conn_pos
     conn_data
-    function TwoPointPotentialFlow(u, k, grid, T = nothing, z = nothing)
-        N = grid.neighborship
-        faces, face_pos = get_facepos(N)
+end
 
-        nhf = length(faces)
-        nc = length(face_pos) - 1
-        if !isnothing(z)
-            @assert length(z) == nc
-            @debug "No depths (z) provided."
-        end
-        if !isnothing(T)
-            @assert length(T) == nhf ÷ 2
-        end
-        get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z)
-        el = get_el(1, 1) # Could be junk, we just need eltype
-        
-        conn_data = Vector{typeof(el)}(undef, nhf)
-        Threads.@threads for cell = 1:nc
-            @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
-                conn_data[fpos] = get_el(faces[fpos], cell)
-            end
-        end
-        new{typeof(u), typeof(k)}(u, k, face_pos, conn_data)
+function TwoPointPotentialFlow(u, k, grid, T = nothing, z = nothing)
+    N = grid.neighborship
+    faces, face_pos = get_facepos(N)
+
+    nhf = length(faces)
+    nc = length(face_pos) - 1
+    if !isnothing(z)
+        @assert length(z) == nc
+        @debug "No depths (z) provided."
     end
+    if !isnothing(T)
+        @assert length(T) == nhf ÷ 2
+    end
+    get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z)
+    el = get_el(1, 1) # Could be junk, we just need eltype
+    
+    conn_data = Vector{typeof(el)}(undef, nhf)
+    Threads.@threads for cell = 1:nc
+        @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
+            conn_data[fpos] = get_el(faces[fpos], cell)
+        end
+    end
+    TwoPointPotentialFlow{typeof(u), typeof(k)}(u, k, face_pos, conn_data)
+end
+
+function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlow{U, K}) where {U, K}
+    tf = (x) -> transfer(context, x)
+    u = tf(fd.upwind)
+    k = tf(fd.grad)
+    conn_pos = tf(fd.conn_pos)
+    conn_data = tf(fd.conn_data)
+
+    return TwoPointPotentialFlow{U, K}(u, k, conn_pos, conn_data)
 end
 
 
