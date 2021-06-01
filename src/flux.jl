@@ -107,13 +107,15 @@ end
 
 
 @inline function tp_flux(c_self::I, c_other::I, t_ij, mob::AbstractArray{R}, p::AbstractArray{R}) where {R<:Real, I<:Integer}
-    dp = p[c_self] - value(p[c_other])
-    if dp > 0
+    kdp = -t_ij*(p[c_self] - value(p[c_other]))
+    if kdp < 0
+        # Flux is leaving the cell
         m = mob[c_self]
     else
+        # Flux is entering the cell
         m = value(mob[c_other])
     end
-    return -m*t_ij*dp
+    return -m*kdp
 end
 
 
