@@ -8,11 +8,9 @@ using ForwardDiff
 ENV["JULIA_DEBUG"] = Terv
 # To disable the debug output:
 # ENV["JULIA_DEBUG"] = nothing
-casename = "pico"
-# casename = "2cell"
-# casename = "spe10_symrmc"
 
-function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
+
+function perform_test(casename, doPlot = false, pvfrac=1, tstep = [1.0, 2.0, 2.0, 2.0, 5.0, 5.0, 10.0])
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
@@ -38,7 +36,7 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     pv = model.domain.grid.pore_volumes
     timesteps = tstep*3600*24 # 1 day, 2 days
     tot_time = sum(timesteps)
-    irate = 100*pvfrac*sum(pv)/tot_time
+    irate = pvfrac*sum(pv)/(tot_time)
     src  = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
             SourceTerm(nc, -irate)]
     forces = build_forces(model, sources = src)
@@ -56,7 +54,6 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     # Linear solver
     println("Starting simulation.")
     states = simulate(sim, timesteps, forces = forces)
-    @show states
     s = states[end]
     p = s.Pressure
     @printf("Final pressure ranges from %f to %f bar.\n", maximum(p)/bar, minimum(p)/bar)
@@ -71,8 +68,8 @@ function perform_test(casename, doPlot = false, pvfrac=0.05, tstep = [1.0, 2.0])
     end
     return (sim, ax)
 end
-##
-perform_test(casename)
-##
+## Perform test, with plotting
+casename = "pico"
 doPlot = true
-sim, ax = perform_test(casename, doPlot)
+perform_test(casename, doPlot)
+println("All done with $casename case!")
