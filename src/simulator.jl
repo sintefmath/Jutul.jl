@@ -99,9 +99,15 @@ function solve_ministep(sim, dt, maxIterations, linsolve, forces)
             break
         end
     end
+
     if done
         t_finalize = @elapsed update_after_step!(sim)
         @debug "Finalized in $t_finalize seconds."
+    else
+        primary = sim.storage.primary_variables
+        for f in keys(primary)
+            update_values!(primary[f], sim.storage.state0[f])
+        end
     end
     return done
 end
