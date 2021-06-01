@@ -288,10 +288,13 @@ function check_convergence(r, eqs, storage, model; iteration = nothing, extra_ou
         n = number_of_equations(model, eq)
         r_v = view(r, (1:n) .+ offset)
         errors, tscale = convergence_criterion(model, storage, eq, r_v; kwarg...)
+
+        prntstr = "Iteration $iteration:\n"
         for (index, e) in enumerate(errors)
-            s = @sprintf("It %d: |%s_%d| = %e\n", iteration, String(key), index, e)
-            @debug s
+            s = @sprintf("E%d: |%s| = %e\n", index, String(key), e)
+            prntstr *= s
         end
+        @debug prntstr
         converged = converged && all(errors .< tol*tscale)
         e = maximum([e, maximum(errors)])
         offset += n
