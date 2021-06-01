@@ -98,7 +98,7 @@ function update_linearized_system_subset!(nz, r::Nothing, model, cache::TervAuto
             # Note: The residual part needs to be fixed for non-standard alignments
             a = get_entry(cache, i, e)
             for d = 1:cache.npartials
-                update_jacobian_entry!(nz, cache, i, e, d, ∂)
+                update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
             end
         end
     end
