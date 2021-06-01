@@ -223,18 +223,18 @@ end
 
 
 # Limit absolute
-function limit_abs(dv, abs_change)
+@inline function limit_abs(dv, abs_change)
     dv = sign(dv)*min(abs(dv), abs_change)
 end
 
-function limit_abs(dv, ::Nothing) dv end
+@inline function limit_abs(dv, ::Nothing) dv end
 
 # Limit relative 
-function limit_rel(v, dv, rel_change)
+@inline function limit_rel(v, dv, rel_change)
     dv = limit_abs(dv, rel_change*abs(v))
 end
 
-function limit_rel(v, dv, ::Nothing) dv end
+@inline function limit_rel(v, dv, ::Nothing) dv end
 # Lower bounds
 function limit_upper(v, dv, maxval)
     if dv > 0 && v + dv > maxval
@@ -243,19 +243,19 @@ function limit_upper(v, dv, maxval)
     return dv
 end
 
-function limit_upper(v, dv, maxval::Nothing) dv end
+@inline function limit_upper(v, dv, maxval::Nothing) dv end
 
 # Upper bounds
-function limit_lower(v, dv, minval)
+@inline function limit_lower(v, dv, minval)
     if dv < 0 && v + dv < minval
         dv = minval - v
     end
     return dv
 end
 
-function limit_lower(v, dv, minval::Nothing) dv end
+@inline function limit_lower(v, dv, minval::Nothing) dv end
 
-function update_value(v, dv, arg...)
+@inline function update_value(v, dv, arg...)
     return v + choose_increment(value(v), dv, arg...)
 end
 
