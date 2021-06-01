@@ -63,7 +63,7 @@ function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces 
     return (e, tol)
 end
 
-function simulator_config(sim)
+function simulator_config(sim; kwarg...)
     cfg = Dict()
     cfg[:max_timestep_cuts] = 5
     cfg[:max_nonlinear_iterations] = 10
@@ -71,10 +71,17 @@ function simulator_config(sim)
     cfg[:output_states] = true
     # Define debug level. If debugging is on, this determines the amount of output.
     cfg[:debug_level] = 1
+    # Overwrite with varargin
+    for key in keys(kwarg)
+        cfg[key] = kwarg[key]
+    end
     return cfg
 end
 
-function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothing, config = simulator_config(sim))
+function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, kwarg...)
+    if isnothing(config)
+        config = simulator_config(sim, kwarg...)
+    end
     states = []
     no_steps = length(timesteps)
     maxIterations = config[:max_nonlinear_iterations]
