@@ -26,11 +26,11 @@ function Simulator(model; state0 = nothing, parameters = setup_parameters(model)
     Simulator(model, storage)
 end
 
-function perform_step!(simulator::TervSimulator; vararg...)
-    perform_step!(simulator.storage, simulator.model; vararg...)
+function perform_step!(simulator::TervSimulator, config; vararg...)
+    perform_step!(simulator.storage, simulator.model, config; vararg...)
 end
 
-function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces = nothing, iteration = NaN, config = simulator_config(sim))
+function perform_step!(storage, model, config; dt = nothing, forces = nothing, iteration = NaN)
     timing_out = config[:debug_level] > 1
     # Update the properties and equations
     t_asm = @elapsed begin 
@@ -54,7 +54,7 @@ function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces 
         do_solve = true
     end
     if do_solve
-        t_solve, t_update = solve_update!(storage, model::TervModel; linsolve = linsolve)
+        t_solve, t_update = solve_update!(storage, model::TervModel; linsolve = config[:linear_solver])
         if timing_out
             @debug "Solved linear system in $t_solve seconds."
             @debug "Updated state $t_update seconds."
@@ -123,7 +123,7 @@ end
 function solve_ministep(sim, dt, maxIterations, linsolve, forces, cfg)
     done = false
     for it = 1:maxIterations
-        e, tol = perform_step!(sim, dt = dt, iteration = it, forces = forces, linsolve = linsolve, config = cfg)
+        e, tol = perform_step!(sim, cfg, dt = dt, iteration = it, forces = forces)
         done = e < tol
         if done
             break
