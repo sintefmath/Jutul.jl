@@ -10,7 +10,7 @@ ENV["JULIA_DEBUG"] = Terv
 # ENV["JULIA_DEBUG"] = nothing
 
 
-function perform_test(casename, doPlot = false, pvfrac=1, tstep = [1.0, 2.0, 2.0, 2.0, 5.0, 5.0, 10.0])
+function perform_test(casename, doPlot = false, pvfrac=1, tstep = ones(25))
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
@@ -36,7 +36,7 @@ function perform_test(casename, doPlot = false, pvfrac=1, tstep = [1.0, 2.0, 2.0
     pv = model.domain.grid.pore_volumes
     timesteps = tstep*3600*24 # 1 day, 2 days
     tot_time = sum(timesteps)
-    irate = pvfrac*sum(pv)/(tot_time)
+    irate = rhoLS*pvfrac*sum(pv)/(tot_time)
     src  = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
             SourceTerm(nc, -irate)]
     forces = build_forces(model, sources = src)
@@ -46,14 +46,15 @@ function perform_test(casename, doPlot = false, pvfrac=1, tstep = [1.0, 2.0, 2.0
     state0 = setup_state(model, init)
     # Model parameters
     parameters = setup_parameters(model)
+    parameters[:ReferenceDensity] = [rhoLS, rhoLS]
     parameters[:Density] = [rhoL, rhoL]
     parameters[:CoreyExponents] = [2, 3]
     parameters[:Viscosity] = [mu, mu/2]
 
     sim = Simulator(model, state0 = state0, parameters = parameters)
-    # Linear solver
+    cfg = simulator_config(sim, max_nonlinear_iterations = 20)
     println("Starting simulation.")
-    states = simulate(sim, timesteps, forces = forces)
+    states = simulate(sim, timesteps, forces = forces, config = cfg)
     s = states[end]
     p = s.Pressure
     @printf("Final pressure ranges from %f to %f bar.\n", maximum(p)/bar, minimum(p)/bar)
