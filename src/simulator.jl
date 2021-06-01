@@ -1,6 +1,6 @@
 export simulate, perform_step!
 export Simulator, TervSimulator
-
+export simulator_config
 
 abstract type TervSimulator end
 struct Simulator <: TervSimulator
@@ -54,9 +54,20 @@ function perform_step!(storage, model; dt = nothing, linsolve = nothing, forces 
     return (e, tol)
 end
 
-function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations = 10, outputStates = true, forces = nothing, linsolve = nothing)
+function simulator_config(sim)
+    cfg = Dict()
+    cfg[:max_timestep_cuts] = 5
+    cfg[:max_nonlinear_iterations] = 10
+    cfg[:linear_solver] = nothing
+    cfg[:output_states] = true
+    return cfg
+end
+
+function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothing, config = simulator_config(sim))
     states = []
     no_steps = length(timesteps)
+    maxIterations = config[:max_nonlinear_iterations]
+    linsolve = config[:linear_solver]
     @info "Starting simulation"
     for (step_no, dT) in enumerate(timesteps)
         t_str =  Dates.canonicalize(Dates.CompoundPeriod(Second(dT)))
@@ -73,7 +84,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
                     break
                 end
             else
-                max_cuts = 5;
+                max_cuts = config[:max_timestep_cuts]
                 if cut_count > max_cuts
                     @warn "Unable to converge time step $step_no/$no_steps. Aborting."
                     return states
@@ -83,7 +94,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; maxIterations =
                 cut_count += 1
             end
         end
-        if outputStates
+        if config[:output_states]
             store_output!(states, sim)
         end
     end

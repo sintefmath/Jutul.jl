@@ -17,6 +17,13 @@ include("dev/two_phase_with_plotting.jl")
 
 You can dump more test grids by using MRST together with the `writeMRSTData.m` function that dumps a grid and rock to a .mat file. Once it is stored as `data/testgrids/mycase.mat` where the file contains the fields `G` and `rock` you can run 
 ```
+perform_test("mycase")
 ```
-`perform_test("mycase")` to run a simple two-phase simulation and `perform_test("mycase", true)` to launch with plotting, provided that the model is of a cartesian grid.
+to run a simple two-phase simulation and 
+```perform_test("mycase", true)```
+to launch with plotting, provided that the model has a cartesian grid.
 
+A next step might be to run all the tests to verify that everything is ok and see what functionality exists:
+```
+include("test/runtests.jl")
+```
