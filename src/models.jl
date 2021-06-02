@@ -387,7 +387,7 @@ function solve_update!(storage, model::TervModel; linsolve = nothing)
 end
 
 function update_primary_variables!(storage, model::TervModel)
-    dx = storage.LinearizedSystem.dx
+    dx = storage.LinearizedSystem.dx_buffer
     update_primary_variables!(storage.primary_variables, dx, model)
 end
 
