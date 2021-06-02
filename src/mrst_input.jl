@@ -1,6 +1,6 @@
 using GLMakie
 using MAT # .MAT file loading
-export get_minimal_tpfa_grid_from_mrst, plot_mrstdata, plot_interactive
+export get_minimal_tpfa_grid_from_mrst, plot_mrstdata, plot_interactive, get_test_setup
 using SparseArrays # Sparse pattern
 using Makie
 
@@ -69,6 +69,83 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     else
         return D
     end
+end
+
+function get_test_setup(grid_name; case_name = "single_phase_simple", target = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05, kwarg...)
+    G = get_minimal_tpfa_grid_from_mrst(grid_name)
+    nc = number_of_cells(G)
+    pv = G.grid.pore_volumes
+    timesteps = timesteps*3600*24
+
+    if target == "cpu"
+        context = DefaultContext()
+    else
+        error("Unsupported target $target")
+    end
+
+    if case_name == "single_phase_simple"
+        # Parameters
+        bar = 1e5
+        p0 = 100*bar # 100 bar
+        mu = 1e-3    # 1 cP
+        cl = 1e-5/bar
+        pRef = 100*bar
+        rhoLS = 1000
+        # Anonymous function for liquid density
+        rhoL = (p) -> rhoLS*exp((p - pRef)*cl)
+        # Single-phase liquid system (compressible pressure equation)
+        phase = LiquidPhase()
+        sys = SinglePhaseSystem(phase)
+        # Simulation model wraps grid and system together with context (which will be used for GPU etc)
+        model = SimulationModel(G, sys, context = context)
+
+        # System state
+        tot_time = sum(timesteps)
+        irate = pvfrac*sum(pv)/tot_time
+        src = [SourceTerm(1, irate), 
+            SourceTerm(nc, -irate)]
+        forces = build_forces(model, sources = src)
+
+        # State is dict with pressure in each cell
+        init = Dict(:Pressure => p0)
+        state0 = setup_state(model, init)
+        # Model parameters
+        parameters = setup_parameters(model)
+        parameters[:Viscosity] = [mu]
+        parameters[:Density] = [rhoL]
+    elseif case_name == "two_phase_simple"
+        bar = 1e5
+        p0 = 100*bar # 100 bar
+        mu = 1e-3    # 1 cP
+        cl = 1e-5/bar
+        pRef = 100*bar
+        rhoLS = 1000
+        # Anonymous function for liquid density
+        rhoL = (p) -> rhoLS*exp((p - pRef)*cl)
+        # Single-phase liquid system (compressible pressure equation)
+        L = LiquidPhase()
+        V = VaporPhase()
+        sys = ImmiscibleSystem([L, V])
+        model = SimulationModel(G, sys, context = context)
+
+        tot_time = sum(timesteps)
+        irate = pvfrac*sum(pv)/tot_time
+        src  = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
+                SourceTerm(nc, -irate)]
+        forces = build_forces(model, sources = src)
+
+        # State is dict with pressure in each cell
+        init = Dict(:Pressure => p0, :Saturations => [0.0, 1.0])
+        # Model parameters
+        parameters = setup_parameters(model)
+        parameters[:Density] = [rhoL, rhoL]
+        parameters[:CoreyExponents] = [2, 3]
+        parameters[:Viscosity] = [mu, mu/2]
+    else
+        error("Unknown case $case_name")
+    end
+    state0 = setup_state(model, init)
+    return (state0, model, parameters, forces, timesteps)
 end
 
 function read_patch_plot(filename::String)
