@@ -64,13 +64,13 @@ struct SingleCUDAContext <: GPUTervContext
     index_t::Type
     block_size
     device
-
-    function SingleCUDAContext(float_t::Type = Float32, index_t::Type = Int32, block_size = 256)
+    matrix_layout
+    function SingleCUDAContext(float_t::Type = Float32, index_t::Type = Int32, block_size = 256, layout = EquationMajorLayout())
         @assert CUDA.functional() "CUDA must be functional for this context."
-        return new(float_t, index_t, block_size, CUDADevice())
+        return new(float_t, index_t, block_size, CUDADevice(), layout)
     end
 end
-
+matrix_layout(c::SingleCUDAContext) = c.matrix_layout
 kernel_compatibility(::SingleCUDAContext) = KernelAllowed()
 
 "Context that uses KernelAbstractions for GPU parallelization"
@@ -82,7 +82,6 @@ struct SharedMemoryKernelContext <: CPUTervContext
         return new(block_size, CPU())
     end
 end
-
 kernel_compatibility(::SharedMemoryKernelContext) = KernelAllowed()
 
 "Context that uses threads etc to accelerate loops"
@@ -94,8 +93,13 @@ broadcast_compatibility(::SharedMemoryContext) = BroadcastDisallowed()
 
 "Default context - not really intended for threading"
 struct DefaultContext <: CPUTervContext
-
+    matrix_layout
+    function DefaultContext(matrix_layout = EquationMajorLayout())
+        new(matrix_layout)
+    end
 end
+matrix_layout(c::DefaultContext) = c.matrix_layout
+
 
 # Domains
 abstract type TervDomain end
