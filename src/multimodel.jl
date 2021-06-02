@@ -356,9 +356,10 @@ function setup_linearized_system!(storage, model::MultiModel)
     candidates = [i for i in keys(models)]
     if ng == 1
         # All Jacobians are grouped together and we assemble as a single linearized system
-        I, J, V, n, m = get_sparse_arguments(storage, model, candidates, candidates)
-        jac = sparse(I, J, V, n, m)
-        lsys = LinearizedSystem(jac)
+        context = models[1].context
+        layout = matrix_layout(context)
+        sparse_arg = get_sparse_arguments(storage, model, candidates, candidates)
+        lsys = LinearizedSystem(sparse_arg, context, layout)
     else
         # We have multiple groups. Store as Matrix of sparse matrices
         @assert false "Needs implementation"
