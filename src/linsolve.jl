@@ -21,7 +21,7 @@ function LinearizedSystem(sparse_arg, context, layout)
     dx = zeros(n)
     jac = sparse(I, J, V, n, m)
 
-    jac_buf, dx_buf, r_buf = V, dx, r
+    jac_buf, dx_buf, r_buf = get_nzval(jac), dx, r
 
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
 end
@@ -47,6 +47,7 @@ function LinearizedSystem(sparse_arg, context, layout::BlockMajorLayout)
     return LinearizedSystem(jac, r, dx, V_buf, r_buf, dx_buf, layout)
 end
 
+
 @inline function get_nzval(jac)
     return jac.nzval
 end
@@ -54,6 +55,12 @@ end
 @inline function get_nzval(jac::AbstractCuSparseMatrix)
     # Why does CUDA and Base differ on capitalization?
     return jac.nzVal
+end
+
+function block_size(lsys::LinearizedSystem) 1 end
+
+function block_size(lsys::LinearizedSystem{S}) where {S <: BlockMajorLayout}
+    return size(lsys.r_buffer, 1)
 end
 
 function solve!(sys::LinearizedSystem, linsolve = nothing)

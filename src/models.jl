@@ -310,26 +310,29 @@ end
 function update_linearized_system!(lsys, equations, model::TervModel; equation_offset = 0)
     for key in keys(equations)
         eq = equations[key]
+        nz = lsys.jac_buffer
         n = number_of_equations(model, eq)
-        update_linearized_system_subset!(lsys, model, eq, r_subset = (equation_offset+1):(equation_offset+n))
-        equation_offset += n
+        r = view(lsys.r_buffer, equation_offset .+ (1:n))
+    
+        update_linearized_system_equation!(nz, r, model, eq)
+        equation_offset += number_of_equations(model, eq)
     end
 end
 
 function check_convergence(storage, model; kwarg...)
     lsys = storage.LinearizedSystem
     eqs = storage.equations
-    check_convergence(lsys.r, eqs, storage, model; kwarg...)
+    check_convergence(lsys, eqs, storage, model; kwarg...)
 end
 
-function check_convergence(r, eqs, storage, model; iteration = nothing, extra_out = false, tol = 1e-3, kwarg...)
+function check_convergence(lsys::LinearizedSystem, eqs, storage, model; iteration = nothing, extra_out = false, tol = 1e-3, offset = 0, kwarg...)
     converged = true
     e = 0
-    offset = 0
+    # offset = 0
     for key in keys(eqs)
         eq = eqs[key]
         n = number_of_equations(model, eq)
-        r_v = view(r, (1:n) .+ offset)
+        r_v = view(lsys.r_buffer, (1:n) .+ offset)
         errors, tscale = convergence_criterion(model, storage, eq, r_v; kwarg...)
 
         prntstr = "Iteration $iteration:\n"

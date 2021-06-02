@@ -90,8 +90,8 @@ function apply_cross_term!(eq, ct, model_t, model_s, arg...)
 end
 
 
-function update_linearized_system_subset!(nz, model_t, model_s, ct::InjectiveCrossTerm)
-    update_linearized_system_subset!(nz, nothing, model_s, ct.crossterm_source_cache)
+function update_linearized_system_crossterm!(nz, model_t, model_s, ct::InjectiveCrossTerm)
+    fill_equation_entries!(nz, nothing, model_s, ct.crossterm_source_cache)
 end
 
 function declare_pattern(target_model, source_model, x::InjectiveCrossTerm, unit)
@@ -479,7 +479,7 @@ function update_linearized_system_crossterms!(lsys, storage, model::MultiModel, 
     for ekey in keys(eqs)
         ct = cross_terms[ekey]
         nz = get_nzval(lsys.jac)
-        update_linearized_system_subset!(nz, model_t, model_s, ct::CrossTerm)
+        update_linearized_system_crossterm!(nz, model_t, model_s, ct::CrossTerm)
     end
 end
 
@@ -510,21 +510,18 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
     converged = true
     err = 0
     offset = 0
-    r = storage.LinearizedSystem.r
+    lsys = storage.LinearizedSystem
     for key in keys(model.models)
         @debug "Checking convergence for submodel $key:"
         s = storage[key]
         m = model.models[key]
         eqs = s.equations
 
-        n = number_of_degrees_of_freedom(m)
-        ix = offset .+ (1:n)
-        r_v = view(r, ix)
-        conv, e, = check_convergence(r_v, eqs, s, m; extra_out = true, tol = tol, kwarg...)
+        conv, e, = check_convergence(lsys, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)
-        offset += n
+        offset += number_of_degrees_of_freedom(m)
     end
     if extra_out
         return (converged, err, tol)

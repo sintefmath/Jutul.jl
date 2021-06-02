@@ -74,15 +74,21 @@ end
     @inbounds nzval[get_jacobian_pos(c, index, eqNo, partial_index, pos)] = new_value
 end
 
-function update_linearized_system_subset!(nz, r, model, cache::TervAutoDiffCache)
+@inline function update_residual_entry!(r, v, unit_index, eq_index, nunits, neqs, matrix_layout)
+    @inbounds r[unit_index + nunits*(eq_index-1)] = v
+end
+
+function fill_equation_entries!(nz, r, model, cache::TervAutoDiffCache)
     nu = cache.number_of_units
+    ne = cache.equations_per_unit
     entries = cache.entries
     pos = cache.jacobian_positions
+    layout = matrix_layout(model.context)
     Threads.@threads for i in 1:nu
-        for e in 1:cache.equations_per_unit
-            # Note: The residual part needs to be fixed for non-standard alignments
+        for e in 1:ne
             a = get_entry(cache, i, e, entries)
-            @inbounds r[i + nu*(e-1)] = a.value
+            # @inbounds r[i + nu*(e-1)] = a.value
+            update_residual_entry!(r, a.value, i, e, nu, ne, layout)
             for d = 1:cache.npartials
                 @inbounds ∂ = a.partials[d]
                 update_jacobian_entry!(nz, cache, i, e, d, ∂, pos)
@@ -91,12 +97,12 @@ function update_linearized_system_subset!(nz, r, model, cache::TervAutoDiffCache
     end
 end
 
-function update_linearized_system_subset!(nz, r::Nothing, model, cache::TervAutoDiffCache)
+function fill_equation_entries!(nz, r::Nothing, model, cache::TervAutoDiffCache)
     nu = cache.number_of_units
+    ne = cache.equations_per_unit
     entries = cache.entries
     Threads.@threads for i in 1:nu
-        for e in 1:cache.equations_per_unit
-            # Note: The residual part needs to be fixed for non-standard alignments
+        for e in 1:ne
             a = get_entry(cache, i, e, entries)
             for d = 1:cache.npartials
                 update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])

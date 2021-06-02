@@ -91,7 +91,7 @@ function half_face_flux_faces_alignment!(face_cache, jac, layout, N, flow_disc; 
     end
 end
 
-function update_linearized_system_subset!(nz, r, model, law::ConservationLaw)
+function fill_equation_entries!(nz, r, model, law::ConservationLaw)
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
     face_flux = law.half_face_flux_faces

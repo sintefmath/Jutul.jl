@@ -182,19 +182,10 @@ end
 """
 Update a linearized system based on the values and derivatives in the equation.
 """
-function update_linearized_system_subset!(lsys, model, equation::TervEquation; r_subset = nothing)
-    if isnothing(r_subset)
-        r = lsys.r
-    else
-        r = view(lsys.r, r_subset)
-    end
-    nz = get_nzval(lsys.jac)
-    update_linearized_system_subset!(nz, r, model, equation)
-end
 
-function update_linearized_system_subset!(nz, r, model, equation::TervEquation)
+function update_linearized_system_equation!(nz, r, model, equation::TervEquation)
     # NOTE: Default only updates diagonal part
-    update_linearized_system_subset!(nz, r, model, get_diagonal_cache(equation))
+    fill_equation_entries!(nz, r, model, get_diagonal_cache(equation))
 end
 
 
@@ -211,7 +202,6 @@ for any force we do not know about is to assume that the force does
 not impact this particular equation.
 """
 function apply_forces_to_equation!(storage, model, eq, force) end
-
 
 function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
     n = number_of_equations_per_unit(eq)

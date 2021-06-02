@@ -47,17 +47,25 @@ abstract type TervMatrixLayout end
 """
 Equations are stored sequentially in rows, derivatives of same type in columns:
 """
-struct EquationMajorLayout end
+struct EquationMajorLayout as_adjoint  end
+function EquationMajorLayout() EquationMajorLayout(false) end
 """
 Domain units sequentially in rows:
 """
-struct UnitMajorLayout end
+struct UnitMajorLayout as_adjoint end
+function UnitMajorLayout() UnitMajorLayout(false) end
+
 """
 Same as UnitMajorLayout, but the nzval is a matrix
 """
-struct BlockMajorLayout end
+struct BlockMajorLayout as_adjoint end
+function BlockMajorLayout() BlockMajorLayout(false) end
 
-matrix_layout(::Any) = EquationMajorLayout()
+matrix_layout(::Any) = EquationMajorLayout(false)
+function represented_as_adjoint(layout)
+    layout.as_adjoint
+end
+
 
 # CUDA context - everything on the single CUDA device attached to machine
 struct SingleCUDAContext <: GPUTervContext
