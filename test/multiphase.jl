@@ -8,12 +8,17 @@ function test_twophase(grid = "pico"; kwarg...)
     return true
 end
 
-
-@testset "Basic multiphase flow" begin
-    @test test_twophase()
-end
-
 bctx = DefaultContext(matrix_layout = BlockMajorLayout())
-@testset "Block assembly" begin
-    @test test_twophase(context = bctx)
+ctx = DefaultContext(matrix_layout = UnitMajorLayout())
+
+@testset "Two phase flow" begin
+    @testset "Basic flow" begin
+        @test test_twophase()
+    end
+    @testset "Block assembly" begin
+        @test test_twophase(context = bctx)
+    end
+    @testset "Unit major assembly" begin
+        @test test_twophase(context = bctx)
+    end
 end
