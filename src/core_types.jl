@@ -4,6 +4,7 @@ export setup_parameters, kernel_compatibility
 export Cells, Nodes, Faces
 
 export SingleCUDAContext, SharedMemoryContext, DefaultContext
+export BlockMajorLayout, EquationMajorLayout
 
 export  transfer, allocate_array
 
@@ -94,7 +95,7 @@ broadcast_compatibility(::SharedMemoryContext) = BroadcastDisallowed()
 "Default context - not really intended for threading"
 struct DefaultContext <: CPUTervContext
     matrix_layout
-    function DefaultContext(matrix_layout = EquationMajorLayout())
+    function DefaultContext(; matrix_layout = EquationMajorLayout())
         new(matrix_layout)
     end
 end

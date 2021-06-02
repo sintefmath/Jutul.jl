@@ -8,18 +8,21 @@ struct LinearizedSystem
     jac
     r
     dx
+    jac_buffer
+    r_buffer
+    dx_buffer
 end
 
-function LinearizedSystem(context::TervContext, jac, r, dx)
-    return LinearizedSystem(jac, r, dx)
-end
-
-function LinearizedSystem(jac)
-    n, m = size(jac)
+function LinearizedSystem(sparse_arg, context, layout)
+    I, J, V, n, m = sparse_arg
     @assert n == m "Expected square system. Recieved $n (eqs) by $m (variables)."
-    dx = zeros(n)
     r = zeros(n)
-    return LinearizedSystem(jac, r, dx)
+    dx = zeros(n)
+    jac = sparse(I, J, V, n, m)
+
+    jac_buf, dx_buf, r_buf = V, dx, r
+
+    return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf)
 end
 
 @inline function get_nzval(jac)
@@ -30,7 +33,6 @@ end
     # Why does CUDA and Base differ on capitalization?
     return jac.nzVal
 end
-
 
 function solve!(sys::LinearizedSystem, linsolve = nothing)
     if isnothing(linsolve)
@@ -49,7 +51,8 @@ function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
     r = CuArray{F}(lsys.r)
     dx = CuArray{F}(lsys.dx)
     jac = CUDA.CUSPARSE.CuSparseMatrixCSC{F}(lsys.jac)
-    return LinearizedSystem(jac, r, dx)
+    nzval = get_nzval(jac)
+    return LinearizedSystem(jac, r, dx, nzval)
 end
 
 # AMG solver (Julia-native)

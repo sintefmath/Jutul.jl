@@ -71,17 +71,18 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     end
 end
 
-function get_test_setup(grid_name; case_name = "single_phase_simple", target = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05, kwarg...)
+function get_test_setup(grid_name; case_name = "single_phase_simple", context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05, kwarg...)
     G = get_minimal_tpfa_grid_from_mrst(grid_name)
     nc = number_of_cells(G)
     pv = G.grid.pore_volumes
     timesteps = timesteps*3600*24
 
-    if target == "cpu"
+    if context == "cpu"
         context = DefaultContext()
-    else
-        error("Unsupported target $target")
+    elseif isa(context, String)
+        error("Unsupported target $context")
     end
+    @assert isa(context, TervContext)
 
     if case_name == "single_phase_simple"
         # Parameters

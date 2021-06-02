@@ -176,7 +176,12 @@ function setup_equations!(eqs, storage, model::TervModel; tag = nothing, kwarg..
 end
 
 
-function get_sparse_arguments(storage, model, layout = matrix_layout(model.context))
+function get_sparse_arguments(storage, model)
+    layout = matrix_layout(model.context)
+    get_sparse_arguments(storage, model, layout)
+end
+
+function get_sparse_arguments(storage, model, layout::EquationMajorLayout)
     ndof = number_of_degrees_of_freedom(model)
     eqs = storage[:equations]
     I = []
@@ -206,18 +211,56 @@ function get_sparse_arguments(storage, model, layout = matrix_layout(model.conte
     return (I, J, V, numrows, ndof)
 end
 
+function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
+    eqs = storage[:equations]
+    I = []
+    J = []
+    numrows = 0
+    primary_units = get_primary_variable_ordered_units(model)
+    block_size = degrees_of_freedom_per_unit(model, primary_units[1])
+    ndof = number_of_degrees_of_freedom(model) ÷ block_size
+    for eq in values(eqs)
+        numcols = 0
+        eqs_per_unit = number_of_equations_per_unit(eq)
+        for u in primary_units
+            dof_per_unit = degrees_of_freedom_per_unit(model, u)
+            @assert dof_per_unit == eqs_per_unit == block_size "Block major layout only supported for square blocks."
+            S = declare_sparsity(model, eq, u, layout)
+            if !isnothing(S)
+                i = S[1]
+                j = S[2]
+                push!(I, i .+ numrows) # Row indices, offset by the size of preceeding equations
+                push!(J, j .+ numcols) # Column indices, offset by the partials in units we have passed
+            end
+            numcols += count_units(model.domain, u)
+        end
+        @assert numcols == ndof "Assumed square block, was $numcols x $ndof"
+        numrows += number_of_units(model, eq)
+    end
+    I = vcat(I...)
+    J = vcat(J...)
+    vt = float_type(model.context)
+    V = zeros(vt, block_size, length(I))
+    return (I, J, V, numrows, ndof)
+end
+
+
 function setup_linearized_system!(storage, model::TervModel)
     # Linearized system is going to have dimensions of
     # total number of equations x total number of primary variables
     if !haskey(storage, :equations)
         error("Unable to allocate linearized system - no equations found.")
     end
-    layout = matrix_layout(model.context)
-    I, J, V, nrows, ncols = get_sparse_arguments(storage, model, layout)
-    jac = sparse(I, J, V, nrows, ncols)
-    lsys = LinearizedSystem(jac)
+    # layout = matrix_layout(model.context)
+    sparg = get_sparse_arguments(storage, model)
+    lsys = setup_linearized_system(sparg, model)
     storage[:LinearizedSystem] = transfer(model.context, lsys)
     return lsys
+end
+
+function setup_linearized_system(sparse_arg, model)
+    context = model.context
+    LinearizedSystem(sparse_arg, context, matrix_layout(context))
 end
 
 function align_equations_to_linearized_system!(storage, model::TervModel; kwarg...)
