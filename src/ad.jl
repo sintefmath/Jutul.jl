@@ -48,14 +48,6 @@ end
     value(get_entry(c, arg...))
 end
 
-@inline function get_partial(c::CompactAutoDiffCache, index, eqNo = 1, partial_index = 1)
-    get_entry(c, index, eqNo).partials[partial_index]
-end
-
-@inline function get_partials(c::CompactAutoDiffCache, index, eqNo = 1)
-    get_entry(c, index, eqNo).partials
-end
-
 @inline function get_jacobian_pos(c::CompactAutoDiffCache{I}, index, eqNo, partial_index, pos)::I where {I}
     @inbounds pos[(eqNo-1)*c.npartials + partial_index, index]
 end
@@ -77,6 +69,11 @@ end
 @inline function update_residual_entry!(r, v, unit_index, eq_index, nunits, neqs, matrix_layout)
     @inbounds r[unit_index + nunits*(eq_index-1)] = v
 end
+
+@inline function update_residual_entry!(r, v, unit_index, eq_index, nunits, neqs, matrix_layout::BlockMajorLayout)
+    @inbounds r[eq_index + (unit_index-1)*neqs]
+end
+
 
 function fill_equation_entries!(nz, r, model, cache::TervAutoDiffCache)
     nu = cache.number_of_units
