@@ -8,16 +8,18 @@ function find_jac_position(A, target_unit_index, source_unit_index, # Typically 
                               layout::EquationMajorLayout)
     row = nunits_target*(equation_index-1) + target_unit_index
     col = nunits_source*(partial_index-1) + source_unit_index
-    adj = represented_as_adjoint(layout)
-    find_sparse_position(A, row, col, adj)
+    find_sparse_position(A, row, col, layout)
 end
 
 function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
     equation_index, partial_index,        # Index of equation and partial derivative - local index
     nunits_target, nunits_source,         # Row and column sizes for each sub-system
     eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
-    ::UnitMajorLayout)
-    error("Not implemented")
+    layout::UnitMajorLayout)
+    row = eqs_per_unit*(target_unit_index-1) + equation_index
+    col = partials_per_unit*(source_unit_index-1) + partial_index
+
+    find_sparse_position(A, row, col, layout)
 end
 
 function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
@@ -28,12 +30,16 @@ function find_jac_position(A, target_unit_index, source_unit_index, # Typically 
     row = target_unit_index
     col = source_unit_index
 
-    adj = represented_as_adjoint(layout)
-    pos = find_sparse_position(A, row, col, adj)
+    pos = find_sparse_position(A, row, col, layout)
     # We now have the I+J position.
     # We assume that the nzval has eqs_per_unit*partials_per_unit rows,
     # with columns equal to nunits_target * nunits*source
     return (pos-1)*eqs_per_unit*partials_per_unit + partials_per_unit*(equation_index-1) + partial_index
+end
+
+function find_sparse_position(A::SparseMatrixCSC, row, col, layout::TervMatrixLayout)
+    adj = represented_as_adjoint(layout)
+    find_sparse_position(A, row, col, adj)
 end
 
 function find_sparse_position(A::SparseMatrixCSC, row, col, is_adjoint)

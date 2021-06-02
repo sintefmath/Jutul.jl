@@ -4,7 +4,7 @@ export setup_parameters, kernel_compatibility
 export Cells, Nodes, Faces
 
 export SingleCUDAContext, SharedMemoryContext, DefaultContext
-export BlockMajorLayout, EquationMajorLayout
+export BlockMajorLayout, EquationMajorLayout, UnitMajorLayout
 
 export  transfer, allocate_array
 
@@ -47,18 +47,24 @@ abstract type TervMatrixLayout end
 """
 Equations are stored sequentially in rows, derivatives of same type in columns:
 """
-struct EquationMajorLayout as_adjoint  end
+struct EquationMajorLayout <: TervMatrixLayout
+    as_adjoint
+end
 function EquationMajorLayout() EquationMajorLayout(false) end
 """
 Domain units sequentially in rows:
 """
-struct UnitMajorLayout as_adjoint end
+struct UnitMajorLayout <: TervMatrixLayout
+    as_adjoint
+end
 function UnitMajorLayout() UnitMajorLayout(false) end
 
 """
 Same as UnitMajorLayout, but the nzval is a matrix
 """
-struct BlockMajorLayout as_adjoint end
+struct BlockMajorLayout <: TervMatrixLayout
+    as_adjoint
+end
 function BlockMajorLayout() BlockMajorLayout(false) end
 
 matrix_layout(::Any) = EquationMajorLayout(false)

@@ -325,7 +325,7 @@ function check_convergence(storage, model; kwarg...)
     check_convergence(lsys, eqs, storage, model; kwarg...)
 end
 
-function check_convergence(lsys::LinearizedSystem, eqs, storage, model; iteration = nothing, extra_out = false, tol = 1e-3, offset = 0, kwarg...)
+function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra_out = false, tol = 1e-3, offset = 0, kwarg...)
     converged = true
     e = 0
     # offset = 0
