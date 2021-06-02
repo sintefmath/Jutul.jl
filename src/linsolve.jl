@@ -1,16 +1,17 @@
 export LinearizedSystem, solve!, AMGSolver, CuSparseSolver, transfer
 
-using SparseArrays, LinearOperators
+using SparseArrays, LinearOperators, StaticArrays
 using IterativeSolvers, Krylov, AlgebraicMultigrid
 using CUDA, CUDA.CUSPARSE
 
-struct LinearizedSystem
+struct LinearizedSystem{L}
     jac
     r
     dx
     jac_buffer
     r_buffer
     dx_buffer
+    matrix_layout::L
 end
 
 function LinearizedSystem(sparse_arg, context, layout)
@@ -22,7 +23,28 @@ function LinearizedSystem(sparse_arg, context, layout)
 
     jac_buf, dx_buf, r_buf = V, dx, r
 
-    return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf)
+    return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
+end
+
+function LinearizedSystem(sparse_arg, context, layout::BlockMajorLayout)
+    I, J, V_buf, n, m = sparse_arg
+    nb = size(V_buf, 1)
+    bz = Int(sqrt(nb))
+    @assert bz ≈ round(sqrt(nb)) "Buffer had $nb rows which is not square divisible."
+    @assert size(V_buf, 2) == length(I) == length(J)
+    @assert n == m "Expected square system. Recieved $n (eqs) by $m (variables)."
+    r_buf = zeros(bz, n)
+    dx_buf = zeros(bz, n)
+
+    float_t = eltype(V_buf)
+    mt = SMatrix{bz, bz, float_t, bz*bz}
+    vt = SVector{bz, float_t}
+    V = reinterpret(reshape, mt, V_buf)
+    r = reinterpret(reshape, vt, r_buf)
+    dx = reinterpret(reshape, vt, dx_buf)
+
+    jac = sparse(I, J, V, n, m)
+    return LinearizedSystem(jac, r, dx, V_buf, r_buf, dx_buf, layout)
 end
 
 @inline function get_nzval(jac)
@@ -46,6 +68,7 @@ function solve!(sys::LinearizedSystem, linsolve = nothing)
 end
 
 function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
+    error("Code not revised.")
     F = context.float_t
     # Transfer types
     r = CuArray{F}(lsys.r)

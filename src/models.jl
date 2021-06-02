@@ -240,7 +240,7 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
     I = vcat(I...)
     J = vcat(J...)
     vt = float_type(model.context)
-    V = zeros(vt, block_size, length(I))
+    V = zeros(vt, block_size*block_size, length(I))
     return (I, J, V, numrows, ndof)
 end
 
