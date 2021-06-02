@@ -38,11 +38,12 @@ end
 
 function find_sparse_position(A::SparseMatrixCSC, row, col, is_adjoint)
     if is_adjoint
-        a = col
-        b = row
-    else
         a = row
         b = col
+    else
+        a = col
+        b = row
+
     end
     find_sparse_position(A, b, a)
 end
