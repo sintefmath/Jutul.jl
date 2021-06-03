@@ -34,7 +34,8 @@ function find_jac_position(A, target_unit_index, source_unit_index, # Typically 
     # We now have the I+J position.
     # We assume that the nzval has eqs_per_unit*partials_per_unit rows,
     # with columns equal to nunits_target * nunits*source
-    return (pos-1)*eqs_per_unit*partials_per_unit + partials_per_unit*(equation_index-1) + partial_index
+    # return (pos-1)*eqs_per_unit*partials_per_unit + partials_per_unit*(equation_index-1) + partial_index
+    return (pos-1)*eqs_per_unit*partials_per_unit + eqs_per_unit*(partial_index-1) + equation_index
 end
 
 function find_sparse_position(A::SparseMatrixCSC, row, col, layout::TervMatrixLayout)
