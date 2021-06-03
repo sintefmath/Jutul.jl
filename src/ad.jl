@@ -71,7 +71,7 @@ end
 end
 
 @inline function update_residual_entry!(r, v, unit_index, eq_index, nunits, neqs, matrix_layout::BlockMajorLayout)
-    @inbounds r[eq_index + (unit_index-1)*neqs]
+    @inbounds r[eq_index + (unit_index-1)*neqs] = v
 end
 
 

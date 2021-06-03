@@ -18,7 +18,7 @@ ctx = DefaultContext(matrix_layout = UnitMajorLayout())
     @testset "Block assembly" begin
         @test test_twophase(context = bctx)
     end
-    @testset "Unit major assembly" begin
-        @test test_twophase(context = bctx)
-    end
+    # @testset "Unit major assembly" begin
+    #    @test test_twophase(context = ctx)
+    # end
 end

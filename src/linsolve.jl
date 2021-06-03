@@ -39,11 +39,13 @@ function LinearizedSystem(sparse_arg, context, layout::BlockMajorLayout)
     float_t = eltype(V_buf)
     mt = SMatrix{bz, bz, float_t, bz*bz}
     vt = SVector{bz, float_t}
-    V = reinterpret(reshape, mt, V_buf)
+    V = zeros(mt, length(I))
     r = reinterpret(reshape, vt, r_buf)
     dx = reinterpret(reshape, vt, dx_buf)
 
     jac = sparse(I, J, V, n, m)
+    nzval = get_nzval(jac)
+    V_buf = reinterpret(reshape, Float64, nzval)
     return LinearizedSystem(jac, r, dx, V_buf, r_buf, dx_buf, layout)
 end
 
