@@ -65,7 +65,7 @@ function block_size(lsys::LinearizedSystem{S}) where {S <: BlockMajorLayout}
     return size(lsys.r_buffer, 1)
 end
 
-function solve!(sys::LinearizedSystem, linsolve = nothing)
+function solve!(sys::LinearizedSystem, linsolve)
     if isnothing(linsolve)
         # Fall back to default Julia direct solver
         solve!(sys)
