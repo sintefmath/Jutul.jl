@@ -51,6 +51,7 @@ struct EquationMajorLayout <: TervMatrixLayout
     as_adjoint
 end
 function EquationMajorLayout() EquationMajorLayout(false) end
+function is_cell_major(::EquationMajorLayout) false end
 """
 Domain units sequentially in rows:
 """
@@ -58,6 +59,7 @@ struct UnitMajorLayout <: TervMatrixLayout
     as_adjoint
 end
 function UnitMajorLayout() UnitMajorLayout(false) end
+function is_cell_major(::UnitMajorLayout) true end
 
 """
 Same as UnitMajorLayout, but the nzval is a matrix
@@ -66,6 +68,7 @@ struct BlockMajorLayout <: TervMatrixLayout
     as_adjoint
 end
 function BlockMajorLayout() BlockMajorLayout(false) end
+function is_cell_major(::BlockMajorLayout) true end
 
 matrix_layout(::Any) = EquationMajorLayout(false)
 function represented_as_adjoint(layout)

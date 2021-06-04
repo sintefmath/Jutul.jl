@@ -58,16 +58,18 @@ struct PhaseMassDensities <: PhaseVariable end
 @terv_secondary function update_as_secondary!(rho, tv::PhaseMassDensities, model, param, Pressure)
     rho_input = param.Density
     p = Pressure
-    for i in 1:number_of_phases(model.system)
-        rho_i = view(rho, i, :)
-        r = rho_input[i]
-        if isa(r, NamedTuple)
-            f_rho = (p) -> r.rhoS*exp((p - r.pRef)*r.c)
-        else
-            # Function handle
-            f_rho = r
+    @sync begin
+        @async for i in 1:number_of_phases(model.system)
+            rho_i = view(rho, i, :)
+            r = rho_input[i]
+            if isa(r, NamedTuple)
+                f_rho = (p) -> r.rhoS*exp((p - r.pRef)*r.c)
+            else
+                # Function handle
+                f_rho = r
+            end
+            fapply!(rho_i, f_rho, p)
         end
-        fapply!(rho_i, f_rho, p)
     end
 end
 

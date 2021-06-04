@@ -69,7 +69,8 @@ function align_to_jacobian!(law::ConservationLaw, jac, model, ::Faces; equation_
     neighborship = model.domain.grid.neighborship
 
     hflux_faces = law.half_face_flux_faces
-    
+    @assert false
+
     if !isnothing(hflux_faces)
         layout = matrix_layout(model.context)
         half_face_flux_faces_alignment!(hflux_faces, jac, layout, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
@@ -91,17 +92,20 @@ function half_face_flux_faces_alignment!(face_cache, jac, layout, N, flow_disc; 
     end
 end
 
-function fill_equation_entries!(nz, r, model, law::ConservationLaw)
+function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
+    cell_major = is_cell_major(matrix_layout(model.context))
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
     face_flux = law.half_face_flux_faces
     cpos = law.flow_discretization.conn_pos
+    n, m = size(acc.entries)
+    rv = get_matrix_view(r, n, m, cell_major)
 
     @sync begin 
-        @async update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
+        @async update_linearized_system_subset_conservation_accumulation!(nz, rv, model, acc, cell_flux, cpos)
         @async update_linearized_system_subset_cell_flux!(nz, model, acc, cell_flux, cpos)
         if !isnothing(face_flux)
-            @async update_linearized_system_subset_face_flux!(nz, r, model, acc, face_flux, cpos)
+            @async update_linearized_system_subset_face_flux!(nz, rv, model, acc, face_flux, cpos)
         end
     end
 end
