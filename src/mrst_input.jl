@@ -92,8 +92,7 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         cl = 1e-5/bar
         pRef = 100*bar
         rhoLS = 1000
-        # Anonymous function for liquid density
-        rhoL = (p) -> rhoLS*exp((p - pRef)*cl)
+        rhoL = (rhoS = rhoLS, c = cl, pRef = pRef)
         # Single-phase liquid system (compressible pressure equation)
         phase = LiquidPhase()
         sys = SinglePhaseSystem(phase)
@@ -121,8 +120,7 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         cl = 1e-5/bar
         pRef = 100*bar
         rhoLS = 1000
-        # Anonymous function for liquid density
-        rhoL = (p) -> rhoLS*exp((p - pRef)*cl)
+        rhoL = (rhoS = rhoLS, c = cl, pRef = pRef)
         # Single-phase liquid system (compressible pressure equation)
         L = LiquidPhase()
         V = VaporPhase()

@@ -1,10 +1,11 @@
 using Terv
 using Test
 
-function test_twophase(grid = "pico"; kwarg...)
+function test_twophase(grid = "pico"; debug_level = 1, kwarg...)
     state0, model, prm, f, t = get_test_setup(grid, case_name = "two_phase_simple"; kwarg...)
     sim = Simulator(model, state0 = state0, parameters = prm)
-    simulate(sim, t, forces = f)
+    cfg = simulator_config(sim, debug_level = debug_level)
+    simulate(sim, t, forces = f, config = cfg)
     return true
 end
 
