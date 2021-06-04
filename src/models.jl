@@ -406,7 +406,7 @@ function update_primary_variables!(primary_storage, dx, model::TervModel)
             if u != current_unit
                 offset += nu*np
                 np = number_of_partials_per_unit(model, u)
-                nu = count_units(model, u)
+                nu = count_units(model.domain, u)
                 ri = get_matrix_view(dx, np, nu, cell_major, offset)
                 local_offset = 0
             end

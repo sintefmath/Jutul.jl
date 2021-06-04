@@ -40,6 +40,14 @@ function get_matrix_view(v::AbstractVector, n, m, transp = false, offset = 0)
     return v
 end
 
+function get_matrix_view(v, n, m, transp = false, offset = 0)
+    if !transp
+        v = v'
+    end
+    return v
+end
+
+
 function get_row_view(v::AbstractVector, n, m, row, transp = false, offset = 0)
     v = get_matrix_view(v, n, m, transp, offset)
     view(v, row, :)
