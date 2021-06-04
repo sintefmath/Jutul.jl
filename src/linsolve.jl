@@ -1,4 +1,4 @@
-export LinearizedSystem, solve!, AMGSolver, CuSparseSolver, transfer
+export LinearizedSystem, solve!, AMGSolver, CuSparseSolver, transfer, BlockDQGMRES
 
 using SparseArrays, LinearOperators, StaticArrays
 using IterativeSolvers, Krylov, AlgebraicMultigrid
@@ -67,15 +67,44 @@ end
 
 function solve!(sys::LinearizedSystem, linsolve = nothing)
     if isnothing(linsolve)
-        @assert length(sys.dx) < 50000
-        J = sys.jac
-        r = sys.r
-        sys.dx .= -(J\r)
+        # Fall back to default Julia direct solver
+        solve!(sys)
     else
+        # Use what was provided
         solve!(sys, linsolve)
     end
 end
 
+struct BlockDQGMRES end
+
+function solve!(sys)
+    @assert length(sys.dx) < 50000
+    J = sys.jac
+    r = sys.r
+    sys.dx .= -(J\r)
+end
+
+function solve!(sys::LinearizedSystem, solver::BlockDQGMRES)
+    # Simple block solver for testing. Not efficiently implemented.
+    n = length(sys.r_buffer)
+
+    r = reshape(sys.r_buffer, n)
+    jac = sys.jac
+
+    Vt = eltype(sys.r)
+    Mt = eltype(jac)
+
+    as_svec = (x) -> reinterpret(Vt, x)
+    as_smat = (x) -> reinterpret(Mt, x)
+    as_float = (x) -> reinterpret(Float64, x)
+
+    opA = LinearOperator(Float64, n, n, false, false, x -> Vector(as_float(jac*as_svec(x))))
+    (x, stats) = dqgmres(opA, r)
+
+    sys.dx_buffer .= reshape(x, size(sys.dx_buffer))
+end
+
+#
 function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
     error("Code not revised.")
     F = context.float_t

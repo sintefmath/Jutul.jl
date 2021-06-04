@@ -54,7 +54,8 @@ function perform_step!(storage, model, config; dt = nothing, forces = nothing, i
         do_solve = true
     end
     if do_solve
-        t_solve, t_update = solve_update!(storage, model::TervModel; linsolve = config[:linear_solver])
+        lsolve = config[:linear_solver]
+        t_solve, t_update = solve_update!(storage, model::TervModel; linear_solver = lsolve)
         if timing_out
             @debug "Solved linear system in $t_solve seconds."
             @debug "Updated state $t_update seconds."
