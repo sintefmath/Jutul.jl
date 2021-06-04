@@ -50,7 +50,6 @@ function find_sparse_position(A::SparseMatrixCSC, row, col, is_adjoint)
     else
         a = col
         b = row
-
     end
     find_sparse_position(A, b, a)
 end
@@ -225,12 +224,13 @@ not impact this particular equation.
 function apply_forces_to_equation!(storage, model, eq, force) end
 
 function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
+    cell_major = is_cell_major(matrix_layout(model.context))
     n = number_of_equations_per_unit(eq)
     m = length(r) ÷ n
+    rm = get_matrix_view(r, n, m, cell_major)
     e = zeros(n)
     for i = 1:n
-        x = view(r, ((i-1)*m+1):(i*m))
-        e[i] = norm(x, Inf)
+        e[i] = norm(rm[i, :], Inf)
     end
     return (e, 1.0)
 end
