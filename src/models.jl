@@ -333,11 +333,14 @@ end
 function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra_out = false, tol = 1e-3, offset = 0, kwarg...)
     converged = true
     e = 0
-    # offset = 0
+    r_buf = lsys.r_buffer
     for key in keys(eqs)
         eq = eqs[key]
-        n = number_of_equations(model, eq)
-        r_v = view(lsys.r_buffer, (1:n) .+ offset)
+        N = number_of_equations(model, eq)
+        n = number_of_equations_per_unit(eq)
+        m = N ÷ n
+        r_v = as_cell_major_matrix(r_buf, n, m, model, offset)
+
         errors, tscale = convergence_criterion(model, storage, eq, r_v; kwarg...)
 
         prntstr = "Iteration $iteration:\n"
@@ -348,7 +351,7 @@ function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra
         @debug prntstr
         converged = converged && all(errors .< tol*tscale)
         e = maximum([e, maximum(errors)])
-        offset += n
+        offset += N
     end
     if extra_out
         return (converged, e, tol)

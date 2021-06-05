@@ -225,11 +225,9 @@ function apply_forces_to_equation!(storage, model, eq, force) end
 
 function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
     n = number_of_equations_per_unit(eq)
-    m = length(r) ÷ n
-    rm = as_cell_major_matrix(r, n, m, model)
     e = zeros(n)
     for i = 1:n
-        e[i] = norm(rm[i, :], Inf)
+        e[i] = norm(r[i, :], Inf)
     end
     return (e, 1.0)
 end

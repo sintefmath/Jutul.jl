@@ -203,12 +203,7 @@ end
     return (I, J, n, m)
 end =#
 function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
-    cell_major = is_cell_major(matrix_layout(model.context))
-
     n = number_of_equations_per_unit(eq)
-    nc = number_of_cells(model.domain)
-    rm = get_matrix_view(r, n, nc, cell_major)
-
     pv = get_pore_volume(model)
     e = zeros(n)
     prm = storage.parameters
@@ -218,7 +213,7 @@ function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
         else
             rhos = 1
         end
-        e[i] = mapreduce((pv, e) -> abs((dt/rhos) * e / pv), max, pv, rm[i, :])
+        e[i] = mapreduce((pv, e) -> abs((dt/rhos) * e / pv), max, pv, r[i, :])
     end
     return (e, 1.0)
 end
