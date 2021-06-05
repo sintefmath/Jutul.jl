@@ -26,6 +26,22 @@ function Simulator(model; state0 = nothing, parameters = setup_parameters(model)
     Simulator(model, storage)
 end
 
+function Base.show(io::IO, t::MIME"text/plain", sim::Simulator) 
+    println("Simulator:")
+    for f in fieldnames(typeof(sim))
+        p = getfield(sim, f)
+        print("  $f:\n")
+        if f == :storage
+            for key in keys(sim.storage)
+                ss = sim.storage[key]
+                println("    $key")
+            end
+        else
+            show(io, t, p)
+        end
+    end
+end
+
 function perform_step!(simulator::TervSimulator, config; vararg...)
     perform_step!(simulator.storage, simulator.model, config; vararg...)
 end

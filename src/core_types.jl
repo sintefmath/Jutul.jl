@@ -216,17 +216,19 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
         p = getfield(model, f)
         print("  $f:\n")
         if f == :primary_variables || f == :secondary_variables
+            ctr = 1
             for (key, pvar) in p
                 nv = degrees_of_freedom_per_unit(model, pvar)
                 nu = number_of_units(model, pvar)
                 u = associated_unit(pvar)
-                print("   ⋅ $key (")
+                print("   $ctr) $key (")
                 if nv > 1
                     print("$nv×")
                 end
                 print("$nu")
 
                 print(" ∈ $(typeof(u)))\n")
+                ctr += 1
             end
             print("\n")
         elseif f == :domain
@@ -238,8 +240,10 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
             end
             print("\n\n")
         elseif f == :equations
+            ctr = 1
             for (key, eq) in p
-                println("    ⋅ $key implemented as $(eq[2]) × $(eq[1])")
+                println("   $ctr) $key implemented as $(eq[2]) × $(eq[1])")
+                ctr += 1
             end
             print("\n")
         else
