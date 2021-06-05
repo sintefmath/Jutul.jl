@@ -99,8 +99,9 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
     face_flux = law.half_face_flux_faces
     cpos = law.flow_discretization.conn_pos
     n, m = size(acc.entries)
+    @show r
     rv = get_matrix_view(r, n, m, cell_major)
-
+    @show rv
     @sync begin 
         @async update_linearized_system_subset_conservation_accumulation!(nz, rv, model, acc, cell_flux, cpos)
         @async update_linearized_system_subset_cell_flux!(nz, model, acc, cell_flux, cpos)

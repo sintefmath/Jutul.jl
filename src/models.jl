@@ -379,7 +379,7 @@ function build_forces(model::TervModel)
     return NamedTuple()
 end
 
-function solve_update!(storage, model::TervModel; linear_solver = nothing)
+function solve_and_update!(storage, model::TervModel; linear_solver = nothing)
     lsys = storage.LinearizedSystem
     t_solve = @elapsed solve!(lsys, linear_solver)
     t_update = @elapsed update_primary_variables!(storage, model)
@@ -400,7 +400,7 @@ function update_primary_variables!(primary_storage, dx, model::TervModel)
         for u in get_primary_variable_ordered_units(model)
             np = number_of_partials_per_unit(model, u)
             nu = count_units(model.domain, u)
-            ri = get_matrix_view(dx, np, nu, cell_major, offset)
+            Dx = get_matrix_view(dx, np, nu, cell_major, offset)
             local_offset = 0
             for (pkey, p) in primary
                 # This is a bit inefficient
@@ -408,7 +408,7 @@ function update_primary_variables!(primary_storage, dx, model::TervModel)
                     continue
                 end
                 ni = degrees_of_freedom_per_unit(model, p)
-                dxi = view(ri, (local_offset+1):(local_offset+ni), :)
+                dxi = view(Dx, :, (local_offset+1):(local_offset+ni))
                 update_primary_variable!(primary_storage, p, pkey, model, dxi)
                 local_offset += ni
             end

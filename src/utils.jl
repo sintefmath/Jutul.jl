@@ -41,7 +41,7 @@ function get_matrix_view(v::AbstractVector, n, m, transp = false, offset = 0)
 end
 
 function get_matrix_view(v, n, m, transp = false, offset = 0)
-    if !transp
+    if transp
         v = v'
     end
     return v
