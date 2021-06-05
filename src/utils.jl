@@ -30,6 +30,11 @@ function fapply!(out::CuArray, f, inputs...)
     @. out = f(inputs...)
 end
 
+function as_cell_major_matrix(v, n, m, model::SimulationModel, offset = 0)
+    transp = !is_cell_major(matrix_layout(model.context))
+    get_matrix_view(v, n, m, transp, offset)
+end
+
 function get_matrix_view(v::AbstractVector, n, m, transp = false, offset = 0)
     r_l = view(v, (offset+1):(offset + n*m))
     if transp

@@ -317,7 +317,8 @@ function update_linearized_system!(lsys, equations, model::TervModel; equation_o
         N = number_of_equations(model, eq)
         n = number_of_equations_per_unit(eq)
         m = N ÷ n
-        r = get_matrix_view(r_buf, n, m, cell_major, equation_offset)
+        r = as_cell_major_matrix(r_buf, n, m, model, equation_offset)
+
         update_linearized_system_equation!(nz, r, model, eq)
         equation_offset += number_of_equations(model, eq)
     end

@@ -224,10 +224,9 @@ not impact this particular equation.
 function apply_forces_to_equation!(storage, model, eq, force) end
 
 function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
-    cell_major = is_cell_major(matrix_layout(model.context))
     n = number_of_equations_per_unit(eq)
     m = length(r) ÷ n
-    rm = get_matrix_view(r, n, m, cell_major)
+    rm = as_cell_major_matrix(r, n, m, model)
     e = zeros(n)
     for i = 1:n
         e[i] = norm(rm[i, :], Inf)

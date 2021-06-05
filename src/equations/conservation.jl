@@ -112,7 +112,6 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
     centries = acc.entries
     fentries = cell_flux.entries
     cp = acc.jacobian_positions
-    layout = matrix_layout(model.context)
     Threads.@threads for cell = 1:nc
         for e in 1:ne
             diag_entry = get_entry(acc, cell, e, centries)
@@ -120,8 +119,7 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
                 diag_entry -= get_entry(cell_flux, i, e, fentries)
             end
 
-            @inbounds r[cell + nc*(e-1)] = diag_entry.value
-            # update_residual_entry!(r, diag_entry.value, cell, e, nc, ne, layout)
+            @inbounds r[e, cell] = diag_entry.value
             for d = 1:np
                 apos = get_jacobian_pos(acc, cell, e, d, cp)
                 @inbounds nz[apos] = diag_entry.partials[d]
