@@ -6,7 +6,9 @@ export Cells, Nodes, Faces
 export SingleCUDAContext, SharedMemoryContext, DefaultContext
 export BlockMajorLayout, EquationMajorLayout, UnitMajorLayout
 
-export  transfer, allocate_array
+export transfer, allocate_array
+
+import Base: show
 
 # Physical system
 abstract type TervSystem end
@@ -205,6 +207,44 @@ struct SimulationModel{O<:TervDomain,
         F = typeof(formulation)
         C = typeof(context)
         new{D, S, F, C}(domain, system, context, formulation, primary, secondary, equations, outputs)
+    end
+end
+
+function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel) 
+    println("SimulationModel:")
+    for f in fieldnames(typeof(model))
+        p = getfield(model, f)
+        print("  $f:\n")
+        if f == :primary_variables || f == :secondary_variables
+            for (key, pvar) in p
+                nv = degrees_of_freedom_per_unit(model, pvar)
+                nu = number_of_units(model, pvar)
+                u = associated_unit(pvar)
+                print("   ⋅ $key (")
+                if nv > 1
+                    print("$nv×")
+                end
+                print("$nu")
+
+                print(" ∈ $(typeof(u)))\n")
+            end
+            print("\n")
+        elseif f == :domain
+            if hasproperty(p, :grid)
+                g = p.grid
+                print("    grid: $(typeof(g))")
+            else
+
+            end
+            print("\n\n")
+        elseif f == :equations
+            for (key, eq) in p
+                println("    ⋅ $key implemented as $(eq[2]) × $(eq[1])")
+            end
+            print("\n")
+        else
+            println("    $p\n")
+        end
     end
 end
 

@@ -69,8 +69,6 @@ function align_to_jacobian!(law::ConservationLaw, jac, model, ::Faces; equation_
     neighborship = model.domain.grid.neighborship
 
     hflux_faces = law.half_face_flux_faces
-    @assert false
-
     if !isnothing(hflux_faces)
         layout = matrix_layout(model.context)
         half_face_flux_faces_alignment!(hflux_faces, jac, layout, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)

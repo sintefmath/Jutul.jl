@@ -1,4 +1,5 @@
 export MultiModel
+import Base: show
 
 struct MultiModel <: TervModel
     models::NamedTuple
@@ -18,6 +19,24 @@ struct MultiModel <: TervModel
         end
         ndof = map(number_of_degrees_of_freedom, models)
         new(models, groups, context, ndof)
+    end
+end
+
+function Base.show(io::IO, t::MIME"text/plain", m::MultiModel) 
+    submodels = m.models
+    if get(io, :compact, false)
+    else
+    end
+    println("MultiModel with $(length(submodels)) submodels:")
+    for key in keys(submodels)
+        m = submodels[key]
+        s = m.system
+        if hasproperty(m.domain, :grid)
+            g = m.domain.grid
+            println("$key: $(typeof(s)) ∈ $(typeof(g))")
+        else
+            println("$key: $(typeof(s)) ∈ $(typeof(m.domain))")
+        end
     end
 end
 
