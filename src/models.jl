@@ -396,23 +396,23 @@ function update_primary_variables!(primary_storage, dx, model::TervModel)
     offset = 0
     primary = get_primary_variables(model)
     if cell_major
-        current_unit = nothing
         offset = 0 # Offset into global r array
-        nu = 0     # Number of units for current unit
-        np = 0     # Number of partials on current unit
-        local_offset = 0; # Offset into current set of units
-        for (pkey, p) in primary
-            u = associated_unit(p)
-            if u != current_unit
-                offset += nu*np
-                np = number_of_partials_per_unit(model, u)
-                nu = count_units(model.domain, u)
-                ri = get_matrix_view(dx, np, nu, cell_major, offset)
-                local_offset = 0
+        for u in get_primary_variable_ordered_units(model)
+            np = number_of_partials_per_unit(model, u)
+            nu = count_units(model.domain, u)
+            ri = get_matrix_view(dx, np, nu, cell_major, offset)
+            local_offset = 0
+            for (pkey, p) in primary
+                # This is a bit inefficient
+                if u != associated_unit(p)
+                    continue
+                end
+                ni = degrees_of_freedom_per_unit(model, p)
+                dxi = view(ri, (local_offset+1):(local_offset+ni), :)
+                update_primary_variable!(primary_storage, p, pkey, model, dxi)
+                local_offset += ni
             end
-            ni = degrees_of_freedom_per_unit(model, p)
-            dxi = view(ri, (local_offset+1):(local_offset+ni), :)
-            update_primary_variable!(primary_storage, p, pkey, model, dxi)
+            offset += nu*np
         end
     else
         for (pkey, p) in primary
