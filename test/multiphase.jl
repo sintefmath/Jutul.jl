@@ -16,9 +16,9 @@ ctx = DefaultContext(matrix_layout = UnitMajorLayout())
     @testset "Basic flow" begin
         @test test_twophase()
     end
-    # @testset "Block assembly" begin
-    #    @test test_twophase(context = bctx)
-    #end
+     @testset "Block assembly" begin
+        @test test_twophase(context = bctx, linear_solver = BlockDQGMRES())
+    end
     # @testset "Unit major assembly" begin
     #    @test test_twophase(context = ctx)
     # end

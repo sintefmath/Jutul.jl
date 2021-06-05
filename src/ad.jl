@@ -66,26 +66,16 @@ end
     @inbounds nzval[get_jacobian_pos(c, index, eqNo, partial_index, pos)] = new_value
 end
 
-@inline function update_residual_entry!(r, v, unit_index, eq_index, nunits, neqs, matrix_layout)
-    @inbounds r[unit_index + nunits*(eq_index-1)] = v
-end
-
-@inline function update_residual_entry!(r, v, unit_index, eq_index, nunits, neqs, matrix_layout::BlockMajorLayout)
-    @inbounds r[eq_index + (unit_index-1)*neqs] = v
-end
-
-
 function fill_equation_entries!(nz, r, model, cache::TervAutoDiffCache)
     nu = cache.number_of_units
     ne = cache.equations_per_unit
     entries = cache.entries
     pos = cache.jacobian_positions
-    layout = matrix_layout(model.context)
+    # layout = matrix_layout(model.context)
     Threads.@threads for i in 1:nu
         for e in 1:ne
             a = get_entry(cache, i, e, entries)
-            # @inbounds r[i + nu*(e-1)] = a.value
-            update_residual_entry!(r, a.value, i, e, nu, ne, layout)
+            @inbounds r[i + nu*(e-1)] = a.value
             for d = 1:cache.npartials
                 @inbounds ∂ = a.partials[d]
                 update_jacobian_entry!(nz, cache, i, e, d, ∂, pos)

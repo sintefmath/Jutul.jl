@@ -308,12 +308,16 @@ function update_linearized_system!(storage, model::TervModel; kwarg...)
 end
 
 function update_linearized_system!(lsys, equations, model::TervModel; equation_offset = 0)
+    cell_major = is_cell_major(matrix_layout(model.context))
+
+    r_buf = lsys.r_buffer
     for key in keys(equations)
         eq = equations[key]
         nz = lsys.jac_buffer
-        n = number_of_equations(model, eq)
-        r = view(lsys.r_buffer, equation_offset .+ (1:n))
-    
+        N = number_of_equations(model, eq)
+        n = number_of_equations_per_unit(eq)
+        m = N ÷ n
+        r = get_matrix_view(r_buf, n, m, cell_major, equation_offset)
         update_linearized_system_equation!(nz, r, model, eq)
         equation_offset += number_of_equations(model, eq)
     end

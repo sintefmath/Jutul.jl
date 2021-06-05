@@ -93,20 +93,16 @@ function half_face_flux_faces_alignment!(face_cache, jac, layout, N, flow_disc; 
 end
 
 function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
-    cell_major = is_cell_major(matrix_layout(model.context))
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
     face_flux = law.half_face_flux_faces
     cpos = law.flow_discretization.conn_pos
-    n, m = size(acc.entries)
-    @show r
-    rv = get_matrix_view(r, n, m, cell_major)
-    @show rv
+
     @sync begin 
-        @async update_linearized_system_subset_conservation_accumulation!(nz, rv, model, acc, cell_flux, cpos)
+        @async update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
         @async update_linearized_system_subset_cell_flux!(nz, model, acc, cell_flux, cpos)
         if !isnothing(face_flux)
-            @async update_linearized_system_subset_face_flux!(nz, rv, model, acc, face_flux, cpos)
+            @async update_linearized_system_subset_face_flux!(nz, r, model, acc, face_flux, cpos)
         end
     end
 end
@@ -124,8 +120,8 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
                 diag_entry -= get_entry(cell_flux, i, e, fentries)
             end
 
-            # @inbounds r[cell + nc*(e-1)] = diag_entry.value
-            update_residual_entry!(r, diag_entry.value, cell, e, nc, ne, layout)
+            @inbounds r[cell + nc*(e-1)] = diag_entry.value
+            # update_residual_entry!(r, diag_entry.value, cell, e, nc, ne, layout)
             for d = 1:np
                 apos = get_jacobian_pos(acc, cell, e, d, cp)
                 @inbounds nz[apos] = diag_entry.partials[d]
