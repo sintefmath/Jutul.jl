@@ -101,7 +101,7 @@ function solve!(sys::LinearizedSystem, solver::BlockDQGMRES)
     opA = LinearOperator(Float64, n, n, false, false, x -> Vector(as_float(jac*as_svec(x))))
     (x, stats) = dqgmres(opA, r)
 
-    sys.dx_buffer .= reshape(x, size(sys.dx_buffer))
+    sys.dx_buffer .= -reshape(x, size(sys.dx_buffer))
 end
 
 #
