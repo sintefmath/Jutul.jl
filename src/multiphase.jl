@@ -144,7 +144,7 @@ function update_primary_variable!(state, p::Saturations, state_symbol, model, dx
             dlast -= dv
             s[ph, cell] += dv
         end
-        s[nph, cell] += dlast
+        @inbounds s[nph, cell] += dlast
     end
 end
 
