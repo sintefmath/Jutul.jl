@@ -109,7 +109,8 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
         @async update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
         @async fill_equation_entries!(nz, nothing, model, cell_flux)
         if !isnothing(face_flux)
-            @async update_linearized_system_subset_face_flux!(nz, r, model, acc, face_flux, cpos)
+            conn_data = law.flow_discretization.conn_data
+            @async update_linearized_system_subset_face_flux!(nz, model, face_flux, cpos, conn_data)
         end
     end
 end
@@ -136,25 +137,27 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
 end
 
 
-function update_linearized_system_subset_face_flux!(jac, r, model, acc, face_flux, conn_pos)
-    @assert false
-    # Use face sign to put this one together
-    nc, ne, np = ad_dims(acc)
+function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_pos, conn_data)
+    _, ne, np = ad_dims(face_flux)
     fentries = face_flux.entries
     fp = face_flux.jacobian_positions
+    nc = length(conn_pos) - 1
     Threads.@threads for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
-                f = get_entry(cell_flux, i, e, fentries)
+                c = conn_data[i]
+                face = c.face
+                sgn = c.face_sign
+                f = sgn*get_entry(face_flux, face, e, fentries)
                 for d = 1:np
                     df_di = f.partials[d]
-                    fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
+                    fpos = get_jacobian_pos(face_flux, i, e, d, fp)
                     @inbounds Jz[fpos] = df_di
                 end
             end
         end
     end
-    error("Not implemented yet")
+    # error("Not implemented yet")
 end
 
 function get_diagonal_cache(e::ConservationLaw)
