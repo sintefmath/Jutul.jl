@@ -15,6 +15,30 @@ function get_units(D::DiscretizedDomain)
     return keys(D.units)
 end
 
+
+function select_secondary_variables_domain!(S, domain::DiscretizedDomain, system, formulation)
+    d = domain.discretizations
+    for k in keys(d)
+        select_secondary_variables_discretization!(S, domain, system, formulation, d[k])
+    end
+end
+
+function select_secondary_variables_discretization!(S, domain, system, formulation, disc)
+
+end
+
+
+function select_primary_variables_domain!(S, domain::DiscretizedDomain, system, formulation)
+    d = domain.discretizations
+    for k in keys(d)
+        select_primary_variables_domain!(S, domain, system, formulation, d[k])
+    end
+end
+
+function select_primary_variables_domain!(S, domain, system, formulation, disc)
+
+end
+
 function count_units(D::DiscretizedDomain, unit::Cells)
     D.units[unit]
 end

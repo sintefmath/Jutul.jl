@@ -1,4 +1,4 @@
-export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
+# export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
 export SPU, TPFA, TwoPointPotentialFlow, DarcyMassMobilityFlow
 
 abstract type TwoPointDiscretization <: TervDiscretization end
@@ -10,10 +10,27 @@ abstract type UpwindDiscretization <: TervDiscretization end
 
 abstract type FlowType <: TervDiscretization end
 
-struct DarcyMassMobilityFlow <: FlowType end
-struct DarcyMassMobilityFlowFused <: FlowType end
-struct TotalMassVelocityMassFractionsFlow <: FlowType end
+function select_primary_variables_flow_type(S, domain, system, formulation, flow_type)
 
+end
+
+struct DarcyMassMobilityFlow <: FlowType end
+function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::DarcyMassMobilityFlow)
+    S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
+    S[:PhaseMobilities] = PhaseMobilities()
+    S[:MassMobilities] = MassMobilities()
+end
+
+struct DarcyMassMobilityFlowFused <: FlowType end
+function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::DarcyMassMobilityFlowFused)
+    S[:PhaseMobilities] = PhaseMobilities()
+    S[:MassMobilities] = MassMobilities()
+end
+
+struct TotalMassVelocityMassFractionsFlow <: FlowType end
+function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::TotalMassVelocityMassFractionsFlow)
+    S[:TotalMass] = TotalMass()
+end
 
 """
 Two-point flux approximation.
@@ -85,6 +102,11 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
     TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
 end
 
+
+function select_secondary_variables_discretization!(S, domain, system, formulation, fd::TwoPointPotentialFlow)
+    select_secondary_variables_flow_type!(S, domain, system, formulation, fd.flow_type)
+end
+
 function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlow{U, K}) where {U, K}
     tf = (x) -> transfer(context, x)
     u = tf(fd.upwind)
@@ -97,9 +119,9 @@ end
 
 struct CellNeighborPotentialDifference <: TervVariables end
 
-function single_unique_potential(model::SimulationModel{D, S}) where {D, S<:MultiPhaseSystem}
+function single_unique_potential(model)
     # We should add capillary pressure here ventually
-    return model.domain.discretization.flow_discretization.gravity
+    return model.domain.discretizations.mass_flow.gravity
 end
 
 function degrees_of_freedom_per_unit(model, sf::CellNeighborPotentialDifference)

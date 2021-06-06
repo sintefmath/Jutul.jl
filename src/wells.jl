@@ -15,7 +15,11 @@ Two point approximation with flux for wells
 """
 struct MixedWellSegmentFlow <: WellPotentialFlowDiscretization end
 
-abstract type WellGrid <: TervGrid end
+abstract type WellGrid <: PorousMediumGrid 
+    # Wells are not porous themselves per se, but they are discretizing 
+    # part of a porous medium.
+end
+
 struct MultiSegmentWell <: WellGrid 
     volumes          # One per cell
     perforations     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
@@ -171,8 +175,7 @@ function associated_unit(::TotalMassRateWell) Well() end
 # end
 
 # Selection of primary variables
-function select_primary_variables!(S, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
-    select_primary_variables!(S, system)
+function select_primary_variables_domain!(S, domain::DiscretizedDomain{G}, system, formulation) where {G<:MultiSegmentWell}
     S[:SegmentTotalVelocity] = SegmentTotalVelocity()
     S[:TotalWellMassRate] = TotalMassRateWell()
     # S[:SurfacePhaseRates] = SurfacePhaseRates()
@@ -185,8 +188,3 @@ function select_equations!(eqs, domain::DiscretizedDomain{G}, system, arg...) wh
     eqs[:control_equation] = (ControlEquationWell, 1)
 end
 
-function select_secondary_variables!(S, domain::DiscretizedDomain{G}, system::MultiPhaseSystem, arg...) where {G <: WellGrid}
-    select_secondary_variables!(S, system)
-    # Wells don't use mobilities, but they need the total mass for mass fractions
-    S[:TotalMass] = TotalMass()
-end
