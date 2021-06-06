@@ -1,5 +1,5 @@
 # export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
-export SPU, TPFA, TwoPointPotentialFlow, DarcyMassMobilityFlow
+export SPU, TPFA, TwoPointPotentialFlow, DarcyMassMobilityFlow, CellNeighborPotentialDifference
 
 abstract type TwoPointDiscretization <: TervDiscretization end
 
@@ -117,7 +117,7 @@ function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlow{U, K}) w
     return TwoPointPotentialFlow{U, K}(u, k, conn_pos, conn_data)
 end
 
-struct CellNeighborPotentialDifference <: TervVariables end
+struct CellNeighborPotentialDifference <: GroupedVariables end
 
 function single_unique_potential(model)
     # We should add capillary pressure here ventually
@@ -144,24 +144,27 @@ function number_of_units(model, pv::CellNeighborPotentialDifference)
 end
 
 @terv_secondary function update_as_secondary!(pot, tv::CellNeighborPotentialDifference, model, param, Pressure, PhaseMassDensities)
-    fd = model.domain.flow_discretization
-    conn_data = fd.conn_data
+    mf = model.domain.discretizations.mass_flow
+    conn_data = mf.conn_data
     context = model.context
-    if fd.gravity
+    if mf.gravity
         update_cell_neighbor_potential_difference_gravity!(pot, conn_data, Pressure, PhaseMassDensities, context, kernel_compatibility(context))
     else
         update_cell_neighbor_potential_difference!(pot, conn_data, Pressure, context, kernel_compatibility(context))
     end
 end
 
-function update_cell_neighbor_potential_difference_gravity!(dpot::AbstractVector, conn_data, p, rho, context, ::KernelDisallowed)
+function update_cell_neighbor_potential_difference_gravity!(dpot, conn_data, p, rho, context, ::KernelDisallowed)
     Threads.@threads for i in eachindex(conn_data)
         c = conn_data[i]
-        @inbounds dpot[i] = half_face_two_point_kgradp_gravity(c.self, c.other, c.T, p, c.gdz, rho)
+        for phno = 1:size(rho, 1)
+            rho_i = view(rho, phno, :)
+            @inbounds dpot[phno, i] = half_face_two_point_kgradp_gravity(c.self, c.other, c.T, p, c.gdz, rho_i)
+        end
     end
 end
 
-function update_cell_neighbor_potential_difference!(dpot::AbstractVector, conn_data, p, context, ::KernelDisallowed)
+function update_cell_neighbor_potential_difference!(dpot, conn_data, p, context, ::KernelDisallowed)
     Threads.@threads for i in eachindex(conn_data)
         c = conn_data[i]
         @inbounds dpot[i] = half_face_two_point_kgradp(c.self, c.other, c.T, p)

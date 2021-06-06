@@ -294,8 +294,11 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
         # Type-assert that this should be scalar, with a vector input
         val::AbstractVector
     else
-        @assert size(val, 1) == nv
-        @assert size(val, 2) == nu
+        nm = length(val)
+        @assert length(val) == nm "Passed value had $nm entries, expected $(nu*nv)"
+        n, m, = size(val)
+        @assert n == nv "Passed value had $n rows, expected $nv"
+        @assert m == nu "Passed value had $m rows, expected $nu"
     end
     if perform_copy
         val = deepcopy(val)
@@ -327,7 +330,9 @@ function initialize_variable_value!(state, model, pvar::ScalarVariable, symb::Sy
     return initialize_variable_value!(state, model, pvar, symb, V)
 end
 
-# Non-scalar primary variables
+"""
+Initializer for the value of non-scalar primary variables
+"""
 function initialize_variable_value!(state, model, pvar::GroupedVariables, symb::Symbol, val::AbstractVector)
     n = values_per_unit(model, pvar)
     t = typeof(pvar)

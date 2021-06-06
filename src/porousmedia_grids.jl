@@ -48,37 +48,6 @@ function number_of_cells(G::ReservoirGrid)
     return length(G.pore_volumes)
 end
 
-# struct SinglePointUpstream <: TervDiscretization
-
-# end
-
-# struct TwoPointFlux <: TervDiscretization
-#     conn_data
-#     conn_pos
-#     function TwoPointFlux(conn_data, nc)
-#         cno = [i.self for i in conn_data]
-#         # Slow code for the same thing:
-#         # counts = [sum(cno .== j) for j in 1:length(pv)]
-#         # nc = length(pv)
-#         counts = similar(cno, nc)
-#         index = 1
-#         cell = 1
-#         while cell < nc + 1
-#             ctr = 0
-#             while cno[index] == cell
-#                 ctr += 1
-#                 index += 1
-#                 if index > length(cno)
-#                     break
-#                 end
-#             end
-#             counts[cell] = ctr
-#             cell += 1
-#         end
-#         cpos = cumsum(vcat([1], counts))
-#         new(conn_data, cpos)
-#     end
-# end
 
 function declare_units(G::MinimalTPFAGrid)
     c = (unit = Cells(), count = length(G.pore_volumes))  # Cells equal to number of pore volumes
