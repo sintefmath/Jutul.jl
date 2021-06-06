@@ -1,5 +1,6 @@
 # export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
-export SPU, TPFA, TwoPointPotentialFlow, DarcyMassMobilityFlow, CellNeighborPotentialDifference
+export SPU, TPFA, TwoPointPotentialFlow, DarcyMassMobilityFlow, 
+        CellNeighborPotentialDifference, TotalMassVelocityMassFractionsFlow
 
 abstract type TwoPointDiscretization <: TervDiscretization end
 
@@ -154,6 +155,7 @@ end
     end
 end
 
+# Half face flux - default reservoir version
 function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
     pot = storage.state.CellNeighborPotentialDifference
     mob = storage.state.MassMobilities
@@ -162,7 +164,6 @@ function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlo
     conn_data = law.flow_discretization.conn_data
     update_fluxes_from_potential_and_mobility!(flux, conn_data, pot, mob)
 end
-
 
 function update_cell_neighbor_potential_difference_gravity!(dpot, conn_data, p, rho, context, ::KernelDisallowed)
     Threads.@threads for i in eachindex(conn_data)
@@ -191,6 +192,7 @@ function update_fluxes_from_potential_and_mobility!(flux, conn_data, pot, mob)
     end
 end
 
+# Fused version for DarcyMassMobilityFlowFused
 function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlowFused}
     state = storage.state
     p = state.Pressure
@@ -212,6 +214,21 @@ function update_fluxes_fused_mobility!(flux, conn_data, p, mob, rho)
         end
     end
 end
+# Total velocity version for TotalMassVelocityMassFractionsFlow
+function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TotalMassVelocityMassFractionsFlow}
+    state = storage.state
+    masses = state.TotalMasses
+    total = state.TotalMass
+    v = state.TotalMassFlux
+
+    flux_cells = get_entries(law.half_face_flux_cells)
+    conn_data = law.flow_discretization.conn_data
+    @assert false
+    update_fluxes_total_mass_velocity_cells!(flux_cells, conn_data, masses, total, v)
+end
+
+
+
 
 # Flux primitive functions follow
 @inline function spu_upwind(c_self::I, c_other::I, θ::R, λ::AbstractArray{R}) where {R<:Real, I<:Integer}

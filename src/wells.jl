@@ -1,6 +1,6 @@
-export SegmentTotalVelocity, BottomHolePressure, SurfacePhaseRates
+export TotalMassFlux, BottomHolePressure, SurfacePhaseRates
 export WellGrid, MultiSegmentWell
-export SegmentTotalVelocity, BottomHolePressure, SurfacePhaseRates
+export TotalMassFlux, BottomHolePressure, SurfacePhaseRates
 
 export InjectorControl, ProducerControl, SinglePhaseRateTarget, BottomHolePressureTarget
 
@@ -156,8 +156,8 @@ function declare_units(W::MultiSegmentWell)
 end
 
 # Total velocity in each well segment
-struct SegmentTotalVelocity <: ScalarVariable end
-function associated_unit(::SegmentTotalVelocity) Faces() end
+struct TotalMassFlux <: ScalarVariable end
+function associated_unit(::TotalMassFlux) Faces() end
 
 # Bottom hole pressure for the well
 # struct BottomHolePressure <: ScalarVariable end
@@ -176,7 +176,7 @@ function associated_unit(::TotalMassRateWell) Well() end
 
 # Selection of primary variables
 function select_primary_variables_domain!(S, domain::DiscretizedDomain{G}, system, formulation) where {G<:MultiSegmentWell}
-    S[:SegmentTotalVelocity] = SegmentTotalVelocity()
+    S[:TotalMassFlux] = TotalMassFlux()
     S[:TotalWellMassRate] = TotalMassRateWell()
     # S[:SurfacePhaseRates] = SurfacePhaseRates()
     # S[:BottomHolePressure] = BottomHolePressure()

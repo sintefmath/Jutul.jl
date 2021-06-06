@@ -50,7 +50,7 @@ function build_well(mrst_data, ix)
 
     cell_centroids = copy((mrst_data["G"]["cells"]["centroids"])')
     z = vcat(ref_depth, cell_centroids[3, rc])
-    flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), W, nothing, z)
+    flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), TotalMassVelocityMassFractionsFlow(), W, nothing, z)
     disc = (mass_flow = flow,)
 
     wmodel = SimulationModel(W, sys, discretization = disc)
@@ -58,7 +58,7 @@ function build_well(mrst_data, ix)
 end
 
 # Initial condition for all wells
-w0 = Dict(:Pressure => p0, :SegmentTotalVelocity => 0.0, :TotalWellMassRate => 0.0)
+w0 = Dict(:Pressure => p0, :TotalMassFlux => 0.0, :TotalWellMassRate => 0.0)
 
 # Rate injector
 Wi = build_well(mrst_data, 1)
