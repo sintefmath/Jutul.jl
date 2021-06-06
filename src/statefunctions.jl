@@ -90,8 +90,8 @@ end
 
 function select_secondary_variables!(sf, domain, system, formulation)
     select_secondary_variables_domain!(sf, domain, system, formulation)
-    select_secondary_variables_domain!(sf, domain, system, formulation)
-    select_secondary_variables_domain!(sf, domain, system, formulation)
+    select_secondary_variables_system!(sf, domain, system, formulation)
+    select_secondary_variables_formulation!(sf, domain, system, formulation)
 end
 
 function select_secondary_variables_domain!(sf, domain, system, formulation)
@@ -130,7 +130,6 @@ end
 function select_primary_variables_formulation!(sf, domain, system, formulation)
 
 end
-
 
 function minimum_output_variables(domain, system, formulation, primary_variables, secondary_variables)
     minimum_output_variables(system, primary_variables)
