@@ -463,7 +463,9 @@ function apply_cross_terms_for_pair!(storage, model, source::Symbol, target::Sym
     eqs = storage_t[:equations]
     for ekey in keys(eqs)
         ct = cross_terms[ekey]
-        apply_cross_term!(eqs[ekey], ct, model_t, model_s, arg...)
+        if !isnothing(ct)
+            apply_cross_term!(eqs[ekey], ct, model_t, model_s, arg...)
+        end
     end
 end
 
