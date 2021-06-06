@@ -154,14 +154,13 @@ end
     end
 end
 
-function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
-    @assert false
-    p = storage.state.Pressure
-    mmob = storage.state.MassMobilities
+function update_half_face_flux!(storage, law, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
+    pot = storage.state.CellNeighborPotentialDifference
+    mob = storage.state.MassMobilities
 
     flux = get_entries(law.half_face_flux_cells)
-    conn_data = law.flow_discretization
-    # half_face_flux!(flux, model, conn_data, mmob, p)
+    conn_data = law.flow_discretization.conn_data
+    update_fluxes_from_potential_and_mobility!(flux, conn_data, pot, mob)
 end
 
 
@@ -182,8 +181,17 @@ function update_cell_neighbor_potential_difference!(dpot, conn_data, p, context,
     end
 end
 
+function update_fluxes_from_potential_and_mobility!(flux, conn_data, pot, mob)
+    Threads.@threads for i in eachindex(conn_data)
+        c = conn_data[i]
+        for phno = 1:size(mob, 1)
+            mob_i = view(mob, phno, :)
+            @inbounds flux[phno, i] = spu_upwind(c.self, c.other, pot[phno, i], mob_i)
+        end
+    end
+end
 # Flux primitive functions follow
-@inline function spu_upwind(c_self::I, c_other::I, θ, λ::AbstractArray{R}, p::AbstractArray{R}) where {R<:Real, I<:Integer}
+@inline function spu_upwind(c_self::I, c_other::I, θ::R, λ::AbstractArray{R}) where {R<:Real, I<:Integer}
     if θ < 0
         # Flux is leaving the cell
         λᶠ = λ[c_self]
