@@ -10,12 +10,15 @@ abstract type KGradDiscretization <: PotentialFlowDiscretization end
 abstract type UpwindDiscretization <: TervDiscretization end
 
 abstract type FlowType <: TervDiscretization end
+include_face_sign(::FlowType) = false
 
 function select_primary_variables_flow_type(S, domain, system, formulation, flow_type)
 
 end
 
 struct DarcyMassMobilityFlow <: FlowType end
+
+
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::DarcyMassMobilityFlow)
     S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
     S[:PhaseMobilities] = PhaseMobilities()
@@ -32,6 +35,7 @@ struct TotalMassVelocityMassFractionsFlow <: FlowType end
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::TotalMassVelocityMassFractionsFlow)
     S[:TotalMass] = TotalMass()
 end
+include_face_sign(::TotalMassVelocityMassFractionsFlow) = true
 
 """
 Two-point flux approximation.
@@ -46,16 +50,21 @@ struct SPU <: UpwindDiscretization end
 "Discretization of kgradp + upwind"
 abstract type FlowDiscretization <: TervDiscretization end
 
-function get_connection(face, cell, faces, N, T, z, g)
+function get_connection(face, cell, faces, N, T, z, g, inc_face_sign)
     D = Dict()
     if N[1, face] == cell
+        s = 1
         other = N[2, face]
     else
+        s = -1
         other = N[1, face]
     end
     D[:self] = cell
     D[:other] = other
     D[:face] = face
+    if inc_face_sign
+        D[:face_sign] = s
+    end
     if !isnothing(T)
         D[:T] = T[face]
     end
@@ -91,7 +100,7 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
     if !isnothing(T)
         @assert length(T) == nhf ÷ 2
     end
-    get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity)
+    get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity, include_face_sign(flow_type))
     el = get_el(1, 1) # Could be junk, we just need eltype
     
     conn_data = Vector{typeof(el)}(undef, nhf)
@@ -235,7 +244,8 @@ function update_fluxes_total_mass_velocity_cells!(flux, conn_data, masses, total
         f = c.face
         for phno = 1:size(masses, 1)
             masses_i = view(masses, phno, :)
-            @inbounds flux[phno, i] = half_face_fluxes_total_mass_velocity!(c.self, c.other, masses_i, total, v[f])
+            vi = c.face_sign*v[f]
+            @inbounds flux[phno, i] = half_face_fluxes_total_mass_velocity!(c.self, c.other, masses_i, total, vi)
         end
     end
 end
@@ -246,7 +256,8 @@ function update_fluxes_total_mass_velocity_faces!(flux, conn_data, masses, total
         f = c.face
         for phno = 1:size(masses, 1)
             masses_i = view(masses, phno, :)
-            flux[phno, i] = half_face_fluxes_total_mass_velocity_face!(c.self, c.other, masses_i, total, v[f])
+            vi = c.face_sign*v[f]
+            flux[phno, i] = half_face_fluxes_total_mass_velocity_face!(c.self, c.other, masses_i, total, vi)
         end
     end
 end
