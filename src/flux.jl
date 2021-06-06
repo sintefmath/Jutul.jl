@@ -9,7 +9,9 @@ abstract type KGradDiscretization <: PotentialFlowDiscretization end
 abstract type UpwindDiscretization <: TervDiscretization end
 
 abstract type FlowType <: TervDiscretization end
+
 struct DarcyMassMobilityFlow <: FlowType end
+struct DarcyMassMobilityFlowFused <: FlowType end
 struct TotalMassVelocityMassFractionsFlow <: FlowType end
 
 
@@ -17,7 +19,6 @@ struct TotalMassVelocityMassFractionsFlow <: FlowType end
 Two-point flux approximation.
 """
 struct TPFA <: KGradDiscretization end
-
 
 """
 Single-point upwinding.
@@ -50,6 +51,7 @@ struct TwoPointPotentialFlow{U <:UpwindDiscretization, K <:PotentialFlowDiscreti
     upwind::U
     grad::K
     flow_type::F
+    gravity::Bool
     conn_pos
     conn_data
 end
@@ -57,12 +59,15 @@ end
 function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, gravity = 9.80665)
     N = grid.neighborship
     faces, face_pos = get_facepos(N)
+    has_grav = !isnothing(gravity) || gravity == 0
 
     nhf = length(faces)
     nc = length(face_pos) - 1
     if !isnothing(z)
         @assert length(z) == nc
-        @debug "No depths (z) provided."
+        if has_grav
+            @warn "No depths (z) provided but gravity is enabled."
+        end
     end
     if !isnothing(T)
         @assert length(T) == nhf ÷ 2
@@ -76,7 +81,7 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
             conn_data[fpos] = get_el(faces[fpos], cell)
         end
     end
-    TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, face_pos, conn_data)
+    TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
 end
 
 function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlow{U, K}) where {U, K}
@@ -89,53 +94,74 @@ function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlow{U, K}) w
     return TwoPointPotentialFlow{U, K}(u, k, conn_pos, conn_data)
 end
 
+struct CellNeighborPotentialDifference <: TervVariables end
 
-function half_face_flux(mob, p, G)
-    flux = similar(p, 2*G.nfaces)
-    half_face_flux!(flux, mob, p, G)
-    return flux
+function single_unique_potential(model::SimulationModel{D, S}) where {D, S<:MultiPhaseSystem}
+    # We should add capillary pressure here ventually
+    return model.domain.discretization.flow_discretization.gravity
 end
 
-function half_face_flux!(flux, model, flux_disc, mob, p)
-    conn_data = flux_disc.conn_data
-    half_face_flux!(flux, mob, p, conn_data, model.context, kernel_compatibility(model.context))
+function degrees_of_freedom_per_unit(model, sf::CellNeighborPotentialDifference)
+    if single_unique_potential(model)
+        n = number_of_phases(model.system)
+    else
+        n = 1
+    end
+    return n
 end
 
-"Half face flux using standard loop"
-function half_face_flux!(flux, mob, p, conn_data, context, ::KernelDisallowed)
+function associated_unit(::CellNeighborPotentialDifference)
+    Cells()
+end
+
+function number_of_units(model, pv::CellNeighborPotentialDifference)
+    # We have two units of potential difference per face of the domain since the difference
+    # is taken with respect to cells
+    return 2*count_units(model.domain, Faces())
+end
+
+@terv_secondary function update_as_secondary!(pot, tv::CellNeighborPotentialDifference, model, param, Pressure, PhaseMassDensities)
+    fd = model.domain.flow_discretization
+    conn_data = fd.conn_data
+    context = model.context
+    if fd.gravity
+        update_cell_neighbor_potential_difference_gravity!(pot, conn_data, Pressure, PhaseMassDensities, context, kernel_compatibility(context))
+    else
+        update_cell_neighbor_potential_difference!(pot, conn_data, Pressure, context, kernel_compatibility(context))
+    end
+end
+
+function update_cell_neighbor_potential_difference_gravity!(dpot::AbstractVector, conn_data, p, rho, context, ::KernelDisallowed)
     Threads.@threads for i in eachindex(conn_data)
         c = conn_data[i]
-        for phaseNo = 1:size(mob, 1)
-            @inbounds flux[phaseNo, i] = tp_flux(c.self, c.other, c.T, view(mob, phaseNo, :), p)
-        end
+        @inbounds dpot[i] = half_face_two_point_kgradp_gravity(c.self, c.other, c.T, p, c.gdz, rho)
     end
 end
 
+function update_cell_neighbor_potential_difference!(dpot::AbstractVector, conn_data, p, context, ::KernelDisallowed)
+    Threads.@threads for i in eachindex(conn_data)
+        c = conn_data[i]
+        @inbounds dpot[i] = half_face_two_point_kgradp(c.self, c.other, c.T, p)
+    end
+end
 
-@inline function tp_flux(c_self::I, c_other::I, t_ij, mob::AbstractArray{R}, p::AbstractArray{R}) where {R<:Real, I<:Integer}
-    kdp = -t_ij*(p[c_self] - value(p[c_other]))
-    if kdp < 0
+# Flux primitive functions follow
+@inline function spu_upwind(c_self::I, c_other::I, θ, λ::AbstractArray{R}, p::AbstractArray{R}) where {R<:Real, I<:Integer}
+    if θ < 0
         # Flux is leaving the cell
-        m = mob[c_self]
+        λᶠ = λ[c_self]
     else
         # Flux is entering the cell
-        m = value(mob[c_other])
+        λᶠ = value(λ[c_other])
     end
-    return m*kdp
+    return λᶠ*θ
 end
 
-
-## GPU stuff, needs revising
-
-"Half face flux using kernel (GPU/CPU)"
-function half_face_flux!(flux, mob, p, conn_data, context, ::KernelAllowed)
-    m = length(conn_data)
-    kernel = half_face_flux_kernel(context.device, context.block_size, m)
-    event = kernel(flux, mob, p, conn_data, ndrange=m)
-    wait(event)
+@inline function half_face_two_point_kgradp_gravity(c_self::I, c_other::I, T, p::AbstractArray{R}, gΔz, ρ::AbstractArray{R}) where {R<:Real, I<:Integer}
+    ρ_avg = 0.5*(ρ[c_self] + value(ρ[c_other]))
+    return -T*(p[c_self] - value(p[c_other]) + gΔz*ρ_avg)
 end
 
-@kernel function half_face_flux_kernel(flux, @Const(mob), @Const(p), @Const(fd))
-    i = @index(Global, Linear)
-    @inbounds flux[i] = tp_flux(fd[i].self, fd[i].other, fd[i].T, view(mob, phaseNo, :), p)
+@inline function half_face_two_point_kgradp(c_self::I, c_other::I, T, p::AbstractArray{R}) where {R<:Real, I<:Integer}
+    return -T*(p[c_self] - value(p[c_other]))
 end

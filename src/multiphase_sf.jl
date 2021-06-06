@@ -18,17 +18,18 @@ function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::PhaseAndC
     number_of_phases(model.system)
 end
 
-function select_secondary_variables!(S, system::MultiPhaseSystem)
+function select_secondary_variables!(S, domain, system::MultiPhaseSystem, formulation)
     S[:PhaseMassDensities] = PhaseMassDensities()
     S[:TotalMasses] = TotalMasses()
 end
 
-function select_secondary_variables!(S, domain::DiscretizedDomain{G}, system::MultiPhaseSystem, arg...) where {G <: PorousMediumGrid}
-    select_secondary_variables!(S, system)
-    # For a porous medium, we also need the notion of mobilities.
+function select_secondary_variables_system!(S, domain::DiscretizedDomain{G}, system::MultiPhaseSystem, formulation) where {G <: PorousMediumGrid}
+    select_secondary_variables_system!(S, nothing, system, TervFormulation)
+    # For a multiphase flow specifically in a porous medium, we also need the notion of mobilities.
     S[:PhaseMobilities] = PhaseMobilities()
     S[:MassMobilities] = MassMobilities()
 end
+
 
 function minimum_output_variables(system::MultiPhaseSystem, primary_variables)
     [:TotalMasses]

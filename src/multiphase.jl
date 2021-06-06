@@ -162,11 +162,11 @@ struct TotalMass <: ScalarVariable end
 
 
 # Selection of variables
-function select_primary_variables!(S, system::SinglePhaseSystem)
+function select_primary_variables_system!(S, domain, system::SinglePhaseSystem, formulation)
     S[:Pressure] = Pressure()
 end
 
-function select_primary_variables!(S, system::ImmiscibleSystem)
+function select_primary_variables_system!(S, domain, system::ImmiscibleSystem, formulation)
     S[:Pressure] = Pressure()
     S[:Saturations] = Saturations()
 end
