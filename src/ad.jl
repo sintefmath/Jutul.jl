@@ -8,7 +8,12 @@ struct CompactAutoDiffCache{I, âˆ‚x} <: TervAutoDiffCache where {I <: Integer, â
     equations_per_unit::I
     number_of_units::I
     npartials::I
-    function CompactAutoDiffCache(equations_per_unit, n_units, npartials_or_model = 1; unit = Cells(), context = DefaultContext(), tag = nothing, kwarg...)
+    function CompactAutoDiffCache(equations_per_unit, n_units, npartials_or_model = 1; 
+                                                        unit = Cells(),
+                                                        context = DefaultContext(),
+                                                        tag = nothing,
+                                                        n_units_pos = nothing,
+                                                        kwarg...)
         if isa(npartials_or_model, TervModel)
             model = npartials_or_model
             npartials = degrees_of_freedom_per_unit(model, unit)
@@ -24,7 +29,11 @@ struct CompactAutoDiffCache{I, âˆ‚x} <: TervAutoDiffCache where {I <: Integer, â
         D = eltype(entries)
         # Position in sparse matrix - only allocated, then filled in later.
         # Since partials are all fetched together with the value, we make partials the fastest index.
-        pos = zeros(I, equations_per_unit*npartials, n_units)
+        if isnothing(n_units_pos)
+            # This can be overriden - if a custom assembly is planned.
+            n_units_pos = n_units
+        end
+        pos = zeros(I, equations_per_unit*npartials, n_units_pos)
         pos = transfer(context, pos)
         new{I, D}(entries, unit, pos, equations_per_unit, n_units, npartials)
     end

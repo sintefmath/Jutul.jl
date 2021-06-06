@@ -234,8 +234,9 @@ function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlo
     flux_faces = get_entries(law.half_face_flux_faces)
 
     conn_data = law.flow_discretization.conn_data
+    N = model.domain.grid.neighborship
     update_fluxes_total_mass_velocity_cells!(flux_cells, conn_data, masses, total, v)
-    update_fluxes_total_mass_velocity_faces!(flux_faces, conn_data, masses, total, v)
+    update_fluxes_total_mass_velocity_faces!(flux_faces, N, masses, total, v)
 end
 
 function update_fluxes_total_mass_velocity_cells!(flux, conn_data, masses, total, v)
@@ -250,14 +251,13 @@ function update_fluxes_total_mass_velocity_cells!(flux, conn_data, masses, total
     end
 end
 
-function update_fluxes_total_mass_velocity_faces!(flux, conn_data, masses, total, v)
-    for i in eachindex(conn_data)
-        @inbounds c = conn_data[i]
-        f = c.face
+function update_fluxes_total_mass_velocity_faces!(flux, N, masses, total, v)
+    for f in 1:size(flux, 2)
         for phno = 1:size(masses, 1)
             masses_i = view(masses, phno, :)
-            vi = c.face_sign*v[f]
-            flux[phno, i] = half_face_fluxes_total_mass_velocity_face!(c.self, c.other, masses_i, total, vi)
+            left = N[1, f]
+            right = N[2, f]
+            flux[phno, f] = half_face_fluxes_total_mass_velocity_face!(left, right, masses_i, total, v[f])
         end
     end
 end
@@ -271,11 +271,11 @@ function half_face_fluxes_total_mass_velocity!(self, other, masses, total, v)
     return x*value(v)
 end
 
-function half_face_fluxes_total_mass_velocity_face!(self, other, masses, total, v)
-    if v < 0
-        x = value(masses[self])/value(total[self])
+function half_face_fluxes_total_mass_velocity_face!(left, right, masses, total, v)
+    if v > 0
+        x = value(masses[left])/value(total[left])
     else
-        x = value(masses[other])/value(total[other])
+        x = value(masses[right])/value(total[right])
     end
     return x*v
 end
