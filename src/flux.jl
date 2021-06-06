@@ -1,5 +1,5 @@
 export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
-export SPU, TPFA, TwoPointPotentialFlow
+export SPU, TPFA, TwoPointPotentialFlow, DarcyMassMobilityFlow
 
 abstract type TwoPointDiscretization <: TervDiscretization end
 
@@ -7,6 +7,11 @@ abstract type PotentialFlowDiscretization <: TervDiscretization end
 abstract type KGradDiscretization <: PotentialFlowDiscretization end
 
 abstract type UpwindDiscretization <: TervDiscretization end
+
+abstract type FlowType <: TervDiscretization end
+struct DarcyMassMobilityFlow <: FlowType end
+struct TotalMassVelocityMassFractionsFlow <: FlowType end
+
 
 """
 Two-point flux approximation.
@@ -22,7 +27,7 @@ struct SPU <: UpwindDiscretization end
 "Discretization of kgradp + upwind"
 abstract type FlowDiscretization <: TervDiscretization end
 
-function get_connection(face, cell, faces, N, T, z)
+function get_connection(face, cell, faces, N, T, z, g)
     D = Dict()
     if N[1, face] == cell
         other = N[2, face]
@@ -36,19 +41,20 @@ function get_connection(face, cell, faces, N, T, z)
         D[:T] = T[face]
     end
     if !isnothing(z)
-        D[:dz] = z[cell] - z[other]
+        D[:gdz] = g*(z[cell] - z[other])
     end
     return convert_to_immutable_storage(D)
 end
 
-struct TwoPointPotentialFlow{U <:UpwindDiscretization, K <:PotentialFlowDiscretization} <: FlowDiscretization
+struct TwoPointPotentialFlow{U <:UpwindDiscretization, K <:PotentialFlowDiscretization, F <: FlowType} <: FlowDiscretization
     upwind::U
     grad::K
+    flow_type::F
     conn_pos
     conn_data
 end
 
-function TwoPointPotentialFlow(u, k, grid, T = nothing, z = nothing)
+function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, gravity = 9.80665)
     N = grid.neighborship
     faces, face_pos = get_facepos(N)
 
@@ -61,7 +67,7 @@ function TwoPointPotentialFlow(u, k, grid, T = nothing, z = nothing)
     if !isnothing(T)
         @assert length(T) == nhf ÷ 2
     end
-    get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z)
+    get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity)
     el = get_el(1, 1) # Could be junk, we just need eltype
     
     conn_data = Vector{typeof(el)}(undef, nhf)
@@ -70,7 +76,7 @@ function TwoPointPotentialFlow(u, k, grid, T = nothing, z = nothing)
             conn_data[fpos] = get_el(faces[fpos], cell)
         end
     end
-    TwoPointPotentialFlow{typeof(u), typeof(k)}(u, k, face_pos, conn_data)
+    TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, face_pos, conn_data)
 end
 
 function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlow{U, K}) where {U, K}
