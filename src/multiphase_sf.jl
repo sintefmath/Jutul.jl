@@ -18,7 +18,7 @@ function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::PhaseAndC
     number_of_phases(model.system)
 end
 
-function select_secondary_variables!(S, domain, system::MultiPhaseSystem, formulation)
+function select_secondary_variables_system!(S, domain, system::MultiPhaseSystem, formulation)
     S[:PhaseMassDensities] = PhaseMassDensities()
     S[:TotalMasses] = TotalMasses()
 end
