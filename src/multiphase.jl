@@ -185,7 +185,7 @@ function get_flow_volume(grid::MinimalTPFAGrid)
 end
 
 # Update of discretization terms
-function update_accumulation!(law, storage, model, dt)
+function update_accumulation!(storage, law, model, dt)
     state = storage.state
     state0 = storage.state0
     acc = get_entries(law.accumulation)
@@ -196,12 +196,8 @@ function update_accumulation!(law, storage, model, dt)
 end
 
 function update_half_face_flux!(law, storage, model)
-    p = storage.state.Pressure
-    mmob = storage.state.MassMobilities
-
-    flux = get_entries(law.half_face_flux_cells)
-    conn_data = law.flow_discretization
-    half_face_flux!(flux, model, conn_data, mmob, p)
+    flow_disc = model.domain.discretizations.mass_flow
+    update_half_fa
 end
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}

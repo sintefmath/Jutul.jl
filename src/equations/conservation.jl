@@ -242,9 +242,10 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, equa
     end
 end
 
-function update_equation!(law::ConservationLaw, storage, model, dt)
-    update_accumulation!(law, storage, model, dt)
-    update_half_face_flux!(law, storage, model)
+function update_equation!(storage, law::ConservationLaw, model, dt)
+    update_accumulation!(storage, law, model, dt)
+    fd = model.domain.discretizations.mass_flow
+    update_half_face_flux!(storage, law, model, fd)
 end
 
 function get_diagonal_part(eq::ConservationLaw)

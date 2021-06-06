@@ -212,7 +212,7 @@ end
 """
 Update equation based on currently stored properties
 """
-function update_equation!(eqs::TervEquation, storage, model, dt)
+function update_equation!(storage, eqs::TervEquation, model, dt)
 
 end
 

@@ -154,6 +154,17 @@ end
     end
 end
 
+function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
+    @assert false
+    p = storage.state.Pressure
+    mmob = storage.state.MassMobilities
+
+    flux = get_entries(law.half_face_flux_cells)
+    conn_data = law.flow_discretization
+    # half_face_flux!(flux, model, conn_data, mmob, p)
+end
+
+
 function update_cell_neighbor_potential_difference_gravity!(dpot, conn_data, p, rho, context, ::KernelDisallowed)
     Threads.@threads for i in eachindex(conn_data)
         c = conn_data[i]
