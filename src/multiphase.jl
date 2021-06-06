@@ -184,21 +184,6 @@ function get_flow_volume(grid::MinimalTPFAGrid)
     grid.pore_volumes
 end
 
-# Update of discretization terms
-function update_accumulation!(storage, law, model, dt)
-    state = storage.state
-    state0 = storage.state0
-    acc = get_entries(law.accumulation)
-    mass = state.TotalMasses
-    mass0 = state0.TotalMasses
-    fapply!(acc, (m, m0) -> (m - m0)/dt, mass, mass0)
-    return acc
-end
-
-function update_half_face_flux!(law, storage, model)
-    flow_disc = model.domain.discretizations.mass_flow
-    update_half_fa
-end
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
     acc = get_entries(eq.accumulation)

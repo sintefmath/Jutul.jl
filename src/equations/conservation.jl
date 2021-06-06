@@ -2,6 +2,7 @@ export ConservationLaw
 
 struct ConservationLaw <: TervEquation
     accumulation::TervAutoDiffCache
+    accumulation_symbol::Symbol
     half_face_flux_cells::TervAutoDiffCache
     half_face_flux_faces::Union{TervAutoDiffCache,Nothing}
     flow_discretization::FlowDiscretization
@@ -9,6 +10,7 @@ end
 
 function ConservationLaw(model, number_of_equations;
                             flow_discretization = model.domain.discretizations.mass_flow,
+                            accumulation_symbol = :TotalMasses,
                             kwarg...)
     D = model.domain
     cell_unit = Cells()
@@ -25,7 +27,7 @@ function ConservationLaw(model, number_of_equations;
     else
         hf_faces = nothing
     end
-    ConservationLaw(acc, hf_cells, hf_faces, flow_discretization)
+    ConservationLaw(acc, accumulation_symbol, hf_cells, hf_faces, flow_discretization)
 end
 
 "Update positions of law's derivatives in global Jacobian"
@@ -242,9 +244,22 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, equa
     end
 end
 
+# Update of discretization terms
+function update_accumulation!(storage, law, model, dt)
+    conserved = law.accumulation_symbol
+    acc = get_entries(law.accumulation)
+    m = storage.state[conserved]
+    m0 = storage.state0[conserved]
+    # mass = state.TotalMasses
+    # mass0 = state0.TotalMasses
+    fapply!(acc, (m, m0) -> (m - m0)/dt, m, m0)
+    return acc
+end
+
+
 function update_equation!(storage, law::ConservationLaw, model, dt)
     update_accumulation!(storage, law, model, dt)
-    fd = model.domain.discretizations.mass_flow
+    fd = law.flow_discretization
     update_half_face_flux!(storage, law, model, fd)
 end
 
