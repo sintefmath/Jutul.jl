@@ -66,12 +66,14 @@ ifrac = 0.01
 irate = ifrac*sum(sum(G.grid.pore_volumes))/sum(timesteps)
 it = SinglePhaseRateTarget(irate, phase)
 ictrl = InjectorControl(it, 1.0)
+iforces = build_forces(Wi, control = ictrl)
 istate = setup_state(Wi, w0)
 
 # BHP producer
 Wp = build_well(mrst_data, 2)
 pt = BottomHolePressureTarget(pRef/2)
 pctrl = ProducerControl(pt)
+pforces = build_forces(Wp, control = pctrl)
 pstate = setup_state(Wp, w0)
 
 
@@ -79,7 +81,7 @@ pstate = setup_state(Wp, w0)
 mmodel = MultiModel((Reservoir = model, Injector = Wi, Producer = Wp))
 # Set up joint state and simulate
 state0 = setup_state(mmodel, Dict(:Reservoir => state0r, :Injector => istate, :Producer => pstate))
-forces = Dict(:Reservoir => nothing, :Injector => ictrl, :Producer => pctrl)
+forces = Dict(:Reservoir => nothing, :Injector => iforces, :Producer => pforces)
 
 
 parameters = setup_parameters(mmodel)

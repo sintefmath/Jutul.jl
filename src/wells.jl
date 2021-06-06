@@ -188,3 +188,6 @@ function select_equations!(eqs, domain::DiscretizedDomain{G}, system, arg...) wh
     eqs[:control_equation] = (ControlEquationWell, 1)
 end
 
+function build_forces(model::SimulationModel{D, S}; control = nothing) where {D <: DiscretizedDomain{G} where G <: WellGrid, S <: MultiPhaseSystem}
+    return (control = control,)
+end
