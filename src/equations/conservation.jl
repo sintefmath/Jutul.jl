@@ -100,7 +100,7 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
 
     @sync begin 
         @async update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
-        @async update_linearized_system_subset_cell_flux!(nz, model, acc, cell_flux, cpos)
+        @async fill_equation_entries!(nz, nothing, model, cell_flux)
         if !isnothing(face_flux)
             @async update_linearized_system_subset_face_flux!(nz, r, model, acc, face_flux, cpos)
         end
@@ -128,10 +128,11 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
     end
 end
 
-function update_linearized_system_subset_cell_flux!(Jz, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos)
+
+function update_linearized_system_subset_face_flux!(jac, r, model, acc, face_flux, conn_pos)
     nc, ne, np = ad_dims(acc)
-    fentries = cell_flux.entries
-    fp = cell_flux.jacobian_positions
+    fentries = face_flux.entries
+    fp = face_flux.jacobian_positions
     Threads.@threads for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
@@ -144,9 +145,6 @@ function update_linearized_system_subset_cell_flux!(Jz, model, acc::CompactAutoD
             end
         end
     end
-end
-
-function update_linearized_system_subset_face_flux!(jac, r, model, acc, face_flux, conn_pos)
     error("Not implemented yet")
 end
 
