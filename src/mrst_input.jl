@@ -11,7 +11,7 @@ struct MRSTPlotData
 end
 
 
-function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false)
+function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false, fuse_flux = false)
     if relative_path
         fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     else
@@ -62,7 +62,12 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
         z = nothing
         g = nothing
     end
-    flow = TwoPointPotentialFlow(SPU(), TPFA(), DarcyMassMobilityFlow(), G, T, z, g)
+    if fuse_flux
+        ft = DarcyMassMobilityFlowFused()
+    else
+        ft = DarcyMassMobilityFlow()
+    end
+    flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
     disc = (mass_flow = flow,)
     D = DiscretizedDomain(G, disc)
 

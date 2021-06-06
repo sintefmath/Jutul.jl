@@ -176,28 +176,52 @@ end
 
 function update_cell_neighbor_potential_difference!(dpot, conn_data, p, context, ::KernelDisallowed)
     Threads.@threads for i in eachindex(conn_data)
-        c = conn_data[i]
+        @inbounds c = conn_data[i]
         @inbounds dpot[i] = half_face_two_point_kgradp(c.self, c.other, c.T, p)
     end
 end
 
 function update_fluxes_from_potential_and_mobility!(flux, conn_data, pot, mob)
     Threads.@threads for i in eachindex(conn_data)
-        c = conn_data[i]
+        @inbounds c = conn_data[i]
         for phno = 1:size(mob, 1)
             mob_i = view(mob, phno, :)
             @inbounds flux[phno, i] = spu_upwind(c.self, c.other, pot[phno, i], mob_i)
         end
     end
 end
+
+# 
+function update_half_face_flux!(storage, law, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlowFused}
+    state = storage.state
+    p = state.Pressure
+    mob = state.MassMobilities
+    rho = state.PhaseMassDensities
+
+    flux = get_entries(law.half_face_flux_cells)
+    conn_data = law.flow_discretization.conn_data
+    update_fluxes_fused_mobility!(flux, conn_data, p, mob, rho)
+end
+
+function update_fluxes_fused_mobility!(flux, conn_data, p, mob, rho)
+    Threads.@threads for i in eachindex(conn_data)
+        @inbounds c = conn_data[i]
+        for phno = 1:size(mob, 1)
+            mob_i = view(mob, phno, :)
+            rho_i = view(rho, phno, :)
+            @inbounds flux[phno, i] = half_face_two_point_flux_fused(c.self, c.other, c.T, p, mob_i, c.gdz, rho_i)
+        end
+    end
+end
+
 # Flux primitive functions follow
 @inline function spu_upwind(c_self::I, c_other::I, θ::R, λ::AbstractArray{R}) where {R<:Real, I<:Integer}
     if θ < 0
         # Flux is leaving the cell
-        λᶠ = λ[c_self]
+        @inbounds λᶠ = λ[c_self]
     else
         # Flux is entering the cell
-        λᶠ = value(λ[c_other])
+        @inbounds λᶠ = value(λ[c_other])
     end
     return λᶠ*θ
 end
@@ -209,4 +233,10 @@ end
 
 @inline function half_face_two_point_kgradp(c_self::I, c_other::I, T, p::AbstractArray{R}) where {R<:Real, I<:Integer}
     return -T*(p[c_self] - value(p[c_other]))
+end
+
+@inline function half_face_two_point_flux_fused(c_self::I, c_other::I, T, p::AbstractArray{R}, λ::AbstractArray{R}, gΔz, ρ::AbstractArray{R}) where {R<:Real, I<:Integer}
+    θ = half_face_two_point_kgradp_gravity(c_self, c_other, T, p, gΔz, ρ)
+    λᶠ = spu_upwind(c_self, c_other, θ, λ)
+    return λᶠ*θ
 end
