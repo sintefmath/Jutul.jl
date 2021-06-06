@@ -223,12 +223,30 @@ function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlo
 
     flux_cells = get_entries(law.half_face_flux_cells)
     conn_data = law.flow_discretization.conn_data
-    @assert false
     update_fluxes_total_mass_velocity_cells!(flux_cells, conn_data, masses, total, v)
+    @assert false
+
 end
 
+function update_fluxes_total_mass_velocity_cells!(flux, conn_data, masses, total, v)
+    # Threads.@threads 
+    for i in eachindex(conn_data)
+        @inbounds c = conn_data[i]
+        for phno = 1:size(masses, 1)
+            masses_i = view(masses, phno, :)
+            @inbounds flux[phno, i] = half_face_fluxes_total_mass_velocity!(c.self, c.other, masses_i, total, v[i])
+        end
+    end
+end
 
-
+function half_face_fluxes_total_mass_velocity!(self, other, masses, total, v)
+    if v < 0
+        x = masses[other]/total[other]
+    else
+        x = value(masses[other])/value(total[other])
+    end
+    return x*value(v)
+end
 
 # Flux primitive functions follow
 @inline function spu_upwind(c_self::I, c_other::I, θ::R, λ::AbstractArray{R}) where {R<:Real, I<:Integer}
