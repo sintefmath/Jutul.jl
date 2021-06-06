@@ -245,22 +245,20 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, equa
 end
 
 # Update of discretization terms
-function update_accumulation!(storage, law, model, dt)
+function update_accumulation!(law, storage, model, dt)
     conserved = law.accumulation_symbol
     acc = get_entries(law.accumulation)
     m = storage.state[conserved]
     m0 = storage.state0[conserved]
-    # mass = state.TotalMasses
-    # mass0 = state0.TotalMasses
     fapply!(acc, (m, m0) -> (m - m0)/dt, m, m0)
     return acc
 end
 
 
-function update_equation!(storage, law::ConservationLaw, model, dt)
-    update_accumulation!(storage, law, model, dt)
+function update_equation!(law::ConservationLaw, storage, model, dt)
     fd = law.flow_discretization
-    update_half_face_flux!(storage, law, model, fd)
+    update_accumulation!(law, storage, model, dt)
+    update_half_face_flux!(law, storage, model, fd)
 end
 
 function get_diagonal_part(eq::ConservationLaw)

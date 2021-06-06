@@ -154,7 +154,7 @@ end
     end
 end
 
-function update_half_face_flux!(storage, law, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
+function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
     pot = storage.state.CellNeighborPotentialDifference
     mob = storage.state.MassMobilities
 
@@ -191,8 +191,7 @@ function update_fluxes_from_potential_and_mobility!(flux, conn_data, pot, mob)
     end
 end
 
-# 
-function update_half_face_flux!(storage, law, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlowFused}
+function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlowFused}
     state = storage.state
     p = state.Pressure
     mob = state.MassMobilities

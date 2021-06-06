@@ -39,7 +39,7 @@ function select_equations!(eqs, system::ScalarTestSystem)
     eqs[:test_equation] = (ScalarTestEquation, 1)
 end
 
-function update_equation!(storage, eq::ScalarTestEquation, model, dt)
+function update_equation!(eq::ScalarTestEquation, storage, model, dt)
     X = storage.state.XVar
     X0 = storage.state0.XVar
     equation = get_entries(eq)
