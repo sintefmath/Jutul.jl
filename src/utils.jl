@@ -1,4 +1,6 @@
-export convert_to_immutable_storage
+export convert_to_immutable_storage, gravity_constant
+
+const gravity_constant = 9.80665
 
 function convert_to_immutable_storage(dct::AbstractDict)
     for (key, value) in dct

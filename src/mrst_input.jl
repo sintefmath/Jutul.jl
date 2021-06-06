@@ -57,10 +57,12 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     G = MinimalTPFAGrid(pv, N)
     if size(cell_centroids, 1) == 3
         z = cell_centroids[3, :]
+        g = gravity_constant
     else
         z = nothing
+        g = nothing
     end
-    flow = TwoPointPotentialFlow(SPU(), TPFA(), DarcyMassMobilityFlow(), G, T, z)
+    flow = TwoPointPotentialFlow(SPU(), TPFA(), DarcyMassMobilityFlow(), G, T, z, g)
     disc = (mass_flow = flow,)
     D = DiscretizedDomain(G, disc)
 

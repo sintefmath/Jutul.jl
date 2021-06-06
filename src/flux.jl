@@ -56,18 +56,19 @@ struct TwoPointPotentialFlow{U <:UpwindDiscretization, K <:PotentialFlowDiscreti
     conn_data
 end
 
-function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, gravity = 9.80665)
+function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, gravity = gravity_constant)
     N = grid.neighborship
     faces, face_pos = get_facepos(N)
     has_grav = !isnothing(gravity) || gravity == 0
 
     nhf = length(faces)
     nc = length(face_pos) - 1
-    if !isnothing(z)
-        @assert length(z) == nc
+    if isnothing(z)
         if has_grav
-            @warn "No depths (z) provided but gravity is enabled."
+            @warn "No depths (z) provided, but gravity is enabled."
         end
+    else
+        @assert length(z) == nc
     end
     if !isnothing(T)
         @assert length(T) == nhf ÷ 2

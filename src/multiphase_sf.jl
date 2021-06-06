@@ -23,13 +23,12 @@ function select_secondary_variables_system!(S, domain, system::MultiPhaseSystem,
     S[:TotalMasses] = TotalMasses()
 end
 
-function select_secondary_variables_system!(S, domain::DiscretizedDomain{G}, system::MultiPhaseSystem, formulation) where {G <: PorousMediumGrid}
-    select_secondary_variables_system!(S, nothing, system, TervFormulation)
+function select_secondary_variables_domain!(S, domain::DiscretizedDomain{G}, system::MultiPhaseSystem, formulation) where {G <: PorousMediumGrid}
+    select_secondary_variables_domain!(S, domain, nothing, TervFormulation)
     # For a multiphase flow specifically in a porous medium, we also need the notion of mobilities.
     S[:PhaseMobilities] = PhaseMobilities()
     S[:MassMobilities] = MassMobilities()
 end
-
 
 function minimum_output_variables(system::MultiPhaseSystem, primary_variables)
     [:TotalMasses]
