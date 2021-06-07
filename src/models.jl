@@ -451,7 +451,21 @@ end
 
 """
 function update_before_step!(storage, model::TervModel, dt, forces)
+    update_before_step_domain!(state, model, model.domain, dt, forces)
+    update_before_step_system!(state, model, model.system, dt, forces)
+    update_before_step_formulation!(state, model, model.formulation, dt, forces)
+end
 
+function update_before_step_domain!(state, model::TervModel, domain, dt, forces)
+    # Do nothing
+end
+
+function update_before_step_system!(state, model::TervModel, system, dt, forces)
+    # Do nothing
+end
+
+function update_before_step_formulation!(state, model::TervModel, formulation, dt, forces)
+    # Do nothing
 end
 
 function update_after_step!(storage, model::TervModel, dt, forces)
