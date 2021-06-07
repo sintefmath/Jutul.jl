@@ -200,8 +200,8 @@ function select_equations!(eqs, domain::DiscretizedDomain{G}, system, arg...) wh
     eqs[:control_equation] = (ControlEquationWell, 1)
 end
 
-function build_forces(model::SimulationModel{D, S}; control = nothing) where {D <: DiscretizedDomain{G} where G <: WellGrid, S <: MultiPhaseSystem}
-    return (control = control,)
+function build_forces(model::SimulationModel{D, S}; control = nothing, limits = nothing) where {D <: DiscretizedDomain{G} where G <: WellGrid, S <: MultiPhaseSystem}
+    return (control = control, limits = limits,)
 end
 
 function initialize_extra_state_fields_domain!(state, model, domain::DiscretizedDomain{G}) where {G<:WellGrid}
@@ -212,4 +212,5 @@ end
 function update_before_step_domain!(storage, model::SimulationModel, domain::DiscretizedDomain{G}, dt, forces) where {G<:WellGrid}
     # Set control to whatever is on the forces
     storage.state.WellConfiguration.control = forces.control
+    storage.state.WellConfiguration.limits = forces.limits
 end
