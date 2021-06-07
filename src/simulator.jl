@@ -139,6 +139,7 @@ end
 
 function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
     done = false
+    update_before_step!(sim, dt, forces)
     for it = 1:maxIterations
         e, tol = perform_step!(sim, dt, forces, cfg, iteration = it)
         done = e < tol

@@ -72,15 +72,15 @@ function initialize_extra_state_fields!(state, model::TervModel)
     initialize_extra_state_fields_formulation!(state, model, model.formulation)
 end
 
-function initialize_extra_state_fields_domain!(state, model::TervModel, domain)
+function initialize_extra_state_fields_domain!(state, model, domain)
     # Do nothing
 end
 
-function initialize_extra_state_fields_system!(state, model::TervModel, system)
+function initialize_extra_state_fields_system!(state, model, system)
     # Do nothing
 end
 
-function initialize_extra_state_fields_formulation!(state, model::TervModel, formulation)
+function initialize_extra_state_fields_formulation!(state, model, formulation)
     # Do nothing
 end
 
@@ -450,25 +450,26 @@ end
 """
 
 """
-function update_before_step!(storage, model::TervModel, dt, forces)
+function update_before_step!(storage, model, dt, forces)
+    @assert false
     update_before_step_domain!(state, model, model.domain, dt, forces)
     update_before_step_system!(state, model, model.system, dt, forces)
     update_before_step_formulation!(state, model, model.formulation, dt, forces)
 end
 
-function update_before_step_domain!(state, model::TervModel, domain, dt, forces)
+function update_before_step_domain!(state, model, domain, dt, forces)
     # Do nothing
 end
 
-function update_before_step_system!(state, model::TervModel, system, dt, forces)
+function update_before_step_system!(state, model, system, dt, forces)
     # Do nothing
 end
 
-function update_before_step_formulation!(state, model::TervModel, formulation, dt, forces)
+function update_before_step_formulation!(state, model, formulation, dt, forces)
     # Do nothing
 end
 
-function update_after_step!(storage, model::TervModel, dt, forces)
+function update_after_step!(storage, model, dt, forces)
     state = storage.state
     state0 = storage.state0
     for key in keys(state0)
