@@ -63,6 +63,33 @@ struct MultiSegmentWell <: WellGrid
     end
 end
 
+"""
+Hagedorn and Brown well bore friction model for a segment.
+"""
+struct SegmentWellBoreFrictionHB
+    L
+    roughness
+    D_outer
+    D_inner
+    assume_turbulent
+    function SegmentWellBoreFrictionHB(L, roughness, D_outer; D_inner = 0, assume_turbulent = true)
+        @assert assume_turbulent
+        new(L, roughness, D_outer, D_inner, assume_turbulent)
+    end
+end
+
+function segment_pressure_drop(sf::SegmentWellBoreFrictionHB, v, ρ, μ)
+    D⁰, Dⁱ = sf.D_outer, sf.D_inner
+    R, L = sf.roughness, sf.L
+    ΔD = D⁰-Dⁱ
+    Re = abs(v)ρ*ΔD/μ;
+    s = sign(value(v))
+
+    f = (-3.6*log(6.9./Re+(R./(3.7*D⁰))^(10/9))/log(10))^(-2);
+    Δp = -(2*s*L/ΔD)*(f*ρ*v^2);
+    return Δp
+end
+
 struct PotentialDropBalanceWell <: TervEquation
     # Equation: pot_diff(p) - pot_diff_model(v, p)
     equation # Differentiated with respect to Velocity
@@ -89,8 +116,73 @@ end
 
 function associated_unit(::PotentialDropBalanceWell) Faces() end
 
+function mix_by_mass(masses, total, values)
+    v = 0
+    for i in eachindex(masses)
+        v += masses[i]*values[i]
+    end
+    return v/total
+end
+
 function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
-    # 
+    # Loop over segments, calculate pressure drop, ...
+    G = model.domain.grid
+    # nf = number_of_faces(G)
+    state = storage.state
+    @show state
+    p = state.Pressure
+    densities = state.PhaseMassDensities
+    total_masses = state.TotalMasses
+    total_mass = state.TotalMass
+
+    λ = state.PhaseMobilities
+    mass_flow = model.domain.discretizations.mass_flow
+    conn_data = mass_flow.conn_data
+    for index = 1:length(conn_data)
+        cd = conn_data[index]
+        gΔz = cd.gdz
+        self = cd.self
+        other = cd.other
+
+        
+
+        p_self = p[self]
+        p_other = value(p[other])
+
+
+
+        ρ_mix_self = mix_by_mass(view(total_masses, :, self), total_mass[self], view(densities, :, self))
+        
+        ρ_mix_other = mix_by_mass(as_value(view(total_masses, :, other)), value(total_mass[other]), as_value(view(densities, :, other)))
+
+        @show total_mass[self]
+        @show ρ_mix_self
+        @show ρ_mix_other
+
+        Δθ = two_point_potential_drop(p_self, p_other, gΔz, ρ_mix_self, ρ_mix_other)
+
+        if cd.face_sign == 1
+            # We do extra stuff
+        end
+        
+        Δp = segment_pressure_drop(seg_model, v, ρ_mix, μ_mix)
+        # L = G.neighborship[1, segNo]
+        # R = G.neighborship[2, segNo]
+        # p_L = p(L)
+        # p_R = p(R)
+
+
+        # Seen from left
+        # dpL = value(p_R) - p_L
+        # Seen from right
+        #dpR = p_R - value(p_L)
+        #if value(dpL) > 0
+            
+        #end
+
+        
+    end
+    
     error("Not implemented yet")
 end
 
@@ -114,6 +206,7 @@ end
 
 function update_equation!(eq::ControlEquationWell, storage, model, dt)
     error("Not implemented yet")
+    
 end
 
 function get_flow_volume(grid::WellGrid)
