@@ -155,6 +155,18 @@ function declare_units(W::MultiSegmentWell)
     return [c, f, p, w]
 end
 
+# abstract type WellConfiguration <: ScalarVariable end
+mutable struct WellConfiguration
+    control
+    target
+    limits
+    function WellConfiguration(control = nothing, target = nothing, limits = nothing)
+        new(control, target, limits)
+    end
+end
+
+
+
 # Total velocity in each well segment
 struct TotalMassFlux <: ScalarVariable end
 function associated_unit(::TotalMassFlux) Faces() end
@@ -190,4 +202,14 @@ end
 
 function build_forces(model::SimulationModel{D, S}; control = nothing) where {D <: DiscretizedDomain{G} where G <: WellGrid, S <: MultiPhaseSystem}
     return (control = control,)
+end
+
+function initialize_extra_state_fields_domain!(state, model, domain::DiscretizedDomain{G}) where {G<:WellGrid}
+    # Insert structure that holds well control (limits etc) that is then updated before each step
+    state[:WellConfiguration] = WellConfiguration()
+end
+
+function update_before_step_domain!(storage, model::SimulationModel, domain::DiscretizedDomain{G}, dt, forces) where {G<:WellGrid}
+    # Set control to whatever is on the forces
+    storage.state.WellConfiguration.control = forces.control
 end
