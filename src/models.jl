@@ -451,7 +451,6 @@ end
 
 """
 function update_before_step!(storage, model, dt, forces)
-    @assert false
     update_before_step_domain!(state, model, model.domain, dt, forces)
     update_before_step_system!(state, model, model.system, dt, forces)
     update_before_step_formulation!(state, model, model.formulation, dt, forces)
