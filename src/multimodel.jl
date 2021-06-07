@@ -568,8 +568,12 @@ function update_primary_variables!(storage, model::MultiModel)
     end
 end
 
-function update_after_step!(storage, model::MultiModel)
-    submodels_storage_apply!(storage, model, update_after_step!)
+function update_after_step!(storage, model::MultiModel, arg...)
+    submodels_storage_apply!(storage, model, update_after_step!, arg...)
+end
+
+function update_before_step!(storage, model::MultiModel, arg...)
+    submodels_storage_apply!(storage, model, update_before_step!, arg...)
 end
 
 function apply_forces!(storage, model::MultiModel, dt, forces::Dict)

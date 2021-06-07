@@ -433,7 +433,14 @@ function update_primary_variables!(primary_storage, dx, model::TervModel)
     end
 end
 
-function update_after_step!(storage, model::TervModel)
+"""
+
+"""
+function update_before_step!(storage, model::TervModel, dt, forces)
+
+end
+
+function update_after_step!(storage, model::TervModel, dt, forces)
     state = storage.state
     state0 = storage.state0
     for key in keys(state0)
@@ -441,7 +448,7 @@ function update_after_step!(storage, model::TervModel)
     end
 end
 
-function get_output_state(storage, model::TervModel)
+function get_output_state(storage, model)
     # As this point (after a converged step) state0 should be state without AD.
     return deepcopy(storage.state0)
 end

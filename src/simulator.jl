@@ -42,11 +42,11 @@ function Base.show(io::IO, t::MIME"text/plain", sim::Simulator)
     end
 end
 
-function perform_step!(simulator::TervSimulator, config; vararg...)
-    perform_step!(simulator.storage, simulator.model, config; vararg...)
+function perform_step!(simulator::TervSimulator, dt, forces, config; vararg...)
+    perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
 end
 
-function perform_step!(storage, model, config; dt = nothing, forces = nothing, iteration = NaN)
+function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     timing_out = config[:debug_level] > 1
     # Update the properties and equations
     t_asm = @elapsed begin 
@@ -112,7 +112,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         t_local = 0
         cut_count = 0
         while !done
-            ok = solve_ministep(sim, dt, maxIterations, linsolve, forces, config)
+            ok = solve_ministep(sim, dt, forces, maxIterations, linsolve, config)
             if ok
                 t_local += dt
                 if t_local >= dT
@@ -137,10 +137,10 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     @info "Simulation complete."
 end
 
-function solve_ministep(sim, dt, maxIterations, linsolve, forces, cfg)
+function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
     done = false
     for it = 1:maxIterations
-        e, tol = perform_step!(sim, cfg, dt = dt, iteration = it, forces = forces)
+        e, tol = perform_step!(sim, dt, forces, cfg, iteration = it)
         done = e < tol
         if done
             break
@@ -151,7 +151,7 @@ function solve_ministep(sim, dt, maxIterations, linsolve, forces, cfg)
     end
 
     if done
-        t_finalize = @elapsed update_after_step!(sim)
+        t_finalize = @elapsed update_after_step!(sim, dt, forces)
         if cfg[:debug_level] > 1
             @debug "Finalized in $t_finalize seconds."
         end
@@ -164,8 +164,12 @@ function solve_ministep(sim, dt, maxIterations, linsolve, forces, cfg)
     return done
 end
 
-function update_after_step!(sim)
-    update_after_step!(sim.storage, sim.model)
+function update_before_step!(sim, dt, forces)
+    update_before_step!(sim.storage, sim.model, dt, forces)
+end
+
+function update_after_step!(sim, dt, forces)
+    update_after_step!(sim.storage, sim.model, dt, forces)
 end
 
 function store_output!(states, sim)
