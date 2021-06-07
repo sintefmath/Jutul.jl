@@ -86,7 +86,14 @@ function PotentialDropBalanceWell(model::TervModel, number_of_equations::Integer
 
     PotentialDropBalanceWell(eq, eq_cells)
 end
+
 function associated_unit(::PotentialDropBalanceWell) Faces() end
+
+function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
+    # 
+    error("Not implemented yet")
+end
+
 
 struct ControlEquationWell <: TervEquation
     # Equation:
@@ -105,6 +112,9 @@ struct ControlEquationWell <: TervEquation
     end
 end
 
+function update_equation!(eq::ControlEquationWell, storage, model, dt)
+    error("Not implemented yet")
+end
 
 function get_flow_volume(grid::WellGrid)
     grid.volumes

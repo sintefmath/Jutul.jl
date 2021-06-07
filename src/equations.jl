@@ -212,8 +212,8 @@ end
 """
 Update equation based on currently stored properties
 """
-function update_equation!(eqs::TervEquation, storage, model, dt)
-
+function update_equation!(eq::TervEquation, storage, model, dt)
+    error("No default implementation exists for $(typeof(eq)).")
 end
 
 """
