@@ -67,6 +67,20 @@ end
 Add variables that need to be in state, but are never AD variables (e.g. phase status flag)
 """
 function initialize_extra_state_fields!(state, model::TervModel)
+    initialize_extra_state_fields_domain!(state, model, model.domain)
+    initialize_extra_state_fields_system!(state, model, model.system)
+    initialize_extra_state_fields_formulation!(state, model, model.formulation)
+end
+
+function initialize_extra_state_fields_domain!(state, model::TervModel, domain)
+    # Do nothing
+end
+
+function initialize_extra_state_fields_system!(state, model::TervModel, system)
+    # Do nothing
+end
+
+function initialize_extra_state_fields_formulation!(state, model::TervModel, formulation)
     # Do nothing
 end
 
