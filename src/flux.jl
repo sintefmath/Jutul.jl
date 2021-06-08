@@ -165,7 +165,7 @@ end
 end
 
 # Half face flux - default reservoir version
-function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
+function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
     pot = storage.state.CellNeighborPotentialDifference
     mob = storage.state.MassMobilities
 
@@ -202,7 +202,7 @@ function update_fluxes_from_potential_and_mobility!(flux, conn_data, pot, mob)
 end
 
 # Fused version for DarcyMassMobilityFlowFused
-function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlowFused}
+function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlowFused}
     state = storage.state
     p = state.Pressure
     mob = state.MassMobilities
@@ -224,7 +224,7 @@ function update_fluxes_fused_mobility!(flux, conn_data, p, mob, rho)
     end
 end
 # Total velocity version for TotalMassVelocityMassFractionsFlow
-function update_half_face_flux!(law, storage, model, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TotalMassVelocityMassFractionsFlow}
+function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TotalMassVelocityMassFractionsFlow}
     state = storage.state
     masses = state.TotalMasses
     total = state.TotalMass

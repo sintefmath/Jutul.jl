@@ -244,7 +244,7 @@ function update_equation!(eq::ControlEquationWell, storage, model, dt)
     state = storage.state
     ctrl = state.WellConfiguration.control
     T = ctrl.target
-    surf_rate = state.:TotalWellMassRate[]
+    surf_rate = state.TotalWellMassRate[]
     bhp = state.Pressure[1]
     eq.equation.entries .= well_control_equation(T, surf_rate, value(bhp))
     eq.equation_top_cell.entries .= well_control_equation(T, value(surf_rate), bhp)

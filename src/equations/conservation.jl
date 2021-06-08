@@ -266,9 +266,13 @@ end
 
 
 function update_equation!(law::ConservationLaw, storage, model, dt)
-    fd = law.flow_discretization
     update_accumulation!(law, storage, model, dt)
-    update_half_face_flux!(law, storage, model, fd)
+    update_half_face_flux!(law, storage, model, dt)
+end
+
+function update_half_face_flux!(law::ConservationLaw, storage, model, dt)
+    fd = law.flow_discretization
+    update_half_face_flux!(law, storage, model, dt, fd)
 end
 
 function get_diagonal_part(eq::ConservationLaw)
