@@ -26,10 +26,12 @@ struct MultiSegmentWell <: WellGrid
     neighborship     # Well cell connectivity
     top              # "Top" node where scalar well quantities live
     reservoir_symbol # Symbol of the reservoir the well is coupled to
+    segment_models   # Segment pressure drop model
     function MultiSegmentWell(volumes::AbstractVector, reservoir_cells;
                                                         WI = nothing,
                                                         N = nothing,
                                                         perforation_cells = nothing,
+                                                        segment_models = nothing,
                                                         reference_depth = 0,
                                                         accumulator_volume = 1e-3*mean(volumes),
                                                         reservoir_symbol = :Reservoir)
@@ -42,6 +44,9 @@ struct MultiSegmentWell <: WellGrid
         elseif maximum(N) == nv
             N = vcat([1, 2], N+1)
         end
+        nseg = size(N, 2)
+        @assert size(N, 1) == 2
+
         volumes = vcat([accumulator_volume], volumes)
         @show volumes
         if isnothing(WI)
@@ -52,14 +57,20 @@ struct MultiSegmentWell <: WellGrid
             @assert length(reservoir_cells) == nv "If no perforation cells are given, we must 1->1 correspondence between well volumes and reservoir cells."
             perforation_cells = collect(2:nc)
         end
-        @assert size(N, 1) == 2
+        if isnothing(segment_models)
+            Δp = SegmentWellBoreFrictionHB(100.0, 1e-4, 0.1)
+            segment_models = repeat([Δp], nseg)
+        else
+            segment_models::AbstractVector
+            @assert length(segment_models) == nseg
+        end
         # @assert length(dz) == nseg "dz must have one entry per segment, plus one for the top segment"
         @assert length(WI) == nr  "Must have one well index per perforated cell"
         @assert length(perforation_cells) == nr
 
         perf = (self = perforation_cells, reservoir = reservoir_cells, WI = WI)
         accumulator = (reference_depth = reference_depth, )
-        new(volumes, perf, N, accumulator, reservoir_symbol)
+        new(volumes, perf, N, accumulator, reservoir_symbol, segment_models)
     end
 end
 
@@ -138,7 +149,7 @@ end
 
 function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
     # Loop over segments, calculate pressure drop, ...
-    G = model.domain.grid
+    W = model.domain.grid
     # nf = number_of_faces(G)
     state = storage.state
     # @show state
@@ -163,6 +174,8 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
         gΔz = cd.gdz
         self = cd.self
         other = cd.other
+        face = cd.face
+        seg_model = W.segment_models[face]
 
         if single_phase
             s_self, s_other = s, s
