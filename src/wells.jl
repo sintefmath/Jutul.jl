@@ -241,7 +241,13 @@ end
 function associated_unit(::ControlEquationWell) Well() end
 
 function update_equation!(eq::ControlEquationWell, storage, model, dt)
-    error("Not implemented yet")
+    state = storage.state
+    ctrl = state.WellConfiguration.control
+    T = ctrl.target
+    surf_rate = state.:TotalWellMassRate[]
+    bhp = state.Pressure[1]
+    eq.equation.entries .= well_control_equation(T, surf_rate, value(bhp))
+    eq.equation_top_cell.entries .= well_control_equation(T, value(surf_rate), bhp)
 end
 
 function align_to_jacobian!(eq::ControlEquationWell, jac, model, u::Cells; kwarg...)
@@ -284,10 +290,20 @@ struct BottomHolePressureTarget <: WellTarget
     value::AbstractFloat
 end
 
+function well_control_equation(t::BottomHolePressureTarget, qt, bhp)
+    return bhp - t.value
+end
+
 struct SinglePhaseRateTarget <: WellTarget
     value::AbstractFloat
     phase::AbstractPhase
 end
+
+function well_control_equation(t::SinglePhaseRateTarget, qt, bhp)
+    # Assuming injector
+    return qt - t.value
+end
+
 
 ## Well controls
 abstract type WellForce <: TervForce end
