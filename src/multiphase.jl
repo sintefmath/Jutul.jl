@@ -184,6 +184,9 @@ function get_flow_volume(grid::MinimalTPFAGrid)
     grid.pore_volumes
 end
 
+function get_flow_volume(grid)
+    1
+end
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
     acc = get_entries(eq.accumulation)

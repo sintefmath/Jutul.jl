@@ -124,18 +124,38 @@ function mix_by_mass(masses, total, values)
     return v/total
 end
 
+function mix_by_saturations(s, values)
+    v = 0
+    for i in eachindex(s)
+        v += save[i]*values[i]
+    end
+    return v
+end
+
+function mix_by_saturations(s::Real, values)
+    return s*values[]
+end
+
 function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
     # Loop over segments, calculate pressure drop, ...
     G = model.domain.grid
     # nf = number_of_faces(G)
     state = storage.state
-    @show state
+    # @show state
+    nph = number_of_phases(model.system)
+    single_phase = nph == 1
+    if single_phase
+        s = 1.0
+    else
+        s = state.Saturations
+    end
     p = state.Pressure
+    μ = storage.parameters.Viscosity
     densities = state.PhaseMassDensities
-    total_masses = state.TotalMasses
-    total_mass = state.TotalMass
+    # total_masses = state.TotalMasses
+    # total_mass = state.TotalMass
 
-    λ = state.PhaseMobilities
+    # λ = state.PhaseMobilities
     mass_flow = model.domain.discretizations.mass_flow
     conn_data = mass_flow.conn_data
     for index = 1:length(conn_data)
@@ -144,22 +164,34 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
         self = cd.self
         other = cd.other
 
-        
+        if single_phase
+            s_self, s_other = s, s
+        else
+            s_self = view(s, :, self)
+            s_other = as_value(view(s, :, other))
+        end
 
         p_self = p[self]
         p_other = value(p[other])
 
+        ρ_mix_self = mix_by_saturations(s_self, view(densities, :, self))
+        ρ_mix_other = mix_by_saturations(s_other, as_value(view(densities, :, other)))
 
+        # ρ_mix_self = mix_by_mass(view(total_masses, :, self), total_mass[self], view(densities, :, self))
+        # ρ_mix_other = mix_by_mass(as_value(view(total_masses, :, other)), value(total_mass[other]), as_value(view(densities, :, other)))
 
-        ρ_mix_self = mix_by_mass(view(total_masses, :, self), total_mass[self], view(densities, :, self))
-        
-        ρ_mix_other = mix_by_mass(as_value(view(total_masses, :, other)), value(total_mass[other]), as_value(view(densities, :, other)))
-
-        @show total_mass[self]
+        # @show total_mass[self]
         @show ρ_mix_self
         @show ρ_mix_other
 
         Δθ = two_point_potential_drop(p_self, p_other, gΔz, ρ_mix_self, ρ_mix_other)
+        if Δθ > 0
+            # TODO: check sign
+            μ_mix = mix_by_saturations(s_self, μ)
+        else
+            μ_mix = mix_by_saturations(s_other, μ)
+        end
+
 
         if cd.face_sign == 1
             # We do extra stuff

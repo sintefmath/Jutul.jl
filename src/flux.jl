@@ -293,9 +293,18 @@ end
 end
 
 @inline function half_face_two_point_kgradp_gravity(c_self::I, c_other::I, T, p::AbstractArray{R}, gΔz, ρ::AbstractArray{R}) where {R<:Real, I<:Integer}
-    ρ_avg = 0.5*(ρ[c_self] + value(ρ[c_other]))
-    return -T*(p[c_self] - value(p[c_other]) + gΔz*ρ_avg)
+    return -T*two_point_potential_drop_half_face(c_self, c_other, p, gΔz, ρ)
 end
+
+@inline function two_point_potential_drop_half_face(c_self, c_other, p::AbstractVector, gΔz, ρ)
+    return two_point_potential_drop(p[c_self], value(p[c_other]), gΔz, ρ[c_self], value(ρ[c_other]))
+end
+
+@inline function two_point_potential_drop(p_self::Real, p_other::Real, gΔz::Real, ρ_self::Real, ρ_other::Real)
+    ρ_avg = 0.5*(ρ_self + ρ_other)
+    return p_self - p_other + gΔz*ρ_avg
+end
+
 
 @inline function half_face_two_point_kgradp(c_self::I, c_other::I, T, p::AbstractArray{R}) where {R<:Real, I<:Integer}
     return -T*(p[c_self] - value(p[c_other]))
