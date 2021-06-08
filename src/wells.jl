@@ -238,15 +238,34 @@ struct ControlEquationWell <: TervEquation
     end
 end
 
+function associated_unit(::ControlEquationWell) Well() end
+
 function update_equation!(eq::ControlEquationWell, storage, model, dt)
     error("Not implemented yet")
+end
+
+function align_to_jacobian!(eq::ControlEquationWell, jac, model, u::Cells; kwarg...)
+    # Need to align to cells, faces is automatically done since it is on the diagonal bands
+    cache = eq.equation_top_cell
+    layout = matrix_layout(model.context)
+    control_equation_top_cell_alignment!(cache, jac, layout; kwarg...)
+end
+
+function control_equation_top_cell_alignment!(cache, jac, layout; equation_offset = 0, variable_offset = 0)
+    nu, ne, np = ad_dims(cache)
+    cellix = 1
+    for e in 1:ne
+        for d = 1:np
+            pos = find_jac_position(jac, 1 + equation_offset, cellix + variable_offset, e, d, nu, nu, ne, np, layout)
+            set_jacobian_pos!(cache, 1, e, d, pos)
+        end
+    end
 end
 
 function get_flow_volume(grid::WellGrid)
     grid.volumes
 end
 
-function associated_unit(::ControlEquationWell) Well() end
 
 
 # Well segments
