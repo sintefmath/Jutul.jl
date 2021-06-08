@@ -96,7 +96,7 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
     Re = abs(v)ρ*ΔD/μ;
     s = sign(v)
     # Friction model - empirical relationship
-    f = (-3.6*log(6.9./Re+(R./(3.7*D⁰))^(10/9))/log(10))^(-2);
+    f = (-3.6*log(6.9/Re+(R/(3.7*D⁰))^(10/9))/log(10))^(-2);
     Δp = -(2*s*L/ΔD)*(f*ρ*v^2);
     return Δp
 end
