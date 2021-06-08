@@ -127,6 +127,30 @@ end
 
 function associated_unit(::PotentialDropBalanceWell) Faces() end
 
+function align_to_jacobian!(eq::PotentialDropBalanceWell, jac, model, u::Cells; kwarg...)
+    # Need to align to cells, faces is automatically done since it is on the diagonal bands
+    cache = eq.equation_cells
+    layout = matrix_layout(model.context)
+    N = model.domain.grid.neighborship
+    potential_drop_cells_alignment!(cache, jac, N, layout; kwarg...)
+end
+
+function potential_drop_cells_alignment!(cache, jac, N, layout; equation_offset = 0, variable_offset = 0)
+    nu, ne, np = ad_dims(cache)
+    nf = size(N, 2)
+    for face in 1:nf
+        for lr = 1:size(N, 1)
+            cellix = N[lr, face]
+            for e in 1:ne
+                for d = 1:np
+                    pos = find_jac_position(jac, face + equation_offset, cellix + variable_offset, e, d, nu, nu, ne, np, layout)
+                    set_jacobian_pos!(cache, 2*(face-1) + lr, e, d, pos)
+                end
+            end
+        end
+    end
+end
+
 function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
     # Loop over segments, calculate pressure drop, ...
     W = model.domain.grid
@@ -148,11 +172,6 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
     face_entries = eq.equation.entries
     cell_entries = eq.equation_cells.entries
 
-
-    # total_masses = state.TotalMasses
-    # total_mass = state.TotalMass
-
-    # λ = state.PhaseMobilities
     mass_flow = model.domain.discretizations.mass_flow
     conn_data = mass_flow.conn_data
     for index = 1:length(conn_data)
@@ -221,7 +240,6 @@ end
 
 function update_equation!(eq::ControlEquationWell, storage, model, dt)
     error("Not implemented yet")
-    
 end
 
 function get_flow_volume(grid::WellGrid)
