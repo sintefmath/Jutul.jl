@@ -71,7 +71,7 @@ iforces = build_forces(Wi, control = ictrl)
 istate = setup_state(Wi, w0)
 param_inj = param_res
 ## Simulate injector on its own
-sim_i = Simulator(Wp, state0 = istate, parameters = param_inj)
+sim_i = Simulator(Wi, state0 = istate, parameters = param_inj)
 states = simulate(sim_i, [1.0], forces = iforces)
 
 # BHP producer
