@@ -40,6 +40,7 @@ include("equations/conservation.jl")
 include("multiphase.jl")
 include("multiphase_sf.jl")
 include("wells.jl")
+include("facilities.jl")
 include("porousmedia.jl")
 
 include("simulator.jl")
