@@ -1,5 +1,6 @@
 module Terv
 
+using Base: Symbol
 using SparseArrays
 using LinearAlgebra
 using BenchmarkTools

@@ -1,6 +1,6 @@
 export TotalMassFlux
 export WellGrid, MultiSegmentWell
-export TotalMassFlux
+export TotalMassFlux, PotentialDropBalanceWell
 
 export InjectorControl, ProducerControl, SinglePhaseRateTarget, BottomHolePressureTarget
 
@@ -280,6 +280,9 @@ function select_primary_variables_domain!(S, domain::DiscretizedDomain{G}, syste
     # S[:BottomHolePressure] = BottomHolePressure()
 end
 
+function select_equations_domain!(eqs, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
+    eqs[:potential_balance] = (PotentialDropBalanceWell, 1)
+end
 
 # Some utilities
 function mix_by_mass(masses, total, values)

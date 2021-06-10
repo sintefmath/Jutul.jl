@@ -3,22 +3,22 @@ export TotalSurfaceMassRate
 
 abstract type SurfaceFacilityDomain <: TervDomain end
 abstract type WellControllerDomain <: SurfaceFacilityDomain end
-struct SingleWellController <: WellControllerDomain end
+struct WellGroup <: WellControllerDomain
+    well_symbols::Vector{Symbol}
+end
 
 """
 Well variables - units that we have exactly one of per well (and usually relates to the surface connection)
 """
 struct Well <: TervUnit end
 
-function count_units(::SingleWellController, ::Well)
-    return 1
+function count_units(wg::WellGroup, ::Well)
+    return length(wg.well_symbols)
 end
 
-function count_units(::SingleWellController, ::Any)
-    error("Unit not found in well domain.")
+function count_units(::WellGroup, ::Any)
+    error("Unit not found in well group.")
 end
-
-
 
 
 # Bottom hole pressure for the well
@@ -81,7 +81,7 @@ struct ControlEquationWell <: TervEquation
     equation::TervAutoDiffCache
     equation_top_cell::TervAutoDiffCache
     function ControlEquationWell(model, number_of_equations; kwarg...)
-        @assert number_of_equations == 1
+        # @assert number_of_equations == 1
         alloc = (unit) -> CompactAutoDiffCache(number_of_equations, 1, model, unit = unit; kwarg...)
         # One potential drop per velocity
         target_well = alloc(Well())
@@ -121,25 +121,25 @@ function control_equation_top_cell_alignment!(cache, jac, layout; equation_offse
 end
 
 # Selection of primary variables
-function select_primary_variables_domain!(S, domain::SingleWellController, system, formulation) 
+function select_primary_variables_domain!(S, domain::WellGroup, system, formulation) 
     S[:TotalWellMassRate] = TotalSurfaceMassRate()
 end
 
-function select_equations_domain!(eqs, domain::SingleWellController, system, arg...)
+function select_equations_domain!(eqs, domain::WellGroup, system, arg...)
     # eqs[:potential_balance] = (PotentialDropBalanceWell, 1)
     eqs[:control_equation] = (ControlEquationWell, 1)
 end
 
-function build_forces(model::SimulationModel{D}; control = nothing, limits = nothing) where {D <: SingleWellController}
+function build_forces(model::SimulationModel{D}; control = nothing, limits = nothing) where {D <: WellGroup}
     return (control = control, limits = limits,)
 end
 
-function initialize_extra_state_fields_domain!(state, model, domain::SingleWellController)
+function initialize_extra_state_fields_domain!(state, model, domain::WellGroup)
     # Insert structure that holds well control (limits etc) that is then updated before each step
     state[:WellConfiguration] = WellConfiguration()
 end
 
-function update_before_step_domain!(storage, model::SimulationModel, domain::SingleWellController, dt, forces)
+function update_before_step_domain!(storage, model::SimulationModel, domain::WellGroup, dt, forces)
     # Set control to whatever is on the forces
     storage.state.WellConfiguration.control = forces.control
     storage.state.WellConfiguration.limits = forces.limits

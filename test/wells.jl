@@ -65,25 +65,27 @@ w0 = Dict(:Pressure => p0, :TotalMassFlux => 0.0, :TotalWellMassRate => 0.0)
 Wi = build_well(mrst_data, 1)
 ifrac = 0.01
 irate = ifrac*sum(sum(G.grid.pore_volumes))/sum(timesteps)
-it = SinglePhaseRateTarget(irate, phase)
-ictrl = InjectorControl(it, 1.0)
-iforces = build_forces(Wi, control = ictrl)
 istate = setup_state(Wi, w0)
 param_inj = param_res
 ## Simulate injector on its own
 sim_i = Simulator(Wi, state0 = istate, parameters = param_inj)
-states = simulate(sim_i, [1.0], forces = iforces)
+states = simulate(sim_i, [1.0])
+## Set up injector control
+it = SinglePhaseRateTarget(irate, phase)
+ictrl = InjectorControl(it, 1.0)
+iforces = build_forces(Wi, control = ictrl)
 
-# BHP producer
+## BHP producer
 Wp = build_well(mrst_data, 2)
-pt = BottomHolePressureTarget(pRef/2)
-pctrl = ProducerControl(pt)
-pforces = build_forces(Wp, control = pctrl)
 pstate = setup_state(Wp, w0)
 param_prod = param_res
 ## Simulate producer only
 sim_p = Simulator(Wp, state0 = pstate, parameters = param_prod)
-states = simulate(sim_p, [1.0], forces = pforces)
+states = simulate(sim_p, [1.0])
+## Set up producer control
+pt = BottomHolePressureTarget(pRef/2)
+pctrl = ProducerControl(pt)
+pforces = build_forces(Wp, control = pctrl)
 
 ##
 mmodel = MultiModel((Reservoir = model, Injector = Wi, Producer = Wp))
