@@ -66,15 +66,22 @@ end
 
 function select_equations(domain, system, formulation)
     eqs = OrderedDict()
-    select_equations!(eqs, domain, system, formulation)
+    select_equations_domain!(eqs, domain, system, formulation)
+    select_equations_system!(eqs, domain, system, formulation)
+    select_equations_formulation!(eqs, domain, system, formulation)
     return eqs
 end
 
-function select_equations!(eqs, domain, system, formulation)
-    select_equations!(eqs, system)
+
+function select_equations_domain!(eqs, arg...)
+    # Default: No equations
 end
 
-function select_equations!(eqs, system)
+function select_equations_system!(eqs, arg...)
+    # Default: No equations
+end
+
+function select_equations_formulation!(eqs, arg...)
     # Default: No equations
 end
 

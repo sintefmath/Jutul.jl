@@ -133,7 +133,7 @@ function declare_pattern(model, e::PotentialDropBalanceWell, ::Cells)
     D = model.domain
     N = D.grid.neighborship
     nf = number_of_faces(D)
-    nc = number_of_cells(D)
+    # nc = number_of_cells(D)
     @assert size(N, 2) == nf
     @assert size(N, 1) == 2
     I = []
@@ -141,13 +141,9 @@ function declare_pattern(model, e::PotentialDropBalanceWell, ::Cells)
     for f in 1:nf
         for i in 1:size(N, 2)
             push!(I, f)
-            push!(I, N[f, i])
+            push!(J, N[f, i])
         end
     end
-    return (I, J)
-end
-
-function declare_pattern(model, e::PotentialDropBalanceWell, ::Faces)
     return (I, J)
 end
 
@@ -389,8 +385,7 @@ function select_primary_variables_domain!(S, domain::DiscretizedDomain{G}, syste
     # S[:BottomHolePressure] = BottomHolePressure()
 end
 
-function select_equations!(eqs, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
-    select_equations!(eqs, system)
+function select_equations_domain!(eqs, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}
     eqs[:potential_balance] = (PotentialDropBalanceWell, 1)
     eqs[:control_equation] = (ControlEquationWell, 1)
 end

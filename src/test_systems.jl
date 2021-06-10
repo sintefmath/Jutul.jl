@@ -35,7 +35,7 @@ function declare_sparsity(model, e::ScalarTestEquation)
 end
 
 
-function select_equations!(eqs, system::ScalarTestSystem)
+function select_equations_system!(eqs, domain, system::ScalarTestSystem, formulation)
     eqs[:test_equation] = (ScalarTestEquation, 1)
 end
 

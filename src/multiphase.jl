@@ -171,7 +171,7 @@ function select_primary_variables_system!(S, domain, system::ImmiscibleSystem, f
     S[:Saturations] = Saturations()
 end
 
-function select_equations!(eqs, system::MultiPhaseSystem)
+function select_equations_system!(eqs, domain, system::MultiPhaseSystem, formulation)
     nph = number_of_phases(system)
     eqs[:mass_conservation] = (ConservationLaw, nph)
 end
