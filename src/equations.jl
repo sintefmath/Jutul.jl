@@ -125,6 +125,11 @@ function declare_sparsity(model, e::TervEquation, unit, layout::EquationMajorLay
         out = nothing
     else
         I, J = primitive
+        ni = length(I)
+        nj = length(J)
+        if length(I) != length(J)
+            error("Pattern I, J for $(typeof(e)) must have equal lengths for unit $(typeof(unit)). (|I| = $ni != $nj = |J|)")
+        end
         nu = number_of_units(model, e)
         nrow_blocks = number_of_equations_per_unit(e)
         ncol_blocks = number_of_partials_per_unit(model, unit)
@@ -145,18 +150,22 @@ function declare_sparsity(model, e::TervEquation, unit, layout::EquationMajorLay
 end
 
 function declare_sparsity(model, e::TervEquation, unit, ::BlockMajorLayout)
-    declare_pattern(model, e, unit)
+    primitive = declare_pattern(model, e, unit)
+    if isnothing(primitive)
+        return nothing
+    else
+        I, J = primitive
+        n = number_of_equations(model, e)
+        m = count_units(model.domain, unit)
+        return I, J, n, m
+    end
 end
 
 """
 Give out source, target arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_pattern(model, e::TervEquation, unit)
-    return nothing
-end
-
-function declare_pattern(model, e::DiagonalEquation, unit)
+function declare_pattern(model, e, unit)
     if unit == associated_unit(e)
         n = count_units(model.domain, unit)
         I = collect(1:n)
