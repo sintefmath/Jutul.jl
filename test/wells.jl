@@ -3,6 +3,7 @@ ENV["JULIA_DEBUG"] = Terv
 
 ##
 casename = "welltest"
+casename = "2cell_well"
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
 ## Set up reservoir part
 # Parameters
@@ -68,6 +69,10 @@ it = SinglePhaseRateTarget(irate, phase)
 ictrl = InjectorControl(it, 1.0)
 iforces = build_forces(Wi, control = ictrl)
 istate = setup_state(Wi, w0)
+param_inj = param_res
+## Simulate injector on its own
+sim_i = Simulator(Wp, state0 = istate, parameters = param_inj)
+states = simulate(sim_i, [1.0], forces = iforces)
 
 # BHP producer
 Wp = build_well(mrst_data, 2)
@@ -75,7 +80,10 @@ pt = BottomHolePressureTarget(pRef/2)
 pctrl = ProducerControl(pt)
 pforces = build_forces(Wp, control = pctrl)
 pstate = setup_state(Wp, w0)
-
+param_prod = param_res
+## Simulate producer only
+sim_p = Simulator(Wp, state0 = pstate, parameters = param_prod)
+states = simulate(sim_p, [1.0], forces = pforces)
 
 ##
 mmodel = MultiModel((Reservoir = model, Injector = Wi, Producer = Wp))
@@ -86,8 +94,8 @@ forces = Dict(:Reservoir => nothing, :Injector => iforces, :Producer => pforces)
 
 parameters = setup_parameters(mmodel)
 parameters[:Reservoir] = param_res
-parameters[:Injector] = param_res
-parameters[:Producer] = param_res
+parameters[:Injector] = param_inj
+parameters[:Producer] = param_prod
 
 
 sim = Simulator(mmodel, state0 = state0, parameters = parameters)

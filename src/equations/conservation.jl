@@ -267,7 +267,12 @@ end
 
 function update_equation!(law::ConservationLaw, storage, model, dt)
     update_accumulation!(law, storage, model, dt)
+    update_intrinsic_sources!(law, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt)
+end
+
+function update_intrinsic_sources!(law::ConservationLaw, storage, model, dt)
+    # Do nothing
 end
 
 function update_half_face_flux!(law::ConservationLaw, storage, model, dt)

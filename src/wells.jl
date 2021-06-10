@@ -93,7 +93,9 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
     D⁰, Dⁱ = f.D_outer, f.D_inner
     R, L = f.roughness, f.L
     ΔD = D⁰-Dⁱ
-    Re = abs(v)ρ*ΔD/μ;
+
+    e = eps(typeof(value(v)))
+    Re = max(abs(v), e)*ρ*ΔD/μ;
     s = sign(v)
     # Friction model - empirical relationship
     f = (-3.6*log(6.9/Re+(R/(3.7*D⁰))^(10/9))/log(10))^(-2);
@@ -405,4 +407,8 @@ end
 
 function mix_by_saturations(s::Real, values)
     return s*values[]
+end
+
+function update_intrinsic_sources!(law::ConservationLaw, storage, model::SimulationModel{D}, dt) where {D <: DiscretizedDomain{G} where G <: WellGrid}
+    # error("Not implemented yet")
 end
