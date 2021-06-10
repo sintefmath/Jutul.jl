@@ -177,41 +177,13 @@ function declare_pattern(model, e::ConservationLaw, ::Cells)
     I = vcat(I, D)
     J = vcat(J, D)
 
-    return (I, J, n, n)
+    return (I, J)
 end
 
 function declare_sparsity(model, e::ConservationLaw, ::Faces)
     @assert false "Not implemented."
 end
 
-
-#= function declare_sparsity(model, e::ConservationLaw)
-    hfd = Array(model.domain.discretizations.KGrad.conn_data)
-    n = number_of_units(model, e)
-    # Fluxes
-    I = map(x -> x.self, hfd)
-    J = map(x -> x.other, hfd)
-    # Diagonals
-    D = [i for i in 1:n]
-
-    I = vcat(I, D)
-    J = vcat(J, D)
-
-    nrows = number_of_equations_per_unit(e)
-    ncols = number_of_partials_per_unit(e)
-    nunits = number_of_units(model, e)
-    if nrows > 1
-        I = vcat(map((x) -> (x-1)*n .+ I, 1:nrows)...)
-        J = repeat(J, nrows)
-    end
-    if ncols > 1
-        I = repeat(I, ncols)
-        J = vcat(map((x) -> (x-1)*n .+ J, 1:ncols)...)
-    end
-    n = number_of_equations(model, e)
-    m = nunits*ncols
-    return (I, J, n, m)
-end =#
 function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
     n = number_of_equations_per_unit(eq)
     pv = get_pore_volume(model)

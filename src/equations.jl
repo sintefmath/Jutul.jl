@@ -60,6 +60,7 @@ function find_sparse_position(A::SparseMatrixCSC, row, col)
             return pos
         end
     end
+    @warn "Unable to map $row, $col: Not allocated in matrix."
     return 0
 end
 
@@ -123,9 +124,8 @@ function declare_sparsity(model, e::TervEquation, unit, layout::EquationMajorLay
     if isnothing(primitive)
         out = nothing
     else
-        I = primitive[1]
-        J = primitive[2]
-        nu = primitive[3]
+        I, J = primitive
+        nu = number_of_units(model, e)
         nrow_blocks = number_of_equations_per_unit(e)
         ncol_blocks = number_of_partials_per_unit(model, unit)
         nunits = count_units(model.domain, unit)
@@ -160,7 +160,7 @@ function declare_pattern(model, e::DiagonalEquation, unit)
     if unit == associated_unit(e)
         n = count_units(model.domain, unit)
         I = collect(1:n)
-        return (I, I, n, n)
+        return (I, I)
     else
         out = nothing
     end

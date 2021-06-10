@@ -129,6 +129,28 @@ end
 
 function associated_unit(::PotentialDropBalanceWell) Faces() end
 
+function declare_pattern(model, e::PotentialDropBalanceWell, ::Cells)
+    D = model.domain
+    N = D.grid.neighborship
+    nf = number_of_faces(D)
+    nc = number_of_cells(D)
+    @assert size(N, 2) == nf
+    @assert size(N, 1) == 2
+    I = []
+    J = []
+    for f in 1:nf
+        for i in 1:size(N, 2)
+            push!(I, f)
+            push!(I, N[f, i])
+        end
+    end
+    return (I, J)
+end
+
+function declare_pattern(model, e::PotentialDropBalanceWell, ::Faces)
+    return (I, J)
+end
+
 function align_to_jacobian!(eq::PotentialDropBalanceWell, jac, model, u::Cells; kwarg...)
     # Need to align to cells, faces is automatically done since it is on the diagonal bands
     cache = eq.equation_cells

@@ -116,14 +116,10 @@ end
 function declare_pattern(target_model, source_model, x::InjectiveCrossTerm, unit)
     source_unit = x.units.source
     if unit == source_unit
-        nunits_source = count_units(source_model.domain, source_unit)
-
         target_impact = x.impact.target
         source_impact = x.impact.source
 
-        n_impact = length(target_impact)
-
-        out = (target_impact, source_impact, n_impact, nunits_source)
+        out = (target_impact, source_impact)
     else
         out = nothing
     end
@@ -137,8 +133,9 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
     else
         target_impact = primitive[1]
         source_impact = primitive[2]
-        n_impact = primitive[3]
-        nunits_source = primitive[4]
+        n_impact = length(target_impact)
+        source_unit = x.units.source
+        nunits_source = count_units(source_model.domain, source_unit)
 
         n_partials = x.npartials_source
         n_eqs = x.equations_per_unit
