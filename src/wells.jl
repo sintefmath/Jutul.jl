@@ -138,15 +138,17 @@ function declare_pattern(model, e::PotentialDropBalanceWell, ::Cells)
     D = model.domain
     N = D.grid.neighborship
     nf = number_of_faces(D)
+    m = size(N, 1)
     # nc = number_of_cells(D)
     @assert size(N, 2) == nf
-    @assert size(N, 1) == 2
-    I = []
-    J = []
+    @assert m == 2
+    t = eltype(N)
+    I = Vector{t}()
+    J = Vector{t}()
     for f in 1:nf
-        for i in 1:size(N, 2)
+        for i in 1:m
             push!(I, f)
-            push!(J, N[f, i])
+            push!(J, N[i, f])
         end
     end
     return (I, J)
