@@ -145,9 +145,9 @@ function map_level(primary_variables, secondary_variables, output_level)
     skeys = [i for i in keys(secondary_variables)]
     if output_level == :All
         out = vcat(pkeys, skeys)
-    elseif output_level == :PrimaryVariables
+    elseif output_level == :primary_variables
         out = pkeys
-    elseif output_level == :SecondaryVariables
+    elseif output_level == :secondary_variables
         out = skeys
     else
         out = [output_level]

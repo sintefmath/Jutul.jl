@@ -159,8 +159,11 @@ function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
         end
     else
         primary = sim.storage.primary_variables
+        state0 = sim.storage.state0
         for f in keys(primary)
-            update_values!(primary[f], sim.storage.state0[f])
+            if haskey(state0, f)
+                update_values!(primary[f], state0[f])
+            end
         end
     end
     return done

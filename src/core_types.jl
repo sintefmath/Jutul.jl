@@ -183,7 +183,7 @@ struct SimulationModel{O<:TervDomain,
     function SimulationModel(domain, system;
                                             formulation = FullyImplicit(), 
                                             context = DefaultContext(),
-                                            output_level = nothing
+                                            output_level = :primary_variables
                                             )
         domain = transfer(context, domain)
         primary = select_primary_variables(domain, system, formulation)
