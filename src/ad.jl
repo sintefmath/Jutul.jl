@@ -315,6 +315,10 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
     return transfer(model.context, val)
 end
 
+function default_value(v)
+    return 0.0
+end
+
 function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     state[symb] = initialize_variable_value(model, pvar, val; kwarg...)
     return state
@@ -328,7 +332,7 @@ function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict;
         error("The key $symb must be present to initialize the state. Found symbols: $k")
     else
         # We do not really need to initialize this, as it will be updated elsewhere.
-        value = 0.0
+        value = default_value(pvar)
     end
     return initialize_variable_value!(state, model, pvar, symb, value)
 end

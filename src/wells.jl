@@ -247,6 +247,12 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
     end
 end
 
+function update_linearized_system_equation!(nz, r, model, equation::PotentialDropBalanceWell)
+    fill_equation_entries!(nz, r, model, equation.equation)
+    fill_equation_entries!(nz, nothing, model, equation.equation_cells)
+end
+
+
 function get_flow_volume(grid::WellGrid)
     grid.volumes
 end
