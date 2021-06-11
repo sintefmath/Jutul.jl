@@ -59,7 +59,7 @@ function build_well(mrst_data, ix)
 end
 
 # Initial condition for all wells
-w0 = Dict(:Pressure => p0, :TotalMassFlux => 1.0)
+w0 = Dict(:Pressure => p0, :TotalMassFlux => 1e-12)
 
 # Rate injector
 Wi = build_well(mrst_data, 1)
