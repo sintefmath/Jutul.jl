@@ -243,7 +243,7 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
             ix = 2
         end
         Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
-        cell_entries[(face-1)*2 + ix] = Δθ - Δp
+        cell_entries[(face-1)*2 + ix] = sgn*(Δθ - Δp)
     end
 end
 
