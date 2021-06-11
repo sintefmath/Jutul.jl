@@ -118,7 +118,7 @@ function transfer(::DefaultContext, grid)
 end
 
 
-function get_1d_reservoir(nc, L = 1, perm = 9.8692e-14, # 0.1 darcy
+function get_1d_reservoir(nc; L = 1, perm = 9.8692e-14, # 0.1 darcy
                          poro = 0.1, volumes = 1, fuse_flux = false, z_max = nothing)
     @assert nc > 1 "Must have at least two cells."
     nf = nc-1
