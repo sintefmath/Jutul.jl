@@ -38,7 +38,7 @@ function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
     layout = matrix_layout(model.context)
-    
+    println("Aligning conservation law cells")
     diagonal_alignment!(acc, jac, u, layout, target_offset = equation_offset, source_offset = variable_offset)
     half_face_flux_cells_alignment!(hflux_cells, acc, jac, layout, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
 end
@@ -180,8 +180,12 @@ function declare_pattern(model, e::ConservationLaw, ::Cells)
     return (I, J)
 end
 
-function declare_sparsity(model, e::ConservationLaw, ::Faces)
-    @assert false "Not implemented."
+function declare_pattern(model, e::ConservationLaw, ::Faces)
+    df = e.flow_discretization
+    cd = df.conn_data
+    I = map(x -> x.self, cd)
+    J = map(x -> x.face, cd)
+    return (I, J)
 end
 
 function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
