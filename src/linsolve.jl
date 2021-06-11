@@ -78,10 +78,13 @@ end
 struct BlockDQGMRES end
 
 function solve!(sys)
-    @assert length(sys.dx) < 50000 "System too big for default direct solver."
+    if length(sys.dx) > 50000
+        error("System too big for default direct solver.")
+    end
     J = sys.jac
     r = sys.r
     sys.dx .= -(J\r)
+    @assert all(isfinite, sys.dx) "Linear solve resulted in non-finite values."
 end
 
 function solve!(sys::LinearizedSystem, solver::BlockDQGMRES)
