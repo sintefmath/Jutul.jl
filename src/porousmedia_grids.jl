@@ -4,7 +4,7 @@ export number_of_cells, number_of_faces, number_of_half_faces
 
 export TwoPointFlux, SinglePointUpstream
 
-export transfer
+export transfer, get_1d_reservoir
 
 # Helpers follow
 # "Minimal struct for TPFA connections (transmissibility + dz + cell pair)"
@@ -30,8 +30,10 @@ struct MinimalTPFAGrid{R<:AbstractFloat, I<:Integer} <: ReservoirGrid
         nc = length(pv)
         pv::AbstractVector
         @assert size(N, 1) == 2  "Two neighbors per face"
-        @assert minimum(N) > 0   "Neighborship entries must be positive."
-        @assert maximum(N) <= nc "Neighborship must be limited to number of cells."
+        if length(N) > 0
+            @assert minimum(N) > 0   "Neighborship entries must be positive."
+            @assert maximum(N) <= nc "Neighborship must be limited to number of cells."
+        end
         @assert all(pv .> 0)     "Pore volumes must be positive"
         new{eltype(pv), eltype(N)}(pv, N)
     end
@@ -113,4 +115,57 @@ end
 
 function transfer(::DefaultContext, grid)
     return grid
+end
+
+
+function get_1d_reservoir(nc, L = 1, perm = 9.8692e-14, # 0.1 darcy
+                         poro = 0.1, volumes = 1, fuse_flux = false, z_max = nothing)
+    @assert nc > 1 "Must have at least two cells."
+    nf = nc-1
+    N = vcat((1:nf)', (2:nc)')
+    dx = L/nc
+    cell_centroids = vcat((dx/2:dx:L-dx/2)', ones(2, nc))
+    face_centroids = vcat((dx:dx:L-dx)', ones(2, nf))
+    face_areas = ones(nf)
+    face_normals = vcat(ones(1, nf), zeros(2, nf))
+
+    function expand(x, nc)
+        repeat([x], nc)
+    end
+    function expand(x::AbstractVector, nc)
+        x
+    end
+    perm = expand(perm, nc)
+    if isa(perm, AbstractVector)
+        perm = copy(perm')
+    end
+    
+    volumes = expand(volumes, nc)
+
+    pv = poro.*volumes
+    nc = length(pv)
+
+    @debug "Data unpack complete. Starting transmissibility calculations."
+    # Deal with face data
+    T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
+    T = compute_face_trans(T_hf, N)
+    G = MinimalTPFAGrid(pv, N)
+    if isnothing(z_max)
+        z = nothing
+        g = nothing
+    else
+        dz = z_max/nc
+        z = (dz/2:dz:z_max-dz/2)'
+        g = gravity_constant
+    end
+
+    if fuse_flux
+        ft = DarcyMassMobilityFlowFused()
+    else
+        ft = DarcyMassMobilityFlow()
+    end
+    flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
+    disc = (mass_flow = flow,)
+    D = DiscretizedDomain(G, disc)
+    return D
 end
