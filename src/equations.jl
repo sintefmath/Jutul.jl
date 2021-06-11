@@ -205,11 +205,12 @@ function align_to_jacobian!(eq::TervEquation, jac, model; equation_offset = 0, v
     end
 end
 
-function align_to_jacobian!(::TervEquation, jac, model, unit; equation_offset = 0, variable_offset = 0) end
 
-
-function align_to_jacobian!(eq::DiagonalEquation, jac, model, unit; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq, jac, model, unit; equation_offset = 0, variable_offset = 0)
     if unit == associated_unit(eq)
+        # By default we perform a diagonal alignment if we match the associated unit.
+        # A diagonal alignment means that the equation for some unit depends only on the values inside that unit.
+        # For instance, an equation defined on all Cells will have each entry depend on all values in that Cell.
         layout = matrix_layout(model.context)
         diagonal_alignment!(eq.equation, jac, unit, layout, target_offset = equation_offset, source_offset = variable_offset)
     end
