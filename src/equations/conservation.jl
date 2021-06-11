@@ -38,7 +38,6 @@ function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
     layout = matrix_layout(model.context)
-    println("Aligning conservation law cells")
     diagonal_alignment!(acc, jac, u, layout, target_offset = equation_offset, source_offset = variable_offset)
     half_face_flux_cells_alignment!(hflux_cells, acc, jac, layout, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
 end
@@ -80,9 +79,6 @@ end
 function half_face_flux_faces_alignment!(face_cache, jac, layout, N, flow_disc; target_offset = 0, source_offset = 0)
     nf, ne, np = ad_dims(face_cache)
     nhf = size(face_cache.jacobian_positions, 2)
-    # nf = size(N, 2)
-    @show nf
-    @show nhf
     @assert nhf/2 == nf
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
