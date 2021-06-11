@@ -224,7 +224,6 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
 
         Δθ = two_point_potential_drop(p_self, p_other, gΔz, ρ_mix_self, ρ_mix_other)
         if Δθ > 0
-            # TODO: check sign
             μ_mix = mix_by_saturations(s_self, μ)
         else
             μ_mix = mix_by_saturations(s_other, μ)
