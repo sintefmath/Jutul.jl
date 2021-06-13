@@ -119,7 +119,7 @@ end
 
 
 function get_1d_reservoir(nc; L = 1, perm = 9.8692e-14, # 0.1 darcy
-                         poro = 0.1, volumes = 1, fuse_flux = false, z_max = nothing)
+                         poro = 0.1, volumes = nc*L, fuse_flux = false, z_max = nothing)
     @assert nc > 1 "Must have at least two cells."
     nf = nc-1
     N = vcat((1:nf)', (2:nc)')
@@ -140,8 +140,12 @@ function get_1d_reservoir(nc; L = 1, perm = 9.8692e-14, # 0.1 darcy
         perm = copy(perm')
     end
     
-    volumes = expand(volumes, nc)
+    if !isa(volumes, AbstractVector)
+        volumes = expand(volumes/nc, nc)
+    end
+    
 
+    @debug sum(volumes)
     pv = poro.*volumes
     nc = length(pv)
 
