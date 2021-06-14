@@ -104,10 +104,10 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
         s = 1
     end
     e = eps(typeof(value(v)))
-    v = max(abs(v), e)
+    v = s*max(abs(v), e)
     # Scaling - assuming input is total mass rate
     v = v./(π*ρ.*((D⁰/2)^2 - (Dⁱ/2)^2));
-    Re = v*ρ*ΔD/μ;
+    Re = abs(v*ρ*ΔD)/μ;
     # Friction model - empirical relationship
     f = (-3.6*log(6.9/Re +(R/(3.7*D⁰))^(10/9))/log(10))^(-2);
     Δp = -(2*s*L/ΔD)*(f*ρ*v^2);
