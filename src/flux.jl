@@ -69,7 +69,7 @@ function get_connection(face, cell, faces, N, T, z, g, inc_face_sign)
         D[:T] = T[face]
     end
     if !isnothing(z)
-        D[:gdz] = g*(z[cell] - z[other])
+        D[:gdz] = -g*(z[cell] - z[other])
     end
     return convert_to_immutable_storage(D)
 end

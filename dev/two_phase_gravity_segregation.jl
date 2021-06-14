@@ -39,7 +39,7 @@ function perform_test(nc = 100, tstep = repeat([0.02], 150))
     # Put heavy phase on top and light phase on bottom
     nl = nc ÷ 2
     sL = vcat(ones(nl), zeros(nc - nl))
-    s0 = 1 .- vcat(sL', 1 .- sL')
+    s0 = vcat(sL', 1 .- sL')
 
     init = Dict(:Pressure => p0, :Saturations => s0)
     state0 = setup_state(model, init)
