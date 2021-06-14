@@ -243,13 +243,16 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
             # This is a good time to deal with the derivatives of v[face] since it is already fetched.
             Δp_f = segment_pressure_drop(seg_model, v, value(ρ_mix), value(μ_mix))
             face_entries[face] = value(Δθ) - Δp_f
+            # @debug "Δp_f $face: $Δp_f flux: $v\neq_f: $(face_entries[face])"
+            # @debug "rho: $(value(ρ_mix)) mu: $(value(μ_mix))"
+
             ix = 1
         else
             ix = 2
         end
         Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
         cell_entries[(face-1)*2 + ix] = sgn*(Δθ - Δp)
-        @debug "Cell entry ($face:$self→$other): $(sgn*(Δθ - Δp))"
+        # @debug "Cell entry ($face:$self→$other): $(sgn*(Δθ - Δp))"
     end
 end
 

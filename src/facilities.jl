@@ -16,9 +16,9 @@ end
 """
 Well variables - units that we have exactly one of per well (and usually relates to the surface connection)
 """
-struct Well <: TervUnit end
+struct Wells <: TervUnit end
 
-function count_units(wg::WellGroup, ::Well)
+function count_units(wg::WellGroup, ::Wells)
     return length(wg.well_symbols)
 end
 
@@ -36,7 +36,7 @@ end
 # function associated_unit(::SurfacePhaseRates) Well() end
 
 struct TotalSurfaceMassRate <: ScalarVariable end
-function associated_unit(::TotalSurfaceMassRate) Well() end
+function associated_unit(::TotalSurfaceMassRate) Wells() end
 
 # function degrees_of_freedom_per_unit(model, v::SurfacePhaseRates)
 #    return number_of_phases(model.system)
@@ -49,8 +49,9 @@ struct BottomHolePressureTarget <: WellTarget
     value::AbstractFloat
 end
 
-function well_control_equation(t::BottomHolePressureTarget, qt, bhp)
-    return bhp - t.value
+function well_control_equation(ctrl, t::BottomHolePressureTarget, qt)
+    # Note: This equation will get the bhp subtracted when coupled to a well
+    return t.value
 end
 
 struct SinglePhaseRateTarget <: WellTarget
@@ -58,9 +59,9 @@ struct SinglePhaseRateTarget <: WellTarget
     phase::AbstractPhase
 end
 
-function well_control_equation(t::SinglePhaseRateTarget, qt, bhp)
-    # Assuming injector
-    return qt - t.value
+function well_control_equation(ctrl, t::SinglePhaseRateTarget, qt)
+    # TODO: Add some notion of surface density
+    return t.value - qt
 end
 
 ## Well controls
@@ -106,27 +107,31 @@ struct ControlEquationWell <: TervEquation
     #        p|top cell - target = 0
     # We need to store derivatives with respect to q_t (same unit) and the top cell (other unit)
     equation::TervAutoDiffCache
-    equation_top_cell::TervAutoDiffCache
     function ControlEquationWell(model, number_of_equations; kwarg...)
         # @assert number_of_equations == 1
-        alloc = (unit) -> CompactAutoDiffCache(number_of_equations, 1, model, unit = unit; kwarg...)
+        nw = count_units(model.domain, Wells())
+        alloc = (unit) -> CompactAutoDiffCache(number_of_equations, nw, model, unit = unit; kwarg...)
         # One potential drop per velocity
-        target_well = alloc(Well())
-        target_topcell = alloc(Cells())
-        new(target_well, target_topcell)
+        target_well = alloc(Wells())
+        new(target_well)
     end
 end
 
-function associated_unit(::ControlEquationWell) Well() end
+function associated_unit(::ControlEquationWell) Wells() end
 
 function update_equation!(eq::ControlEquationWell, storage, model, dt)
     state = storage.state
     ctrl = state.WellGroupConfiguration.control
-    T = ctrl.target
-    surf_rate = state.TotalWellMassRate[]
-    bhp = state.Pressure[1]
-    eq.equation.entries .= well_control_equation(T, surf_rate, value(bhp))
-    eq.equation_top_cell.entries .= well_control_equation(T, value(surf_rate), bhp)
+    wells = model.domain.well_symbols
+    # T = ctrl.target
+    surf_rate = state.TotalSurfaceMassRate
+    # bhp = state.Pressure[1]
+    for (i, key) in enumerate(wells)
+        C = ctrl[key]
+        T = C.target
+        @debug "Well $key operating using $T"
+        eq.equation.entries[i] = well_control_equation(ctrl, T, surf_rate[i])
+    end
 end
 
 function align_to_jacobian!(eq::ControlEquationWell, jac, model, u::Cells; kwarg...)
