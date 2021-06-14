@@ -103,3 +103,16 @@ parameters[:Producer] = param_prod
 sim = Simulator(mmodel, state0 = state0, parameters = parameters)
 states = simulate(sim, [1.0], forces = forces)
 
+## Plot pressure drop model
+using Makie
+friction = Wi.domain.grid.segment_models[1]
+rho = 1000;
+mu = 1000;
+n = 1000
+v = range(0, 1, length = n)
+
+dp = zeros(n)
+for (i, vi) in enumerate(v)
+    dp[i] = segment_pressure_drop(friction, vi, rho, mu);
+end
+plot(v, dp)
