@@ -333,7 +333,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
                         push!(I, S[1] .+ equation_offset)
                         push!(J, S[2] .+ variable_offset)
                     end
-                    variable_offset += degrees_of_freedom_per_unit(source_model, u)
+                    variable_offset += number_of_degrees_of_freedom(source_model, u)
                 end
             end
             equation_offset += number_of_equations(target_model, eq)
