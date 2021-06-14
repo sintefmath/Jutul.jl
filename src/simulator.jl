@@ -105,8 +105,9 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     linsolve = config[:linear_solver]
     @info "Starting simulation"
     for (step_no, dT) in enumerate(timesteps)
-        t_str =  Dates.canonicalize(Dates.CompoundPeriod(Second(dT)))
-        @info "Solving step $step_no/$no_steps of length $t_str."
+        # t_str =  Dates.canonicalize(Dates.CompoundPeriod(Second(dT)))
+        # @info "Solving step $step_no/$no_steps of length $t_str."
+        @info "Solving step $step_no/$no_steps"
         dt = dT
         done = false
         t_local = 0
