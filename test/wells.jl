@@ -94,12 +94,13 @@ WG = SimulationModel(g, mode)
 F0 = Dict(:TotalSurfaceMassRate => 0.0)
 fstate = setup_state(WG, F0)
 
+controls = Dict(:Injector => ictrl, :Producer => pctrl)
+fforces = build_forces(WG, control = controls)
 ##
 mmodel = MultiModel((Reservoir = model, Injector = Wi, Producer = Wp, Facility = WG))
 # Set up joint state and simulate
 state0 = setup_state(mmodel, Dict(:Reservoir => state0r, :Injector => istate, :Producer => pstate, :Facility => fstate))
-forces = Dict(:Reservoir => nothing, :Injector => iforces, :Producer => pforces)
-
+forces = Dict(:Reservoir => nothing, :Facility => fforces, :Injector => nothing, :Producer => nothing)
 
 parameters = setup_parameters(mmodel)
 parameters[:Reservoir] = param_res

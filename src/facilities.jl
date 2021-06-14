@@ -93,7 +93,7 @@ struct WellGroupConfiguration
         if isnothing(limits)
             limits = Dict{Symbol, Any}()
             for s in well_symbols
-                limits[s] = Nothing
+                limits[s] = nothing
             end
         end
         new(control, limits)
@@ -158,7 +158,7 @@ function select_equations_domain!(eqs, domain::WellGroup, system, arg...)
 end
 
 function build_forces(model::SimulationModel{D}; control = Dict(), limits = Dict()) where {D <: WellGroup}
-    return (control = control, limits = limits,)
+    return (control = control::Dict, limits = limits::Dict,)
 end
 
 function initialize_extra_state_fields_domain!(state, model, domain::WellGroup)
