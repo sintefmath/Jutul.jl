@@ -374,10 +374,11 @@ function convert_state_ad(model, state, tag = nothing)
     # @debug "Found $n_partials primary variables."
     last_unit = nothing
     offset = 0
+    outstr = ""
     if isnothing(tag)
-        @debug "Setting up primary variables..."
+        outstr *= "Setting up primary variables...\n"
     else
-        @debug "$tag: Setting up primary variables..."
+        outstr *= "$tag: Setting up primary variables...\n"
     end
     # Bookkeeping for debug output
     total_number_of_partials = 0
@@ -388,7 +389,7 @@ function convert_state_ad(model, state, tag = nothing)
         n_partials = degrees_of_freedom_per_unit(model, u)
         if last_unit != u
             n_units = count_units(model.domain, u)
-            @debug "Variable group:\n\t$(n_units) $(typeof(u)) with $n_partials partial derivatives each ($(n_partials*n_units) total)."
+            outstr *= "Variable group:\n\t$(n_units) $(typeof(u)) with $n_partials partial derivatives each ($(n_partials*n_units) total).\n"
             # Note: We assume that the variables are sorted by units.
             # This is asserted for in the model constructor.
             last_unit = u
@@ -399,23 +400,24 @@ function convert_state_ad(model, state, tag = nothing)
         # Number of partials this primary variable contributes
         n_local = degrees_of_freedom_per_unit(model, pvar)
         t = get_unit_tag(tag, u)
-        @debug "→ $pkey:\n\t$n_local of $n_partials partials on all $(typeof(u)), covers $(offset+1) → $(offset + n_local)"
+        outstr *= "→ $pkey:\n\t$n_local of $n_partials partials on all $(typeof(u)), covers $(offset+1) → $(offset + n_local)\n"
         stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = t, offset = offset, context = context)
         offset += n_local
         total_number_of_partials += n_local
     end
-    @debug "Primary variables set up: $(number_of_degrees_of_freedom(model)) degrees of freedom\n\t → $total_number_of_partials distinct primary variables over $total_number_of_groups different units."
+    outstr *= "Primary variables set up: $(number_of_degrees_of_freedom(model)) degrees of freedom\n\t → $total_number_of_partials distinct primary variables over $total_number_of_groups different units.\n"
     secondary = get_secondary_variables(model)
     # Loop over secondary variables and initialize as AD with zero partials
-    @debug "Setting up secondary variables..."
+    outstr *= "Setting up secondary variables...\n"
     for (skey, svar) in secondary
         u = associated_unit(svar)
-        @debug "$skey: Defined on $(typeof(u))"
+        outstr *= "\t$skey: Defined on $(typeof(u))\n"
 
         t = get_unit_tag(tag, u)
         n_partials = degrees_of_freedom_per_unit(model, u)
         stateAD = initialize_secondary_variable_ad(stateAD, model, svar, skey, n_partials, tag = t, context = context)
     end
+    @debug outstr
     return stateAD
 end
 
