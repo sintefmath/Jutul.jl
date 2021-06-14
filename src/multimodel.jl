@@ -98,6 +98,7 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
                                                 source_index = impact_source,
                                                 target_offset = equation_offset,
                                                 source_offset = variable_offset)
+        # TODO: Should there be a offset here from the primary variables?
     end
 end
 
@@ -361,8 +362,8 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
             push!(I, i .+ equation_offset)
             push!(J, j .+ variable_offset)
             push!(V, v)
+            outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1).\n"
             variable_offset += m
-            outstr *= "$source → $target: $n rows and $m columns.\n"
         end
         outstr *= "\n"
         equation_offset += n
