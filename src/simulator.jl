@@ -121,13 +121,13 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                 end
             else
                 max_cuts = config[:max_timestep_cuts]
-                if cut_count > max_cuts
+                if cut_count + 1 > max_cuts
                     @warn "Unable to converge time step $step_no/$no_steps. Aborting."
                     return states
                 end
+                cut_count += 1
                 dt = min(dt/2, dT - t_local)
                 @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut $cut_count of $max_cuts allowed."
-                cut_count += 1
             end
         end
         if config[:output_states]
