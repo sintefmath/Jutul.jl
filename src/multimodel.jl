@@ -60,7 +60,7 @@ struct InjectiveCrossTerm <: CrossTerm
         context = target_model.context
         target_unit = associated_unit(target_eq)
         if isnothing(intersection)
-            intersection = get_domain_intersection(target_unit, target_model, source_model, source)
+            intersection = get_domain_intersection(target_unit, target_model, source_model, target, source)
         end
         target_impact, source_impact, source_unit = intersection
         @assert !isnothing(target_impact) "Cannot declare cross term when there is no overlap between domains."
@@ -167,7 +167,7 @@ For a given unit in domain target_d, find any indices into that unit that is con
 any units in source_d. The interface is limited to a single unit-unit impact.
 The return value is a tuple of indices and the corresponding unit
 """
-function get_domain_intersection(u::TervUnit, target_d::TervDomain, source_d::TervDomain, source_symbol)
+function get_domain_intersection(u::TervUnit, target_d::TervDomain, source_d::TervDomain, target_symbol, source_symbol)
     source_symbol::Union{Nothing, Symbol}
     (target = nothing, source = nothing, source_unit = Cells())
 end
@@ -223,14 +223,14 @@ function setup_cross_terms(storage, model::MultiModel)
     storage[:cross_terms] = crossd
 end
 
-function declare_cross_term(eq::TervEquation, target_model, source_model; source = nothing, kwarg...)
+function declare_cross_term(eq::TervEquation, target_model, source_model; target = nothing, source = nothing)
     target_unit = associated_unit(eq)
-    intersection = get_domain_intersection(target_unit, target_model, source_model, source)
+    intersection = get_domain_intersection(target_unit, target_model, source_model, target, source)
     if isnothing(intersection.target)
         # Declare nothing, so we can easily spot no overlap
         ct = nothing
     else
-        ct = InjectiveCrossTerm(eq, target_model, source_model, intersection; source = source, kwarg...)
+        ct = InjectiveCrossTerm(eq, target_model, source_model, intersection; target = target, source = source)
     end
     return ct
 end
