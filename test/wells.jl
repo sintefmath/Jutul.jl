@@ -3,7 +3,7 @@ ENV["JULIA_DEBUG"] = Terv
 
 ##
 casename = "welltest"
-casename = "2cell_well"
+# casename = "2cell_well"
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
 ## Set up reservoir part
 # Parameters
@@ -73,7 +73,7 @@ states = simulate(sim_i, [1.0])
 ## Set up injector control
 it = SinglePhaseRateTarget(irate, phase)
 ictrl = InjectorControl(it, 1.0)
-iforces = build_forces(Wi, control = ictrl)
+# iforces = build_forces(Wi, control = ictrl)
 
 ## BHP producer
 Wp = build_well(mrst_data, 2)
@@ -85,12 +85,19 @@ states = simulate(sim_p, [1.0])
 ## Set up producer control
 pt = BottomHolePressureTarget(pRef/2)
 pctrl = ProducerControl(pt)
-pforces = build_forces(Wp, control = pctrl)
+# pforces = build_forces(Wp, control = pctrl)
 
 ##
-mmodel = MultiModel((Reservoir = model, Injector = Wi, Producer = Wp))
+g = WellGroup([:Injector, :Producer])
+mode = PredictionMode()
+WG = SimulationModel(g, mode)
+F0 = Dict(:TotalSurfaceMassRate => 0.0)
+fstate = setup_state(WG, F0)
+
+##
+mmodel = MultiModel((Reservoir = model, Injector = Wi, Producer = Wp, Facility = WG))
 # Set up joint state and simulate
-state0 = setup_state(mmodel, Dict(:Reservoir => state0r, :Injector => istate, :Producer => pstate))
+state0 = setup_state(mmodel, Dict(:Reservoir => state0r, :Injector => istate, :Producer => pstate, :Facility => fstate))
 forces = Dict(:Reservoir => nothing, :Injector => iforces, :Producer => pforces)
 
 
@@ -106,13 +113,18 @@ states = simulate(sim, [1.0], forces = forces)
 ## Plot pressure drop model
 using Makie
 friction = Wi.domain.grid.segment_models[1]
-rho = 1000;
-mu = 1000;
+rho = 1000
+mu = 1e-3
 n = 1000
-v = range(0, 1, length = n)
+v = range(0, -1, length = n)
 
 dp = zeros(n)
 for (i, vi) in enumerate(v)
     dp[i] = segment_pressure_drop(friction, vi, rho, mu);
 end
 plot(v, dp)
+##
+@enter segment_pressure_drop(friction, 1.0, rho, mu)
+##
+v = 0.0009816451799103162
+segment_pressure_drop(friction, v, rho, mu)

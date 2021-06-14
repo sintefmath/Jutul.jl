@@ -249,6 +249,7 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
         end
         Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
         cell_entries[(face-1)*2 + ix] = sgn*(Δθ - Δp)
+        @debug "Cell entry ($face:$self→$other): $(sgn*(Δθ - Δp))"
     end
 end
 
@@ -269,28 +270,18 @@ Perforations are connections from well cells to reservoir vcells
 struct Perforations <: TervUnit end
 
 ## Well targets
-abstract type WellTarget end
-struct BottomHolePressureTarget <: WellTarget
-    value::AbstractFloat
-end
 
 
 function declare_units(W::MultiSegmentWell)
     c = (unit = Cells(),         count = length(W.volumes))
     f = (unit = Faces(),         count = size(W.neighborship, 2))
     p = (unit = Perforations(),  count = length(W.perforations.self))
-    # w = (unit = Well(),          count = 1)
-    return [c, f, p]#, w]
+    return [c, f, p]
 end
-
-# abstract type WellConfiguration <: ScalarVariable end
 
 # Selection of primary variables
 function select_primary_variables_domain!(S, domain::DiscretizedDomain{G}, system, formulation) where {G<:MultiSegmentWell}
     S[:TotalMassFlux] = TotalMassFlux()
-    # S[:TotalWellMassRate] = TotalMassRateWell()
-    # S[:SurfacePhaseRates] = SurfacePhaseRates()
-    # S[:BottomHolePressure] = BottomHolePressure()
 end
 
 function select_equations_domain!(eqs, domain::DiscretizedDomain{G}, system, arg...) where {G<:MultiSegmentWell}

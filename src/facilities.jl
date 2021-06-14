@@ -1,4 +1,10 @@
-export TotalSurfaceMassRate
+export TotalSurfaceMassRate, WellGroup
+export HistoryMode, PredictionMode
+
+abstract type FacilitySystem <: TervSystem end
+struct PredictionMode <: FacilitySystem end
+struct HistoryMode <: FacilitySystem end
+
 
 
 abstract type SurfaceFacilityDomain <: TervDomain end
@@ -36,6 +42,13 @@ function associated_unit(::TotalSurfaceMassRate) Well() end
 #    return number_of_phases(model.system)
 # end
 
+
+abstract type WellTarget end
+
+struct BottomHolePressureTarget <: WellTarget
+    value::AbstractFloat
+end
+
 function well_control_equation(t::BottomHolePressureTarget, qt, bhp)
     return bhp - t.value
 end
@@ -50,10 +63,13 @@ function well_control_equation(t::SinglePhaseRateTarget, qt, bhp)
     return qt - t.value
 end
 
-
 ## Well controls
 abstract type WellForce <: TervForce end
 abstract type WellControlForce <: WellForce end
+
+struct DisabledControl <: WellControlForce
+
+end
 
 struct InjectorControl <: WellControlForce
     target::WellTarget
@@ -64,12 +80,23 @@ struct ProducerControl <: WellControlForce
     target::WellTarget
 end
 
-mutable struct WellConfiguration
+struct WellGroupConfiguration
     control
-    target
     limits
-    function WellConfiguration(control = nothing, target = nothing, limits = nothing)
-        new(control, target, limits)
+    function WellGroupConfiguration(well_symbols, control = nothing, limits = nothing)
+        if isnothing(control)
+            control = Dict{Symbol, WellControlForce}()
+            for s in well_symbols
+                control[s] = DisabledControl()
+            end
+        end
+        if isnothing(limits)
+            limits = Dict{Symbol, Any}()
+            for s in well_symbols
+                limits[s] = Nothing
+            end
+        end
+        new(control, limits)
     end
 end
 
@@ -94,7 +121,7 @@ function associated_unit(::ControlEquationWell) Well() end
 
 function update_equation!(eq::ControlEquationWell, storage, model, dt)
     state = storage.state
-    ctrl = state.WellConfiguration.control
+    ctrl = state.WellGroupConfiguration.control
     T = ctrl.target
     surf_rate = state.TotalWellMassRate[]
     bhp = state.Pressure[1]
@@ -122,7 +149,7 @@ end
 
 # Selection of primary variables
 function select_primary_variables_domain!(S, domain::WellGroup, system, formulation) 
-    S[:TotalWellMassRate] = TotalSurfaceMassRate()
+    S[:TotalSurfaceMassRate] = TotalSurfaceMassRate()
 end
 
 function select_equations_domain!(eqs, domain::WellGroup, system, arg...)
@@ -130,17 +157,22 @@ function select_equations_domain!(eqs, domain::WellGroup, system, arg...)
     eqs[:control_equation] = (ControlEquationWell, 1)
 end
 
-function build_forces(model::SimulationModel{D}; control = nothing, limits = nothing) where {D <: WellGroup}
+function build_forces(model::SimulationModel{D}; control = Dict(), limits = Dict()) where {D <: WellGroup}
     return (control = control, limits = limits,)
 end
 
 function initialize_extra_state_fields_domain!(state, model, domain::WellGroup)
     # Insert structure that holds well control (limits etc) that is then updated before each step
-    state[:WellConfiguration] = WellConfiguration()
+    state[:WellGroupConfiguration] = WellGroupConfiguration(domain.well_symbols)
 end
 
 function update_before_step_domain!(storage, model::SimulationModel, domain::WellGroup, dt, forces)
     # Set control to whatever is on the forces
-    storage.state.WellConfiguration.control = forces.control
-    storage.state.WellConfiguration.limits = forces.limits
+    cfg = storage.state.WellGroupConfiguration
+    for (key, val) in forces.control
+        cfg.control[key] = val
+    end
+    for (key, val) in forces.limits
+        cfg.limits[key] = val
+    end
 end
