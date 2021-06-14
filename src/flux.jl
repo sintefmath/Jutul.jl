@@ -263,7 +263,7 @@ function update_fluxes_total_mass_velocity_faces!(flux, N, masses, total, v)
 end
 
 function half_face_fluxes_total_mass_velocity!(self, other, masses, total, v)
-    if v < 0
+    if v > 0
         x = masses[self]/total[self]
     else
         x = value(masses[other])/value(total[other])
