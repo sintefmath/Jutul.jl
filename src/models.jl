@@ -347,7 +347,9 @@ end
 function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra_out = false, tol = 1e-3, offset = 0, kwarg...)
     converged = true
     e = 0
+    eoffset = 0
     r_buf = lsys.r_buffer
+    prntstr = "Iteration $iteration:\n"
     for key in keys(eqs)
         eq = eqs[key]
         N = number_of_equations(model, eq)
@@ -357,16 +359,16 @@ function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra
 
         errors, tscale = convergence_criterion(model, storage, eq, r_v; kwarg...)
 
-        prntstr = "Iteration $iteration:\n"
         for (index, e) in enumerate(errors)
-            s = @sprintf("E%d: |%s| = %e\n", index, String(key), e)
+            s = @sprintf("E%d: |%s| = %e\n", index + eoffset, String(key), e)
             prntstr *= s
         end
-        @debug prntstr
         converged = converged && all(errors .< tol*tscale)
         e = maximum([e, maximum(errors)])
         offset += N
+        eoffset += n
     end
+    @debug prntstr
     if extra_out
         return (converged, e, tol)
     else
