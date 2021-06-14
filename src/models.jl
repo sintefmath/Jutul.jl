@@ -160,11 +160,9 @@ function setup_equations(storage, model::TervModel; kwarg...)
 end
 
 function setup_equations!(eqs, storage, model::TervModel; tag = nothing, kwarg...)
-    msg = "Setting up $(length(model.equations)) groups of governing equations..."
-    if isnothing(tag)
-        @debug "$msg"
-    else
-        @debug "$tag: $msg"
+    outstr = "Setting up $(length(model.equations)) groups of governing equations...\n"
+    if !isnothing(tag)
+        outstr = "$tag: "*outstr
     end
     counter = 1
     num_equations_total = 0
@@ -181,12 +179,13 @@ function setup_equations!(eqs, storage, model::TervModel; tag = nothing, kwarg..
         ne = number_of_units(model, e)
         n = num*ne
 
-        @debug "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_unit(e)) for $n equations in total."
+        outstr *= "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_unit(e)) for $n equations in total.\n"
         eqs[sym] = e
         counter += 1
         num_equations_total += n
     end
-    @debug "$num_equations_total equations total distributed over $counter groups."
+    outstr *= "$num_equations_total equations total distributed over $counter groups.\n"
+    @debug outstr
 end
 
 
