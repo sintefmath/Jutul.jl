@@ -1,4 +1,4 @@
-export MultiModel
+export MultiModel, get_domain_intersection
 import Base: show
 
 struct MultiModel <: TervModel
@@ -60,7 +60,7 @@ struct InjectiveCrossTerm <: CrossTerm
         context = target_model.context
         target_unit = associated_unit(target_eq)
         if isnothing(intersection)
-            intersection = get_domain_intersection(target_unit, target_model, source_model, target, source)
+            intersection = get_model_intersection(target_unit, target_model, source_model, target, source)
         end
         target_impact, source_impact, source_unit = intersection
         @assert !isnothing(target_impact) "Cannot declare cross term when there is no overlap between domains."
@@ -158,8 +158,8 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
 end
 
 
-function get_domain_intersection(u::TervUnit, target_model::TervModel, source_model::TervModel, arg...)
-    return get_domain_intersection(u, target_model.domain, source_model.domain, arg...)
+function get_model_intersection(u, target_model, source_model, target, source)
+    return get_domain_intersection(u, target_model.domain, source_model.domain, target, source)
 end
 
 """
@@ -167,7 +167,7 @@ For a given unit in domain target_d, find any indices into that unit that is con
 any units in source_d. The interface is limited to a single unit-unit impact.
 The return value is a tuple of indices and the corresponding unit
 """
-function get_domain_intersection(u::TervUnit, target_d::TervDomain, source_d::TervDomain, target_symbol, source_symbol)
+function get_domain_intersection(u, target_d, source_d, target_symbol, source_symbol)
     source_symbol::Union{Nothing, Symbol}
     (target = nothing, source = nothing, source_unit = Cells())
 end
@@ -203,17 +203,26 @@ end
 function setup_cross_terms(storage, model::MultiModel)
     crossd = Dict{Symbol, Any}()
     models = model.models
+    debugstr = "Determining cross-terms\n"
     for target in keys(models)
         sources = Dict{Symbol, Any}()
         for source in keys(models)
             if target == source
                 continue
             end
+            debugstr *= "$source → $target:\n"
+
             target_model = models[target]
             source_model = models[source]
             d = Dict()
             for (key, eq) in storage[target][:equations]
                 ct = declare_cross_term(eq, target_model, source_model, target = target, source = source)
+                debugstr *= String(key)*": "
+                if isnothing(ct)
+                    debugstr *= "No cross-term found.\n"
+                else
+                    debugstr *= "Cross-term found.\n"
+                end
                 d[key] = ct
             end
             sources[source] = d
@@ -221,11 +230,12 @@ function setup_cross_terms(storage, model::MultiModel)
         crossd[target] = sources
     end
     storage[:cross_terms] = crossd
+    @debug debugstr
 end
 
 function declare_cross_term(eq::TervEquation, target_model, source_model; target = nothing, source = nothing)
     target_unit = associated_unit(eq)
-    intersection = get_domain_intersection(target_unit, target_model, source_model, target, source)
+    intersection = get_model_intersection(target_unit, target_model, source_model, target, source)
     if isnothing(intersection.target)
         # Declare nothing, so we can easily spot no overlap
         ct = nothing
@@ -340,7 +350,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     I = []
     J = []
     V = []
-    outstr = ""
+    outstr = "Determining sparse pattern of $(length(targets))×$(length(sources)) models:\n"
     equation_offset = 0
     variable_offset = 0
     for target in targets

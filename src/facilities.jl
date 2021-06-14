@@ -1,5 +1,5 @@
 export TotalSurfaceMassRate, WellGroup
-export HistoryMode, PredictionMode
+export HistoryMode, PredictionMode, Wells
 
 abstract type FacilitySystem <: TervSystem end
 struct PredictionMode <: FacilitySystem end
@@ -9,25 +9,6 @@ abstract type SurfaceFacilityDomain <: TervDomain end
 abstract type WellControllerDomain <: SurfaceFacilityDomain end
 struct WellGroup <: WellControllerDomain
     well_symbols::Vector{Symbol}
-end
-
-
-function get_domain_intersection(u::Cells, target_d::WellControllerDomain, source_d::DiscretizedDomain{W}, 
-                                           target_symbol, source_symbol) where {W<:WellGrid}
-    # From controller to top well cell
-    pos = get_well_position(target_d, target_symbol)
-    (target = 1, source = pos, source_unit = Wells())
-end
-
-function get_domain_intersection(u::Wells, target_d::DiscretizedDomain{W}, source_d::WellControllerDomain,
-                                           target_symbol, source_symbol) where {W<:WellGrid}
-    # From top cell in well to control equation
-    pos = get_well_position(source_d, source_symbol)
-    (target = pos, source = 1, source_unit = Cells())
-end
-
-function get_well_position(d, symbol)
-    return findall(d.well_symbols .== symbol)[]
 end
 
 """
@@ -41,6 +22,24 @@ end
 
 function count_units(::WellGroup, ::Any)
     error("Unit not found in well group.")
+end
+
+function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, source_d::WellControllerDomain, 
+                                           target_symbol, source_symbol) where {W<:WellGrid}
+    # From controller to top well cell
+    pos = get_well_position(source_d, target_symbol)
+    (target = 1, source = pos, source_unit = Wells())
+end
+
+function get_domain_intersection(u::Wells, target_d::WellControllerDomain, source_d::DiscretizedDomain{W},
+                                           target_symbol, source_symbol) where {W<:WellGrid}
+    # From top cell in well to control equation
+    pos = get_well_position(target_d, source_symbol)
+    (target = pos, source = 1, source_unit = Cells())
+end
+
+function get_well_position(d, symbol)
+    return findall(d.well_symbols .== symbol)[]
 end
 
 
