@@ -10,10 +10,10 @@ ENV["JULIA_DEBUG"] = Terv
 # ENV["JULIA_DEBUG"] = nothing
 
 
-function perform_test(nc = 100, tstep = ones(30))
+function perform_test(nc = 100, tstep = repeat([0.02], 150))
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
-    G = get_1d_reservoir(nc, z_max = 10)
+    G = get_1d_reservoir(nc, z_max = 1)
     nc = number_of_cells(G)
     # Parameters
     bar = 1e5
@@ -36,8 +36,7 @@ function perform_test(nc = 100, tstep = ones(30))
     # Simulation model wraps grid and system together with context (which will be used for GPU etc)
     model = SimulationModel(G, sys)
 
-    # State is dict with pressure in each cell
-    # s0 = [0.0, 1.0]
+    # Put heavy phase on top and light phase on bottom
     nl = nc ÷ 2
     sL = vcat(ones(nl), zeros(nc - nl))
     s0 = 1 .- vcat(sL', 1 .- sL')
