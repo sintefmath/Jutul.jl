@@ -133,6 +133,14 @@ struct ControlEquationWell <: TervEquation
     end
 end
 
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell, 
+                            target_storage, source_storage,
+                            target_model::SimulationModel{WG},
+                            source_model::SimulationModel{D}, 
+                            target, source, dt) where {D<:DiscretizedDomain{W} where W<:MultiSegmentWell, WG<:WellGroup}
+    error("To be implemented - control eq.")
+end
+
 function associated_unit(::ControlEquationWell) Wells() end
 
 function update_equation!(eq::ControlEquationWell, storage, model, dt)
