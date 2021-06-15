@@ -89,7 +89,7 @@ Allocate storage for the model. You should overload setup_storage! if you have a
 definition.
 """
 function setup_storage(model::TervModel; kwarg...)
-    d = Dict{Symbol, Any}()
+    d = TervStorage()
     setup_storage!(d, model; kwarg...)
     return d
 end

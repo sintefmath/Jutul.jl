@@ -8,6 +8,8 @@ export BlockMajorLayout, EquationMajorLayout, UnitMajorLayout
 
 export transfer, allocate_array
 
+export TervStorage
+
 import Base: show
 
 # Physical system
@@ -271,3 +273,53 @@ function SimulationModel(g::TervGrid, system; discretization = nothing, kwarg...
     d = DiscretizedDomain(g, discretization)
     SimulationModel(d, system; kwarg...)
 end
+
+struct TervStorage{S}
+    data::S
+    function TervStorage(S = Dict{Symbol, Any}())
+        new{typeof(S)}(S)
+    end
+end
+
+function convert_to_immutable_storage(S::TervStorage)
+    return TervStorage(convert_to_immutable_storage(S.data))
+end
+
+function Base.getproperty(S::TervStorage{D}, name::Symbol) where {D<:Dict}
+    data = getfield(S, :data)
+    if name == :data
+        return data
+    else
+        return data[name]
+    end
+end
+
+function Base.getproperty(S::TervStorage, name::Symbol)
+    data = getfield(S, :data)
+    if name == :data
+        return data
+    else
+        return getproperty(data, name)
+    end
+end
+
+function Base.setproperty!(S::TervStorage, name::Symbol, x)
+    setproperty!(S.data, name, x)
+end
+
+function Base.setproperty!(S::TervStorage{D}, name::Symbol, x) where {D<:AbstractDict}
+    S.data[name] = x
+end
+
+function Base.setindex!(S::TervStorage, x, name::Symbol)
+    setindex!(S.data, x, name)
+end
+
+function Base.getindex(S::TervStorage, name::Symbol)
+    getindex(S.data, name)
+end
+
+function Base.haskey(S::TervStorage, name::Symbol)
+    return haskey(S.data, name)
+end
+

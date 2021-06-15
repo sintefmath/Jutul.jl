@@ -186,7 +186,7 @@ function setup_state!(state, model::MultiModel, init_values)
 end
 
 function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model))
-    storage = Dict()
+    storage = TervStorage()
     for key in keys(model.models)
         m = model.models[key]
         storage[key] = setup_storage(m,  state0 = state0[key], 
