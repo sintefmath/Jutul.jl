@@ -55,7 +55,7 @@ function apply_forces_to_equation!(storage, model, eq::ScalarTestEquation, force
     @. equation -= force.value
 end
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, target_storage, source_storage, target, source, dt)
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, target_storage, source_storage, target_model, source_model, target, source, dt)
     X_T = target_storage.state.XVar
     X_S = source_storage.state.XVar
     function f(X_S, X_T)

@@ -442,11 +442,11 @@ function update_cross_terms_for_pair!(storage, model, source::Symbol, target::Sy
     eqs = storage_t[:equations]
     for ekey in keys(eqs)
         ct = cross_terms[ekey]
-        update_cross_term!(ct, eqs[ekey], storage_t, storage_s, model_t, model_s, arg...)
+        update_cross_term!(ct, eqs[ekey], storage_t, storage_s, model_t, model_s, target, source, arg...)
     end
 end
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq, target_storage, source_storage, target, source, dt)
+function update_cross_term!(ct::InjectiveCrossTerm, eq, target_storage, source_storage, target_model, source_model, target, source, dt)
     error("Cross term must be specialized for your equation and models.")
 end
 
