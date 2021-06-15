@@ -98,7 +98,7 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
                                                 source_index = impact_source,
                                                 target_offset = equation_offset,
                                                 source_offset = variable_offset)
-        # TODO: Should there be a offset here from the primary variables?
+        variable_offset += number_of_degrees_of_freedom(source, u)
     end
 end
 
