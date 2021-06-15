@@ -129,7 +129,7 @@ function injective_alignment!(cache::TervAutoDiffCache, jac, unit, layout;
             for e in 1:ne
                 for d = 1:np
                     pos = find_jac_position(jac, target + target_offset, source + source_offset, e, d, nix, nu, ne, np, layout)
-                    set_jacobian_pos!(cache, target, e, d, pos)
+                    set_jacobian_pos!(cache, index, e, d, pos)
                 end
             end
         end
