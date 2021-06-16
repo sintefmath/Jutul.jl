@@ -1,6 +1,6 @@
 using GLMakie
 using MAT # .MAT file loading
-export get_minimal_tpfa_grid_from_mrst, plot_mrstdata, plot_interactive, get_test_setup
+export get_minimal_tpfa_grid_from_mrst, plot_mrstdata, plot_interactive, get_test_setup, get_well_from_mrst_data
 using SparseArrays # Sparse pattern
 using Makie
 
@@ -77,6 +77,38 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
         return D
     end
 end
+
+function get_well_from_mrst_data(mrst_data, system, ix; extraout = false)
+    W_mrst = mrst_data["W"][ix]
+    w = convert_to_immutable_storage(W_mrst)
+
+    function awrap(x::Any)
+        x
+    end
+    function awrap(x::Number)
+        [x]
+    end
+    ref_depth = W_mrst["refDepth"]
+    rc = Int64.(awrap(w.cells))
+    n = length(rc)
+    # dz = awrap(w.dZ)
+    WI = awrap(w.WI)
+    W = MultiSegmentWell(ones(n), rc, WI = WI, reference_depth = ref_depth)
+
+    cell_centroids = copy((mrst_data["G"]["cells"]["centroids"])')
+    z = vcat(ref_depth, cell_centroids[3, rc])
+    flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), TotalMassVelocityMassFractionsFlow(), W, nothing, z)
+    disc = (mass_flow = flow,)
+
+    wmodel = SimulationModel(W, system, discretization = disc)
+    if extraout
+        out = (wmodel, W_mrst)
+    else
+        out = wmodel
+    end
+    return out
+end
+
 
 function get_test_setup(grid_name; case_name = "single_phase_simple", context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05, kwarg...)
     G = get_minimal_tpfa_grid_from_mrst(grid_name)
