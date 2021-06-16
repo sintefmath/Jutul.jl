@@ -5,7 +5,6 @@ export simulator_config
 abstract type TervSimulator end
 struct Simulator <: TervSimulator
     model::TervModel
-    storage::NamedTuple
 end
 
 function Simulator(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true, kwarg...)
