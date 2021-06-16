@@ -313,6 +313,85 @@ Intersection of wells to wells
 #    return (target = nothing, source = nothing, target_unit = u, source_unit = u)
 #end
 
+"""
+Cross term from wellbore into reservoir
+"""
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, 
+                            target_storage, source_storage,
+                            target_model::SimulationModel{DR},
+                            source_model::SimulationModel{DW}, 
+                            target, source, dt) where {DR<:DiscretizedDomain{G} where G<:ReservoirGrid,
+                                                       DW<:DiscretizedDomain{W} where W<:MultiSegmentWell}
+    # error("Hello world")
+    state_res = target_storage.state
+    state_well = source_storage.state
+
+    perforations = source_model.domain.grid.perforations
+
+    res_q = ct.crossterm_target
+    well_q = ct.crossterm_source
+    apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, 1)
+end
+
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, 
+    target_storage, source_storage,
+    target_model::SimulationModel{DW}, 
+    source_model::SimulationModel{DR},
+    target, source, dt) where {DR<:DiscretizedDomain{G} where G<:ReservoirGrid,
+                               DW<:DiscretizedDomain{W} where W<:MultiSegmentWell}
+    state_res = source_storage.state
+    state_well = target_storage.state
+
+    perforations = target_model.domain.grid.perforations
+
+    res_q = ct.crossterm_source
+    well_q = ct.crossterm_target
+    apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, -1)
+end
+
+
+function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, sgn)
+    p_res = state_res.Pressure
+    p_well = state_well.Pressure
+    λ = state_res.PhaseMobilities
+    ρλ_i = state_res.MassMobilities
+    masses = state_well.TotalMasses
+
+    perforation_sources!(well_q, perforations, as_value(p_res), p_well,           as_value(λ), as_value(ρλ_i), masses, sgn)
+    perforation_sources!(res_q, perforations, p_res,           as_value(p_well), λ,           ρλ_i,           as_value(masses), sgn)
+end
+
+function perforation_sources!(target, perforations, p_res, p_well, λ, ρλ_i, masses, sgn)
+    # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
+    nc = size(ρλ_i, 1)
+    nph = size(λ, 1)
+
+    for i in eachindex(perforations.self)
+        si = perforations.self[i]
+        ri = perforations.reservoir[i]
+        wi = perforations.WI[i]
+        # TODO: Check sign
+        dp = wi*(p_res[ri] - p_well[si])
+        if dp > 0
+            # Injection
+            λ_t = 0
+            for ph in 1:nph
+                λ_t += λ[ph, ri]
+            end
+            for c in 1:nc
+                # dp * rho * s * totmob well
+                target[c, i] = sgn*masses[c, si]*λ_t*dp
+            end
+        else
+            # Production
+            for c in 1:nc
+                target[c, i] = sgn*ρλ_i[c, ri]*dp
+            end
+        end
+
+    end
+end
+
 
 # Selection of primary variables
 function select_primary_variables_domain!(S, domain::DiscretizedDomain{G}, system, formulation) where {G<:MultiSegmentWell}
