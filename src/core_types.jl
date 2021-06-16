@@ -274,24 +274,15 @@ function SimulationModel(g::TervGrid, system; discretization = nothing, kwarg...
     SimulationModel(d, system; kwarg...)
 end
 
-struct TervStorage{S}
-    data::S
+struct TervStorage
+    data
     function TervStorage(S = Dict{Symbol, Any}())
-        new{typeof(S)}(S)
+        new(S)
     end
 end
 
 function convert_to_immutable_storage(S::TervStorage)
     return TervStorage(convert_to_immutable_storage(S.data))
-end
-
-function Base.getproperty(S::TervStorage{D}, name::Symbol) where {D<:Dict}
-    data = getfield(S, :data)
-    if name == :data
-        return data
-    else
-        return data[name]
-    end
 end
 
 function Base.getproperty(S::TervStorage, name::Symbol)
@@ -307,10 +298,6 @@ function Base.setproperty!(S::TervStorage, name::Symbol, x)
     setproperty!(S.data, name, x)
 end
 
-function Base.setproperty!(S::TervStorage{D}, name::Symbol, x) where {D<:AbstractDict}
-    S.data[name] = x
-end
-
 function Base.setindex!(S::TervStorage, x, name::Symbol)
     setindex!(S.data, x, name)
 end
@@ -323,3 +310,26 @@ function Base.haskey(S::TervStorage, name::Symbol)
     return haskey(S.data, name)
 end
 
+function Base.show(io::IO, t::MIME"text/plain", storage::TervStorage) 
+    data = storage.data
+    if isa(data, AbstractDict)
+        println("TervStorage (mutable) with fields:")
+    else
+        println("TervStorage (immutable) with fields:")
+    end
+    for key in keys(data)
+        println("  $key: $(typeof(data[key]))")
+    end
+end
+
+function Base.show(io::IO, t::TervStorage, storage::TervStorage) 
+    data = storage.data
+    if isa(data, AbstractDict)
+        println("TervStorage (mutable) with fields:")
+    else
+        println("TervStorage (immutable) with fields:")
+    end
+    for key in keys(data)
+        println("  $key: $(typeof(data[key]))")
+    end
+end
