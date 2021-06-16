@@ -129,8 +129,8 @@ bh_i = map((x) -> x[:Injector][:Pressure][1], states)
 bh_p = map((x) -> x[:Producer][:Pressure][1], states)
 
 ax = Axis(f[2, 1:2], title = "Bottom hole pressure")
-l2 = lines!(ax, bh_i)
-l1 = lines!(ax, bh_p)
+l1 = lines!(ax, bh_i)
+l2 = lines!(ax, bh_p)
 axislegend(ax, [l1, l2], ["Injector", "Producer"])
 display(f)
 
