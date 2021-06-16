@@ -91,6 +91,13 @@ end
 struct InjectorControl <: WellControlForce
     target::WellTarget
     injection_mixture
+    function InjectorControl(target, mix)
+        if isa(mix, Real)
+            mix = [mix]
+        end
+        mix = vec(mix)
+        new(target, mix)
+    end
 end
 
 struct ProducerControl <: WellControlForce
