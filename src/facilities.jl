@@ -182,8 +182,6 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
     ctrl = fstate.WellGroupConfiguration.control[well_symbol]
     target = ctrl.target
     if isa(target, BottomHolePressureTarget)
-        # mswell = source_model.domain
-        # pos = get_well_position(mswell, well_symbol)
         # Treat top node as bhp reference point
         bhp_contribution = -source_storage.state.Pressure[1]
 
