@@ -28,14 +28,14 @@ function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, sourc
                                            target_symbol, source_symbol) where {W<:WellGrid}
     # From controller to top well cell
     pos = get_well_position(source_d, target_symbol)
-    (target = 1, source = pos, source_unit = Wells())
+    (target = 1, source = pos, target_unit = Cells(), source_unit = Wells())
 end
 
 function get_domain_intersection(u::Wells, target_d::WellControllerDomain, source_d::DiscretizedDomain{W},
                                            target_symbol, source_symbol) where {W<:WellGrid}
     # From top cell in well to control equation
     pos = get_well_position(target_d, source_symbol)
-    (target = pos, source = 1, source_unit = Cells())
+    (target = pos, source = 1, target_unit = Wells(), source_unit = Cells())
 end
 
 function get_well_position(d, symbol)
@@ -137,10 +137,39 @@ end
 """
 Impact from well group in facility on conservation equation inside well
 """
-function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, target_storage, source_storage, 
-                            target_model::SimulationModel{D}, source_model::SimulationModel{WG}, 
-                            target, source, dt) where {D<:DiscretizedDomain{W} where W<:MultiSegmentWell, WG<:WellGroup} 
-    
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_storage, facility_storage, 
+                            target_model::SimulationModel{D, S}, source_model::SimulationModel{WG}, 
+                            well_symbol, source, dt) where 
+                            {D<:DiscretizedDomain{W} where W<:MultiSegmentWell, 
+                            S<:Union{ImmiscibleSystem, SinglePhaseSystem}, 
+                            WG<:WellGroup} 
+    fstate = facility_storage.state
+    wstate = well_storage.state
+    # Stuff from facility
+    mswell = source_model.domain
+    pos = get_well_position(mswell, well_symbol)
+    ctrl = fstate.WellGroupConfiguration.control[well_symbol]
+    qT = fstate.TotalSurfaceMassRate[pos]
+
+    if isa(ctrl, InjectorControl)
+        @assert value(qT) >= 0
+        mix = ctrl.injection_mixture
+    else
+        @assert value(qT) <= 0
+        top_node = 1
+        masses = wstate.TotalMasses[:, top_node]
+        mass = wstate.TotalMass[top_node]
+        mix = masses./mass    
+    end
+
+    function update_topnode_sources!(src, qT, mix)
+        for i in eachindex(mix)
+            src[i] = mix[i]*qT
+        end
+    end
+
+    update_topnode_sources!(ct.crossterm_source, qT, value(mix))
+    update_topnode_sources!(ct.crossterm_target, value(qT), mix)
     error("To be implemented - mass balance well.")
 
 end
