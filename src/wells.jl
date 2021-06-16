@@ -256,12 +256,6 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
     end
 end
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, target_storage, source_storage, 
-                            target_model::SimulationModel{D}, source_model::SimulationModel{WG}, 
-                            target, source, dt) where {D<:DiscretizedDomain{W} where W<:MultiSegmentWell, WG<:WellGroup} 
-    error("To be implemented - mass balance well.")
-end
-
 function update_linearized_system_equation!(nz, r, model, equation::PotentialDropBalanceWell)
     fill_equation_entries!(nz, r, model, equation.equation)
     fill_equation_entries!(nz, nothing, model, equation.equation_cells)

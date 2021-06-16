@@ -133,6 +133,18 @@ struct ControlEquationWell <: TervEquation
     end
 end
 
+
+"""
+Impact from well group in facility on conservation equation inside well
+"""
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, target_storage, source_storage, 
+                            target_model::SimulationModel{D}, source_model::SimulationModel{WG}, 
+                            target, source, dt) where {D<:DiscretizedDomain{W} where W<:MultiSegmentWell, WG<:WellGroup} 
+    
+    error("To be implemented - mass balance well.")
+
+end
+
 function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell, 
                             target_storage, source_storage,
                             target_model::SimulationModel{WG},
