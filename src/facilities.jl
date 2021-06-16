@@ -167,11 +167,8 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
             src[i] = mix[i]*qT
         end
     end
-
-    update_topnode_sources!(ct.crossterm_source, qT, value(mix))
+    update_topnode_sources!(ct.crossterm_source, qT, value.(mix))
     update_topnode_sources!(ct.crossterm_target, value(qT), mix)
-    error("To be implemented - mass balance well.")
-
 end
 
 function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell, 
