@@ -156,9 +156,6 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
     # error("Not implemented yet")
 end
 
-function get_diagonal_cache(e::ConservationLaw)
-    e.accumulation
-end
 
 function declare_pattern(model, e::ConservationLaw, ::Cells)
     df = e.flow_discretization
