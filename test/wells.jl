@@ -3,7 +3,7 @@ ENV["JULIA_DEBUG"] = Terv
 
 ##
 casename = "welltest"
-# casename = "2cell_well"
+casename = "2cell_well"
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
 ## Set up reservoir part
 # Parameters
@@ -109,10 +109,33 @@ parameters[:Producer] = param_prod
 
 
 sim = Simulator(mmodel, state0 = state0, parameters = parameters)
-states = simulate(sim, [1.0], forces = forces)
+dt = [1.0]
+dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24
+states = simulate(sim, dt, forces = forces)
+##
+using Makie
+f = Figure()
+
+# Production/injection rates
+q_i = map((x) -> x[:Facility][:TotalSurfaceMassRate][1], states)
+ax = Axis(f[1, 1], title = "Injector rate")
+lines!(ax, q_i)
+
+q_p = map((x) -> x[:Facility][:TotalSurfaceMassRate][2], states)
+ax = Axis(f[1, 2], title = "Producer rate")
+lines!(ax, q_p)
+# BHP plotting together
+bh_i = map((x) -> x[:Injector][:Pressure][1], states)
+bh_p = map((x) -> x[:Producer][:Pressure][1], states)
+
+ax = Axis(f[2, 1:2], title = "Bottom hole pressure")
+l2 = lines!(ax, bh_i)
+l1 = lines!(ax, bh_p)
+axislegend(ax, [l1, l2], ["Injector", "Producer"])
+display(f)
+
 
 ## Plot pressure drop model
-using Makie
 friction = Wi.domain.grid.segment_models[1]
 rho = 1000
 mu = 1e-3
@@ -123,9 +146,4 @@ dp = zeros(n)
 for (i, vi) in enumerate(v)
     dp[i] = segment_pressure_drop(friction, vi, rho, mu);
 end
-plot(v, dp)
-##
-@enter segment_pressure_drop(friction, 1.0, rho, mu)
-##
-v = 0.0009816451799103162
-segment_pressure_drop(friction, v, rho, mu)
+lines(v, dp)
