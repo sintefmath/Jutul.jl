@@ -62,7 +62,7 @@ struct InjectiveCrossTerm <: CrossTerm
         if isnothing(intersection)
             intersection = get_model_intersection(target_unit, target_model, source_model, target, source)
         end
-        target_impact, source_impact, source_unit = intersection
+        target_impact, source_impact, target_unit, source_unit = intersection
         @assert !isnothing(target_impact) "Cannot declare cross term when there is no overlap between domains."
         noverlap = length(target_impact)
         @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
@@ -74,7 +74,7 @@ struct InjectiveCrossTerm <: CrossTerm
 
         target_tag = get_unit_tag(target, target_unit)
         c_term_target = allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = npartials_target, tag = target_tag)
-        c_term_source_c = CompactAutoDiffCache(equations_per_unit, noverlap, npartials_source, context = context, tag = source)
+        c_term_source_c = CompactAutoDiffCache(equations_per_unit, noverlap, npartials_source, context = context, tag = source, unit = source_unit)
         c_term_source = c_term_source_c.entries
 
         # Units and overlap - target, then source
@@ -170,7 +170,7 @@ The return value is a tuple of indices and the corresponding unit
 """
 function get_domain_intersection(u, target_d, source_d, target_symbol, source_symbol)
     source_symbol::Union{Nothing, Symbol}
-    (target = nothing, source = nothing, source_unit = Cells())
+    (target = nothing, source = nothing, target_unit = u, source_unit = Cells())
 end
 
 function number_of_models(model::MultiModel)
