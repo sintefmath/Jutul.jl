@@ -104,7 +104,7 @@ end
 
 function apply_cross_term!(eq, ct, model_t, model_s, arg...)
     ix = ct.impact.target
-    d = get_diagonal_part(eq)
+    d = get_diagonal_entries(eq)
     # TODO: Why is this allocating?
     d[:, ix] += ct.crossterm_target
 end
