@@ -170,13 +170,27 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
     update_topnode_sources!(ct.crossterm_source, qT, value.(mix))
     update_topnode_sources!(ct.crossterm_target, value(qT), mix)
 end
-
+"""
+Cross term from well on control equation for well
+"""
 function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell, 
                             target_storage, source_storage,
                             target_model::SimulationModel{WG},
                             source_model::SimulationModel{D}, 
-                            target, source, dt) where {D<:DiscretizedDomain{W} where W<:MultiSegmentWell, WG<:WellGroup}
-    error("To be implemented - control eq.")
+                            target, well_symbol, dt) where {D<:DiscretizedDomain{W} where W<:MultiSegmentWell, WG<:WellGroup}
+    fstate = target_storage.state
+    ctrl = fstate.WellGroupConfiguration.control[well_symbol]
+    target = ctrl.target
+    if isa(target, BottomHolePressureTarget)
+        # mswell = source_model.domain
+        # pos = get_well_position(mswell, well_symbol)
+        # Treat top node as bhp reference point
+        bhp_contribution = -source_storage.state.Pressure[1]
+
+        # Cross-term in well
+        ct.crossterm_source[1] = bhp_contribution
+        ct.crossterm_target[1] = value(bhp_contribution)
+    end
 end
 
 function associated_unit(::ControlEquationWell) Wells() end
