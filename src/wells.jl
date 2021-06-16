@@ -282,6 +282,38 @@ function declare_units(W::MultiSegmentWell)
     return [c, f, p]
 end
 
+"""
+Intersection of well with reservoir cells
+"""
+function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{G}, source_d::DiscretizedDomain{W},
+    target_symbol, source_symbol) where {W<:WellGrid, G<:PorousMediumGrid}
+    well = source_d.grid
+    if target_symbol == well.reservoir_symbol
+        # The symbol matches up and this well exists in this reservoir
+        p = well.perforations
+        isect = (target = p.reservoir, source = p.self, target_unit = Cells(), source_unit = Cells())
+    else
+        isect = (target = nothing, source = nothing, target_unit = Cells(), source_unit = Cells())
+    end
+end
+
+"""
+Intersection of reservoir with well cells
+"""
+function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, source_d::DiscretizedDomain{G}, target_symbol, source_symbol) where {W<:WellGrid, G<:PorousMediumGrid}
+    # transpose the connections
+    source, target, source_unit, target_unit = get_domain_intersection(u, source_d, target_d, source_symbol, target_symbol)
+    return (target = target, source = source, target_unit = target_unit, source_unit = source_unit)
+end
+
+"""
+Intersection of wells to wells
+"""
+function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, source_d::DiscretizedDomain{W}, target_symbol, source_symbol) where {W<:WellGrid}
+    return (target = nothing, source = nothing, target_unit = u, source_unit = u)
+end
+
+
 # Selection of primary variables
 function select_primary_variables_domain!(S, domain::DiscretizedDomain{G}, system, formulation) where {G<:MultiSegmentWell}
     S[:TotalMassFlux] = TotalMassFlux()
