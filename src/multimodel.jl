@@ -359,9 +359,11 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         n = 0
         for source in sources
             i, j, v, n, m = get_sparse_arguments(storage, model, target, source)
-            push!(I, i .+ equation_offset)
-            push!(J, j .+ variable_offset)
-            push!(V, v)
+            if length(i) > 0
+                push!(I, i .+ equation_offset)
+                push!(J, j .+ variable_offset)
+                push!(V, v)
+            end
             outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1).\n"
             variable_offset += m
         end
@@ -369,9 +371,9 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         equation_offset += n
     end
     @debug outstr
-    I = vcat(I...)
-    J = vcat(J...)
-    V = vcat(V...)
+    I = vec(vcat(I...))
+    J = vec(vcat(J...))
+    V = vec(vcat(V...))
     return (I, J, V, equation_offset, variable_offset)
 end
 

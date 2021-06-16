@@ -250,8 +250,10 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
         @assert numcols == ndof "Assumed square block, was $numcols x $ndof"
         numrows += number_of_units(model, eq)
     end
-    I = vcat(I...)
-    J = vcat(J...)
+    it = index_type(model.context)
+
+    I = Vector{it}(vcat(I...))
+    J = Vector{it}(vcat(J...))
     vt = float_type(model.context)
     V = zeros(vt, block_size*block_size, length(I))
     return (I, J, V, numrows, ndof)
