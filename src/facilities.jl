@@ -164,7 +164,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
 
     function update_topnode_sources!(src, qT, mix)
         for i in eachindex(mix)
-            src[i] = mix[i]*qT
+            src[i] = -mix[i]*qT
         end
     end
     update_topnode_sources!(ct.crossterm_source, qT, value.(mix))
