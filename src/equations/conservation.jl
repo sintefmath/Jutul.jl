@@ -200,7 +200,6 @@ function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
     return (e, 1.0)
 end
 
-
 function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, equation_offset = 0, variable_offset = 0)
     n = size(fluxpos, 1)
     nf = size(fluxpos, 2)
@@ -252,6 +251,6 @@ function update_half_face_flux!(law::ConservationLaw, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt, fd)
 end
 
-function get_diagonal_part(eq::ConservationLaw)
+@inline function get_diagonal_cache(eq::ConservationLaw)
     return eq.accumulation
 end

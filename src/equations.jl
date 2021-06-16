@@ -249,7 +249,7 @@ function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
     return (e, 1.0)
 end
 
-@inline function get_diagonal_part(eq::TervEquation)
+@inline function get_diagonal_entries(eq::TervEquation)
     return get_entries(get_diagonal_cache(eq))
 end
 
