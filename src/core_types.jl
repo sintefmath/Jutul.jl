@@ -310,6 +310,11 @@ function Base.haskey(S::TervStorage, name::Symbol)
     return haskey(S.data, name)
 end
 
+function Base.keys(S::TervStorage)
+    return keys(S.data)
+end
+
+
 function Base.show(io::IO, t::MIME"text/plain", storage::TervStorage) 
     data = storage.data
     if isa(data, AbstractDict)
