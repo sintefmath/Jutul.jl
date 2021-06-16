@@ -70,7 +70,7 @@ end
 end
 
 @inline function update_jacobian_entry!(nzval, c::CompactAutoDiffCache, index, eqNo, partial_index, 
-                                                                        new_value = get_partial(c, index, eqNo, partial_index),
+                                                                        new_value,
                                                                         pos = c.jacobian_positions)
     @inbounds nzval[get_jacobian_pos(c, index, eqNo, partial_index, pos)] = new_value
 end
