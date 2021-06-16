@@ -1,5 +1,5 @@
 export MultiPhaseSystem, ImmiscibleSystem, SinglePhaseSystem
-export LiquidPhase, VaporPhase
+export AqueousPhase, LiquidPhase, VaporPhase
 export number_of_phases, get_short_name, get_name, subscript
 export update_linearized_system!
 export SourceTerm, build_forces
@@ -68,12 +68,19 @@ end
 abstract type AbstractPhase end
 
 function get_short_name(phase::AbstractPhase)
-    return get_name(phase)[1:1]
+    return get_name(phase)[]
 end
 
 function subscript(prefix::String, phase::AbstractPhase)
     return string(prefix, "_", get_short_name(phase))
 end
+# Aqueous phase
+struct AqueousPhase <: AbstractPhase end
+
+function get_name(::AqueousPhase)
+    return "Aqueous"
+end
+
 # Liquid phase
 struct LiquidPhase <: AbstractPhase end
 
