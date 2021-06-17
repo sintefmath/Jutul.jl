@@ -1,5 +1,6 @@
 using Terv
 ENV["JULIA_DEBUG"] = Terv
+single_phase = false
 
 ##
 casename = "welltest"
@@ -15,16 +16,28 @@ pRef = 100*bar
 rhoLS = 1000
 rhoL = (p) -> rhoLS*exp((p - pRef)*cl)
 phase = LiquidPhase()
-sys = SinglePhaseSystem(phase)
+
+if single_phase
+    sys = SinglePhaseSystem(phase)
+else
+    phase2 = AqueousPhase()
+    sys = ImmiscibleSystem([phase, phase2])
+end
 model = SimulationModel(G, sys)
 
-init = Dict(:Pressure => p0)
+init = Dict(:Pressure => p0, :Saturations => [1, 0])
 state0r = setup_state(model, init)
 
 # Model parameters
 param_res = setup_parameters(model)
-param_res[:Viscosity] = [mu]
-param_res[:Density] = [rhoL]
+if single_phase
+    param_res[:Viscosity] = [mu]
+    param_res[:Density] = [rhoL]
+else
+    param_res[:Viscosity] = [mu, mu]
+    param_res[:Density] = [rhoL, rhoL]
+    param_res[:CoreyExponents] = [1, 1]
+end
 
 timesteps = [1.0]
 sim = Simulator(model, state0 = state0r, parameters = param_res)
@@ -59,7 +72,7 @@ function build_well(mrst_data, ix)
 end
 
 # Initial condition for all wells
-w0 = Dict(:Pressure => p0, :TotalMassFlux => 1e-12)
+w0 = Dict(:Pressure => p0, :TotalMassFlux => 1e-12, :Saturations => [1, 0])
 
 # Rate injector
 Wi = build_well(mrst_data, 1)
