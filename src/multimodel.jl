@@ -363,6 +363,11 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
                 push!(I, i .+ equation_offset)
                 push!(J, j .+ variable_offset)
                 push!(V, v)
+                @assert maximum(i) <= n "I index exceeded $n for $source → $target (largest value: $(maximum(i))"
+                @assert maximum(j) <= m "J index exceeded $m for $source → $target (largest value: $(maximum(j))"
+
+                @assert minimum(i) >= 1 "I index was lower than 1 for $source → $target"
+                @assert minimum(j) >= 1 "J index was lower than 1 for $source → $target"
             end
             outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1).\n"
             variable_offset += m
