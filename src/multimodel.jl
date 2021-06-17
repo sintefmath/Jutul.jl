@@ -211,22 +211,24 @@ function setup_cross_terms(storage, model::MultiModel)
             if target == source
                 continue
             end
-            debugstr *= "$source → $target:\n"
+            tmpstr = "$source → $target:\n"
 
             target_model = models[target]
             source_model = models[source]
             d = Dict()
+            found = false
             for (key, eq) in storage[target][:equations]
                 ct = declare_cross_term(eq, target_model, source_model, target = target, source = source)
-                debugstr *= String(key)*": "
-                if isnothing(ct)
-                    debugstr *= "No cross-term found.\n"
-                else
-                    debugstr *= "Cross-term found.\n"
+                if !isnothing(ct)
+                    found = true
+                    tmpstr *= String(key)*": Cross-term found.\n"
                 end
                 d[key] = ct
             end
             sources[source] = d
+            if found
+                debugstr *= tmpstr
+            end
         end
         crossd[target] = sources
     end
