@@ -28,14 +28,14 @@ function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, sourc
                                            target_symbol, source_symbol) where {W<:WellGrid}
     # From controller to top well cell
     pos = get_well_position(source_d, target_symbol)
-    (target = 1, source = pos, target_unit = Cells(), source_unit = Wells())
+    (target = 1, source = pos, target_unit = u, source_unit = Wells())
 end
 
 function get_domain_intersection(u::Wells, target_d::WellControllerDomain, source_d::DiscretizedDomain{W},
                                            target_symbol, source_symbol) where {W<:WellGrid}
     # From top cell in well to control equation
     pos = get_well_position(target_d, source_symbol)
-    (target = pos, source = 1, target_unit = Wells(), source_unit = Cells())
+    (target = pos, source = 1, target_unit = u, source_unit = Cells())
 end
 
 function get_well_position(d, symbol)

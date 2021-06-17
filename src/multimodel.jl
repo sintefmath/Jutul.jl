@@ -80,7 +80,7 @@ struct InjectiveCrossTerm <: CrossTerm
         # Units and overlap - target, then source
         units = (target = target_unit, source = source_unit)
         overlap = (target = target_impact, source = source_impact)
-        new(overlap, units, c_term_target, c_term_source, c_term_source_c, equations_per_unit, npartials_target, npartials_target)
+        new(overlap, units, c_term_target, c_term_source, c_term_source_c, equations_per_unit, npartials_target, npartials_source)
     end
 end
 
@@ -134,7 +134,6 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
     else
         target_impact = primitive[1]
         source_impact = primitive[2]
-        n_impact = length(target_impact)
         source_unit = x.units.source
         target_unit = x.units.target
         nunits_source = count_units(source_model.domain, source_unit)
@@ -161,6 +160,7 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
 
         @assert minimum(I) >= 1 "I index was lower than 1"
         @assert minimum(J) >= 1 "J index was lower than 1"
+        @debug out
     end
     return out
 end
