@@ -138,6 +138,7 @@ function declare_sparsity(model, e::TervEquation, unit, layout::EquationMajorLay
             error("Pattern I, J for $(typeof(e)) must have equal lengths for unit $(typeof(unit)). (|I| = $ni != $nj = |J|)")
         end
         nu = number_of_units(model, e)
+        nu_other = count_units(model.domain, unit)
         nrow_blocks = number_of_equations_per_unit(e)
         ncol_blocks = number_of_partials_per_unit(model, unit)
         nunits = count_units(model.domain, unit)
@@ -147,7 +148,7 @@ function declare_sparsity(model, e::TervEquation, unit, layout::EquationMajorLay
         end
         if ncol_blocks > 1
             I = repeat(I, ncol_blocks)
-            J = vcat(map((x) -> (x-1)*nu .+ J, 1:ncol_blocks)...)
+            J = vcat(map((x) -> (x-1)*nu_other .+ J, 1:ncol_blocks)...)
         end
         n = number_of_equations(model, e)
         m = nunits*ncol_blocks
