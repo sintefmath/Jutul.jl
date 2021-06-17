@@ -136,7 +136,9 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
         source_impact = primitive[2]
         n_impact = length(target_impact)
         source_unit = x.units.source
+        target_unit = x.units.target
         nunits_source = count_units(source_model.domain, source_unit)
+        nunits_target = count_units(target_model.domain, target_unit)
 
         n_partials = x.npartials_source
         n_eqs = x.equations_per_unit
@@ -144,16 +146,21 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
         J = []
         for eqno in 1:n_eqs
             for derno in 1:n_partials
-                push!(I, target_impact .+ (eqno-1)*n_impact)
+                push!(I, target_impact .+ (eqno-1)*nunits_target)
                 push!(J, source_impact .+ (derno-1)*nunits_source)
             end
         end
         I = vcat(I...)
         J = vcat(J...)
 
-        n = n_eqs*n_impact
+        n = n_eqs*nunits_target
         m = n_partials*nunits_source
         out = (I, J, n, m)
+        @assert maximum(I) <= n "I index exceeded declared row count $n (largest value: $(maximum(I)))"
+        @assert maximum(J) <= m "J index exceeded declared column count $m (largest value: $(maximum(J)))"
+
+        @assert minimum(I) >= 1 "I index was lower than 1"
+        @assert minimum(J) >= 1 "J index was lower than 1"
     end
     return out
 end
