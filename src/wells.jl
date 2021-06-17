@@ -414,7 +414,7 @@ end
 function mix_by_saturations(s, values)
     v = 0
     for i in eachindex(s)
-        v += save[i]*values[i]
+        v += s[i]*values[i]
     end
     return v
 end
