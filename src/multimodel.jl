@@ -56,6 +56,8 @@ struct InjectiveCrossTerm <: CrossTerm
     equations_per_unit     # Number of equations per impact
     npartials_target       # Number of partials per equation (in target)
     npartials_source       # (in source)
+    target_symbol
+    source_symbol
     function InjectiveCrossTerm(target_eq, target_model, source_model, intersection = nothing; target = nothing, source = nothing)
         context = target_model.context
         target_unit = associated_unit(target_eq)
@@ -80,7 +82,7 @@ struct InjectiveCrossTerm <: CrossTerm
         # Units and overlap - target, then source
         units = (target = target_unit, source = source_unit)
         overlap = (target = target_impact, source = source_impact)
-        new(overlap, units, c_term_target, c_term_source, c_term_source_c, equations_per_unit, npartials_target, npartials_source)
+        new(overlap, units, c_term_target, c_term_source, c_term_source_c, equations_per_unit, npartials_target, npartials_source, target, source)
     end
 end
 
@@ -93,11 +95,13 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
     impact_source = ct.impact[2]
     punits = get_primary_variable_ordered_units(source)
     for u in punits
+        nu = count_units(source.domain, u)
         injective_alignment!(cs, jac, u, layout,
                                                 target_index = impact_target,
                                                 source_index = impact_source,
                                                 target_offset = equation_offset,
-                                                source_offset = variable_offset)
+                                                source_offset = variable_offset, 
+                                                number_of_units = nu)
         variable_offset += number_of_degrees_of_freedom(source, u)
     end
 end
