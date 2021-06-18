@@ -607,8 +607,11 @@ function update_primary_variables!(storage, model::MultiModel)
     end
 end
 
+function reset_to_previous_state!(storage, model::MultiModel)
+    submodels_storage_apply!(storage, model, reset_to_previous_state!)
+end
+
 function update_after_step!(storage, model::MultiModel, dt, forces)
-    submodels_storage_apply!(storage, model, update_after_step!, dt, forces)
     for key in keys(model.models)
         update_after_step!(storage[key], model.models[key], dt, forces[key])
     end

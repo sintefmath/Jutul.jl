@@ -483,3 +483,13 @@ function get_output_state(storage, model)
     # As this point (after a converged step) state0 should be state without AD.
     return deepcopy(storage.state0)
 end
+
+function reset_to_previous_state!(storage, model)
+    primary = storage.primary_variables
+    state0 = storage.state0
+    for f in keys(primary)
+        if haskey(state0, f)
+            update_values!(primary[f], state0[f])
+        end
+    end
+end

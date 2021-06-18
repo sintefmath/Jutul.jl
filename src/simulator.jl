@@ -159,13 +159,7 @@ function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
             @debug "Finalized in $t_finalize seconds."
         end
     else
-        primary = sim.storage.primary_variables
-        state0 = sim.storage.state0
-        for f in keys(primary)
-            if haskey(state0, f)
-                update_values!(primary[f], state0[f])
-            end
-        end
+        reset_to_previous_state!(sim.storage, sim.model)
     end
     return done
 end
