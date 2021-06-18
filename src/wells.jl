@@ -54,7 +54,6 @@ struct MultiSegmentWell <: WellGrid
         @assert size(N, 1) == 2
 
         volumes = vcat([accumulator_volume], volumes)
-        @show volumes
         if isnothing(WI)
             @warn "No well indices provided. Using 1e-12."
             WI = repeat(1e-12, nr)
@@ -187,9 +186,7 @@ end
 function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
     # Loop over segments, calculate pressure drop, ...
     W = model.domain.grid
-    # nf = number_of_faces(G)
     state = storage.state
-    # @show state
     nph = number_of_phases(model.system)
     single_phase = nph == 1
     if single_phase

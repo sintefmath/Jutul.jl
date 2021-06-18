@@ -203,7 +203,6 @@ function plot_mrstdata(mrst_grid, data)
             Axis(fig[1, 1])
             heatmap!(reshape(data, cartDims[1:2]...))
             ul = (minimum(data), maximum(data))
-            @show ul
             # vertical colorbars
             Colorbar(fig[1, 2], limits = ul)
             ax = fig
@@ -272,7 +271,6 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
         # looping = !looping
         # println("Loop function called")
         if false
-            @show loop_mode
             if loop_mode.val > 0
                 # println("Doing loop")
                 start = state_index.val
@@ -280,7 +278,6 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
                     start = 1
                 end
                 for i = start:nstates
-                    @show i
                     newindex = increment_index()
                     if newindex > nstates
                         break
