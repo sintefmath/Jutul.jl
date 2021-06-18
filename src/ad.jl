@@ -132,8 +132,6 @@ function injective_alignment!(cache::TervAutoDiffCache, jac, unit, layout;
         else
             nu_t = number_of_units_target
         end
-        @debug ad_dims(cache)
-        nix = length(target_index)
         N = length(source_index)
         @assert length(target_index) == N
         for index in 1:N
