@@ -94,17 +94,9 @@ function select_secondary_variables!(sf, domain, system, formulation)
     select_secondary_variables_formulation!(sf, domain, system, formulation)
 end
 
-function select_secondary_variables_domain!(sf, domain, system, formulation)
-
-end
-
-function select_secondary_variables_system!(sf, domain, system, formulation)
-
-end
-
-function select_secondary_variables_formulation!(sf, domain, system, formulation)
-
-end
+select_secondary_variables_domain!(sf, domain, system, formulation) = nothing
+select_secondary_variables_system!(sf, domain, system, formulation) = nothing
+select_secondary_variables_formulation!(sf, domain, system, formulation) = nothing
 
 ## Definition
 function select_primary_variables(domain, system, formulation)
@@ -119,21 +111,11 @@ function select_primary_variables!(sf, domain, system, formulation)
     select_primary_variables_formulation!(sf, domain, system, formulation)
 end
 
-function select_primary_variables_domain!(sf, domain, system, formulation)
+select_primary_variables_domain!(sf, domain, system, formulation) = nothing
+select_primary_variables_system!(sf, domain, system, formulation) = nothing
+select_primary_variables_formulation!(sf, domain, system, formulation) = nothing
 
-end
-
-function select_primary_variables_system!(sf, domain, system, formulation)
-
-end
-
-function select_primary_variables_formulation!(sf, domain, system, formulation)
-
-end
-
-function minimum_output_variables(domain, system, formulation, primary_variables, secondary_variables)
-    minimum_output_variables(system, primary_variables)
-end
+minimum_output_variables(domain, system, formulation, primary_variables, secondary_variables) = minimum_output_variables(system, primary_variables)
 
 function minimum_output_variables(system, primary_variables)
     # Default: Output all primary variables
