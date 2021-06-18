@@ -164,18 +164,21 @@ function align_to_jacobian!(eq::PotentialDropBalanceWell, jac, model, u::Cells; 
     cache = eq.equation_cells
     layout = matrix_layout(model.context)
     N = model.domain.grid.neighborship
-    potential_drop_cells_alignment!(cache, jac, N, layout; kwarg...)
+    nc = count_units(model.domain, u)
+    potential_drop_cells_alignment!(cache, jac, N, layout, nc; kwarg...)
 end
 
-function potential_drop_cells_alignment!(cache, jac, N, layout; equation_offset = 0, variable_offset = 0)
-    nu, ne, np = ad_dims(cache)
+function potential_drop_cells_alignment!(cache, jac, N, layout, nc; equation_offset = 0, variable_offset = 0)
+    _, ne, np = ad_dims(cache)
     nf = size(N, 2)
+    nu_t = nf
+    nu_s = nc
     for face in 1:nf
         for lr = 1:size(N, 1)
             cellix = N[lr, face]
             for e in 1:ne
                 for d = 1:np
-                    pos = find_jac_position(jac, face + equation_offset, cellix + variable_offset, e, d, nu, nu, ne, np, layout)
+                    pos = find_jac_position(jac, face + equation_offset, cellix + variable_offset, e, d, nu_t, nu_s, ne, np, layout)
                     set_jacobian_pos!(cache, 2*(face-1) + lr, e, d, pos)
                 end
             end
