@@ -34,18 +34,11 @@ include("equations.jl")
 include("ad.jl")
 
 include("conservation/conservation.jl")
-
-include("applications/reservoir_simulator/porousmedia_grids.jl")
-include("applications/reservoir_simulator/multiphase.jl")
-include("applications/reservoir_simulator/multiphase_secondary_variables.jl")
-include("applications/reservoir_simulator/facility/wells.jl")
-include("applications/reservoir_simulator/facility/facility.jl")
-include("applications/reservoir_simulator/porousmedia.jl")
-include("applications/reservoir_simulator/mrst_input.jl")
-
 include("simulator.jl")
 
 include("utils.jl")
+
 # Various add-ons
+include("applications/reservoir_simulator/reservoir_simulator.jl")
 include("applications/test_systems/test_systems.jl")
 end # module
