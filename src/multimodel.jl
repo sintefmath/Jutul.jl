@@ -94,14 +94,16 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
     impact_target = ct.impact[1]
     impact_source = ct.impact[2]
     punits = get_primary_variable_ordered_units(source)
+    nu_t = count_units(target.domain, ct.units.target)
     for u in punits
-        nu = count_units(source.domain, u)
+        nu_s = count_units(source.domain, u)
         injective_alignment!(cs, jac, u, layout,
                                                 target_index = impact_target,
                                                 source_index = impact_source,
                                                 target_offset = equation_offset,
                                                 source_offset = variable_offset, 
-                                                number_of_units = nu)
+                                                number_of_units_source = nu_s,
+                                                number_of_units_target = nu_t)
         variable_offset += number_of_degrees_of_freedom(source, u)
     end
 end
