@@ -26,7 +26,6 @@ include("domains.jl")
 
 # Meat and potatoes
 include("variables.jl")
-include("static_structures.jl")
 include("conservation/flux.jl")
 include("linsolve.jl")
 
