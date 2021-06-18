@@ -4,6 +4,7 @@ ENV["JULIA_DEBUG"] = Terv
 
 ##
 casename = "simple_egg"
+
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
 ## Set up initializers
 models = OrderedDict()
@@ -82,6 +83,7 @@ w0 = Dict(:Pressure => mean(p0), :TotalMassFlux => 1e-12, :Saturations => [1.0, 
 well_symbols = map((x) -> Symbol(x["name"]), vec(mrst_data["W"]))
 num_wells = length(well_symbols)
 
+well_parameters = Dict()
 controls = Dict()
 for i = 1:num_wells
     sym = well_symbols[i]
@@ -108,6 +110,14 @@ for i = 1:num_wells
         println("Producer")
         ctrl = ProducerControl(target)
     end
+    param_w = setup_parameters(w)
+    param_w[:Viscosity] = vec(mu)
+    param_w[:Density] = [rhoA, rhoL]
+    param_w[:ReferenceDensity] = vec(rhoS)
+    
+
+
+    well_parameters[sym] = param_w
     controls[sym] = ctrl
     forces[sym] = nothing
     initializer[sym] = w0
@@ -128,12 +138,15 @@ mmodel = MultiModel(convert_to_immutable_storage(models))
 # mmodel = MultiModel((Reservoir = model, Injector = Wi, Producer = Wp, Facility = WG))
 # Set up joint state and simulate
 state0 = setup_state(mmodel, initializer)
-forces[:Facility] = controls
+forces[:Facility] = facility_forces
 # forces = Dict(:Reservoir => nothing, :Facility => facility_forces, :Injector => nothing, :Producer => nothing)
 
 parameters = setup_parameters(mmodel)
 parameters[:Reservoir] = param_res
 
+for w in well_symbols
+    parameters[w] = well_parameters[w]
+end
 
 sim = Simulator(mmodel, state0 = state0, parameters = parameters)
 dt = [1.0]
