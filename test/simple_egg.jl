@@ -4,6 +4,9 @@ ENV["JULIA_DEBUG"] = Terv
 
 ##
 casename = "simple_egg"
+# casename = "intermediate"
+# casename = "mini"
+
 
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
 ## Set up initializers
@@ -39,7 +42,11 @@ param_res[:Density] = [rhoA, rhoL]
 param_res[:CoreyExponents] = vec(nkr)
 param_res[:ReferenceDensity] = vec(rhoS)
 
-timesteps = vec(mrst_data["dt"])
+dt = mrst_data["dt"]
+if isa(dt, Real)
+    dt = [dt]
+end
+timesteps = vec(dt)
 sim = Simulator(model, state0 = state0r, parameters = param_res)
 
 # simulate(sim, timesteps)
@@ -149,8 +156,9 @@ for w in well_symbols
 end
 
 sim = Simulator(mmodel, state0 = state0, parameters = parameters)
-dt = [1.0]
-dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24
+# dt = [1.0]
+# dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24
+dt = timesteps
 states = simulate(sim, dt, forces = forces)
 ##
 using Makie
