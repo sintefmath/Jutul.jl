@@ -21,32 +21,32 @@ include("multimodel.jl")
 
 # include("models.jl")
 # MRST stuff
-include("mrst_input.jl")
 # Grids, types
 include("domains.jl")
-include("porousmedia_grids.jl")
 
 # Meat and potatoes
-include("statefunctions.jl")
+include("variables.jl")
 include("static_structures.jl")
-include("flux.jl")
-include("benchmarks.jl")
+include("conservation/flux.jl")
 include("linsolve.jl")
 
 include("context.jl")
 include("equations.jl")
 include("ad.jl")
 
-include("equations/conservation.jl")
-include("multiphase.jl")
-include("multiphase_sf.jl")
-include("wells.jl")
-include("facilities.jl")
-include("porousmedia.jl")
+include("conservation/conservation.jl")
+
+include("applications/reservoir_simulator/porousmedia_grids.jl")
+include("applications/reservoir_simulator/multiphase.jl")
+include("applications/reservoir_simulator/multiphase_secondary_variables.jl")
+include("applications/reservoir_simulator/facility/wells.jl")
+include("applications/reservoir_simulator/facility/facility.jl")
+include("applications/reservoir_simulator/porousmedia.jl")
+include("applications/reservoir_simulator/mrst_input.jl")
 
 include("simulator.jl")
 
 include("utils.jl")
 # Various add-ons
-include("test_systems.jl")
+include("applications/test_systems/test_systems.jl")
 end # module
