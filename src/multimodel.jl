@@ -194,6 +194,12 @@ function get_primary_variable_names(model::MultiModel)
 
 end
 
+function sort_secondary_variables!(model::MultiModel)
+    for m in model.models
+        sort_secondary_variables!(m)
+    end
+end
+
 function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
 end
