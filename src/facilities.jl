@@ -159,10 +159,14 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
     qT = fstate.TotalSurfaceMassRate[pos]
 
     if isa(ctrl, InjectorControl)
-        @assert value(qT) >= 0
+        if value(qT) < 0
+            @warn "Injector $well_symbol is producing?"
+        end
         mix = ctrl.injection_mixture
     else
-        @assert value(qT) <= 0
+        if value(qT) > 0
+            @warn "Producer $well_symbol is injecting?"
+        end
         top_node = 1
         masses = wstate.TotalMasses[:, top_node]
         mass = wstate.TotalMass[top_node]
@@ -210,7 +214,7 @@ function update_equation!(eq::ControlEquationWell, storage, model, dt)
     for (i, key) in enumerate(wells)
         C = ctrl[key]
         T = C.target
-        @debug "Well $key operating using $T"
+        # @debug "Well $key operating using $T"
         eq.equation.entries[i] = well_control_equation(ctrl, T, surf_rate[i])
     end
 end
