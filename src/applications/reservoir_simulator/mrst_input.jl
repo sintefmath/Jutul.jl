@@ -180,8 +180,6 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         # Model parameters
         parameters = setup_parameters(model)
         parameters[:Density] = [rhoL, rhoL]
-        # parameters[:CoreyExponents] = [2, 3]
-        # parameters[:Viscosity] = [mu, mu/2]
     else
         error("Unknown case $case_name")
     end

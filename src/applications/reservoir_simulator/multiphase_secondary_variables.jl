@@ -63,14 +63,14 @@ struct BrooksCoreyRelPerm <: RelativePermeabilities
         r = expand(residuals)
         epts = expand(endpoints)
         
-        total = sum(endpoints)
+        total = sum(residuals)
         new(e, r, epts, total)
     end
 end
 
-@terv_secondary function update_as_secondary!(kr, kr_def::MultiPhaseSystem, model, param, Saturations)
+@terv_secondary function update_as_secondary!(kr, kr_def::BrooksCoreyRelPerm, model, param, Saturations)
     n, sr, kwm, sr_tot = kr_def.exponents, kr_def.residuals, kr_def.endpoints, kr_def.residual_total
-    @tullio kr[ph, i] = brooks_corey_relperm(Saturations[ph, i], n[ph], sr[ph], kwm[ph], sr_tot[ph])
+    @tullio kr[ph, i] = brooks_corey_relperm(Saturations[ph, i], n[ph], sr[ph], kwm[ph], sr_tot)
 end
 
 function brooks_corey_relperm(s, n, sr, kwm, sr_tot)
