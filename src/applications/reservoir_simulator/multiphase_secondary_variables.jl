@@ -44,6 +44,42 @@ end
     @tullio mob[ph, i] = Saturations[ph, i]^n[ph] / mu[ph]
 end
 
+abstract type RelativePermeabilities <: GroupedVariables end
+
+struct BrooksCoreyRelPerm <: RelativePermeabilities
+    exponents
+    residuals
+    endpoints
+    residual_total
+    function BrooksCoreyRelPerm(system::MultiPhaseSystem, exponents = 1, residuals = 0, endpoints = 1)
+        nph = number_of_phases(system)
+
+        expand(v::Real) = [v for i in 1:nph]
+        function expand(v::AbstractVector)
+            @assert length(v) == nph
+            return v
+        end
+        e = expand(exponents)
+        r = expand(residuals)
+        epts = expand(endpoints)
+        
+        total = sum(endpoints)
+        new(e, r, epts, total)
+    end
+end
+
+@terv_secondary function update_as_secondary!(kr, kr_def::MultiPhaseSystem, model, param, Saturations)
+    n, sr, kwm, sr_tot = kr_def.exponents, kr_def.residuals, kr_def.endpoints, kr_def.residual_total
+    @tullio kr[ph, i] = brooks_corey_relperm(Saturations[ph, i], n[ph], sr[ph], kwm[ph], sr_tot[ph])
+end
+
+function brooks_corey_relperm(s, n, sr, kwm, sr_tot)
+    den = 1 - sr_tot;
+    sat = ((s - sr)./den);
+    sat = max(min(sat, 1), 0);
+    return kwm*sat^n;
+end
+
 """
 Mass density of each phase
 """
