@@ -197,16 +197,27 @@ end
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
     acc = get_entries(eq.accumulation)
-    mob = storage.state.PhaseMobilities
-    insert_phase_sources(mob, acc, force)
+    state = storage.state
+    if haskey(state, :RelativePermeabilities)
+        kr = state.RelativePermeabilities
+    else
+        kr = 1.0
+    end
+    mu = state.PhaseViscosities
+    insert_phase_sources(kr, mu, acc, force)
 end
 
-function insert_phase_sources(mob, acc, sources)
+function insert_phase_sources(kr, mu, acc, sources)
     nph = size(acc, 1)
     for src in sources
         v = src.value
         c = src.cell
-        mobt = sum(mob[:, c])
+        if isa(kr, Real)
+            mob = kr./mu[:, c]
+        else
+            mob = kr[:, c]./mu[:, c]
+        end
+        mobt = sum(mob)
         if v > 0
             for index in 1:nph
                 f = src.fractional_flow[index]
@@ -214,7 +225,7 @@ function insert_phase_sources(mob, acc, sources)
             end
         else
             for index in 1:nph
-                f = mob[index, c]/mobt
+                f = mob[index]/mobt
                 @inbounds acc[index, c] -= v*f
             end
         end

@@ -127,7 +127,6 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         # Parameters
         bar = 1e5
         p0 = 100*bar # 100 bar
-        mu = 1e-3    # 1 cP
         cl = 1e-5/bar
         pRef = 100*bar
         rhoLS = 1000
@@ -150,7 +149,6 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         state0 = setup_state(model, init)
         # Model parameters
         parameters = setup_parameters(model)
-        parameters[:Viscosity] = [mu]
         parameters[:Density] = [rhoL]
     elseif case_name == "two_phase_simple"
         bar = 1e5
@@ -166,6 +164,11 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         sys = ImmiscibleSystem([L, V])
         model = SimulationModel(G, sys, context = context)
 
+        kr = BrooksCoreyRelPerm(sys, [2, 3])
+        s = model.secondary_variables
+        s[:RelativePermeabilities] = kr
+        s[:PhaseViscosities] = ConstantVariables([mu, mu/2])
+
         tot_time = sum(timesteps)
         irate = pvfrac*sum(pv)/tot_time
         src  = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
@@ -177,8 +180,8 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         # Model parameters
         parameters = setup_parameters(model)
         parameters[:Density] = [rhoL, rhoL]
-        parameters[:CoreyExponents] = [2, 3]
-        parameters[:Viscosity] = [mu, mu/2]
+        # parameters[:CoreyExponents] = [2, 3]
+        # parameters[:Viscosity] = [mu, mu/2]
     else
         error("Unknown case $case_name")
     end

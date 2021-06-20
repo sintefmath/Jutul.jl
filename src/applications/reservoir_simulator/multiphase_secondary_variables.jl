@@ -1,10 +1,10 @@
 export PhaseMassDensities, PhaseMobilities, MassMobilities
 
-abstract type PhaseVariable <: GroupedVariables end
+abstract type PhaseVariables <: GroupedVariables end
 abstract type ComponentVariable <: GroupedVariables end
 abstract type PhaseAndComponentVariable <: GroupedVariables end
 
-function degrees_of_freedom_per_unit(model, sf::PhaseVariable) number_of_phases(model.system) end
+function degrees_of_freedom_per_unit(model, sf::PhaseVariables) number_of_phases(model.system) end
 
 # Single-phase specialization
 function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::ComponentVariable) where {D, S<:SinglePhaseSystem} 1 end
@@ -30,7 +30,7 @@ end
 """
 Volumetric mobility of each phase
 """
-struct PhaseMobilities <: PhaseVariable end
+struct PhaseMobilities <: PhaseVariables end
 
 @terv_secondary function update_as_secondary!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, param) where {G, S<:SinglePhaseSystem}
     mu = param.Viscosity[1]
@@ -44,7 +44,7 @@ end
     @tullio mob[ph, i] = Saturations[ph, i]^n[ph] / mu[ph]
 end
 
-abstract type RelativePermeabilities <: GroupedVariables end
+abstract type RelativePermeabilities <: PhaseVariables end
 
 struct BrooksCoreyRelPerm <: RelativePermeabilities
     exponents
@@ -83,7 +83,7 @@ end
 """
 Mass density of each phase
 """
-struct PhaseMassDensities <: PhaseVariable end
+struct PhaseMassDensities <: PhaseVariables end
 
 @terv_secondary function update_as_secondary!(rho, tv::PhaseMassDensities, model, param, Pressure)
     rho_input = param.Density
@@ -108,8 +108,14 @@ Mobility of the mass of each component, in each phase (TBD how to represent this
 """
 struct MassMobilities <: PhaseAndComponentVariable end
 
-@terv_secondary function update_as_secondary!(mobrho, tv::MassMobilities, model, param, PhaseMobilities, PhaseMassDensities)
-    @tullio mobrho[ph, i] = PhaseMobilities[ph, i]*PhaseMassDensities[ph, i]
+@terv_secondary function update_as_secondary!(ρλ_i, tv::MassMobilities, model, param, PhaseMassDensities, PhaseViscosities, RelativePermeabilities)
+    kr, μ, ρ = RelativePermeabilities, PhaseViscosities, PhaseMassDensities
+    @tullio ρλ_i[ph, i] = kr[ph, i]*ρ[ph, i]/μ[ph, i]
+end
+
+@terv_secondary function update_as_secondary!(ρλ_i, tv::MassMobilities, model::SimulationModel{D, S}, param, PhaseMassDensities, PhaseViscosities) where {D, S<:SinglePhaseSystem}
+    μ, ρ = PhaseViscosities, PhaseMassDensities
+    @tullio ρλ_i[i] = ρ[i]/μ[i]
 end
 
 # Total masses

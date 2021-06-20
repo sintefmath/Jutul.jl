@@ -215,3 +215,34 @@ function initialize_variable_value!(state, model, pvar::GroupedVariables, symb::
     return initialize_variable_value!(state, model, pvar, symb, repeat([val], n))
 end
 
+# Specific variable implementations that are generic for many types of system follow
+
+"""
+A set of constants, repeated over the entire set of Cells or some other unit
+"""
+struct ConstantVariables <: GroupedVariables
+    constants::AbstractVector
+    unit::TervUnit
+    function ConstantVariables(constants, unit = Cells())
+        new(constants, unit)
+    end
+end
+
+values_per_unit(model, var::ConstantVariables) = length(var.constants)
+associated_unit(model, var::ConstantVariables) = var.unit
+
+function initialize_variable_value(model, var::ConstantVariables, val; perform_copy = true)
+    # Ignore initializer, use instance as view to avoid allocating lots of copies
+    nu = number_of_units(model, var)
+    return view(var.constants, :, ones(Integer, nu))
+end
+
+function initialize_secondary_variable_ad!(state, model, var::ConstantVariables, arg...; kwarg...)
+    # Do nothing. There is no need to add AD.
+    return state
+end
+
+function initialize_primary_variable_ad!(state, model, var::ConstantVariables, sym, arg...; kwarg...)
+    error("$sym is declared to be constants - cannot be primary variables.")
+end
+
