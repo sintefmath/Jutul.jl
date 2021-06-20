@@ -299,8 +299,8 @@ function initialize_primary_variable_ad!(arg...; offset = 0, kwarg...)
     initialize_variable_ad(arg..., offset + 1; kwarg...)
 end
 
-function initialize_secondary_variable_ad(arg...; kwarg...)
-    initialize_variable_ad(arg..., NaN; kwarg...)
+function initialize_secondary_variable_ad!(state, model, pvar, arg...; kwarg...)
+    initialize_variable_ad(state, model, pvar, arg..., NaN; kwarg...)
 end
 
 function initialize_variable_ad(state, model, pvar, symb, npartials, diag_pos; kwarg...)
@@ -429,7 +429,7 @@ function convert_state_ad(model, state, tag = nothing)
 
         t = get_unit_tag(tag, u)
         n_partials = degrees_of_freedom_per_unit(model, u)
-        stateAD = initialize_secondary_variable_ad(stateAD, model, svar, skey, n_partials, tag = t, context = context)
+        stateAD = initialize_secondary_variable_ad!(stateAD, model, svar, skey, n_partials, tag = t, context = context)
     end
     @debug outstr
     return stateAD
@@ -501,3 +501,4 @@ function get_unit_tag(basetag, unit)
     end
     utag
 end
+
