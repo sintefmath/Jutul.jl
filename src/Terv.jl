@@ -25,7 +25,7 @@ include("multimodel.jl")
 include("domains.jl")
 
 # Meat and potatoes
-include("variables.jl")
+include("variable_evaluation.jl")
 include("conservation/flux.jl")
 include("linsolve.jl")
 
