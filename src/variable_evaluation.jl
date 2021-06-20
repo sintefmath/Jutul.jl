@@ -203,9 +203,9 @@ function sort_symbols(symbols, deps)
     graph = SimpleDiGraph(n)
     for (i, dep) in enumerate(deps)
         for d in dep
-            pos = findall(symbols .== d)[]
-            @assert length(pos) == 1 "Symbol $d must appear exactly once"
-            add_edge!(graph, i, pos)
+            pos = findall(symbols .== d)
+            @assert length(pos) == 1 "Symbol $d must appear exactly once in secondary variables, found $(length(pos)) entries."
+            add_edge!(graph, i, pos[])
         end
     end
     reverse(topological_sort_by_dfs(graph))
