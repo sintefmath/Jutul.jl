@@ -34,13 +34,14 @@ struct PhaseMobilities <: PhaseVariable end
 
 @terv_secondary function update_as_secondary!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, param) where {G, S<:SinglePhaseSystem}
     mu = param.Viscosity[1]
-    fapply!(mob, () -> 1/mu)
+    @tullio mob[i] = 1/mu[ph]
 end
 
 @terv_secondary function update_as_secondary!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, param, Saturations) where {G, S<:ImmiscibleSystem}
     n = param.CoreyExponents
     mu = param.Viscosity
-    @. mob = Saturations^n/mu
+    # @. mob = Saturations^n/mu
+    @tullio mob[ph, i] = Saturations[ph, i]^n[ph] / mu[ph]
 end
 
 """
@@ -72,24 +73,23 @@ Mobility of the mass of each component, in each phase (TBD how to represent this
 struct MassMobilities <: PhaseAndComponentVariable end
 
 @terv_secondary function update_as_secondary!(mobrho, tv::MassMobilities, model, param, PhaseMobilities, PhaseMassDensities)
-    fapply!(mobrho, *, PhaseMobilities, PhaseMassDensities)
+    @tullio mobrho[ph, i] = PhaseMobilities[ph, i]*PhaseMassDensities[ph, i]
 end
 
 # Total masses
 @terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities) where {G, S<:SinglePhaseSystem}
     pv = get_pore_volume(model)
-    fapply!(totmass, *, PhaseMassDensities, pv)
+    @tullio totmass[i] = PhaseMassDensities[i]*pv[i]
 end
 
 @terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities, Saturations) where {G, S<:ImmiscibleSystem}
     pv = get_pore_volume(model)
     rho = PhaseMassDensities
     s = Saturations
-    @. totmass = rho*pv*s
+    @tullio totmass[ph, i] = rho[ph, i]*pv[i]*s[ph, i]
 end
 
 # Total mass
 @terv_secondary function update_as_secondary!(totmass, tv::TotalMass, model::SimulationModel{G, S}, param, TotalMasses) where {G, S<:MultiPhaseSystem}
-    tmp = TotalMasses'
-    sum!(totmass, tmp)
+    @tullio totmass[i] = TotalMasses[ph, i]
 end

@@ -11,6 +11,7 @@ using MappedArrays
 using Printf
 using Dates
 using DataStructures
+using Tullio
 
 # Main types
 include("core_types.jl")
