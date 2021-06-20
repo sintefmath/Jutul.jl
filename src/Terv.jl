@@ -32,6 +32,7 @@ include("linsolve.jl")
 include("context.jl")
 include("equations.jl")
 include("ad.jl")
+include("variables.jl")
 
 include("conservation/conservation.jl")
 include("simulator.jl")
