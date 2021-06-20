@@ -166,7 +166,6 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
 
         @assert minimum(I) >= 1 "I index was lower than 1"
         @assert minimum(J) >= 1 "J index was lower than 1"
-        @debug out
     end
     return out
 end
