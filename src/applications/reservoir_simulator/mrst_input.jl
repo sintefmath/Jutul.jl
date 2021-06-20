@@ -130,12 +130,13 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         cl = 1e-5/bar
         pRef = 100*bar
         rhoLS = 1000
-        rhoL = (rhoS = rhoLS, c = cl, pRef = pRef)
         # Single-phase liquid system (compressible pressure equation)
         phase = LiquidPhase()
         sys = SinglePhaseSystem(phase)
         # Simulation model wraps grid and system together with context (which will be used for GPU etc)
         model = SimulationModel(G, sys, context = context)
+        s = model.secondary_variables
+        s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
 
         # System state
         tot_time = sum(timesteps)
@@ -149,7 +150,6 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         state0 = setup_state(model, init)
         # Model parameters
         parameters = setup_parameters(model)
-        parameters[:Density] = [rhoL]
     elseif case_name == "two_phase_simple"
         bar = 1e5
         p0 = 100*bar # 100 bar
@@ -157,8 +157,6 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         cl = 1e-5/bar
         pRef = 100*bar
         rhoLS = 1000
-        rhoL = (rhoS = rhoLS, c = cl, pRef = pRef)
-        # Single-phase liquid system (compressible pressure equation)
         L = LiquidPhase()
         V = VaporPhase()
         sys = ImmiscibleSystem([L, V])
@@ -168,6 +166,7 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         s = model.secondary_variables
         s[:RelativePermeabilities] = kr
         s[:PhaseViscosities] = ConstantVariables([mu, mu/2])
+        s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
 
         tot_time = sum(timesteps)
         irate = pvfrac*sum(pv)/tot_time
@@ -179,7 +178,6 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         init = Dict(:Pressure => p0, :Saturations => [0.0, 1.0])
         # Model parameters
         parameters = setup_parameters(model)
-        parameters[:Density] = [rhoL, rhoL]
     else
         error("Unknown case $case_name")
     end

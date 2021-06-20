@@ -19,7 +19,7 @@ function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::PhaseAndC
 end
 
 function select_secondary_variables_system!(S, domain, system::MultiPhaseSystem, formulation)
-    S[:PhaseMassDensities] = PhaseMassDensities()
+    S[:PhaseMassDensities] = ConstantCompressibilityDensities(system)
     S[:TotalMasses] = TotalMasses()
 end
 
@@ -34,8 +34,12 @@ struct BrooksCoreyRelPerm <: RelativePermeabilities
     residuals
     endpoints
     residual_total
-    function BrooksCoreyRelPerm(system::MultiPhaseSystem, exponents = 1, residuals = 0, endpoints = 1)
-        nph = number_of_phases(system)
+    function BrooksCoreyRelPerm(sys_or_nph::Union{MultiPhaseSystem, Integer}, exponents = 1, residuals = 0, endpoints = 1)
+        if isa(sys_or_nph, Integer)
+            nph = sys_or_nph
+        else
+            nph = number_of_phases(sys_or_nph)
+        end
 
         expand(v::Real) = [v for i in 1:nph]
         function expand(v::AbstractVector)
@@ -66,24 +70,40 @@ end
 """
 Mass density of each phase
 """
-struct PhaseMassDensities <: PhaseVariables end
+abstract type PhaseMassDensities <: PhaseVariables end
 
-@terv_secondary function update_as_secondary!(rho, tv::PhaseMassDensities, model, param, Pressure)
-    rho_input = param.Density
-    p = Pressure
-    @sync begin
-        @async for i in 1:number_of_phases(model.system)
-            rho_i = view(rho, i, :)
-            r = rho_input[i]
-            if isa(r, NamedTuple)
-                f_rho = (p) -> r.rhoS*exp((p - r.pRef)*r.c)
-            else
-                # Function handle
-                f_rho = r
-            end
-            fapply!(rho_i, f_rho, p)
+struct ConstantCompressibilityDensities <: PhaseMassDensities
+    reference_pressure
+    reference_densities
+    compressibility
+    function ConstantCompressibilityDensities(sys_or_nph::Union{MultiPhaseSystem, Integer}, reference_pressure = 101325, reference_density = 1000, compressibility = 1e-10)
+        if isa(sys_or_nph, Integer)
+            nph = sys_or_nph
+        else
+            nph = number_of_phases(sys_or_nph)
         end
+
+        expand(v::Real) = [v for i in 1:nph]
+        function expand(v::AbstractVector)
+            @assert length(v) == nph
+            return v
+        end
+        pref = expand(reference_pressure)
+        rhoref = expand(reference_density)
+        c = expand(compressibility)
+
+        new(pref, rhoref, c)
     end
+end
+
+@terv_secondary function update_as_secondary!(rho, density::ConstantCompressibilityDensities, model, param, Pressure)
+    p_ref, c, rho_ref = density.reference_pressure, density.compressibility, density.reference_densities
+    @tullio rho[ph, i] = constant_expansion(Pressure[i], p_ref[ph], c[ph], rho_ref[ph])
+end
+
+function constant_expansion(p, p_ref, c, f_ref)
+    Δ = p - p_ref
+    return f_ref * exp(Δ * c)
 end
 
 """
