@@ -27,23 +27,6 @@ function minimum_output_variables(system::MultiPhaseSystem, primary_variables)
     [:TotalMasses]
 end
 
-"""
-Volumetric mobility of each phase
-"""
-struct PhaseMobilities <: PhaseVariables end
-
-@terv_secondary function update_as_secondary!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, param) where {G, S<:SinglePhaseSystem}
-    mu = param.Viscosity[1]
-    @tullio mob[i] = 1/mu[ph]
-end
-
-@terv_secondary function update_as_secondary!(mob, tv::PhaseMobilities, model::SimulationModel{G, S}, param, Saturations) where {G, S<:ImmiscibleSystem}
-    n = param.CoreyExponents
-    mu = param.Viscosity
-    # @. mob = Saturations^n/mu
-    @tullio mob[ph, i] = Saturations[ph, i]^n[ph] / mu[ph]
-end
-
 abstract type RelativePermeabilities <: PhaseVariables end
 
 struct BrooksCoreyRelPerm <: RelativePermeabilities
