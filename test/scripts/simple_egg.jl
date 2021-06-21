@@ -15,19 +15,26 @@ initializer = Dict()
 forces = Dict()
 ## Set up reservoir part
 f = mrst_data["fluid"]
-p = f["p"]
-c = f["c"]
-mu = f["mu"]
-nkr = f["nkr"]
-rhoS = f["rhoS"]
-
-rhoA = (rhoS = rhoS[1], pRef = p[1], c = c[1])
-rhoL = (rhoS = rhoS[2], pRef = p[2], c = c[2])
+p = vec(f["p"])
+c = vec(f["c"])
+mu = vec(f["mu"])
+nkr = vec(f["nkr"])
+rhoS = vec(f["rhoS"])
 
 water = AqueousPhase()
 oil = LiquidPhase()
 sys = ImmiscibleSystem([water, oil])
 model = SimulationModel(G, sys)
+
+rho = ConstantCompressibilityDensities(sys, p, rhoS, c)
+kr = BrooksCoreyRelPerm(sys, nkr)
+mu = ConstantVariables(mu)
+
+s = model.secondary_variables
+s[:PhaseMassDensities] = rho
+s[:RelativePermeabilities] = kr
+s[:PhaseViscosities] = mu
+
 ##
 state0 = mrst_data["state0"]
 p0 = vec(state0["pressure"])
@@ -37,9 +44,6 @@ state0r = setup_state(model, init)
 
 ## Model parameters
 param_res = setup_parameters(model)
-param_res[:Viscosity] = vec(mu)
-param_res[:Density] = [rhoA, rhoL]
-param_res[:CoreyExponents] = vec(nkr)
 param_res[:ReferenceDensity] = vec(rhoS)
 
 dt = mrst_data["dt"]
@@ -96,6 +100,11 @@ for i = 1:num_wells
     sym = well_symbols[i]
 
     w, wdata = get_well_from_mrst_data(mrst_data, sys, i, extraout = true)
+
+    s = w.secondary_variables
+    s[:PhaseMassDensities] = rho
+    s[:PhaseViscosities] = mu
+
     models[sym] = w
 
     println("$sym")
@@ -118,8 +127,8 @@ for i = 1:num_wells
         ctrl = ProducerControl(target)
     end
     param_w = setup_parameters(w)
-    param_w[:Viscosity] = vec(mu)
-    param_w[:Density] = [rhoA, rhoL]
+    # param_w[:Viscosity] = vec(mu)
+    # param_w[:Density] = [rhoA, rhoL]
     param_w[:ReferenceDensity] = vec(rhoS)
     
 
