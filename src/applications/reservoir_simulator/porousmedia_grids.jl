@@ -1,23 +1,8 @@
-export MinimalTPFAGrid#, TPFAHalfFaceData
+export MinimalTPFAGrid
 export get_cell_faces, get_facepos, get_cell_neighbors
 export number_of_cells, number_of_faces, number_of_half_faces
 
-export TwoPointFlux, SinglePointUpstream
-
 export transfer, get_1d_reservoir
-
-# Helpers follow
-# "Minimal struct for TPFA connections (transmissibility + dz + cell pair)"
-# struct TPFAHalfFaceData{R<:Real,I<:Integer}
-#     T::R
-#     dz::R
-#     self::I
-#     other::I
-# end
-
-# function TPFAHalfFaceData{R, I}(target::TPFAHalfFaceData) where {R<:Real, I<:Integer}
-#     return TPFAHalfFaceData(R(target.T), R(target.dz), I(target.self), I(target.other))
-# end
 
 abstract type PorousMediumGrid <: TervGrid end
 abstract type ReservoirGrid <: PorousMediumGrid end
