@@ -19,7 +19,9 @@ function ConservationLaw(model, number_of_equations;
     nf = count_units(D, face_unit)
     nhf = 2 * nf
     face_partials = degrees_of_freedom_per_unit(model, face_unit)
-    alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(number_of_equations, n, model, unit = unit, n_units_pos = n_units_pos; kwarg...)
+    alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(number_of_equations, n, model,
+                                                                                unit = unit, n_units_pos = n_units_pos, 
+                                                                                context = model.context; kwarg...)
     acc = alloc(nc, cell_unit, nc)
     hf_cells = alloc(nhf, cell_unit, nhf)
     if face_partials > 0
