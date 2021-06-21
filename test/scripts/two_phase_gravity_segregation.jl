@@ -27,14 +27,13 @@ function perform_test(nc = 100, tstep = repeat([0.02], 150))
     rhoVS = 100
     cv = 1e-4/bar
 
-    rhoL = (rhoS = rhoLS, c = cl, pRef = pRef)
-    rhoV = (rhoS = rhoVS, c = cv, pRef = pRef)
 
     L = LiquidPhase()
     V = VaporPhase()
     sys = ImmiscibleSystem([L, V])
-    # Simulation model wraps grid and system together with context (which will be used for GPU etc)
     model = SimulationModel(G, sys)
+    s = model.secondary_variables
+    s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, [rhoLS, rhoVS], [cl, cv])
 
     # Put heavy phase on top and light phase on bottom
     nl = nc ÷ 2
@@ -46,10 +45,6 @@ function perform_test(nc = 100, tstep = repeat([0.02], 150))
     # Model parameters
     parameters = setup_parameters(model)
     parameters[:ReferenceDensity] = [rhoLS, rhoVS]
-    parameters[:Density] = [rhoL, rhoV]
-    parameters[:CoreyExponents] = [1, 1]
-    parameters[:Viscosity] = [mu, mu]
-
     timesteps = tstep*3600*24
 
     sim = Simulator(model, state0 = state0, parameters = parameters)
