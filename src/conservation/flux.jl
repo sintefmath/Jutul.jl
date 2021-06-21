@@ -21,12 +21,10 @@ struct DarcyMassMobilityFlowFused <: FlowType end
 
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::Union{DarcyMassMobilityFlow, DarcyMassMobilityFlowFused})
-    nph = number_of_phases(system)
     S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
     if !isa(system, SinglePhaseSystem)
         S[:RelativePermeabilities] = BrooksCoreyRelPerm(system)
     end
-    S[:PhaseViscosities] = ConstantVariables(1e-3*ones(nph)) # 1 cP for all phases by default
     S[:MassMobilities] = MassMobilities()
 end
 
