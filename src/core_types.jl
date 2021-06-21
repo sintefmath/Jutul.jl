@@ -189,6 +189,7 @@ struct SimulationModel{O<:TervDomain,
                                             )
         domain = transfer(context, domain)
         primary = select_primary_variables(domain, system, formulation)
+        primary = transfer(context, primary)
         function check_prim(pvar)
             a = map(associated_unit, values(pvar))
             for u in unique(a)
@@ -201,6 +202,8 @@ struct SimulationModel{O<:TervDomain,
         end
         check_prim(primary)
         secondary = select_secondary_variables(domain, system, formulation)
+        secondary = transfer(context, secondary)
+
         equations = select_equations(domain, system, formulation)
         outputs = select_output_variables(domain, system, formulation, primary, secondary, output_level)
 

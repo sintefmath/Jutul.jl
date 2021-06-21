@@ -31,6 +31,14 @@ function transfer(context, t::NamedTuple)
     return (; zip(k, v)...)
 end
 
+function transfer(context, t::AbstractDict)
+    t = copy(t)
+    for (key, val) in t
+        t[key] = transfer(context, val)
+    end
+    return t
+end
+
 function transfer(context, t::AbstractFloat)
     convert(float_type(context), t)
 end
