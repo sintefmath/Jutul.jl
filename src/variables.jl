@@ -223,20 +223,40 @@ end
 A set of constants, repeated over the entire set of Cells or some other unit
 """
 struct ConstantVariables <: GroupedVariables
-    constants::AbstractVector
+    constants::VecOrMat
     unit::TervUnit
-    function ConstantVariables(constants, unit = Cells())
-        new(constants, unit)
+    single_unit::Bool
+    function ConstantVariables(constants, unit = Cells(), single_unit = nothing)
+        if isnothing(single_unit)
+            single_unit = isa(constants, AbstractVector)
+        end
+        new(constants, unit, single_unit)
     end
 end
 
-values_per_unit(model, var::ConstantVariables) = length(var.constants)
+function values_per_unit(model, var::ConstantVariables)
+    c = var.constants
+    if var.single_unit
+        n = length(c)
+    else
+        n = size(c, 1)
+    end
+end
 associated_unit(model, var::ConstantVariables) = var.unit
 
 function initialize_variable_value(model, var::ConstantVariables, val; perform_copy = true)
-    # Ignore initializer, use instance as view to avoid allocating lots of copies
+    # Ignore initializer since we already know the constants
     nu = number_of_units(model, var)
-    return view(var.constants, :, ones(Integer, nu))
+    @debug var
+    if var.single_unit
+        @warn "!!!!!!!!!!!!SINGLE UNIT"
+        # use instance as view to avoid allocating lots of copies
+        var_val = view(var.constants, :, ones(Integer, nu))
+    else
+        # We have all the values we need ready.
+        var_val = var.constants
+    end
+    return var_val
 end
 
 function initialize_secondary_variable_ad!(state, model, var::ConstantVariables, arg...; kwarg...)
