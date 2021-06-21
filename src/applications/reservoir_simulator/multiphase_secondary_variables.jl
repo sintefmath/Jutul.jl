@@ -55,6 +55,15 @@ struct BrooksCoreyRelPerm <: RelativePermeabilities
     end
 end
 
+function transfer(c::SingleCUDAContext, kr::BrooksCoreyRelPerm)
+    e = transfer(c, kr.exponents)
+    r = transfer(c, kr.residuals)
+    ept = transfer(c, kr.residual_total)
+
+    nph = length(e)
+    BrooksCoreyRelPerm(nph, e, r, ept)
+end
+
 @terv_secondary function update_as_secondary!(kr, kr_def::BrooksCoreyRelPerm, model, param, Saturations)
     n, sr, kwm, sr_tot = kr_def.exponents, kr_def.residuals, kr_def.endpoints, kr_def.residual_total
     @tullio kr[ph, i] = brooks_corey_relperm(Saturations[ph, i], n[ph], sr[ph], kwm[ph], sr_tot)
@@ -94,6 +103,15 @@ struct ConstantCompressibilityDensities <: PhaseMassDensities
 
         new(pref, rhoref, c)
     end
+end
+
+function transfer(c::SingleCUDAContext, rho::ConstantCompressibilityDensities)
+    pref = transfer(c, rho.reference_pressure)
+    rhoref = transfer(c, rho.reference_densities)
+    c = transfer(c, rho.compressibility)
+
+    nph = length(pref)
+    ConstantCompressibilityDensities(nph, pref, rhoref, c)
 end
 
 @terv_secondary function update_as_secondary!(rho, density::ConstantCompressibilityDensities, model, param, Pressure)
