@@ -39,12 +39,11 @@ function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation
 
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
-    layout = matrix_layout(model.context)
-    diagonal_alignment!(acc, jac, u, layout, target_offset = equation_offset, source_offset = variable_offset)
-    half_face_flux_cells_alignment!(hflux_cells, acc, jac, layout, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
+    diagonal_alignment!(acc, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
+    half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
 end
 
-function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, N, flow_disc; target_offset = 0, source_offset = 0)
+function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, N, flow_disc; target_offset = 0, source_offset = 0)
     nu, ne, np = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
@@ -58,7 +57,7 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, layout, N, 
             end
             for e in 1:ne
                 for d = 1:np
-                    pos = find_jac_position(jac, cell + target_offset, other + source_offset, e, d, nu, nu, ne, np, layout)
+                    pos = find_jac_position(jac, cell + target_offset, other + source_offset, e, d, nu, nu, ne, np, context)
                     set_jacobian_pos!(face_cache, f_ix, e, d, pos)
                 end
             end
@@ -72,13 +71,12 @@ function align_to_jacobian!(law::ConservationLaw, jac, model, ::Faces; equation_
 
     hflux_faces = law.half_face_flux_faces
     if !isnothing(hflux_faces)
-        layout = matrix_layout(model.context)
-        half_face_flux_faces_alignment!(hflux_faces, jac, layout, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
+        half_face_flux_faces_alignment!(hflux_faces, jac, model.context, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
     end
 end
 
 
-function half_face_flux_faces_alignment!(face_cache, jac, layout, N, flow_disc; target_offset = 0, source_offset = 0)
+function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc; target_offset = 0, source_offset = 0)
     nf, ne, np = ad_dims(face_cache)
     nhf = size(face_cache.jacobian_positions, 2)
     @assert nhf/2 == nf
@@ -89,7 +87,7 @@ function half_face_flux_faces_alignment!(face_cache, jac, layout, N, flow_disc; 
             face = flow_disc.conn_data[f_ix].face
             for e in 1:ne
                 for d = 1:np
-                    pos = find_jac_position(jac, cell + target_offset, face + source_offset, e, d, nc, nf, ne, np, layout)
+                    pos = find_jac_position(jac, cell + target_offset, face + source_offset, e, d, nc, nf, ne, np, context)
                     set_jacobian_pos!(face_cache, f_ix, e, d, pos)
                 end
             end

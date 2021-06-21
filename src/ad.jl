@@ -115,7 +115,7 @@ function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_units, 
     injective_alignment!(cache, arg...; target_index = eq_index, source_index = eq_index, kwarg...)
 end
 
-function injective_alignment!(cache::TervAutoDiffCache, jac, unit, layout;
+function injective_alignment!(cache::TervAutoDiffCache, jac, unit, context;
                                     target_index = 1:cache.number_of_units,
                                     source_index = 1:cache.number_of_units,
                                     number_of_units_source = nothing,
@@ -124,6 +124,7 @@ function injective_alignment!(cache::TervAutoDiffCache, jac, unit, layout;
                                     source_offset = 0)
     unit::TervUnit
     cache.unit::TervUnit
+    layout = matrix_layout(context)
     if unit == cache.unit
         nu_c, ne, np = ad_dims(cache)
         if isnothing(number_of_units_source)
@@ -138,22 +139,25 @@ function injective_alignment!(cache::TervAutoDiffCache, jac, unit, layout;
         end
         N = length(source_index)
         @assert length(target_index) == N
-        for index in 1:N
-            target = target_index[index]
-            source = source_index[index]
-            for e in 1:ne
-                for d = 1:np
-                    pos = find_jac_position(jac, target + target_offset, source + source_offset, e, d, 
-                    nu_t, nu_s, # nunits target, nunits source 
-                    ne, np, # number of equations, number of partials
-                    layout)
-                    set_jacobian_pos!(cache, index, e, d, pos)
-                end
+        do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
+    end
+end
+
+function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
+    for index in 1:length(source_index)
+        target = target_index[index]
+        source = source_index[index]
+        for e in 1:ne
+            for d = 1:np
+                pos = find_jac_position(jac, target + target_offset, source + source_offset, e, d, 
+                nu_t, nu_s,
+                ne, np,
+                layout)
+                set_jacobian_pos!(cache, index, e, d, pos)
             end
         end
     end
 end
-
 
 function number_of_primary_variables(model)
     # TODO: Bit of a mess (number of primary variables, vs number of actual primary variables realized on grid. Fix.)

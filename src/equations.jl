@@ -1,6 +1,19 @@
 export allocate_array_ad, get_ad_unit_scalar, update_values!
 export value, find_sparse_position
 
+
+function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
+    equation_index, partial_index,        # Index of equation and partial derivative - local index
+    nunits_target, nunits_source,         # Row and column sizes for each sub-system
+    eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
+    context::TervContext)
+    layout = matrix_layout(context)
+    find_jac_position(A, target_unit_index, source_unit_index,
+    equation_index, partial_index,
+    nunits_target, nunits_source,
+    eqs_per_unit, partials_per_unit, layout)
+end
+
 function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
                               equation_index, partial_index,        # Index of equation and partial derivative - local index
                               nunits_target, nunits_source,         # Row and column sizes for each sub-system
@@ -212,8 +225,7 @@ function align_to_jacobian!(eq, jac, model, unit; equation_offset = 0, variable_
         # By default we perform a diagonal alignment if we match the associated unit.
         # A diagonal alignment means that the equation for some unit depends only on the values inside that unit.
         # For instance, an equation defined on all Cells will have each entry depend on all values in that Cell.
-        layout = matrix_layout(model.context)
-        diagonal_alignment!(eq.equation, jac, unit, layout, target_offset = equation_offset, source_offset = variable_offset)
+        diagonal_alignment!(eq.equation, jac, unit, model.context, target_offset = equation_offset, source_offset = variable_offset)
     end
 end
 
