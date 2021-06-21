@@ -2,7 +2,7 @@ using Terv
 using LinearAlgebra
 using Printf
 using ForwardDiff
-using CUDA
+using CUDA, Test
 # Turn on debugging to show output and timing.
 # Turn on by uncommenting or running the following:
 ENV["JULIA_DEBUG"] = Terv
@@ -27,12 +27,7 @@ function test_single_phase_gpu(casename = "pico", target = "cuda", pvfrac=0.05, 
     # Parameters
     bar = 1e5
     p0 = 100*bar # 100 bar
-    mu = 1e-3    # 1 cP
-    cl = 1e-5/bar
-    pRef = 100*bar
-    rhoLS = 1000
-    # Anonymous function for liquid density
-    rhoL = (p) -> rhoLS*exp((p - pRef)*cl)
+
     # Single-phase liquid system (compressible pressure equation)
     phase = LiquidPhase()
     sys = SinglePhaseSystem(phase)
@@ -64,8 +59,6 @@ function test_single_phase_gpu(casename = "pico", target = "cuda", pvfrac=0.05, 
     state0 = setup_state(model, init)
     # Model parameters
     parameters = setup_parameters(model)
-    parameters[:Viscosity] = [mu]
-    parameters[:Density] = [rhoL]
 
     # linsolve = nothing
     sim = Simulator(model, state0 = state0, parameters = parameters)

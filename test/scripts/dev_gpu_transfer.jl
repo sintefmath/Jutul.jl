@@ -32,7 +32,6 @@ mu = 1e-3    # 1 cP
 cl = 1e-5/bar
 pRef = 100*bar
 rhoLS = 1000.0
-rhoL = (rhoS = rhoLS, c = cl, pRef = pRef)
 # Single-phase liquid system (compressible pressure equation)
 phase = LiquidPhase()
 sys = SinglePhaseSystem(phase)
@@ -59,11 +58,9 @@ src = sources = [SourceTerm(1, irate, fractional_flow = [1.0]),
 # State is dict with pressure in each cell
 state0 = setup_state(model, p0)
 # Model parameters
-parameters = setup_parameters(model)
-parameters[subscript("Viscosity", phase)] = mu
-parameters[subscript("Density", phase)] = rhoL
 
-sim = Simulator(model, state0 = state0, parameters = parameters)
+
+sim = Simulator(model, state0 = state0)
 
 # linsolve = nothing
 states = simulate(sim, timesteps, sources = src, linsolve = linsolve)

@@ -98,10 +98,6 @@ function get_facepos(N)
     return (faces, facePos)
 end
 
-function transfer(::DefaultContext, grid)
-    return grid
-end
-
 
 function get_1d_reservoir(nc; L = 1, perm = 9.8692e-14, # 0.1 darcy
                          poro = 0.1, area = 1, fuse_flux = false,

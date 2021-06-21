@@ -294,7 +294,7 @@ function align_equations_to_jacobian!(equations, jac, model; equation_offset = 0
 end
 
 function allocate_array(context::TervContext, value, n...)
-    tmp = context_convert(context, value)
+    tmp = transfer(context, value)
     return repeat(tmp, n...)
 end
 

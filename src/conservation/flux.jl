@@ -116,14 +116,20 @@ function select_secondary_variables_discretization!(S, domain, system, formulati
     select_secondary_variables_flow_type!(S, domain, system, formulation, fd.flow_type)
 end
 
-function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlow{U, K}) where {U, K}
+function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlow{U, K, F}) where {U, K, F}
     tf = (x) -> transfer(context, x)
     u = tf(fd.upwind)
     k = tf(fd.grad)
-    conn_pos = tf(fd.conn_pos)
-    conn_data = tf(fd.conn_data)
 
-    return TwoPointPotentialFlow{U, K}(u, k, conn_pos, conn_data)
+    conn_pos = tf(fd.conn_pos)
+    cd = map(tf, fd.conn_data)
+
+    conn_data = tf(cd)
+
+    flow_type = tf(fd.flow_type)
+    has_grav = tf(fd.gravity)
+
+    return TwoPointPotentialFlow{U, K, F}(u, k, flow_type, has_grav, conn_pos, conn_data)
 end
 
 struct CellNeighborPotentialDifference <: GroupedVariables end
@@ -303,7 +309,6 @@ end
     ρ_avg = 0.5*(ρ_self + ρ_other)
     return p_self - p_other + gΔz*ρ_avg
 end
-
 
 @inline function half_face_two_point_kgradp(c_self::I, c_other::I, T, p::AbstractArray{R}) where {R<:Real, I<:Integer}
     return -T*(p[c_self] - value(p[c_other]))

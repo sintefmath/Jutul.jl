@@ -1,19 +1,18 @@
 
 # Transfer operators
-
-function context_convert(context::TervContext, v::Real)
-    return context_convert(context, [v])
+function transfer(context, v::Real)
+    return transfer(context, [v])
 end
 
-function context_convert(context::TervContext, v::AbstractArray)
+function transfer(context::TervContext, v::AbstractArray)
     return Array(v)
 end
 
-function context_convert(context::SingleCUDAContext, v::AbstractArray)
+function transfer(context::SingleCUDAContext, v::AbstractArray)
     return CuArray(v)
 end
 
-function transfer(context::TervContext, v)
+function transfer(context, v)
     return v
 end
 
@@ -25,6 +24,20 @@ function transfer(context::SingleCUDAContext, v::AbstractArray{F}) where {F<:Abs
     return CuArray{context.float_t}(v)
 end
 
+function transfer(context, t::NamedTuple)
+    k = keys(t)
+    v = map((x) -> transfer(context, x), values(t))
+
+    return (; zip(k, v)...)
+end
+
+function transfer(context, t::AbstractFloat)
+    convert(float_type(context), t)
+end
+
+function transfer(context, t::Integer)
+    convert(index_type(context), t)
+end
 
 "Synchronize backend after allocations if needed"
 function synchronize(::TervContext)
