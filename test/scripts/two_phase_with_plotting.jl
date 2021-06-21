@@ -23,14 +23,17 @@ function perform_test(casename, doPlot = false, pvfrac=1, tstep = ones(25))
     cl = 1e-5/bar
     pRef = 100*bar
     rhoLS = 1000
-    # Anonymous function for liquid density
-    rhoL = (p) -> rhoLS*exp((p - pRef)*cl)
-    # Single-phase liquid system (compressible pressure equation)
+
+    # Two phase liquid-vapor system
     L = LiquidPhase()
     V = VaporPhase()
     sys = ImmiscibleSystem([L, V])
-    # Simulation model wraps grid and system together with context (which will be used for GPU etc)
     model = SimulationModel(G, sys)
+    s = model.secondary_variables
+    # Same density for both phases
+    s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
+    s[:RelativePermeabilities] = BrooksCoreyRelPerm(sys, [2, 3])
+    s[:PhaseViscosities] = ConstantVariables([mu, mu/2])
 
     # System state
     pv = model.domain.grid.pore_volumes
@@ -47,9 +50,6 @@ function perform_test(casename, doPlot = false, pvfrac=1, tstep = ones(25))
     # Model parameters
     parameters = setup_parameters(model)
     parameters[:ReferenceDensity] = [rhoLS, rhoLS]
-    parameters[:Density] = [rhoL, rhoL]
-    parameters[:CoreyExponents] = [2, 3]
-    parameters[:Viscosity] = [mu, mu/2]
 
     sim = Simulator(model, state0 = state0, parameters = parameters)
     cfg = simulator_config(sim, max_nonlinear_iterations = 20)

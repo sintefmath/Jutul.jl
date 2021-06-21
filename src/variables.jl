@@ -1,3 +1,5 @@
+export ConstantVariables
+
 # Primary variables
 function number_of_units(model, pv::TervVariables)
     # By default, each primary variable exists on all cells of a discretized domain
