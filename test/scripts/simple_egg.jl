@@ -170,7 +170,7 @@ sim = Simulator(mmodel, state0 = state0, parameters = parameters)
 dt = timesteps
 states = simulate(sim, dt, forces = forces)
 ##
-using Makie
+using GLMakie
 f = Figure()
 
 # Production/injection rates

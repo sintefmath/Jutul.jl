@@ -118,7 +118,7 @@ dt = [1.0]
 dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24
 states = simulate(sim, dt, forces = forces)
 ##
-using Makie
+using GLMakie
 f = Figure()
 
 # Production/injection rates

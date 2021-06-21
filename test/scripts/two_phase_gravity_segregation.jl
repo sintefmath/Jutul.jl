@@ -1,7 +1,6 @@
 using Terv
 using LinearAlgebra
 using Printf
-# using Plots
 using ForwardDiff
 # Turn on debugging to show output and timing.
 # Turn on by uncommenting or running the following:
@@ -62,11 +61,11 @@ end
 # states, model = perform_test(5000, repeat([0.01], 3000))
 states, model = perform_test()
 ##
-using Makie
+using GLMakie
 tmp = vcat(map((x) -> x.Saturations[1, :]', states)...)
 f = Figure()
 ax = Axis(f[1, 1])
-Makie.heatmap!(tmp')
+heatmap!(tmp')
 ax.xlabel = "Depth"
 ax.ylabel = "Time"
 display(f)

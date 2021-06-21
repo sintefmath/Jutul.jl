@@ -140,8 +140,6 @@ function get_1d_reservoir(nc; L = 1, perm = 9.8692e-14, # 0.1 darcy
         g = gravity_constant
     end
 
-    @debug z
-    @debug sum(volumes)
     if fuse_flux
         ft = DarcyMassMobilityFlowFused()
     else
