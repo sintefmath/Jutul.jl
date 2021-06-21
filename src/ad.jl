@@ -76,32 +76,36 @@ end
 end
 
 function fill_equation_entries!(nz, r, model, cache::TervAutoDiffCache)
-    nu = cache.number_of_units
-    ne = cache.equations_per_unit
+    nu, ne, np = ad_dims(cache)
     entries = cache.entries
-    pos = cache.jacobian_positions
-    # layout = matrix_layout(model.context)
+    jp = cache.jacobian_positions
     Threads.@threads for i in 1:nu
         for e in 1:ne
             a = get_entry(cache, i, e, entries)
             @inbounds r[i + nu*(e-1)] = a.value
             for d = 1:cache.npartials
-                @inbounds ∂ = a.partials[d]
-                update_jacobian_entry!(nz, cache, i, e, d, ∂, pos)
+                apos = get_jacobian_pos(cache, i, e, d, jp)
+                @inbounds nz[apos] = a.partials[d]
             end
         end
     end
 end
 
 function fill_equation_entries!(nz, r::Nothing, model, cache::TervAutoDiffCache)
-    nu = cache.number_of_units
-    ne = cache.equations_per_unit
+    nu, ne, np = ad_dims(cache)
     entries = cache.entries
+    jp = cache.jacobian_positions
     Threads.@threads for i in 1:nu
         for e in 1:ne
             a = get_entry(cache, i, e, entries)
-            for d = 1:cache.npartials
-                update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
+            for d = 1:np
+                @inbounds ∂ = a.partials[d]
+                # TODO:
+                # This part is type unstable, for some reason.
+                # update_jacobian_entry!(nz, cache, i, e, d, ∂)
+                # Use more verbose/inner version instead:
+                apos = get_jacobian_pos(cache, i, e, d, jp)
+                @inbounds nz[apos] = a.partials[d]
             end
         end
     end
