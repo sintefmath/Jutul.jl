@@ -253,8 +253,9 @@ function initialize_variable_value(model, var::ConstantVariables, val; perform_c
     # Ignore initializer since we already know the constants
     nu = number_of_units(model, var)
     if var.single_unit
+        it = index_type(model.context)
         # use instance as view to avoid allocating lots of copies
-        var_val = view(var.constants, :, ones(Integer, nu))
+        var_val = view(var.constants, :, ones(it, nu))
     else
         # We have all the values we need ready.
         var_val = var.constants
