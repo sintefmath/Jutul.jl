@@ -189,6 +189,22 @@ function update_cell_neighbor_potential_difference_gravity!(dpot, conn_data, p, 
     end
 end
 
+function update_cell_neighbor_potential_difference_gravity!(dpot, conn_data, p, rho, context, ::KernelAllowed)
+    @kernel function kern(dpot, @Const(conn_data), @Const(p), @Const(rho))
+        ph, i = @index(Global, NTuple)
+        c = conn_data[i]
+        rho_i = view(rho, ph, :)
+        dpot[ph, i] = half_face_two_point_kgradp_gravity(c.self, c.other, c.T, p, c.gdz, rho_i)
+    end
+    begin
+        d = size(dpot)
+
+        kernel = kern(context.device, context.block_size, d)
+        event_jac = kernel(dpot, conn_data, p, rho, ndrange = d)
+        wait(event_jac)
+    end
+end
+
 function update_cell_neighbor_potential_difference!(dpot, conn_data, p, context, ::KernelDisallowed)
     Threads.@threads for i in eachindex(conn_data)
         @inbounds c = conn_data[i]
