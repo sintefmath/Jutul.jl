@@ -109,14 +109,25 @@ end
 
 #
 function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
-    error("Code not revised.")
-    F = context.float_t
-    # Transfer types
-    r = CuArray{F}(lsys.r)
-    dx = CuArray{F}(lsys.dx)
-    jac = CUDA.CUSPARSE.CuSparseMatrixCSC{F}(lsys.jac)
-    nzval = get_nzval(jac)
-    return LinearizedSystem(jac, r, dx, nzval)
+    F_t = float_type(context)
+    I_t = index_type(context)
+    
+    # I, J, V, n, m = sparse_arg
+
+    A = lsys.jac
+    n = size(A, 1)
+
+    # A = sparse(I_t.(I), I_t.(J), F_t.(V), I_t(n), I_t(m))
+    jac = CUDA.CUSPARSE.CuSparseMatrixCSC{F_t}(A)
+
+    V_buf = get_nzval(jac)
+
+    r = CuArray{F_t}(undef, n)
+    dx = CuArray{F_t}(undef, n)
+
+    r_buf = r
+    dx_buf = dx
+    return LinearizedSystem(jac, r, dx, V_buf, r_buf, dx_buf, lsys.matrix_layout)
 end
 
 # AMG solver (Julia-native)
