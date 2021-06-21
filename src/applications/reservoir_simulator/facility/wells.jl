@@ -353,18 +353,23 @@ end
 function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, sgn)
     p_res = state_res.Pressure
     p_well = state_well.Pressure
-    λ = state_res.PhaseMobilities
+    if haskey(state_res, :RelativePermeabilities)
+        kr = state_res.RelativePermeabilities
+    else
+        kr = nothing
+    end
+    μ = state_res.PhaseViscosities
     ρλ_i = state_res.MassMobilities
     masses = state_well.TotalMasses
 
-    perforation_sources!(well_q, perforations, as_value(p_res), p_well,           as_value(λ), as_value(ρλ_i), masses, sgn)
-    perforation_sources!(res_q, perforations, p_res,           as_value(p_well), λ,           ρλ_i,           as_value(masses), sgn)
+    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  as_value(kr), as_value(μ), as_value(ρλ_i),          masses, sgn)
+    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),          kr,           μ,           ρλ_i,  as_value(masses), sgn)
 end
 
-function perforation_sources!(target, perforations, p_res, p_well, λ, ρλ_i, masses, sgn)
+function perforation_sources!(target, perforations, p_res, p_well, kr, μ, ρλ_i, masses, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     nc = size(ρλ_i, 1)
-    nph = size(λ, 1)
+    nph = size(μ, 1)
 
     for i in eachindex(perforations.self)
         si = perforations.self[i]
@@ -376,7 +381,11 @@ function perforation_sources!(target, perforations, p_res, p_well, λ, ρλ_i, m
             # Injection
             λ_t = 0
             for ph in 1:nph
-                λ_t += λ[ph, ri]
+                if isnothing(kr)
+                    λ_t += 1/μ[ph, ri]
+                else
+                    λ_t += kr[ph, ri]/μ[ph, ri]
+                end
             end
             for c in 1:nc
                 # dp * rho * s * totmob well
