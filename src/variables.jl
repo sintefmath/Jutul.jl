@@ -223,7 +223,7 @@ end
 A set of constants, repeated over the entire set of Cells or some other unit
 """
 struct ConstantVariables <: GroupedVariables
-    constants::VecOrMat
+    constants
     unit::TervUnit
     single_unit::Bool
     function ConstantVariables(constants, unit = Cells(), single_unit = nothing)
@@ -243,6 +243,11 @@ function values_per_unit(model, var::ConstantVariables)
     end
 end
 associated_unit(model, var::ConstantVariables) = var.unit
+
+function transfer(context, v::ConstantVariables)
+    constants = transfer(context, v.constants)
+    return ConstantVariables(constants, v.unit, v.single_unit)
+end
 
 function initialize_variable_value(model, var::ConstantVariables, val; perform_copy = true)
     # Ignore initializer since we already know the constants
