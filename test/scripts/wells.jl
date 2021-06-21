@@ -30,14 +30,6 @@ state0r = setup_state(model, init)
 
 # Model parameters
 param_res = setup_parameters(model)
-if single_phase
-    param_res[:Viscosity] = [mu]
-    param_res[:Density] = [rhoL]
-else
-    param_res[:Viscosity] = [mu, mu]
-    param_res[:Density] = [rhoL, rhoL]
-    param_res[:CoreyExponents] = [1, 1]
-end
 
 timesteps = [1.0]
 sim = Simulator(model, state0 = state0r, parameters = param_res)
@@ -146,6 +138,7 @@ l1 = lines!(ax, bh_i)
 l2 = lines!(ax, bh_p)
 axislegend(ax, [l1, l2], ["Injector", "Producer"])
 display(f)
+##
 
 
 ## Plot pressure drop model

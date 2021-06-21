@@ -19,8 +19,10 @@ function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::PhaseAndC
 end
 
 function select_secondary_variables_system!(S, domain, system::MultiPhaseSystem, formulation)
-    S[:PhaseMassDensities] = ConstantCompressibilityDensities(system)
+    nph = number_of_phases(system)
+    S[:PhaseMassDensities] = ConstantCompressibilityDensities(nph)
     S[:TotalMasses] = TotalMasses()
+    S[:PhaseViscosities] = ConstantVariables(1e-3*ones(nph)) # 1 cP for all phases by default
 end
 
 function minimum_output_variables(system::MultiPhaseSystem, primary_variables)

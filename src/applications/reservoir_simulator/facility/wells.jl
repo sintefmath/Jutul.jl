@@ -4,7 +4,7 @@ export TotalMassFlux, PotentialDropBalanceWell
 
 export InjectorControl, ProducerControl, SinglePhaseRateTarget, BottomHolePressureTarget
 
-export Well, Perforations
+export Perforations
 export MixedWellSegmentFlow
 export segment_pressure_drop
 
@@ -198,7 +198,7 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
         s = state.Saturations
     end
     p = state.Pressure
-    μ = storage.parameters.Viscosity
+    μ = state.PhaseViscosities
     V = state.TotalMassFlux
     densities = state.PhaseMassDensities
 
@@ -230,9 +230,9 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
 
         Δθ = two_point_potential_drop(p_self, p_other, gΔz, ρ_mix_self, ρ_mix_other)
         if Δθ > 0
-            μ_mix = mix_by_saturations(s_self, μ)
+            μ_mix = mix_by_saturations(s_self, view(μ, :, self))
         else
-            μ_mix = mix_by_saturations(s_other, μ)
+            μ_mix = mix_by_saturations(s_other, as_value(view(μ, :, other)))
         end
 
         sgn = cd.face_sign
