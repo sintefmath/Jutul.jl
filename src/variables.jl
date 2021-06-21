@@ -249,7 +249,6 @@ function initialize_variable_value(model, var::ConstantVariables, val; perform_c
     nu = number_of_units(model, var)
     @debug var
     if var.single_unit
-        @warn "!!!!!!!!!!!!SINGLE UNIT"
         # use instance as view to avoid allocating lots of copies
         var_val = view(var.constants, :, ones(Integer, nu))
     else
