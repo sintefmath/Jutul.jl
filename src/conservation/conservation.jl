@@ -228,7 +228,7 @@ function update_accumulation!(law, storage, model, dt)
     acc = get_entries(law.accumulation)
     m = storage.state[conserved]
     m0 = storage.state0[conserved]
-    fapply!(acc, (m, m0) -> (m - m0)/dt, m, m0)
+    @tullio acc[c, i] = (m[c, i] - m0[c, i])/dt
     return acc
 end
 
