@@ -48,6 +48,9 @@ Number of independent primary variables / degrees of freedom per computational u
 function degrees_of_freedom_per_unit(model, ::ScalarVariable)
     return 1
 end
+function degrees_of_freedom_per_unit(model, ::ConstantVariables)
+    return 0 # A constant has no freedom
+end
 """
 Number of values held by a primary variable. Normally this is equal to the number of degrees of freedom,
 but some special primary variables are most conveniently defined by having N values and N-1 independent variables.
