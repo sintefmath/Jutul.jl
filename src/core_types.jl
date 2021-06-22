@@ -2,6 +2,7 @@ export TervSystem, TervDomain, TervVariables
 export SimulationModel, TervVariables, TervFormulation
 export setup_parameters, kernel_compatibility
 export Cells, Nodes, Faces
+export ConstantVariables
 
 export SingleCUDAContext, SharedMemoryContext, DefaultContext
 export BlockMajorLayout, EquationMajorLayout, UnitMajorLayout
@@ -23,6 +24,7 @@ abstract type TervDiscretization end
 abstract type TervVariables end
 abstract type ScalarVariable <: TervVariables end
 abstract type GroupedVariables <: TervVariables end
+
 
 # Functions of the state
 abstract type TervStateFunction <: TervVariables end
@@ -276,6 +278,22 @@ function SimulationModel(g::TervGrid, system; discretization = nothing, kwarg...
     d = DiscretizedDomain(g, discretization)
     SimulationModel(d, system; kwarg...)
 end
+
+"""
+A set of constants, repeated over the entire set of Cells or some other unit
+"""
+struct ConstantVariables <: GroupedVariables
+    constants
+    unit::TervUnit
+    single_unit::Bool
+    function ConstantVariables(constants, unit = Cells(), single_unit = nothing)
+        if isnothing(single_unit)
+            single_unit = isa(constants, AbstractVector)
+        end
+        new(constants, unit, single_unit)
+    end
+end
+
 
 struct TervStorage
     data

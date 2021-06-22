@@ -1,5 +1,3 @@
-export ConstantVariables
-
 # Primary variables
 function number_of_units(model, pv::TervVariables)
     # By default, each primary variable exists on all cells of a discretized domain
@@ -222,20 +220,6 @@ end
 
 # Specific variable implementations that are generic for many types of system follow
 
-"""
-A set of constants, repeated over the entire set of Cells or some other unit
-"""
-struct ConstantVariables <: GroupedVariables
-    constants
-    unit::TervUnit
-    single_unit::Bool
-    function ConstantVariables(constants, unit = Cells(), single_unit = nothing)
-        if isnothing(single_unit)
-            single_unit = isa(constants, AbstractVector)
-        end
-        new(constants, unit, single_unit)
-    end
-end
 
 function values_per_unit(model, var::ConstantVariables)
     c = var.constants
