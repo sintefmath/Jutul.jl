@@ -61,11 +61,10 @@ end
 # states, model = perform_test(5000, repeat([0.01], 3000))
 states, model = perform_test()
 ##
-using GLMakie
+using Plots
 tmp = vcat(map((x) -> x.Saturations[1, :]', states)...)
-f = Figure()
-ax = Axis(f[1, 1])
-heatmap!(tmp')
-ax.xlabel = "Depth"
-ax.ylabel = "Time"
-display(f)
+Plots.heatmap(tmp)
+title!("Gravity segregation")
+xaxis!("Depth")
+yaxis!("Time")
+##
