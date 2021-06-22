@@ -12,7 +12,7 @@ instantiate # First time dependency setup
 using Revise
 using Terv
 # Uses the dumped pico grid (3 x 3 x 1) from MRST:
-include("dev/two_phase_with_plotting.jl")
+include("test/scripts/two_phase_with_plotting.jl")
 ```
 
 You can dump more test grids by using MRST together with the `writeMRSTData.m` function that dumps a grid and rock to a .mat file. Once it is stored as `data/testgrids/mycase.mat` where the file contains the fields `G` and `rock` you can run 
