@@ -1,6 +1,6 @@
 export TotalMassFlux
 export WellGrid, MultiSegmentWell
-export TotalMassFlux, PotentialDropBalanceWell
+export TotalMassFlux, PotentialDropBalanceWell, SegmentWellBoreFrictionHB
 
 export InjectorControl, ProducerControl, SinglePhaseRateTarget, BottomHolePressureTarget
 
