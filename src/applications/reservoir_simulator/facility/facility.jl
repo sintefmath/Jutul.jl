@@ -1,4 +1,4 @@
-export TotalSurfaceMassRate, WellGroup
+export TotalSurfaceMassRate, WellGroup, DisabledControl
 export HistoryMode, PredictionMode, Wells
 
 abstract type FacilitySystem <: TervSystem end
@@ -42,22 +42,8 @@ function get_well_position(d, symbol)
     return findall(d.well_symbols .== symbol)[]
 end
 
-
-# Bottom hole pressure for the well
-# struct BottomHolePressure <: ScalarVariable end
-# function associated_unit(::BottomHolePressure) Well() end
-
-# Phase rates for well at surface conditions
-# struct SurfacePhaseRates <: GroupedVariables end
-# function associated_unit(::SurfacePhaseRates) Well() end
-
 struct TotalSurfaceMassRate <: ScalarVariable end
 function associated_unit(::TotalSurfaceMassRate) Wells() end
-
-# function degrees_of_freedom_per_unit(model, v::SurfacePhaseRates)
-#    return number_of_phases(model.system)
-# end
-
 
 abstract type WellTarget end
 
@@ -80,12 +66,22 @@ function well_control_equation(ctrl, t::SinglePhaseRateTarget, qt)
     return t.value - qt
 end
 
+struct DisabledTarget <: WellTarget end
+
+function well_control_equation(ctrl, t::DisabledTarget, qt)
+    return qt
+end
+
 ## Well controls
 abstract type WellForce <: TervForce end
 abstract type WellControlForce <: WellForce end
 
 struct DisabledControl <: WellControlForce
-
+    target::DisabledTarget
+    function DisabledControl()
+        t = DisabledTarget()
+        new(t)
+    end
 end
 
 struct InjectorControl <: WellControlForce
@@ -96,6 +92,7 @@ struct InjectorControl <: WellControlForce
             mix = [mix]
         end
         mix = vec(mix)
+        @assert sum(mix) ≈ 1
         new(target, mix)
     end
 end
@@ -171,7 +168,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
         top_node = 1
         masses = wstate.TotalMasses[:, top_node]
         mass = wstate.TotalMass[top_node]
-        mix = masses./mass    
+        mix = masses./mass
     end
 
     function update_topnode_sources!(src, qT, mix)
