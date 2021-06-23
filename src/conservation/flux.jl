@@ -283,17 +283,26 @@ end
 
 function half_face_fluxes_total_mass_velocity!(self, other, masses, total, v)
     if v > 0
+    if v < 0
+        # Flux is leaving the cell
         x = masses[self]/total[self]
     else
+        # Flux is entering the cell
         x = value(masses[other])/value(total[other])
     end
     return x*value(v)
 end
 
 function half_face_fluxes_total_mass_velocity_face!(left, right, masses, total, v)
+    # Note the different signs. The above function (for cells) compute the half face flux
+    # and recieve the signed flux going into or out of the cell. For the half face velocity
+    # we have a single velocity, and the convention is to take the left cell to be upstream 
+    # for a positive flux.
     if v > 0
+        # Flow from left to right
         x = value(masses[left])/value(total[left])
     else
+        # Flow from right to left
         x = value(masses[right])/value(total[right])
     end
     return x*v
