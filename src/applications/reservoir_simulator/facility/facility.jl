@@ -163,6 +163,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
             @warn "Injector $well_symbol is producing?"
         end
         mix = ctrl.injection_mixture
+        @assert length(mix) == number_of_phases(target_model.system) "Injection composition must match number of phases."
     else
         if value(qT) > 0
             @warn "Producer $well_symbol is injecting?"
