@@ -113,10 +113,7 @@ function initialize_storage!(storage, model::TervModel; initialize_state0 = true
         end
         storage[:state0] = state0
     end
-    if isa(model.context, SingleCUDAContext)
-        # Needed because of an issue with kernel abstractions.
-        CUDA.synchronize()
-    end
+    synchronize(model.context)
 end
 
 """
