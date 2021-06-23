@@ -177,12 +177,6 @@ function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, n
     end
 end
 
-function number_of_primary_variables(model)
-    # TODO: Bit of a mess (number of primary variables, vs number of actual primary variables realized on grid. Fix.)
-    return length(get_primary_variable_names(model))
-end
-
-
 """
 Convert a state containing variables as arrays of doubles
 to a state where those arrays contain the same value as Dual types.
