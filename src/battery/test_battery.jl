@@ -1,8 +1,8 @@
 using Terv
 using Test
 
-function test_cc(grid="pico"; linear_solver=nothing)
-    state0, model, prm, f, t = get_test_setup_battery(grid)
+function test_cc(linear_solver=nothing)
+    state0, model, prm, f, t = get_test_setup_battery()
 
     #! Have not change anything below
     sim = Simulator(model, state0=state0, parameters=prm)

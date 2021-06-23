@@ -1,6 +1,6 @@
 # export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
 export SPU, TPFA, TwoPointPotentialFlow, DarcyMassMobilityFlow, 
-        CellNeighborPotentialDifference, TotalMassVelocityMassFractionsFlow
+        CellNeighborPotentialDifference, TotalMassVelocityMassFractionsFlow, FlowType
 
 abstract type TwoPointDiscretization <: TervDiscretization end
 
