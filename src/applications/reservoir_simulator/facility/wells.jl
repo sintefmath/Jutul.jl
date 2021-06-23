@@ -358,15 +358,17 @@ function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, per
     p_well = state_well.Pressure
     if haskey(state_res, :RelativePermeabilities)
         kr = state_res.RelativePermeabilities
+        kr_value = as_value(kr)
     else
         kr = nothing
+        kr_value = nothing
     end
     μ = state_res.PhaseViscosities
     ρλ_i = state_res.MassMobilities
     masses = state_well.TotalMasses
 
-    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  as_value(kr), as_value(μ), as_value(ρλ_i),          masses, sgn)
-    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),          kr,           μ,           ρλ_i,  as_value(masses), sgn)
+    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          masses, sgn)
+    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i,  as_value(masses), sgn)
 end
 
 function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, masses, sgn)
