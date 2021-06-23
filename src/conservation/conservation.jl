@@ -181,22 +181,6 @@ function declare_pattern(model, e::ConservationLaw, ::Faces)
     return (I, J)
 end
 
-function convergence_criterion(model, storage, eq::ConservationLaw, r; dt = 1)
-    n = number_of_equations_per_unit(eq)
-    pv = get_pore_volume(model)
-    e = zeros(n)
-    prm = storage.parameters
-    for i = 1:n
-        if haskey(prm, :ReferenceDensity)
-            rhos = prm.ReferenceDensity[i]
-        else
-            rhos = 1
-        end
-        e[i] = mapreduce((pv, e) -> abs((dt/rhos) * e / pv), max, pv, r[i, :])
-    end
-    return (e, 1.0)
-end
-
 function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, equation_offset = 0, variable_offset = 0)
     n = size(fluxpos, 1)
     nf = size(fluxpos, 2)

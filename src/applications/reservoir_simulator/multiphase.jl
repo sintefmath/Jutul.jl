@@ -239,6 +239,22 @@ end
     @. acc[i] -= s
 end
 
+function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}
+    n = number_of_equations_per_unit(eq)
+    pv = get_pore_volume(model)
+    e = zeros(n)
+    prm = storage.parameters
+    for i = 1:n
+        if haskey(prm, :ReferenceDensity)
+            rhos = prm.ReferenceDensity[i]
+        else
+            rhos = 1
+        end
+        e[i] = mapreduce((pv, e) -> abs((dt/rhos) * e / pv), max, pv, r[i, :])
+    end
+    return (e, 1.0)
+end
+
 # Accumulation: Base implementation
 "Fill acculation term onto diagonal with pre-determined access pattern into jac"
 function fill_accumulation!(jac, r, acc, apos, neq, context, ::KernelDisallowed)
