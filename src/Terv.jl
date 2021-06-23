@@ -43,4 +43,6 @@ include("utils.jl")
 # Various add-ons
 include("applications/reservoir_simulator/reservoir_simulator.jl")
 include("applications/test_systems/test_systems.jl")
+
+include("battery/battery.jl")
 end # module
