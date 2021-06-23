@@ -342,15 +342,28 @@ function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing; tag = nothing) 
     return v
 end
 
-function update_values!(v::AbstractArray, next::AbstractArray)
-    @. v = v - value(v) + next
+"""
+    update_values!(x, dx)
+
+Replace values of `x` in-place by `y`, leaving `x` with the avlues of y and the partials of `x`.
+"""
+@inline function update_values!(v::AbstractArray, next::AbstractArray)
+    # The ForwardDiff type is immutable, so to preserve the derivatives we do this little trick:
+    @. v = v - value(v) + value(next)
 end
 
+"""
+Take value of AD.
+"""
 @inline function value(x)
     return ForwardDiff.value(x)
 end
 
-function value(d::Dict)
+"""
+    value(d::Dict)
+Call value on all elements of some Dict.
+"""
+function value(d::AbstractDict)
     v = copy(d)
     for key in keys(v)
         v[key] = value.(v[key])
@@ -358,10 +371,19 @@ function value(d::Dict)
     return v
 end
 
+"""
+Create a mapped array that produces only the values when indexed.
+
+Only useful for AD arrays, otherwise it does nothing.
+"""
 @inline function as_value(x)
     mappedarray(value, x)
 end
 
+"""
+Combine a base tag (which can be nothing) with a unit to get a tag that
+captures base tag + unit tag for use with AD initialization.
+"""
 function get_unit_tag(basetag, unit)
     utag = Symbol(typeof(unit))
     if !isnothing(basetag)
