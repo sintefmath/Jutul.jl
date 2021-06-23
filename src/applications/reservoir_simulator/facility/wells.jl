@@ -369,16 +369,16 @@ function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, per
     perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),          kr,           μ,           ρλ_i,  as_value(masses), sgn)
 end
 
-function perforation_sources!(target, perforations, p_res, p_well, kr, μ, ρλ_i, masses, sgn)
+function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, masses, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     nc = size(ρλ_i, 1)
     nph = size(μ, 1)
 
-    for i in eachindex(perforations.self)
-        si = perforations.self[i]
-        ri = perforations.reservoir[i]
-        wi = perforations.WI[i]
-        # TODO: Check sign
+    for i in eachindex(perf.self)
+        si = perf.self[i]
+        ri = perf.reservoir[i]
+        wi = perf.WI[i]
+
         dp = wi*(p_res[ri] - p_well[si])
         if dp > 0
             # Injection
@@ -400,7 +400,6 @@ function perforation_sources!(target, perforations, p_res, p_well, kr, μ, ρλ_
                 target[c, i] = sgn*ρλ_i[c, ri]*dp
             end
         end
-
     end
 end
 
