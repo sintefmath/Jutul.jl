@@ -1,14 +1,24 @@
 # Primary variables
+
+"""
+Number of units (e.g. Cells, Faces) a variable is defined on.
+"""
 function number_of_units(model, pv::TervVariables)
     # By default, each primary variable exists on all cells of a discretized domain
     return count_units(model.domain, associated_unit(pv))
 end
 
+"""
+The unit a variable is associated with, and can hold partial derivatives with respect to.
+"""
 function associated_unit(::TervVariables)
     # The default unit for all primary variables is Cells()
     return Cells()
 end
 
+"""
+Total number of degrees of freedom for a model, over all primary variables and all units.
+"""
 function number_of_degrees_of_freedom(model::TervModel)
     ndof = 0
     for (pkey, pvar) in get_primary_variables(model)
@@ -46,9 +56,14 @@ Number of independent primary variables / degrees of freedom per computational u
 function degrees_of_freedom_per_unit(model, ::ScalarVariable)
     return 1
 end
+
+"""
+Constant variables hold no degrees of freedom.
+"""
 function degrees_of_freedom_per_unit(model, ::ConstantVariables)
     return 0 # A constant has no freedom
 end
+
 """
 Number of values held by a primary variable. Normally this is equal to the number of degrees of freedom,
 but some special primary variables are most conveniently defined by having N values and N-1 independent variables.
@@ -58,10 +73,24 @@ function values_per_unit(model, u::TervVariables)
 end
 
 ## Update functions
-
+"Absolute allowable change for variable during a nonlinear update."
 function absolute_increment_limit(::TervVariables) nothing end
+
+"""
+Relative allowable change for variable during a nonlinear update.
+A variable with value |x| and relative limit 0.2 cannot change more
+than |x|*0.2.
+"""
 function relative_increment_limit(::TervVariables) nothing end
+
+"""
+Upper (inclusive) limit for variable.
+"""
 function maximum_value(::TervVariables) nothing end
+
+"""
+Lower (inclusive) limit for variable.
+"""
 function minimum_value(::TervVariables) nothing end
 
 function update_primary_variable!(state, p::TervVariables, state_symbol, model, dx)

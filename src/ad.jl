@@ -1,6 +1,13 @@
 export CompactAutoDiffCache, as_value
 
+"""
+An AutoDiffCache is a type that holds both a set of AD values and a map into some
+global Jacobian.
+"""
 abstract type TervAutoDiffCache end
+"""
+Cache that holds an AD vector/matrix together with their positions.
+"""
 struct CompactAutoDiffCache{I, ∂x} <: TervAutoDiffCache where {I <: Integer, ∂x <: Real}
     entries
     unit
@@ -39,12 +46,23 @@ struct CompactAutoDiffCache{I, ∂x} <: TervAutoDiffCache where {I <: Integer, �
     end
 end
 
+"""
+Get number of units a cache is defined on.
+"""
 @inline function number_of_units(c::TervAutoDiffCache) c.number_of_units end
 
+"""
+Get the entries of the main autodiff cache for an equation.
+
+Note: This only gets the .equation field's entries.
+"""
 @inline function get_entries(e::TervEquation)
     return get_entries(e.equation)
 end
 
+"""
+Get entries of autodiff cache. Entries are AD vectors that hold values and derivatives.
+"""
 @inline function get_entries(c::CompactAutoDiffCache)
     return c.entries
 end
@@ -226,6 +244,45 @@ function convert_state_ad(model, state, tag = nothing)
     return stateAD
 end
 
+"""
+    allocate_array_ad(n[, m]; <keyword arguments>)
+
+Allocate vector or matrix as AD with optionally provided context and a specified non-zero on the diagonal.
+
+# Arguments
+- `n::Integer`: number of entries in vector, or number of rows if `m` is given.
+- `m::Integer`: number of rows (optional)
+
+# Keyword arguments
+- `npartials = 1`: Number of partials derivatives to allocate for each element
+- `diag_pos = nothing`: Indices of where to put units on the diagonal (if any)
+
+Other keyword arguments are passed onto `get_ad_unit_scalar`.
+
+# Examples:
+
+Allocate a vector with a single partial:
+```julia-repl
+julia> allocate_array_ad(2)
+2-element Vector{ForwardDiff.Dual{nothing, Float64, 1}}:
+ Dual{nothing}(0.0,0.0)
+ Dual{nothing}(0.0,0.0)
+```
+Allocate a vector with two partials, and set the first to one:
+```julia-repl
+julia> allocate_array_ad(2, diag_pos = 1, npartials = 2)
+2-element Vector{ForwardDiff.Dual{nothing, Float64, 2}}:
+ Dual{nothing}(0.0,1.0,0.0)
+ Dual{nothing}(0.0,1.0,0.0)
+```
+Set up a matrix with two partials, where the first column has partials [1, 0] and the second [0, 1]:
+```julia-repl
+julia> allocate_array_ad(2, 2, diag_pos = [1, 2], npartials = 2)
+2×2 Matrix{ForwardDiff.Dual{nothing, Float64, 2}}:
+ Dual{nothing}(0.0,1.0,0.0)  Dual{nothing}(0.0,1.0,0.0)
+ Dual{nothing}(0.0,0.0,1.0)  Dual{nothing}(0.0,0.0,1.0)
+```
+"""
 function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), diag_pos = nothing, npartials = 1, kwarg...) where {R<:Integer}
     # allocate a n length zero vector with space for derivatives
     T = float_type(context)
@@ -244,19 +301,39 @@ function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), dia
     return A
 end
 
+"""
+    allocate_array_ad(v::AbstractVector, ...)
+Convert vector to AD vector.
+"""
 function allocate_array_ad(v::AbstractVector; kwarg...)
     # create a copy of a vector as AD
     v_AD = allocate_array_ad(length(v); kwarg...)
     update_values!(v_AD, v)
 end
 
-# Allocators 
+"""
+    allocate_array_ad(v::AbstractMatrix, ...)
+Convert matrix to AD matrix.
+"""
 function allocate_array_ad(v::AbstractMatrix; kwarg...)
     # create a copy of a vector as AD
     v_AD = allocate_array_ad(size(v)...; kwarg...)
     update_values!(v_AD, v)
 end
 
+"""
+    get_ad_unit_scalar(v::Real, npartials, diag_pos = nothing; <keyword_arguments>)
+
+Get scalar with partial derivatives as AD instance.
+
+# Arguments
+- `v::Real`: Value of AD variable.
+- `npartials`: Number of partial derivatives each AD instance holds.
+- `diag_pos` = nothing: Position(s) of where to set 1 as the partial derivative instead of zero.
+
+# Keyword arguments
+- `tag = nothing`: Tag for AD instance. Two AD values of the different tag cannot interoperate to avoid perturbation confusion (see ForwardDiff documentation).
+"""
 function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing; tag = nothing) where {T<:Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
     if npartials > 0
