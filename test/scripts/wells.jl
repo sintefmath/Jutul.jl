@@ -4,7 +4,7 @@ single_phase = false
 
 ##
 casename = "welltest"
-casename = "2cell_well"
+# casename = "2cell_well"
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
 ## Set up reservoir part
 # Parameters
@@ -19,20 +19,21 @@ phase = LiquidPhase()
 
 if single_phase
     sys = SinglePhaseSystem(phase)
+    imix = 1.0
 else
     phase2 = AqueousPhase()
     sys = ImmiscibleSystem([phase, phase2])
+    imix = [1.0, 0.0]
 end
 model = SimulationModel(G, sys)
 
-init = Dict(:Pressure => p0, :Saturations => [1, 0])
+init = Dict(:Pressure => p0, :Saturations => [0, 1.0])
 state0r = setup_state(model, init)
 
-# Model parameters
-param_res = setup_parameters(model)
+# timesteps = [1.0]
+timesteps = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24
 
-timesteps = [1.0]
-sim = Simulator(model, state0 = state0r, parameters = param_res)
+sim = Simulator(model, state0 = state0r)
 simulate(sim, timesteps)
 ## Set up injector
 ix = 1
@@ -64,28 +65,26 @@ function build_well(mrst_data, ix)
 end
 
 # Initial condition for all wells
-w0 = Dict(:Pressure => p0, :TotalMassFlux => 1e-12, :Saturations => [1, 0])
+w0 = Dict(:Pressure => p0, :TotalMassFlux => 1e-12, :Saturations => [0, 1.0])
 
 # Rate injector
 Wi = build_well(mrst_data, 1)
-ifrac = 0.01
+ifrac = 1.0
 irate = ifrac*sum(sum(G.grid.pore_volumes))/sum(timesteps)
 istate = setup_state(Wi, w0)
-param_inj = param_res
 ## Simulate injector on its own
-sim_i = Simulator(Wi, state0 = istate, parameters = param_inj)
+sim_i = Simulator(Wi, state0 = istate)
 states = simulate(sim_i, [1.0])
 ## Set up injector control
 it = SinglePhaseRateTarget(irate, phase)
-ictrl = InjectorControl(it, 1.0)
+ictrl = InjectorControl(it, imix)
 # iforces = build_forces(Wi, control = ictrl)
 
 ## BHP producer
 Wp = build_well(mrst_data, 2)
 pstate = setup_state(Wp, w0)
-param_prod = param_res
 ## Simulate producer only
-sim_p = Simulator(Wp, state0 = pstate, parameters = param_prod)
+sim_p = Simulator(Wp, state0 = pstate)
 states = simulate(sim_p, [1.0])
 ## Set up producer control
 pt = BottomHolePressureTarget(pRef/2)
@@ -107,16 +106,9 @@ mmodel = MultiModel((Reservoir = model, Injector = Wi, Producer = Wp, Facility =
 state0 = setup_state(mmodel, Dict(:Reservoir => state0r, :Injector => istate, :Producer => pstate, :Facility => fstate))
 forces = Dict(:Reservoir => nothing, :Facility => fforces, :Injector => nothing, :Producer => nothing)
 
-parameters = setup_parameters(mmodel)
-parameters[:Reservoir] = param_res
-parameters[:Injector] = param_inj
-parameters[:Producer] = param_prod
 
-
-sim = Simulator(mmodel, state0 = state0, parameters = parameters)
-dt = [1.0]
-dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24
-states = simulate(sim, dt, forces = forces)
+sim = Simulator(mmodel, state0 = state0)
+states = simulate(sim, timesteps, forces = forces)
 ##
 using GLMakie
 f = Figure()
@@ -133,23 +125,22 @@ lines!(ax, q_p)
 bh_i = map((x) -> x[:Injector][:Pressure][1], states)
 bh_p = map((x) -> x[:Producer][:Pressure][1], states)
 
-ax = Axis(f[2, 1:2], title = "Bottom hole pressure")
+ax = Axis(f[2, 1], title = "Bottom hole pressure")
 l1 = lines!(ax, bh_i)
 l2 = lines!(ax, bh_p)
 axislegend(ax, [l1, l2], ["Injector", "Producer"])
-display(f)
-##
 
-
-## Plot pressure drop model
-friction = Wi.domain.grid.segment_models[1]
-rho = 1000
-mu = 1e-3
-n = 1000
-v = range(0, -1, length = n)
-
-dp = zeros(n)
-for (i, vi) in enumerate(v)
-    dp[i] = segment_pressure_drop(friction, vi, rho, mu);
+# Liquid fractions
+if single_phase
+    L_i = ones(size(bh_i))
+    L_p = L_i
+else
+    L_i = map((x) -> x[:Injector][:Saturations][1], states)
+    L_p = map((x) -> x[:Producer][:Saturations][1], states)
 end
-lines(v, dp)
+
+ax = Axis(f[2, 2], title = "Liquid volume fraction")
+l1 = lines!(ax, L_i)
+l2 = lines!(ax, L_p)
+axislegend(ax, [l1, l2], ["Injector", "Producer"])
+display(f)
