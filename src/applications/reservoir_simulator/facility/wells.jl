@@ -333,12 +333,15 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, 1)
 end
 
+"""
+Cross term from reservoir into well bore
+"""
 function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, 
     target_storage, source_storage,
     target_model::SimulationModel{DW}, 
     source_model::SimulationModel{DR},
-    target, source, dt) where {DR<:DiscretizedDomain{G} where G<:ReservoirGrid,
-                               DW<:DiscretizedDomain{W} where W<:MultiSegmentWell}
+    target, source, dt) where {DW<:DiscretizedDomain{W} where W<:MultiSegmentWell,
+                               DR<:DiscretizedDomain{G} where G<:ReservoirGrid}
     state_res = source_storage.state
     state_well = target_storage.state
 
