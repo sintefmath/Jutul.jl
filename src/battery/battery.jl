@@ -153,6 +153,14 @@ function get_cc_grid(perm = nothing, poro = nothing, volumes = nothing, extraout
 end
 
 
+# To get right number of dof for CellNeigh...
+function single_unique_potential(
+    model::SimulationModel{D, S}
+    )where {D<:TervDomain, S<:CurrentCollector}
+    return false
+end
+
+
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::ChargeFlow)
     S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
 end
