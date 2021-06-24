@@ -10,6 +10,16 @@ struct CurrentCollector <: ElectroChemicalComponent end
 struct ChargeFlow <: FlowType end
 include_face_sign(::ChargeFlow) = false
 
+# abstract type PhaseAndComponentVariable <: GroupedVariables end
+# #? Is this the right replacement for MassMobility
+# abstract type PhaseMassDensities <: PhaseVariables end
+
+struct Phi <: ScalarVariable end
+
+function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:TervDomain, S<:CurrentCollector}
+    return (sources = sources,)
+end
+
 function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05)
     G = get_cc_grid()
 
@@ -34,10 +44,10 @@ function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac 
 
     sys = CurrentCollector()
     model = SimulationModel(G, sys, context = context)
-    s = model.secondary_variables
+    # ? Can i just skip this??
+    # s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
 
     ## Bellow is not fixed
-    s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
 
     # System state
     tot_time = sum(timesteps)
@@ -75,6 +85,12 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
         @assert all(pv .> 0)     "Pore volumes must be positive"
         new{eltype(pv), eltype(N)}(pv, N)
     end
+end
+
+function degrees_of_freedom_per_unit(
+    model::SimulationModel{D, S}, sf::ComponentVariable
+    ) where {D<:TervDomain, S<:CurrentCollector}
+    return 1 
 end
 
 
@@ -115,7 +131,7 @@ function get_cc_grid(perm = nothing, poro = nothing, volumes = nothing, extraout
     T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
     T = compute_face_trans(T_hf, N)
 
-    G = MinimalTPFAGrid(pv, N)
+    G = MinimalECTPFAGrid(pv, N)
     if size(cell_centroids, 1) == 3
         z = cell_centroids[3, :]
         g = gravity_constant
@@ -135,3 +151,9 @@ function get_cc_grid(perm = nothing, poro = nothing, volumes = nothing, extraout
         return D
     end
 end
+
+
+function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::ChargeFlow)
+    S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
+end
+
