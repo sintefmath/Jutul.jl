@@ -26,6 +26,13 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     internal_faces = (N[:, 2] .> 0) .& (N[:, 1] .> 0)
     N = copy(N[internal_faces, :]')
     
+    function get_vec(d)
+        if isa(d, AbstractArray)
+            return vec(d)
+        else
+            return [d]
+        end
+    end
     # get_cell_faces(N)
     # get_cell_neighbors(N)
     
@@ -42,10 +49,10 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
 
     # Deal with cell data
     if isnothing(poro)
-        poro = vec(exported["rock"]["poro"])
+        poro = get_vec(exported["rock"]["poro"])
     end
     if isnothing(volumes)
-        volumes = vec(exported["G"]["cells"]["volumes"])
+        volumes = get_vec(exported["G"]["cells"]["volumes"])
     end
     pv = poro.*volumes
     nc = length(pv)

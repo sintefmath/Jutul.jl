@@ -97,13 +97,17 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
     if !isnothing(T)
         @assert length(T) == nhf ÷ 2
     end
-    get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity, include_face_sign(flow_type))
-    el = get_el(1, 1) # Could be junk, we just need eltype
-    
-    conn_data = Vector{typeof(el)}(undef, nhf)
-    Threads.@threads for cell = 1:nc
-        @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
-            conn_data[fpos] = get_el(faces[fpos], cell)
+    if nhf == 0
+        conn_data = []
+    else
+        get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity, include_face_sign(flow_type))
+        el = get_el(1, 1) # Could be junk, we just need eltype
+        
+        conn_data = Vector{typeof(el)}(undef, nhf)
+        Threads.@threads for cell = 1:nc
+            @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
+                conn_data[fpos] = get_el(faces[fpos], cell)
+            end
         end
     end
     TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
