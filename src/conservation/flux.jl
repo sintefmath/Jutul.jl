@@ -266,9 +266,10 @@ function update_fluxes_total_mass_velocity_cells!(flux, conn_data, masses, total
     for i in eachindex(conn_data)
         @inbounds c = conn_data[i]
         f = c.face
+        s = c.face_sign
+        vi = s*v[f]
         for phno = 1:size(masses, 1)
             masses_i = view(masses, phno, :)
-            vi = c.face_sign*v[f]
             @inbounds flux[phno, i] = half_face_fluxes_total_mass_velocity!(c.self, c.other, masses_i, total, vi)
         end
     end
@@ -301,7 +302,7 @@ function half_face_fluxes_total_mass_velocity_face!(left, right, masses, total, 
     # and recieve the signed flux going into or out of the cell. For the half face velocity
     # we have a single velocity, and the convention is to take the left cell to be upstream 
     # for a positive flux.
-    if v > 0
+    if v < 0
         # Flow from left to right
         x = value(masses[left])/value(total[left])
     else
