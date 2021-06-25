@@ -640,6 +640,7 @@ function get_output_state(storage, model::MultiModel)
     for key in keys(models)
         out[key] = get_output_state(storage[key], models[key])
     end
+    out = convert_to_immutable_storage(out)
     return out
 end
 
