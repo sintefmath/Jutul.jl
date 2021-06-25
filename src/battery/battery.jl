@@ -10,70 +10,6 @@ struct CurrentCollector <: ElectroChemicalComponent end
 struct ChargeFlow <: FlowType end
 include_face_sign(::ChargeFlow) = false
 
-# abstract type PhaseAndComponentVariable <: GroupedVariables end
-# #? Is this the right replacement for MassMobility
-# abstract type PhaseMassDensities <: PhaseVariables end
-
-struct Phi <: ScalarVariable end
-
-function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:TervDomain, S<:CurrentCollector}
-    return (sources = sources,)
-end
-
-function declare_units(G::MinimalECTPFAGrid)
-    c = (unit = Cells(), count = length(G.pore_volumes))  # Cells equal to number of pore volumes
-    f = (unit = Faces(), count = size(G.neighborship, 2)) # Faces
-    return [c, f]
-end
-
-
-function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05)
-    G = get_cc_grid()
-
-    nc = number_of_cells(G)
-    pv = G.grid.pore_volumes
-    timesteps = timesteps*3600*24
-
-    if context == "cpu"
-        context = DefaultContext()
-    elseif isa(context, String)
-        error("Unsupported target $context")
-    end
-    @assert isa(context, TervContext)
-
-    #TODO: Gjøre til batteri-parametere
-    # Parameters
-    bar = 1e5
-    p0 = 100*bar # 100 bar
-    cl = 1e-5/bar
-    pRef = 100*bar
-    rhoLS = 1000
-
-    sys = CurrentCollector()
-    model = SimulationModel(G, sys, context = context)
-    # ? Can i just skip this??
-    # s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
-
-
-    # System state
-    tot_time = sum(timesteps)
-    irate = pvfrac*sum(pv)/tot_time
-    src = [SourceTerm(1, irate), 
-        SourceTerm(nc, -irate)]
-    forces = build_forces(model, sources = src)
-    # print(fieldnames(typeof(G)))
-    # print(G.units)
-    ## Bellow is not fixed
-    # State is dict with pressure in each cell
-    init = Dict(:Pressure => p0)
-    state0 = setup_state(model, init)
-    # Model parameters
-    parameters = setup_parameters(model)
-
-    state0 = setup_state(model, init)
-    return (state0, model, parameters, forces, timesteps)
-end
-
 
 abstract type ElectroChemicalGrid <: TervGrid end
 
@@ -94,6 +30,164 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
         new{eltype(pv), eltype(N)}(pv, N)
     end
 end
+
+function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:TervDomain, S<:CurrentCollector}
+    return (sources = sources,)
+end
+
+function declare_units(G::MinimalECTPFAGrid)
+    c = (unit = Cells(), count = length(G.pore_volumes))  # Cells equal to number of pore volumes
+    f = (unit = Faces(), count = size(G.neighborship, 2)) # Faces
+    return [c, f]
+end
+
+
+
+# Instead of CellNeighborPotentialDifference (?)
+struct Phi <: ScalarVariable 
+end
+
+
+@terv_secondary function update_as_secondary!(
+    pot, tv::Phi, model, param, Phi
+    ) #should resisitvity be added?
+    mf = model.domain.discretizations.mass_flow
+    conn_data = mf.conn_data
+    context = model.context
+    if mf.gravity
+        update_cell_neighbor_potential_difference_gravity!(
+            pot, conn_data, Phi, context, kernel_compatibility(context)
+            )
+    else
+        update_cell_neighbor_potential_difference!(
+            pot, conn_data, Phi, context, kernel_compatibility(context)
+            )
+    end
+end
+
+function update_cell_neighbor_potential_difference_gravity!(
+    dpot, conn_data, p, rho, context, ::KernelDisallowed
+    )
+    Threads.@threads for i in eachindex(conn_data)
+        c = conn_data[i]
+        for phno = 1:size(rho, 1)
+            rho_i = view(rho, phno, :)
+            @inbounds dpot[phno, i] = half_face_two_point_kgradp_gravity(
+                c.self, c.other, c.T, p, c.gdz, rho_i
+                )
+        end
+    end
+end
+
+function update_cell_neighbor_potential_difference_gravity!(
+    dpot, conn_data, p, rho, context, ::KernelAllowed
+    )
+    @kernel function kern(dpot, @Const(conn_data), @Const(p), @Const(rho))
+        ph, i = @index(Global, NTuple)
+        c = conn_data[i]
+        rho_i = view(rho, ph, :)
+        dpot[ph, i] = half_face_two_point_kgradp_gravity(
+            c.self, c.other, c.T, p, c.gdz, rho_i
+            )
+    end
+    begin
+        d = size(dpot)
+
+        kernel = kern(context.device, context.block_size, d)
+        event_jac = kernel(dpot, conn_data, p, rho, ndrange = d)
+        wait(event_jac)
+    end
+end
+
+
+### PHYSICS
+### MUST BE REWRITTEN; ARE IN THEIR ORIGINAL FORM
+### REMOVE GRAVITY; PRESSURE -> PHI
+
+
+@inline function half_face_two_point_kgradp_gravity(
+    c_self::I, c_other::I, T, p::AbstractArray{R}, gΔz, ρ::AbstractArray{R}
+    ) where {R<:Real, I<:Integer}
+    return -T*two_point_potential_drop_half_face(c_self, c_other, p, gΔz, ρ)
+end
+
+@inline function two_point_potential_drop_half_face(
+    c_self, c_other, p::AbstractVector, gΔz, ρ
+    )
+    return two_point_potential_drop(p[c_self], value(p[c_other]), gΔz, ρ[c_self], value(ρ[c_other]))
+end
+
+@inline function two_point_potential_drop(
+    p_self::Real, p_other::Real, gΔz::Real, ρ_self::Real, ρ_other::Real
+    )
+    ρ_avg = 0.5*(ρ_self + ρ_other)
+    return p_self - p_other + gΔz*ρ_avg
+end
+
+@inline function half_face_two_point_kgradp(
+    c_self::I, c_other::I, T, p::AbstractArray{R}
+    ) where {R<:Real, I<:Integer}
+    return -T*(p[c_self] - value(p[c_other]))
+end
+
+@inline function half_face_two_point_flux_fused(
+    c_self::I, c_other::I, T, p::AbstractArray{R}, λ::AbstractArray{R}, 
+    gΔz, ρ::AbstractArray{R}
+    ) where {R<:Real, I<:Integer}
+    θ = half_face_two_point_kgradp_gravity(c_self, c_other, T, p, gΔz, ρ)
+    λᶠ = spu_upwind(c_self, c_other, θ, λ)
+    return λᶠ*θ
+end
+
+####
+
+
+
+
+function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05)
+    G = get_cc_grid()
+
+    nc = number_of_cells(G)
+    pv = G.grid.pore_volumes
+    timesteps = timesteps*3600*24
+
+    if context == "cpu"
+        context = DefaultContext()
+    elseif isa(context, String)
+        error("Unsupported target $context")
+    end
+    @assert isa(context, TervContext)
+
+    #TODO: Gjøre til batteri-parametere
+    # Parameters
+    rhoLS = 1000
+
+    phi = 1
+
+    sys = CurrentCollector()
+    model = SimulationModel(G, sys, context = context)
+    # ? Can i just skip this??
+    # ? I think this is where resisitvity would go
+    # s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
+
+
+    # System state
+    tot_time = sum(timesteps)
+    irate = pvfrac*sum(pv)/tot_time
+    src = [SourceTerm(1, irate), 
+        SourceTerm(nc, -irate)]
+    forces = build_forces(model, sources = src)
+
+    # State is dict with pressure in each cell
+    init = Dict(:Phi => phi)
+    state0 = setup_state(model, init)
+    # Model parameters
+    parameters = setup_parameters(model)
+
+    state0 = setup_state(model, init)
+    return (state0, model, parameters, forces, timesteps)
+end
+
 
 function degrees_of_freedom_per_unit(
     model::SimulationModel{D, S}, sf::ComponentVariable
@@ -150,11 +244,8 @@ function get_cc_grid(perm = nothing, poro = nothing, volumes = nothing, extraout
 
     ft = ChargeFlow()
     flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
-    print(fieldnames(typeof(flow)))
     disc = (mass_flow = flow,)
     D = DiscretizedDomain(G, disc)
-    # print(fieldnames(typeof(D)))
-    # print(D.units)
 
     if extraout
         return (D, exported)
@@ -173,6 +264,6 @@ end
 
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::ChargeFlow)
-    S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
+    S[:Phi] = Phi()
 end
 

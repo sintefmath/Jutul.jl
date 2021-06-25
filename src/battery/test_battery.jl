@@ -3,9 +3,8 @@ using Test
 
 function test_cc(linear_solver=nothing)
     state0, model, prm, f, t = get_test_setup_battery()
-
-    #! Have not change anything below
     sim = Simulator(model, state0=state0, parameters=prm)
+    #! Have not change anything below
     cfg = simulator_config(sim)
     cfg[:linear_solver] = linear_solver
     simulate(sim, t, forces = f, config = cfg)
