@@ -2,6 +2,9 @@ using Terv
 export ElectroChemicalComponent, CurrentCollector
 export get_test_setup_battery, get_cc_grid
 
+
+### Classes and corresponding overwritten functions
+
 abstract type ElectroChemicalComponent <: TervSystem end
 struct CurrentCollector <: ElectroChemicalComponent end
 
@@ -9,7 +12,6 @@ struct CurrentCollector <: ElectroChemicalComponent end
 #? Is this the correct substitution
 struct ChargeFlow <: FlowType end
 include_face_sign(::ChargeFlow) = false
-
 
 abstract type ElectroChemicalGrid <: TervGrid end
 
@@ -36,17 +38,37 @@ function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<
 end
 
 function declare_units(G::MinimalECTPFAGrid)
-    c = (unit = Cells(), count = length(G.pore_volumes))  # Cells equal to number of pore volumes
-    f = (unit = Faces(), count = size(G.neighborship, 2)) # Faces
+    # Cells equal to number of pore volumes
+    c = (unit = Cells(), count = length(G.pore_volumes))
+    # Faces
+    f = (unit = Faces(), count = size(G.neighborship, 2))
     return [c, f]
 end
 
+function degrees_of_freedom_per_unit(
+    model::SimulationModel{D, S}, sf::ComponentVariable
+    ) where {D<:TervDomain, S<:CurrentCollector}
+    return 1 
+end
 
+# To get right number of dof for CellNeigh...
+function single_unique_potential(
+    model::SimulationModel{D, S}
+    )where {D<:TervDomain, S<:CurrentCollector}
+    return false
+end
+
+function select_secondary_variables_flow_type!(
+    S, domain, system, formulation, flow_type::ChargeFlow
+    )
+    S[:Phi] = Phi()
+end
 
 # Instead of CellNeighborPotentialDifference (?)
 struct Phi <: ScalarVariable 
 end
 
+### Fra variable_evaluation
 
 @terv_secondary function update_as_secondary!(
     pot, tv::Phi, model, param, Phi
@@ -55,46 +77,39 @@ end
     conn_data = mf.conn_data
     context = model.context
     if mf.gravity
-        update_cell_neighbor_potential_difference_gravity!(
+        update_cell_neighbor_potential_cc!(
             pot, conn_data, Phi, context, kernel_compatibility(context)
             )
     else
-        update_cell_neighbor_potential_difference!(
+        update_cell_neighbor_potential_cc!(
             pot, conn_data, Phi, context, kernel_compatibility(context)
             )
     end
 end
 
-function update_cell_neighbor_potential_difference_gravity!(
-    dpot, conn_data, p, rho, context, ::KernelDisallowed
+function update_cell_neighbor_potential_cc!(
+    dpot, conn_data, phi, context, ::KernelDisallowed
     )
     Threads.@threads for i in eachindex(conn_data)
         c = conn_data[i]
-        for phno = 1:size(rho, 1)
-            rho_i = view(rho, phno, :)
-            @inbounds dpot[phno, i] = half_face_two_point_kgradp_gravity(
-                c.self, c.other, c.T, p, c.gdz, rho_i
-                )
-        end
+        @inbounds dpot[phno] = half_face_two_point_kgradp_gravity(
+                c.self, c.other, c.T, phi
+        )
     end
 end
 
-function update_cell_neighbor_potential_difference_gravity!(
-    dpot, conn_data, p, rho, context, ::KernelAllowed
+function update_cell_neighbor_potential_cc!(
+    dpot, conn_data, phi, context, ::KernelAllowed
     )
-    @kernel function kern(dpot, @Const(conn_data), @Const(p), @Const(rho))
+    @kernel function kern(dpot, @Const(conn_data))
         ph, i = @index(Global, NTuple)
         c = conn_data[i]
-        rho_i = view(rho, ph, :)
-        dpot[ph, i] = half_face_two_point_kgradp_gravity(
-            c.self, c.other, c.T, p, c.gdz, rho_i
-            )
+        dpot[ph] = half_face_two_point_grad(c.self, c.other, c.T, phi)
     end
     begin
         d = size(dpot)
-
         kernel = kern(context.device, context.block_size, d)
-        event_jac = kernel(dpot, conn_data, p, rho, ndrange = d)
+        event_jac = kernel(dpot, conn_data, phi, ndrange = d)
         wait(event_jac)
     end
 end
@@ -102,46 +117,39 @@ end
 
 ### PHYSICS
 ### MUST BE REWRITTEN; ARE IN THEIR ORIGINAL FORM
-### REMOVE GRAVITY; PRESSURE -> PHI
 
 
-@inline function half_face_two_point_kgradp_gravity(
-    c_self::I, c_other::I, T, p::AbstractArray{R}, gΔz, ρ::AbstractArray{R}
+@inline function half_face_two_point_grad(
+    c_self::I, c_other::I, T, phi::AbstractArray{R}
     ) where {R<:Real, I<:Integer}
-    return -T*two_point_potential_drop_half_face(c_self, c_other, p, gΔz, ρ)
+    return -T*two_point_potential_drop_half_face(c_self, c_other, phi)
 end
 
 @inline function two_point_potential_drop_half_face(
-    c_self, c_other, p::AbstractVector, gΔz, ρ
+    c_self, c_other, phi::AbstractVector
     )
-    return two_point_potential_drop(p[c_self], value(p[c_other]), gΔz, ρ[c_self], value(ρ[c_other]))
+    return two_point_potential_drop(phi[c_self], value(phi[c_other]))
 end
 
-@inline function two_point_potential_drop(
-    p_self::Real, p_other::Real, gΔz::Real, ρ_self::Real, ρ_other::Real
-    )
-    ρ_avg = 0.5*(ρ_self + ρ_other)
-    return p_self - p_other + gΔz*ρ_avg
+@inline function two_point_potential_drop(phi_self::Real, phi_other::Real)
+    return phi_self - phi_other
 end
 
-@inline function half_face_two_point_kgradp(
-    c_self::I, c_other::I, T, p::AbstractArray{R}
+@inline function half_face_two_point_grad(
+    c_self::I, c_other::I, T, phi::AbstractArray{R}
     ) where {R<:Real, I<:Integer}
-    return -T*(p[c_self] - value(p[c_other]))
+    return -T*(phi[c_self] - value(phi[c_other]))
 end
 
 @inline function half_face_two_point_flux_fused(
-    c_self::I, c_other::I, T, p::AbstractArray{R}, λ::AbstractArray{R}, 
-    gΔz, ρ::AbstractArray{R}
+    c_self::I, c_other::I, T, phi::AbstractArray{R}, λ::AbstractArray{R},
     ) where {R<:Real, I<:Integer}
-    θ = half_face_two_point_kgradp_gravity(c_self, c_other, T, p, gΔz, ρ)
+    θ = half_face_two_point_grad(c_self, c_other, T, phi)
     λᶠ = spu_upwind(c_self, c_other, θ, λ)
     return λᶠ*θ
 end
 
 ####
-
-
 
 
 function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05)
@@ -186,13 +194,6 @@ function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac 
 
     state0 = setup_state(model, init)
     return (state0, model, parameters, forces, timesteps)
-end
-
-
-function degrees_of_freedom_per_unit(
-    model::SimulationModel{D, S}, sf::ComponentVariable
-    ) where {D<:TervDomain, S<:CurrentCollector}
-    return 1 
 end
 
 
@@ -253,17 +254,3 @@ function get_cc_grid(perm = nothing, poro = nothing, volumes = nothing, extraout
         return D
     end
 end
-
-
-# To get right number of dof for CellNeigh...
-function single_unique_potential(
-    model::SimulationModel{D, S}
-    )where {D<:TervDomain, S<:CurrentCollector}
-    return false
-end
-
-
-function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::ChargeFlow)
-    S[:Phi] = Phi()
-end
-
