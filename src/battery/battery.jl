@@ -20,6 +20,14 @@ function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<
     return (sources = sources,)
 end
 
+
+function declare_units(G::MinimalECTPFAGrid)
+    c = (unit = Cells(), count = length(G.pore_volumes))  # Cells equal to number of pore volumes
+    f = (unit = Faces(), count = size(G.neighborship, 2)) # Faces
+    return [c, f]
+end
+
+
 function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05)
     G = get_cc_grid()
 
@@ -47,7 +55,6 @@ function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac 
     # ? Can i just skip this??
     # s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
 
-    ## Bellow is not fixed
 
     # System state
     tot_time = sum(timesteps)
@@ -55,7 +62,9 @@ function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac 
     src = [SourceTerm(1, irate), 
         SourceTerm(nc, -irate)]
     forces = build_forces(model, sources = src)
-
+    # print(fieldnames(typeof(G)))
+    # print(G.units)
+    ## Bellow is not fixed
     # State is dict with pressure in each cell
     init = Dict(:Pressure => p0)
     state0 = setup_state(model, init)
@@ -142,8 +151,11 @@ function get_cc_grid(perm = nothing, poro = nothing, volumes = nothing, extraout
 
     ft = ChargeFlow()
     flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
+    print(fieldnames(typeof(flow)))
     disc = (mass_flow = flow,)
     D = DiscretizedDomain(G, disc)
+    # print(fieldnames(typeof(D)))
+    # print(D.units)
 
     if extraout
         return (D, exported)
