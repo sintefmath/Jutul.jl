@@ -330,7 +330,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
 
     res_q = ct.crossterm_target
     well_q = ct.crossterm_source
-    apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, 1)
+    apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, -1)
 end
 
 """
@@ -349,7 +349,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
 
     res_q = ct.crossterm_source
     well_q = ct.crossterm_target
-    apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, -1)
+    apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, 1)
 end
 
 
@@ -371,7 +371,7 @@ function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, per
     perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i,  as_value(masses), sgn)
 end
 
-function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, masses, sgn)
+function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_masses, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     nc = size(ρλ_i, 1)
     nph = size(μ, 1)
@@ -381,7 +381,7 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, masse
         ri = perf.reservoir[i]
         wi = perf.WI[i]
 
-        dp = wi*(p_res[ri] - p_well[si])
+        dp = wi*(p_well[si] - p_res[ri])
         if dp > 0
             # Injection
             λ_t = 0
@@ -394,7 +394,7 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, masse
             end
             for c in 1:nc
                 # dp * rho * s * totmob well
-                target[c, i] = sgn*masses[c, si]*λ_t*dp
+                target[c, i] = sgn*well_masses[c, si]*λ_t*dp
             end
         else
             # Production
