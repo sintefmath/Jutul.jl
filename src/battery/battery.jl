@@ -20,7 +20,6 @@ function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<
     return (sources = sources,)
 end
 
-
 function declare_units(G::MinimalECTPFAGrid)
     c = (unit = Cells(), count = length(G.pore_volumes))  # Cells equal to number of pore volumes
     f = (unit = Faces(), count = size(G.neighborship, 2)) # Faces
