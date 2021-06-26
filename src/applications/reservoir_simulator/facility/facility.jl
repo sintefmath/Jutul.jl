@@ -51,11 +51,14 @@ function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_s
     cfg = state.WellGroupConfiguration.control
     # Injectors can only have strictly positive injection rates,
     # producers can only have strictly negative and disabled controls give zero rate.
+    function do_update(v, dx, ctrl)
+        return update_value(v, dx)
+    end
     function do_update(v, dx, ctrl::InjectorControl)
         return update_value(v, dx, nothing, nothing, 1e-20, nothing)
     end
     function do_update(v, dx, ctrl::ProducerControl)
-        return update_value(v, dx, nothing, nothing, -1e-20, nothing)
+        return update_value(v, dx, nothing, nothing, nothing, -1e-20)
     end
     function do_update(v, dx, ctrl::DisabledControl)
         return 0.0
