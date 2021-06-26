@@ -109,7 +109,7 @@ function update_primary_variable!(state, p::TervVariables, state_symbol, model, 
     end
 end
 
-@inline function choose_increment(v::F, dv::F, abs_change, rel_change, minval, maxval) where {F<:AbstractFloat}
+@inline function choose_increment(v::F, dv::F, abs_change = nothing, rel_change = nothing, minval = nothing, maxval = nothing) where {F<:AbstractFloat}
     dv = limit_abs(dv, abs_change)
     dv = limit_rel(v, dv, rel_change)
     dv = limit_lower(v, dv, minval)
