@@ -45,6 +45,27 @@ end
 struct TotalSurfaceMassRate <: ScalarVariable end
 function associated_unit(::TotalSurfaceMassRate) Wells() end
 
+function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_symbol, model, dx)
+    v = state[state_symbol]
+    symbols = model.domain.well_symbols
+    cfg = state.WellGroupConfiguration.control
+    # Injectors can only have strictly positive injection rates,
+    # producers can only have strictly negative and disabled controls give zero rate.
+    function do_update(v, dx, ctrl::InjectorControl)
+        return update_value(v, dx, nothing, nothing, 1e-20, nothing)
+    end
+    function do_update(v, dx, ctrl::ProducerControl)
+        return update_value(v, dx, nothing, nothing, -1e-20, nothing)
+    end
+    function do_update(v, dx, ctrl::DisabledControl)
+        return 0.0
+    end
+    for i in eachindex(v)
+        s = symbols[i]
+        v[i] = do_update(v[i], dx[i], cfg[s])
+    end
+end
+
 abstract type WellTarget end
 
 struct BottomHolePressureTarget <: WellTarget
