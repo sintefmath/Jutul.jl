@@ -474,7 +474,7 @@ function update_cross_terms_for_pair!(storage, model, source::Symbol, target::Sy
 end
 
 function update_cross_term!(ct::InjectiveCrossTerm, eq, target_storage, source_storage, target_model, source_model, target, source, dt)
-    error("Cross term must be specialized for your equation and models.")
+    error("Cross term must be specialized for your equation and models. Did not understand how to specialize $target ($(typeof(target_model))) to $source ($(typeof(source_model)))")
 end
 
 function update_cross_term!(::Nothing, arg...)
