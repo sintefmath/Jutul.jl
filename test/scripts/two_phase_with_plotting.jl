@@ -49,7 +49,7 @@ function perform_test(casename, doPlot = false, pvfrac=1, tstep = ones(25))
     state0 = setup_state(model, init)
     # Model parameters
     parameters = setup_parameters(model)
-    parameters[:ReferenceDensity] = [rhoLS, rhoLS]
+    parameters[:reference_densities] = [rhoLS, rhoLS]
 
     sim = Simulator(model, state0 = state0, parameters = parameters)
     cfg = simulator_config(sim, max_nonlinear_iterations = 20)

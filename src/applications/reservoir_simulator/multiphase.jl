@@ -254,8 +254,8 @@ function convergence_criterion(model::SimulationModel{D, S}, storage, eq::Conser
     e = zeros(n)
     prm = storage.parameters
     for i = 1:n
-        if haskey(prm, :ReferenceDensity)
-            rhos = prm.ReferenceDensity[i]
+        if haskey(prm, :reference_densities)
+            rhos = prm.reference_densities[i]
         else
             rhos = 1
         end
