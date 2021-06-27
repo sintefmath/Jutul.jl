@@ -118,9 +118,10 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
         end
         @assert !isa(flow_type, TrivialFlow) "TrivialFlow only valid for grids without connections."
     else
+        nc = number_of_cells(grid)
         has_grav = false
         conn_data = []
-        face_pos = [1]
+        face_pos = ones(Int64, nc)
     end
     TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
 end

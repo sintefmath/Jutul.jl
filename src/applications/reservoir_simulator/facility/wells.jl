@@ -167,7 +167,6 @@ function declare_pattern(model, e::PotentialDropBalanceWell, ::Cells)
     N = D.grid.neighborship
     nf = number_of_faces(D)
     m = size(N, 1)
-    # nc = number_of_cells(D)
     @assert size(N, 2) == nf
     @assert m == 2
     t = eltype(N)
@@ -305,10 +304,13 @@ function get_neighborship(W::MultiSegmentWell)
     return W.neighborship
 end
 
+function number_of_cells(W::WellGrid)
+    length(W.volumes)
+end
+
 function declare_units(W::WellGrid)
-    N = get_neighborship(W)
-    c = (unit = Cells(),         count = length(W.volumes))
-    f = (unit = Faces(),         count = size(N, 2))
+    c = (unit = Cells(),         count = number_of_cells(W))
+    f = (unit = Faces(),         count = number_of_faces(W))
     p = (unit = Perforations(),  count = length(W.perforations.self))
     return [c, f, p]
 end

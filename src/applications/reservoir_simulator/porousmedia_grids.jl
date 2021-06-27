@@ -29,9 +29,13 @@ function number_of_cells(G::ReservoirGrid)
     return length(G.pore_volumes)
 end
 
+function number_of_faces(G)
+    size(get_neighborship(G), 2)
+end
+
 function declare_units(G::MinimalTPFAGrid)
-    c = (unit = Cells(), count = length(G.pore_volumes))  # Cells equal to number of pore volumes
-    f = (unit = Faces(), count = size(G.neighborship, 2)) # Faces
+    c = (unit = Cells(), count = number_of_cells(G)) # Cells equal to number of pore volumes
+    f = (unit = Faces(), count = number_of_faces(G)) # Faces
     return [c, f]
 end
 
