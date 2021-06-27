@@ -261,7 +261,7 @@ function convergence_criterion(model::SimulationModel{D, S}, storage, eq::Conser
         end
         e[i] = mapreduce((pv, e) -> abs((dt/rhos) * e / pv), max, pv, r[i, :])
     end
-    return (e, 1.0)
+    return (e, tolerance_scale(eq))
 end
 
 # Accumulation: Base implementation

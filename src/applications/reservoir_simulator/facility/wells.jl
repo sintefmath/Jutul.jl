@@ -162,6 +162,8 @@ end
 
 function associated_unit(::PotentialDropBalanceWell) Faces() end
 
+function tolerance_scale(::PotentialDropBalanceWell) 1e6 end
+
 function declare_pattern(model, e::PotentialDropBalanceWell, ::Cells)
     D = model.domain
     N = D.grid.neighborship
