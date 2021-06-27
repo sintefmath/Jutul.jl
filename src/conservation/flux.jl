@@ -121,7 +121,7 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
         nc = number_of_cells(grid)
         has_grav = false
         conn_data = []
-        face_pos = ones(Int64, nc)
+        face_pos = ones(Int64, nc+1)
     end
     TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
 end
