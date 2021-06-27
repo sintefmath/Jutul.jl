@@ -39,6 +39,7 @@ struct MultiSegmentWell <: WellGrid
                                                         perforation_cells = nothing,
                                                         segment_models = nothing,
                                                         reference_depth = 0,
+                                                        dz = nothing,
                                                         accumulator_volume = 1e-3*mean(volumes),
                                                         reservoir_symbol = :Reservoir)
         nv = length(volumes)
@@ -69,11 +70,16 @@ struct MultiSegmentWell <: WellGrid
             segment_models::AbstractVector
             @assert length(segment_models) == nseg
         end
+        if isnothing(dz)
+            gdz = zeros(length(perforation_cells))
+        else
+            gdz = dz*gravity_constant
+        end
         # @assert length(dz) == nseg "dz must have one entry per segment, plus one for the top segment"
         @assert length(WI) == nr  "Must have one well index per perforated cell"
         @assert length(perforation_cells) == nr
 
-        perf = (self = perforation_cells, reservoir = reservoir_cells, WI = WI)
+        perf = (self = perforation_cells, reservoir = reservoir_cells, WI = WI, gdz = gdz)
         accumulator = (reference_depth = reference_depth, )
         new(volumes, perf, N, accumulator, reservoir_symbol, segment_models)
     end
@@ -234,7 +240,6 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
         else
             μ_mix = mix_by_saturations(s_other, as_value(view(μ, :, other)))
         end
-
         sgn = cd.face_sign
         v = sgn*V[face]
         ρ_mix = 0.5*(ρ_mix_self + ρ_mix_other)
@@ -243,6 +248,8 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
             # This is a good time to deal with the derivatives of v[face] since it is already fetched.
             Δp_f = segment_pressure_drop(seg_model, v, value(ρ_mix), value(μ_mix))
             face_entries[face] = value(Δθ) - Δp_f
+            # @debug "$face \neq_f: $(value.(face_entries[face]))"
+
             # @debug "Δp_f $face: $Δp_f flux: $v\neq_f: $(face_entries[face])"
             # @debug "rho: $(value(ρ_mix)) mu: $(value(μ_mix))"
 
@@ -252,7 +259,7 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
         end
         Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
         cell_entries[(face-1)*2 + ix] = sgn*(Δθ - Δp)
-        # @debug "Cell entry ($face:$self→$other): $(sgn*(Δθ - Δp))"
+        # @debug "Cell entry ($face:$self→$other): $(sgn*value.(Δθ - Δp))"
     end
 end
 
@@ -330,7 +337,9 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
 
     res_q = ct.crossterm_target
     well_q = ct.crossterm_source
+    
     apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, -1)
+    # @debug "($source → $target, from wellbore): $(value.(res_q)), s: $(value.(state_well.Saturations))"
 end
 
 """
@@ -350,6 +359,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     res_q = ct.crossterm_source
     well_q = ct.crossterm_target
     apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, 1)
+    @debug "Res->WB: $(value.(res_q))"
 end
 
 
@@ -367,11 +377,14 @@ function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, per
     ρλ_i = state_res.MassMobilities
     masses = state_well.TotalMasses
 
-    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          masses, sgn)
-    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i,  as_value(masses), sgn)
+    ρ_w = state_well.PhaseMassDensities
+    # ρ_r = state_res.PhaseMassDensities
+
+    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          masses, ρ_w, sgn)
+    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i,  as_value(masses), as_value(ρ_w), sgn)
 end
 
-function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_masses, sgn)
+function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_masses, ρ_w, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     nc = size(ρλ_i, 1)
     nph = size(μ, 1)
@@ -380,8 +393,9 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_
         si = perf.self[i]
         ri = perf.reservoir[i]
         wi = perf.WI[i]
+        gdz = perf.gdz[i]
 
-        dp = wi*(p_well[si] - p_res[ri])
+        dp = wi*(p_well[si] - p_res[ri] + ρ_w[si]*gdz)
         if dp > 0
             # Injection
             λ_t = 0
