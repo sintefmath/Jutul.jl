@@ -63,9 +63,11 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
         @debug "Updated linear system in $t_lsys seconds."
     end
     converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
-    for i in errors
-        @debug "$(i.name): $(i.error)"
+    if config[:info_level] > 0
+        @info "Convergence report, iteration $iteration:"
+        get_convergence_table(errors)
     end
+
     if converged
         do_solve = iteration == 1
         @debug "Step converged."
@@ -91,6 +93,7 @@ function simulator_config(sim; kwarg...)
     cfg[:output_states] = true
     # Define debug level. If debugging is on, this determines the amount of output.
     cfg[:debug_level] = 1
+    cfg[:info_level] = 1
     # Overwrite with varargin
     for key in keys(kwarg)
         cfg[key] = kwarg[key]
@@ -100,7 +103,7 @@ end
 
 function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, kwarg...)
     if isnothing(config)
-        config = simulator_config(sim, kwarg...)
+        config = simulator_config(sim; kwarg...)
     end
     states = []
     no_steps = length(timesteps)
@@ -110,7 +113,6 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     for (step_no, dT) in enumerate(timesteps)
         t_str =  Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
         @info "Solving step $step_no/$no_steps of length $t_str."
-        # @info "Solving step $step_no/$no_steps"
         dt = dT
         done = false
         t_local = 0

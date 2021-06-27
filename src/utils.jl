@@ -59,3 +59,50 @@ function get_row_view(v::AbstractVector, n, m, row, transp = false, offset = 0)
     v = get_matrix_view(v, n, m, transp, offset)
     view(v, row, :)
 end
+
+function get_convergence_table(errors::AbstractDict)
+    # Already a dict
+    conv_table_fn(errors, true)
+end
+
+function get_convergence_table(errors)
+    d = OrderedDict()
+    d[:Base] = errors
+    conv_table_fn(errors, false)
+end
+
+function conv_table_fn(model_errors, has_models = false)
+    if !has_models
+        # Make the code easier to have for both multimodel and single model case.
+        header = ["Equation", "Value", "Tolerance"]
+    else
+        header = ["Model", "Equation", "Value", "Tolerance"]
+    end
+    tbl = []
+    for (model, errors) in model_errors
+        for (mix, eq) in enumerate(errors)
+            for (i, e) in enumerate(eq.error)
+                if i == 1
+                    nm = String(eq.name)
+                    tt = eq.tolerance
+                else
+                    nm = ""
+                    tt = ""
+                end
+                if has_models
+                    if mix == 1
+                        m = String(model)
+                    else
+                        m = ""
+                    end
+                    t = [m nm e tt]
+                else
+                    t = [nm e tt]
+                end
+                push!(tbl, t)
+            end
+        end
+    end
+    tbl = vcat(tbl...)
+    return pretty_table(tbl, header = header)
+end

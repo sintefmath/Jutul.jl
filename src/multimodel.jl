@@ -572,20 +572,21 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
     err = 0
     offset = 0
     lsys = storage.LinearizedSystem
+    errors = OrderedDict()
     for key in keys(model.models)
         @debug "Checking convergence for submodel $key:"
         s = storage[key]
         m = model.models[key]
         eqs = s.equations
 
-        conv, errors, e, = check_convergence(lsys, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
+        conv, e, errors[key], = check_convergence(lsys, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)
         offset += number_of_degrees_of_freedom(m)
     end
     if extra_out
-        return (converged, err, tol)
+        return (converged, err, errors)
     else
         return converged
     end
@@ -650,4 +651,9 @@ end
 
 function get_submodels(model, arg...)
     map((x) -> model.models[x], arg)
+end
+
+
+function get_convergence_table(model::MultiModel, errors)
+    get_convergence_table(keys(model.models), errors)
 end
