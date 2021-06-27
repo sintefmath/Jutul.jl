@@ -1,13 +1,16 @@
 using Terv
 using Statistics, DataStructures
 ENV["JULIA_DEBUG"] = Terv
-
+ENV["JULIA_DEBUG"] = nothing
 ##
 casename = "simple_egg"
-casename = "bl_wells"
+# casename = "bl_wells"
+# casename = "bl_wells_mini"
+
 # casename = "single_inj_single_cell"
 # casename = "intermediate"
 # casename = "mini"
+simple_well = true
 
 
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
@@ -81,7 +84,7 @@ controls = Dict()
 for i = 1:num_wells
     sym = well_symbols[i]
 
-    w, wdata = get_well_from_mrst_data(mrst_data, sys, i, extraout = true, volume = 1e-3, simple = false)
+    w, wdata = get_well_from_mrst_data(mrst_data, sys, i, extraout = true, volume = 1e-3, simple = simple_well)
 
     sv = w.secondary_variables
     sv[:PhaseMassDensities] = rho
@@ -146,17 +149,61 @@ sim = Simulator(mmodel, state0 = state0, parameters = parameters)
 # dt = [1.0]
 # dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24
 dt = timesteps
-states = simulate(sim, dt, forces = forces)
+states = simulate(sim, dt, forces = forces, info_level = 1)
 nothing
 ##
 d = map((x) -> x[:Reservoir][:Pressure][1], states)
-d = map((x) -> x[:W1][:Saturations][1], states)
+# d = map((x) -> x[:W1][:Saturations][1], states)
 d = map((x) -> x[:Reservoir][:Saturations][1], states)
-d = map((x) -> x[:Reservoir][:Saturations][1, end], states)
+# d = map((x) -> x[:Reservoir][:Saturations][1, end], states)
 d = states[end][:Reservoir].Saturations'
+# d = states[end][:Reservoir].Pressure
+
 # d = map((x) -> x[:W1][:Pressure][2] - x[:Reservoir][:Pressure][1], states)
 
 using Plots
 Plots.plot(d)
 ##
 # Plots.plot()
+##
+
+function get_qws(ix)
+    s = well_symbols[ix]
+    map((x) -> x[:Facility][:TotalSurfaceMassRate][ix]*x[s][:Saturations][1, 1], states)
+end
+
+function get_qos(ix)
+    s = well_symbols[ix]
+    map((x) -> x[:Facility][:TotalSurfaceMassRate][ix]*x[s][:Saturations][2, 1], states)
+end
+
+ix = 9:12
+w = well_symbols[ix]
+# d = map((x) -> x[w][:Saturations][1], states)
+d = map((x) -> -x[:Facility][:TotalSurfaceMassRate][ix], states)
+d = hcat(d...)'
+h = Plots.plot(d)
+ylims!(h, (0, 6e-3))
+##
+d = map(get_qws, ix)
+d = hcat(d...)
+h = Plots.plot(-d)
+ylims!(h, (0, 6e-3))
+##
+d = map(get_qos, ix)
+d = hcat(d...)
+h = Plots.plot(-d)
+ylims!(h, (0, 6e-3))
+
+##
+
+function get_bhp(ix)
+    s = well_symbols[ix]
+    map((x) -> x[s][:Pressure][1], states)
+end
+
+ix = 1:8
+d = map(get_bhp, ix)
+d = hcat(d...)
+h = Plots.plot(d)
+# ylims!(h, (0, 6e-3))
