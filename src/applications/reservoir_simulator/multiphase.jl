@@ -99,7 +99,16 @@ end
 # Primary variable logic
 
 # Pressure as primary variable
-struct Pressure <: ScalarVariable end
+struct Pressure <: ScalarVariable
+    dpMaxAbs
+    dpMaxRel
+    function Pressure(dpMaxAbs = nothing, dpMaxRel = nothing)
+        new(dpMaxAbs, dpMaxRel)
+    end
+end
+
+@inline function absolute_increment_limit(p::Pressure) p.dpMaxAbs end
+@inline function relative_increment_limit(p::Pressure) p.dpMaxRel end
 
 # Saturations as primary variable
 struct Saturations <: GroupedVariables
