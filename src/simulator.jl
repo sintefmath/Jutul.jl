@@ -139,8 +139,8 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
             store_output!(states, sim)
         end
     end
-    return states
     @info "Simulation complete."
+    return states
 end
 
 function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
