@@ -106,7 +106,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
         end
         top_node = 1
         masses = wstate.TotalMasses[:, top_node]
-        mass = wstate.TotalMass[top_node]
+        mass = sum(masses)
         mix = masses./mass
     end
 
