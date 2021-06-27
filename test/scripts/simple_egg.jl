@@ -4,6 +4,8 @@ ENV["JULIA_DEBUG"] = Terv
 
 ##
 casename = "simple_egg"
+casename = "bl_wells"
+# casename = "single_inj_single_cell"
 # casename = "intermediate"
 # casename = "mini"
 
@@ -37,7 +39,12 @@ s[:PhaseViscosities] = mu
 
 ##
 state0 = mrst_data["state0"]
-p0 = vec(state0["pressure"])
+p0 = state0["pressure"]
+if isa(p0, AbstractArray)
+    p0 = vec(p0)
+else
+    p0 = [p0]
+end
 s0 = state0["s"]'
 init = Dict(:Pressure => p0, :Saturations => s0)
 state0r = setup_state(model, init)
@@ -61,35 +68,10 @@ models[:Reservoir] = model
 
 ## Set up injector
 
-
-function build_well(mrst_data, ix)
-    W_mrst = mrst_data["W"][ix]
-    w = convert_to_immutable_storage(W_mrst)
-
-    function awrap(x::Any)
-        x
-    end
-    function awrap(x::Number)
-        [x]
-    end
-    ref_depth = W_mrst["refDepth"]
-    rc = Int64.(awrap(w.cells))
-    n = length(rc)
-    # dz = awrap(w.dZ)
-    WI = awrap(w.WI)
-    W = MultiSegmentWell(ones(n), rc, WI = WI, reference_depth = ref_depth)
-
-    cell_centroids = copy((mrst_data["G"]["cells"]["centroids"])')
-    z = vcat(ref_depth, cell_centroids[3, rc])
-    flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), TotalMassVelocityMassFractionsFlow(), W, nothing, z)
-    disc = (mass_flow = flow,)
-
-    wmodel = SimulationModel(W, sys, discretization = disc)
-    return wmodel
-end
-
 # Initial condition for all wells
-w0 = Dict(:Pressure => mean(p0), :TotalMassFlux => 1e-12, :Saturations => [1.0, 0])
+slw = 1.0
+slw = 0.0
+w0 = Dict(:Pressure => mean(p0), :TotalMassFlux => 1e-12, :Saturations => [slw, 1-slw])
 
 well_symbols = map((x) -> Symbol(x["name"]), vec(mrst_data["W"]))
 num_wells = length(well_symbols)
@@ -99,11 +81,11 @@ controls = Dict()
 for i = 1:num_wells
     sym = well_symbols[i]
 
-    w, wdata = get_well_from_mrst_data(mrst_data, sys, i, extraout = true)
+    w, wdata = get_well_from_mrst_data(mrst_data, sys, i, extraout = true, volume = 1e-3)
 
-    s = w.secondary_variables
-    s[:PhaseMassDensities] = rho
-    s[:PhaseViscosities] = mu
+    sv = w.secondary_variables
+    sv[:PhaseMassDensities] = rho
+    sv[:PhaseViscosities] = mu
 
     models[sym] = w
 
@@ -127,11 +109,7 @@ for i = 1:num_wells
         ctrl = ProducerControl(target)
     end
     param_w = setup_parameters(w)
-    # param_w[:Viscosity] = vec(mu)
-    # param_w[:Density] = [rhoA, rhoL]
     param_w[:ReferenceDensity] = vec(rhoS)
-    
-
 
     well_parameters[sym] = param_w
     controls[sym] = ctrl
@@ -169,38 +147,16 @@ sim = Simulator(mmodel, state0 = state0, parameters = parameters)
 # dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24
 dt = timesteps
 states = simulate(sim, dt, forces = forces)
+nothing
 ##
-using GLMakie
-f = Figure()
+d = map((x) -> x[:Reservoir][:Pressure][1], states)
+d = map((x) -> x[:W1][:Saturations][1], states)
+d = map((x) -> x[:Reservoir][:Saturations][1], states)
+d = map((x) -> x[:Reservoir][:Saturations][1, end], states)
+d = states[end][:Reservoir].Saturations'
+# d = map((x) -> x[:W1][:Pressure][2] - x[:Reservoir][:Pressure][1], states)
 
-# Production/injection rates
-q_i = map((x) -> x[:Facility][:TotalSurfaceMassRate][1], states)
-ax = Axis(f[1, 1], title = "Injector rate")
-lines!(ax, q_i)
-
-q_p = map((x) -> x[:Facility][:TotalSurfaceMassRate][2], states)
-ax = Axis(f[1, 2], title = "Producer rate")
-lines!(ax, q_p)
-# BHP plotting together
-bh_i = map((x) -> x[:Injector][:Pressure][1], states)
-bh_p = map((x) -> x[:Producer][:Pressure][1], states)
-
-ax = Axis(f[2, 1:2], title = "Bottom hole pressure")
-l1 = lines!(ax, bh_i)
-l2 = lines!(ax, bh_p)
-axislegend(ax, [l1, l2], ["Injector", "Producer"])
-display(f)
-
-
-## Plot pressure drop model
-friction = Wi.domain.grid.segment_models[1]
-rho = 1000
-mu = 1e-3
-n = 1000
-v = range(0, -1, length = n)
-
-dp = zeros(n)
-for (i, vi) in enumerate(v)
-    dp[i] = segment_pressure_drop(friction, vi, rho, mu);
-end
-lines(v, dp)
+using Plots
+Plots.plot(d)
+##
+# Plots.plot()
