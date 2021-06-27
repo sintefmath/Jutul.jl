@@ -111,7 +111,7 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
         flow = TwoPointPotentialFlow(nothing, nothing, TrivialFlow(), W)
     else
         # For a MS well, this is the drop from the perforated cell center to the perforation (assumed zero here)
-        dz = zeros(rc)
+        dz = zeros(length(rc))
         W = MultiSegmentWell(volume*ones(n), rc, WI = WI, reference_depth = ref_depth, dz = dz)
 
         z = vcat(ref_depth, z)
