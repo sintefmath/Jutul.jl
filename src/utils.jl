@@ -72,7 +72,7 @@ function get_convergence_table(errors)
 end
 
 function conv_table_fn(model_errors, has_models = false)
-    header = ["Equation", "||R||", "ϵ"]
+    header = ["Equation", "‖R‖", "ϵ"]
     alignment = [:l, :r, :r]
     if has_models
         # Make the code easier to have for both multimodel and single model case.
