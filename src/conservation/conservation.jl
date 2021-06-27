@@ -57,7 +57,7 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, N,
             end
             for e in 1:ne
                 for d = 1:np
-                    pos = find_jac_position(jac, cell + target_offset, other + source_offset, e, d, nu, nu, ne, np, context)
+                    pos = find_jac_position(jac, other + target_offset, cell + source_offset, e, d, nu, nu, ne, np, context)
                     set_jacobian_pos!(face_cache, f_ix, e, d, pos)
                 end
             end
