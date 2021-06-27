@@ -342,12 +342,15 @@ function check_convergence(storage, model; kwarg...)
     check_convergence(lsys, eqs, storage, model; kwarg...)
 end
 
-function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra_out = false, tol = 1e-3, offset = 0, kwarg...)
+function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra_out = false, tol = nothing, offset = 0, kwarg...)
     converged = true
     e = 0
     eoffset = 0
     r_buf = lsys.r_buffer
     prm = storage.parameters.tolerances
+    if isnothing(tol)
+        tol = prm.default
+    end
     output = []
     for key in keys(eqs)
         eq = eqs[key]
@@ -402,6 +405,7 @@ end
 function setup_parameters(model)
     d = Dict{Symbol, Any}()
     d[:tolerances] = Dict{Symbol, Any}()
+    d[:tolerances][:default] = 1e-3
     return d
 end
 
