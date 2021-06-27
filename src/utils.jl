@@ -68,7 +68,7 @@ end
 function get_convergence_table(errors)
     d = OrderedDict()
     d[:Base] = errors
-    conv_table_fn(errors, false)
+    conv_table_fn(d, false)
 end
 
 function conv_table_fn(model_errors, has_models = false)
@@ -90,7 +90,7 @@ function conv_table_fn(model_errors, has_models = false)
                     tt = ""
                 end
                 if has_models
-                    if mix == 1
+                    if mix == 1 && i == 1
                         m = String(model)
                     else
                         m = ""
