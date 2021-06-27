@@ -578,7 +578,7 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
         m = model.models[key]
         eqs = s.equations
 
-        conv, e, = check_convergence(lsys, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
+        conv, errors, e, = check_convergence(lsys, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)

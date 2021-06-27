@@ -62,7 +62,10 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     if timing_out
         @debug "Updated linear system in $t_lsys seconds."
     end
-    converged, e, tol = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
+    converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
+    for i in errors
+        @debug "$(i.name): $(i.error)"
+    end
     if converged
         do_solve = iteration == 1
         @debug "Step converged."
@@ -77,7 +80,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
             @debug "Updated state $t_update seconds."
         end
     end
-    return (e, tol)
+    return (e, converged)
 end
 
 function simulator_config(sim; kwarg...)
@@ -142,8 +145,7 @@ function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
     done = false
     update_before_step!(sim, dt, forces)
     for it = 1:maxIterations
-        e, tol = perform_step!(sim, dt, forces, cfg, iteration = it)
-        done = e < tol
+        e, done = perform_step!(sim, dt, forces, cfg, iteration = it)
         if done
             break
         end
