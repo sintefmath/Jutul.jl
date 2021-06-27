@@ -81,7 +81,7 @@ controls = Dict()
 for i = 1:num_wells
     sym = well_symbols[i]
 
-    w, wdata = get_well_from_mrst_data(mrst_data, sys, i, extraout = true, volume = 1e-3)
+    w, wdata = get_well_from_mrst_data(mrst_data, sys, i, extraout = true, volume = 1e-3, simple = false)
 
     sv = w.secondary_variables
     sv[:PhaseMassDensities] = rho
