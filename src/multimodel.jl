@@ -574,7 +574,6 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
     lsys = storage.LinearizedSystem
     errors = OrderedDict()
     for key in keys(model.models)
-        @debug "Checking convergence for submodel $key:"
         s = storage[key]
         m = model.models[key]
         eqs = s.equations
