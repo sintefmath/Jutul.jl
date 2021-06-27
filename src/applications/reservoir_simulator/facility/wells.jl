@@ -34,14 +34,12 @@ struct MultiSegmentWell <: WellGrid
     reservoir_symbol # Symbol of the reservoir the well is coupled to
     segment_models   # Segment pressure drop model
     function MultiSegmentWell(volumes::AbstractVector, reservoir_cells;
-                                                        WI = nothing,
                                                         N = nothing,
                                                         perforation_cells = nothing,
                                                         segment_models = nothing,
                                                         reference_depth = 0,
-                                                        dz = nothing,
                                                         accumulator_volume = 1e-3*mean(volumes),
-                                                        reservoir_symbol = :Reservoir)
+                                                        reservoir_symbol = :Reservoir, kwarg...)
         nv = length(volumes)
         nc = nv + 1
         nr = length(reservoir_cells)
@@ -55,10 +53,6 @@ struct MultiSegmentWell <: WellGrid
         @assert size(N, 1) == 2
 
         volumes = vcat([accumulator_volume], volumes)
-        if isnothing(WI)
-            @warn "No well indices provided. Using 1e-12."
-            WI = repeat(1e-12, nr)
-        end
         if !isnothing(reservoir_cells) && isnothing(perforation_cells)
             @assert length(reservoir_cells) == nv "If no perforation cells are given, we must 1->1 correspondence between well volumes and reservoir cells."
             perforation_cells = collect(2:nc)
@@ -70,19 +64,28 @@ struct MultiSegmentWell <: WellGrid
             segment_models::AbstractVector
             @assert length(segment_models) == nseg
         end
-        if isnothing(dz)
-            gdz = zeros(length(perforation_cells))
-        else
-            gdz = dz*gravity_constant
-        end
-        # @assert length(dz) == nseg "dz must have one entry per segment, plus one for the top segment"
+        WI, gdz = common_well_setup(perforation_cells; kwarg...)
         @assert length(WI) == nr  "Must have one well index per perforated cell"
         @assert length(perforation_cells) == nr
-
         perf = (self = perforation_cells, reservoir = reservoir_cells, WI = WI, gdz = gdz)
         accumulator = (reference_depth = reference_depth, )
         new(volumes, perf, N, accumulator, reservoir_symbol, segment_models)
     end
+end
+
+function common_well_setup(perforation_cells; dz = nothing, WI = nothing, gravity = gravity_constant)
+    nr = length(perforation_cells)
+    if isnothing(dz)
+        @warn "dz provided for well. Assuming no gravity."
+        gdz = zeros(nr)
+    else
+        gdz = dz*gravity
+    end
+    if isnothing(WI)
+        @warn "No well indices provided. Using 1e-12."
+        WI = repeat(1e-12, nr)
+    end
+    return (WI, gdz)
 end
 
 """
