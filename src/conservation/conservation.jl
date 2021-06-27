@@ -35,7 +35,7 @@ end
 "Update positions of law's derivatives in global Jacobian"
 function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
-    neighborship = model.domain.grid.neighborship
+    neighborship = get_neighborship(model.domain.grid)
 
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells

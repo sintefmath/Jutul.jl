@@ -1,20 +1,11 @@
 export TotalSurfaceMassRate, WellGroup, DisabledControl
 export HistoryMode, PredictionMode, Wells
 
-abstract type FacilitySystem <: TervSystem end
-struct PredictionMode <: FacilitySystem end
-struct HistoryMode <: FacilitySystem end
 
-abstract type SurfaceFacilityDomain <: TervDomain end
-abstract type WellControllerDomain <: SurfaceFacilityDomain end
-struct WellGroup <: WellControllerDomain
-    well_symbols::Vector{Symbol}
-end
 
 """
 Well variables - units that we have exactly one of per well (and usually relates to the surface connection)
 """
-struct Wells <: TervUnit end
 
 function count_units(wg::WellGroup, ::Wells)
     return length(wg.well_symbols)
@@ -42,7 +33,6 @@ function get_well_position(d, symbol)
     return findall(d.well_symbols .== symbol)[]
 end
 
-struct TotalSurfaceMassRate <: ScalarVariable end
 function associated_unit(::TotalSurfaceMassRate) Wells() end
 
 function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_symbol, model, dx)
@@ -69,20 +59,10 @@ function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_s
     end
 end
 
-abstract type WellTarget end
-
-struct BottomHolePressureTarget <: WellTarget
-    value::AbstractFloat
-end
 
 function well_control_equation(ctrl, t::BottomHolePressureTarget, qt)
     # Note: This equation will get the bhp subtracted when coupled to a well
     return t.value
-end
-
-struct SinglePhaseRateTarget <: WellTarget
-    value::AbstractFloat
-    phase::AbstractPhase
 end
 
 function well_control_equation(ctrl, t::SinglePhaseRateTarget, qt)
@@ -90,77 +70,12 @@ function well_control_equation(ctrl, t::SinglePhaseRateTarget, qt)
     return t.value - qt
 end
 
-struct DisabledTarget <: WellTarget end
 
 function well_control_equation(ctrl, t::DisabledTarget, qt)
     return qt
 end
 
 ## Well controls
-abstract type WellForce <: TervForce end
-abstract type WellControlForce <: WellForce end
-
-struct DisabledControl <: WellControlForce
-    target::DisabledTarget
-    function DisabledControl()
-        t = DisabledTarget()
-        new(t)
-    end
-end
-
-struct InjectorControl <: WellControlForce
-    target::WellTarget
-    injection_mixture
-    function InjectorControl(target, mix)
-        if isa(mix, Real)
-            mix = [mix]
-        end
-        mix = vec(mix)
-        @assert sum(mix) ≈ 1
-        new(target, mix)
-    end
-end
-
-struct ProducerControl <: WellControlForce
-    target::WellTarget
-end
-
-struct WellGroupConfiguration
-    control
-    limits
-    function WellGroupConfiguration(well_symbols, control = nothing, limits = nothing)
-        if isnothing(control)
-            control = Dict{Symbol, WellControlForce}()
-            for s in well_symbols
-                control[s] = DisabledControl()
-            end
-        end
-        if isnothing(limits)
-            limits = Dict{Symbol, Any}()
-            for s in well_symbols
-                limits[s] = nothing
-            end
-        end
-        new(control, limits)
-    end
-end
-
-struct ControlEquationWell <: TervEquation
-    # Equation:
-    #        q_t - target = 0
-    #        p|top cell - target = 0
-    # We need to store derivatives with respect to q_t (same unit) and the top cell (other unit)
-    equation::TervAutoDiffCache
-    function ControlEquationWell(model, number_of_equations; kwarg...)
-        # @assert number_of_equations == 1
-        nw = count_units(model.domain, Wells())
-        alloc = (unit) -> CompactAutoDiffCache(number_of_equations, nw, model, unit = unit; kwarg...)
-        # One potential drop per velocity
-        target_well = alloc(Wells())
-        new(target_well)
-    end
-end
-
 
 """
 Impact from well group in facility on conservation equation inside well
@@ -168,7 +83,7 @@ Impact from well group in facility on conservation equation inside well
 function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_storage, facility_storage, 
                             target_model::SimulationModel{D, S}, source_model::SimulationModel{WG}, 
                             well_symbol, source, dt) where 
-                            {D<:DiscretizedDomain{W} where W<:MultiSegmentWell, 
+                            {D<:DiscretizedDomain{W} where W<:WellGrid, 
                             S<:Union{ImmiscibleSystem, SinglePhaseSystem}, 
                             WG<:WellGroup} 
     fstate = facility_storage.state
@@ -210,7 +125,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
                             target_storage, source_storage,
                             target_model::SimulationModel{WG},
                             source_model::SimulationModel{D}, 
-                            target, well_symbol, dt) where {D<:DiscretizedDomain{W} where W<:MultiSegmentWell, WG<:WellGroup}
+                            target, well_symbol, dt) where {D<:DiscretizedDomain{W} where W<:WellGrid, WG<:WellGroup}
     fstate = target_storage.state
     ctrl = fstate.WellGroupConfiguration.control[well_symbol]
     target = ctrl.target

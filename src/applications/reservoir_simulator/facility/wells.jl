@@ -26,6 +26,19 @@ struct TotalMassFlux <: ScalarVariable end
 function associated_unit(::TotalMassFlux) Faces() end
 
 
+struct SimpleWell <: WellGrid 
+    volumes
+    perforations
+    reservoir_symbol
+    function SimpleWell(reservoir_cells; reference_depth = 0, volume = 1e-3, reservoir_symbol = :Reservoir, kwarg...)
+        nr = length(reservoir_cells)
+
+        WI, gdz = common_well_setup(nr; kwarg...)
+        perf = (self = ones(Int64, nr), reservoir = reservoir_cells, WI = WI, gdz = gdz)
+        new([volume], perf, reservoir_symbol)
+    end
+end
+
 struct MultiSegmentWell <: WellGrid 
     volumes          # One per cell
     perforations     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
@@ -64,26 +77,27 @@ struct MultiSegmentWell <: WellGrid
             segment_models::AbstractVector
             @assert length(segment_models) == nseg
         end
-        WI, gdz = common_well_setup(perforation_cells; kwarg...)
-        @assert length(WI) == nr  "Must have one well index per perforated cell"
         @assert length(perforation_cells) == nr
+        WI, gdz = common_well_setup(nr; kwarg...)
         perf = (self = perforation_cells, reservoir = reservoir_cells, WI = WI, gdz = gdz)
         accumulator = (reference_depth = reference_depth, )
         new(volumes, perf, N, accumulator, reservoir_symbol, segment_models)
     end
 end
 
-function common_well_setup(perforation_cells; dz = nothing, WI = nothing, gravity = gravity_constant)
-    nr = length(perforation_cells)
+function common_well_setup(nr; dz = nothing, WI = nothing, gravity = gravity_constant)
     if isnothing(dz)
         @warn "dz provided for well. Assuming no gravity."
         gdz = zeros(nr)
     else
+        @assert length(dz) == nr  "Must have one connection drop dz per perforated cell"
         gdz = dz*gravity
     end
     if isnothing(WI)
         @warn "No well indices provided. Using 1e-12."
         WI = repeat(1e-12, nr)
+    else
+        @assert length(WI) == nr  "Must have one well index per perforated cell"
     end
     return (WI, gdz)
 end
@@ -273,7 +287,7 @@ end
 
 
 function get_flow_volume(grid::WellGrid)
-    grid.volumes
+    return grid.volumes
 end
 
 # Well segments
@@ -282,12 +296,19 @@ Perforations are connections from well cells to reservoir vcells
 """
 struct Perforations <: TervUnit end
 
-## Well targets
+function get_neighborship(::SimpleWell)
+    # No interior connections.
+    return zeros(Int64, 2, 0)
+end
 
+function get_neighborship(W::MultiSegmentWell)
+    return W.neighborship
+end
 
-function declare_units(W::MultiSegmentWell)
+function declare_units(W::WellGrid)
+    N = get_neighborship(W)
     c = (unit = Cells(),         count = length(W.volumes))
-    f = (unit = Faces(),         count = size(W.neighborship, 2))
+    f = (unit = Faces(),         count = size(N, 2))
     p = (unit = Perforations(),  count = length(W.perforations.self))
     return [c, f, p]
 end
@@ -331,7 +352,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
                             target_model::SimulationModel{DR},
                             source_model::SimulationModel{DW}, 
                             target, source, dt) where {DR<:DiscretizedDomain{G} where G<:ReservoirGrid,
-                                                       DW<:DiscretizedDomain{W} where W<:MultiSegmentWell}
+                                                       DW<:DiscretizedDomain{W} where W<:WellGrid}
     # error("Hello world")
     state_res = target_storage.state
     state_well = source_storage.state
@@ -352,7 +373,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     target_storage, source_storage,
     target_model::SimulationModel{DW}, 
     source_model::SimulationModel{DR},
-    target, source, dt) where {DW<:DiscretizedDomain{W} where W<:MultiSegmentWell,
+    target, source, dt) where {DW<:DiscretizedDomain{W} where W<:WellGrid,
                                DR<:DiscretizedDomain{G} where G<:ReservoirGrid}
     state_res = source_storage.state
     state_well = target_storage.state

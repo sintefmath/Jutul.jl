@@ -3,6 +3,8 @@ include("porousmedia_grids.jl")
 include("multiphase.jl")
 include("multiphase_secondary_variables.jl")
 # Wells etc.
+include("facility/types.jl")
+
 include("facility/wells.jl")
 include("facility/facility.jl")
 include("porousmedia.jl")
