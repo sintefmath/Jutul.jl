@@ -46,7 +46,7 @@ function declare_units(G::MinimalECTPFAGrid)
 end
 
 function degrees_of_freedom_per_unit(
-    model::SimulationModel{D, S}, sf::ComponentVariable
+    model::SimulationModel{D, S}, sf::Phi
     ) where {D<:TervDomain, S<:CurrentCollector}
     return 1 
 end
@@ -67,29 +67,43 @@ end
 struct Phi <: ScalarVariable 
 end
 
-# function ConservationLaw(model, number_of_equations;
-#     flow_discretization = model.domain.discretizations.mass_flow,
-#     accumulation_symbol = :TotalCharge,
-#     kwarg...)
-# D = model.domain
-# cell_unit = Cells()
-# face_unit = Faces()
-# nc = count_units(D, cell_unit)
-# nf = count_units(D, face_unit)
-# nhf = 2 * nf
-# face_partials = degrees_of_freedom_per_unit(model, face_unit)
-# alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(number_of_equations, n, model,
-#                                                         unit = unit, n_units_pos = n_units_pos, 
-#                                                         context = model.context; kwarg...)
-# acc = alloc(nc, cell_unit, nc)
-# hf_cells = alloc(nhf, cell_unit, nhf)
-# if face_partials > 0
-# hf_faces = alloc(nf, face_unit, nhf)
-# else
-# hf_faces = nothing
-# end
-# ConservationLaw(acc, accumulation_symbol, hf_cells, hf_faces, flow_discretization)
-# end
+struct ChargeConservation <: TervEquation
+    accumulation::TervAutoDiffCache
+    accumulation_symbol::Symbol
+    half_face_flux_cells::TervAutoDiffCache
+    half_face_flux_faces::Union{TervAutoDiffCache,Nothing}
+    flow_discretization::FlowDiscretization
+end
+
+
+function ChargeConservation(
+    model, number_of_equations;
+    flow_discretization = model.domain.discretizations.mass_flow,
+    accumulation_symbol = :TotalCharge,
+    kwarg...
+    )
+D = model.domain
+cell_unit = Cells()
+face_unit = Faces()
+nc = count_units(D, cell_unit)
+nf = count_units(D, face_unit)
+nhf = 2 * nf
+face_partials = degrees_of_freedom_per_unit(model, face_unit)
+alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(
+    number_of_equations, n, model, unit = unit, n_units_pos = n_units_pos,
+    context = model.context; kwarg...
+    )
+acc = alloc(nc, cell_unit, nc)
+hf_cells = alloc(nhf, cell_unit, nhf)
+if face_partials > 0
+hf_faces = alloc(nf, face_unit, nhf)
+else
+hf_faces = nothing
+end
+ChargeConservatoin(
+    acc, accumulation_symbol, hf_cells, hf_faces, flow_discretization
+    )
+end
 
 
 
@@ -145,18 +159,8 @@ function update_cell_neighbor_potential_cc!(
 end
 
 
-# function select_equations(domain, system, formulation)
-#     eqs = OrderedDict()
-#     select_equations_domain!(eqs, domain, system, formulation) # Defual no eqs
-#     select_equations_system!(eqs, domain, system, formulation)
-#     select_equations_formulation!(eqs, domain, system, formulation) # Default no eqs
-#     return eqs
-# end
-
 function select_equations_system!(eqs, domain, system::CurrentCollector, formulation)
-    eqs[:charge_conservation] = (ConservationLaw(
-        accumulation_symbol = :TotalCharge, flow_discretization = model.domain.discretizations.charge_flow
-        ), 1)
+    eqs[:charge_conservation] = (ChargeConservation, 1)
 end
 
 
@@ -174,10 +178,10 @@ end
     return two_point_potential_drop(phi[c_self], value(phi[c_other]))
 end
 
+
 @inline function two_point_potential_drop(phi_self::Real, phi_other::Real)
     return phi_self - phi_other
 end
-
 
 @inline function half_face_two_point_flux_fused(
     c_self::I, c_other::I, T, phi::AbstractArray{R}, λ::AbstractArray{R},
