@@ -7,16 +7,13 @@ export get_test_setup_battery, get_cc_grid
 
 abstract type ElectroChemicalComponent <: TervSystem end
 struct CurrentCollector <: ElectroChemicalComponent end
+abstract type ElectroChemicalGrid <: TervGrid end
+struct Phi <: ScalarVariable end
 
 # Instead of DarcyMassMobilityFlow
 #? Is this the correct substitution
 struct ChargeFlow <: FlowType end
 include_face_sign(::ChargeFlow) = false
-
-abstract type ElectroChemicalGrid <: TervGrid end
-
-struct Phi <: ScalarVariable 
-end
 
 struct ChargeConservation <: TervEquation
     accumulation::TervAutoDiffCache
@@ -61,6 +58,18 @@ function degrees_of_freedom_per_unit(
     ) where {D<:TervDomain, S<:CurrentCollector}
     return 1 
 end
+
+
+# To catch MassMobilities
+function degrees_of_freedom_per_unit(
+    model::SimulationModel{D, S}, sf::PhaseAndComponentVariable
+    ) where {D<:TervDomain, S<:CurrentCollector}
+    return 1
+end
+
+# function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::PhaseAndComponentVariable) where {D, S<:CurrentCollector} 1 end
+
+
 
 # To get right number of dof for CellNeigh...
 function single_unique_potential(
@@ -163,14 +172,22 @@ function select_equations_system!(eqs, domain, system::CurrentCollector, formula
 end
 
 "Update positions of law's derivatives in global Jacobian"
-function align_to_jacobian!(law::ChargeConservation, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(
+    law::ChargeConservation, jac, model, u::Cells; equation_offset = 0, 
+    variable_offset = 0
+    )
     fd = law.flow_discretization
     neighborship = get_neighborship(model.domain.grid)
 
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
-    diagonal_alignment!(acc, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
-    half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
+    diagonal_alignment!(
+        acc, jac, u, model.context, target_offset = equation_offset, 
+        source_offset = variable_offset)
+    half_face_flux_cells_alignment!(
+        hflux_cells, acc, jac, model.context, neighborship, fd, 
+        target_offset = equation_offset, source_offset = variable_offset
+        )
 end
 
 ### PHYSICS
@@ -223,6 +240,13 @@ end
 @inline function get_diagonal_cache(eq::ChargeConservation)
     return eq.accumulation
 end
+
+
+function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::ChargeFlow)
+    S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
+    S[:MassMobilities] = MassMobilities() # ? Change to conductibity?
+end
+
 
 ###
 
