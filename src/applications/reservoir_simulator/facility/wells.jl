@@ -226,60 +226,67 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
     V = state.TotalMassFlux
     densities = state.PhaseMassDensities
 
-    face_entries = eq.equation.entries
-    cell_entries = eq.equation_cells.entries
+    face_entries = get_entries(eq.equation)
+    cell_entries = get_entries(eq.equation_cells)
 
     mass_flow = model.domain.discretizations.mass_flow
     conn_data = mass_flow.conn_data
+
+
     for index = 1:length(conn_data)
         cd = conn_data[index]
-        gΔz = cd.gdz
-        self = cd.self
-        other = cd.other
-        face = cd.face
-        seg_model = W.segment_models[face]
-
-        if single_phase
-            s_self, s_other = s, s
-        else
-            s_self = view(s, :, self)
-            s_other = as_value(view(s, :, other))
-        end
-
-        p_self = p[self]
-        p_other = value(p[other])
-
-        ρ_mix_self = mix_by_saturations(s_self, view(densities, :, self))
-        ρ_mix_other = mix_by_saturations(s_other, as_value(view(densities, :, other)))
-
-        Δθ = two_point_potential_drop(p_self, p_other, gΔz, ρ_mix_self, ρ_mix_other)
-        if Δθ > 0
-            μ_mix = mix_by_saturations(s_self, view(μ, :, self))
-        else
-            μ_mix = mix_by_saturations(s_other, as_value(view(μ, :, other)))
-        end
-        sgn = cd.face_sign
-        v = sgn*V[face]
-        ρ_mix = 0.5*(ρ_mix_self + ρ_mix_other)
-
-        if sgn == 1
-            # This is a good time to deal with the derivatives of v[face] since it is already fetched.
-            Δp_f = segment_pressure_drop(seg_model, v, value(ρ_mix), value(μ_mix))
-            face_entries[face] = value(Δθ) - Δp_f
-            # @debug "$face \neq_f: $(value.(face_entries[face]))"
-
-            # @debug "Δp_f $face: $Δp_f flux: $v\neq_f: $(face_entries[face])"
-            # @debug "rho: $(value(ρ_mix)) mu: $(value(μ_mix))"
-
-            ix = 1
-        else
-            ix = 2
-        end
-        Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
-        cell_entries[(face-1)*2 + ix] = sgn*(Δθ - Δp)
+        update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W, single_phase)
         # @debug "Cell entry ($face:$self→$other): $(sgn*value.(Δθ - Δp))"
     end
 end
+
+function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W, single_phase)
+    gΔz = cd.gdz
+    self = cd.self
+    other = cd.other
+    face = cd.face
+    seg_model = W.segment_models[face]
+
+    if single_phase
+        s_self, s_other = s, s
+    else
+        s_self = view(s, :, self)
+        s_other = as_value(view(s, :, other))
+    end
+
+    p_self = p[self]
+    p_other = value(p[other])
+
+    ρ_mix_self = mix_by_saturations(s_self, view(densities, :, self))
+    ρ_mix_other = mix_by_saturations(s_other, as_value(view(densities, :, other)))
+
+    Δθ = two_point_potential_drop(p_self, p_other, gΔz, ρ_mix_self, ρ_mix_other)
+    if Δθ > 0
+        μ_mix = mix_by_saturations(s_self, view(μ, :, self))
+    else
+        μ_mix = mix_by_saturations(s_other, as_value(view(μ, :, other)))
+    end
+    sgn = cd.face_sign
+    v = sgn*V[face]
+    ρ_mix = 0.5*(ρ_mix_self + ρ_mix_other)
+
+    if sgn == 1
+        # This is a good time to deal with the derivatives of v[face] since it is already fetched.
+        Δp_f = segment_pressure_drop(seg_model, v, value(ρ_mix), value(μ_mix))
+        face_entries[face] = value(Δθ) - Δp_f
+        # @debug "$face \neq_f: $(value.(face_entries[face]))"
+
+        # @debug "Δp_f $face: $Δp_f flux: $v\neq_f: $(face_entries[face])"
+        # @debug "rho: $(value(ρ_mix)) mu: $(value(μ_mix))"
+
+        ix = 1
+    else
+        ix = 2
+    end
+    Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
+    cell_entries[(face-1)*2 + ix] = sgn*(Δθ - Δp)
+end
+
 
 function update_linearized_system_equation!(nz, r, model, equation::PotentialDropBalanceWell)
     fill_equation_entries!(nz, r, model, equation.equation)
