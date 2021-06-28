@@ -387,7 +387,6 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     res_q = ct.crossterm_source
     well_q = ct.crossterm_target
     apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, 1)
-    @debug "Res->WB: $(value.(res_q))"
 end
 
 
