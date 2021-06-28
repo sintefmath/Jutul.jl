@@ -252,16 +252,21 @@ function convergence_criterion(model::SimulationModel{D, S}, storage, eq::Conser
     n = number_of_equations_per_unit(eq)
     pv = get_pore_volume(model)
     e = zeros(n)
-    prm = storage.parameters
+    rhos = get_reference_densities(model, storage)
     for i = 1:n
-        if haskey(prm, :reference_densities)
-            rhos = prm.reference_densities[i]
-        else
-            rhos = 1
-        end
-        e[i] = mapreduce((pv, e) -> abs((dt/rhos) * e / pv), max, pv, r[i, :])
+        e[i] = mapreduce((pv, e) -> abs((dt/rhos[i]) * e / pv), max, pv, view(r, i, :))
     end
     return (e, tolerance_scale(eq))
+end
+
+function get_reference_densities(model, storage)
+    prm = storage.parameters
+    if haskey(prm, :reference_densities)
+        rhos = prm.reference_densities
+    else
+        rhos = ones(number_of_phases(model.system))
+    end
+    return rhos::Vector{float_type(model.context)}
 end
 
 # Accumulation: Base implementation
