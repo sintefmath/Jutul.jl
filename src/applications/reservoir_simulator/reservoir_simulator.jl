@@ -5,6 +5,7 @@ include("multiphase_secondary_variables.jl")
 # Wells etc.
 include("facility/types.jl")
 
+include("facility/flux.jl")
 include("facility/wells.jl")
 include("facility/facility.jl")
 include("porousmedia.jl")

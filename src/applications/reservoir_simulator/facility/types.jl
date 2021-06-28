@@ -1,3 +1,5 @@
+export TotalMassVelocityMassFractionsFlow
+
 abstract type FacilitySystem <: TervSystem end
 struct PredictionMode <: FacilitySystem end
 struct HistoryMode <: FacilitySystem end
@@ -86,3 +88,4 @@ struct ControlEquationWell <: TervEquation
     end
 end
 
+struct TotalMassVelocityMassFractionsFlow <: FlowType end
