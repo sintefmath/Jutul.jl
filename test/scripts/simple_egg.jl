@@ -1,9 +1,10 @@
 using Terv
 using Statistics, DataStructures
 ENV["JULIA_DEBUG"] = Terv
-ENV["JULIA_DEBUG"] = nothing
+# ENV["JULIA_DEBUG"] = nothing
 ##
-casename = "simple_egg"
+# casename = "simple_egg"
+casename = "egg"
 # casename = "gravity_test"
 # casename = "bl_wells"
 # casename = "bl_wells_mini"
@@ -14,7 +15,7 @@ casename = "simple_egg"
 simple_well = false
 
 
-G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
+G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false)
 ## Set up initializers
 models = OrderedDict()
 initializer = Dict()
@@ -27,13 +28,23 @@ mu = vec(f["mu"])
 nkr = vec(f["nkr"])
 rhoS = vec(f["rhoS"])
 
+
 water = AqueousPhase()
 oil = LiquidPhase()
 sys = ImmiscibleSystem([water, oil])
 model = SimulationModel(G, sys)
 
 rho = ConstantCompressibilityDensities(sys, p, rhoS, c)
-kr = BrooksCoreyRelPerm(sys, nkr)
+
+swof = f["swof"]
+
+if isempty(swof)
+    kr = BrooksCoreyRelPerm(sys, nkr)
+else
+    s = swof[:, 1]
+    krt = vcat(swof[:, 2]', 1 .- swof[:, 3]')
+    kr = TabulatedRelPermSimple(s, krt)
+end
 mu = ConstantVariables(mu)
 
 s = model.secondary_variables

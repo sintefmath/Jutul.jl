@@ -1,6 +1,5 @@
 module Terv
 
-using Base: Symbol
 using SparseArrays
 using LinearAlgebra
 using BenchmarkTools
@@ -13,6 +12,7 @@ using Dates
 using DataStructures
 using Tullio
 using PrettyTables
+using DataInterpolations
 
 # Main types
 include("core_types.jl")
@@ -40,7 +40,7 @@ include("conservation/conservation.jl")
 include("simulator.jl")
 
 include("utils.jl")
-
+include("interpolation.jl")
 # Various add-ons
 include("applications/reservoir_simulator/reservoir_simulator.jl")
 include("applications/test_systems/test_systems.jl")
