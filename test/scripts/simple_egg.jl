@@ -41,8 +41,10 @@ swof = f["swof"]
 if isempty(swof)
     kr = BrooksCoreyRelPerm(sys, nkr)
 else
-    s = swof[:, 1]
-    krt = vcat(swof[:, 2]', 1 .- swof[:, 3]')
+    sw = swof[:, 1]
+    so = 1 .- sw
+    s = [sw, so]
+    krt = vcat(swof[:, 2]', swof[end:-1:1, 3]')
     kr = TabulatedRelPermSimple(s, krt)
 end
 mu = ConstantVariables(mu)

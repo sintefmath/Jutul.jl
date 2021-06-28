@@ -88,10 +88,16 @@ struct TabulatedRelPermSimple <: RelativePermeabilities
     interpolators
     function TabulatedRelPermSimple(s::AbstractVector, kr::AbstractMatrix; kwarg...)
         nph, n = size(kr)
-        @assert length(s) == n
         @assert nph > 0
-
-        interpolators = map((ix) -> get_1d_interpolator(s, kr[ix, :]; kwarg...), 1:nph)
+        if eltype(s)<:AbstractVector
+            # We got a set of different vectors that correspond to rows of kr
+            @assert all(map(length, s) .== n)
+            interpolators = map((ix) -> get_1d_interpolator(s[ix], kr[ix, :]; kwarg...), 1:nph)
+        else
+            # We got a single vector that is used for all rows
+            @assert length(s) == n
+            interpolators = map((ix) -> get_1d_interpolator(s, kr[ix, :]; kwarg...), 1:nph)
+        end
         new(s, kr, interpolators)
     end
 end
