@@ -176,11 +176,10 @@ end
 @terv_secondary function update_as_secondary!(pot, tv::CellNeighborPotentialDifference, model, param, Pressure, PhaseMassDensities)
     mf = model.domain.discretizations.mass_flow
     conn_data = mf.conn_data
-    context = model.context
     if mf.gravity
         @tullio pot[ph, i] = half_face_two_point_kgradp_gravity(conn_data[i], Pressure, view(PhaseMassDensities, ph, :))
     else
-        @tullio pot[i] = half_face_two_point_kgradp(conn_data[i], p)
+        @tullio pot[i] = half_face_two_point_kgradp(conn_data[i], Pressure)
     end
 end
 
@@ -189,43 +188,43 @@ function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentia
 
 end
 
-# Half face flux - default reservoir version
+"""
+Half face Darcy flux with separate potential.
+"""
 function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
     pot = storage.state.CellNeighborPotentialDifference
     mob = storage.state.MassMobilities
 
     flux = get_entries(law.half_face_flux_cells)
     conn_data = law.flow_discretization.conn_data
-    update_fluxes_from_potential_and_mobility!(flux, conn_data, pot, mob)
+
+    @tullio flux[ph, i] = spu_upwind_mult(conn_data[i].self, conn_data[i].other, pot[ph, i], view(mob, ph, :))
 end
 
-function update_fluxes_from_potential_and_mobility!(flux, conn_data, pot, mob)
-    @tullio flux[phno, i] = spu_upwind(conn_data[i].self, conn_data[i].other, pot[phno, i], view(mob, phno, :))
-end
-
-# Fused version for DarcyMassMobilityFlowFused
+"""
+Half face Darcy flux in a single fused operation (faster for immiscible models)
+"""
 function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlowFused}
+    mf = model.domain.discretizations.mass_flow
+
     state = storage.state
     p = state.Pressure
     mob = state.MassMobilities
     rho = state.PhaseMassDensities
 
     flux = get_entries(law.half_face_flux_cells)
-    conn_data = law.flow_discretization.conn_data
-    update_fluxes_fused_mobility!(flux, conn_data, p, mob, rho)
-end
-
-function update_fluxes_fused_mobility!(flux, conn_data, p, mob, rho)
-    Threads.@threads for i in eachindex(conn_data)
-        @inbounds c = conn_data[i]
-        for phno = 1:size(mob, 1)
-            mob_i = view(mob, phno, :)
-            rho_i = view(rho, phno, :)
-            @inbounds flux[phno, i] = half_face_two_point_flux_fused(c.self, c.other, c.T, p, mob_i, c.gdz, rho_i)
-        end
+    mf = law.flow_discretization
+    conn_data = mf.conn_data
+    if mf.gravity
+        @tullio flux[ph, i] = half_face_two_point_flux_fused_gravity(conn_data[i], p, view(mob, ph, :), view(rho, ph, :))
+    else
+        @tullio flux[ph, i] = half_face_two_point_flux_fused(conn_data[i], p, view(mob, ph, :))
     end
 end
-# Total velocity version for TotalMassVelocityMassFractionsFlow
+
+"""
+Total velocity half face flux with mass fractions for TotalMassVelocityMassFractionsFlow
+"""
 function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TotalMassVelocityMassFractionsFlow}
     state = storage.state
     masses = state.TotalMasses
@@ -249,20 +248,7 @@ function update_fluxes_total_mass_velocity_cells!(flux, conn_data, masses, total
         vi = s*v[f]
         return half_face_fluxes_total_mass_velocity!(c.self, c.other, masses_i, total, vi)
     end
-
-    @time @tullio flux[phno, i] = q(conn_data[i], masses, total, v, phno)
-    @time begin
-        for i in eachindex(conn_data)
-            @inbounds c = conn_data[i]
-            f = c.face
-            s = c.face_sign
-            vi = s*v[f]
-            for phno = 1:size(masses, 1)
-                masses_i = view(masses, phno, :)
-                @inbounds flux[phno, i] = half_face_fluxes_total_mass_velocity!(c.self, c.other, masses_i, total, vi)
-            end
-        end
-    end
+    @tullio flux[phno, i] = q(conn_data[i], masses, total, v, phno)
 end
 
 function update_fluxes_total_mass_velocity_faces!(flux, N, masses, total, v)
@@ -306,7 +292,9 @@ function half_face_fluxes_total_mass_velocity_face!(left, right, masses, total, 
     return x*v
 end
 
-# Flux primitive functions follow
+"""
+Perform single-point upwinding based on signed potential.
+"""
 @inline function spu_upwind(c_self::I, c_other::I, θ::R, λ::AbstractArray{R}) where {R<:Real, I<:Integer}
     if θ < 0
         # Flux is leaving the cell
@@ -315,36 +303,88 @@ end
         # Flux is entering the cell
         @inbounds λᶠ = value(λ[c_other])
     end
-    return λᶠ*θ
+    return λᶠ
 end
 
+"""
+Perform single-point upwinding based on signed potential, then multiply the result with that potential
+"""
+@inline function spu_upwind_mult(c_self, c_other, θ, λ)
+    λᶠ = spu_upwind(c_self, c_other, θ, λ)
+    return θ*λᶠ
+end
+
+"""
+Two point Darcy flux with gravity - outer version that takes in NamedTuple for static parameters
+"""
 @inline function half_face_two_point_kgradp_gravity(conn_data::NamedTuple, p, density)
     return half_face_two_point_kgradp_gravity(conn_data.self, conn_data.other, conn_data.T, p, conn_data.gdz, density)
 end
 
+"""
+Two point Darcy flux with gravity - inner version that takes in cells and transmissibily explicitly
+"""
 @inline function half_face_two_point_kgradp_gravity(c_self::I, c_other::I, T, p::AbstractArray{R}, gΔz, ρ::AbstractArray{R}) where {R<:Real, I<:Integer}
-    return -T*two_point_potential_drop_half_face(c_self, c_other, p, gΔz, ρ)
+    v = -T*two_point_potential_drop_half_face(c_self, c_other, p, gΔz, ρ)
+    return v
 end
 
+"""
+Two-point potential drop (with derivatives only respect to "c_self")
+"""
 @inline function two_point_potential_drop_half_face(c_self, c_other, p::AbstractVector, gΔz, ρ)
     return two_point_potential_drop(p[c_self], value(p[c_other]), gΔz, ρ[c_self], value(ρ[c_other]))
 end
 
+"""
+Two-point potential drop with gravity (generic)
+"""
 @inline function two_point_potential_drop(p_self::Real, p_other::Real, gΔz::Real, ρ_self::Real, ρ_other::Real)
     ρ_avg = 0.5*(ρ_self + ρ_other)
     return p_self - p_other + gΔz*ρ_avg
 end
 
+"""
+TPFA KGrad(p) without gravity. (Outer version, with conn_data input)
+"""
 @inline function half_face_two_point_kgradp(conn_data::NamedTuple, p::AbstractArray)
     half_face_two_point_kgradp(conn_data.self, conn_data.other, conn_data.T, p)
 end
 
+"""
+TPFA KGrad(p) without gravity. (Inner version, with explicit inputs)
+"""
 @inline function half_face_two_point_kgradp(c_self::I, c_other::I, T, p::AbstractArray{R}) where {R<:Real, I<:Integer}
     return -T*(p[c_self] - value(p[c_other]))
 end
 
-@inline function half_face_two_point_flux_fused(c_self::I, c_other::I, T, p::AbstractArray{R}, λ::AbstractArray{R}, gΔz, ρ::AbstractArray{R}) where {R<:Real, I<:Integer}
-    θ = half_face_two_point_kgradp_gravity(c_self, c_other, T, p, gΔz, ρ)
+"""
+TPFA-SPU Mobility * KGrad(p) without gravity. (Outer version, with conn_data input)
+"""
+@inline function half_face_two_point_flux_fused(conn_data, p, λ)
+    return half_face_two_point_flux_fused(conn_data.self, conn_data.other, conn_data.T, p, λ)
+end
+
+"""
+TPFA-SPU Mobility * KGrad(p) without gravity. (Inner version, with explicit inputs)
+"""
+@inline function half_face_two_point_flux_fused(c_self, c_other, T, p, λ)
+    θ = half_face_two_point_kgradp(c_self, c_other, T, p)
     λᶠ = spu_upwind(c_self, c_other, θ, λ)
     return λᶠ*θ
+end
+
+"""
+TPFA-SPU Mobility * (KGrad(p) + G). (Outer version, with conn_data input)
+"""
+@inline function half_face_two_point_flux_fused_gravity(conn_data, p, λ, density)
+    return half_face_two_point_flux_fused_gravity(conn_data.self, conn_data.other, conn_data.T, p, λ, conn_data.gdz, density)
+end
+
+"""
+TPFA-SPU Mobility * (KGrad(p) + G). (Inner version, with explicit inputs)
+"""
+@inline function half_face_two_point_flux_fused_gravity(c_self, c_other, T, p, λ, gΔz, density)
+    θ = half_face_two_point_kgradp_gravity(c_self, c_other, T, p, gΔz, density)
+    return spu_upwind_mult(c_self, c_other, θ, λ)
 end
