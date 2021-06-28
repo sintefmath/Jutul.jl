@@ -67,9 +67,6 @@ function degrees_of_freedom_per_unit(
     return 1
 end
 
-# function degrees_of_freedom_per_unit(model::SimulationModel{D, S}, sf::PhaseAndComponentVariable) where {D, S<:CurrentCollector} 1 end
-
-
 
 # To get right number of dof for CellNeigh...
 function single_unique_potential(
@@ -241,6 +238,8 @@ end
     return eq.accumulation
 end
 
+
+# TODO: Må ha rktig secondary variables, i tillegg til tilhørende dependency, som definieres via update_as_secondary
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::ChargeFlow)
     S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
