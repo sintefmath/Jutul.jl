@@ -117,7 +117,7 @@ function conv_table_fn(model_errors, has_models = false)
     function not_converged(data, i, j)
         if j == rpos
             d = data[i, j]
-            t = tols[j]
+            t = tols[i]
             return d > t && d > 10*t
         else
             return false
@@ -129,7 +129,7 @@ function conv_table_fn(model_errors, has_models = false)
     function nearly_converged(data, i, j)
         if j == rpos
             d = data[i, j]
-            t = tols[j]
+            t = tols[i]
             return d > t && d < nearly_factor*t
         else
             return false
@@ -140,7 +140,7 @@ function conv_table_fn(model_errors, has_models = false)
 
     function converged(data, i, j)
         if j == rpos
-            return data[i, j] <= tols[j]
+            return data[i, j] <= tols[i]
         else
             return false
         end
