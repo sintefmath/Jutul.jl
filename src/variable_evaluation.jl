@@ -1,4 +1,5 @@
 using ExprTools, LightGraphs
+export sort_secondary_variables!, build_variable_graph
 """
 Designate the function as updating a secondary variable.
 
@@ -168,10 +169,7 @@ function sort_secondary_variables!(model::TervModel)
     # Do nothing for general case.
 end
 
-function sort_secondary_variables!(model::SimulationModel)
-    primary = model.primary_variables
-    secondary = model.secondary_variables
-    
+function build_variable_graph(model, primary = model.primary_variables, secondary = model.secondary_variables)
     edges = []
     nodes = []
     for key in keys(primary)
@@ -183,6 +181,13 @@ function sort_secondary_variables!(model::SimulationModel)
         push!(nodes, key)
         push!(edges, dep)
     end
+    return (nodes, edges)
+end
+
+function sort_secondary_variables!(model::SimulationModel)
+    primary = model.primary_variables
+    secondary = model.secondary_variables
+    nodes, edges = build_variable_graph(model, primary, secondary)
     order = sort_symbols(nodes, edges)
     @debug "Variable ordering determined: $(nodes[order])"
     np = length(primary)
@@ -195,6 +200,7 @@ function sort_secondary_variables!(model::SimulationModel)
     @. order -= np
     @. secondary.keys = secondary.keys[order]
     @. secondary.vals = secondary.vals[order]
+    return model
 end
 
 function sort_symbols(symbols, deps)
