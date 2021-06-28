@@ -18,8 +18,10 @@ end
 
 function select_secondary_variables_domain!(S, domain::DiscretizedDomain, system, formulation)
     d = domain.discretizations
-    for k in keys(d)
-        select_secondary_variables_discretization!(S, domain, system, formulation, d[k])
+    if !isnothing(d)
+        for k in keys(d)
+            select_secondary_variables_discretization!(S, domain, system, formulation, d[k])
+        end
     end
 end
 
@@ -30,8 +32,10 @@ end
 
 function select_primary_variables_domain!(S, domain::DiscretizedDomain, system, formulation)
     d = domain.discretizations
-    for k in keys(d)
-        select_primary_variables_domain!(S, domain, system, formulation, d[k])
+    if !isnothing(d)
+        for k in keys(d)
+            select_primary_variables_domain!(S, domain, system, formulation, d[k])
+        end
     end
 end
 

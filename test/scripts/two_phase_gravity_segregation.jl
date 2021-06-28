@@ -43,7 +43,7 @@ function perform_test(nc = 100, tstep = repeat([0.02], 150))
     state0 = setup_state(model, init)
     # Model parameters
     parameters = setup_parameters(model)
-    parameters[:ReferenceDensity] = [rhoLS, rhoVS]
+    parameters[:reference_densities] = [rhoLS, rhoVS]
     timesteps = tstep*3600*24
 
     sim = Simulator(model, state0 = state0, parameters = parameters)

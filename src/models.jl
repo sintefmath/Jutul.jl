@@ -342,12 +342,16 @@ function check_convergence(storage, model; kwarg...)
     check_convergence(lsys, eqs, storage, model; kwarg...)
 end
 
-function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra_out = false, tol = 1e-3, offset = 0, kwarg...)
+function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra_out = false, tol = nothing, offset = 0, kwarg...)
     converged = true
     e = 0
     eoffset = 0
     r_buf = lsys.r_buffer
-    prntstr = "Iteration $iteration:\n"
+    prm = storage.parameters.tolerances
+    if isnothing(tol)
+        tol = prm.default
+    end
+    output = []
     for key in keys(eqs)
         eq = eqs[key]
         N = number_of_equations(model, eq)
@@ -357,18 +361,23 @@ function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra
 
         errors, tscale = convergence_criterion(model, storage, eq, r_v; kwarg...)
 
-        for (index, e) in enumerate(errors)
-            s = @sprintf("E%d: |%s| = %e\n", index + eoffset, String(key), e)
-            prntstr *= s
+        if haskey(prm, key)
+            t_e = prm[key]
+        else
+            t_e = tol
         end
-        converged = converged && all(errors .< tol*tscale)
-        e = maximum([e, maximum(errors)])
+        errors = errors./tscale
+        ok = errors .< t_e
+        converged = converged && all(ok)
+        e = maximum([e, maximum(errors)/t_e])
         offset += N
         eoffset += n
+        if extra_out
+            push!(output, (name = key, error = errors, tolerance = t_e))
+        end
     end
-    @debug prntstr
     if extra_out
-        return (converged, e, tol)
+        return (converged, e, output)
     else
         return converged
     end
@@ -394,7 +403,10 @@ function apply_forces!(storage, model, dt, ::Nothing)
 end
 
 function setup_parameters(model)
-    return Dict{Symbol, Any}()
+    d = Dict{Symbol, Any}()
+    d[:tolerances] = Dict{Symbol, Any}()
+    d[:tolerances][:default] = 1e-3
+    return d
 end
 
 function build_forces(model::TervModel)

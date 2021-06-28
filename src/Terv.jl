@@ -12,6 +12,7 @@ using Printf
 using Dates
 using DataStructures
 using Tullio
+using PrettyTables
 
 # Main types
 include("core_types.jl")

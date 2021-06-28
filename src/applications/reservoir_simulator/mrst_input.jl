@@ -85,7 +85,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     end
 end
 
-function get_well_from_mrst_data(mrst_data, system, ix; extraout = false)
+function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = false, simple = false)
     W_mrst = mrst_data["W"][ix]
     w = convert_to_immutable_storage(W_mrst)
 
@@ -100,13 +100,24 @@ function get_well_from_mrst_data(mrst_data, system, ix; extraout = false)
     n = length(rc)
     # dz = awrap(w.dZ)
     WI = awrap(w.WI)
-    W = MultiSegmentWell(ones(n), rc, WI = WI, reference_depth = ref_depth)
-
     cell_centroids = copy((mrst_data["G"]["cells"]["centroids"])')
-    z = vcat(ref_depth, cell_centroids[3, rc])
-    flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), TotalMassVelocityMassFractionsFlow(), W, nothing, z)
-    disc = (mass_flow = flow,)
+    z = cell_centroids[3, rc]
 
+    if simple
+        # For simple well, distance from ref depth to perf
+        dz = ref_depth .- z
+        W = SimpleWell(rc, WI = WI, dz = dz)
+        wmodel = SimulationModel(W, system)
+        flow = TwoPointPotentialFlow(nothing, nothing, TrivialFlow(), W)
+    else
+        # For a MS well, this is the drop from the perforated cell center to the perforation (assumed zero here)
+        dz = zeros(length(rc))
+        W = MultiSegmentWell(volume*ones(n), rc, WI = WI, reference_depth = ref_depth, dz = dz)
+
+        z = vcat(ref_depth, z)
+        flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), TotalMassVelocityMassFractionsFlow(), W, nothing, z)
+    end
+    disc = (mass_flow = flow,)
     wmodel = SimulationModel(W, system, discretization = disc)
     if extraout
         out = (wmodel, W_mrst)
@@ -262,7 +273,7 @@ function plot_interactive(mrst_grid, states; plot_type = nothing)
     end
     ax = Axis(fig[1, 2])
     ys = @lift(select_data(mrst_grid, states[$state_index], $prop_name))
-    scat = heatmap!(ax, ys, label = "COLORBARLABEL")
+    scat = Makie.heatmap!(ax, ys, label = "COLORBARLABEL")
     cb = Colorbar(fig[1, 3], scat, vertical = true, width = 30)
 
     on(menu.selection) do s

@@ -62,7 +62,12 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     if timing_out
         @debug "Updated linear system in $t_lsys seconds."
     end
-    converged, e, tol = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
+    converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
+    if config[:info_level] > 0
+        @info "Convergence report, iteration $iteration:"
+        get_convergence_table(errors)
+    end
+
     if converged
         do_solve = iteration == 1
         @debug "Step converged."
@@ -77,7 +82,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
             @debug "Updated state $t_update seconds."
         end
     end
-    return (e, tol)
+    return (e, converged)
 end
 
 function simulator_config(sim; kwarg...)
@@ -88,6 +93,7 @@ function simulator_config(sim; kwarg...)
     cfg[:output_states] = true
     # Define debug level. If debugging is on, this determines the amount of output.
     cfg[:debug_level] = 1
+    cfg[:info_level] = 1
     # Overwrite with varargin
     for key in keys(kwarg)
         cfg[key] = kwarg[key]
@@ -97,7 +103,7 @@ end
 
 function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, kwarg...)
     if isnothing(config)
-        config = simulator_config(sim, kwarg...)
+        config = simulator_config(sim; kwarg...)
     end
     states = []
     no_steps = length(timesteps)
@@ -107,7 +113,6 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     for (step_no, dT) in enumerate(timesteps)
         t_str =  Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
         @info "Solving step $step_no/$no_steps of length $t_str."
-        # @info "Solving step $step_no/$no_steps"
         dt = dT
         done = false
         t_local = 0
@@ -134,16 +139,15 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
             store_output!(states, sim)
         end
     end
-    return states
     @info "Simulation complete."
+    return states
 end
 
 function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
     done = false
     update_before_step!(sim, dt, forces)
     for it = 1:maxIterations
-        e, tol = perform_step!(sim, dt, forces, cfg, iteration = it)
-        done = e < tol
+        e, done = perform_step!(sim, dt, forces, cfg, iteration = it)
         if done
             break
         end

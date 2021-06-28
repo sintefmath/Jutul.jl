@@ -474,7 +474,7 @@ function update_cross_terms_for_pair!(storage, model, source::Symbol, target::Sy
 end
 
 function update_cross_term!(ct::InjectiveCrossTerm, eq, target_storage, source_storage, target_model, source_model, target, source, dt)
-    error("Cross term must be specialized for your equation and models.")
+    error("Cross term must be specialized for your equation and models. Did not understand how to specialize $target ($(typeof(target_model))) to $source ($(typeof(source_model)))")
 end
 
 function update_cross_term!(::Nothing, arg...)
@@ -572,20 +572,20 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
     err = 0
     offset = 0
     lsys = storage.LinearizedSystem
+    errors = OrderedDict()
     for key in keys(model.models)
-        @debug "Checking convergence for submodel $key:"
         s = storage[key]
         m = model.models[key]
         eqs = s.equations
 
-        conv, e, = check_convergence(lsys, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
+        conv, e, errors[key], = check_convergence(lsys, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)
         offset += number_of_degrees_of_freedom(m)
     end
     if extra_out
-        return (converged, err, tol)
+        return (converged, err, errors)
     else
         return converged
     end
@@ -640,6 +640,7 @@ function get_output_state(storage, model::MultiModel)
     for key in keys(models)
         out[key] = get_output_state(storage[key], models[key])
     end
+    out = convert_to_immutable_storage(out)
     return out
 end
 
@@ -649,4 +650,9 @@ end
 
 function get_submodels(model, arg...)
     map((x) -> model.models[x], arg)
+end
+
+
+function get_convergence_table(model::MultiModel, errors)
+    get_convergence_table(keys(model.models), errors)
 end

@@ -1,6 +1,6 @@
 # export half_face_flux, half_face_flux!, tp_flux, half_face_flux_kernel
 export SPU, TPFA, TwoPointPotentialFlow, DarcyMassMobilityFlow, 
-        CellNeighborPotentialDifference, TotalMassVelocityMassFractionsFlow, FlowType
+        CellNeighborPotentialDifference, TotalMassVelocityMassFractionsFlow, FlowType, TrivialFlow
 
 abstract type TwoPointDiscretization <: TervDiscretization end
 
@@ -16,8 +16,13 @@ function select_primary_variables_flow_type(S, domain, system, formulation, flow
 
 end
 
+function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type)
+    
+end
+
 struct DarcyMassMobilityFlow <: FlowType end
 struct DarcyMassMobilityFlowFused <: FlowType end
+struct TrivialFlow <: FlowType end
 
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::Union{DarcyMassMobilityFlow, DarcyMassMobilityFlowFused})
@@ -71,7 +76,7 @@ function get_connection(face, cell, faces, N, T, z, g, inc_face_sign)
     return convert_to_immutable_storage(D)
 end
 
-struct TwoPointPotentialFlow{U <:UpwindDiscretization, K <:PotentialFlowDiscretization, F <: FlowType} <: FlowDiscretization
+struct TwoPointPotentialFlow{U <: Union{UpwindDiscretization, Nothing}, K <:Union{PotentialFlowDiscretization, Nothing}, F <: FlowType} <: FlowDiscretization
     upwind::U
     grad::K
     flow_type::F
@@ -80,26 +85,28 @@ struct TwoPointPotentialFlow{U <:UpwindDiscretization, K <:PotentialFlowDiscreti
     conn_data
 end
 
-function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, gravity = gravity_constant)
-    N = grid.neighborship
-    faces, face_pos = get_facepos(N)
-    has_grav = !isnothing(gravity) || gravity == 0
+function get_neighborship(grid)
+    return grid.neighborship
+end
 
-    nhf = length(faces)
-    nc = length(face_pos) - 1
-    if isnothing(z)
-        if has_grav
-            @warn "No depths (z) provided, but gravity is enabled."
+function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, gravity = gravity_constant)
+    N = get_neighborship(grid)
+    if size(N, 2) > 0
+        faces, face_pos = get_facepos(N)
+        has_grav = !isnothing(gravity) || gravity == 0
+
+        nhf = length(faces)
+        nc = length(face_pos) - 1
+        if isnothing(z)
+            if has_grav
+                @warn "No depths (z) provided, but gravity is enabled."
+            end
+        else
+            @assert length(z) == nc
         end
-    else
-        @assert length(z) == nc
-    end
-    if !isnothing(T)
-        @assert length(T) == nhf ÷ 2
-    end
-    if nhf == 0
-        conn_data = []
-    else
+        if !isnothing(T)
+            @assert length(T) == nhf ÷ 2
+        end
         get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity, include_face_sign(flow_type))
         el = get_el(1, 1) # Could be junk, we just need eltype
         
@@ -109,6 +116,12 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
                 conn_data[fpos] = get_el(faces[fpos], cell)
             end
         end
+        @assert !isa(flow_type, TrivialFlow) "TrivialFlow only valid for grids without connections."
+    else
+        nc = number_of_cells(grid)
+        has_grav = false
+        conn_data = []
+        face_pos = ones(Int64, nc+1)
     end
     TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
 end
@@ -170,6 +183,11 @@ end
         update_cell_neighbor_potential_difference!(pot, conn_data, Pressure, context, kernel_compatibility(context))
     end
 end
+# Half face flux - trivial version which should only be used when there are no faces
+function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TrivialFlow}
+
+end
+
 
 # Half face flux - default reservoir version
 function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
@@ -266,9 +284,10 @@ function update_fluxes_total_mass_velocity_cells!(flux, conn_data, masses, total
     for i in eachindex(conn_data)
         @inbounds c = conn_data[i]
         f = c.face
+        s = c.face_sign
+        vi = s*v[f]
         for phno = 1:size(masses, 1)
             masses_i = view(masses, phno, :)
-            vi = c.face_sign*v[f]
             @inbounds flux[phno, i] = half_face_fluxes_total_mass_velocity!(c.self, c.other, masses_i, total, vi)
         end
     end
@@ -288,9 +307,11 @@ end
 function half_face_fluxes_total_mass_velocity!(self, other, masses, total, v)
     if v < 0
         # Flux is leaving the cell
+        # @debug "$self: Flow leaving."
         x = masses[self]/total[self]
     else
         # Flux is entering the cell
+        # @debug "$self: Flow entering."
         x = value(masses[other])/value(total[other])
     end
     return x*value(v)
@@ -301,11 +322,13 @@ function half_face_fluxes_total_mass_velocity_face!(left, right, masses, total, 
     # and recieve the signed flux going into or out of the cell. For the half face velocity
     # we have a single velocity, and the convention is to take the left cell to be upstream 
     # for a positive flux.
-    if v > 0
+    if v < 0
         # Flow from left to right
+        # @debug "L->R $left -> $right"
         x = value(masses[left])/value(total[left])
     else
         # Flow from right to left
+        # @debug "R->L $right -> $left"
         x = value(masses[right])/value(total[right])
     end
     return x*v

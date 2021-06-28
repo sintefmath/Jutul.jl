@@ -99,7 +99,16 @@ end
 # Primary variable logic
 
 # Pressure as primary variable
-struct Pressure <: ScalarVariable end
+struct Pressure <: ScalarVariable
+    dpMaxAbs
+    dpMaxRel
+    function Pressure(dpMaxAbs = nothing, dpMaxRel = nothing)
+        new(dpMaxAbs, dpMaxRel)
+    end
+end
+
+@inline function absolute_increment_limit(p::Pressure) p.dpMaxAbs end
+@inline function relative_increment_limit(p::Pressure) p.dpMaxRel end
 
 # Saturations as primary variable
 struct Saturations <: GroupedVariables
@@ -245,14 +254,14 @@ function convergence_criterion(model::SimulationModel{D, S}, storage, eq::Conser
     e = zeros(n)
     prm = storage.parameters
     for i = 1:n
-        if haskey(prm, :ReferenceDensity)
-            rhos = prm.ReferenceDensity[i]
+        if haskey(prm, :reference_densities)
+            rhos = prm.reference_densities[i]
         else
             rhos = 1
         end
         e[i] = mapreduce((pv, e) -> abs((dt/rhos) * e / pv), max, pv, r[i, :])
     end
-    return (e, 1.0)
+    return (e, tolerance_scale(eq))
 end
 
 # Accumulation: Base implementation

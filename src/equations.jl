@@ -259,7 +259,11 @@ function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
     for i = 1:n
         e[i] = norm(r[i, :], Inf)
     end
-    return (e, 1.0)
+    return (e, tolerance_scale(eq))
+end
+
+function tolerance_scale(eq)
+    return 1.0
 end
 
 @inline function get_diagonal_entries(eq::TervEquation)

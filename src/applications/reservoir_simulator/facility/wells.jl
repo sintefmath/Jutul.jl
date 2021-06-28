@@ -26,6 +26,19 @@ struct TotalMassFlux <: ScalarVariable end
 function associated_unit(::TotalMassFlux) Faces() end
 
 
+struct SimpleWell <: WellGrid 
+    volumes
+    perforations
+    reservoir_symbol
+    function SimpleWell(reservoir_cells; reference_depth = 0, volume = 1e-3, reservoir_symbol = :Reservoir, kwarg...)
+        nr = length(reservoir_cells)
+
+        WI, gdz = common_well_setup(nr; kwarg...)
+        perf = (self = ones(Int64, nr), reservoir = reservoir_cells, WI = WI, gdz = gdz)
+        new([volume], perf, reservoir_symbol)
+    end
+end
+
 struct MultiSegmentWell <: WellGrid 
     volumes          # One per cell
     perforations     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
@@ -34,13 +47,12 @@ struct MultiSegmentWell <: WellGrid
     reservoir_symbol # Symbol of the reservoir the well is coupled to
     segment_models   # Segment pressure drop model
     function MultiSegmentWell(volumes::AbstractVector, reservoir_cells;
-                                                        WI = nothing,
                                                         N = nothing,
                                                         perforation_cells = nothing,
                                                         segment_models = nothing,
                                                         reference_depth = 0,
                                                         accumulator_volume = 1e-3*mean(volumes),
-                                                        reservoir_symbol = :Reservoir)
+                                                        reservoir_symbol = :Reservoir, kwarg...)
         nv = length(volumes)
         nc = nv + 1
         nr = length(reservoir_cells)
@@ -54,10 +66,6 @@ struct MultiSegmentWell <: WellGrid
         @assert size(N, 1) == 2
 
         volumes = vcat([accumulator_volume], volumes)
-        if isnothing(WI)
-            @warn "No well indices provided. Using 1e-12."
-            WI = repeat(1e-12, nr)
-        end
         if !isnothing(reservoir_cells) && isnothing(perforation_cells)
             @assert length(reservoir_cells) == nv "If no perforation cells are given, we must 1->1 correspondence between well volumes and reservoir cells."
             perforation_cells = collect(2:nc)
@@ -69,14 +77,29 @@ struct MultiSegmentWell <: WellGrid
             segment_models::AbstractVector
             @assert length(segment_models) == nseg
         end
-        # @assert length(dz) == nseg "dz must have one entry per segment, plus one for the top segment"
-        @assert length(WI) == nr  "Must have one well index per perforated cell"
         @assert length(perforation_cells) == nr
-
-        perf = (self = perforation_cells, reservoir = reservoir_cells, WI = WI)
+        WI, gdz = common_well_setup(nr; kwarg...)
+        perf = (self = perforation_cells, reservoir = reservoir_cells, WI = WI, gdz = gdz)
         accumulator = (reference_depth = reference_depth, )
         new(volumes, perf, N, accumulator, reservoir_symbol, segment_models)
     end
+end
+
+function common_well_setup(nr; dz = nothing, WI = nothing, gravity = gravity_constant)
+    if isnothing(dz)
+        @warn "dz provided for well. Assuming no gravity."
+        gdz = zeros(nr)
+    else
+        @assert length(dz) == nr  "Must have one connection drop dz per perforated cell"
+        gdz = dz*gravity
+    end
+    if isnothing(WI)
+        @warn "No well indices provided. Using 1e-12."
+        WI = repeat(1e-12, nr)
+    else
+        @assert length(WI) == nr  "Must have one well index per perforated cell"
+    end
+    return (WI, gdz)
 end
 
 """
@@ -139,12 +162,13 @@ end
 
 function associated_unit(::PotentialDropBalanceWell) Faces() end
 
+function tolerance_scale(::PotentialDropBalanceWell) 1e6 end
+
 function declare_pattern(model, e::PotentialDropBalanceWell, ::Cells)
     D = model.domain
     N = D.grid.neighborship
     nf = number_of_faces(D)
     m = size(N, 1)
-    # nc = number_of_cells(D)
     @assert size(N, 2) == nf
     @assert m == 2
     t = eltype(N)
@@ -234,7 +258,6 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
         else
             μ_mix = mix_by_saturations(s_other, as_value(view(μ, :, other)))
         end
-
         sgn = cd.face_sign
         v = sgn*V[face]
         ρ_mix = 0.5*(ρ_mix_self + ρ_mix_other)
@@ -243,6 +266,8 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
             # This is a good time to deal with the derivatives of v[face] since it is already fetched.
             Δp_f = segment_pressure_drop(seg_model, v, value(ρ_mix), value(μ_mix))
             face_entries[face] = value(Δθ) - Δp_f
+            # @debug "$face \neq_f: $(value.(face_entries[face]))"
+
             # @debug "Δp_f $face: $Δp_f flux: $v\neq_f: $(face_entries[face])"
             # @debug "rho: $(value(ρ_mix)) mu: $(value(μ_mix))"
 
@@ -252,7 +277,7 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
         end
         Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
         cell_entries[(face-1)*2 + ix] = sgn*(Δθ - Δp)
-        # @debug "Cell entry ($face:$self→$other): $(sgn*(Δθ - Δp))"
+        # @debug "Cell entry ($face:$self→$other): $(sgn*value.(Δθ - Δp))"
     end
 end
 
@@ -263,7 +288,7 @@ end
 
 
 function get_flow_volume(grid::WellGrid)
-    grid.volumes
+    return grid.volumes
 end
 
 # Well segments
@@ -272,12 +297,22 @@ Perforations are connections from well cells to reservoir vcells
 """
 struct Perforations <: TervUnit end
 
-## Well targets
+function get_neighborship(::SimpleWell)
+    # No interior connections.
+    return zeros(Int64, 2, 0)
+end
 
+function get_neighborship(W::MultiSegmentWell)
+    return W.neighborship
+end
 
-function declare_units(W::MultiSegmentWell)
-    c = (unit = Cells(),         count = length(W.volumes))
-    f = (unit = Faces(),         count = size(W.neighborship, 2))
+function number_of_cells(W::WellGrid)
+    length(W.volumes)
+end
+
+function declare_units(W::WellGrid)
+    c = (unit = Cells(),         count = number_of_cells(W))
+    f = (unit = Faces(),         count = number_of_faces(W))
     p = (unit = Perforations(),  count = length(W.perforations.self))
     return [c, f, p]
 end
@@ -321,7 +356,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
                             target_model::SimulationModel{DR},
                             source_model::SimulationModel{DW}, 
                             target, source, dt) where {DR<:DiscretizedDomain{G} where G<:ReservoirGrid,
-                                                       DW<:DiscretizedDomain{W} where W<:MultiSegmentWell}
+                                                       DW<:DiscretizedDomain{W} where W<:WellGrid}
     # error("Hello world")
     state_res = target_storage.state
     state_well = source_storage.state
@@ -330,7 +365,9 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
 
     res_q = ct.crossterm_target
     well_q = ct.crossterm_source
+    
     apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, -1)
+    # @debug "($source → $target, from wellbore): $(value.(res_q)), s: $(value.(state_well.Saturations))"
 end
 
 """
@@ -340,7 +377,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     target_storage, source_storage,
     target_model::SimulationModel{DW}, 
     source_model::SimulationModel{DR},
-    target, source, dt) where {DW<:DiscretizedDomain{W} where W<:MultiSegmentWell,
+    target, source, dt) where {DW<:DiscretizedDomain{W} where W<:WellGrid,
                                DR<:DiscretizedDomain{G} where G<:ReservoirGrid}
     state_res = source_storage.state
     state_well = target_storage.state
@@ -350,6 +387,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     res_q = ct.crossterm_source
     well_q = ct.crossterm_target
     apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, 1)
+    @debug "Res->WB: $(value.(res_q))"
 end
 
 
@@ -367,11 +405,15 @@ function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, per
     ρλ_i = state_res.MassMobilities
     masses = state_well.TotalMasses
 
-    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          masses, sgn)
-    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i,  as_value(masses), sgn)
+    ρ_w = state_well.PhaseMassDensities
+    s_w = state_well.Saturations
+    # ρ_r = state_res.PhaseMassDensities
+
+    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          masses, ρ_w, s_w, sgn)
+    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i,  as_value(masses), as_value(ρ_w), as_value(s_w), sgn)
 end
 
-function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_masses, sgn)
+function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_masses, ρ_w, s_w, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     nc = size(ρλ_i, 1)
     nph = size(μ, 1)
@@ -380,8 +422,14 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_
         si = perf.self[i]
         ri = perf.reservoir[i]
         wi = perf.WI[i]
-
-        dp = wi*(p_well[si] - p_res[ri])
+        gdz = perf.gdz[i]
+        if gdz != 0
+            ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
+            ρgdz = gdz*ρ_mix
+        else
+            ρgdz = 0
+        end
+        dp = wi*(p_well[si] - p_res[ri] + ρgdz)
         if dp > 0
             # Injection
             λ_t = 0
