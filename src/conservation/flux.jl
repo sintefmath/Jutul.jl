@@ -246,23 +246,16 @@ function update_fluxes_total_mass_velocity_cells!(flux, conn_data, masses, total
         f = c.face
         s = c.face_sign
         vi = s*v[f]
-        return half_face_fluxes_total_mass_velocity!(c.self, c.other, masses_i, total, vi)
+        return half_face_fluxes_total_mass_velocity(c.self, c.other, masses_i, total, vi)
     end
     @tullio flux[phno, i] = q(conn_data[i], masses, total, v, phno)
 end
 
 function update_fluxes_total_mass_velocity_faces!(flux, N, masses, total, v)
-    for f in 1:size(flux, 2)
-        for phno = 1:size(masses, 1)
-            masses_i = view(masses, phno, :)
-            left = N[1, f]
-            right = N[2, f]
-            flux[phno, f] = half_face_fluxes_total_mass_velocity_face!(left, right, masses_i, total, v[f])
-        end
-    end
+    @tullio flux[ph, f] = half_face_fluxes_total_mass_velocity_face(N[1, f], N[2, f], view(masses, ph, :), total, v[f])
 end
 
-function half_face_fluxes_total_mass_velocity!(self, other, masses, total, v)
+function half_face_fluxes_total_mass_velocity(self, other, masses, total, v)
     if v < 0
         # Flux is leaving the cell
         # @debug "$self: Flow leaving."
@@ -275,7 +268,7 @@ function half_face_fluxes_total_mass_velocity!(self, other, masses, total, v)
     return x*value(v)
 end
 
-function half_face_fluxes_total_mass_velocity_face!(left, right, masses, total, v)
+function half_face_fluxes_total_mass_velocity_face(left, right, masses, total, v)
     # Note the different signs. The above function (for cells) compute the half face flux
     # and recieve the signed flux going into or out of the cell. For the half face velocity
     # we have a single velocity, and the convention is to take the left cell to be upstream 
