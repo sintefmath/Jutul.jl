@@ -67,6 +67,32 @@ end
 struct Phi <: ScalarVariable 
 end
 
+# function ConservationLaw(model, number_of_equations;
+#     flow_discretization = model.domain.discretizations.mass_flow,
+#     accumulation_symbol = :TotalCharge,
+#     kwarg...)
+# D = model.domain
+# cell_unit = Cells()
+# face_unit = Faces()
+# nc = count_units(D, cell_unit)
+# nf = count_units(D, face_unit)
+# nhf = 2 * nf
+# face_partials = degrees_of_freedom_per_unit(model, face_unit)
+# alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(number_of_equations, n, model,
+#                                                         unit = unit, n_units_pos = n_units_pos, 
+#                                                         context = model.context; kwarg...)
+# acc = alloc(nc, cell_unit, nc)
+# hf_cells = alloc(nhf, cell_unit, nhf)
+# if face_partials > 0
+# hf_faces = alloc(nf, face_unit, nhf)
+# else
+# hf_faces = nothing
+# end
+# ConservationLaw(acc, accumulation_symbol, hf_cells, hf_faces, flow_discretization)
+# end
+
+
+
 # Selection of variables
 function select_primary_variables_system!(S, domain, system::ElectroChemicalComponent, formulation)
     S[:Phi] = Phi()
@@ -77,7 +103,7 @@ end
 @terv_secondary function update_as_secondary!(
     pot, tv::Phi, model, param, Phi
     ) #should resisitvity be added?
-    mf = model.domain.discretizations.mass_flow
+    mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     context = model.context
     if mf.gravity
@@ -96,7 +122,7 @@ function update_cell_neighbor_potential_cc!(
     )
     Threads.@threads for i in eachindex(conn_data)
         c = conn_data[i]
-        @inbounds dpot[phno] = half_face_two_point_kgradp_gravity(
+        @inbounds dpot[phno] = half_face_two_point_grad(
                 c.self, c.other, c.T, phi
         )
     end
@@ -119,16 +145,18 @@ function update_cell_neighbor_potential_cc!(
 end
 
 
-function select_equations(domain, system, formulation)
-    eqs = OrderedDict()
-    select_equations_domain!(eqs, domain, system, formulation) # Defual no eqs
-    select_equations_system!(eqs, domain, system, formulation)
-    select_equations_formulation!(eqs, domain, system, formulation) # Default no eqs
-    return eqs
-end
+# function select_equations(domain, system, formulation)
+#     eqs = OrderedDict()
+#     select_equations_domain!(eqs, domain, system, formulation) # Defual no eqs
+#     select_equations_system!(eqs, domain, system, formulation)
+#     select_equations_formulation!(eqs, domain, system, formulation) # Default no eqs
+#     return eqs
+# end
 
 function select_equations_system!(eqs, domain, system::CurrentCollector, formulation)
-    eqs[:charge_conservation] = (ConservationLaw, 1)
+    eqs[:charge_conservation] = (ConservationLaw(
+        accumulation_symbol = :TotalCharge, flow_discretization = model.domain.discretizations.charge_flow
+        ), 1)
 end
 
 
@@ -253,7 +281,7 @@ function get_cc_grid(perm = nothing, poro = nothing, volumes = nothing, extraout
 
     ft = ChargeFlow()
     flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
-    disc = (mass_flow = flow,)
+    disc = (charge_flow = flow,)
     D = DiscretizedDomain(G, disc)
 
     if extraout
