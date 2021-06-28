@@ -15,6 +15,17 @@ include_face_sign(::ChargeFlow) = false
 
 abstract type ElectroChemicalGrid <: TervGrid end
 
+struct Phi <: ScalarVariable 
+end
+
+struct ChargeConservation <: TervEquation
+    accumulation::TervAutoDiffCache
+    accumulation_symbol::Symbol
+    half_face_flux_cells::TervAutoDiffCache
+    half_face_flux_faces::Union{TervAutoDiffCache,Nothing}
+    flow_discretization::FlowDiscretization
+end
+
 # TPFA grid
 "Minimal struct for TPFA-like grid. Just connection data and pore-volumes"
 struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
@@ -63,22 +74,10 @@ function select_secondary_variables_flow_type!(
     )
 end
 
-# Instead of CellNeighborPotentialDifference (?)
-struct Phi <: ScalarVariable 
-end
-
-struct ChargeConservation <: TervEquation
-    accumulation::TervAutoDiffCache
-    accumulation_symbol::Symbol
-    half_face_flux_cells::TervAutoDiffCache
-    half_face_flux_faces::Union{TervAutoDiffCache,Nothing}
-    flow_discretization::FlowDiscretization
-end
-
 
 function ChargeConservation(
     model, number_of_equations;
-    flow_discretization = model.domain.discretizations.mass_flow,
+    flow_discretization = model.domain.discretizations.charge_flow,
     accumulation_symbol = :TotalCharge,
     kwarg...
     )
@@ -100,7 +99,7 @@ hf_faces = alloc(nf, face_unit, nhf)
 else
 hf_faces = nothing
 end
-ChargeConservatoin(
+ChargeConservation(
     acc, accumulation_symbol, hf_cells, hf_faces, flow_discretization
     )
 end
@@ -163,6 +162,16 @@ function select_equations_system!(eqs, domain, system::CurrentCollector, formula
     eqs[:charge_conservation] = (ChargeConservation, 1)
 end
 
+"Update positions of law's derivatives in global Jacobian"
+function align_to_jacobian!(law::ChargeConservation, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
+    fd = law.flow_discretization
+    neighborship = get_neighborship(model.domain.grid)
+
+    acc = law.accumulation
+    hflux_cells = law.half_face_flux_cells
+    diagonal_alignment!(acc, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
+    half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
+end
 
 ### PHYSICS
 
@@ -192,6 +201,30 @@ end
 end
 
 ####
+
+
+## From flux.jl
+
+function update_equation!(law::ChargeConservation, storage, model, dt)
+    update_accumulation!(law, storage, model, dt)
+    update_intrinsic_sources!(law, storage, model, dt)
+    update_half_face_flux!(law, storage, model, dt)
+end
+
+function update_intrinsic_sources!(law::ChargeConservation, storage, model, dt)
+    # Do nothing
+end
+
+function update_half_face_flux!(law::ChargeConservation, storage, model, dt)
+    fd = law.flow_discretization
+    update_half_face_flux!(law, storage, model, dt, fd)
+end
+
+@inline function get_diagonal_cache(eq::ChargeConservation)
+    return eq.accumulation
+end
+
+###
 
 
 function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05)
