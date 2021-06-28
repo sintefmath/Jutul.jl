@@ -61,11 +61,15 @@ end
 function select_secondary_variables_flow_type!(
     S, domain, system, formulation, flow_type::ChargeFlow
     )
-    S[:Phi] = Phi()
 end
 
 # Instead of CellNeighborPotentialDifference (?)
 struct Phi <: ScalarVariable 
+end
+
+# Selection of variables
+function select_primary_variables_system!(S, domain, system::ElectroChemicalComponent, formulation)
+    S[:Phi] = Phi()
 end
 
 ### Fra variable_evaluation
@@ -115,9 +119,20 @@ function update_cell_neighbor_potential_cc!(
 end
 
 
-### PHYSICS
-### MUST BE REWRITTEN; ARE IN THEIR ORIGINAL FORM
+function select_equations(domain, system, formulation)
+    eqs = OrderedDict()
+    select_equations_domain!(eqs, domain, system, formulation) # Defual no eqs
+    select_equations_system!(eqs, domain, system, formulation)
+    select_equations_formulation!(eqs, domain, system, formulation) # Default no eqs
+    return eqs
+end
 
+function select_equations_system!(eqs, domain, system::CurrentCollector, formulation)
+    eqs[:charge_conservation] = (ConservationLaw, 1)
+end
+
+
+### PHYSICS
 
 @inline function half_face_two_point_grad(
     c_self::I, c_other::I, T, phi::AbstractArray{R}
@@ -135,11 +150,6 @@ end
     return phi_self - phi_other
 end
 
-@inline function half_face_two_point_grad(
-    c_self::I, c_other::I, T, phi::AbstractArray{R}
-    ) where {R<:Real, I<:Integer}
-    return -T*(phi[c_self] - value(phi[c_other]))
-end
 
 @inline function half_face_two_point_flux_fused(
     c_self::I, c_other::I, T, phi::AbstractArray{R}, λ::AbstractArray{R},
@@ -166,14 +176,12 @@ function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac 
     end
     @assert isa(context, TervContext)
 
-    #TODO: Gjøre til batteri-parametere
     # Parameters
-    rhoLS = 1000
-
     phi = 1
 
     sys = CurrentCollector()
     model = SimulationModel(G, sys, context = context)
+
     # ? Can i just skip this??
     # ? I think this is where resisitvity would go
     # s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
