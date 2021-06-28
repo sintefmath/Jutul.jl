@@ -10,6 +10,8 @@ struct CurrentCollector <: ElectroChemicalComponent end
 abstract type ElectroChemicalGrid <: TervGrid end
 struct Phi <: ScalarVariable end
 struct Conductivity <: ComponentVariable end
+struct TotalCharge <: GroupedVariables end
+
 
 # Instead of DarcyMassMobilityFlow
 #? Is this the correct substitution
@@ -65,6 +67,16 @@ function degrees_of_freedom_per_unit(
     model::SimulationModel{D, S}, sf::Conductivity
     ) where {D<:TervDomain, S<:CurrentCollector}
     return 1
+end
+
+function degrees_of_freedom_per_unit(model, sf::TotalCharge)
+    return 1
+end
+
+function minimum_output_variables(
+    system::CurrentCollector, primary_variables
+    )
+    [:TotalCharge]
 end
 
 
@@ -268,6 +280,7 @@ end
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::ChargeFlow)
     # S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
+    S[:TotalCharge] = TotalCharge()
     S[:Conductivity] = Conductivity()
 end
 
