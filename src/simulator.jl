@@ -88,7 +88,7 @@ end
 function simulator_config(sim; kwarg...)
     cfg = Dict()
     cfg[:max_timestep_cuts] = 5
-    cfg[:max_nonlinear_iterations] = 10
+    cfg[:max_nonlinear_iterations] = 15
     cfg[:linear_solver] = nothing
     cfg[:output_states] = true
     # Define debug level. If debugging is on, this determines the amount of output.
