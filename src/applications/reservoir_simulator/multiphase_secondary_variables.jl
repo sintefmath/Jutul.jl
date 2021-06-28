@@ -1,4 +1,4 @@
-export PhaseMassDensities, ConstantCompressibilityDensities, MassMobilities, BrooksCoreyRelPerm
+export PhaseMassDensities, ConstantCompressibilityDensities, MassMobilities, BrooksCoreyRelPerm, ComponentVariable
 
 abstract type PhaseVariables <: GroupedVariables end
 abstract type ComponentVariable <: GroupedVariables end

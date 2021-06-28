@@ -9,6 +9,7 @@ abstract type ElectroChemicalComponent <: TervSystem end
 struct CurrentCollector <: ElectroChemicalComponent end
 abstract type ElectroChemicalGrid <: TervGrid end
 struct Phi <: ScalarVariable end
+struct Conductivity <: ComponentVariable end
 
 # Instead of DarcyMassMobilityFlow
 #? Is this the correct substitution
@@ -60,9 +61,8 @@ function degrees_of_freedom_per_unit(
 end
 
 
-# To catch MassMobilities
 function degrees_of_freedom_per_unit(
-    model::SimulationModel{D, S}, sf::PhaseAndComponentVariable
+    model::SimulationModel{D, S}, sf::Conductivity
     ) where {D<:TervDomain, S<:CurrentCollector}
     return 1
 end
@@ -79,6 +79,26 @@ function select_secondary_variables_flow_type!(
     S, domain, system, formulation, flow_type::ChargeFlow
     )
 end
+
+# function initialize_variable_value!(state, model, pvar::Conductivity, symb::Symbol, val::Number)
+#     V = repeat([val], number_of_units(model, pvar))
+#     return initialize_variable_value!(state, model, pvar, symb, V)
+# end
+
+# ??Hvorfor denne??
+function initialize_variable_value!(
+    state, model, pvar::Conductivity, symb::Symbol, val::Number
+    )
+    n = values_per_unit(model, pvar)
+    return initialize_variable_value!(state, model, pvar, symb, repeat([val], n))
+end
+
+
+
+function default_value(v::Conductivity)
+    return 1.0
+end
+
 
 
 function ChargeConservation(
@@ -118,6 +138,12 @@ function select_primary_variables_system!(S, domain, system::ElectroChemicalComp
 end
 
 ### Fra variable_evaluation
+
+# ? What is rholambda
+@terv_secondary function update_as_secondary!(
+    ρλ_i, tv::Conductivity, model, param
+    )
+end
 
 @terv_secondary function update_as_secondary!(
     pot, tv::Phi, model, param, Phi
@@ -216,7 +242,6 @@ end
 
 ####
 
-
 ## From flux.jl
 
 function update_equation!(law::ChargeConservation, storage, model, dt)
@@ -242,8 +267,8 @@ end
 # TODO: Må ha rktig secondary variables, i tillegg til tilhørende dependency, som definieres via update_as_secondary
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::ChargeFlow)
-    S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
-    S[:MassMobilities] = MassMobilities() # ? Change to conductibity?
+    # S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
+    S[:Conductivity] = Conductivity()
 end
 
 
