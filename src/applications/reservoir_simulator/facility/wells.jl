@@ -232,11 +232,8 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
     mass_flow = model.domain.discretizations.mass_flow
     conn_data = mass_flow.conn_data
 
-
-    for index = 1:length(conn_data)
-        cd = conn_data[index]
+    for cd in conn_data
         update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W, single_phase)
-        # @debug "Cell entry ($face:$self→$other): $(sgn*value.(Δθ - Δp))"
     end
 end
 
