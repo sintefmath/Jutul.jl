@@ -178,16 +178,16 @@ end
     conn_data = mf.conn_data
     context = model.context
     if mf.gravity
-        update_cell_neighbor_potential_difference_gravity!(pot, conn_data, Pressure, PhaseMassDensities, context, kernel_compatibility(context))
+        @tullio pot[ph, i] = half_face_two_point_kgradp_gravity(conn_data[i], Pressure, view(PhaseMassDensities, ph, :))
     else
-        update_cell_neighbor_potential_difference!(pot, conn_data, Pressure, context, kernel_compatibility(context))
+        @tullio pot[i] = half_face_two_point_kgradp(conn_data[i], p)
     end
 end
+
 # Half face flux - trivial version which should only be used when there are no faces
 function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TrivialFlow}
 
 end
-
 
 # Half face flux - default reservoir version
 function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
@@ -199,47 +199,8 @@ function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentia
     update_fluxes_from_potential_and_mobility!(flux, conn_data, pot, mob)
 end
 
-function update_cell_neighbor_potential_difference_gravity!(dpot, conn_data, p, rho, context, ::KernelDisallowed)
-    Threads.@threads for i in eachindex(conn_data)
-        c = conn_data[i]
-        for phno = 1:size(rho, 1)
-            rho_i = view(rho, phno, :)
-            @inbounds dpot[phno, i] = half_face_two_point_kgradp_gravity(c.self, c.other, c.T, p, c.gdz, rho_i)
-        end
-    end
-end
-
-function update_cell_neighbor_potential_difference_gravity!(dpot, conn_data, p, rho, context, ::KernelAllowed)
-    @kernel function kern(dpot, @Const(conn_data), @Const(p), @Const(rho))
-        ph, i = @index(Global, NTuple)
-        c = conn_data[i]
-        rho_i = view(rho, ph, :)
-        dpot[ph, i] = half_face_two_point_kgradp_gravity(c.self, c.other, c.T, p, c.gdz, rho_i)
-    end
-    begin
-        d = size(dpot)
-
-        kernel = kern(context.device, context.block_size, d)
-        event_jac = kernel(dpot, conn_data, p, rho, ndrange = d)
-        wait(event_jac)
-    end
-end
-
-function update_cell_neighbor_potential_difference!(dpot, conn_data, p, context, ::KernelDisallowed)
-    Threads.@threads for i in eachindex(conn_data)
-        @inbounds c = conn_data[i]
-        @inbounds dpot[i] = half_face_two_point_kgradp(c.self, c.other, c.T, p)
-    end
-end
-
 function update_fluxes_from_potential_and_mobility!(flux, conn_data, pot, mob)
-    Threads.@threads for i in eachindex(conn_data)
-        @inbounds c = conn_data[i]
-        for phno = 1:size(mob, 1)
-            mob_i = view(mob, phno, :)
-            @inbounds flux[phno, i] = spu_upwind(c.self, c.other, pot[phno, i], mob_i)
-        end
-    end
+    @tullio flux[phno, i] = spu_upwind(conn_data[i].self, conn_data[i].other, pot[phno, i], view(mob, phno, :))
 end
 
 # Fused version for DarcyMassMobilityFlowFused
@@ -281,14 +242,25 @@ function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentia
 end
 
 function update_fluxes_total_mass_velocity_cells!(flux, conn_data, masses, total, v)
-    for i in eachindex(conn_data)
-        @inbounds c = conn_data[i]
+    function q(c, masses, total, v, phno)
+        masses_i = view(masses, phno, :)
         f = c.face
         s = c.face_sign
         vi = s*v[f]
-        for phno = 1:size(masses, 1)
-            masses_i = view(masses, phno, :)
-            @inbounds flux[phno, i] = half_face_fluxes_total_mass_velocity!(c.self, c.other, masses_i, total, vi)
+        return half_face_fluxes_total_mass_velocity!(c.self, c.other, masses_i, total, vi)
+    end
+
+    @time @tullio flux[phno, i] = q(conn_data[i], masses, total, v, phno)
+    @time begin
+        for i in eachindex(conn_data)
+            @inbounds c = conn_data[i]
+            f = c.face
+            s = c.face_sign
+            vi = s*v[f]
+            for phno = 1:size(masses, 1)
+                masses_i = view(masses, phno, :)
+                @inbounds flux[phno, i] = half_face_fluxes_total_mass_velocity!(c.self, c.other, masses_i, total, vi)
+            end
         end
     end
 end
@@ -346,6 +318,10 @@ end
     return λᶠ*θ
 end
 
+@inline function half_face_two_point_kgradp_gravity(conn_data::NamedTuple, p, density)
+    return half_face_two_point_kgradp_gravity(conn_data.self, conn_data.other, conn_data.T, p, conn_data.gdz, density)
+end
+
 @inline function half_face_two_point_kgradp_gravity(c_self::I, c_other::I, T, p::AbstractArray{R}, gΔz, ρ::AbstractArray{R}) where {R<:Real, I<:Integer}
     return -T*two_point_potential_drop_half_face(c_self, c_other, p, gΔz, ρ)
 end
@@ -357,6 +333,10 @@ end
 @inline function two_point_potential_drop(p_self::Real, p_other::Real, gΔz::Real, ρ_self::Real, ρ_other::Real)
     ρ_avg = 0.5*(ρ_self + ρ_other)
     return p_self - p_other + gΔz*ρ_avg
+end
+
+@inline function half_face_two_point_kgradp(conn_data::NamedTuple, p::AbstractArray)
+    half_face_two_point_kgradp(conn_data.self, conn_data.other, conn_data.T, p)
 end
 
 @inline function half_face_two_point_kgradp(c_self::I, c_other::I, T, p::AbstractArray{R}) where {R<:Real, I<:Integer}
