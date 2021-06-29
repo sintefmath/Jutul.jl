@@ -200,6 +200,7 @@ function sort_secondary_variables!(model::SimulationModel)
     @. order -= np
     @. secondary.keys = secondary.keys[order]
     @. secondary.vals = secondary.vals[order]
+    OrderedCollections.rehash!(secondary)
     return model
 end
 
