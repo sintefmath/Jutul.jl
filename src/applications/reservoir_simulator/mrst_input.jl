@@ -128,8 +128,8 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
 end
 
 
-function get_test_setup(grid_name; case_name = "single_phase_simple", context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05, kwarg...)
-    G = get_minimal_tpfa_grid_from_mrst(grid_name)
+function get_test_setup(grid_name; case_name = "single_phase_simple", context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05, fuse_flux = false, kwarg...)
+    G = get_minimal_tpfa_grid_from_mrst(grid_name, fuse_flux = fuse_flux)
     nc = number_of_cells(G)
     pv = G.grid.pore_volumes
     timesteps = timesteps*3600*24

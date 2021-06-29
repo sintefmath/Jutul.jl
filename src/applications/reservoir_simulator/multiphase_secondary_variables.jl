@@ -51,7 +51,7 @@ struct BrooksCoreyRelPerm <: RelativePermeabilities
         e = expand(exponents)
         r = expand(residuals)
         epts = expand(endpoints)
-        
+
         total = sum(residuals)
         new(e, r, epts, total)
     end
@@ -71,7 +71,7 @@ end
     @tullio kr[ph, i] = brooks_corey_relperm(Saturations[ph, i], n[ph], sr[ph], kwm[ph], sr_tot)
 end
 
-function brooks_corey_relperm(s, n, sr, kwm, sr_tot)
+function brooks_corey_relperm(s::Real, n::Real, sr::Real, kwm::Real, sr_tot::Real)
     den = 1 - sr_tot;
     sat = ((s - sr)./den);
     sat = max(min(sat, 1), 0);
@@ -121,7 +121,7 @@ end
     @tullio rho[ph, i] = constant_expansion(Pressure[i], p_ref[ph], c[ph], rho_ref[ph])
 end
 
-function constant_expansion(p, p_ref, c, f_ref)
+function constant_expansion(p::Real, p_ref::Real, c::Real, f_ref::Real)
     Δ = p - p_ref
     return f_ref * exp(Δ * c)
 end

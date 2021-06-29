@@ -22,7 +22,7 @@ struct MultiModel <: TervModel
     end
 end
 
-function Base.show(io::IO, t::MIME"text/plain", m::MultiModel) 
+function Base.show(io::IO, t::MIME"text/plain", m::MultiModel)
     submodels = m.models
     if get(io, :compact, false)
     else
@@ -44,7 +44,7 @@ abstract type CrossTerm end
 
 """
 A cross model term where the dependency is injective and the term is additive:
-(each addition to a unit in the target only depends one unit from the source, 
+(each addition to a unit in the target only depends one unit from the source,
 and is added into that position upon application)
 """
 struct InjectiveCrossTerm <: CrossTerm
@@ -101,7 +101,7 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
                                                 target_index = impact_target,
                                                 source_index = impact_source,
                                                 target_offset = equation_offset,
-                                                source_offset = variable_offset, 
+                                                source_offset = variable_offset,
                                                 number_of_units_source = nu_s,
                                                 number_of_units_target = nu_t)
         variable_offset += number_of_degrees_of_freedom(source, u)
@@ -205,10 +205,10 @@ end
 
 function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model))
     storage = TervStorage()
-    for key in keys(model.models)
+    for key in submodels_symbols(model)
         m = model.models[key]
-        storage[key] = setup_storage(m,  state0 = state0[key], 
-                                            parameters = parameters[key], 
+        storage[key] = setup_storage(m,  state0 = state0[key],
+                                            parameters = parameters[key],
                                             setup_linearized_system = false,
                                             tag = key)
     end
@@ -315,7 +315,7 @@ function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, ta
     for ekey in keys(equations)
         eq = equations[ekey]
         ct = crossterms[ekey]
-        
+
         if !isnothing(ct)
             align_to_jacobian!(ct, lsys.jac, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
         end
@@ -435,7 +435,7 @@ function setup_linearized_system!(storage, model::MultiModel)
 end
 
 function initialize_storage!(storage, model::MultiModel; kwarg...)
-    for key in keys(model.models)
+    for key in submodels_symbols(model)
         initialize_storage!(storage[key], model.models[key]; kwarg...)
     end
 end
@@ -451,10 +451,10 @@ end
 
 function update_cross_terms!(storage, model::MultiModel, arg...)
     models = model.models
-    for target in keys(models)
+    @sync for target in keys(models)
         for source in keys(models)
             if source != target
-                update_cross_terms_for_pair!(storage, model, source, target, arg...)
+                @async update_cross_terms_for_pair!(storage, model, source, target, arg...)
             end
         end
     end
@@ -483,10 +483,10 @@ end
 
 function apply_cross_terms!(storage, model::MultiModel, arg...)
     models = model.models
-    for target in keys(models)
+    @sync for target in keys(models)
         for source in keys(models)
             if source != target
-                apply_cross_terms_for_pair!(storage, model, source, target, arg...)
+                @async apply_cross_terms_for_pair!(storage, model, source, target, arg...)
             end
         end
     end
@@ -511,21 +511,31 @@ end
 function update_linearized_system!(storage, model::MultiModel; equation_offset = 0)
     lsys = storage.LinearizedSystem
     models = model.models
-    for key in keys(models)
+    offsets = get_submodel_degree_of_freedom_offsets(model)
+    model_keys = submodels_symbols(model)
+    @sync for (index, key) in enumerate(model_keys)
         m = models[key]
         s = storage[key]
         eqs = s.equations
-        update_linearized_system!(lsys, eqs, m; equation_offset = equation_offset)
-        equation_offset += number_of_degrees_of_freedom(m)
+        @async update_linearized_system!(lsys, eqs, m; equation_offset = offsets[index])
     end
     # Then, update cross terms
-    for target in keys(models)
-        for source in keys(models)
+    @sync for target in model_keys
+        for source in model_keys
             if source != target
-                update_linearized_system_crossterms!(lsys, storage, model, source, target)
+                @async update_linearized_system_crossterms!(lsys, storage, model, source, target)
             end
         end
     end
+end
+
+
+function get_submodel_degree_of_freedom_offsets(model::MultiModel)
+    n = cumsum(vcat([0], [i for i in values(model.number_of_degrees_of_freedom)]))
+end
+
+function submodels_symbols(model::MultiModel)
+    return keys(model.models)
 end
 
 function update_linearized_system_crossterms!(lsys, storage, model::MultiModel, source, target)
@@ -546,7 +556,7 @@ end
 
 function setup_state(model::MultiModel, initializers)
     state = Dict()
-    for key in keys(model.models)
+    for key in submodels_symbols(model)
         m = model.models[key]
         init = initializers[key]
         state[key] = setup_state(m, init)
@@ -556,7 +566,7 @@ end
 
 function setup_parameters(model::MultiModel)
     p = Dict()
-    for key in keys(model.models)
+    for key in submodels_symbols(model)
         m = model.models[key]
         p[key] = setup_parameters(m)
     end
@@ -573,7 +583,7 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
     offset = 0
     lsys = storage.LinearizedSystem
     errors = OrderedDict()
-    for key in keys(model.models)
+    for key in submodels_symbols(model)
         s = storage[key]
         m = model.models[key]
         eqs = s.equations
@@ -611,26 +621,26 @@ function reset_to_previous_state!(storage, model::MultiModel)
 end
 
 function update_after_step!(storage, model::MultiModel, dt, forces)
-    for key in keys(model.models)
+    for key in submodels_symbols(model)
         update_after_step!(storage[key], model.models[key], dt, forces[key])
     end
 end
 
 function update_before_step!(storage, model::MultiModel, dt, forces)
-    for key in keys(model.models)
+    for key in submodels_symbols(model)
         update_before_step!(storage[key], model.models[key], dt, forces[key])
     end
 end
 
 function apply_forces!(storage, model::MultiModel, dt, forces::Dict)
-    for key in keys(model.models)
+    for key in submodels_symbols(model)
         apply_forces!(storage[key], model.models[key], dt, forces[key])
     end
 end
 
 function submodels_storage_apply!(storage, model, f!, arg...)
-    for key in keys(model.models)
-        f!(storage[key], model.models[key], arg...)
+    @sync for key in submodels_symbols(model)
+        @async f!(storage[key], model.models[key], arg...)
     end
 end
 
@@ -654,5 +664,5 @@ end
 
 
 function get_convergence_table(model::MultiModel, errors)
-    get_convergence_table(keys(model.models), errors)
+    get_convergence_table(submodels_symbols(model), errors)
 end

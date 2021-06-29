@@ -4,13 +4,14 @@ ENV["JULIA_DEBUG"] = Terv
 ENV["JULIA_DEBUG"] = nothing
 ##
 casename = "simple_egg"
+# casename = "gravity_test"
 # casename = "bl_wells"
 # casename = "bl_wells_mini"
 
 # casename = "single_inj_single_cell"
 # casename = "intermediate"
 # casename = "mini"
-simple_well = true
+simple_well = false
 
 
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
@@ -54,7 +55,7 @@ state0r = setup_state(model, init)
 
 ## Model parameters
 param_res = setup_parameters(model)
-param_res[:ReferenceDensity] = vec(rhoS)
+param_res[:reference_densities] = vec(rhoS)
 
 dt = mrst_data["dt"]
 if isa(dt, Real)
@@ -84,18 +85,18 @@ controls = Dict()
 for i = 1:num_wells
     sym = well_symbols[i]
 
-    w, wdata = get_well_from_mrst_data(mrst_data, sys, i, extraout = true, volume = 1e-3, simple = simple_well)
+    wi, wdata = get_well_from_mrst_data(mrst_data, sys, i, extraout = true, volume = 1e-3, simple = simple_well)
 
-    sv = w.secondary_variables
+    sv = wi.secondary_variables
     sv[:PhaseMassDensities] = rho
     sv[:PhaseViscosities] = mu
 
-    models[sym] = w
+    models[sym] = wi
 
     println("$sym")
     t_mrst = wdata["val"]
     is_injector = wdata["sign"] > 0
-
+    is_shut = wdata["status"] < 1
     if wdata["type"] == "rate"
         println("Rate")
         target = SinglePhaseRateTarget(t_mrst, AqueousPhase())
@@ -104,15 +105,19 @@ for i = 1:num_wells
         target = BottomHolePressureTarget(t_mrst)
     end
 
-    if is_injector
+    if is_shut
+        println("Shut well")
+        ctrl = DisabledControl()
+    elseif is_injector
         println("Injector")
         ctrl = InjectorControl(target, wdata["compi"])
     else
         println("Producer")
         ctrl = ProducerControl(target)
     end
-    param_w = setup_parameters(w)
-    param_w[:ReferenceDensity] = vec(rhoS)
+    param_w = setup_parameters(wi)
+    param_w[:tolerances][:mass_conservation] = 1e-1
+    param_w[:reference_densities] = vec(rhoS)
 
     well_parameters[sym] = param_w
     controls[sym] = ctrl
@@ -145,7 +150,7 @@ for w in well_symbols
     parameters[w] = well_parameters[w]
 end
 
-sim = Simulator(mmodel, state0 = state0, parameters = parameters)
+sim = Simulator(mmodel, state0 = state0, parameters = deepcopy(parameters))
 # dt = [1.0]
 # dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24
 dt = timesteps
@@ -183,7 +188,7 @@ w = well_symbols[ix]
 d = map((x) -> -x[:Facility][:TotalSurfaceMassRate][ix], states)
 d = hcat(d...)'
 h = Plots.plot(d)
-ylims!(h, (0, 6e-3))
+# ylims!(h, (0, 6e-3))
 ##
 d = map(get_qws, ix)
 d = hcat(d...)

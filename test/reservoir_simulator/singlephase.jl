@@ -12,6 +12,7 @@ function test_single_phase(grid = "pico"; linear_solver = nothing, kwarg...)
 end
 @testset "Single-phase" begin
     @test test_single_phase()
+    @test test_single_phase(fuse_flux = true)
 end
 
 @testset "Single-phase linear solvers" begin
