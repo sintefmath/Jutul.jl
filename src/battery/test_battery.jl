@@ -1,6 +1,8 @@
 using Terv
 using Test
 
+ENV["JULIA_DEBUG"] = Terv
+
 function test_cc(linear_solver=nothing)
     state0, model, prm, f, t = get_test_setup_battery()
     sim = Simulator(model, state0=state0, parameters=prm)

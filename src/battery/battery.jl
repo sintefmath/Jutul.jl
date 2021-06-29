@@ -117,28 +117,53 @@ function ChargeConservation(
     accumulation_symbol = :TotalCharge,
     kwarg...
     )
-D = model.domain
-cell_unit = Cells()
-face_unit = Faces()
-nc = count_units(D, cell_unit)
-nf = count_units(D, face_unit)
-nhf = 2 * nf
-face_partials = degrees_of_freedom_per_unit(model, face_unit)
-alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(
+
+    D = model.domain
+    cell_unit = Cells()
+    face_unit = Faces()
+    nc = count_units(D, cell_unit)
+    nf = count_units(D, face_unit)
+    nhf = 2 * nf
+    face_partials = degrees_of_freedom_per_unit(model, face_unit)
+
+    alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(
     number_of_equations, n, model, unit = unit, n_units_pos = n_units_pos,
     context = model.context; kwarg...
     )
-acc = alloc(nc, cell_unit, nc)
-hf_cells = alloc(nhf, cell_unit, nhf)
-if face_partials > 0
-hf_faces = alloc(nf, face_unit, nhf)
-else
-hf_faces = nothing
-end
-ChargeConservation(
-    acc, accumulation_symbol, hf_cells, hf_faces, flow_discretization
+
+    acc = alloc(nc, cell_unit, nc)
+    hf_cells = alloc(nhf, cell_unit, nhf)
+
+    if face_partials > 0
+        hf_faces = alloc(nf, face_unit, nhf)
+    else
+        hf_faces = nothing
+    end
+
+    ChargeConservation(
+        acc, accumulation_symbol, hf_cells, hf_faces, flow_discretization
     )
 end
+
+function update_linearized_system_equation!(
+    nz, r, model, law::ChargeConservation
+    )
+    
+    acc = get_diagonal_cache(law)
+    cell_flux = law.half_face_flux_cells
+    face_flux = law.half_face_flux_faces
+    cpos = law.flow_discretization.conn_pos
+
+    @sync begin 
+        @async update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
+        @async fill_equation_entries!(nz, nothing, model, cell_flux)
+        if !isnothing(face_flux)
+            conn_data = law.flow_discretization.conn_data
+            @async update_linearized_system_subset_face_flux!(nz, model, face_flux, cpos, conn_data)
+        end
+    end
+end
+
 
 
 # Selection of variables
