@@ -224,6 +224,32 @@ function align_to_jacobian!(
         )
 end
 
+
+function declare_pattern(model, e::ChargeConservation, ::Cells)
+    df = e.flow_discretization
+    hfd = Array(df.conn_data)
+    n = number_of_units(model, e)
+    # Fluxes
+    I = map(x -> x.self, hfd)
+    J = map(x -> x.other, hfd)
+    # Diagonals
+    D = [i for i in 1:n]
+
+    I = vcat(I, D)
+    J = vcat(J, D)
+
+    return (I, J)
+end
+
+function declare_pattern(model, e::ChargeConservation, ::Faces)
+    df = e.flow_discretization
+    cd = df.conn_data
+    I = map(x -> x.self, cd)
+    J = map(x -> x.face, cd)
+    return (I, J)
+end
+
+
 ### PHYSICS
 
 @inline function half_face_two_point_grad(
