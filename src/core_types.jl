@@ -1,5 +1,5 @@
 export TervSystem, TervDomain, TervVariables, TervGrid, TervContext
-export SimulationModel, TervVariables, TervFormulation
+export SimulationModel, TervVariables, TervFormulation, TervEquation
 export setup_parameters, kernel_compatibility
 export Cells, Nodes, Faces
 export ConstantVariables, ScalarVariable, GroupedVariables

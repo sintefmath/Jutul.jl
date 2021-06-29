@@ -11,6 +11,8 @@ abstract type ElectroChemicalGrid <: TervGrid end
 struct Phi <: ScalarVariable end
 struct Conductivity <: ComponentVariable end
 struct TotalCharge <: GroupedVariables end
+# New version of CellNeighborPotentialDifference
+struct TPFlux <: GroupedVariables end
 
 
 # Instead of DarcyMassMobilityFlow
@@ -73,6 +75,11 @@ function degrees_of_freedom_per_unit(model, sf::TotalCharge)
     return 1
 end
 
+function degrees_of_freedom_per_unit(model, sf::TPFlux)
+    return 1
+end
+
+
 function minimum_output_variables(
     system::CurrentCollector, primary_variables
     )
@@ -87,10 +94,6 @@ function single_unique_potential(
     return false
 end
 
-function select_secondary_variables_flow_type!(
-    S, domain, system, formulation, flow_type::ChargeFlow
-    )
-end
 
 # function initialize_variable_value!(state, model, pvar::Conductivity, symb::Symbol, val::Number)
 #     V = repeat([val], number_of_units(model, pvar))
@@ -165,9 +168,18 @@ function update_linearized_system_equation!(
 end
 
 
+function apply_forces_to_equation!(
+    storage, model, eq::ChargeConservation, force::Vector{SourceTerm}
+    )
+    equation = get_entries(eq)
+    @. equation -= force.value
+end
+
 
 # Selection of variables
-function select_primary_variables_system!(S, domain, system::ElectroChemicalComponent, formulation)
+function select_primary_variables_system!(
+    S, domain, system::ElectroChemicalComponent, formulation
+    )
     S[:Phi] = Phi()
 end
 
@@ -195,6 +207,25 @@ end
             )
     end
 end
+
+
+# Hvordan i alle dager fungerer dette????
+# @terv_secondary function update_as_secondary!(
+#     totcharge, tv::TotalCharge, model::SimulationModel{G, S}, param,
+#     TotalCharge
+#     ) where {G, S<:CurrentCollector}
+#     @tullio totcharge[i] = TotalCharge[ph, i]
+# end
+
+
+@terv_secondary function update_as_secondary!(
+    pot, tv::TPFlux, model, param, Phi
+    )
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
+    @tullio pot[i] = half_face_two_point_grad(conn_data[i], Phi)
+end
+
 
 function update_cell_neighbor_potential_cc!(
     dpot, conn_data, phi, context, ::KernelDisallowed
@@ -229,6 +260,7 @@ function select_equations_system!(
     )
     eqs[:charge_conservation] = (ChargeConservation, 1)
 end
+
 
 "Update positions of law's derivatives in global Jacobian"
 function align_to_jacobian!(
@@ -278,6 +310,14 @@ end
 ### PHYSICS
 
 @inline function half_face_two_point_grad(
+    conn_data::NamedTuple, p::AbstractArray
+    )
+    half_face_two_point_grad(
+        conn_data.self, conn_data.other, conn_data.T, p
+        )
+end
+
+@inline function half_face_two_point_grad(
     c_self::I, c_other::I, T, phi::AbstractArray{R}
     ) where {R<:Real, I<:Integer}
     return -T*two_point_potential_drop_half_face(c_self, c_other, phi)
@@ -288,7 +328,6 @@ end
     )
     return two_point_potential_drop(phi[c_self], value(phi[c_other]))
 end
-
 
 @inline function two_point_potential_drop(phi_self::Real, phi_other::Real)
     return phi_self - phi_other
@@ -344,6 +383,13 @@ end
 # end
 
 
+# ?? trengs denne ??
+function update_half_face_flux!(
+    law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}
+    ) where {U,K,T<:TrivialFlow}
+
+end
+
 
 @inline function get_diagonal_cache(eq::ChargeConservation)
     return eq.accumulation
@@ -353,7 +399,7 @@ end
 # TODO: Må ha rktig secondary variables, i tillegg til tilhørende dependency, som definieres via update_as_secondary
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::ChargeFlow)
-    # S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
+    S[:TPFlux] = TPFlux()
     S[:TotalCharge] = TotalCharge()
     S[:Conductivity] = Conductivity()
 end
@@ -400,7 +446,6 @@ function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac 
     # Model parameters
     parameters = setup_parameters(model)
 
-    state0 = setup_state(model, init)
     return (state0, model, parameters, forces, timesteps)
 end
 
