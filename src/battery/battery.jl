@@ -106,11 +106,9 @@ function initialize_variable_value!(
 end
 
 
-
 function default_value(v::Conductivity)
     return 1.0
 end
-
 
 
 function ChargeConservation(
@@ -141,7 +139,6 @@ ChargeConservation(
     acc, accumulation_symbol, hf_cells, hf_faces, flow_discretization
     )
 end
-
 
 
 # Selection of variables
@@ -202,7 +199,9 @@ function update_cell_neighbor_potential_cc!(
 end
 
 
-function select_equations_system!(eqs, domain, system::CurrentCollector, formulation)
+function select_equations_system!(
+    eqs, domain, system::CurrentCollector, formulation
+    )
     eqs[:charge_conservation] = (ChargeConservation, 1)
 end
 
@@ -247,6 +246,7 @@ end
 @inline function half_face_two_point_flux_fused(
     c_self::I, c_other::I, T, phi::AbstractArray{R}, λ::AbstractArray{R},
     ) where {R<:Real, I<:Integer}
+    
     θ = half_face_two_point_grad(c_self, c_other, T, phi)
     λᶠ = spu_upwind(c_self, c_other, θ, λ)
     return λᶠ*θ
@@ -262,14 +262,37 @@ function update_equation!(law::ChargeConservation, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt)
 end
 
-function update_intrinsic_sources!(law::ChargeConservation, storage, model, dt)
+function update_intrinsic_sources!(
+    law::ChargeConservation, storage, model, dt
+    )
     # Do nothing
 end
 
-function update_half_face_flux!(law::ChargeConservation, storage, model, dt)
+function update_half_face_flux!(
+    law::ChargeConservation, storage, model, dt
+    )
     fd = law.flow_discretization
     update_half_face_flux!(law, storage, model, dt, fd)
 end
+
+
+function update_half_face_flux!(
+    law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}
+    ) where {U,K,T<:ChargeFlow}
+
+    # ?? Can i just skip this? What does it normally do??
+    # pot = storage.state.CellNeighborPotentialDifference
+    # mob = storage.state.MassMobilities
+    # flux = get_entries(law.half_face_flux_cells)
+    # conn_data = law.flow_discretization.conn_data
+    # update_fluxes_from_potential!(flux, conn_data, pot, mob)
+end
+
+# function update_fluxes_from_potential!(flux, conn_data, pot, mob)
+#     @tullio flux[phno, i] = spu_upwind(conn_data[i].self, conn_data[i].other, pot[phno, i], view(mob, phno, :))
+# end
+
+
 
 @inline function get_diagonal_cache(eq::ChargeConservation)
     return eq.accumulation
