@@ -10,6 +10,7 @@ using MappedArrays
 using Printf
 using Dates
 using DataStructures
+using LoopVectorization
 using Tullio
 using PrettyTables
 using DataInterpolations
