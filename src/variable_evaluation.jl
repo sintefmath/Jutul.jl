@@ -84,7 +84,7 @@ end
 
 # Initializers
 function select_secondary_variables(domain, system, formulation)
-    sf = OrderedDict()
+    sf = OrderedDict{Symbol, TervVariables}()
     select_secondary_variables!(sf, domain, system, formulation)
     return sf
 end
@@ -101,7 +101,7 @@ select_secondary_variables_formulation!(sf, domain, system, formulation) = nothi
 
 ## Definition
 function select_primary_variables(domain, system, formulation)
-    sf = OrderedDict()
+    sf = OrderedDict{Symbol, TervVariables}()
     select_primary_variables!(sf, domain, system, formulation)
     return sf
 end
