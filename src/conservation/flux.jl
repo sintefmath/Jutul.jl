@@ -176,11 +176,6 @@ end
         @tullio pot[i] = half_face_two_point_kgradp(conn_data[i], Pressure)
     end
 end
-# Half face flux - trivial version which should only be used when there are no faces
-function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TrivialFlow}
-
-end
-
 
 # Half face flux - trivial version which should only be used when there are no faces
 function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TrivialFlow}
