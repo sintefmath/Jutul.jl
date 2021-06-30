@@ -80,6 +80,7 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     end
 end
 
+# ??How do you implement sources??
 function build_forces(
     model::SimulationModel{G, S}; sources = nothing
     ) where {G<:TervDomain, S<:CurrentCollector}
@@ -169,12 +170,12 @@ function update_linearized_system_equation!(
     end
 end
 
-function apply_forces_to_equation!(
-    storage, model, eq::ChargeConservation, force::Vector{SourceTerm}
-    )
-    equation = get_entries(eq)
-    @. equation -= force.value
-end
+# function apply_forces_to_equation!(
+#     storage, model, eq::ChargeConservation, force::Vector{SourceTerm}
+#     )
+#     equation = get_entries(eq)
+#     @. equation -= force.value
+# end
 
 
 "Update positions of law's derivatives in global Jacobian"
