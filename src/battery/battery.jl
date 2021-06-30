@@ -254,13 +254,25 @@ end
     )
 end
 
-# Hvordan i alle dager fungerer dette????
-# @terv_secondary function update_as_secondary!(
-#     totcharge, tv::TotalCharge, model::SimulationModel{G, S}, param,
-#     TotalCharge
-#     ) where {G, S<:CurrentCollector}
-#     @tullio totcharge[i] = TotalCharge[ph, i]
+@terv_secondary function update_as_secondary!(
+    totcharge, tv::TotalCharge, model::SimulationModel{G, S}, param
+    ) where {G, S<:CurrentCollector}
+    @tullio totcharge[i] = 0 # Charge neutrality
+end
+
+# # Total mass
+# # Skal byttes ut med total charge
+
+# @terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities) where {G, S<:SinglePhaseSystem}
+#     pv = get_pore_volume(model)
+#     @tullio totmass[i] = PhaseMassDensities[i]*pv[i]
 # end
+
+# @terv_secondary function update_as_secondary!(rho, density::ConstantCompressibilityDensities, model, param, Pressure)
+#     p_ref, c, rho_ref = density.reference_pressure, density.compressibility, density.reference_densities
+#     @tullio rho[ph, i] = rho_ref[ph] * exp((Pressure[i] - p_ref[ph]) * c[ph])
+# end
+# # Slutt total mass
 
 @terv_secondary function update_as_secondary!(
     pot, tv::TPFlux, model, param, Phi
@@ -367,30 +379,19 @@ function update_half_face_flux!(
     update_half_face_flux!(law, storage, model, dt, fd)
 end
 
-
 function update_half_face_flux!(
     law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}
     ) where {U,K,T<:ChargeFlow}
 
-    # ?? Can i just skip this? What does it normally do??
-    # pot = storage.state.CellNeighborPotentialDifference
-    # mob = storage.state.MassMobilities
-    # flux = get_entries(law.half_face_flux_cells)
-    # conn_data = law.flow_discretization.conn_data
-    # update_fluxes_from_potential!(flux, conn_data, pot, mob)
+    pot = storage.state.TPFlux
+    flux = get_entries(law.half_face_flux_cells)
+    update_fluxes_from_potential!(flux, pot)
 end
 
-# function update_fluxes_from_potential!(flux, conn_data, pot, mob)
-#     @tullio flux[phno, i] = spu_upwind(conn_data[i].self, conn_data[i].other, pot[phno, i], view(mob, phno, :))
-# end
-
-
-# ?? trengs denne ??
-function update_half_face_flux!(
-    law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}
-    ) where {U,K,T<:TrivialFlow}
-
+function update_fluxes_from_potential!(flux, pot)
+    @tullio flux[i] = pot[i]
 end
+
 
 @inline function get_diagonal_cache(eq::ChargeConservation)
     return eq.accumulation
@@ -439,7 +440,9 @@ function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac 
 end
 
 
-function get_cc_grid(perm = nothing, poro = nothing, volumes = nothing, extraout = false)
+function get_cc_grid(
+    perm = nothing, poro = nothing, volumes = nothing, extraout = false
+    )
     name = "pico"
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     @debug "Reading MAT file $fn..."
