@@ -30,7 +30,7 @@ include("domains.jl")
 # Meat and potatoes
 include("variable_evaluation.jl")
 include("conservation/flux.jl")
-include("linsolve.jl")
+include("linsolve/linsolve.jl")
 
 include("context.jl")
 include("equations.jl")
