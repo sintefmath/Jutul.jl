@@ -105,7 +105,7 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
         el = get_el(1, 1) # Could be junk, we just need eltype
         
         conn_data = Vector{typeof(el)}(undef, nhf)
-        Threads.@threads for cell = 1:nc
+        @threads for cell = 1:nc
             @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
                 conn_data[fpos] = get_el(faces[fpos], cell)
             end

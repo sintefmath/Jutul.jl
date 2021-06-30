@@ -15,6 +15,7 @@ using Tullio
 using PrettyTables
 using DataInterpolations
 
+using Base.Threads
 # Main types
 include("core_types.jl")
 

@@ -150,7 +150,7 @@ function update_primary_variable!(state, p::Saturations, state_symbol, model, dx
     minval = minimum_value(p)
 
     s = state[state_symbol]
-    Threads.@threads for cell = 1:nu
+    @threads for cell = 1:nu
     # for cell = 1:nu
         dlast = 0
         @inbounds for ph = 1:(nph-1)
@@ -276,7 +276,7 @@ function fill_accumulation!(jac, r, acc, apos, neq, context, ::KernelDisallowed)
     nc = size(apos, 2)
     dim = size(apos, 1)
     nder = dim ÷ neq
-    @inbounds Threads.@threads for cell = 1:nc
+    @inbounds @threads for cell = 1:nc
         for eq = 1:neq
             r[cell + (eq-1)*nc] = acc[eq, cell].value
         end
@@ -320,7 +320,7 @@ function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, neq
     nc = size(apos, 2)
     n = size(apos, 1)
     nder = n ÷ neq
-    # Threads.@threads for cell = 1:nc
+    # @threads for cell = 1:nc
     for cell = 1:nc
         for i = conn_pos[cell]:(conn_pos[cell+1]-1)
             for eqNo = 1:neq

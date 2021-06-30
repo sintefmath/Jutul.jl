@@ -47,7 +47,7 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, N,
     nu, ne, np = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
-    Threads.@threads for cell in 1:nc
+    @threads for cell in 1:nc
         @inbounds for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
             f = flow_disc.conn_data[f_ix].face
             if N[1, f] == cell
@@ -116,7 +116,7 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
     centries = acc.entries
     fentries = cell_flux.entries
     cp = acc.jacobian_positions
-    Threads.@threads for cell = 1:nc
+    @threads for cell = 1:nc
         for e in 1:ne
             diag_entry = get_entry(acc, cell, e, centries)
             @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
@@ -138,7 +138,7 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
     fentries = face_flux.entries
     fp = face_flux.jacobian_positions
     nc = length(conn_pos) - 1
-    Threads.@threads for cell = 1:nc
+    @threads for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
                 c = conn_data[i]

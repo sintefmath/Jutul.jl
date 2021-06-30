@@ -101,7 +101,7 @@ kernel_compatibility(::SingleCUDAContext) = KernelAllowed()
 struct SharedMemoryKernelContext <: CPUTervContext
     block_size
     device
-    function SharedMemoryKernelContext(block_size = Threads.nthreads())
+    function SharedMemoryKernelContext(block_size = nthreads())
         # Remark: No idea what block_size means here.
         return new(block_size, CPU())
     end
