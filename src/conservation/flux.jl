@@ -191,8 +191,13 @@ function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentia
 
     flux = get_entries(law.half_face_flux_cells)
     conn_data = law.flow_discretization.conn_data
-
-    @tullio flux[ph, i] = spu_upwind_mult(conn_data[i].self, conn_data[i].other, pot[ph, i], view(mob, ph, :))
+    if size(pot, 1) == 1
+        # Scalar potential
+        @tullio flux[ph, i] = spu_upwind_mult(conn_data[i].self, conn_data[i].other, pot[i], view(mob, ph, :))
+    else
+        # Multiphase potential
+        @tullio flux[ph, i] = spu_upwind_mult(conn_data[i].self, conn_data[i].other, pot[ph, i], view(mob, ph, :))
+    end
 end
 
 """
