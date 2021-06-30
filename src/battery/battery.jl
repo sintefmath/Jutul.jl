@@ -28,92 +28,6 @@ struct ChargeConservation <: TervEquation
     flow_discretization::FlowDiscretization
 end
 
-# TPFA grid
-"Minimal struct for TPFA-like grid. Just connection data and pore-volumes"
-struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
-    pore_volumes::AbstractVector{R}
-    neighborship::AbstractArray{I}
-    function MinimalECTPFAGrid(pv, N)
-        nc = length(pv)
-        pv::AbstractVector
-        @assert size(N, 1) == 2  "Two neighbors per face"
-        if length(N) > 0
-            @assert minimum(N) > 0   "Neighborship entries must be positive."
-            @assert maximum(N) <= nc "Neighborship must be limited to number of cells."
-        end
-        @assert all(pv .> 0)     "Pore volumes must be positive"
-        new{eltype(pv), eltype(N)}(pv, N)
-    end
-end
-
-function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:TervDomain, S<:CurrentCollector}
-    return (sources = sources,)
-end
-
-function declare_units(G::MinimalECTPFAGrid)
-    # Cells equal to number of pore volumes
-    c = (unit = Cells(), count = length(G.pore_volumes))
-    # Faces
-    f = (unit = Faces(), count = size(G.neighborship, 2))
-    return [c, f]
-end
-
-function degrees_of_freedom_per_unit(
-    model::SimulationModel{D, S}, sf::Phi
-    ) where {D<:TervDomain, S<:CurrentCollector}
-    return 1 
-end
-
-
-function degrees_of_freedom_per_unit(
-    model::SimulationModel{D, S}, sf::Conductivity
-    ) where {D<:TervDomain, S<:CurrentCollector}
-    return 1
-end
-
-function degrees_of_freedom_per_unit(model, sf::TotalCharge)
-    return 1
-end
-
-function degrees_of_freedom_per_unit(model, sf::TPFlux)
-    return 1
-end
-
-
-function minimum_output_variables(
-    system::CurrentCollector, primary_variables
-    )
-    [:TotalCharge]
-end
-
-
-# To get right number of dof for CellNeigh...
-function single_unique_potential(
-    model::SimulationModel{D, S}
-    )where {D<:TervDomain, S<:CurrentCollector}
-    return false
-end
-
-
-# function initialize_variable_value!(state, model, pvar::Conductivity, symb::Symbol, val::Number)
-#     V = repeat([val], number_of_units(model, pvar))
-#     return initialize_variable_value!(state, model, pvar, symb, V)
-# end
-
-# ??Hvorfor denne??
-function initialize_variable_value!(
-    state, model, pvar::Conductivity, symb::Symbol, val::Number
-    )
-    n = values_per_unit(model, pvar)
-    return initialize_variable_value!(state, model, pvar, symb, repeat([val], n))
-end
-
-
-function default_value(v::Conductivity)
-    return 1.0
-end
-
-
 function ChargeConservation(
     model, number_of_equations;
     flow_discretization = model.domain.discretizations.charge_flow,
@@ -148,6 +62,94 @@ function ChargeConservation(
     )
 end
 
+# TPFA grid
+"Minimal struct for TPFA-like grid. Just connection data and pore-volumes"
+struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
+    pore_volumes::AbstractVector{R}
+    neighborship::AbstractArray{I}
+    function MinimalECTPFAGrid(pv, N)
+        nc = length(pv)
+        pv::AbstractVector
+        @assert size(N, 1) == 2  "Two neighbors per face"
+        if length(N) > 0
+            @assert minimum(N) > 0   "Neighborship entries must be positive."
+            @assert maximum(N) <= nc "Neighborship must be limited to number of cells."
+        end
+        @assert all(pv .> 0)     "Pore volumes must be positive"
+        new{eltype(pv), eltype(N)}(pv, N)
+    end
+end
+
+function build_forces(
+    model::SimulationModel{G, S}; sources = nothing
+    ) where {G<:TervDomain, S<:CurrentCollector}
+    return (sources = sources,)
+end
+
+function declare_units(G::MinimalECTPFAGrid)
+    # Cells equal to number of pore volumes
+    c = (unit = Cells(), count = length(G.pore_volumes))
+    # Faces
+    f = (unit = Faces(), count = size(G.neighborship, 2))
+    return [c, f]
+end
+
+function degrees_of_freedom_per_unit(
+    model::SimulationModel{D, S}, sf::Phi
+    ) where {D<:TervDomain, S<:CurrentCollector}
+    return 1 
+end
+
+function degrees_of_freedom_per_unit(
+    model::SimulationModel{D, S}, sf::Conductivity
+    ) where {D<:TervDomain, S<:CurrentCollector}
+    return 1
+end
+
+function degrees_of_freedom_per_unit(model, sf::TotalCharge)
+    return 1
+end
+
+function degrees_of_freedom_per_unit(model, sf::TPFlux)
+    return 1
+end
+
+function minimum_output_variables(
+    system::CurrentCollector, primary_variables
+    )
+    [:TotalCharge]
+end
+
+function single_unique_potential(
+    model::SimulationModel{D, S}
+    )where {D<:TervDomain, S<:CurrentCollector}
+    return false
+end
+
+function initialize_variable_value!(
+    state, model, pvar::Conductivity, symb::Symbol, val::Number
+    )
+    n = values_per_unit(model, pvar)
+    return initialize_variable_value!(
+        state, model, pvar, symb, repeat([val], n)
+        )
+end
+
+function default_value(v::Conductivity)
+    return 1.0
+end
+
+function number_of_units(model, pv::TPFlux)
+    """ Two fluxes per face """
+    return 2*count_units(model.domain, Faces())
+end
+
+
+# Why not faces?
+function associated_unit(::TPFlux)
+    Cells()
+end
+
 function update_linearized_system_equation!(
     nz, r, model, law::ChargeConservation
     )
@@ -167,7 +169,6 @@ function update_linearized_system_equation!(
     end
 end
 
-
 function apply_forces_to_equation!(
     storage, model, eq::ChargeConservation, force::Vector{SourceTerm}
     )
@@ -176,38 +177,81 @@ function apply_forces_to_equation!(
 end
 
 
-# Selection of variables
+"Update positions of law's derivatives in global Jacobian"
+function align_to_jacobian!(
+    law::ChargeConservation, jac, model, u::Cells; equation_offset = 0, 
+    variable_offset = 0
+    )
+    fd = law.flow_discretization
+    neighborship = get_neighborship(model.domain.grid)
+
+    acc = law.accumulation
+    hflux_cells = law.half_face_flux_cells
+    diagonal_alignment!(
+        acc, jac, u, model.context, target_offset = equation_offset, 
+        source_offset = variable_offset)
+    half_face_flux_cells_alignment!(
+        hflux_cells, acc, jac, model.context, neighborship, fd, 
+        target_offset = equation_offset, source_offset = variable_offset
+        )
+end
+
+function declare_pattern(model, e::ChargeConservation, ::Cells)
+    df = e.flow_discretization
+    hfd = Array(df.conn_data)
+    n = number_of_units(model, e)
+    # Fluxes
+    I = map(x -> x.self, hfd)
+    J = map(x -> x.other, hfd)
+    # Diagonals
+    D = [i for i in 1:n]
+
+    I = vcat(I, D)
+    J = vcat(J, D)
+
+    return (I, J)
+end
+
+function declare_pattern(model, e::ChargeConservation, ::Faces)
+    df = e.flow_discretization
+    cd = df.conn_data
+    I = map(x -> x.self, cd)
+    J = map(x -> x.face, cd)
+    return (I, J)
+end
+
+
+#############
+# Variables #
+#############
+
 function select_primary_variables_system!(
     S, domain, system::ElectroChemicalComponent, formulation
     )
     S[:Phi] = Phi()
 end
 
-### Fra variable_evaluation
+function select_secondary_variables_flow_type!(
+    S, domain, system, formulation, flow_type::ChargeFlow
+    )
+    S[:TPFlux] = TPFlux()
+    S[:TotalCharge] = TotalCharge()
+    S[:Conductivity] = Conductivity()
+end
 
+function select_equations_system!(
+    eqs, domain, system::CurrentCollector, formulation
+    )
+    eqs[:charge_conservation] = (ChargeConservation, 1)
+end
+
+
+### Fra variable_evaluation
 # ? What is rholambda
 @terv_secondary function update_as_secondary!(
     ρλ_i, tv::Conductivity, model, param
     )
 end
-
-@terv_secondary function update_as_secondary!(
-    pot, tv::Phi, model, param, Phi
-    ) #should resisitvity be added?
-    mf = model.domain.discretizations.charge_flow
-    conn_data = mf.conn_data
-    context = model.context
-    if mf.gravity
-        update_cell_neighbor_potential_cc!(
-            pot, conn_data, Phi, context, kernel_compatibility(context)
-            )
-    else
-        update_cell_neighbor_potential_cc!(
-            pot, conn_data, Phi, context, kernel_compatibility(context)
-            )
-    end
-end
-
 
 # Hvordan i alle dager fungerer dette????
 # @terv_secondary function update_as_secondary!(
@@ -217,7 +261,6 @@ end
 #     @tullio totcharge[i] = TotalCharge[ph, i]
 # end
 
-
 @terv_secondary function update_as_secondary!(
     pot, tv::TPFlux, model, param, Phi
     )
@@ -226,6 +269,16 @@ end
     @tullio pot[i] = half_face_two_point_grad(conn_data[i], Phi)
 end
 
+@terv_secondary function update_as_secondary!(
+    pot, tv::Phi, model, param, Phi
+    ) #should resisitvity be added?
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
+    context = model.context
+    update_cell_neighbor_potential_cc!(
+        pot, conn_data, Phi, context, kernel_compatibility(context)
+        )
+end
 
 function update_cell_neighbor_potential_cc!(
     dpot, conn_data, phi, context, ::KernelDisallowed
@@ -252,58 +305,6 @@ function update_cell_neighbor_potential_cc!(
         event_jac = kernel(dpot, conn_data, phi, ndrange = d)
         wait(event_jac)
     end
-end
-
-
-function select_equations_system!(
-    eqs, domain, system::CurrentCollector, formulation
-    )
-    eqs[:charge_conservation] = (ChargeConservation, 1)
-end
-
-
-"Update positions of law's derivatives in global Jacobian"
-function align_to_jacobian!(
-    law::ChargeConservation, jac, model, u::Cells; equation_offset = 0, 
-    variable_offset = 0
-    )
-    fd = law.flow_discretization
-    neighborship = get_neighborship(model.domain.grid)
-
-    acc = law.accumulation
-    hflux_cells = law.half_face_flux_cells
-    diagonal_alignment!(
-        acc, jac, u, model.context, target_offset = equation_offset, 
-        source_offset = variable_offset)
-    half_face_flux_cells_alignment!(
-        hflux_cells, acc, jac, model.context, neighborship, fd, 
-        target_offset = equation_offset, source_offset = variable_offset
-        )
-end
-
-
-function declare_pattern(model, e::ChargeConservation, ::Cells)
-    df = e.flow_discretization
-    hfd = Array(df.conn_data)
-    n = number_of_units(model, e)
-    # Fluxes
-    I = map(x -> x.self, hfd)
-    J = map(x -> x.other, hfd)
-    # Diagonals
-    D = [i for i in 1:n]
-
-    I = vcat(I, D)
-    J = vcat(J, D)
-
-    return (I, J)
-end
-
-function declare_pattern(model, e::ChargeConservation, ::Faces)
-    df = e.flow_discretization
-    cd = df.conn_data
-    I = map(x -> x.self, cd)
-    J = map(x -> x.face, cd)
-    return (I, J)
 end
 
 
@@ -390,23 +391,14 @@ function update_half_face_flux!(
 
 end
 
-
 @inline function get_diagonal_cache(eq::ChargeConservation)
     return eq.accumulation
 end
 
 
-# TODO: Må ha rktig secondary variables, i tillegg til tilhørende dependency, som definieres via update_as_secondary
-
-function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::ChargeFlow)
-    S[:TPFlux] = TPFlux()
-    S[:TotalCharge] = TotalCharge()
-    S[:Conductivity] = Conductivity()
-end
-
-
-###
-
+##############
+# Main funcs #
+##############
 
 function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05)
     G = get_cc_grid()
@@ -427,10 +419,6 @@ function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac 
 
     sys = CurrentCollector()
     model = SimulationModel(G, sys, context = context)
-
-    # ? Can i just skip this??
-    # ? I think this is where resisitvity would go
-    # s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
 
 
     # System state
