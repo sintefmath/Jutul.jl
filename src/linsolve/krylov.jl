@@ -23,13 +23,13 @@ function verbose(cfg)
     return Int64(cfg.verbose)
 end
 
-function preconditioner(krylov::GenericKrylov, sys)
+function preconditioner(krylov::GenericKrylov, sys, arg...)
     M = krylov.preconditioner
     if isnothing(M)
         op = I
     else
         update!(M, sys.jac, sys.r)
-        op = linear_operator(M)
+        op = linear_operator(M, arg...)
     end
     return op
 end
@@ -40,7 +40,8 @@ function solve!(sys::LinearizedSystem, krylov::GenericKrylov)
     r = vector_residual(sys)
     op = linear_operator(sys)
 
-    M = preconditioner(krylov, sys)
+    L = preconditioner(krylov, sys, :left)
+    R = preconditioner(krylov, sys, :right)
     v = verbose(cfg)
     (x, stats) = solver(op, r, 
                             itmax = cfg.max_iterations,
@@ -48,7 +49,7 @@ function solve!(sys::LinearizedSystem, krylov::GenericKrylov)
                             rtol = rtol(cfg),
                             history = v > 0,
                             atol = atol(cfg),
-                            M = M)
+                            M = L, N = R)
     if !stats.solved
         @warn "Linear solve did not converge: $(stats.status)"
     elseif v > 0
