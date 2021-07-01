@@ -19,10 +19,13 @@ ctx = DefaultContext(matrix_layout = UnitMajorLayout())
     @testset "Basic flow (fused)" begin
         @test test_twophase(fuse_flux = true)
     end
-    @testset "Block assembly" begin
-        @test test_twophase(context = bctx, linear_solver = BlockDQGMRES())
+    @testset "Basic flow - with Krylov solver" begin
+        @test test_twophase(linear_solver = GenericKrylov())
     end
-    # @testset "Unit major assembly" begin
+    @testset "Block assembly" begin
+        @test test_twophase(context = bctx, linear_solver = GenericKrylov())
+    end
+    #  @testset "Unit major assembly" begin
     #    @test test_twophase(context = ctx)
     # end
 end

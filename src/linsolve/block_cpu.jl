@@ -41,10 +41,9 @@ function get_mul!(sys::LinearizedSystem{BlockMajorLayout})
             mul!(res_v, jac, x_v)
             if α != one(T)
                 lmul!(α, res_v)
-                # @. res_v = α*res_v
             end
-            # res_v .= α.*jac*x_v
         else
+            # TODO: optimize me like the three argument version.
             res_v .= α.*jac*x_v + β.*res_v
         end
     end
@@ -63,16 +62,4 @@ end
 
 function block_size(lsys::LinearizedSystem{S}) where {S <: BlockMajorLayout}
     return size(lsys.r_buffer, 1)
-end
-
-struct BlockDQGMRES end
-
-function solve!(sys::LinearizedSystem, solver::BlockDQGMRES)
-    r = vector_residual(sys)
-    op = get_linear_operator(sys)
-    (x, stats) = dqgmres(op, r, history = true)
-    if !stats.solved
-        @warn "Linear solve did not converge: $(stats.status)"
-    end
-    update_dx_from_vector!(sys, x)
 end

@@ -26,16 +26,24 @@ function LinearizedSystem(sparse_arg, context, layout)
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
 end
 
-function get_mul!(lsys)
-    return mul!
+function linear_operator(sys)
+    if block_size(sys) == 1
+        op = LinearOperator(sys.jac)
+    else
+        apply! = get_mul!(sys)
+        n = length(sys.r_buffer)
+        op = LinearOperator(Float64, n, n, false, false, apply!)
+    end
+    return op
 end
 
-function get_linear_operator(sys)
-    apply! = get_mul!(sys)
-    n = length(sys.r_buffer)
-    return LinearOperator(Float64, n, n, false, false, apply!)
+function vector_residual(sys)
+    return sys.r
 end
 
+function update_dx_from_vector!(sys, dx)
+    sys.dx .= -dx
+end
 
 @inline function get_nzval(jac)
     return jac.nzval
