@@ -12,8 +12,7 @@ function get_factorization(precond)
 end
 
 function linear_operator(precond::TervPreconditioner, side::Symbol = :left)
-    n = get_n(precond)
-    @debug n
+    n = matrix_dim(precond)
     function local_mul!(res, x, α, β::T, type) where T
         if β == zero(T)
             apply!(res, precond, x, type)
@@ -79,15 +78,20 @@ function apply!(x, ilu::ILUZeroPreconditioner, y, arg...)
     ilu_apply!(x, factor, y, arg...)
 end
 
-function ilu_apply!(x::Vector{F}, f::ILU0Precon{F}, y::Vector{F}, type::Symbol = :both) where {F<:Real}
+function ilu_f(type::Symbol)
     # Why must this be qualified?
     if type == :left
-        ILUZero.forward_substitution!(x, f, y)
+        f = ILUZero.forward_substitution!
     elseif type == :right
-        ILUZero.backward_substitution!(x, f, y)
+        f = ILUZero.backward_substitution!
     else
-        ILUZero.ldiv!(x, f, y)
+        f = ILUZero.ldiv!
     end
+end
+
+function ilu_apply!(x::Vector{F}, f::ILU0Precon{F}, y::Vector{F}, type::Symbol = :both) where {F<:Real}
+    f! = ilu_f(type)
+    f!(x, f, y)
 end
 
 function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)
@@ -97,18 +101,12 @@ function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)
     T = eltype(s)
     Vt = SVector{N, T}
     as_svec = (x) -> reinterpret(Vt, x)
-    x_b = as_svec(x)
-    y_b = as_svec(y)
-    ILUZero.ldiv!(x_b, ilu, y_b)
-    if type == :left
-        ILUZero.forward_substitution!(x_b, ilu, y_b)
-    elseif type == :right
-        ILUZero.backward_substitution!(x_b, ilu, y_b)
-    else
-        ILUZero.ldiv!(x_b, ilu, y_b)
-    end
+
+    # Solve by reinterpreting vectors to block (=SVector) vectors
+    f! = ilu_f(type)
+    f!(as_svec(x), ilu, as_svec(y))
 end
 
-function get_n(ilu::ILUZeroPreconditioner)
+function matrix_dim(ilu::ILUZeroPreconditioner)
     return ilu.dim[1]
 end
