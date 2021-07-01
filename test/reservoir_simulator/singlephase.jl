@@ -18,4 +18,6 @@ end
 @testset "Single-phase linear solvers" begin
     @test test_single_phase(linear_solver = AMGSolver("RugeStuben", 1e-3))
     @test test_single_phase(linear_solver = AMGSolver("SmoothedAggregation", 1e-3))
+    @test test_single_phase(linear_solver = GenericKrylov())
+    @test test_single_phase(linear_solver = GenericKrylov(preconditioner = ILUZeroPreconditioner()))
 end

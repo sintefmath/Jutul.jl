@@ -14,6 +14,7 @@ using LoopVectorization
 using Tullio
 using PrettyTables
 using DataInterpolations
+using ILUZero
 
 using Base.Threads
 # Main types
