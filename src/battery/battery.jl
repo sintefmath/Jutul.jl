@@ -145,8 +145,7 @@ function number_of_units(model, pv::TPFlux)
     return 2*count_units(model.domain, Faces())
 end
 
-
-# Why not faces?
+# ?Why not faces?
 function associated_unit(::TPFlux)
     Cells()
 end
@@ -169,13 +168,6 @@ function update_linearized_system_equation!(
         end
     end
 end
-
-# function apply_forces_to_equation!(
-#     storage, model, eq::ChargeConservation, force::Vector{SourceTerm}
-#     )
-#     equation = get_entries(eq)
-#     @. equation -= force.value
-# end
 
 
 "Update positions of law's derivatives in global Jacobian"
@@ -237,7 +229,7 @@ function select_secondary_variables_flow_type!(
     )
     S[:TPFlux] = TPFlux()
     S[:TotalCharge] = TotalCharge()
-    S[:Conductivity] = Conductivity()
+    # S[:Conductivity] = Conductivity()
 end
 
 function select_equations_system!(
@@ -247,32 +239,12 @@ function select_equations_system!(
 end
 
 
-### Fra variable_evaluation
-# ? What is rholambda
-@terv_secondary function update_as_secondary!(
-    ρλ_i, tv::Conductivity, model, param
-    )
-end
-
 @terv_secondary function update_as_secondary!(
     totcharge, tv::TotalCharge, model::SimulationModel{G, S}, param
     ) where {G, S<:CurrentCollector}
     @tullio totcharge[i] = 0 # Charge neutrality
 end
 
-# # Total mass
-# # Skal byttes ut med total charge
-
-# @terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities) where {G, S<:SinglePhaseSystem}
-#     pv = get_pore_volume(model)
-#     @tullio totmass[i] = PhaseMassDensities[i]*pv[i]
-# end
-
-# @terv_secondary function update_as_secondary!(rho, density::ConstantCompressibilityDensities, model, param, Pressure)
-#     p_ref, c, rho_ref = density.reference_pressure, density.compressibility, density.reference_densities
-#     @tullio rho[ph, i] = rho_ref[ph] * exp((Pressure[i] - p_ref[ph]) * c[ph])
-# end
-# # Slutt total mass
 
 @terv_secondary function update_as_secondary!(
     pot, tv::TPFlux, model, param, Phi
@@ -284,7 +256,7 @@ end
 
 @terv_secondary function update_as_secondary!(
     pot, tv::Phi, model, param, Phi
-    ) #should resisitvity be added?
+    )
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     context = model.context
@@ -334,26 +306,7 @@ end
 @inline function half_face_two_point_grad(
     c_self::I, c_other::I, T, phi::AbstractArray{R}
     ) where {R<:Real, I<:Integer}
-    return -T*two_point_potential_drop_half_face(c_self, c_other, phi)
-end
-
-@inline function two_point_potential_drop_half_face(
-    c_self, c_other, phi::AbstractVector
-    )
-    return two_point_potential_drop(phi[c_self], value(phi[c_other]))
-end
-
-@inline function two_point_potential_drop(phi_self::Real, phi_other::Real)
-    return phi_self - phi_other
-end
-
-@inline function half_face_two_point_flux_fused(
-    c_self::I, c_other::I, T, phi::AbstractArray{R}, λ::AbstractArray{R},
-    ) where {R<:Real, I<:Integer}
-    
-    θ = half_face_two_point_grad(c_self, c_other, T, phi)
-    λᶠ = spu_upwind(c_self, c_other, θ, λ)
-    return λᶠ*θ
+    return -T * (phi[c_self] - value(phi[c_other]))
 end
 
 ####
@@ -383,7 +336,7 @@ function update_half_face_flux!(
     law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}
     ) where {U,K,T<:ChargeFlow}
 
-    pot = storage.state.TPFlux
+    pot = storage.state.TPFlux  # ?WHy is this named pot?
     flux = get_entries(law.half_face_flux_cells)
     update_fluxes_from_potential!(flux, pot)
 end
@@ -402,37 +355,20 @@ end
 # Main funcs #
 ##############
 
-function get_test_setup_battery(context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05)
+function get_test_setup_battery()
     G = get_cc_grid()
-
-    nc = number_of_cells(G)
-    pv = G.grid.pore_volumes
-    timesteps = timesteps*3600*24
-
-    if context == "cpu"
-        context = DefaultContext()
-    elseif isa(context, String)
-        error("Unsupported target $context")
-    end
-    @assert isa(context, TervContext)
-
-    # Parameters
-    phi = 1
+    timesteps = [1.0, 2.0]
 
     sys = CurrentCollector()
-    model = SimulationModel(G, sys, context = context)
-
-
-    # System state
-    tot_time = sum(timesteps)
-    irate = pvfrac*sum(pv)/tot_time
-    src = [SourceTerm(1, irate), 
-        SourceTerm(nc, -irate)]
-    forces = build_forces(model, sources = src)
+    model = SimulationModel(G, sys, context = DefaultContext())
+    forces = build_forces(model)
 
     # State is dict with pressure in each cell
+    phi = 1.
     init = Dict(:Phi => phi)
     state0 = setup_state(model, init)
+    state0[:Phi][1] = 2  # Endrer startverdien, skal ikke endre svaret
+    
     # Model parameters
     parameters = setup_parameters(model)
 
@@ -463,6 +399,7 @@ function get_cc_grid(
     face_normals = copy(face_normals')
     if isnothing(perm)
         perm = copy((exported["rock"]["perm"])')
+        perm = ones(size(perm)) # Endre permeability til 1 
     end
 
     # Deal with cell data
@@ -480,15 +417,11 @@ function get_cc_grid(
     T = compute_face_trans(T_hf, N)
 
     G = MinimalECTPFAGrid(pv, N)
-    if size(cell_centroids, 1) == 3
-        z = cell_centroids[3, :]
-        g = gravity_constant
-    else
-        z = nothing
-        g = nothing
-    end
+    z = nothing
+    g = nothing
 
     ft = ChargeFlow()
+    # ??Hva gjør SPU og TPFA??
     flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
     disc = (charge_flow = flow,)
     D = DiscretizedDomain(G, disc)
