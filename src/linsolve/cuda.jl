@@ -1,4 +1,8 @@
 
+@inline function get_nzval(jac::AbstractCuSparseMatrix)
+    # Why does CUDA and Base differ on capitalization?
+    return jac.nzVal
+end
 #
 function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
     F_t = float_type(context)
