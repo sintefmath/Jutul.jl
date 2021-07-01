@@ -21,7 +21,7 @@ include("core_types.jl")
 
 # Models 
 include("models.jl")
-include("multimodel.jl")
+include("multimodel/multimodel.jl")
 
 # include("models.jl")
 # MRST stuff
