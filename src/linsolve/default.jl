@@ -26,6 +26,17 @@ function LinearizedSystem(sparse_arg, context, layout)
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
 end
 
+function get_mul!(lsys)
+    return mul!
+end
+
+function get_linear_operator(sys)
+    apply! = get_mul!(sys)
+    n = length(sys.r_buffer)
+    return LinearOperator(Float64, n, n, false, false, apply!)
+end
+
+
 @inline function get_nzval(jac)
     return jac.nzval
 end

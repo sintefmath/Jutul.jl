@@ -24,18 +24,7 @@ function LinearizedSystem(sparse_arg, context, layout::BlockMajorLayout)
     return LinearizedSystem(jac, r, dx, V_buf, r_buf, dx_buf, layout)
 end
 
-
-function block_size(lsys::LinearizedSystem{S}) where {S <: BlockMajorLayout}
-    return size(lsys.r_buffer, 1)
-end
-
-struct BlockDQGMRES end
-
-function solve!(sys::LinearizedSystem, solver::BlockDQGMRES)
-    # Simple block solver for testing. Not efficiently implemented.
-    n = length(sys.r_buffer)
-
-    r = reshape(sys.r_buffer, n)
+function get_mul!(sys::LinearizedSystem{BlockMajorLayout})
     jac = sys.jac
 
     Vt = eltype(sys.r)
@@ -45,7 +34,7 @@ function solve!(sys::LinearizedSystem, solver::BlockDQGMRES)
     # as_smat = (x) -> reinterpret(Mt, x)
     # as_float = (x) -> reinterpret(Float64, x)
 
-    function op_mult!(res, x, α, β::T) where T
+    function block_mul!(res, x, α, β::T) where T
         res_v = as_svec(res)
         x_v = as_svec(x)
         if β == zero(T)
@@ -59,8 +48,31 @@ function solve!(sys::LinearizedSystem, solver::BlockDQGMRES)
             res_v .= α.*jac*x_v + β.*res_v
         end
     end
+    return block_mul!
+end
 
-    opA = LinearOperator(Float64, n, n, false, false, op_mult!)
-    (x, stats) = dqgmres(opA, r)
-    sys.dx_buffer .= -reshape(x, size(sys.dx_buffer))
+function vector_residual(sys::LinearizedSystem{BlockMajorLayout})
+    n = length(sys.r_buffer)
+    r = reshape(sys.r_buffer, n)
+
+end
+
+function update_dx_from_vector!(sys::LinearizedSystem{BlockMajorLayout}, dx)
+    sys.dx_buffer .= -reshape(dx, size(sys.dx_buffer))
+end
+
+function block_size(lsys::LinearizedSystem{S}) where {S <: BlockMajorLayout}
+    return size(lsys.r_buffer, 1)
+end
+
+struct BlockDQGMRES end
+
+function solve!(sys::LinearizedSystem, solver::BlockDQGMRES)
+    r = vector_residual(sys)
+    op = get_linear_operator(sys)
+    (x, stats) = dqgmres(op, r, history = true)
+    if !stats.solved
+        @warn "Linear solve did not converge: $(stats.status)"
+    end
+    update_dx_from_vector!(sys, x)
 end
