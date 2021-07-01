@@ -5,7 +5,7 @@ mutable struct GenericKrylov
     preconditioner
     config::IterativeSolverConfig
     function GenericKrylov(solver = dqgmres; preconditioner = nothing, kwarg...)
-        new(solver, preconditioner, IterativeSolverConfig(kwarg...))
+        new(solver, preconditioner, IterativeSolverConfig(;kwarg...))
     end
 end
 
@@ -33,6 +33,7 @@ function preconditioner(krylov::GenericKrylov, sys)
     end
     return op
 end
+
 function solve!(sys::LinearizedSystem, krylov::GenericKrylov)
     solver, cfg = krylov.solver, krylov.config
 
@@ -40,7 +41,9 @@ function solve!(sys::LinearizedSystem, krylov::GenericKrylov)
     op = linear_operator(sys)
 
     M = preconditioner(krylov, sys)
-    (x, stats) = solver(op, r, history = true, verbose = verbose(cfg), rtol = rtol(cfg), atol = atol(cfg), M = M)
+    (x, stats) = solver(op, r, itmax = cfg.max_iterations,
+                            verbose = verbose(cfg), rtol = rtol(cfg),
+                            atol = atol(cfg), M = M)
     if !stats.solved
         @warn "Linear solve did not converge: $(stats.status)"
     end
