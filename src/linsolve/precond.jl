@@ -32,23 +32,43 @@ ILU(0) preconditioner on CPU
 """
 mutable struct ILUZeroPreconditioner <: TervPreconditioner
     factor
+    dim
     function ILUZeroPreconditioner()
-        new(nothing)
+        new(nothing, nothing)
     end
 end
 
 function update!(ilu::ILUZeroPreconditioner, A, b)
     if isnothing(ilu.factor)
-        ilu.factor = ilu0(A)
+        ilu.factor = ilu0(A, eltype(b))
+        d = length(b[1])
+        ilu.dim = d .* size(A)
     else
         ilu0!(ilu.factor, A)
     end
 end
+
 function apply!(x, ilu::ILUZeroPreconditioner, y)
+    factor = ilu.factor
+    ilu_apply!(x, factor, y)
+end
+
+function ilu_apply!(x::Vector{F}, f::ILU0Precon{F}, y::Vector{F}) where {F<:Real}
     # Why must this be qualified?
-    ILUZero.ldiv!(x, ilu.factor, y)
+    ILUZero.ldiv!(x, f, y)
+end
+
+function ilu_apply!(x, ilu::ILU0Precon, y)
+    s = ilu.l_nzval[1]
+    N = size(s, 1)
+    T = eltype(s)
+    Vt = SVector{N, T}
+    as_svec = (x) -> reinterpret(Vt, x)
+    x_b = as_svec(x)
+    y_b = as_svec(y)
+    ILUZero.ldiv!(x_b, ilu, y_b)
 end
 
 function get_n(ilu::ILUZeroPreconditioner)
-    return ilu.factor.n
+    return ilu.dim[1]
 end
