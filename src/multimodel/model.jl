@@ -235,33 +235,38 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
 end
 
 function setup_linearized_system!(storage, model::MultiModel)
-    F = float_type(model.context)
-
     groups = model.groups
     models = model.models
-    ugroups = unique(groups)
-    ng = length(ugroups)
+    context = model.context
 
     candidates = [i for i in keys(models)]
-    if ng == 1
+    if isnothing(groups)
         # All Jacobians are grouped together and we assemble as a single linearized system
-        context = models[1].context
+        if isnothing(context)
+            context = models[1].context
+        end
         layout = matrix_layout(context)
         sparse_arg = get_sparse_arguments(storage, model, candidates, candidates)
         lsys = LinearizedSystem(sparse_arg, context, layout)
     else
+        ugroups = unique(groups)
+        ng = length(ugroups)
+    
         # We have multiple groups. Store as Matrix of sparse matrices
-        jac = Matrix{Any}(undef, ng, ng)
-        # equation_offset = 0
-        # variable_offset = 0
+        lsys = Matrix{Any}(undef, ng, ng)
+        use_groups_context = isnothing(context)
         for rowg in 1:ng
             t = candidates[groups .== rowg]
+            if use_groups_context
+                context = models[t[1]].context
+            end
+            layout = matrix_layout(context)
             for colg in 1:ng
                 s = candidates[groups .== colg]
-                I, J, V, n, m = get_sparse_arguments(storage, model, t, s)
+                sparse_arg = get_sparse_arguments(storage, model, t, s)
+                lsys[rowg, colg] = LinearizedSystem(sparse_arg, context, layout, allocate_r = rowg == colg)
             end
         end
-        @assert false "Needs implementation"
     end
     storage[:LinearizedSystem] = lsys
 end

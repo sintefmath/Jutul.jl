@@ -14,7 +14,7 @@ struct LinearizedSystem{L}
     matrix_layout::L
 end
 
-function LinearizedSystem(sparse_arg, context, layout, allocate_r = true)
+function LinearizedSystem(sparse_arg, context, layout; allocate_r = true)
     I, J, V, n, m = sparse_arg
     @assert n == m "Expected square system. Recieved $n (eqs) by $m (variables)."
     if allocate_r

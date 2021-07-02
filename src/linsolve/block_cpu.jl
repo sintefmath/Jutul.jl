@@ -1,7 +1,7 @@
 """
 Linearized system for matrix with block layout
 """
-function LinearizedSystem(sparse_arg, context, layout::BlockMajorLayout, allocate_r = true)
+function LinearizedSystem(sparse_arg, context, layout::BlockMajorLayout; allocate_r = true)
     I, J, V_buf, n, m = sparse_arg
     nb = size(V_buf, 1)
     bz = Int(sqrt(nb))
@@ -35,7 +35,7 @@ function get_mul!(sys::LinearizedSystem{BlockMajorLayout})
     jac = sys.jac
 
     Vt = eltype(sys.r)
-    Mt = eltype(jac)
+    # Mt = eltype(jac)
 
     as_svec = (x) -> reinterpret(Vt, x)
     # as_smat = (x) -> reinterpret(Mt, x)

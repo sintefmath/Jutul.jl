@@ -1,18 +1,22 @@
 struct MultiModel <: TervModel
     models::NamedTuple
-    groups::Vector
-    context::TervContext
+    groups::Union{Vector, Nothing}
+    context::Union{TervContext, Nothing}
     number_of_degrees_of_freedom
-    function MultiModel(models; groups = nothing, context = DefaultContext())
-        nm = length(models)
-        if isnothing(groups)
-            groups = ones(Int64, nm)
+    function MultiModel(models; groups = nothing, context = nothing)
+        if !isnothing(groups)
+            nm = length(models)
+            @assert maximum(groups) <= nm
+            @assert minimum(groups) > 0
+            @assert length(groups) == nm
         end
-        @assert maximum(groups) <= nm
-        @assert minimum(groups) > 0
-        @assert length(groups) == nm
-        for m in models
-            @assert context == m.context
+        if !isnothing(context)
+            for m in models
+                @assert context == m.context
+            end
+        end
+        if isa(models, AbstractDict)
+            models = convert_to_immutable_storage(models)
         end
         ndof = map(number_of_degrees_of_freedom, models)
         new(models, groups, context, ndof)
