@@ -1,6 +1,6 @@
 using Terv
 export ElectroChemicalComponent, CurrentCollector
-export get_test_setup_battery, get_cc_grid
+export get_test_setup_battery, get_cc_grid, vonNeumannBC, BoundaryCondition
 
 ###########
 # Classes #
@@ -16,13 +16,16 @@ struct TPFlux <: GroupedVariables end
 struct ChargeFlow <: FlowType end
 include_face_sign(::ChargeFlow) = false
 
-struct BoundaryCondition <: TervForce 
+abstract type BoundaryCondition <: TervForce end
+struct vonNeumannBC <: BoundaryCondition 
     cell
     value
 end
-
-struct vonNeumannBCs <: BoundaryCondition end
-struct DirichletBCs <: BoundaryCondition end
+struct DirichletBC <: BoundaryCondition 
+    cell
+    value
+    T
+end
 
 struct ChargeConservation <: TervEquation
     accumulation::TervAutoDiffCache
@@ -66,19 +69,19 @@ function ChargeConservation(
     )
 end
 
-"Minimal struct for TPFA-like grid. Just connection data and pore-volumes"
+
 struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     pore_volumes::AbstractVector{R}
     neighborship::AbstractArray{I}
     function MinimalECTPFAGrid(pv, N)
         nc = length(pv)
         pv::AbstractVector
-        @assert size(N, 1) == 2  "Two neighbors per face"
+        @assert size(N, 1) == 2
         if length(N) > 0
-            @assert minimum(N) > 0   "Neighborship entries must be positive."
-            @assert maximum(N) <= nc "Neighborship must be limited to number of cells."
+            @assert minimum(N) > 0
+            @assert maximum(N) <= nc
         end
-        @assert all(pv .> 0)     "Pore volumes must be positive"
+        @assert all(pv .> 0)
         new{eltype(pv), eltype(N)}(pv, N)
     end
 end
@@ -237,11 +240,11 @@ function select_equations_system!(
     eqs[:charge_conservation] = (ChargeConservation, 1)
 end
 
-@terv_secondary function update_as_secondary!(
-    totcharge, tv::TotalCharge, model::SimulationModel{G, S}, param
-    ) where {G, S<:CurrentCollector}
-    @tullio totcharge[i] = 0 # Charge neutrality
-end
+# @terv_secondary function update_as_secondary!(
+#     totcharge, tv::TotalCharge, model::SimulationModel{G, S}, param
+#     ) where {G, S<:CurrentCollector}
+#     @tullio totcharge[i] = 0 # Charge neutrality
+# end
 
 
 @terv_secondary function update_as_secondary!(
@@ -325,14 +328,13 @@ function update_accumulation!(law, storage, model::ChargeConservation, dt)
 end
 
 function apply_forces_to_equation!(
-    storage, model::SimulationModel{D, S}, eq::ChargeConservation, 
-    force::Array{vonNeumannBCs}
+    storage, model::SimulationModel{D, S}, eq::ChargeConservation, force
     ) where {D<:Any, S<:CurrentCollector}
     acc = get_entries(eq.accumulation)
-    insert_sources(acc, force)
+    insert_sources(acc, force, storage)
 end
 
-function insert_sources(acc, sources)
+function insert_sources(acc, sources::Array{vonNeumannBC}, storage)
     for src in sources
         v = src.value
         c = src.cell
@@ -340,8 +342,17 @@ function insert_sources(acc, sources)
     end
 end
 
-function insert_sources(acc, sources::Array{})
-
+function insert_sources(acc, sources::Array{DirichletBC}, storage)
+    for src in sources
+        phi_ext = src.value
+        c = src.cell
+        T = src.T
+        prim = storage.primary_variables
+        phis = prim.Phi
+        phi = phis[c]
+        acc[c] -= -T*(phi - phi_ext) # Fortegn?
+    end
+end
 
 function update_half_face_flux!(
     law::ChargeConservation, storage, model, dt
@@ -387,7 +398,8 @@ function get_test_setup_battery()
     state0[:Phi][1] = 2  # Endrer startverdien, skal ikke endre svaret
 
     nc = length(G.grid.pore_volumes)
-    bc = [vonNeumannBCs(1, 1.), vonNeumannBCs(nc, -1.)]
+    # bc = [vonNeumannBC(1, 1.), vonNeumannBC(nc, -1.)]
+    bc = [DirichletBC(1, 1., 1), DirichletBC(nc, -1., 1)]
     forces = build_forces(model, sources=bc)
     
     # Model parameters
