@@ -156,16 +156,11 @@ function update_linearized_system_equation!(
     
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
-    face_flux = law.half_face_flux_faces
     cpos = law.flow_discretization.conn_pos
 
-    @sync begin 
-        @async update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
-        @async fill_equation_entries!(nz, nothing, model, cell_flux)
-        if !isnothing(face_flux)
-            conn_data = law.flow_discretization.conn_data
-            @async update_linearized_system_subset_face_flux!(nz, model, face_flux, cpos, conn_data)
-        end
+    begin 
+        update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
+        fill_equation_entries!(nz, nothing, model, cell_flux)
     end
 end
 
@@ -229,7 +224,6 @@ function select_secondary_variables_flow_type!(
     )
     S[:TPFlux] = TPFlux()
     S[:TotalCharge] = TotalCharge()
-    # S[:Conductivity] = Conductivity()
 end
 
 function select_equations_system!(
@@ -292,8 +286,9 @@ function update_cell_neighbor_potential_cc!(
     end
 end
 
-
-### PHYSICS
+###########
+# PHYSICS #
+###########
 
 @inline function half_face_two_point_grad(
     conn_data::NamedTuple, p::AbstractArray
@@ -315,15 +310,32 @@ end
 
 function update_equation!(law::ChargeConservation, storage, model, dt)
     update_accumulation!(law, storage, model, dt)
-    update_intrinsic_sources!(law, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt)
 end
 
-function update_intrinsic_sources!(
-    law::ChargeConservation, storage, model, dt
-    )
-    # Do nothing
+# Update of discretization terms
+function update_accumulation!(law, storage, model::ChargeConservation, dt)
+    acc = get_entries(law.accumulation)
+    @. acc = 0  # Assume no accumulation
+    return acc
 end
+
+function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
+    acc = get_entries(eq.accumulation)
+    insert_sources(acc, force)
+end
+
+function insert_phase_sources(acc, sources)
+    for src in sources
+        v = src.value
+        c = src.cell
+        mobt = sum(mob)
+        f = mob[index]/mobt
+        @inbounds acc[c] -= v*f
+    end
+end
+
+
 
 function update_half_face_flux!(
     law::ChargeConservation, storage, model, dt
