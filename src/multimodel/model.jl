@@ -120,15 +120,15 @@ function align_equations_to_linearized_system!(storage, model::MultiModel; equat
         for g in 1:ng
             J = lsys[g, g].jac
             subs = groups .== g
-            align_subgroup!(storage, models, model_keys[subs], ndofs, J, equation_offset, variable_offset)    
+            align_equations_subgroup!(storage, models, model_keys[subs], ndofs, J, equation_offset, variable_offset)    
         end
     else
         J = lsys.jac
-        align_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
+        align_equations_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
     end
 end
 
-function align_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
+function align_equations_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
     for key in model_keys
         submodel = models[key]
         eqs = storage[key][:equations]
@@ -144,17 +144,37 @@ end
 function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
     ndofs = model.number_of_degrees_of_freedom
+    model_keys = keys(models)
+    ndofs = model.number_of_degrees_of_freedom
 
     lsys = storage[:LinearizedSystem]
-    cross_terms = storage[:cross_terms]
+    if has_groups(model)
+        ng = number_of_groups(model)
+        groups = model.groups
+        for target_g in 1:ng
+            t_subs = groups .== target_g
+            target_keys = model_keys[t_subs]
+            for source_g in 1:ng
+                s_subs = groups .== source_g
+                source_keys = model_keys[s_subs]
+                ls = lsys[target_g, source_g]
+                align_crossterms_subgroup!(storage, models, target_keys, source_keys, ndofs, ls, equation_offset, variable_offset)    
+            end
+        end
+    else
+        align_crossterms_subgroup!(storage, models, model_keys, model_keys, ndofs, lsys, equation_offset, variable_offset)
+    end
+end
 
+function align_crossterms_subgroup!(storage, models, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset)
     base_variable_offset = variable_offset
+    cross_terms = storage[:cross_terms]
     # Iterate over targets (= rows)
-    for target in keys(models)
+    for target in target_keys
         target_model = models[target]
         variable_offset = base_variable_offset
         # Iterate over sources (= columns)
-        for source in keys(models)
+        for source in source_keys
             source_model = models[source]
             if source != target
                 ct = cross_terms[target][source]
@@ -168,7 +188,6 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
         equation_offset += ndofs[target]
     end
 end
-
 
 function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, target::TervModel, source::TervModel; equation_offset = 0, variable_offset = 0)
     for ekey in keys(equations)
