@@ -1,21 +1,28 @@
 """
 Linearized system for matrix with block layout
 """
-function LinearizedSystem(sparse_arg, context, layout::BlockMajorLayout)
+function LinearizedSystem(sparse_arg, context, layout::BlockMajorLayout, allocate_r = true)
     I, J, V_buf, n, m = sparse_arg
     nb = size(V_buf, 1)
     bz = Int(sqrt(nb))
     @assert bz ≈ round(sqrt(nb)) "Buffer had $nb rows which is not square divisible."
     @assert size(V_buf, 2) == length(I) == length(J)
     @assert n == m "Expected square system. Recieved $n (eqs) by $m (variables)."
-    r_buf = zeros(bz, n)
-    dx_buf = zeros(bz, n)
 
     float_t = eltype(V_buf)
     mt = SMatrix{bz, bz, float_t, bz*bz}
     vt = SVector{bz, float_t}
     V = zeros(mt, length(I))
-    r = reinterpret(reshape, vt, r_buf)
+    if allocate_r
+        r_buf = zeros(bz, n)
+        r = reinterpret(reshape, vt, r_buf)
+    else
+        r_buf = nothing
+        r = nothing
+    end
+    # Allocate a double buffer - then re-interpret as correct type
+    dx_buf = zeros(bz, n)
+    # dx is now aliased to dx_buf
     dx = reinterpret(reshape, vt, dx_buf)
 
     jac = sparse(I, J, V, n, m)
