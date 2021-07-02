@@ -2,8 +2,9 @@ using Terv
 export ElectroChemicalComponent, CurrentCollector
 export get_test_setup_battery, get_cc_grid
 
-
-### Classes and corresponding overwritten functions
+###########
+# Classes #
+###########
 
 abstract type ElectroChemicalComponent <: TervSystem end
 struct CurrentCollector <: ElectroChemicalComponent end
@@ -11,14 +12,17 @@ abstract type ElectroChemicalGrid <: TervGrid end
 struct Phi <: ScalarVariable end
 struct Conductivity <: ComponentVariable end
 struct TotalCharge <: GroupedVariables end
-# New version of CellNeighborPotentialDifference
 struct TPFlux <: GroupedVariables end
-
-
-# Instead of DarcyMassMobilityFlow
-#? Is this the correct substitution
 struct ChargeFlow <: FlowType end
 include_face_sign(::ChargeFlow) = false
+
+struct BoundaryCondition <: TervForce 
+    cell
+    value
+end
+
+struct vonNeumannBCs <: BoundaryCondition end
+struct DirichletBCs <: BoundaryCondition end
 
 struct ChargeConservation <: TervEquation
     accumulation::TervAutoDiffCache
@@ -62,7 +66,6 @@ function ChargeConservation(
     )
 end
 
-# TPFA grid
 "Minimal struct for TPFA-like grid. Just connection data and pore-volumes"
 struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     pore_volumes::AbstractVector{R}
@@ -80,7 +83,10 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     end
 end
 
-# ??How do you implement sources??
+#########
+# utils #
+#########
+
 function build_forces(
     model::SimulationModel{G, S}; sources = nothing
     ) where {G<:TervDomain, S<:CurrentCollector}
@@ -165,7 +171,6 @@ function update_linearized_system_equation!(
 end
 
 
-"Update positions of law's derivatives in global Jacobian"
 function align_to_jacobian!(
     law::ChargeConservation, jac, model, u::Cells; equation_offset = 0, 
     variable_offset = 0
@@ -231,7 +236,6 @@ function select_equations_system!(
     )
     eqs[:charge_conservation] = (ChargeConservation, 1)
 end
-
 
 @terv_secondary function update_as_secondary!(
     totcharge, tv::TotalCharge, model::SimulationModel{G, S}, param
@@ -320,21 +324,23 @@ function update_accumulation!(law, storage, model::ChargeConservation, dt)
     return acc
 end
 
-function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
+function apply_forces_to_equation!(
+    storage, model::SimulationModel{D, S}, eq::ChargeConservation, 
+    force::Array{vonNeumannBCs}
+    ) where {D<:Any, S<:CurrentCollector}
     acc = get_entries(eq.accumulation)
     insert_sources(acc, force)
 end
 
-function insert_phase_sources(acc, sources)
+function insert_sources(acc, sources)
     for src in sources
         v = src.value
         c = src.cell
-        mobt = sum(mob)
-        f = mob[index]/mobt
-        @inbounds acc[c] -= v*f
+        @inbounds acc[c] -= v
     end
 end
 
+function insert_sources(acc, sources::Array{})
 
 
 function update_half_face_flux!(
@@ -352,7 +358,7 @@ function update_half_face_flux!(
     flux = get_entries(law.half_face_flux_cells)
     update_fluxes_from_potential!(flux, pot)
 end
-
+# Kan disse kombineres
 function update_fluxes_from_potential!(flux, pot)
     @tullio flux[i] = pot[i]
 end
@@ -373,13 +379,16 @@ function get_test_setup_battery()
 
     sys = CurrentCollector()
     model = SimulationModel(G, sys, context = DefaultContext())
-    forces = build_forces(model)
 
     # State is dict with pressure in each cell
     phi = 1.
     init = Dict(:Phi => phi)
     state0 = setup_state(model, init)
     state0[:Phi][1] = 2  # Endrer startverdien, skal ikke endre svaret
+
+    nc = length(G.grid.pore_volumes)
+    bc = [vonNeumannBCs(1, 1.), vonNeumannBCs(nc, -1.)]
+    forces = build_forces(model, sources=bc)
     
     # Model parameters
     parameters = setup_parameters(model)
