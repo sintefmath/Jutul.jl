@@ -9,6 +9,7 @@ struct MultiModel <: TervModel
             @assert maximum(groups) <= nm
             @assert minimum(groups) > 0
             @assert length(groups) == nm
+            @assert maximum(groups) == length(unique(groups))
         end
         if !isnothing(context)
             for m in models

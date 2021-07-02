@@ -21,6 +21,17 @@ function number_of_models(model::MultiModel)
     return length(model.models)
 end
 
+has_groups(model::MultiModel) = !isnothing(model.groups)
+
+function number_of_groups(model::MultiModel)
+    if has_groups(model)
+        n = maximum(model.groups)
+    else
+        n = 1
+    end
+end
+
+
 function get_primary_variable_names(model::MultiModel)
 
 end
@@ -100,12 +111,28 @@ end
 
 function align_equations_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
+    model_keys = keys(models)
     ndofs = model.number_of_degrees_of_freedom
     lsys = storage[:LinearizedSystem]
-    for key in keys(models)
+    if has_groups(model)
+        ng = number_of_groups(model)
+        groups = model.groups
+        for g in 1:ng
+            J = lsys[g, g].jac
+            subs = groups .== g
+            align_subgroup!(storage, models, model_keys[subs], ndofs, J, equation_offset, variable_offset)    
+        end
+    else
+        J = lsys.jac
+        align_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
+    end
+end
+
+function align_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
+    for key in model_keys
         submodel = models[key]
         eqs = storage[key][:equations]
-        nrow_end = align_equations_to_jacobian!(eqs, lsys.jac, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
+        nrow_end = align_equations_to_jacobian!(eqs, J, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
         nrow = nrow_end - equation_offset
         ndof = ndofs[key]
         @assert nrow == ndof "Submodels must have equal number of equations and degrees of freedom. Found $nrow equations and $ndof variables for submodel $key"
@@ -235,25 +262,16 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
 end
 
 function setup_linearized_system!(storage, model::MultiModel)
-    groups = model.groups
     models = model.models
     context = model.context
 
     candidates = [i for i in keys(models)]
-    if isnothing(groups)
-        # All Jacobians are grouped together and we assemble as a single linearized system
-        if isnothing(context)
-            context = models[1].context
-        end
-        layout = matrix_layout(context)
-        sparse_arg = get_sparse_arguments(storage, model, candidates, candidates)
-        lsys = LinearizedSystem(sparse_arg, context, layout)
-    else
-        ugroups = unique(groups)
-        ng = length(ugroups)
+    if has_groups(model)
+        groups = model.groups
+        ng = number_of_groups(model)
     
-        # We have multiple groups. Store as Matrix of sparse matrices
-        lsys = Matrix{Any}(undef, ng, ng)
+        # We have multiple groups. Store as Matrix of linearized systems
+        lsys = Matrix{LinearizedSystem}(undef, ng, ng)
         use_groups_context = isnothing(context)
         for rowg in 1:ng
             t = candidates[groups .== rowg]
@@ -267,6 +285,14 @@ function setup_linearized_system!(storage, model::MultiModel)
                 lsys[rowg, colg] = LinearizedSystem(sparse_arg, context, layout, allocate_r = rowg == colg)
             end
         end
+    else
+        # All Jacobians are grouped together and we assemble as a single linearized system
+        if isnothing(context)
+            context = models[1].context
+        end
+        layout = matrix_layout(context)
+        sparse_arg = get_sparse_arguments(storage, model, candidates, candidates)
+        lsys = LinearizedSystem(sparse_arg, context, layout)
     end
     storage[:LinearizedSystem] = lsys
 end
@@ -493,4 +519,16 @@ end
 
 function get_convergence_table(model::MultiModel, errors)
     get_convergence_table(submodels_symbols(model), errors)
+end
+
+function submodel_jacobian(model::MultiModel, lsys, target, source = target)
+    if has_groups(model)
+        k = keys(model.models)
+        i = model.groups[findall(k .== target)]
+        j = model.groups[findall(k .== source)]
+        J = lsys[i, j].jac
+    else
+        J = lsys.jac
+    end
+    return J
 end
