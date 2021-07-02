@@ -413,9 +413,9 @@ function build_forces(model::TervModel)
     return NamedTuple()
 end
 
-function solve_and_update!(storage, model::TervModel; linear_solver = nothing)
+function solve_and_update!(storage, model::TervModel, dt = nothing; linear_solver = nothing)
     lsys = storage.LinearizedSystem
-    t_solve = @elapsed solve!(lsys, linear_solver)
+    t_solve = @elapsed solve!(lsys, linear_solver, model, storage, dt)
     t_update = @elapsed update_primary_variables!(storage, model)
     return (t_solve, t_update)
 end

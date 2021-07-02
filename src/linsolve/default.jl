@@ -1,4 +1,4 @@
-export LinearizedSystem, solve!, AMGSolver, CuSparseSolver, transfer, BlockDQGMRES, LUSolver
+export LinearizedSystem, solve!, AMGSolver, CuSparseSolver, transfer, LUSolver
 
 using SparseArrays, LinearOperators, StaticArrays
 using IterativeSolvers, Krylov, AlgebraicMultigrid
@@ -50,6 +50,10 @@ end
 end
 
 function block_size(lsys::LinearizedSystem) 1 end
+
+function solve!(sys::LinearizedSystem, linsolve, model = nothing, storage = nothing, dt = nothing)
+    solve!(sys, linsolve)
+end
 
 function solve!(sys::LinearizedSystem, linsolve::Nothing)
     solve!(sys)
