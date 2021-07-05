@@ -1,10 +1,10 @@
-export ILUZeroPreconditioner
+export ILUZeroPreconditioner, GroupWisePreconditioner
 using ILUZero
 
 abstract type TervPreconditioner end
 
-function update!(preconditioner, A, b)
-
+function update!(preconditioner, lsys)
+    update!(preconditioner, lsys.jac, lsys.r)
 end
 
 function get_factorization(precond)
@@ -109,4 +109,25 @@ end
 
 function matrix_dim(ilu::ILUZeroPreconditioner)
     return ilu.dim[1]
+end
+# Trivial precond
+function update!(::UniformScaling{Bool}, arg...)
+    # Do nothing.
+end
+
+# Multi-model preconditioners
+mutable struct GroupWisePreconditioner <: TervPreconditioner
+    preconditioners::AbstractVector
+    function GroupWisePreconditioner(preconditioners)
+        new(preconditioners)
+    end
+end
+
+function update!(prec::GroupWisePreconditioner, lsys::MultiLinearizedSystem)
+    s = lsys.subsystems
+    n = size(s, 1)
+    @assert n == length(prec.preconditioners)
+    for i in 1:n
+        update!(prec.preconditioners[i], s[i, i])
+    end
 end

@@ -28,7 +28,7 @@ function preconditioner(krylov::GenericKrylov, sys, arg...)
     if isnothing(M)
         op = I
     else
-        update!(M, sys.jac, sys.r)
+        update!(M, sys)
         op = linear_operator(M, arg...)
     end
     return op
