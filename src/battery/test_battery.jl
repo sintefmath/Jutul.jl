@@ -13,3 +13,8 @@ function test_cc(linear_solver=nothing)
 end
 
 state0, states, model, sim = test_cc();
+
+G, exported = get_cc_grid("cccase", true)
+
+plot_interactive(exported["G"], states)
+

@@ -1,6 +1,6 @@
 using Terv
 export ElectroChemicalComponent, CurrentCollector
-export get_test_setup_battery, get_cc_grid, vonNeumannBC, BoundaryCondition
+export get_test_setup_battery, get_cc_grid, vonNeumannBC, BoundaryCondition, get_bccc_struct
 
 ###########
 # Classes #
@@ -21,11 +21,25 @@ struct vonNeumannBC <: BoundaryCondition
     cell
     value
 end
+
 struct DirichletBC <: BoundaryCondition 
-    cell
-    value
+    faces
+    cells
+    values
     T
 end
+
+function DirichletBC(model, faces, values)
+    # from model, retrieve grid
+    # check if faces are at boundary of the grid
+    # compute cell indices that are connected to faces (-> cells)
+    # from model, retrieve T
+    # extract T that correponds to faces (-> T)
+
+    # faces, cells, values and T are "aligned" (the index/values correspond, we can have same cell for different faces)
+    
+end
+
 
 struct ChargeConservation <: TervEquation
     accumulation::TervAutoDiffCache
@@ -346,13 +360,13 @@ function insert_sources(acc, sources::Array{vonNeumannBC}, storage)
     end
 end
 
-function insert_sources(acc, sources::Array{DirichletBC}, storage)
-    for src in sources
-        phi_ext = src.value
-        c = src.cell
-        T = src.T
-        phi = (storage.primary_variables.Phi)[c]
-        @inbounds acc[c] += - T*(phi_ext - phi)
+function insert_sources(acc, source::DirichletBC, storage)
+    phi_ext = source.values
+    c = source.cells
+    T = source.T
+    phi = (storage.primary_variables.Phi)[c]
+    for ind = 1 : size(c)
+        @inbounds acc[c[ind]] += - T[ind]*(phi_ext[ind] - phi[ind])
     end
 end
 
@@ -387,7 +401,7 @@ end
 ##############
 
 function get_test_setup_battery()
-    G = get_cc_grid()
+    G = get_cc_grid("cccase")
     timesteps = [1.0, 2.0]
 
     sys = CurrentCollector()
@@ -412,9 +426,21 @@ function get_test_setup_battery()
     return (state0, model, parameters, forces, timesteps)
 end
 
+function get_bccc_struct(name)
+    fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
+    @debug "Reading MAT file $fn..."
+    exported = MAT.matread(fn)
+    @debug "File read complete. Unpacking data..."
 
-function get_cc_grid(extraout = false)
-    name = "pico"
+    bccells = copy((exported["bccells"])')
+    bcfaces = copy((exported["bcfaces"])')
+
+    bccells = Int64.(bccells)
+    bcfaces = Int64.(bcfaces)
+    return (bccells, bcfaces)
+end
+
+function get_cc_grid(name, extraout = false)
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     @debug "Reading MAT file $fn..."
     exported = MAT.matread(fn)
