@@ -94,8 +94,8 @@ end
 
 function linear_operator(sys::MultiLinearizedSystem)
     S = sys.subsystems
-    d = size(S)
-    ops = map(linear_operator, S)
+    d = size(S, 2)
+    ops = map(linear_operator, permutedims(S))
     op = hvcat(d, ops...)
     return op
 end
