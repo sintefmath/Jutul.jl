@@ -320,8 +320,6 @@ function update_linearized_system!(storage, model::TervModel; kwarg...)
 end
 
 function update_linearized_system!(lsys, equations, model::TervModel; equation_offset = 0)
-    cell_major = is_cell_major(matrix_layout(model.context))
-
     r_buf = lsys.r_buffer
     for key in keys(equations)
         eq = equations[key]

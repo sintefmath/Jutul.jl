@@ -1,7 +1,7 @@
 """
-Linearized system for matrix with block layout
+Jacobian for matrix with block layout
 """
-function LinearizedSystem(sparse_arg, context, layout::BlockMajorLayout; allocate_r = true)
+function build_jacobian(sparse_arg, context, layout::BlockMajorLayout)
     I, J, V_buf, n, m = sparse_arg
     nb = size(V_buf, 1)
     bz = Int(sqrt(nb))
@@ -11,24 +11,22 @@ function LinearizedSystem(sparse_arg, context, layout::BlockMajorLayout; allocat
 
     float_t = eltype(V_buf)
     mt = SMatrix{bz, bz, float_t, bz*bz}
-    vt = SVector{bz, float_t}
     V = zeros(mt, length(I))
-    if allocate_r
-        r_buf = zeros(bz, n)
-        r = reinterpret(reshape, vt, r_buf)
-    else
-        r_buf = nothing
-        r = nothing
-    end
-    # Allocate a double buffer - then re-interpret as correct type
-    dx_buf = zeros(bz, n)
-    # dx is now aliased to dx_buf
-    dx = reinterpret(reshape, vt, dx_buf)
-
     jac = sparse(I, J, V, n, m)
     nzval = get_nzval(jac)
     V_buf = reinterpret(reshape, Float64, nzval)
-    return LinearizedSystem(jac, r, dx, V_buf, r_buf, dx_buf, layout)
+    return (jac, V_buf, bz)
+end
+
+function get_jacobian_vector(n, context, layout::BlockMajorLayout, v = nothing, bz = 1)
+    if isnothing(v)
+        v_buf = zeros(bz, n)
+    end
+    float_t = float_type(context)
+    vt = SVector{bz, float_t}
+    v = reinterpret(reshape, vt, v_buf)
+
+    return (v, v_buf)
 end
 
 function get_mul!(sys::LinearizedSystem{BlockMajorLayout})
