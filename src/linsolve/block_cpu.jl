@@ -19,8 +19,11 @@ function build_jacobian(sparse_arg, context, layout::BlockMajorLayout)
 end
 
 function get_jacobian_vector(n, context, layout::BlockMajorLayout, v = nothing, bz = 1)
-    if isnothing(v)
+    v_buf = v
+    if isnothing(v_buf)
         v_buf = zeros(bz, n)
+    elseif isa(v_buf, AbstractVector)
+        v_buf = reshape(v_buf, bz, :)
     end
     float_t = float_type(context)
     vt = SVector{bz, float_t}

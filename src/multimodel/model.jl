@@ -276,7 +276,11 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     @debug outstr
     I = vec(vcat(I...))
     J = vec(vcat(J...))
-    V = vec(vcat(V...))
+    if isa(eltype(V), AbstractVector)
+        V = vec(vcat(V...))
+    else
+        V = vcat(V...)
+    end
     return (I, J, V, equation_offset, variable_offset)
 end
 
