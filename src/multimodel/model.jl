@@ -202,12 +202,12 @@ function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, ta
     return equation_offset
 end
 
-function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol)
+function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol, context)
     models = model.models
     target_model = models[target]
     source_model = models[source]
-    source_layout = matrix_layout(source_model.context)
-    F = float_type(source_model.context)
+    layout = matrix_layout(context)
+    F = float_type(context)
 
     if target == source
         # These are the main diagonal blocks each model knows how to produce themselves
@@ -227,7 +227,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
             if !isnothing(x)
                 variable_offset = 0
                 for u in get_primary_variable_ordered_units(source_model)
-                    S = declare_sparsity(target_model, source_model, x, u, source_layout)
+                    S = declare_sparsity(target_model, source_model, x, u, layout)
                     if !isnothing(S)
                         push!(I, S[1] .+ equation_offset)
                         push!(J, S[2] .+ variable_offset)
@@ -245,7 +245,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
     return sarg
 end
 
-function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol})
+function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, arg...)
     I = []
     J = []
     V = []
@@ -256,7 +256,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         variable_offset = 0
         n = 0
         for source in sources
-            i, j, v, n, m = get_sparse_arguments(storage, model, target, source)
+            i, j, v, n, m = get_sparse_arguments(storage, model, target, source, arg...)
             if length(i) > 0
                 push!(I, i .+ equation_offset)
                 push!(J, j .+ variable_offset)
@@ -301,27 +301,31 @@ function setup_linearized_system!(storage, model::MultiModel)
         dx = zeros(F, n)
 
         subsystems = Matrix{LinearizedType}(undef, ng, ng)
-        use_groups_context = isnothing(context)
+        has_context = !isnothing(context)
 
         base_pos = 0
         for rowg in 1:ng
             local_models = groups .== rowg
             local_size = sum(ndof[local_models])
             t = candidates[local_models]
-            if use_groups_context
-                context = models[t[1]].context
-            end
-            layout = matrix_layout(context)
+            row_context = models[t[1]].context
+            
             for colg in 1:ng
                 s = candidates[groups .== colg]
-                sparse_arg = get_sparse_arguments(storage, model, t, s)
+                if rowg == colg || !has_context
+                    ctx = row_context
+                else
+                    ctx = context
+                end
+                layout = matrix_layout(ctx)
+                sparse_arg = get_sparse_arguments(storage, model, t, s, ctx)
                 if rowg == colg
                     global_subs = (base_pos+1):(base_pos+local_size)
                     r_i = view(r, global_subs)
                     dx_i = view(dx, global_subs)
-                    subsystems[rowg, colg] = LinearizedSystem(sparse_arg, context, layout, dx = dx_i, r = r_i)
+                    subsystems[rowg, colg] = LinearizedSystem(sparse_arg, ctx, layout, dx = dx_i, r = r_i)
                 else
-                    subsystems[rowg, colg] = LinearizedBlock(sparse_arg, context, layout)
+                    subsystems[rowg, colg] = LinearizedBlock(sparse_arg, ctx, layout)
                 end
             end
             base_pos += local_size

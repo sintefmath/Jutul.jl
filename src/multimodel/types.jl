@@ -11,11 +11,6 @@ struct MultiModel <: TervModel
             @assert length(groups) == nm
             @assert maximum(groups) == length(unique(groups))
         end
-        if !isnothing(context)
-            for m in models
-                @assert context == m.context
-            end
-        end
         if isa(models, AbstractDict)
             models = convert_to_immutable_storage(models)
         end
