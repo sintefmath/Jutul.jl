@@ -34,7 +34,7 @@ function preconditioner(krylov::GenericKrylov, sys, arg...)
     return op
 end
 
-function solve!(sys::LinearizedSystem, krylov::GenericKrylov)
+function solve!(sys::LSystem, krylov::GenericKrylov)
     solver, cfg = krylov.solver, krylov.config
 
     r = vector_residual(sys)

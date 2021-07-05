@@ -4,7 +4,9 @@ using SparseArrays, LinearOperators, StaticArrays
 using IterativeSolvers, Krylov, AlgebraicMultigrid
 using CUDA, CUDA.CUSPARSE
 
-struct LinearizedSystem{L}
+abstract type TervLinearSystem end
+
+struct LinearizedSystem{L} <: TervLinearSystem
     jac
     r
     dx
@@ -14,20 +16,41 @@ struct LinearizedSystem{L}
     matrix_layout::L
 end
 
-function LinearizedSystem(sparse_arg, context, layout; allocate_r = true)
-    I, J, V, n, m = sparse_arg
-    @assert n == m "Expected square system. Recieved $n (eqs) by $m (variables)."
-    if allocate_r
-        r = zeros(n)
-    else
-        r = nothing
+struct LinearizedBlock{L} <: TervLinearSystem
+    jac
+    jac_buffer
+    matrix_layout::L
+    function LinearizedBlock(sparse_arg, context, layout)
+        jac, jac_buf = build_jacobian(sparse_arg, context, layout)
+        new{typeof(layout)}(jac, jac_buf, layout)
     end
-    dx = zeros(n)
-    jac = sparse(I, J, V, n, m)
+end
 
-    jac_buf, dx_buf, r_buf = get_nzval(jac), dx, r
+
+LinearizedType = Union{LinearizedSystem, LinearizedBlock}
+LSystem = Union{LinearizedType, Matrix{LinearizedSystem}}
+
+function LinearizedSystem(sparse_arg, context, layout; r = nothing, dx = nothing)
+    jac, jac_buf = build_jacobian(sparse_arg, context, layout)
+    n, m = size(jac)
+    @assert n == m "Expected square system. Recieved $n (eqs) by $m (primary variables)."
+    dx, dx_buf = get_jacobian_vector(n, context, layout, dx)
+    r, r_buf = get_jacobian_vector(n, context, layout, r)
 
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
+end
+
+function build_jacobian(sparse_arg, context, layout)
+    I, J, V, n, m = sparse_arg
+    jac = sparse(I, J, V, n, m)
+    return (jac, get_nzval(jac))
+end
+
+function get_jacobian_vector(n, context, layout, v = nothing)
+    if isnothing(v)
+        v = zeros(n)
+    end
+    return (v, v)
 end
 
 function linear_operator(sys)
@@ -53,13 +76,13 @@ end
     return jac.nzval
 end
 
-function block_size(lsys::LinearizedSystem) 1 end
+function block_size(lsys::LSystem) 1 end
 
-function solve!(sys::LinearizedSystem, linsolve, model = nothing, storage = nothing, dt = nothing)
+function solve!(sys::LSystem, linsolve, model = nothing, storage = nothing, dt = nothing)
     solve!(sys, linsolve)
 end
 
-function solve!(sys::LinearizedSystem, linsolve::Nothing)
+function solve!(sys::LSystem, linsolve::Nothing)
     solve!(sys)
 end
 

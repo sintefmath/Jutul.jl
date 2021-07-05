@@ -290,7 +290,7 @@ function setup_linearized_system!(storage, model::MultiModel)
         ng = number_of_groups(model)
     
         # We have multiple groups. Store as Matrix of linearized systems
-        lsys = Matrix{LinearizedSystem}(undef, ng, ng)
+        lsys = Matrix{LinearizedType}(undef, ng, ng)
         use_groups_context = isnothing(context)
         for rowg in 1:ng
             t = candidates[groups .== rowg]
@@ -301,7 +301,11 @@ function setup_linearized_system!(storage, model::MultiModel)
             for colg in 1:ng
                 s = candidates[groups .== colg]
                 sparse_arg = get_sparse_arguments(storage, model, t, s)
-                lsys[rowg, colg] = LinearizedSystem(sparse_arg, context, layout, allocate_r = rowg == colg)
+                if rowg == colg
+                    lsys[rowg, colg] = LinearizedSystem(sparse_arg, context, layout)
+                else
+                    lsys[rowg, colg] = LinearizedBlock(sparse_arg, context, layout)
+                end
             end
         end
     else

@@ -22,7 +22,6 @@ include("core_types.jl")
 
 # Models 
 include("models.jl")
-include("multimodel/multimodel.jl")
 
 # include("models.jl")
 # MRST stuff
@@ -44,6 +43,9 @@ include("simulator.jl")
 
 include("utils.jl")
 include("interpolation.jl")
+# 
+include("multimodel/multimodel.jl")
+
 # Various add-ons
 include("applications/reservoir_simulator/reservoir_simulator.jl")
 include("applications/test_systems/test_systems.jl")
