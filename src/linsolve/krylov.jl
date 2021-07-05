@@ -58,3 +58,44 @@ function solve!(sys::LSystem, krylov::GenericKrylov)
     end
     update_dx_from_vector!(sys, x)
 end
+
+# function get_mul!(sys::MultiLinearizedSystem)
+#     subsystems = sys.subsystems
+#     n, m = size(subsystems)
+#     function block_mul!(res, x, α, β::T) where T
+#         if β == zero(T)
+#             row_offset = 0
+#             for row = 1:n
+#                 col_offset = 0
+#                 for col = 1:m
+#                     M = subsystems[row, col].jac
+#                     nrows, ncols = size(M)
+#                     rpos = (row_offset+1):(row_offset+nrows)
+#                     cpos = (col_offset+1):(col_offset+ncols)
+#                     # Grab views into the global vectors and applu matrix here
+#                     res_v = view(res, rpos)
+#                     x_v = view(x, cpos)
+#                     mul!(res_v, M, x_v)
+#                     if α != one(T)
+#                         # TODO: This is wrong
+#                         error("May be wrong.")
+#                         lmul!(α, res_v)
+#                     end
+#                     col_offset += ncols
+#                 end
+#                 row_offset += size(subsystems[row, 1].jac, 1)
+#             end
+#         else
+#             error("Not implemented yet.")
+#         end
+#     end
+#     return block_mul!
+# end
+
+function linear_operator(sys::MultiLinearizedSystem)
+    S = sys.subsystems
+    d = size(S)
+    ops = map(linear_operator, S)
+    op = hvcat(d, ops...)
+    return op
+end

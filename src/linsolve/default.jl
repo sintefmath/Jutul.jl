@@ -26,9 +26,29 @@ struct LinearizedBlock{L} <: TervLinearSystem
     end
 end
 
-
 LinearizedType = Union{LinearizedSystem, LinearizedBlock}
-LSystem = Union{LinearizedType, Matrix{LinearizedSystem}}
+
+struct MultiLinearizedSystem{L} <: TervLinearSystem
+    subsystems::Matrix{LinearizedType}
+    r
+    dx
+    r_buffer
+    dx_buffer
+    matrix_layout::L
+    function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = nothing)
+        n = 0
+        for i = 1:size(subsystems, 1)
+            ni, mi = size(subsystems[i, i].jac)
+            @assert ni == mi
+            n += ni
+        end
+        dx, dx_buf = get_jacobian_vector(n, context, layout, dx)
+        r, r_buf = get_jacobian_vector(n, context, layout, r)
+        new{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, layout)
+    end
+end
+
+LSystem = Union{LinearizedType, MultiLinearizedSystem}
 
 function LinearizedSystem(sparse_arg, context, layout; r = nothing, dx = nothing)
     jac, jac_buf = build_jacobian(sparse_arg, context, layout)
@@ -78,7 +98,7 @@ end
 
 function block_size(lsys::LSystem) 1 end
 
-function solve!(sys::LSystem, linsolve, model = nothing, storage = nothing, dt = nothing)
+function solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing)
     solve!(sys, linsolve)
 end
 

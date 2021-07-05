@@ -1,7 +1,7 @@
 using Terv
 using Test
 
-function test_multi(; use_groups = false)
+function test_multi(; use_groups = false, kwarg...)
     sys = ScalarTestSystem()
     # Model A
     A = ScalarTestDomain()
@@ -27,7 +27,7 @@ function test_multi(; use_groups = false)
     state0 = setup_state(model, Dict(:A => state0A, :B => state0B))
     forces = Dict(:A => forcesA, :B => forcesB)
     sim = Simulator(model, state0 = state0)
-    states = simulate(sim, [1.0], forces = forces)
+    states = simulate(sim, [1.0], forces = forces; kwarg...)
 
     XA = states[end][:A][:XVar]
     XB = states[end][:B][:XVar]
@@ -36,5 +36,5 @@ function test_multi(; use_groups = false)
 end
 @testset "Multi-model: Scalar test system" begin
     @test test_multi(use_groups = false)
-    # @test test_multi(use_groups = true)
+    @test test_multi(use_groups = true, linear_solver = GenericKrylov())
 end
