@@ -385,32 +385,45 @@ end
 function update_linearized_system!(storage, model::MultiModel; equation_offset = 0)
     lsys = storage.LinearizedSystem
     models = model.models
-    offsets = get_submodel_degree_of_freedom_offsets(model)
-    model_keys = submodels_symbols(model)
+    model_keys = keys(models)
+    if has_groups(model)
+        ng = number_of_groups(model)
+        groups = model.groups
+        for g in 1:ng
+            lsys_g = lsys[g, g]
+            subs = groups .== g
+            group_keys = model_keys[subs]
+            offsets = get_submodel_degree_of_freedom_offsets(model, g)
+            update_main_linearized_system_subgroup!(storage, model, group_keys, offsets, lsys_g)
+        end
+    else
+        offsets = get_submodel_degree_of_freedom_offsets(model)
+        update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
+    end
+    update_cross_term_linearized_system_subgroup!(storage, model, model_keys, lsys)
+end
+
+function update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
     @sync for (index, key) in enumerate(model_keys)
-        m = models[key]
+        m = model.models[key]
         s = storage[key]
         eqs = s.equations
         @async update_linearized_system!(lsys, eqs, m; equation_offset = offsets[index])
     end
+end
+
+function update_cross_term_linearized_system_subgroup!(storage, model, model_keys, linearized_system)
     # Then, update cross terms
     @sync for target in model_keys
         for source in model_keys
             if source != target
+                lsys = get_linearized_system_model_pair(storage, model, source, target, linearized_system)
                 @async update_linearized_system_crossterms!(lsys, storage, model, source, target)
             end
         end
     end
 end
 
-
-function get_submodel_degree_of_freedom_offsets(model::MultiModel)
-    n = cumsum(vcat([0], [i for i in values(model.number_of_degrees_of_freedom)]))
-end
-
-function submodels_symbols(model::MultiModel)
-    return keys(model.models)
-end
 
 function update_linearized_system_crossterms!(lsys, storage, model::MultiModel, source, target)
     cross_terms = storage[:cross_terms][target][source]
@@ -457,12 +470,17 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
     offset = 0
     lsys = storage.LinearizedSystem
     errors = OrderedDict()
-    for key in submodels_symbols(model)
+    for (i, key) in enumerate(submodels_symbols(model))
+        if has_groups(model) && i > 1
+            if model.groups[i] != model.groups[i-1]
+                offset = 0
+            end
+        end
         s = storage[key]
         m = model.models[key]
         eqs = s.equations
-
-        conv, e, errors[key], = check_convergence(lsys, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
+        ls = get_linearized_system_submodel(storage, model, key, lsys)
+        conv, e, errors[key], = check_convergence(ls, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)
@@ -538,16 +556,4 @@ end
 
 function get_convergence_table(model::MultiModel, errors)
     get_convergence_table(submodels_symbols(model), errors)
-end
-
-function submodel_jacobian(model::MultiModel, lsys, target, source = target)
-    if has_groups(model)
-        k = keys(model.models)
-        i = model.groups[findall(k .== target)]
-        j = model.groups[findall(k .== source)]
-        J = lsys[i, j].jac
-    else
-        J = lsys.jac
-    end
-    return J
 end
