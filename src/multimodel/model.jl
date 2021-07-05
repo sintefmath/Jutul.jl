@@ -521,15 +521,20 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
 end
 
 function update_primary_variables!(storage, model::MultiModel)
-    dx = storage.LinearizedSystem.dx
+    lsys = storage.LinearizedSystem
+    dx = lsys.dx
     models = model.models
 
     offset = 0
-    for key in keys(models)
+    for (i, key) in enumerate(keys(models))
         m = models[key]
         s = storage[key]
         ndof = number_of_degrees_of_freedom(m)
         dx_v = view(dx, (offset+1):(offset+ndof))
+        if is_cell_major(matrix_layout(m.context))
+            bz = block_size(lsys[i, i])
+            dx_v = reshape(dx_v, bz, :)
+        end
         update_primary_variables!(s.state, dx_v, m)
         offset += ndof
     end
