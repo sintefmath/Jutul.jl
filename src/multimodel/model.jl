@@ -286,14 +286,24 @@ function setup_linearized_system!(storage, model::MultiModel)
 
     candidates = [i for i in keys(models)]
     if has_groups(model)
+        ndof = values(model.number_of_degrees_of_freedom)
+        n = sum(ndof)
         groups = model.groups
         ng = number_of_groups(model)
     
         # We have multiple groups. Store as Matrix of linearized systems
-        lsys = Matrix{LinearizedType}(undef, ng, ng)
+        F = float_type(context)
+        r = zeros(F, n)
+        dx = zeros(F, n)
+
+        subsystems = Matrix{LinearizedType}(undef, ng, ng)
         use_groups_context = isnothing(context)
+
+        base_pos = 0
         for rowg in 1:ng
-            t = candidates[groups .== rowg]
+            local_models = groups .== rowg
+            local_size = sum(ndof[local_models])
+            t = candidates[local_models]
             if use_groups_context
                 context = models[t[1]].context
             end
@@ -302,12 +312,17 @@ function setup_linearized_system!(storage, model::MultiModel)
                 s = candidates[groups .== colg]
                 sparse_arg = get_sparse_arguments(storage, model, t, s)
                 if rowg == colg
-                    lsys[rowg, colg] = LinearizedSystem(sparse_arg, context, layout)
+                    global_subs = (base_pos+1):(base_pos+local_size)
+                    r_i = view(r, global_subs)
+                    dx_i = view(dx, global_subs)
+                    subsystems[rowg, colg] = LinearizedSystem(sparse_arg, context, layout, dx = dx_i, r = r_i)
                 else
-                    lsys[rowg, colg] = LinearizedBlock(sparse_arg, context, layout)
+                    subsystems[rowg, colg] = LinearizedBlock(sparse_arg, context, layout)
                 end
             end
+            base_pos += local_size
         end
+        lsys = MultiLinearizedSystem(subsystems, context, matrix_layout(context))
     else
         # All Jacobians are grouped together and we assemble as a single linearized system
         if isnothing(context)
