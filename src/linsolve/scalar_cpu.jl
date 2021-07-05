@@ -57,5 +57,5 @@ function solve!(sys::LinearizedSystem, solver::AMGSolver)
         gmres!(sys.dx, sys.jac, -sys.r, reltol = cfg.relative_tolerance, maxiter = cfg.max_iterations, 
                                         Pl = solver.preconditioner, verbose = cfg.verbose)
     end
-    @debug "Solved linear system to $(solver.reltol) in $t_solve seconds."
+    @debug "Solved linear system to $(cfg.relative_tolerance) in $t_solve seconds."
 end
