@@ -71,7 +71,7 @@ end
 
 
 struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
-    pore_volumes::AbstractVector{R}
+    volumes::AbstractVector{R}
     neighborship::AbstractArray{I}
     function MinimalECTPFAGrid(pv, N)
         nc = length(pv)
@@ -86,6 +86,10 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     end
 end
 
+function get_flow_volume(grid::MinimalECTPFAGrid)
+    grid.volumes
+end
+
 #########
 # utils #
 #########
@@ -98,7 +102,7 @@ end
 
 function declare_units(G::MinimalECTPFAGrid)
     # Cells equal to number of pore volumes
-    c = (unit = Cells(), count = length(G.pore_volumes))
+    c = (unit = Cells(), count = length(G.volumes))
     # Faces
     f = (unit = Faces(), count = size(G.neighborship, 2))
     return [c, f]
@@ -347,10 +351,8 @@ function insert_sources(acc, sources::Array{DirichletBC}, storage)
         phi_ext = src.value
         c = src.cell
         T = src.T
-        prim = storage.primary_variables
-        phis = prim.Phi
-        phi = phis[c]
-        acc[c] -= -T*(phi - phi_ext) # Fortegn?
+        phi = (storage.primary_variables.Phi)[c]
+        @inbounds acc[c] += - T*(phi_ext - phi)
     end
 end
 
@@ -396,10 +398,12 @@ function get_test_setup_battery()
     init = Dict(:Phi => phi)
     state0 = setup_state(model, init)
     state0[:Phi][1] = 2  # Endrer startverdien, skal ikke endre svaret
-
-    nc = length(G.grid.pore_volumes)
-    # bc = [vonNeumannBC(1, 1.), vonNeumannBC(nc, -1.)]
-    bc = [DirichletBC(1, 1., 1), DirichletBC(nc, -1., 1)]
+    
+    # set up boundary conditions
+    T = model.domain.discretizations.charge_flow.conn_data[1].T
+    nc = length(G.grid.volumes)
+    phi0 = 1.
+    bc = [DirichletBC(1, phi0, T), DirichletBC(nc, -phi0, T)]
     forces = build_forces(model, sources=bc)
     
     # Model parameters
@@ -409,9 +413,7 @@ function get_test_setup_battery()
 end
 
 
-function get_cc_grid(
-    perm = nothing, poro = nothing, volumes = nothing, extraout = false
-    )
+function get_cc_grid(extraout = false)
     name = "pico"
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     @debug "Reading MAT file $fn..."
@@ -425,31 +427,22 @@ function get_cc_grid(
         
     # Cells
     cell_centroids = copy((exported["G"]["cells"]["centroids"])')
+
     # Faces
     face_centroids = copy((exported["G"]["faces"]["centroids"][internal_faces, :])')
     face_areas = vec(exported["G"]["faces"]["areas"][internal_faces])
     face_normals = exported["G"]["faces"]["normals"][internal_faces, :]./face_areas
     face_normals = copy(face_normals')
-    if isnothing(perm)
-        perm = copy((exported["rock"]["perm"])')
-        perm = ones(size(perm)) # Endre permeability til 1 
-    end
+    cond = ones(size((exported["rock"]["perm"])')) # Conductivity σ, corresponding to permeability
 
-    # Deal with cell data
-    if isnothing(poro)
-        poro = vec(exported["rock"]["poro"])
-    end
-    if isnothing(volumes)
-        volumes = vec(exported["G"]["cells"]["volumes"])
-    end
-    pv = poro.*volumes
+    volumes = vec(exported["G"]["cells"]["volumes"])
 
     @debug "Data unpack complete. Starting transmissibility calculations."
     # Deal with face data
-    T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
+    T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, cond, N)
     T = compute_face_trans(T_hf, N)
 
-    G = MinimalECTPFAGrid(pv, N)
+    G = MinimalECTPFAGrid(volumes, N)
     z = nothing
     g = nothing
 
