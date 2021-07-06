@@ -17,16 +17,15 @@ function get_test_setup_battery()
     state0[:Phi][1] = 2  # Endrer startverdien, skal ikke endre svaret
     
     forces = nothing
-    # # set up boundary conditions
-    # T = model.domain.discretizations.charge_flow.conn_data[1].T
-    # nc = length(G.grid.volumes)
-    # phi0 = 2.
-    # # bc = [DirichletBC(1, phi0, T), DirichletBC(nc, -phi0, T)]
-    # num_faces = size(T)
-    # boundary_faces = [1, num_faces]
-    # boundary_values = [-1, 1]
-    # bc = DirichletBC(model, boundary_faces, boundary_values)
-    # forces = build_forces(model, sources=bc)
+    # set up boundary conditions
+    # bc = [DirichletBC(1, phi0, T), DirichletBC(nc, -phi0, T)]
+    T = model.domain.discretizations.charge_flow.conn_data[1].T
+    nc = length(domain.grid.volumes)
+    boundary_cells = [1, nc]
+    boundary_values = [-1, 1]
+    T_hfs = [1/2, 1/2]
+    bc = DirichletBC(boundary_cells, boundary_values, T_hfs)
+    forces = build_forces(model, sources=bc)
     
     # Model parameters
     parameters = setup_parameters(model)

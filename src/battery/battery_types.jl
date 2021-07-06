@@ -23,7 +23,6 @@ struct vonNeumannBC <: BoundaryCondition
 end
 
 struct DirichletBC <: BoundaryCondition 
-    faces
     cells
     values
     T
@@ -58,22 +57,24 @@ end
 # Constructors #
 ################
 
-function DirichletBC(model, faces, values)
-    """
-    Takes values at boundary faces and returns TervForce object
-    wich enforces boundary condition.
-    """
-    disc = model.domain.discretizations[1]
-    conn_data = disc.conn_data
-    boundary_cells = map(x -> x[:face] .== faces, conn_data)
-    @assert sum(boundary_cells) .== 1 # Check if cells at boundary
-    boundary_cells = map(x -> sum(x), x) # collapse array
-    cells = map(x -> x[:cell], conn_data)
-    cells = cells[boundary_cells.==1]
-    Ts = map(x -> x[:T], conn_data)
-    Ts = Ts[boundary_cells.==1]
-    DirichletBC(faces, cells, values, Ts)
-end
+
+# Cannot be used as we do not have external faces
+# function DirichletBC(model, faces, values)
+#     """
+#     Takes values at boundary faces and returns TervForce object
+#     wich enforces boundary condition.
+#     """
+#     disc = model.domain.discretizations[1]
+#     conn_data = disc.conn_data
+#     boundary_cells = map(x -> x[:face] .== faces, conn_data)
+#     @assert sum(boundary_cells) .== 1 # Check if cells at boundary
+#     boundary_cells = map(x -> sum(x), x) # collapse array
+#     cells = map(x -> x[:cell], conn_data)
+#     cells = cells[boundary_cells.==1]
+#     Ts = map(x -> x[:T], conn_data)
+#     Ts = Ts[boundary_cells.==1]
+#     DirichletBC(faces, cells, values, Ts)
+# end
 
 function ChargeConservation(
     model, number_of_equations;

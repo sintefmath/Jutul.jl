@@ -1,12 +1,13 @@
 using Terv
 
-function get_flow_volume(grid::MinimalECTPFAGrid)
-    grid.volumes
-end
-
 #########
 # utils #
 #########
+
+
+function get_flow_volume(grid::MinimalECTPFAGrid)
+    grid.volumes
+end
 
 function build_forces(
     model::SimulationModel{G, S}; sources = nothing
@@ -265,7 +266,8 @@ function insert_sources(acc, source::DirichletBC, storage)
     c = source.cells
     T = source.T
     phi = (storage.primary_variables.Phi)[c]
-    for ind = 1 : size(c)
+    # print(2:size(c)[0])
+    for ind = 1:size(c)[1]
         @inbounds acc[c[ind]] += - T[ind]*(phi_ext[ind] - phi[ind])
     end
 end
