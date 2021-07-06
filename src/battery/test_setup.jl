@@ -80,7 +80,7 @@ function get_bccc_struct(name)
     return (bccells, bcfaces)
 end
 
-function get_cc_grid(name, extraout = false)
+function get_cc_grid(name="square_current_collector"; extraout = false)
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     @debug "Reading MAT file $fn..."
     exported = MAT.matread(fn)
