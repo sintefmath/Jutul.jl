@@ -4,7 +4,7 @@ export get_test_setup_battery, get_cc_grid, get_bccc_struct
 
 function get_test_setup_battery(name="square_current_collector")
     domain, exported = get_cc_grid(name, true)
-    timesteps = [1.0, 2.0]
+    timesteps = [1.,]
     G = exported["G"]
 
     sys = CurrentCollector()
@@ -16,16 +16,11 @@ function get_test_setup_battery(name="square_current_collector")
     state0 = setup_state(model, init)
     state0[:Phi][1] = 2  # Endrer startverdien, skal ikke endre svaret
     
-    dirichlet = nothing
-    neumann = nothing
     # set up boundary conditions
-    T = model.domain.discretizations.charge_flow.conn_data[1].T
     nc = length(domain.grid.volumes)
-    boundary_cells = [1, nc]
-    boundary_values = [4, -4]
-    T_hfs = [1/2, 1/2]
-    dirichlet = DirichletBC(boundary_cells, boundary_values, T_hfs)
-    neumann = vonNeumannBC([10, nc-9], [1, -1])
+    
+    dirichlet = DirichletBC([1, 1], [1, -1], [2, 2])
+    neumann = vonNeumannBC([1, nc], [-1, 1])
     forces = (neumann=neumann, dirichlet= dirichlet,)
     
     # Model parameters
@@ -33,6 +28,43 @@ function get_test_setup_battery(name="square_current_collector")
 
     return (state0, model, parameters, forces, timesteps, G)
 end
+
+function test_mixed_boundary_conditions()
+    domain, exported = get_cc_grid("square_current_collector", true)
+    timesteps = [1.,]
+    G = exported["G"]
+
+    sys = CurrentCollector()
+    model = SimulationModel(domain, sys, context = DefaultContext())
+
+    # State is dict with pressure in each cell
+    phi = 1.
+    init = Dict(:Phi => phi)
+    state0 = setup_state(model, init)
+    
+    # set up boundary conditions
+    nc = length(domain.grid.volumes)
+    
+    boundary_cells_righ = 1:10:nc
+    boundary_cells_left = 10:10:nc
+    boundary_values = ones(size(boundary_cells_righ))
+    T_hfs = 2 * ones(size(boundary_cells_righ))
+    dirichlet = DirichletBC(boundary_cells_righ, 0*boundary_values, T_hfs)
+    neumann = vonNeumannBC(boundary_cells_left, boundary_values)
+    forces = (neumann=neumann, dirichlet= dirichlet,)
+    
+    # Model parameters
+    parameters = setup_parameters(model)
+
+    sim = Simulator(model, state0=state0, parameters=prm)
+    cfg = simulator_config(sim)
+    cfg[:linear_solver] = linear_solver
+    states = simulate(sim, t, forces = f, config = cfg)
+
+    # Check if the field value increments by one
+    @assert sum(isapprox.(diff(states[1].Phi[1:10]), 1)) == 9
+end
+
 
 function get_bccc_struct(name)
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
