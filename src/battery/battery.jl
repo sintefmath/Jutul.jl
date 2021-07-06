@@ -416,7 +416,7 @@ function get_test_setup_battery()
     # set up boundary conditions
     T = model.domain.discretizations.charge_flow.conn_data[1].T
     nc = length(G.grid.volumes)
-    phi0 = 1.
+    phi0 = 2.
     bc = [DirichletBC(1, phi0, T), DirichletBC(nc, -phi0, T)]
     forces = build_forces(model, sources=bc)
     
