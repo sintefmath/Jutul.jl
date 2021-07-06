@@ -2,8 +2,8 @@ using Terv
 
 export get_test_setup_battery, get_cc_grid, get_bccc_struct
 
-function get_test_setup_battery()
-    domain, exported = get_cc_grid("pico", true)
+function get_test_setup_battery(name="square_current_collector")
+    domain, exported = get_cc_grid(name, true)
     timesteps = [1.0, 2.0]
     G = exported["G"]
 
@@ -16,16 +16,17 @@ function get_test_setup_battery()
     state0 = setup_state(model, init)
     state0[:Phi][1] = 2  # Endrer startverdien, skal ikke endre svaret
     
-    forces = nothing
+    dirichlet = nothing
+    neumann = nothing
     # set up boundary conditions
-    # bc = [DirichletBC(1, phi0, T), DirichletBC(nc, -phi0, T)]
     T = model.domain.discretizations.charge_flow.conn_data[1].T
     nc = length(domain.grid.volumes)
     boundary_cells = [1, nc]
-    boundary_values = [-1, 1]
+    boundary_values = [4, -4]
     T_hfs = [1/2, 1/2]
-    bc = DirichletBC(boundary_cells, boundary_values, T_hfs)
-    forces = build_forces(model, sources=bc)
+    dirichlet = DirichletBC(boundary_cells, boundary_values, T_hfs)
+    neumann = vonNeumannBC([10, nc-9], [1, -1])
+    forces = (neumann=neumann, dirichlet= dirichlet,)
     
     # Model parameters
     parameters = setup_parameters(model)

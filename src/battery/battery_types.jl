@@ -1,6 +1,6 @@
 using Terv
 export ElectroChemicalComponent, CurrentCollector
-export vonNeumannBC, BoundaryCondition, MinimalECTPFAGrid
+export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
 
 ###########
 # Classes #
@@ -18,14 +18,14 @@ include_face_sign(::ChargeFlow) = false
 
 abstract type BoundaryCondition <: TervForce end
 struct vonNeumannBC <: BoundaryCondition 
-    cell
-    value
+    cells
+    values
 end
 
 struct DirichletBC <: BoundaryCondition 
     cells
     values
-    T
+    half_face_Ts
 end
 
 struct ChargeConservation <: TervEquation
@@ -59,6 +59,7 @@ end
 
 
 # Cannot be used as we do not have external faces
+
 # function DirichletBC(model, faces, values)
 #     """
 #     Takes values at boundary faces and returns TervForce object
