@@ -12,7 +12,7 @@ G = computeGeometry(G);
 
 nc = G.cells.num;
 
-rock.perm = 0.1*darcy*ones(nc, 1);
+rock.perm = ones(nc, 1);
 
 epsi = Lx/(10*nx);
 bcfaces = find(abs(G.faces.centroids(:, 1)) < epsi);

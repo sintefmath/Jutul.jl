@@ -1,6 +1,6 @@
 using Terv
 
-export get_test_setup_battery, get_cc_grid, get_bccc_struct
+export get_test_setup_battery, get_cc_grid, get_bc
 
 function get_test_setup_battery(name="square_current_collector")
     domain, exported = get_cc_grid(name, true)
@@ -79,6 +79,14 @@ function get_bccc_struct(name)
     bcfaces = Int64.(bcfaces)
     return (bccells, bcfaces)
 end
+
+
+function get_bc(name)
+    fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, "_T.mat")
+    exported = MAT.matread(fn)
+    return exported
+end
+
 
 function get_cc_grid(name="square_current_collector"; extraout = false)
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
