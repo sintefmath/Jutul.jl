@@ -45,5 +45,8 @@ include("utils.jl")
 include("applications/reservoir_simulator/reservoir_simulator.jl")
 include("applications/test_systems/test_systems.jl")
 
+include("battery/battery_types.jl")
 include("battery/battery.jl")
+include("battery/test_setup.jl")
+
 end # module

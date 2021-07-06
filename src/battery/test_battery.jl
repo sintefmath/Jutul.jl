@@ -4,17 +4,16 @@ using Test
 ENV["JULIA_DEBUG"] = Terv
 
 function test_cc(linear_solver=nothing)
-    state0, model, prm, f, t = get_test_setup_battery()
+    state0, model, prm, f, t, G = get_test_setup_battery()
     sim = Simulator(model, state0=state0, parameters=prm)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = linear_solver
     states = simulate(sim, t, forces = f, config = cfg)
-    return state0, states, model, sim
+    return state0, states, model, G
 end
 
-state0, states, model, sim = test_cc();
+state0, states, model, G = test_cc();
+# plot_interactive(G, states)
 
-G, exported = get_cc_grid("cccase", true)
-
-plot_interactive(exported["G"], states)
-
+# G, exported = get_cc_grid("cccase", true);
+# plot_interactive(exported["G"], states);
