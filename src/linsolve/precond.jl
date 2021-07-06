@@ -89,7 +89,7 @@ function ilu_f(type::Symbol)
     end
 end
 
-function ilu_apply!(x::Vector{F}, f::ILU0Precon{F}, y::Vector{F}, type::Symbol = :both) where {F<:Real}
+function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
     f! = ilu_f(type)
     f!(x, f, y)
 end
