@@ -18,6 +18,17 @@ epsi = Lx/(10*nx);
 bcfaces = find(abs(G.faces.centroids(:, 1)) < epsi);
 bccells = sum(G.faces.neighbors(bcfaces, :), 2);
 
+T = computeTrans(G, rock);
+
+nf = G.faces.num;
+ncf = size(G.cells.faces, 1);
+
+M = sparse(G.cells.faces(:, 1), (1 : ncf)', 1, nf, ncf);
+
+T = M*T;
+
+T = T(bcfaces);
+
 figure
 plotGrid(G)
 plotFaces(G, bcfaces, 'edgecolor', 'red', 'linewidth', 3);
@@ -26,4 +37,4 @@ plotGrid(G, bccells, 'facecolor', 'blue');
 savedir = '../../../data/testgrids';
 
 save(fullfile(savedir, 'cccase.mat'), 'G', 'rock');
-save(fullfile(savedir, 'bccccase.mat'), 'bccells', 'bcfaces');
+save(fullfile(savedir, 'bccccase.mat'), 'bccells', 'T');
