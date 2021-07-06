@@ -1,10 +1,12 @@
 using Terv
-using Statistics, DataStructures
+using Statistics, DataStructures, LinearAlgebra
 ENV["JULIA_DEBUG"] = Terv
-# ENV["JULIA_DEBUG"] = nothing
+ENV["JULIA_DEBUG"] = nothing
 ##
 # casename = "simple_egg"
 casename = "egg"
+# casename = "egg_ministeps"
+
 # casename = "gravity_test"
 # casename = "bl_wells"
 # casename = "bl_wells_mini"
@@ -14,7 +16,7 @@ casename = "egg"
 # casename = "mini"
 simple_well = false
 
-function run_immiscible_mrst(casename, simple_well = false)
+# function run_immiscible_mrst(casename, simple_well = false)
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false)
     ## Set up initializers
     models = OrderedDict()
@@ -32,27 +34,38 @@ function run_immiscible_mrst(casename, simple_well = false)
     water = AqueousPhase()
     oil = LiquidPhase()
     sys = ImmiscibleSystem([water, oil])
-    model = SimulationModel(G, sys)
+    bctx = DefaultContext(matrix_layout = BlockMajorLayout())
+    dctx = DefaultContext()
+
+    res_context = bctx
+    # res_context = dctx
+
+    model = SimulationModel(G, sys, context = res_context)
 
     rho = ConstantCompressibilityDensities(sys, p, rhoS, c)
 
-    swof = f["swof"]
-
-    if isempty(swof)# || true
-        kr = BrooksCoreyRelPerm(sys, nkr)
+    if haskey(f, "swof")
+        swof = f["swof"]
     else
-        sw = swof[:, 1]
-        krw = swof[:, 2]'
-        # Change so table to be with respect to so,
-        # and to be increasing with respect to input
-        so = 1 .- sw
-        so = so[end:-1:1]
-        kro = swof[end:-1:1, 3]'
-        s = [sw, so]
-        krt = vcat(krw, kro)
-        kr = TabulatedRelPermSimple(s, krt)
+        swof = []
     end
 
+    if isempty(swof) # || true
+        kr = BrooksCoreyRelPerm(sys, nkr)
+        # kr = BrooksCoreyRelPerm(sys, nkr, [0.1, 0.1], [0.7, 0.8])
+    else
+        display(swof)
+        s = 0:0.1:1
+        # swof = hcat(s, 0.6.*s.^2, 0.7.*(1 .- s).^2)
+        display(swof)
+        s, krt = preprocess_relperm_table(swof)
+        display(s)
+        display(krt)
+        # error()
+        kr = TabulatedRelPermSimple(s, krt)
+        # error()
+    end
+    # error()
     mu = ConstantVariables(mu)
 
     s = model.secondary_variables
@@ -154,7 +167,10 @@ function run_immiscible_mrst(casename, simple_well = false)
     initializer[:Facility] = F0
     ##
 
-    mmodel = MultiModel(convert_to_immutable_storage(models))
+    groups = nothing
+    groups = repeat([2], length(models))
+    groups[1] = 1
+    mmodel = MultiModel(convert_to_immutable_storage(models), groups = groups, context = DefaultContext())
     # Set up joint state and simulate
     state0 = setup_state(mmodel, initializer)
     forces[:Facility] = facility_forces
@@ -164,17 +180,30 @@ function run_immiscible_mrst(casename, simple_well = false)
 
     for w in well_symbols
         parameters[w] = well_parameters[w]
-    end
+    end  
 
     sim = Simulator(mmodel, state0 = state0, parameters = deepcopy(parameters))
     # dt = [1.0]
-    # dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24
+    # dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24#
     dt = timesteps
-    simulate(sim, dt, forces = forces, info_level = 1)
-end
+    # dt = dt[1:20]
+    # lsolve = LUSolver(check = false)
+    group_p = GroupWisePreconditioner([ILUZeroPreconditioner(), TrivialPreconditioner()])
+
+    lsolve = GenericKrylov(verbose = 10)
+    lsolve = GenericKrylov(verbose = 10, preconditioner = group_p)
+
+    # lsolve = GenericKrylov(verbose = 10, preconditioner = ILUZeroPreconditioner())
+
+    states = simulate(sim, dt, forces = forces, info_level = 1, linear_solver = lsolve)
+    # return (states, mmodel, well_symbols)
+# end
 ##
-states = run_immiscible_mrst(casename, false)
-nothing
+ sim2 = Simulator(model, state0 = state0r)
+# simulate(sim2, dt)
+##
+# states, model, well_symbols = run_immiscible_mrst(casename, false)
+# nothing
 ##
 d = map((x) -> x[:Reservoir][:Pressure][1], states)
 # d = map((x) -> x[:W1][:Saturations][1], states)
@@ -204,7 +233,11 @@ end
 ix = 9:12
 w = well_symbols[ix]
 # d = map((x) -> x[w][:Saturations][1], states)
-d = map((x) -> -x[:Facility][:TotalSurfaceMassRate][ix], states)
+
+s = states
+s = states_analytical
+s = states_swof_bc
+d = map((x) -> -x[:Facility][:TotalSurfaceMassRate][ix], s)
 d = hcat(d...)'
 h = Plots.plot(d)
 # ylims!(h, (0, 6e-3))
@@ -212,12 +245,12 @@ h = Plots.plot(d)
 d = map(get_qws, ix)
 d = hcat(d...)
 h = Plots.plot(-d)
-ylims!(h, (0, 6e-3))
+# ylims!(h, (0, 6e-3))
 ##
 d = map(get_qos, ix)
 d = hcat(d...)
 h = Plots.plot(-d)
-ylims!(h, (0, 6e-3))
+# ylims!(h, (0, 6e-3))
 
 ##
 
@@ -231,3 +264,43 @@ d = map(get_bhp, ix)
 d = hcat(d...)
 h = Plots.plot(d)
 # ylims!(h, (0, 6e-3))
+##
+# svar = model.models.Reservoir.secondary_variables
+# kr = svar[:RelativePermeabilities]
+
+
+krw = kr.interpolators[1]
+kro = kr.interpolators[2]
+
+sw = collect(-0.2:0.1:1.2)
+so = 1 .- sw
+Plots.plot(sw, krw.(sw))
+Plots.plot!(sw, kro.(so))
+
+##
+using ForwardDiff
+krw = kr.interpolators[1]
+kro = kr.interpolators[2]
+
+
+##
+so = ForwardDiff.Dual(0.80, -1)
+kro(so)
+##
+sw = ForwardDiff.Dual(0.2, 1)
+krw(sw)
+##
+sw = collect(0:0.01:1)
+so = 1 .- sw
+der = (x) -> x.partials[1]
+##
+fo = (s) -> kro(ForwardDiff.Dual(s, -1))
+ko = fo.(so)
+Plots.plot(so, value.(ko), title = "kro")
+Plots.plot!(so, der.(ko))
+##
+fw = (s) -> krw(ForwardDiff.Dual(s, 1))
+kw = fw.(sw)
+dw = der.(kw)
+Plots.plot(sw, value.(kw), title = "krw")
+Plots.plot!(sw, dw)

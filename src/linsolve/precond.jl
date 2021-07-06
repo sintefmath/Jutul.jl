@@ -1,4 +1,4 @@
-export ILUZeroPreconditioner, GroupWisePreconditioner
+export ILUZeroPreconditioner, GroupWisePreconditioner, TrivialPreconditioner
 using ILUZero
 
 abstract type TervPreconditioner end
@@ -110,9 +110,22 @@ end
 function matrix_dim(ilu::ILUZeroPreconditioner)
     return ilu.dim[1]
 end
+
+mutable struct TrivialPreconditioner <: TervPreconditioner
+    dim
+    function TrivialPreconditioner()
+        new(nothing)
+    end
+end
+
+
 # Trivial precond
-function update!(::UniformScaling{Bool}, arg...)
-    # Do nothing.
+function update!(tp::TrivialPreconditioner, A, b)
+    tp.dim = size(A)
+end
+
+function linear_operator(id::TrivialPreconditioner, ::Symbol)
+    return opEye(id.dim...)
 end
 
 # Multi-model preconditioners
@@ -130,4 +143,10 @@ function update!(prec::GroupWisePreconditioner, lsys::MultiLinearizedSystem)
     for i in 1:n
         update!(prec.preconditioners[i], s[i, i])
     end
+end
+
+function linear_operator(precond::GroupWisePreconditioner, side::Symbol = :left)
+    d = Vector{LinearOperator}(map((x) -> linear_operator(x, side), precond.preconditioners))
+    D = BlockDiagonalOperator(d...)
+    return D
 end
