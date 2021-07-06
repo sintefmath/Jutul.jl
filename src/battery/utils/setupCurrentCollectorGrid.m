@@ -1,4 +1,4 @@
-clear all
+% clear all
 close all
 
 nx = 10;
@@ -36,5 +36,5 @@ plotGrid(G, bccells, 'facecolor', 'blue');
 
 savedir = '../../../data/testgrids';
 
-save(fullfile(savedir, 'cccase.mat'), 'G', 'rock');
-save(fullfile(savedir, 'bccccase.mat'), 'bccells', 'T');
+save(fullfile(savedir, 'square_current_collector.mat'), 'G', 'rock');
+% save(fullfile(savedir, 'bccccase.mat'), 'bccells', 'T');
