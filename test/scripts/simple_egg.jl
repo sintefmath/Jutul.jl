@@ -1,5 +1,5 @@
 using Terv
-using Statistics, DataStructures, LinearAlgebra
+using Statistics, DataStructures, LinearAlgebra, Krylov
 ENV["JULIA_DEBUG"] = Terv
 ENV["JULIA_DEBUG"] = nothing
 ##
@@ -38,7 +38,7 @@ simple_well = false
     dctx = DefaultContext()
 
     res_context = bctx
-    # res_context = dctx
+    res_context = dctx
 
     model = SimulationModel(G, sys, context = res_context)
 
@@ -188,10 +188,16 @@ simple_well = false
     dt = timesteps
     # dt = dt[1:20]
     # lsolve = LUSolver(check = false)
-    group_p = GroupWisePreconditioner([ILUZeroPreconditioner(), TrivialPreconditioner()])
+    res_precond = ILUZeroPreconditioner()
+    well_precond = TrivialPreconditioner()
+    well_precond = LUPreconditioner()
+    res_precond = LUPreconditioner()
+
+    group_p = GroupWisePreconditioner([res_precond, well_precond])
+    # group_p = GroupWisePreconditioner([ILUZeroPreconditioner(), ILUZeroPreconditioner()])
 
     lsolve = GenericKrylov(verbose = 10)
-    lsolve = GenericKrylov(verbose = 10, preconditioner = group_p)
+    lsolve = GenericKrylov(dqgmres, verbose = 10, preconditioner = group_p)
 
     # lsolve = GenericKrylov(verbose = 10, preconditioner = ILUZeroPreconditioner())
 
@@ -200,7 +206,8 @@ simple_well = false
 # end
 ##
  sim2 = Simulator(model, state0 = state0r)
-# simulate(sim2, dt)
+simulate(sim2, dt, linear_solver = GenericKrylov(verbose = 10, preconditioner = ILUZeroPreconditioner())
+)
 ##
 # states, model, well_symbols = run_immiscible_mrst(casename, false)
 # nothing
