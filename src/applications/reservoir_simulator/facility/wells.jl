@@ -1,4 +1,3 @@
-export TotalMassFlux
 export WellGrid, MultiSegmentWell
 export TotalMassFlux, PotentialDropBalanceWell, SegmentWellBoreFrictionHB
 
@@ -111,10 +110,19 @@ struct SegmentWellBoreFrictionHB
     D_outer
     D_inner
     assume_turbulent
-    function SegmentWellBoreFrictionHB(L, roughness, D_outer; D_inner = 0, assume_turbulent = true)
-        @assert assume_turbulent
-        new(L, roughness, D_outer, D_inner, assume_turbulent)
+    laminar_limit
+    turbulent_limit
+    function SegmentWellBoreFrictionHB(L, roughness, D_outer; D_inner = 0, assume_turbulent = false, laminar_limit = 2000.0, turbulent_limit = 2000.0)
+        new(L, roughness, D_outer, D_inner, assume_turbulent, laminar_limit, turbulent_limit)
     end
+end
+
+function is_turbulent_flow(f::SegmentWellBoreFrictionHB, Re)
+    return f.assume_turbulent || Re >= f.turbulent_limit
+end
+
+function is_laminar_flow(f::SegmentWellBoreFrictionHB, Re)
+    return !f.assume_turbulent && Re <= f.laminar_limit
 end
 
 function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
@@ -131,10 +139,26 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
     v = v/(π*ρ*((D⁰/2)^2 - (Dⁱ/2)^2));
     Re = abs(v*ρ*ΔD)/μ;
     # Friction model - empirical relationship
-    f = (-3.6*log(6.9/Re +(R/(3.7*D⁰))^(10/9))/log(10))^(-2);
+    Re_l = f.laminar_limit
+    Re_t = f.turbulent_limit
+    if is_laminar_flow(f, Re)
+        f = 16/Re_l;
+    else
+        # Either turbulent or intermediate flow regime. We need turbulent value either way.
+        f_t = (-3.6*log(6.9/Re +(R/(3.7*D⁰))^(10/9))/log(10))^(-2);
+        if is_turbulent_flow(f, Re)
+            # Turbulent flow
+            f = f_t
+        else
+            # Intermediate regime - interpolation
+            f_l = 16/Re_l
+            f = f_l + ((f_t-f_l)/(Re_t-Re_l))*(Re - Re_l);
+        end
+    end
     Δp = -(2*s*L/ΔD)*(f*ρ*v^2);
     return Δp
 end
+
 
 struct PotentialDropBalanceWell <: TervEquation
     # Equation: pot_diff(p) - pot_diff_model(v, p)
@@ -268,19 +292,25 @@ function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W
     ρ_mix = 0.5*(ρ_mix_self + ρ_mix_other)
 
     Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
-    eq = sgn*(Δθ - Δp)
+
+    @inline function pot_balance(Δθ, Δp)
+        return Δθ + Δp
+    end
+
+    eq = pot_balance(Δθ, Δp)
     if sgn == 1
         # This is a good time to deal with the derivatives of v[face] since it is already fetched.
         Δp_f = segment_pressure_drop(seg_model, v, value(ρ_mix), value(μ_mix))
-        face_entries[face] = value(Δθ) - Δp_f
+        eq_f = pot_balance(value(Δθ), Δp_f)
         # @debug "$face \neq_f: $(value.(face_entries[face]))"
 
         # @debug "Δp_f $face: $Δp_f flux: $v\neq_f: $(face_entries[face])"
         # @debug "rho: $(value(ρ_mix)) mu: $(value(μ_mix))"
 
+        face_entries[face] = eq_f
         cell_entries[(face-1)*2 + 1] = eq
     else
-        cell_entries[(face-1)*2 + 2] = eq
+        cell_entries[(face-1)*2 + 2] = -eq
     end
 end
 
