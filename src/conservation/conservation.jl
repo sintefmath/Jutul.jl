@@ -146,7 +146,7 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
                 sgn = c.face_sign
                 f = sgn*get_entry(face_flux, face, e, fentries)
                 for d = 1:np
-                    df_di = -f.partials[d]
+                    df_di = f.partials[d]
                     fpos = get_jacobian_pos(face_flux, i, e, d, fp)
                     @inbounds Jz[fpos] = df_di
                 end
