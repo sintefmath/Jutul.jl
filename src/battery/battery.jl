@@ -169,7 +169,8 @@ end
 function select_equations_system!(
     eqs, domain, system::CurrentCollector, formulation
     )
-    eqs[:charge_conservation] = (ChargeConservation, 1)
+    charge_cons = (arg...; kwarg...) -> Conservation(Phi(), arg...; kwarg...)
+    eqs[:charge_conservation] = (charge_cons, 1)
 end
 
 # concrete electrochemical component
@@ -193,7 +194,7 @@ end
 function select_equations_system!(
     eqs, domain, system::ECComponent, formulation
     )
-    eqs[:charge_conservation] = (ChargeConservation, 1)
+    eqs[:charge_conservation] = (Conservation{Phi}, 1)
     eqs[:mass_conservation] = (MassConservation, 1)
 end
 
@@ -258,7 +259,7 @@ end
 @terv_secondary function update_as_secondary!(
     pot, tv::C, model, param, C
     )
-    mf = model.domain.discretizations.charge_flow
+    mf = model.domain.discretizations.mi
     conn_data = mf.conn_data
     context = model.context
     update_cell_neighbor_potential_cc!(

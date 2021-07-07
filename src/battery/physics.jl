@@ -22,7 +22,7 @@ function update_equation!(law::Conservation, storage, model, dt)
 end
 
 # Update of discretization terms
-function update_accumulation!(law, storage, model::ChargeConservation, dt)
+function update_accumulation!(law, storage, model::Conservation{Phi}, dt)
     acc = get_entries(law.accumulation)
     acc .= 0  # Assume no accumulation
     return acc
@@ -56,7 +56,7 @@ function update_half_face_flux!(
 end
 
 function update_half_face_flux!(
-    law::ChargeConservation, storage, model, dt, 
+    law::Conservation{Phi}, storage, model, dt, 
     flowd::TwoPointPotentialFlow{U, K, T}
     ) where {U,K,T<:ECFlow}
 
@@ -79,9 +79,10 @@ end
 function apply_forces_to_equation!(
     storage, model::SimulationModel{D, S}, eq::Conservation, force
     ) where {D<:Any, S<:CurrentCollector}
-    if eltype(force) == 
-    acc = get_entries(eq.accumulation)
-    insert_sources(acc, force, storage)
+    if eltype(force) == eltype(eq)
+        acc = get_entries(eq.accumulation)
+        insert_sources(acc, force, storage)
+    end
 end
 
 function insert_sources(acc, source::vonNeumannBC, storage)
