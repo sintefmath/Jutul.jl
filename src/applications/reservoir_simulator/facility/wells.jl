@@ -152,7 +152,9 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
         else
             # Intermediate regime - interpolation
             f_l = 16/Re_l
-            f = f_l + ((f_t-f_l)/(Re_t-Re_l))*(Re - Re_l);
+            Δf = f_t - f_l
+            ΔRe = Re_t - Re_l
+            f = f_l + (Δf / ΔRe)*(Re - Re_l);
         end
     end
     Δp = -(2*s*L/ΔD)*(f*ρ*v^2);
