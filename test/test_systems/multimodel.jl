@@ -34,7 +34,15 @@ function test_multi(; use_groups = false, kwarg...)
 
     return XA[] ≈ 1/3 && XB[] ≈ -1/3
 end
+
+group_precond = GroupWisePreconditioner([TrivialPreconditioner(), TrivialPreconditioner()])
+
 @testset "Multi-model: Scalar test system" begin
-    @test test_multi(use_groups = false)
-    @test test_multi(use_groups = true, linear_solver = GenericKrylov())
+    @testset "Single sparse matrix" begin
+        @test test_multi(use_groups = false)
+    end
+    @testset "Multiple sparse matrices" begin
+        @test test_multi(use_groups = true, linear_solver = GenericKrylov())
+        @test test_multi(use_groups = true, linear_solver = GenericKrylov(preconditioner = group_precond))
+    end
 end
