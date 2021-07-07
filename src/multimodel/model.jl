@@ -337,7 +337,7 @@ function setup_linearized_system!(storage, model::MultiModel)
             context = models[1].context
         end
         layout = matrix_layout(context)
-        sparse_arg = get_sparse_arguments(storage, model, candidates, candidates)
+        sparse_arg = get_sparse_arguments(storage, model, candidates, candidates, context)
         lsys = LinearizedSystem(sparse_arg, context, layout)
     end
     storage[:LinearizedSystem] = lsys
