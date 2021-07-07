@@ -199,8 +199,8 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPFlux, model::CurrentCollector, param, Phi
-    )
+    pot, tv::TPFlux, model::SimulationModel{D, S, F, C}, param, Phi
+    ) where {D, S <: CurrentCollector, F, C}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     @tullio pot[i] = half_face_two_point_grad(conn_data[i], Phi)
