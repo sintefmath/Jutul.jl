@@ -188,12 +188,17 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
 
         tot_time = sum(timesteps)
         irate = pvfrac*sum(pv)/tot_time
-        src  = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
+        s0 = 1.0
+        s = 0.0
+
+        # s = 0.1
+        # s0 = 0.9
+        src  = [SourceTerm(1, irate, fractional_flow = [1 - s, s]), 
                 SourceTerm(nc, -irate)]
         forces = build_forces(model, sources = src)
 
         # State is dict with pressure in each cell
-        init = Dict(:Pressure => p0, :Saturations => [0.0, 1.0])
+        init = Dict(:Pressure => p0, :Saturations => [1 - s0, s0])
         # Model parameters
         parameters = setup_parameters(model)
     else
