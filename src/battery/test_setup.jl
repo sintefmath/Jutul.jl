@@ -67,8 +67,9 @@ end
 
 
 function get_test_setup_ec_component()
-    domain = get_cc_grid(MixedFlow())
-    timesteps = [1.,]
+    domain, exported = get_cc_grid(MixedFlow(), extraout=true)
+    timesteps = [1., 2, 3, 4]
+    G = exported["G"]
     
     sys = ECComponent()
     model = SimulationModel(domain, sys, context = DefaultContext())
@@ -82,7 +83,7 @@ function get_test_setup_ec_component()
     forces = nothing    
     parameters = setup_parameters(model)
 
-    return (state0, model, parameters, forces, timesteps)
+    return (state0, model, parameters, forces, timesteps, G)
 end
 
 

@@ -79,6 +79,7 @@ end
 function apply_forces_to_equation!(
     storage, model::SimulationModel{D, S}, eq::Conservation, force
     ) where {D<:Any, S<:CurrentCollector}
+    if eltype(force) == 
     acc = get_entries(eq.accumulation)
     insert_sources(acc, force, storage)
 end
