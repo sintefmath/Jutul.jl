@@ -8,6 +8,7 @@ export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
 
 abstract type ElectroChemicalComponent <: TervSystem end
 struct CurrentCollector <: ElectroChemicalComponent end
+struct ECComponent <: ElectroChemicalComponent end
 
 abstract type ElectroChemicalGrid <: TervGrid end
 struct Phi <: ScalarVariable end
@@ -17,8 +18,10 @@ struct TotalCharge <: GroupedVariables end
 struct TotalConcentration <: GroupedVariables end
 struct TPFlux <: GroupedVariables end
 
-struct ChargeFlow <: FlowType end
-include_face_sign(::ChargeFlow) = false
+abstract type ECFlow <: FlowType end
+struct ChargeFlow <: ECFlow end
+struct MixedFlow <: ECFlow end
+
 
 # Todo: allow for several variables in BC's
 abstract type BoundaryCondition <: TervForce end

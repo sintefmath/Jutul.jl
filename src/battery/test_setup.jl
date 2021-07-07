@@ -1,6 +1,6 @@
 using Terv
 
-export get_test_setup_battery, get_cc_grid, get_bc
+export get_test_setup_battery, get_cc_grid, get_bc, test_mixed_boundary_conditions
 
 function get_test_setup_battery(name="square_current_collector")
     domain, exported = get_cc_grid(name, extraout=true)
@@ -63,6 +63,30 @@ function test_mixed_boundary_conditions()
     # Check if the field value increments by one
     @assert sum(isapprox.(diff(states[1].Phi[1:10]), 1)) == 9
 end
+
+
+function get_test_setup_ec_component(name="square_current_collector")
+    domain = get_cc_grid(name)
+    timesteps = [1.,]
+    
+    sys = ECComponent()
+    model = SimulationModel(domain, sys, context = DefaultContext())
+
+    # State is dict with pressure in each cell
+    phi = 1.
+    c = 1.
+    init = Dict(:Phi => phi, :C => c)
+    state0 = setup_state(model, init)
+    
+    # set up boundary conditions
+    nc = length(domain.grid.volumes)
+    
+    # Model parameters
+    parameters = setup_parameters(model)
+
+    return (state0, model, parameters, forces, timesteps)
+end
+
 
 
 function get_bccc_struct(name)

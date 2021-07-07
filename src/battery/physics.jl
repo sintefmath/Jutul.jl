@@ -28,9 +28,8 @@ function update_accumulation!(law, storage, model::ChargeConservation, dt)
     return acc
 end
 
-# ? Might Conservation be used insead of ChargeCons??
 function update_half_face_flux!(
-    law::ChargeConservation, storage, model, dt
+    law::Conservation, storage, model, dt
     )
     fd = law.flow_discretization
     update_half_face_flux!(law, storage, model, dt, fd)
@@ -39,14 +38,10 @@ end
 
 function update_half_face_flux!(
     law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}
-    ) where {U,K,T<:ChargeFlow}
+    ) where {U,K,T<:ECFlow}
 
     pot = storage.state.TPFlux  # ?WHy is this named pot?
     flux = get_entries(law.half_face_flux_cells)
-    update_fluxes_from_potential!(flux, pot)
-end
-# Kan disse kombineres
-function update_fluxes_from_potential!(flux, pot)
     @tullio flux[i] = pot[i]
 end
 

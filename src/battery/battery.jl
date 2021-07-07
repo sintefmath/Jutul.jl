@@ -11,7 +11,7 @@ end
 
 function build_forces(
     model::SimulationModel{G, S}; sources = nothing
-    ) where {G<:TervDomain, S<:CurrentCollector}
+    ) where {G<:TervDomain, S<:ElectroChemicalComponent}
     return (sources = sources,)
 end
 
@@ -22,6 +22,10 @@ function declare_units(G::MinimalECTPFAGrid)
     f = (unit = Faces(), count = size(G.neighborship, 2))
     return [c, f]
 end
+
+####################
+# CurrentCollector #
+####################
 
 function degrees_of_freedom_per_unit(
     model::SimulationModel{D, S}, sf::Phi
@@ -51,7 +55,7 @@ end
 
 function single_unique_potential(
     model::SimulationModel{D, S}
-    )where {D<:TervDomain, S<:CurrentCollector}
+    )where {D<:TervDomain, S<:ElectroChemicalComponent}
     return false
 end
 
@@ -141,7 +145,7 @@ end
 #############
 
 function select_primary_variables_system!(
-    S, domain, system::ElectroChemicalComponent, formulation
+    S, domain, system::CurrentCollector, formulation
     )
     S[:Phi] = Phi()
 end
@@ -158,12 +162,6 @@ function select_equations_system!(
     )
     eqs[:charge_conservation] = (ChargeConservation, 1)
 end
-
-# @terv_secondary function update_as_secondary!(
-#     totcharge, tv::TotalCharge, model::SimulationModel{G, S}, param
-#     ) where {G, S<:CurrentCollector}
-#     @tullio totcharge[i] = 0 # Charge neutrality
-# end
 
 
 @terv_secondary function update_as_secondary!(

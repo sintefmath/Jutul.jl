@@ -1,5 +1,6 @@
 module Terv
 
+using Core: _abstracttype
 using Base: Symbol, Real
 using SparseArrays
 using LinearAlgebra
