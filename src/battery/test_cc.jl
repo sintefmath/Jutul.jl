@@ -3,7 +3,10 @@ using Test
 
 ENV["JULIA_DEBUG"] = Terv;
 
-test_mixed_boundary_conditions()
+states, G = test_mixed_boundary_conditions();
+##
+f = plot_interactive(G, states)
+display(f)
 
 ##
 function test_cc(linear_solver=nothing)

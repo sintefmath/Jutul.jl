@@ -23,14 +23,13 @@ struct ChargeFlow <: ECFlow end
 struct MixedFlow <: ECFlow end
 
 
-# Todo: allow for several variables in BC's
-abstract type BoundaryCondition <: TervForce end
-struct vonNeumannBC{T} <: BoundaryCondition 
+abstract type BoundaryCondition{T} <: TervForce end
+struct vonNeumannBC{T} <: BoundaryCondition{T} 
     cells
     values
 end
 
-struct DirichletBC{T} <: BoundaryCondition 
+struct DirichletBC{T} <: BoundaryCondition{T}
     cells
     values
     half_face_Ts
@@ -76,7 +75,6 @@ function acc_symbol(p::C)
 end
 
 
-# ? There has to be a way to not copy these
 function Conservation(
     pvar, model, number_of_equations;
     flow_discretization = nothing, kwarg...
@@ -89,8 +87,6 @@ function Conservation(
     end
     accumulation_symbol = acc_symbol(pvar)
 
-
-    # Todo: This is copy-pasted, what is necessary??
     D = model.domain
     cell_unit = Cells()
     face_unit = Faces()

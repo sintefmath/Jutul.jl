@@ -75,11 +75,28 @@ end
 # Boundary conditions #
 #######################
 
+
+function potential(::BoundaryCondition{Phi})
+    return Phi()
+end
+
+function potential(::BoundaryCondition{C})
+    return C()
+end
+
+function potential(::Conservation{Phi})
+    return Phi()
+end
+
+function potential(::Conservation{C})
+    return C()
+end
+
 # Called from uppdate_state_dependents
 function apply_forces_to_equation!(
     storage, model::SimulationModel{D, S}, eq::Conservation{T}, force
     ) where {D<:Any, S<:ElectroChemicalComponent, T}
-    if eltype(force) == eltype(eq)
+    if potential(force) == potential(eq)
         acc = get_entries(eq.accumulation)
         insert_sources(acc, force, storage)
     end

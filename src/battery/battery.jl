@@ -174,7 +174,6 @@ function select_equations_system!(
 end
 
 # concrete electrochemical component
-
 function select_primary_variables_system!(
     S, domain, system::ECComponent, formulation
     )
@@ -188,6 +187,7 @@ function select_secondary_variables_flow_type!(
     S[:TPFlux_Phi] = TPFlux{Phi}()
     S[:TPFlux_C] = TPFlux{C}()
     S[:TotalCharge] = TotalCharge()
+    #?? Is it necessary with both C and TotCons??
     S[:TotalConcentration] = TotalConcentration()
 end
 
@@ -212,7 +212,7 @@ end
 
 @terv_secondary function update_as_secondary!(
     pot, tv::TPFlux{C}, model::SimulationModel{D, S, F, Con}, param, C
-    ) where {D, S <: ECComponent, F, Con}
+    ) where {D, S <: ElectroChemicalComponent, F, Con}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     @tullio pot[i] = half_face_two_point_grad(conn_data[i], C)
