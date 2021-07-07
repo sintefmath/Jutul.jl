@@ -162,7 +162,7 @@ end
 function select_secondary_variables_flow_type!(
     S, domain, system, formulation, flow_type::ChargeFlow
     )
-    S[:TPFlux] = TPFlux()
+    S[:TPFlux_Phi] = TPFlux{Phi}()
     S[:TotalCharge] = TotalCharge()
 end
 
@@ -184,7 +184,8 @@ end
 function select_secondary_variables_flow_type!(
     S, domain, system, formulation, flow_type::MixedFlow
     )
-    S[:TPFlux] = TPFlux()
+    S[:TPFlux_Phi] = TPFlux{Phi}()
+    S[:TPFlux_C] = TPFlux{C}()
     S[:TotalCharge] = TotalCharge()
     S[:TotalConcentration] = TotalConcentration()
 end
@@ -199,12 +200,21 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPFlux, model::SimulationModel{D, S, F, C}, param, Phi
-    ) where {D, S <: CurrentCollector, F, C}
+    pot, tv::TPFlux{Phi}, model::SimulationModel{D, S, F, C}, param, Phi
+    ) where {D, S <: ElectroChemicalComponent, F, C}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     @tullio pot[i] = half_face_two_point_grad(conn_data[i], Phi)
 end
+
+@terv_secondary function update_as_secondary!(
+    pot, tv::TPFlux{C}, model::SimulationModel{D, S, F, Con}, param, C
+    ) where {D, S <: ECComponent, F, Con}
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
+    @tullio pot[i] = half_face_two_point_grad(conn_data[i], C)
+end
+
 
 @terv_secondary function update_as_secondary!(
     pot, tv::Phi, model, param, Phi
@@ -258,8 +268,8 @@ end
 
 # Hvordan vet den at C er C??
 @terv_secondary function update_as_secondary!(
-    totcons, tv::TotalConcentration, param, C
+    totcons, tv::TotalConcentration, model, param, C
     )
-    @tullio totcons[i] = C[i]
+    @tullio totcons[i] = C[i] # Why is total cons like that? 
 end
 

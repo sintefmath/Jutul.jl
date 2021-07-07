@@ -14,9 +14,9 @@ struct ECComponent <: ElectroChemicalComponent end # Not a good name
 abstract type ElectroChemicalGrid <: TervGrid end
 struct Phi <: ScalarVariable end
 struct C <: ScalarVariable end
-struct TotalCharge <: GroupedVariables end
-struct TotalConcentration <: GroupedVariables end
-struct TPFlux <: GroupedVariables end
+struct TotalCharge <: GroupedVariables end # should be scalar
+struct TotalConcentration <: ScalarVariable end
+struct TPFlux{T} <: GroupedVariables end
 
 abstract type ECFlow <: FlowType end
 struct ChargeFlow <: ECFlow end

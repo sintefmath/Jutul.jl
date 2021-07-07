@@ -28,6 +28,15 @@ function update_accumulation!(law, storage, model::ChargeConservation, dt)
     return acc
 end
 
+function update_accumulation!(law::MassConservation, storage, model, dt)
+    conserved = law.accumulation_symbol
+    acc = get_entries(law.accumulation)
+    m = storage.state[conserved]
+    m0 = storage.state0[conserved]
+    @tullio acc[c] = (m[c] - m0[c])/dt
+    return acc
+end
+
 function update_half_face_flux!(
     law::Conservation, storage, model, dt
     )
@@ -37,13 +46,25 @@ end
 
 
 function update_half_face_flux!(
-    law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}
+    law::MassConservation, storage, model, dt, 
+    flowd::TwoPointPotentialFlow{U, K, T}
     ) where {U,K,T<:ECFlow}
 
-    pot = storage.state.TPFlux  # ?WHy is this named pot?
+    pot = storage.state.TPFlux_C  # ?WHy is this named pot?
     flux = get_entries(law.half_face_flux_cells)
     @tullio flux[i] = pot[i]
 end
+
+function update_half_face_flux!(
+    law::ChargeConservation, storage, model, dt, 
+    flowd::TwoPointPotentialFlow{U, K, T}
+    ) where {U,K,T<:ECFlow}
+
+    pot = storage.state.TPFlux_Phi  # ?WHy is this named pot?
+    flux = get_entries(law.half_face_flux_cells)
+    @tullio flux[i] = pot[i]
+end
+
 
 @inline function get_diagonal_cache(eq::Conservation)
     return eq.accumulation
