@@ -194,8 +194,10 @@ end
 function select_equations_system!(
     eqs, domain, system::ECComponent, formulation
     )
-    eqs[:charge_conservation] = (Conservation{Phi}, 1)
-    eqs[:mass_conservation] = (MassConservation, 1)
+    charge_cons = (arg...; kwarg...) -> Conservation(Phi(), arg...; kwarg...)
+    mass_cons = (arg...; kwarg...) -> Conservation(C(), arg...; kwarg...)
+    eqs[:charge_conservation] = (charge_cons, 1)
+    eqs[:mass_conservation] = (mass_cons, 1)
 end
 
 

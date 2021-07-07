@@ -28,7 +28,7 @@ function update_accumulation!(law, storage, model::Conservation{Phi}, dt)
     return acc
 end
 
-function update_accumulation!(law::MassConservation, storage, model, dt)
+function update_accumulation!(law::Conservation{C}, storage, model, dt)
     conserved = law.accumulation_symbol
     acc = get_entries(law.accumulation)
     m = storage.state[conserved]
@@ -46,7 +46,7 @@ end
 
 
 function update_half_face_flux!(
-    law::MassConservation, storage, model, dt, 
+    law::Conservation{C}, storage, model, dt, 
     flowd::TwoPointPotentialFlow{U, K, T}
     ) where {U,K,T<:ECFlow}
 
