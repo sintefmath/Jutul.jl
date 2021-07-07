@@ -16,7 +16,7 @@ end
     return -T * (phi[c_self] - value(phi[c_other]))
 end
 
-function update_equation!(law::ChargeConservation, storage, model, dt)
+function update_equation!(law::Conservation, storage, model, dt)
     update_accumulation!(law, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt)
 end
@@ -28,7 +28,7 @@ function update_accumulation!(law, storage, model::ChargeConservation, dt)
     return acc
 end
 
-
+# ? Might Conservation be used insead of ChargeCons??
 function update_half_face_flux!(
     law::ChargeConservation, storage, model, dt
     )
@@ -50,7 +50,7 @@ function update_fluxes_from_potential!(flux, pot)
     @tullio flux[i] = pot[i]
 end
 
-@inline function get_diagonal_cache(eq::ChargeConservation)
+@inline function get_diagonal_cache(eq::Conservation)
     return eq.accumulation
 end
 
@@ -61,7 +61,7 @@ end
 
 # Called from uppdate_state_dependents
 function apply_forces_to_equation!(
-    storage, model::SimulationModel{D, S}, eq::ChargeConservation, force
+    storage, model::SimulationModel{D, S}, eq::Conservation, force
     ) where {D<:Any, S<:CurrentCollector}
     acc = get_entries(eq.accumulation)
     insert_sources(acc, force, storage)

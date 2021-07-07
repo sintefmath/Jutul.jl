@@ -79,7 +79,7 @@ function associated_unit(::TPFlux)
 end
 
 function update_linearized_system_equation!(
-    nz, r, model, law::ChargeConservation
+    nz, r, model, law::Conservation
     )
     
     acc = get_diagonal_cache(law)
@@ -94,7 +94,7 @@ end
 
 
 function align_to_jacobian!(
-    law::ChargeConservation, jac, model, u::Cells; equation_offset = 0, 
+    law::Conservation, jac, model, u::Cells; equation_offset = 0, 
     variable_offset = 0
     )
     fd = law.flow_discretization
@@ -111,7 +111,7 @@ function align_to_jacobian!(
         )
 end
 
-function declare_pattern(model, e::ChargeConservation, ::Cells)
+function declare_pattern(model, e::Conservation, ::Cells)
     df = e.flow_discretization
     hfd = Array(df.conn_data)
     n = number_of_units(model, e)
@@ -127,7 +127,7 @@ function declare_pattern(model, e::ChargeConservation, ::Cells)
     return (I, J)
 end
 
-function declare_pattern(model, e::ChargeConservation, ::Faces)
+function declare_pattern(model, e::Conservation, ::Faces)
     df = e.flow_discretization
     cd = df.conn_data
     I = map(x -> x.self, cd)
