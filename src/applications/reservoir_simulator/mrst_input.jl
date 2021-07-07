@@ -11,7 +11,7 @@ struct MRSTPlotData
 end
 
 
-function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false, fuse_flux = false)
+function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false, fuse_flux = false, grav_on = true)
     if relative_path
         fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     else
@@ -62,7 +62,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
     T = compute_face_trans(T_hf, N)
     G = MinimalTPFAGrid(pv, N)
-    if size(cell_centroids, 1) == 3
+    if size(cell_centroids, 1) == 3 && grav_on
         z = cell_centroids[3, :]
         g = gravity_constant
     else
