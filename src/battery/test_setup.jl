@@ -3,7 +3,7 @@ using Terv
 export get_test_setup_battery, get_cc_grid, get_bc
 
 function get_test_setup_battery(name="square_current_collector")
-    domain, exported = get_cc_grid(name, true)
+    domain, exported = get_cc_grid(name, extraout=true)
     timesteps = [1.,]
     G = exported["G"]
 
@@ -30,9 +30,8 @@ function get_test_setup_battery(name="square_current_collector")
 end
 
 function test_mixed_boundary_conditions()
-    domain, exported = get_cc_grid("square_current_collector", true)
+    domain = get_cc_grid("square_current_collector")
     timesteps = [1.,]
-    G = exported["G"]
 
     sys = CurrentCollector()
     model = SimulationModel(domain, sys, context = DefaultContext())
@@ -56,10 +55,10 @@ function test_mixed_boundary_conditions()
     # Model parameters
     parameters = setup_parameters(model)
 
-    sim = Simulator(model, state0=state0, parameters=prm)
+    sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
-    cfg[:linear_solver] = linear_solver
-    states = simulate(sim, t, forces = f, config = cfg)
+    cfg[:linear_solver] = nothing
+    states = simulate(sim, timesteps, forces = forces, config = cfg)
 
     # Check if the field value increments by one
     @assert sum(isapprox.(diff(states[1].Phi[1:10]), 1)) == 9
