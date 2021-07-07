@@ -1,4 +1,4 @@
-export ILUZeroPreconditioner, GroupWisePreconditioner, TrivialPreconditioner
+export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner
 using ILUZero
 
 abstract type TervPreconditioner end
@@ -11,8 +11,11 @@ function get_factorization(precond)
     return precond.factor
 end
 
+is_left_preconditioner(::TervPreconditioner) = true
+is_right_preconditioner(::TervPreconditioner) = false
+
 function linear_operator(precond::TervPreconditioner, side::Symbol = :left)
-    n = matrix_dim(precond)
+    n = operator_nrows(precond)
     function local_mul!(res, x, α, β::T, type) where T
         if β == zero(T)
             apply!(res, precond, x, type)
@@ -25,28 +28,39 @@ function linear_operator(precond::TervPreconditioner, side::Symbol = :left)
     end
 
     if side == :left
-        if precond.left
-            if precond.right
+        if is_left_preconditioner(precond)
+            if is_right_preconditioner(precond)
                 f! = (r, x, α, β) -> local_mul!(r, x, α, β, :left)
             else
                 f! = (r, x, α, β) -> local_mul!(r, x, α, β, :both)
             end
             op = LinearOperator(Float64, n, n, false, false, f!)
         else
-            op = I
+            op = opEye(n, n)
         end
     elseif side == :right
-        if precond.right
+        if is_right_preconditioner(precond)
             f! = (r, x, α, β) -> local_mul!(r, x, α, β, :right)
             op = LinearOperator(Float64, n, n, false, false, f!)
         else
-            op = I
+            op = opEye(n, n)
         end
     else
         error("Side must be :left or :right, was $side")
     end
 
     return op
+end
+
+function apply!(x, p::TervPreconditioner, y, arg...)
+    factor = get_factorization(p)
+    if is_left_preconditioner(p)
+        ldiv!(x, factor, y)
+    elseif is_right_preconditioner(p)
+        error("Not supported.")
+    else
+        error("Neither left or right preconditioner?")
+    end
 end
 
 """
@@ -63,6 +77,9 @@ mutable struct ILUZeroPreconditioner <: TervPreconditioner
     end
 end
 
+is_left_preconditioner(p::ILUZeroPreconditioner) = p.left
+is_right_preconditioner(p::ILUZeroPreconditioner) = p.right
+
 function update!(ilu::ILUZeroPreconditioner, A, b)
     if isnothing(ilu.factor)
         ilu.factor = ilu0(A, eltype(b))
@@ -74,7 +91,7 @@ function update!(ilu::ILUZeroPreconditioner, A, b)
 end
 
 function apply!(x, ilu::ILUZeroPreconditioner, y, arg...)
-    factor = ilu.factor
+    factor = get_factorization(ilu)
     ilu_apply!(x, factor, y, arg...)
 end
 
@@ -107,7 +124,7 @@ function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)
     f!(as_svec(x), ilu, as_svec(y))
 end
 
-function matrix_dim(ilu::ILUZeroPreconditioner)
+function operator_nrows(ilu::ILUZeroPreconditioner)
     return ilu.dim[1]
 end
 
@@ -117,8 +134,34 @@ mutable struct TrivialPreconditioner <: TervPreconditioner
         new(nothing)
     end
 end
+"""
+Full LU factorization as preconditioner (intended for smaller subsystems)
+"""
+mutable struct LUPreconditioner <: TervPreconditioner
+    factor
+    function LUPreconditioner()
+        new(nothing)
+    end
+end
 
+function update!(lup::LUPreconditioner, A, b)
+    if isnothing(lup.factor)
+        lup.factor = lu(A)
+    else
+        lu!(lup.factor, A)
+    end
+end
 
+function operator_nrows(lup::LUPreconditioner)
+    f = get_factorization(lup)
+    return size(f.L, 1)
+end
+
+# LU factor as precond for wells?
+
+"""
+Trivial / identity preconditioner with size for use in subsystems.
+"""
 # Trivial precond
 function update!(tp::TrivialPreconditioner, A, b)
     tp.dim = size(A)
@@ -128,7 +171,9 @@ function linear_operator(id::TrivialPreconditioner, ::Symbol)
     return opEye(id.dim...)
 end
 
-# Multi-model preconditioners
+"""
+Multi-model preconditioners
+"""
 mutable struct GroupWisePreconditioner <: TervPreconditioner
     preconditioners::AbstractVector
     function GroupWisePreconditioner(preconditioners)
