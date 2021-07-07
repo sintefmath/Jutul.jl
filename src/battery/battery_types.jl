@@ -8,12 +8,11 @@ export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
 
 abstract type ElectroChemicalComponent <: TervSystem end
 struct CurrentCollector <: ElectroChemicalComponent end
-struct ECComponent <: ElectroChemicalComponent end
+struct ECComponent <: ElectroChemicalComponent end # Not a good name
 
 abstract type ElectroChemicalGrid <: TervGrid end
 struct Phi <: ScalarVariable end
 struct C <: ScalarVariable end
-struct Conductivity <: ComponentVariable end
 struct TotalCharge <: GroupedVariables end
 struct TotalConcentration <: GroupedVariables end
 struct TPFlux <: GroupedVariables end

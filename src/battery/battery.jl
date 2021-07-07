@@ -23,6 +23,16 @@ function declare_units(G::MinimalECTPFAGrid)
     return [c, f]
 end
 
+################
+# All EC-comps #
+################
+
+function single_unique_potential(
+    model::SimulationModel{D, S}
+    )where {D<:TervDomain, S<:ElectroChemicalComponent}
+    return false
+end
+
 ####################
 # CurrentCollector #
 ####################
@@ -31,12 +41,6 @@ function degrees_of_freedom_per_unit(
     model::SimulationModel{D, S}, sf::Phi
     ) where {D<:TervDomain, S<:CurrentCollector}
     return 1 
-end
-
-function degrees_of_freedom_per_unit(
-    model::SimulationModel{D, S}, sf::Conductivity
-    ) where {D<:TervDomain, S<:CurrentCollector}
-    return 1
 end
 
 function degrees_of_freedom_per_unit(model, sf::TotalCharge)
@@ -53,24 +57,32 @@ function minimum_output_variables(
     [:TotalCharge]
 end
 
-function single_unique_potential(
-    model::SimulationModel{D, S}
-    )where {D<:TervDomain, S<:ElectroChemicalComponent}
-    return false
+###################
+# concrete eccomp #
+###################
+
+# ? should this be automated ?
+function degrees_of_freedom_per_unit(
+    model::SimulationModel{D, S}, sf::Phi
+    ) where {D<:TervDomain, S<:EC}
+    return 2
 end
 
-function initialize_variable_value!(
-    state, model, pvar::Conductivity, symb::Symbol, val::Number
+function degrees_of_freedom_per_unit(model, sf::TotalCharge)
+    return 1
+end
+
+function degrees_of_freedom_per_unit(model, sf::TPFlux)
+    return 1
+end
+
+function minimum_output_variables(
+    system::CurrentCollector, primary_variables
     )
-    n = values_per_unit(model, pvar)
-    return initialize_variable_value!(
-        state, model, pvar, symb, repeat([val], n)
-        )
+    [:TotalCharge]
 end
 
-function default_value(v::Conductivity)
-    return 1.0
-end
+
 
 function number_of_units(model, pv::TPFlux)
     """ Two fluxes per face """
