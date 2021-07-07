@@ -14,7 +14,9 @@ casename = "egg"
 # casename = "single_inj_single_cell"
 # casename = "intermediate"
 # casename = "mini"
-simple_well = false
+simple_well = true
+block_backend = false
+use_groups = false
 
 # function run_immiscible_mrst(casename, simple_well = false)
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false)
@@ -37,8 +39,11 @@ simple_well = false
     bctx = DefaultContext(matrix_layout = BlockMajorLayout())
     dctx = DefaultContext()
 
-    res_context = bctx
-    res_context = dctx
+    if block_backend
+        res_context = bctx
+    else
+        res_context = dctx
+    end
 
     model = SimulationModel(G, sys, context = res_context)
 
@@ -166,10 +171,12 @@ simple_well = false
     models[:Facility] = WG
     initializer[:Facility] = F0
     ##
-
-    groups = nothing
-    groups = repeat([2], length(models))
-    groups[1] = 1
+    if use_groups
+        groups = repeat([2], length(models))
+        groups[1] = 1    
+    else
+        groups = nothing
+    end
     mmodel = MultiModel(convert_to_immutable_storage(models), groups = groups, context = DefaultContext())
     # Set up joint state and simulate
     state0 = setup_state(mmodel, initializer)
@@ -187,20 +194,24 @@ simple_well = false
     # dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24#
     dt = timesteps
     # dt = dt[1:20]
-    # lsolve = LUSolver(check = false)
-    res_precond = ILUZeroPreconditioner()
-    well_precond = TrivialPreconditioner()
-    well_precond = LUPreconditioner()
-    res_precond = LUPreconditioner()
+    # 
+    if use_groups
+        res_precond = ILUZeroPreconditioner()
+        well_precond = TrivialPreconditioner()
+        # well_precond = LUPreconditioner()
+        # res_precond = LUPreconditioner()
 
-    group_p = GroupWisePreconditioner([res_precond, well_precond])
-    # group_p = GroupWisePreconditioner([ILUZeroPreconditioner(), ILUZeroPreconditioner()])
+        group_p = GroupWisePreconditioner([res_precond, well_precond])
+        # group_p = GroupWisePreconditioner([ILUZeroPreconditioner(), ILUZeroPreconditioner()])
 
-    lsolve = GenericKrylov(verbose = 10)
-    lsolve = GenericKrylov(dqgmres, verbose = 10, preconditioner = group_p)
+        lsolve = GenericKrylov(verbose = 10)
+        lsolve = GenericKrylov(dqgmres, verbose = 10, preconditioner = group_p)
 
-    # lsolve = GenericKrylov(verbose = 10, preconditioner = ILUZeroPreconditioner())
-
+        # lsolve = GenericKrylov(verbose = 10, preconditioner = ILUZeroPreconditioner())
+    else
+        # lsolve = LUSolver(check = false)
+        lsolve = nothing
+    end
     states = simulate(sim, dt, forces = forces, info_level = 1, linear_solver = lsolve)
     # return (states, mmodel, well_symbols)
 # end
