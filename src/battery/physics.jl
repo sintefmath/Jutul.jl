@@ -77,8 +77,8 @@ end
 
 # Called from uppdate_state_dependents
 function apply_forces_to_equation!(
-    storage, model::SimulationModel{D, S}, eq::Conservation, force
-    ) where {D<:Any, S<:CurrentCollector}
+    storage, model::SimulationModel{D, S}, eq::Conservation{T}, force
+    ) where {D<:Any, S<:ElectroChemicalComponent, T}
     if eltype(force) == eltype(eq)
         acc = get_entries(eq.accumulation)
         insert_sources(acc, force, storage)

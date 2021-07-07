@@ -80,7 +80,8 @@ function get_test_setup_ec_component()
     init = Dict(:Phi => phi, :C => c)
     state0 = setup_state(model, init)
 
-    forces = nothing    
+    # set up boundary conditions
+    forces = (bc = DirichletBC{Phi()}([1, 10], [1, -1], [2, 2]), )
     parameters = setup_parameters(model)
 
     return (state0, model, parameters, forces, timesteps, G)

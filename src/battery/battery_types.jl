@@ -25,12 +25,12 @@ struct MixedFlow <: ECFlow end
 
 # Todo: allow for several variables in BC's
 abstract type BoundaryCondition <: TervForce end
-struct vonNeumannBC <: BoundaryCondition 
+struct vonNeumannBC{T} <: BoundaryCondition 
     cells
     values
 end
 
-struct DirichletBC <: BoundaryCondition 
+struct DirichletBC{T} <: BoundaryCondition 
     cells
     values
     half_face_Ts
