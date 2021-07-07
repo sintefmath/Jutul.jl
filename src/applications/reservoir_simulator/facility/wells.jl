@@ -438,7 +438,6 @@ function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, per
     end
     μ = state_res.PhaseViscosities
     ρλ_i = state_res.MassMobilities
-    masses = state_well.TotalMasses
 
     ρ_w = state_well.PhaseMassDensities
     if haskey(state_well, :Saturations)
@@ -448,13 +447,11 @@ function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, per
         s_w = nothing
         s_w_v = nothing
     end
-    # ρ_r = state_res.PhaseMassDensities
-
-    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          masses, ρ_w, s_w, sgn)
-    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i,  as_value(masses), as_value(ρ_w), s_w_v, sgn)
+    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          ρ_w,  s_w, sgn)
+    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i, as_value(ρ_w), s_w_v, sgn)
 end
 
-function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_masses, ρ_w, s_w, sgn)
+function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, ρ_w, s_w, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     nc = size(ρλ_i, 1)
     nph = size(μ, 1)
@@ -485,9 +482,14 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_
                     λ_t += kr[ph, ri]/μ[ph, ri]
                 end
             end
+            # @debug "λ_t: $(value(λ_t)) dp: $(value(dp)) ρgdz: $(value(ρgdz))"
             for c in 1:nc
-                # dp * rho * s * totmob well
-                target[c, i] = sgn*well_masses[c, si]*λ_t*dp
+                if isnothing(s_w)
+                    mass_mix = ρ_w[c, si]
+                else
+                    mass_mix = s_w[c, si]*ρ_w[c, si]
+                end
+                target[c, i] = sgn*mass_mix*λ_t*dp
             end
         else
             # Production
