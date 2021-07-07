@@ -33,6 +33,28 @@ function single_unique_potential(
     return false
 end
 
+function degrees_of_freedom_per_unit(model, sf::TotalCharge)
+    return 1
+end
+
+function degrees_of_freedom_per_unit(model, sf::TotalConcentration)
+    return 1
+end
+
+function degrees_of_freedom_per_unit(model, sf::TPFlux)
+    return 1
+end
+
+function number_of_units(model, pv::TPFlux)
+    """ Two fluxes per face """
+    return 2*count_units(model.domain, Faces())
+end
+
+# ?Why not faces?
+function associated_unit(::TPFlux)
+    Cells()
+end
+
 ####################
 # CurrentCollector #
 ####################
@@ -41,14 +63,6 @@ function degrees_of_freedom_per_unit(
     model::SimulationModel{D, S}, sf::Phi
     ) where {D<:TervDomain, S<:CurrentCollector}
     return 1 
-end
-
-function degrees_of_freedom_per_unit(model, sf::TotalCharge)
-    return 1
-end
-
-function degrees_of_freedom_per_unit(model, sf::TPFlux)
-    return 1
 end
 
 function minimum_output_variables(
@@ -64,35 +78,16 @@ end
 # ? should this be automated ?
 function degrees_of_freedom_per_unit(
     model::SimulationModel{D, S}, sf::Phi
-    ) where {D<:TervDomain, S<:EC}
-    return 2
-end
-
-function degrees_of_freedom_per_unit(model, sf::TotalCharge)
-    return 1
-end
-
-function degrees_of_freedom_per_unit(model, sf::TPFlux)
+    ) where {D<:TervDomain, S<:ECComponent}
     return 1
 end
 
 function minimum_output_variables(
-    system::CurrentCollector, primary_variables
+    system::ECComponent, primary_variables
     )
-    [:TotalCharge]
+    [:TotalCharge, :TotalConcentration]
 end
 
-
-
-function number_of_units(model, pv::TPFlux)
-    """ Two fluxes per face """
-    return 2*count_units(model.domain, Faces())
-end
-
-# ?Why not faces?
-function associated_unit(::TPFlux)
-    Cells()
-end
 
 function update_linearized_system_equation!(
     nz, r, model, law::Conservation
@@ -156,6 +151,8 @@ end
 # Variables #
 #############
 
+# current collector 
+
 function select_primary_variables_system!(
     S, domain, system::CurrentCollector, formulation
     )
@@ -175,9 +172,34 @@ function select_equations_system!(
     eqs[:charge_conservation] = (ChargeConservation, 1)
 end
 
+# concrete electrochemical component
+
+function select_primary_variables_system!(
+    S, domain, system::ECComponent, formulation
+    )
+    S[:Phi] = Phi()
+    S[:C] = C()
+end
+
+function select_secondary_variables_flow_type!(
+    S, domain, system, formulation, flow_type::MixedFlow
+    )
+    S[:TPFlux] = TPFlux()
+    S[:TotalCharge] = TotalCharge()
+    S[:TotalConcentration] = TotalConcentration()
+end
+
+function select_equations_system!(
+    eqs, domain, system::ECComponent, formulation
+    )
+    eqs[:charge_conservation] = (ChargeConservation, 1)
+    eqs[:mass_conservation] = (MassConservation, 1)
+end
+
+
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPFlux, model, param, Phi
+    pot, tv::TPFlux, model::CurrentCollector, param, Phi
     )
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
@@ -221,3 +243,23 @@ function update_cell_neighbor_potential_cc!(
         wait(event_jac)
     end
 end
+
+
+@terv_secondary function update_as_secondary!(
+    pot, tv::C, model, param, C
+    )
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
+    context = model.context
+    update_cell_neighbor_potential_cc!(
+        pot, conn_data, C, context, kernel_compatibility(context)
+        )
+end
+
+# Hvordan vet den at C er C??
+@terv_secondary function update_as_secondary!(
+    totcons, tv::TotalConcentration, param, C
+    )
+    @tullio totcons[i] = C[i]
+end
+

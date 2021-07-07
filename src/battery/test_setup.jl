@@ -1,6 +1,7 @@
 using Terv
 
 export get_test_setup_battery, get_cc_grid, get_bc, test_mixed_boundary_conditions
+export get_test_setup_ec_component
 
 function get_test_setup_battery(name="square_current_collector")
     domain, exported = get_cc_grid(name, extraout=true)
@@ -30,7 +31,7 @@ function get_test_setup_battery(name="square_current_collector")
 end
 
 function test_mixed_boundary_conditions()
-    domain = get_cc_grid("square_current_collector")
+    domain = get_cc_grid(ChargeFlow(), name="square_current_collector")
     timesteps = [1.,]
 
     sys = CurrentCollector()
@@ -65,8 +66,8 @@ function test_mixed_boundary_conditions()
 end
 
 
-function get_test_setup_ec_component(name="square_current_collector")
-    domain = get_cc_grid(name)
+function get_test_setup_ec_component()
+    domain = get_cc_grid(MixedFlow())
     timesteps = [1.,]
     
     sys = ECComponent()
@@ -77,11 +78,8 @@ function get_test_setup_ec_component(name="square_current_collector")
     c = 1.
     init = Dict(:Phi => phi, :C => c)
     state0 = setup_state(model, init)
-    
-    # set up boundary conditions
-    nc = length(domain.grid.volumes)
-    
-    # Model parameters
+
+    forces = nothing    
     parameters = setup_parameters(model)
 
     return (state0, model, parameters, forces, timesteps)
@@ -111,7 +109,7 @@ function get_bc(name)
 end
 
 
-function get_cc_grid(name="square_current_collector"; extraout = false)
+function get_cc_grid(flow_type=ChargeFlow(); name="square_current_collector", extraout = false)
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     @debug "Reading MAT file $fn..."
     exported = MAT.matread(fn)
@@ -143,7 +141,7 @@ function get_cc_grid(name="square_current_collector"; extraout = false)
     z = nothing
     g = nothing
 
-    ft = ChargeFlow()
+    ft = flow_type
     # ??Hva gjør SPU og TPFA??
     flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
     disc = (charge_flow = flow,)
