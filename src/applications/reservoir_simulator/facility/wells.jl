@@ -409,11 +409,17 @@ function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, per
     masses = state_well.TotalMasses
 
     ρ_w = state_well.PhaseMassDensities
-    s_w = state_well.Saturations
+    if haskey(state_well, :Saturations)
+        s_w = state_well.Saturations
+        s_w_v = as_value(s_w)
+    else
+        s_w = nothing
+        s_w_v = nothing
+    end
     # ρ_r = state_res.PhaseMassDensities
 
     perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          masses, ρ_w, s_w, sgn)
-    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i,  as_value(masses), as_value(ρ_w), as_value(s_w), sgn)
+    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i,  as_value(masses), as_value(ρ_w), s_w_v, sgn)
 end
 
 function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_masses, ρ_w, s_w, sgn)
@@ -427,7 +433,11 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_
         wi = perf.WI[i]
         gdz = perf.gdz[i]
         if gdz != 0
-            ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
+            if isnothing(s_w)
+                ρ_mix = ρ_w[1, si]
+            else
+                ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
+            end
             ρgdz = gdz*ρ_mix
         else
             ρgdz = 0
