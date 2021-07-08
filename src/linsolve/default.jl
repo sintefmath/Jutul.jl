@@ -75,7 +75,7 @@ function build_jacobian(sparse_arg, context, layout)
     else
         V_buf = reinterpret(reshape, Ft, nzval)
     end
-    return (jac, nzval, bz)
+    return (jac, V_buf, bz)
 end
 
 function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
