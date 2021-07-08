@@ -1,5 +1,5 @@
 using Terv
-
+export get_flow_volume
 #########
 # utils #
 #########
@@ -278,14 +278,17 @@ end
 end
 
 # Kan en bytte ut med AccVariable??
+# ? Hva sker når man ganger med volume?
 @terv_secondary function update_as_secondary!(
     acc, tv::MassAcc, model, param, C
     )
-    @tullio acc[i] = C[i] # TODO: multiply by volume
+    V = get_flow_volume(model.domain.grid)
+    @tullio acc[i] = C[i]
 end
 
 @terv_secondary function update_as_secondary!(
     acc, tv::EnergyAcc, model, param, T
     )
-    @tullio acc[i] = T[i] # TODO: multiply by volume
+    V = get_flow_volume(model.domain.grid)
+    @tullio acc[i] = T[i]
 end

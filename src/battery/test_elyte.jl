@@ -27,10 +27,10 @@ function test_elyte()
     cfg[:linear_solver] = nothing
     states = simulate(sim, timesteps, forces=forces, config = cfg)
 
-    return G, states
+    return G, states, model
 end
 
-G, states = test_elyte();
+G, states, model = test_elyte();
 ##
 
 f = plot_interactive(G, states)
