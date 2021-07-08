@@ -273,6 +273,6 @@ end
 @terv_secondary function update_as_secondary!(
     totcons, tv::TotalConcentration, model, param, C
     )
-    @tullio totcons[i] = C[i] # Why is total cons like that? 
+    @tullio totcons[i] = C[i] # TODO: multiply by volume
 end
 

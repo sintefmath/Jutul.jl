@@ -94,6 +94,15 @@ function potential(::Conservation{C})
     return C()
 end
 
+function get_potential_vals(storage, potential::C)
+    return storage.primary_variables.C
+end
+
+function get_potential_vals(storage, potential::Phi)
+    return storage.primary_variables.Phi
+end
+
+
 # Called from uppdate_state_dependents
 function apply_forces_to_equation!(
     storage, model::SimulationModel{D, S}, eq::Conservation{T}, force
@@ -113,25 +122,15 @@ end
 
 
 # TODO: Include resistivity / other types of factors/ constants
-# Can these be made into one function?
 
-function insert_sources(acc, source::DirichletBC{Phi}, storage)
+function insert_sources(acc, source::DirichletBC, storage)
     T = source.half_face_Ts
-    phi_ext = source.values
-    phi = storage.primary_variables.Phi
+    pot_ext = source.values
+    pot = get_potential_vals(storage, potential(source))
     for (i, c) in enumerate(source.cells)
         # This loop is used insted of @tullio due to possibility of 
         # two sources at the different faces, but the same cell
-        @inbounds acc[c] += - T[i]*(phi_ext[i] - phi[c])
-    end
-end
-
-function insert_sources(acc, source::DirichletBC{C}, storage)
-    T = source.half_face_Ts
-    C_ext = source.values
-    C = storage.primary_variables.C
-    for (i, c) in enumerate(source.cells)
-        @inbounds acc[c] += - T[i]*(C_ext[i] - C[c])
+        @inbounds acc[c] += - T[i]*(pot_ext[i] - pot[c])
     end
 end
 

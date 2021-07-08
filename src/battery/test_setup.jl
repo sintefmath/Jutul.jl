@@ -68,7 +68,8 @@ end
 
 
 function get_test_setup_ec_component()
-    domain, exported = get_cc_grid(MixedFlow(), extraout=true)
+    name="square_current_collector"
+    domain, exported = get_cc_grid(MixedFlow(), name=name, extraout=true)
     timesteps = 1:10
     G = exported["G"]
     
@@ -80,12 +81,32 @@ function get_test_setup_ec_component()
     c = 0.
     init = Dict(:Phi => phi, :C => c)
     state0 = setup_state(model, init)
+    
+    parameters = setup_parameters(model)
 
     # set up boundary conditions
-    bc_phi = DirichletBC{Phi}([1], [1], [2])
-    bc_c = DirichletBC{C}([1], [1], [2])
-    forces = (bc_phi=bc_phi, bc_c=bc_c )
-    parameters = setup_parameters(model)
+
+    # # Set 1 of boudary conditions
+    # bc_phi = DirichletBC{Phi}([1], [1], [2])
+    # bc_c = DirichletBC{C}([1], [1], [2])
+    # forces = (bc_phi=bc_phi, bc_c=bc_c )
+
+    # # Set 2 of boudary conditions
+
+    bcells, T = get_boundary(name)
+    one = ones(size(bcells))
+
+    dirichlet_phi = DirichletBC{Phi}(bcells, one, T)
+    neumann_phi = vonNeumannBC{Phi}(bcells.+9, one)
+    dirichlet_c = DirichletBC{C}(bcells, one, T)
+    neumann_c = vonNeumannBC{C}(bcells.+9, one)
+
+    forces = (
+        neumann_phi     = neumann_phi, 
+        dirichlet_phi   = dirichlet_phi, 
+        neumann_c       = neumann_c,
+        dirichlet_c     = dirichlet_c
+        )
 
     return (state0, model, parameters, forces, timesteps, G)
 end
