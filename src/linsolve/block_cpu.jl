@@ -1,18 +1,3 @@
-
-function get_jacobian_vector(n, context, layout::BlockMajorLayout, v = nothing, bz = 1)
-    v_buf = v
-    if isnothing(v_buf)
-        v_buf = zeros(bz, n)
-    elseif isa(v_buf, AbstractVector)
-        v_buf = reshape(v_buf, bz, :)
-    end
-    float_t = float_type(context)
-    vt = SVector{bz, float_t}
-    v = reinterpret(reshape, vt, v_buf)
-
-    return (v, v_buf)
-end
-
 function get_mul!(sys::LinearizedSystem{BlockMajorLayout})
     jac = sys.jac
 
@@ -42,7 +27,6 @@ end
 function vector_residual(sys::LinearizedSystem{BlockMajorLayout})
     n = length(sys.r_buffer)
     r = reshape(sys.r_buffer, n)
-
 end
 
 function update_dx_from_vector!(sys::LinearizedSystem{BlockMajorLayout}, dx)

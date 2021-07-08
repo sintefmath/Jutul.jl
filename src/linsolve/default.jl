@@ -79,10 +79,28 @@ function build_jacobian(sparse_arg, context, layout)
 end
 
 function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
-    if isnothing(v)
-        v = zeros(n)
+    Ft = float_type(context)
+    Vt = r_eltype(context, layout, bz)
+
+    if Ft == Vt
+        if isnothing(v)
+            v = zeros(Vt, n)
+        end
+        v_buf = v
+    else
+        if isnothing(v)
+            # No vector given - allocate and re-interpret
+            v = zeros(Vt, n)
+            v_buf = reinterpret(reshape, Ft, v)
+        else
+            # Vector (of floats) was given. Use as buffer, reinterpret.
+            v::AbstractVector{<:Ft}
+            @assert length(v) == n*bz
+            v_buf = reshape(v, bz, :)
+            v = reinterpret(reshape, Vt, v_buf)
+        end
     end
-    return (v, v)
+    return (v, v_buf)
 end
 
 function linear_operator(sys)
