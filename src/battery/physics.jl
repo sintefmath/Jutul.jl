@@ -22,13 +22,13 @@ function update_equation!(law::Conservation, storage, model, dt)
 end
 
 # Update of discretization terms
-function update_accumulation!(law::Conservation{Phi}, storage, model, dt)
+function update_accumulation!(law::Conservation{ChargeAcc}, storage, model, dt)
     acc = get_entries(law.accumulation)
     acc .= 0  # Assume no accumulation
     return acc
 end
 
-function update_accumulation!(law::Conservation{C}, storage, model, dt)
+function update_accumulation!(law::Conservation, storage, model, dt)
     conserved = law.accumulation_symbol
     acc = get_entries(law.accumulation)
     m = storage.state[conserved]
@@ -46,7 +46,7 @@ end
 
 
 function update_half_face_flux!(
-    law::Conservation{C}, storage, model, dt, 
+    law::Conservation{MassAcc}, storage, model, dt, 
     flowd::TwoPointPotentialFlow{U, K, T}
     ) where {U,K,T<:ECFlow}
 
@@ -56,13 +56,13 @@ function update_half_face_flux!(
 end
 
 function update_half_face_flux!(
-    law::Conservation{Phi}, storage, model, dt, 
+    law::Conservation{ChargeAcc}, storage, model, dt, 
     flowd::TwoPointPotentialFlow{U, K, T}
     ) where {U,K,T<:ECFlow}
 
-    grad_Phi = storage.state.TPFlux_Phi
-    flux = get_entries(law.half_face_flux_cells)
-    @tullio flux[i] = grad_Phi[i]
+    flux = storage.state.TPFlux_Phi
+    f = get_entries(law.half_face_flux_cells)
+    @tullio f[i] = flux[i]
 end
 
 
@@ -77,28 +77,23 @@ end
 
 
 # Helper functio to find 
+# TODO: There has to be a readymade implementation for this
 
-function potential(::BoundaryCondition{Phi})
-    return Phi()
-end
+function corr_type(::vonNeumannBC{ChargeAcc}) return ChargeAcc() end
+function corr_type(::vonNeumannBC{MassAcc}) return MassAcc() end
+function corr_type(::Conservation{ChargeAcc}) return ChargeAcc() end
+function corr_type(::Conservation{MassAcc}) return MassAcc() end
 
-function potential(::BoundaryCondition{C})
-    return C()
-end
+# !Temporary hack, a potential does not necesessary corr to 
+# !a single potential.
+# TODO: mak boundary condition to play nice with non-diag Onsager matrix
+function corr_type(::DirichletBC{Phi}) return ChargeAcc() end
+function corr_type(::DirichletBC{C}) return MassAcc() end
 
-function potential(::Conservation{Phi})
-    return Phi()
-end
-
-function potential(::Conservation{C})
-    return C()
-end
-
-function get_potential_vals(storage, potential::C)
+function get_potential_vals(storage, ::MassAcc)
     return storage.primary_variables.C
 end
-
-function get_potential_vals(storage, potential::Phi)
+function get_potential_vals(storage, ::ChargeAcc)
     return storage.primary_variables.Phi
 end
 
@@ -107,7 +102,7 @@ end
 function apply_forces_to_equation!(
     storage, model::SimulationModel{D, S}, eq::Conservation{T}, force
     ) where {D<:Any, S<:ElectroChemicalComponent, T}
-    if potential(force) == potential(eq)
+    if corr_type(force) == corr_type(eq)
         acc = get_entries(eq.accumulation)
         insert_sources(acc, force, storage)
     end
@@ -126,7 +121,7 @@ end
 function insert_sources(acc, source::DirichletBC, storage)
     T = source.half_face_Ts
     pot_ext = source.values
-    pot = get_potential_vals(storage, potential(source))
+    pot = get_potential_vals(storage, corr_type(source))
     for (i, c) in enumerate(source.cells)
         # This loop is used insted of @tullio due to possibility of 
         # two sources at the different faces, but the same cell

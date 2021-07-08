@@ -11,8 +11,8 @@ struct TotalCurrent <: ScalarVariable end
 function select_equations_system!(
     eqs, domain, system::Electrolyte, formulation
     )
-    charge_cons = (arg...; kwarg...) -> Conservation(Phi(), arg...; kwarg...)
-    mass_cons = (arg...; kwarg...) -> Conservation(C(), arg...; kwarg...)
+    charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
+    mass_cons = (arg...; kwarg...) -> Conservation(MassAcc(), arg...; kwarg...)
     eqs[:charge_conservation] = (charge_cons, 1)
     eqs[:mass_conservation] = (mass_cons, 1)
 end
@@ -31,15 +31,15 @@ function select_secondary_variables_system!!(
     S[:TPFlux_Phi] = TPFlux{Phi}()
     S[:TPFlux_C] = TPFlux{C}()
     S[:TotalCurrent] = TotalCurrent()
-    S[:TotalCharge] = TotalCharge()
-    S[:TotalConcentration] = TotalConcentration()
+    S[:ChargeAcc] = ChargeAcc()
+    S[:MassAcc] = MassAcc()
 end
 
 # Must be available to evaluate time derivatives
 function minimum_output_variables(
     system::Electrolyte, primary_variables
     )
-    [:TotalCharge, :TotalConcentration]
+    [:ChargeAcc, :MassAcc]
 end
 
 
@@ -65,7 +65,7 @@ end
 end
 
 function update_half_face_flux!(
-    law::Conservation{C}, storage, model::SimulationModel{D, S, F, Cons},
+    law::Conservation, storage, model::SimulationModel{D, S, F, Cons},
      dt, flow::TwoPointPotentialFlow{U, K, T}
     ) where {U,K,T<:ECFlow, D, S<:Electrolyte, F, Cons}
 

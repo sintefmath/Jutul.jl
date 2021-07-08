@@ -20,10 +20,11 @@ struct Phi <: ScalarVariable end
 struct C <: ScalarVariable end
 struct T <: ScalarVariable end
 # Accumulation variables
-# ? Introduce abstract type Accumulation ?
-struct TotalCharge <: ScalarVariable end
-struct TotalConcentration <: ScalarVariable end
-struct TotalHeat <: ScalarVariable end
+
+abstract type AccumulationVariable <: ScalarVariable end
+struct ChargeAcc <: AccumulationVariable end
+struct MassAcc <: AccumulationVariable end
+struct EnergyAcc <: AccumulationVariable end
 
 # ? Should this be named TPGrad{} instead ???
 struct TPFlux{T} <: ScalarVariable end
@@ -76,20 +77,20 @@ end
 ################
 
 
-function acc_symbol(p::Phi)
-    return :TotalCharge
+function acc_symbol(::ChargeAcc)
+    return :ChargeAcc
 end
 
-function acc_symbol(p::C)
-    return :TotalConcentration
+function acc_symbol(::MassAcc)
+    return :MassAcc
 end
 
-function acc_symbol(p::T)
-    return :TotalHeat
+function acc_symbol(::EnergyAcc)
+    return :EnergyAcc
 end
 
 function Conservation(
-    pvar, model, number_of_equations;
+    acc_type, model, number_of_equations;
     flow_discretization = nothing, kwarg...
     )
     """
@@ -98,7 +99,7 @@ function Conservation(
     if isnothing(flow_discretization)
         flow_discretization = model.domain.discretizations[1]
     end
-    accumulation_symbol = acc_symbol(pvar)
+    accumulation_symbol = acc_symbol(acc_type)
 
     D = model.domain
     cell_unit = Cells()
@@ -122,7 +123,7 @@ function Conservation(
         hf_faces = nothing
     end
 
-    Conservation{typeof(pvar)}(
+    Conservation{typeof(acc_type)}(
         acc, accumulation_symbol, hf_cells, hf_faces, flow_discretization
     )
 end

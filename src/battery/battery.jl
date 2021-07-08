@@ -33,11 +33,11 @@ function single_unique_potential(
     return false
 end
 
-function degrees_of_freedom_per_unit(model, sf::TotalCharge)
+function degrees_of_freedom_per_unit(model, sf::ChargeAcc)
     return 1
 end
 
-function degrees_of_freedom_per_unit(model, sf::TotalConcentration)
+function degrees_of_freedom_per_unit(model, sf::MassAcc)
     return 1
 end
 
@@ -68,7 +68,7 @@ end
 function minimum_output_variables(
     system::CurrentCollector, primary_variables
     )
-    [:TotalCharge]
+    [:ChargeAcc]
 end
 
 ###################
@@ -85,7 +85,7 @@ end
 function minimum_output_variables(
     system::ECComponent, primary_variables
     )
-    [:TotalCharge, :TotalConcentration]
+    [:ChargeAcc, :MassAcc]
 end
 
 
@@ -163,13 +163,13 @@ function select_secondary_variables_flow_type!(
     S, domain, system, formulation, flow_type::ChargeFlow
     )
     S[:TPFlux_Phi] = TPFlux{Phi}()
-    S[:TotalCharge] = TotalCharge()
+    S[:ChargeAcc] = ChargeAcc()
 end
 
 function select_equations_system!(
     eqs, domain, system::CurrentCollector, formulation
     )
-    charge_cons = (arg...; kwarg...) -> Conservation(Phi(), arg...; kwarg...)
+    charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
     eqs[:charge_conservation] = (charge_cons, 1)
 end
 
@@ -186,15 +186,15 @@ function select_secondary_variables_flow_type!(
     )
     S[:TPFlux_Phi] = TPFlux{Phi}()
     S[:TPFlux_C] = TPFlux{C}()
-    S[:TotalCharge] = TotalCharge()
-    S[:TotalConcentration] = TotalConcentration()
+    S[:ChargeAcc] = ChargeAcc()
+    S[:MassAcc] = MassAcc()
 end
 
 function select_equations_system!(
     eqs, domain, system::ECComponent, formulation
     )
-    charge_cons = (arg...; kwarg...) -> Conservation(Phi(), arg...; kwarg...)
-    mass_cons = (arg...; kwarg...) -> Conservation(C(), arg...; kwarg...)
+    charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
+    mass_cons = (arg...; kwarg...) -> Conservation(MassAcc(), arg...; kwarg...)
     eqs[:charge_conservation] = (charge_cons, 1)
     eqs[:mass_conservation] = (mass_cons, 1)
 end
@@ -279,13 +279,13 @@ end
 
 # Hvordan vet den at C er C??
 @terv_secondary function update_as_secondary!(
-    totcons, tv::TotalConcentration, model, param, C
+    totcons, tv::MassAcc, model, param, C
     )
     @tullio totcons[i] = C[i] # TODO: multiply by volume
 end
 
 @terv_secondary function update_as_secondary!(
-    totcons, tv::TotalHeat, model, param, T
+    totcons, tv::EnergyAcc, model, param, T
     )
     @tullio totcons[i] = C[i] # TODO: multiply by volume
 end

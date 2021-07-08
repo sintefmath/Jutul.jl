@@ -21,7 +21,7 @@ function get_test_setup_battery(name="square_current_collector")
     nc = length(domain.grid.volumes)
     
     dirichlet = DirichletBC{Phi}([1, 1], [1, -1], [2, 2])
-    neumann = vonNeumannBC{Phi}([1, nc], [-1, 1])
+    neumann = vonNeumannBC{ChargeAcc}([1, nc], [-1, 1])
     forces = (neumann=neumann, dirichlet= dirichlet,)
     
     # Model parameters
@@ -34,7 +34,7 @@ function test_mixed_boundary_conditions()
     name="square_current_collector"
     domain, exported = get_cc_grid(ChargeFlow(), extraout=true, name=name)
     G = exported["G"]
-    timesteps = [1.,]
+    timesteps = 1:5
 
     sys = CurrentCollector()
     model = SimulationModel(domain, sys, context = DefaultContext())
@@ -50,7 +50,7 @@ function test_mixed_boundary_conditions()
     one = ones(size(bcells))
 
     dirichlet = DirichletBC{Phi}(bcells, one, T)
-    neumann = vonNeumannBC{Phi}(bcells.+9, one)
+    neumann = vonNeumannBC{ChargeAcc}(bcells.+9, one)
     forces = (neumann=neumann, dirichlet= dirichlet,)
     
     # Model parameters
@@ -97,9 +97,9 @@ function get_test_setup_ec_component()
     one = ones(size(bcells))
 
     dirichlet_phi = DirichletBC{Phi}(bcells, one, T)
-    neumann_phi = vonNeumannBC{Phi}(bcells.+9, one)
+    neumann_phi = vonNeumannBC{ChargeAcc}(bcells.+9, one)
     dirichlet_c = DirichletBC{C}(bcells, one, T)
-    neumann_c = vonNeumannBC{C}(bcells.+9, one)
+    neumann_c = vonNeumannBC{MassAcc}(bcells.+9, one)
 
     forces = (
         neumann_phi     = neumann_phi, 
