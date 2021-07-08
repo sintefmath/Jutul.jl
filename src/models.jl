@@ -411,19 +411,19 @@ function build_forces(model::TervModel)
     return NamedTuple()
 end
 
-function solve_and_update!(storage, model::TervModel, dt = nothing; linear_solver = nothing)
+function solve_and_update!(storage, model::TervModel, dt = nothing; linear_solver = nothing, kwarg...)
     lsys = storage.LinearizedSystem
     t_solve = @elapsed solve!(lsys, linear_solver, model, storage, dt)
-    t_update = @elapsed update_primary_variables!(storage, model)
+    t_update = @elapsed update_primary_variables!(storage, model; kwarg...)
     return (t_solve, t_update)
 end
 
-function update_primary_variables!(storage, model::TervModel)
+function update_primary_variables!(storage, model::TervModel; kwarg...)
     dx = storage.LinearizedSystem.dx_buffer
-    update_primary_variables!(storage.primary_variables, dx, model)
+    update_primary_variables!(storage.primary_variables, dx, model; kwarg...)
 end
 
-function update_primary_variables!(primary_storage, dx, model::TervModel)
+function update_primary_variables!(primary_storage, dx, model::TervModel; check = false)
     cell_major = is_cell_major(matrix_layout(model.context))
     offset = 0
     primary = get_primary_variables(model)
@@ -441,6 +441,9 @@ function update_primary_variables!(primary_storage, dx, model::TervModel)
                 end
                 ni = degrees_of_freedom_per_unit(model, p)
                 dxi = view(Dx, :, (local_offset+1):(local_offset+ni))
+                if check
+                    check_increment(dxi, pkey)
+                end
                 update_primary_variable!(primary_storage, p, pkey, model, dxi)
                 local_offset += ni
             end
@@ -451,6 +454,9 @@ function update_primary_variables!(primary_storage, dx, model::TervModel)
             n = number_of_degrees_of_freedom(model, p)
             rng = (1:n) .+ offset
             dxi = view(dx, rng)
+            if check
+                check_increment(dxi, pkey)
+            end
             update_primary_variable!(primary_storage, p, pkey, model, dxi)
             offset += n
         end

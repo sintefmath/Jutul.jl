@@ -520,7 +520,7 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
     end
 end
 
-function update_primary_variables!(storage, model::MultiModel)
+function update_primary_variables!(storage, model::MultiModel; kwarg...)
     lsys = storage.LinearizedSystem
     dx = lsys.dx
     models = model.models
@@ -535,7 +535,7 @@ function update_primary_variables!(storage, model::MultiModel)
             bz = block_size(lsys[i, i])
             dx_v = reshape(dx_v, bz, :)
         end
-        update_primary_variables!(s.state, dx_v, m)
+        update_primary_variables!(s.state, dx_v, m; kwarg...)
         offset += ndof
     end
 end

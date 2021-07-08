@@ -76,7 +76,8 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     end
     if do_solve
         lsolve = config[:linear_solver]
-        t_solve, t_update = solve_and_update!(storage, model::TervModel, dt, linear_solver = lsolve)
+        check = config[:safe_mode]
+        t_solve, t_update = solve_and_update!(storage, model::TervModel, dt, linear_solver = lsolve, check = check)
         if timing_out
             @debug "Solved linear system in $t_solve seconds."
             @debug "Updated state $t_update seconds."
@@ -91,6 +92,8 @@ function simulator_config(sim; kwarg...)
     cfg[:max_nonlinear_iterations] = 15
     cfg[:linear_solver] = nothing
     cfg[:output_states] = true
+    # Extra checks on values etc
+    cfg[:safe_mode] = true
     # Define debug level. If debugging is on, this determines the amount of output.
     cfg[:debug_level] = 1
     cfg[:info_level] = 1
