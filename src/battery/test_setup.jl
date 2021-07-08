@@ -76,14 +76,14 @@ function get_test_setup_ec_component()
     model = SimulationModel(domain, sys, context = DefaultContext())
 
     # State is dict with pressure in each cell
-    phi = 1.
-    c = 1.
+    phi = 0.
+    c = 0.
     init = Dict(:Phi => phi, :C => c)
     state0 = setup_state(model, init)
 
     # set up boundary conditions
-    bc_phi = DirichletBC{Phi}([1, 10], [1, -1], [2, 2])
-    bc_c = DirichletBC{C}([1], [1 ], [2, 2])
+    bc_phi = DirichletBC{Phi}([1], [1], [2])
+    bc_c = DirichletBC{C}([1], [1], [2])
     forces = (bc_phi=bc_phi, bc_c=bc_c )
     parameters = setup_parameters(model)
 

@@ -76,6 +76,8 @@ end
 #######################
 
 
+# Helper functio to find 
+
 function potential(::BoundaryCondition{Phi})
     return Phi()
 end
@@ -109,7 +111,11 @@ function insert_sources(acc, source::vonNeumannBC, storage)
     end
 end
 
-function insert_sources(acc, source::DirichletBC, storage)
+
+# TODO: Include resistivity / other types of factors/ constants
+# Can these be made into one function?
+
+function insert_sources(acc, source::DirichletBC{Phi}, storage)
     T = source.half_face_Ts
     phi_ext = source.values
     phi = storage.primary_variables.Phi
@@ -117,6 +123,15 @@ function insert_sources(acc, source::DirichletBC, storage)
         # This loop is used insted of @tullio due to possibility of 
         # two sources at the different faces, but the same cell
         @inbounds acc[c] += - T[i]*(phi_ext[i] - phi[c])
+    end
+end
+
+function insert_sources(acc, source::DirichletBC{C}, storage)
+    T = source.half_face_Ts
+    C_ext = source.values
+    C = storage.primary_variables.C
+    for (i, c) in enumerate(source.cells)
+        @inbounds acc[c] += - T[i]*(C_ext[i] - C[c])
     end
 end
 
