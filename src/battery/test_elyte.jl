@@ -12,13 +12,15 @@ function test_elyte()
 
     phi0 = 0.
     c0 = 0.
-    init = Dict(:Phi => phi0, :C => c0)
+    T0 = 0.
+    init = Dict(:Phi => phi0, :C => c0, :T =>T0)
     state0 = setup_state(model, init)
     parameters = setup_parameters(model)
 
     bc_phi = DirichletBC{Phi}([1], [1], [2])
     bc_c = DirichletBC{C}([1], [1], [2])
-    forces = (bc_phi=bc_phi, bc_c=bc_c )
+    bc_T = DirichletBC{T}([1], [1], [2])
+    forces = (bc_phi=bc_phi, bc_c=bc_c, bc_T=bc_T,)
 
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)

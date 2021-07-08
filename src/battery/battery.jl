@@ -159,8 +159,8 @@ function select_primary_variables_system!(
     S[:Phi] = Phi()
 end
 
-function select_secondary_variables_flow_type!(
-    S, domain, system, formulation, flow_type::ChargeFlow
+function select_secondary_variables_system!(
+    S, domain, system::CurrentCollector, formulation, flow_type
     )
     S[:TPFlux_Phi] = TPFlux{Phi}()
     S[:ChargeAcc] = ChargeAcc()
@@ -181,8 +181,8 @@ function select_primary_variables_system!(
     S[:C] = C()
 end
 
-function select_secondary_variables_flow_type!(
-    S, domain, system, formulation, flow_type::MixedFlow
+function select_secondary_variables_system!(
+    S, domain, system::ECComponent, formulation, flow_type
     )
     S[:TPFlux_Phi] = TPFlux{Phi}()
     S[:TPFlux_C] = TPFlux{C}()

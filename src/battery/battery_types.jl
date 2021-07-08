@@ -2,7 +2,7 @@ using Terv
 export ElectroChemicalComponent, CurrentCollector, Electectrolyte, TestElyte
 export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
 export ChargeFlow, MixedFlow
-export Phi, C
+export Phi, C, T
 
 ###########
 # Classes #
