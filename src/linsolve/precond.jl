@@ -164,7 +164,7 @@ Trivial / identity preconditioner with size for use in subsystems.
 """
 # Trivial precond
 function update!(tp::TrivialPreconditioner, A, b)
-    tp.dim = size(A)
+    tp.dim = size(A).*length(b[1])
 end
 
 function linear_operator(id::TrivialPreconditioner, ::Symbol)
