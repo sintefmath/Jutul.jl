@@ -15,15 +15,21 @@ function test_elyte()
     init = Dict(:Phi => phi0, :C => c0)
     state0 = setup_state(model, init)
     parameters = setup_parameters(model)
-    forces = (bc=nothing,) # Defaul no flux bc's
+
+    bc_phi = DirichletBC{Phi}([1], [1], [2])
+    bc_c = DirichletBC{C}([1], [1], [2])
+    forces = (bc_phi=bc_phi, bc_c=bc_c )
 
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
     states = simulate(sim, timesteps, forces=forces, config = cfg)
 
-    return states
+    return G, states
 end
 
-test_elyte()
+G, states = test_elyte()
+##
 
+f = plot_interactive(G, states)
+display(f)
