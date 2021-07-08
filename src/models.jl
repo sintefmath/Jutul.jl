@@ -233,10 +233,8 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
             @assert dof_per_unit == eqs_per_unit == block_size "Block major layout only supported for square blocks."
             S = declare_sparsity(model, eq, u, layout)
             if !isnothing(S)
-                i = S[1]
-                j = S[2]
-                push!(I, i .+ numrows) # Row indices, offset by the size of preceeding equations
-                push!(J, j .+ numcols) # Column indices, offset by the partials in units we have passed
+                push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
+                push!(J, S.J .+ numcols) # Column indices, offset by the partials in units we have passed
             end
             numcols += count_units(model.domain, u)
         end

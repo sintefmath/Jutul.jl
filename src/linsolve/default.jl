@@ -67,7 +67,7 @@ function build_jacobian(sparse_arg, context, layout)
     Jt = jacobian_eltype(context, layout, bz)
     Ft = float_type(context)
 
-    V = Vector{Jt}(undef, length(I))
+    V = zeros(Jt, length(I))
     jac = sparse(I, J, V, n, m)
     nzval = get_nzval(jac)
     if Ft == Jt

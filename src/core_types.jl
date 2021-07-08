@@ -163,7 +163,7 @@ function r_eltype(context, layout, block_size)
 end
 
 function jacobian_eltype(context::CPUTervContext, layout::BlockMajorLayout, block_size)
-    return SMatrix{block_size..., float_type(context)}
+    return SMatrix{block_size..., float_type(context), prod(block_size)}
 end
 
 function r_eltype(context::CPUTervContext, layout::BlockMajorLayout, block_size)
