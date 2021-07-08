@@ -160,7 +160,7 @@ function select_primary_variables_system!(
 end
 
 function select_secondary_variables_system!(
-    S, domain, system::CurrentCollector, formulation, flow_type
+    S, domain, system::CurrentCollector, formulation
     )
     S[:TPFlux_Phi] = TPFlux{Phi}()
     S[:ChargeAcc] = ChargeAcc()
@@ -182,7 +182,7 @@ function select_primary_variables_system!(
 end
 
 function select_secondary_variables_system!(
-    S, domain, system::ECComponent, formulation, flow_type
+    S, domain, system::ECComponent, formulation
     )
     S[:TPFlux_Phi] = TPFlux{Phi}()
     S[:TPFlux_C] = TPFlux{C}()
@@ -222,7 +222,7 @@ end
     ) where {D, S <: ElectroChemicalComponent, F, Con}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    @tullio pot[i] = half_face_two_point_grad(conn_data[i], C)
+    @tullio pot[i] = half_face_two_point_grad(conn_data[i], T)
 end
 
 
@@ -277,15 +277,15 @@ end
         )
 end
 
-# Hvordan vet den at C er C??
+# Kan en bytte ut med AccVariable??
 @terv_secondary function update_as_secondary!(
-    totcons, tv::MassAcc, model, param, C
+    acc, tv::MassAcc, model, param, C
     )
-    @tullio totcons[i] = C[i] # TODO: multiply by volume
+    @tullio acc[i] = C[i] # TODO: multiply by volume
 end
 
 @terv_secondary function update_as_secondary!(
-    totcons, tv::EnergyAcc, model, param, T
+    acc, tv::EnergyAcc, model, param, T
     )
-    @tullio totcons[i] = C[i] # TODO: multiply by volume
+    @tullio acc[i] = T[i] # TODO: multiply by volume
 end

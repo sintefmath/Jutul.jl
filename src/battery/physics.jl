@@ -45,6 +45,8 @@ function update_half_face_flux!(
 end
 
 
+# TODO: Theis should happen via intermediate types
+
 function update_half_face_flux!(
     law::Conservation{MassAcc}, storage, model, dt, 
     flowd::TwoPointPotentialFlow{U, K, T}
@@ -65,6 +67,16 @@ function update_half_face_flux!(
     @tullio f[i] = flux[i]
 end
 
+function update_half_face_flux!(
+    law::Conservation{EnergyAcc}, storage, model, dt, 
+    flowd::TwoPointPotentialFlow{U, K, T}
+    ) where {U,K,T<:ECFlow}
+
+    flux = storage.state.TPFlux_T
+    flux = get_entries(law.half_face_flux_cells)
+    @tullio flux[i] = flux[i]
+end
+
 
 @inline function get_diagonal_cache(eq::Conservation)
     return eq.accumulation
@@ -81,14 +93,17 @@ end
 
 function corr_type(::vonNeumannBC{ChargeAcc}) return ChargeAcc() end
 function corr_type(::vonNeumannBC{MassAcc}) return MassAcc() end
+function corr_type(::vonNeumannBC{EnergyAcc}) return EnergyAcc() end
 function corr_type(::Conservation{ChargeAcc}) return ChargeAcc() end
 function corr_type(::Conservation{MassAcc}) return MassAcc() end
+function corr_type(::Conservation{EnergyAcc}) return EnergyAcc() end
 
 # !Temporary hack, a potential does not necesessary corr to 
 # !a single potential.
 # TODO: mak boundary condition to play nice with non-diag Onsager matrix
 function corr_type(::DirichletBC{Phi}) return ChargeAcc() end
 function corr_type(::DirichletBC{C}) return MassAcc() end
+function corr_type(::DirichletBC{T}) return EnergyAcc() end
 
 function get_potential_vals(storage, ::MassAcc)
     return storage.primary_variables.C
@@ -96,7 +111,9 @@ end
 function get_potential_vals(storage, ::ChargeAcc)
     return storage.primary_variables.Phi
 end
-
+function get_potential_vals(storage, ::EnergyAcc)
+    return storage.primary_variables.T
+end
 
 # Called from uppdate_state_dependents
 function apply_forces_to_equation!(

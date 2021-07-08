@@ -8,6 +8,11 @@ struct TestElyte <: Electrolyte end
 struct ChemicalCurrent <: ScalarVariable end
 struct TotalCurrent <: ScalarVariable end
 
+function number_of_units(model, pv::TotalCurrent)
+    """ Two fluxes per face """
+    return 2*count_units(model.domain, Faces())
+end
+
 function select_equations_system!(
     eqs, domain, system::Electrolyte, formulation
     )
@@ -60,16 +65,16 @@ end
 function get_current_coeff_c(
     model::SimulationModel{D, S, F, Cons}, C, T
     ) where {D, S<:Electrolyte, F, Cons}
-    return ones(size(C))
+    return ones(number_of_units(model, TotalCurrent()))
 end
 function get_current_coeff_phi(
     model::SimulationModel{D, S, F, Cons}, C, T
     ) where {D, S<:Electrolyte, F, Cons}
-    return ones(size(C))
+    return ones(number_of_units(model, TotalCurrent()))
 end
 
 @terv_secondary function update_as_secondary!(
-    j, tv::EnergyAcc, model, param, 
+    j, tv::TotalCurrent, model, param, 
     TPFlux_C, TPFlux_Phi, C, T
     )
     # Should have one coefficient for each, probably

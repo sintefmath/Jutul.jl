@@ -30,7 +30,7 @@ function test_elyte()
     return G, states
 end
 
-G, states = test_elyte()
+G, states = test_elyte();
 ##
 
 f = plot_interactive(G, states)
