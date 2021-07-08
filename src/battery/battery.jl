@@ -217,7 +217,16 @@ end
     @tullio pot[i] = half_face_two_point_grad(conn_data[i], C)
 end
 
+@terv_secondary function update_as_secondary!(
+    pot, tv::TPFlux{T}, model::SimulationModel{D, S, F, Con}, param, T
+    ) where {D, S <: ElectroChemicalComponent, F, Con}
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
+    @tullio pot[i] = half_face_two_point_grad(conn_data[i], C)
+end
 
+
+# ? Is this necesessary?
 @terv_secondary function update_as_secondary!(
     pot, tv::Phi, model, param, Phi
     )
@@ -275,3 +284,8 @@ end
     @tullio totcons[i] = C[i] # TODO: multiply by volume
 end
 
+@terv_secondary function update_as_secondary!(
+    totcons, tv::TotalHeat, model, param, T
+    )
+    @tullio totcons[i] = C[i] # TODO: multiply by volume
+end

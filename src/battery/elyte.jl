@@ -64,3 +64,12 @@ end
     @tullio j[i] = coeff[i] * (TPFlux_C[i] + TPFlux_Phi[i])
 end
 
+function update_half_face_flux!(
+    law::Conservation{C}, storage, model::SimulationModel{D, S, F, Cons},
+     dt, flow::TwoPointPotentialFlow{U, K, T}
+    ) where {U,K,T<:ECFlow, D, S<:Electrolyte, F, Cons}
+
+    f = storage.state.Flux
+    flux = get_entries(law.half_face_flux_cells)
+    @tullio flux[i] = f[i]
+end

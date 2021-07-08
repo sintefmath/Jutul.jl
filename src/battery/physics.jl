@@ -50,9 +50,9 @@ function update_half_face_flux!(
     flowd::TwoPointPotentialFlow{U, K, T}
     ) where {U,K,T<:ECFlow}
 
-    pot = storage.state.TPFlux_C  # ?WHy is this named pot?
+    grad_C = storage.state.TPFlux_C
     flux = get_entries(law.half_face_flux_cells)
-    @tullio flux[i] = pot[i]
+    @tullio flux[i] = grad_C[i]
 end
 
 function update_half_face_flux!(
@@ -60,9 +60,9 @@ function update_half_face_flux!(
     flowd::TwoPointPotentialFlow{U, K, T}
     ) where {U,K,T<:ECFlow}
 
-    pot = storage.state.TPFlux_Phi  # ?WHy is this named pot?
+    grad_Phi = storage.state.TPFlux_Phi
     flux = get_entries(law.half_face_flux_cells)
-    @tullio flux[i] = pot[i]
+    @tullio flux[i] = grad_Phi[i]
 end
 
 

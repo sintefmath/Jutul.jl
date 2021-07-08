@@ -15,12 +15,17 @@ struct ECComponent <: ElectroChemicalComponent end # Not a good name
 abstract type ElectroChemicalGrid <: TervGrid end
 
 # Potentials
+# ? introduce abstract type Potential?
 struct Phi <: ScalarVariable end
 struct C <: ScalarVariable end
+struct T <: ScalarVariable end
 # Accumulation variables
+# ? Introduce abstract type Accumulation ?
 struct TotalCharge <: ScalarVariable end
 struct TotalConcentration <: ScalarVariable end
+struct TotalHeat <: ScalarVariable end
 
+# ? Should this be named TPGrad{} instead ???
 struct TPFlux{T} <: ScalarVariable end
 
 abstract type ECFlow <: FlowType end
@@ -79,6 +84,9 @@ function acc_symbol(p::C)
     return :TotalConcentration
 end
 
+function acc_symbol(p::T)
+    return :TotalHeat
+end
 
 function Conservation(
     pvar, model, number_of_equations;
