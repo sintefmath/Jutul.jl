@@ -33,18 +33,25 @@ function select_secondary_variables_system!!(
     S[:TotalCurrent] = TotalCurrent()
     S[:TotalCharge] = TotalCharge()
     S[:TotalConcentration] = TotalConcentration()
-
 end
 
+# Must be available to evaluate time derivatives
+function minimum_output_variables(
+    system::Electrolyte, primary_variables
+    )
+    [:TotalCharge, :TotalConcentration]
+end
+
+
 function get_current_coeff(
-    model::SimulationModel{D, S, F, C}, C, Phi
-    ) where {D, S::TestElyte, F, C}
+    model::SimulationModel{D, S, F, Cons}, C, Phi
+    ) where {D, S<:TestElyte, F, Cons}
     return ones(size(C))
 end
 
 function get_current_coeff(
-    model::SimulationModel{D, S, F, C}, C, Phi
-    ) where {D, S::Electrolyte, F, C}
+    model::SimulationModel{D, S, F, Cons}, C, Phi
+    ) where {D, S<:Electrolyte, F, Cons}
     error("current coeff not implemented for abstract electrolyte")
 end
 

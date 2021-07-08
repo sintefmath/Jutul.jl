@@ -50,5 +50,6 @@ include("battery/battery_types.jl")
 include("battery/physics.jl")
 include("battery/battery.jl")
 include("battery/test_setup.jl")
+include("battery/elyte.jl")
 
 end # module

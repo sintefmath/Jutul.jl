@@ -20,8 +20,8 @@ function get_test_setup_battery(name="square_current_collector")
     # set up boundary conditions
     nc = length(domain.grid.volumes)
     
-    dirichlet = DirichletBC([1, 1], [1, -1], [2, 2])
-    neumann = vonNeumannBC([1, nc], [-1, 1])
+    dirichlet = DirichletBC{Phi}([1, 1], [1, -1], [2, 2])
+    neumann = vonNeumannBC{Phi}([1, nc], [-1, 1])
     forces = (neumann=neumann, dirichlet= dirichlet,)
     
     # Model parameters
