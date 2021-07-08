@@ -56,7 +56,7 @@ end
 
 function check_increment(dx, key)
     if any(!isfinite, dx)
-        bad = findall(!isfinite.(dx))
+        bad = findall(isfinite.(dx) .== false)
         n_bad = length(bad)
         n = min(10, length(bad))
         bad = bad[1:n]
