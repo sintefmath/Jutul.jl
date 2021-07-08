@@ -54,16 +54,28 @@ function LinearizedSystem(sparse_arg, context, layout; r = nothing, dx = nothing
     jac, jac_buf, bz = build_jacobian(sparse_arg, context, layout)
     n, m = size(jac)
     @assert n == m "Expected square system. Recieved $n (eqs) by $m (primary variables)."
-    dx, dx_buf = get_jacobian_vector(n, context, layout, dx, bz)
-    r, r_buf = get_jacobian_vector(n, context, layout, r, bz)
+    dx, dx_buf = get_jacobian_vector(n, context, layout, dx, bz[1])
+    r, r_buf = get_jacobian_vector(n, context, layout, r, bz[1])
 
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
 end
 
 function build_jacobian(sparse_arg, context, layout)
-    I, J, V, n, m = sparse_arg
+    @assert sparse_arg.layout == layout
+    I, J, n, m = ijnm(sparse_arg)
+    bz = block_size(sparse_arg)
+    Jt = jacobian_eltype(context, layout, bz)
+    Ft = float_type(context)
+
+    V = Vector{Jt}(undef, length(I))
     jac = sparse(I, J, V, n, m)
-    return (jac, get_nzval(jac), 1)
+    nzval = get_nzval(jac)
+    if Ft == Jt
+        V_buf = nzval
+    else
+        V_buf = reinterpret(reshape, Ft, nzval)
+    end
+    return (jac, nzval, bz)
 end
 
 function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)

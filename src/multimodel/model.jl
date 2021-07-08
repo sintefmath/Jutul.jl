@@ -207,7 +207,6 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
     target_model = models[target]
     source_model = models[source]
     layout = matrix_layout(context)
-    F = float_type(context)
 
     if target == source
         # These are the main diagonal blocks each model knows how to produce themselves
@@ -229,8 +228,8 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
                 for u in get_primary_variable_ordered_units(source_model)
                     S = declare_sparsity(target_model, source_model, x, u, layout)
                     if !isnothing(S)
-                        push!(I, S[1] .+ equation_offset)
-                        push!(J, S[2] .+ variable_offset)
+                        push!(I, S.I .+ equation_offset)
+                        push!(J, S.J .+ variable_offset)
                     end
                     variable_offset += number_of_degrees_of_freedom(source_model, u)
                 end
@@ -239,13 +238,12 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         end
         I = vcat(I...)
         J = vcat(J...)
-        V = zeros(F, length(I))
-        sarg = (I, J, V, equation_offset, ncols)
+        sarg = SparsePattern(I, J, equation_offset, ncols, layout)
     end
     return sarg
 end
 
-function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, arg...)
+function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, context)
     I = []
     J = []
     V = []
@@ -256,11 +254,11 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         variable_offset = 0
         n = 0
         for source in sources
-            i, j, v, n, m = get_sparse_arguments(storage, model, target, source, arg...)
+            sarg = get_sparse_arguments(storage, model, target, source, context)
+            i, j, n, m = ijnm(sarg)
             if length(i) > 0
                 push!(I, i .+ equation_offset)
                 push!(J, j .+ variable_offset)
-                push!(V, v)
                 @assert maximum(i) <= n "I index exceeded $n for $source → $target (largest value: $(maximum(i))"
                 @assert maximum(j) <= m "J index exceeded $m for $source → $target (largest value: $(maximum(j))"
 
@@ -276,12 +274,8 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     @debug outstr
     I = vec(vcat(I...))
     J = vec(vcat(J...))
-    if isa(eltype(V), AbstractVector)
-        V = vec(vcat(V...))
-    else
-        V = vcat(V...)
-    end
-    return (I, J, V, equation_offset, variable_offset)
+    # TODO: Fix block size
+    return SparsePattern(I, J, equation_offset, variable_offset, matrix_layout(context))
 end
 
 function setup_linearized_system!(storage, model::MultiModel)

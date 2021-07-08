@@ -30,8 +30,8 @@ struct ScalarTestEquation <: DiagonalEquation
     end
 end
 
-function declare_sparsity(model, e::ScalarTestEquation)
-    return (1, 1, 1, 1)
+function declare_sparsity(model, e::ScalarTestEquation, layout)
+    return SparsePattern(1, 1, 1, 1, layout)
 end
 
 

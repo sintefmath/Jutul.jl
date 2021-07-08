@@ -14,6 +14,13 @@ function convert_to_immutable_storage(v::Any)
     return v
 end
 
+function sparse_pattern(I::AbstractVector{T}, J::AbstractVector{T}, nrows::T, ncols::T; block_size = (1, 1)) where {T <: Integer}
+    if isa(block_size, Integer)
+        block_size = (block_size, block_size)
+    end
+    @assert length(I) == length(J)
+    return (I = I, J = J, nrows = nrows, ncols = ncols, block_size = block_size)
+end
 
 "Apply a function to each element in the fastest possible manner."
 function fapply!(out, f, inputs...)

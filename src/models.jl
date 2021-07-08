@@ -188,7 +188,7 @@ end
 
 function get_sparse_arguments(storage, model)
     layout = matrix_layout(model.context)
-    get_sparse_arguments(storage, model, layout)
+    return get_sparse_arguments(storage, model, layout)
 end
 
 function get_sparse_arguments(storage, model, layout::EquationMajorLayout)
@@ -203,10 +203,8 @@ function get_sparse_arguments(storage, model, layout::EquationMajorLayout)
         for u in primary_units
             S = declare_sparsity(model, eq, u, layout)
             if !isnothing(S)
-                i = S[1]
-                j = S[2]
-                push!(I, i .+ numrows) # Row indices, offset by the size of preceeding equations
-                push!(J, j .+ numcols) # Column indices, offset by the partials in units we have passed
+                push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
+                push!(J, S.J .+ numcols) # Column indices, offset by the partials in units we have passed
             end
             numcols += number_of_degrees_of_freedom(model, u)
         end
@@ -216,9 +214,7 @@ function get_sparse_arguments(storage, model, layout::EquationMajorLayout)
     end
     I = vcat(I...)
     J = vcat(J...)
-    vt = float_type(model.context)
-    V = zeros(vt, length(I))
-    return (I, J, V, numrows, ndof)
+    return SparsePattern(I, J, numrows, ndof, layout)
 end
 
 function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
@@ -251,9 +247,7 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
 
     I = Vector{it}(vcat(I...))
     J = Vector{it}(vcat(J...))
-    vt = float_type(model.context)
-    V = zeros(vt, block_size*block_size, length(I))
-    return (I, J, V, numrows, ndof)
+    return SparsePattern(I, J, numrows, ndof, layout, block_size)
 end
 
 

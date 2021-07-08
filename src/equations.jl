@@ -165,21 +165,25 @@ function declare_sparsity(model, e::TervEquation, unit, layout::EquationMajorLay
         end
         n = number_of_equations(model, e)
         m = nunits*ncol_blocks
-        out = (I, J, n, m)
+        out = SparsePattern(I, J, n, m, layout)
     end
     return out
 end
 
-function declare_sparsity(model, e::TervEquation, unit, ::BlockMajorLayout)
+function declare_sparsity(model, e::TervEquation, unit, layout::BlockMajorLayout)
     primitive = declare_pattern(model, e, unit)
     if isnothing(primitive)
-        return nothing
+        out = nothing
     else
         I, J = primitive
         n = number_of_equations(model, e)
         m = count_units(model.domain, unit)
-        return I, J, n, m
+
+        n_bz = number_of_equations_per_unit(e)
+        m_bz = degrees_of_freedom_per_unit(model, unit)
+        out = SparsePattern(I, J, n, m, layout, n_bz, m_bz)
     end
+    return out
 end
 
 """
