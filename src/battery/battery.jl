@@ -187,7 +187,6 @@ function select_secondary_variables_flow_type!(
     S[:TPFlux_Phi] = TPFlux{Phi}()
     S[:TPFlux_C] = TPFlux{C}()
     S[:TotalCharge] = TotalCharge()
-    #?? Is it necessary with both C and TotCons??
     S[:TotalConcentration] = TotalConcentration()
 end
 
@@ -200,7 +199,7 @@ function select_equations_system!(
     eqs[:mass_conservation] = (mass_cons, 1)
 end
 
-
+# TODO: Can these be combined?
 
 @terv_secondary function update_as_secondary!(
     pot, tv::TPFlux{Phi}, model::SimulationModel{D, S, F, C}, param, Phi

@@ -1,5 +1,5 @@
 using Terv
-export ElectroChemicalComponent, CurrentCollector
+export ElectroChemicalComponent, CurrentCollector, Electectrolyte, TestElyte
 export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
 export ChargeFlow, MixedFlow
 
@@ -12,11 +12,15 @@ struct CurrentCollector <: ElectroChemicalComponent end
 struct ECComponent <: ElectroChemicalComponent end # Not a good name
 
 abstract type ElectroChemicalGrid <: TervGrid end
+
+# Potentials
 struct Phi <: ScalarVariable end
 struct C <: ScalarVariable end
-struct TotalCharge <: GroupedVariables end # should be scalar
+# Accumulation variables
+struct TotalCharge <: ScalarVariable end
 struct TotalConcentration <: ScalarVariable end
-struct TPFlux{T} <: GroupedVariables end
+
+struct TPFlux{T} <: ScalarVariable end
 
 abstract type ECFlow <: FlowType end
 struct ChargeFlow <: ECFlow end

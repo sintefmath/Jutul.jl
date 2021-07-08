@@ -13,5 +13,6 @@ function test_ec(linear_solver=nothing)
 end
 
 states, G = test_ec();
+##
 f = plot_interactive(G, states)
 display(f)
