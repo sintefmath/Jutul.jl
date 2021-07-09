@@ -43,9 +43,9 @@ end
 function select_secondary_variables_system!(
     S, domain, system::Electrolyte, formulation
     )
-    S[:TPFlux_Phi] = TPFlux{Phi}()
-    S[:TPFlux_C] = TPFlux{C}()
-    S[:TPFlux_T] = TPFlux{T}()
+    S[:TPkGrad_Phi] = TPkGrad{Phi}()
+    S[:TPkGrad_C] = TPkGrad{C}()
+    S[:TPkGrad_T] = TPkGrad{T}()
     
     S[:TotalCurrent] = TotalCurrent()
     
@@ -75,12 +75,12 @@ end
 
 @terv_secondary function update_as_secondary!(
     j, tv::TotalCurrent, model, param, 
-    TPFlux_C, TPFlux_Phi, C, T
+    TPkGrad_C, TPkGrad_Phi, C, T
     )
     # Should have one coefficient for each, probably
     coeff_phi = get_current_coeff_phi(model, C, T)
     coeff_c = get_current_coeff_c(model, C, T)
-    @tullio j[i] =  coeff_c[i]*TPFlux_C[i] + coeff_phi[i]*TPFlux_Phi[i]
+    @tullio j[i] =  coeff_c[i]*TPkGrad_C[i] + coeff_phi[i]*TPkGrad_Phi[i]
 end
 
 

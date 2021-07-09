@@ -26,8 +26,8 @@ struct ChargeAcc <: AccumulationVariable end
 struct MassAcc <: AccumulationVariable end
 struct EnergyAcc <: AccumulationVariable end
 
-# ? Should this be named TPGrad{} instead ???
-struct TPFlux{T} <: ScalarVariable end
+# Represents k∇T, where k is a tensor, T a potential
+struct TPkGrad{T} <: ScalarVariable end
 
 abstract type ECFlow <: FlowType end
 struct ChargeFlow <: ECFlow end

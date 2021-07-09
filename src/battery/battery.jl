@@ -41,11 +41,11 @@ function degrees_of_freedom_per_unit(model, sf::MassAcc)
     return 1
 end
 
-function degrees_of_freedom_per_unit(model, sf::TPFlux)
+function degrees_of_freedom_per_unit(model, sf::TPkGrad)
     return 1
 end
 
-function number_of_units(model, pv::TPFlux)
+function number_of_units(model, pv::TPkGrad)
     """ Two fluxes per face """
     return 2*count_units(model.domain, Faces())
 end
@@ -64,7 +64,7 @@ end
 
 
 # ?Why not faces?
-function associated_unit(::TPFlux)
+function associated_unit(::TPkGrad)
     Cells()
 end
 
@@ -180,7 +180,7 @@ end
 function select_secondary_variables_system!(
     S, domain, system::CurrentCollector, formulation
     )
-    S[:TPFlux_Phi] = TPFlux{Phi}()
+    S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:ChargeAcc] = ChargeAcc()
 end
 
@@ -202,8 +202,8 @@ end
 function select_secondary_variables_system!(
     S, domain, system::ECComponent, formulation
     )
-    S[:TPFlux_Phi] = TPFlux{Phi}()
-    S[:TPFlux_C] = TPFlux{C}()
+    S[:TPkGrad_Phi] = TPkGrad{Phi}()
+    S[:TPkGrad_C] = TPkGrad{C}()
     S[:ChargeAcc] = ChargeAcc()
     S[:MassAcc] = MassAcc()
 end
@@ -238,7 +238,7 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPFlux{Phi}, model::SimulationModel{D, S, F, C}, param, Phi
+    pot, tv::TPkGrad{Phi}, model::SimulationModel{D, S, F, C}, param, Phi
     ) where {D, S <: ElectroChemicalComponent, F, C}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
@@ -249,7 +249,7 @@ end
 end
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPFlux{C}, model::SimulationModel{D, S, F, Con}, param, C
+    pot, tv::TPkGrad{C}, model::SimulationModel{D, S, F, Con}, param, C
     ) where {D, S <: ElectroChemicalComponent, F, Con}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
@@ -258,7 +258,7 @@ end
 end
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPFlux{T}, model::SimulationModel{D, S, F, Con}, param, T
+    pot, tv::TPkGrad{T}, model::SimulationModel{D, S, F, Con}, param, T
     ) where {D, S <: ElectroChemicalComponent, F, Con}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
