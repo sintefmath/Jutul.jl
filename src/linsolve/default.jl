@@ -16,13 +16,16 @@ struct LinearizedSystem{L} <: TervLinearSystem
     matrix_layout::L
 end
 
-struct LinearizedBlock{L} <: TervLinearSystem
+struct LinearizedBlock{R, C} <: TervLinearSystem
     jac
     jac_buffer
-    matrix_layout::L
-    function LinearizedBlock(sparse_arg, context, layout)
+    matrix_layout::R
+    residual_layout::C
+    function LinearizedBlock(sparse_arg, context, layout, layout_r)
         jac, jac_buf = build_jacobian(sparse_arg, context, layout)
-        new{typeof(layout)}(jac, jac_buf, layout)
+        I = typeof(layout)
+        J = typeof(layout_r)
+        new{I, J}(jac, jac_buf, layout, layout_r)
     end
 end
 
