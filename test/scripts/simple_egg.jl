@@ -1,27 +1,24 @@
 using Terv
 using Statistics, DataStructures, LinearAlgebra, Krylov
 ENV["JULIA_DEBUG"] = Terv
-ENV["JULIA_DEBUG"] = nothing
+# ENV["JULIA_DEBUG"] = nothing
 ##
 # casename = "simple_egg"
 casename = "egg"
 # casename = "egg_ministeps"
 
 # casename = "gravity_test"
-casename = "bl_wells"
-casename = "bl_wells_mini"
+# casename = "bl_wells"
+# casename = "bl_wells_mini"
 
 # casename = "single_inj_single_cell"
 # casename = "intermediate"
 # casename = "mini"
 simple_well = false
-block_backend = false
-use_groups = true
+block_backend = true
+use_groups = false
 include_wells_as_blocks = use_groups && simple_well && false
-
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false)
-
-
 function setup_res(G, mrst_data; block_backend = false, use_groups = false)
     ## Set up reservoir part
     f = mrst_data["fluid"]
@@ -75,7 +72,8 @@ function setup_res(G, mrst_data; block_backend = false, use_groups = false)
         p0 = [p0]
     end
     s0 = state0["s"]'
-    # @. s0 += [1e-3; -1e-3]
+    # ϵ = 0.5
+    # @. s0 += [ϵ; -ϵ]
     init = Dict(:Pressure => p0, :Saturations => s0)
     # state0r = setup_state(model, init)
 
@@ -91,7 +89,7 @@ initializer = Dict()
 forces = Dict()
 
 # function run_immiscible_mrst(casename, simple_well = false)
-model, init, param_res = setup_res(G, mrst_data; block_backend = false, use_groups = false)
+model, init, param_res = setup_res(G, mrst_data; block_backend = block_backend, use_groups = use_groups)
 
 dt = mrst_data["dt"]
 if isa(dt, Real)
@@ -109,8 +107,6 @@ initializer[:Reservoir] = init
 forces[:Reservoir] = nothing
 models[:Reservoir] = model
 
-## Set up injector
-# Initial condition for all wells
 slw = 1.0
 slw = 0.0
 w0 = Dict(:Pressure => mean(init[:Pressure]), :TotalMassFlux => 1e-12, :Saturations => [slw, 1-slw])
@@ -150,7 +146,9 @@ for i = 1:num_wells
         ctrl = DisabledControl()
     elseif is_injector
         println("Injector")
-        ctrl = InjectorControl(target, wdata["compi"])
+        ci = wdata["compi"]
+        # ci = [0.5, 0.5]
+        ctrl = InjectorControl(target, ci)
     else
         println("Producer")
         ctrl = ProducerControl(target)
@@ -185,7 +183,10 @@ if use_groups
 else
     groups = nothing
 end
-mmodel = MultiModel(convert_to_immutable_storage(models), groups = groups, context = DefaultContext())
+outer_context = DefaultContext()
+# outer_context = nothing
+
+mmodel = MultiModel(convert_to_immutable_storage(models), groups = groups, context = outer_context)
 # Set up joint state and simulate
 state0 = setup_state(mmodel, initializer)
 forces[:Facility] = facility_forces
@@ -202,35 +203,37 @@ sim = Simulator(mmodel, state0 = state0, parameters = deepcopy(parameters))
 # dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24#
 dt = timesteps
 # dt = dt[1:20]
-dt = dt[1:3]
-dt[1] = 1
+# dt = dt[1:3]
+# dt[1] = 1
 # 
+
+atol = 1e-3
+rtol = 1e-3
+max_it = 100
 if use_groups
     well_precond = TrivialPreconditioner()
     res_precond = TrivialPreconditioner()
 
-    # res_precond = ILUZeroPreconditioner()
-    # well_precond = LUPreconditioner()
+    res_precond = ILUZeroPreconditioner()
+    well_precond = LUPreconditioner()
+    # well_precond = ILUZeroPreconditioner()
     if !block_backend
         # res_precond = LUPreconditioner()
     end
 
     group_p = GroupWisePreconditioner([res_precond, well_precond])
-    # group_p = GroupWisePreconditioner([ILUZeroPreconditioner(), ILUZeroPreconditioner()])
-    atol = 1e-12
-    rtol = 1e-12
-    # lsolve = GenericKrylov(verbose = 10, relative_tolerance = rtol, absolute_tolerance = atol)
-    lsolve = GenericKrylov(dqgmres, verbose = 10, preconditioner = group_p, relative_tolerance = rtol, absolute_tolerance = atol, max_iterations = 1000)
 
-    # lsolve = GenericKrylov(verbose = 10, preconditioner = ILUZeroPreconditioner())
+    prec = group_p
+    # prec = nothing
 else
-    # lsolve = LUSolver(check = false)
-    lsolve = nothing
-    atol = 1e-12
-    rtol = 1e-12
-    lsolve = GenericKrylov(verbose = 10, relative_tolerance = rtol, absolute_tolerance = atol)
+    prec = nothing
 end
-states = simulate(sim, dt, forces = forces, info_level = 1, linear_solver = lsolve)
+lsolve = GenericKrylov(dqgmres, verbose = 10, preconditioner = prec, relative_tolerance = rtol, absolute_tolerance = atol, max_iterations = max_it)
+lsolve = nothing
+
+states = simulate(sim, dt, forces = forces, info_level = 1, linear_solver = lsolve, max_iterations = max_it)
+error("Early termination")
+
 # return (states, mmodel, well_symbols)
 # end
 ##
