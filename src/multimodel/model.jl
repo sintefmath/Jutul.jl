@@ -213,8 +213,9 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         sarg = get_sparse_arguments(storage[target], target_model)
     else
         # Source differs from target. We need to get sparsity from cross model terms.
-        I = []
-        J = []
+        T = index_type(context)
+        I = Vector{Vector{T}}()
+        J = Vector{Vector{T}}()
         ncols = number_of_degrees_of_freedom(source_model)
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source

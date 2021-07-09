@@ -95,13 +95,20 @@ struct SparsePattern{L}
             I = vec(I)
             J = vec(J)
         end
-        I::AbstractVector{T}
-        J::AbstractVector{T}
-        @assert length(I) == length(J)
-        @assert maximum(I) <= n
-        @assert minimum(I) > 0
-        @assert maximum(J) <= m
-        @assert minimum(J) > 0
+        if length(I) > 0
+            I::AbstractVector{T}
+            J::AbstractVector{T}
+            @assert length(I) == length(J)
+            @assert maximum(I) <= n
+            @assert minimum(I) > 0
+            @assert maximum(J) <= m
+            @assert minimum(J) > 0
+        else
+            # Empty vectors might be Any, and the asserts above
+            # cannot be used.
+            I = Vector{T}()
+            J = Vector{T}()
+        end
         @assert n > 0
         @assert m > 0
         new{typeof(layout)}(I, J, n, m, block_n, block_m, layout)
