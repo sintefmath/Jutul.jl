@@ -59,8 +59,9 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
 
         n_partials = x.npartials_source
         n_eqs = x.equations_per_unit
-        I = []
-        J = []
+        F = eltype(target_impact)
+        I = Vector{Vector{F}}()
+        J = Vector{Vector{F}}()
         for eqno in 1:n_eqs
             for derno in 1:n_partials
                 push!(I, target_impact .+ (eqno-1)*nunits_target)

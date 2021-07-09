@@ -54,6 +54,7 @@ struct MultiSegmentWell <: WellGrid
                                                         reservoir_symbol = :Reservoir, kwarg...)
         nv = length(volumes)
         nc = nv + 1
+        reservoir_cells = vec(reservoir_cells)
         nr = length(reservoir_cells)
         if isnothing(N)
             @debug "No connectivity. Assuming nicely ordered linear well."
@@ -69,6 +70,8 @@ struct MultiSegmentWell <: WellGrid
             @assert length(reservoir_cells) == nv "If no perforation cells are given, we must 1->1 correspondence between well volumes and reservoir cells."
             perforation_cells = collect(2:nc)
         end
+        perforation_cells = vec(perforation_cells)
+
         if isnothing(segment_models)
             Δp = SegmentWellBoreFrictionHB(100.0, 1e-4, 0.1)
             segment_models = repeat([Δp], nseg)
@@ -362,10 +365,13 @@ function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{G}, sourc
     if target_symbol == well.reservoir_symbol
         # The symbol matches up and this well exists in this reservoir
         p = well.perforations
-        isect = (target = p.reservoir, source = p.self, target_unit = Cells(), source_unit = Cells())
+        t = p.reservoir::AbstractVector
+        s = p.self::AbstractVector
     else
-        isect = (target = nothing, source = nothing, target_unit = Cells(), source_unit = Cells())
+        t = nothing
+        s = nothing
     end
+    return (target = t, source = s, target_unit = Cells(), source_unit = Cells())
 end
 
 """

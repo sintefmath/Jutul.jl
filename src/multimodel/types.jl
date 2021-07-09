@@ -45,6 +45,8 @@ struct InjectiveCrossTerm <: CrossTerm
         end
         target_impact, source_impact, target_unit, source_unit = intersection
         @assert !isnothing(target_impact) "Cannot declare cross term when there is no overlap between domains."
+        target_impact::AbstractVector
+        source_impact::AbstractVector
         noverlap = length(target_impact)
         @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
         # Infer Unit from target_eq
