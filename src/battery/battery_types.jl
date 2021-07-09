@@ -17,8 +17,8 @@ abstract type ElectroChemicalGrid <: TervGrid end
 struct Phi <: ScalarVariable end
 struct C <: ScalarVariable end
 struct T <: ScalarVariable end
-# Accumulation variables
 
+# Accumulation variables
 abstract type AccumulationVariable <: ScalarVariable end
 struct ChargeAcc <: AccumulationVariable end
 struct MassAcc <: AccumulationVariable end

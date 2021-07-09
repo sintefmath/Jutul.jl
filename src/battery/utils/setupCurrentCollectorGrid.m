@@ -1,8 +1,8 @@
 % clear all
 close all
 
-nx = 10;
-ny = 10;
+nx = 100;
+ny = 100;
 
 Lx = 1;
 Ly = 1;

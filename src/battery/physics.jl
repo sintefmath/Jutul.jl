@@ -16,7 +16,7 @@ export half_face_two_point_kgrad
 end
 
 @inline function harm_av(
-    c_self::I, c_other::I, T::R, k::AbstractArray{R}
+    c_self::I, c_other::I, T::R, k::AbstractArray
     ) where {R<:Real, I<:Integer}
     return T * (k[c_self]^-1 + k[c_other]^-1)^-1
 end
@@ -26,7 +26,7 @@ end
 end
 
 @inline function half_face_two_point_kgrad(
-    c_self::I, c_other::I, T::R, phi::AbstractArray, k::AbstractArray{R}
+    c_self::I, c_other::I, T::R, phi::AbstractArray, k::AbstractArray
     ) where {R<:Real, I<:Integer}
     return - harm_av(c_self, c_other, T, k) * grad(c_self, c_other, phi)
 end

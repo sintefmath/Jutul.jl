@@ -1,5 +1,6 @@
 using Terv
 export get_flow_volume
+
 #########
 # utils #
 #########
@@ -183,58 +184,6 @@ end
     @tullio pot[i] = half_face_two_point_kgrad(conn_data[i], T, k)
 end
 
-
-# # ? Is this necesessary?
-# @terv_secondary function update_as_secondary!(
-#     pot, tv::Phi, model, param, Phi
-#     )
-#     mf = model.domain.discretizations.charge_flow
-#     conn_data = mf.conn_data
-#     context = model.context
-#     k = get_alpha(model)
-#     update_cell_neighbor_potential_cc!(
-#         pot, conn_data, Phi, context, kernel_compatibility(context), k
-#         )
-# end
-
-# function update_cell_neighbor_potential_cc!(
-#     dpot, conn_data, phi, context, ::KernelDisallowed, k
-#     )
-#     Threads.@threads for i in eachindex(conn_data)
-#         c = conn_data[i]
-#         @inbounds dpot[phno] = half_face_two_point_kgrad(
-#                 c.self, c.other, c.T, phi, k
-#         )
-#     end
-# end
-
-# function update_cell_neighbor_potential_cc!(
-#     dpot, conn_data, phi, context, ::KernelAllowed, k
-#     )
-#     @kernel function kern(dpot, @Const(conn_data))
-#         ph, i = @index(Global, NTuple)
-#         c = conn_data[i]
-#         dpot[ph] = half_face_two_point_kgrad(c.self, c.other, c.T, phi, k)
-#     end
-#     begin
-#         d = size(dpot)
-#         kernel = kern(context.device, context.block_size, d)
-#         event_jac = kernel(dpot, conn_data, phi, ndrange = d)
-#         wait(event_jac)
-#     end
-# end
-
-# @terv_secondary function update_as_secondary!(
-#     pot, tv::C, model, param, C
-#     )
-#     mf = model.domain.discretizations.mi
-#     conn_data = mf.conn_data
-#     context = model.context
-#     k = get_alpha(model)
-#     update_cell_neighbor_potential_cc!(
-#         pot, conn_data, C, context, kernel_compatibility(context), k
-#         )
-# end
 
 # ? Hva sker når man ganger med volume?
 @terv_secondary function update_as_secondary!(

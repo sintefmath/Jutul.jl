@@ -12,18 +12,18 @@ function test_elyte()
 
     phi0 = 0.
     c0 = 0.
-    T0 = 0.
+    T0 = 1.
     init = Dict(:Phi => phi0, :C => c0, :T =>T0)
     state0 = setup_state(model, init)
     parameters = setup_parameters(model)
 
     bc_phi = DirichletBC{Phi}([100], [0], [2])
     bc_c = DirichletBC{C}([100], [0], [2])
-    bc_T = DirichletBC{T}([100], [0], [2])
+    bc_T = DirichletBC{T}([1], [1], [2])
     forces = (bc_phi=bc_phi, bc_c=bc_c, bc_T=bc_T,)
 
-    bc_c2 = vonNeumannBC{MassAcc}([1], [1])
-    bc_T2 = vonNeumannBC{EnergyAcc}([1], [1])
+    bc_c2 = vonNeumannBC{MassAcc}([10], [1])
+    bc_T2 = vonNeumannBC{EnergyAcc}([100], [1])
 
     forces = (forces..., bc_c2=bc_c2, bc_T2=bc_T2,)
 
