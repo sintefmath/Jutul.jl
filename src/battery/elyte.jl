@@ -70,12 +70,7 @@ end
 end
 
 
-function update_half_face_flux!(
-    law::Conservation{MassAcc}, storage, model, dt, 
-    flowd::TwoPointPotentialFlow{U, K, T}
-    ) where {U,K,T<:ECFlow}
-
-    j = storage.state.TotalCurrent
-    f = get_entries(law.half_face_flux_cells)
-    @tullio f[i] = j[i]
+function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
+    law::Conservation{MassAcc}) where {D, S <: Electrolyte, F, Con}
+    return storage.state.TotalCurrent
 end

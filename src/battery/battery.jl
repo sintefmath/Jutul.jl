@@ -39,6 +39,12 @@ function degrees_of_freedom_per_unit(model, sf::TPkGrad)
     return 1
 end
 
+function degrees_of_freedom_per_unit(
+    model::SimulationModel{D, S}, sf::Phi
+    ) where {D<:TervDomain, S<:ElectroChemicalComponent}
+    return 1
+end
+
 function number_of_units(model, pv::TPkGrad)
     """ Two fluxes per face """
     return 2*count_units(model.domain, Faces())
@@ -64,35 +70,6 @@ end
 
 @inline function get_diagonal_cache(eq::Conservation)
     return eq.accumulation
-end
-
-
-####################
-# CurrentCollector #
-####################
-
-# function degrees_of_freedom_per_unit(
-#     model::SimulationModel{D, S}, sf::Phi
-#     ) where {D<:TervDomain, S<:CurrentCollector}
-#     return 1 
-# end
-
-
-###################
-# concrete eccomp #
-###################
-
-# ? should this be automated ?
-function degrees_of_freedom_per_unit(
-    model::SimulationModel{D, S}, sf::Phi
-    ) where {D<:TervDomain, S<:ECComponent}
-    return 1
-end
-
-function minimum_output_variables(
-    system::ECComponent, primary_variables
-    )
-    [:ChargeAcc, :MassAcc]
 end
 
 
@@ -154,39 +131,9 @@ function declare_pattern(model, e::Conservation, ::Faces)
 end
 
 
-#############
-# Variables #
-#############
-
-# current collector 
-
-
-
-# concrete electrochemical component
-function select_primary_variables_system!(
-    S, domain, system::ECComponent, formulation
-    )
-    S[:Phi] = Phi()
-    S[:C] = C()
-end
-
-function select_secondary_variables_system!(
-    S, domain, system::ECComponent, formulation
-    )
-    S[:TPkGrad_Phi] = TPkGrad{Phi}()
-    S[:TPkGrad_C] = TPkGrad{C}()
-    S[:ChargeAcc] = ChargeAcc()
-    S[:MassAcc] = MassAcc()
-end
-
-function select_equations_system!(
-    eqs, domain, system::ECComponent, formulation
-    )
-    charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
-    mass_cons = (arg...; kwarg...) -> Conservation(MassAcc(), arg...; kwarg...)
-    eqs[:charge_conservation] = (charge_cons, 1)
-    eqs[:mass_conservation] = (mass_cons, 1)
-end
+############################
+# Standard implementations #
+############################
 
 function get_conductivity(
     model::SimulationModel{D, S, F, C}
@@ -237,60 +184,58 @@ end
 end
 
 
-# ? Is this necesessary?
-@terv_secondary function update_as_secondary!(
-    pot, tv::Phi, model, param, Phi
-    )
-    mf = model.domain.discretizations.charge_flow
-    conn_data = mf.conn_data
-    context = model.context
-    k = get_alpha(model)
-    update_cell_neighbor_potential_cc!(
-        pot, conn_data, Phi, context, kernel_compatibility(context), k
-        )
-end
+# # ? Is this necesessary?
+# @terv_secondary function update_as_secondary!(
+#     pot, tv::Phi, model, param, Phi
+#     )
+#     mf = model.domain.discretizations.charge_flow
+#     conn_data = mf.conn_data
+#     context = model.context
+#     k = get_alpha(model)
+#     update_cell_neighbor_potential_cc!(
+#         pot, conn_data, Phi, context, kernel_compatibility(context), k
+#         )
+# end
 
-function update_cell_neighbor_potential_cc!(
-    dpot, conn_data, phi, context, ::KernelDisallowed, k
-    )
-    Threads.@threads for i in eachindex(conn_data)
-        c = conn_data[i]
-        @inbounds dpot[phno] = half_face_two_point_kgrad(
-                c.self, c.other, c.T, phi, k
-        )
-    end
-end
+# function update_cell_neighbor_potential_cc!(
+#     dpot, conn_data, phi, context, ::KernelDisallowed, k
+#     )
+#     Threads.@threads for i in eachindex(conn_data)
+#         c = conn_data[i]
+#         @inbounds dpot[phno] = half_face_two_point_kgrad(
+#                 c.self, c.other, c.T, phi, k
+#         )
+#     end
+# end
 
-function update_cell_neighbor_potential_cc!(
-    dpot, conn_data, phi, context, ::KernelAllowed, k
-    )
-    @kernel function kern(dpot, @Const(conn_data))
-        ph, i = @index(Global, NTuple)
-        c = conn_data[i]
-        dpot[ph] = half_face_two_point_kgrad(c.self, c.other, c.T, phi, k)
-    end
-    begin
-        d = size(dpot)
-        kernel = kern(context.device, context.block_size, d)
-        event_jac = kernel(dpot, conn_data, phi, ndrange = d)
-        wait(event_jac)
-    end
-end
+# function update_cell_neighbor_potential_cc!(
+#     dpot, conn_data, phi, context, ::KernelAllowed, k
+#     )
+#     @kernel function kern(dpot, @Const(conn_data))
+#         ph, i = @index(Global, NTuple)
+#         c = conn_data[i]
+#         dpot[ph] = half_face_two_point_kgrad(c.self, c.other, c.T, phi, k)
+#     end
+#     begin
+#         d = size(dpot)
+#         kernel = kern(context.device, context.block_size, d)
+#         event_jac = kernel(dpot, conn_data, phi, ndrange = d)
+#         wait(event_jac)
+#     end
+# end
 
+# @terv_secondary function update_as_secondary!(
+#     pot, tv::C, model, param, C
+#     )
+#     mf = model.domain.discretizations.mi
+#     conn_data = mf.conn_data
+#     context = model.context
+#     k = get_alpha(model)
+#     update_cell_neighbor_potential_cc!(
+#         pot, conn_data, C, context, kernel_compatibility(context), k
+#         )
+# end
 
-@terv_secondary function update_as_secondary!(
-    pot, tv::C, model, param, C
-    )
-    mf = model.domain.discretizations.mi
-    conn_data = mf.conn_data
-    context = model.context
-    k = get_alpha(model)
-    update_cell_neighbor_potential_cc!(
-        pot, conn_data, C, context, kernel_compatibility(context), k
-        )
-end
-
-# Kan en bytte ut med AccVariable??
 # ? Hva sker når man ganger med volume?
 @terv_secondary function update_as_secondary!(
     acc, tv::MassAcc, model, param, C
