@@ -21,10 +21,15 @@ abstract type WellGrid <: PorousMediumGrid
 end
 
 # Total velocity in each well segment
-struct TotalMassFlux <: ScalarVariable end
-function associated_unit(::TotalMassFlux) Faces() end
-variable_scale(::TotalMassFlux) = 10*3600*24 # 1 day
+struct TotalMassFlux <: ScalarVariable
+    scale
+    function TotalMassFlux(scale = 3600*24)
+        new(scale)
+    end
+end
 
+function associated_unit(::TotalMassFlux) Faces() end
+variable_scale(t::TotalMassFlux) = t.scale
 
 struct SimpleWell <: WellGrid 
     volumes
@@ -192,7 +197,7 @@ end
 
 function associated_unit(::PotentialDropBalanceWell) Faces() end
 
-# function tolerance_scale(::PotentialDropBalanceWell) 1e6 end
+function tolerance_scale(::PotentialDropBalanceWell) 1e6 end
 
 function declare_pattern(model, e::PotentialDropBalanceWell, ::Cells)
     D = model.domain
@@ -300,7 +305,7 @@ function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W
     Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
 
     @inline function pot_balance(Δθ, Δp)
-        return (Δθ + Δp)/1e6
+        return (Δθ + Δp)
     end
 
     eq = pot_balance(Δθ, Δp)
