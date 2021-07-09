@@ -26,7 +26,7 @@ end
 
 function vector_residual(sys::LinearizedSystem{BlockMajorLayout})
     n = length(sys.r_buffer)
-    r = reshape(sys.r_buffer, n)
+    return reshape(sys.r_buffer, n)
 end
 
 function update_dx_from_vector!(sys::LinearizedSystem{BlockMajorLayout}, dx)

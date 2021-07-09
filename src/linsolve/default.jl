@@ -90,7 +90,7 @@ function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
     else
         if isnothing(v)
             # No vector given - allocate and re-interpret
-            v = zeros(Vt, n)
+            v = zeros(Vt, bz, n)
             v_buf = reinterpret(reshape, Ft, v)
         else
             # Vector (of floats) was given. Use as buffer, reinterpret.
