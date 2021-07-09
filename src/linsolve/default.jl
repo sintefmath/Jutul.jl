@@ -128,13 +128,14 @@ function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorL
     # with block ordering, but row [i] has equation major ordering
     bz = block.residual_block_size
     jac = block.jac
-    function apply!(res, x, α, β::T) where T
-        # Number of entries (as floats)
-        n = length(res)
-        # Number of entries (as bz x 1 sub-vectors)
-        m = n ÷ bz
+    return linear_operator_mixed_block(jac, bz)
+end
 
-        x_v = reshape(reshape(x, bz, :)', :)
+function linear_operator_mixed_block(jac, bz)
+    function apply!(res, x, α, β::T) where T
+        # Note: This is unfortunately allocating, but applying
+        # with a simple view leads to degraded performance.
+        x_v = collect(reshape(reshape(x, bz, :)', :))
         if β == zero(T)
             mul!(res, jac, x_v)
             if α != one(T)
@@ -144,7 +145,7 @@ function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorL
             error("Not implemented.")
         end
     end
-    n, m = size(block.jac)
+    n, m = size(jac)
     op = LinearOperator(Float64, n, m, false, false, apply!)
     return op
 end
