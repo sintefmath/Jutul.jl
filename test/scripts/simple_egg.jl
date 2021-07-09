@@ -16,7 +16,7 @@ casename = "egg"
 # casename = "mini"
 simple_well = false
 block_backend = true
-use_groups = false
+use_groups = true
 include_wells_as_blocks = use_groups && simple_well && false
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false)
 function setup_res(G, mrst_data; block_backend = false, use_groups = false)
@@ -121,7 +121,7 @@ for i = 1:num_wells
     sym = well_symbols[i]
 
     wi, wdata = get_well_from_mrst_data(mrst_data, sys, i, 
-            extraout = true, volume = 1e-3, simple = simple_well, context = w_context)
+            extraout = true, volume = 1e-2, simple = simple_well, context = w_context)
 
     sv = wi.secondary_variables
     sv[:PhaseMassDensities] = model.secondary_variables[:PhaseMassDensities]
@@ -207,7 +207,7 @@ dt = timesteps
 # dt[1] = 1
 # 
 
-atol = 1e-3
+atol = 1e-5
 rtol = 1e-3
 max_it = 100
 if use_groups
@@ -229,9 +229,9 @@ else
     prec = nothing
 end
 lsolve = GenericKrylov(dqgmres, verbose = 10, preconditioner = prec, relative_tolerance = rtol, absolute_tolerance = atol, max_iterations = max_it)
-lsolve = nothing
-
-states = simulate(sim, dt, forces = forces, info_level = 1, linear_solver = lsolve, max_iterations = max_it)
+# lsolve = nothing
+cfg = simulator_config(sim, info_level = 1, debug_level = 2, max_nonlinear_iterations = 20, linear_solver = lsolve)
+states = simulate(sim, dt, forces = forces, config = cfg)
 error("Early termination")
 
 # return (states, mmodel, well_symbols)
