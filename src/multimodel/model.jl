@@ -314,9 +314,9 @@ function setup_linearized_system!(storage, model::MultiModel)
         subsystems = Matrix{LinearizedType}(undef, ng, ng)
         has_context = !isnothing(context)
 
-        base_pos = 0
         block_sizes = zeros(ng)
         # Groups system with respect to themselves
+        base_pos = 0
         for dpos in 1:ng
             local_models = groups .== dpos
             local_size = sum(ndof[local_models])
@@ -330,8 +330,10 @@ function setup_linearized_system!(storage, model::MultiModel)
             r_i = view(r, global_subs)
             dx_i = view(dx, global_subs)
             subsystems[dpos, dpos] = LinearizedSystem(sparse_arg, ctx, layout, dx = dx_i, r = r_i)
+            base_pos += local_size
         end
         # Off diagonal groups (cross-group connections)
+        base_pos = 0
         for rowg in 1:ng
             local_models = groups .== rowg
             local_size = sum(ndof[local_models])
