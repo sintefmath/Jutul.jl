@@ -339,12 +339,13 @@ function setup_linearized_system!(storage, model::MultiModel)
             local_size = sum(ndof[local_models])
             t = candidates[local_models]
             row_context = models[t[1]].context
-            row_layout = matrix_layout(row_context)
             for colg in 1:ng
                 if rowg == colg
                     continue
                 end
                 s = candidates[groups .== colg]
+                col_context = models[s[1]].context
+                col_layout = matrix_layout(col_context)
                 if has_context
                     ctx = context
                 else
@@ -352,7 +353,7 @@ function setup_linearized_system!(storage, model::MultiModel)
                 end
                 layout = matrix_layout(ctx)
                 sparse_arg = get_sparse_arguments(storage, model, t, s, ctx)
-                subsystems[rowg, colg] = LinearizedBlock(sparse_arg, ctx, layout, row_layout, block_sizes[rowg])
+                subsystems[rowg, colg] = LinearizedBlock(sparse_arg, ctx, layout, col_layout, block_sizes[colg])
             end
             base_pos += local_size
         end

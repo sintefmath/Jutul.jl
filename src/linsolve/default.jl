@@ -107,7 +107,7 @@ function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
     return (v, v_buf)
 end
 
-function linear_operator(sys)
+function linear_operator(sys::LinearizedSystem)
     if block_size(sys) == 1
         op = LinearOperator(sys.jac)
     else
@@ -115,6 +115,37 @@ function linear_operator(sys)
         n = length(sys.r_buffer)
         op = LinearOperator(Float64, n, n, false, false, apply!)
     end
+    return op
+end
+
+function linear_operator(block::LinearizedBlock{T, T}) where {T <: Any}
+    return LinearOperator(block.jac)
+end
+
+function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorLayout})
+    # Handle this case specifically:
+    # A linearized block at [i,j] where residual vector entry [j] is from a system
+    # with block ordering, but row [i] has equation major ordering
+    bz = block.residual_block_size
+    jac = block.jac
+    function apply!(res, x, α, β::T) where T
+        # Number of entries (as floats)
+        n = length(res)
+        # Number of entries (as bz x 1 sub-vectors)
+        m = n ÷ bz
+
+        x_v = reshape(reshape(x, 2, :)', :)
+        if β == zero(T)
+            mul!(res, jac, x_v)
+            if α != one(T)
+                lmul!(α, res)
+            end
+        else
+            error("Not implemented.")
+        end
+    end
+    n, m = size(block.jac)
+    op = LinearOperator(Float64, n, m, false, false, apply!)
     return op
 end
 
