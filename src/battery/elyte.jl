@@ -66,7 +66,6 @@ end
     j, tv::TotalCurrent, model, param, 
     TPkGrad_C, TPkGrad_Phi, C, T
     )
-    # Should have one coefficient for each, probably
     @tullio j[i] =  TPkGrad_C[i] + TPkGrad_Phi[i]
 end
 

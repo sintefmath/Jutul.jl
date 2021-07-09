@@ -60,8 +60,6 @@ function update_half_face_flux!(
 end
 
 
-# TODO: Theis should happen via intermediate types
-
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
     law::Conservation{ChargeAcc}) where {D, S <: ElectroChemicalComponent, F, Con}
     return storage.state.TPkGrad_Phi
@@ -104,7 +102,7 @@ function corr_type(::Conservation{MassAcc}) return MassAcc() end
 function corr_type(::Conservation{EnergyAcc}) return EnergyAcc() end
 
 # !Temporary hack, a potential does not necesessary corr to 
-# !a single potential.
+# !a single potential. Should be done in update_as_secondary
 # TODO: mak boundary condition to play nice with non-diag Onsager matrix
 function corr_type(::DirichletBC{Phi}) return ChargeAcc() end
 function corr_type(::DirichletBC{C}) return MassAcc() end
@@ -138,7 +136,7 @@ function insert_sources(acc, source::vonNeumannBC, storage)
 end
 
 
-# TODO: Include resistivity / other types of factors/ constants
+# TODO: This shuld be done in update_as_secondary
 
 function insert_sources(acc, source::DirichletBC, storage)
     T = source.half_face_Ts

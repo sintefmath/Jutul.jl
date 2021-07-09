@@ -9,12 +9,6 @@ function get_flow_volume(grid::MinimalECTPFAGrid)
     grid.volumes
 end
 
-function build_forces(
-    model::SimulationModel{G, S}; sources = nothing
-    ) where {G<:TervDomain, S<:ElectroChemicalComponent}
-    return (sources = sources,)
-end
-
 function declare_units(G::MinimalECTPFAGrid)
     # Cells equal to number of pore volumes
     c = (unit = Cells(), count = length(G.volumes))
@@ -77,17 +71,12 @@ end
 # CurrentCollector #
 ####################
 
-function degrees_of_freedom_per_unit(
-    model::SimulationModel{D, S}, sf::Phi
-    ) where {D<:TervDomain, S<:CurrentCollector}
-    return 1 
-end
+# function degrees_of_freedom_per_unit(
+#     model::SimulationModel{D, S}, sf::Phi
+#     ) where {D<:TervDomain, S<:CurrentCollector}
+#     return 1 
+# end
 
-function minimum_output_variables(
-    system::CurrentCollector, primary_variables
-    )
-    [:ChargeAcc]
-end
 
 ###################
 # concrete eccomp #
@@ -171,25 +160,7 @@ end
 
 # current collector 
 
-function select_primary_variables_system!(
-    S, domain, system::CurrentCollector, formulation
-    )
-    S[:Phi] = Phi()
-end
 
-function select_secondary_variables_system!(
-    S, domain, system::CurrentCollector, formulation
-    )
-    S[:TPkGrad_Phi] = TPkGrad{Phi}()
-    S[:ChargeAcc] = ChargeAcc()
-end
-
-function select_equations_system!(
-    eqs, domain, system::CurrentCollector, formulation
-    )
-    charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
-    eqs[:charge_conservation] = (charge_cons, 1)
-end
 
 # concrete electrochemical component
 function select_primary_variables_system!(

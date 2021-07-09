@@ -34,8 +34,7 @@ function test_elyte()
 
     return G, states, model
 end
-sim = test_elyte()
-##
+
 G, states, model = test_elyte();
 ##
 

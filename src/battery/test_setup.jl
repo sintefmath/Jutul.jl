@@ -1,9 +1,9 @@
 using Terv
 
-export get_test_setup_battery, get_cc_grid, get_bc, test_mixed_boundary_conditions
+export get_test_setup_cc, get_cc_grid, get_bc, test_mixed_boundary_conditions
 export get_test_setup_ec_component
 
-function get_test_setup_battery(name="square_current_collector")
+function get_test_setup_cc(name="square_current_collector")
     domain, exported = get_cc_grid(name=name, extraout=true)
     timesteps = [1., 2, 3, 4]
     G = exported["G"]

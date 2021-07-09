@@ -9,7 +9,6 @@ export Phi, C, T, ChargeAcc, MassAcc, EnergyAcc
 ###########
 
 abstract type ElectroChemicalComponent <: TervSystem end
-struct CurrentCollector <: ElectroChemicalComponent end
 struct ECComponent <: ElectroChemicalComponent end # Not a good name
 
 abstract type ElectroChemicalGrid <: TervGrid end

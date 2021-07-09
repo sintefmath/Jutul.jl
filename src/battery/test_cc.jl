@@ -3,14 +3,9 @@ using Test
 
 ENV["JULIA_DEBUG"] = Terv;
 
-states, G = test_mixed_boundary_conditions();
-##
-f = plot_interactive(G, states)
-display(f)
-
 ##
 function test_cc(linear_solver=nothing)
-    state0, model, prm, f, t, G = get_test_setup_battery()
+    state0, model, prm, f, t, G = get_test_setup_cc()
     sim = Simulator(model, state0=state0, parameters=prm)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = linear_solver
@@ -24,3 +19,8 @@ f = plot_interactive(G, states)
 display(f)
 
 ###
+
+states, G = test_mixed_boundary_conditions();
+##
+f = plot_interactive(G, states)
+display(f)
