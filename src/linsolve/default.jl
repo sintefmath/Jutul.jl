@@ -95,7 +95,7 @@ function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
         else
             # Vector (of floats) was given. Use as buffer, reinterpret.
             v::AbstractVector{<:Ft}
-            @assert length(v) == n*bz
+            @assert length(v) == n*bz "Expected buffer size $n*$bz, was $(length(v))."
             v_buf = reshape(v, bz, :)
             v = reinterpret(reshape, Vt, v_buf)
         end

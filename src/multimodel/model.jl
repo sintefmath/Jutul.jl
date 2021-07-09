@@ -247,16 +247,31 @@ end
 function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, context)
     I = []
     J = []
-    V = []
     outstr = "Determining sparse pattern of $(length(targets))×$(length(sources)) models:\n"
     equation_offset = 0
     variable_offset = 0
+    function treat_block_size(bz, bz_new)
+        if !isnothing(bz)
+            @assert bz == bz_new
+        end
+        return bz_new
+    end
+    function finalize_block_size(bz)
+        if isnothing(bz)
+            bz = 1
+        end
+        return bz
+    end
+    bz_n = nothing
+    bz_m = nothing
     for target in targets
         variable_offset = 0
         n = 0
         for source in sources
             sarg = get_sparse_arguments(storage, model, target, source, context)
             i, j, n, m = ijnm(sarg)
+            bz_n = treat_block_size(bz_n, sarg.block_n)
+            bz_m = treat_block_size(bz_m, sarg.block_m)
             if length(i) > 0
                 push!(I, i .+ equation_offset)
                 push!(J, j .+ variable_offset)
@@ -275,8 +290,9 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     @debug outstr
     I = vec(vcat(I...))
     J = vec(vcat(J...))
-    # TODO: Fix block size
-    return SparsePattern(I, J, equation_offset, variable_offset, matrix_layout(context))
+    bz_n = finalize_block_size(bz_n)
+    bz_m = finalize_block_size(bz_m)
+    return SparsePattern(I, J, equation_offset, variable_offset, matrix_layout(context), bz_n, bz_m)
 end
 
 function setup_linearized_system!(storage, model::MultiModel)
