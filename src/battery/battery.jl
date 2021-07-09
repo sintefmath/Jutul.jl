@@ -225,9 +225,9 @@ end
 
 function get_alpha(
     model::SimulationModel{D, S, F, Con}
-    ) where {D, S <: ElectroChemicalComponent, F, Con}    
-    # return repeat(LinRange(0.1, 10, 10)', 10)'
-    return ones(number_of_units(model, C())) * 1000
+    ) where {D, S <: ElectroChemicalComponent, F, Con}
+    return ones(number_of_units(model, C()))  * 100
+    return repeat((10 .^ LinRange(3, -3, 10))', 10)'
 end
 
 function get_heat_cond(

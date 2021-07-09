@@ -20,7 +20,7 @@ function get_test_setup_battery(name="square_current_collector")
     # set up boundary conditions
     nc = length(domain.grid.volumes)
     
-    dirichlet = DirichletBC{Phi}([1, 1], [1, -1], [2, 2])
+    dirichlet = DirichletBC{Phi}([1], [0], [2])
     neumann = vonNeumannBC{ChargeAcc}([1, nc], [-1, 1])
     forces = (neumann=neumann, dirichlet= dirichlet,)
     
@@ -86,27 +86,27 @@ function get_test_setup_ec_component()
 
     # set up boundary conditions
 
-    # # Set 1 of boudary conditions
-    # bc_phi = DirichletBC{Phi}([1], [1], [2])
-    # bc_c = DirichletBC{C}([1], [1], [2])
-    # forces = (bc_phi=bc_phi, bc_c=bc_c )
+    # Set 1 of boudary conditions
+    bc_phi = DirichletBC{Phi}([1], [1], [2])
+    bc_c = DirichletBC{C}([1], [1], [2])
+    forces = (bc_phi=bc_phi, bc_c=bc_c )
 
     # # Set 2 of boudary conditions
 
-    bcells, T = get_boundary(name)
-    one = ones(size(bcells))
+    # bcells, T = get_boundary(name)
+    # one = ones(size(bcells))
 
-    dirichlet_phi = DirichletBC{Phi}(bcells, one, T)
-    neumann_phi = vonNeumannBC{ChargeAcc}(bcells.+9, one)
-    dirichlet_c = DirichletBC{C}(bcells, one, T)
-    neumann_c = vonNeumannBC{MassAcc}(bcells.+9, one)
+    # dirichlet_phi = DirichletBC{Phi}(bcells, one, T)
+    # neumann_phi = vonNeumannBC{ChargeAcc}(bcells.+9, one)
+    # dirichlet_c = DirichletBC{C}(bcells, one, T)
+    # neumann_c = vonNeumannBC{MassAcc}(bcells.+9, one)
 
-    forces = (
-        neumann_phi     = neumann_phi, 
-        dirichlet_phi   = dirichlet_phi, 
-        neumann_c       = neumann_c,
-        dirichlet_c     = dirichlet_c
-        )
+    # forces = (
+    #     neumann_phi     = neumann_phi, 
+    #     dirichlet_phi   = dirichlet_phi, 
+    #     neumann_c       = neumann_c,
+    #     dirichlet_c     = dirichlet_c
+    #     )
 
     return (state0, model, parameters, forces, timesteps, G)
 end

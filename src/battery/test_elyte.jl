@@ -25,7 +25,7 @@ function test_elyte()
     bc_c2 = vonNeumannBC{MassAcc}([1], [1])
     bc_T2 = vonNeumannBC{EnergyAcc}([1], [1])
 
-    forces = (forces..., bc_c2=bc_c, bc_T2=bc_T,)
+    forces = (forces..., bc_c2=bc_c2, bc_T2=bc_T2,)
 
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
