@@ -52,9 +52,10 @@ function solve!(sys::LSystem, krylov::GenericKrylov)
                             M = L, N = R)
     if !stats.solved
         @warn "Linear solve did not converge: $(stats.status)"
-    elseif v > 0
+    end
+    if v > 0
         r = stats.residuals
-        @debug "Final residual $(r[end]), improvement $(r[end]/r[1]) after $(length(r)) iterations."
+        @debug "Final residual $(r[end]), rel. value $(r[end]/r[1]) after $(length(r)) iterations."
     end
     update_dx_from_vector!(sys, x)
 end

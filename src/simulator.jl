@@ -154,8 +154,11 @@ function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
         if done
             break
         end
-        if e > 1e10 || isinf(e) || isnan(e)
-            @warn "Simulator produced non-finite or very large residuals."
+        if e > 1e10
+            @warn "Simulator produced very large residuals: $e."
+            break
+        elseif !isfinite(e)
+            @warn "Simulator produced non-finite residuals: $e."
             break
         end
     end
