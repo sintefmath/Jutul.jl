@@ -315,6 +315,23 @@ function setup_linearized_system!(storage, model::MultiModel)
         has_context = !isnothing(context)
 
         base_pos = 0
+        block_sizes = zeros(ng)
+        # Groups system with respect to themselves
+        for dpos in 1:ng
+            local_models = groups .== dpos
+            local_size = sum(ndof[local_models])
+            t = candidates[local_models]
+            ctx = models[t[1]].context
+            layout = matrix_layout(ctx)
+            sparse_arg = get_sparse_arguments(storage, model, t, t, ctx)
+
+            block_sizes[dpos] = sparse_arg.block_n
+            global_subs = (base_pos+1):(base_pos+local_size)
+            r_i = view(r, global_subs)
+            dx_i = view(dx, global_subs)
+            subsystems[dpos, dpos] = LinearizedSystem(sparse_arg, ctx, layout, dx = dx_i, r = r_i)
+        end
+        # Off diagonal groups (cross-group connections)
         for rowg in 1:ng
             local_models = groups .== rowg
             local_size = sum(ndof[local_models])
@@ -322,22 +339,18 @@ function setup_linearized_system!(storage, model::MultiModel)
             row_context = models[t[1]].context
             row_layout = matrix_layout(row_context)
             for colg in 1:ng
+                if rowg == colg
+                    continue
+                end
                 s = candidates[groups .== colg]
-                if rowg == colg || !has_context
-                    ctx = row_context
-                else
+                if has_context
                     ctx = context
+                else
+                    ctx = row_context
                 end
                 layout = matrix_layout(ctx)
                 sparse_arg = get_sparse_arguments(storage, model, t, s, ctx)
-                if rowg == colg
-                    global_subs = (base_pos+1):(base_pos+local_size)
-                    r_i = view(r, global_subs)
-                    dx_i = view(dx, global_subs)
-                    subsystems[rowg, colg] = LinearizedSystem(sparse_arg, ctx, layout, dx = dx_i, r = r_i)
-                else
-                    subsystems[rowg, colg] = LinearizedBlock(sparse_arg, ctx, layout, row_layout)
-                end
+                subsystems[rowg, colg] = LinearizedBlock(sparse_arg, ctx, layout, row_layout, block_sizes[rowg])
             end
             base_pos += local_size
         end
