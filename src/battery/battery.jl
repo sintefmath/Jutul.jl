@@ -50,10 +50,28 @@ function number_of_units(model, pv::TPFlux)
     return 2*count_units(model.domain, Faces())
 end
 
+function number_of_units(model, ::Phi)
+    return count_units(model.domain, Cells())
+end
+
+function number_of_units(model, ::C)
+    return count_units(model.domain, Cells())
+end
+
+function number_of_units(model, ::T)
+    return count_units(model.domain, Cells())
+end
+
+
 # ?Why not faces?
 function associated_unit(::TPFlux)
     Cells()
 end
+
+@inline function get_diagonal_cache(eq::Conservation)
+    return eq.accumulation
+end
+
 
 ####################
 # CurrentCollector #
@@ -199,14 +217,35 @@ function select_equations_system!(
     eqs[:mass_conservation] = (mass_cons, 1)
 end
 
-# TODO: Can these be combined?
+function get_conductivity(
+    model::SimulationModel{D, S, F, C}
+    ) where {D, S <: ElectroChemicalComponent, F, C}    
+    return ones(number_of_units(model, Phi()))
+end
+
+function get_alpha(
+    model::SimulationModel{D, S, F, Con}
+    ) where {D, S <: ElectroChemicalComponent, F, Con}    
+    # return repeat(LinRange(0.1, 10, 10)', 10)'
+    return ones(number_of_units(model, C())) * 1000
+end
+
+function get_heat_cond(
+    model::SimulationModel{D, S, F, Con}
+    ) where {D, S <: ElectroChemicalComponent, F, Con}    
+    return ones(number_of_units(model, T()))
+end
+
 
 @terv_secondary function update_as_secondary!(
     pot, tv::TPFlux{Phi}, model::SimulationModel{D, S, F, C}, param, Phi
     ) where {D, S <: ElectroChemicalComponent, F, C}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    @tullio pot[i] = half_face_two_point_grad(conn_data[i], Phi)
+    σ = get_conductivity(model)
+    for i in 1:size(pot)[1]
+        pot[i] = half_face_two_point_kgrad(conn_data[i], Phi, σ)
+    end
 end
 
 @terv_secondary function update_as_secondary!(
@@ -214,7 +253,8 @@ end
     ) where {D, S <: ElectroChemicalComponent, F, Con}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    @tullio pot[i] = half_face_two_point_grad(conn_data[i], C)
+    α = get_alpha(model)
+    @tullio pot[i] = half_face_two_point_kgrad(conn_data[i], C, α)
 end
 
 @terv_secondary function update_as_secondary!(
@@ -222,7 +262,9 @@ end
     ) where {D, S <: ElectroChemicalComponent, F, Con}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    @tullio pot[i] = half_face_two_point_grad(conn_data[i], T)
+    # ? Sette til konstant??
+    k = get_heat_cond(model)
+    @tullio pot[i] = half_face_two_point_kgrad(conn_data[i], T, k)
 end
 
 
@@ -233,29 +275,30 @@ end
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     context = model.context
+    k = get_alpha(model)
     update_cell_neighbor_potential_cc!(
-        pot, conn_data, Phi, context, kernel_compatibility(context)
+        pot, conn_data, Phi, context, kernel_compatibility(context), k
         )
 end
 
 function update_cell_neighbor_potential_cc!(
-    dpot, conn_data, phi, context, ::KernelDisallowed
+    dpot, conn_data, phi, context, ::KernelDisallowed, k
     )
     Threads.@threads for i in eachindex(conn_data)
         c = conn_data[i]
-        @inbounds dpot[phno] = half_face_two_point_grad(
-                c.self, c.other, c.T, phi
+        @inbounds dpot[phno] = half_face_two_point_kgrad(
+                c.self, c.other, c.T, phi, k
         )
     end
 end
 
 function update_cell_neighbor_potential_cc!(
-    dpot, conn_data, phi, context, ::KernelAllowed
+    dpot, conn_data, phi, context, ::KernelAllowed, k
     )
     @kernel function kern(dpot, @Const(conn_data))
         ph, i = @index(Global, NTuple)
         c = conn_data[i]
-        dpot[ph] = half_face_two_point_grad(c.self, c.other, c.T, phi)
+        dpot[ph] = half_face_two_point_kgrad(c.self, c.other, c.T, phi, k)
     end
     begin
         d = size(dpot)
@@ -272,8 +315,9 @@ end
     mf = model.domain.discretizations.mi
     conn_data = mf.conn_data
     context = model.context
+    k = get_alpha(model)
     update_cell_neighbor_potential_cc!(
-        pot, conn_data, C, context, kernel_compatibility(context)
+        pot, conn_data, C, context, kernel_compatibility(context), k
         )
 end
 

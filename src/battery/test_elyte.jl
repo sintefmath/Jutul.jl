@@ -17,10 +17,15 @@ function test_elyte()
     state0 = setup_state(model, init)
     parameters = setup_parameters(model)
 
-    bc_phi = DirichletBC{Phi}([1], [1], [2])
-    bc_c = DirichletBC{C}([1], [1], [2])
-    bc_T = DirichletBC{T}([1], [1], [2])
+    bc_phi = DirichletBC{Phi}([100], [0], [2])
+    bc_c = DirichletBC{C}([100], [0], [2])
+    bc_T = DirichletBC{T}([100], [0], [2])
     forces = (bc_phi=bc_phi, bc_c=bc_c, bc_T=bc_T,)
+
+    bc_c2 = vonNeumannBC{MassAcc}([1], [1])
+    bc_T2 = vonNeumannBC{EnergyAcc}([1], [1])
+
+    forces = (forces..., bc_c2=bc_c, bc_T2=bc_T,)
 
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)

@@ -1,19 +1,34 @@
 using Terv
 
-export half_face_two_point_grad
+export half_face_two_point_kgrad
 
-@inline function half_face_two_point_grad(
-    conn_data::NamedTuple, p::AbstractArray
+
+#####################
+# Gradient operator #
+#####################
+
+@inline function half_face_two_point_kgrad(
+    conn_data::NamedTuple, p::AbstractArray, k::AbstractArray
     )
-    half_face_two_point_grad(
-        conn_data.self, conn_data.other, conn_data.T, p
+    half_face_two_point_kgrad(
+        conn_data.self, conn_data.other, conn_data.T, p, k
         )
 end
 
-@inline function half_face_two_point_grad(
-    c_self::I, c_other::I, T, phi::AbstractArray{R}
+@inline function harm_av(
+    c_self::I, c_other::I, T::R, k::AbstractArray{R}
     ) where {R<:Real, I<:Integer}
-    return -T * (phi[c_self] - value(phi[c_other]))
+    return T * (k[c_self]^-1 + k[c_other]^-1)^-1
+end
+
+@inline function grad(c_self, c_other, p::AbstractArray)
+    return   p[c_self] - value(p[c_other])
+end
+
+@inline function half_face_two_point_kgrad(
+    c_self::I, c_other::I, T::R, phi::AbstractArray, k::AbstractArray{R}
+    ) where {R<:Real, I<:Integer}
+    return - harm_av(c_self, c_other, T, k) * grad(c_self, c_other, phi)
 end
 
 function update_equation!(law::Conservation, storage, model, dt)
@@ -76,12 +91,6 @@ function update_half_face_flux!(
     f = get_entries(law.half_face_flux_cells)
     @tullio f[i] = flux[i]
 end
-
-
-@inline function get_diagonal_cache(eq::Conservation)
-    return eq.accumulation
-end
-
 
 #######################
 # Boundary conditions #
