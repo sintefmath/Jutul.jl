@@ -243,9 +243,7 @@ end
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     σ = get_conductivity(model)
-    for i in 1:size(pot)[1]
-        pot[i] = half_face_two_point_kgrad(conn_data[i], Phi, σ)
-    end
+    @tullio pot[i] = half_face_two_point_kgrad(conn_data[i], Phi, σ)
 end
 
 @terv_secondary function update_as_secondary!(

@@ -62,25 +62,12 @@ function minimum_output_variables(
 end
 
 
-function get_current_coeff_c(
-    model::SimulationModel{D, S, F, Cons}, C, T
-    ) where {D, S<:Electrolyte, F, Cons}
-    return ones(number_of_units(model, TotalCurrent()))
-end
-function get_current_coeff_phi(
-    model::SimulationModel{D, S, F, Cons}, C, T
-    ) where {D, S<:Electrolyte, F, Cons}
-    return ones(number_of_units(model, TotalCurrent()))
-end
-
 @terv_secondary function update_as_secondary!(
     j, tv::TotalCurrent, model, param, 
     TPkGrad_C, TPkGrad_Phi, C, T
     )
     # Should have one coefficient for each, probably
-    coeff_phi = get_current_coeff_phi(model, C, T)
-    coeff_c = get_current_coeff_c(model, C, T)
-    @tullio j[i] =  coeff_c[i]*TPkGrad_C[i] + coeff_phi[i]*TPkGrad_Phi[i]
+    @tullio j[i] =  TPkGrad_C[i] + TPkGrad_Phi[i]
 end
 
 

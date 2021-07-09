@@ -62,35 +62,31 @@ end
 
 # TODO: Theis should happen via intermediate types
 
+function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
+    law::Conservation{ChargeAcc}) where {D, S <: ElectroChemicalComponent, F, Con}
+    return storage.state.TPkGrad_Phi
+end
+
+function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
+    law::Conservation{MassAcc}) where {D, S <: ElectroChemicalComponent, F, Con}
+    return storage.state.TPkGrad_C
+end
+
+function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
+    law::Conservation{EnergyAcc}) where {D, S <: ElectroChemicalComponent, F, Con}
+    return storage.state.TPkGrad_T
+end
+
 function update_half_face_flux!(
-    law::Conservation{MassAcc}, storage, model, dt, 
-    flowd::TwoPointPotentialFlow{U, K, T}
+    law::Conservation, storage, model, dt, 
+    flow::TwoPointPotentialFlow{U, K, T}
     ) where {U,K,T<:ECFlow}
 
-    flux = storage.state.TPkGrad_C
+    flux = get_flux(storage, model, law)
     f = get_entries(law.half_face_flux_cells)
     @tullio f[i] = flux[i]
 end
 
-function update_half_face_flux!(
-    law::Conservation{ChargeAcc}, storage, model, dt, 
-    flowd::TwoPointPotentialFlow{U, K, T}
-    ) where {U,K,T<:ECFlow}
-
-    flux = storage.state.TPkGrad_Phi
-    f = get_entries(law.half_face_flux_cells)
-    @tullio f[i] = flux[i]
-end
-
-function update_half_face_flux!(
-    law::Conservation{EnergyAcc}, storage, model, dt, 
-    flowd::TwoPointPotentialFlow{U, K, T}
-    ) where {U,K,T<:ECFlow}
-
-    flux = storage.state.TPkGrad_T
-    f = get_entries(law.half_face_flux_cells)
-    @tullio f[i] = flux[i]
-end
 
 #######################
 # Boundary conditions #
