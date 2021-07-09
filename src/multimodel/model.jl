@@ -63,7 +63,7 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
 end
 
 function setup_cross_terms(storage, model::MultiModel)
-    crossd = Dict{Symbol, Any}()
+    crossd = TervStorage()
     models = model.models
     debugstr = "Determining cross-terms\n"
     for target in keys(models)
