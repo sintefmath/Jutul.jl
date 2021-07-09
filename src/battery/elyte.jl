@@ -62,25 +62,31 @@ function minimum_output_variables(
 end
 
 
-function get_current_coeff_c(
-    model::SimulationModel{D, S, F, Cons}, C, T
-    ) where {D, S<:Electrolyte, F, Cons}
-    return ones(number_of_units(model, TotalCurrent()))
+function get_kappa(
+    C, T, model::SimulationModel{D, S, F, Con},
+    ) where {D, S <: ElectroChemicalComponent, F, Con}
+    return 4. + 3.5*C + (2.)*T + 0.1 * C * T # Arbitrary for now
 end
-function get_current_coeff_phi(
-    model::SimulationModel{D, S, F, Cons}, C, T
-    ) where {D, S<:Electrolyte, F, Cons}
-    return ones(number_of_units(model, TotalCurrent()))
+
+@terv_secondary function update_as_secondary!(
+    pot, tv::C, model::SimulationModel{D, S, F, Con}, param, C, T
+    ) where {D, S <: ElyteTest, F, Con}
+    mf = model.domain.discretizations.mi
+    conn_data = mf.conn_data
+    context = model.context
+    # ?Her burde en kanskje ha noe pre allocated?
+    @. κ = get_kappa(C, T, model) # Kanskje ikke så lurt med κ i kode...
+    update_cell_neighbor_potential_cc!(
+        pot, conn_data, C, context, kernel_compatibility(context), κ
+        )
 end
 
 @terv_secondary function update_as_secondary!(
     j, tv::TotalCurrent, model, param, 
-    TPkGrad_C, TPkGrad_Phi, C, T
+    TPkGrad_C, TPkGrad_Phi
     )
     # Should have one coefficient for each, probably
-    coeff_phi = get_current_coeff_phi(model, C, T)
-    coeff_c = get_current_coeff_c(model, C, T)
-    @tullio j[i] =  coeff_c[i]*TPkGrad_C[i] + coeff_phi[i]*TPkGrad_Phi[i]
+    @tullio j[i] =  TPkGrad_C[i] + TPkGrad_Phi[i]
 end
 
 
