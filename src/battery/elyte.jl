@@ -82,3 +82,14 @@ end
     coeff_c = get_current_coeff_c(model, C, T)
     @tullio j[i] =  coeff_c[i]*TPFlux_C[i] + coeff_phi[i]*TPFlux_Phi[i]
 end
+
+
+function update_half_face_flux!(
+    law::Conservation{MassAcc}, storage, model, dt, 
+    flowd::TwoPointPotentialFlow{U, K, T}
+    ) where {U,K,T<:ECFlow}
+
+    j = storage.state.TotalCurrent
+    f = get_entries(law.half_face_flux_cells)
+    @tullio f[i] = j[i]
+end
