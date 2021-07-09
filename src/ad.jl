@@ -328,10 +328,10 @@ Get scalar with partial derivatives as AD instance.
 # Keyword arguments
 - `tag = nothing`: Tag for AD instance. Two AD values of the different tag cannot interoperate to avoid perturbation confusion (see ForwardDiff documentation).
 """
-function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing; tag = nothing) where {T<:Real}
+function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing; diag_value = 1.0, tag = nothing) where {T<:Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
     if npartials > 0
-        v = ForwardDiff.Dual{tag}(v, ntuple(x -> T.(x == diag_pos), npartials))
+        v = ForwardDiff.Dual{tag}(v, diag_value.*ntuple(x -> T.(x == diag_pos), npartials))
     end
     return v
 end

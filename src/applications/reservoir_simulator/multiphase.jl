@@ -102,9 +102,14 @@ end
 struct Pressure <: ScalarVariable
     dpMaxAbs
     dpMaxRel
-    function Pressure(dpMaxAbs = nothing, dpMaxRel = nothing)
-        new(dpMaxAbs, dpMaxRel)
+    scale
+    function Pressure(dpMaxAbs = nothing, dpMaxRel = nothing, scale = 1e8)
+        new(dpMaxAbs, dpMaxRel, scale)
     end
+end
+
+function variable_scale(p::Pressure)
+    return p.scale
 end
 
 @inline function absolute_increment_limit(p::Pressure) p.dpMaxAbs end
