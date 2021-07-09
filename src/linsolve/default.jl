@@ -134,7 +134,7 @@ function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorL
         # Number of entries (as bz x 1 sub-vectors)
         m = n ÷ bz
 
-        x_v = reshape(reshape(x, 2, :)', :)
+        x_v = reshape(reshape(x, bz, :)', :)
         if β == zero(T)
             mul!(res, jac, x_v)
             if α != one(T)
