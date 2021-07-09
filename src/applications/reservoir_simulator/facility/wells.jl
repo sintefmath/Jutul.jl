@@ -39,7 +39,7 @@ struct SimpleWell <: WellGrid
         nr = length(reservoir_cells)
 
         WI, gdz = common_well_setup(nr; kwarg...)
-        perf = (self = ones(Int64, nr), reservoir = reservoir_cells, WI = WI, gdz = gdz)
+        perf = (self = ones(Int64, nr), reservoir = vec(reservoir_cells), WI = WI, gdz = gdz)
         new([volume], perf, reservoir_symbol)
     end
 end
