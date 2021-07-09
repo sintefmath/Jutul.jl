@@ -90,8 +90,8 @@ function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
     else
         if isnothing(v)
             # No vector given - allocate and re-interpret
-            v = zeros(Vt, bz, n)
-            v_buf = reinterpret(reshape, Ft, v)
+            v_buf = zeros(Ft, bz, n)
+            v = reinterpret(reshape, Vt, v_buf)
         else
             # Vector (of floats) was given. Use as buffer, reinterpret.
             v::AbstractVector{<:Ft}
