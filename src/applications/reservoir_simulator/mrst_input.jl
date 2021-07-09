@@ -85,7 +85,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     end
 end
 
-function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = false, simple = false)
+function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = false, simple = false, kwarg...)
     W_mrst = mrst_data["W"][ix]
     w = convert_to_immutable_storage(W_mrst)
 
@@ -107,7 +107,7 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
         # For simple well, distance from ref depth to perf
         dz = ref_depth .- z
         W = SimpleWell(rc, WI = WI, dz = dz)
-        wmodel = SimulationModel(W, system)
+        wmodel = SimulationModel(W, system; kwarg...)
         flow = TwoPointPotentialFlow(nothing, nothing, TrivialFlow(), W)
     else
         # For a MS well, this is the drop from the perforated cell center to the perforation (assumed zero here)
@@ -118,7 +118,7 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
         flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), TotalMassVelocityMassFractionsFlow(), W, nothing, z)
     end
     disc = (mass_flow = flow,)
-    wmodel = SimulationModel(W, system, discretization = disc)
+    wmodel = SimulationModel(W, system, discretization = disc; kwarg...)
     if extraout
         out = (wmodel, W_mrst)
     else
