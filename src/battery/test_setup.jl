@@ -16,7 +16,9 @@ function get_test_setup_cc(name="square_current_collector")
     init = Dict(:Phi => phi)
     state0 = setup_state(model, init)
     state0[:Phi][1] = 2  # Endrer startverdien, skal ikke endre svaret
-    
+
+    S = model.secondary_variables
+
     # set up boundary conditions
     nc = length(domain.grid.volumes)
     
@@ -148,11 +150,17 @@ function get_cc_grid(
     face_areas = vec(exported["G"]["faces"]["areas"][internal_faces])
     face_normals = exported["G"]["faces"]["normals"][internal_faces, :]./face_areas
     face_normals = copy(face_normals')
-    cond = ones(size((exported["rock"]["perm"])')) # Conductivity σ, corresponding to permeability
     volumes = vec(exported["G"]["cells"]["volumes"])
 
     # Deal with face data
-    T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, cond, N)
+
+    # Different constants for different potential means this cannot
+    # be included in T
+    one = ones(size((exported["rock"]["perm"])'))
+    
+    T_hf = compute_half_face_trans(
+        cell_centroids, face_centroids, face_normals, face_areas, one, N
+        )
     T = compute_face_trans(T_hf, N)
 
     G = MinimalECTPFAGrid(volumes, N)
