@@ -128,7 +128,7 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
     e = eps(typeof(value(v)))
     v = s*max(abs(v), e)
     # Scaling - assuming input is total mass rate
-    v = v./(π*ρ.*((D⁰/2)^2 - (Dⁱ/2)^2));
+    v = v/(π*ρ*((D⁰/2)^2 - (Dⁱ/2)^2));
     Re = abs(v*ρ*ΔD)/μ;
     # Friction model - empirical relationship
     f = (-3.6*log(6.9/Re +(R/(3.7*D⁰))^(10/9))/log(10))^(-2);
@@ -267,6 +267,8 @@ function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W
     v = sgn*V[face]
     ρ_mix = 0.5*(ρ_mix_self + ρ_mix_other)
 
+    Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
+    eq = sgn*(Δθ - Δp)
     if sgn == 1
         # This is a good time to deal with the derivatives of v[face] since it is already fetched.
         Δp_f = segment_pressure_drop(seg_model, v, value(ρ_mix), value(μ_mix))
@@ -276,12 +278,10 @@ function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W
         # @debug "Δp_f $face: $Δp_f flux: $v\neq_f: $(face_entries[face])"
         # @debug "rho: $(value(ρ_mix)) mu: $(value(μ_mix))"
 
-        ix = 1
+        cell_entries[(face-1)*2 + 1] = eq
     else
-        ix = 2
+        cell_entries[(face-1)*2 + 2] = eq
     end
-    Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
-    cell_entries[(face-1)*2 + ix] = sgn*(Δθ - Δp)
 end
 
 

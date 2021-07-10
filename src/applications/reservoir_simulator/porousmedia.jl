@@ -26,7 +26,7 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     @assert(size(perm, 2) == nc)
     # Check N, just in case
     @assert(size(N, 2) == nf)
-    Threads.@threads for cell = 1:nc
+    @threads for cell = 1:nc
         for fpos = facePos[cell]:(facePos[cell+1]-1)
             face = faces[fpos]
 

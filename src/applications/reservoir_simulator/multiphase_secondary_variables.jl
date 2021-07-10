@@ -1,4 +1,5 @@
-export PhaseMassDensities, ConstantCompressibilityDensities, MassMobilities, BrooksCoreyRelPerm, ComponentVariable
+export PhaseMassDensities, ConstantCompressibilityDensities, MassMobilities
+export BrooksCoreyRelPerm, TabulatedRelPermSimple
 
 abstract type PhaseVariables <: GroupedVariables end
 abstract type ComponentVariable <: GroupedVariables end
@@ -76,6 +77,34 @@ function brooks_corey_relperm(s::Real, n::Real, sr::Real, kwm::Real, sr_tot::Rea
     sat = ((s - sr)./den);
     sat = max(min(sat, 1), 0);
     return kwm*sat^n;
+end
+
+"""
+Interpolated multiphase rel. perm. that is simple (single region, no magic for more than two phases)
+"""
+struct TabulatedRelPermSimple <: RelativePermeabilities
+    s
+    kr
+    interpolators
+    function TabulatedRelPermSimple(s::AbstractVector, kr::AbstractMatrix; kwarg...)
+        nph, n = size(kr)
+        @assert nph > 0
+        if eltype(s)<:AbstractVector
+            # We got a set of different vectors that correspond to rows of kr
+            @assert all(map(length, s) .== n)
+            interpolators = map((ix) -> get_1d_interpolator(s[ix], kr[ix, :]; kwarg...), 1:nph)
+        else
+            # We got a single vector that is used for all rows
+            @assert length(s) == n
+            interpolators = map((ix) -> get_1d_interpolator(s, kr[ix, :]; kwarg...), 1:nph)
+        end
+        new(s, kr, interpolators)
+    end
+end
+
+@terv_secondary function update_as_secondary!(kr, kr_def::TabulatedRelPermSimple, model, param, Saturations)
+    I = kr_def.interpolators
+    @tullio kr[ph, i] = I[ph](Saturations[ph, i])
 end
 
 """

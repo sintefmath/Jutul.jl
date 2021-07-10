@@ -1,4 +1,7 @@
-function test_multi()
+using Terv
+using Test
+
+function test_multi(; use_groups = false, kwarg...)
     sys = ScalarTestSystem()
     # Model A
     A = ScalarTestDomain()
@@ -14,18 +17,32 @@ function test_multi()
     state0B = setup_state(modelB, Dict(:XVar=>0.0))
     
     # Make a multimodel
-    model = MultiModel((A = modelA, B = modelB), groups = [1, 1])
+    if use_groups
+        groups = [1, 2]
+    else
+        groups = nothing
+    end
+    model = MultiModel((A = modelA, B = modelB), groups = groups)
     # Set up joint state and simulate
     state0 = setup_state(model, Dict(:A => state0A, :B => state0B))
     forces = Dict(:A => forcesA, :B => forcesB)
     sim = Simulator(model, state0 = state0)
-    states = simulate(sim, [1.0], forces = forces)
+    states = simulate(sim, [1.0], forces = forces; kwarg...)
 
     XA = states[end][:A][:XVar]
     XB = states[end][:B][:XVar]
 
     return XA[] ≈ 1/3 && XB[] ≈ -1/3
 end
+
+group_precond = GroupWisePreconditioner([TrivialPreconditioner(), TrivialPreconditioner()])
+
 @testset "Multi-model: Scalar test system" begin
-    @test test_multi()
+    @testset "Single sparse matrix" begin
+        @test test_multi(use_groups = false)
+    end
+    @testset "Multiple sparse matrices" begin
+        @test test_multi(use_groups = true, linear_solver = GenericKrylov())
+        @test test_multi(use_groups = true, linear_solver = GenericKrylov(preconditioner = group_precond))
+    end
 end

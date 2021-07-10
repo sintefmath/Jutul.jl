@@ -1,27 +1,3 @@
-export MultiModel, get_domain_intersection
-import Base: show
-
-struct MultiModel <: TervModel
-    models::NamedTuple
-    groups::Vector
-    context::TervContext
-    number_of_degrees_of_freedom
-    function MultiModel(models; groups = nothing, context = DefaultContext())
-        nm = length(models)
-        if isnothing(groups)
-            groups = ones(Int64, nm)
-        end
-        @assert maximum(groups) <= nm
-        @assert minimum(groups) > 0
-        @assert length(groups) == nm
-        for m in models
-            @assert context == m.context
-        end
-        ndof = map(number_of_degrees_of_freedom, models)
-        new(models, groups, context, ndof)
-    end
-end
-
 function Base.show(io::IO, t::MIME"text/plain", m::MultiModel)
     submodels = m.models
     if get(io, :compact, false)
@@ -40,154 +16,21 @@ function Base.show(io::IO, t::MIME"text/plain", m::MultiModel)
     end
 end
 
-abstract type CrossTerm end
-
-"""
-A cross model term where the dependency is injective and the term is additive:
-(each addition to a unit in the target only depends one unit from the source,
-and is added into that position upon application)
-"""
-struct InjectiveCrossTerm <: CrossTerm
-    impact                 # 2 by N - first row is target, second is source
-    units                  # tuple - first tuple is target, second is source
-    crossterm_target       # The cross-term, with AD values taken relative to the targe
-    crossterm_source       # Same cross-term, AD values taken relative to the source
-    crossterm_source_cache # The cache that holds crossterm_source together with the entries.
-    equations_per_unit     # Number of equations per impact
-    npartials_target       # Number of partials per equation (in target)
-    npartials_source       # (in source)
-    target_symbol
-    source_symbol
-    function InjectiveCrossTerm(target_eq, target_model, source_model, intersection = nothing; target = nothing, source = nothing)
-        context = target_model.context
-        target_unit = associated_unit(target_eq)
-        if isnothing(intersection)
-            intersection = get_model_intersection(target_unit, target_model, source_model, target, source)
-        end
-        target_impact, source_impact, target_unit, source_unit = intersection
-        @assert !isnothing(target_impact) "Cannot declare cross term when there is no overlap between domains."
-        noverlap = length(target_impact)
-        @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
-        # Infer Unit from target_eq
-        equations_per_unit = number_of_equations_per_unit(target_eq)
-
-        npartials_target = number_of_partials_per_unit(target_model, target_unit)
-        npartials_source = number_of_partials_per_unit(source_model, source_unit)
-
-        target_tag = get_unit_tag(target, target_unit)
-        c_term_target = allocate_array_ad(equations_per_unit, noverlap, context = context, npartials = npartials_target, tag = target_tag)
-        c_term_source_c = CompactAutoDiffCache(equations_per_unit, noverlap, npartials_source, context = context, tag = source, unit = source_unit)
-        c_term_source = c_term_source_c.entries
-
-        # Units and overlap - target, then source
-        units = (target = target_unit, source = source_unit)
-        overlap = (target = target_impact, source = source_impact)
-        new(overlap, units, c_term_target, c_term_source, c_term_source_c, equations_per_unit, npartials_target, npartials_source, target, source)
-    end
-end
-
-function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, source::TervModel; equation_offset = 0, variable_offset = 0)
-    cs = ct.crossterm_source_cache
-
-    layout = matrix_layout(source.context)
-
-    impact_target = ct.impact[1]
-    impact_source = ct.impact[2]
-    punits = get_primary_variable_ordered_units(source)
-    nu_t = count_units(target.domain, ct.units.target)
-    for u in punits
-        nu_s = count_units(source.domain, u)
-        injective_alignment!(cs, jac, u, layout,
-                                                target_index = impact_target,
-                                                source_index = impact_source,
-                                                target_offset = equation_offset,
-                                                source_offset = variable_offset,
-                                                number_of_units_source = nu_s,
-                                                number_of_units_target = nu_t)
-        variable_offset += number_of_degrees_of_freedom(source, u)
-    end
-end
-
-function apply_cross_term!(eq, ct, model_t, model_s, arg...)
-    ix = ct.impact.target
-    d = get_diagonal_entries(eq)
-    # TODO: Why is this allocating?
-    d[:, ix] += ct.crossterm_target
-end
-
-
-function update_linearized_system_crossterm!(nz, model_t, model_s, ct::InjectiveCrossTerm)
-    fill_equation_entries!(nz, nothing, model_s, ct.crossterm_source_cache)
-end
-
-function declare_pattern(target_model, source_model, x::InjectiveCrossTerm, unit)
-    source_unit = x.units.source
-    if unit == source_unit
-        target_impact = x.impact.target
-        source_impact = x.impact.source
-
-        out = (target_impact, source_impact)
-    else
-        out = nothing
-    end
-    return out
-end
-
-function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout::EquationMajorLayout)
-    primitive = declare_pattern(target_model, source_model, x, unit)
-    if isnothing(primitive)
-        out = nothing
-    else
-        target_impact = primitive[1]
-        source_impact = primitive[2]
-        source_unit = x.units.source
-        target_unit = x.units.target
-        nunits_source = count_units(source_model.domain, source_unit)
-        nunits_target = count_units(target_model.domain, target_unit)
-
-        n_partials = x.npartials_source
-        n_eqs = x.equations_per_unit
-        I = []
-        J = []
-        for eqno in 1:n_eqs
-            for derno in 1:n_partials
-                push!(I, target_impact .+ (eqno-1)*nunits_target)
-                push!(J, source_impact .+ (derno-1)*nunits_source)
-            end
-        end
-        I = vcat(I...)
-        J = vcat(J...)
-
-        n = n_eqs*nunits_target
-        m = n_partials*nunits_source
-        out = (I, J, n, m)
-        @assert maximum(I) <= n "I index exceeded declared row count $n (largest value: $(maximum(I)))"
-        @assert maximum(J) <= m "J index exceeded declared column count $m (largest value: $(maximum(J)))"
-
-        @assert minimum(I) >= 1 "I index was lower than 1"
-        @assert minimum(J) >= 1 "J index was lower than 1"
-    end
-    return out
-end
-
-
-function get_model_intersection(u, target_model, source_model, target, source)
-    return get_domain_intersection(u, target_model.domain, source_model.domain, target, source)
-end
-
-"""
-For a given unit in domain target_d, find any indices into that unit that is connected to
-any units in source_d. The interface is limited to a single unit-unit impact.
-The return value is a tuple of indices and the corresponding unit
-"""
-function get_domain_intersection(u, target_d, source_d, target_symbol, source_symbol)
-    source_symbol::Union{Nothing, Symbol}
-    (target = nothing, source = nothing, target_unit = u, source_unit = Cells())
-end
 
 function number_of_models(model::MultiModel)
     return length(model.models)
 end
+
+has_groups(model::MultiModel) = !isnothing(model.groups)
+
+function number_of_groups(model::MultiModel)
+    if has_groups(model)
+        n = maximum(model.groups)
+    else
+        n = 1
+    end
+end
+
 
 function get_primary_variable_names(model::MultiModel)
 
@@ -268,12 +111,28 @@ end
 
 function align_equations_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
+    model_keys = keys(models)
     ndofs = model.number_of_degrees_of_freedom
     lsys = storage[:LinearizedSystem]
-    for key in keys(models)
+    if has_groups(model)
+        ng = number_of_groups(model)
+        groups = model.groups
+        for g in 1:ng
+            J = lsys[g, g].jac
+            subs = groups .== g
+            align_equations_subgroup!(storage, models, model_keys[subs], ndofs, J, equation_offset, variable_offset)    
+        end
+    else
+        J = lsys.jac
+        align_equations_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
+    end
+end
+
+function align_equations_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
+    for key in model_keys
         submodel = models[key]
         eqs = storage[key][:equations]
-        nrow_end = align_equations_to_jacobian!(eqs, lsys.jac, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
+        nrow_end = align_equations_to_jacobian!(eqs, J, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
         nrow = nrow_end - equation_offset
         ndof = ndofs[key]
         @assert nrow == ndof "Submodels must have equal number of equations and degrees of freedom. Found $nrow equations and $ndof variables for submodel $key"
@@ -285,17 +144,37 @@ end
 function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
     ndofs = model.number_of_degrees_of_freedom
+    model_keys = keys(models)
+    ndofs = model.number_of_degrees_of_freedom
 
     lsys = storage[:LinearizedSystem]
-    cross_terms = storage[:cross_terms]
+    if has_groups(model)
+        ng = number_of_groups(model)
+        groups = model.groups
+        for target_g in 1:ng
+            t_subs = groups .== target_g
+            target_keys = model_keys[t_subs]
+            for source_g in 1:ng
+                s_subs = groups .== source_g
+                source_keys = model_keys[s_subs]
+                ls = lsys[target_g, source_g]
+                align_crossterms_subgroup!(storage, models, target_keys, source_keys, ndofs, ls, equation_offset, variable_offset)    
+            end
+        end
+    else
+        align_crossterms_subgroup!(storage, models, model_keys, model_keys, ndofs, lsys, equation_offset, variable_offset)
+    end
+end
 
+function align_crossterms_subgroup!(storage, models, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset)
     base_variable_offset = variable_offset
+    cross_terms = storage[:cross_terms]
     # Iterate over targets (= rows)
-    for target in keys(models)
+    for target in target_keys
         target_model = models[target]
         variable_offset = base_variable_offset
         # Iterate over sources (= columns)
-        for source in keys(models)
+        for source in source_keys
             source_model = models[source]
             if source != target
                 ct = cross_terms[target][source]
@@ -310,7 +189,6 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
     end
 end
 
-
 function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, target::TervModel, source::TervModel; equation_offset = 0, variable_offset = 0)
     for ekey in keys(equations)
         eq = equations[ekey]
@@ -324,12 +202,12 @@ function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, ta
     return equation_offset
 end
 
-function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol)
+function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol, context)
     models = model.models
     target_model = models[target]
     source_model = models[source]
-    source_layout = matrix_layout(source_model.context)
-    F = float_type(source_model.context)
+    layout = matrix_layout(context)
+    F = float_type(context)
 
     if target == source
         # These are the main diagonal blocks each model knows how to produce themselves
@@ -349,7 +227,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
             if !isnothing(x)
                 variable_offset = 0
                 for u in get_primary_variable_ordered_units(source_model)
-                    S = declare_sparsity(target_model, source_model, x, u, source_layout)
+                    S = declare_sparsity(target_model, source_model, x, u, layout)
                     if !isnothing(S)
                         push!(I, S[1] .+ equation_offset)
                         push!(J, S[2] .+ variable_offset)
@@ -367,7 +245,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
     return sarg
 end
 
-function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol})
+function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, arg...)
     I = []
     J = []
     V = []
@@ -378,7 +256,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         variable_offset = 0
         n = 0
         for source in sources
-            i, j, v, n, m = get_sparse_arguments(storage, model, target, source)
+            i, j, v, n, m = get_sparse_arguments(storage, model, target, source, arg...)
             if length(i) > 0
                 push!(I, i .+ equation_offset)
                 push!(J, j .+ variable_offset)
@@ -398,38 +276,69 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     @debug outstr
     I = vec(vcat(I...))
     J = vec(vcat(J...))
-    V = vec(vcat(V...))
+    if isa(eltype(V), AbstractVector)
+        V = vec(vcat(V...))
+    else
+        V = vcat(V...)
+    end
     return (I, J, V, equation_offset, variable_offset)
 end
 
 function setup_linearized_system!(storage, model::MultiModel)
-    F = float_type(model.context)
-
-    groups = model.groups
     models = model.models
-    ugroups = unique(groups)
-    ng = length(ugroups)
+    context = model.context
 
     candidates = [i for i in keys(models)]
-    if ng == 1
-        # All Jacobians are grouped together and we assemble as a single linearized system
-        context = models[1].context
-        layout = matrix_layout(context)
-        sparse_arg = get_sparse_arguments(storage, model, candidates, candidates)
-        lsys = LinearizedSystem(sparse_arg, context, layout)
-    else
-        # We have multiple groups. Store as Matrix of sparse matrices
-        @assert false "Needs implementation"
-        jac = Matrix{Any}(ng, ng)
-        # equation_offset = 0
-        # variable_offset = 0
+    if has_groups(model)
+        ndof = values(model.number_of_degrees_of_freedom)
+        n = sum(ndof)
+        groups = model.groups
+        ng = number_of_groups(model)
+    
+        # We have multiple groups. Store as Matrix of linearized systems
+        F = float_type(context)
+        r = zeros(F, n)
+        dx = zeros(F, n)
+
+        subsystems = Matrix{LinearizedType}(undef, ng, ng)
+        has_context = !isnothing(context)
+
+        base_pos = 0
         for rowg in 1:ng
-            t = candidates[groups .== rowg]
+            local_models = groups .== rowg
+            local_size = sum(ndof[local_models])
+            t = candidates[local_models]
+            row_context = models[t[1]].context
+            
             for colg in 1:ng
                 s = candidates[groups .== colg]
-                I, J, V, n, m = get_sparse_arguments(storage, model, t, s)
+                if rowg == colg || !has_context
+                    ctx = row_context
+                else
+                    ctx = context
+                end
+                layout = matrix_layout(ctx)
+                sparse_arg = get_sparse_arguments(storage, model, t, s, ctx)
+                if rowg == colg
+                    global_subs = (base_pos+1):(base_pos+local_size)
+                    r_i = view(r, global_subs)
+                    dx_i = view(dx, global_subs)
+                    subsystems[rowg, colg] = LinearizedSystem(sparse_arg, ctx, layout, dx = dx_i, r = r_i)
+                else
+                    subsystems[rowg, colg] = LinearizedBlock(sparse_arg, ctx, layout)
+                end
             end
+            base_pos += local_size
         end
+        lsys = MultiLinearizedSystem(subsystems, context, matrix_layout(context), r = r, dx = dx)
+    else
+        # All Jacobians are grouped together and we assemble as a single linearized system
+        if isnothing(context)
+            context = models[1].context
+        end
+        layout = matrix_layout(context)
+        sparse_arg = get_sparse_arguments(storage, model, candidates, candidates, context)
+        lsys = LinearizedSystem(sparse_arg, context, layout)
     end
     storage[:LinearizedSystem] = lsys
 end
@@ -473,14 +382,6 @@ function update_cross_terms_for_pair!(storage, model, source::Symbol, target::Sy
     end
 end
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq, target_storage, source_storage, target_model, source_model, target, source, dt)
-    error("Cross term must be specialized for your equation and models. Did not understand how to specialize $target ($(typeof(target_model))) to $source ($(typeof(source_model)))")
-end
-
-function update_cross_term!(::Nothing, arg...)
-    # Do nothing.
-end
-
 function apply_cross_terms!(storage, model::MultiModel, arg...)
     models = model.models
     @sync for target in keys(models)
@@ -511,32 +412,45 @@ end
 function update_linearized_system!(storage, model::MultiModel; equation_offset = 0)
     lsys = storage.LinearizedSystem
     models = model.models
-    offsets = get_submodel_degree_of_freedom_offsets(model)
-    model_keys = submodels_symbols(model)
+    model_keys = keys(models)
+    if has_groups(model)
+        ng = number_of_groups(model)
+        groups = model.groups
+        for g in 1:ng
+            lsys_g = lsys[g, g]
+            subs = groups .== g
+            group_keys = model_keys[subs]
+            offsets = get_submodel_degree_of_freedom_offsets(model, g)
+            update_main_linearized_system_subgroup!(storage, model, group_keys, offsets, lsys_g)
+        end
+    else
+        offsets = get_submodel_degree_of_freedom_offsets(model)
+        update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
+    end
+    update_cross_term_linearized_system_subgroup!(storage, model, model_keys, lsys)
+end
+
+function update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
     @sync for (index, key) in enumerate(model_keys)
-        m = models[key]
+        m = model.models[key]
         s = storage[key]
         eqs = s.equations
         @async update_linearized_system!(lsys, eqs, m; equation_offset = offsets[index])
     end
+end
+
+function update_cross_term_linearized_system_subgroup!(storage, model, model_keys, linearized_system)
     # Then, update cross terms
     @sync for target in model_keys
         for source in model_keys
             if source != target
+                lsys = get_linearized_system_model_pair(storage, model, source, target, linearized_system)
                 @async update_linearized_system_crossterms!(lsys, storage, model, source, target)
             end
         end
     end
 end
 
-
-function get_submodel_degree_of_freedom_offsets(model::MultiModel)
-    n = cumsum(vcat([0], [i for i in values(model.number_of_degrees_of_freedom)]))
-end
-
-function submodels_symbols(model::MultiModel)
-    return keys(model.models)
-end
 
 function update_linearized_system_crossterms!(lsys, storage, model::MultiModel, source, target)
     cross_terms = storage[:cross_terms][target][source]
@@ -583,12 +497,17 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
     offset = 0
     lsys = storage.LinearizedSystem
     errors = OrderedDict()
-    for key in submodels_symbols(model)
+    for (i, key) in enumerate(submodels_symbols(model))
+        if has_groups(model) && i > 1
+            if model.groups[i] != model.groups[i-1]
+                offset = 0
+            end
+        end
         s = storage[key]
         m = model.models[key]
         eqs = s.equations
-
-        conv, e, errors[key], = check_convergence(lsys, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
+        ls = get_linearized_system_submodel(storage, model, key, lsys)
+        conv, e, errors[key], = check_convergence(ls, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)
@@ -602,15 +521,20 @@ function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = f
 end
 
 function update_primary_variables!(storage, model::MultiModel)
-    dx = storage.LinearizedSystem.dx
+    lsys = storage.LinearizedSystem
+    dx = lsys.dx
     models = model.models
 
     offset = 0
-    for key in keys(models)
+    for (i, key) in enumerate(keys(models))
         m = models[key]
         s = storage[key]
         ndof = number_of_degrees_of_freedom(m)
         dx_v = view(dx, (offset+1):(offset+ndof))
+        if is_cell_major(matrix_layout(m.context))
+            bz = block_size(lsys[i, i])
+            dx_v = reshape(dx_v, bz, :)
+        end
         update_primary_variables!(s.state, dx_v, m)
         offset += ndof
     end
@@ -661,7 +585,6 @@ end
 function get_submodels(model, arg...)
     map((x) -> model.models[x], arg)
 end
-
 
 function get_convergence_table(model::MultiModel, errors)
     get_convergence_table(submodels_symbols(model), errors)

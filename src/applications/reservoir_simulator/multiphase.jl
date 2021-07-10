@@ -150,7 +150,7 @@ function update_primary_variable!(state, p::Saturations, state_symbol, model, dx
     minval = minimum_value(p)
 
     s = state[state_symbol]
-    Threads.@threads for cell = 1:nu
+    @threads for cell = 1:nu
     # for cell = 1:nu
         dlast = 0
         @inbounds for ph = 1:(nph-1)
@@ -252,16 +252,21 @@ function convergence_criterion(model::SimulationModel{D, S}, storage, eq::Conser
     n = number_of_equations_per_unit(eq)
     pv = get_pore_volume(model)
     e = zeros(n)
-    prm = storage.parameters
+    rhos = get_reference_densities(model, storage)
     for i = 1:n
-        if haskey(prm, :reference_densities)
-            rhos = prm.reference_densities[i]
-        else
-            rhos = 1
-        end
-        e[i] = mapreduce((pv, e) -> abs((dt/rhos) * e / pv), max, pv, r[i, :])
+        e[i] = mapreduce((pv, e) -> abs((dt/rhos[i]) * e / pv), max, pv, view(r, i, :))
     end
     return (e, tolerance_scale(eq))
+end
+
+function get_reference_densities(model, storage)
+    prm = storage.parameters
+    if haskey(prm, :reference_densities)
+        rhos = prm.reference_densities
+    else
+        rhos = ones(number_of_phases(model.system))
+    end
+    return rhos::Vector{float_type(model.context)}
 end
 
 # Accumulation: Base implementation
@@ -271,7 +276,7 @@ function fill_accumulation!(jac, r, acc, apos, neq, context, ::KernelDisallowed)
     nc = size(apos, 2)
     dim = size(apos, 1)
     nder = dim ÷ neq
-    @inbounds Threads.@threads for cell = 1:nc
+    @inbounds @threads for cell = 1:nc
         for eq = 1:neq
             r[cell + (eq-1)*nc] = acc[eq, cell].value
         end
@@ -315,7 +320,7 @@ function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, neq
     nc = size(apos, 2)
     n = size(apos, 1)
     nder = n ÷ neq
-    # Threads.@threads for cell = 1:nc
+    # @threads for cell = 1:nc
     for cell = 1:nc
         for i = conn_pos[cell]:(conn_pos[cell+1]-1)
             for eqNo = 1:neq

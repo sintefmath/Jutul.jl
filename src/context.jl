@@ -65,11 +65,11 @@ function synchronize(::TervContext)
     # Default: Do nothing
 end
 
-function float_type(c::TervContext)
+function float_type(context)
     return Float64
 end
 
-function index_type(c::TervContext)
+function index_type(context)
     return Int64
 end
 
