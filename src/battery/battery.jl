@@ -199,3 +199,10 @@ end
     V = get_flow_volume(model.domain.grid)
     @tullio acc[i] = T[i]
 end
+
+@terv_secondary function update_as_secondary!(
+    acc, tv::ChargeAcc, model, param, Phi
+    )
+    V = get_flow_volume(model.domain.grid)
+    @tullio acc[i] = 0
+end

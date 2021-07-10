@@ -58,4 +58,6 @@ include("battery/elyte.jl")
 include("battery/current_collector.jl")
 include("battery/elchem_component.jl")
 
+include("plot_graph.jl")
+
 end # module

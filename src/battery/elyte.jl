@@ -149,11 +149,11 @@ end
 
 @terv_secondary function update_as_secondary!(
     DGrad_C, tv::TPDGrad{C}, model::SimulationModel{Dom, S, F, Con}, 
-    param, C, D 
+    param, C, Diffusivity
     ) where {Dom, S <: ElectroChemicalComponent, F, Con}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    @tullio DGrad_C[i] = half_face_two_point_kgrad(conn_data[i], C, D)
+    @tullio DGrad_C[i] = half_face_two_point_kgrad(conn_data[i], C, Diffusivity)
 end
 
 
