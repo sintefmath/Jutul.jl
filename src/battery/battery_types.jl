@@ -2,7 +2,7 @@ using Terv
 export ElectroChemicalComponent, CurrentCollector, Electectrolyte, TestElyte
 export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
 export ChargeFlow, MixedFlow
-export Phi, C, T, ChargeAcc, MassAcc, EnergyAcc
+export Phi, C, T, ChargeAcc, MassAcc, EnergyAcc, KGrad
 
 ###########
 # Classes #
@@ -25,7 +25,8 @@ struct MassAcc <: AccumulationVariable end
 struct EnergyAcc <: AccumulationVariable end
 
 # Represents k∇T, where k is a tensor, T a potential
-struct TPkGrad{T} <: ScalarVariable end
+abstract type KGrad{T} <: ScalarVariable end
+struct TPkGrad{T} <: KGrad{T} end
 
 abstract type ECFlow <: FlowType end
 struct ChargeFlow <: ECFlow end

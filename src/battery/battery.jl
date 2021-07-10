@@ -36,7 +36,7 @@ function degrees_of_freedom_per_unit(model, sf::MassAcc)
     return 1
 end
 
-function degrees_of_freedom_per_unit(model, sf::TPkGrad)
+function degrees_of_freedom_per_unit(model, sf::KGrad)
     return 1
 end
 
@@ -46,7 +46,7 @@ function degrees_of_freedom_per_unit(
     return 1
 end
 
-function number_of_units(model, pv::TPkGrad)
+function number_of_units(model, pv::KGrad)
     """ Two fluxes per face """
     return 2*count_units(model.domain, Faces())
 end
@@ -65,7 +65,7 @@ end
 
 
 # ?Why not faces?
-function associated_unit(::TPkGrad)
+function associated_unit(::KGrad)
     Cells()
 end
 
