@@ -32,8 +32,8 @@ function get_schur_blocks!(sys, include_r = true; update = false, keep_ix = 1, e
     end
     ϵ = factorized ? E_lu : E
     if include_r
-        a = keep.r
-        b = elim.r
+        a = vector_residual(keep)
+        b = vector_residual(elim)
         return (B, C, D, ϵ, a, b)
     else
         return (B, C, D, ϵ)
@@ -53,20 +53,10 @@ function linear_operator(sys::MultiLinearizedSystem)
     if do_schur(sys)
         B, C, D, E = get_schur_blocks!(sys, false)
         # A = B - CE\D
-        n = size(B, 1)
-        function schur_mul!(res, x, α, β::T) where T
-            if β == zero(T)
-                tmp = B*x - C*(E\(D*x))
-                res .= tmp
-                # mul!(res, jac, x)
-                if α != one(T)
-                    lmul!(α, res)
-                end
-            else
-                error("Not implemented yet.")
-            end
-        end
-        op = LinearOperator(Float64, n, n, false, false, schur_mul!)
+        n = size(C, 1)
+        T = eltype(sys[1, 1].r)
+        apply! = (res, x, α, β) -> schur_mul!(res, T, B, C, D, E, x, α, β)
+        op = LinearOperator(Float64, n, n, false, false, apply!)
     else
         S = sys.subsystems
         d = size(S, 2)
@@ -86,5 +76,36 @@ function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
         sys.dx[(n+1):m] = -dy
     else
         sys.dx .= -dx
+    end
+end
+
+function schur_mul!(res, r_type::Float64, B, C, D, E, x, α, β::T) where T
+    if β == zero(T)
+        tmp = B*x - C*(E\(D*x))
+        res .= tmp
+        if α != one(T)
+            lmul!(α, res)
+        end
+    else
+        error("Not implemented yet.")
+    end
+end
+
+function schur_mul!(res, r_type, B, C, D, E, x, α, β::T) where T
+    as_svec = (x) -> reinterpret(r_type, x)
+    res_v = as_svec(res)
+    x_v = as_svec(x)
+    if β == zero(T)
+        # compute B*x
+        mul!(res_v, B, x_v)
+        # then add in the rest
+        res -= C*(E\(D*x))
+        # Simple version:
+        # res .= B*x - C*(E\(D*x))
+        if α != one(T)
+            lmul!(α, res)
+        end
+    else
+        error("Not implemented yet.")
     end
 end
