@@ -43,15 +43,18 @@ function solve!(sys::LSystem, krylov::GenericKrylov)
     L = preconditioner(krylov, sys, :left)
     R = preconditioner(krylov, sys, :right)
     v = verbose(cfg)
+    max_it = cfg.max_iterations
+    rt = rtol(cfg)
+    at = atol(cfg)
     (x, stats) = solver(op, r, 
-                            itmax = cfg.max_iterations,
+                            itmax = max_it,
                             verbose = v,
-                            rtol = rtol(cfg),
+                            rtol = rt,
                             history = v > 0,
-                            atol = atol(cfg),
+                            atol = at,
                             M = L, N = R)
     if !stats.solved
-        @warn "Linear solve did not converge: $(stats.status)"
+        @warn "Linear solve did not converge: $(stats.status). rtol = $rt, atol = $at, max_it = $max_it"
     end
     if v > 0
         r = stats.residuals
