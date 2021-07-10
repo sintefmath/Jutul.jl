@@ -9,14 +9,19 @@ casename = "egg"
 
 # casename = "gravity_test"
 # casename = "bl_wells"
-casename = "bl_wells_mini"
+# casename = "bl_wells_mini"
 
 # casename = "single_inj_single_cell"
 # casename = "intermediate"
 # casename = "mini"
 simple_well = false
-block_backend = false
+block_backend = true
 use_groups = true
+use_schur = true
+
+# Need groups to work.
+use_schur = use_schur && use_groups
+
 include_wells_as_blocks = use_groups && simple_well && false
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false)
 function setup_res(G, mrst_data; block_backend = false, use_groups = false)
@@ -187,7 +192,12 @@ end
 outer_context = DefaultContext()
 # outer_context = nothing
 
-mmodel = MultiModel(convert_to_immutable_storage(models), groups = groups, context = outer_context, reduction = :schur_apply)
+if use_schur
+    red = :schur_apply
+else
+    red = nothing
+end
+mmodel = MultiModel(convert_to_immutable_storage(models), groups = groups, context = outer_context, reduction = red)
 # Set up joint state and simulate
 state0 = setup_state(mmodel, initializer)
 forces[:Facility] = facility_forces
@@ -222,10 +232,14 @@ if use_groups
         # res_precond = LUPreconditioner()
     end
 
-    group_p = GroupWisePreconditioner([res_precond, well_precond])
+    if use_schur
+        group_p = res_precond
+    else
+        group_p = GroupWisePreconditioner([res_precond, well_precond])
+    end
 
     prec = group_p
-    prec = nothing
+    # prec = nothing
 else
     prec = nothing
 end

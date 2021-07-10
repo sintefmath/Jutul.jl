@@ -4,7 +4,9 @@ using ILUZero
 abstract type TervPreconditioner end
 
 function update!(preconditioner, lsys)
-    update!(preconditioner, lsys.jac, lsys.r)
+    J = jacobian(lsys)
+    r = residual(lsys)
+    update!(preconditioner, J, r)
 end
 
 function get_factorization(precond)

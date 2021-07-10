@@ -125,6 +125,9 @@ function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
     return (v, v_buf)
 end
 
+jacobian(sys) = sys.jac
+residual(sys) = lsys.r
+
 function prepare_solve!(sys)
     # Default is to do nothing.
 end

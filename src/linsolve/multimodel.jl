@@ -109,3 +109,21 @@ function schur_mul!(res, r_type, B, C, D, E, x, α, β::T) where T
         error("Not implemented yet.")
     end
 end
+
+function jacobian(sys::MultiLinearizedSystem)
+    if do_schur(sys)
+        J = sys[1, 1].jac
+    else
+        error()
+    end
+    return J
+end
+
+function residual(sys::MultiLinearizedSystem)
+    if do_schur(sys)
+        r = sys[1, 1].r
+    else
+        error()
+    end
+    return r
+end
