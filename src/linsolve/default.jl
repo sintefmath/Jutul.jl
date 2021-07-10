@@ -38,8 +38,10 @@ struct MultiLinearizedSystem{L} <: TervLinearSystem
     dx
     r_buffer
     dx_buffer
+    reduction
+    factor
     matrix_layout::L
-    function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = nothing)
+    function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = nothing, reduction = nothing)
         n = 0
         for i = 1:size(subsystems, 1)
             ni, mi = size(subsystems[i, i].jac)
@@ -48,7 +50,7 @@ struct MultiLinearizedSystem{L} <: TervLinearSystem
         end
         dx, dx_buf = get_jacobian_vector(n, context, layout, dx)
         r, r_buf = get_jacobian_vector(n, context, layout, r)
-        new{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, layout)
+        new{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, nothing, layout)
     end
 end
 
@@ -105,6 +107,10 @@ function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
         end
     end
     return (v, v_buf)
+end
+
+function prepare_solve!(sys)
+    # Default is to do nothing.
 end
 
 function linear_operator(sys::LinearizedSystem)

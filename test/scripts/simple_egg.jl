@@ -9,13 +9,13 @@ casename = "egg"
 
 # casename = "gravity_test"
 # casename = "bl_wells"
-# casename = "bl_wells_mini"
+casename = "bl_wells_mini"
 
 # casename = "single_inj_single_cell"
 # casename = "intermediate"
 # casename = "mini"
 simple_well = false
-block_backend = true
+block_backend = false
 use_groups = true
 include_wells_as_blocks = use_groups && simple_well && false
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false)
@@ -80,6 +80,7 @@ function setup_res(G, mrst_data; block_backend = false, use_groups = false)
     ## Model parameters
     param_res = setup_parameters(model)
     param_res[:reference_densities] = vec(rhoS)
+    param_res[:tolerances][:default] = 0.01
     return (model, init, param_res)
 end
 
@@ -186,7 +187,7 @@ end
 outer_context = DefaultContext()
 # outer_context = nothing
 
-mmodel = MultiModel(convert_to_immutable_storage(models), groups = groups, context = outer_context)
+mmodel = MultiModel(convert_to_immutable_storage(models), groups = groups, context = outer_context, reduction = :schur_apply)
 # Set up joint state and simulate
 state0 = setup_state(mmodel, initializer)
 forces[:Facility] = facility_forces
@@ -207,8 +208,8 @@ dt = timesteps
 # dt[1] = 1
 # 
 
-atol = 1e-5
-rtol = 1e-3
+atol = 1e-12
+rtol = 1e-12
 max_it = 100
 if use_groups
     well_precond = TrivialPreconditioner()
@@ -224,13 +225,13 @@ if use_groups
     group_p = GroupWisePreconditioner([res_precond, well_precond])
 
     prec = group_p
-    # prec = nothing
+    prec = nothing
 else
     prec = nothing
 end
-lsolve = GenericKrylov(dqgmres, verbose = 10, preconditioner = prec, relative_tolerance = rtol, absolute_tolerance = atol, max_iterations = max_it)
+lsolve = GenericKrylov(dqgmres, verbose = 0, preconditioner = prec, relative_tolerance = rtol, absolute_tolerance = atol, max_iterations = max_it)
 # lsolve = nothing
-cfg = simulator_config(sim, info_level = 1, debug_level = 2, max_nonlinear_iterations = 20, linear_solver = lsolve)
+cfg = simulator_config(sim, info_level = 2, debug_level = 0, max_nonlinear_iterations = 20, linear_solver = lsolve)
 states = simulate(sim, dt, forces = forces, config = cfg)
 error("Early termination")
 

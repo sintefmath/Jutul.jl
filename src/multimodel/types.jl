@@ -3,19 +3,26 @@ struct MultiModel <: TervModel
     groups::Union{Vector, Nothing}
     context::Union{TervContext, Nothing}
     number_of_degrees_of_freedom
-    function MultiModel(models; groups = nothing, context = nothing)
-        if !isnothing(groups)
+    reduction
+    function MultiModel(models; groups = nothing, context = nothing, reduction = nothing)
+        if isnothing(groups)
+            num_groups = 1
+        else
             nm = length(models)
+            num_groups = length(unique(groups))
             @assert maximum(groups) <= nm
             @assert minimum(groups) > 0
             @assert length(groups) == nm
-            @assert maximum(groups) == length(unique(groups))
+            @assert maximum(groups) == num_groups
         end
         if isa(models, AbstractDict)
             models = convert_to_immutable_storage(models)
         end
         ndof = map(number_of_degrees_of_freedom, models)
-        new(models, groups, context, ndof)
+        if reduction == :schur_apply
+            @assert num_groups == 2
+        end
+        new(models, groups, context, ndof, reduction)
     end
 end
 

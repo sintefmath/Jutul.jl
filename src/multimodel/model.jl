@@ -357,7 +357,7 @@ function setup_linearized_system!(storage, model::MultiModel)
             end
             base_pos += local_size
         end
-        lsys = MultiLinearizedSystem(subsystems, context, matrix_layout(context), r = r, dx = dx)
+        lsys = MultiLinearizedSystem(subsystems, context, matrix_layout(context), r = r, dx = dx, reduction = model.reduction)
     else
         # All Jacobians are grouped together and we assemble as a single linearized system
         if isnothing(context)
