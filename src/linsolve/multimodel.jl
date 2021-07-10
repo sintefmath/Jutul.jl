@@ -8,16 +8,13 @@ do_schur(sys) = sys.reduction == :schur_apply
 
 function prepare_solve!(sys::MultiLinearizedSystem)
     if do_schur(sys)
-        B, C, D, E, a, b = get_schur_blocks(sys)
+        B, C, D, E, a, b = get_schur_blocks!(sys, true, update = true)
         a -= C*(E\b)
-
-        # error()
-        # A = B - CE\D
-        # r = a - CE\b
     end
 end
 
-function get_schur_blocks(sys, include_r = true, keep_ix = 1, elim_ix = 2)
+
+function get_schur_blocks!(sys, include_r = true; update = false, keep_ix = 1, elim_ix = 2, factorized = true)
     keep = sys[keep_ix, keep_ix]
     elim = sys[elim_ix, elim_ix]
 
@@ -25,12 +22,21 @@ function get_schur_blocks(sys, include_r = true, keep_ix = 1, elim_ix = 2)
     C = sys[keep_ix, elim_ix].jac
     D = sys[elim_ix, keep_ix].jac
     E = elim.jac
+
+    F = sys.factor
+    
+    if update
+        E_lu = update!(F, lu, lu!, E)
+    else
+        E_lu = F.factor
+    end
+    ϵ = factorized ? E_lu : E
     if include_r
         a = keep.r
         b = elim.r
-        return (B, C, D, E, a, b)
+        return (B, C, D, ϵ, a, b)
     else
-        return (B, C, D, E)
+        return (B, C, D, ϵ)
     end
 end
 
@@ -45,7 +51,7 @@ end
 
 function linear_operator(sys::MultiLinearizedSystem)
     if do_schur(sys)
-        B, C, D, E = get_schur_blocks(sys, false)
+        B, C, D, E = get_schur_blocks!(sys, false)
         # A = B - CE\D
         n = size(B, 1)
         function schur_mul!(res, x, α, β::T) where T
@@ -72,7 +78,7 @@ end
 
 function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
     if do_schur(sys)
-        B, C, D, E, a, b = get_schur_blocks(sys)
+        B, C, D, E, a, b = get_schur_blocks!(sys)
         dy = E\(b - D*dx)
         n = length(dx)
         m = length(sys.dx)

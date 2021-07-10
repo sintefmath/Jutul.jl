@@ -4,6 +4,22 @@ using SparseArrays, LinearOperators, StaticArrays
 using IterativeSolvers, Krylov, AlgebraicMultigrid
 using CUDA, CUDA.CUSPARSE
 
+mutable struct FactorStore
+    factor
+    function FactorStore()
+        new(nothing)
+    end
+end
+
+function update!(f::FactorStore, g, g!, A)
+    if isnothing(f.factor)
+        f.factor = g(A)
+    else
+        g!(f.factor, A)
+    end
+    return f.factor
+end
+
 abstract type TervLinearSystem end
 
 struct LinearizedSystem{L} <: TervLinearSystem
@@ -50,7 +66,7 @@ struct MultiLinearizedSystem{L} <: TervLinearSystem
         end
         dx, dx_buf = get_jacobian_vector(n, context, layout, dx)
         r, r_buf = get_jacobian_vector(n, context, layout, r)
-        new{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, nothing, layout)
+        new{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, FactorStore(), layout)
     end
 end
 
