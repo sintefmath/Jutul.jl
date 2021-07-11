@@ -22,7 +22,7 @@ function prepare_solve!(sys::MultiLinearizedSystem)
         tmp = C*(E\b)
         e = eltype(B)
         if e == Float64
-           da = tmp
+            da = tmp
         else
             bz = size(e, 1)
             da = equation_major_to_block_major_view(tmp, bz)
@@ -117,14 +117,20 @@ function schur_mul!(res, r_type::Float64, B, C, D, E, x, α, β::T) where T
 end
 
 function schur_mul!(res, r_type, B, C, D, E, x, α, β::T) where T
-    as_svec = (x) -> reinterpret(r_type, x)
+    is_float = r_type == eltype(res)
+    if is_float
+        as_svec = (x) -> x
+    else
+        as_svec = (x) -> reinterpret(r_type, x)
+    end
     res_v = as_svec(res)
     x_v = as_svec(x)
+
     if β == zero(T)
         # compute B*x
         mul!(res_v, B, x_v)
         tmp = C*(E\(D*x))
-        if r_type == Float64
+        if is_float
             drs = tmp
         else
             block_size = length(r_type)
