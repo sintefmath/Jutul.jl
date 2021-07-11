@@ -6,11 +6,28 @@ end
 
 do_schur(sys) = sys.reduction == :schur_apply
 
+function equation_major_to_block_major_view(a, block_size)
+    @views x = reshape(reshape(vec(a), :, block_size)', :)
+    return x
+end
+
+function block_major_to_equation_major_view(a, block_size)
+    @views x = reshape(reshape(vec(a), block_size,:)', :)
+    return x
+end
+
 function prepare_solve!(sys::MultiLinearizedSystem)
     if do_schur(sys)
         B, C, D, E, a, b = get_schur_blocks!(sys, true, update = true)
         tmp = C*(E\b)
-        @. a -= tmp
+        e = eltype(B)
+        if e == Float64
+           da = tmp
+        else
+            bz = size(e, 1)
+            da = equation_major_to_block_major_view(tmp, bz)
+        end
+        @. a -= da
     end
 end
 
@@ -100,8 +117,9 @@ function schur_mul!(res, r_type, B, C, D, E, x, α, β::T) where T
         # compute B*x
         mul!(res_v, B, x_v)
         tmp = C*(E\(D*x))
-        # then add in the rest
-        @. res -= tmp
+        block_size = length(r_type)
+        drs = equation_major_to_block_major_view(tmp, block_size)
+        @. res -= drs
         # Simple version:
         # res .= B*x - C*(E\(D*x))
         if α != one(T)
