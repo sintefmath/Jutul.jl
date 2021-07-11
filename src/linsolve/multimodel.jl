@@ -9,7 +9,8 @@ do_schur(sys) = sys.reduction == :schur_apply
 function prepare_solve!(sys::MultiLinearizedSystem)
     if do_schur(sys)
         B, C, D, E, a, b = get_schur_blocks!(sys, true, update = true)
-        a -= C*(E\b)
+        tmp = C*(E\b)
+        @. a -= tmp
     end
 end
 
@@ -98,8 +99,9 @@ function schur_mul!(res, r_type, B, C, D, E, x, α, β::T) where T
     if β == zero(T)
         # compute B*x
         mul!(res_v, B, x_v)
+        tmp = C*(E\(D*x))
         # then add in the rest
-        res -= C*(E\(D*x))
+        @. res -= tmp
         # Simple version:
         # res .= B*x - C*(E\(D*x))
         if α != one(T)
