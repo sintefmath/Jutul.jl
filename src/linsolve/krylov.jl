@@ -59,7 +59,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov)
     end
     if v > 0
         r = stats.residuals
-        @debug "Final residual $(r[end]), rel. value $(r[end]/r[1]) after $(length(r)) iterations."
+        @debug "Final residual $(r[end]), rel. value $(r[end]/r[1]) after $(length(r)-1) iterations."
     end
     update_dx_from_vector!(sys, x)
 end
