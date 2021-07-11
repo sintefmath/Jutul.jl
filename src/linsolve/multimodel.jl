@@ -117,8 +117,12 @@ function schur_mul!(res, r_type, B, C, D, E, x, α, β::T) where T
         # compute B*x
         mul!(res_v, B, x_v)
         tmp = C*(E\(D*x))
-        block_size = length(r_type)
-        drs = equation_major_to_block_major_view(tmp, block_size)
+        if r_type == Float64
+            drs = tmp
+        else
+            block_size = length(r_type)
+            drs = equation_major_to_block_major_view(tmp, block_size)
+        end
         @. res -= drs
         # Simple version:
         # res .= B*x - C*(E\(D*x))
