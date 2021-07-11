@@ -87,7 +87,14 @@ end
 function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
     if do_schur(sys)
         B, C, D, E, a, b = get_schur_blocks!(sys)
-        dy = E\(b - D*dx)
+        bz = block_size(sys[1, 1])
+        if bz == 1
+            Δx = dx
+        else
+            Δx = block_major_to_equation_major_view(dx, bz)
+        end
+        dy = E\(b - D*Δx)
+
         n = length(dx)
         m = length(sys.dx)
         sys.dx[1:n] = -dx
