@@ -258,9 +258,7 @@ function convergence_criterion(model::SimulationModel{D, S}, storage, eq::Conser
     pv = get_pore_volume(model)
     e = zeros(n)
     rhos = get_reference_densities(model, storage)
-    for i = 1:n
-        e[i] = mapreduce((pv, e) -> abs((dt/rhos[i]) * e / pv), max, pv, view(r, i, :))
-    end
+    @tullio max e[j] := abs(r[j, i]) * dt / (rhos[j]*pv[i])
     return (e, tolerance_scale(eq))
 end
 
