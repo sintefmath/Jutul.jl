@@ -51,12 +51,12 @@ include("applications/reservoir_simulator/reservoir_simulator.jl")
 include("applications/test_systems/test_systems.jl")
 
 include("battery/battery_types.jl")
+include("battery/elchem_component.jl")
 include("battery/physics.jl")
 include("battery/battery.jl")
 include("battery/test_setup.jl")
 include("battery/elyte.jl")
 include("battery/current_collector.jl")
-include("battery/elchem_component.jl")
 
 include("plot_graph.jl")
 

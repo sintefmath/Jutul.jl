@@ -31,13 +31,12 @@ function plot_graph(model)
     # nodes = [:a, :b, :c, :d]
     # edges = [[], [:a], [:a], [:a, :c]]
 
-
     nodes, edges = get_graph(model)
     nodes_name = [String(node) for node in nodes]
     edges_ind = get_index_graph(nodes, edges)
 
-    graphplot(edges_ind, names=nodes_name, nodeshape=:rect, curvature_scalar=0.001)
+    p = graphplot(edges_ind, names=nodes_name, nodeshape=:rect, curvature_scalar=0.001)
     Plots.plot!(size=(1200, 1200))
-    # Plots.plot!(mehtod=:tree)
+    Plots.plot(show=true)
 end
 
