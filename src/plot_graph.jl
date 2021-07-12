@@ -37,6 +37,6 @@ function plot_graph(model)
 
     p = graphplot(edges_ind, names=nodes_name, nodeshape=:rect, curvature_scalar=0.001)
     Plots.plot!(size=(1200, 1200))
-    Plots.plot(show=true)
+    Plots.plot!(show=true)
 end
 

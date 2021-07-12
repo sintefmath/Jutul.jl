@@ -37,7 +37,9 @@ function update_equation!(law::Conservation, storage, model, dt)
 end
 
 # Update of discretization terms
-function update_accumulation!(law::Conservation{ChargeAcc}, storage, model, dt)
+function update_accumulation!(
+    law::Conservation{ChargeAcc}, storage, model, dt
+    )
     acc = get_entries(law.accumulation)
     acc .= 0  # Assume no accumulation
     return acc

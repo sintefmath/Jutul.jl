@@ -32,12 +32,8 @@ function select_equations_system!(
     mass_cons = (arg...; kwarg...) -> Conservation(
         MassAcc(), arg...; kwarg...
         )
-    energy_cons = (arg...; kwarg...) -> Conservation(
-        EnergyAcc(), arg...; kwarg...
-        )
     eqs[:charge_conservation] = (charge_cons, 1)
     eqs[:mass_conservation] = (mass_cons, 1)
-    eqs[:energy_conservation] = (energy_cons, 1)
 
 end
 
@@ -46,7 +42,6 @@ function select_primary_variables_system!(
     )
     S[:Phi] = Phi()
     S[:C] = C()
-    S[:T] = T()
 end
 
 
@@ -58,6 +53,7 @@ function select_secondary_variables_system!(
     S[:TPDGrad_C] = TPDGrad{C}()
     S[:TPkGrad_T] = TPkGrad{T}()
     
+    S[:T] = T()
     S[:Conductivity] = Conductivity()
     S[:DmuDc] = DmuDc()
     S[:Diffusivity] = Diffusivity()
@@ -67,7 +63,6 @@ function select_secondary_variables_system!(
     
     S[:ChargeAcc] = ChargeAcc()
     S[:MassAcc] = MassAcc()
-    S[:EnergyAcc] = EnergyAcc()
 
     # Should find a way to avoid having 1 per cell
     t = 1; z = 1
@@ -79,7 +74,7 @@ end
 function minimum_output_variables(
     system::Electrolyte, primary_variables
     )
-    [:ChargeAcc, :MassAcc, :EnergyAcc]
+    [:ChargeAcc, :MassAcc, :Conductivity, :Diffusivity] # :EnergyAcc
 end
 
 @terv_secondary function update_as_secondary!(
@@ -90,24 +85,18 @@ end
     @tullio dmudc[i] = R * (T[i] / C[i])
 end
 
-function cond(
-    T, C, model::SimulationModel{D, S, F, Con},
-    ) where {D, S <: Electrolyte, F, Con}
-    return 4. + 3.5*C + (2.)*T + 0.1 * C * T # Arbitrary for now
+
+@inline function cond(
+    T::Real, C::Real, ::Electrolyte
+    )
+    return 4. + 3.5 * C + (2.)*T + 0.1 * C * T # Arbitrary for now
 end
 
 @terv_secondary function update_as_secondary!(
-    con, sv::Conductivity, model, param, T, C
+    con, tv::Conductivity, model, param, T, C
     )
-    @tullio con[i] = 1# cond(T[i], C[i], model)
-end
-
-function diffusivity(
-    c, T, model::SimulationModel{D, S, F, Con},
-    ) where {D, S <: ElectroChemicalComponent, F, Con}
-
-    # Diffusion coefficient, [m^2 s^-1]
-    return 
+    s = model.system
+    @tullio con[i] = cond(T[i], C[i], s)
 end
 
 @terv_secondary function update_as_secondary!(
@@ -124,8 +113,6 @@ end
             )
         )
 end
-
-
     
 @terv_secondary function update_as_secondary!(
     kgrad_phi, tv::TPkGrad{Phi}, model::SimulationModel{D, S, F, C}, param, 
@@ -136,12 +123,6 @@ end
     @tullio kgrad_phi[i] = half_face_two_point_kgrad(conn_data[i], Phi, Conductivity)
 end
 
-
-function get_alpha(
-    model::SimulationModel{D, S, F, Con}
-    ) where {D, S <: Electrolyte, F, Con}
-    return ones(number_of_units(model, C()))
-end
 
 @terv_secondary function update_as_secondary!(
     pot, tv::TPkGrad{C}, model::SimulationModel{D, S, F, Con}, param, C,
@@ -183,6 +164,11 @@ end
 
 
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
-    law::Conservation{MassAcc}) where {D, S <: Electrolyte, F, Con}
+    law::Conservation{ChargeAcc}) where {D, S <: Electrolyte, F, Con}
     return storage.state.TotalCurrent
+end
+
+function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
+    law::Conservation{MassAcc}) where {D, S <: Electrolyte, F, Con}
+    return storage.state.ChargeCarrierFlux
 end
