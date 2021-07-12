@@ -145,8 +145,8 @@ end
 function get_alpha(
     model::SimulationModel{D, S, F, Con}
     ) where {D, S <: ElectroChemicalComponent, F, Con}
-    return ones(number_of_units(model, C()))  * 100
-    return repeat((10 .^ LinRange(3, -3, 10))', 10)'
+    return ones(number_of_units(model, C()))
+    # return repeat((10 .^ LinRange(3, -3, 10))', 10)'
 end
 
 function get_heat_cond(
@@ -157,7 +157,7 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPkGrad{Phi}, model::SimulationModel{D, S, F, C}, param, Phi
+    pot, tv::TPkGrad{Phi}, model::SimulationModel{D, S, F, C}, param, Phi, Conductivity
     ) where {D, S <: ElectroChemicalComponent, F, C}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
@@ -179,30 +179,27 @@ end
     ) where {D, S <: ElectroChemicalComponent, F, Con}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    # ? Sette til konstant??
     k = get_heat_cond(model)
     @tullio pot[i] = half_face_two_point_kgrad(conn_data[i], T, k)
 end
 
 
-# ? Hva sker når man ganger med volume?
 @terv_secondary function update_as_secondary!(
     acc, tv::MassAcc, model, param, C
     )
     V = get_flow_volume(model.domain.grid)
-    @tullio acc[i] = C[i]
+    @tullio acc[i] = C[i] * V[i]
 end
 
 @terv_secondary function update_as_secondary!(
     acc, tv::EnergyAcc, model, param, T
     )
     V = get_flow_volume(model.domain.grid)
-    @tullio acc[i] = T[i]
+    @tullio acc[i] = T[i] * V[i]
 end
 
 @terv_secondary function update_as_secondary!(
-    acc, tv::ChargeAcc, model, param, Phi
+    acc, tv::ChargeAcc, model, param, Phi # only for the graph
     )
-    V = get_flow_volume(model.domain.grid)
     @tullio acc[i] = 0
 end

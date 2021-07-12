@@ -22,13 +22,13 @@ end
 end
 
 @inline function grad(c_self, c_other, p::AbstractArray)
-    return value(p[c_other]) - p[c_self]
+    return p[c_self] - value(p[c_other])
 end
 
 @inline function half_face_two_point_kgrad(
     c_self::I, c_other::I, T::R, phi::AbstractArray, k::AbstractArray
     ) where {R<:Real, I<:Integer}
-    return - harm_av(c_self, c_other, T, k) * grad(c_self, c_other, phi)
+    return  harm_av(c_self, c_other, T, k) * grad(c_self, c_other, phi)
 end
 
 function update_equation!(law::Conservation, storage, model, dt)
@@ -36,14 +36,6 @@ function update_equation!(law::Conservation, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt)
 end
 
-# Update of discretization terms
-function update_accumulation!(
-    law::Conservation{ChargeAcc}, storage, model, dt
-    )
-    acc = get_entries(law.accumulation)
-    acc .= 0  # Assume no accumulation
-    return acc
-end
 
 function update_accumulation!(law::Conservation, storage, model, dt)
     conserved = law.accumulation_symbol
@@ -64,17 +56,17 @@ end
 
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
     law::Conservation{ChargeAcc}) where {D, S <: ElectroChemicalComponent, F, Con}
-    return storage.state.TPkGrad_Phi
+    return - storage.state.TPkGrad_Phi
 end
 
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
     law::Conservation{MassAcc}) where {D, S <: ElectroChemicalComponent, F, Con}
-    return storage.state.TPkGrad_C
+    return - storage.state.TPkGrad_C
 end
 
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
     law::Conservation{EnergyAcc}) where {D, S <: ElectroChemicalComponent, F, Con}
-    return storage.state.TPkGrad_T
+    return - storage.state.TPkGrad_T
 end
 
 function update_half_face_flux!(
@@ -105,7 +97,7 @@ function corr_type(::Conservation{EnergyAcc}) return EnergyAcc() end
 
 # !Temporary hack, a potential does not necesessary corr to 
 # !a single potential. Should be done in update_as_secondary
-# TODO: mak boundary condition to play nice with non-diag Onsager matrix
+# TODO: make boundary condition to play nice with non-diag Onsager matrix
 function corr_type(::DirichletBC{Phi}) return ChargeAcc() end
 function corr_type(::DirichletBC{C}) return MassAcc() end
 function corr_type(::DirichletBC{T}) return EnergyAcc() end
@@ -147,7 +139,7 @@ function insert_sources(acc, source::DirichletBC, storage)
     for (i, c) in enumerate(source.cells)
         # This loop is used insted of @tullio due to possibility of 
         # two sources at the different faces, but the same cell
-        @inbounds acc[c] += - T[i]*(pot_ext[i] - pot[c])
+        @inbounds acc[c] -= - T[i]*(pot[c] - pot_ext[i])
     end
 end
 

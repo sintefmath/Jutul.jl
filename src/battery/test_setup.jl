@@ -1,118 +1,6 @@
 using Terv
 
-export get_test_setup_cc, get_cc_grid, get_bc, test_mixed_boundary_conditions
-export get_test_setup_ec_component
-
-function get_test_setup_cc(name="square_current_collector")
-    domain, exported = get_cc_grid(name=name, extraout=true)
-    timesteps = [1., 2, 3, 4]
-    G = exported["G"]
-
-    sys = CurrentCollector()
-    model = SimulationModel(domain, sys, context = DefaultContext())
-
-    # State is dict with pressure in each cell
-    phi = 1.
-    init = Dict(:Phi => phi)
-    state0 = setup_state(model, init)
-    state0[:Phi][1] = 2  # Endrer startverdien, skal ikke endre svaret
-
-    S = model.secondary_variables
-
-    # set up boundary conditions
-    nc = length(domain.grid.volumes)
-    
-    dirichlet = DirichletBC{Phi}([1], [0], [2])
-    neumann = vonNeumannBC{ChargeAcc}([1, nc], [-1, 1])
-    forces = (neumann=neumann, dirichlet= dirichlet,)
-    
-    # Model parameters
-    parameters = setup_parameters(model)
-
-    return (state0, model, parameters, forces, timesteps, G)
-end
-
-function test_mixed_boundary_conditions()
-    name="square_current_collector"
-    domain, exported = get_cc_grid(ChargeFlow(), extraout=true, name=name)
-    G = exported["G"]
-    timesteps = 1:5
-
-    sys = CurrentCollector()
-    model = SimulationModel(domain, sys, context = DefaultContext())
-
-    # State is dict with pressure in each cell
-    phi = 1.
-    init = Dict(:Phi => phi)
-    state0 = setup_state(model, init)
-    
-    # set up boundary conditions
-    
-    bcells, T = get_boundary(name)
-    one = ones(size(bcells))
-
-    dirichlet = DirichletBC{Phi}(bcells, one, T)
-    neumann = vonNeumannBC{ChargeAcc}(bcells.+9, one)
-    forces = (neumann=neumann, dirichlet= dirichlet,)
-    
-    # Model parameters
-    parameters = setup_parameters(model)
-
-    sim = Simulator(model, state0=state0, parameters=parameters)
-    cfg = simulator_config(sim)
-    cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, forces = forces, config = cfg)
-
-    # Check if the field value increments by one
-    # @assert sum(isapprox.(diff(states[1].Phi[1:10]), 1)) == 9
-    return states, G
-end
-
-
-function get_test_setup_ec_component()
-    name="square_current_collector"
-    domain, exported = get_cc_grid(MixedFlow(), name=name, extraout=true)
-    timesteps = 1:10
-    G = exported["G"]
-    
-    sys = ECComponent()
-    model = SimulationModel(domain, sys, context = DefaultContext())
-
-    # State is dict with pressure in each cell
-    phi = 0.
-    c = 0.
-    init = Dict(:Phi => phi, :C => c)
-    state0 = setup_state(model, init)
-    
-    parameters = setup_parameters(model)
-
-    # set up boundary conditions
-
-    # Set 1 of boudary conditions
-    bc_phi = DirichletBC{Phi}([1], [1], [2])
-    bc_c = DirichletBC{C}([1], [1], [2])
-    forces = (bc_phi=bc_phi, bc_c=bc_c )
-
-    # # Set 2 of boudary conditions
-
-    # bcells, T = get_boundary(name)
-    # one = ones(size(bcells))
-
-    # dirichlet_phi = DirichletBC{Phi}(bcells, one, T)
-    # neumann_phi = vonNeumannBC{ChargeAcc}(bcells.+9, one)
-    # dirichlet_c = DirichletBC{C}(bcells, one, T)
-    # neumann_c = vonNeumannBC{MassAcc}(bcells.+9, one)
-
-    # forces = (
-    #     neumann_phi     = neumann_phi, 
-    #     dirichlet_phi   = dirichlet_phi, 
-    #     neumann_c       = neumann_c,
-    #     dirichlet_c     = dirichlet_c
-    #     )
-
-    return (state0, model, parameters, forces, timesteps, G)
-end
-
+export get_cc_grid, get_boundary
 
 function get_boundary(name)
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, "_T.mat")
@@ -126,8 +14,6 @@ function get_boundary(name)
 
     return (bccells, T)
 end
-
-
 
 function get_cc_grid(
     flow_type=ChargeFlow(); name="square_current_collector", extraout = false
