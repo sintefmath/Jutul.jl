@@ -4,7 +4,7 @@ mutable struct GenericKrylov
     solver
     preconditioner
     config::IterativeSolverConfig
-    function GenericKrylov(solver = bicgstab; preconditioner = nothing, kwarg...)
+    function GenericKrylov(solver = dqgmres; preconditioner = nothing, kwarg...)
         new(solver, preconditioner, IterativeSolverConfig(;kwarg...))
     end
 end
