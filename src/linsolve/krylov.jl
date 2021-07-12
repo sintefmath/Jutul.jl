@@ -4,7 +4,7 @@ mutable struct GenericKrylov
     solver
     preconditioner
     config::IterativeSolverConfig
-    function GenericKrylov(solver = dqgmres; preconditioner = nothing, kwarg...)
+    function GenericKrylov(solver = bicgstab; preconditioner = nothing, kwarg...)
         new(solver, preconditioner, IterativeSolverConfig(;kwarg...))
     end
 end
@@ -51,15 +51,16 @@ function solve!(sys::LSystem, krylov::GenericKrylov)
                             itmax = max_it,
                             verbose = v,
                             rtol = rt,
-                            history = v > 0,
+                            history = true,
                             atol = at,
                             M = L, N = R)
+    res = stats.residuals
+    n = length(res) - 1
     if !stats.solved
-        @warn "Linear solve did not converge: $(stats.status). rtol = $rt, atol = $at, max_it = $max_it"
+        @warn "Linear solver: $(stats.status), final residual: $(res[end]). rtol = $rt, atol = $at, max_it = $max_it"
     end
     if v > 0
-        r = stats.residuals
-        @debug "Final residual $(r[end]), rel. value $(r[end]/r[1]) after $(length(r)-1) iterations."
+        @debug "Final residual $(res[end]), rel. value $(res[end]/res[1]) after $n iterations."
     end
     update_dx_from_vector!(sys, x)
 end
