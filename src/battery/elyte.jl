@@ -51,7 +51,6 @@ function select_secondary_variables_system!(
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:TPkGrad_C] = TPkGrad{C}()
     S[:TPDGrad_C] = TPDGrad{C}()
-    S[:TPkGrad_T] = TPkGrad{T}()
     
     S[:T] = T()
     S[:Conductivity] = Conductivity()
@@ -63,25 +62,29 @@ function select_secondary_variables_system!(
     
     S[:ChargeAcc] = ChargeAcc()
     S[:MassAcc] = MassAcc()
-
-    # Should find a way to avoid having 1 per cell
-    t = 1; z = 1
-    S[:t] = ConstantVariables([t])
-    S[:z] = ConstantVariables([z])
 end
 
 # Must be available to evaluate time derivatives
 function minimum_output_variables(
     system::Electrolyte, primary_variables
     )
-    [:ChargeAcc, :MassAcc, :Conductivity, :Diffusivity] # :EnergyAcc
+    [:ChargeAcc, :MassAcc, :Conductivity, :Diffusivity]
+end
+
+function setup_parameters(
+    ::SimulationModel{<:Any, <:Electrolyte, <:Any, <:Any}
+    )
+    d = Dict{Symbol, Any}()
+    d[:tolerances] = Dict{Symbol, Any}()
+    d[:tolerances][:default] = 1e-3
+    d[:t] = 1
+    d[:z] = 1
+    return d
 end
 
 @terv_secondary function update_as_secondary!(
     dmudc, sv::DmuDc, model, param, T, C
     )
-    # TODO: Find a better way to hadle constants
-    R = 1 # Gas constant in proper units
     @tullio dmudc[i] = R * (T[i] / C[i])
 end
 
@@ -125,14 +128,15 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPkGrad{C}, model::SimulationModel{D, S, F, Con}, param, C,
-    Conductivity, DmuDc, t, z
-    ) where {D, S <: Electrolyte, F, Con}
+    pot, tv::TPkGrad{C}, model::SimulationModel{<:Any, <:Electrolyte, <:Any, <:Any}, param, C,
+    Conductivity, DmuDc
+    )
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    Far = 1 # Faradays constant in proper units
-    # Should this be its own variable
-    @tullio k[i] := Conductivity[i] * DmuDc[i] * t[i] / (Far * z[i])
+    t = param.t
+    z = param.z
+    F = FARADAY_CONST
+    @tullio k[i] := Conductivity[i]*DmuDc[i] * t/(F*z)
     @tullio pot[i] = half_face_two_point_kgrad(conn_data[i], C, k)
 end
 
@@ -155,11 +159,12 @@ end
 
 @terv_secondary function update_as_secondary!(
     N, tv::ChargeCarrierFlux, model, param, 
-    TPDGrad_C, TotalCurrent, t, z
+    TPDGrad_C, TotalCurrent
     )
-    F = 1 # Faraday const in proper units
-    a = t[1] / (F * z[1]) # A hack, for now
-    @tullio N[i] =  -TPDGrad_C[i] + a * TotalCurrent[i]
+    t = param.t
+    z = param.z
+    F = FARADAY_CONST
+    @tullio N[i] =  -TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
 end
 
 

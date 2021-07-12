@@ -51,6 +51,7 @@ include("applications/reservoir_simulator/reservoir_simulator.jl")
 include("applications/test_systems/test_systems.jl")
 
 include("battery/battery_types.jl")
+include("battery/physical_constants.jl")
 include("battery/elchem_component.jl")
 include("battery/physics.jl")
 include("battery/battery.jl")

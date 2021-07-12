@@ -5,7 +5,7 @@ ENV["JULIA_DEBUG"] = Terv;
 
 function plot_elyte()
     name="square_current_collector"
-    domain, exported = get_cc_grid(MixedFlow(), name=name, extraout=true)
+    domain = get_cc_grid(MixedFlow(), name=name)
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
     plot_graph(model)
@@ -43,10 +43,10 @@ function test_elyte()
     cfg[:linear_solver] = nothing
     states = simulate(sim, timesteps, forces=forces, config = cfg)
 
-    return G, states, model
+    return G, states, model, sim
 end
 
-G, states, model = test_elyte();
+G, states, model, sim = test_elyte();
 ##
 
 f = plot_interactive(G, states)
