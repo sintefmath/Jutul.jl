@@ -10,6 +10,7 @@ struct TPDGrad{T} <: KGrad{T} end
 struct Conductivity <: ScalarVariable end
 struct Diffusivity <: ScalarVariable end
 struct DmuDc <: ScalarVariable end
+struct ConsCoeff <: ScalarVariable end
 
 abstract type Current <: ScalarVariable end
 struct TotalCurrent <: Current end
@@ -56,6 +57,7 @@ function select_secondary_variables_system!(
     S[:Conductivity] = Conductivity()
     S[:DmuDc] = DmuDc()
     S[:Diffusivity] = Diffusivity()
+    S[:ConsCoeff] = ConsCoeff()
 
     S[:TotalCurrent] = TotalCurrent()
     S[:ChargeCarrierFlux] = ChargeCarrierFlux()
@@ -82,18 +84,32 @@ function setup_parameters(
     return d
 end
 
+
+@inline function cond(T::Real, C::Real, ::Electrolyte)
+    return 4. + 3.5 * C + (2.)*T + 0.1 * C * T # Arbitrary for now
+end
+
+@inline function diffusivity(T::Real, C::Real, ::Electrolyte)
+    # ?Should these be parameters?
+    cnst = [[-4.43, -54] [-0.22, 0.0 ]]
+    Tgi = [229, 5.0]
+    K = 1e9 # Martins "make it big" constant
+    return K * (
+        1e-4 * 10 ^ ( 
+            cnst[1,1] + 
+            cnst[1,2] / ( T - Tgi[1] - Tgi[2] * C * 1e-3) + 
+            cnst[2,1] * C * 1e-3
+            )
+        )
+end
+
 @terv_secondary function update_as_secondary!(
     dmudc, sv::DmuDc, model, param, T, C
     )
+    R = GAS_CONSTANT
     @tullio dmudc[i] = R * (T[i] / C[i])
 end
 
-
-@inline function cond(
-    T::Real, C::Real, ::Electrolyte
-    )
-    return 4. + 3.5 * C + (2.)*T + 0.1 * C * T # Arbitrary for now
-end
 
 @terv_secondary function update_as_secondary!(
     con, tv::Conductivity, model, param, T, C
@@ -102,19 +118,12 @@ end
     @tullio con[i] = cond(T[i], C[i], s)
 end
 
+
 @terv_secondary function update_as_secondary!(
     D, sv::Diffusivity, model, param, C, T
     )
-    cnst = [[-4.43, -54] [-0.22, 0.0 ]]
-    Tgi = [229, 5.0]
-
-    @tullio D[i] = (
-        1e-4 * 10 ^ ( 
-            cnst[1,1] + 
-            cnst[1,2] / ( T[i] - Tgi[1] - Tgi[2] * C[i] * 1e-3) + 
-            cnst[2,1] * C[i] * 1e-3
-            )
-        )
+    s = model.system
+    @tullio D[i] = diffusivity(T[i], C[i], s)
 end
     
 @terv_secondary function update_as_secondary!(
@@ -128,17 +137,24 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPkGrad{C}, model::SimulationModel{<:Any, <:Electrolyte, <:Any, <:Any}, param, C,
-    Conductivity, DmuDc
+    coeff, tv::ConsCoeff, model::SimulationModel{<:Any, <:Electrolyte, <:Any, <:Any}, 
+    param, Conductivity, DmuDc
     )
-    mf = model.domain.discretizations.charge_flow
-    conn_data = mf.conn_data
     t = param.t
     z = param.z
     F = FARADAY_CONST
-    @tullio k[i] := Conductivity[i]*DmuDc[i] * t/(F*z)
-    @tullio pot[i] = half_face_two_point_kgrad(conn_data[i], C, k)
+    @tullio coeff[i] := Conductivity[i]*DmuDc[i] * t/(F*z)
 end
+
+
+@terv_secondary function update_as_secondary!(
+    kGrad_C, tv::TPkGrad{C}, model::SimulationModel{<:Any, <:Electrolyte, <:Any, <:Any}, param, C, ConsCoeff
+    )
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
+    @tullio kGrad_C[i] = half_face_two_point_kgrad(conn_data[i], C, ConsCoeff)
+end
+
 
 @terv_secondary function update_as_secondary!(
     DGrad_C, tv::TPDGrad{C}, model::SimulationModel{Dom, S, F, Con}, 
@@ -154,7 +170,7 @@ end
     j, tv::TotalCurrent, model, param, 
     TPkGrad_C, TPkGrad_Phi
     )
-    @tullio j[i] =  -TPkGrad_C[i] + TPkGrad_Phi[i]
+    @tullio j[i] =  - TPkGrad_C[i] - TPkGrad_Phi[i]
 end
 
 @terv_secondary function update_as_secondary!(
@@ -164,7 +180,7 @@ end
     t = param.t
     z = param.z
     F = FARADAY_CONST
-    @tullio N[i] =  -TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
+    @tullio N[i] =  - TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
 end
 
 

@@ -22,7 +22,7 @@ end
 end
 
 @inline function grad(c_self, c_other, p::AbstractArray)
-    return   p[c_self] - value(p[c_other])
+    return value(p[c_other]) - p[c_self]
 end
 
 @inline function half_face_two_point_kgrad(
