@@ -12,22 +12,22 @@ function equation_major_to_block_major_view(a, block_size)
 end
 
 function block_major_to_equation_major_view(a, block_size)
-    @views x = reshape(reshape(vec(a), block_size,:)', :)
+    @views x = reshape(reshape(vec(a), block_size, :)', :)
     return x
 end
 
 function prepare_solve!(sys::MultiLinearizedSystem)
     if do_schur(sys)
         B, C, D, E, a, b = get_schur_blocks!(sys, true, update = true)
-        tmp = C*(E\b)
         e = eltype(B)
-        if e == Float64
-            da = tmp
-        else
+        is_float = e == Float64
+        Δa = C*(E\b)
+        
+        if !is_float
             bz = size(e, 1)
-            da = equation_major_to_block_major_view(tmp, bz)
+            Δa = equation_major_to_block_major_view(Δa, bz)
         end
-        @. a -= da
+        @. a -= Δa
     end
 end
 
@@ -104,7 +104,7 @@ function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
     end
 end
 
-function schur_mul!(res, r_type::Float64, B, C, D, E, x, α, β::T) where T
+function schur_mul3!(res, r_type::Float64, B, C, D, E, x, α, β::T) where T
     if β == zero(T)
         tmp = B*x - C*(E\(D*x))
         res .= tmp
@@ -129,13 +129,15 @@ function schur_mul!(res, r_type, B, C, D, E, x, α, β::T) where T
     if β == zero(T)
         # compute B*x
         mul!(res_v, B, x_v)
-        tmp = C*(E\(D*x))
         if is_float
-            drs = tmp
+            drs = C*(E\(D*x))
         else
             block_size = length(r_type)
-            drs = equation_major_to_block_major_view(tmp, block_size)
+            M = (x) -> block_major_to_equation_major_view(x, block_size)
+            M⁻¹ = (x) -> equation_major_to_block_major_view(x, block_size)
+            drs = M⁻¹(C*(E\(D*M(x))))
         end
+
         @. res -= drs
         # Simple version:
         # res .= B*x - C*(E\(D*x))
