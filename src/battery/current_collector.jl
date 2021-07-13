@@ -32,13 +32,3 @@ function select_equations_system!(
     charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
     eqs[:charge_conservation] = (charge_cons, 1)
 end
-
-
-@terv_secondary function update_as_secondary!(
-    kGrad, sv::TPkGrad{Phi}, model::SimulationModel{D, S, F, C}, param, 
-    Phi, Conductivity ) where {D, S <: CurrentCollector, F, C}
-    mf = model.domain.discretizations.charge_flow
-    conn_data = mf.conn_data
-    σ = Conductivity
-    @tullio kGrad[i] = half_face_two_point_kgrad(conn_data[i], Phi, σ)
-end

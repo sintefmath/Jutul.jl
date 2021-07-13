@@ -12,50 +12,46 @@ function test_ec()
     
     sys = ECComponent()
     model = SimulationModel(domain, sys, context = DefaultContext())
+    parameters = setup_parameters(model)
+    parameters[:boundary_currents] = (:BCCharge, :BCMass)
 
     # State is dict with pressure in each cell
-    phi = 0.
-    c = 0.
-    init = Dict(:Phi => phi, :C => c)
-    state0 = setup_state(model, init)
-    
-    # parameters = setup_parameters(model)
-
-    # # set up boundary conditions
-
-    # # Set 1 of boudary conditions
-    # bc_phi = DirichletBC{Phi}([1], [1], [2])
-    # bc_c = DirichletBC{C}([1], [1], [2])
-    # forces = (bc_phi=bc_phi, bc_c=bc_c )
-
-    # # Set 2 of boudary conditions
+    phi0 = 1.
+    C0 = 1.
+    D = 1.
+    σ = 1
 
     bcells, T = get_boundary(name)
     one = ones(size(bcells))
 
-    dirichlet_phi = DirichletBC{Phi}(bcells, 0*one, T)
-    neumann_phi = vonNeumannBC{ChargeAcc}(bcells.+9, one)
-    dirichlet_c = DirichletBC{C}(bcells, one, T)
-    neumann_c = vonNeumannBC{MassAcc}(bcells.+9, one)
+    S = model.secondary_variables
+    S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, T)
+    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+9)
+    S[:BoundaryC] = BoundaryPotential{Phi}(bcells, T)
+    S[:BCMass] = BoundaryCurrent{ChargeAcc}(bcells.+9)
 
-    forces = (
-        neumann_phi     = neumann_phi, 
-        dirichlet_phi   = dirichlet_phi, 
-        neumann_c       = neumann_c,
-        dirichlet_c     = dirichlet_c
+    phi0 = 1.
+    init = Dict(
+        :Phi            => phi0,
+        :C              => C0,
+        :Conductivity   => σ,
+        :Diffusivity    => D,
+        :BoundaryPhi    => one, 
+        :BCCharge       => one,
+        :BoundaryC      => one, 
+        :BCMass         => one,
         )
 
-    parameters = setup_parameters(model)
+    state0 = setup_state(model, init)
+
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, forces = forces, config = cfg)
+    states = simulate(sim, timesteps, config = cfg)
     return states, G
 end
 
 states, G = test_ec();
 ##
-f = plot_interactive(G, states)
-
+f = plot_interactive(G, states);
 display(f)
-print(states[1][:MassAcc])

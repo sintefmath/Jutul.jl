@@ -143,51 +143,29 @@ end
 # Standard implementations #
 ############################
 
-function get_conductivity(
-    model::SimulationModel{D, S, F, C}
-    ) where {D, S <: ElectroChemicalComponent, F, C}    
-    return ones(number_of_units(model, Phi()))
-end
-
-function get_alpha(
-    model::SimulationModel{D, S, F, Con}
-    ) where {D, S <: ElectroChemicalComponent, F, Con}
-    return ones(number_of_units(model, C()))
-    # return repeat((10 .^ LinRange(3, -3, 10))', 10)'
-end
-
-function get_heat_cond(
-    model::SimulationModel{D, S, F, Con}
-    ) where {D, S <: ElectroChemicalComponent, F, Con}    
-    return ones(number_of_units(model, T()))
-end
-
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPkGrad{Phi}, model::SimulationModel{D, S, F, C}, param, Phi, Conductivity
-    ) where {D, S <: ElectroChemicalComponent, F, C}
+    kGrad, sv::TPkGrad{Phi}, model::SimulationModel{D, S, F, C}, param, 
+    Phi, Conductivity ) where {D, S <: ElectroChemicalComponent, F, C}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    σ = get_conductivity(model)
-    @tullio pot[i] = half_face_two_point_kgrad(conn_data[i], Phi, σ)
+    @tullio kGrad[i] = half_face_two_point_kgrad(conn_data[i], Phi, Conductivity)
 end
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPkGrad{C}, model::SimulationModel{D, S, F, Con}, param, C
-    ) where {D, S <: ElectroChemicalComponent, F, Con}
+    kGrad, sv::TPkGrad{C}, model::SimulationModel{D, S, F, Con}, param, 
+    C, Diffusivity) where {D, S <: ElectroChemicalComponent, F, Con}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    α = get_alpha(model)
-    @tullio pot[i] = half_face_two_point_kgrad(conn_data[i], C, α)
+    @tullio kGrad[i] = half_face_two_point_kgrad(conn_data[i], C, Diffusivity)
 end
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPkGrad{T}, model::SimulationModel{D, S, F, Con}, param, T
-    ) where {D, S <: ElectroChemicalComponent, F, Con}
+    kGrad, sv::TPkGrad{T}, model::SimulationModel{D, S, F, C}, param, 
+    T, ThermalConductivity) where {D, S <: ElectroChemicalComponent, F, C}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    k = get_heat_cond(model)
-    @tullio pot[i] = half_face_two_point_kgrad(conn_data[i], T, k)
+    @tullio kGrad[i] = half_face_two_point_kgrad(conn_data[i], T, ThermalConductivity)
 end
 
 

@@ -7,8 +7,6 @@ struct TestElyte <: Electrolyte end
 
 struct TPDGrad{T} <: KGrad{T} end
 # Is it necesessary with a new struxt for all these?
-struct Conductivity <: ScalarVariable end
-struct Diffusivity <: ScalarVariable end
 struct DmuDc <: ScalarVariable end
 struct ConsCoeff <: ScalarVariable end
 
@@ -112,7 +110,7 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    con, tv::Conductivity, model, param, T, C
+    con, tv::Conductivity, model::SimulationModel{<:Any, <:Electrolyte, <:Any,<:Any}, param, T, C
     )
     s = model.system
     @tullio con[i] = cond(T[i], C[i], s)
@@ -120,7 +118,7 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    D, sv::Diffusivity, model, param, C, T
+    D, sv::Diffusivity, model::SimulationModel{<:Any, <:Electrolyte, <:Any,<:Any}, param, C, T
     )
     s = model.system
     @tullio D[i] = diffusivity(T[i], C[i], s)

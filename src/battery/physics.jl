@@ -84,6 +84,8 @@ end
 # Boundary conditions #
 #######################
 
+function corr_type(::Conservation{T}) return T() end
+
 
 # Called from uppdate_state_dependents
 function apply_boundary_conditions!(
@@ -97,14 +99,16 @@ function apply_boundary_conditions!(
 end
 
 
-function apply_boundary_potential!(acc, state, pkey, model)
+function apply_boundary_potential!(
+    acc, state, model, eq::Conservation{ChargeAcc}
+    )
     # values
     Phi = state[:Phi]
-    BoundaryPhi = state[pkey]
+    BoundaryPhi = state[:BoundaryPhi]
     σ = state[:Conductivity]
 
     # Type
-    bp = model.secondary_variables[pkey]
+    bp = model.secondary_variables[:BoundaryPhi]
     T = bp.T_half_face
 
     for (i, c) in enumerate(bp.cells)
@@ -112,7 +116,41 @@ function apply_boundary_potential!(acc, state, pkey, model)
     end
 end
 
-function apply_boundary_current!(acc, state, jkey, model)
+function apply_boundary_potential!(
+    acc, state, model, eq::Conservation{MassAcc}
+    )
+    # values
+    C = state[:C]
+    BoundaryC = state[:BoundaryC]
+    D = state[:Diffusivity]
+
+    # Type
+    bp = model.secondary_variables[:BoundaryC]
+    T = bp.T_half_face
+
+    for (i, c) in enumerate(bp.cells)
+        @inbounds acc[c] -= - D[c]*T[i]*(C[c] - BoundaryC[i])
+    end
+end
+
+
+function apply_bc_to_equation!(
+    storage, parameters, model, eq::Conservation
+    )
+    acc = get_entries(eq.accumulation)
+    state = storage.state
+
+    apply_boundary_potential!(acc, state, model, eq)
+
+    jkey = BOUNDARY_CURRENT[corr_type(eq)]
+    if haskey(state, jkey)
+        apply_boundary_current!(acc, state, jkey, model, eq)
+    end
+end
+
+function apply_boundary_current!(
+    acc, state, jkey, model, eq::Conservation
+    )
     J = state[jkey]
 
     jb = model.secondary_variables[jkey]
@@ -120,21 +158,3 @@ function apply_boundary_current!(acc, state, jkey, model)
         @inbounds acc[c] -= J[i]
     end
 end
-
-function apply_bc_to_equation!(
-    storage, parameters, model, eq::Conservation{ChargeAcc}
-    )
-    acc = get_entries(eq.accumulation)
-    state = storage.state
-
-    pkey = :BoundaryPhi
-    if haskey(state, pkey)
-        apply_boundary_potential!(acc, state, pkey, model)
-    end
-
-    jkey = :BCCharge
-    if haskey(state, jkey)
-        apply_boundary_current!(acc, state, jkey, model)
-    end
-end
-

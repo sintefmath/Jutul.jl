@@ -1,9 +1,10 @@
 using Terv
+
 export ElectroChemicalComponent, CurrentCollector, Electectrolyte, TestElyte
 export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
 export ChargeFlow, MixedFlow, Conservation, BoundaryPotential, BoundaryCurrent
 export Phi, C, T, ChargeAcc, MassAcc, EnergyAcc, KGrad
-
+export BOUNDARY_CURRENT, corr_type
 ###########
 # Classes #
 ###########
@@ -18,11 +19,34 @@ struct Phi <: ScalarVariable end
 struct C <: ScalarVariable end
 struct T <: ScalarVariable end
 
+struct Conductivity <: ScalarVariable end
+struct Diffusivity <: ScalarVariable end
+struct ThermalConductivity <: ScalarVariable end
+
+struct Conservation{T} <: TervEquation 
+    accumulation::TervAutoDiffCache
+    accumulation_symbol::Symbol
+    half_face_flux_cells::TervAutoDiffCache
+    half_face_flux_faces::Union{TervAutoDiffCache,Nothing}
+    flow_discretization::FlowDiscretization
+end
+
 # Accumulation variables
 abstract type AccumulationVariable <: ScalarVariable end
 struct ChargeAcc <: AccumulationVariable end
 struct MassAcc <: AccumulationVariable end
 struct EnergyAcc <: AccumulationVariable end
+
+# Currents corresponding to a accumulation type
+const BOUNDARY_CURRENT = Dict(
+    ChargeAcc() => :BCCharge,
+    MassAcc()   => :BCMass,
+    EnergyAcc() => :BCEnergy,
+)
+# TODO: Can this not be automated????
+function corr_type(::Conservation{ChargeAcc}) ChargeAcc() end
+function corr_type(::Conservation{MassAcc}) MassAcc() end
+function corr_type(::Conservation{EnergyAcc}) EnergyAcc() end
 
 # Represents k∇T, where k is a tensor, T a potential
 abstract type KGrad{T} <: ScalarVariable end
@@ -39,15 +63,6 @@ end
 
 struct BoundaryCurrent{T} <: ScalarVariable 
     cells
-end
-
-
-struct Conservation{T} <: TervEquation 
-    accumulation::TervAutoDiffCache
-    accumulation_symbol::Symbol
-    half_face_flux_cells::TervAutoDiffCache
-    half_face_flux_faces::Union{TervAutoDiffCache,Nothing}
-    flow_discretization::FlowDiscretization
 end
 
 
