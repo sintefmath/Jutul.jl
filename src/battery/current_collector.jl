@@ -1,8 +1,11 @@
 using Terv
-
 export CurrentCollector
 
 struct CurrentCollector <: ElectroChemicalComponent end
+
+function number_of_units(model, BP::BoundaryPotential)
+    return size(BP.cells)[1]
+end
 
 function minimum_output_variables(
     system::CurrentCollector, primary_variables
@@ -22,6 +25,7 @@ function select_secondary_variables_system!(
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:ChargeAcc] = ChargeAcc()
 
+
     μ = 2.1 # Why not?
     S[:Conductivity] = ConstantVariables([μ,])
 end
@@ -36,10 +40,10 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    pot, tv::TPkGrad{Phi}, model::SimulationModel{D, S, F, C}, param, 
+    kGrad, sv::TPkGrad{Phi}, model::SimulationModel{D, S, F, C}, param, 
     Phi, Conductivity ) where {D, S <: CurrentCollector, F, C}
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     σ = Conductivity
-    @tullio pot[i] = half_face_two_point_kgrad(conn_data[i], Phi, σ)
+    @tullio kGrad[i] = half_face_two_point_kgrad(conn_data[i], Phi, σ)
 end

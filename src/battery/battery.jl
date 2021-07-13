@@ -201,5 +201,5 @@ end
 @terv_secondary function update_as_secondary!(
     acc, tv::ChargeAcc, model, param, Phi # only for the graph
     )
-    @tullio acc[i] = 0
+    @tullio acc[i] = 0 # Charge neutrality
 end

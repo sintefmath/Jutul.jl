@@ -85,63 +85,31 @@ end
 #######################
 
 
-# Helper functio to find 
-# TODO: There has to be a readymade implementation for this
-
-function corr_type(::vonNeumannBC{ChargeAcc}) return ChargeAcc() end
-function corr_type(::vonNeumannBC{MassAcc}) return MassAcc() end
-function corr_type(::vonNeumannBC{EnergyAcc}) return EnergyAcc() end
-function corr_type(::Conservation{ChargeAcc}) return ChargeAcc() end
-function corr_type(::Conservation{MassAcc}) return MassAcc() end
-function corr_type(::Conservation{EnergyAcc}) return EnergyAcc() end
-
-# !Temporary hack, a potential does not necesessary corr to 
-# !a single potential. Should be done in update_as_secondary
-# TODO: make boundary condition to play nice with non-diag Onsager matrix
-function corr_type(::DirichletBC{Phi}) return ChargeAcc() end
-function corr_type(::DirichletBC{C}) return MassAcc() end
-function corr_type(::DirichletBC{T}) return EnergyAcc() end
-
-function get_potential_vals(storage, ::MassAcc)
-    return storage.primary_variables.C
-end
-function get_potential_vals(storage, ::ChargeAcc)
-    return storage.primary_variables.Phi
-end
-function get_potential_vals(storage, ::EnergyAcc)
-    return storage.primary_variables.T
-end
-
 # Called from uppdate_state_dependents
-function apply_forces_to_equation!(
-    storage, model::SimulationModel{D, S}, eq::Conservation{T}, force
-    ) where {D<:Any, S<:ElectroChemicalComponent, T}
-    if corr_type(force) == corr_type(eq)
-        acc = get_entries(eq.accumulation)
-        insert_sources(acc, force, storage)
-    end
-end
-
-function insert_sources(acc, source::vonNeumannBC, storage)
-    for (i, v) in enumerate(source.values)
-        c = source.cells[i]
-        @inbounds acc[c] -= v
+function apply_boundary_conditions!(
+    storage, model::SimulationModel{A, B, C, D}
+    ) where {A, B<:ElectroChemicalComponent, C, D}
+    equations = storage.equations
+    for key in keys(equations)
+        eq = equations[key]
+        apply_bc_to_equation!(storage, model, eq)
     end
 end
 
 
-# TODO: This shuld be done in update_as_secondary
+function apply_bc_to_equation!(storage, model, eq::Conservation{ChargeAcc})
+    # values
+    Phi = storage.state[:Phi]
+    BoundaryPhi = storage.state[:BoundaryPhi]
+    σ = storage.state[:Conductivity]
 
-function insert_sources(acc, source::DirichletBC, storage)
-    T = source.half_face_Ts
-    pot_ext = source.values
-    pot = get_potential_vals(storage, corr_type(source))
-    for (i, c) in enumerate(source.cells)
-        # This loop is used insted of @tullio due to possibility of 
-        # two sources at the different faces, but the same cell
-        @inbounds acc[c] -= - T[i]*(pot[c] - pot_ext[i])
+    # Type
+    bp = model.secondary_variables[:BoundaryPhi]
+    T = bp.T_half_face
+
+    acc = get_entries(eq.accumulation)
+    for (i, c) in enumerate(bp.cells)
+        @inbounds acc[c] -= - σ[c]*T[i]*(Phi[c] - BoundaryPhi[i])
     end
 end
-
-function insert_sources(acc, source, storage) end
 

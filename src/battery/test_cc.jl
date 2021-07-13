@@ -6,7 +6,7 @@ ENV["JULIA_DEBUG"] = Terv;
 
 function test_cc(name="square_current_collector")
     domain, exported = get_cc_grid(name=name, extraout=true)
-    timesteps = [1., 2, 3, 4]
+    timesteps = [1., ]
     G = exported["G"]
 
     sys = CurrentCollector()
@@ -14,18 +14,20 @@ function test_cc(name="square_current_collector")
 
     # State is dict with pressure in each cell
     phi = 0.
-    init = Dict(:Phi => phi)
-    state0 = setup_state(model, init)
-    state0[:Phi][1] = 2  # Endrer startverdien, skal ikke endre svaret
 
+    boudary_phi = [0., 1]
+    b_cells = [1, 100]
+    T_half_face = [2., 2.]
     S = model.secondary_variables
+    S[:BoundaryPhi] = BoundaryPotential{Phi}(b_cells, T_half_face)
 
-    # set up boundary conditions
-    nc = length(domain.grid.volumes)
+    init = Dict(:Phi => phi, :BoundaryPhi=>boudary_phi)
+    state0 = setup_state(model, init)
     
-    dirichlet = DirichletBC{Phi}([1], [0], [2])
-    neumann = vonNeumannBC{ChargeAcc}([1, nc], [-1, 1])
-    forces = (neumann=neumann, dirichlet= dirichlet,)
+    forces = (sources=nothing,)
+    
+    # neumann = vonNeumannBC{ChargeAcc}([1, 100], [-1, 1])
+    # forces = (neumann=neumann,)
     
     # Model parameters
     parameters = setup_parameters(model)
