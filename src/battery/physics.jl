@@ -87,29 +87,54 @@ end
 
 # Called from uppdate_state_dependents
 function apply_boundary_conditions!(
-    storage, model::SimulationModel{A, B, C, D}
+    storage, parameters, model::SimulationModel{A, B, C, D}
     ) where {A, B<:ElectroChemicalComponent, C, D}
     equations = storage.equations
     for key in keys(equations)
         eq = equations[key]
-        apply_bc_to_equation!(storage, model, eq)
+        apply_bc_to_equation!(storage, parameters, model, eq)
     end
 end
 
 
-function apply_bc_to_equation!(storage, model, eq::Conservation{ChargeAcc})
+function apply_boundary_potential!(acc, state, pkey, model)
     # values
-    Phi = storage.state[:Phi]
-    BoundaryPhi = storage.state[:BoundaryPhi]
-    σ = storage.state[:Conductivity]
+    Phi = state[:Phi]
+    BoundaryPhi = state[pkey]
+    σ = state[:Conductivity]
 
     # Type
-    bp = model.secondary_variables[:BoundaryPhi]
+    bp = model.secondary_variables[pkey]
     T = bp.T_half_face
 
-    acc = get_entries(eq.accumulation)
     for (i, c) in enumerate(bp.cells)
         @inbounds acc[c] -= - σ[c]*T[i]*(Phi[c] - BoundaryPhi[i])
+    end
+end
+
+function apply_boundary_current!(acc, state, jkey, model)
+    J = state[jkey]
+
+    jb = model.secondary_variables[jkey]
+    for (i, c) in enumerate(jb.cells)
+        @inbounds acc[c] -= J[i]
+    end
+end
+
+function apply_bc_to_equation!(
+    storage, parameters, model, eq::Conservation{ChargeAcc}
+    )
+    acc = get_entries(eq.accumulation)
+    state = storage.state
+
+    pkey = :BoundaryPhi
+    if haskey(state, pkey)
+        apply_boundary_potential!(acc, state, pkey, model)
+    end
+
+    jkey = :BCCharge
+    if haskey(state, jkey)
+        apply_boundary_current!(acc, state, jkey, model)
     end
 end
 

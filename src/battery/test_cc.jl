@@ -23,19 +23,14 @@ function test_cc(name="square_current_collector")
 
     init = Dict(:Phi => phi, :BoundaryPhi=>boudary_phi)
     state0 = setup_state(model, init)
-    
-    forces = (sources=nothing,)
-    
-    # neumann = vonNeumannBC{ChargeAcc}([1, 100], [-1, 1])
-    # forces = (neumann=neumann,)
-    
+        
     # Model parameters
     parameters = setup_parameters(model)
 
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, forces = forces, config = cfg)
+    states = simulate(sim, timesteps, config = cfg)
     return state0, states, model, G
 end
 
@@ -55,27 +50,28 @@ function test_mixed_bc()
     sys = CurrentCollector()
     model = SimulationModel(domain, sys, context = DefaultContext())
 
-    # State is dict with pressure in each cell
-    phi = 1.
-    init = Dict(:Phi => phi)
-    state0 = setup_state(model, init)
     
     # set up boundary conditions
-    
     bcells, T = get_boundary(name)
     one = ones(size(bcells))
 
-    dirichlet = DirichletBC{Phi}(bcells, one, T)
-    neumann = vonNeumannBC{ChargeAcc}(bcells.+9, one)
-    forces = (neumann=neumann, dirichlet= dirichlet,)
-    
-    # Model parameters
+    S = model.secondary_variables
+    S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, T)
+    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+9)
+
+    phi0 = 1.
+    init = Dict(
+        :Phi            => phi0, 
+        :BoundaryPhi    => one, 
+        :BCCharge       => one
+        )
+    state0 = setup_state(model, init)
     parameters = setup_parameters(model)
 
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, forces = forces, config = cfg)
+    states = simulate(sim, timesteps, config = cfg)
 
     return states, G
 end

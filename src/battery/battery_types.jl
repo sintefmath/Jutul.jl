@@ -1,7 +1,7 @@
 using Terv
 export ElectroChemicalComponent, CurrentCollector, Electectrolyte, TestElyte
 export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
-export ChargeFlow, MixedFlow, Conservation, BoundaryPotential
+export ChargeFlow, MixedFlow, Conservation, BoundaryPotential, BoundaryCurrent
 export Phi, C, T, ChargeAcc, MassAcc, EnergyAcc, KGrad
 
 ###########
@@ -36,6 +36,11 @@ struct BoundaryPotential{T} <: ScalarVariable
     cells
     T_half_face
 end
+
+struct BoundaryCurrent{T} <: ScalarVariable 
+    cells
+end
+
 
 struct Conservation{T} <: TervEquation 
     accumulation::TervAutoDiffCache

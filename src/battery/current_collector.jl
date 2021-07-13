@@ -3,10 +3,6 @@ export CurrentCollector
 
 struct CurrentCollector <: ElectroChemicalComponent end
 
-function number_of_units(model, BP::BoundaryPotential)
-    return size(BP.cells)[1]
-end
-
 function minimum_output_variables(
     system::CurrentCollector, primary_variables
     )
@@ -24,7 +20,6 @@ function select_secondary_variables_system!(
     )
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:ChargeAcc] = ChargeAcc()
-
 
     μ = 2.1 # Why not?
     S[:Conductivity] = ConstantVariables([μ,])

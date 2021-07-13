@@ -63,6 +63,13 @@ function number_of_units(model, ::T)
     return count_units(model.domain, Cells())
 end
 
+function number_of_units(model, BP::BoundaryPotential)
+    return size(BP.cells)[1]
+end
+function number_of_units(model, BP::BoundaryCurrent)
+    return size(BP.cells)[1]
+end
+
 
 # ?Why not faces?
 function associated_unit(::KGrad)

@@ -7,12 +7,12 @@ function get_boundary(name)
     exported = MAT.matread(fn)
 
     exported
-    bccells = copy((exported["bccells"])')
+    bccells = copy((exported["bccells"]))
     T = copy((exported["T"])')
 
     bccells = Int64.(bccells)
 
-    return (bccells, T)
+    return (bccells[:, 1], T)
 end
 
 function get_cc_grid(

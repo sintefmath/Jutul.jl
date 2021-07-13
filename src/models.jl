@@ -307,8 +307,13 @@ function update_state_dependents!(storage, model::TervModel, dt, forces)
     apply_boundary_conditions!(storage, model)
 end
 
-function apply_boundary_conditions!(storage, model::TervModel) 
-    nothing 
+function apply_boundary_conditions!(storage, model::TervModel)
+    parameters = storage.parameters
+    apply_boundary_conditions!(storage, parameters, model)
+end
+
+function apply_boundary_conditions!(storage, parameters, model)
+    nothing
 end
 
 function update_equations!(storage, model, dt = nothing)
