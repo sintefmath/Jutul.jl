@@ -19,10 +19,6 @@ function number_of_units(model, pv::Current)
     return 2*count_units(model.domain, Faces())
 end
 
-function number_of_units(model, pv::ConductivityFace)
-    return 2*count_units(model.domain, Faces())
-end
-
 function select_equations_system!(
     eqs, domain, system::Electrolyte, formulation
     )
@@ -125,28 +121,12 @@ end
     @tullio con[i] = cond(T[i], C[i], s)
 end
 
-@inline function harm_av(c, κ)
-    i, j = c.self, c.other
-    return (κ[i]^-1 + κ[j]^-1)^-1
-end
-
-
-
 @terv_secondary function update_as_secondary!(
     D, sv::Diffusivity, model::SimulationModel{<:Any, <:Electrolyte, <:Any,<:Any},
      param, C, T
     )
     s = model.system
     @tullio D[i] = diffusivity(T[i], C[i], s)
-end
-    
-@terv_secondary function update_as_secondary!(
-    kgrad_phi, tv::TPkGrad{Phi}, model::SimulationModel{D, S, F, C}, param, 
-    Phi, Conductivity
-    ) where {D, S <: Electrolyte, F, C}
-    mf = model.domain.discretizations.charge_flow
-    conn_data = mf.conn_data
-    @tullio kgrad_phi[i] = half_face_two_point_kgrad(conn_data[i], Phi, Conductivity)
 end
 
 
@@ -198,6 +178,11 @@ end
 end
 
 
+@inline function harm_av(c, κ)
+    i, j = c.self, c.other
+    return (κ[i]^-1 + κ[j]^-1)^-1
+end
+
 @terv_secondary function update_as_secondary!(
     Q, tv::EnergyFlux, model, param, 
     TPkGrad_T, TotalCurrent, TPDGrad_C, Conductivity, Diffusivity, DmuDc
@@ -205,11 +190,10 @@ end
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     D = Diffusivity
-    @tullio Q[i] = ( 
-        0
-        # - TPkGrad_T[i]
-        # - TotalCurrent[i]^2 / harm_av(conn_data[i], Conductivity)
-        # - TPDGrad_C[i]^2 * harm_av(conn_data[i], DmuDc ./ D)
+    @tullio Q[i] = (
+        - TPkGrad_T[i]
+        - TotalCurrent[i]^2 / harm_av(conn_data[i], Conductivity)
+        - TPDGrad_C[i]^2 * harm_av(conn_data[i], DmuDc ./ D)
     )
 end
 
@@ -220,12 +204,12 @@ end
 
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
     law::Conservation{MassAcc}) where {D, S <: Electrolyte, F, Con}
-    return storage.state.EnergyFlux
+    return storage.state.ChargeCarrierFlux
 end
 
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
     law::Conservation{EnergyAcc}) where {D, S <: Electrolyte, F, Con}
-    return storage.state.ChargeCarrierFlux
+    return storage.state.EnergyFlux
 end
 
 
@@ -237,7 +221,7 @@ function apply_boundary_potential!(
     Phi = state[:Phi]
     C = state[:C]
     dmudc = state[:DmuDc]
-    co = state[:Conductivity]
+    κ = state[:Conductivity]
 
     F = FARADAY_CONST
     z = parameters.z
@@ -252,8 +236,8 @@ function apply_boundary_potential!(
     T = bp.T_half_face
     for (i, c) in enumerate(bp.cells)
         @inbounds acc[c] -= (
-            - dmudc[c] * t/(F*z) * co[c] * T[i] * (C[c] - BoundaryC[i])
-            - co[c] * T[i] * (Phi[c] - BoundaryPhi[i])
+            - dmudc[c] * t/(F*z) * κ[c] * T[i] * (C[c] - BoundaryC[i])
+            - κ[c] * T[i] * (Phi[c] - BoundaryPhi[i])
         )
     end
 end

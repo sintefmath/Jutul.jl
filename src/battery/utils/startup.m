@@ -1,1 +1,1 @@
-run('../../../../mrst-2021a-clean/startup.m')
+run('../../../../mrst-2021a/startup.m')

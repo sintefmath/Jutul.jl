@@ -8,6 +8,11 @@ function plot_elyte()
     domain = get_cc_grid(MixedFlow(), name=name)
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
+    S = model.secondary_variables
+    S[:BoundaryPhi] = BoundaryPotential{Phi}([], [])
+    S[:BoundaryC] = BoundaryPotential{Phi}([], [])
+    S[:BoundaryT] = BoundaryPotential{T}([], [])
+
     plot_graph(model)
 end
 
@@ -18,7 +23,7 @@ plot_elyte()
 function test_elyte()
     name="square_current_collector"
     domain, exported = get_cc_grid(MixedFlow(), name=name, extraout=true)
-    timesteps = LinRange(0, 1, 10)[2:end]
+    timesteps = LinRange(0, 1, 100)[2:end]
     G = exported["G"]
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
@@ -28,12 +33,9 @@ function test_elyte()
     bcells = [1, 100]
     Thf = [2, 2]
     S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, Thf)
-    S[:BoundaryC] = BoundaryPotential{Phi}(bcells, Thf)
+    S[:BoundaryC] = BoundaryPotential{C}(bcells, Thf)
     S[:BoundaryT] = BoundaryPotential{T}(bcells, Thf)
 
-    # S[:BCCharge] = BoundaryCurrent{ChargeAcc}([])
-    # S[:BCCMass] = BoundaryCurrent{ChargeAcc}([])
-    # S[:BCCEnergy] = BoundaryCurrent{ChargeAcc}([])
 
     init = Dict(
         :Phi                    => 1.,
@@ -46,11 +48,7 @@ function test_elyte()
         :BoundaryPhi            => [1., 2.],
         :BoundaryC              => [1., 2.],
         :BoundaryT              => [1., 2.], 
-
-        # :BCCharge               => [],
-        # :BCMass                => [],
-        # :BCEnergy               => [],
-        )
+    )
 
     state0 = setup_state(model, init)
 
