@@ -22,7 +22,7 @@ function test_elyte()
     G = exported["G"]
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
-    phi0 = 0.
+    phi0 = 1.
     c0 = 1.
     T0 = 1.
     κ = 1.
@@ -34,9 +34,10 @@ function test_elyte()
     bc_c = DirichletBC{C}([10], [c0], [2])
     forces = (bc_phi=bc_phi, bc_c=bc_c)
 
-    bc_c2 = vonNeumannBC{MassAcc}([1, 100], [1, -1])
+    bc_M = vonNeumannBC{MassAcc}([1], [1])
+    bc_Q = vonNeumannBC{ChargeAcc}([1], [1])
 
-    forces = (forces..., bc_c2=bc_c2)
+    forces = (forces..., bc_M=bc_M, bc_Q=bc_Q)
 
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
