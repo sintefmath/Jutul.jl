@@ -22,27 +22,37 @@ function test_elyte()
     G = exported["G"]
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
-    phi0 = 1.
-    c0 = 1.
-    T0 = 1.
-    κ = 1.
-    init = Dict(:Phi=>phi0, :C=>c0, :T=>T0, :Conductivity=>κ, :ConsCoeff=>1)
-    state0 = setup_state(model, init)
     parameters = setup_parameters(model)
 
-    bc_phi = DirichletBC{Phi}([10], [phi0], [2])
-    bc_c = DirichletBC{C}([10], [c0], [2])
-    forces = (bc_phi=bc_phi, bc_c=bc_c)
+    bcells, T = get_boundary(name)
+    one = ones(size(bcells))
 
-    bc_M = vonNeumannBC{MassAcc}([1], [1])
-    bc_Q = vonNeumannBC{ChargeAcc}([1], [1])
+    S = model.secondary_variables
+    S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, T)
+    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+9)
+    S[:BoundaryC] = BoundaryPotential{Phi}(bcells, T)
+    S[:BCMass] = BoundaryCurrent{ChargeAcc}(bcells.+9)
 
-    forces = (forces..., bc_M=bc_M, bc_Q=bc_Q)
+    init = Dict(
+        :Phi            => 1.,
+        :C              => 1.,
+        :Conductivity   => 1.,
+        :Diffusivity    => 1.,
+        :T              => 1., 
+        :ConsCoeff      => 1.,
+        :BoundaryPhi    => one, 
+        :BCCharge       => one,
+        :BoundaryC      => one, 
+        :BCMass         => one,
+        )
+
+    state0 = setup_state(model, init)
+    # return state0
 
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, forces=forces, config = cfg)
+    states = simulate(sim, timesteps, config = cfg)
 
     return G, states, model, sim
 end

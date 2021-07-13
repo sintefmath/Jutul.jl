@@ -191,3 +191,69 @@ function get_flux(storage,  model::SimulationModel{D, S, F, Con},
     law::Conservation{MassAcc}) where {D, S <: Electrolyte, F, Con}
     return storage.state.ChargeCarrierFlux
 end
+
+
+function apply_boundary_potential!(
+    acc, state, parameters, model::SimulationModel{<:Any,<:Electrolyte,<:Any,<:Any}, 
+    eq::Conservation{ChargeAcc}
+    )
+    # values
+    Phi = state[:Phi]
+    C = state[:C]
+    dmudc = state[:DmuDc]
+    co = state[:Conductivity]
+
+    F = FARADAY_CONST
+    z = parameters.z
+    t = parameters.t
+
+    BoundaryPhi = state[:BoundaryPhi]
+    BoundaryC = state[:BoundaryC]
+
+    # Type
+    # TODO: What if potential is defined on different cells
+    bp = model.secondary_variables[:BoundaryPhi]
+    T = bp.T_half_face
+    for (i, c) in enumerate(bp.cells)
+        @inbounds acc[c] -= (
+            - dmudc[c] * t/(F*z) * co[c] * T[i] * (C[c] - BoundaryC[i])
+            - co[c] * T[i] * (Phi[c] - BoundaryPhi[i])
+        )
+    end
+end
+
+function apply_boundary_potential!(
+    acc, state, model::SimulationModel{<:Any,<:Electrolyte,<:Any,<:Any}, 
+    eq::Conservation{ChargeAcc}
+    )
+    # values
+    Phi = state[:Phi]
+    C = state[:C]
+    dmudc = state[:DmuDc]
+    κ = state[:Conductivity]
+    D = state[:Diffusivity]
+
+    F = FARADAY_CONST
+    z = parameters.z
+    t = parameters.t
+
+    BoundaryPhi = state[:BoundaryPhi]
+    BoundaryC = state[:BoundaryC]
+
+    # Type
+    bp = model.secondary_variables[:BoundaryC]
+    T = bp.T_half_face
+
+    for (i, c) in enumerate(bp.cells)
+        @inbounds j = (
+            - dmudc[c] * t/(F*z) * κ[c] * T[i] * (C[c] - BoundaryC[i])
+            - κ[c] * T[i] * (Phi[c] - BoundaryPhi[i])
+        )
+        @inbounds acc[c] -= (
+            - D[c] * T[i](C[c] - BoundaryC[i])
+            + t / (F * z) * j
+        )
+    end
+end
+
+

@@ -100,7 +100,7 @@ end
 
 
 function apply_boundary_potential!(
-    acc, state, model, eq::Conservation{ChargeAcc}
+    acc, state, parameters, model, eq::Conservation{ChargeAcc}
     )
     # values
     Phi = state[:Phi]
@@ -117,7 +117,7 @@ function apply_boundary_potential!(
 end
 
 function apply_boundary_potential!(
-    acc, state, model, eq::Conservation{MassAcc}
+    acc, state, parameters, model, eq::Conservation{MassAcc}
     )
     # values
     C = state[:C]
@@ -140,7 +140,7 @@ function apply_bc_to_equation!(
     acc = get_entries(eq.accumulation)
     state = storage.state
 
-    apply_boundary_potential!(acc, state, model, eq)
+    apply_boundary_potential!(acc, state, parameters, model, eq)
 
     jkey = BOUNDARY_CURRENT[corr_type(eq)]
     if haskey(state, jkey)
