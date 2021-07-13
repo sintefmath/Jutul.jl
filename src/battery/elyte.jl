@@ -14,7 +14,6 @@ abstract type Current <: ScalarVariable end
 struct TotalCurrent <: Current end
 struct ChargeCarrierFlux <: Current end
 struct EnergyFlux <: Current end
-struct ConductivityFace <: ScalarVariable end
 
 function number_of_units(model, pv::Current)
     return 2*count_units(model.domain, Faces())
@@ -65,13 +64,13 @@ function select_secondary_variables_system!(
     S[:DmuDc] = DmuDc()
     S[:ConsCoeff] = ConsCoeff()
 
-    S[:ConductivityFace] = Conductivity()
     S[:TotalCurrent] = TotalCurrent()
     S[:ChargeCarrierFlux] = ChargeCarrierFlux()
     S[:EnergyFlux] = EnergyFlux()
     
     S[:ChargeAcc] = ChargeAcc()
     S[:MassAcc] = MassAcc()
+    S[:EnergyAcc] = EnergyAcc()
 end
 
 # Must be available to evaluate time derivatives
@@ -89,7 +88,6 @@ function setup_parameters(
     d[:tolerances][:default] = 1e-3
     d[:t] = 1.
     d[:z] = 1.
-    d[:beta] = 1.
     return d
 end
 
@@ -130,14 +128,6 @@ end
 @inline function harm_av(c, κ)
     i, j = c.self, c.other
     return (κ[i]^-1 + κ[j]^-1)^-1
-end
-
-@terv_secondary function update_as_secondary!(
-    con, tv::ConductivityFace, model::SimulationModel{<:Any, <:Electrolyte, <:Any,<:Any}, param, Conductivity
-    )
-    mf = model.domain.discretizations.charge_flow
-    conn_data = mf.conn_data
-    @tullio con[i] = harm_av(conn_data[i], Conductivity)
 end
 
 
@@ -209,13 +199,18 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    N, tv::EnergyFlux, model, param, 
-    TPkGrad_T, TotalCurrent, ConductivityFace, T
+    Q, tv::EnergyFlux, model, param, 
+    TPkGrad_T, TotalCurrent, TPDGrad_C, Conductivity, Diffusivity, DmuDc
     )
-    β = param.beta
-    κ = ConductivityFace # Does this affect performance?
-    j = TotalCurrent
-    @tullio N[i] = - TPkGrad_T[i] - j[i]^2 / κ[i] + β * T[i] * j[i]
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
+    D = Diffusivity
+    @tullio Q[i] = ( 
+        0
+        # - TPkGrad_T[i]
+        # - TotalCurrent[i]^2 / harm_av(conn_data[i], Conductivity)
+        # - TPDGrad_C[i]^2 * harm_av(conn_data[i], DmuDc ./ D)
+    )
 end
 
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
@@ -265,7 +260,7 @@ end
 
 function apply_boundary_potential!(
     acc, state, model::SimulationModel{<:Any,<:Electrolyte,<:Any,<:Any}, 
-    eq::Conservation{ChargeAcc}
+    eq::Conservation{MassAcc}
     )
     # values
     Phi = state[:Phi]
@@ -296,5 +291,45 @@ function apply_boundary_potential!(
         )
     end
 end
+
+function apply_boundary_potential!(
+    acc, state, model::SimulationModel{<:Any,<:Electrolyte,<:Any,<:Any}, 
+    eq::Conservation{EnergyAcc}
+    )
+    # values
+    Phi = state[:Phi]
+    C = state[:C]
+    T = state[:T]
+    dmudc = state[:DmuDc]
+    κ = state[:Conductivity]
+    D = state[:Diffusivity]
+    λ = state[:ThermalConductivity]
+
+    F = FARADAY_CONST
+    z = parameters.z
+    t = parameters.t
+
+    BoundaryPhi = state[:BoundaryPhi]
+    BoundaryC = state[:BoundaryC]
+
+    # Type
+    bp = model.secondary_variables[:BoundaryC]
+    T = bp.T_half_face
+
+    for (i, c) in enumerate(bp.cells)
+        @inbounds j = (
+            - dmudc[c] * t/(F*z) * κ[c] * T[i] * (C[c] - BoundaryC[i])
+            - κ[c] * T[i] * (Phi[c] - BoundaryPhi[i])
+        )
+        @inbounds GradC = Thf[i]*(C[c] - BoundaryC[i])
+        @inbounds GradT = Thf[i]*(T[c] - BoundaryT[i])
+        @inbounds acc[c] -= (
+            - λ[c] * GradT[c]
+            - j[c]^2 / κ[c]
+            - dmudc[c] * GradC[c]^2 / D[c]
+        )
+    end
+end
+
 
 

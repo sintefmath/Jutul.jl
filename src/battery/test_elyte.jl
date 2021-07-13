@@ -24,14 +24,16 @@ function test_elyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
 
-    bcells, T = get_boundary(name)
-    one = ones(size(bcells))
-
     S = model.secondary_variables
-    S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, T)
-    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+9)
-    S[:BoundaryC] = BoundaryPotential{Phi}(bcells, T)
-    S[:BCMass] = BoundaryCurrent{ChargeAcc}(bcells.+9)
+    bcells = [1, 100]
+    Thf = [2, 2]
+    S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, Thf)
+    S[:BoundaryC] = BoundaryPotential{Phi}(bcells, Thf)
+    S[:BoundaryT] = BoundaryPotential{T}(bcells, Thf)
+
+    # S[:BCCharge] = BoundaryCurrent{ChargeAcc}([])
+    # S[:BCCMass] = BoundaryCurrent{ChargeAcc}([])
+    # S[:BCCEnergy] = BoundaryCurrent{ChargeAcc}([])
 
     init = Dict(
         :Phi                    => 1.,
@@ -41,10 +43,13 @@ function test_elyte()
         :Diffusivity            => 1.,
         :ThermalConductivity    => 1., 
         :ConsCoeff              => 1.,
-        :BoundaryPhi            => one, 
-        :BCCharge               => one,
-        :BoundaryC              => one, 
-        :BCMass                 => one,
+        :BoundaryPhi            => [1., 2.],
+        :BoundaryC              => [1., 2.],
+        :BoundaryT              => [1., 2.], 
+
+        # :BCCharge               => [],
+        # :BCCMass                => [],
+        # :BCEnergy               => [],
         )
 
     state0 = setup_state(model, init)

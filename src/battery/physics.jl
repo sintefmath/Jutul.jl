@@ -133,6 +133,24 @@ function apply_boundary_potential!(
     end
 end
 
+function apply_boundary_potential!(
+    acc, state, parameters, model, eq::Conservation{EnergyAcc}
+    )
+    # values
+    T = state[:T]
+    BoundaryT = state[:BoundaryT]
+    λ = state[:ThermalConductivity]
+
+    # Type
+    bp = model.secondary_variables[:BoundaryT]
+    Thf = bp.T_half_face
+
+    for (i, c) in enumerate(bp.cells)
+        @inbounds acc[c] -= - λ[c]*Thf[i]*(T[c] - BoundaryT[i])
+    end
+end
+
+
 
 function apply_bc_to_equation!(
     storage, parameters, model, eq::Conservation
