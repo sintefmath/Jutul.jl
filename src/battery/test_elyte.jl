@@ -48,7 +48,7 @@ function test_elyte()
         :BoundaryT              => [1., 2.], 
 
         # :BCCharge               => [],
-        # :BCCMass                => [],
+        # :BCMass                => [],
         # :BCEnergy               => [],
         )
 

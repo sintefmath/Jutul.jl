@@ -18,28 +18,37 @@ function test_ec()
     # State is dict with pressure in each cell
     phi0 = 1.
     C0 = 1.
+    T0 = 1.
     D = 1.
-    σ = 1
+    σ = 1.
+    λ = 1.
 
-    bcells, T = get_boundary(name)
+    bcells, Thf = get_boundary(name)
     one = ones(size(bcells))
 
     S = model.secondary_variables
-    S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, T)
+    S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, Thf)
+    S[:BoundaryC] = BoundaryPotential{Phi}(bcells, Thf)
+    S[:BoundaryT] = BoundaryPotential{T}(bcells, Thf)
+
     S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+9)
-    S[:BoundaryC] = BoundaryPotential{Phi}(bcells, T)
-    S[:BCMass] = BoundaryCurrent{ChargeAcc}(bcells.+9)
+    S[:BCMass] = BoundaryCurrent{MassAcc}(bcells.+9)
+    S[:BCEnergy] = BoundaryCurrent{EnergyAcc}(bcells.+9)
 
     phi0 = 1.
     init = Dict(
-        :Phi            => phi0,
-        :C              => C0,
-        :Conductivity   => σ,
-        :Diffusivity    => D,
-        :BoundaryPhi    => one, 
-        :BCCharge       => one,
-        :BoundaryC      => one, 
-        :BCMass         => one,
+        :Phi                    => phi0,
+        :C                      => C0,
+        :T                      => T0,
+        :Conductivity           => σ,
+        :Diffusivity            => D,
+        :ThermalConductivity    => λ,
+        :BoundaryPhi            => one, 
+        :BoundaryC              => one, 
+        :BoundaryT              => one,
+        :BCCharge               => one,
+        :BCMass                 => one,
+        :BCEnergy               => one,
         )
 
     state0 = setup_state(model, init)
