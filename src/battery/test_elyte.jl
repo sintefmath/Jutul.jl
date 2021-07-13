@@ -34,20 +34,20 @@ function test_elyte()
     S[:BCMass] = BoundaryCurrent{ChargeAcc}(bcells.+9)
 
     init = Dict(
-        :Phi            => 1.,
-        :C              => 1.,
-        :Conductivity   => 1.,
-        :Diffusivity    => 1.,
-        :T              => 1., 
-        :ConsCoeff      => 1.,
-        :BoundaryPhi    => one, 
-        :BCCharge       => one,
-        :BoundaryC      => one, 
-        :BCMass         => one,
+        :Phi                    => 1.,
+        :C                      => 1.,
+        :T                      => 1.,
+        :Conductivity           => 1.,
+        :Diffusivity            => 1.,
+        :ThermalConductivity    => 1., 
+        :ConsCoeff              => 1.,
+        :BoundaryPhi            => one, 
+        :BCCharge               => one,
+        :BoundaryC              => one, 
+        :BCMass                 => one,
         )
 
     state0 = setup_state(model, init)
-    # return state0
 
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)

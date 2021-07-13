@@ -13,12 +13,14 @@ struct ConsCoeff <: ScalarVariable end
 abstract type Current <: ScalarVariable end
 struct TotalCurrent <: Current end
 struct ChargeCarrierFlux <: Current end
-struct ChemicalCurrent <: Current end
-
-
+struct EnergyFlux <: Current end
+struct ConductivityFace <: ScalarVariable end
 
 function number_of_units(model, pv::Current)
-    """ Two fluxes per face """
+    return 2*count_units(model.domain, Faces())
+end
+
+function number_of_units(model, pv::ConductivityFace)
     return 2*count_units(model.domain, Faces())
 end
 
@@ -31,9 +33,13 @@ function select_equations_system!(
     mass_cons = (arg...; kwarg...) -> Conservation(
         MassAcc(), arg...; kwarg...
         )
+    energy_cons = (arg...; kwarg...) -> Conservation(
+        EnergyAcc(), arg...; kwarg...
+        )
+    
     eqs[:charge_conservation] = (charge_cons, 1)
     eqs[:mass_conservation] = (mass_cons, 1)
-
+    eqs[:energy_conservation] = (energy_cons, 1)
 end
 
 function select_primary_variables_system!(
@@ -41,6 +47,7 @@ function select_primary_variables_system!(
     )
     S[:Phi] = Phi()
     S[:C] = C()
+    S[:T] = T()
 end
 
 
@@ -50,15 +57,18 @@ function select_secondary_variables_system!(
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:TPkGrad_C] = TPkGrad{C}()
     S[:TPDGrad_C] = TPDGrad{C}()
+    S[:TPkGrad_T] = TPkGrad{T}()
     
-    S[:T] = T()
     S[:Conductivity] = Conductivity()
-    S[:DmuDc] = DmuDc()
+    S[:ThermalConductivity] = Conductivity()
     S[:Diffusivity] = Diffusivity()
+    S[:DmuDc] = DmuDc()
     S[:ConsCoeff] = ConsCoeff()
 
+    S[:ConductivityFace] = Conductivity()
     S[:TotalCurrent] = TotalCurrent()
     S[:ChargeCarrierFlux] = ChargeCarrierFlux()
+    S[:EnergyFlux] = EnergyFlux()
     
     S[:ChargeAcc] = ChargeAcc()
     S[:MassAcc] = MassAcc()
@@ -68,7 +78,7 @@ end
 function minimum_output_variables(
     system::Electrolyte, primary_variables
     )
-    [:ChargeAcc, :MassAcc, :Conductivity, :Diffusivity]
+    [:ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity]
 end
 
 function setup_parameters(
@@ -77,8 +87,9 @@ function setup_parameters(
     d = Dict{Symbol, Any}()
     d[:tolerances] = Dict{Symbol, Any}()
     d[:tolerances][:default] = 1e-3
-    d[:t] = 1
-    d[:z] = 1
+    d[:t] = 1.
+    d[:z] = 1.
+    d[:beta] = 1.
     return d
 end
 
@@ -116,9 +127,24 @@ end
     @tullio con[i] = cond(T[i], C[i], s)
 end
 
+@inline function harm_av(c, κ)
+    i, j = c.self, c.other
+    return (κ[i]^-1 + κ[j]^-1)^-1
+end
 
 @terv_secondary function update_as_secondary!(
-    D, sv::Diffusivity, model::SimulationModel{<:Any, <:Electrolyte, <:Any,<:Any}, param, C, T
+    con, tv::ConductivityFace, model::SimulationModel{<:Any, <:Electrolyte, <:Any,<:Any}, param, Conductivity
+    )
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
+    @tullio con[i] = harm_av(conn_data[i], Conductivity)
+end
+
+
+
+@terv_secondary function update_as_secondary!(
+    D, sv::Diffusivity, model::SimulationModel{<:Any, <:Electrolyte, <:Any,<:Any},
+     param, C, T
     )
     s = model.system
     @tullio D[i] = diffusivity(T[i], C[i], s)
@@ -141,7 +167,7 @@ end
     t = param.t
     z = param.z
     F = FARADAY_CONST
-    @tullio coeff[i] := Conductivity[i]*DmuDc[i] * t/(F*z)
+    @tullio coeff[i] = Conductivity[i]*DmuDc[i] * t/(F*z)
 end
 
 
@@ -182,6 +208,16 @@ end
 end
 
 
+@terv_secondary function update_as_secondary!(
+    N, tv::EnergyFlux, model, param, 
+    TPkGrad_T, TotalCurrent, ConductivityFace, T
+    )
+    β = param.beta
+    κ = ConductivityFace # Does this affect performance?
+    j = TotalCurrent
+    @tullio N[i] = - TPkGrad_T[i] - j[i]^2 / κ[i] + β * T[i] * j[i]
+end
+
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
     law::Conservation{ChargeAcc}) where {D, S <: Electrolyte, F, Con}
     return storage.state.TotalCurrent
@@ -189,6 +225,11 @@ end
 
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
     law::Conservation{MassAcc}) where {D, S <: Electrolyte, F, Con}
+    return storage.state.EnergyFlux
+end
+
+function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
+    law::Conservation{EnergyAcc}) where {D, S <: Electrolyte, F, Con}
     return storage.state.ChargeCarrierFlux
 end
 
