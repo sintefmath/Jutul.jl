@@ -37,65 +37,30 @@ end
 function solve!(sys::LSystem, krylov::GenericKrylov)
     solver, cfg = krylov.solver, krylov.config
 
+    prepare_solve!(sys)
     r = vector_residual(sys)
     op = linear_operator(sys)
 
     L = preconditioner(krylov, sys, :left)
     R = preconditioner(krylov, sys, :right)
     v = verbose(cfg)
+    max_it = cfg.max_iterations
+    rt = rtol(cfg)
+    at = atol(cfg)
     (x, stats) = solver(op, r, 
-                            itmax = cfg.max_iterations,
+                            itmax = max_it,
                             verbose = v,
-                            rtol = rtol(cfg),
-                            history = v > 0,
-                            atol = atol(cfg),
+                            rtol = rt,
+                            history = true,
+                            atol = at,
                             M = L, N = R)
+    res = stats.residuals
+    n = length(res) - 1
     if !stats.solved
-        @warn "Linear solve did not converge: $(stats.status)"
-    elseif v > 0
-        r = stats.residuals
-        @debug "Final residual $(r[end]), improvement $(r[end]/r[1]) after $(length(r)) iterations."
+        @warn "Linear solver: $(stats.status), final residual: $(res[end]). rtol = $rt, atol = $at, max_it = $max_it"
+    end
+    if v > 0
+        @debug "Final residual $(res[end]), rel. value $(res[end]/res[1]) after $n iterations."
     end
     update_dx_from_vector!(sys, x)
-end
-
-# function get_mul!(sys::MultiLinearizedSystem)
-#     subsystems = sys.subsystems
-#     n, m = size(subsystems)
-#     function block_mul!(res, x, α, β::T) where T
-#         if β == zero(T)
-#             row_offset = 0
-#             for row = 1:n
-#                 col_offset = 0
-#                 for col = 1:m
-#                     M = subsystems[row, col].jac
-#                     nrows, ncols = size(M)
-#                     rpos = (row_offset+1):(row_offset+nrows)
-#                     cpos = (col_offset+1):(col_offset+ncols)
-#                     # Grab views into the global vectors and applu matrix here
-#                     res_v = view(res, rpos)
-#                     x_v = view(x, cpos)
-#                     mul!(res_v, M, x_v)
-#                     if α != one(T)
-#                         # TODO: This is wrong
-#                         error("May be wrong.")
-#                         lmul!(α, res_v)
-#                     end
-#                     col_offset += ncols
-#                 end
-#                 row_offset += size(subsystems[row, 1].jac, 1)
-#             end
-#         else
-#             error("Not implemented yet.")
-#         end
-#     end
-#     return block_mul!
-# end
-
-function linear_operator(sys::MultiLinearizedSystem)
-    S = sys.subsystems
-    d = size(S, 2)
-    ops = map(linear_operator, permutedims(S))
-    op = hvcat(d, ops...)
-    return op
 end

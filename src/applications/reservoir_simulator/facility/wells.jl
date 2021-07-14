@@ -1,4 +1,3 @@
-export TotalMassFlux
 export WellGrid, MultiSegmentWell
 export TotalMassFlux, PotentialDropBalanceWell, SegmentWellBoreFrictionHB
 
@@ -22,9 +21,15 @@ abstract type WellGrid <: PorousMediumGrid
 end
 
 # Total velocity in each well segment
-struct TotalMassFlux <: ScalarVariable end
-function associated_unit(::TotalMassFlux) Faces() end
+struct TotalMassFlux <: ScalarVariable
+    scale
+    function TotalMassFlux(scale = 3600*24)
+        new(scale)
+    end
+end
 
+function associated_unit(::TotalMassFlux) Faces() end
+variable_scale(t::TotalMassFlux) = t.scale
 
 struct SimpleWell <: WellGrid 
     volumes
@@ -34,7 +39,7 @@ struct SimpleWell <: WellGrid
         nr = length(reservoir_cells)
 
         WI, gdz = common_well_setup(nr; kwarg...)
-        perf = (self = ones(Int64, nr), reservoir = reservoir_cells, WI = WI, gdz = gdz)
+        perf = (self = ones(Int64, nr), reservoir = vec(reservoir_cells), WI = WI, gdz = gdz)
         new([volume], perf, reservoir_symbol)
     end
 end
@@ -55,6 +60,7 @@ struct MultiSegmentWell <: WellGrid
                                                         reservoir_symbol = :Reservoir, kwarg...)
         nv = length(volumes)
         nc = nv + 1
+        reservoir_cells = vec(reservoir_cells)
         nr = length(reservoir_cells)
         if isnothing(N)
             @debug "No connectivity. Assuming nicely ordered linear well."
@@ -70,6 +76,8 @@ struct MultiSegmentWell <: WellGrid
             @assert length(reservoir_cells) == nv "If no perforation cells are given, we must 1->1 correspondence between well volumes and reservoir cells."
             perforation_cells = collect(2:nc)
         end
+        perforation_cells = vec(perforation_cells)
+
         if isnothing(segment_models)
             Δp = SegmentWellBoreFrictionHB(100.0, 1e-4, 0.1)
             segment_models = repeat([Δp], nseg)
@@ -111,10 +119,19 @@ struct SegmentWellBoreFrictionHB
     D_outer
     D_inner
     assume_turbulent
-    function SegmentWellBoreFrictionHB(L, roughness, D_outer; D_inner = 0, assume_turbulent = true)
-        @assert assume_turbulent
-        new(L, roughness, D_outer, D_inner, assume_turbulent)
+    laminar_limit
+    turbulent_limit
+    function SegmentWellBoreFrictionHB(L, roughness, D_outer; D_inner = 0, assume_turbulent = false, laminar_limit = 2000.0, turbulent_limit = 2000.0)
+        new(L, roughness, D_outer, D_inner, assume_turbulent, laminar_limit, turbulent_limit)
     end
+end
+
+function is_turbulent_flow(f::SegmentWellBoreFrictionHB, Re)
+    return f.assume_turbulent || Re >= f.turbulent_limit
+end
+
+function is_laminar_flow(f::SegmentWellBoreFrictionHB, Re)
+    return !f.assume_turbulent && Re <= f.laminar_limit
 end
 
 function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
@@ -131,10 +148,28 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
     v = v/(π*ρ*((D⁰/2)^2 - (Dⁱ/2)^2));
     Re = abs(v*ρ*ΔD)/μ;
     # Friction model - empirical relationship
-    f = (-3.6*log(6.9/Re +(R/(3.7*D⁰))^(10/9))/log(10))^(-2);
+    Re_l = f.laminar_limit
+    Re_t = f.turbulent_limit
+    if is_laminar_flow(f, Re)
+        f = 16/Re_l;
+    else
+        # Either turbulent or intermediate flow regime. We need turbulent value either way.
+        f_t = (-3.6*log(6.9/Re +(R/(3.7*D⁰))^(10/9))/log(10))^(-2);
+        if is_turbulent_flow(f, Re)
+            # Turbulent flow
+            f = f_t
+        else
+            # Intermediate regime - interpolation
+            f_l = 16/Re_l
+            Δf = f_t - f_l
+            ΔRe = Re_t - Re_l
+            f = f_l + (Δf / ΔRe)*(Re - Re_l);
+        end
+    end
     Δp = -(2*s*L/ΔD)*(f*ρ*v^2);
     return Δp
 end
+
 
 struct PotentialDropBalanceWell <: TervEquation
     # Equation: pot_diff(p) - pot_diff_model(v, p)
@@ -268,19 +303,25 @@ function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W
     ρ_mix = 0.5*(ρ_mix_self + ρ_mix_other)
 
     Δp = segment_pressure_drop(seg_model, value(v), ρ_mix, μ_mix)
-    eq = sgn*(Δθ - Δp)
+
+    @inline function pot_balance(Δθ, Δp)
+        return (Δθ + Δp)
+    end
+
+    eq = pot_balance(Δθ, Δp)
     if sgn == 1
         # This is a good time to deal with the derivatives of v[face] since it is already fetched.
         Δp_f = segment_pressure_drop(seg_model, v, value(ρ_mix), value(μ_mix))
-        face_entries[face] = value(Δθ) - Δp_f
+        eq_f = pot_balance(value(Δθ), Δp_f)
         # @debug "$face \neq_f: $(value.(face_entries[face]))"
 
         # @debug "Δp_f $face: $Δp_f flux: $v\neq_f: $(face_entries[face])"
         # @debug "rho: $(value(ρ_mix)) mu: $(value(μ_mix))"
 
+        face_entries[face] = eq_f
         cell_entries[(face-1)*2 + 1] = eq
     else
-        cell_entries[(face-1)*2 + 2] = eq
+        cell_entries[(face-1)*2 + 2] = -eq
     end
 end
 
@@ -330,10 +371,13 @@ function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{G}, sourc
     if target_symbol == well.reservoir_symbol
         # The symbol matches up and this well exists in this reservoir
         p = well.perforations
-        isect = (target = p.reservoir, source = p.self, target_unit = Cells(), source_unit = Cells())
+        t = p.reservoir::AbstractVector
+        s = p.self::AbstractVector
     else
-        isect = (target = nothing, source = nothing, target_unit = Cells(), source_unit = Cells())
+        t = nothing
+        s = nothing
     end
+    return (target = t, source = s, target_unit = Cells(), source_unit = Cells())
 end
 
 """
@@ -406,17 +450,20 @@ function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, per
     end
     μ = state_res.PhaseViscosities
     ρλ_i = state_res.MassMobilities
-    masses = state_well.TotalMasses
 
     ρ_w = state_well.PhaseMassDensities
-    s_w = state_well.Saturations
-    # ρ_r = state_res.PhaseMassDensities
-
-    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          masses, ρ_w, s_w, sgn)
-    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i,  as_value(masses), as_value(ρ_w), as_value(s_w), sgn)
+    if haskey(state_well, :Saturations)
+        s_w = state_well.Saturations
+        s_w_v = as_value(s_w)
+    else
+        s_w = nothing
+        s_w_v = nothing
+    end
+    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          ρ_w,  s_w, sgn)
+    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i, as_value(ρ_w), s_w_v, sgn)
 end
 
-function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_masses, ρ_w, s_w, sgn)
+function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, ρ_w, s_w, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     nc = size(ρλ_i, 1)
     nph = size(μ, 1)
@@ -427,7 +474,11 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_
         wi = perf.WI[i]
         gdz = perf.gdz[i]
         if gdz != 0
-            ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
+            if isnothing(s_w)
+                ρ_mix = ρ_w[1, si]
+            else
+                ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
+            end
             ρgdz = gdz*ρ_mix
         else
             ρgdz = 0
@@ -443,9 +494,14 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, well_
                     λ_t += kr[ph, ri]/μ[ph, ri]
                 end
             end
+            # @debug "λ_t: $(value(λ_t)) dp: $(value(dp)) ρgdz: $(value(ρgdz))"
             for c in 1:nc
-                # dp * rho * s * totmob well
-                target[c, i] = sgn*well_masses[c, si]*λ_t*dp
+                if isnothing(s_w)
+                    mass_mix = ρ_w[c, si]
+                else
+                    mass_mix = s_w[c, si]*ρ_w[c, si]
+                end
+                target[c, i] = sgn*mass_mix*λ_t*dp
             end
         else
             # Production

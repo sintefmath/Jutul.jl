@@ -100,16 +100,18 @@ function update_primary_variable!(state, p::TervVariables, state_symbol, model, 
     rel_max = relative_increment_limit(p)
     maxval = maximum_value(p)
     minval = minimum_value(p)
+    scale = variable_scale(p)
 
     for (index, nm) in enumerate(names)
         offset = nu*(index-1)
         v = state[state_symbol]
         dv = view(dx, (1:nu) .+ offset)
-        @. v = update_value(v, dv, abs_max, rel_max, minval, maxval)
+        @. v = update_value(v, dv, abs_max, rel_max, minval, maxval, scale)
     end
 end
 
-@inline function choose_increment(v::F, dv::F, abs_change = nothing, rel_change = nothing, minval = nothing, maxval = nothing) where {F<:AbstractFloat}
+@inline function choose_increment(v::F, dv::F, abs_change = nothing, rel_change = nothing, minval = nothing, maxval = nothing, scale = nothing) where {F<:AbstractFloat}
+    dv = scale_increment(dv, scale)
     dv = limit_abs(dv, abs_change)
     dv = limit_rel(v, dv, rel_change)
     dv = limit_lower(v, dv, minval)
@@ -151,6 +153,13 @@ end
 
 @inline function limit_lower(v, dv, minval::Nothing) dv end
 
+# Scaling
+@inline function scale_increment(dv, scale)
+    return dv*scale
+end
+
+@inline scale_increment(dv, ::Nothing) = dv
+
 @inline function update_value(v, dv, arg...)
     return v + choose_increment(value(v), dv, arg...)
 end
@@ -168,9 +177,15 @@ function get_name(v::TervVariables)
     return String(get_symbol(v))
 end
 
+variable_scale(::TervVariables) = nothing
+
 ## Initialization
-function initialize_primary_variable_ad!(arg...; offset = 0, kwarg...)
-    initialize_variable_ad(arg..., offset + 1; kwarg...)
+function initialize_primary_variable_ad!(state, model, pvar, arg...; offset = 0, kwarg...)
+    diag_value = variable_scale(pvar)
+    if isnothing(diag_value)
+        diag_value = 1.0
+    end
+    initialize_variable_ad(state, model, pvar, arg..., offset + 1; diag_value = diag_value, kwarg...)
 end
 
 function initialize_secondary_variable_ad!(state, model, pvar, arg...; kwarg...)

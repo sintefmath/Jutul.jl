@@ -4,7 +4,9 @@ using ILUZero
 abstract type TervPreconditioner end
 
 function update!(preconditioner, lsys)
-    update!(preconditioner, lsys.jac, lsys.r)
+    J = jacobian(lsys)
+    r = residual(lsys)
+    update!(preconditioner, J, r)
 end
 
 function get_factorization(precond)
@@ -164,7 +166,7 @@ Trivial / identity preconditioner with size for use in subsystems.
 """
 # Trivial precond
 function update!(tp::TrivialPreconditioner, A, b)
-    tp.dim = size(A)
+    tp.dim = size(A).*length(b[1])
 end
 
 function linear_operator(id::TrivialPreconditioner, ::Symbol)

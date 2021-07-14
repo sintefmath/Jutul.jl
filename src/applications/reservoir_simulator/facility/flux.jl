@@ -26,7 +26,14 @@ function update_fluxes_total_mass_velocity_cells!(flux, conn_data, masses, total
     function q(c, masses, total, v, phno)
         masses_i = view(masses, phno, :)
         f = c.face
-        s = c.face_sign
+        # sign == 1 if current (self) cell is the first in N[:, i], -1 otherwise.
+        # Flux i is positive if going from N[1, i] (L) to N[2, i] (R) and negative 
+        # otherwise.
+        #
+        # This means that we need to flip the sign for the purpose of cell-cell
+        # fluxes since their convention is to have negative fluxes going out from
+        # the self cell.
+        s = -c.face_sign
         vi = s*v[f]
         return half_face_fluxes_total_mass_velocity(c.self, c.other, masses_i, total, vi)
     end
@@ -40,11 +47,9 @@ end
 function half_face_fluxes_total_mass_velocity(self, other, masses, total, v)
     if v < 0
         # Flux is leaving the cell
-        # @debug "$self: Flow leaving."
         x = masses[self]/total[self]
     else
         # Flux is entering the cell
-        # @debug "$self: Flow entering."
         x = value(masses[other])/value(total[other])
     end
     return x*value(v)
@@ -55,13 +60,11 @@ function half_face_fluxes_total_mass_velocity_face(left, right, masses, total, v
     # and recieve the signed flux going into or out of the cell. For the half face velocity
     # we have a single velocity, and the convention is to take the left cell to be upstream 
     # for a positive flux.
-    if v < 0
+    if v > 0
         # Flow from left to right
-        # @debug "L->R $left -> $right"
         x = value(masses[left])/value(total[left])
     else
         # Flow from right to left
-        # @debug "R->L $right -> $left"
         x = value(masses[right])/value(total[right])
     end
     return x*v

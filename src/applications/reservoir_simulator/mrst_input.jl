@@ -11,7 +11,7 @@ struct MRSTPlotData
 end
 
 
-function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false, fuse_flux = false)
+function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false, fuse_flux = false, grav_on = true)
     if relative_path
         fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     else
@@ -62,7 +62,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
     T = compute_face_trans(T_hf, N)
     G = MinimalTPFAGrid(pv, N)
-    if size(cell_centroids, 1) == 3
+    if size(cell_centroids, 1) == 3 && grav_on
         z = cell_centroids[3, :]
         g = gravity_constant
     else
@@ -85,7 +85,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     end
 end
 
-function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = false, simple = false)
+function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = false, simple = false, kwarg...)
     W_mrst = mrst_data["W"][ix]
     w = convert_to_immutable_storage(W_mrst)
 
@@ -107,7 +107,7 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
         # For simple well, distance from ref depth to perf
         dz = ref_depth .- z
         W = SimpleWell(rc, WI = WI, dz = dz)
-        wmodel = SimulationModel(W, system)
+        wmodel = SimulationModel(W, system; kwarg...)
         flow = TwoPointPotentialFlow(nothing, nothing, TrivialFlow(), W)
     else
         # For a MS well, this is the drop from the perforated cell center to the perforation (assumed zero here)
@@ -118,7 +118,7 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
         flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), TotalMassVelocityMassFractionsFlow(), W, nothing, z)
     end
     disc = (mass_flow = flow,)
-    wmodel = SimulationModel(W, system, discretization = disc)
+    wmodel = SimulationModel(W, system, discretization = disc; kwarg...)
     if extraout
         out = (wmodel, W_mrst)
     else

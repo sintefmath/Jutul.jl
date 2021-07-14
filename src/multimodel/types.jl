@@ -3,19 +3,26 @@ struct MultiModel <: TervModel
     groups::Union{Vector, Nothing}
     context::Union{TervContext, Nothing}
     number_of_degrees_of_freedom
-    function MultiModel(models; groups = nothing, context = nothing)
-        if !isnothing(groups)
+    reduction
+    function MultiModel(models; groups = nothing, context = nothing, reduction = nothing)
+        if isnothing(groups)
+            num_groups = 1
+        else
             nm = length(models)
+            num_groups = length(unique(groups))
             @assert maximum(groups) <= nm
             @assert minimum(groups) > 0
             @assert length(groups) == nm
-            @assert maximum(groups) == length(unique(groups))
+            @assert maximum(groups) == num_groups
         end
         if isa(models, AbstractDict)
             models = convert_to_immutable_storage(models)
         end
         ndof = map(number_of_degrees_of_freedom, models)
-        new(models, groups, context, ndof)
+        if reduction == :schur_apply
+            @assert num_groups == 2
+        end
+        new(models, groups, context, ndof, reduction)
     end
 end
 
@@ -45,6 +52,8 @@ struct InjectiveCrossTerm <: CrossTerm
         end
         target_impact, source_impact, target_unit, source_unit = intersection
         @assert !isnothing(target_impact) "Cannot declare cross term when there is no overlap between domains."
+        target_impact::AbstractVector
+        source_impact::AbstractVector
         noverlap = length(target_impact)
         @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
         # Infer Unit from target_eq

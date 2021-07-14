@@ -9,7 +9,7 @@ function number_of_cells(::ScalarTestDomain) 1 end
 
 function get_domain_intersection(u::TervUnit, target_d::ScalarTestDomain, source_d::ScalarTestDomain, target_symbol, source_symbol)
     # This domain always interacts with the single cell in instances of itself, and nothing else
-    (target = 1, source = 1, target_unit = Cells(), source_unit = Cells())
+    (target = [1], source = [1], target_unit = Cells(), source_unit = Cells())
 end
 
 # Driving force for the test equation
@@ -30,8 +30,8 @@ struct ScalarTestEquation <: DiagonalEquation
     end
 end
 
-function declare_sparsity(model, e::ScalarTestEquation)
-    return (1, 1, 1, 1)
+function declare_sparsity(model, e::ScalarTestEquation, layout)
+    return SparsePattern(1, 1, 1, 1, layout)
 end
 
 

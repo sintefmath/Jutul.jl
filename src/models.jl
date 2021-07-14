@@ -188,7 +188,7 @@ end
 
 function get_sparse_arguments(storage, model)
     layout = matrix_layout(model.context)
-    get_sparse_arguments(storage, model, layout)
+    return get_sparse_arguments(storage, model, layout)
 end
 
 function get_sparse_arguments(storage, model, layout::EquationMajorLayout)
@@ -203,10 +203,8 @@ function get_sparse_arguments(storage, model, layout::EquationMajorLayout)
         for u in primary_units
             S = declare_sparsity(model, eq, u, layout)
             if !isnothing(S)
-                i = S[1]
-                j = S[2]
-                push!(I, i .+ numrows) # Row indices, offset by the size of preceeding equations
-                push!(J, j .+ numcols) # Column indices, offset by the partials in units we have passed
+                push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
+                push!(J, S.J .+ numcols) # Column indices, offset by the partials in units we have passed
             end
             numcols += number_of_degrees_of_freedom(model, u)
         end
@@ -216,9 +214,7 @@ function get_sparse_arguments(storage, model, layout::EquationMajorLayout)
     end
     I = vcat(I...)
     J = vcat(J...)
-    vt = float_type(model.context)
-    V = zeros(vt, length(I))
-    return (I, J, V, numrows, ndof)
+    return SparsePattern(I, J, numrows, ndof, layout)
 end
 
 function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
@@ -237,10 +233,8 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
             @assert dof_per_unit == eqs_per_unit == block_size "Block major layout only supported for square blocks."
             S = declare_sparsity(model, eq, u, layout)
             if !isnothing(S)
-                i = S[1]
-                j = S[2]
-                push!(I, i .+ numrows) # Row indices, offset by the size of preceeding equations
-                push!(J, j .+ numcols) # Column indices, offset by the partials in units we have passed
+                push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
+                push!(J, S.J .+ numcols) # Column indices, offset by the partials in units we have passed
             end
             numcols += count_units(model.domain, u)
         end
@@ -251,9 +245,7 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
 
     I = Vector{it}(vcat(I...))
     J = Vector{it}(vcat(J...))
-    vt = float_type(model.context)
-    V = zeros(vt, block_size*block_size, length(I))
-    return (I, J, V, numrows, ndof)
+    return SparsePattern(I, J, numrows, ndof, layout, block_size)
 end
 
 
@@ -421,19 +413,19 @@ function build_forces(model::TervModel)
     return NamedTuple()
 end
 
-function solve_and_update!(storage, model::TervModel, dt = nothing; linear_solver = nothing)
+function solve_and_update!(storage, model::TervModel, dt = nothing; linear_solver = nothing, kwarg...)
     lsys = storage.LinearizedSystem
     t_solve = @elapsed solve!(lsys, linear_solver, model, storage, dt)
-    t_update = @elapsed update_primary_variables!(storage, model)
+    t_update = @elapsed update_primary_variables!(storage, model; kwarg...)
     return (t_solve, t_update)
 end
 
-function update_primary_variables!(storage, model::TervModel)
+function update_primary_variables!(storage, model::TervModel; kwarg...)
     dx = storage.LinearizedSystem.dx_buffer
-    update_primary_variables!(storage.primary_variables, dx, model)
+    update_primary_variables!(storage.primary_variables, dx, model; kwarg...)
 end
 
-function update_primary_variables!(primary_storage, dx, model::TervModel)
+function update_primary_variables!(primary_storage, dx, model::TervModel; check = false)
     cell_major = is_cell_major(matrix_layout(model.context))
     offset = 0
     primary = get_primary_variables(model)
@@ -451,6 +443,9 @@ function update_primary_variables!(primary_storage, dx, model::TervModel)
                 end
                 ni = degrees_of_freedom_per_unit(model, p)
                 dxi = view(Dx, :, (local_offset+1):(local_offset+ni))
+                if check
+                    check_increment(dxi, pkey)
+                end
                 update_primary_variable!(primary_storage, p, pkey, model, dxi)
                 local_offset += ni
             end
@@ -461,6 +456,9 @@ function update_primary_variables!(primary_storage, dx, model::TervModel)
             n = number_of_degrees_of_freedom(model, p)
             rng = (1:n) .+ offset
             dxi = view(dx, rng)
+            if check
+                check_increment(dxi, pkey)
+            end
             update_primary_variable!(primary_storage, p, pkey, model, dxi)
             offset += n
         end

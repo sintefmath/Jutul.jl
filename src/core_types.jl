@@ -81,6 +81,42 @@ function represented_as_adjoint(layout)
     layout.as_adjoint
 end
 
+struct SparsePattern{L}
+    I
+    J
+    n
+    m
+    block_n
+    block_m
+    layout::L
+    function SparsePattern(I, J, n::T, m::T, layout, block_n::T = 1, block_m::T = block_n) where {T <: Integer}
+        if isa(I, Integer)
+            @assert isa(J, Integer)
+            I = vec(I)
+            J = vec(J)
+        end
+        if length(I) > 0
+            I::AbstractVector{T}
+            J::AbstractVector{T}
+            @assert length(I) == length(J)
+            @assert maximum(I) <= n
+            @assert minimum(I) > 0
+            @assert maximum(J) <= m
+            @assert minimum(J) > 0
+        else
+            # Empty vectors might be Any, and the asserts above
+            # cannot be used.
+            I = Vector{T}()
+            J = Vector{T}()
+        end
+        @assert n > 0
+        @assert m > 0
+        new{typeof(layout)}(I, J, n, m, block_n, block_m, layout)
+    end
+end
+
+ijnm(p::SparsePattern) = (p.I, p.J, p.n, p.m)
+block_size(p::SparsePattern) = (p.block_n, p.block_m)
 
 # CUDA context - everything on the single CUDA device attached to machine
 struct SingleCUDAContext <: GPUTervContext
@@ -122,7 +158,24 @@ struct DefaultContext <: CPUTervContext
         new(matrix_layout)
     end
 end
+
 matrix_layout(c::DefaultContext) = c.matrix_layout
+
+function jacobian_eltype(context, layout, block_size)
+    return float_type(context)
+end
+
+function r_eltype(context, layout, block_size)
+    return float_type(context)
+end
+
+function jacobian_eltype(context::CPUTervContext, layout::BlockMajorLayout, block_size)
+    return SMatrix{block_size..., float_type(context), prod(block_size)}
+end
+
+function r_eltype(context::CPUTervContext, layout::BlockMajorLayout, block_size)
+    return SVector{block_size[1], float_type(context)}
+end
 
 
 # Domains

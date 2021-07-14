@@ -4,7 +4,6 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
     cs = ct.crossterm_source_cache
 
     layout = matrix_layout(source.context)
-
     impact_target = ct.impact[1]
     impact_source = ct.impact[2]
     punits = get_primary_variable_ordered_units(source)
@@ -60,8 +59,9 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
 
         n_partials = x.npartials_source
         n_eqs = x.equations_per_unit
-        I = []
-        J = []
+        F = eltype(target_impact)
+        I = Vector{Vector{F}}()
+        J = Vector{Vector{F}}()
         for eqno in 1:n_eqs
             for derno in 1:n_partials
                 push!(I, target_impact .+ (eqno-1)*nunits_target)
@@ -73,12 +73,34 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
 
         n = n_eqs*nunits_target
         m = n_partials*nunits_source
-        out = (I, J, n, m)
+        out = SparsePattern(I, J, n, m, layout)
         @assert maximum(I) <= n "I index exceeded declared row count $n (largest value: $(maximum(I)))"
         @assert maximum(J) <= m "J index exceeded declared column count $m (largest value: $(maximum(J)))"
 
         @assert minimum(I) >= 1 "I index was lower than 1"
         @assert minimum(J) >= 1 "J index was lower than 1"
+    end
+    return out
+end
+
+function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout::BlockMajorLayout)
+    primitive = declare_pattern(target_model, source_model, x, unit)
+    if isnothing(primitive)
+        out = nothing
+    else
+        target_impact = primitive[1]
+        source_impact = primitive[2]
+        source_unit = x.units.source
+        target_unit = x.units.target
+        nunits_source = count_units(source_model.domain, source_unit)
+        nunits_target = count_units(target_model.domain, target_unit)
+
+        I = target_impact
+        J = source_impact
+
+        n = nunits_target
+        m = nunits_source
+        out = SparsePattern(I, J, n, m, layout)
     end
     return out
 end

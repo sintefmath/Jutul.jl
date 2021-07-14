@@ -14,7 +14,6 @@ function convert_to_immutable_storage(v::Any)
     return v
 end
 
-
 "Apply a function to each element in the fastest possible manner."
 function fapply!(out, f, inputs...)
     # Example:
@@ -54,6 +53,15 @@ function get_matrix_view(v, n, m, transp = false, offset = 0)
     return v
 end
 
+function check_increment(dx, key)
+    if any(!isfinite, dx)
+        bad = findall(isfinite.(dx) .== false)
+        n_bad = length(bad)
+        n = min(10, length(bad))
+        bad = bad[1:n]
+        @warn "$key: $n_bad non-finite values found. Indices: (limited to 10) $bad"
+    end
+end
 
 function get_row_view(v::AbstractVector, n, m, row, transp = false, offset = 0)
     v = get_matrix_view(v, n, m, transp, offset)
