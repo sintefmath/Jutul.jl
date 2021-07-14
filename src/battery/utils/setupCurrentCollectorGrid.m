@@ -1,11 +1,11 @@
 % clear all
 close all
 
-nx = 100;
-ny = 100;
+nx = 10;
+ny = 10;
 
-Lx = 1;
-Ly = 1;
+Lx = 1e-4;
+Ly = 1e-4;
 
 G = cartGrid([nx, ny], [Lx, Ly]);
 G = computeGeometry(G);

@@ -63,7 +63,6 @@ function select_secondary_variables_system!(
 
     S[:TotalCurrent] = TotalCurrent()
     S[:ChargeCarrierFlux] = ChargeCarrierFlux()
-    S[:EnergyFlux] = EnergyFlux()
     
     S[:ChargeAcc] = ChargeAcc()
     S[:MassAcc] = MassAcc()
@@ -88,31 +87,33 @@ function setup_parameters(
     return d
 end
 
-const cnst = [
+const poly_param = [
     -10.5       0.074       -6.96e-5    ;
     0.668e-3    -1.78e-5    2.80e-8     ;
     0.494e-6    -8.86e-10   0           ;
 ]
-const p1 = Polynomial(cnst[1:end, 1])
-const p2 = Polynomial(cnst[1:end, 2])
-const p3 = Polynomial(cnst[1:end, 3])
-
+const p1 = Polynomial(poly_param[1:end, 1])
+const p2 = Polynomial(poly_param[1:end, 2])
+const p3 = Polynomial(poly_param[1:end, 3])
 
 @inline function cond(T::Real, C::Real, ::Electrolyte)
     fact = 1e-4
     return fact * C * (p1(C) + p2(C) * T + p3(C) * T^2)^2
 end
 
+const diff_params = [
+    -4.43   -54 ;
+    -0.22   0.0 ;
+]
+const Tgi = [229 5.0]
+
 @inline function diffusivity(T::Real, C::Real, ::Electrolyte)
     # ?Should these be parameters?
-    cnst = [[-4.43, -54] [-0.22, 0.0 ]]
-    Tgi = [229, 5.0]
-    K = 1e9 # Martins "make it big" constant
-    return K * (
+    return (
         1e-4 * 10 ^ ( 
-            cnst[1,1] + 
-            cnst[1,2] / ( T - Tgi[1] - Tgi[2] * C * 1e-3) + 
-            cnst[2,1] * C * 1e-3
+            diff_params[1,1] + 
+            diff_params[1,2] / ( T - Tgi[1] - Tgi[2] * C * 1e-3) + 
+            diff_params[2,1] * C * 1e-3
             )
         )
 end
@@ -151,7 +152,6 @@ end
     @tullio coeff[i] = Conductivity[i]*DmuDc[i] * t/(F*z)
 end
 
-
 @terv_secondary function update_as_secondary!(
     kGrad_C, tv::TPkGrad{C}, model::SimulationModel{<:Any, <:Electrolyte, <:Any, <:Any}, param, C, ConsCoeff
     )
@@ -159,7 +159,6 @@ end
     conn_data = mf.conn_data
     @tullio kGrad_C[i] = half_face_two_point_kgrad(conn_data[i], C, ConsCoeff)
 end
-
 
 @terv_secondary function update_as_secondary!(
     DGrad_C, tv::TPDGrad{C}, model::SimulationModel{Dom, S, F, Con}, 
@@ -188,26 +187,6 @@ end
     @tullio N[i] =  - TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
 end
 
-
-@inline function harm_av(c, κ)
-    i, j = c.self, c.other
-    return (κ[i]^-1 + κ[j]^-1)^-1
-end
-
-@terv_secondary function update_as_secondary!(
-    Q, tv::EnergyFlux, model, param, 
-    TPkGrad_T, TotalCurrent, TPDGrad_C, Conductivity, Diffusivity, DmuDc
-    )
-    mf = model.domain.discretizations.charge_flow
-    conn_data = mf.conn_data
-    D = Diffusivity
-    @tullio Q[i] = (
-        - TPkGrad_T[i]
-        - TotalCurrent[i]^2 / harm_av(conn_data[i], Conductivity)
-        - TPDGrad_C[i]^2 * harm_av(conn_data[i], DmuDc ./ D)
-    )
-end
-
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
     law::Conservation{ChargeAcc}) where {D, S <: Electrolyte, F, Con}
     return storage.state.TotalCurrent
@@ -220,7 +199,7 @@ end
 
 function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
     law::Conservation{EnergyAcc}) where {D, S <: Electrolyte, F, Con}
-    return storage.state.EnergyFlux
+    return - storage.state.TPkGrad_T
 end
 
 
@@ -244,14 +223,25 @@ function apply_boundary_potential!(
     # Type
     # TODO: What if potential is defined on different cells
     bp = model.secondary_variables[:BoundaryPhi]
-    T = bp.T_half_face
+    T_hf = bp.T_half_face
     for (i, c) in enumerate(bp.cells)
         @inbounds acc[c] -= (
-            - dmudc[c] * t/(F*z) * κ[c] * T[i] * (C[c] - BoundaryC[i])
-            - κ[c] * T[i] * (Phi[c] - BoundaryPhi[i])
+            - dmudc[c] * t/(F*z) * κ[c] * T_hf[i] * (C[c] - BoundaryC[i])
+            - κ[c] * T_hf[i] * (Phi[c] - BoundaryPhi[i])
         )
     end
 end
+
+function update_accumulation!(law::Conservation{EnergyAcc}, storage, model, dt)
+    conserved = law.accumulation_symbol
+    acc = get_entries(law.accumulation)
+    m = storage.state[conserved]
+    m0 = storage.state0[conserved]
+    # TODO: Add energy density from J^2 and GradC^2
+    @tullio acc[c] = (m[c] - m0[c])/dt
+    return acc
+end
+
 
 function apply_boundary_potential!(
     acc, state, model::SimulationModel{<:Any,<:Electrolyte,<:Any,<:Any}, 
@@ -273,15 +263,15 @@ function apply_boundary_potential!(
 
     # Type
     bp = model.secondary_variables[:BoundaryC]
-    T = bp.T_half_face
+    T_hf = bp.T_half_face
 
     for (i, c) in enumerate(bp.cells)
         @inbounds j = (
-            - dmudc[c] * t/(F*z) * κ[c] * T[i] * (C[c] - BoundaryC[i])
-            - κ[c] * T[i] * (Phi[c] - BoundaryPhi[i])
+            - dmudc[c] * t/(F*z) * κ[c] * T_hf[i] * (C[c] - BoundaryC[i])
+            - κ[c] * T_hf[i] * (Phi[c] - BoundaryPhi[i])
         )
         @inbounds acc[c] -= (
-            - D[c] * T[i](C[c] - BoundaryC[i])
+            - D[c] * T_hf[i](C[c] - BoundaryC[i])
             + t / (F * z) * j
         )
     end
@@ -292,37 +282,16 @@ function apply_boundary_potential!(
     eq::Conservation{EnergyAcc}
     )
     # values
-    Phi = state[:Phi]
-    C = state[:C]
     T = state[:T]
-    dmudc = state[:DmuDc]
-    κ = state[:Conductivity]
-    D = state[:Diffusivity]
     λ = state[:ThermalConductivity]
-
-    F = FARADAY_CONST
-    z = parameters.z
-    t = parameters.t
-
-    BoundaryPhi = state[:BoundaryPhi]
-    BoundaryC = state[:BoundaryC]
 
     # Type
     bp = model.secondary_variables[:BoundaryC]
     T = bp.T_half_face
 
     for (i, c) in enumerate(bp.cells)
-        @inbounds j = (
-            - dmudc[c] * t/(F*z) * κ[c] * T[i] * (C[c] - BoundaryC[i])
-            - κ[c] * T[i] * (Phi[c] - BoundaryPhi[i])
-        )
-        @inbounds GradC = Thf[i]*(C[c] - BoundaryC[i])
-        @inbounds GradT = Thf[i]*(T[c] - BoundaryT[i])
-        @inbounds acc[c] -= (
-            - λ[c] * GradT[c]
-            - j[c]^2 / κ[c]
-            - dmudc[c] * GradC[c]^2 / D[c]
-        )
+        # TODO: Add influence of boundary on energy density
+        @inbounds acc[c] -= - λ[c] * Thf[i] * (T[c] - BoundaryT[i])
     end
 end
 

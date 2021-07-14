@@ -24,15 +24,16 @@ plot_elyte()
 function test_elyte()
     name="square_current_collector"
     domain, exported = get_cc_grid(MixedFlow(), name=name, extraout=true)
-    timesteps = LinRange(0, 1, 100)[2:end]
+    timesteps = LinRange(0, 0.1, 100)[2:end]
     G = exported["G"]
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
 
     S = model.secondary_variables
-    bcells = [1, 100]
-    Thf = [2, 2]
+    nc = Int(G["cells"]["num"])
+    bcells = [1, nc]
+    Thf = [2., 2.]
     S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, Thf)
     S[:BoundaryC] = BoundaryPotential{C}(bcells, Thf)
     S[:BoundaryT] = BoundaryPotential{T}(bcells, Thf)
@@ -41,14 +42,14 @@ function test_elyte()
     init = Dict(
         :Phi                    => 1.,
         :C                      => 1.,
-        :T                      => 1.,
+        :T                      => 273.,
         :Conductivity           => 1.,
         :Diffusivity            => 1.,
-        :ThermalConductivity    => 1., 
+        :ThermalConductivity    => 6e-05, 
         :ConsCoeff              => 1.,
         :BoundaryPhi            => [1., 2.],
-        :BoundaryC              => [1., 2.],
-        :BoundaryT              => [1., 2.], 
+        :BoundaryC              => [1., 1.],
+        :BoundaryT              => [273., 300.], 
     )
 
     state0 = setup_state(model, init)
@@ -66,3 +67,4 @@ G, states, model, sim = test_elyte();
 
 f = plot_interactive(G, states)
 display(f)
+##
