@@ -1,6 +1,7 @@
-using Terv
+using Terv, Polynomials
 
 export Electrolyte, TestElyte
+export p1, p2, p3, cnst
 
 abstract type Electrolyte <: ElectroChemicalComponent end
 struct TestElyte <: Electrolyte end
@@ -87,9 +88,19 @@ function setup_parameters(
     return d
 end
 
+const cnst = [
+    -10.5       0.074       -6.96e-5    ;
+    0.668e-3    -1.78e-5    2.80e-8     ;
+    0.494e-6    -8.86e-10   0           ;
+]
+const p1 = Polynomial(cnst[1:end, 1])
+const p2 = Polynomial(cnst[1:end, 2])
+const p3 = Polynomial(cnst[1:end, 3])
+
 
 @inline function cond(T::Real, C::Real, ::Electrolyte)
-    return 4. + 3.5 * C + (2.)*T + 0.1 * C * T # Arbitrary for now
+    fact = 1e-4
+    return fact * C * (p1(C) + p2(C) * T + p3(C) * T^2)^2
 end
 
 @inline function diffusivity(T::Real, C::Real, ::Electrolyte)
