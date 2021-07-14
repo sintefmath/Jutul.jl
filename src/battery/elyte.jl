@@ -202,6 +202,15 @@ function get_flux(storage,  model::SimulationModel{D, S, F, Con},
     return - storage.state.TPkGrad_T
 end
 
+function update_accumulation!(law::Conservation{EnergyAcc}, storage, model, dt)
+    conserved = law.accumulation_symbol
+    acc = get_entries(law.accumulation)
+    m = storage.state[conserved]
+    m0 = storage.state0[conserved]
+    # TODO: Add energy density from J^2 and GradC^2
+    @tullio acc[c] = (m[c] - m0[c])/dt
+    return acc
+end
 
 function apply_boundary_potential!(
     acc, state, parameters, model::SimulationModel{<:Any,<:Electrolyte,<:Any,<:Any}, 
@@ -230,16 +239,6 @@ function apply_boundary_potential!(
             - κ[c] * T_hf[i] * (Phi[c] - BoundaryPhi[i])
         )
     end
-end
-
-function update_accumulation!(law::Conservation{EnergyAcc}, storage, model, dt)
-    conserved = law.accumulation_symbol
-    acc = get_entries(law.accumulation)
-    m = storage.state[conserved]
-    m0 = storage.state0[conserved]
-    # TODO: Add energy density from J^2 and GradC^2
-    @tullio acc[c] = (m[c] - m0[c])/dt
-    return acc
 end
 
 
