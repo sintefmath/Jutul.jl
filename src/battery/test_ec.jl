@@ -6,7 +6,9 @@ ENV["JULIA_DEBUG"] = Terv;
 
 function test_ec()
     name="square_current_collector"
-    domain, exported = get_cc_grid(MixedFlow(), name=name, extraout=true)
+    bcells, T_hf = get_boundary(name)
+    one = ones(size(bcells))
+    domain, exported = get_cc_grid(MixedFlow(), name=name, extraout=true, bc=bcells, b_T_hf=T_hf)
     timesteps = LinRange(0, 10, 10)[2:end]
     G = exported["G"]
     
@@ -23,17 +25,14 @@ function test_ec()
     σ = 1.
     λ = 1.
 
-    bcells, Thf = get_boundary(name)
-    one = ones(size(bcells))
-
     S = model.secondary_variables
-    S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, Thf)
-    S[:BoundaryC] = BoundaryPotential{Phi}(bcells, Thf)
-    S[:BoundaryT] = BoundaryPotential{T}(bcells, Thf)
+    S[:BoundaryPhi] = BoundaryPotential{Phi}()
+    S[:BoundaryC] = BoundaryPotential{Phi}()
+    S[:BoundaryT] = BoundaryPotential{T}()
 
-    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+9)
-    S[:BCMass] = BoundaryCurrent{MassAcc}(bcells.+9)
-    S[:BCEnergy] = BoundaryCurrent{EnergyAcc}(bcells.+9)
+    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+99)
+    S[:BCMass] = BoundaryCurrent{MassAcc}(bcells.+99)
+    S[:BCEnergy] = BoundaryCurrent{EnergyAcc}(bcells.+99)
 
     phi0 = 1.
     init = Dict(

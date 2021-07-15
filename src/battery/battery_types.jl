@@ -69,7 +69,7 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     volumes::AbstractVector{R}
     neighborship::AbstractArray{I}
     boundary_cells::AbstractArray{I}
-    boundary_T_hf::AbstractArray{I}
+    boundary_T_hf::AbstractArray{R}
 
     function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[])
         nc = length(pv)

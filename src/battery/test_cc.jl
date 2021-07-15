@@ -5,7 +5,7 @@ ENV["JULIA_DEBUG"] = Terv;
 
 
 function test_cc(name="square_current_collector")
-    domain, exported = get_cc_grid(name=name, extraout=true)
+    domain, exported = get_cc_grid(name=name, extraout=true, bc=[1, 100], b_T_hf=[2., 2.])
     timesteps = [1., ]
     G = exported["G"]
 
@@ -14,12 +14,10 @@ function test_cc(name="square_current_collector")
 
     # State is dict with pressure in each cell
     phi = 0.
+    boudary_phi = [1, 2]
 
-    boudary_phi = [0., 1]
-    b_cells = [1, 100]
-    T_half_face = [2., 2.]
     S = model.secondary_variables
-    S[:BoundaryPhi] = BoundaryPotential{Phi}(b_cells, T_half_face)
+    S[:BoundaryPhi] = BoundaryPotential{Phi}()
 
     init = Dict(:Phi => phi, :BoundaryPhi=>boudary_phi)
     state0 = setup_state(model, init)
@@ -43,7 +41,8 @@ display(f)
 
 function test_mixed_bc()
     name="square_current_collector"
-    domain, exported = get_cc_grid(ChargeFlow(), extraout=true, name=name)
+    bcells, T_hf = get_boundary(name)
+    domain, exported = get_cc_grid(ChargeFlow(), extraout=true, name=name, bc=bcells, b_T_hf=T_hf)
     G = exported["G"]
     timesteps = 1:5
 
@@ -52,12 +51,11 @@ function test_mixed_bc()
 
     
     # set up boundary conditions
-    bcells, T = get_boundary(name)
     one = ones(size(bcells))
 
     S = model.secondary_variables
-    S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, T)
-    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+9)
+    S[:BoundaryPhi] = BoundaryPotential{Phi}()
+    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(99 .+bcells)
 
     phi0 = 1.
     init = Dict(

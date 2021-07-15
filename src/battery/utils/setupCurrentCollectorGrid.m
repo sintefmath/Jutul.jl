@@ -1,8 +1,7 @@
-% clear all
-close all
+mrstModule add ad-core battery mpfa
 
-nx = 10;
-ny = 10;
+nx = 100;
+ny = 100;
 
 Lx = 1e-4;
 Ly = 1e-4;
@@ -29,6 +28,20 @@ T = M*T;
 
 T = T(bcfaces);
 
+% TODO: Hvorfor gir dette feil?
+paramobj = CurrentCollectorInputParams();
+
+paramobj.G = G;
+paramobj.heatCapacity = 0;
+paramobj.thermalConductivity = 0;
+paramobj.heatCapacity = 0;
+paramobj.EffectiveElectricalConductivity = 1;
+
+
+model = CurrentCollector(paramobj);
+op = model.operators.cellFluxOp;
+P = op.P;
+
 figure
 plotGrid(G)
 plotFaces(G, bcfaces, 'edgecolor', 'red', 'linewidth', 3);
@@ -38,3 +51,4 @@ savedir = '../../../data/testgrids';
 
 save(fullfile(savedir, 'square_current_collector.mat'), 'G', 'rock');
 save(fullfile(savedir, 'square_current_collector_T.mat'), 'bccells', 'T');
+save(fullfile(savedir, 'square_current_collector_P.mat'), 'P');

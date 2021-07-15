@@ -8,11 +8,11 @@ function get_boundary(name)
 
     exported
     bccells = copy((exported["bccells"]))
-    T = copy((exported["T"])')
+    T = copy((exported["T"]))
 
     bccells = Int64.(bccells)
 
-    return (bccells[:, 1], T)
+    return (bccells[:, 1], T[:, 1])
 end
 
 function get_cc_grid(
