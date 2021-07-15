@@ -107,12 +107,11 @@ function apply_boundary_potential!(
     BoundaryPhi = state[:BoundaryPhi]
     σ = state[:Conductivity]
 
-    # Type
-    bp = model.secondary_variables[:BoundaryPhi]
-    T = bp.T_half_face
+    bc = model.domain.grid.boundary_cells
+    T_hf = model.domain.grid.boundary_T_hf
 
-    for (i, c) in enumerate(bp.cells)
-        @inbounds acc[c] -= - σ[c]*T[i]*(Phi[c] - BoundaryPhi[i])
+    for (i, c) in enumerate(bc)
+        @inbounds acc[c] -= - σ[c]*T_hf[i]*(Phi[c] - BoundaryPhi[i])
     end
 end
 
@@ -125,11 +124,11 @@ function apply_boundary_potential!(
     D = state[:Diffusivity]
 
     # Type
-    bp = model.secondary_variables[:BoundaryC]
-    T = bp.T_half_face
+    bc = model.domain.grid.boundary_cells
+    T_hf = model.domain.grid.boundary_T_hf
 
-    for (i, c) in enumerate(bp.cells)
-        @inbounds acc[c] -= - D[c]*T[i]*(C[c] - BoundaryC[i])
+    for (i, c) in enumerate(bc)
+        @inbounds acc[c] -= - D[c]*T_hf[i]*(C[c] - BoundaryC[i])
     end
 end
 
@@ -141,12 +140,11 @@ function apply_boundary_potential!(
     BoundaryT = state[:BoundaryT]
     λ = state[:ThermalConductivity]
 
-    # Type
-    bp = model.secondary_variables[:BoundaryT]
-    Thf = bp.T_half_face
+    bc = model.domain.grid.boundary_cells
+    T_hf = model.domain.grid.boundary_T_hf
 
-    for (i, c) in enumerate(bp.cells)
-        @inbounds acc[c] -= - λ[c]*Thf[i]*(T[c] - BoundaryT[i])
+    for (i, c) in enumerate(bc)
+        @inbounds acc[c] -= - λ[c]*T_hf[i]*(T[c] - BoundaryT[i])
     end
 end
 

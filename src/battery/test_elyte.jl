@@ -10,9 +10,9 @@ function plot_elyte()
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
     S = model.secondary_variables
-    S[:BoundaryPhi] = BoundaryPotential{Phi}([], [])
-    S[:BoundaryC] = BoundaryPotential{Phi}([], [])
-    S[:BoundaryT] = BoundaryPotential{T}([], [])
+    S[:BoundaryPhi] = BoundaryPotential{Phi}()
+    S[:BoundaryC] = BoundaryPotential{Phi}()
+    S[:BoundaryT] = BoundaryPotential{T}()
 
     plot_graph(model)
 end
@@ -23,7 +23,11 @@ plot_elyte()
 
 function test_elyte()
     name="square_current_collector"
-    domain, exported = get_cc_grid(MixedFlow(), name=name, extraout=true)
+    bc = [1, 100]
+    T_hf = [2., 2.]
+    domain, exported = get_cc_grid(
+        MixedFlow(), name=name, extraout=true, bc=bc, b_T_hf=T_hf
+        )
     timesteps = LinRange(0, 0.1, 100)[2:end]
     G = exported["G"]
     sys = TestElyte()
@@ -31,12 +35,10 @@ function test_elyte()
     parameters = setup_parameters(model)
 
     S = model.secondary_variables
-    nc = Int(G["cells"]["num"])
-    bcells = [1, nc]
-    Thf = [2., 2.]
-    S[:BoundaryPhi] = BoundaryPotential{Phi}(bcells, Thf)
-    S[:BoundaryC] = BoundaryPotential{C}(bcells, Thf)
-    S[:BoundaryT] = BoundaryPotential{T}(bcells, Thf)
+
+    S[:BoundaryPhi] = BoundaryPotential{Phi}()
+    S[:BoundaryC] = BoundaryPotential{C}()
+    S[:BoundaryT] = BoundaryPotential{T}()
 
 
     init = Dict(

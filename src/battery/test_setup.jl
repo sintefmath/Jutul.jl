@@ -16,7 +16,8 @@ function get_boundary(name)
 end
 
 function get_cc_grid(
-    flow_type=ChargeFlow(); name="square_current_collector", extraout = false
+    flow_type=ChargeFlow(); name="square_current_collector", 
+    extraout = false, bc=[], b_T_hf=[]
     )
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     exported = MAT.matread(fn)
@@ -49,7 +50,7 @@ function get_cc_grid(
         )
     T = compute_face_trans(T_hf, N)
 
-    G = MinimalECTPFAGrid(volumes, N)
+    G = MinimalECTPFAGrid(volumes, N, bc, b_T_hf)
     z = nothing
     g = nothing
 

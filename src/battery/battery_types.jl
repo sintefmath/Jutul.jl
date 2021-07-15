@@ -56,20 +56,22 @@ abstract type ECFlow <: FlowType end
 struct ChargeFlow <: ECFlow end
 struct MixedFlow <: ECFlow end
 
-struct BoundaryPotential{T} <: ScalarVariable 
-    cells
-    T_half_face
-end
-
+struct BoundaryPotential{T} <: ScalarVariable end
 struct BoundaryCurrent{T} <: ScalarVariable 
     cells
 end
 
 
 struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
+    """
+    Simple grid for a electro chemical component
+    """
     volumes::AbstractVector{R}
     neighborship::AbstractArray{I}
-    function MinimalECTPFAGrid(pv, N)
+    boundary_cells::AbstractArray{I}
+    boundary_T_hf::AbstractArray{I}
+
+    function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[])
         nc = length(pv)
         pv::AbstractVector
         @assert size(N, 1) == 2
@@ -78,7 +80,8 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
             @assert maximum(N) <= nc
         end
         @assert all(pv .> 0)
-        new{eltype(pv), eltype(N)}(pv, N)
+        @assert size(bc) == size(T_hf)
+        new{eltype(pv), eltype(N)}(pv, N, bc, T_hf)
     end
 end
 

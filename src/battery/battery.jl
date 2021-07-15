@@ -64,7 +64,7 @@ function number_of_units(model, ::T)
 end
 
 function number_of_units(model, BP::BoundaryPotential)
-    return size(BP.cells)[1]
+    return size(model.domain.grid.boundary_cells)[1]
 end
 function number_of_units(model, BP::BoundaryCurrent)
     return size(BP.cells)[1]

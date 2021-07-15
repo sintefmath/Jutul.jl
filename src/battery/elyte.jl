@@ -226,17 +226,16 @@ function apply_boundary_potential!(
     z = parameters.z
     t = parameters.t
 
-    BoundaryPhi = state[:BoundaryPhi]
-    BoundaryC = state[:BoundaryC]
+    BPhi = state[:BoundaryPhi]
+    BC = state[:BoundaryC]
 
-    # Type
-    # TODO: What if potential is defined on different cells
-    bp = model.secondary_variables[:BoundaryPhi]
-    T_hf = bp.T_half_face
-    for (i, c) in enumerate(bp.cells)
+    bc = model.domain.grid.boundary_cells
+    T_hf = model.domain.grid.boundary_T_hf
+
+    for (i, c) in enumerate(bc)
         @inbounds acc[c] -= (
-            - dmudc[c] * t/(F*z) * κ[c] * T_hf[i] * (C[c] - BoundaryC[i])
-            - κ[c] * T_hf[i] * (Phi[c] - BoundaryPhi[i])
+            - dmudc[c] * t/(F*z) * κ[c] * T_hf[i] * (C[c] - BC[i])
+            - κ[c] * T_hf[i] * (Phi[c] - BPhi[i])
         )
     end
 end
@@ -257,20 +256,19 @@ function apply_boundary_potential!(
     z = parameters.z
     t = parameters.t
 
-    BoundaryPhi = state[:BoundaryPhi]
-    BoundaryC = state[:BoundaryC]
+    BPhi = state[:BoundaryPhi]
+    BC = state[:BoundaryC]
 
-    # Type
-    bp = model.secondary_variables[:BoundaryC]
-    T_hf = bp.T_half_face
+    bc = model.domain.grid.boundary_cells
+    T_hf = model.domain.grid.boundary_T_hf
 
-    for (i, c) in enumerate(bp.cells)
+    for (i, c) in enumerate(bc)
         @inbounds j = (
-            - dmudc[c] * t/(F*z) * κ[c] * T_hf[i] * (C[c] - BoundaryC[i])
-            - κ[c] * T_hf[i] * (Phi[c] - BoundaryPhi[i])
+            - dmudc[c] * t/(F*z) * κ[c] * T_hf[i] * (C[c] - BC[i])
+            - κ[c] * T_hf[i] * (Phi[c] - BPhi[i])
         )
         @inbounds acc[c] -= (
-            - D[c] * T_hf[i](C[c] - BoundaryC[i])
+            - D[c] * T_hf[i](C[c] - BC[i])
             + t / (F * z) * j
         )
     end
@@ -283,14 +281,17 @@ function apply_boundary_potential!(
     # values
     T = state[:T]
     λ = state[:ThermalConductivity]
+    BT = state[:BoundaryT]
+
 
     # Type
     bp = model.secondary_variables[:BoundaryC]
-    T = bp.T_half_face
+    bc = model.domain.grid.boundary_cells
+    T_hf = model.domain.grid.boundary_T_hf
 
-    for (i, c) in enumerate(bp.cells)
+    for (i, c) in enumerate(bc)
         # TODO: Add influence of boundary on energy density
-        @inbounds acc[c] -= - λ[c] * Thf[i] * (T[c] - BoundaryT[i])
+        @inbounds acc[c] -= - λ[c] * T_hf[i] * (T[c] - BT[i])
     end
 end
 
