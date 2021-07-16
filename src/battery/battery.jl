@@ -77,21 +77,6 @@ end
 end
 
 
-function update_linearized_system_equation!(
-    nz, r, model, law::Conservation
-    )
-    
-    acc = get_diagonal_cache(law)
-    cell_flux = law.half_face_flux_cells
-    cpos = law.flow_discretization.conn_pos
-
-    update_linearized_system_subset_conservation_accumulation!(
-        nz, r, model, acc, cell_flux, cpos
-        )
-    fill_equation_entries!(nz, nothing, model, cell_flux)
-end
-
-
 function align_to_jacobian!(
     law::Conservation, jac, model, u::Cells; equation_offset = 0, 
     variable_offset = 0
@@ -133,6 +118,72 @@ function declare_pattern(model, e::Conservation, ::Faces)
     J = map(x -> x.face, cd)
     return (I, J)
 end
+
+#####################
+# Updating Jacobian #
+#####################
+
+
+function update_linearized_system_equation!(
+    nz, r, model, law::Conservation
+    )
+    
+    acc = get_diagonal_cache(law)
+    cell_flux = law.half_face_flux_cells
+    cpos = law.flow_discretization.conn_pos
+
+    #?? What is up with the names??
+    #! @async removed for debugging, slows performance!
+    update_linearized_system_subset_conservation_accumulation_2!( #! Obs, _2!!
+        nz, r, model, acc, cell_flux, cpos
+        )
+    #? Why is r nothing?
+    fill_equation_entries_2!(nz, nothing, model, cell_flux) 
+end
+
+# TODO: Make sure densities are added
+function update_linearized_system_subset_conservation_accumulation_2!(
+    nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache,
+    conn_pos
+    )
+    nc, ne, np = ad_dims(acc)
+    centries = acc.entries
+    fentries = cell_flux.entries
+    cp = acc.jacobian_positions
+    #! @threads removed for debugging, slows performance!
+    for cell = 1:nc
+        for e in 1:ne
+            diag_entry = get_entry(acc, cell, e, centries)
+            @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+                diag_entry -= get_entry(cell_flux, i, e, fentries)
+            end
+
+            @inbounds r[e, cell] = diag_entry.value
+            for d = 1:np
+                apos = get_jacobian_pos(acc, cell, e, d, cp)
+                @inbounds nz[apos] = diag_entry.partials[d]
+            end
+        end
+    end
+end
+
+
+# TODO: Add entry so that densities not on the diagonal, such as j^2, may be added
+function fill_equation_entries!(
+    nz, r::Nothing, model, cache::TervAutoDiffCache
+    )
+    nu, ne, np = ad_dims(cache)
+    entries = cache.entries
+    jp = cache.jacobian_positions
+    @threads for i in 1:nu
+        for e in 1:ne
+            a = get_entry(cache, i, e, entries)
+            for d = 1:np
+                apos = get_jacobian_pos(cache, i, e, d, jp)
+                @inbounds nz[apos] = a.partials[d]
+            end
+        end
+    end
 
 
 ############################

@@ -28,7 +28,6 @@ T = M*T;
 
 T = T(bcfaces);
 
-% TODO: Hvorfor gir dette feil?
 paramobj = CurrentCollectorInputParams();
 
 paramobj.G = G;

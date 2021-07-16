@@ -19,6 +19,25 @@ struct TotalCurrent <: Current end
 struct ChargeCarrierFlux <: Current end
 struct EnergyFlux <: Current end
 
+# Abstract type of a vector that is defined on a cell, from face flux
+abstract type CellVector end
+struct JCell <: CellVector end
+struct DGradCCell <: CellVector end
+
+struct ScalarNonDiagVaraible <: ScalarVariable
+struct JSq <: ScalarVariable end
+struct DGradCSq <: ScalaraVariable end
+
+function number_of_units(model, pv::ScalarNonDiagVaraible)
+    """ Each value depends on a cell and all its neighbours """
+    # TODO: Return number of cells + number of neighbours
+end
+
+function number_of_units(model, pv::CellVector)
+    """ 2 components per cell """
+    return 2*count_units(model.domain, Cells())
+end
+
 function number_of_units(model, pv::Current)
     return 2*count_units(model.domain, Faces())
 end
@@ -66,7 +85,9 @@ function select_secondary_variables_system!(
 
     S[:TotalCurrent] = TotalCurrent()
     S[:ChargeCarrierFlux] = ChargeCarrierFlux()
-    
+    S[:JCell] = JCell()
+    S[:JSq] = JSq()
+
     S[:ChargeAcc] = ChargeAcc()
     S[:MassAcc] = MassAcc()
     S[:EnergyAcc] = EnergyAcc()
@@ -76,7 +97,7 @@ end
 function minimum_output_variables(
     system::Electrolyte, primary_variables
     )
-    [:ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity, :TotalCurrent]
+    [:ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity, :TotalCurrent, :JSq]
 end
 
 function setup_parameters(::ElectrolyteModel)
@@ -186,6 +207,21 @@ end
     F = FARADAY_CONST
     @tullio N[i] =  - TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
 end
+
+@terv_secondary(
+function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
+    # TODO: Make map from face-valued flux to cell-valued vector
+    nothing
+end
+)
+
+@terv_secondary(
+function update_as_secondary!(j_sq, sc::JSq, model, param, JCell)
+    # TODO: Make map from cell-valued vector to scalar, include dep.
+    nothing
+end
+)
+
 
 function get_flux(
     storage,  model::ElectrolyteModel, law::Conservation{ChargeAcc}
