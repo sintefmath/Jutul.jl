@@ -6,6 +6,9 @@ export p1, p2, p3, cnst
 abstract type Electrolyte <: ElectroChemicalComponent end
 struct TestElyte <: Electrolyte end
 
+# Alias for convinience
+const ElectrolyteModel = SimulationModel{<:Any, <:Electrolyte, <:Any, <:Any}
+
 struct TPDGrad{T} <: KGrad{T} end
 # Is it necesessary with a new struxt for all these?
 struct DmuDc <: ScalarVariable end
@@ -73,12 +76,10 @@ end
 function minimum_output_variables(
     system::Electrolyte, primary_variables
     )
-    [:ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity]
+    [:ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity, :TotalCurrent]
 end
 
-function setup_parameters(
-    ::SimulationModel{<:Any, <:Electrolyte, <:Any, <:Any}
-    )
+function setup_parameters(::ElectrolyteModel)
     d = Dict{Symbol, Any}()
     d[:tolerances] = Dict{Symbol, Any}()
     d[:tolerances][:default] = 1e-3
@@ -125,17 +126,18 @@ end
     @tullio dmudc[i] = R * (T[i] / C[i])
 end
 
-
-@terv_secondary function update_as_secondary!(
-    con, tv::Conductivity, model::SimulationModel{<:Any, <:Electrolyte, <:Any,<:Any}, param, T, C
+# ? Does this maybe look better ?
+@terv_secondary(
+function update_as_secondary!(
+    con, tv::Conductivity, model::ElectrolyteModel, param, T, C
     )
     s = model.system
     @tullio con[i] = cond(T[i], C[i], s)
 end
+)
 
 @terv_secondary function update_as_secondary!(
-    D, sv::Diffusivity, model::SimulationModel{<:Any, <:Electrolyte, <:Any,<:Any},
-     param, C, T
+    D, sv::Diffusivity, model::ElectrolyteModel, param, C, T
     )
     s = model.system
     @tullio D[i] = diffusivity(T[i], C[i], s)
@@ -143,8 +145,7 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    coeff, tv::ConsCoeff, model::SimulationModel{<:Any, <:Electrolyte, <:Any, <:Any}, 
-    param, Conductivity, DmuDc
+    coeff, tv::ConsCoeff, model::ElectrolyteModel, param, Conductivity, DmuDc
     )
     t = param.t
     z = param.z
@@ -153,7 +154,7 @@ end
 end
 
 @terv_secondary function update_as_secondary!(
-    kGrad_C, tv::TPkGrad{C}, model::SimulationModel{<:Any, <:Electrolyte, <:Any, <:Any}, param, C, ConsCoeff
+    kGrad_C, tv::TPkGrad{C}, model::ElectrolyteModel, param, C, ConsCoeff
     )
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
@@ -161,9 +162,8 @@ end
 end
 
 @terv_secondary function update_as_secondary!(
-    DGrad_C, tv::TPDGrad{C}, model::SimulationModel{Dom, S, F, Con}, 
-    param, C, Diffusivity
-    ) where {Dom, S <: Electrolyte, F, Con}
+    DGrad_C, tv::TPDGrad{C}, model::ElectrolyteModel, param, C, Diffusivity
+    )
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     @tullio DGrad_C[i] = half_face_two_point_kgrad(conn_data[i], C, Diffusivity)
@@ -187,18 +187,21 @@ end
     @tullio N[i] =  - TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
 end
 
-function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
-    law::Conservation{ChargeAcc}) where {D, S <: Electrolyte, F, Con}
+function get_flux(
+    storage,  model::ElectrolyteModel, law::Conservation{ChargeAcc}
+    )
     return storage.state.TotalCurrent
 end
 
-function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
-    law::Conservation{MassAcc}) where {D, S <: Electrolyte, F, Con}
+function get_flux(
+    storage,  model::ElectrolyteModel, law::Conservation{MassAcc}
+    )
     return storage.state.ChargeCarrierFlux
 end
 
-function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
-    law::Conservation{EnergyAcc}) where {D, S <: Electrolyte, F, Con}
+function get_flux(
+    storage,  model::ElectrolyteModel, law::Conservation{EnergyAcc}
+    )
     return - storage.state.TPkGrad_T
 end
 
@@ -213,8 +216,7 @@ function update_accumulation!(law::Conservation{EnergyAcc}, storage, model, dt)
 end
 
 function apply_boundary_potential!(
-    acc, state, parameters, model::SimulationModel{<:Any,<:Electrolyte,<:Any,<:Any}, 
-    eq::Conservation{ChargeAcc}
+    acc, state, parameters, model::ElectrolyteModel, eq::Conservation{ChargeAcc}
     )
     # values
     Phi = state[:Phi]
@@ -242,8 +244,7 @@ end
 
 
 function apply_boundary_potential!(
-    acc, state, model::SimulationModel{<:Any,<:Electrolyte,<:Any,<:Any}, 
-    eq::Conservation{MassAcc}
+    acc, state, model::ElectrolyteModel, eq::Conservation{MassAcc}
     )
     # values
     Phi = state[:Phi]
@@ -275,8 +276,7 @@ function apply_boundary_potential!(
 end
 
 function apply_boundary_potential!(
-    acc, state, model::SimulationModel{<:Any,<:Electrolyte,<:Any,<:Any}, 
-    eq::Conservation{EnergyAcc}
+    acc, state, model::ElectrolyteModel, eq::Conservation{EnergyAcc}
     )
     # values
     T = state[:T]

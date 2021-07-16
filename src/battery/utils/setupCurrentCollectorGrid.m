@@ -1,7 +1,7 @@
 mrstModule add ad-core battery mpfa
 
-nx = 100;
-ny = 100;
+nx = 10;
+ny = 10;
 
 Lx = 1e-4;
 Ly = 1e-4;
@@ -41,6 +41,7 @@ paramobj.EffectiveElectricalConductivity = 1;
 model = CurrentCollector(paramobj);
 op = model.operators.cellFluxOp;
 P = op.P;
+S = op.S;
 
 figure
 plotGrid(G)
@@ -51,4 +52,4 @@ savedir = '../../../data/testgrids';
 
 save(fullfile(savedir, 'square_current_collector.mat'), 'G', 'rock');
 save(fullfile(savedir, 'square_current_collector_T.mat'), 'bccells', 'T');
-save(fullfile(savedir, 'square_current_collector_P.mat'), 'P');
+save(fullfile(savedir, 'square_current_collector_P.mat'), 'P', 'S');

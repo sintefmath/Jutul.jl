@@ -12,7 +12,7 @@ function plot_elyte()
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
     S[:BoundaryC] = BoundaryPotential{Phi}()
-    S[:BoundaryT] = BoundaryPotential{T}(bccells)
+    S[:BoundaryT] = BoundaryPotential{T}()
 
     plot_graph(model)
 end
@@ -24,10 +24,13 @@ plot_elyte()
 function test_elyte()
     name="square_current_collector"
     bcells, T_hf = get_boundary(name)
+    one = ones(size(bcells))
+    bcells = [bcells..., (bcells .+ 9)...]
+    T_hf = [T_hf..., T_hf...]
     domain, exported = get_cc_grid(
         MixedFlow(), name=name, extraout=true, bc=bcells, b_T_hf=T_hf
         )
-    timesteps = LinRange(0, 0.01, 100)[2:end]
+    timesteps = diff(LinRange(0, 1, 200))
     G = exported["G"]
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
@@ -39,12 +42,7 @@ function test_elyte()
     S[:BoundaryC] = BoundaryPotential{C}()
     S[:BoundaryT] = BoundaryPotential{T}()
 
-    # S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+99)
-    # S[:BCMass] = BoundaryCurrent{MassAcc}(bcells.+99)
-    # S[:BCEnergy] = BoundaryCurrent{EnergyAcc}(bcells.+99)
 
-    one = ones(size(bcells))
-    
     init = Dict(
         :Phi                    => 1.,
         :C                      => 1.,
@@ -53,9 +51,9 @@ function test_elyte()
         :Diffusivity            => 1.,
         :ThermalConductivity    => 6e-05, 
         :ConsCoeff              => 1.,
-        :BoundaryPhi            => 10 .*one,
-        :BoundaryC              => 10 .*one,
-        :BoundaryT              => 273. .* one, 
+        :BoundaryPhi            => [one..., -one...],
+        :BoundaryC              => [one..., 0*one...],
+        :BoundaryT              => [273 .* one..., 300 .* one...]
         # :BCCharge               => one,
         # :BCMass                 => one,
         # :BCEnergy               => one,

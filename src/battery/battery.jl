@@ -89,10 +89,10 @@ function update_linearized_system_equation!(
     cell_flux = law.half_face_flux_cells
     cpos = law.flow_discretization.conn_pos
 
-    begin 
-        update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
-        fill_equation_entries!(nz, nothing, model, cell_flux)
-    end
+    update_linearized_system_subset_conservation_accumulation!(
+        nz, r, model, acc, cell_flux, cpos
+        )
+    fill_equation_entries!(nz, nothing, model, cell_flux)
 end
 
 

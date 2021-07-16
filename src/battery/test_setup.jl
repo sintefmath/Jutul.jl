@@ -1,6 +1,6 @@
 using Terv
 
-export get_cc_grid, get_boundary
+export get_cc_grid, get_boundary, get_tensorprod
 
 function get_boundary(name)
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, "_T.mat")
@@ -14,6 +14,18 @@ function get_boundary(name)
 
     return (bccells[:, 1], T[:, 1])
 end
+
+function get_tensorprod(name="square_current_collector")
+    fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, "_P.mat")
+    exported = MAT.matread(fn)
+
+    exported
+    P = copy((exported["P"]))
+    S = copy((exported["S"]))
+
+    return P, S
+end
+
 
 function get_cc_grid(
     flow_type=ChargeFlow(); name="square_current_collector", 
