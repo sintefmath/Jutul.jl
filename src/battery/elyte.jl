@@ -24,9 +24,9 @@ abstract type CellVector end
 struct JCell <: CellVector end
 struct DGradCCell <: CellVector end
 
-struct ScalarNonDiagVaraible <: ScalarVariable
+struct ScalarNonDiagVaraible <: ScalarVariable end
 struct JSq <: ScalarVariable end
-struct DGradCSq <: ScalaraVariable end
+struct DGradCSq <: ScalarVariable end
 
 function number_of_units(model, pv::ScalarNonDiagVaraible)
     """ Each value depends on a cell and all its neighbours """
@@ -208,10 +208,53 @@ end
     @tullio N[i] =  - TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
 end
 
+
+function get_cell_index(c, k, diff_C)
+    # TODO: Should return the index of j_cell that holds the value of j, in cell c, with the derivative w.r.t cell diff_c
+end
+
+function get_face_index(f, diff_c)
+    # TODO: Return the value at face f, that depends on cell diff_c
+end
+
+function get_face(c, model)
+    #TODO: get all the faces of C
+end
+
+function get_neighbors(c, model)
+    # TODO: Return a list of the neighbors of c
+end
+
 @terv_secondary(
 function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
+    """
+    j_cell is a vector that has 2 coponents per cell
+    P maps between values defined on the face, and vectors defined in cells
+    P_[c, i, f] = P_[2*c + i, f], (c=cell, i=space, f=face)
+    j_c[c, i, c'] = P_[c, i, f] * J_[f, c'] (c'=cell dependence)
+    """
+    P = model.domain.grid.P
+    J = TotalCurrent    
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
     # TODO: Make map from face-valued flux to cell-valued vector
-    nothing
+    for c in 1:number_of_cells(model.domain.discretization)
+        for f in get_faces(c, model)
+            cic = get_cell_index(c, i, c)
+            fc = get_face_index(f, c)
+            j_cell[cic] = P[2*c + i, f] * J[fc]
+        end
+        for n in get_neighbours(c, model)
+            for f in get_faces(c, model)
+                # TODO: Make so that J only depends on n
+                cin = get_cell_index(c, i, n)
+                get_cell_index(c, i, n)
+                fc = get_face_index(f, n)
+                fc = get_face_index(f, c)
+                j_cell[cin] = P[2*c + i, f] * J[fc]
+            end
+        end
+    end
 end
 )
 

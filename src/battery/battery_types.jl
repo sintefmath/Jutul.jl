@@ -1,10 +1,12 @@
 using Terv
 
+# TODO: Theser are not all needed
 export ElectroChemicalComponent, CurrentCollector, Electectrolyte, TestElyte
 export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
 export ChargeFlow, MixedFlow, Conservation, BoundaryPotential, BoundaryCurrent
 export Phi, C, T, ChargeAcc, MassAcc, EnergyAcc, KGrad
 export BOUNDARY_CURRENT, corr_type
+
 ###########
 # Classes #
 ###########
@@ -72,8 +74,9 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     neighborship::AbstractArray{I}
     boundary_cells::AbstractArray{I}
     boundary_T_hf::AbstractArray{R}
+    P::AbstractArray{R} # Tensor to map from cells to faces
 
-    function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[])
+    function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[])
         nc = length(pv)
         pv::AbstractVector
         @assert size(N, 1) == 2
@@ -83,7 +86,7 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
         end
         @assert all(pv .> 0)
         @assert size(bc) == size(T_hf)
-        new{eltype(pv), eltype(N)}(pv, N, bc, T_hf)
+        new{eltype(pv), eltype(N)}(pv, N, bc, T_hf, P)
     end
 end
 

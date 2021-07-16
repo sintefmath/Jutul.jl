@@ -175,7 +175,8 @@ function fill_equation_entries!(
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
     jp = cache.jacobian_positions
-    @threads for i in 1:nu
+    #! @threads removed for debugging, slows performance!
+    for i in 1:nu
         for e in 1:ne
             a = get_entry(cache, i, e, entries)
             for d = 1:np
@@ -184,6 +185,7 @@ function fill_equation_entries!(
             end
         end
     end
+end
 
 
 ############################
