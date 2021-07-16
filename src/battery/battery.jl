@@ -22,9 +22,7 @@ end
 # All EC-comps #
 ################
 
-function single_unique_potential(
-    model::SimulationModel{D, S}
-    )where {D<:TervDomain, S<:ElectroChemicalComponent}
+function single_unique_potential(model::ECModel)
     return false
 end
 
@@ -40,9 +38,7 @@ function degrees_of_freedom_per_unit(model, sf::KGrad)
     return 1
 end
 
-function degrees_of_freedom_per_unit(
-    model::SimulationModel{D, S}, sf::Phi
-    ) where {D<:TervDomain, S<:ElectroChemicalComponent}
+function degrees_of_freedom_per_unit(model::ECModel, sf::Phi)
     return 1
 end
 
@@ -145,24 +141,24 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    kGrad, sv::TPkGrad{Phi}, model::SimulationModel{D, S, F, C}, param, 
-    Phi, Conductivity ) where {D, S <: ElectroChemicalComponent, F, C}
+    kGrad, sv::TPkGrad{Phi}, model::ECModel, param, Phi, Conductivity
+    )
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     @tullio kGrad[i] = half_face_two_point_kgrad(conn_data[i], Phi, Conductivity)
 end
 
 @terv_secondary function update_as_secondary!(
-    kGrad, sv::TPkGrad{C}, model::SimulationModel{D, S, F, Con}, param, 
-    C, Diffusivity) where {D, S <: ElectroChemicalComponent, F, Con}
+    kGrad, sv::TPkGrad{C}, model::ECModel, param, C, Diffusivity
+    )
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     @tullio kGrad[i] = half_face_two_point_kgrad(conn_data[i], C, Diffusivity)
 end
 
 @terv_secondary function update_as_secondary!(
-    kGrad, sv::TPkGrad{T}, model::SimulationModel{D, S, F, C}, param, 
-    T, ThermalConductivity) where {D, S <: ElectroChemicalComponent, F, C}
+    kGrad, sv::TPkGrad{T}, model::ECModel, param, T, ThermalConductivity
+    )
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
     @tullio kGrad[i] = half_face_two_point_kgrad(conn_data[i], T, ThermalConductivity)

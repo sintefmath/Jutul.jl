@@ -54,18 +54,15 @@ function update_half_face_flux!(
 end
 
 
-function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
-    law::Conservation{ChargeAcc}) where {D, S <: ElectroChemicalComponent, F, Con}
+function get_flux(storage,  model::ECModel, law::Conservation{ChargeAcc})
     return - storage.state.TPkGrad_Phi
 end
 
-function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
-    law::Conservation{MassAcc}) where {D, S <: ElectroChemicalComponent, F, Con}
+function get_flux(storage,  model::ECModel, law::Conservation{MassAcc})
     return - storage.state.TPkGrad_C
 end
 
-function get_flux(storage,  model::SimulationModel{D, S, F, Con}, 
-    law::Conservation{EnergyAcc}) where {D, S <: ElectroChemicalComponent, F, Con}
+function get_flux(storage, model::ECModel, law::Conservation{EnergyAcc})
     return - storage.state.TPkGrad_T
 end
 
@@ -88,9 +85,7 @@ function corr_type(::Conservation{T}) return T() end
 
 
 # Called from uppdate_state_dependents
-function apply_boundary_conditions!(
-    storage, parameters, model::SimulationModel{A, B, C, D}
-    ) where {A, B<:ElectroChemicalComponent, C, D}
+function apply_boundary_conditions!(storage, parameters, model::ECModel)
     equations = storage.equations
     for key in keys(equations)
         eq = equations[key]

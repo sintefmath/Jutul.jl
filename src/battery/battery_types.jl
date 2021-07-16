@@ -10,6 +10,8 @@ export BOUNDARY_CURRENT, corr_type
 ###########
 
 abstract type ElectroChemicalComponent <: TervSystem end
+# Alias for a genereal Electro Chemical Model
+const ECModel = SimulationModel{<:Any, <:ElectroChemicalComponent, <:Any, <:Any}
 
 abstract type ElectroChemicalGrid <: TervGrid end
 
@@ -23,7 +25,7 @@ struct Conductivity <: ScalarVariable end
 struct Diffusivity <: ScalarVariable end
 struct ThermalConductivity <: ScalarVariable end
 
-struct Conservation{T} <: TervEquation 
+struct Conservation{T} <: TervEquation
     accumulation::TervAutoDiffCache
     accumulation_symbol::Symbol
     half_face_flux_cells::TervAutoDiffCache
