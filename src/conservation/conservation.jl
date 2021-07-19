@@ -103,7 +103,7 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
 
     @sync begin 
         @async update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
-        @async fill_equation_entries!(nz, nothing, model, cell_flux)
+        # @async fill_equation_entries!(nz, nothing, model, cell_flux)
         if !isnothing(face_flux)
             conn_data = law.flow_discretization.conn_data
             @async update_linearized_system_subset_face_flux!(nz, model, face_flux, cpos, conn_data)
@@ -116,11 +116,17 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
     centries = acc.entries
     fentries = cell_flux.entries
     cp = acc.jacobian_positions
+    fp = cell_flux.jacobian_positions
     @threads for cell = 1:nc
         for e in 1:ne
             diag_entry = get_entry(acc, cell, e, centries)
             @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-                diag_entry -= get_entry(cell_flux, i, e, fentries)
+                q = get_entry(cell_flux, i, e, fentries)
+                for d = 1:np
+                    fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
+                    @inbounds nz[fpos] = q.partials[d]
+                end
+                diag_entry -= q
             end
 
             @inbounds r[e, cell] = diag_entry.value
@@ -153,7 +159,6 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
             end
         end
     end
-    # error("Not implemented yet")
 end
 
 
