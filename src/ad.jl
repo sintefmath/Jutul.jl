@@ -80,7 +80,12 @@ end
 end
 
 @inline function set_jacobian_pos!(c::CompactAutoDiffCache, index, eqNo, partial_index, pos)
+    set_jacobian_pos!(c.jacobian_positions, index, eqNo, partial_index, c.npartials, pos)
     c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
+end
+
+@inline function set_jacobian_pos!(jpos, index, eqNo, partial_index, npartials, pos)
+    jpos[(eqNo-1)*npartials + partial_index, index] = pos
 end
 
 @inline function ad_dims(cache::CompactAutoDiffCache{I, D})::Tuple{I, I, I} where {I, D}
@@ -123,7 +128,7 @@ function fill_equation_entries!(nz, r::Nothing, model, cache::TervAutoDiffCache)
                 # update_jacobian_entry!(nz, cache, i, e, d, ∂)
                 # Use more verbose/inner version instead:
                 apos = get_jacobian_pos(cache, i, e, d, jp)
-                @inbounds nz[apos] = a.partials[d]
+                @inbounds nz[apos] = ∂
             end
         end
     end
@@ -142,7 +147,6 @@ function injective_alignment!(cache::TervAutoDiffCache, jac, unit, context;
                                     source_offset = 0)
     unit::TervUnit
     cache.unit::TervUnit
-    layout = matrix_layout(context)
     if unit == cache.unit
         nu_c, ne, np = ad_dims(cache)
         if isnothing(number_of_units_source)
@@ -157,11 +161,12 @@ function injective_alignment!(cache::TervAutoDiffCache, jac, unit, context;
         end
         N = length(source_index)
         @assert length(target_index) == N
-        do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
+        do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context)
     end
 end
 
-function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
+function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context)
+    layout = matrix_layout(context)
     for index in 1:length(source_index)
         target = target_index[index]
         source = source_index[index]
@@ -175,6 +180,27 @@ function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, n
             end
         end
     end
+end
+
+function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext)
+
+    layout = matrix_layout(context)
+    jpos = cache.jacobian_positions
+    function kernel(jpos, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
+        index, e, d = threadIdx()
+        target = target_index[index]
+        source = source_index[index]
+
+        pos = find_jac_position(jac, target + target_offset, source + source_offset, e, d, 
+        nu_t, nu_s,
+        ne, np,
+        layout)
+        set_jacobian_pos!(jpos, index, e, d, np, pos)
+        return
+    end
+    ns = length(source_index)
+
+    @cuda threads=(ns, ne, np) kernel(jpos, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
 end
 
 """
