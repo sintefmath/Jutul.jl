@@ -1,4 +1,4 @@
-
+import LinearAlgebra.mul!
 
 export GenericKrylov
 
@@ -8,7 +8,7 @@ end
 
 Base.eltype(p::PrecondWrapper) = eltype(p.op)
 
-mul!(x, p::PrecondWrapper, arg...) = mul!(x, p.op, arg...)
+LinearAlgebra.mul!(x, p::PrecondWrapper, arg...) = mul!(x, p.op, arg...)
 
 function LinearAlgebra.ldiv!(p::PrecondWrapper, x)
     y = copy(x)
@@ -65,7 +65,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov)
     at = atol(cfg)
     if from_IterativeSolvers(solver)
         # Pl = krylov.preconditioner.factor
-        (x, history) = solver(op, r, abstol = at, reltol = rt, log = true, Pl = L, maxiter = max_it, verbose = v > 0)#, Pl = L, Pr = R, )
+        (x, history) = solver(op, r, abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)#, Pr = R)
         display(history)
     else
         (x, stats) = solver(op, r, 
