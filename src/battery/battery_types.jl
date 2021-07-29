@@ -97,7 +97,14 @@ function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[])
         num_neig = size(cell1)[1]
         vec = [1:dim for i in 1:num_neig]
         cell, cell_dep, vec = map(x -> reduce(vcat, x), [cell1, cell2, vec])
-        # ? Should this be sorted ?
+        # must add self dependence
+        for i in 1:maximum(cell) #! Probably not the best way to find nc
+            push!(cell, i); push!(cell, i)
+            push!(cell_dep, i); push!(cell_dep, i)
+            push!(vec, 1); push!(vec, 2)
+        end
+        # ? Should these be sorted in som way ?
+
         tbl = [
             (cell = cell[i], cell_dep = cell_dep[i], vec = vec[i]) 
                 for i in 1:size(cell, 1)

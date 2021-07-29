@@ -19,23 +19,50 @@ struct TotalCurrent <: Current end
 struct ChargeCarrierFlux <: Current end
 struct EnergyFlux <: Current end
 
+abstract type NonDiagCellVariables <: TervVariables end
+
 # Abstract type of a vector that is defined on a cell, from face flux
-abstract type CellVector <: ScalarVariable end
+abstract type CellVector <: NonDiagCellVariables end
 struct JCell <: CellVector end
 struct DGradCCell <: CellVector end
 
-struct ScalarNonDiagVaraible <: ScalarVariable end
-struct JSq <: ScalarVariable end
-struct DGradCSq <: ScalarVariable end
+abstract type ScalarNonDiagVaraible <: NonDiagCellVariables end
+struct JSq <: ScalarNonDiagVaraible end
+struct DGradCSq <: ScalarNonDiagVaraible end
 
-function number_of_units(model, pv::ScalarNonDiagVaraible)
-    """ Each value depends on a cell and all its neighbours """
-    # TODO: Return number of cells + number of neighbours
+
+function initialize_variable_value(
+    model, pvar::NonDiagCellVariables, val; perform_copy=true
+    )
+    nu = number_of_units(model, pvar)
+    nv = values_per_unit(model, pvar)
+    
+    @assert length(val) == nu * nv "Expected val length $(nu*nv), got $(length(val))"
+    val::AbstractVector
+
+    if perform_copy
+        val = deepcopy(val)
+    end
+    return transfer(model.context, val)
 end
 
-function number_of_units(model, pv::CellVector)
-    """ 2 components per cell """
-    return 2*count_units(model.domain, Cells())
+function initialize_variable_value!(state, model, pvar::NonDiagCellVariables, symb::Symbol, val::Number)
+    num_val = number_of_units(model, pvar)*values_per_unit(model, pvar)
+    V = repeat([val], num_val)
+    return initialize_variable_value!(state, model, pvar, symb, V)
+end
+
+function number_of_units(model, pv::NonDiagCellVariables)
+    """ Each value depends on a cell and all its neighbours """
+    return size(model.domain.grid.cellcellvectbl, 1)
+end
+
+function values_per_unit(model, u::CellVector)
+    return 2
+end
+
+function values_per_unit(model, u::ScalarNonDiagVaraible)
+    return 1
 end
 
 function number_of_units(model, pv::Current)
@@ -210,8 +237,6 @@ end
 
 
 function get_cell_index(c, n, i, tbl)
-    print(c, n, i)
-    print
     bool = map(x -> x.cell == c && x.cell_dep == n && x.vec == i, tbl)
     indx = findall(bool)
     @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx))"
@@ -220,8 +245,8 @@ end
 
 function get_face_index(f, c, conn_data)
     bool = map(x -> x.self == c && x.face == f, conn_data)
-    indx = finall(bool)
-    @assert size(indx) == (1,) "Invalid or duplicate face cell combo"
+    indx = findall(bool)
+    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size $(size(indx))"
     return indx[1]
 end
 
@@ -243,7 +268,8 @@ function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
     for c in 1:number_of_cells(model.domain)
         cell_mask = map(x -> x.self==1, conn_data)
         neigh_self = conn_data[cell_mask] # ? is this the best way??
-        for f in neigh_self
+        for neigh in neigh_self
+            f = neigh.face
             for i in 1:2 #! Only valid in 2D for now
                 cic = get_cell_index(c, c, i, ccv)
                 fc = get_face_index(f, c, conn_data)
