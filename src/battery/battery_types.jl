@@ -75,19 +75,38 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     boundary_cells::AbstractArray{I}
     boundary_T_hf::AbstractArray{R}
     P::AbstractArray{R} # Tensor to map from cells to faces
+    cellcellvectbl
+end
 
-    function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[])
-        nc = length(pv)
-        pv::AbstractVector
-        @assert size(N, 1) == 2
-        if length(N) > 0
-            @assert minimum(N) > 0
-            @assert maximum(N) <= nc
-        end
-        @assert all(pv .> 0)
-        @assert size(bc) == size(T_hf)
-        new{eltype(pv), eltype(N)}(pv, N, bc, T_hf, P)
+function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[])
+    nc = length(pv)
+    pv::AbstractVector
+    @assert size(N, 1) == 2
+    if length(N) > 0
+        @assert minimum(N) > 0
+        @assert maximum(N) <= nc
     end
+    @assert all(pv .> 0)
+    @assert size(bc) == size(T_hf)
+
+    function get_cellcellvec_map(neigh)
+        """ Creates cellcellvectbl """
+        dim = 2
+        cell1 = [repeat([i], dim) for i in neigh[1, :]]
+        cell2 = [repeat([i], dim) for i in neigh[2, :]]
+        num_neig = size(cell1)[1]
+        vec = [1:dim for i in 1:num_neig]
+        cell, cell_dep, vec = map(x -> reduce(vcat, x), [cell1, cell2, vec])
+        # ? Should this be sorted ?
+        tbl = [
+            (cell = cell[i], cell_dep = cell_dep[i], vec = vec[i]) 
+                for i in 1:size(cell, 1)
+            ]
+        return tbl
+    end
+    tbl = get_cellcellvec_map(N)
+
+    MinimalECTPFAGrid{eltype(pv), eltype(N)}(pv, N, bc, T_hf, P, tbl)
 end
 
 

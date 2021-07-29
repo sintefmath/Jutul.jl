@@ -9,6 +9,7 @@ function plot_elyte()
     domain = get_cc_grid(MixedFlow(), name=name)
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
+    return model
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
     S[:BoundaryC] = BoundaryPotential{Phi}()
@@ -17,7 +18,7 @@ function plot_elyte()
     plot_graph(model)
 end
 
-plot_elyte()
+model = plot_elyte();
 
 ##
 

@@ -20,7 +20,7 @@ struct ChargeCarrierFlux <: Current end
 struct EnergyFlux <: Current end
 
 # Abstract type of a vector that is defined on a cell, from face flux
-abstract type CellVector end
+abstract type CellVector <: ScalarVariable end
 struct JCell <: CellVector end
 struct DGradCCell <: CellVector end
 
@@ -209,20 +209,20 @@ end
 end
 
 
-function get_cell_index(c, k, diff_C)
-    # TODO: Should return the index of j_cell that holds the value of j, in cell c, with the derivative w.r.t cell diff_c
+function get_cell_index(c, n, i, tbl)
+    print(c, n, i)
+    print
+    bool = map(x -> x.cell == c && x.cell_dep == n && x.vec == i, tbl)
+    indx = findall(bool)
+    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx))"
+    return indx[1]
 end
 
-function get_face_index(f, diff_c)
-    # TODO: Return the value at face f, that depends on cell diff_c
-end
-
-function get_face(c, model)
-    #TODO: get all the faces of C
-end
-
-function get_neighbors(c, model)
-    # TODO: Return a list of the neighbors of c
+function get_face_index(f, c, conn_data)
+    bool = map(x -> x.self == c && x.face == f, conn_data)
+    indx = finall(bool)
+    @assert size(indx) == (1,) "Invalid or duplicate face cell combo"
+    return indx[1]
 end
 
 @terv_secondary(
@@ -230,28 +230,41 @@ function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
     """
     j_cell is a vector that has 2 coponents per cell
     P maps between values defined on the face, and vectors defined in cells
-    P_[c, i, f] = P_[2*c + i, f], (c=cell, i=space, f=face)
-    j_c[c, i, c'] = P_[c, i, f] * J_[f, c'] (c'=cell dependence)
+    P_[c, f, i] = P_[2*c + i, f], (c=cell, i=space, f=face)
+    j_c[c, c', i] = P_[c, f, i] * J_[f, c'] (c'=cell dependence)
     """
     P = model.domain.grid.P
     J = TotalCurrent    
     mf = model.domain.discretizations.charge_flow
+    ccv = model.domain.grid.cellcellvectbl
     conn_data = mf.conn_data
-    # TODO: Make map from face-valued flux to cell-valued vector
-    for c in 1:number_of_cells(model.domain.discretization)
-        for f in get_faces(c, model)
-            cic = get_cell_index(c, i, c)
-            fc = get_face_index(f, c)
-            j_cell[cic] = P[2*c + i, f] * J[fc]
+
+    j_cell .= 0 # ? Is this necesessary ?
+    for c in 1:number_of_cells(model.domain)
+        cell_mask = map(x -> x.self==1, conn_data)
+        neigh_self = conn_data[cell_mask] # ? is this the best way??
+        for f in neigh_self
+            for i in 1:2 #! Only valid in 2D for now
+                cic = get_cell_index(c, c, i, ccv)
+                fc = get_face_index(f, c, conn_data)
+                j_cell[cic] += P[2*c + i, f] * J[fc]
+            end
         end
         for n in get_neighbours(c, model)
-            for f in get_faces(c, model)
-                # TODO: Make so that J only depends on n
-                cin = get_cell_index(c, i, n)
-                get_cell_index(c, i, n)
-                fc = get_face_index(f, n)
-                fc = get_face_index(f, c)
-                j_cell[cin] = P[2*c + i, f] * J[fc]
+            for f in neigh # ? Which of these loops should first ?
+                for i in 1:2
+                    cin = get_cell_index(c, i, n, ccv)
+                    fn = get_face_index(f, n, conn_data)
+
+                    # The value should only depend on cell n
+                    if conn_data[fn].self == n
+                        Jfn = J[fn]
+                    else
+                        Jfn = value(J[fn])
+                    end
+
+                    j_cell[cin] += P[2*c + i, f] * Jfn
+                end
             end
         end
     end
