@@ -71,9 +71,12 @@ function linear_operator(sys::MultiLinearizedSystem)
     if do_schur(sys)
         B, C, D, E = get_schur_blocks!(sys, false)
         # A = B - CE\D
+        m = size(E, 1)
         n = size(C, 1)
         T = eltype(sys[1, 1].r)
-        apply! = (res, x, α, β) -> schur_mul!(res, T, B, C, D, E, x, α, β)
+        a_buf = zeros(n)
+        b_buf = zeros(m)
+        apply! = (res, x, α, β) -> schur_mul!(res, a_buf, b_buf, T, B, C, D, E, x, α, β)
         op = LinearOperator(Float64, n, n, false, false, apply!)
     else
         S = sys.subsystems
@@ -116,7 +119,21 @@ function schur_mul3!(res, r_type::Float64, B, C, D, E, x, α, β::T) where T
     end
 end
 
-function schur_mul!(res, r_type, B, C, D, E, x, α, β::T) where T
+function schur_mul!(res, a_buf, b_buf, r_type, B, C, D, E, x, α, β::T) where T
+    # display(mean(B.nzval))
+    # display(mean(C.nzval))
+    # display(mean(E.nzval))
+    # display(mean(D.nzval))
+    # display(Matrix(E))
+    if false
+        tmp = B*x - C*(E\(D*x))
+        res .= tmp
+        if α != one(T)
+            lmul!(α, res)
+        end
+
+        return 
+    end
     is_float = r_type == eltype(res)
     if is_float
         as_svec = (x) -> x
@@ -125,7 +142,6 @@ function schur_mul!(res, r_type, B, C, D, E, x, α, β::T) where T
     end
     res_v = as_svec(res)
     x_v = as_svec(x)
-
     if β == zero(T)
         # compute B*x
         mul!(res_v, B, x_v)
@@ -135,7 +151,15 @@ function schur_mul!(res, r_type, B, C, D, E, x, α, β::T) where T
             block_size = length(r_type)
             M = (x) -> block_major_to_equation_major_view(x, block_size)
             M⁻¹ = (x) -> equation_major_to_block_major_view(x, block_size)
-            drs = M⁻¹(C*(E\(D*M(x))))
+            
+            a_buf .= M(x)
+            e1 = D*a_buf
+            e2 = E\e1
+            e3 = C*e2
+
+            drs = M⁻¹(e3)
+            # @time drs = M⁻¹(C*(E\(D*M(x))))
+            # drs = M⁻¹(C*(E\(D*x)))
         end
 
         @. res -= drs
