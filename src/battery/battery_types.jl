@@ -92,6 +92,13 @@ function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[])
     function get_cellcellvec_map(neigh)
         """ Creates cellcellvectbl """
         dim = 2
+        # Must have 2 copies of each neighbourship
+        # This took some time to figure out 😰
+        neigh = [
+            [neigh[1, i] neigh[2, i]; neigh[2, i] neigh[1, i]] 
+            for i in 1:size(neigh, 2)
+            ]
+        neigh = reduce(vcat, neigh)'
         cell1 = [repeat([i], dim) for i in neigh[1, :]]
         cell2 = [repeat([i], dim) for i in neigh[2, :]]
         num_neig = size(cell1)[1]

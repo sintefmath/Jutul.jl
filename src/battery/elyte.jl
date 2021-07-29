@@ -65,6 +65,10 @@ function values_per_unit(model, u::ScalarNonDiagVaraible)
     return 1
 end
 
+function degrees_of_freedom_per_unit(model, sf::NonDiagCellVariables)
+    return values_per_unit(model, sf) 
+end
+
 function number_of_units(model, pv::Current)
     return 2*count_units(model.domain, Faces())
 end
@@ -239,15 +243,22 @@ end
 function get_cell_index(c, n, i, tbl)
     bool = map(x -> x.cell == c && x.cell_dep == n && x.vec == i, tbl)
     indx = findall(bool)
-    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx))"
+    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n, $i)"
     return indx[1]
 end
 
 function get_face_index(f, c, conn_data)
-    bool = map(x -> x.self == c && x.face == f, conn_data)
-    indx = findall(bool)
-    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size $(size(indx))"
-    return indx[1]
+    bool = map(x -> [x.face == f x.self == c], conn_data)
+    indx = findall(x -> x[1] == 1, bool)
+    @assert size(indx) == (2,) "Invalid or duplicate face cell combo, size $(size(indx)) for (f, c) = ($f, $c)"
+    #! Very ugly, can this be done better?
+    if bool[indx[1]][2]
+        return indx[1], true
+    elseif bool[indx[2]][2]
+        return indx[2], true
+    else   
+        return indx[1][1], false
+    end
 end
 
 @terv_secondary(
@@ -266,24 +277,29 @@ function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
 
     j_cell .= 0 # ? Is this necesessary ?
     for c in 1:number_of_cells(model.domain)
-        cell_mask = map(x -> x.self==1, conn_data)
+        cell_mask = map(x -> x.self==c, conn_data)
         neigh_self = conn_data[cell_mask] # ? is this the best way??
         for neigh in neigh_self
             f = neigh.face
             for i in 1:2 #! Only valid in 2D for now
                 cic = get_cell_index(c, c, i, ccv)
-                fc = get_face_index(f, c, conn_data)
+                fc, bool = get_face_index(f, c, conn_data)
+                @assert bool
                 j_cell[cic] += P[2*c + i, f] * J[fc]
             end
         end
-        for n in get_neighbours(c, model)
-            for f in neigh # ? Which of these loops should first ?
+
+        # what is the best order to loop through?
+        for neigh in neigh_self
+            n = neigh.other
+            for neigh2 in neigh_self
+                f = neigh2.face
                 for i in 1:2
-                    cin = get_cell_index(c, i, n, ccv)
-                    fn = get_face_index(f, n, conn_data)
+                    cin = get_cell_index(c, n, i, ccv)
+                    fn, bool = get_face_index(f, n, conn_data)
 
                     # The value should only depend on cell n
-                    if conn_data[fn].self == n
+                    if bool
                         Jfn = J[fn]
                     else
                         Jfn = value(J[fn])
@@ -412,6 +428,4 @@ function apply_boundary_potential!(
         @inbounds acc[c] -= - λ[c] * T_hf[i] * (T[c] - BT[i])
     end
 end
-
-
 
