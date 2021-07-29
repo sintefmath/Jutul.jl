@@ -6,7 +6,7 @@ struct PrecondWrapper
     op::LinearOperator
 end
 
-eltype(p::PrecondWrapper) = eltype(p.op)
+Base.eltype(p::PrecondWrapper) = eltype(p.op)
 
 mul!(x, p::PrecondWrapper, arg...) = mul!(x, p.op, arg...)
 

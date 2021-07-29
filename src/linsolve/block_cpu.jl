@@ -13,11 +13,6 @@ function block_mul!(res, jac, Vt, x, α, β::T) where T
     end
 end
 
-
-function ldiv!(TervPrecond, x)
-
-end
-
 function get_mul!(sys::LinearizedSystem{BlockMajorLayout})
     jac = sys.jac
 
