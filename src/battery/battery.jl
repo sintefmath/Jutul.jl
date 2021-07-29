@@ -169,7 +169,7 @@ end
 
 
 # TODO: Add entry so that densities not on the diagonal, such as j^2, may be added
-function fill_equation_entries!(
+function fill_equation_entries_2!(
     nz, r::Nothing, model, cache::TervAutoDiffCache
     )
     nu, ne, np = ad_dims(cache)

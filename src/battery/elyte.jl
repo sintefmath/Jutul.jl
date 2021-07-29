@@ -285,7 +285,8 @@ function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
                 cic = get_cell_index(c, c, i, ccv)
                 fc, bool = get_face_index(f, c, conn_data)
                 @assert bool
-                j_cell[cic] += P[2*c + i, f] * J[fc]
+                ci = 2*(c-1) + i
+                j_cell[cic] += P[ci, f] * J[fc]
             end
         end
 
@@ -305,7 +306,7 @@ function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
                         Jfn = value(J[fn])
                     end
 
-                    j_cell[cin] += P[2*c + i, f] * Jfn
+                    j_cell[cin] += P[2*(c-1) + i, f] * Jfn
                 end
             end
         end
