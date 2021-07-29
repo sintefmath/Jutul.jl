@@ -23,10 +23,15 @@ end
 # Total velocity in each well segment
 struct TotalMassFlux <: ScalarVariable
     scale
-    function TotalMassFlux(scale = 3600*24)
-        new(scale)
+    max_abs
+    max_rel
+    function TotalMassFlux(;scale = 3600*24, max_abs = nothing, max_rel = nothing)
+        new(scale, max_abs, max_rel)
     end
 end
+
+relative_increment_limit(tmf::TotalMassFlux) = tmf.max_rel
+absolute_increment_limit(tmf::TotalMassFlux) = tmf.max_abs
 
 function associated_unit(::TotalMassFlux) Faces() end
 variable_scale(t::TotalMassFlux) = t.scale
