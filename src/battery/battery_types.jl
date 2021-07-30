@@ -1,6 +1,6 @@
 using Terv
 
-# TODO: Theser are not all needed
+# TODO: These are not all needed
 export ElectroChemicalComponent, CurrentCollector, Electectrolyte, TestElyte
 export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
 export ChargeFlow, MixedFlow, Conservation, BoundaryPotential, BoundaryCurrent
