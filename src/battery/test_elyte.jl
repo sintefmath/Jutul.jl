@@ -22,6 +22,10 @@ model = plot_elyte();
 
 ##
 
+P, S = get_tensorprod()
+
+##
+
 function test_elyte()
     name="square_current_collector"
     bcells, T_hf = get_boundary(name)

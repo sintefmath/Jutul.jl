@@ -240,7 +240,7 @@ end
 end
 
 
-function get_cell_index(c, n, i, tbl)
+function get_cell_index_vec(c, n, i, tbl)
     bool = map(x -> x.cell == c && x.cell_dep == n && x.vec == i, tbl)
     indx = findall(bool)
     @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n, $i)"
@@ -270,7 +270,7 @@ function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
     j_c[c, c', i] = P_[c, f, i] * J_[f, c'] (c'=cell dependence)
     """
     P = model.domain.grid.P
-    J = TotalCurrent    
+    J = TotalCurrent
     mf = model.domain.discretizations.charge_flow
     ccv = model.domain.grid.cellcellvectbl
     conn_data = mf.conn_data
@@ -282,7 +282,7 @@ function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
         for neigh in neigh_self
             f = neigh.face
             for i in 1:2 #! Only valid in 2D for now
-                cic = get_cell_index(c, c, i, ccv)
+                cic = get_cell_index_vec(c, c, i, ccv)
                 fc, bool = get_face_index(f, c, conn_data)
                 @assert bool
                 ci = 2*(c-1) + i
@@ -296,7 +296,7 @@ function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
             for neigh2 in neigh_self
                 f = neigh2.face
                 for i in 1:2
-                    cin = get_cell_index(c, n, i, ccv)
+                    cin = get_cell_index_vec(c, n, i, ccv)
                     fn, bool = get_face_index(f, n, conn_data)
 
                     # The value should only depend on cell n
@@ -309,15 +309,47 @@ function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
                     j_cell[cin] += P[2*(c-1) + i, f] * Jfn
                 end
             end
-        end
+        end # the end is near
     end
 end
 )
 
+function get_cell_index_scalar(c, n, tbl)
+    bool = map(x -> x.cell == c && x.cell_dep == n, tbl)
+    indx = findall(bool)
+    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n)"
+    return indx[1]
+end
+
 @terv_secondary(
 function update_as_secondary!(j_sq, sc::JSq, model, param, JCell)
-    # TODO: Make map from cell-valued vector to scalar, include dep.
-    nothing
+    """
+    Takes in vector valued field defined on the cell, and returns the
+    modulus square
+    jsq[c, c'] = S[c, i] * j[c, c', i]^2
+    """
+    S = model.domain.grid.S
+    conn_data = mf.conn_data
+    cc = model.domain.grid.cellcelltbl
+    ccv = model.domain.grid.cellcellvectbl
+
+    for i in 1:number_of_cells(model.domain)
+        cell_mask = map(x -> x.self==c, conn_data)
+        neigh_self = conn_data[cell_mask]
+        cc = get_cell_index_scalar(c, c, tbl)
+        for i in 1:2
+            cci = get_cell_index_vec(c, c, i, )
+            jsq[cc] = S[c, i] * j[cci]^2
+        end
+        for neigh in neigh_self
+            n = neigh.other
+            cn = get_cell_index_scalar(c, n, tbl)
+            for i in 1:2
+                cni = get_cell_index_vec(c, n, i, )
+                jsq[cn] = S[c, i] * j[cni]^2
+            end
+        end 
+    end
 end
 )
 

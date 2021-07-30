@@ -63,7 +63,7 @@ function get_cc_grid(
     T = compute_face_trans(T_hf, N)
 
     P, S = get_tensorprod(name)
-    G = MinimalECTPFAGrid(volumes, N, bc, b_T_hf, P)
+    G = MinimalECTPFAGrid(volumes, N, bc, b_T_hf, P, S)
     z = nothing
     g = nothing
 

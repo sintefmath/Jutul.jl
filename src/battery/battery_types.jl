@@ -75,10 +75,66 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     boundary_cells::AbstractArray{I}
     boundary_T_hf::AbstractArray{R}
     P::AbstractArray{R} # Tensor to map from cells to faces
+    S::AbstractArray{R} # Tensor map cell vector to cell scalar
     cellcellvectbl
+    cellcelltbl
 end
 
-function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[])
+
+function get_cellcellvec_map(neigh)
+    """ Creates cellcellvectbl """
+    dim = 2
+    # Must have 2 copies of each neighbourship
+    # This took some time to figure out 😰
+    neigh = [
+        [neigh[1, i] neigh[2, i]; neigh[2, i] neigh[1, i]] 
+        for i in 1:size(neigh, 2)
+        ]
+    neigh = reduce(vcat, neigh)'
+    cell1 = [repeat([i], dim) for i in neigh[1, :]]
+    cell2 = [repeat([i], dim) for i in neigh[2, :]]
+    num_neig = size(cell1)[1]
+    vec = [1:dim for i in 1:num_neig]
+    cell, cell_dep, vec = map(x -> reduce(vcat, x), [cell1, cell2, vec])
+    # must add self dependence
+    for i in 1:maximum(cell) #! Probably not the best way to find nc
+        push!(cell, i); push!(cell, i)
+        push!(cell_dep, i); push!(cell_dep, i)
+        push!(vec, 1); push!(vec, 2)
+    end
+    # ? Should these be sorted in som way ?
+
+    tbl = [
+        (cell = cell[i], cell_dep = cell_dep[i], vec = vec[i]) 
+            for i in 1:size(cell, 1)
+        ]
+    return tbl
+end
+
+function get_cellcell_map(neigh)
+    """ Creates cellcelltbl """
+    neigh = [
+        [neigh[1, i] neigh[2, i]; neigh[2, i] neigh[1, i]] 
+        for i in 1:size(neigh, 2)
+        ]
+    neigh = reduce(vcat, neigh)'
+    cell1 = neigh[1, :]
+    cell2 = neigh[2, :]
+    num_neig = size(cell1)[1]
+    cell, cell_dep, vec = map(x -> reduce(vcat, x), [cell1, cell2])
+    for i in 1:maximum(cell) #! Probably not the best way to find nc
+        push!(cell, i);
+        push!(cell_dep, i);
+    end
+    tbl = [
+        (cell = cell[i], cell_dep = cell_dep[i])
+            for i in 1:size(cell, 1)
+        ]
+    return tbl
+end
+
+
+function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[], S=[])
     nc = length(pv)
     pv::AbstractVector
     @assert size(N, 1) == 2
@@ -88,39 +144,13 @@ function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[])
     end
     @assert all(pv .> 0)
     @assert size(bc) == size(T_hf)
+    
+    cellcellvectbl = get_cellcellvec_map(N)
+    cellcelltbl  = get_cellcell_map(N)
 
-    function get_cellcellvec_map(neigh)
-        """ Creates cellcellvectbl """
-        dim = 2
-        # Must have 2 copies of each neighbourship
-        # This took some time to figure out 😰
-        neigh = [
-            [neigh[1, i] neigh[2, i]; neigh[2, i] neigh[1, i]] 
-            for i in 1:size(neigh, 2)
-            ]
-        neigh = reduce(vcat, neigh)'
-        cell1 = [repeat([i], dim) for i in neigh[1, :]]
-        cell2 = [repeat([i], dim) for i in neigh[2, :]]
-        num_neig = size(cell1)[1]
-        vec = [1:dim for i in 1:num_neig]
-        cell, cell_dep, vec = map(x -> reduce(vcat, x), [cell1, cell2, vec])
-        # must add self dependence
-        for i in 1:maximum(cell) #! Probably not the best way to find nc
-            push!(cell, i); push!(cell, i)
-            push!(cell_dep, i); push!(cell_dep, i)
-            push!(vec, 1); push!(vec, 2)
-        end
-        # ? Should these be sorted in som way ?
-
-        tbl = [
-            (cell = cell[i], cell_dep = cell_dep[i], vec = vec[i]) 
-                for i in 1:size(cell, 1)
-            ]
-        return tbl
-    end
-    tbl = get_cellcellvec_map(N)
-
-    MinimalECTPFAGrid{eltype(pv), eltype(N)}(pv, N, bc, T_hf, P, tbl)
+    MinimalECTPFAGrid{eltype(pv), eltype(N)}(
+        pv, N, bc, T_hf, P, S, cellcellvectbl, cellcelltbl
+        )
 end
 
 
