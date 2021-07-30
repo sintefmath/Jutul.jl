@@ -35,7 +35,7 @@ function test_elyte()
     domain, exported = get_cc_grid(
         MixedFlow(), name=name, extraout=true, bc=bcells, b_T_hf=T_hf
         )
-    timesteps = diff(LinRange(0, 1, 200))
+    timesteps = diff(LinRange(0, 0.05, 10))
     G = exported["G"]
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())

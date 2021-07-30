@@ -30,6 +30,8 @@ abstract type ScalarNonDiagVaraible <: NonDiagCellVariables end
 struct JSq <: ScalarNonDiagVaraible end
 struct DGradCSq <: ScalarNonDiagVaraible end
 
+struct JSqDiag <: ScalarVariable end
+
 
 function initialize_variable_value(
     model, pvar::NonDiagCellVariables, val; perform_copy=true
@@ -118,6 +120,7 @@ function select_secondary_variables_system!(
     S[:ChargeCarrierFlux] = ChargeCarrierFlux()
     S[:JCell] = JCell()
     S[:JSq] = JSq()
+    S[:JSqDiag] = JSqDiag()
 
     S[:ChargeAcc] = ChargeAcc()
     S[:MassAcc] = MassAcc()
@@ -128,7 +131,7 @@ end
 function minimum_output_variables(
     system::Electrolyte, primary_variables
     )
-    [:ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity, :TotalCurrent, :JSq]
+    [:ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity, :TotalCurrent, :JCell, :JSqDiag]
 end
 
 function setup_parameters(::ElectrolyteModel)
@@ -326,7 +329,7 @@ function update_as_secondary!(jsq, sc::JSq, model, param, JCell)
     """
     Takes in vector valued field defined on the cell, and returns the
     modulus square
-    jsq[c, c'] = S[c, i] * j[c, c', i]^2
+    jsq[c, c'] = S[c, 2*(c-1) + i] * j[c, c', i]^2
     """
 
     S = model.domain.grid.S
@@ -335,22 +338,35 @@ function update_as_secondary!(jsq, sc::JSq, model, param, JCell)
     cctbl = model.domain.grid.cellcelltbl
     ccv = model.domain.grid.cellcellvectbl
 
+    jsq .= 0
     for c in 1:number_of_cells(model.domain)
         cell_mask = map(x -> x.self==c, conn_data)
         neigh_self = conn_data[cell_mask]
         cc = get_cell_index_scalar(c, c, cctbl)
         for i in 1:2
             cci = get_cell_index_vec(c, c, i, ccv)
-            jsq[cc] = S[c, i] * JCell[cci]^2
+            jsq[cc] += S[c, 2*(c-1) + i] * JCell[cci]^2
         end
         for neigh in neigh_self
             n = neigh.other
             cn = get_cell_index_scalar(c, n, cctbl)
             for i in 1:2
                 cni = get_cell_index_vec(c, n, i, ccv)
-                jsq[cn] = S[c, i] * JCell[cni]^2
+                jsq[cn] += S[c, 2*(c-1) + i] * JCell[cni]^2
             end
         end 
+    end
+end
+)
+
+@terv_secondary(
+function update_as_secondary!(jsq_diag, sc::JSqDiag, model, param, JSq)
+    """ Carries the diagonal velues of JSq """
+
+    cctbl = model.domain.grid.cellcelltbl
+    cc = i -> get_cell_index_scalar(i, i, cctbl)
+    for i in 1:number_of_cells(model.domain)
+        jsq_diag[i] = JSq[cc(i)]
     end
 end
 )
