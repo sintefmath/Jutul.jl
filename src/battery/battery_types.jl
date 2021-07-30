@@ -31,7 +31,6 @@ struct Conservation{T} <: TervEquation
     accumulation::TervAutoDiffCache
     accumulation_symbol::Symbol
     half_face_flux_cells::TervAutoDiffCache
-    half_face_flux_faces::Union{TervAutoDiffCache,Nothing}
     flow_discretization::FlowDiscretization
 end
 
@@ -134,6 +133,11 @@ function get_cellcell_map(neigh)
 end
 
 
+################
+# Constructors #
+################
+
+
 function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[], S=[])
     nc = length(pv)
     pv::AbstractVector
@@ -151,24 +155,6 @@ function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[], S=[])
     MinimalECTPFAGrid{eltype(pv), eltype(N)}(
         pv, N, bc, T_hf, P, S, cellcellvectbl, cellcelltbl
         )
-end
-
-
-################
-# Constructors #
-################
-
-
-function acc_symbol(::ChargeAcc)
-    return :ChargeAcc
-end
-
-function acc_symbol(::MassAcc)
-    return :MassAcc
-end
-
-function acc_symbol(::EnergyAcc)
-    return :EnergyAcc
 end
 
 function Conservation(
@@ -189,24 +175,30 @@ function Conservation(
     nc = count_units(D, cell_unit)
     nf = count_units(D, face_unit)
     nhf = 2 * nf
-    face_partials = degrees_of_freedom_per_unit(model, face_unit)
 
     alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(
-    number_of_equations, n, model, unit = unit, n_units_pos = n_units_pos,
-    context = model.context; kwarg...
+        number_of_equations, n, model, unit = unit, n_units_pos = n_units_pos,
+        context = model.context; kwarg...
     )
 
     acc = alloc(nc, cell_unit, nc)
     hf_cells = alloc(nhf, cell_unit, nhf)
 
-    if face_partials > 0
-        hf_faces = alloc(nf, face_unit, nhf)
-    else
-        hf_faces = nothing
-    end
 
     Conservation{typeof(acc_type)}(
-        acc, accumulation_symbol, hf_cells, hf_faces, flow_discretization
+        acc, accumulation_symbol, hf_cells, flow_discretization
     )
 end
 
+
+function acc_symbol(::ChargeAcc)
+    return :ChargeAcc
+end
+
+function acc_symbol(::MassAcc)
+    return :MassAcc
+end
+
+function acc_symbol(::EnergyAcc)
+    return :EnergyAcc
+end

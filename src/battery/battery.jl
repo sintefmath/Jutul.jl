@@ -132,24 +132,23 @@ function update_linearized_system_equation!(
     cell_flux = law.half_face_flux_cells
     cpos = law.flow_discretization.conn_pos
 
-    #?? What is up with the names??
-    #! @async removed for debugging, slows performance!
-    update_linearized_system_subset_conservation_accumulation_2!( #! Obs, _2!!
-        nz, r, model, acc, cell_flux, cpos
-        )
-    #? Why is r nothing?
-    fill_equation_entries_2!(nz, nothing, model, cell_flux) 
+    fill_jac_entries!(nz, r, model, acc, cell_flux, cpos)
 end
 
-# TODO: Make sure densities are added
-function update_linearized_system_subset_conservation_accumulation_2!(
-    nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache,
-    conn_pos
-    )
+# TODO: Add entry so that densities not on the diagonal, such as j^2, may be added
+# ? What is the best way to do this? Should Cache be used?
+function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos)
+
+    # Cells, equations, partials
     nc, ne, np = ad_dims(acc)
+    nu, _ = ad_dims(cell_flux)
+
     centries = acc.entries
     fentries = cell_flux.entries
     cp = acc.jacobian_positions
+    jp = cell_flux.jacobian_positions
+
+
     #! @threads removed for debugging, slows performance!
     for cell = 1:nc
         for e in 1:ne
@@ -165,22 +164,12 @@ function update_linearized_system_subset_conservation_accumulation_2!(
             end
         end
     end
-end
 
-
-# TODO: Add entry so that densities not on the diagonal, such as j^2, may be added
-function fill_equation_entries_2!(
-    nz, r::Nothing, model, cache::TervAutoDiffCache
-    )
-    nu, ne, np = ad_dims(cache)
-    entries = cache.entries
-    jp = cache.jacobian_positions
-    #! @threads removed for debugging, slows performance!
     for i in 1:nu
         for e in 1:ne
-            a = get_entry(cache, i, e, entries)
+            a = get_entry(cell_flux, i, e, fentries)
             for d = 1:np
-                apos = get_jacobian_pos(cache, i, e, d, jp)
+                apos = get_jacobian_pos(cell_flux, i, e, d, jp)
                 @inbounds nz[apos] = a.partials[d]
             end
         end
