@@ -31,6 +31,7 @@ struct JSq <: ScalarNonDiagVaraible end
 struct DGradCSq <: ScalarNonDiagVaraible end
 
 struct JSqDiag <: ScalarVariable end
+struct DGradCSqDiag <: ScalarVariable end
 
 
 function initialize_variable_value(
@@ -118,9 +119,14 @@ function select_secondary_variables_system!(
 
     S[:TotalCurrent] = TotalCurrent()
     S[:ChargeCarrierFlux] = ChargeCarrierFlux()
+
     S[:JCell] = JCell()
     S[:JSq] = JSq()
     S[:JSqDiag] = JSqDiag()
+
+    S[:DGradCCell] = DGradCCell()
+    S[:DGradCSq] = DGradCSq()
+    S[:DGradCSqDiag] = DGradCSqDiag()
 
     S[:ChargeAcc] = ChargeAcc()
     S[:MassAcc] = MassAcc()
@@ -131,7 +137,7 @@ end
 function minimum_output_variables(
     system::Electrolyte, primary_variables
     )
-    [:ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity, :TotalCurrent, :JCell, :JSqDiag]
+    [:ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity, :TotalCurrent, :DGradCSqDiag, :JSqDiag]
 end
 
 function setup_parameters(::ElectrolyteModel)
@@ -394,6 +400,52 @@ function update_as_secondary!(jsq_diag, sc::JSqDiag, model, param, JSq)
     end
 end
 )
+
+
+@terv_secondary(
+function update_as_secondary!(j_cell, sc::DGradCCell, model, param, TPDGrad_C)
+
+    P = model.domain.grid.P
+    J = TPDGrad_C
+    mf = model.domain.discretizations.charge_flow
+    ccv = model.domain.grid.cellcellvectbl
+    conn_data = mf.conn_data
+
+    j_cell .= 0 # ? Is this necesessary ?
+    for c in 1:number_of_cells(model.domain)
+        face_to_cell!(j_cell, J, c, P, ccv, conn_data)
+    end
+end
+)
+
+@terv_secondary(
+function update_as_secondary!(jsq, sc::DGradCSq, model, param, DGradCCell)
+
+    S = model.domain.grid.S
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
+    cctbl = model.domain.grid.cellcelltbl
+    ccv = model.domain.grid.cellcellvectbl
+
+    jsq .= 0
+    for c in 1:number_of_cells(model.domain)
+        vec_to_scalar(jsq, DGradCCell, c, S, ccv, cctbl, conn_data)
+    end
+end
+)
+
+@terv_secondary(
+function update_as_secondary!(jsq_diag, sc::DGradCSqDiag, model, param, DGradCSq)
+    """ Carries the diagonal velues of JSq """
+
+    cctbl = model.domain.grid.cellcelltbl
+    cc = i -> get_cell_index_scalar(i, i, cctbl)
+    for i in 1:number_of_cells(model.domain)
+        jsq_diag[i] = DGradCSq[cc(i)]
+    end
+end
+)
+
 
 
 function get_flux(

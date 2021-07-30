@@ -34,7 +34,8 @@ function test_elyte()
     domain, exported = get_cc_grid(
         MixedFlow(), name=name, extraout=true, bc=bcells, b_T_hf=T_hf
         )
-    timesteps = diff(LinRange(0, 0.05, 10))
+    t = LinRange(0, 1, 200)
+    timesteps = diff(t)
     G = exported["G"]
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
@@ -55,7 +56,7 @@ function test_elyte()
         :Diffusivity            => 1.,
         :ThermalConductivity    => 6e-05, 
         :ConsCoeff              => 1.,
-        :BoundaryPhi            => [one..., -one...],
+        :BoundaryPhi            => [one..., 0*one...],
         :BoundaryC              => [one..., 0*one...],
         :BoundaryT              => [273 .* one..., 300 .* one...]
         # :BCCharge               => one,
