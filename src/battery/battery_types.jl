@@ -121,7 +121,7 @@ function get_cellcell_map(neigh)
     cell1 = neigh[1, :]
     cell2 = neigh[2, :]
     num_neig = size(cell1)[1]
-    cell, cell_dep, vec = map(x -> reduce(vcat, x), [cell1, cell2])
+    cell, cell_dep = map(x -> reduce(vcat, x), [cell1, cell2])
     for i in 1:maximum(cell) #! Probably not the best way to find nc
         push!(cell, i);
         push!(cell_dep, i);

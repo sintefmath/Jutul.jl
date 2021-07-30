@@ -322,31 +322,33 @@ function get_cell_index_scalar(c, n, tbl)
 end
 
 @terv_secondary(
-function update_as_secondary!(j_sq, sc::JSq, model, param, JCell)
+function update_as_secondary!(jsq, sc::JSq, model, param, JCell)
     """
     Takes in vector valued field defined on the cell, and returns the
     modulus square
     jsq[c, c'] = S[c, i] * j[c, c', i]^2
     """
+
     S = model.domain.grid.S
+    mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    cc = model.domain.grid.cellcelltbl
+    cctbl = model.domain.grid.cellcelltbl
     ccv = model.domain.grid.cellcellvectbl
 
-    for i in 1:number_of_cells(model.domain)
+    for c in 1:number_of_cells(model.domain)
         cell_mask = map(x -> x.self==c, conn_data)
         neigh_self = conn_data[cell_mask]
-        cc = get_cell_index_scalar(c, c, tbl)
+        cc = get_cell_index_scalar(c, c, cctbl)
         for i in 1:2
-            cci = get_cell_index_vec(c, c, i, )
-            jsq[cc] = S[c, i] * j[cci]^2
+            cci = get_cell_index_vec(c, c, i, ccv)
+            jsq[cc] = S[c, i] * JCell[cci]^2
         end
         for neigh in neigh_self
             n = neigh.other
-            cn = get_cell_index_scalar(c, n, tbl)
+            cn = get_cell_index_scalar(c, n, cctbl)
             for i in 1:2
-                cni = get_cell_index_vec(c, n, i, )
-                jsq[cn] = S[c, i] * j[cni]^2
+                cni = get_cell_index_vec(c, n, i, ccv)
+                jsq[cn] = S[c, i] * JCell[cni]^2
             end
         end 
     end
