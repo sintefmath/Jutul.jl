@@ -33,6 +33,8 @@ struct DGradCSq <: ScalarNonDiagVaraible end
 struct JSqDiag <: ScalarVariable end
 struct DGradCSqDiag <: ScalarVariable end
 
+struct EnergyDensity <: ScalarNonDiagVaraible end
+struct EDDiag <: ScalarVariable end
 
 function initialize_variable_value(
     model, pvar::NonDiagCellVariables, val; perform_copy=true
@@ -122,23 +124,152 @@ function select_secondary_variables_system!(
 
     S[:JCell] = JCell()
     S[:JSq] = JSq()
-    S[:JSqDiag] = JSqDiag()
-
     S[:DGradCCell] = DGradCCell()
     S[:DGradCSq] = DGradCSq()
-    S[:DGradCSqDiag] = DGradCSqDiag()
+
+    S[:EnergyDensity] = EnergyDensity()
 
     S[:ChargeAcc] = ChargeAcc()
     S[:MassAcc] = MassAcc()
     S[:EnergyAcc] = EnergyAcc()
+
+    # Variables for plotting
+    S[:DGradCSqDiag] = DGradCSqDiag()
+    S[:JSqDiag] = JSqDiag()
+    S[:EDDiag] = EDDiag()
 end
 
 # Must be available to evaluate time derivatives
 function minimum_output_variables(
     system::Electrolyte, primary_variables
     )
-    [:ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity, :TotalCurrent, :DGradCSqDiag, :JSqDiag]
+    [
+        :ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity,
+        :TotalCurrent, :DGradCSqDiag, :JSqDiag, :EnergyDensity
+    ]
 end
+
+
+##############
+# Tensormaps #
+##############
+# TODO: These should all be computed initially, to avoid serach later
+
+
+function get_cell_index_vec(c, n, i, tbl)
+    """ 
+    Returns cni, the index of a vector defined on cells, with dependence
+    on neighbouring cells. v[cni] is the i'th component of the field in
+    cell c, dependent on cell n (for partial derivatives).
+    """
+    bool = map(x -> x.cell == c && x.cell_dep == n && x.vec == i, tbl)
+    indx = findall(bool)
+    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n, $i)"
+    return indx[1] # cni
+end
+
+function get_face_index(f, c, conn_data)
+    """
+    Retuns i, b. i is the index of a vector defined on faces. v[i] is the
+    value on face f. b is true if f is a face of the cell c, and false else
+    """
+    bool = map(x -> [x.face == f x.self == c], conn_data)
+    indx = findall(x -> x[1] == 1, bool)
+    @assert size(indx) == (2,) "Invalid or duplicate face cell combo, size $(size(indx)) for (f, c) = ($f, $c)"
+    #! Very ugly, can this be done better?
+    if bool[indx[1]][2]
+        return indx[1], true
+    elseif bool[indx[2]][2]
+        return indx[2], true
+    else   
+        return indx[1][1], false
+    end
+end
+
+function get_cell_index_scalar(c, n, tbl)
+    """
+    Returns cn, the index of a scalar defined on cells, which also depends
+    on neighbouring cells. v[cn] is the value at cell c, dependent on c.
+    """
+    bool = map(x -> x.cell == c && x.cell_dep == n, tbl)
+    indx = findall(bool)
+    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n)"
+    return indx[1]
+end
+
+
+# ! Boundary current is not included
+function face_to_cell!(j_cell, J, c, P, ccv, conn_data)
+    """
+    Take a field defined on faces, J, finds its value at the cell c.
+    j_cell is a vector that has 2 coponents per cell
+    P maps between values defined on the face, and vectors defined in cells
+    P_[c, f, i] = P_[2*(c-1) + i, f], (c=cell, i=space, f=face)
+    j_c[c, c', i] = P_[c, f, i] * J_[f, c'] (c'=cell dependence)
+    """
+
+    # TODO: Combine the loop over neigh_self with the self
+    cell_mask = map(x -> x.self==c, conn_data)
+    neigh_self = conn_data[cell_mask] # ? is this the best way??
+    for neigh in neigh_self
+        f = neigh.face
+        for i in 1:2 #! Only valid in 2D for now
+            cic = get_cell_index_vec(c, c, i, ccv)
+            fc, bool = get_face_index(f, c, conn_data)
+            @assert bool
+            ci = 2*(c-1) + i
+            j_cell[cic] += P[ci, f] * J[fc]
+        end
+    end
+
+    # what is the best order to loop through?
+    for neigh in neigh_self
+        n = neigh.other
+        for neigh2 in neigh_self
+            f = neigh2.face
+            for i in 1:2
+                cin = get_cell_index_vec(c, n, i, ccv)
+                fn, bool = get_face_index(f, n, conn_data)
+
+                # The value should only depend on cell n
+                if bool
+                    Jfn = J[fn]
+                else
+                    Jfn = value(J[fn])
+                end
+
+                j_cell[cin] += P[2*(c-1) + i, f] * Jfn
+            end
+        end
+    end # the end is near
+end
+
+function vec_to_scalar(jsq, j, c, S, ccv, cctbl, conn_data)
+    """
+    Takes in vector valued field defined on the cell, and returns the
+    modulus square
+    jsq[c, c'] = S[c, 2*(c-1) + i] * j[c, c', i]^2
+    """
+    cell_mask = map(x -> x.self==c, conn_data)
+    neigh_self = conn_data[cell_mask]
+    cc = get_cell_index_scalar(c, c, cctbl)
+    for i in 1:2
+        cci = get_cell_index_vec(c, c, i, ccv)
+        jsq[cc] += S[c, 2*(c-1) + i] * j[cci]^2
+    end
+    for neigh in neigh_self
+        n = neigh.other
+        cn = get_cell_index_scalar(c, n, cctbl)
+        for i in 1:2
+            cni = get_cell_index_vec(c, n, i, ccv)
+            jsq[cn] += S[c, 2*(c-1) + i] * j[cni]^2
+        end
+    end 
+end
+
+#######################
+# Secondary Variables #
+#######################
 
 function setup_parameters(::ElectrolyteModel)
     d = Dict{Symbol, Any}()
@@ -249,114 +380,6 @@ end
 end
 
 
-function get_cell_index_vec(c, n, i, tbl)
-    """ 
-    Returns cni, the index of a vector defined on cells, with dependence
-    on neighbouring cells. v[cni] is the i'th component of the field in
-    cell c, dependent on cell n (for partial derivatives).
-    """
-    bool = map(x -> x.cell == c && x.cell_dep == n && x.vec == i, tbl)
-    indx = findall(bool)
-    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n, $i)"
-    return indx[1] # cni
-end
-
-function get_face_index(f, c, conn_data)
-    """
-    Retuns i, b. i is the index of a vector defined on faces. v[i] is the
-    value on face f. b is true if f is a face of the cell c, and false else
-    """
-    bool = map(x -> [x.face == f x.self == c], conn_data)
-    indx = findall(x -> x[1] == 1, bool)
-    @assert size(indx) == (2,) "Invalid or duplicate face cell combo, size $(size(indx)) for (f, c) = ($f, $c)"
-    #! Very ugly, can this be done better?
-    if bool[indx[1]][2]
-        return indx[1], true
-    elseif bool[indx[2]][2]
-        return indx[2], true
-    else   
-        return indx[1][1], false
-    end
-end
-
-function get_cell_index_scalar(c, n, tbl)
-    """
-    Returns cn, the index of a scalar defined on cells, which also depends
-    on neighbouring cells. v[cn] is the value at cell c, dependent on c.
-    """
-    bool = map(x -> x.cell == c && x.cell_dep == n, tbl)
-    indx = findall(bool)
-    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n)"
-    return indx[1]
-end
-
-
-function face_to_cell!(j_cell, J, c, P, ccv, conn_data)
-    """
-    Take a field defined on faces, J, finds its value at the cell c.
-    j_cell is a vector that has 2 coponents per cell
-    P maps between values defined on the face, and vectors defined in cells
-    P_[c, f, i] = P_[2*c + i, f], (c=cell, i=space, f=face)
-    j_c[c, c', i] = P_[c, f, i] * J_[f, c'] (c'=cell dependence)
-    """
-    cell_mask = map(x -> x.self==c, conn_data)
-    neigh_self = conn_data[cell_mask] # ? is this the best way??
-    for neigh in neigh_self
-        f = neigh.face
-        for i in 1:2 #! Only valid in 2D for now
-            cic = get_cell_index_vec(c, c, i, ccv)
-            fc, bool = get_face_index(f, c, conn_data)
-            @assert bool
-            ci = 2*(c-1) + i
-            j_cell[cic] += P[ci, f] * J[fc]
-        end
-    end
-
-    # what is the best order to loop through?
-    for neigh in neigh_self
-        n = neigh.other
-        for neigh2 in neigh_self
-            f = neigh2.face
-            for i in 1:2
-                cin = get_cell_index_vec(c, n, i, ccv)
-                fn, bool = get_face_index(f, n, conn_data)
-
-                # The value should only depend on cell n
-                if bool
-                    Jfn = J[fn]
-                else
-                    Jfn = value(J[fn])
-                end
-
-                j_cell[cin] += P[2*(c-1) + i, f] * Jfn
-            end
-        end
-    end # the end is near
-end
-
-function vec_to_scalar(jsq, j, c, S, ccv, cctbl, conn_data)
-    """
-    Takes in vector valued field defined on the cell, and returns the
-    modulus square
-    jsq[c, c'] = S[c, 2*(c-1) + i] * j[c, c', i]^2
-    """
-    cell_mask = map(x -> x.self==c, conn_data)
-    neigh_self = conn_data[cell_mask]
-    cc = get_cell_index_scalar(c, c, cctbl)
-    for i in 1:2
-        cci = get_cell_index_vec(c, c, i, ccv)
-        jsq[cc] += S[c, 2*(c-1) + i] * j[cci]^2
-    end
-    for neigh in neigh_self
-        n = neigh.other
-        cn = get_cell_index_scalar(c, n, cctbl)
-        for i in 1:2
-            cni = get_cell_index_vec(c, n, i, ccv)
-            jsq[cn] += S[c, 2*(c-1) + i] * j[cni]^2
-        end
-    end 
-end
-
 @terv_secondary(
 function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
 
@@ -385,18 +408,6 @@ function update_as_secondary!(jsq, sc::JSq, model, param, JCell)
     jsq .= 0
     for c in 1:number_of_cells(model.domain)
         vec_to_scalar(jsq, JCell, c, S, ccv, cctbl, conn_data)
-    end
-end
-)
-
-@terv_secondary(
-function update_as_secondary!(jsq_diag, sc::JSqDiag, model, param, JSq)
-    """ Carries the diagonal velues of JSq """
-
-    cctbl = model.domain.grid.cellcelltbl
-    cc = i -> get_cell_index_scalar(i, i, cctbl)
-    for i in 1:number_of_cells(model.domain)
-        jsq_diag[i] = JSq[cc(i)]
     end
 end
 )
@@ -434,10 +445,53 @@ function update_as_secondary!(jsq, sc::DGradCSq, model, param, DGradCCell)
 end
 )
 
+
 @terv_secondary(
-function update_as_secondary!(jsq_diag, sc::DGradCSqDiag, model, param, DGradCSq)
+function update_as_secondary!(
+    ρ, sc::EnergyDensity, model, param, DGradCSq, JSq, Diffusivity, Conductivity, DmuDc
+    )
+    
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
+    cctbl = model.domain.grid.cellcelltbl
+
+    κ = Conductivity
+    D = Diffusivity
+
+    for c in 1:number_of_cells(model.domain)
+
+        cell_mask = map(x -> x.self==c, conn_data)
+        neigh_self = conn_data[cell_mask]
+        cc = get_cell_index_scalar(c, c, cctbl)
+
+        # TODO: This should be combinded
+        ρ[cc] = JSq[cc] / κ[c] + DmuDc[c] * DGradCSq[cc] / D[c]
+
+        for neigh in neigh_self
+            n = neigh.other
+            cn = get_cell_index_scalar(c, n, cctbl)
+            ρ[cn] = JSq[cn] / value(κ[c]) + value(DmuDc[c]) * DGradCSq[cn] / value(D[c])
+        end
+    end
+end
+)
+
+
+@terv_secondary(
+function update_as_secondary!(jsq_diag, sc::JSqDiag, model, param, JSq)
     """ Carries the diagonal velues of JSq """
 
+    cctbl = model.domain.grid.cellcelltbl
+    cc = i -> get_cell_index_scalar(i, i, cctbl)
+    for i in 1:number_of_cells(model.domain)
+        jsq_diag[i] = JSq[cc(i)]
+    end
+end
+)
+
+
+@terv_secondary(
+function update_as_secondary!(jsq_diag, sc::DGradCSqDiag, model, param, DGradCSq)
     cctbl = model.domain.grid.cellcelltbl
     cc = i -> get_cell_index_scalar(i, i, cctbl)
     for i in 1:number_of_cells(model.domain)
@@ -446,6 +500,16 @@ function update_as_secondary!(jsq_diag, sc::DGradCSqDiag, model, param, DGradCSq
 end
 )
 
+
+@terv_secondary(
+function update_as_secondary!(ρ_diag, sc::EDDiag, model, param, E)
+    cctbl = model.domain.grid.cellcelltbl
+    cc = i -> get_cell_index_scalar(i, i, cctbl)
+    for i in 1:number_of_cells(model.domain)
+        jsq_diag[i] = DGradCSq[cc(i)]
+    end
+end
+)
 
 
 function get_flux(

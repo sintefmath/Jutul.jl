@@ -34,7 +34,7 @@ function test_elyte()
     domain, exported = get_cc_grid(
         MixedFlow(), name=name, extraout=true, bc=bcells, b_T_hf=T_hf
         )
-    t = LinRange(0, 1, 200)
+    t = LinRange(0, 0.1, 20)
     timesteps = diff(t)
     G = exported["G"]
     sys = TestElyte()
