@@ -453,7 +453,12 @@ function update_primary_variables!(primary_storage, dx, model::TervModel; check 
         for u in get_primary_variable_ordered_units(model)
             np = number_of_partials_per_unit(model, u)
             nu = count_units(model.domain, u)
-            Dx = get_matrix_view(dx, np, nu, true, offset)
+            t = isa(layout, BlockMajorLayout)
+            if t
+                Dx = get_matrix_view(dx, np, nu, true, offset)
+            else
+                Dx = get_matrix_view(dx, np, nu, false, offset)'
+            end
             local_offset = 0
             for (pkey, p) in primary
                 # This is a bit inefficient
