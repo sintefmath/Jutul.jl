@@ -191,7 +191,7 @@ function get_sparse_arguments(storage, model)
     return get_sparse_arguments(storage, model, layout)
 end
 
-function get_sparse_arguments(storage, model, layout::EquationMajorLayout)
+function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout, UnitMajorLayout})
     ndof = number_of_degrees_of_freedom(model)
     eqs = storage[:equations]
     I = []
