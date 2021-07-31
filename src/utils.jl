@@ -36,16 +36,16 @@ function as_cell_major_matrix(v, n, m, model::SimulationModel, offset = 0)
     get_matrix_view(v, n, m, transp, offset)
 end
 
-function get_matrix_view(v, n, m, transp = false, offset = 0)
-    if size(v, 2) == 1 && n != 1
-        r_l = view(v, (offset+1):(offset + n*m))
+function get_matrix_view(v0, n, m, transp = false, offset = 0)
+    if size(v0, 2) == 1 && n != 1
+        r_l = view(v0, (offset+1):(offset + n*m))
         if transp
             v = reshape(r_l, m, n)'
         else
             v = reshape(r_l, n, m)
         end
     else
-        r_l = view(v, (offset+1):(offset+n), :)
+        v = view(v0, (offset+1):(offset+n), :)
         if transp
             v = v'
         end
