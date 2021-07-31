@@ -248,6 +248,34 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
     return SparsePattern(I, J, numrows, ndof, layout, block_size)
 end
 
+function get_sparse_arguments2(storage, model, layout::UnitMajorLayout)
+    ndof = number_of_degrees_of_freedom(model)
+    eqs = storage[:equations]
+    I = []
+    J = []
+    numrows = 0
+    numcols = 0
+    primary_units = get_primary_variable_ordered_units(model)
+
+    for (u_no, u) in enumerate(primary_units)
+        npartials = degrees_of_freedom_per_unit(model, u)
+        nu = count_units(model.domain, u)
+        for (eq_no, eq) in enumerate(values(eqs))
+            S = declare_sparsity(model, eq, u, layout)
+            row_ix = (S.I-1)*u_no + 1
+            col_ix = (S.J-1)*eq_no + 1
+            if !isnothing(S)
+                push!(I, row_ix .+ numrows)
+                push!(J, col_ix .+ numcols)
+            end
+        end
+        numrows += npartials*nu
+        numcols += npartials*nu
+    end
+    I = vcat(I...)
+    J = vcat(J...)
+    return SparsePattern(I, J, numrows, ndof, layout)
+end
 
 function setup_linearized_system!(storage, model::TervModel)
     # Linearized system is going to have dimensions of
@@ -416,7 +444,8 @@ function update_primary_variables!(storage, model::TervModel; kwarg...)
 end
 
 function update_primary_variables!(primary_storage, dx, model::TervModel; check = false)
-    cell_major = is_cell_major(matrix_layout(model.context))
+    layout = matrix_layout(model.context)
+    cell_major = is_cell_major(layout)
     offset = 0
     primary = get_primary_variables(model)
     if cell_major
@@ -424,7 +453,7 @@ function update_primary_variables!(primary_storage, dx, model::TervModel; check 
         for u in get_primary_variable_ordered_units(model)
             np = number_of_partials_per_unit(model, u)
             nu = count_units(model.domain, u)
-            Dx = get_matrix_view(dx, np, nu, cell_major, offset)
+            Dx = get_matrix_view(dx, np, nu, true, offset)
             local_offset = 0
             for (pkey, p) in primary
                 # This is a bit inefficient

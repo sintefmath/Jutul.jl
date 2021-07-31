@@ -36,22 +36,23 @@ function as_cell_major_matrix(v, n, m, model::SimulationModel, offset = 0)
     get_matrix_view(v, n, m, transp, offset)
 end
 
-function get_matrix_view(v::AbstractVector, n, m, transp = false, offset = 0)
-    r_l = view(v, (offset+1):(offset + n*m))
-    if transp
-        v = reshape(r_l, m, n)'
+function get_matrix_view(v, n, m, transp = false, offset = 0)
+    if size(v, 2) == 1 && n != 1
+        r_l = view(v, (offset+1):(offset + n*m))
+        if transp
+            v = reshape(r_l, m, n)'
+        else
+            v = reshape(r_l, n, m)
+        end
     else
-        v = reshape(r_l, n, m)
+        r_l = view(v, (offset+1):(offset+n), :)
+        if transp
+            v = v'
+        end
     end
     return v
 end
 
-function get_matrix_view(v, n, m, transp = false, offset = 0)
-    if transp
-        v = v'
-    end
-    return v
-end
 
 function check_increment(dx, key)
     if any(!isfinite, dx)
@@ -63,10 +64,10 @@ function check_increment(dx, key)
     end
 end
 
-function get_row_view(v::AbstractVector, n, m, row, transp = false, offset = 0)
-    v = get_matrix_view(v, n, m, transp, offset)
-    view(v, row, :)
-end
+# function get_row_view(v::AbstractVector, n, m, row, transp = false, offset = 0)
+#     v = get_matrix_view(v, n, m, transp, offset)
+#     view(v, row, :)
+# end
 
 function get_convergence_table(errors::AbstractDict)
     # Already a dict
