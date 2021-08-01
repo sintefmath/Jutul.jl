@@ -1,4 +1,4 @@
-export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner
+export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, DampedJacobiPreconditioner
 using ILUZero
 
 abstract type TervPreconditioner end
@@ -63,6 +63,59 @@ function apply!(x, p::TervPreconditioner, y, arg...)
     else
         error("Neither left or right preconditioner?")
     end
+end
+
+"""
+Damped Jacobi preconditioner on CPU
+"""
+mutable struct DampedJacobiPreconditioner <: TervPreconditioner
+    factor
+    dim
+    w
+    function DampedJacobiPreconditioner(; w = 2/3)
+        new(nothing, nothing, w)
+    end
+end
+
+
+function update!(jac::DampedJacobiPreconditioner, A, b)
+    ω = jac.w
+    if isnothing(jac.factor)
+        D = Diagonal(A)
+        for i in 1:size(D, 1)
+            D.diag[i] = ω*inv(D.diag[i])
+        end
+        jac.factor = D
+        d = length(b[1])
+        jac.dim = d .* size(A)
+    else
+        D = jac.factor
+        for i in 1:size(D, 1)
+            D.diag[i] = ω*inv(A[i, i])
+        end
+    end
+end
+
+function apply!(x, jac::DampedJacobiPreconditioner, y, arg...)
+    # Very hacky.
+    D = jac.factor
+
+    s = D.diag[1]
+    N = size(s, 1)
+    T = eltype(s)
+    Vt = SVector{N, T}
+    as_svec = (x) -> reinterpret(Vt, x)
+
+    # Solve by reinterpreting vectors to block (=SVector) vectors
+    tmp = D*as_svec(y)
+    xv = as_svec(x)
+    xv .= tmp
+    # f! = ilu_f(type)
+    # f!(as_svec(x), ilu, as_svec(y))
+end
+
+function operator_nrows(ilu::DampedJacobiPreconditioner)
+    return ilu.dim[1]
 end
 
 """
