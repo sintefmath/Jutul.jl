@@ -66,7 +66,10 @@ function solve!(sys::LSystem, krylov::GenericKrylov)
     if from_IterativeSolvers(solver)
         # Pl = krylov.preconditioner.factor
         (x, history) = solver(op, r, abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)#, Pr = R)
-        display(history)
+        solved = history.isconverged
+        msg = history
+        n = history.iters
+        res = history.data[:resnorm]
     else
         (x, stats) = solver(op, r, 
                                 itmax = max_it,
@@ -77,12 +80,17 @@ function solve!(sys::LSystem, krylov::GenericKrylov)
                                 M = L, N = R)
         res = stats.residuals
         n = length(res) - 1
-        if !stats.solved
-            @warn "Linear solver: $(stats.status), final residual: $(res[end]). rtol = $rt, atol = $at, max_it = $max_it"
-        end
-        if v > 0
-            @debug "Final residual $(res[end]), rel. value $(res[end]/res[1]) after $n iterations."
-        end
+        solved = stats.solved
+        msg = stats.status
+    end
+    initial_res = res[1]
+    final_res = res[end]
+
+    if !solved
+        @warn "Linear solver: $msg, final residual: $final_res. rtol = $rt, atol = $at, max_it = $max_it"
+    end
+    if v > 0
+        @debug "Final residual $final_res, rel. value $(final_res/initial_res) after $n iterations."
     end
     update_dx_from_vector!(sys, x)
 end
