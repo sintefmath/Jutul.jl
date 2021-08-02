@@ -197,8 +197,7 @@ function update_linearized_system_equation!(
     fill_jac_entries!(nz, r, model, acc, cell_flux, cpos, density)
 end
 
-# TODO: Add entry so that densities not on the diagonal, such as j^2, may be added
-# ? What is the best way to do this? Should Cache be used?
+
 function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos, density)
 
     # Cells, equations, partials
@@ -214,8 +213,9 @@ function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos, density)
     jp = cell_flux.jacobian_positions
     dp = density.jacobian_positions
 
-    #! @threads removed for debugging, slows performance!
+    # TODO: Combine loops
 
+    #! @threads removed for debugging, slows performance!
     # Fill accumulation + diag flux
     for cell = 1:nc
         for e in 1:ne
@@ -249,7 +249,7 @@ function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos, density)
         for e in 1:ne
             entry = get_entry(density, i, e, dentries)
 
-            # Todo: get this value right
+            # TODO: get this value right
             # @inbounds r[e, cell] = diag_entry.value
 
             for d = 1:np

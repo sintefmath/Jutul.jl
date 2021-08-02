@@ -154,7 +154,7 @@ end
 # Tensormaps #
 ##############
 # TODO: These should all be computed initially, to avoid serach later
-
+# TODO: Use standard way to loop through neigh. (as fill_jac_entries!)
 
 function get_cell_index_vec(c, n, i, tbl)
     """ 

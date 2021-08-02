@@ -80,7 +80,7 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     cellcelltbl
 end
 
-
+# TODO: Use thses to find map to linear index 
 function get_cellcellvec_map(neigh)
     """ Creates cellcellvectbl """
     dim = 2
