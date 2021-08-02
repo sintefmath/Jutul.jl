@@ -364,3 +364,35 @@ end
     )
     @tullio acc[i] = 0 # Charge neutrality
 end
+
+@terv_secondary(
+function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
+
+    P = model.domain.grid.P
+    J = TotalCurrent
+    mf = model.domain.discretizations.charge_flow
+    ccv = model.domain.grid.cellcellvectbl
+    conn_data = mf.conn_data
+
+    j_cell .= 0 # ? Is this necesessary ?
+    for c in 1:number_of_cells(model.domain)
+        face_to_cell!(j_cell, J, c, P, ccv, conn_data)
+    end
+end
+)
+
+@terv_secondary(
+function update_as_secondary!(jsq, sc::JSq, model, param, JCell)
+
+    S = model.domain.grid.S
+    mf = model.domain.discretizations.charge_flow
+    conn_data = mf.conn_data
+    cctbl = model.domain.grid.cellcelltbl
+    ccv = model.domain.grid.cellcellvectbl
+
+    jsq .= 0
+    for c in 1:number_of_cells(model.domain)
+        vec_to_scalar!(jsq, JCell, c, S, ccv, cctbl, conn_data)
+    end
+end
+)
