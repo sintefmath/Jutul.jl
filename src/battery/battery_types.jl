@@ -65,6 +65,25 @@ struct BoundaryCurrent{T} <: ScalarVariable
     cells
 end
 
+abstract type Current <: ScalarVariable end
+struct TotalCurrent <: Current end
+struct ChargeCarrierFlux <: Current end
+struct EnergyFlux <: Current end
+
+function number_of_units(model, pv::Current)
+    return 2*count_units(model.domain, Faces())
+end
+
+abstract type NonDiagCellVariables <: TervVariables end
+
+# Abstract type of a vector that is defined on a cell, from face flux
+abstract type CellVector <: NonDiagCellVariables end
+struct JCell <: CellVector end
+
+abstract type ScalarNonDiagVaraible <: NonDiagCellVariables end
+struct JSq <: ScalarNonDiagVaraible end
+
+struct JSqDiag <: ScalarVariable end
 
 struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     """
@@ -79,62 +98,6 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     cellcellvectbl
     cellcelltbl
 end
-
-# TODO: Use thses to find map to linear index 
-function get_cellcellvec_map(neigh)
-    """ Creates cellcellvectbl """
-    dim = 2
-    # Must have 2 copies of each neighbourship
-    neigh = [
-        [neigh[1, i] neigh[2, i]; neigh[2, i] neigh[1, i]] 
-        for i in 1:size(neigh, 2)
-        ]
-    neigh = reduce(vcat, neigh)'
-    cell1 = [repeat([i], dim) for i in neigh[1, :]]
-    cell2 = [repeat([i], dim) for i in neigh[2, :]]
-    num_neig = size(cell1)[1]
-    vec = [1:dim for i in 1:num_neig]
-    cell, cell_dep, vec = map(x -> reduce(vcat, x), [cell1, cell2, vec])
-    # must add self dependence
-    for i in 1:maximum(cell) #! Probably not the best way to find nc
-        push!(cell, i); push!(cell, i)
-        push!(cell_dep, i); push!(cell_dep, i)
-        push!(vec, 1); push!(vec, 2)
-    end
-    # ? Should these be sorted in som way ?
-
-    tbl = [
-        (cell = cell[i], cell_dep = cell_dep[i], vec = vec[i]) 
-            for i in 1:size(cell, 1)
-        ]
-    return tbl
-end
-
-function get_cellcell_map(neigh)
-    """ Creates cellcelltbl """
-    neigh = [
-        [
-            neigh[1, i] neigh[2, i]; 
-            neigh[2, i] neigh[1, i]
-        ] 
-        for i in 1:size(neigh, 2)
-        ]
-    neigh = reduce(vcat, neigh)'
-    cell1 = neigh[1, :]
-    cell2 = neigh[2, :]
-    num_neig = size(cell1)[1]
-    cell, cell_dep = map(x -> reduce(vcat, x), [cell1, cell2])
-    for i in 1:maximum(cell) #! Probably not the best way to find nc
-        push!(cell, i);
-        push!(cell_dep, i);
-    end
-    tbl = [
-        (cell = cell[i], cell_dep = cell_dep[i])
-        for i in 1:size(cell, 1)
-        ]
-    return tbl
-end
-
 
 ################
 # Constructors #

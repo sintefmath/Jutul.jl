@@ -85,6 +85,7 @@ end
 #######################
 # Boundary conditions #
 #######################
+# TODO: Add possibilites for different potentials to have different boundary cells
 
 function corr_type(::Conservation{T}) return T() end
 
@@ -105,13 +106,13 @@ function apply_boundary_potential!(
     # values
     Phi = state[:Phi]
     BoundaryPhi = state[:BoundaryPhi]
-    σ = state[:Conductivity]
+    κ = state[:Conductivity]
 
     bc = model.domain.grid.boundary_cells
     T_hf = model.domain.grid.boundary_T_hf
 
     for (i, c) in enumerate(bc)
-        @inbounds acc[c] -= - σ[c]*T_hf[i]*(Phi[c] - BoundaryPhi[i])
+        @inbounds acc[c] -= - κ[c]*T_hf[i]*(Phi[c] - BoundaryPhi[i])
     end
 end
 

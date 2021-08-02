@@ -14,69 +14,11 @@ struct TPDGrad{T} <: KGrad{T} end
 struct DmuDc <: ScalarVariable end
 struct ConsCoeff <: ScalarVariable end
 
-abstract type Current <: ScalarVariable end
-struct TotalCurrent <: Current end
-struct ChargeCarrierFlux <: Current end
-struct EnergyFlux <: Current end
-
-abstract type NonDiagCellVariables <: TervVariables end
-
-# Abstract type of a vector that is defined on a cell, from face flux
-abstract type CellVector <: NonDiagCellVariables end
-struct JCell <: CellVector end
 struct DGradCCell <: CellVector end
-
-abstract type ScalarNonDiagVaraible <: NonDiagCellVariables end
-struct JSq <: ScalarNonDiagVaraible end
 struct DGradCSq <: ScalarNonDiagVaraible end
-
-struct JSqDiag <: ScalarVariable end
 struct DGradCSqDiag <: ScalarVariable end
-
 struct EnergyDensity <: ScalarNonDiagVaraible end
 struct EDDiag <: ScalarVariable end
-
-function initialize_variable_value(
-    model, pvar::NonDiagCellVariables, val; perform_copy=true
-    )
-    nu = number_of_units(model, pvar)
-    nv = values_per_unit(model, pvar)
-    
-    @assert length(val) == nu * nv "Expected val length $(nu*nv), got $(length(val))"
-    val::AbstractVector
-
-    if perform_copy
-        val = deepcopy(val)
-    end
-    return transfer(model.context, val)
-end
-
-function initialize_variable_value!(state, model, pvar::NonDiagCellVariables, symb::Symbol, val::Number)
-    num_val = number_of_units(model, pvar)*values_per_unit(model, pvar)
-    V = repeat([val], num_val)
-    return initialize_variable_value!(state, model, pvar, symb, V)
-end
-
-function number_of_units(model, pv::NonDiagCellVariables)
-    """ Each value depends on a cell and all its neighbours """
-    return size(model.domain.grid.cellcelltbl, 1)
-end
-
-function values_per_unit(model, u::CellVector)
-    return 2
-end
-
-function values_per_unit(model, u::ScalarNonDiagVaraible)
-    return 1
-end
-
-function degrees_of_freedom_per_unit(model, sf::NonDiagCellVariables)
-    return values_per_unit(model, sf) 
-end
-
-function number_of_units(model, pv::Current)
-    return 2*count_units(model.domain, Faces())
-end
 
 function select_equations_system!(
     eqs, domain, system::Electrolyte, formulation
@@ -149,123 +91,6 @@ function minimum_output_variables(
     ]
 end
 
-
-##############
-# Tensormaps #
-##############
-# TODO: These should all be computed initially, to avoid serach later
-# TODO: Use standard way to loop through neigh. (as fill_jac_entries!)
-
-function get_cell_index_vec(c, n, i, tbl)
-    """ 
-    Returns cni, the index of a vector defined on cells, with dependence
-    on neighbouring cells. v[cni] is the i'th component of the field in
-    cell c, dependent on cell n (for partial derivatives).
-    """
-    bool = map(x -> x.cell == c && x.cell_dep == n && x.vec == i, tbl)
-    indx = findall(bool)
-    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n, $i)"
-    return indx[1] # cni
-end
-
-function get_face_index(f, c, conn_data)
-    """
-    Retuns i, b. i is the index of a vector defined on faces. v[i] is the
-    value on face f. b is true if f is a face of the cell c, and false else
-    """
-    bool = map(x -> [x.face == f x.self == c], conn_data)
-    indx = findall(x -> x[1] == 1, bool)
-    @assert size(indx) == (2,) "Invalid or duplicate face cell combo, size $(size(indx)) for (f, c) = ($f, $c)"
-    #! Very ugly, can this be done better?
-    if bool[indx[1]][2]
-        return indx[1], true
-    elseif bool[indx[2]][2]
-        return indx[2], true
-    else   
-        return indx[1][1], false
-    end
-end
-
-function get_cell_index_scalar(c, n, tbl)
-    """
-    Returns cn, the index of a scalar defined on cells, which also depends
-    on neighbouring cells. v[cn] is the value at cell c, dependent on c.
-    """
-    bool = map(x -> x.cell == c && x.cell_dep == n, tbl)
-    indx = findall(bool)
-    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n)"
-    return indx[1]
-end
-
-
-# ! Boundary current is not included
-function face_to_cell!(j_cell, J, c, P, ccv, conn_data)
-    """
-    Take a field defined on faces, J, finds its value at the cell c.
-    j_cell is a vector that has 2 coponents per cell
-    P maps between values defined on the face, and vectors defined in cells
-    P_[c, f, i] = P_[2*(c-1) + i, f], (c=cell, i=space, f=face)
-    j_c[c, c', i] = P_[c, f, i] * J_[f, c'] (c'=cell dependence)
-    """
-
-    # TODO: Combine the loop over neigh_self with the self
-    cell_mask = map(x -> x.self==c, conn_data)
-    neigh_self = conn_data[cell_mask] # ? is this the best way??
-    for neigh in neigh_self
-        f = neigh.face
-        for i in 1:2 #! Only valid in 2D for now
-            cic = get_cell_index_vec(c, c, i, ccv)
-            fc, bool = get_face_index(f, c, conn_data)
-            @assert bool
-            ci = 2*(c-1) + i
-            j_cell[cic] += P[ci, f] * J[fc]
-        end
-    end
-
-    # what is the best order to loop through?
-    for neigh in neigh_self
-        n = neigh.other
-        for neigh2 in neigh_self
-            f = neigh2.face
-            for i in 1:2
-                cin = get_cell_index_vec(c, n, i, ccv)
-                fn, bool = get_face_index(f, n, conn_data)
-
-                # The value should only depend on cell n
-                if bool
-                    Jfn = J[fn]
-                else
-                    Jfn = value(J[fn])
-                end
-
-                j_cell[cin] += P[2*(c-1) + i, f] * Jfn
-            end
-        end
-    end # the end is near
-end
-
-function vec_to_scalar(jsq, j, c, S, ccv, cctbl, conn_data)
-    """
-    Takes in vector valued field defined on the cell, and returns the
-    modulus square
-    jsq[c, c'] = S[c, 2*(c-1) + i] * j[c, c', i]^2
-    """
-    cell_mask = map(x -> x.self==c, conn_data)
-    neigh_self = conn_data[cell_mask]
-    cc = get_cell_index_scalar(c, c, cctbl)
-    for i in 1:2
-        cci = get_cell_index_vec(c, c, i, ccv)
-        jsq[cc] += S[c, 2*(c-1) + i] * j[cci]^2
-    end
-    for neigh in neigh_self
-        n = neigh.other
-        cn = get_cell_index_scalar(c, n, cctbl)
-        for i in 1:2
-            cni = get_cell_index_vec(c, n, i, ccv)
-            jsq[cn] += S[c, 2*(c-1) + i] * j[cni]^2
-        end
-    end 
-end
 
 #######################
 # Secondary Variables #
@@ -536,14 +361,6 @@ function get_flux(
     return - storage.state.TPkGrad_T
 end
 
-function update_accumulation!(law::Conservation{EnergyAcc}, storage, model, dt)
-    conserved = law.accumulation_symbol
-    acc = get_entries(law.accumulation)
-    m = storage.state[conserved]
-    m0 = storage.state0[conserved]
-    @tullio acc[c] = (m[c] - m0[c])/dt
-    return acc
-end
 
 function apply_boundary_potential!(
     acc, state, parameters, model::ElectrolyteModel, eq::Conservation{ChargeAcc}

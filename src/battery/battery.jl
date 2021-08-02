@@ -22,6 +22,7 @@ end
 # All EC-comps #
 ################
 
+# TODO: Remove the uncessecary ones
 function single_unique_potential(model::ECModel)
     return false
 end
@@ -66,6 +67,22 @@ function number_of_units(model, BP::BoundaryCurrent)
     return size(BP.cells)[1]
 end
 
+function number_of_units(model, pv::NonDiagCellVariables)
+    """ Each value depends on a cell and all its neighbours """
+    return size(model.domain.grid.cellcelltbl, 1)
+end
+
+function values_per_unit(model, u::CellVector)
+    return 2
+end
+
+function values_per_unit(model, u::ScalarNonDiagVaraible)
+    return 1
+end
+
+function degrees_of_freedom_per_unit(model, sf::NonDiagCellVariables)
+    return values_per_unit(model, sf) 
+end
 
 # ?Why not faces?
 function associated_unit(::KGrad)
@@ -74,6 +91,27 @@ end
 
 @inline function get_diagonal_cache(eq::Conservation)
     return eq.accumulation
+end
+
+function initialize_variable_value(
+    model, pvar::NonDiagCellVariables, val; perform_copy=true
+    )
+    nu = number_of_units(model, pvar)
+    nv = values_per_unit(model, pvar)
+    
+    @assert length(val) == nu * nv "Expected val length $(nu*nv), got $(length(val))"
+    val::AbstractVector
+
+    if perform_copy
+        val = deepcopy(val)
+    end
+    return transfer(model.context, val)
+end
+
+function initialize_variable_value!(state, model, pvar::NonDiagCellVariables, symb::Symbol, val::Number)
+    num_val = number_of_units(model, pvar)*values_per_unit(model, pvar)
+    V = repeat([val], num_val)
+    return initialize_variable_value!(state, model, pvar, symb, V)
 end
 
 
