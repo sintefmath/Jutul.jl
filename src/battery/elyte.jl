@@ -59,7 +59,7 @@ end
 
 function number_of_units(model, pv::NonDiagCellVariables)
     """ Each value depends on a cell and all its neighbours """
-    return size(model.domain.grid.cellcellvectbl, 1)
+    return size(model.domain.grid.cellcelltbl, 1)
 end
 
 function values_per_unit(model, u::CellVector)
@@ -475,6 +475,12 @@ function update_as_secondary!(
     end
 end
 )
+
+function update_density!(law::Conservation, storage, model::ElectrolyteModel)
+    ρ = storage.state.EnergyDensity
+    ρ_law = get_entries(law.density)
+    @tullio ρ[i] = ρ_law[i]
+end
 
 
 @terv_secondary(

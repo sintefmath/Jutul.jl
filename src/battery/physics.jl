@@ -34,6 +34,7 @@ end
 function update_equation!(law::Conservation, storage, model, dt)
     update_accumulation!(law, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt)
+    update_density!(law, storage, model)
 end
 
 
@@ -74,6 +75,10 @@ function update_half_face_flux!(
     flux = get_flux(storage, model, law)
     f = get_entries(law.half_face_flux_cells)
     @tullio f[i] = flux[i]
+end
+
+function update_density!(law::Conservation, storage, model)
+    nothing
 end
 
 

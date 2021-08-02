@@ -2,23 +2,40 @@ export allocate_array_ad, get_ad_unit_scalar, update_values!
 export value, find_sparse_position
 
 
-function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
-    equation_index, partial_index,        # Index of equation and partial derivative - local index
-    nunits_target, nunits_source,         # Row and column sizes for each sub-system
-    eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
-    context::TervContext)
-    layout = matrix_layout(context)
-    find_jac_position(A, target_unit_index, source_unit_index,
+function find_jac_position(
+    # Typically row and column - global index
+    A, target_unit_index, source_unit_index, 
+    # Index of equation and partial derivative - local index
     equation_index, partial_index,
+    # Row and column sizes for each sub-system
     nunits_target, nunits_source,
-    eqs_per_unit, partials_per_unit, layout)
+    # Sizes of the smallest inner system
+    eqs_per_unit, partials_per_unit,
+    context::TervContext
+    )
+    
+    layout = matrix_layout(context)
+    find_jac_position(
+        A, target_unit_index, source_unit_index, 
+        equation_index, partial_index,
+        nunits_target, nunits_source, 
+        eqs_per_unit, partials_per_unit, 
+        layout
+        )
 end
 
-function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
-                              equation_index, partial_index,        # Index of equation and partial derivative - local index
-                              nunits_target, nunits_source,         # Row and column sizes for each sub-system
-                              eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
-                              layout::EquationMajorLayout)
+function find_jac_position(
+    # Typically row and column - global index
+    A, target_unit_index, source_unit_index,
+    # Index of equation and partial derivative - local index
+    equation_index, partial_index,
+    # Row and column sizes for each sub-system
+    nunits_target, nunits_source,
+    # Sizes of the smallest inner system
+    eqs_per_unit, partials_per_unit,
+    layout::EquationMajorLayout
+    )
+
     row = nunits_target*(equation_index-1) + target_unit_index
     col = nunits_source*(partial_index-1) + source_unit_index
     find_sparse_position(A, row, col, layout)

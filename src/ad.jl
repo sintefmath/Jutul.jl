@@ -167,10 +167,13 @@ function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, n
         source = source_index[index]
         for e in 1:ne
             for d = 1:np
-                pos = find_jac_position(jac, target + target_offset, source + source_offset, e, d, 
-                nu_t, nu_s,
-                ne, np,
-                layout)
+                pos = find_jac_position(
+                    jac, target + target_offset, source + source_offset, 
+                    e, d, 
+                    nu_t, nu_s,
+                    ne, np,
+                    layout
+                    )
                 set_jacobian_pos!(cache, index, e, d, pos)
             end
         end

@@ -31,6 +31,7 @@ struct Conservation{T} <: TervEquation
     accumulation::TervAutoDiffCache
     accumulation_symbol::Symbol
     half_face_flux_cells::TervAutoDiffCache
+    density::TervAutoDiffCache
     flow_discretization::FlowDiscretization
 end
 
@@ -84,7 +85,6 @@ function get_cellcellvec_map(neigh)
     """ Creates cellcellvectbl """
     dim = 2
     # Must have 2 copies of each neighbourship
-    # This took some time to figure out 😰
     neigh = [
         [neigh[1, i] neigh[2, i]; neigh[2, i] neigh[1, i]] 
         for i in 1:size(neigh, 2)
@@ -113,7 +113,10 @@ end
 function get_cellcell_map(neigh)
     """ Creates cellcelltbl """
     neigh = [
-        [neigh[1, i] neigh[2, i]; neigh[2, i] neigh[1, i]] 
+        [
+            neigh[1, i] neigh[2, i]; 
+            neigh[2, i] neigh[1, i]
+        ] 
         for i in 1:size(neigh, 2)
         ]
     neigh = reduce(vcat, neigh)'
@@ -127,7 +130,7 @@ function get_cellcell_map(neigh)
     end
     tbl = [
         (cell = cell[i], cell_dep = cell_dep[i])
-            for i in 1:size(cell, 1)
+        for i in 1:size(cell, 1)
         ]
     return tbl
 end
@@ -159,14 +162,12 @@ end
 
 function Conservation(
     acc_type, model, number_of_equations;
-    flow_discretization = nothing, kwarg...
+    flow_discretization = model.domain.discretizations[1], kwarg...
     )
     """
     A conservation law corresponding to the underlying potential pvar
     """
-    if isnothing(flow_discretization)
-        flow_discretization = model.domain.discretizations[1]
-    end
+
     accumulation_symbol = acc_symbol(acc_type)
 
     D = model.domain
@@ -175,6 +176,8 @@ function Conservation(
     nc = count_units(D, cell_unit)
     nf = count_units(D, face_unit)
     nhf = 2 * nf
+    nn = size(get_neighborship(D.grid), 2)
+    n_tot = nc + 2 * nn
 
     alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(
         number_of_equations, n, model, unit = unit, n_units_pos = n_units_pos,
@@ -183,10 +186,10 @@ function Conservation(
 
     acc = alloc(nc, cell_unit, nc)
     hf_cells = alloc(nhf, cell_unit, nhf)
-
+    density = alloc(n_tot, cell_unit, n_tot)
 
     Conservation{typeof(acc_type)}(
-        acc, accumulation_symbol, hf_cells, flow_discretization
+        acc, accumulation_symbol, hf_cells, density, flow_discretization
     )
 end
 

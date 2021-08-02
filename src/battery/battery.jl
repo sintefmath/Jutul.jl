@@ -86,14 +86,75 @@ function align_to_jacobian!(
 
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
+    density = law.density
+    cctbl = model.domain.grid.cellcelltbl
+
+
     diagonal_alignment!(
-        acc, jac, u, model.context, target_offset = equation_offset, 
-        source_offset = variable_offset)
+        acc, jac, u, model.context;
+        target_offset = equation_offset, source_offset = variable_offset
+        )
     half_face_flux_cells_alignment!(
         hflux_cells, acc, jac, model.context, neighborship, fd, 
         target_offset = equation_offset, source_offset = variable_offset
         )
+    density_alignment!(
+        density, acc, jac, model.context, neighborship, fd, cctbl;
+        target_offset = equation_offset, source_offset = variable_offset
+        )
 end
+
+function find_and_place_density!(
+    jac, target, source, nu, ne, np, index, density, context
+    )
+    for e in 1:ne
+        for d = 1:np
+            pos = find_jac_position(
+                jac, target, source, 
+                e, d, 
+                nu, nu, 
+                ne, np, 
+                context
+                )
+            set_jacobian_pos!(density, index, e, d, pos)
+        end
+    end
+end
+
+function density_alignment!(
+    density, acc_cache, jac, context, N, flow_disc, cctbl;
+    target_offset = 0, source_offset = 0
+    )
+    
+    nu, ne, np = ad_dims(acc_cache)
+    facepos = flow_disc.conn_pos
+    nc = length(facepos) - 1
+    @threads for cell in 1:nc
+
+        # diagonal
+        index = get_cell_index_scalar(cell, cell, cctbl)
+        find_and_place_density!(
+            jac, cell + target_offset, cell + source_offset, nu, ne, np, index, density, 
+            context
+            )
+
+        # off diagonal
+        @inbounds for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
+            f = flow_disc.conn_data[f_ix].face
+            if N[1, f] == cell
+                other = N[2, f]
+            else
+                other = N[1, f]
+            end
+            index = get_cell_index_scalar(cell, other, cctbl)
+            find_and_place_density!(
+                jac, other + target_offset, cell + source_offset, nu, ne, np, index, 
+                density, context
+                )
+        end
+    end
+end
+
 
 function declare_pattern(model, e::Conservation, ::Cells)
     df = e.flow_discretization
@@ -131,28 +192,35 @@ function update_linearized_system_equation!(
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
     cpos = law.flow_discretization.conn_pos
+    density = law.density
 
-    fill_jac_entries!(nz, r, model, acc, cell_flux, cpos)
+    fill_jac_entries!(nz, r, model, acc, cell_flux, cpos, density)
 end
 
 # TODO: Add entry so that densities not on the diagonal, such as j^2, may be added
 # ? What is the best way to do this? Should Cache be used?
-function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos)
+function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos, density)
 
     # Cells, equations, partials
     nc, ne, np = ad_dims(acc)
     nu, _ = ad_dims(cell_flux)
+    nud, _ = ad_dims(density)
 
     centries = acc.entries
     fentries = cell_flux.entries
+    dentries = density.entries
+
     cp = acc.jacobian_positions
     jp = cell_flux.jacobian_positions
-
+    dp = density.jacobian_positions
 
     #! @threads removed for debugging, slows performance!
+
+    # Fill accumulation + diag flux
     for cell = 1:nc
         for e in 1:ne
             diag_entry = get_entry(acc, cell, e, centries)
+            
             @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
                 diag_entry -= get_entry(cell_flux, i, e, fentries)
             end
@@ -165,15 +233,32 @@ function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos)
         end
     end
 
+    # Fill of-diagonal flux
     for i in 1:nu
         for e in 1:ne
             a = get_entry(cell_flux, i, e, fentries)
-            for d = 1:np
+            for d in 1:np
                 apos = get_jacobian_pos(cell_flux, i, e, d, jp)
                 @inbounds nz[apos] = a.partials[d]
             end
         end
     end
+
+    # Fill density term
+    for i = 1:nud
+        for e in 1:ne
+            entry = get_entry(density, i, e, dentries)
+
+            # Todo: get this value right
+            # @inbounds r[e, cell] = diag_entry.value
+
+            for d = 1:np
+                pos = get_jacobian_pos(density, i, e, d, dp)
+                @inbounds nz[pos] += entry.partials[d]
+            end
+        end
+    end
+
 end
 
 
