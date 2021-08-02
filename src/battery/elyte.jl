@@ -232,7 +232,7 @@ function update_as_secondary!(jsq, sc::JSq, model, param, JCell)
 
     jsq .= 0
     for c in 1:number_of_cells(model.domain)
-        vec_to_scalar(jsq, JCell, c, S, ccv, cctbl, conn_data)
+        vec_to_scalar!(jsq, JCell, c, S, ccv, cctbl, conn_data)
     end
 end
 )
@@ -265,7 +265,7 @@ function update_as_secondary!(jsq, sc::DGradCSq, model, param, DGradCCell)
 
     jsq .= 0
     for c in 1:number_of_cells(model.domain)
-        vec_to_scalar(jsq, DGradCCell, c, S, ccv, cctbl, conn_data)
+        vec_to_scalar!(jsq, DGradCCell, c, S, ccv, cctbl, conn_data)
     end
 end
 )

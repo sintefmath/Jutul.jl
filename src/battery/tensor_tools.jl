@@ -1,5 +1,7 @@
 using Terv
 
+export vec_to_scalar!, face_to_cell!, get_cellcell_map, get_cellcellvec_map
+
 ##############
 # Tensormaps #
 ##############
@@ -94,7 +96,7 @@ function face_to_cell!(j_cell, J, c, P, ccv, conn_data)
     end # the end is near
 end
 
-function vec_to_scalar(jsq, j, c, S, ccv, cctbl, conn_data)
+function vec_to_scalar!(jsq, j, c, S, ccv, cctbl, conn_data)
     """
     Takes in vector valued field defined on the cell, and returns the
     modulus square
