@@ -1,3 +1,8 @@
+"""
+Electectrolyte
+A electrolyte with coupleded potentials (φ, C, T) and |∇φ|^2-terms
+"""
+
 using Terv
 
 ENV["JULIA_DEBUG"] = Terv;

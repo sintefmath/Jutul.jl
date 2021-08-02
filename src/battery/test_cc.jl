@@ -1,3 +1,9 @@
+"""
+Simple current collector
+A conductro with constant conductivity
+"""
+
+
 using Terv
 using Test
 
