@@ -1,7 +1,7 @@
-"""
+#=
 Electectrolyte
 A electrolyte with coupleded potentials (φ, C, T) and |k∇φ|^2-terms
-"""
+=#
 using Terv
 
 ENV["JULIA_DEBUG"] = Terv;
