@@ -199,6 +199,14 @@ end
 
 
 function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos, density)
+    """
+    Fills the entries of the Jacobian.
+    First loop: Add contributions from accumulation, and diagonal contributions
+    from the flux to the jacobian, and values from accumulation and fluxt to r.
+    Second loop: Adds off diagonal contributions from the flux to the jacobian.
+    Third loop: Adds the contribution from density terms to the loop
+    Fourth loop: Adds contributions from density to r.
+    """
 
     # Cells, equations, partials
     nc, ne, np = ad_dims(acc)
@@ -213,18 +221,18 @@ function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos, density)
     jp = cell_flux.jacobian_positions
     dp = density.jacobian_positions
 
-    # TODO: Combine loops
+    cctbl = model.domain.grid.cellcelltbl
 
     #! @threads removed for debugging, slows performance!
     # Fill accumulation + diag flux
     for cell = 1:nc
         for e in 1:ne
             diag_entry = get_entry(acc, cell, e, centries)
-            
+
             @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
                 diag_entry -= get_entry(cell_flux, i, e, fentries)
             end
-
+            
             @inbounds r[e, cell] = diag_entry.value
             for d = 1:np
                 apos = get_jacobian_pos(acc, cell, e, d, cp)
@@ -249,13 +257,20 @@ function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos, density)
         for e in 1:ne
             entry = get_entry(density, i, e, dentries)
 
-            # TODO: get this value right
-            # @inbounds r[e, cell] = diag_entry.value
-
             for d = 1:np
                 pos = get_jacobian_pos(density, i, e, d, dp)
                 @inbounds nz[pos] += entry.partials[d]
             end
+        end
+    end
+
+    # Add value from densities
+    for c in 1:nc
+        for e in 1:ne
+            cc = get_cell_index_scalar(c, c, cctbl)
+            entry = get_entry(density, cc, e, dentries)
+            
+            @inbounds r[e, c] += entry.value
         end
     end
 
