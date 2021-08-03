@@ -4,6 +4,11 @@ export GenericKrylov
 
 struct PrecondWrapper
     op::LinearOperator
+    x
+    function PrecondWrapper(op)
+        x = zeros(eltype(op), size(op, 1))
+        new(op, x)
+    end
 end
 
 Base.eltype(p::PrecondWrapper) = eltype(p.op)
@@ -11,9 +16,9 @@ Base.eltype(p::PrecondWrapper) = eltype(p.op)
 LinearAlgebra.mul!(x, p::PrecondWrapper, arg...) = mul!(x, p.op, arg...)
 
 function LinearAlgebra.ldiv!(p::PrecondWrapper, x)
-    y = copy(x)
-    mul!(x, p.op, y, 1, 0) 
-    # lmul!(x, p.op, y)
+    y = p.x
+    y = copy!(y, x)
+    mul!(x, p.op, y) 
 end
 
 mutable struct GenericKrylov
