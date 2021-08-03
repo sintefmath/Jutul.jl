@@ -114,56 +114,64 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     end
-    report = OrderedDict()
+    reports = []
     states = []
     no_steps = length(timesteps)
     maxIterations = config[:max_nonlinear_iterations]
     linsolve = config[:linear_solver]
     @info "Starting simulation"
     for (step_no, dT) in enumerate(timesteps)
-        t_str =  Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
-        @info "Solving step $step_no/$no_steps of length $t_str."
-        dt = dT
-        done = false
-        t_local = 0
-        cut_count = 0
-        ctr = 1
         subrep = OrderedDict()
-        while !done
-            ok, subrep[ctr] = solve_ministep(sim, dt, forces, maxIterations, linsolve, config)
-            if ok
-                t_local += dt
-                if t_local >= dT
-                    break
+        ministep_reports = []
+        t_step = @elapsed begin
+            t_str =  Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
+            @info "Solving step $step_no/$no_steps of length $t_str."
+            dt = dT
+            done = false
+            t_local = 0
+            cut_count = 0
+            ctr = 1
+            while !done
+                ok, s = solve_ministep(sim, dt, forces, maxIterations, linsolve, config)
+                push!(ministep_reports, s)
+                if ok
+                    t_local += dt
+                    if t_local >= dT
+                        break
+                    end
+                else
+                    max_cuts = config[:max_timestep_cuts]
+                    if cut_count + 1 > max_cuts
+                        @warn "Unable to converge time step $step_no/$no_steps. Aborting."
+                        return states
+                    end
+                    cut_count += 1
+                    dt = min(dt/2, dT - t_local)
+                    @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut $cut_count of $max_cuts allowed."
                 end
-            else
-                max_cuts = config[:max_timestep_cuts]
-                if cut_count + 1 > max_cuts
-                    @warn "Unable to converge time step $step_no/$no_steps. Aborting."
-                    return states
-                end
-                cut_count += 1
-                dt = min(dt/2, dT - t_local)
-                @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut $cut_count of $max_cuts allowed."
+                ctr += 1
             end
-            ctr += 1
+            subrep[:ministeps] = ministep_reports
+            push!(reports, subrep)
+            if config[:output_states]
+                store_output!(states, sim)
+            end
         end
-        report[step_no] = subrep
-        if config[:output_states]
-            store_output!(states, sim)
-        end
+        subrep[:total_time] = t_step
     end
     @info "Simulation complete."
-    return (states, report)
+    return (states, reports)
 end
 
 function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
     done = false
     report = OrderedDict()
     report[:dt] = dt
+    step_reports = []
     update_before_step!(sim, dt, forces)
     for it = 1:maxIterations
-        e, done, report[it] = perform_step!(sim, dt, forces, cfg, iteration = it)
+        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it)
+        push!(step_reports, r)
         if done
             break
         end
@@ -182,7 +190,7 @@ function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
         end
         report[:failure] = failure
     end
-
+    report[:steps] = step_reports
     if done
         t_finalize = @elapsed update_after_step!(sim, dt, forces)
         if cfg[:debug_level] > 1
