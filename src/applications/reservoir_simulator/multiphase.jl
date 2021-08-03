@@ -218,10 +218,11 @@ function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::Co
         kr = 1.0
     end
     mu = state.PhaseViscosities
-    insert_phase_sources(kr, mu, acc, force)
+    rhoS = get_reference_densities(model, storage)
+    insert_phase_sources(kr, mu, rhoS, acc, force)
 end
 
-function insert_phase_sources(kr, mu, acc, sources)
+function insert_phase_sources(kr, mu, rhoS, acc, sources)
     nph = size(acc, 1)
     for src in sources
         v = src.value
@@ -235,12 +236,14 @@ function insert_phase_sources(kr, mu, acc, sources)
         if v > 0
             for index in 1:nph
                 f = src.fractional_flow[index]
-                @inbounds acc[index, c] -= v*f
+                q = rhoS[index]*v*f
+                @inbounds acc[index, c] -= q
             end
         else
             for index in 1:nph
                 f = mob[index]/mobt
-                @inbounds acc[index, c] -= v*f
+                q = rhoS[index]*v*f
+                @inbounds acc[index, c] -= q
             end
         end
     end
