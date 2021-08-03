@@ -65,7 +65,7 @@ function update_linearized_system_equation!(
 end
 
 
-function update_density!(law::Conservation{EnergyDensity}, storage, model::CCT)
+function update_density!(law::Conservation{EnergyAcc}, storage, model::CCT)
     ρ = storage.state.EDensity
     ρ_law = get_entries(law.density)
     @tullio ρ[i] = ρ_law[i]
@@ -80,7 +80,6 @@ function update_as_secondary!(j_cell, sc::kGradPhiCell, model, param, TPkGrad_Ph
     end
 end
 )
-
 
 @terv_secondary(
 function update_as_secondary!(ρ, sc::EDensity, model, param, kGradPhiCell, Conductivity)
