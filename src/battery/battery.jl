@@ -366,11 +366,8 @@ end
 
 @terv_secondary(
 function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
-    J = TotalCurrent
-
-    j_cell .= 0 # ? Is this necesessary ?
     for c in 1:number_of_cells(model.domain)
-        face_to_cell!(j_cell, J, c, model)
+        face_to_cell!(j_cell, TotalCurrent, c, model)
     end
 end
 )

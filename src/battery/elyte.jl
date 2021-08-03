@@ -207,30 +207,14 @@ end
 
 @terv_secondary(
 function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
-
-    P = model.domain.grid.P
-    J = TotalCurrent
-    mf = model.domain.discretizations.charge_flow
-    ccv = model.domain.grid.cellcellvectbl
-    conn_data = mf.conn_data
-
-    j_cell .= 0 # ? Is this necesessary ?
     for c in 1:number_of_cells(model.domain)
-        face_to_cell!(j_cell, J, c, model)
+        face_to_cell!(j_cell, TotalCurrent, c, model)
     end
 end
 )
 
 @terv_secondary(
 function update_as_secondary!(jsq, sc::JSq, model, param, JCell)
-
-    S = model.domain.grid.S
-    mf = model.domain.discretizations.charge_flow
-    conn_data = mf.conn_data
-    cctbl = model.domain.grid.cellcelltbl
-    ccv = model.domain.grid.cellcellvectbl
-
-    jsq .= 0
     for c in 1:number_of_cells(model.domain)
         vec_to_scalar!(jsq, JCell, c, model)
     end
@@ -240,30 +224,14 @@ end
 
 @terv_secondary(
 function update_as_secondary!(j_cell, sc::DGradCCell, model, param, TPDGrad_C)
-
-    P = model.domain.grid.P
-    J = TPDGrad_C
-    mf = model.domain.discretizations.charge_flow
-    ccv = model.domain.grid.cellcellvectbl
-    conn_data = mf.conn_data
-
-    j_cell .= 0 # ? Is this necesessary ?
     for c in 1:number_of_cells(model.domain)
-        face_to_cell!(j_cell, J, c, model)
+        face_to_cell!(j_cell, TPDGrad_C, c, model)
     end
 end
 )
 
 @terv_secondary(
 function update_as_secondary!(jsq, sc::DGradCSq, model, param, DGradCCell)
-
-    S = model.domain.grid.S
-    mf = model.domain.discretizations.charge_flow
-    conn_data = mf.conn_data
-    cctbl = model.domain.grid.cellcelltbl
-    ccv = model.domain.grid.cellcellvectbl
-
-    jsq .= 0
     for c in 1:number_of_cells(model.domain)
         vec_to_scalar!(jsq, DGradCCell, c, model)
     end
@@ -271,7 +239,6 @@ end
 )
 
 
-# TODO: use get_neigh to loop through neighbours
 @terv_secondary(
 function update_as_secondary!(
     ρ, sc::EnergyDensity, model, param, DGradCSq, JSq, Diffusivity, Conductivity, DmuDc
@@ -286,14 +253,12 @@ function update_as_secondary!(
 
     for c in 1:number_of_cells(model.domain)
 
-        cell_mask = map(x -> x.self==c, conn_data)
-        neigh_self = conn_data[cell_mask]
         cc = get_cell_index_scalar(c, c, cctbl)
 
         # TODO: This should be combinded
         ρ[cc] = JSq[cc] / κ[c] + DmuDc[c] * DGradCSq[cc] / D[c]
 
-        for neigh in neigh_self
+        for neigh in get_neigh(c, model)
             n = neigh.other
             cn = get_cell_index_scalar(c, n, cctbl)
             ρ[cn] = JSq[cn] / value(κ[c]) + value(DmuDc[c]) * DGradCSq[cn] / value(D[c])
