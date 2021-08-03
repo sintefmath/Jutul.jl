@@ -21,8 +21,14 @@ function prepare_solve!(sys::MultiLinearizedSystem)
         B, C, D, E, a, b = get_schur_blocks!(sys, true, update = true)
         e = eltype(B)
         is_float = e == Float64
-        Δa = C*(E\b)
+        is_float = e <: Real
         
+        a_buf = sys.schur_buffer[1]
+        b_buf = sys.schur_buffer[2]
+        # The following is the in-place version of Δa = C*(E\b)
+        ldiv!(b_buf, E, b)
+        mul!(a_buf, C, b_buf)
+        Δa = a_buf        
         if !is_float
             bz = size(e, 1)
             Δa = equation_major_to_block_major_view(Δa, bz)
@@ -71,7 +77,6 @@ function linear_operator(sys::MultiLinearizedSystem)
     if do_schur(sys)
         B, C, D, E = get_schur_blocks!(sys, false)
         # A = B - CE\D
-        m = size(E, 1)
         n = size(C, 1)
         T = eltype(sys[1, 1].r)
         a_buf = sys.schur_buffer[1]
@@ -132,20 +137,6 @@ function schur_mul3!(res, r_type::Float64, B, C, D, E, x, α, β::T) where T
 end
 
 function schur_mul!(res, a_buf, b_buf, r_type, B, C, D, E, x, α, β::T) where T
-    # display(mean(B.nzval))
-    # display(mean(C.nzval))
-    # display(mean(E.nzval))
-    # display(mean(D.nzval))
-    # display(Matrix(E))
-    if false
-        tmp = B*x - C*(E\(D*x))
-        res .= tmp
-        if α != one(T)
-            lmul!(α, res)
-        end
-
-        return 
-    end
     is_float = r_type == eltype(res)
     if is_float
         as_svec = (x) -> x
