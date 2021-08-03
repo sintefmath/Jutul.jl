@@ -348,10 +348,10 @@ struct ConstantVariables <: GroupedVariables
 end
 
 
-struct TervStorage{T}
-    data::T
+struct TervStorage
+    data::Union{Dict{Symbol, Any}, NamedTuple}
     function TervStorage(S = Dict{Symbol, Any}())
-        new{typeof(S)}(S)
+        new(S)
     end
 end
 
