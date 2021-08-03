@@ -19,9 +19,10 @@ end
 mutable struct GenericKrylov
     solver
     preconditioner
+    x
     config::IterativeSolverConfig
-    function GenericKrylov(solver = dqgmres; preconditioner = nothing, kwarg...)
-        new(solver, preconditioner, IterativeSolverConfig(;kwarg...))
+    function GenericKrylov(solver = gmres!; preconditioner = nothing, kwarg...)
+        new(solver, preconditioner, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
 
@@ -65,7 +66,18 @@ function solve!(sys::LSystem, krylov::GenericKrylov)
     at = atol(cfg)
     if from_IterativeSolvers(solver)
         # Pl = krylov.preconditioner.factor
-        (x, history) = solver(op, r, abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)#, Pr = R)
+        if is_mutating(solver)
+            if isnothing(krylov.x)
+                krylov.x = similar(r)
+            end
+            x = krylov.x
+            x .= zero(eltype(r))
+
+            (x, history) = solver(x, op, r, initially_zero = true, abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)#, Pr = R)
+        else
+            (x, history) = solver(op, r, abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)#, Pr = R)
+        end
+        
         solved = history.isconverged
         msg = history
         n = history.iters
@@ -100,7 +112,9 @@ function solve!(sys::LSystem, krylov::GenericKrylov)
     update_dx_from_vector!(sys, x)
 end
 
-
+function is_mutating(f)
+    return String(Symbol(f))[end] == '!'
+end
 function from_IterativeSolvers(f)
-    return f == gmres
+    return f == gmres || f == gmres! || f == bicgstabl || f == bicgstabl!
 end
