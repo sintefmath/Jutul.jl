@@ -26,5 +26,5 @@ function group_index(model, symbol)
 end
 
 function submodels_symbols(model::MultiModel)
-    return [i for i in keys(model.models)]::Vector{Symbol}
+    return keys(model.models)
 end
