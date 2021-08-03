@@ -1,4 +1,4 @@
-export convert_to_immutable_storage, gravity_constant
+export convert_to_immutable_storage, gravity_constant, report_stats
 
 const gravity_constant = 9.80665
 
@@ -163,4 +163,52 @@ function conv_table_fn(model_errors, has_models = false)
                              body_hlines = body_hlines,
                              highlighters = highlighers, 
                              formatters = ft_printf("%2.4e"))
+end
+
+function report_stats(reports)
+    total_time = 0
+    # Counts
+    total_its = 0
+    total_linearizations = 0
+    # Various timings
+    total_finalize = 0
+    total_assembly = 0
+    total_linear_update = 0
+    total_linear_solve = 0
+    total_update = 0
+    total_convergence = 0
+
+
+    total_steps = length(reports)
+    total_ministeps = 0
+    for outer_rep in reports
+        total_time += outer_rep[:total_time]
+        for mini_rep in outer_rep[:ministeps]
+            total_ministeps += 1
+            total_finalize += mini_rep[:finalize_time]
+
+            for rep in mini_rep[:steps]
+                total_linearizations += 1
+                if haskey(rep, :update_time)
+                    total_its += 1
+                    total_update += rep[:update_time]
+                    total_linear_solve += rep[:linear_solve_time]
+                end
+                total_assembly += rep[:assembly_time]
+                total_linear_update += rep[:linear_system_time]
+                total_convergence += rep[:convergence_time]
+            end
+        end
+    end
+
+    return (
+            newtons = total_its,
+            linearizations = total_linearizations,
+            total_time = total_time,
+            assembly_time = total_assembly,
+            linear_system_time = total_linear_update,
+            linear_solve_time = total_linear_solve,
+            update_time = total_update,
+            convergence_time = total_convergence
+           )
 end
