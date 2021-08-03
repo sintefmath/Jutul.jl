@@ -47,6 +47,9 @@ function perform_step!(simulator::TervSimulator, dt, forces, config; vararg...)
 end
 
 function perform_step!(storage, model, dt, forces, config; iteration = NaN)
+    do_solve, e, converged = true, nothing, false
+
+    report = OrderedDict()
     timing_out = config[:debug_level] > 1
     # Update the properties and equations
     t_asm = @elapsed begin 
@@ -55,25 +58,26 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     if timing_out
         @debug "Assembled equations in $t_asm seconds."
     end
+    report[:assembly_time] = t_asm
     # Update the linearized system
-    t_lsys = @elapsed begin
+    report[:linear_system_time] = @elapsed begin
         update_linearized_system!(storage, model)
     end
     if timing_out
-        @debug "Updated linear system in $t_lsys seconds."
+        @debug "Updated linear system in $(report[:linear_system_time]) seconds."
     end
-    converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
-    if config[:info_level] > 0
-        @info "Convergence report, iteration $iteration:"
-        get_convergence_table(errors)
+    report[:convergence_time] = @elapsed begin
+        converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
+        if config[:info_level] > 1
+            @info "Convergence report, iteration $iteration:"
+            get_convergence_table(errors)
+        end
+        if converged
+            do_solve = iteration == 1
+            @debug "Step converged."
+        end
     end
 
-    if converged
-        do_solve = iteration == 1
-        @debug "Step converged."
-    else
-        do_solve = true
-    end
     if do_solve
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
@@ -82,8 +86,10 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
             @debug "Solved linear system in $t_solve seconds."
             @debug "Updated state $t_update seconds."
         end
+        report[:linear_solve_time] = t_solve
+        report[:update_time] = t_update
     end
-    return (e, converged)
+    return (e, converged, report)
 end
 
 function simulator_config(sim; kwarg...)
@@ -108,6 +114,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     end
+    report = OrderedDict()
     states = []
     no_steps = length(timesteps)
     maxIterations = config[:max_nonlinear_iterations]
@@ -120,8 +127,10 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         done = false
         t_local = 0
         cut_count = 0
+        ctr = 1
+        subrep = OrderedDict()
         while !done
-            ok = solve_ministep(sim, dt, forces, maxIterations, linsolve, config)
+            ok, subrep[ctr] = solve_ministep(sim, dt, forces, maxIterations, linsolve, config)
             if ok
                 t_local += dt
                 if t_local >= dT
@@ -137,30 +146,41 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                 dt = min(dt/2, dT - t_local)
                 @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut $cut_count of $max_cuts allowed."
             end
+            ctr += 1
         end
+        report[step_no] = subrep
         if config[:output_states]
             store_output!(states, sim)
         end
     end
     @info "Simulation complete."
-    return states
+    return (states, report)
 end
 
 function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
     done = false
+    report = OrderedDict()
+    report[:dt] = dt
     update_before_step!(sim, dt, forces)
     for it = 1:maxIterations
-        e, done = perform_step!(sim, dt, forces, cfg, iteration = it)
+        e, done, report[it] = perform_step!(sim, dt, forces, cfg, iteration = it)
         if done
             break
         end
-        if e > 1e10
-            @warn "Simulator produced very large residuals: $e."
-            break
-        elseif !isfinite(e)
-            @warn "Simulator produced non-finite residuals: $e."
+        too_large = e > 1e10
+        non_finite = !isfinite(e)
+        failure = non_finite || too_large
+        if failure
+            if too_large
+                reason = "Simulator produced very large residuals: $e."
+            else
+                reason = "Simulator produced non-finite residuals: $e."
+            end
+            report[:failure_message] = reason
+            @warn reason
             break
         end
+        report[:failure] = failure
     end
 
     if done
@@ -168,10 +188,11 @@ function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
         if cfg[:debug_level] > 1
             @debug "Finalized in $t_finalize seconds."
         end
+        report[:finalize_time] = t_finalize
     else
         reset_to_previous_state!(sim.storage, sim.model)
     end
-    return done
+    return (done, report)
 end
 
 function update_before_step!(sim, dt, forces)
