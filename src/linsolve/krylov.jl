@@ -51,8 +51,8 @@ function preconditioner(krylov::GenericKrylov, sys, arg...)
 end
 
 function solve!(sys::LSystem, krylov::GenericKrylov)
-    solver, cfg = krylov.solver, krylov.config
-
+    solver = krylov.solver
+    cfg = krylov.config
     prepare_solve!(sys)
     r = vector_residual(sys)
     op = linear_operator(sys)
@@ -83,13 +83,18 @@ function solve!(sys::LSystem, krylov::GenericKrylov)
         solved = stats.solved
         msg = stats.status
     end
-    initial_res = res[1]
-    final_res = res[end]
+    if n > 1
+        initial_res = res[1]
+        final_res = res[end]
+    else
+        initial_res = 0
+        final_res = 0
+    end
 
     if !solved
-        @warn "Linear solver: $msg, final residual: $final_res. rtol = $rt, atol = $at, max_it = $max_it"
+        @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rt, atol = $at, max_it = $max_it"
     end
-    if v > 0
+    if v > 0 || true
         @debug "Final residual $final_res, rel. value $(final_res/initial_res) after $n iterations."
     end
     update_dx_from_vector!(sys, x)
