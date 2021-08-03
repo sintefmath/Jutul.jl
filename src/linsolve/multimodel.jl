@@ -16,6 +16,12 @@ function block_major_to_equation_major_view(a, block_size)
     return x
 end
 
+@inline major_to_minor(n, m, i) = n*((i - 1) % m) + 1 + ((i -1) ÷ m)
+@inline from_block_index(bz, nc, i) = major_to_minor(bz, nc, i)
+@inline from_unit_index(bz, nc, i) = major_to_minor(nc, bz, i)
+
+
+
 function prepare_solve!(sys::MultiLinearizedSystem)
     if do_schur(sys)
         B, C, D, E, a, b = get_schur_blocks!(sys, true, update = true)
@@ -27,7 +33,7 @@ function prepare_solve!(sys::MultiLinearizedSystem)
         # The following is the in-place version of Δa = C*(E\b)
         ldiv!(b_buf, E, b)
         mul!(a_buf, C, b_buf)
-        Δa = a_buf        
+        Δa = a_buf
         if !is_float
             bz = size(e, 1)
             Δa = equation_major_to_block_major_view(Δa, bz)
@@ -149,20 +155,22 @@ function schur_mul!(res, a_buf, b_buf, r_type, B, C, D, E, x, α, β::T) where T
         mul!(res_v, B, x_v)
         if is_float
             drs = C*(E\(D*x))
+            @tullio res[i] = res[i] - drs[i]
         else
             block_size = length(r_type)
-            M = (x) -> block_major_to_equation_major_view(x, block_size)
-            M⁻¹ = (x) -> equation_major_to_block_major_view(x, block_size)
-            
-            a_buf .= M(x)
+            n = length(res) ÷ block_size
+            # Convert to cell major view            
+            @turbo for i in 1:(n*block_size)
+                a_buf[i] = x[from_block_index(block_size, n, i)]
+            end
             mul!(b_buf, D, a_buf)
             ldiv!(E, b_buf)
             mul!(a_buf, C, b_buf)
-            drs = M⁻¹(a_buf)
-            # @time drs = M⁻¹(C*(E\(D*M(x))))
+            # Convert back to block major and subtract
+            @turbo for i in 1:(n*block_size)
+                res[i] -= a_buf[from_unit_index(block_size, n, i)]
+            end
         end
-
-        @. res -= drs
         # Simple version:
         # res .= B*x - C*(E\(D*x))
         if α != one(T)
