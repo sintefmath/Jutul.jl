@@ -5,13 +5,13 @@ struct CurrentCollectorT <: ElectroChemicalComponent end
 const CCT = SimulationModel{<:Any, <:CurrentCollectorT, <:Any, <:Any}
 
 struct kGradPhiCell <: CellVector end
-struct kGradPhiSq <: ScalarNonDiagVaraible end
-struct kGradPhiSqDiag <: ScalarVariable end
+struct EDensity <: ScalarNonDiagVaraible end
+struct EDensityDiag <: ScalarVariable end
 
 function minimum_output_variables(
     system::CurrentCollectorT, primary_variables
     )
-    [:ChargeAcc, :EnergyAcc]
+    [:ChargeAcc, :EnergyAcc, :EDensity, :EDensityDiag]
 end
 
 function select_primary_variables_system!(
@@ -37,8 +37,8 @@ function select_secondary_variables_system!(
     S[:BoundaryT] = BoundaryPotential{T}()
     
     S[:kGradPhiCell] = kGradPhiCell()    
-    S[:kGradPhiSq] = kGradPhiSq()
-    S[:kGradPhiSqDiag] = kGradPhiSqDiag()
+    S[:EDensity] = EDensity()
+    S[:EDensityDiag] = EDensityDiag() # For plotting
 end
 
 
@@ -53,7 +53,7 @@ end
 
 
 function update_density!(law::Conservation, storage, model::CCT)
-    ρ = storage.state.kGradPhiSq # ! Should devide on κ
+    ρ = storage.state.EDensity # ! Should divide on κ
     ρ_law = get_entries(law.density)
     @tullio ρ[i] = ρ_law[i]
 end
@@ -70,35 +70,49 @@ function update_as_secondary!(j_cell, sc::kGradPhiCell, model, param, TPkGrad_Ph
 
     j_cell .= 0 # ? Is this necesessary ?
     for c in 1:number_of_cells(model.domain)
-        face_to_cell!(j_cell, J, c, P, ccv, conn_data)
+        face_to_cell!(j_cell, J, c, model)
     end
 end
 )
 
+
 @terv_secondary(
-function update_as_secondary!(jsq, sc::kGradPhiSq, model, param, kGradPhiCell)
+function update_as_secondary!(ρ, sc::EDensity, model, param, kGradPhiCell, Conductivity)
 
     S = model.domain.grid.S
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
+
     cctbl = model.domain.grid.cellcelltbl
     ccv = model.domain.grid.cellcellvectbl
+    κ = Conductivity
 
-    jsq .= 0
+    ρ .= 0
     for c in 1:number_of_cells(model.domain)
-        vec_to_scalar!(jsq, kGradPhiCell, c, S, ccv, cctbl, conn_data)
+        vec_to_scalar!(ρ, kGradPhiCell, c, model)
+    end
+
+    cc = (c, n) -> get_cell_index_scalar(c, n, cctbl)
+    nc = number_of_cells(model.domain)
+    for c = 1:nc
+        ρ[cc(c, c)] *= 1 / κ[c]
+        κc = value(κ[c])
+        @inbounds for neigh in get_neigh(c, model)
+            n = neigh.other
+            ρ[cc(c, n)] *= 1 / κc
+        end
     end
 end
 )
 
 @terv_secondary(
-function update_as_secondary!(jsq_diag, sc::kGradPhiSqDiag, model, param, kGradPhiSq)
-    """ Carries the diagonal velues of JSq """
+function update_as_secondary!(ρ_diag, sc::EDensityDiag, model, param, EDensity)
+    """ Carries the diagonal velues of ρ """
 
     cctbl = model.domain.grid.cellcelltbl
     cc = i -> get_cell_index_scalar(i, i, cctbl)
     for i in 1:number_of_cells(model.domain)
-        jsq_diag[i] = kGradPhiSq[cc(i)]
+        ρ_diag[i] = EDensity[cc(i)]
     end
 end
 )

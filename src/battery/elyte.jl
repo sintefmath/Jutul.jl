@@ -216,7 +216,7 @@ function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
 
     j_cell .= 0 # ? Is this necesessary ?
     for c in 1:number_of_cells(model.domain)
-        face_to_cell!(j_cell, J, c, P, ccv, conn_data)
+        face_to_cell!(j_cell, J, c, model)
     end
 end
 )
@@ -232,7 +232,7 @@ function update_as_secondary!(jsq, sc::JSq, model, param, JCell)
 
     jsq .= 0
     for c in 1:number_of_cells(model.domain)
-        vec_to_scalar!(jsq, JCell, c, S, ccv, cctbl, conn_data)
+        vec_to_scalar!(jsq, JCell, c, model)
     end
 end
 )
@@ -249,7 +249,7 @@ function update_as_secondary!(j_cell, sc::DGradCCell, model, param, TPDGrad_C)
 
     j_cell .= 0 # ? Is this necesessary ?
     for c in 1:number_of_cells(model.domain)
-        face_to_cell!(j_cell, J, c, P, ccv, conn_data)
+        face_to_cell!(j_cell, J, c, model)
     end
 end
 )
@@ -265,12 +265,13 @@ function update_as_secondary!(jsq, sc::DGradCSq, model, param, DGradCCell)
 
     jsq .= 0
     for c in 1:number_of_cells(model.domain)
-        vec_to_scalar!(jsq, DGradCCell, c, S, ccv, cctbl, conn_data)
+        vec_to_scalar!(jsq, DGradCCell, c, model)
     end
 end
 )
 
 
+# TODO: use get_neigh to loop through neighbours
 @terv_secondary(
 function update_as_secondary!(
     ρ, sc::EnergyDensity, model, param, DGradCSq, JSq, Diffusivity, Conductivity, DmuDc

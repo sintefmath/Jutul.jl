@@ -1,6 +1,25 @@
 using Terv
 
 export vec_to_scalar!, face_to_cell!, get_cellcell_map, get_cellcellvec_map
+export get_neigh
+
+################
+# Helper funcs #
+################
+
+@inline function get_neigh(c, model)
+    """
+    Retruns a vector of NamedTuples of the form
+    (T = a, face = b, self = c, other = d)
+    of all neighbours of cell c.
+    """
+    mf = model.domain.discretizations.charge_flow
+    conn_pos = mf.conn_pos
+    conn_data = mf.conn_data
+    indx = conn_pos[c]:(conn_pos[c + 1] - 1)
+    return conn_data[indx]
+end
+
 
 ##############
 # Tensormaps #
@@ -51,7 +70,7 @@ end
 
 
 # ! Boundary current is not included
-function face_to_cell!(j_cell, J, c, P, ccv, conn_data)
+function face_to_cell!(j_cell, J, c, model)
     """
     Take a field defined on faces, J, finds its value at the cell c.
     j_cell is a vector that has 2 coponents per cell
@@ -60,10 +79,13 @@ function face_to_cell!(j_cell, J, c, P, ccv, conn_data)
     j_c[c, c', i] = P_[c, f, i] * J_[f, c'] (c'=cell dependence)
     """
 
-    # TODO: Combine the loop over neigh_self with the self
-    cell_mask = map(x -> x.self==c, conn_data)
-    neigh_self = conn_data[cell_mask] # ? is this the best way??
-    for neigh in neigh_self
+    P = model.domain.grid.P
+    mf = model.domain.discretizations.charge_flow
+    ccv = model.domain.grid.cellcellvectbl
+    conn_data = mf.conn_data
+
+    neigh_c = get_neigh(c, model)
+    for neigh in neigh_c
         f = neigh.face
         for i in 1:2 #! Only valid in 2D for now
             cic = get_cell_index_vec(c, c, i, ccv)
@@ -75,9 +97,9 @@ function face_to_cell!(j_cell, J, c, P, ccv, conn_data)
     end
 
     # what is the best order to loop through?
-    for neigh in neigh_self
+    for neigh in neigh_c
         n = neigh.other
-        for neigh2 in neigh_self
+        for neigh2 in neigh_c
             f = neigh2.face
             for i in 1:2
                 cin = get_cell_index_vec(c, n, i, ccv)
@@ -96,20 +118,23 @@ function face_to_cell!(j_cell, J, c, P, ccv, conn_data)
     end # the end is near
 end
 
-function vec_to_scalar!(jsq, j, c, S, ccv, cctbl, conn_data)
+function vec_to_scalar!(jsq, j, c, model)
     """
     Takes in vector valued field defined on the cell, and returns the
     modulus square
     jsq[c, c'] = S[c, 2*(c-1) + i] * j[c, c', i]^2
     """
-    cell_mask = map(x -> x.self==c, conn_data)
-    neigh_self = conn_data[cell_mask]
+    S = model.domain.grid.S
+    mf = model.domain.discretizations.charge_flow
+    cctbl = model.domain.grid.cellcelltbl
+    ccv = model.domain.grid.cellcellvectbl
+
     cc = get_cell_index_scalar(c, c, cctbl)
     for i in 1:2
         cci = get_cell_index_vec(c, c, i, ccv)
         jsq[cc] += S[c, 2*(c-1) + i] * j[cci]^2
     end
-    for neigh in neigh_self
+    for neigh in get_neigh(c, model)
         n = neigh.other
         cn = get_cell_index_scalar(c, n, cctbl)
         for i in 1:2

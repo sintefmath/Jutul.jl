@@ -19,12 +19,23 @@ function test_ccT(name="square_current_collector")
     model = SimulationModel(domain, sys, context = DefaultContext())
 
     # State is dict with pressure in each cell
-    phi = 0.
-    T0 = 0.
+    phi = 1.
+    T0 = 1.
     boundary_phi = [1., 2.]
     boundary_T = [1., 1.]
+    κ = 1.
+    λ = 1.
 
-    init = Dict(:Phi => phi, :T=>T0, :BoundaryPhi=>boundary_phi, :BoundaryT=>boundary_T)
+    init = Dict(
+        :Phi                    => phi, 
+        :T                      => 
+        T0,
+        :Conductivity           => κ,
+        :ThermalConductivity    => λ,
+        :BoundaryPhi            => boundary_phi, 
+        :BoundaryT              => boundary_T
+        )
+    
     state0 = setup_state(model, init)
         
     # Model parameters
