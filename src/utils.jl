@@ -54,7 +54,7 @@ function get_matrix_view(v0, n, m, transp = false, offset = 0)
 end
 
 
-function check_increment(dx, key)
+function check_increment(dx, pvar, key)
     if any(!isfinite, dx)
         bad = findall(isfinite.(dx) .== false)
         n_bad = length(bad)

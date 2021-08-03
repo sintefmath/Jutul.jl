@@ -468,7 +468,7 @@ function update_primary_variables!(primary_storage, dx, model::TervModel; check 
                 ni = degrees_of_freedom_per_unit(model, p)
                 dxi = view(Dx, :, (local_offset+1):(local_offset+ni))
                 if check
-                    check_increment(dxi, pkey)
+                    check_increment(dxi, p, pkey)
                 end
                 update_primary_variable!(primary_storage, p, pkey, model, dxi)
                 local_offset += ni
@@ -481,7 +481,7 @@ function update_primary_variables!(primary_storage, dx, model::TervModel; check 
             rng = (1:n) .+ offset
             dxi = view(dx, rng)
             if check
-                check_increment(dxi, pkey)
+                check_increment(dxi, p, pkey)
             end
             update_primary_variable!(primary_storage, p, pkey, model, dxi)
             offset += n
