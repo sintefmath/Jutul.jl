@@ -72,7 +72,7 @@ mutable struct DampedJacobiPreconditioner <: TervPreconditioner
     factor
     dim
     w
-    function DampedJacobiPreconditioner(; w = 2/3)
+    function DampedJacobiPreconditioner(; w = 1)
         new(nothing, nothing, w)
     end
 end
