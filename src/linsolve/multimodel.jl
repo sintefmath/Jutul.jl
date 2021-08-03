@@ -20,7 +20,6 @@ function prepare_solve!(sys::MultiLinearizedSystem)
     if do_schur(sys)
         B, C, D, E, a, b = get_schur_blocks!(sys, true, update = true)
         e = eltype(B)
-        is_float = e == Float64
         is_float = e <: Real
         
         a_buf = sys.schur_buffer[1]
