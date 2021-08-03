@@ -51,9 +51,22 @@ function select_equations_system!(
     eqs[:energy_conservation] = (energy_cons, 1)
 end
 
+function update_linearized_system_equation!(
+    nz, r, model::ElectrolyteModel, law::Conservation{EnergyAcc}
+    )
+    
+    acc = get_diagonal_cache(law)
+    cell_flux = law.half_face_flux_cells
+    cpos = law.flow_discretization.conn_pos
+    density = law.density
 
-function update_density!(law::Conservation, storage, model::CCT)
-    ρ = storage.state.EDensity # ! Should divide on κ
+    fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
+    fill_jac_density!(nz, r, model, density)
+end
+
+
+function update_density!(law::Conservation{EnergyDensity}, storage, model::CCT)
+    ρ = storage.state.EDensity
     ρ_law = get_entries(law.density)
     @tullio ρ[i] = ρ_law[i]
 end
