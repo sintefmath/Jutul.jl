@@ -367,19 +367,3 @@ end
     )
     @tullio acc[i] = 0 # Charge neutrality
 end
-
-@terv_secondary(
-function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
-    for c in 1:number_of_cells(model.domain)
-        face_to_cell!(j_cell, TotalCurrent, c, model)
-    end
-end
-)
-
-@terv_secondary(
-function update_as_secondary!(jsq, sc::JSq, model, param, JCell)
-    for c in 1:number_of_cells(model.domain)
-        vec_to_scalar!(jsq, JCell, c, model)
-    end
-end
-)

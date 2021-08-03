@@ -52,7 +52,7 @@ function select_equations_system!(
 end
 
 function update_linearized_system_equation!(
-    nz, r, model::ElectrolyteModel, law::Conservation{EnergyAcc}
+    nz, r, model::CCT, law::Conservation{EnergyAcc}
     )
     
     acc = get_diagonal_cache(law)

@@ -1,7 +1,7 @@
 mrstModule add ad-core battery mpfa
 
-nx = 10;
-ny = 10;
+nx = 3;
+ny = 3;
 
 Lx = 1e-4;
 Ly = 1e-4;

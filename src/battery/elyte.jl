@@ -218,7 +218,6 @@ end
     @tullio N[i] =  - TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
 end
 
-
 @terv_secondary(
 function update_as_secondary!(j_cell, sc::JCell, model, param, TotalCurrent)
     for c in 1:number_of_cells(model.domain)
@@ -235,7 +234,6 @@ function update_as_secondary!(jsq, sc::JSq, model, param, JCell)
 end
 )
 
-
 @terv_secondary(
 function update_as_secondary!(j_cell, sc::DGradCCell, model, param, TPDGrad_C)
     for c in 1:number_of_cells(model.domain)
@@ -251,7 +249,6 @@ function update_as_secondary!(jsq, sc::DGradCSq, model, param, DGradCCell)
     end
 end
 )
-
 
 @terv_secondary(
 function update_as_secondary!(
@@ -281,13 +278,6 @@ function update_as_secondary!(
 end
 )
 
-function update_density!(law::Conservation, storage, model::ElectrolyteModel)
-    ρ = storage.state.EnergyDensity
-    ρ_law = get_entries(law.density)
-    @tullio ρ[i] = ρ_law[i]
-end
-
-
 @terv_secondary(
 function update_as_secondary!(jsq_diag, sc::JSqDiag, model, param, JSq)
     """ Carries the diagonal velues of JSq """
@@ -300,7 +290,6 @@ function update_as_secondary!(jsq_diag, sc::JSqDiag, model, param, JSq)
 end
 )
 
-
 @terv_secondary(
 function update_as_secondary!(jsq_diag, sc::DGradCSqDiag, model, param, DGradCSq)
     cctbl = model.domain.grid.cellcelltbl
@@ -310,7 +299,6 @@ function update_as_secondary!(jsq_diag, sc::DGradCSqDiag, model, param, DGradCSq
     end
 end
 )
-
 
 @terv_secondary(
 function update_as_secondary!(ρ_diag, sc::EDDiag, model, param, EnergyDensity)
@@ -322,6 +310,11 @@ function update_as_secondary!(ρ_diag, sc::EDDiag, model, param, EnergyDensity)
 end
 )
 
+function update_density!(law::Conservation{EnergyAcc}, storage, model::ElectrolyteModel)
+    ρ = storage.state.EnergyDensity
+    ρ_law = get_entries(law.density)
+    @tullio ρ[i] = ρ_law[i]
+end
 
 function get_flux(
     storage,  model::ElectrolyteModel, law::Conservation{ChargeAcc}

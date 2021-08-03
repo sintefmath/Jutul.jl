@@ -3,7 +3,6 @@ Simple current collector
 A conductro with constant conductivity
 =#
 using Terv
-using Test
 
 ENV["JULIA_DEBUG"] = Terv;
 

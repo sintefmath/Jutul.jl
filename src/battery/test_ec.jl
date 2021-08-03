@@ -5,7 +5,6 @@ The different potentials are independent (diagonal onsager matrix),
 and conductivity, diffusivity is constant.
 =#
 using Terv
-using Test
 
 ENV["JULIA_DEBUG"] = Terv;
 
