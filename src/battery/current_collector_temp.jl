@@ -61,16 +61,9 @@ end
 
 @terv_secondary(
 function update_as_secondary!(j_cell, sc::kGradPhiCell, model, param, TPkGrad_Phi)
-
-    P = model.domain.grid.P
-    J = TPkGrad_Phi
-    mf = model.domain.discretizations.charge_flow
-    ccv = model.domain.grid.cellcellvectbl
-    conn_data = mf.conn_data
-
-    j_cell .= 0 # ? Is this necesessary ?
-    for c in 1:number_of_cells(model.domain)
-        face_to_cell!(j_cell, J, c, model)
+    nc = number_of_cells(model.domain)
+    for c in 1:nc
+        face_to_cell!(j_cell, TPkGrad_Phi, c, model)
     end
 end
 )
@@ -78,17 +71,11 @@ end
 
 @terv_secondary(
 function update_as_secondary!(ρ, sc::EDensity, model, param, kGradPhiCell, Conductivity)
-
-    S = model.domain.grid.S
-    mf = model.domain.discretizations.charge_flow
-    conn_data = mf.conn_data
-
     cctbl = model.domain.grid.cellcelltbl
-    ccv = model.domain.grid.cellcellvectbl
     κ = Conductivity
 
-    ρ .= 0
-    for c in 1:number_of_cells(model.domain)
+    nc = number_of_cells(model.domain)
+    for c in 1:nc
         vec_to_scalar!(ρ, kGradPhiCell, c, model)
     end
 

@@ -232,42 +232,29 @@ function update_linearized_system_equation!(
     cpos = law.flow_discretization.conn_pos
     density = law.density
 
-    fill_jac_entries!(nz, r, model, acc, cell_flux, cpos, density)
+    fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
 end
 
-
-function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos, density)
+function fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
     """
     Fills the entries of the Jacobian.
-    First loop: Add contributions from accumulation, and diagonal contributions
-    from the flux to the jacobian, and values from accumulation and fluxt to r.
-    Second loop: Adds off diagonal contributions from the flux to the jacobian.
-    Third loop: Adds the contribution from density terms to the loop
-    Fourth loop: Adds contributions from density to r.
+    First loop: Adds the contribution from density terms to the loop
+    Second loop: Adds contributions from density to r.
     """
-
-    # Cells, equations, partials
     nc, ne, np = ad_dims(acc)
     nu, _ = ad_dims(cell_flux)
-    nud, _ = ad_dims(density)
-
     centries = acc.entries
     fentries = cell_flux.entries
-    dentries = density.entries
-
     cp = acc.jacobian_positions
     jp = cell_flux.jacobian_positions
-    dp = density.jacobian_positions
 
-    cctbl = model.domain.grid.cellcelltbl
-
-    #! @threads removed for debugging, slows performance!
+        #! @threads removed for debugging, slows performance!
     # Fill accumulation + diag flux
     for cell = 1:nc
         for e in 1:ne
             diag_entry = get_entry(acc, cell, e, centries)
 
-            @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+            @inbounds for i = cpos[cell]:(cpos[cell + 1] - 1)
                 diag_entry -= get_entry(cell_flux, i, e, fentries)
             end
             
@@ -290,6 +277,22 @@ function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos, density)
         end
     end
 
+end
+
+
+function fill_jac_density!(nz, r, model, density)
+    """
+    Fills the entries of the Jacobian.
+    Third loop: Adds the contribution from density terms to the loop
+    Fourth loop: Adds contributions from density to r.
+    """
+
+    # Cells, equations, partials
+    nud, ne, np = ad_dims(density)
+    dentries = density.entries
+    dp = density.jacobian_positions
+    cctbl = model.domain.grid.cellcelltbl
+
     # Fill density term
     for i = 1:nud
         for e in 1:ne
@@ -302,6 +305,7 @@ function fill_jac_entries!(nz, r, model, acc, cell_flux, conn_pos, density)
         end
     end
 
+    nc = number_of_cells(model.domain)
     # Add value from densities
     for c in 1:nc
         for e in 1:ne
@@ -374,8 +378,6 @@ end
 
 @terv_secondary(
 function update_as_secondary!(jsq, sc::JSq, model, param, JCell)
-
-    jsq .= 0
     for c in 1:number_of_cells(model.domain)
         vec_to_scalar!(jsq, JCell, c, model)
     end
