@@ -74,8 +74,8 @@ function linear_operator(sys::MultiLinearizedSystem)
         m = size(E, 1)
         n = size(C, 1)
         T = eltype(sys[1, 1].r)
-        a_buf = zeros(n)
-        b_buf = zeros(m)
+        a_buf = sys.schur_buffer[1]
+        b_buf = sys.schur_buffer[2]
         apply! = (res, x, α, β) -> schur_mul!(res, a_buf, b_buf, T, B, C, D, E, x, α, β)
         op = LinearOperator(Float64, n, n, false, false, apply!)
     else
