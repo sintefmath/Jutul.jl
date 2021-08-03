@@ -153,13 +153,11 @@ function schur_mul!(res, a_buf, b_buf, r_type, B, C, D, E, x, α, β::T) where T
             M⁻¹ = (x) -> equation_major_to_block_major_view(x, block_size)
             
             a_buf .= M(x)
-            e1 = D*a_buf
-            e2 = E\e1
-            e3 = C*e2
-
-            drs = M⁻¹(e3)
+            mul!(b_buf, D, a_buf)
+            ldiv!(E, b_buf)
+            mul!(a_buf, C, b_buf)
+            drs = M⁻¹(a_buf)
             # @time drs = M⁻¹(C*(E\(D*M(x))))
-            # drs = M⁻¹(C*(E\(D*x)))
         end
 
         @. res -= drs
