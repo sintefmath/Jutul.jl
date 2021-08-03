@@ -96,12 +96,24 @@ function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
         else
             Δx = block_major_to_equation_major_view(dx, bz)
         end
-        dy = E\(b - D*Δx)
 
         n = length(dx)
         m = length(sys.dx)
-        sys.dx[1:n] = -dx
-        sys.dx[(n+1):m] = -dy
+
+        A = view(sys.dx, 1:n)
+        B = view(sys.dx, (n+1):m)
+
+        @. A = -dx
+        
+        buf_a = sys.schur_buffer[1]
+        buf_b = sys.schur_buffer[2]
+        # We want to do (in-place):
+        # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
+        buf_a .= Δx
+        mul!(buf_b, D, buf_a)
+        # now buf_b = D*Δx
+        @. buf_b -= b
+        ldiv!(B, E, buf_b)
     else
         sys.dx .= -dx
     end
