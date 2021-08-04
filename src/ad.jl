@@ -121,7 +121,7 @@ function fill_equation_entries!(nz, r::Nothing, model, cache::TervAutoDiffCache)
     @threads for i in 1:nu
         for e in 1:ne
             a = get_entry(cache, i, e, entries)
-            for d = 1:np
+            @turbo for d = 1:np
                 @inbounds ∂ = a.partials[d]
                 # TODO:
                 # This part is type unstable, for some reason.

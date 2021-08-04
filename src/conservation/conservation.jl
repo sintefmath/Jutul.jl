@@ -122,7 +122,7 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
             diag_entry = get_entry(acc, cell, e, centries)
             @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
                 q = get_entry(cell_flux, i, e, fentries)
-                for d = 1:np
+                @turbo for d = 1:np
                     fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
                     @inbounds nz[fpos] = q.partials[d]
                 end
@@ -130,7 +130,7 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
             end
 
             @inbounds r[e, cell] = diag_entry.value
-            for d = 1:np
+            @turbo for d = 1:np
                 apos = get_jacobian_pos(acc, cell, e, d, cp)
                 @inbounds nz[apos] = diag_entry.partials[d]
             end

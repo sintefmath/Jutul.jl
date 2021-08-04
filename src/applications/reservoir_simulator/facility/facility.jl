@@ -53,7 +53,7 @@ function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_s
     function do_update(v, dx, ctrl::DisabledControl)
         return 0.0
     end
-    for i in eachindex(v)
+    @inbounds for i in eachindex(v)
         s = symbols[i]
         v[i] = do_update(v[i], dx[i], cfg[s])
     end
@@ -148,7 +148,7 @@ function update_equation!(eq::ControlEquationWell, storage, model, dt)
     # T = ctrl.target
     surf_rate = state.TotalSurfaceMassRate
     # bhp = state.Pressure[1]
-    for (i, key) in enumerate(wells)
+    @inbounds for (i, key) in enumerate(wells)
         C = ctrl[key]
         T = C.target
         # @debug "Well $key operating using $T"

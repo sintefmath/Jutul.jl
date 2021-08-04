@@ -318,15 +318,10 @@ function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W
         # This is a good time to deal with the derivatives of v[face] since it is already fetched.
         Δp_f = segment_pressure_drop(seg_model, v, value(ρ_mix), value(μ_mix))
         eq_f = pot_balance(value(Δθ), Δp_f)
-        # @debug "$face \neq_f: $(value.(face_entries[face]))"
-
-        # @debug "Δp_f $face: $Δp_f flux: $v\neq_f: $(face_entries[face])"
-        # @debug "rho: $(value(ρ_mix)) mu: $(value(μ_mix))"
-
-        face_entries[face] = eq_f
-        cell_entries[(face-1)*2 + 1] = eq
+        @inbounds face_entries[face] = eq_f
+        @inbounds cell_entries[(face-1)*2 + 1] = eq
     else
-        cell_entries[(face-1)*2 + 2] = -eq
+        @inbounds cell_entries[(face-1)*2 + 2] = -eq
     end
 end
 
@@ -473,7 +468,7 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, ρ_w,
     nc = size(ρλ_i, 1)
     nph = size(μ, 1)
 
-    for i in eachindex(perf.self)
+    @inbounds for i in eachindex(perf.self)
         si = perf.self[i]
         ri = perf.reservoir[i]
         wi = perf.WI[i]
