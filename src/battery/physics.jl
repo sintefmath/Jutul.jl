@@ -67,10 +67,7 @@ function get_flux(storage, model::ECModel, law::Conservation{EnergyAcc})
     return - storage.state.TPkGrad_T
 end
 
-function update_half_face_flux!(
-    law::Conservation, storage, model, dt, 
-    flow::TwoPointPotentialFlow{U, K, T}
-    ) where {U,K,T<:ECFlow}
+function update_half_face_flux!(law::Conservation, storage, model, dt, flow::TPFlow)
 
     flux = get_flux(storage, model, law)
     f = get_entries(law.half_face_flux_cells)
@@ -148,7 +145,6 @@ function apply_boundary_potential!(
         @inbounds acc[c] -= - λ[c]*T_hf[i]*(T[c] - BoundaryT[i])
     end
 end
-
 
 
 function apply_bc_to_equation!(

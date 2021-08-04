@@ -83,7 +83,7 @@ end
 
 @terv_secondary(
 function update_as_secondary!(ρ, sc::EDensity, model, param, kGradPhiCell, Conductivity)
-    cctbl = model.domain.grid.cellcelltbl
+    cctbl = model.domain.discretizations.charge_flow.cellcell.tbl
     κ = Conductivity
 
     nc = number_of_cells(model.domain)
@@ -108,7 +108,7 @@ end
 function update_as_secondary!(ρ_diag, sc::EDensityDiag, model, param, EDensity)
     """ Carries the diagonal velues of ρ """
 
-    cctbl = model.domain.grid.cellcelltbl
+    cctbl = model.domain.discretizations.charge_flow.cellcell.tbl
     cc = i -> get_cell_index_scalar(i, i, cctbl)
     for i in 1:number_of_cells(model.domain)
         ρ_diag[i] = EDensity[cc(i)]

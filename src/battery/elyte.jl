@@ -257,7 +257,7 @@ function update_as_secondary!(
     
     mf = model.domain.discretizations.charge_flow
     conn_data = mf.conn_data
-    cctbl = model.domain.grid.cellcelltbl
+    cctbl = model.domain.discretizations.charge_flow.cellcellvec.tbl
 
     κ = Conductivity
     D = Diffusivity
@@ -282,7 +282,7 @@ end
 function update_as_secondary!(jsq_diag, sc::JSqDiag, model, param, JSq)
     """ Carries the diagonal velues of JSq """
 
-    cctbl = model.domain.grid.cellcelltbl
+    cctbl = model.domain.discretizations.charge_flow.cellcellvec.tbl
     cc = i -> get_cell_index_scalar(i, i, cctbl)
     for i in 1:number_of_cells(model.domain)
         jsq_diag[i] = JSq[cc(i)]
@@ -292,7 +292,7 @@ end
 
 @terv_secondary(
 function update_as_secondary!(jsq_diag, sc::DGradCSqDiag, model, param, DGradCSq)
-    cctbl = model.domain.grid.cellcelltbl
+    cctbl = model.domain.discretizations.charge_flow.cellcellvec.tbl
     cc = i -> get_cell_index_scalar(i, i, cctbl)
     for i in 1:number_of_cells(model.domain)
         jsq_diag[i] = DGradCSq[cc(i)]
@@ -302,7 +302,7 @@ end
 
 @terv_secondary(
 function update_as_secondary!(ρ_diag, sc::EDDiag, model, param, EnergyDensity)
-    cctbl = model.domain.grid.cellcelltbl
+    cctbl = model.domain.discretizations.charge_flow.cellcellvec.tbl
     cc = i -> get_cell_index_scalar(i, i, cctbl)
     for i in 1:number_of_cells(model.domain)
         ρ_diag[i] = EnergyDensity[cc(i)]

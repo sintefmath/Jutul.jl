@@ -69,7 +69,7 @@ end
 
 function number_of_units(model, pv::NonDiagCellVariables)
     """ Each value depends on a cell and all its neighbours """
-    return size(model.domain.grid.cellcelltbl, 1)
+    return size(model.domain.discretizations.charge_flow.cellcellvec.tbl, 1) // 2 #! Assumes 2D
 end
 
 function values_per_unit(model, u::CellVector)
@@ -125,8 +125,7 @@ function align_to_jacobian!(
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
     density = law.density
-    cctbl = model.domain.grid.cellcelltbl
-
+    cctbl = model.domain.discretizations.charge_flow.cellcellvec.tbl
 
     diagonal_alignment!(
         acc, jac, u, model.context;
@@ -167,7 +166,8 @@ function density_alignment!(
     nu, ne, np = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
-    @threads for cell in 1:nc
+    # @threads 
+    for cell in 1:nc
 
         # diagonal
         index = get_cell_index_scalar(cell, cell, cctbl)
@@ -291,7 +291,7 @@ function fill_jac_density!(nz, r, model, density)
     nud, ne, np = ad_dims(density)
     dentries = density.entries
     dp = density.jacobian_positions
-    cctbl = model.domain.grid.cellcelltbl
+    cctbl = model.domain.discretizations.charge_flow.cellcell.tbl
 
     # Fill density term
     for i = 1:nud

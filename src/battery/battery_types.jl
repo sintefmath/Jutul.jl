@@ -95,9 +95,44 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     boundary_T_hf::AbstractArray{R}
     P::AbstractArray{R} # Tensor to map from cells to faces
     S::AbstractArray{R} # Tensor map cell vector to cell scalar
-    cellcellvectbl
-    cellcelltbl
 end
+
+struct TPFlow{F} <: FlowDiscretization
+    conn_pos
+    conn_data
+    cellfacecellvec
+    cellcellvec
+end
+
+function get_neighborship(grid)
+    return grid.neighborship
+end
+
+function TPFlow(grid::TervGrid, T)
+    N = get_neighborship(grid)
+    faces, face_pos = get_facepos(N)
+
+    nhf = length(faces)
+    nc = length(face_pos) - 1
+    if !isnothing(T)
+        @assert length(T) == nhf ÷ 2
+    end
+    get_el = (face, cell) -> get_connection(face, cell, faces, N, T, nothing, nothing, false)
+    el_type = typeof(get_el(1, 1))
+    
+    conn_data = Vector{el_type}(undef, nhf)
+    @threads for cell = 1:nc
+        @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
+            conn_data[fpos] = get_el(faces[fpos], cell)
+        end
+    end
+
+    cfcv = get_cellfacecellvec_tbl(N, face_pos, conn_data, faces)
+    cc = get_cellcellvec_tbl(N, face_pos, conn_data)
+
+    TPFlow{ChargeFlow}(face_pos, conn_data, cfcv, cc)
+end
+
 
 ################
 # Constructors #
@@ -115,12 +150,8 @@ function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[], S=[])
     @assert all(pv .> 0)
     @assert size(bc) == size(T_hf)
     
-    cellcellvectbl = get_cellcellvec_map(N)
-    cellcelltbl  = get_cellcell_map(N)
 
-    MinimalECTPFAGrid{eltype(pv), eltype(N)}(
-        pv, N, bc, T_hf, P, S, cellcellvectbl, cellcelltbl
-        )
+    MinimalECTPFAGrid{eltype(pv), eltype(N)}(pv, N, bc, T_hf, P, S)
 end
 
 function Conservation(

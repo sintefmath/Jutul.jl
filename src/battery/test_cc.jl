@@ -8,7 +8,7 @@ ENV["JULIA_DEBUG"] = Terv;
 
 
 function test_cc(name="square_current_collector")
-    domain, exported = get_cc_grid(name=name, extraout=true, bc=[1, 100], b_T_hf=[2., 2.])
+    domain, exported = get_cc_grid(name=name, extraout=true, bc=[1, 9], b_T_hf=[2., 2.])
     timesteps = [1., ]
     G = exported["G"]
 
@@ -45,7 +45,7 @@ display(f)
 function test_mixed_bc()
     name="square_current_collector"
     bcells, T_hf = get_boundary(name)
-    domain, exported = get_cc_grid(ChargeFlow(), extraout=true, name=name, bc=bcells, b_T_hf=T_hf)
+    domain, exported = get_cc_grid(;extraout=true, name=name, bc=bcells, b_T_hf=T_hf)
     G = exported["G"]
     timesteps = 1:5
 
@@ -58,7 +58,7 @@ function test_mixed_bc()
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
-    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(99 .+bcells)
+    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(2 .+bcells)
 
     phi0 = 1.
     init = Dict(

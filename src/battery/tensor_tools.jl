@@ -25,7 +25,7 @@ end
 # Tensormaps #
 ##############
 # TODO: These should all be computed initially, to avoid serach later
-# TODO: Use standard way to loop through neigh. (as fill_jac_entries!)
+
 
 function get_cell_index_vec(c, n, i, tbl)
     """ 
@@ -81,28 +81,26 @@ function face_to_cell!(j_cell, J, c, model)
 
     P = model.domain.grid.P
     mf = model.domain.discretizations.charge_flow
-    ccv = model.domain.grid.cellcellvectbl
+    cfcv_tbl = mf.cellfacecellvec.tbl
+    cfcv_pos = mf.cellfacecellvec.pos
     conn_data = mf.conn_data
 
     neigh_c = get_neigh(c, model)
+
     for neigh in neigh_c
         f = neigh.face
         for i in 1:2 #! Only valid in 2D for now
-            cic = get_cell_index_vec(c, c, i, ccv)
+            cic = get_cell_index_vec(c, c, i, ccv_tbl)
             fc, bool = get_face_index(f, c, conn_data)
             @assert bool
             ci = 2*(c-1) + i
             j_cell[cic] += P[ci, f] * J[fc]
         end
-    end
 
-    # what is the best order to loop through?
-    for neigh in neigh_c
-        n = neigh.other
         for neigh2 in neigh_c
-            f = neigh2.face
+            n = neigh2.other
             for i in 1:2
-                cin = get_cell_index_vec(c, n, i, ccv)
+                cin = get_cell_index_vec(c, n, i, ccv_tbl)
                 fn, bool = get_face_index(f, n, conn_data)
 
                 # The value should only depend on cell n
@@ -114,8 +112,9 @@ function face_to_cell!(j_cell, J, c, model)
 
                 j_cell[cin] += P[2*(c-1) + i, f] * Jfn
             end
-        end
-    end # the end is near
+        end # the end is near
+    end
+
 end
 
 function vec_to_scalar!(jsq, j, c, model)
@@ -125,20 +124,19 @@ function vec_to_scalar!(jsq, j, c, model)
     jsq[c, c'] = S[c, 2*(c-1) + i] * j[c, c', i]^2
     """
     S = model.domain.grid.S
-    mf = model.domain.discretizations.charge_flow
-    cctbl = model.domain.grid.cellcelltbl
-    ccv = model.domain.grid.cellcellvectbl
+    cctbl = model.domain.discretizations.charge_flow.cellcellvec.tbl
+    ccv_tbl = model.domain.discretizations.charge_flow.cellcellvec.tbl
 
     cc = get_cell_index_scalar(c, c, cctbl)
     for i in 1:2
-        cci = get_cell_index_vec(c, c, i, ccv)
+        cci = get_cell_index_vec(c, c, i, ccv_tbl)
         jsq[cc] += S[c, 2*(c-1) + i] * j[cci]^2
     end
     for neigh in get_neigh(c, model)
         n = neigh.other
         cn = get_cell_index_scalar(c, n, cctbl)
         for i in 1:2
-            cni = get_cell_index_vec(c, n, i, ccv)
+            cni = get_cell_index_vec(c, n, i, ccv_tbl)
             jsq[cn] += S[c, 2*(c-1) + i] * j[cni]^2
         end
     end 
@@ -146,37 +144,73 @@ end
 
 
 # TODO: Use thses to find map to linear index 
-function get_cellcellvec_map(neigh)
+function get_cellfacecellvec_tbl(neigh, face_pos, conn_data, faces)
     """ Creates cellcellvectbl """
     dim = 2
+    nc = maximum(neigh) #! Probably not the best way to find nc
+    # ! This is now genereated 2 times, as conn_data is in disc. (Why?)
+
     # Must have 2 copies of each neighbourship
+
     neigh = [
         [neigh[1, i] neigh[2, i]; neigh[2, i] neigh[1, i]] 
         for i in 1:size(neigh, 2)
         ]
-    neigh = reduce(vcat, neigh)'
-    cell1 = [repeat([i], dim) for i in neigh[1, :]]
-    cell2 = [repeat([i], dim) for i in neigh[2, :]]
-    num_neig = size(cell1)[1]
-    vec = [1:dim for i in 1:num_neig]
-    cell, cell_dep, vec = map(x -> reduce(vcat, x), [cell1, cell2, vec])
-    # must add self dependence
-    for i in 1:maximum(cell) #! Probably not the best way to find nc
-        push!(cell, i); push!(cell, i)
-        push!(cell_dep, i); push!(cell_dep, i)
-        push!(vec, 1); push!(vec, 2)
+    neigh = reduce(vcat, neigh)
+
+    cell1 = neigh[:, 1]
+    cell2 = neigh[:, 2]
+    print(cell1)
+    indx = sortperm(cell1)
+    cell1, cell2 = [cell1[indx], cell2[indx]]
+    
+    d = (diff(cell1) .== 1)
+    c_pos = findall(vcat(true, d, true))
+
+    cell = []
+    cell_dep = []
+    face =  []
+    for c in 1:nc
+        for fp in face_pos[c]:(face_pos[c+1]-1)
+            f = faces[fp]
+            push!(cell, c)
+            push!(cell_dep, c)
+            push!(face, f)
+
+            for np in c_pos[c]:(c_pos[c+1]-1)
+                n = cell2[np]
+                # print(c,  ", ", fp,", ",np, "\n")
+                push!(cell, c)
+                push!(cell_dep, n)
+                push!(face, f)
+
+            end
+        end
     end
-    # ? Should these be sorted in som way ?
+    cell, face, cell_dep = map(x -> reduce(vcat, x), [cell, face, cell_dep])
+
+    n = size(cell, 1)
+    vec = [1:dim for i in 1:n]
+    cell_dep, cell, face = map(
+        x -> [repeat([a], dim) for a in x],
+        [cell_dep, cell, face]
+        )
+    cell, face, cell_dep, vec = map(x -> reduce(vcat, x), [cell, face, cell_dep, vec])
+
+
+    d = (diff(cell) .== 1)
+    ccv_pos = findall(vcat(true, d, true))
 
     tbl = [
-        (cell = cell[i], cell_dep = cell_dep[i], vec = vec[i]) 
+        (cell = cell[i], face = face[i], cell_dep = cell_dep[i], vec = vec[i]) 
             for i in 1:size(cell, 1)
         ]
-    return tbl
+    return (tbl=tbl, pos=ccv_pos)
 end
 
-function get_cellcell_map(neigh)
+function get_cellcellvec_tbl(neigh, face_pos, conn_data)
     """ Creates cellcelltbl """
+    dim = 2
     neigh = [
         [
             neigh[1, i] neigh[2, i]; 
@@ -187,16 +221,25 @@ function get_cellcell_map(neigh)
     neigh = reduce(vcat, neigh)'
     cell1 = neigh[1, :]
     cell2 = neigh[2, :]
-    num_neig = size(cell1)[1]
+
     cell, cell_dep = map(x -> reduce(vcat, x), [cell1, cell2])
     for i in 1:maximum(cell) #! Probably not the best way to find nc
         push!(cell, i);
         push!(cell_dep, i);
     end
+
+    n = size(cell, 1)
+    vec = [1:dim for i in 1:n]
+    cell_dep, cell = map(
+        x -> [repeat([a], dim) for a in x],
+        [cell_dep, cell]
+        )
+    cell, cell_dep, vec = map(x -> reduce(vcat, x), [cell, cell_dep, vec])
+
     tbl = [
-        (cell = cell[i], cell_dep = cell_dep[i])
+        (cell = cell[i], cell_dep = cell_dep[i], vec = vec[i])
         for i in 1:size(cell, 1)
         ]
-    return tbl
+    return (tbl=tbl,)
 end
 
