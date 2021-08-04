@@ -159,7 +159,14 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         end
         subrep[:total_time] = t_step
     end
-    @info "Simulation complete."
+    stats = report_stats(reports)
+    info_level = config[:info_level]
+    if info_level >= 0
+        @info "Simulation complete. Completed $(stats.steps) time-steps in $(stats.time_sum.total) seconds with $(stats.newtons) iterations."
+        if info_level > 0
+            print_stats(stats)
+        end
+    end
     return (states, reports)
 end
 

@@ -1,4 +1,4 @@
-export convert_to_immutable_storage, gravity_constant, report_stats
+export convert_to_immutable_storage, gravity_constant, report_stats, print_stats
 
 const gravity_constant = 9.80665
 
@@ -178,7 +178,6 @@ function report_stats(reports)
     total_update = 0
     total_convergence = 0
 
-
     total_steps = length(reports)
     total_ministeps = 0
     for outer_rep in reports
@@ -200,15 +199,93 @@ function report_stats(reports)
             end
         end
     end
-
+    sum_measured = total_assembly + total_linear_update + total_linear_solve + total_update + total_convergence
+    other_time = total_time - sum_measured
+    totals = (
+                assembly = total_assembly,
+                linear_system = total_linear_update,
+                linear_solve = total_linear_solve,
+                update_time = total_update,
+                convergence = total_convergence,
+                other = other_time,
+                total = total_time
+            )
+    
+    n = total_its
+    m = total_linearizations
+    each = (
+                assembly = total_assembly / m,
+                linear_system = total_linear_update / m,
+                linear_solve = total_linear_solve / n,
+                update_time = total_update / n,
+                convergence = total_convergence / m,
+                other = other_time / n,
+                total = total_time / n
+            )
     return (
             newtons = total_its,
             linearizations = total_linearizations,
-            total_time = total_time,
-            assembly_time = total_assembly,
-            linear_system_time = total_linear_update,
-            linear_solve_time = total_linear_solve,
-            update_time = total_update,
-            convergence_time = total_convergence
+            steps = total_steps,
+            ministeps = total_ministeps,
+            time_sum = totals,
+            time_each = each
            )
+end
+
+
+function print_stats(reports::AbstractArray)
+    stats = report_stats(reports)
+    print_stats(stats)
+end
+
+function print_stats(stats)
+    print_iterations(stats)
+    print_timing(stats)
+end
+
+function print_iterations(stats)
+    flds = [:newtons, :linearizations]
+    data = Array{Any}(undef, length(flds), 3)
+    nstep = stats.steps
+    nmini = stats.ministeps
+
+    for (i, f) in enumerate(flds)
+        raw = stats[f]
+        data[i, 3] = raw
+        data[i, 1] = raw/nstep
+        data[i, 2] = raw/nmini
+    end
+    
+    
+    pretty_table(data; header = (["Per step", "Per ministep", "Total"], ["#$nstep", "#$nmini", ""]), 
+                      row_names = flds,
+                      title = "Number of iterations",
+                      title_alignment = :c,
+                      row_name_column_title = "Type")
+end
+
+function print_timing(stats)
+    flds = collect(keys(stats.time_each))
+    
+    n = length(flds)
+    hl_last = Highlighter(f = (data, i, j) -> i == n, crayon = Crayon(background = :light_blue))
+    
+    tscale = 1
+    tscale_each = 1
+    data = Array{Any}(undef, n, 3)
+    tot = stats.time_sum.total*tscale
+    for (i, f) in enumerate(flds)
+        teach = stats.time_each[f]*tscale_each
+        tsum = stats.time_sum[f]*tscale
+        data[i, 1] = teach
+        data[i, 2] = 100*tsum/tot
+        data[i, 3] = tsum
+    end
+    pretty_table(data; header = (["Each", "Total", "Total"], ["seconds", "%", "seconds"]), 
+                      row_names = flds,
+                      formatters = (ft_printf("%3.2e", 1), ft_printf("%3.2f", 2:3)),
+                      title = "Simulator timing",
+                      title_alignment = :c,
+                      body_hlines = [n-1],
+                      row_name_column_title = "Type")
 end
