@@ -102,6 +102,8 @@ struct TPFlow{F} <: FlowDiscretization
     conn_data
     cellfacecellvec
     cellcellvec
+    cellcell
+    maps # Maps between indices
 end
 
 function get_neighborship(grid)
@@ -127,10 +129,21 @@ function TPFlow(grid::TervGrid, T)
         end
     end
 
-    cfcv = get_cellfacecellvec_tbl(N, face_pos, conn_data, faces)
-    cc = get_cellcellvec_tbl(N, face_pos, conn_data)
+    cfcv = get_cellfacecellvec_tbl(conn_data, face_pos)
+    ccv = get_cellcellvec_tbl(conn_data, face_pos)
+    cc = get_cellcell_tbl(conn_data, face_pos)
 
-    TPFlow{ChargeFlow}(face_pos, conn_data, cfcv, cc)
+    cfcv2ccv = get_cfcv2ccv_map(cfcv, ccv)
+    cfcv2cc = get_cfcv2cc_map(cfcv, cc)
+    cfcv2fc, cfcv2fc_bool = get_cfcv2fc_map(cfcv, conn_data)
+    map = (
+        cfcv2ccv = cfcv2ccv, 
+        cfcv2cc = cfcv2cc, 
+        cfcv2fc = cfcv2fc,
+        cfcv2fc_bool = cfcv2fc_bool
+    )
+
+    TPFlow{ChargeFlow}(face_pos, conn_data, cfcv, ccv, cc, map)
 end
 
 

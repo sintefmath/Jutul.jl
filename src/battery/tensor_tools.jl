@@ -1,6 +1,7 @@
 using Terv
 
 export vec_to_scalar!, face_to_cell!, get_cellcell_map, get_cellcellvec_map
+export get_cfcv2ccv_map, get_cfcv2cc_map, get_cfcv2fc_map
 export get_neigh
 
 ################
@@ -27,48 +28,6 @@ end
 # TODO: These should all be computed initially, to avoid serach later
 
 
-function get_cell_index_vec(c, n, i, tbl)
-    """ 
-    Returns cni, the index of a vector defined on cells, with dependence
-    on neighbouring cells. v[cni] is the i'th component of the field in
-    cell c, dependent on cell n (for partial derivatives).
-    """
-    bool = map(x -> x.cell == c && x.cell_dep == n && x.vec == i, tbl)
-    indx = findall(bool)
-    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n, $i)"
-    return indx[1] # cni
-end
-
-function get_face_index(f, c, conn_data)
-    """
-    Retuns i, b. i is the index of a vector defined on faces. v[i] is the
-    value on face f. b is true if f is a face of the cell c, and false else
-    """
-    bool = map(x -> [x.face == f x.self == c], conn_data)
-    indx = findall(x -> x[1] == 1, bool)
-    @assert size(indx) == (2,) "Invalid or duplicate face cell combo, size $(size(indx)) for (f, c) = ($f, $c)"
-    #! Very ugly, can this be done better?
-    if bool[indx[1]][2]
-        return indx[1], true
-    elseif bool[indx[2]][2]
-        return indx[2], true
-    else   
-        return indx[1][1], false
-    end
-end
-
-function get_cell_index_scalar(c, n, tbl)
-    """
-    Returns cn, the index of a scalar defined on cells, which also depends
-    on neighbouring cells. v[cn] is the value at cell c, dependent on c.
-    """
-    bool = map(x -> x.cell == c && x.cell_dep == n, tbl)
-    indx = findall(bool)
-    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n)"
-    return indx[1]
-end
-
-
 # ! Boundary current is not included
 function face_to_cell!(j_cell, J, c, model)
     """
@@ -87,14 +46,18 @@ function face_to_cell!(j_cell, J, c, model)
 
     neigh_c = get_neigh(c, model)
 
+    for cfcv in cfcv_pos[c]:(cfcv_pos[c+1]-1)
+
+    end
+
+
     for neigh in neigh_c
         f = neigh.face
         for i in 1:2 #! Only valid in 2D for now
             cic = get_cell_index_vec(c, c, i, ccv_tbl)
             fc, bool = get_face_index(f, c, conn_data)
             @assert bool
-            ci = 2*(c-1) + i
-            j_cell[cic] += P[ci, f] * J[fc]
+            j_cell[cic] += P[2*(c-1) + i, f] * J[fc]
         end
 
         for neigh2 in neigh_c
@@ -142,104 +105,167 @@ function vec_to_scalar!(jsq, j, c, model)
     end 
 end
 
+##############################
+# Table generating functions #
+##############################
+# Thses functions generate the tables of indices
 
-# TODO: Use thses to find map to linear index 
-function get_cellfacecellvec_tbl(neigh, face_pos, conn_data, faces)
-    """ Creates cellcellvectbl """
-    dim = 2
-    nc = maximum(neigh) #! Probably not the best way to find nc
-    # ! This is now genereated 2 times, as conn_data is in disc. (Why?)
-
-    # Must have 2 copies of each neighbourship
-
-    neigh = [
-        [neigh[1, i] neigh[2, i]; neigh[2, i] neigh[1, i]] 
-        for i in 1:size(neigh, 2)
-        ]
-    neigh = reduce(vcat, neigh)
-
-    cell1 = neigh[:, 1]
-    cell2 = neigh[:, 2]
-    print(cell1)
-    indx = sortperm(cell1)
-    cell1, cell2 = [cell1[indx], cell2[indx]]
-    
-    d = (diff(cell1) .== 1)
-    c_pos = findall(vcat(true, d, true))
-
-    cell = []
-    cell_dep = []
-    face =  []
+function get_cellfacecellvec_tbl(cdata, cpos)
+    cfcv_tbl = []
+    cfcv_pos = [1]
+    nc = length(cpos) - 1
     for c in 1:nc
-        for fp in face_pos[c]:(face_pos[c+1]-1)
-            f = faces[fp]
-            push!(cell, c)
-            push!(cell_dep, c)
-            push!(face, f)
-
-            for np in c_pos[c]:(c_pos[c+1]-1)
-                n = cell2[np]
-                # print(c,  ", ", fp,", ",np, "\n")
-                push!(cell, c)
-                push!(cell_dep, n)
-                push!(face, f)
-
+        for fp in cpos[c]:(cpos[c+1]-1)
+            f = cdata[fp].face
+            for i in 1:2
+                cfcv = (cell=c, face=f, cell_dep=c, vec=i)
+                push!(cfcv_tbl, cfcv)
+            end
+            for np in cpos[c]:(cpos[c+1]-1)
+                n = cdata[np].other
+                for i in 1:2
+                    cfcv = (cell=c, face=f, cell_dep=n, vec=i)
+                    push!(cfcv_tbl, cfcv)
+                end
             end
         end
-    end
-    cell, face, cell_dep = map(x -> reduce(vcat, x), [cell, face, cell_dep])
-
-    n = size(cell, 1)
-    vec = [1:dim for i in 1:n]
-    cell_dep, cell, face = map(
-        x -> [repeat([a], dim) for a in x],
-        [cell_dep, cell, face]
-        )
-    cell, face, cell_dep, vec = map(x -> reduce(vcat, x), [cell, face, cell_dep, vec])
-
-
-    d = (diff(cell) .== 1)
-    ccv_pos = findall(vcat(true, d, true))
-
-    tbl = [
-        (cell = cell[i], face = face[i], cell_dep = cell_dep[i], vec = vec[i]) 
-            for i in 1:size(cell, 1)
-        ]
-    return (tbl=tbl, pos=ccv_pos)
-end
-
-function get_cellcellvec_tbl(neigh, face_pos, conn_data)
-    """ Creates cellcelltbl """
-    dim = 2
-    neigh = [
-        [
-            neigh[1, i] neigh[2, i]; 
-            neigh[2, i] neigh[1, i]
-        ] 
-        for i in 1:size(neigh, 2)
-        ]
-    neigh = reduce(vcat, neigh)'
-    cell1 = neigh[1, :]
-    cell2 = neigh[2, :]
-
-    cell, cell_dep = map(x -> reduce(vcat, x), [cell1, cell2])
-    for i in 1:maximum(cell) #! Probably not the best way to find nc
-        push!(cell, i);
-        push!(cell_dep, i);
+        push!(cfcv_pos, size(cfcv_tbl, 1)+1)
     end
 
-    n = size(cell, 1)
-    vec = [1:dim for i in 1:n]
-    cell_dep, cell = map(
-        x -> [repeat([a], dim) for a in x],
-        [cell_dep, cell]
-        )
-    cell, cell_dep, vec = map(x -> reduce(vcat, x), [cell, cell_dep, vec])
-
-    tbl = [
-        (cell = cell[i], cell_dep = cell_dep[i], vec = vec[i])
-        for i in 1:size(cell, 1)
-        ]
-    return (tbl=tbl,)
+    return (tbl=cfcv_tbl, pos=cfcv_pos)
 end
 
+
+function get_cellcellvec_tbl(cdata, cpos)
+    ccv_tbl = []
+    ccv_pos = [1]
+    nc = length(cpos) - 1
+    for c in 1:nc
+        for i in 1:2
+            ccv = (cell=c, cell_dep=c, vec=i)
+            push!(ccv_tbl, ccv)
+        end
+        for np in cpos[c]:(cpos[c+1]-1)
+            n = cdata[np].other
+            for i in 1:2
+                ccv = (cell=c, cell_dep=n, vec=i)
+                push!(ccv_tbl, ccv)
+            end
+        end
+        push!(ccv_pos, size(ccv_tbl, 1)+1)
+    end
+
+    return (tbl=ccv_tbl, pos=ccv_pos)
+end
+
+function get_cellcell_tbl(cdata, cpos)
+    cc_tbl = []
+    cc_pos = [1]
+    nc = length(cpos) - 1
+    for c in 1:nc
+        for i in 1:2
+            cc = (cell=c, cell_dep=c, vec=i)
+            push!(cc_tbl, cc)
+        end
+        for np in cpos[c]:(cpos[c+1]-1)
+            n = cdata[np].other
+            cc = (cell=c, cell_dep=n)
+            push!(cc_tbl, cc)
+        end
+        push!(cc_pos, size(cc_tbl, 1)+1)
+    end
+    return (tbl=cc_tbl, pos=cc_pos)
+end
+
+##############
+# Index maps #
+##############
+# Maps between linear indices
+
+function get_ccv_index(c, n, i, tbl)
+    """ 
+    Returns cni, the index of a vector defined on cells, with dependence
+    on neighbouring cells. v[cni] is the i'th component of the field in
+    cell c, dependent on cell n (for partial derivatives).
+    """
+    bool = map(x -> x.cell == c && x.cell_dep == n && x.vec == i, tbl)
+    indx = findall(bool)
+    @assert size(indx, 1) == 1 "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n, $i)"
+    return indx[1] # cni
+end
+
+
+function get_cfcv2ccv_map(cfcv, ccv)
+    """
+    Returns a vector that maps index of cellfacecellvec to cellcellvec
+    """
+    cfcv2ccv = []
+    for a in cfcv.tbl
+        c, n, i = a.cell, a.cell_dep, a.vec
+        indx = get_ccv_index(c, n, i, ccv.tbl)
+        push!(cfcv2ccv, indx)
+    end
+    @assert size(cfcv.tbl) == size(cfcv2ccv)
+    return cfcv2ccv
+end
+
+function get_fc_index(f, c, conn_data)
+    """
+    Retuns i, b. i is the index of a vector defined on faces. v[i] is the
+    value on face f. b is true if f is a face of the cell c, and false else
+    """
+    bool = map(x -> [x.face == f x.self == c], conn_data)
+    indx = findall(x -> x[1] == 1, bool)
+    @assert size(indx) == (2,) "Invalid or duplicate face cell combo, size $(size(indx)) for (f, c) = ($f, $c)"
+    #! Very ugly, can this be done better?
+    if bool[indx[1]][2]
+        return indx[1], true
+    elseif bool[indx[2]][2]
+        return indx[2], true
+    else   
+        return indx[1][1], false
+    end
+end
+
+function get_cfcv2cf_map(cfcv, cdata)
+    """
+    Returns a vector that maps index of cell1facecell2vec to facecell2,
+    as well as a vector of booleans. If true, only value of AD should be used
+    """
+    cfcv2fc = []
+    cfcv2fc_bool = []
+    for a in cfcv.tbl
+        n, f = a.cell_dep, a.face
+        indx, bool = get_cf_index(f, n, cdata)
+        push!(cfcv2fc, indx)
+        push!(cfcv2fc_bool, bool)
+    end
+    @assert size(cfcv.tbl) == size(cfcv2fc)
+    return cfcv2fc, cfcv2fc_bool
+end
+
+function get_cc_index(c, n, tbl)
+    """
+    Returns cn, the index of a scalar defined on cells, which also depends
+    on neighbouring cells. v[cn] is the value at cell c, dependent on c.
+    """
+    bool = map(x -> x.cell == c && x.cell_dep == n, tbl)
+    indx = findall(bool)
+    @assert size(indx, 1) == 1 "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n) = ($c, $n)"
+    return indx[1]
+end
+
+function get_cfcv2cc_map(cfcv, cc)
+    """
+    Returns a vector that maps index of cell1facecell2vec to facecell2,
+    as well as a vector of booleans. If true, only value of AD should be used
+    """
+    cfcv2cc = []
+    for a in cfcv.tbl
+        c, n = a.cell, a.cell_dep
+        indx = get_cc_index(c, n, cc.tbl)
+        push!(cfcv2cc, indx)
+    end
+    @assert size(cfcv.tbl) == size(cfcv2cc)
+    return cfcv2cc
+end
