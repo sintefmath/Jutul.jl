@@ -60,7 +60,8 @@ include("battery/test_setup.jl")
 include("battery/elyte.jl")
 include("battery/current_collector.jl")
 include("battery/current_collector_temp.jl")
-
+include("battery/activematerial.jl")
+include("battery/ocd.jl")
 include("plot_graph.jl")
 
 end # module

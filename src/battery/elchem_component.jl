@@ -5,13 +5,13 @@ export ECComponent
 struct ECComponent <: ElectroChemicalComponent end # Not a good name
 
 function minimum_output_variables(
-    system::ECComponent, primary_variables
+    system::ElectroChemicalComponent, primary_variables
     )
     [:ChargeAcc, :MassAcc, :EnergyAcc]
 end
 
 function select_primary_variables_system!(
-    S, domain, system::ECComponent, formulation
+    S, domain, system::ElectroChemicalComponent, formulation
     )
     S[:Phi] = Phi()
     S[:C] = C()
@@ -19,7 +19,7 @@ function select_primary_variables_system!(
 end
 
 function select_secondary_variables_system!(
-    S, domain, system::ECComponent, formulation
+    S, domain, system::ElectroChemicalComponent, formulation
     )
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:TPkGrad_C] = TPkGrad{C}()
@@ -35,7 +35,7 @@ function select_secondary_variables_system!(
 end
 
 function select_equations_system!(
-    eqs, domain, system::ECComponent, formulation
+    eqs, domain, system::ElectroChemicalComponent, formulation
     )
     charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
     mass_cons = (arg...; kwarg...) -> Conservation(MassAcc(), arg...; kwarg...)
