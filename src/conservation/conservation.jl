@@ -5,6 +5,7 @@ struct ConservationLaw <: TervEquation
     accumulation_symbol::Symbol
     half_face_flux_cells::TervAutoDiffCache
     half_face_flux_faces::Union{TervAutoDiffCache,Nothing}
+    sources::AbstractSparseMatrix
     flow_discretization::FlowDiscretization
 end
 
@@ -22,14 +23,20 @@ function ConservationLaw(model, number_of_equations;
     alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(number_of_equations, n, model,
                                                                                 unit = unit, n_units_pos = n_units_pos, 
                                                                                 context = model.context; kwarg...)
+    # Accumulation terms
     acc = alloc(nc, cell_unit, nc)
+    # Source terms - as sparse matrix
+    t_acc = eltype(acc.entries)
+    src = sparse(zeros(0), zeros(0), zeros(t_acc, 0), size(acc.entries)...)
+    # Half face fluxes - differentiated with respect to pairs of cells
     hf_cells = alloc(nhf, cell_unit, nhf)
+    # Half face fluxes - differentiated with respect to the faces
     if face_partials > 0
         hf_faces = alloc(nf, face_unit, nhf)
     else
         hf_faces = nothing
     end
-    ConservationLaw(acc, accumulation_symbol, hf_cells, hf_faces, flow_discretization)
+    ConservationLaw(acc, accumulation_symbol, hf_cells, hf_faces, src, flow_discretization)
 end
 
 "Update positions of law's derivatives in global Jacobian"
@@ -99,11 +106,14 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
     face_flux = law.half_face_flux_faces
+    src = law.sources
     cpos = law.flow_discretization.conn_pos
 
     @sync begin 
-        @async update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
-        # @async fill_equation_entries!(nz, nothing, model, cell_flux)
+        @async begin 
+            update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
+            update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
+        end
         if !isnothing(face_flux)
             conn_data = law.flow_discretization.conn_data
             @async update_linearized_system_subset_face_flux!(nz, model, face_flux, cpos, conn_data)
@@ -138,6 +148,26 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
     end
 end
 
+function update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
+    nc, _, np = ad_dims(acc)
+    rv_src = rowvals(src)
+    nz_src = nonzeros(src)
+    cp = acc.jacobian_positions
+    @threads for cell in 1:nc
+        for rp in nzrange(src, cell)
+            e = rv_src[rp]
+            v = nz_src[rp]
+            # Value
+            r[e, cell] += v.value
+            # Partials
+            for d = 1:np
+                pos = get_jacobian_pos(acc, cell, e, d, cp)
+                @inbounds nz[pos] += v.partials[d]
+            end
+            # @info "Entry $e, $cell ($nc x $np): $(v.value)"
+        end
+    end
+end
 
 function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_pos, conn_data)
     _, ne, np = ad_dims(face_flux)
@@ -223,13 +253,11 @@ end
 
 
 function update_equation!(law::ConservationLaw, storage, model, dt)
+    # Zero out any sparse indices
+    @. law.sources = 0
+    # Next, update accumulation, "intrinsic" sources and fluxes
     update_accumulation!(law, storage, model, dt)
-    update_intrinsic_sources!(law, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt)
-end
-
-function update_intrinsic_sources!(law::ConservationLaw, storage, model, dt)
-    # Do nothing
 end
 
 function update_half_face_flux!(law::ConservationLaw, storage, model, dt)
@@ -239,4 +267,8 @@ end
 
 @inline function get_diagonal_cache(eq::ConservationLaw)
     return eq.accumulation
+end
+
+@inline function get_diagonal_entries(eq::ConservationLaw)
+    return eq.sources
 end

@@ -210,7 +210,7 @@ function get_flow_volume(grid)
 end
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
-    acc = get_entries(eq.accumulation)
+    acc = get_diagonal_entries(eq)
     state = storage.state
     if haskey(state, :RelativePermeabilities)
         kr = state.RelativePermeabilities
