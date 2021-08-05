@@ -69,7 +69,7 @@ end
 
 function number_of_units(model, pv::NonDiagCellVariables)
     """ Each value depends on a cell and all its neighbours """
-    return size(model.domain.discretizations.charge_flow.cellcellvec.tbl, 1) // 2 #! Assumes 2D
+    return size(model.domain.discretizations.charge_flow.cellcell.tbl, 1) #! Assumes 2D
 end
 
 function values_per_unit(model, u::CellVector)
@@ -166,25 +166,15 @@ function density_alignment!(
     nu, ne, np = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
+    cc = flow_disc.cellcell
+
     # @threads 
     for cell in 1:nc
-
-        # diagonal
-        index = get_cell_index_scalar(cell, cell, cctbl)
-        find_and_place_density!(
-            jac, cell + target_offset, cell + source_offset, nu, ne, np, index, density, 
-            context
-            )
-
-        # off diagonal
-        @inbounds for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
-            f = flow_disc.conn_data[f_ix].face
-            if N[1, f] == cell
-                other = N[2, f]
-            else
-                other = N[1, f]
-            end
-            index = get_cell_index_scalar(cell, other, cctbl)
+        for cn in cc.pos[cell]:(cc.pos[cell+1]-1)
+            c, n = cc.tbl[cn]
+            @assert c == cell
+            other = n
+            index = cn
             find_and_place_density!(
                 jac, other + target_offset, cell + source_offset, nu, ne, np, index, 
                 density, context
@@ -307,10 +297,14 @@ function fill_jac_density!(nz, r, model, density)
 
     nc = number_of_cells(model.domain)
     # Add value from densities
-    for c in 1:nc
+    mf = model.domain.discretizations.charge_flow
+    cc = mf.cellcell
+    nc = number_of_cells(model.domain)
+    for cn in cc.pos[1:end-1] # The diagonal elements
         for e in 1:ne
-            cc = get_cell_index_scalar(c, c, cctbl)
-            entry = get_entry(density, cc, e, dentries)
+            c, n = cc.tbl[cn]
+            @assert c == n
+            entry = get_entry(density, cn, e, dentries)
             @inbounds r[e, c] += entry.value
         end
     end

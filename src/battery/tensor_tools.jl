@@ -2,13 +2,13 @@ using Terv
 
 export vec_to_scalar!, face_to_cell!, get_cellcell_map, get_cellcellvec_map
 export get_cfcv2ccv_map, get_cfcv2cc_map, get_cfcv2fc_map
-export get_neigh
+export get_neigh, get_ccv_index, get_cc_index
 
 ################
 # Helper funcs #
 ################
 
-@inline function get_neigh(c, model)
+function get_neigh(c, model)
     """
     Retruns a vector of NamedTuples of the form
     (T = a, face = b, self = c, other = d)
@@ -40,44 +40,18 @@ function face_to_cell!(j_cell, J, c, model)
 
     P = model.domain.grid.P
     mf = model.domain.discretizations.charge_flow
-    cfcv_tbl = mf.cellfacecellvec.tbl
-    cfcv_pos = mf.cellfacecellvec.pos
-    conn_data = mf.conn_data
+    cfcv = mf.cellfacecellvec
+    cfcv2ccv = mf.maps.cfcv2ccv
+    cfcv2fc = mf.maps.cfcv2fc
+    bool = mf.maps.cfcv2fc_bool
 
-    neigh_c = get_neigh(c, model)
-
-    for cfcv in cfcv_pos[c]:(cfcv_pos[c+1]-1)
-
+    for j in cfcv.pos[c]:(cfcv.pos[c+1]-1)
+        c, f, n, i = cfcv.tbl[j]
+        cni = cfcv2ccv[j]
+        fc = cfcv2fc[j]
+        Jfc = bool[j] ? J[fc] : value(J[fc])
+        j_cell[cni] += P[2*(c-1) + i, f] * Jfc
     end
-
-
-    for neigh in neigh_c
-        f = neigh.face
-        for i in 1:2 #! Only valid in 2D for now
-            cic = get_cell_index_vec(c, c, i, ccv_tbl)
-            fc, bool = get_face_index(f, c, conn_data)
-            @assert bool
-            j_cell[cic] += P[2*(c-1) + i, f] * J[fc]
-        end
-
-        for neigh2 in neigh_c
-            n = neigh2.other
-            for i in 1:2
-                cin = get_cell_index_vec(c, n, i, ccv_tbl)
-                fn, bool = get_face_index(f, n, conn_data)
-
-                # The value should only depend on cell n
-                if bool
-                    Jfn = J[fn]
-                else
-                    Jfn = value(J[fn])
-                end
-
-                j_cell[cin] += P[2*(c-1) + i, f] * Jfn
-            end
-        end # the end is near
-    end
-
 end
 
 function vec_to_scalar!(jsq, j, c, model)
@@ -87,40 +61,37 @@ function vec_to_scalar!(jsq, j, c, model)
     jsq[c, c'] = S[c, 2*(c-1) + i] * j[c, c', i]^2
     """
     S = model.domain.grid.S
-    cctbl = model.domain.discretizations.charge_flow.cellcellvec.tbl
-    ccv_tbl = model.domain.discretizations.charge_flow.cellcellvec.tbl
-
-    cc = get_cell_index_scalar(c, c, cctbl)
-    for i in 1:2
-        cci = get_cell_index_vec(c, c, i, ccv_tbl)
-        jsq[cc] += S[c, 2*(c-1) + i] * j[cci]^2
+    mf = model.domain.discretizations.charge_flow
+    ccv = mf.cellcellvec
+    ccv2cc = mf.maps.ccv2cc
+    for cni in ccv.pos[c]:(ccv.pos[c+1]-1)
+        c, n, i = ccv.tbl[cni]
+        cn = ccv2cc[cni]
+        jsq[cn] += S[c, 2*(c-1) + i] * j[cni]^2
     end
-    for neigh in get_neigh(c, model)
-        n = neigh.other
-        cn = get_cell_index_scalar(c, n, cctbl)
-        for i in 1:2
-            cni = get_cell_index_vec(c, n, i, ccv_tbl)
-            jsq[cn] += S[c, 2*(c-1) + i] * j[cni]^2
-        end
-    end 
 end
+
 
 ##############################
 # Table generating functions #
 ##############################
 # Thses functions generate the tables of indices
+# TODO: Make sure the order of the loops give optimal performance
 
 function get_cellfacecellvec_tbl(cdata, cpos)
     cfcv_tbl = []
     cfcv_pos = [1]
     nc = length(cpos) - 1
+
     for c in 1:nc
         for fp in cpos[c]:(cpos[c+1]-1)
             f = cdata[fp].face
+
             for i in 1:2
                 cfcv = (cell=c, face=f, cell_dep=c, vec=i)
                 push!(cfcv_tbl, cfcv)
             end
+
             for np in cpos[c]:(cpos[c+1]-1)
                 n = cdata[np].other
                 for i in 1:2
@@ -128,6 +99,7 @@ function get_cellfacecellvec_tbl(cdata, cpos)
                     push!(cfcv_tbl, cfcv)
                 end
             end
+
         end
         push!(cfcv_pos, size(cfcv_tbl, 1)+1)
     end
@@ -140,11 +112,14 @@ function get_cellcellvec_tbl(cdata, cpos)
     ccv_tbl = []
     ccv_pos = [1]
     nc = length(cpos) - 1
+
     for c in 1:nc
+
         for i in 1:2
             ccv = (cell=c, cell_dep=c, vec=i)
             push!(ccv_tbl, ccv)
         end
+
         for np in cpos[c]:(cpos[c+1]-1)
             n = cdata[np].other
             for i in 1:2
@@ -152,6 +127,7 @@ function get_cellcellvec_tbl(cdata, cpos)
                 push!(ccv_tbl, ccv)
             end
         end
+
         push!(ccv_pos, size(ccv_tbl, 1)+1)
     end
 
@@ -162,16 +138,17 @@ function get_cellcell_tbl(cdata, cpos)
     cc_tbl = []
     cc_pos = [1]
     nc = length(cpos) - 1
+
     for c in 1:nc
-        for i in 1:2
-            cc = (cell=c, cell_dep=c, vec=i)
-            push!(cc_tbl, cc)
-        end
+
+        cc = (cell=c, cell_dep=c)
+        push!(cc_tbl, cc)
         for np in cpos[c]:(cpos[c+1]-1)
             n = cdata[np].other
             cc = (cell=c, cell_dep=n)
             push!(cc_tbl, cc)
         end
+
         push!(cc_pos, size(cc_tbl, 1)+1)
     end
     return (tbl=cc_tbl, pos=cc_pos)
@@ -181,6 +158,7 @@ end
 # Index maps #
 ##############
 # Maps between linear indices
+# TODO: the serach functions (get_xx_index) may have improvement potential
 
 function get_ccv_index(c, n, i, tbl)
     """ 
@@ -192,21 +170,6 @@ function get_ccv_index(c, n, i, tbl)
     indx = findall(bool)
     @assert size(indx, 1) == 1 "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n, $i)"
     return indx[1] # cni
-end
-
-
-function get_cfcv2ccv_map(cfcv, ccv)
-    """
-    Returns a vector that maps index of cellfacecellvec to cellcellvec
-    """
-    cfcv2ccv = []
-    for a in cfcv.tbl
-        c, n, i = a.cell, a.cell_dep, a.vec
-        indx = get_ccv_index(c, n, i, ccv.tbl)
-        push!(cfcv2ccv, indx)
-    end
-    @assert size(cfcv.tbl) == size(cfcv2ccv)
-    return cfcv2ccv
 end
 
 function get_fc_index(f, c, conn_data)
@@ -227,23 +190,6 @@ function get_fc_index(f, c, conn_data)
     end
 end
 
-function get_cfcv2cf_map(cfcv, cdata)
-    """
-    Returns a vector that maps index of cell1facecell2vec to facecell2,
-    as well as a vector of booleans. If true, only value of AD should be used
-    """
-    cfcv2fc = []
-    cfcv2fc_bool = []
-    for a in cfcv.tbl
-        n, f = a.cell_dep, a.face
-        indx, bool = get_cf_index(f, n, cdata)
-        push!(cfcv2fc, indx)
-        push!(cfcv2fc_bool, bool)
-    end
-    @assert size(cfcv.tbl) == size(cfcv2fc)
-    return cfcv2fc, cfcv2fc_bool
-end
-
 function get_cc_index(c, n, tbl)
     """
     Returns cn, the index of a scalar defined on cells, which also depends
@@ -255,17 +201,49 @@ function get_cc_index(c, n, tbl)
     return indx[1]
 end
 
-function get_cfcv2cc_map(cfcv, cc)
+
+function get_cfcv2ccv_map(cfcv, ccv)
+    """
+    Returns a vector that maps index of cellfacecellvec to cellcellvec
+    """
+    cfcv2ccv = []
+    for a in cfcv.tbl
+        c, n, i = a.cell, a.cell_dep, a.vec
+        indx = get_ccv_index(c, n, i, ccv.tbl)
+        push!(cfcv2ccv, indx)
+    end
+    @assert size(cfcv.tbl) == size(cfcv2ccv)
+    return cfcv2ccv
+end
+
+function get_cfcv2fc_map(cfcv, cdata)
     """
     Returns a vector that maps index of cell1facecell2vec to facecell2,
     as well as a vector of booleans. If true, only value of AD should be used
     """
-    cfcv2cc = []
+    cfcv2fc = []
+    cfcv2fc_bool = []
     for a in cfcv.tbl
+        n, f = a.cell_dep, a.face
+        indx, bool = get_fc_index(f, n, cdata)
+        push!(cfcv2fc, indx)
+        push!(cfcv2fc_bool, bool)
+    end
+    @assert size(cfcv.tbl) == size(cfcv2fc)
+    return cfcv2fc, cfcv2fc_bool
+end
+
+function get_ccv2cc_map(ccv, cc)
+    """
+    Returns a vector that maps index of cell1cell2vec to cell1cell2,
+    as well as a vector of booleans. If true, only value of AD should be used
+    """
+    ccv2cc = []
+    for a in ccv.tbl
         c, n = a.cell, a.cell_dep
         indx = get_cc_index(c, n, cc.tbl)
-        push!(cfcv2cc, indx)
+        push!(ccv2cc, indx)
     end
-    @assert size(cfcv.tbl) == size(cfcv2cc)
-    return cfcv2cc
+    @assert size(ccv.tbl) == size(ccv2cc)
+    return ccv2cc
 end

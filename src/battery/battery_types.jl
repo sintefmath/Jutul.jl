@@ -98,6 +98,7 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
 end
 
 struct TPFlow{F} <: FlowDiscretization
+    # TODO: Declare types ?
     conn_pos
     conn_data
     cellfacecellvec
@@ -134,11 +135,12 @@ function TPFlow(grid::TervGrid, T)
     cc = get_cellcell_tbl(conn_data, face_pos)
 
     cfcv2ccv = get_cfcv2ccv_map(cfcv, ccv)
-    cfcv2cc = get_cfcv2cc_map(cfcv, cc)
+    ccv2cc = get_ccv2cc_map(ccv, cc)
     cfcv2fc, cfcv2fc_bool = get_cfcv2fc_map(cfcv, conn_data)
+
     map = (
         cfcv2ccv = cfcv2ccv, 
-        cfcv2cc = cfcv2cc, 
+        ccv2cc = ccv2cc, 
         cfcv2fc = cfcv2fc,
         cfcv2fc_bool = cfcv2fc_bool
     )

@@ -91,14 +91,13 @@ function update_as_secondary!(ρ, sc::EDensity, model, param, kGradPhiCell, Cond
         vec_to_scalar!(ρ, kGradPhiCell, c, model)
     end
 
-    cc = (c, n) -> get_cell_index_scalar(c, n, cctbl)
-    nc = number_of_cells(model.domain)
+    mf = model.domain.discretizations.charge_flow
+    cc = mf.cellcell
     for c = 1:nc
-        ρ[cc(c, c)] *= 1 / κ[c]
-        κc = value(κ[c])
-        @inbounds for neigh in get_neigh(c, model)
-            n = neigh.other
-            ρ[cc(c, n)] *= 1 / κc
+        for cn in cc.pos[c]:(cc.pos[c+1]-1)
+            c, n = cc.tbl[cn]
+            κc = (c == n) ? κ[c] : value(κ[c])
+            ρ[cn] *= 1 / κc
         end
     end
 end
@@ -108,10 +107,14 @@ end
 function update_as_secondary!(ρ_diag, sc::EDensityDiag, model, param, EDensity)
     """ Carries the diagonal velues of ρ """
 
-    cctbl = model.domain.discretizations.charge_flow.cellcell.tbl
-    cc = i -> get_cell_index_scalar(i, i, cctbl)
-    for i in 1:number_of_cells(model.domain)
-        ρ_diag[i] = EDensity[cc(i)]
+
+    mf = model.domain.discretizations.charge_flow
+    cc = mf.cellcell
+    nc = number_of_cells(model.domain)
+    for cn in cc.pos[1:end-1] # The diagonal elements
+        c, n = cc.tbl[cn]
+        @assert c == n
+        ρ_diag[c] = EDensity[cn]
     end
 end
 )

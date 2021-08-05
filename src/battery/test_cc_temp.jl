@@ -17,12 +17,6 @@ function test_ccT(name="square_current_collector")
 
     sys = CurrentCollectorT()
     model = SimulationModel(domain, sys, context = DefaultContext())
-end
-model = test_ccT()
-f = model.domain.discretizations.charge_flow
-tbl = f.cellfacecellvec.tbl
-pos = f.cellfacecellvec.pos
-##
 
     # State is dict with pressure in each cell
     phi = 1.
