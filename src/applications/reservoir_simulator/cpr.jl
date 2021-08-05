@@ -96,9 +96,11 @@ function apply!(x, cpr::CPRPreconditioner, y, arg...)
             x[(i-1)*bz + j] = 0
         end
     end
-    # y <- y - A*x
+    # x = x' + p
+    # A (x' + p) = y
+    # A x' = y'
+    # y' = y - A*x
     # x = A \ y + p
-
     buf = cpr.buf
     A = cpr.A_ps
     mul!(buf, A, x)
@@ -122,24 +124,51 @@ function update_weights!(cpr, storage, J)
     n = size(cpr.A_p, 1)
     bz = cpr.block_size
     if isnothing(cpr.w_p)
-        cpr.w_p = zeros(bz, n)
+        cpr.w_p = ones(bz, n)
     end
     w = cpr.w_p
     r = zeros(bz)
     r[1] = 1
-    r_p = SVector{bz}(r)
+    
     if cpr.strategy == :true_impes
-        error("Not implemented")
+        eq = storage.Reservoir.equations[:mass_conservation]
+        acc = eq.accumulation.entries
+        true_impes!(w, acc, r, n, bz)
     elseif cpr.strategy == :quasi_impes
-        @threads for block = 1:n
-            J_b = J[block, block]'
-            tmp = J_b\r_p
-            for i = 1:bz
-                w[i, block] = tmp[i]
-            end
-        end
+        quasi_impes!(w, J, r, n, bz)
+    elseif cpr.strategy == :none
+        # Do nothing. Already set to one.
     else
         error("Unsupported strategy $(cpr.strategy)")
     end
     return w
+end
+
+function true_impes!(w, acc, r, n, bz)
+    r_p = SVector{bz}(r)
+    A = MMatrix{bz, bz, eltype(r)}(zeros(bz, bz))
+    for cell in 1:n
+        for i = 1:bz
+            v = acc[i, cell]
+            for j = 1:bz
+                A[j, i] = v.partials[j]
+            end
+        end
+        invert_w!(w, A, r_p, cell, bz)
+    end
+end
+
+function quasi_impes!(w, J, r, n, bz)
+    r_p = SVector{bz}(r)
+    @threads for cell = 1:n
+        J_b = J[cell, cell]'
+        invert_w!(w, J_b, r_p, cell, bz)
+    end
+end
+
+@inline function invert_w!(w, J, r, cell, bz)
+    tmp = J\r
+    @inbounds for i = 1:bz
+        w[i, cell] = tmp[i]
+    end
 end
