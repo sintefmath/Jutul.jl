@@ -20,10 +20,10 @@ function perform_test(nc = 100, tstep = repeat([0.02], 150))
     mu = 1e-3    # 1 cP
     pRef = 100*bar
     # Liquid
-    rhoLS = 1000
+    rhoLS = 1000.0
     cl = 1e-5/bar
     # Vapor
-    rhoVS = 100
+    rhoVS = 100.0
     cv = 1e-4/bar
 
 
