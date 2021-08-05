@@ -159,6 +159,7 @@ end
 ##############
 # Maps between linear indices
 # TODO: the serach functions (get_xx_index) may have improvement potential
+# TODO: Improve using search by exploiting that we have c
 
 function get_ccv_index(c, n, i, tbl)
     """ 

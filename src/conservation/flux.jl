@@ -1,4 +1,4 @@
-export SPU, TPFA, TwoPointPotentialFlow, TrivialFlow
+export SPU, TPFA, TwoPointPotentialFlow, TrivialFlow, get_neighborship
 
 abstract type TwoPointDiscretization <: TervDiscretization end
 

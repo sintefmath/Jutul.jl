@@ -10,7 +10,9 @@ ENV["JULIA_DEBUG"] = Terv;
 ##
 
 function test_ccT(name="square_current_collector")
-    domain, exported = get_cc_grid(name=name, extraout=true, bc=[1, 9], b_T_hf=[2., 2.])
+    bc=[1, 9]
+    b_T_hf=[2., 2.]
+    domain, exported = get_cc_grid(name=name, extraout=true, bc=bc, b_T_hf=b_T_hf)
     t = LinRange(0, 0.1, 20)
     timesteps = diff(t)
     G = exported["G"]
@@ -28,8 +30,7 @@ function test_ccT(name="square_current_collector")
 
     init = Dict(
         :Phi                    => phi, 
-        :T                      => 
-        T0,
+        :T                      => T0,                     
         :Conductivity           => κ,
         :ThermalConductivity    => λ,
         :BoundaryPhi            => boundary_phi, 

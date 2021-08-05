@@ -107,10 +107,6 @@ struct TPFlow{F} <: FlowDiscretization
     maps # Maps between indices
 end
 
-function get_neighborship(grid)
-    return grid.neighborship
-end
-
 function TPFlow(grid::TervGrid, T)
     N = get_neighborship(grid)
     faces, face_pos = get_facepos(N)
