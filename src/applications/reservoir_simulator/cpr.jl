@@ -20,36 +20,43 @@ end
 
 
 function update!(cpr::CPRPreconditioner, lsys, model, storage)
-    update_pressure_system!(cpr, lsys, model, storage)
+    update_cpr_internals!(cpr, lsys, model, storage)
     update!(cpr.system_precond, lsys, model, storage)
     update!(cpr.pressure_precond, cpr.A_p, cpr.r_p)
 end
 
-function update_pressure_system!(cpr::CPRPreconditioner, lsys, model, storage)
-    s = storage.Reservoir
-    J = reservoir_jacobian(lsys)
-    cpr.A_ps = linear_operator(lsys)#J
-    # r = reservoir_residual(lsys)
-    n = J.n
+function initialize_storage!(cpr, J, s)
     if isnothing(cpr.A_p)
         m = J.m
-        cpr.block_size = size(eltype(J), 1)
+        n = J.n
+        cpr.block_size = bz = size(eltype(J), 1)
         @assert n == m == length(s.state.Pressure)
         nzval = zeros(length(J.nzval))
 
         cpr.A_p = SparseMatrixCSC(n, n, J.colptr, J.rowval, nzval)
         cpr.r_p = zeros(n)
-        cpr.buf = zeros(n*cpr.block_size)
+        cpr.buf = zeros(n*bz)
+        cpr.p = zeros(n)
+        cpr.w_p = zeros(bz, n)
     end
-    bz = cpr.block_size
-    update_weights!(cpr, storage, J)
-    A_p = cpr.A_p
+end
 
+function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage)
+    s = storage.Reservoir
+    A = reservoir_jacobian(lsys)
+    cpr.A_ps = linear_operator(lsys)
+    initialize_storage!(cpr, A, s)
+    w_p = update_weights!(cpr, storage, A)
+    update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size)
+end
+
+function update_pressure_system!(A_p, A, w_p, bz)
     cp = A_p.colptr
     nz = A_p.nzval
-    nz_s = J.nzval
+    nz_s = A.nzval
     rv = A_p.rowval
-    w_p = cpr.w_p
+    n = A.n
+    # Update the pressure system with the same pattern in-place
     for i in 1:n
         for j in cp[i]:cp[i+1]-1
             row = rv[j]
@@ -67,13 +74,12 @@ function operator_nrows(cpr::CPRPreconditioner)
     return length(cpr.r_p)*cpr.block_size
 end
 
-function apply!(x, p::CPRPreconditioner, y, arg...)
-    # ldiv!(x, factor, y)
-    r_p = p.r_p
-    tmp = similar(r_p)
-    bz = p.block_size
+function apply!(x, cpr::CPRPreconditioner, y, arg...)
+    r_p = cpr.r_p
+    bz = cpr.block_size
     n = length(r_p)
-    w_p = p.w_p
+    w_p = cpr.w_p
+    # Construct right hand side by the weights
     for i = 1:n
         v = 0
         for b = 1:bz
@@ -81,10 +87,11 @@ function apply!(x, p::CPRPreconditioner, y, arg...)
         end
         r_p[i] = v
     end
-    # x .= 0
-    apply!(tmp, p.pressure_precond, r_p)
+    Δp = cpr.p
+    # Apply preconditioner to pressure part
+    apply!(Δp, cpr.pressure_precond, r_p)
     for i = 1:n
-        x[(i-1)*bz + 1] = tmp[i]
+        x[(i-1)*bz + 1] = Δp[i]
         for j = 2:bz
             x[(i-1)*bz + j] = 0
         end
@@ -92,14 +99,14 @@ function apply!(x, p::CPRPreconditioner, y, arg...)
     # y <- y - A*x
     # x = A \ y + p
 
-    buf = p.buf
-    A = p.A_ps
+    buf = cpr.buf
+    A = cpr.A_ps
     mul!(buf, A, x)
     @. y -= buf
 
-    apply!(x, p.system_precond, y)
+    apply!(x, cpr.system_precond, y)
     for i = 1:n
-        x[(i-1)*bz + 1] += tmp[i]
+        x[(i-1)*bz + 1] += Δp[i]
     end
 end
 
@@ -134,4 +141,5 @@ function update_weights!(cpr, storage, J)
     else
         error("Unsupported strategy $(cpr.strategy)")
     end
+    return w
 end
