@@ -1,4 +1,4 @@
-export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, DampedJacobiPreconditioner
+export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, DampedJacobiPreconditioner, AMGPreconditioner
 using ILUZero
 
 abstract type TervPreconditioner end
@@ -63,6 +63,25 @@ function apply!(x, p::TervPreconditioner, y, arg...)
     else
         error("Neither left or right preconditioner?")
     end
+end
+
+"""
+AMG on CPU (Julia native)
+"""
+mutable struct AMGPreconditioner <: TervPreconditioner
+    method
+    factor
+    hierarchy
+    function AMGPreconditioner(method = ruge_stuben)
+        new(method, nothing, nothing)
+    end
+end
+
+function update!(amg::AMGPreconditioner, A, b)
+    @debug string("Setting up preconditioner ", amg.method)
+    t_amg = @elapsed amg.hierarchy = amg.method(A)
+    @debug "Set up AMG in $t_amg seconds."
+    amg.factor = aspreconditioner(amg.hierarchy)
 end
 
 """
