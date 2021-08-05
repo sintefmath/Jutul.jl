@@ -106,8 +106,6 @@ end
 @terv_secondary(
 function update_as_secondary!(ρ_diag, sc::EDensityDiag, model, param, EDensity)
     """ Carries the diagonal velues of ρ """
-
-
     mf = model.domain.discretizations.charge_flow
     cc = mf.cellcell
     nc = number_of_cells(model.domain)

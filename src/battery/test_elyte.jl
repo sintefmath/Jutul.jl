@@ -33,11 +33,9 @@ function test_elyte()
     name="square_current_collector"
     bcells, T_hf = get_boundary(name)
     one = ones(size(bcells))
-    bcells = [bcells..., (bcells .+ 9)...]
+    bcells = [bcells..., (bcells .+ 2)...]
     T_hf = [T_hf..., T_hf...]
-    domain, exported = get_cc_grid(
-        MixedFlow(), name=name, extraout=true, bc=bcells, b_T_hf=T_hf
-        )
+    domain, exported = get_cc_grid(;name=name, extraout=true, bc=bcells, b_T_hf=T_hf)
     t = LinRange(0, 0.1, 20)
     timesteps = diff(t)
     G = exported["G"]
