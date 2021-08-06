@@ -1,6 +1,6 @@
 using Terv, Polynomials
 
-export Electrolyte, TestElyte
+export Electrolyte, TestElyte, DmuDc, ConsCoeff
 export p1, p2, p3, cnst
 
 abstract type Electrolyte <: ElectroChemicalComponent end

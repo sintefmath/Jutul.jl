@@ -10,7 +10,7 @@ ENV["JULIA_DEBUG"] = Terv;
 
 function plot_elyte()
     name="square_current_collector"
-    domain = get_cc_grid(MixedFlow(), name=name)
+    domain = get_cc_grid(name=name)
     sys = TestElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
     S = model.secondary_variables

@@ -9,7 +9,7 @@ using MAT
 using Plots
 ENV["JULIA_DEBUG"] = Terv;
 
-
+##
 function test_ac()
     name="model1d"
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
@@ -27,7 +27,7 @@ function test_ac()
     bcvalue = ones(size(bccells))
 
 
-    domain = exported_model_to_domain(exported,bc = bccells, b_T_hf = T_hf)
+    domain = exported_model_to_domain(exported, bc = bccells, b_T_hf = T_hf)
     timesteps = diff(LinRange(0, 10, 10)[2:end])
     
     G = exported["G"]
