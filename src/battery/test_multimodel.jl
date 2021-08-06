@@ -12,9 +12,9 @@ ENV["JULIA_DEBUG"] = Terv;
 
 function test_ac()
     name="model1d"
-    fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
+    fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
     exported_all = MAT.matread(fn)
-    exported = exported_all["model1d"]["NegativeElectrode"]["CurrentCollector"];
+    exported = exported_all["model"]["NegativeElectrode"]["CurrentCollector"];
     ## for boundary
     bcfaces = [1]
     # bcfaces = Int64.(bfaces)
@@ -29,6 +29,7 @@ function test_ac()
 
     domain = exported_model_to_domain(exported,bc = bccells, b_T_hf = T_hf)
     timesteps = diff(LinRange(0, 10, 10)[2:end])
+    
     G = exported["G"]
     
     # sys = ECComponent()
@@ -81,9 +82,11 @@ function test_ac()
     return states, G, state0
 end
 
-states, G, state0 = test_ac();
+##
 
-#f = plot_interactive(G, states);
+states, G, state0 = test_ac();
+##
+#f= plot_interactive(G, states);
 
 x = G["cells"]["centroids"]
 xf= G["faces"]["centroids"][end]
