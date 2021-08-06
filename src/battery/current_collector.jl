@@ -6,7 +6,7 @@ struct CurrentCollector <: ElectroChemicalComponent end
 function minimum_output_variables(
     system::CurrentCollector, primary_variables
     )
-    [:ChargeAcc]
+    [:ChargeAcc,:TPkGrad_Phi]
 end
 
 function select_primary_variables_system!(

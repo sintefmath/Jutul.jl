@@ -81,10 +81,8 @@ function get_cc_grid(
     end
 end
 
-function exported_model_to_domain(exported,
-    flow_type=ChargeFlow(),
-    extraout = false, bc=[], b_T_hf=[]
-    )
+function exported_model_to_domain(exported; bc=[], b_T_hf=[])
+    flow_type=ChargeFlow();
     N = exported["G"]["faces"]["neighbors"]
     N = Int64.(N)
     internal_faces = (N[:, 2] .> 0) .& (N[:, 1] .> 0)
@@ -125,10 +123,5 @@ function exported_model_to_domain(exported,
     disc = (charge_flow = flow,)
     D = DiscretizedDomain(G, disc)
 
-    if extraout
-        return (D, exported)
-    else
-        return D
-    end
 end
 

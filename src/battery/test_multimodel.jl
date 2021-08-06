@@ -26,19 +26,20 @@ function test_ac()
     bcvalue = ones(size(bccells))
 
 
-    domain = exported_model_to_domain(exported)
-    timesteps = LinRange(0, 10, 10)[2:end]
-    #G = exported["G"]
+    domain = exported_model_to_domain(exported,bc = bccells, b_T_hf = T_hf)
+    timesteps = diff(LinRange(0, 10, 10)[2:end])
+    G = exported["G"]
     
     # sys = ECComponent()
     # sys = ACMaterial();
-    sys = Grafite()
+    #sys = Grafite()
+    sys = CurrentCollector()
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
     parameters[:boundary_currents] = (:BCCharge, :BCMass)
 
     # State is dict with pressure in each cell
-    phi0 = 1.
+    phi0 = 0.5
     C0 = 1.
     T0 = 1.
     D = 1.
@@ -76,9 +77,42 @@ function test_ac()
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
     states = simulate(sim, timesteps, config = cfg)
-    return states, G
+    return states, G, state0
 end
 
-states, G = test_ac();
+states, G, state0 = test_ac();
+
+#f = plot_interactive(G, states);
+
+x = G["cells"]["centroids"]
+xf= G["faces"]["centroids"][end]
+xfi= G["faces"]["centroids"][2:end-1]
+#state0=states[1]
+p1 = Plots.plot(x,state0[:Phi];title="Phi")
+#p2 = Plots.plot(xfi,state0.TPkGrad_Phi[1:2:end-1];title="Flux")
+p2 = Plots.plot([xf[end]],[state0[:BCCharge][1]];title="Flux")
+p=plot(p1, p2, layout = (1, 2), legend = false)
+for (n,state) in enumerate(states)
+    println(n)
+    Plots.plot!(p1,x,states[n].Phi)
+    Plots.plot!(p2,xfi,states[n].TPkGrad_Phi[1:2:end-1])
+    display(plot!(p1, p2, layout = (1, 2), legend = false))
+end
 ##
-f = plot_interactive(G, states);
+
+x = G["cells"]["centroids"]
+state0=states[1]
+p1 = Plots.plot(x,state0.Phi;title="Phi")
+p2 = Plots.plot(x,state0.C;title="C")
+p=plot(p1, p2, layout = (1, 2), legend = false)
+for (n,state) in enumerate(states)
+    println(n)
+    Plots.plot!(p1,x,states[n].Phi)
+    Plots.plot!(p2,x,states[n].C)
+    display(plot!(p1, p2, layout = (1, 2), legend = false))
+end
+##
+x=1:4
+for a in x
+    println(a)
+end
