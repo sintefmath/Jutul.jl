@@ -220,7 +220,6 @@ function update_linearized_system_equation!(
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
     cpos = law.flow_discretization.conn_pos
-    density = law.density
 
     fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
 end
@@ -290,7 +289,7 @@ function fill_jac_density!(nz, r, model, density)
 
             for d = 1:np
                 pos = get_jacobian_pos(density, i, e, d, dp)
-                @inbounds nz[pos] += entry.partials[d]
+                @inbounds nz[pos] -= entry.partials[d]
             end
         end
     end
@@ -305,7 +304,7 @@ function fill_jac_density!(nz, r, model, density)
             c, n = cc.tbl[cn]
             @assert c == n
             entry = get_entry(density, cn, e, dentries)
-            @inbounds r[e, c] += entry.value
+            @inbounds r[e, c] -= entry.value
         end
     end
 

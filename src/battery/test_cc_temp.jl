@@ -13,7 +13,8 @@ function test_ccT(name="square_current_collector")
     bc=[1, 9]
     b_T_hf=[2., 2.]
     domain, exported = get_cc_grid(name=name, extraout=true, bc=bc, b_T_hf=b_T_hf)
-    t = LinRange(0, 0.1, 20)
+    T = 1e2
+    t = LinRange(0, T, 10)
     timesteps = diff(t)
     G = exported["G"]
 
@@ -25,11 +26,11 @@ function test_ccT(name="square_current_collector")
     T0 = 1.
     boundary_phi = [1., 2.]
     boundary_T = [1., 1.]
-    κ = 1.
-    λ = 1.
+    κ = 1e-4
+    λ = 1e-4
 
     init = Dict(
-        :Phi                    => phi, 
+        :Phi                    => phi,
         :T                      => T0,                     
         :Conductivity           => κ,
         :ThermalConductivity    => λ,

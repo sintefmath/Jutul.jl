@@ -11,7 +11,7 @@ struct EDensityDiag <: ScalarVariable end
 function minimum_output_variables(
     system::CurrentCollectorT, primary_variables
     )
-    [:ChargeAcc, :EnergyAcc, :EDensity, :EDensityDiag]
+    [:ChargeAcc, :EnergyAcc, :EDensityDiag]
 end
 
 function select_primary_variables_system!(
@@ -68,7 +68,7 @@ end
 function update_density!(law::Conservation{EnergyAcc}, storage, model::CCT)
     ρ = storage.state.EDensity
     ρ_law = get_entries(law.density)
-    @tullio ρ[i] = ρ_law[i]
+    @tullio ρ_law[i] = ρ[i]
 end
 
 

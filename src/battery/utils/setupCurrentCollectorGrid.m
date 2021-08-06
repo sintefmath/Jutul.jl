@@ -1,10 +1,10 @@
 mrstModule add ad-core battery mpfa
 
-nx = 3;
-ny = 3;
+nx = 10;
+ny = 10;
 
-Lx = 1e-4;
-Ly = 1e-4;
+Lx = 1;
+Ly = 1;
 
 G = cartGrid([nx, ny], [Lx, Ly]);
 G = computeGeometry(G);
@@ -49,6 +49,7 @@ plotGrid(G, bccells, 'facecolor', 'blue');
 
 savedir = '../../../data/testgrids';
 
-save(fullfile(savedir, 'square_current_collector.mat'), 'G', 'rock');
-save(fullfile(savedir, 'square_current_collector_T.mat'), 'bccells', 'T');
-save(fullfile(savedir, 'square_current_collector_P.mat'), 'P', 'S');
+name = "square_current_collector_10by10";
+save(fullfile(savedir, name + '.mat'), 'G', 'rock');
+save(fullfile(savedir, name + '_T.mat'), 'bccells', 'T');
+save(fullfile(savedir, name + '_P.mat'), 'P', 'S');
