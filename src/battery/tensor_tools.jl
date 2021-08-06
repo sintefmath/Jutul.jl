@@ -1,13 +1,14 @@
 using Terv
 
 export vec_to_scalar!, face_to_cell!, get_cellcell_map, get_cellcellvec_map
-export get_neigh
+export get_cfcv2ccv_map, get_cfcv2cc_map, get_cfcv2fc_map
+export get_neigh, get_ccv_index, get_cc_index
 
 ################
 # Helper funcs #
 ################
 
-@inline function get_neigh(c, model)
+function get_neigh(c, model)
     """
     Retruns a vector of NamedTuples of the form
     (T = a, face = b, self = c, other = d)
@@ -25,9 +26,142 @@ end
 # Tensormaps #
 ##############
 # TODO: These should all be computed initially, to avoid serach later
-# TODO: Use standard way to loop through neigh. (as fill_jac_entries!)
 
-function get_cell_index_vec(c, n, i, tbl)
+
+# ! Boundary current is not included
+function face_to_cell!(j_cell, J, c, model)
+    """
+    Take a field defined on faces, J, finds its value at the cell c.
+    j_cell is a vector that has 2 coponents per cell
+    P maps between values defined on the face, and vectors defined in cells
+    P_[c, f, i] = P_[2*(c-1) + i, f], (c=cell, i=space, f=face)
+    j_c[c, c', i] = P_[c, f, i] * J_[f, c'] (c'=cell dependence)
+    """
+
+    P = model.domain.grid.P
+    mf = model.domain.discretizations.charge_flow
+    cfcv = mf.cellfacecellvec
+    cfcv2ccv = mf.maps.cfcv2ccv
+    cfcv2fc = mf.maps.cfcv2fc
+    bool = mf.maps.cfcv2fc_bool
+
+    for j in cfcv.pos[c]:(cfcv.pos[c+1]-1)
+        c, f, n, i = cfcv.tbl[j]
+        cni = cfcv2ccv[j]
+        fc = cfcv2fc[j]
+        Jfc = bool[j] ? J[fc] : value(J[fc])
+        j_cell[cni] += P[2*(c-1) + i, f] * Jfc
+    end
+end
+
+function vec_to_scalar!(jsq, j, c, model)
+    """
+    Takes in vector valued field defined on the cell, and returns the
+    modulus square
+    jsq[c, c'] = S[c, 2*(c-1) + i] * j[c, c', i]^2
+    """
+    S = model.domain.grid.S
+    mf = model.domain.discretizations.charge_flow
+    ccv = mf.cellcellvec
+    ccv2cc = mf.maps.ccv2cc
+    for cni in ccv.pos[c]:(ccv.pos[c+1]-1)
+        c, n, i = ccv.tbl[cni]
+        cn = ccv2cc[cni]
+        jsq[cn] += S[c, 2*(c-1) + i] * j[cni]^2
+    end
+end
+
+
+##############################
+# Table generating functions #
+##############################
+# Thses functions generate the tables of indices
+# TODO: Make sure the order of the loops give optimal performance
+
+function get_cellfacecellvec_tbl(cdata, cpos)
+    cfcv_tbl = []
+    cfcv_pos = [1]
+    nc = length(cpos) - 1
+
+    for c in 1:nc
+        for fp in cpos[c]:(cpos[c+1]-1)
+            f = cdata[fp].face
+
+            for i in 1:2
+                cfcv = (cell=c, face=f, cell_dep=c, vec=i)
+                push!(cfcv_tbl, cfcv)
+            end
+
+            for np in cpos[c]:(cpos[c+1]-1)
+                n = cdata[np].other
+                for i in 1:2
+                    cfcv = (cell=c, face=f, cell_dep=n, vec=i)
+                    push!(cfcv_tbl, cfcv)
+                end
+            end
+
+        end
+        push!(cfcv_pos, size(cfcv_tbl, 1)+1)
+    end
+
+    return (tbl=cfcv_tbl, pos=cfcv_pos)
+end
+
+
+function get_cellcellvec_tbl(cdata, cpos)
+    ccv_tbl = []
+    ccv_pos = [1]
+    nc = length(cpos) - 1
+
+    for c in 1:nc
+
+        for i in 1:2
+            ccv = (cell=c, cell_dep=c, vec=i)
+            push!(ccv_tbl, ccv)
+        end
+
+        for np in cpos[c]:(cpos[c+1]-1)
+            n = cdata[np].other
+            for i in 1:2
+                ccv = (cell=c, cell_dep=n, vec=i)
+                push!(ccv_tbl, ccv)
+            end
+        end
+
+        push!(ccv_pos, size(ccv_tbl, 1)+1)
+    end
+
+    return (tbl=ccv_tbl, pos=ccv_pos)
+end
+
+function get_cellcell_tbl(cdata, cpos)
+    cc_tbl = []
+    cc_pos = [1]
+    nc = length(cpos) - 1
+
+    for c in 1:nc
+
+        cc = (cell=c, cell_dep=c)
+        push!(cc_tbl, cc)
+        for np in cpos[c]:(cpos[c+1]-1)
+            n = cdata[np].other
+            cc = (cell=c, cell_dep=n)
+            push!(cc_tbl, cc)
+        end
+
+        push!(cc_pos, size(cc_tbl, 1)+1)
+    end
+    return (tbl=cc_tbl, pos=cc_pos)
+end
+
+##############
+# Index maps #
+##############
+# Maps between linear indices
+# TODO: the serach functions (get_xx_index) may have improvement potential
+# TODO: Improve using search by exploiting that we have c
+
+function get_ccv_index(c, n, i, tbl)
     """ 
     Returns cni, the index of a vector defined on cells, with dependence
     on neighbouring cells. v[cni] is the i'th component of the field in
@@ -35,11 +169,11 @@ function get_cell_index_vec(c, n, i, tbl)
     """
     bool = map(x -> x.cell == c && x.cell_dep == n && x.vec == i, tbl)
     indx = findall(bool)
-    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n, $i)"
+    @assert size(indx, 1) == 1 "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n, $i)"
     return indx[1] # cni
 end
 
-function get_face_index(f, c, conn_data)
+function get_fc_index(f, c, conn_data)
     """
     Retuns i, b. i is the index of a vector defined on faces. v[i] is the
     value on face f. b is true if f is a face of the cell c, and false else
@@ -57,146 +191,60 @@ function get_face_index(f, c, conn_data)
     end
 end
 
-function get_cell_index_scalar(c, n, tbl)
+function get_cc_index(c, n, tbl)
     """
     Returns cn, the index of a scalar defined on cells, which also depends
     on neighbouring cells. v[cn] is the value at cell c, dependent on c.
     """
     bool = map(x -> x.cell == c && x.cell_dep == n, tbl)
     indx = findall(bool)
-    @assert size(indx) == (1,) "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n, i) = ($c, $n)"
+    @assert size(indx, 1) == 1 "Invalid or duplicate face cell combo, size = $(size(indx)) for (c, n) = ($c, $n)"
     return indx[1]
 end
 
 
-# ! Boundary current is not included
-function face_to_cell!(j_cell, J, c, model)
+function get_cfcv2ccv_map(cfcv, ccv)
     """
-    Take a field defined on faces, J, finds its value at the cell c.
-    j_cell is a vector that has 2 coponents per cell
-    P maps between values defined on the face, and vectors defined in cells
-    P_[c, f, i] = P_[2*(c-1) + i, f], (c=cell, i=space, f=face)
-    j_c[c, c', i] = P_[c, f, i] * J_[f, c'] (c'=cell dependence)
+    Returns a vector that maps index of cellfacecellvec to cellcellvec
     """
-
-    P = model.domain.grid.P
-    mf = model.domain.discretizations.charge_flow
-    ccv = model.domain.grid.cellcellvectbl
-    conn_data = mf.conn_data
-
-    neigh_c = get_neigh(c, model)
-    for neigh in neigh_c
-        f = neigh.face
-        for i in 1:2 #! Only valid in 2D for now
-            cic = get_cell_index_vec(c, c, i, ccv)
-            fc, bool = get_face_index(f, c, conn_data)
-            @assert bool
-            ci = 2*(c-1) + i
-            j_cell[cic] += P[ci, f] * J[fc]
-        end
+    cfcv2ccv = []
+    for a in cfcv.tbl
+        c, n, i = a.cell, a.cell_dep, a.vec
+        indx = get_ccv_index(c, n, i, ccv.tbl)
+        push!(cfcv2ccv, indx)
     end
-
-    # what is the best order to loop through?
-    for neigh in neigh_c
-        n = neigh.other
-        for neigh2 in neigh_c
-            f = neigh2.face
-            for i in 1:2
-                cin = get_cell_index_vec(c, n, i, ccv)
-                fn, bool = get_face_index(f, n, conn_data)
-
-                # The value should only depend on cell n
-                if bool
-                    Jfn = J[fn]
-                else
-                    Jfn = value(J[fn])
-                end
-
-                j_cell[cin] += P[2*(c-1) + i, f] * Jfn
-            end
-        end
-    end # the end is near
+    @assert size(cfcv.tbl) == size(cfcv2ccv)
+    return cfcv2ccv
 end
 
-function vec_to_scalar!(jsq, j, c, model)
+function get_cfcv2fc_map(cfcv, cdata)
     """
-    Takes in vector valued field defined on the cell, and returns the
-    modulus square
-    jsq[c, c'] = S[c, 2*(c-1) + i] * j[c, c', i]^2
+    Returns a vector that maps index of cell1facecell2vec to facecell2,
+    as well as a vector of booleans. If true, only value of AD should be used
     """
-    S = model.domain.grid.S
-    mf = model.domain.discretizations.charge_flow
-    cctbl = model.domain.grid.cellcelltbl
-    ccv = model.domain.grid.cellcellvectbl
-
-    cc = get_cell_index_scalar(c, c, cctbl)
-    for i in 1:2
-        cci = get_cell_index_vec(c, c, i, ccv)
-        jsq[cc] += S[c, 2*(c-1) + i] * j[cci]^2
+    cfcv2fc = []
+    cfcv2fc_bool = []
+    for a in cfcv.tbl
+        n, f = a.cell_dep, a.face
+        indx, bool = get_fc_index(f, n, cdata)
+        push!(cfcv2fc, indx)
+        push!(cfcv2fc_bool, bool)
     end
-    for neigh in get_neigh(c, model)
-        n = neigh.other
-        cn = get_cell_index_scalar(c, n, cctbl)
-        for i in 1:2
-            cni = get_cell_index_vec(c, n, i, ccv)
-            jsq[cn] += S[c, 2*(c-1) + i] * j[cni]^2
-        end
-    end 
+    @assert size(cfcv.tbl) == size(cfcv2fc)
+    return cfcv2fc, cfcv2fc_bool
 end
 
-
-# TODO: Use thses to find map to linear index 
-function get_cellcellvec_map(neigh)
-    """ Creates cellcellvectbl """
-    dim = 2
-    # Must have 2 copies of each neighbourship
-    neigh = [
-        [neigh[1, i] neigh[2, i]; neigh[2, i] neigh[1, i]] 
-        for i in 1:size(neigh, 2)
-        ]
-    neigh = reduce(vcat, neigh)'
-    cell1 = [repeat([i], dim) for i in neigh[1, :]]
-    cell2 = [repeat([i], dim) for i in neigh[2, :]]
-    num_neig = size(cell1)[1]
-    vec = [1:dim for i in 1:num_neig]
-    cell, cell_dep, vec = map(x -> reduce(vcat, x), [cell1, cell2, vec])
-    # must add self dependence
-    for i in 1:maximum(cell) #! Probably not the best way to find nc
-        push!(cell, i); push!(cell, i)
-        push!(cell_dep, i); push!(cell_dep, i)
-        push!(vec, 1); push!(vec, 2)
+function get_ccv2cc_map(ccv, cc)
+    """
+    Returns a vector that maps index of cell1cell2vec to cell1cell2,
+    as well as a vector of booleans. If true, only value of AD should be used
+    """
+    ccv2cc = []
+    for a in ccv.tbl
+        c, n = a.cell, a.cell_dep
+        indx = get_cc_index(c, n, cc.tbl)
+        push!(ccv2cc, indx)
     end
-    # ? Should these be sorted in som way ?
-
-    tbl = [
-        (cell = cell[i], cell_dep = cell_dep[i], vec = vec[i]) 
-            for i in 1:size(cell, 1)
-        ]
-    return tbl
+    @assert size(ccv.tbl) == size(ccv2cc)
+    return ccv2cc
 end
-
-function get_cellcell_map(neigh)
-    """ Creates cellcelltbl """
-    neigh = [
-        [
-            neigh[1, i] neigh[2, i]; 
-            neigh[2, i] neigh[1, i]
-        ] 
-        for i in 1:size(neigh, 2)
-        ]
-    neigh = reduce(vcat, neigh)'
-    cell1 = neigh[1, :]
-    cell2 = neigh[2, :]
-    num_neig = size(cell1)[1]
-    cell, cell_dep = map(x -> reduce(vcat, x), [cell1, cell2])
-    for i in 1:maximum(cell) #! Probably not the best way to find nc
-        push!(cell, i);
-        push!(cell_dep, i);
-    end
-    tbl = [
-        (cell = cell[i], cell_dep = cell_dep[i])
-        for i in 1:size(cell, 1)
-        ]
-    return tbl
-end
-

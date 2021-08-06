@@ -254,25 +254,17 @@ end
 function update_as_secondary!(
     ρ, sc::EnergyDensity, model, param, DGradCSq, JSq, Diffusivity, Conductivity, DmuDc
     )
-    
-    mf = model.domain.discretizations.charge_flow
-    conn_data = mf.conn_data
-    cctbl = model.domain.grid.cellcelltbl
-
     κ = Conductivity
     D = Diffusivity
 
-    for c in 1:number_of_cells(model.domain)
-
-        cc = get_cell_index_scalar(c, c, cctbl)
-
-        # TODO: This should be combinded
-        ρ[cc] = JSq[cc] / κ[c] + DmuDc[c] * DGradCSq[cc] / D[c]
-
-        for neigh in get_neigh(c, model)
-            n = neigh.other
-            cn = get_cell_index_scalar(c, n, cctbl)
-            ρ[cn] = JSq[cn] / value(κ[c]) + value(DmuDc[c]) * DGradCSq[cn] / value(D[c])
+    mf = model.domain.discretizations.charge_flow
+    cc = mf.cellcell
+    nc = number_of_cells(model.domain)
+    for c = 1:nc
+        for cn in cc.pos[c]:(cc.pos[c+1]-1)
+            c, n = cc.tbl[cn]
+            v = (c == n) ? v -> v : v -> value(v)
+            ρ[cn] = JSq[cn] / v(κ[c]) + v(DmuDc[c]) * DGradCSq[cn] / v(D[c])
         end
     end
 end
@@ -281,31 +273,39 @@ end
 @terv_secondary(
 function update_as_secondary!(jsq_diag, sc::JSqDiag, model, param, JSq)
     """ Carries the diagonal velues of JSq """
-
-    cctbl = model.domain.grid.cellcelltbl
-    cc = i -> get_cell_index_scalar(i, i, cctbl)
-    for i in 1:number_of_cells(model.domain)
-        jsq_diag[i] = JSq[cc(i)]
+    mf = model.domain.discretizations.charge_flow
+    cc = mf.cellcell
+    nc = number_of_cells(model.domain)
+    for cn in cc.pos[1:end-1] # The diagonal elements
+        c, n = cc.tbl[cn]
+        @assert c == n
+        jsq_diag[c] = JSq[cn]
     end
 end
 )
 
 @terv_secondary(
 function update_as_secondary!(jsq_diag, sc::DGradCSqDiag, model, param, DGradCSq)
-    cctbl = model.domain.grid.cellcelltbl
-    cc = i -> get_cell_index_scalar(i, i, cctbl)
-    for i in 1:number_of_cells(model.domain)
-        jsq_diag[i] = DGradCSq[cc(i)]
+    mf = model.domain.discretizations.charge_flow
+    cc = mf.cellcell
+    nc = number_of_cells(model.domain)
+    for cn in cc.pos[1:end-1] # The diagonal elements
+        c, n = cc.tbl[cn]
+        @assert c == n
+        jsq_diag[c] = DGradCSq[cn]
     end
 end
 )
 
 @terv_secondary(
 function update_as_secondary!(ρ_diag, sc::EDDiag, model, param, EnergyDensity)
-    cctbl = model.domain.grid.cellcelltbl
-    cc = i -> get_cell_index_scalar(i, i, cctbl)
-    for i in 1:number_of_cells(model.domain)
-        ρ_diag[i] = EnergyDensity[cc(i)]
+    mf = model.domain.discretizations.charge_flow
+    cc = mf.cellcell
+    nc = number_of_cells(model.domain)
+    for cn in cc.pos[1:end-1] # The diagonal elements
+        c, n = cc.tbl[cn]
+        @assert c == n
+        ρ_diag[c] = EnergyDensity[cn]
     end
 end
 )
@@ -313,7 +313,7 @@ end
 function update_density!(law::Conservation{EnergyAcc}, storage, model::ElectrolyteModel)
     ρ = storage.state.EnergyDensity
     ρ_law = get_entries(law.density)
-    @tullio ρ[i] = ρ_law[i]
+    @tullio ρ[c] = ρ_law[i]
 end
 
 function get_flux(

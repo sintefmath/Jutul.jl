@@ -95,9 +95,55 @@ struct MinimalECTPFAGrid{R<:AbstractFloat, I<:Integer} <: ElectroChemicalGrid
     boundary_T_hf::AbstractArray{R}
     P::AbstractArray{R} # Tensor to map from cells to faces
     S::AbstractArray{R} # Tensor map cell vector to cell scalar
-    cellcellvectbl
-    cellcelltbl
 end
+
+struct TPFlow{F} <: FlowDiscretization
+    # TODO: Declare types ?
+    conn_pos
+    conn_data
+    cellfacecellvec
+    cellcellvec
+    cellcell
+    maps # Maps between indices
+end
+
+function TPFlow(grid::TervGrid, T)
+    N = get_neighborship(grid)
+    faces, face_pos = get_facepos(N)
+
+    nhf = length(faces)
+    nc = length(face_pos) - 1
+    if !isnothing(T)
+        @assert length(T) == nhf ÷ 2
+    end
+    get_el = (face, cell) -> get_connection(face, cell, faces, N, T, nothing, nothing, false)
+    el_type = typeof(get_el(1, 1))
+    
+    conn_data = Vector{el_type}(undef, nhf)
+    @threads for cell = 1:nc
+        @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
+            conn_data[fpos] = get_el(faces[fpos], cell)
+        end
+    end
+
+    cfcv = get_cellfacecellvec_tbl(conn_data, face_pos)
+    ccv = get_cellcellvec_tbl(conn_data, face_pos)
+    cc = get_cellcell_tbl(conn_data, face_pos)
+
+    cfcv2ccv = get_cfcv2ccv_map(cfcv, ccv)
+    ccv2cc = get_ccv2cc_map(ccv, cc)
+    cfcv2fc, cfcv2fc_bool = get_cfcv2fc_map(cfcv, conn_data)
+
+    map = (
+        cfcv2ccv = cfcv2ccv, 
+        ccv2cc = ccv2cc, 
+        cfcv2fc = cfcv2fc,
+        cfcv2fc_bool = cfcv2fc_bool
+    )
+
+    TPFlow{ChargeFlow}(face_pos, conn_data, cfcv, ccv, cc, map)
+end
+
 
 ################
 # Constructors #
@@ -115,12 +161,8 @@ function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[], S=[])
     @assert all(pv .> 0)
     @assert size(bc) == size(T_hf)
     
-    cellcellvectbl = get_cellcellvec_map(N)
-    cellcelltbl  = get_cellcell_map(N)
 
-    MinimalECTPFAGrid{eltype(pv), eltype(N)}(
-        pv, N, bc, T_hf, P, S, cellcellvectbl, cellcelltbl
-        )
+    MinimalECTPFAGrid{eltype(pv), eltype(N)}(pv, N, bc, T_hf, P, S)
 end
 
 function Conservation(

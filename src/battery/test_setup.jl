@@ -27,10 +27,8 @@ function get_tensorprod(name="square_current_collector")
     return P, S
 end
 
-
 function get_cc_grid(
-    flow_type=ChargeFlow(); name="square_current_collector", 
-    extraout = false, bc=[], b_T_hf=[]
+    ;name="square_current_collector", extraout = false, bc=[], b_T_hf=[]
     )
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     exported = MAT.matread(fn)
@@ -44,9 +42,7 @@ function get_cc_grid(
     cell_centroids = copy((exported["G"]["cells"]["centroids"])')
 
     # Faces
-    face_centroids = copy((
-        exported["G"]["faces"]["centroids"][internal_faces, :])'
-        )
+    face_centroids = copy((exported["G"]["faces"]["centroids"][internal_faces, :])')
     face_areas = vec(exported["G"]["faces"]["areas"][internal_faces])
     face_normals = exported["G"]["faces"]["normals"][internal_faces, :]./face_areas
     face_normals = copy(face_normals')
@@ -54,23 +50,19 @@ function get_cc_grid(
 
     # Deal with face data
 
-    # Different constants for different potential means this cannot
-    # be included in T
+    # Different constants for different potential means this cannot be included in T
     one = ones(size((exported["rock"]["perm"])'))
     
     T_hf = compute_half_face_trans(
-        cell_centroids, face_centroids, face_normals, face_areas, one, N
+    cell_centroids, face_centroids, face_normals, face_areas, one, N
         )
     T = compute_face_trans(T_hf, N)
 
+    # TODO: move P, S, boundary to discretization
     P, S = get_tensorprod(name)
     G = MinimalECTPFAGrid(volumes, N, bc, b_T_hf, P, S)
-    z = nothing
-    g = nothing
 
-    ft = flow_type
-    # ??Hva gjør SPU og TPFA??
-    flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
+    flow = TPFlow(G, T)
     disc = (charge_flow = flow,)
     D = DiscretizedDomain(G, disc)
 

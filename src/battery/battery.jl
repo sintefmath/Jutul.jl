@@ -69,7 +69,7 @@ end
 
 function number_of_units(model, pv::NonDiagCellVariables)
     """ Each value depends on a cell and all its neighbours """
-    return size(model.domain.grid.cellcelltbl, 1)
+    return size(model.domain.discretizations.charge_flow.cellcell.tbl, 1) #! Assumes 2D
 end
 
 function values_per_unit(model, u::CellVector)
@@ -125,8 +125,7 @@ function align_to_jacobian!(
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
     density = law.density
-    cctbl = model.domain.grid.cellcelltbl
-
+    cctbl = model.domain.discretizations.charge_flow.cellcellvec.tbl
 
     diagonal_alignment!(
         acc, jac, u, model.context;
@@ -167,24 +166,15 @@ function density_alignment!(
     nu, ne, np = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
-    @threads for cell in 1:nc
+    cc = flow_disc.cellcell
 
-        # diagonal
-        index = get_cell_index_scalar(cell, cell, cctbl)
-        find_and_place_density!(
-            jac, cell + target_offset, cell + source_offset, nu, ne, np, index, density, 
-            context
-            )
-
-        # off diagonal
-        @inbounds for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
-            f = flow_disc.conn_data[f_ix].face
-            if N[1, f] == cell
-                other = N[2, f]
-            else
-                other = N[1, f]
-            end
-            index = get_cell_index_scalar(cell, other, cctbl)
+    # @threads 
+    for cell in 1:nc
+        for cn in cc.pos[cell]:(cc.pos[cell+1]-1)
+            c, n = cc.tbl[cn]
+            @assert c == cell
+            other = n
+            index = cn
             find_and_place_density!(
                 jac, other + target_offset, cell + source_offset, nu, ne, np, index, 
                 density, context
@@ -230,7 +220,6 @@ function update_linearized_system_equation!(
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
     cpos = law.flow_discretization.conn_pos
-    density = law.density
 
     fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
 end
@@ -291,7 +280,7 @@ function fill_jac_density!(nz, r, model, density)
     nud, ne, np = ad_dims(density)
     dentries = density.entries
     dp = density.jacobian_positions
-    cctbl = model.domain.grid.cellcelltbl
+    cctbl = model.domain.discretizations.charge_flow.cellcell.tbl
 
     # Fill density term
     for i = 1:nud
@@ -300,18 +289,22 @@ function fill_jac_density!(nz, r, model, density)
 
             for d = 1:np
                 pos = get_jacobian_pos(density, i, e, d, dp)
-                @inbounds nz[pos] += entry.partials[d]
+                @inbounds nz[pos] -= entry.partials[d]
             end
         end
     end
 
     nc = number_of_cells(model.domain)
     # Add value from densities
-    for c in 1:nc
+    mf = model.domain.discretizations.charge_flow
+    cc = mf.cellcell
+    nc = number_of_cells(model.domain)
+    for cn in cc.pos[1:end-1] # The diagonal elements
         for e in 1:ne
-            cc = get_cell_index_scalar(c, c, cctbl)
-            entry = get_entry(density, cc, e, dentries)
-            @inbounds r[e, c] += entry.value
+            c, n = cc.tbl[cn]
+            @assert c == n
+            entry = get_entry(density, cn, e, dentries)
+            @inbounds r[e, c] -= entry.value
         end
     end
 
