@@ -57,12 +57,12 @@ function update_pressure_system!(A_p, A, w_p, bz)
     rv = A_p.rowval
     n = A.n
     # Update the pressure system with the same pattern in-place
-    for i in 1:n
-        for j in cp[i]:cp[i+1]-1
+    @threads for i in 1:n
+        @inbounds for j in cp[i]:cp[i+1]-1
             row = rv[j]
             Ji = nz_s[j]
             tmp = 0
-            for b = 1:bz
+            @inbounds for b = 1:bz
                 tmp += Ji[b, 1]*w_p[b, row]
             end
             nz[j] = tmp
@@ -80,12 +80,12 @@ function apply!(x, cpr::CPRPreconditioner, y, arg...)
     n = length(r_p)
     w_p = cpr.w_p
     # Construct right hand side by the weights
-    for i = 1:n
+    @threads for i = 1:n
         v = 0
-        for b = 1:bz
+        @inbounds for b = 1:bz
             v += y[(i-1)*bz + b]*w_p[b, i]
         end
-        r_p[i] = v
+        @inbounds r_p[i] = v
     end
     Δp = cpr.p
     # Apply preconditioner to pressure part
@@ -148,9 +148,9 @@ function true_impes!(w, acc, r, n, bz)
     r_p = SVector{bz}(r)
     A = MMatrix{bz, bz, eltype(r)}(zeros(bz, bz))
     for cell in 1:n
-        for i = 1:bz
+        @inbounds for i = 1:bz
             v = acc[i, cell]
-            for j = 1:bz
+            @inbounds for j = 1:bz
                 A[j, i] = v.partials[j]
             end
         end
