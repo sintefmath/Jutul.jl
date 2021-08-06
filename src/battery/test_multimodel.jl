@@ -25,7 +25,7 @@ function test_ac()
     bccells = N_all[bcfaces,1] + N_all[bcfaces,2]
     T_hf   = T_all[bcfaces]
     bcvalue = ones(size(bccells))
-
+    bcvaluephi = ones(size(bccells)).*0.0
 
     domain = exported_model_to_domain(exported, bc = bccells, b_T_hf = T_hf)
     timesteps = diff(LinRange(0, 10, 10)[2:end])
@@ -45,8 +45,8 @@ function test_ac()
     C0 = 1.
     T0 = 1.
     D = 1.
-    σ = 1.
-    λ = 1.
+    σ = exported["EffectiveElectricalConductivity"][1].*1000
+    λ = exported["thermalConductivity"][1]
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
@@ -57,7 +57,7 @@ function test_ac()
     S[:BCMass] = BoundaryCurrent{MassAcc}(bccells.+9)
     S[:BCEnergy] = BoundaryCurrent{EnergyAcc}(bccells.+9)
 
-    phi0 = 1.
+    phi0 = 0.
     init = Dict(
         :Phi                    => phi0,
         :C                      => C0,
@@ -65,10 +65,10 @@ function test_ac()
         :Conductivity           => σ,
         :Diffusivity            => D,
         :ThermalConductivity    => λ,
-        :BoundaryPhi            => bcvalue, 
+        :BoundaryPhi            => bcvaluephi, 
         :BoundaryC              => bcvalue, 
         :BoundaryT              => bcvalue,
-        :BCCharge               => -bcvalue,
+        :BCCharge               => -bcvalue.*9.4575,
         :BCMass                 => bcvalue,
         :BCEnergy               => bcvalue,
         )
@@ -79,23 +79,29 @@ function test_ac()
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
     states = simulate(sim, timesteps, config = cfg)
-    return states, G, state0
+    stateref = exported_all["states"]
+    return states, G, state0, stateref
 end
 
-##
+states, G, state0, stateref = test_ac();
 
-states, G, state0 = test_ac();
-##
-#f= plot_interactive(G, states);
-
+# f= plot_interactive(G, states);
+phi_ref = stateref[10]["NegativeElectrode"]["CurrentCollector"]["phi"]
+j_ref = stateref[10]["NegativeElectrode"]["CurrentCollector"]["j"]
 x = G["cells"]["centroids"]
 xf= G["faces"]["centroids"][end]
 xfi= G["faces"]["centroids"][2:end-1]
 #state0=states[1]
 p1 = Plots.plot(x,state0[:Phi];title="Phi")
-#p2 = Plots.plot(xfi,state0.TPkGrad_Phi[1:2:end-1];title="Flux")
-p2 = Plots.plot([xf[end]],[state0[:BCCharge][1]];title="Flux")
+Plots.plot!(p1,x,phi_ref;linecolor="red")
+p2 = Plots.plot(xfi,states[1].TPkGrad_Phi[1:2:end-1];title="Flux")
+#p2 = Plots.plot([xf[end]],[state0[:BCCharge][1]];title="Flux")
+#Plots.plot!(p2,xfi,j_ref;linecolor="red")
 p=plot(p1, p2, layout = (1, 2), legend = false)
+Plots.plot!(p1,x,states[end].Phi)
+Plots.plot!(p2,xfi,states[end].TPkGrad_Phi[1:2:end-1])
+display(plot!(p1, p2, layout = (1, 2), legend = false))
+##
 for (n,state) in enumerate(states)
     println(n)
     Plots.plot!(p1,x,states[n].Phi)

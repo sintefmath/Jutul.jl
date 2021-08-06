@@ -21,7 +21,7 @@ function select_secondary_variables_system!(
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:ChargeAcc] = ChargeAcc()
 
-    μ = 2.1 # Why not?
+    μ = 100 # Why not?
     S[:Conductivity] = ConstantVariables([μ,])
 end
 
