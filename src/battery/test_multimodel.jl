@@ -6,6 +6,7 @@ and conductivity, diffusivity is constant.
 =#
 using Terv
 using MAT
+using Plots
 ENV["JULIA_DEBUG"] = Terv;
 
 
@@ -39,7 +40,7 @@ function test_ac()
     parameters[:boundary_currents] = (:BCCharge, :BCMass)
 
     # State is dict with pressure in each cell
-    phi0 = 0.5
+    phi0 = 1.0
     C0 = 1.
     T0 = 1.
     D = 1.
@@ -66,7 +67,7 @@ function test_ac()
         :BoundaryPhi            => bcvalue, 
         :BoundaryC              => bcvalue, 
         :BoundaryT              => bcvalue,
-        :BCCharge               => bcvalue,
+        :BCCharge               => -bcvalue,
         :BCMass                 => bcvalue,
         :BCEnergy               => bcvalue,
         )

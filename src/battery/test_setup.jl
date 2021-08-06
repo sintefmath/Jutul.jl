@@ -111,9 +111,9 @@ function exported_model_to_domain(exported; bc=[], b_T_hf=[])
     ft = flow_type
     # ??Hva gjør SPU og TPFA??
     T = exported["operators"]["T"]
-    flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
+    flow = TPFlow(G, T)
     disc = (charge_flow = flow,)
     D = DiscretizedDomain(G, disc)
-
+    return D
 end
 
