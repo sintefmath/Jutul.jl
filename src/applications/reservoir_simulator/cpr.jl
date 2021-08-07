@@ -82,9 +82,7 @@ function apply!(x, cpr::CPRPreconditioner, y, arg...)
     apply!(Δp, cpr.pressure_precond, r_p)
     correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
     apply!(x, cpr.system_precond, y)
-    for i in eachindex(Δp)
-        x[(i-1)*bz + 1] += Δp[i]
-    end
+    increment_pressure!(x, Δp, bz)
 end
 
 function reservoir_residual(lsys)
@@ -164,12 +162,18 @@ function correct_residual_for_dp!(y, x, Δp, bz, buf, A)
     # A x' = y'
     # y' = y - A*x
     # x = A \ y + p
-    for i in eachindex(Δp)
+    @inbounds for i in eachindex(Δp)
         x[(i-1)*bz + 1] = Δp[i]
-        for j = 2:bz
+        @inbounds for j = 2:bz
             x[(i-1)*bz + j] = 0
         end
     end
     mul!(buf, A, x)
     @. y -= buf
+end
+
+function increment_pressure!(x, Δp, bz)
+    @inbounds for i in eachindex(Δp)
+        x[(i-1)*bz + 1] += Δp[i]
+    end
 end
