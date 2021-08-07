@@ -45,26 +45,26 @@ function verbose(cfg)
     return Int64(cfg.verbose)
 end
 
-function preconditioner(krylov::GenericKrylov, sys, model, storage, arg...)
+function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, arg...)
     M = krylov.preconditioner
     if isnothing(M)
         op = I
     else
-        update!(M, sys, model, storage)
+        update!(M, sys, model, storage, recorder)
         op = PrecondWrapper(linear_operator(M, arg...))
     end
     return op
 end
 
-function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, dt = nothing)
+function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, dt = nothing, recorder = nothing)
     solver = krylov.solver
     cfg = krylov.config
     prepare_solve!(sys)
     r = vector_residual(sys)
     op = linear_operator(sys)
 
-    L = preconditioner(krylov, sys, model, storage, :left)
-    R = preconditioner(krylov, sys, model, storage, :right)
+    L = preconditioner(krylov, sys, model, storage, recorder, :left)
+    R = preconditioner(krylov, sys, model, storage, recorder, :right)
     v = verbose(cfg)
     max_it = cfg.max_iterations
     rt = rtol(cfg)

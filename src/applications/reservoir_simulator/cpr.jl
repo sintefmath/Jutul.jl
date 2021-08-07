@@ -19,9 +19,9 @@ mutable struct CPRPreconditioner <: TervPreconditioner
 end
 
 
-function update!(cpr::CPRPreconditioner, lsys, model, storage)
-    update_cpr_internals!(cpr, lsys, model, storage)
-    update!(cpr.system_precond, lsys, model, storage)
+function update!(cpr::CPRPreconditioner, arg...)
+    update_cpr_internals!(cpr, arg...)
+    update!(cpr.system_precond, arg...)
     update!(cpr.pressure_precond, cpr.A_p, cpr.r_p)
 end
 
@@ -41,7 +41,7 @@ function initialize_storage!(cpr, J, s)
     end
 end
 
-function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage)
+function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage, recorder)
     s = storage.Reservoir
     A = reservoir_jacobian(lsys)
     cpr.A_ps = linear_operator(lsys)

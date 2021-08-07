@@ -3,7 +3,7 @@ using ILUZero
 
 abstract type TervPreconditioner end
 
-function update!(preconditioner, lsys, model, storage)
+function update!(preconditioner, lsys, model, storage, recorder)
     J = jacobian(lsys)
     r = residual(lsys)
     update!(preconditioner, J, r)

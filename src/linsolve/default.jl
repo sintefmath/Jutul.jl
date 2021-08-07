@@ -199,7 +199,7 @@ end
 
 function block_size(lsys::LSystem) 1 end
 
-function solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing)
+function solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing)
     solve!(sys, linsolve)
 end
 
