@@ -128,6 +128,25 @@ function update_weights!(cpr, storage, J)
 end
 
 function true_impes!(w, acc, r, n, bz)
+    if bz == 2
+        # Hard coded variant
+        true_impes_2!(w, acc, r, n, bz)
+    else
+        true_impes_gen!(w, acc, r, n, bz)
+    end
+end
+
+function true_impes_2!(w, acc, r, n, bz)
+    r_p = SVector{2}(r)
+    for cell in 1:n
+        A = @SMatrix [acc[1, cell].partials[1] acc[2, cell].partials[1]; 
+                      acc[1, cell].partials[2] acc[2, cell].partials[2]]        
+        invert_w!(w, A, r_p, cell, bz)
+    end
+end
+
+
+function true_impes_gen!(w, acc, r, n, bz)
     r_p = SVector{bz}(r)
     A = MMatrix{bz, bz, eltype(r)}(zeros(bz, bz))
     for cell in 1:n
