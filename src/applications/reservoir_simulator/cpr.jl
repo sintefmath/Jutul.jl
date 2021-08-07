@@ -75,39 +75,14 @@ function operator_nrows(cpr::CPRPreconditioner)
 end
 
 function apply!(x, cpr::CPRPreconditioner, y, arg...)
-    r_p = cpr.r_p
-    bz = cpr.block_size
-    n = length(r_p)
-    w_p = cpr.w_p
+    r_p, w_p, bz, Δp = cpr.r_p, cpr.w_p, cpr.block_size, cpr.p
     # Construct right hand side by the weights
-    @threads for i = 1:n
-        v = 0
-        @inbounds for b = 1:bz
-            v += y[(i-1)*bz + b]*w_p[b, i]
-        end
-        @inbounds r_p[i] = v
-    end
-    Δp = cpr.p
+    update_p_rhs!(r_p, y, bz, w_p)
     # Apply preconditioner to pressure part
     apply!(Δp, cpr.pressure_precond, r_p)
-    for i = 1:n
-        x[(i-1)*bz + 1] = Δp[i]
-        for j = 2:bz
-            x[(i-1)*bz + j] = 0
-        end
-    end
-    # x = x' + p
-    # A (x' + p) = y
-    # A x' = y'
-    # y' = y - A*x
-    # x = A \ y + p
-    buf = cpr.buf
-    A = cpr.A_ps
-    mul!(buf, A, x)
-    @. y -= buf
-
+    correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
     apply!(x, cpr.system_precond, y)
-    for i = 1:n
+    for i in eachindex(Δp)
         x[(i-1)*bz + 1] += Δp[i]
     end
 end
@@ -171,4 +146,30 @@ end
     @inbounds for i = 1:bz
         w[i, cell] = tmp[i]
     end
+end
+
+function update_p_rhs!(r_p, y, bz, w_p)
+    @threads for i in eachindex(r_p)
+        v = 0
+        @inbounds for b = 1:bz
+            v += y[(i-1)*bz + b]*w_p[b, i]
+        end
+        @inbounds r_p[i] = v
+    end
+end
+
+function correct_residual_for_dp!(y, x, Δp, bz, buf, A)
+    # x = x' + p
+    # A (x' + p) = y
+    # A x' = y'
+    # y' = y - A*x
+    # x = A \ y + p
+    for i in eachindex(Δp)
+        x[(i-1)*bz + 1] = Δp[i]
+        for j = 2:bz
+            x[(i-1)*bz + j] = 0
+        end
+    end
+    mul!(buf, A, x)
+    @. y -= buf
 end
