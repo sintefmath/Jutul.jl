@@ -13,16 +13,19 @@ mutable struct CPRPreconditioner <: TervPreconditioner
     system_precond
     strategy
     block_size
-    function CPRPreconditioner(p = LUPreconditioner(), s = ILUZeroPreconditioner(); strategy = :quasi_impes)
-        new(nothing, nothing, nothing, nothing, nothing, nothing, p, s, strategy, nothing)
+    update_frequency::Integer
+    update_interval::Symbol
+    function CPRPreconditioner(p = LUPreconditioner(), s = ILUZeroPreconditioner(); strategy = :quasi_impes, update_frequency = 1, update_interval = :iteration)
+        new(nothing, nothing, nothing, nothing, nothing, nothing, p, s, strategy, nothing, update_frequency, update_interval)
     end
 end
 
-
 function update!(cpr::CPRPreconditioner, arg...)
-    update_cpr_internals!(cpr, arg...)
+    update_p = update_cpr_internals!(cpr, arg...)
     update!(cpr.system_precond, arg...)
-    update!(cpr.pressure_precond, cpr.A_p, cpr.r_p)
+    if update_p
+        update!(cpr.pressure_precond, cpr.A_p, cpr.r_p)
+    end
 end
 
 function initialize_storage!(cpr, J, s)
@@ -42,12 +45,16 @@ function initialize_storage!(cpr, J, s)
 end
 
 function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage, recorder)
+    do_p_update = should_update_pressure_subsystem(cpr, recorder)
     s = storage.Reservoir
     A = reservoir_jacobian(lsys)
     cpr.A_ps = linear_operator(lsys)
     initialize_storage!(cpr, A, s)
-    w_p = update_weights!(cpr, storage, A)
-    update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size)
+    if do_p_update
+        w_p = update_weights!(cpr, storage, A)
+        update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size)
+    end
+    return do_p_update
 end
 
 function update_pressure_system!(A_p, A, w_p, bz)
@@ -176,4 +183,33 @@ function increment_pressure!(x, Δp, bz)
     @inbounds for i in eachindex(Δp)
         x[(i-1)*bz + 1] += Δp[i]
     end
+end
+
+
+function should_update_pressure_subsystem(cpr, rec)
+    interval = cpr.update_interval
+    if isnothing(cpr.A_p)
+        update = true
+    elseif interval == :once
+        update = false
+    else
+        it = subiteration(rec)
+        outer_step = step(rec)
+        ministep = substep(rec)
+        if interval == :iteration
+            crit = true
+            n = it
+        elseif interval == :ministep
+            n = ministep
+            crit = it == 1
+        elseif interval == :step
+            n = outer_step
+            crit = it == 1
+        else
+            error("Bad parameter update_frequency: $interval")
+        end
+        uf = cpr.update_frequency
+        update = crit && (uf == 1 || (n % uf) == 1)
+    end
+    return update
 end

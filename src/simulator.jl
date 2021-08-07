@@ -255,7 +255,7 @@ function store_output!(states, sim)
     push!(states, state_out)
 end
 
-# Recorder stuff
+# Progress recorder stuff
 function nextstep_global!(r::ProgressRecorder, dT, prev_success = !isnan(r.recorder.dt))
     g = r.recorder
     l = r.subrecorder
@@ -274,6 +274,12 @@ function next_iteration!(rec)
     rec.subrecorder.iteration += 1
 end
 
+iteration(r) = r.recorder.iteration
+subiteration(r) = r.subrecorder.iteration
+step(r) = r.recorder.step
+substep(r) = r.subrecorder.step
+
+# Solve recorder stuff
 function nextstep!(l::SolveRecorder, dT, success)
     # Update time
     if success
