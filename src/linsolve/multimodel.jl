@@ -16,10 +16,13 @@ function block_major_to_equation_major_view(a, block_size)
     return x
 end
 
-@inline major_to_minor(n, m, i) = n*((i - 1) % m) + 1 + ((i -1) ÷ m)
+@inline major_to_minor(n, m, i) = n*((i - 1) % m) + 1 + ((i - 1) ÷ m)
 @inline from_block_index(bz, nc, i) = major_to_minor(bz, nc, i)
 @inline from_unit_index(bz, nc, i) = major_to_minor(nc, bz, i)
 
+
+@inline from_block_urange(bz, n, b) = (b-1)*n+1:b*n
+@inline from_unit_urange(bz, n, b) = b:bz:((n-1)*bz+b)
 
 
 function prepare_solve!(sys::MultiLinearizedSystem)
@@ -155,17 +158,18 @@ function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x
     @assert β == zero(T) "Only β == 0 implemented."
     # compute B*x
     mul!(res_v, B, x_v)
-    n = length(res) ÷ block_size
+    N = length(res)
+    n = N ÷ block_size
     # Convert to cell major view
-    @turbo for i in 1:(n*block_size)
-        a_buf[i] = x[from_block_index(block_size, n, i)]
+    @inbounds for b = 1:block_size
+        @. a_buf[from_block_urange(block_size, n, b)] = x[from_unit_urange(block_size, n, b)]
     end
     mul!(b_buf, D, a_buf)
     ldiv!(E, b_buf)
     mul!(a_buf, C, b_buf)
     # Convert back to block major and subtract
-    @turbo for i in 1:(n*block_size)
-        res[i] -= a_buf[from_unit_index(block_size, n, i)]
+    @inbounds for b = 1:block_size
+        @. res[from_unit_urange(block_size, n, b)] -= a_buf[from_block_urange(block_size, n, b)]
     end
     # Simple version:
     # res .= B*x - C*(E\(D*x))
