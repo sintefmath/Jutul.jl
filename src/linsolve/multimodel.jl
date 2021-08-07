@@ -27,7 +27,7 @@ function prepare_solve!(sys::MultiLinearizedSystem)
         B, C, D, E, a, b = get_schur_blocks!(sys, true, update = true)
         e = eltype(B)
         is_float = e <: Real
-        
+
         a_buf = sys.schur_buffer[1]
         b_buf = sys.schur_buffer[2]
         # The following is the in-place version of Δa = C*(E\b)
@@ -53,7 +53,7 @@ function get_schur_blocks!(sys, include_r = true; update = false, keep_ix = 1, e
     E = elim.jac
 
     F = sys.factor
-    
+
     if update
         E_lu = update!(F, lu, lu!, E)
     else
@@ -92,7 +92,7 @@ function linear_operator(sys::MultiLinearizedSystem)
         S = sys.subsystems
         d = size(S, 2)
         ops = map(linear_operator, permutedims(S))
-        op = hvcat(d, ops...)    
+        op = hvcat(d, ops...)
     end
     return op
 end
@@ -114,7 +114,6 @@ function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
         B = view(sys.dx, (n+1):m)
 
         @. A = -dx
-        
         buf_a = sys.schur_buffer[1]
         buf_b = sys.schur_buffer[2]
         # We want to do (in-place):
@@ -141,43 +140,48 @@ function schur_mul3!(res, r_type::Float64, B, C, D, E, x, α, β::T) where T
     end
 end
 
-function schur_mul!(res, a_buf, b_buf, r_type, B, C, D, E, x, α, β::T) where T
-    is_float = r_type == eltype(res)
-    if is_float
-        as_svec = (x) -> x
-    else
-        as_svec = (x) -> reinterpret(r_type, x)
+function schur_mul_float!(res, B, C, D, E, x, α, β::T) where T
+    @assert β == zero(T) "Only β == 0 implemented."
+    # compute B*x
+    mul!(res, B, x)
+    drs = C*(E\(D*x))
+    @tullio res[i] = res[i] - drs[i]
+    if α != one(T)
+        lmul!(α, res)
     end
-    res_v = as_svec(res)
-    x_v = as_svec(x)
-    if β == zero(T)
-        # compute B*x
-        mul!(res_v, B, x_v)
-        if is_float
-            drs = C*(E\(D*x))
-            @tullio res[i] = res[i] - drs[i]
-        else
-            block_size = length(r_type)
-            n = length(res) ÷ block_size
-            # Convert to cell major view            
-            @turbo for i in 1:(n*block_size)
-                a_buf[i] = x[from_block_index(block_size, n, i)]
-            end
-            mul!(b_buf, D, a_buf)
-            ldiv!(E, b_buf)
-            mul!(a_buf, C, b_buf)
-            # Convert back to block major and subtract
-            @turbo for i in 1:(n*block_size)
-                res[i] -= a_buf[from_unit_index(block_size, n, i)]
-            end
-        end
-        # Simple version:
-        # res .= B*x - C*(E\(D*x))
-        if α != one(T)
-            lmul!(α, res)
-        end
+end
+
+function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x_v, α, β::T) where T
+    @assert β == zero(T) "Only β == 0 implemented."
+    # compute B*x
+    mul!(res_v, B, x_v)
+    n = length(res) ÷ block_size
+    # Convert to cell major view
+    @turbo for i in 1:(n*block_size)
+        a_buf[i] = x[from_block_index(block_size, n, i)]
+    end
+    mul!(b_buf, D, a_buf)
+    ldiv!(E, b_buf)
+    mul!(a_buf, C, b_buf)
+    # Convert back to block major and subtract
+    @turbo for i in 1:(n*block_size)
+        res[i] -= a_buf[from_unit_index(block_size, n, i)]
+    end
+    # Simple version:
+    # res .= B*x - C*(E\(D*x))
+    if α != one(T)
+        lmul!(α, res)
+    end
+end
+
+function schur_mul!(res, a_buf, b_buf, r_type, B, C, D, E, x, α, β)
+    if r_type == eltype(res)
+        schur_mul_float!(res, B, C, D, E, x, α, β)
     else
-        error("Not implemented yet.")
+        res_v = reinterpret(r_type, res)
+        x_v = reinterpret(r_type, x)
+        block_size = length(r_type)
+        schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x_v, α, β)
     end
 end
 
