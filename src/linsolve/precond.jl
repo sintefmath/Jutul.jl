@@ -9,6 +9,10 @@ function update!(preconditioner, lsys, model, storage, recorder)
     update!(preconditioner, J, r)
 end
 
+function partial_update!(p, A, b)
+    update!(p, A, b)
+end
+
 function get_factorization(precond)
     return precond.factor
 end
@@ -82,6 +86,22 @@ function update!(amg::AMGPreconditioner, A, b)
     t_amg = @elapsed amg.hierarchy = amg.method(A)
     @debug "Set up AMG in $t_amg seconds."
     amg.factor = aspreconditioner(amg.hierarchy)
+end
+
+function partial_update!(amg::AMGPreconditioner, A, b)
+    amg.hierarchy = update_hierarchy!(amg.hierarchy, A)
+end
+
+function update_hierarchy!(h, A)
+    levels = h.levels
+    n = length(levels)
+    for i = 1:n
+        l = levels[i]
+        P, R = l.P, l.R
+        levels[i] = AlgebraicMultigrid.Level(A, P, R)
+        A = R*A*P
+    end
+    return AlgebraicMultigrid.MultiLevel(levels, A, AlgebraicMultigrid.Pinv(A), h.presmoother, h.postsmoother, h.workspace)
 end
 
 """

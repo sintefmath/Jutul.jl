@@ -13,10 +13,11 @@ mutable struct CPRPreconditioner <: TervPreconditioner
     system_precond
     strategy
     block_size
-    update_frequency::Integer
-    update_interval::Symbol
-    function CPRPreconditioner(p = LUPreconditioner(), s = ILUZeroPreconditioner(); strategy = :quasi_impes, update_frequency = 1, update_interval = :iteration)
-        new(nothing, nothing, nothing, nothing, nothing, nothing, p, s, strategy, nothing, update_frequency, update_interval)
+    update_frequency::Integer # Update frequency for AMG hierarchy (and pressure part if partial_update = false)
+    update_interval::Symbol   # iteration, ministep, step, ...
+    partial_update            # Perform partial update of AMG and update pressure system
+    function CPRPreconditioner(p = LUPreconditioner(), s = ILUZeroPreconditioner(); strategy = :quasi_impes, update_frequency = 1, update_interval = :iteration, partial_update = true)
+        new(nothing, nothing, nothing, nothing, nothing, nothing, p, s, strategy, nothing, update_frequency, update_interval, partial_update)
     end
 end
 
@@ -25,6 +26,8 @@ function update!(cpr::CPRPreconditioner, arg...)
     update!(cpr.system_precond, arg...)
     if update_p
         update!(cpr.pressure_precond, cpr.A_p, cpr.r_p)
+    elseif cpr.partial_update
+        partial_update!(cpr.pressure_precond, cpr.A_p, cpr.r_p)
     end
 end
 
@@ -50,7 +53,7 @@ function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage, rec
     A = reservoir_jacobian(lsys)
     cpr.A_ps = linear_operator(lsys)
     initialize_storage!(cpr, A, s)
-    if do_p_update
+    if do_p_update || cpr.partial_update
         w_p = update_weights!(cpr, storage, A)
         update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size)
     end
