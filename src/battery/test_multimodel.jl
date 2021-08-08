@@ -10,7 +10,7 @@ using Plots
 ENV["JULIA_DEBUG"] = Terv;
 
 ##
-function test_ac()
+function make_system(exported,sys)
     name="model1d"
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
     exported_all = MAT.matread(fn)
@@ -27,15 +27,8 @@ function test_ac()
     bcvalue = ones(size(bccells))
     bcvaluephi = ones(size(bccells)).*0.0
 
-    domain = exported_model_to_domain(exported, bc = bccells, b_T_hf = T_hf)
-    timesteps = diff(LinRange(0, 10, 10)[2:end])
-    
-    G = exported["G"]
-    
-    # sys = ECComponent()
-    # sys = ACMaterial();
-    #sys = Grafite()
-    sys = CurrentCollector()
+    domain = exported_model_to_domain(exported, bc = bccells, b_T_hf = T_hf)  
+    G = exported["G"]    
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
     parameters[:boundary_currents] = (:BCCharge, :BCMass)
@@ -76,12 +69,28 @@ function test_ac()
     state0 = setup_state(model, init)
 
     sim = Simulator(model, state0=state0, parameters=parameters)
+    return sim, G, state0
+end
+
+function test_ac()
+    name="model1d"
+    fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
+    exported_all = MAT.matread(fn)
+    exported = exported_all["model"]["NegativeElectrode"]["CurrentCollector"];
+    # sys = ECComponent()
+    # sys = ACMaterial();
+    #sys = Grafite()
+    sys = CurrentCollector()
+    (sim, G, state0) = make_system(exported,sys)
+    timesteps = diff(LinRange(0, 10, 10)[2:end])
+     
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
     states = simulate(sim, timesteps, config = cfg)
     stateref = exported_all["states"]
     return states, G, state0, stateref
 end
+
 
 states, G, state0, stateref = test_ac();
 
