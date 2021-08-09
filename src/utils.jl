@@ -37,7 +37,7 @@ function as_cell_major_matrix(v, n, m, model::SimulationModel, offset = 0)
 end
 
 function get_matrix_view(v0, n, m, transp = false, offset = 0)
-    if size(v0, 2) == 1 && n != 1
+    if size(v0, 2) == 1
         r_l = view(v0, (offset+1):(offset + n*m))
         if transp
             v = reshape(r_l, m, n)'
