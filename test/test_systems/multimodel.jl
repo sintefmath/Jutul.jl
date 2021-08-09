@@ -27,7 +27,7 @@ function test_multi(; use_groups = false, kwarg...)
     state0 = setup_state(model, Dict(:A => state0A, :B => state0B))
     forces = Dict(:A => forcesA, :B => forcesB)
     sim = Simulator(model, state0 = state0)
-    states = simulate(sim, [1.0], forces = forces; kwarg...)
+    states, = simulate(sim, [1.0], forces = forces; kwarg...)
 
     XA = states[end][:A][:XVar]
     XB = states[end][:B][:XVar]

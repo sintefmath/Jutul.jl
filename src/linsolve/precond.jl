@@ -3,6 +3,9 @@ using ILUZero
 
 abstract type TervPreconditioner end
 
+function update!(preconditioner::Nothing, arg...)
+    # Do nothing.
+end
 function update!(preconditioner, lsys, model, storage, recorder)
     J = jacobian(lsys)
     r = residual(lsys)
@@ -228,6 +231,11 @@ mutable struct TrivialPreconditioner <: TervPreconditioner
         new(nothing)
     end
 end
+
+function update!(preconditioner::TrivialPreconditioner, lsys, model, storage, recorder)
+    # No need to update.
+end
+
 """
 Full LU factorization as preconditioner (intended for smaller subsystems)
 """
@@ -257,7 +265,9 @@ end
 Trivial / identity preconditioner with size for use in subsystems.
 """
 # Trivial precond
-function update!(tp::TrivialPreconditioner, A, b)
+function update!(tp::TrivialPreconditioner, lsys, model, storage, recorder)
+    A = jacobian(lsys)
+    b = residual(lsys)
     tp.dim = size(A).*length(b[1])
 end
 
@@ -275,12 +285,12 @@ mutable struct GroupWisePreconditioner <: TervPreconditioner
     end
 end
 
-function update!(prec::GroupWisePreconditioner, lsys::MultiLinearizedSystem)
+function update!(prec::GroupWisePreconditioner, lsys::MultiLinearizedSystem, arg...)
     s = lsys.subsystems
     n = size(s, 1)
     @assert n == length(prec.preconditioners)
     for i in 1:n
-        update!(prec.preconditioners[i], s[i, i])
+        update!(prec.preconditioners[i], s[i, i], arg...)
     end
 end
 
