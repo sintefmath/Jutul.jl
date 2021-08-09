@@ -184,7 +184,9 @@ function report_stats(reports)
         total_time += outer_rep[:total_time]
         for mini_rep in outer_rep[:ministeps]
             total_ministeps += 1
-            total_finalize += mini_rep[:finalize_time]
+            if haskey(mini_rep, :finalize_time)
+                total_finalize += mini_rep[:finalize_time]
+            end
 
             for rep in mini_rep[:steps]
                 total_linearizations += 1
