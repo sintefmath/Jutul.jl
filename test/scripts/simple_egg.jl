@@ -1,7 +1,7 @@
 using Terv
 using Statistics, DataStructures, LinearAlgebra, Krylov, IterativeSolvers
 ENV["JULIA_DEBUG"] = Terv
-# ENV["JULIA_DEBUG"] = nothing
+ENV["JULIA_DEBUG"] = nothing
 ##
 # casename = "simple_egg"
 casename = "egg"
@@ -14,7 +14,9 @@ casename = "egg"
 # casename = "single_inj_single_cell"
 # casename = "intermediate"
 # casename = "mini"
-# casename = "spe10_2ph_1"
+casename = "spe10_2ph_1"
+casename = "spe10_2ph_1_85"
+
 simple_well = false
 block_backend = true
 # block_backend = false
@@ -24,8 +26,8 @@ use_schur = true
 # Need groups to work.
 use_schur = use_schur && use_groups
 
-include_wells_as_blocks = use_groups && simple_well && false 
-G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = true)
+include_wells_as_blocks = use_groups && simple_well && false    
+G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false)
 function setup_res(G, mrst_data; block_backend = false, use_groups = false)
     ## Set up reservoir part
     f = mrst_data["fluid"]
@@ -224,7 +226,6 @@ for w in well_symbols
     parameters[w] = well_parameters[w]
 end  
 
-sim = Simulator(mmodel, state0 = state0, parameters = deepcopy(parameters))
 # dt = [1.0]
 # dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24#
 dt = timesteps
@@ -260,21 +261,34 @@ if use_groups
 else
     prec = LUPreconditioner()
 end
+using AlgebraicMultigrid
+p_solve = AMGPreconditioner(smoothed_aggregation)
+#p_solve = LUPreconditioner()
+cpr_type = :true_impes
+# cpr_type = :quasi_impes
+# cpr_type = :none
+prec = CPRPreconditioner(p_solve, strategy = cpr_type, 
+                    update_interval = :ministep, partial_update = true)
+
 atol = 1e-12
 rtol = 1e-12
 
 atol = 1e-12
 rtol = 1e-2
-rtol = 0.01
-rtol = 0.1
+# rtol = 0.01
+rtol = 0.05
+rtol = 0.001
+rtol = 1e-2
+
+max_it = 50
 # atol = 1e-18
 # rtol = 1e-18
 
-max_it = 100#1000
+# max_it = 200#1000
 # max_it = 1
 krylov = bicgstab
-# krylov = dqgmres
-krylov = gmres
+krylov = dqgmres
+krylov = gmres!
 # prec = nothing 
 lsolve = GenericKrylov(krylov, verbose = 0, preconditioner = prec, 
                         relative_tolerance = rtol, absolute_tolerance = atol,
@@ -288,19 +302,31 @@ m = 20
 # m = 1
 
 max_cuts = 0
-# max_cuts = 5
-il = 0
+max_cuts = 5
+il = 3
 dl = 0
+dt = dt[[1]]
+# 24.7 s
+# 27.6
+# lsolve = nothing
+sim = Simulator(mmodel, state0 = state0, parameters = deepcopy(parameters))
 cfg = simulator_config(sim, info_level = il, debug_level = dl,
                             max_nonlinear_iterations = m,
                             max_timestep_cuts = max_cuts,
+                            output_states = false,
                             linear_solver = lsolve)
 @time states, reports = simulate(sim, dt, forces = forces, config = cfg)
 error("Early termination")
+##
+using PrettyTables
+stats = report_stats(reports)
+print_stats(reports)
 
+##
 # return (states, mmodel, well_symbols)
 # end
 ##
+# 4, 1
 krylov = gmres
 krylov = dqgmres
 sim2 = Simulator(model, state0 = state0[:Reservoir], parameters = param_res)
@@ -336,7 +362,7 @@ cfg = simulator_config(sim, info_level = il, debug_level = dl,
                             max_timestep_cuts = max_cuts,
                             linear_solver = lsr)
 
-states2 = simulate(sim2, dtt, forces = forces, config = cfg)
+@time states2 = simulate(sim2, dtt, forces = forces, config = cfg)
 nothing
 ##
  # states, model, well_symbols = run_immiscible_mrst(casename, false)
