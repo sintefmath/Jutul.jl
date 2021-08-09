@@ -116,3 +116,28 @@ function update_as_secondary!(ρ_diag, sc::EDensityDiag, model, param, EDensity)
     end
 end
 )
+
+function align_to_jacobian!(
+    law::Conservation, jac, model::CCT, u::Cells; equation_offset = 0, 
+    variable_offset = 0
+    )
+    fd = law.flow_discretization
+    neighborship = get_neighborship(model.domain.grid)
+
+    acc = law.accumulation
+    hflux_cells = law.half_face_flux_cells
+    density = law.density
+
+    diagonal_alignment!(
+        acc, jac, u, model.context;
+        target_offset = equation_offset, source_offset = variable_offset
+        )
+    half_face_flux_cells_alignment!(
+        hflux_cells, acc, jac, model.context, neighborship, fd, 
+        target_offset = equation_offset, source_offset = variable_offset
+        )
+    density_alignment!(
+        density, acc, jac, model.context, fd;
+        target_offset = equation_offset, source_offset = variable_offset
+        )
+end

@@ -124,8 +124,6 @@ function align_to_jacobian!(
 
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
-    density = law.density
-    cctbl = model.domain.discretizations.charge_flow.cellcellvec.tbl
 
     diagonal_alignment!(
         acc, jac, u, model.context;
@@ -133,10 +131,6 @@ function align_to_jacobian!(
         )
     half_face_flux_cells_alignment!(
         hflux_cells, acc, jac, model.context, neighborship, fd, 
-        target_offset = equation_offset, source_offset = variable_offset
-        )
-    density_alignment!(
-        density, acc, jac, model.context, neighborship, fd, cctbl;
         target_offset = equation_offset, source_offset = variable_offset
         )
 end
@@ -159,7 +153,7 @@ function find_and_place_density!(
 end
 
 function density_alignment!(
-    density, acc_cache, jac, context, N, flow_disc, cctbl;
+    density, acc_cache, jac, context, flow_disc;
     target_offset = 0, source_offset = 0
     )
     
@@ -168,8 +162,7 @@ function density_alignment!(
     nc = length(facepos) - 1
     cc = flow_disc.cellcell
 
-    # @threads 
-    for cell in 1:nc
+    @threads for cell in 1:nc
         for cn in cc.pos[cell]:(cc.pos[cell+1]-1)
             c, n = cc.tbl[cn]
             @assert c == cell
@@ -220,8 +213,9 @@ function update_linearized_system_equation!(
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
     cpos = law.flow_discretization.conn_pos
-
-    fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
+    @sync begin
+        @async fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
+    end
 end
 
 function fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
@@ -237,9 +231,8 @@ function fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
     cp = acc.jacobian_positions
     jp = cell_flux.jacobian_positions
 
-        #! @threads removed for debugging, slows performance!
     # Fill accumulation + diag flux
-    for cell = 1:nc
+    @threads for cell = 1:nc
         for e in 1:ne
             diag_entry = get_entry(acc, cell, e, centries)
 
@@ -256,7 +249,7 @@ function fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
     end
 
     # Fill of-diagonal flux
-    for i in 1:nu
+    @threads for i in 1:nu
         for e in 1:ne
             a = get_entry(cell_flux, i, e, fentries)
             for d in 1:np
@@ -280,10 +273,9 @@ function fill_jac_density!(nz, r, model, density)
     nud, ne, np = ad_dims(density)
     dentries = density.entries
     dp = density.jacobian_positions
-    cctbl = model.domain.discretizations.charge_flow.cellcell.tbl
 
     # Fill density term
-    for i = 1:nud
+    @threads for i = 1:nud
         for e in 1:ne
             entry = get_entry(density, i, e, dentries)
 
@@ -299,9 +291,9 @@ function fill_jac_density!(nz, r, model, density)
     mf = model.domain.discretizations.charge_flow
     cc = mf.cellcell
     nc = number_of_cells(model.domain)
-    for cn in cc.pos[1:end-1] # The diagonal elements
+    @threads for cn in cc.pos[1:end-1] # The diagonal elements
         for e in 1:ne
-            c, n = cc.tbl[cn]
+            @inbounds c, n = cc.tbl[cn]
             @assert c == n
             entry = get_entry(density, cn, e, dentries)
             @inbounds r[e, c] -= entry.value
