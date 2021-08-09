@@ -67,32 +67,71 @@ function make_system(exported,sys)
         )
 
     state0 = setup_state(model, init)
-
-    sim = Simulator(model, state0=state0, parameters=parameters)
-    return sim, G, state0
+    return model, G, state0, parameters, init
 end
+
+# function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, target_storage, source_storage, target_model, source_model, target, source, dt)
+#    X_T = target_storage.state.XVar
+#    X_S = source_storage.state.XVar
+#    function f(X_S, X_T)
+#        X_T - X_S
+#    end
+#    # Source term with AD context from source model - will end up as off-diagonal block
+#    @. ct.crossterm_source = f(X_S, value(X_T))
+#    # Source term with AD context from target model - will be inserted into equation
+#    @. ct.crossterm_target = f(value(X_S), X_T)
+#end
+
 
 function test_ac()
     name="model1d"
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
     exported_all = MAT.matread(fn)
-    exported = exported_all["model"]["NegativeElectrode"]["CurrentCollector"];
+    exported_cc = 
+    ["CurrentCollector"];
     # sys = ECComponent()
     # sys = ACMaterial();
     #sys = Grafite()
-    sys = CurrentCollector()
-    (sim, G, state0) = make_system(exported,sys)
+    sys_cc = CurrentCollector()
+    (model_cc, G_cc, state0_cc, parm_cc,init_cc) = make_system(exported_cc,sys_cc)
+    sys_nam = CurrentCollector()
+    exported_nam = exported_all["model"]["NegativeElectrode"]["CurrentCollector"];
+    # sys = ECComponent()
+    (model_nam, G_nam, state0_nam, parm_nam, init_nam) = make_system(exported_nam,sys_nam)
+
     timesteps = diff(LinRange(0, 10, 10)[2:end])
-     
+    
+    groups = nothing
+    model = MultiModel((CC = model_cc, NAM = model_nam), groups = groups)
+    state0 = setup_state(model, Dict(:CC => state0_cc, :NAM => state0_nam))
+    init = Dict(
+        :CC => init_cc,
+        :NAM => init_nam
+    )
+    forces = Dict(
+        :CC => nothing,
+        :NAM => nothing
+    )
+    parameters = Dict(
+        :CC => parm_cc,
+        :NAM => parm_nam
+    )
+    #parameters = setup_parameters(model) # Dict(:CC => parm_cc, :NAM => parm_cc))
+    #forces = Dict(:CC => state0_cc, :NAM => state0_nam)
+    sim = Simulator(model, state0 = state0,
+         parameters = parameters, copy_state = true)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, config = cfg)
+    states = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
-    return states, G, state0, stateref
+    grids = Dict(:CC => G_cc,
+                :NAM =>G_nam
+                )
+    return states, grids, state0, stateref
 end
 
 
-states, G, state0, stateref = test_ac();
+states, grids, state0, stateref = test_ac();
 
 # f= plot_interactive(G, states);
 phi_ref = stateref[10]["NegativeElectrode"]["CurrentCollector"]["phi"]
@@ -118,20 +157,3 @@ for (n,state) in enumerate(states)
     display(plot!(p1, p2, layout = (1, 2), legend = false))
 end
 ##
-
-x = G["cells"]["centroids"]
-state0=states[1]
-p1 = Plots.plot(x,state0.Phi;title="Phi")
-p2 = Plots.plot(x,state0.C;title="C")
-p=plot(p1, p2, layout = (1, 2), legend = false)
-for (n,state) in enumerate(states)
-    println(n)
-    Plots.plot!(p1,x,states[n].Phi)
-    Plots.plot!(p2,x,states[n].C)
-    display(plot!(p1, p2, layout = (1, 2), legend = false))
-end
-##
-x=1:4
-for a in x
-    println(a)
-end

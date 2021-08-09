@@ -589,6 +589,13 @@ function apply_forces!(storage, model::MultiModel, dt, forces::Dict)
     end
 end
 
+function apply_boundary_conditions!(storage, model::MultiModel)
+    for key in submodels_symbols(model)
+        apply_boundary_conditions!(storage[key], storage[key].parameters, model.models[key])
+    end
+end
+
+
 function submodels_storage_apply!(storage, model, f!, arg...)
     @sync for key in submodels_symbols(model)
         @async f!(storage[key], model.models[key], arg...)
