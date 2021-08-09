@@ -36,6 +36,8 @@ struct Conservation{T} <: TervEquation
 end
 
 # Accumulation variables
+# ! Naming mistakes: the time derivatives of these variables
+# ! are actually the accumulation variable, these are densities
 abstract type AccumulationVariable <: ScalarVariable end
 struct ChargeAcc <: AccumulationVariable end
 struct MassAcc <: AccumulationVariable end
@@ -107,7 +109,12 @@ struct TPFlow{F} <: FlowDiscretization
     maps # Maps between indices
 end
 
-function TPFlow(grid::TervGrid, T)
+
+################
+# Constructors #
+################
+
+function TPFlow(grid::TervGrid, T; tensor_map = false)
     N = get_neighborship(grid)
     faces, face_pos = get_facepos(N)
 
@@ -126,28 +133,26 @@ function TPFlow(grid::TervGrid, T)
         end
     end
 
-    cfcv = get_cellfacecellvec_tbl(conn_data, face_pos)
-    ccv = get_cellcellvec_tbl(conn_data, face_pos)
-    cc = get_cellcell_tbl(conn_data, face_pos)
+    cfcv, ccv, cc, map = [[], [], [], []]
+    if tensor_map
+        cfcv = get_cellfacecellvec_tbl(conn_data, face_pos)
+        ccv = get_cellcellvec_tbl(conn_data, face_pos)
+        cc = get_cellcell_tbl(conn_data, face_pos)
 
-    cfcv2ccv = get_cfcv2ccv_map(cfcv, ccv)
-    ccv2cc = get_ccv2cc_map(ccv, cc)
-    cfcv2fc, cfcv2fc_bool = get_cfcv2fc_map(cfcv, conn_data)
+        cfcv2ccv = get_cfcv2ccv_map(cfcv, ccv)
+        ccv2cc = get_ccv2cc_map(ccv, cc)
+        cfcv2fc, cfcv2fc_bool = get_cfcv2fc_map(cfcv, conn_data)
 
-    map = (
-        cfcv2ccv = cfcv2ccv, 
-        ccv2cc = ccv2cc, 
-        cfcv2fc = cfcv2fc,
-        cfcv2fc_bool = cfcv2fc_bool
-    )
+        map = (
+            cfcv2ccv = cfcv2ccv, 
+            ccv2cc = ccv2cc, 
+            cfcv2fc = cfcv2fc,
+            cfcv2fc_bool = cfcv2fc_bool
+        )
+    end
 
     TPFlow{ChargeFlow}(face_pos, conn_data, cfcv, ccv, cc, map)
 end
-
-
-################
-# Constructors #
-################
 
 
 function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[], S=[])

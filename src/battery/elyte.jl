@@ -20,27 +20,17 @@ struct DGradCSqDiag <: ScalarVariable end
 struct EnergyDensity <: ScalarNonDiagVaraible end
 struct EDDiag <: ScalarVariable end
 
-function select_equations_system!(
-    eqs, domain, system::Electrolyte, formulation
-    )
-    charge_cons = (arg...; kwarg...) -> Conservation(
-        ChargeAcc(), arg...; kwarg...
-        )
-    mass_cons = (arg...; kwarg...) -> Conservation(
-        MassAcc(), arg...; kwarg...
-        )
-    energy_cons = (arg...; kwarg...) -> Conservation(
-        EnergyAcc(), arg...; kwarg...
-        )
+function select_equations_system!(eqs, domain, system::Electrolyte, formulation)
+    charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
+    mass_cons = (arg...; kwarg...) -> Conservation(MassAcc(), arg...; kwarg...)
+    energy_cons = (arg...; kwarg...) -> Conservation(EnergyAcc(), arg...; kwarg...)
     
     eqs[:charge_conservation] = (charge_cons, 1)
     eqs[:mass_conservation] = (mass_cons, 1)
     eqs[:energy_conservation] = (energy_cons, 1)
 end
 
-function select_primary_variables_system!(
-    S, domain, system::Electrolyte, formulation
-    )
+function select_primary_variables_system!(S, domain, system::Electrolyte, formulation)
     S[:Phi] = Phi()
     S[:C] = C()
     S[:T] = T()
@@ -48,8 +38,7 @@ end
 
 
 function select_secondary_variables_system!(
-    S, domain, system::Electrolyte, formulation
-    )
+    S, domain, system::Electrolyte, formulation)
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:TPkGrad_C] = TPkGrad{C}()
     S[:TPDGrad_C] = TPDGrad{C}()
@@ -82,9 +71,7 @@ function select_secondary_variables_system!(
 end
 
 # Must be available to evaluate time derivatives
-function minimum_output_variables(
-    system::Electrolyte, primary_variables
-    )
+function minimum_output_variables(system::Electrolyte, primary_variables)
     [
         :ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity,
         :TotalCurrent, :DGradCSqDiag, :JSqDiag, :EnergyDensity
@@ -101,8 +88,10 @@ function update_linearized_system_equation!(
     cpos = law.flow_discretization.conn_pos
     density = law.density
 
-    fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
-    fill_jac_density!(nz, r, model, density)
+    @sync begin
+        @async fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
+        @async fill_jac_density!(nz, r, model, density)
+    end
 end
 
 
@@ -140,7 +129,6 @@ const diff_params = [
 const Tgi = [229 5.0]
 
 @inline function diffusivity(T::Real, C::Real, ::Electrolyte)
-    # ?Should these be parameters?
     return (
         1e-4 * 10 ^ ( 
             diff_params[1,1] + 
@@ -150,12 +138,13 @@ const Tgi = [229 5.0]
         )
 end
 
-@terv_secondary function update_as_secondary!(
-    dmudc, sv::DmuDc, model, param, T, C
-    )
+
+@terv_secondary(
+function update_as_secondary!(dmudc, sv::DmuDc, model, param, T, C)
     R = GAS_CONSTANT
     @tullio dmudc[i] = R * (T[i] / C[i])
 end
+)
 
 # ? Does this maybe look better ?
 @terv_secondary(
@@ -334,20 +323,40 @@ function get_flux(
     return - storage.state.TPkGrad_T
 end
 
+function align_to_jacobian!(
+    law::Conservation, jac, model::TestElyte, u::Cells; equation_offset = 0, 
+    variable_offset = 0
+    )
+    fd = law.flow_discretization
+    neighborship = get_neighborship(model.domain.grid)
+
+    acc = law.accumulation
+    hflux_cells = law.half_face_flux_cells
+    density = law.density
+
+    diagonal_alignment!(
+        acc, jac, u, model.context;
+        target_offset = equation_offset, source_offset = variable_offset
+        )
+    half_face_flux_cells_alignment!(
+        hflux_cells, acc, jac, model.context, neighborship, fd, 
+        target_offset = equation_offset, source_offset = variable_offset
+        )
+    density_alignment!(
+        density, acc, jac, model.context, fd;
+        target_offset = equation_offset, source_offset = variable_offset
+        )
+end
+
 
 function apply_boundary_potential!(
     acc, state, parameters, model::ElectrolyteModel, eq::Conservation{ChargeAcc}
     )
     # values
-    println("A")
     Phi = state[:Phi]
     C = state[:C]
-    dmudc = state[:DmuDc]
     κ = state[:Conductivity]
-
-    F = FARADAY_CONST
-    z = parameters.z
-    t = parameters.t
+    coeff = state[:ConsCoeff]
 
     BPhi = state[:BoundaryPhi]
     BC = state[:BoundaryC]
@@ -357,7 +366,7 @@ function apply_boundary_potential!(
 
     for (i, c) in enumerate(bc)
         @inbounds acc[c] -= (
-            - dmudc[c] * t/(F*z) * κ[c] * T_hf[i] * (C[c] - BC[i])
+            - coeff[c] * T_hf[i] * (C[c] - BC[i])
             - κ[c] * T_hf[i] * (Phi[c] - BPhi[i])
         )
     end
@@ -367,17 +376,16 @@ end
 function apply_boundary_potential!(
     acc, state, parameters, model::ElectrolyteModel, eq::Conservation{MassAcc}
     )
-    println("B")
     # values
     Phi = state[:Phi]
     C = state[:C]
-    dmudc = state[:DmuDc]
     κ = state[:Conductivity]
     D = state[:Diffusivity]
 
     F = FARADAY_CONST
     z = parameters.z
     t = parameters.t
+    coeff = state[:ConsCoeff]
 
     BPhi = state[:BoundaryPhi]
     BC = state[:BoundaryC]
@@ -387,11 +395,11 @@ function apply_boundary_potential!(
 
     for (i, c) in enumerate(bc)
         @inbounds j = (
-            - dmudc[c] * t/(F*z) * κ[c] * T_hf[i] * (C[c] - BC[i])
+            - coeff[c] * T_hf[i] * (C[c] - BC[i])
             - κ[c] * T_hf[i] * (Phi[c] - BPhi[i])
         )
         @inbounds acc[c] -= (
-            - D[c] * T_hf[i]*(C[c] - BC[i])
+            - D[c] * T_hf[i] * (C[c] - BC[i])
             + t / (F * z) * j
         )
     end
