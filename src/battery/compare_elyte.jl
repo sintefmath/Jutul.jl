@@ -36,13 +36,13 @@ function test_simple_elyte()
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
     S[:BoundaryC] = BoundaryPotential{C}()
 
-    state0 = exported["state0"]
+    init_states = exported["state0"]
     init = Dict(
-          :Phi                    => state0["phi"][:, 1],
-          :C                      => state0["cs"][1][:, 1], # ? Why is this different?
-          :T                      => state0["T"][:, 1],
-          :BoundaryPhi            => b_phi,
-          :BoundaryC              => b_c,
+          :Phi              => init_states["phi"][:, 1],
+          :C                => init_states["cs"][1][:, 1],
+          :T                => init_states["T"][:, 1],
+          :BoundaryPhi      => b_phi,
+          :BoundaryC        => b_c,
           )
   
       state0 = setup_state(model, init)

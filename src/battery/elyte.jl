@@ -260,11 +260,11 @@ function update_as_secondary!(
     mf = model.domain.discretizations.charge_flow
     cc = mf.cellcell
     nc = number_of_cells(model.domain)
+    (v, c, n) -> (c == n) ? v[c] : value(v[c])
     for c = 1:nc
         for cn in cc.pos[c]:(cc.pos[c+1]-1)
             c, n = cc.tbl[cn]
-            v = (c == n) ? v -> v : v -> value(v)
-            ρ[cn] = JSq[cn] / v(κ[c]) + v(DmuDc[c]) * DGradCSq[cn] / v(D[c])
+            ρ[cn] = JSq[cn] / v(κ, c, n) + v(DmuDc, c, n) * DGradCSq[cn] / v(D, c, n)
         end
     end
 end
@@ -339,6 +339,7 @@ function apply_boundary_potential!(
     acc, state, parameters, model::ElectrolyteModel, eq::Conservation{ChargeAcc}
     )
     # values
+    println("A")
     Phi = state[:Phi]
     C = state[:C]
     dmudc = state[:DmuDc]
@@ -364,8 +365,9 @@ end
 
 
 function apply_boundary_potential!(
-    acc, state, model::ElectrolyteModel, eq::Conservation{MassAcc}
+    acc, state, parameters, model::ElectrolyteModel, eq::Conservation{MassAcc}
     )
+    println("B")
     # values
     Phi = state[:Phi]
     C = state[:C]
@@ -389,7 +391,7 @@ function apply_boundary_potential!(
             - κ[c] * T_hf[i] * (Phi[c] - BPhi[i])
         )
         @inbounds acc[c] -= (
-            - D[c] * T_hf[i](C[c] - BC[i])
+            - D[c] * T_hf[i]*(C[c] - BC[i])
             + t / (F * z) * j
         )
     end
