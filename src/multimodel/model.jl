@@ -558,7 +558,7 @@ function update_primary_variables!(storage, model::MultiModel; kwarg...)
         s = storage[key]
         ndof = number_of_degrees_of_freedom(m)
         dx_v = view(dx, (offset+1):(offset+ndof))
-        if is_cell_major(matrix_layout(m.context))
+        if isa(matrix_layout(m.context), BlockMajorLayout)
             bz = block_size(lsys[i, i])
             dx_v = reshape(dx_v, bz, :)
         end

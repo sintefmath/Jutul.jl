@@ -24,8 +24,8 @@ end
 function apply_cross_term!(eq, ct, model_t, model_s, arg...)
     ix = ct.impact.target
     d = get_diagonal_entries(eq)
-    # TODO: Why is this allocating?
-    d[:, ix] += ct.crossterm_target
+    # NOTE: We do not use += here due to sparse oddities with ForwardDiff.
+    @tullio d[i, ix[j]] = d[i, ix[j]] + ct.crossterm_target[i, j]
 end
 
 function update_linearized_system_crossterm!(nz, model_t, model_s, ct::InjectiveCrossTerm)

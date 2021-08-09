@@ -106,7 +106,7 @@ function update_primary_variable!(state, p::TervVariables, state_symbol, model, 
         offset = nu*(index-1)
         v = state[state_symbol]
         dv = view(dx, (1:nu) .+ offset)
-        @. v = update_value(v, dv, abs_max, rel_max, minval, maxval, scale)
+        @tullio v[i] = update_value(v[i], dv[i], abs_max, rel_max, minval, maxval, scale)
     end
 end
 

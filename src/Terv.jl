@@ -1,9 +1,17 @@
 module Terv
 
-using SparseArrays
+# Use ForwardDiff.Duals
+using ForwardDiff
+# Some light type piracy to fix:
+# https://github.com/JuliaDiff/ForwardDiff.jl/issues/542
+export iszero
+import ForwardDiff.Dual
+import Base.iszero
+Base.iszero(d::ForwardDiff.Dual) = false# iszero(d.value) && iszero(d.partials)
+
 using LinearAlgebra
 using BenchmarkTools
-using ForwardDiff
+using SparseArrays
 using KernelAbstractions, CUDA, CUDAKernels
 using Logging
 using MappedArrays

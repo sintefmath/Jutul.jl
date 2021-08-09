@@ -15,3 +15,4 @@ include("porousmedia.jl")
 include("mrst_input.jl")
 # Various input tricks
 include("io.jl")
+include("cpr.jl")

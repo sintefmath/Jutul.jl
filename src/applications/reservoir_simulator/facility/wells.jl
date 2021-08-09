@@ -15,23 +15,28 @@ Two point approximation with flux for wells
 """
 struct MixedWellSegmentFlow <: WellPotentialFlowDiscretization end
 
-abstract type WellGrid <: PorousMediumGrid 
-    # Wells are not porous themselves per se, but they are discretizing 
+abstract type WellGrid <: PorousMediumGrid
+    # Wells are not porous themselves per se, but they are discretizing
     # part of a porous medium.
 end
 
 # Total velocity in each well segment
 struct TotalMassFlux <: ScalarVariable
     scale
-    function TotalMassFlux(scale = 3600*24)
-        new(scale)
+    max_abs
+    max_rel
+    function TotalMassFlux(;scale = 3600*24, max_abs = nothing, max_rel = nothing)
+        new(scale, max_abs, max_rel)
     end
 end
+
+relative_increment_limit(tmf::TotalMassFlux) = tmf.max_rel
+absolute_increment_limit(tmf::TotalMassFlux) = tmf.max_abs
 
 function associated_unit(::TotalMassFlux) Faces() end
 variable_scale(t::TotalMassFlux) = t.scale
 
-struct SimpleWell <: WellGrid 
+struct SimpleWell <: WellGrid
     volumes
     perforations
     reservoir_symbol
@@ -44,7 +49,7 @@ struct SimpleWell <: WellGrid
     end
 end
 
-struct MultiSegmentWell <: WellGrid 
+struct MultiSegmentWell <: WellGrid
     volumes          # One per cell
     perforations     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     neighborship     # Well cell connectivity
@@ -113,16 +118,16 @@ end
 """
 Hagedorn and Brown well bore friction model for a segment.
 """
-struct SegmentWellBoreFrictionHB
-    L
-    roughness
-    D_outer
-    D_inner
-    assume_turbulent
-    laminar_limit
-    turbulent_limit
+struct SegmentWellBoreFrictionHB{R}
+    L::R
+    roughness::R
+    D_outer::R
+    D_inner::R
+    assume_turbulent::Bool
+    laminar_limit::R
+    turbulent_limit::R
     function SegmentWellBoreFrictionHB(L, roughness, D_outer; D_inner = 0, assume_turbulent = false, laminar_limit = 2000.0, turbulent_limit = 2000.0)
-        new(L, roughness, D_outer, D_inner, assume_turbulent, laminar_limit, turbulent_limit)
+        new{typeof(L)}(L, roughness, D_outer, D_inner, assume_turbulent, laminar_limit, turbulent_limit)
     end
 end
 
@@ -313,15 +318,10 @@ function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W
         # This is a good time to deal with the derivatives of v[face] since it is already fetched.
         Δp_f = segment_pressure_drop(seg_model, v, value(ρ_mix), value(μ_mix))
         eq_f = pot_balance(value(Δθ), Δp_f)
-        # @debug "$face \neq_f: $(value.(face_entries[face]))"
-
-        # @debug "Δp_f $face: $Δp_f flux: $v\neq_f: $(face_entries[face])"
-        # @debug "rho: $(value(ρ_mix)) mu: $(value(μ_mix))"
-
-        face_entries[face] = eq_f
-        cell_entries[(face-1)*2 + 1] = eq
+        @inbounds face_entries[face] = eq_f
+        @inbounds cell_entries[(face-1)*2 + 1] = eq
     else
-        cell_entries[(face-1)*2 + 2] = -eq
+        @inbounds cell_entries[(face-1)*2 + 2] = -eq
     end
 end
 
@@ -399,10 +399,10 @@ Intersection of wells to wells
 """
 Cross term from wellbore into reservoir
 """
-function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, 
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
                             target_storage, source_storage,
                             target_model::SimulationModel{DR},
-                            source_model::SimulationModel{DW}, 
+                            source_model::SimulationModel{DW},
                             target, source, dt) where {DR<:DiscretizedDomain{G} where G<:ReservoirGrid,
                                                        DW<:DiscretizedDomain{W} where W<:WellGrid}
     # error("Hello world")
@@ -413,7 +413,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
 
     res_q = ct.crossterm_target
     well_q = ct.crossterm_source
-    
+
     apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, -1)
     # @debug "($source → $target, from wellbore): $(value.(res_q)), s: $(value.(state_well.Saturations))"
 end
@@ -421,9 +421,9 @@ end
 """
 Cross term from reservoir into well bore
 """
-function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, 
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     target_storage, source_storage,
-    target_model::SimulationModel{DW}, 
+    target_model::SimulationModel{DW},
     source_model::SimulationModel{DR},
     target, source, dt) where {DW<:DiscretizedDomain{W} where W<:WellGrid,
                                DR<:DiscretizedDomain{G} where G<:ReservoirGrid}
@@ -468,7 +468,7 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, ρ_w,
     nc = size(ρλ_i, 1)
     nph = size(μ, 1)
 
-    for i in eachindex(perf.self)
+    @inbounds for i in eachindex(perf.self)
         si = perf.self[i]
         ri = perf.reservoir[i]
         wi = perf.WI[i]
