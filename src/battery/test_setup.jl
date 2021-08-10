@@ -62,7 +62,7 @@ function get_cc_grid(
     P, S = get_tensorprod(name)
     G = MinimalECTPFAGrid(volumes, N, bc, b_T_hf, P, S)
 
-    flow = TPFlow(G, T)
+    flow = TPFlow(G, T; tensor_map=true)
     disc = (charge_flow = flow,)
     D = DiscretizedDomain(G, disc)
 

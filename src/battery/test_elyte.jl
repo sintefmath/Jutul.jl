@@ -15,7 +15,7 @@ function plot_elyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
-    S[:BoundaryC] = BoundaryPotential{Phi}()
+    S[:BoundaryC] = BoundaryPotential{C}()
     S[:BoundaryT] = BoundaryPotential{T}()
 
     return plot_graph(model)
@@ -30,13 +30,13 @@ P, S = get_tensorprod()
 ##
 
 function test_elyte()
-    name="square_current_collector"
+    name="square_current_collector_10by10"
     bcells, T_hf = get_boundary(name)
     one = ones(size(bcells))
-    bcells = [bcells..., (bcells .+ 2)...]
+    bcells = [bcells..., (bcells .+ 9)...]
     T_hf = [T_hf..., T_hf...]
     domain, exported = get_cc_grid(;name=name, extraout=true, bc=bcells, b_T_hf=T_hf)
-    t = LinRange(0, 0.1, 20)
+    t = LinRange(0, 10, 20)
     timesteps = diff(t)
     G = exported["G"]
     sys = TestElyte()
@@ -53,17 +53,11 @@ function test_elyte()
     init = Dict(
         :Phi                    => 1.,
         :C                      => 1.,
-        :T                      => 273.,
-        :Conductivity           => 1.,
-        :Diffusivity            => 1.,
-        :ThermalConductivity    => 6e-05, 
-        :ConsCoeff              => 1.,
+        :T                      => 298.,
+        :ThermalConductivity    => 6e-05,
         :BoundaryPhi            => [one..., 0*one...],
-        :BoundaryC              => [one..., 0*one...],
+        :BoundaryC              => [2*one..., one...],
         :BoundaryT              => [273 .* one..., 300 .* one...]
-        # :BCCharge               => one,
-        # :BCMass                 => one,
-        # :BCEnergy               => one,
     )
 
     state0 = setup_state(model, init)
@@ -80,5 +74,16 @@ G, states, model, sim = test_elyte();
 ##
 
 f = plot_interactive(G, states)
+display(f)
+##
+
+accstates = []
+for i in 1:18
+    state = Dict{Symbol, Any}()
+    state[:MassAcc] = (states[i+1][:MassAcc] .- states[i][:MassAcc])
+    push!(accstates, state)
+end
+
+f = plot_interactive(G, accstates)
 display(f)
 ##

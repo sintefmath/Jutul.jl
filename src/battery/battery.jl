@@ -108,7 +108,9 @@ function initialize_variable_value(
     return transfer(model.context, val)
 end
 
-function initialize_variable_value!(state, model, pvar::NonDiagCellVariables, symb::Symbol, val::Number)
+function initialize_variable_value!(
+    state, model, pvar::NonDiagCellVariables, symb::Symbol, val::Number
+    )
     num_val = number_of_units(model, pvar)*values_per_unit(model, pvar)
     V = repeat([val], num_val)
     return initialize_variable_value!(state, model, pvar, symb, V)
@@ -206,10 +208,7 @@ end
 #####################
 
 
-function update_linearized_system_equation!(
-    nz, r, model, law::Conservation
-    )
-    
+function update_linearized_system_equation!(nz, r, model, law::Conservation)
     acc = get_diagonal_cache(law)
     cell_flux = law.half_face_flux_cells
     cpos = law.flow_discretization.conn_pos
@@ -220,9 +219,9 @@ end
 
 function fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
     """
-    Fills the entries of the Jacobian.
-    First loop: Adds the contribution from density terms to the loop
-    Second loop: Adds contributions from density to r.
+    Fills the entries of the Jacobian from accumulation term and flux
+    First loop: Adds diagonal elements to r and jacobian
+    Second loop: Adds off-diagonal terms to jacobian
     """
     nc, ne, np = ad_dims(acc)
     nu, _ = ad_dims(cell_flux)
@@ -265,8 +264,8 @@ end
 function fill_jac_density!(nz, r, model, density)
     """
     Fills the entries of the Jacobian.
-    Third loop: Adds the contribution from density terms to the loop
-    Fourth loop: Adds contributions from density to r.
+    First loop: Adds the contribution from density terms to the loop
+    Second loop: Adds contributions from density to r.
     """
 
     # Cells, equations, partials

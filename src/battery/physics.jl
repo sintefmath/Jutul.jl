@@ -147,9 +147,7 @@ function apply_boundary_potential!(
 end
 
 
-function apply_bc_to_equation!(
-    storage, parameters, model, eq::Conservation
-    )
+function apply_bc_to_equation!(storage, parameters, model, eq::Conservation)
     acc = get_entries(eq.accumulation)
     state = storage.state
 
@@ -161,9 +159,7 @@ function apply_bc_to_equation!(
     end
 end
 
-function apply_boundary_current!(
-    acc, state, jkey, model, eq::Conservation
-    )
+function apply_boundary_current!(acc, state, jkey, model, eq::Conservation)
     J = state[jkey]
 
     jb = model.secondary_variables[jkey]

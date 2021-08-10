@@ -30,7 +30,6 @@ function select_secondary_variables_system!(S, domain, system::SimpleElyte, form
 
     S[:T] = T()
     S[:Conductivity] = Conductivity()
-    S[:ThermalConductivity] = Conductivity()
     S[:Diffusivity] = Diffusivity()
     S[:DmuDc] = DmuDc()
     S[:ConsCoeff] = ConsCoeff()
@@ -43,5 +42,5 @@ function select_secondary_variables_system!(S, domain, system::SimpleElyte, form
 end
 
 function minimum_output_variables(system::SimpleElyte, primary_variables)
-    return [:ChargeAcc, :MassAcc, :Conductivity, :Diffusivity, :TPkGrad_Phi]
+    return [:ChargeAcc, :MassAcc, :Conductivity, :Diffusivity, :TPkGrad_Phi, :TPkGrad_C]
 end

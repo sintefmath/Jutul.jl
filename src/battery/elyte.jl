@@ -1,13 +1,14 @@
 using Terv, Polynomials
 
 export Electrolyte, TestElyte, DmuDc, ConsCoeff
-export p1, p2, p3, cnst
+export p1, p2, p3, cnst, diffusivity
 
 abstract type Electrolyte <: ElectroChemicalComponent end
 struct TestElyte <: Electrolyte end
 
 # Alias for convinience
 const ElectrolyteModel = SimulationModel{<:Any, <:Electrolyte, <:Any, <:Any}
+const TestElyteModel = SimulationModel{<:Any, <:TestElyte, <:Any, <:Any}
 
 struct TPDGrad{T} <: KGrad{T} end
 # Is it necesessary with a new struxt for all these?
@@ -37,8 +38,7 @@ function select_primary_variables_system!(S, domain, system::Electrolyte, formul
 end
 
 
-function select_secondary_variables_system!(
-    S, domain, system::Electrolyte, formulation)
+function select_secondary_variables_system!(S, domain, system::Electrolyte, formulation)
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:TPkGrad_C] = TPkGrad{C}()
     S[:TPDGrad_C] = TPDGrad{C}()
@@ -80,7 +80,7 @@ end
 
 
 function update_linearized_system_equation!(
-    nz, r, model::ElectrolyteModel, law::Conservation{EnergyAcc}
+    nz, r, model::TestElyteModel, law::Conservation{EnergyAcc}
     )
     
     acc = get_diagonal_cache(law)
@@ -191,15 +191,13 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    j, tv::TotalCurrent, model, param, 
-    TPkGrad_C, TPkGrad_Phi
+    j, tv::TotalCurrent, model, param, TPkGrad_C, TPkGrad_Phi
     )
     @tullio j[i] =  - TPkGrad_C[i] - TPkGrad_Phi[i]
 end
 
 @terv_secondary function update_as_secondary!(
-    N, tv::ChargeCarrierFlux, model, param, 
-    TPDGrad_C, TotalCurrent
+    N, tv::ChargeCarrierFlux, model, param, TPDGrad_C, TotalCurrent
     )
     t = param.t
     z = param.z
@@ -249,7 +247,7 @@ function update_as_secondary!(
     mf = model.domain.discretizations.charge_flow
     cc = mf.cellcell
     nc = number_of_cells(model.domain)
-    (v, c, n) -> (c == n) ? v[c] : value(v[c])
+    v = (a, c, n) -> (c == n) ? a[c] : value(a[c])
     for c = 1:nc
         for cn in cc.pos[c]:(cc.pos[c+1]-1)
             c, n = cc.tbl[cn]
@@ -324,7 +322,7 @@ function get_flux(
 end
 
 function align_to_jacobian!(
-    law::Conservation, jac, model::TestElyte, u::Cells; equation_offset = 0, 
+    law::Conservation, jac, model::TestElyteModel, u::Cells; equation_offset = 0, 
     variable_offset = 0
     )
     fd = law.flow_discretization
@@ -406,7 +404,7 @@ function apply_boundary_potential!(
 end
 
 function apply_boundary_potential!(
-    acc, state, model::ElectrolyteModel, eq::Conservation{EnergyAcc}
+    acc, state, parameters, model::ElectrolyteModel, eq::Conservation{EnergyAcc}
     )
     # values
     T = state[:T]
@@ -415,7 +413,6 @@ function apply_boundary_potential!(
 
 
     # Type
-    bp = model.secondary_variables[:BoundaryC]
     bc = model.domain.grid.boundary_cells
     T_hf = model.domain.grid.boundary_T_hf
 

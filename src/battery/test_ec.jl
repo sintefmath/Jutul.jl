@@ -10,7 +10,7 @@ ENV["JULIA_DEBUG"] = Terv;
 
 
 function test_ec()
-    name="square_current_collector"
+    name="square_current_collector_10by10"
     bcells, T_hf = get_boundary(name)
     one = ones(size(bcells))
     domain, exported = get_cc_grid(; name=name, extraout=true, bc=bcells, b_T_hf=T_hf)
@@ -32,12 +32,12 @@ function test_ec()
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
-    S[:BoundaryC] = BoundaryPotential{Phi}()
+    S[:BoundaryC] = BoundaryPotential{C}()
     S[:BoundaryT] = BoundaryPotential{T}()
 
-    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+2)
-    S[:BCMass] = BoundaryCurrent{MassAcc}(bcells.+2)
-    S[:BCEnergy] = BoundaryCurrent{EnergyAcc}(bcells.+2)
+    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+9)
+    S[:BCMass] = BoundaryCurrent{MassAcc}(bcells.+9)
+    S[:BCEnergy] = BoundaryCurrent{EnergyAcc}(bcells.+9)
 
     phi0 = 1.
     init = Dict(

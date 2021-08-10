@@ -34,7 +34,7 @@ function test_ac()
     
     # sys = ECComponent()
     # sys = ACMaterial();
-    #sys = Grafite()
+    # sys = Grafite()
     sys = CurrentCollector()
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
@@ -50,7 +50,7 @@ function test_ac()
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
-    S[:BoundaryC] = BoundaryPotential{Phi}()
+    S[:BoundaryC] = BoundaryPotential{C}()
     S[:BoundaryT] = BoundaryPotential{T}()
 
     S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bccells.+9)

@@ -13,7 +13,7 @@ function test_ac()
     name="square_current_collector"
     bcells, T_hf = get_boundary(name)
     one = ones(size(bcells))
-    domain, exported = get_cc_grid(MixedFlow(), name=name, extraout=true, bc=bcells, b_T_hf=T_hf)
+    domain, exported = get_cc_grid(name=name, extraout=true, bc=bcells, b_T_hf=T_hf)
     timesteps = LinRange(0, 10, 10)[2:end]
     G = exported["G"]
     
@@ -34,7 +34,7 @@ function test_ac()
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
-    S[:BoundaryC] = BoundaryPotential{Phi}()
+    S[:BoundaryC] = BoundaryPotential{C}()
     S[:BoundaryT] = BoundaryPotential{T}()
 
     S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+9)
