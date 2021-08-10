@@ -1,7 +1,6 @@
 using Terv, Polynomials
 
 export ActiveMaterial, ACMaterial
-
 abstract type ActiveMaterial <: ElectroChemicalComponent end
 struct ACMaterial <: ActiveMaterial end
 struct Ocd <: ScalarVariable end
@@ -9,7 +8,7 @@ const ActiveMaterialModel = SimulationModel{<:Any, <:ActiveMaterial, <:Any, <:An
 function minimum_output_variables(
     system::ActiveMaterial, primary_variables
     )
-    [:ChargeAcc, :MassAcc, :EnergyAcc, :Ocd]
+    [:ChargeAcc, :MassAcc, :EnergyAcc, :Ocd, :TPkGrad_Phi]
 end
 
 function select_primary_variables_system!(
