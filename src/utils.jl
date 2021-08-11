@@ -1,4 +1,4 @@
-export convert_to_immutable_storage, gravity_constant
+export convert_to_immutable_storage, gravity_constant, report_stats, print_stats
 
 const gravity_constant = 9.80665
 
@@ -36,24 +36,25 @@ function as_cell_major_matrix(v, n, m, model::SimulationModel, offset = 0)
     get_matrix_view(v, n, m, transp, offset)
 end
 
-function get_matrix_view(v::AbstractVector, n, m, transp = false, offset = 0)
-    r_l = view(v, (offset+1):(offset + n*m))
-    if transp
-        v = reshape(r_l, m, n)'
+function get_matrix_view(v0, n, m, transp = false, offset = 0)
+    if size(v0, 2) == 1
+        r_l = view(v0, (offset+1):(offset + n*m))
+        if transp
+            v = reshape(r_l, m, n)'
+        else
+            v = reshape(r_l, n, m)
+        end
     else
-        v = reshape(r_l, n, m)
+        v = view(v0, (offset+1):(offset+n), :)
+        if transp
+            v = v'
+        end
     end
     return v
 end
 
-function get_matrix_view(v, n, m, transp = false, offset = 0)
-    if transp
-        v = v'
-    end
-    return v
-end
 
-function check_increment(dx, key)
+function check_increment(dx, pvar, key)
     if any(!isfinite, dx)
         bad = findall(isfinite.(dx) .== false)
         n_bad = length(bad)
@@ -63,10 +64,10 @@ function check_increment(dx, key)
     end
 end
 
-function get_row_view(v::AbstractVector, n, m, row, transp = false, offset = 0)
-    v = get_matrix_view(v, n, m, transp, offset)
-    view(v, row, :)
-end
+# function get_row_view(v::AbstractVector, n, m, row, transp = false, offset = 0)
+#     v = get_matrix_view(v, n, m, transp, offset)
+#     view(v, row, :)
+# end
 
 function get_convergence_table(errors::AbstractDict)
     # Already a dict
@@ -162,4 +163,131 @@ function conv_table_fn(model_errors, has_models = false)
                              body_hlines = body_hlines,
                              highlighters = highlighers, 
                              formatters = ft_printf("%2.4e"))
+end
+
+function report_stats(reports)
+    total_time = 0
+    # Counts
+    total_its = 0
+    total_linearizations = 0
+    # Various timings
+    total_finalize = 0
+    total_assembly = 0
+    total_linear_update = 0
+    total_linear_solve = 0
+    total_update = 0
+    total_convergence = 0
+
+    total_steps = length(reports)
+    total_ministeps = 0
+    for outer_rep in reports
+        total_time += outer_rep[:total_time]
+        for mini_rep in outer_rep[:ministeps]
+            total_ministeps += 1
+            if haskey(mini_rep, :finalize_time)
+                total_finalize += mini_rep[:finalize_time]
+            end
+
+            for rep in mini_rep[:steps]
+                total_linearizations += 1
+                if haskey(rep, :update_time)
+                    total_its += 1
+                    total_update += rep[:update_time]
+                    total_linear_solve += rep[:linear_solve_time]
+                end
+                total_assembly += rep[:assembly_time]
+                total_linear_update += rep[:linear_system_time]
+                total_convergence += rep[:convergence_time]
+            end
+        end
+    end
+    sum_measured = total_assembly + total_linear_update + total_linear_solve + total_update + total_convergence
+    other_time = total_time - sum_measured
+    totals = (
+                assembly = total_assembly,
+                linear_system = total_linear_update,
+                linear_solve = total_linear_solve,
+                update_time = total_update,
+                convergence = total_convergence,
+                other = other_time,
+                total = total_time
+            )
+    
+    n = total_its
+    m = total_linearizations
+    each = (
+                assembly = total_assembly / m,
+                linear_system = total_linear_update / m,
+                linear_solve = total_linear_solve / n,
+                update_time = total_update / n,
+                convergence = total_convergence / m,
+                other = other_time / n,
+                total = total_time / n
+            )
+    return (
+            newtons = total_its,
+            linearizations = total_linearizations,
+            steps = total_steps,
+            ministeps = total_ministeps,
+            time_sum = totals,
+            time_each = each
+           )
+end
+
+
+function print_stats(reports::AbstractArray)
+    stats = report_stats(reports)
+    print_stats(stats)
+end
+
+function print_stats(stats)
+    print_iterations(stats)
+    print_timing(stats)
+end
+
+function print_iterations(stats)
+    flds = [:newtons, :linearizations]
+    data = Array{Any}(undef, length(flds), 3)
+    nstep = stats.steps
+    nmini = stats.ministeps
+
+    for (i, f) in enumerate(flds)
+        raw = stats[f]
+        data[i, 3] = raw
+        data[i, 1] = raw/nstep
+        data[i, 2] = raw/nmini
+    end
+    
+    
+    pretty_table(data; header = (["Per step", "Per ministep", "Total"], ["#$nstep", "#$nmini", ""]), 
+                      row_names = flds,
+                      title = "Number of iterations",
+                      title_alignment = :c,
+                      row_name_column_title = "Type")
+end
+
+function print_timing(stats)
+    flds = collect(keys(stats.time_each))
+    
+    n = length(flds)
+    hl_last = Highlighter(f = (data, i, j) -> i == n, crayon = Crayon(background = :light_blue))
+    
+    tscale = 1
+    tscale_each = 1
+    data = Array{Any}(undef, n, 3)
+    tot = stats.time_sum.total*tscale
+    for (i, f) in enumerate(flds)
+        teach = stats.time_each[f]*tscale_each
+        tsum = stats.time_sum[f]*tscale
+        data[i, 1] = teach
+        data[i, 2] = 100*tsum/tot
+        data[i, 3] = tsum
+    end
+    pretty_table(data; header = (["Each", "Total", "Total"], ["seconds", "%", "seconds"]), 
+                      row_names = flds,
+                      formatters = (ft_printf("%3.2e", 1), ft_printf("%3.2f", 2:3)),
+                      title = "Simulator timing",
+                      title_alignment = :c,
+                      body_hlines = [n-1],
+                      row_name_column_title = "Type")
 end

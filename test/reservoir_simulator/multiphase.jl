@@ -26,7 +26,7 @@ ctx = DefaultContext(matrix_layout = UnitMajorLayout())
         @test test_twophase(context = bctx, linear_solver = GenericKrylov())
         @test test_twophase(context = bctx, linear_solver = GenericKrylov(preconditioner = ILUZeroPreconditioner()))
     end
-    #  @testset "Unit major assembly" begin
-    #    @test test_twophase(context = ctx)
-    # end
+    @testset "Unit major assembly" begin
+       @test test_twophase(context = ctx)
+    end
 end

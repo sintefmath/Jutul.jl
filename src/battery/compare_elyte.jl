@@ -4,6 +4,7 @@ Compare the simulation of electrolyte in Julia and Matlab
 
 using Terv
 using MAT
+ENV["JULIA_DEBUG"] = Terv;
 
 ##
 
@@ -55,7 +56,9 @@ function test_simple_elyte()
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, config = cfg)
+    cfg[:info_level] = 2
+    cfg[:debug_level] = 2
+    states, report = simulate(sim, timesteps, config = cfg)
     rs = exported["states"][:, 1]
     return states, G, model, rs
 end

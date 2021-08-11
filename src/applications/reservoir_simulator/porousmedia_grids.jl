@@ -4,6 +4,8 @@ export number_of_cells, number_of_faces, number_of_half_faces
 
 export transfer, get_1d_reservoir
 
+import Base.eltype
+
 abstract type PorousMediumGrid <: TervGrid end
 abstract type ReservoirGrid <: PorousMediumGrid end
 # TPFA grid

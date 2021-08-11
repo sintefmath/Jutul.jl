@@ -146,7 +146,7 @@ kernel_compatibility(::SharedMemoryKernelContext) = KernelAllowed()
 
 "Context that uses threads etc to accelerate loops"
 struct SharedMemoryContext <: CPUTervContext
-    
+
 end
 
 broadcast_compatibility(::SharedMemoryContext) = BroadcastDisallowed()
@@ -195,7 +195,7 @@ function DiscretizedDomain(grid, disc = nothing)
         @assert num >= 0 "Units must have non-negative counts."
         u[unit.unit] = num
     end
-    DiscretizedDomain(grid, disc, u) 
+    DiscretizedDomain(grid, disc, u)
 end
 
 function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
@@ -225,7 +225,7 @@ abstract type DiagonalEquation <: TervEquation end
 # Models
 abstract type TervModel end
 
-struct SimulationModel{O<:TervDomain, 
+struct SimulationModel{O<:TervDomain,
                        S<:TervSystem,
                        F<:TervFormulation,
                        C<:TervContext} <: TervModel
@@ -238,7 +238,7 @@ struct SimulationModel{O<:TervDomain,
     equations
     output_variables
     function SimulationModel(domain, system;
-                                            formulation = FullyImplicit(), 
+                                            formulation = FullyImplicit(),
                                             context = DefaultContext(),
                                             output_level = :primary_variables
                                             )
@@ -270,7 +270,7 @@ struct SimulationModel{O<:TervDomain,
     end
 end
 
-function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel) 
+function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
     println("SimulationModel:")
     for f in fieldnames(typeof(model))
         p = getfield(model, f)
@@ -327,7 +327,7 @@ struct Nodes <: TervUnit end
 # Sim model
 
 function SimulationModel(g::TervGrid, system; discretization = nothing, kwarg...)
-    # Simple constructor that assumes 
+    # Simple constructor that assumes
     d = DiscretizedDomain(g, discretization)
     SimulationModel(d, system; kwarg...)
 end
@@ -349,7 +349,7 @@ end
 
 
 struct TervStorage
-    data
+    data::Union{Dict{Symbol, Any}, NamedTuple}
     function TervStorage(S = Dict{Symbol, Any}())
         new(S)
     end
@@ -389,7 +389,7 @@ function Base.keys(S::TervStorage)
 end
 
 
-function Base.show(io::IO, t::MIME"text/plain", storage::TervStorage) 
+function Base.show(io::IO, t::MIME"text/plain", storage::TervStorage)
     data = storage.data
     if isa(data, AbstractDict)
         println("TervStorage (mutable) with fields:")
@@ -401,7 +401,7 @@ function Base.show(io::IO, t::MIME"text/plain", storage::TervStorage)
     end
 end
 
-function Base.show(io::IO, t::TervStorage, storage::TervStorage) 
+function Base.show(io::IO, t::TervStorage, storage::TervStorage)
     data = storage.data
     if isa(data, AbstractDict)
         println("TervStorage (mutable) with fields:")
