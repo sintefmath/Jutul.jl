@@ -8,5 +8,5 @@ model = class2data(model);
 paramobj = class2data(paramobj);
 schedule = class2data(schedule);
 
-save(filename, 'model', 'states', 'state0')
+save(filename, 'model', 'states', 'state0', "schedule")
 close all

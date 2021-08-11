@@ -26,13 +26,13 @@ function test_simple_elyte_1d()
 
     domain = exported_model_to_domain(ex_model, bc=bc_cells, b_T_hf=b_T_hf)
 
-    timesteps = diff(1:10) * 10
+    timesteps = exported["schedule"]["step"]["val"][:, 1]
     
     G = ex_model["G"]
     sys = SimpleElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
-    parameters[:tolerances][:default] = 1e-8
+    parameters[:tolerances][:default] = 1e-12
     parameters[:t] = ex_model["sp"]["t"][1]
     parameters[:z] = ex_model["sp"]["z"][1]
 
