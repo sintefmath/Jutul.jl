@@ -134,18 +134,16 @@ states, G, model = test_simple_elyte_1d();
 using Plots
 state0 = states[1]
 
-x = G["cells"]["centroids"]
+x = G["cells"]["centroids"][:, 1]
 xf = G["faces"]["centroids"][end]
 xfi= G["faces"]["centroids"][2:10]
-# xfi = LinRange(0, 1, 9)
 
 plot1 = Plots.plot([], []; title = "Phi")
 plot2 = Plots.plot([], []; title = "Flux")
 
 p = plot(plot1, plot2, layout = (1, 2), legend = false)
 
-for (n, state) in enumerate(states[2:end])
-    println(n)
+for (n, state) in enumerate(states[1:end])
     Plots.plot!(plot1, x, states[n].Phi)
     Plots.plot!(plot2, xfi, states[n].TPkGrad_Phi[1:2:end-1])
     display(plot!(plot1, plot2, layout = (1, 2), legend = false))
