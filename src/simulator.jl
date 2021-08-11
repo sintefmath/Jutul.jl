@@ -69,8 +69,16 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     end
 
     if converged
-        do_solve = iteration == 1
-        @debug "Step converged."
+        if iteration == 1
+            # Should always do one iteration. 
+            do_solve = true
+            # Ensures secondary variables are updated, and correct error
+            converged = false
+
+        else
+            do_solve = false
+            @debug "Step converged."
+        end
     else
         do_solve = true
     end
