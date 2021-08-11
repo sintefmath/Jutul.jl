@@ -88,7 +88,7 @@ function exported_model_to_domain(exported; bc=[], b_T_hf=[])
     S = exported["operators"]["cellFluxOp"]["S"]
     G = MinimalECTPFAGrid(volumes, N, bc, b_T_hf, P, S)
 
-    T = exported["operators"]["T"]
+    T = exported["operators"]["T"].*2.0
     flow = TPFlow(G, T)
     disc = (charge_flow = flow,)
     D = DiscretizedDomain(G, disc)

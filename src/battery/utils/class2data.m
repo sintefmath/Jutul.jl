@@ -1,8 +1,19 @@
 function data = class2data(obj)
     if(isstruct(obj) || isobject(obj))
         myfields = fields(obj);
-        for i=1:numel(myfields)
-            data.(myfields{i}) = class2data(obj.(myfields{i}));            
+        if(numel(obj)>1)
+            assert(isstruct(obj))
+            data = obj;
+            for k=1:numel(obj)  
+                for i=1:numel(myfields)
+                    data(k).(myfields{i}) = class2data(obj(k).(myfields{i}));            
+                end
+            end
+        else
+            data = struct();
+            for i=1:numel(myfields)
+                    data.(myfields{i}) = class2data(obj.(myfields{i}));            
+            end
         end
     else
        if(isnumeric(obj) || ischar(obj) )
@@ -18,3 +29,4 @@ function data = class2data(obj)
            data = [];
        end 
     end
+end

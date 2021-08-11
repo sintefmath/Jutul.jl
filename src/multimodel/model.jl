@@ -55,11 +55,59 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
                                             setup_linearized_system = false,
                                             tag = key)
     end
+    couplings = model.couplings;
     setup_cross_terms(storage, model)
+    # overwriting potential couplings with explicit given
+    setup_cross_terms!(storage, model, couplings)
     setup_linearized_system!(storage, model)
     align_equations_to_linearized_system!(storage, model)
     align_cross_terms_to_linearized_system!(storage, model)
     return storage
+end
+
+function setup_cross_terms!(storage, model::MultiModel, couplings)#::ModelCoupling)
+    crossd = TervStorage()
+    models = model.models
+    debugstr = "Determining cross-terms\n"
+    for coupling in couplings
+        sources = Dict{Symbol, Any}()
+        target = coupling.target[:model]
+        source = coupling.source[:model]
+        def_target_eq = coupling.target[:equation]
+        def_source_eq = coupling.target[:equation]
+        intersection = coupling.intersection
+        issym = coupling.issym
+        crosstype = coupling.crosstype
+        @assert !(target == source)
+        tmpstr = "$source → $target:\n"
+        target_model = models[target]
+        source_model = models[source]
+        
+        target_eq = storage[target][:equations][def_target_eq]
+        ct = setup_cross_term(target_eq,
+                              target_model,
+                              source_model,
+                              target,
+                              source,
+                              intersection,
+                              crosstype;transpose = false)
+
+        @assert !isnothing(ct)
+        storage[:cross_terms][target][source][def_target_eq] = ct
+        if(issym)
+            source_eq = storage[target][:equations][def_source_eq]
+            cs = setup_cross_term(source_eq,
+                              source_model,
+                              target_model,
+                              source,
+                              target,
+                              intersection,
+                              crosstype;
+                              transpose = true)
+            storage[:cross_terms][source][target][def_source_eq] = cs
+        end
+    end
+    #storage[:cross_terms] = crossd
 end
 
 function setup_cross_terms(storage, model::MultiModel)
@@ -96,6 +144,13 @@ function setup_cross_terms(storage, model::MultiModel)
     storage[:cross_terms] = crossd
     @debug debugstr
 end
+
+
+function transpose_intersection(intersection)
+    target, source, target_unit, source_unit = intersection
+    (source, target, source_unit, target_unit)
+end
+
 
 function declare_cross_term(eq::TervEquation, target_model, source_model; target = nothing, source = nothing)
     target_unit = associated_unit(eq)
@@ -588,6 +643,13 @@ function apply_forces!(storage, model::MultiModel, dt, forces::Dict)
         apply_forces!(storage[key], model.models[key], dt, forces[key])
     end
 end
+
+function apply_boundary_conditions!(storage, model::MultiModel)
+    for key in submodels_symbols(model)
+        apply_boundary_conditions!(storage[key], storage[key].parameters, model.models[key])
+    end
+end
+
 
 function submodels_storage_apply!(storage, model, f!, arg...)
     @sync for key in submodels_symbols(model)

@@ -39,12 +39,12 @@ function make_system(exported,sys,bcfaces,srccells)
     C0 = 1.
     T0 = 1.
     D = 1.
-    σ = exported["EffectiveElectricalConductivity"][1]
-    λ = exported["thermalConductivity"][1]
+    σ = 1.0 #exported["EffectiveElectricalConductivity"][1]
+    λ = 1.0 #exported["thermalConductivity"][1]
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
-    S[:BoundaryC] = BoundaryPotential{C}()
+    S[:BoundaryC] = BoundaryPotential{Phi}()
     S[:BoundaryT] = BoundaryPotential{T}()
 
     S[:BCCharge] = BoundaryCurrent{ChargeAcc}(srccells)
@@ -84,7 +84,7 @@ end
 #end
 
 
-function test_ac()
+#function test_ac()
     name="model1d"
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
     exported_all = MAT.matread(fn)
@@ -101,31 +101,43 @@ function test_ac()
     exported_nam = exported_all["model"]["NegativeElectrode"]["ElectrodeActiveComponent"];
     # sys = ECComponent()
     bcfaces=[]
-    srccells = [10]
+    srccells = []
     (model_nam, G_nam, state0_nam, parm_nam, init_nam) = 
         make_system(exported_nam,sys_nam,bcfaces,srccells)
+
+    sys_elyte = CurrentCollector()#
+    #sys_elyte = SimpleElyte()
+    exported_elyte = exported_all["model"]["Electrolyte"]
+    bcfaces=[]
+    srccells = [30]
+    (model_elyte, G_elyte, state0_elyte, parm_elyte, init_elyte) = 
+        make_system(exported_elyte,sys_elyte,bcfaces,srccells)
 
     timesteps = diff(LinRange(0, 10, 10)[2:end])
     
     groups = nothing
-    model = MultiModel((CC = model_cc, NAM = model_nam), groups = groups)
+    model = MultiModel((CC = model_cc, NAM = model_nam, ELYTE = model_elyte), groups = groups)
     init_cc[:BCCharge]  = 0.0  
     #init_nam[:BoundaryPhi] = -3e-6
     init = Dict(
         :CC => init_cc,
-        :NAM => init_nam
+        :NAM => init_nam,
+        :ELYTE => init_elyte
     )
     # state0 = setup_state(model, Dict(:CC => state0_cc, :NAM => state0_nam))
     state0 = setup_state(model, init)
     forces = Dict(
         :CC => nothing,
-        :NAM => nothing
+        :NAM => nothing,
+        :ELYTE => nothing
     )
     parameters = Dict(
         :CC => parm_cc,
-        :NAM => parm_nam
+        :NAM => parm_nam,
+        :ELYTE => parm_elyte
     )
 
+    # setup coupling CC <-> NAM
     target = Dict( :model => :NAM,
                    :equation => :charge_conservation
     )
@@ -137,25 +149,38 @@ function test_ac()
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings,coupling)
 
-
-
-
+    # setup coupling NAM <-> ELYTE
+    target = Dict( :model => :ELYTE,
+                   :equation => :charge_conservation
+    )
+    source = Dict( :model => :NAM,
+                :equation => :charge_conservation)
+    range = Vector{Int64}(undef,10) 
+    for i in [1:10]
+        range[i]=i
+        range[i]=i
+    end
+    intersection = ( range, range, Cells(), Cells())
+    crosstermtype = InjectiveCrossTerm
+    issym = true
+    coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
+    push!(model.couplings,coupling)
     #parameters = setup_parameters(model) # Dict(:CC => parm_cc, :NAM => parm_cc))
     #forces = Dict(:CC => state0_cc, :NAM => state0_nam)
-    sim = Simulator(model, state0 = state0,
-         parameters = parameters, copy_state = true)
+    sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
     states = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
     grids = Dict(:CC => G_cc,
-                :NAM =>G_nam
+                :NAM =>G_nam,
+                :ELYTE => G_elyte
                 )
     return states, grids, state0, stateref, parameters, init, exported_all
-end
+#end
 
 
-@time states, grids, state0, stateref, parameters, init, exported_all = test_ac();
+#@time states, grids, state0, stateref, parameters, init, exported_all = test_ac();
 
 ## f= plot_interactive(G, states);
 #fields = ["CurrentCollector","ElectrodeActiveMaterial"]
@@ -182,6 +207,23 @@ for field in fields
     xfi= G["faces"]["centroids"][2:end-1]
     #state0=states[1]
     state = stateref[10]["NegativeElectrode"]
+    phi_ref = state[field]["phi"]
+    j_ref = state[field]["j"]
+    Plots.plot!(p1,x,phi_ref;linecolor="red")
+    Plots.plot!(p2,xfi,j_ref;title="Flux",linecolor="red")
+    if haskey(state,"c")
+        c = state[field]["c"]
+        Plots.plot!(p3,xfi,j_ref;title="Flux",linecolor="red")
+    end
+end
+fields = ["Electrolyte"]
+for field in fields
+    G = exported_all["model"][field]["G"]
+    x = G["cells"]["centroids"]
+    xf= G["faces"]["centroids"][end]
+    xfi= G["faces"]["centroids"][2:end-1]
+    #state0=states[1]
+    state = stateref[10]
     phi_ref = state[field]["phi"]
     j_ref = state[field]["j"]
     Plots.plot!(p1,x,phi_ref;linecolor="red")

@@ -1,10 +1,24 @@
+struct MultiModelCoupling
+    target
+    source
+    intersection
+    issym
+    crosstype
+    function MultiModelCoupling(target, source, intersection; crosstype = InjectiveCrossTerm, issym = true)
+        new(target,source,intersection, issym, crosstype)
+    end   
+end
+
+
+
 struct MultiModel <: TervModel
     models::NamedTuple
+    couplings::Vector{MultiModelCoupling}
     groups::Union{Vector, Nothing}
     context::Union{TervContext, Nothing}
     number_of_degrees_of_freedom
     reduction
-    function MultiModel(models; groups = nothing, context = nothing, reduction = nothing)
+    function MultiModel(models; couplings=Vector{MultiModelCoupling}(undef,0), groups = nothing, context = nothing, reduction = nothing)
         if isnothing(groups)
             num_groups = 1
         else
@@ -22,17 +36,22 @@ struct MultiModel <: TervModel
         if reduction == :schur_apply
             @assert num_groups == 2
         end
-        new(models, groups, context, ndof, reduction)
+        new(models, couplings, groups, context, ndof, reduction)
     end
 end
 
+
+
+
 abstract type CrossTerm end
+
 
 """
 A cross model term where the dependency is injective and the term is additive:
 (each addition to a unit in the target only depends one unit from the source,
 and is added into that position upon application)
 """
+
 struct InjectiveCrossTerm <: CrossTerm
     impact                 # 2 by N - first row is target, second is source
     units                  # tuple - first tuple is target, second is source
@@ -72,4 +91,12 @@ struct InjectiveCrossTerm <: CrossTerm
         overlap = (target = target_impact, source = source_impact)
         new(overlap, units, c_term_target, c_term_source, c_term_source_c, equations_per_unit, npartials_target, npartials_source, target, source)
     end
+end
+
+function setup_cross_term(target_eq::TervEquation, target_model, source_model, target, source, intersection, type::Type{InjectiveCrossTerm}; transpose = false)
+    if(transpose)
+        intersection = transpose_intersection(intersection)
+    end
+    ct = InjectiveCrossTerm(target_eq, target_model, source_model, intersection; target=target, source=source)
+    return ct
 end
