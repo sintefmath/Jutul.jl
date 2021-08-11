@@ -145,8 +145,10 @@ function test_ac()
     sim = Simulator(model, state0 = state0,
          parameters = parameters, copy_state = true)
     cfg = simulator_config(sim)
+    cfg[:info_level] = 2
+    cfg[:debug_level] = 2
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, forces = forces, config = cfg)
+    states, report = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
     grids = Dict(:CC => G_cc,
                 :NAM =>G_nam

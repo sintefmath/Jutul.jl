@@ -9,7 +9,7 @@ ENV["JULIA_DEBUG"] = Terv;
 
 function test_cc(name="square_current_collector")
     domain, exported = get_cc_grid(name=name, extraout=true, bc=[1, 9], b_T_hf=[2., 2.])
-    timesteps = [1., ]
+    timesteps = [1., 1.]
     G = exported["G"]
 
     sys = CurrentCollector()
@@ -31,13 +31,16 @@ function test_cc(name="square_current_collector")
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, config = cfg)
+    states, report = simulate(sim, timesteps, config = cfg)
     return state0, states, model, G
 end
 
 state0, states, model, G = test_cc();
 ##
-f = plot_interactive(G, states)
+
+# Can't plot if the first value in state does not match the grid
+s = [Dict(k => state[k] for k in keys(state) if k != :TPkGrad_Phi) for state in states]
+f = plot_interactive(G, s)
 display(f)
 
 ##
@@ -45,9 +48,9 @@ display(f)
 function test_mixed_bc()
     name="square_current_collector"
     bcells, T_hf = get_boundary(name)
-    domain, exported = get_cc_grid(;extraout=true, name=name, bc=bcells, b_T_hf=T_hf)
+    domain, exported = get_cc_grid(extraout=true, name=name, bc=bcells, b_T_hf=T_hf)
     G = exported["G"]
-    timesteps = 1:5
+    timesteps = diff(1:5)
 
     sys = CurrentCollector()
     model = SimulationModel(domain, sys, context = DefaultContext())
@@ -62,9 +65,10 @@ function test_mixed_bc()
 
     phi0 = 1.
     init = Dict(
-        :Phi            => phi0, 
-        :BoundaryPhi    => one, 
-        :BCCharge       => one
+        :Phi            => phi0,
+        :Conductivity   => 1., 
+        :BoundaryPhi    => one,
+        :BCCharge       => one,
         )
     state0 = setup_state(model, init)
     parameters = setup_parameters(model)
@@ -72,7 +76,9 @@ function test_mixed_bc()
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, config = cfg)
+    cfg[:info_level] = 2
+    cfg[:debug_level] = 2
+    states, report = simulate(sim, timesteps, config = cfg)
 
     return states, G
 end
@@ -80,5 +86,7 @@ end
 
 states, G = test_mixed_bc();
 ##
-f = plot_interactive(G, states)
+
+s = [Dict(k => state[k] for k in keys(state) if k != :TPkGrad_Phi) for state in states]
+f = plot_interactive(G, s)
 display(f)

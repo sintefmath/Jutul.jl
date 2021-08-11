@@ -54,7 +54,7 @@ function test_simple_elyte_1d()
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, config = cfg)
+    states, report = simulate(sim, timesteps, config = cfg)
 
     rs = exported["states"][:, 1]
     return states, G, model, rs

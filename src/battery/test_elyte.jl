@@ -25,10 +25,6 @@ plot_elyte()
 
 ##
 
-P, S = get_tensorprod()
-
-##
-
 function test_elyte()
     name="square_current_collector_10by10"
     bcells, T_hf = get_boundary(name)
@@ -65,7 +61,9 @@ function test_elyte()
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, config = cfg)
+    cfg[:info_level] = 2
+    cfg[:debug_level] = 2
+    states, report = simulate(sim, timesteps, config = cfg)
 
     return G, states, model, sim
 end

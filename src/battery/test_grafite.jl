@@ -10,7 +10,7 @@ ENV["JULIA_DEBUG"] = Terv;
 
 
 function test_ac()
-    name="square_current_collector"
+    name="square_current_collector_10by10"
     bcells, T_hf = get_boundary(name)
     one = ones(size(bcells))
     domain, exported = get_cc_grid(name=name, extraout=true, bc=bcells, b_T_hf=T_hf)
@@ -30,7 +30,6 @@ function test_ac()
     T0 = 1.
     D = 1.
     σ = 1.
-    λ = 1.
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
@@ -48,7 +47,6 @@ function test_ac()
         :T                      => T0,
         :Conductivity           => σ,
         :Diffusivity            => D,
-        :ThermalConductivity    => λ,
         :BoundaryPhi            => one, 
         :BoundaryC              => one, 
         :BoundaryT              => one,
@@ -62,11 +60,14 @@ function test_ac()
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, config = cfg)
+    cfg[:info_level] = 2
+    cfg[:debug_level] = 2
+    states, report = simulate(sim, timesteps, config = cfg)
     return states, G
 end
 
 states, G = test_ac();
+
 ##
 f = plot_interactive(G, states);
 display(f)

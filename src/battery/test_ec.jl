@@ -60,11 +60,14 @@ function test_ec()
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states = simulate(sim, timesteps, config = cfg)
+    cfg[:info_level] = 2
+    cfg[:debug_level] = 2
+    states, report = simulate(sim, timesteps, config = cfg)
     return states, G
 end
 
 states, G = test_ec();
+
 ##
 f = plot_interactive(G, states);
 display(f)

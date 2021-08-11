@@ -6,7 +6,7 @@ struct CurrentCollector <: ElectroChemicalComponent end
 function minimum_output_variables(
     system::CurrentCollector, primary_variables
     )
-    [:ChargeAcc,:TPkGrad_Phi]
+    [:ChargeAcc, :TPkGrad_Phi]
 end
 
 function select_primary_variables_system!(
@@ -20,9 +20,7 @@ function select_secondary_variables_system!(
     )
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:ChargeAcc] = ChargeAcc()
-
-    μ = 100 # Why not?
-    S[:Conductivity] = ConstantVariables([μ,])
+    S[:Conductivity] = Conductivity()
 end
 
 
