@@ -44,7 +44,7 @@ function make_system(exported,sys,bcfaces,srccells)
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
-    S[:BoundaryC] = BoundaryPotential{Phi}()
+    S[:BoundaryC] = BoundaryPotential{C}()
     S[:BoundaryT] = BoundaryPotential{T}()
 
     S[:BCCharge] = BoundaryCurrent{ChargeAcc}(srccells)
