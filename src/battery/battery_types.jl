@@ -38,6 +38,7 @@ end
 # Accumulation variables
 # ! Naming mistakes: the time derivatives of these variables
 # ! are actually the accumulation variable, these are densities
+# TODO: Rename accumulation to conserved
 abstract type AccumulationVariable <: ScalarVariable end
 struct ChargeAcc <: AccumulationVariable end
 struct MassAcc <: AccumulationVariable end
