@@ -1,5 +1,5 @@
 export simulate, perform_step!
-export Simulator, TervSimulator
+export Simulator, TervSimulator, ProgressRecorder
 export simulator_config
 
 abstract type TervSimulator end
@@ -26,6 +26,26 @@ function Simulator(model; state0 = nothing, parameters = setup_parameters(model)
     Simulator(model, storage)
 end
 
+mutable struct SolveRecorder
+    step       # Step index in context
+    iterations # Total iterations in context
+    failed     # Failed iterations
+    time       # Time - last converged. Current implicit level at time + dt
+    iteration  # Current iteration (if applicable)
+    dt         # Current timestep
+    function SolveRecorder()
+        new(0, 0, 0, 0.0, 0, NaN)
+    end
+end
+
+mutable struct ProgressRecorder
+    recorder
+    subrecorder
+    function ProgressRecorder()
+        new(SolveRecorder(), SolveRecorder())
+    end
+end
+
 function Base.show(io::IO, t::MIME"text/plain", sim::Simulator) 
     println("Simulator:")
     for f in fieldnames(typeof(sim))
@@ -47,6 +67,9 @@ function perform_step!(simulator::TervSimulator, dt, forces, config; vararg...)
 end
 
 function perform_step!(storage, model, dt, forces, config; iteration = NaN)
+    do_solve, e, converged = true, nothing, false
+
+    report = OrderedDict()
     timing_out = config[:debug_level] > 1
     # Update the properties and equations
     t_asm = @elapsed begin 
@@ -55,35 +78,39 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     if timing_out
         @debug "Assembled equations in $t_asm seconds."
     end
+    report[:assembly_time] = t_asm
     # Update the linearized system
-    t_lsys = @elapsed begin
+    report[:linear_system_time] = @elapsed begin
         update_linearized_system!(storage, model)
     end
     if timing_out
-        @debug "Updated linear system in $t_lsys seconds."
+        @debug "Updated linear system in $(report[:linear_system_time]) seconds."
     end
-    converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
-    if config[:info_level] > 0
-        @info "Convergence report, iteration $iteration:"
-        get_convergence_table(errors)
+    report[:convergence_time] = @elapsed begin
+        converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
+        if config[:info_level] > 1
+            @info "Convergence report, iteration $iteration:"
+            get_convergence_table(errors)
+        end
+        if converged
+            do_solve = iteration == 1
+            @debug "Step converged."
+        end
     end
 
-    if converged
-        do_solve = iteration == 1
-        @debug "Step converged."
-    else
-        do_solve = true
-    end
     if do_solve
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
-        t_solve, t_update = solve_and_update!(storage, model::TervModel, dt, linear_solver = lsolve, check = check)
+        rec = config[:ProgressRecorder]
+        t_solve, t_update = solve_and_update!(storage, model::TervModel, dt, linear_solver = lsolve, check = check, recorder = rec)
         if timing_out
             @debug "Solved linear system in $t_solve seconds."
             @debug "Updated state $t_update seconds."
         end
+        report[:linear_solve_time] = t_solve
+        report[:update_time] = t_update
     end
-    return (e, converged)
+    return (e, converged, report)
 end
 
 function simulator_config(sim; kwarg...)
@@ -97,6 +124,8 @@ function simulator_config(sim; kwarg...)
     # Define debug level. If debugging is on, this determines the amount of output.
     cfg[:debug_level] = 1
     cfg[:info_level] = 1
+    # Define a default progress ProgressRecorder
+    cfg[:ProgressRecorder] = ProgressRecorder()
     # Overwrite with varargin
     for key in keys(kwarg)
         cfg[key] = kwarg[key]
@@ -108,70 +137,109 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     end
+    reports = []
     states = []
     no_steps = length(timesteps)
     maxIterations = config[:max_nonlinear_iterations]
-    linsolve = config[:linear_solver]
+    rec = config[:ProgressRecorder]
     @info "Starting simulation"
     for (step_no, dT) in enumerate(timesteps)
-        t_str =  Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
-        @info "Solving step $step_no/$no_steps of length $t_str."
-        dt = dT
-        done = false
-        t_local = 0
-        cut_count = 0
-        while !done
-            ok = solve_ministep(sim, dt, forces, maxIterations, linsolve, config)
-            if ok
-                t_local += dt
-                if t_local >= dT
-                    break
+        nextstep_global!(rec, dT)
+        subrep = OrderedDict()
+        ministep_reports = []
+        t_step = @elapsed begin
+            @info "Solving step $step_no/$no_steps of length $(get_tstr(dT))."
+            dt = dT
+            done = false
+            t_local = 0
+            cut_count = 0
+            ctr = 1
+            nextstep_local!(rec, dt, false)
+            while !done
+                ok, s = solve_ministep(sim, dt, forces, maxIterations, config)
+                push!(ministep_reports, s)
+                if ok
+                    t_local += dt
+                    if t_local >= dT
+                        break
+                    end
+                else
+                    max_cuts = config[:max_timestep_cuts]
+                    if cut_count + 1 > max_cuts
+                        @warn "Unable to converge time step $step_no/$no_steps. Aborting."
+                        return states
+                    end
+                    cut_count += 1
+                    dt = min(dt/2, dT - t_local)
+                    @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut $cut_count of $max_cuts allowed."
                 end
-            else
-                max_cuts = config[:max_timestep_cuts]
-                if cut_count + 1 > max_cuts
-                    @warn "Unable to converge time step $step_no/$no_steps. Aborting."
-                    return states
-                end
-                cut_count += 1
-                dt = min(dt/2, dT - t_local)
-                @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut $cut_count of $max_cuts allowed."
+                ctr += 1
+                nextstep_local!(rec, dt, ok)
+            end
+            subrep[:ministeps] = ministep_reports
+            push!(reports, subrep)
+            if config[:output_states]
+                store_output!(states, sim)
             end
         end
-        if config[:output_states]
-            store_output!(states, sim)
+        subrep[:total_time] = t_step
+    end
+    info_level = config[:info_level]
+
+    if info_level >= 0 && length(reports) > 0
+        stats = report_stats(reports)
+        @info "Simulation complete. Completed $(stats.steps) time-steps in $(stats.time_sum.total) seconds with $(stats.newtons) iterations."
+        if info_level > 0
+            print_stats(stats)
         end
     end
-    @info "Simulation complete."
-    return states
+    return (states, reports)
 end
 
-function solve_ministep(sim, dt, forces, maxIterations, linsolve, cfg)
+function get_tstr(dT)
+    Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
+end
+
+function solve_ministep(sim, dt, forces, maxIterations, cfg)
     done = false
+    rec = cfg[:ProgressRecorder]
+    report = OrderedDict()
+    report[:dt] = dt
+    step_reports = []
     update_before_step!(sim, dt, forces)
     for it = 1:maxIterations
-        e, done = perform_step!(sim, dt, forces, cfg, iteration = it)
+        next_iteration!(rec)
+        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it)
+        push!(step_reports, r)
         if done
             break
         end
-        if e > 1e10
-            @warn "Simulator produced very large residuals: $e."
-            break
-        elseif !isfinite(e)
-            @warn "Simulator produced non-finite residuals: $e."
+        too_large = e > 1e10
+        non_finite = !isfinite(e)
+        failure = non_finite || too_large
+        if failure
+            if too_large
+                reason = "Simulator produced very large residuals: $e."
+            else
+                reason = "Simulator produced non-finite residuals: $e."
+            end
+            report[:failure_message] = reason
+            @warn reason
             break
         end
+        report[:failure] = failure
     end
-
+    report[:steps] = step_reports
     if done
         t_finalize = @elapsed update_after_step!(sim, dt, forces)
         if cfg[:debug_level] > 1
             @debug "Finalized in $t_finalize seconds."
         end
+        report[:finalize_time] = t_finalize
     else
         reset_to_previous_state!(sim.storage, sim.model)
     end
-    return done
+    return (done, report)
 end
 
 function update_before_step!(sim, dt, forces)
@@ -186,3 +254,52 @@ function store_output!(states, sim)
     state_out = get_output_state(sim.storage, sim.model)
     push!(states, state_out)
 end
+
+# Progress recorder stuff
+function nextstep_global!(r::ProgressRecorder, dT, prev_success = !isnan(r.recorder.dt))
+    g = r.recorder
+    l = r.subrecorder
+    g.iteration = l.iterations
+    # A bit dicey, just need to get this working
+    g.failed += l.failed
+    nextstep!(g, dT, prev_success)
+    reset!(r.subrecorder)
+end
+
+function nextstep_local!(r::ProgressRecorder, dT, prev_success = !isnan(r.local_recorder.dt))
+    nextstep!(r.subrecorder, dT, prev_success)
+end
+
+function next_iteration!(rec)
+    rec.subrecorder.iteration += 1
+end
+
+iteration(r) = r.recorder.iteration
+subiteration(r) = r.subrecorder.iteration
+step(r) = r.recorder.step
+substep(r) = r.subrecorder.step
+
+# Solve recorder stuff
+function nextstep!(l::SolveRecorder, dT, success)
+    # Update time
+    if success
+        l.step += 1
+        l.time += l.dt
+    else
+        l.failed += l.iteration
+    end
+    l.dt = dT
+    # Update iterations
+    l.iterations += l.iteration
+    l.iteration = 0
+end
+
+function reset!(r::SolveRecorder, dt = NaN)
+    r.step = 1
+    r.iterations = 0
+    r.time = 0.0
+    r.iteration = 0
+    r.dt = dt
+end
+
+

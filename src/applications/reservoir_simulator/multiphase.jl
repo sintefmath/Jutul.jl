@@ -210,7 +210,7 @@ function get_flow_volume(grid)
 end
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
-    acc = get_entries(eq.accumulation)
+    acc = get_diagonal_entries(eq)
     state = storage.state
     if haskey(state, :RelativePermeabilities)
         kr = state.RelativePermeabilities
@@ -218,10 +218,11 @@ function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::Co
         kr = 1.0
     end
     mu = state.PhaseViscosities
-    insert_phase_sources(kr, mu, acc, force)
+    rhoS = get_reference_densities(model, storage)
+    insert_phase_sources(kr, mu, rhoS, acc, force)
 end
 
-function insert_phase_sources(kr, mu, acc, sources)
+function insert_phase_sources(kr, mu, rhoS, acc, sources)
     nph = size(acc, 1)
     for src in sources
         v = src.value
@@ -235,12 +236,14 @@ function insert_phase_sources(kr, mu, acc, sources)
         if v > 0
             for index in 1:nph
                 f = src.fractional_flow[index]
-                @inbounds acc[index, c] -= v*f
+                q = rhoS[index]*v*f
+                @inbounds acc[index, c] -= q
             end
         else
             for index in 1:nph
                 f = mob[index]/mobt
-                @inbounds acc[index, c] -= v*f
+                q = rhoS[index]*v*f
+                @inbounds acc[index, c] -= q
             end
         end
     end
@@ -255,10 +258,10 @@ end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}
     n = number_of_equations_per_unit(eq)
-    pv = get_pore_volume(model)
+    Φ = get_pore_volume(model)
     e = zeros(n)
-    rhos = get_reference_densities(model, storage)
-    @tullio max e[j] := abs(r[j, i]) * dt / (rhos[j]*pv[i])
+    ρ = storage.state.PhaseMassDensities
+    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, i])*Φ[i])
     return (e, tolerance_scale(eq))
 end
 

@@ -191,7 +191,7 @@ function get_sparse_arguments(storage, model)
     return get_sparse_arguments(storage, model, layout)
 end
 
-function get_sparse_arguments(storage, model, layout::EquationMajorLayout)
+function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout, UnitMajorLayout})
     ndof = number_of_degrees_of_freedom(model)
     eqs = storage[:equations]
     I = []
@@ -248,6 +248,34 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
     return SparsePattern(I, J, numrows, ndof, layout, block_size)
 end
 
+function get_sparse_arguments2(storage, model, layout::UnitMajorLayout)
+    ndof = number_of_degrees_of_freedom(model)
+    eqs = storage[:equations]
+    I = []
+    J = []
+    numrows = 0
+    numcols = 0
+    primary_units = get_primary_variable_ordered_units(model)
+
+    for (u_no, u) in enumerate(primary_units)
+        npartials = degrees_of_freedom_per_unit(model, u)
+        nu = count_units(model.domain, u)
+        for (eq_no, eq) in enumerate(values(eqs))
+            S = declare_sparsity(model, eq, u, layout)
+            row_ix = (S.I-1)*u_no + 1
+            col_ix = (S.J-1)*eq_no + 1
+            if !isnothing(S)
+                push!(I, row_ix .+ numrows)
+                push!(J, col_ix .+ numcols)
+            end
+        end
+        numrows += npartials*nu
+        numcols += npartials*nu
+    end
+    I = vcat(I...)
+    J = vcat(J...)
+    return SparsePattern(I, J, numrows, ndof, layout)
+end
 
 function setup_linearized_system!(storage, model::TervModel)
     # Linearized system is going to have dimensions of
@@ -413,9 +441,9 @@ function build_forces(model::TervModel)
     return NamedTuple()
 end
 
-function solve_and_update!(storage, model::TervModel, dt = nothing; linear_solver = nothing, kwarg...)
+function solve_and_update!(storage, model::TervModel, dt = nothing; linear_solver = nothing, recorder = nothing, kwarg...)
     lsys = storage.LinearizedSystem
-    t_solve = @elapsed solve!(lsys, linear_solver, model, storage, dt)
+    t_solve = @elapsed solve!(lsys, linear_solver, model, storage, dt, recorder)
     t_update = @elapsed update_primary_variables!(storage, model; kwarg...)
     return (t_solve, t_update)
 end
@@ -426,7 +454,8 @@ function update_primary_variables!(storage, model::TervModel; kwarg...)
 end
 
 function update_primary_variables!(primary_storage, dx, model::TervModel; check = false)
-    cell_major = is_cell_major(matrix_layout(model.context))
+    layout = matrix_layout(model.context)
+    cell_major = is_cell_major(layout)
     offset = 0
     primary = get_primary_variables(model)
     if cell_major
@@ -434,7 +463,12 @@ function update_primary_variables!(primary_storage, dx, model::TervModel; check 
         for u in get_primary_variable_ordered_units(model)
             np = number_of_partials_per_unit(model, u)
             nu = count_units(model.domain, u)
-            Dx = get_matrix_view(dx, np, nu, cell_major, offset)
+            t = isa(layout, BlockMajorLayout)
+            if t
+                Dx = get_matrix_view(dx, np, nu, true, offset)
+            else
+                Dx = get_matrix_view(dx, np, nu, false, offset)'
+            end
             local_offset = 0
             for (pkey, p) in primary
                 # This is a bit inefficient
@@ -444,7 +478,7 @@ function update_primary_variables!(primary_storage, dx, model::TervModel; check 
                 ni = degrees_of_freedom_per_unit(model, p)
                 dxi = view(Dx, :, (local_offset+1):(local_offset+ni))
                 if check
-                    check_increment(dxi, pkey)
+                    check_increment(dxi, p, pkey)
                 end
                 update_primary_variable!(primary_storage, p, pkey, model, dxi)
                 local_offset += ni
@@ -457,7 +491,7 @@ function update_primary_variables!(primary_storage, dx, model::TervModel; check 
             rng = (1:n) .+ offset
             dxi = view(dx, rng)
             if check
-                check_increment(dxi, pkey)
+                check_increment(dxi, p, pkey)
             end
             update_primary_variable!(primary_storage, p, pkey, model, dxi)
             offset += n

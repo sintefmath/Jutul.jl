@@ -57,16 +57,26 @@ struct MultiLinearizedSystem{L} <: TervLinearSystem
     reduction
     factor
     matrix_layout::L
+    schur_buffer
     function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = nothing, reduction = nothing)
         n = 0
+        schur_buffer = []
         for i = 1:size(subsystems, 1)
-            ni, mi = size(subsystems[i, i].jac)
+            J = subsystems[i, i].jac
+            ni, mi = size(J)
             @assert ni == mi
+            e = eltype(J)
+            if e <: Real
+                bz = 1
+            else
+                bz = size(e, 1)
+            end
+            push!(schur_buffer, zeros(ni*bz))
             n += ni
         end
         dx, dx_buf = get_jacobian_vector(n, context, layout, dx)
         r, r_buf = get_jacobian_vector(n, context, layout, r)
-        new{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, FactorStore(), layout)
+        new{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, FactorStore(), layout, schur_buffer)
     end
 end
 
@@ -189,7 +199,7 @@ end
 
 function block_size(lsys::LSystem) 1 end
 
-function solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing)
+function solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing)
     solve!(sys, linsolve)
 end
 

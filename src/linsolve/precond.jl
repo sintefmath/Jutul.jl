@@ -1,12 +1,19 @@
-export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner
+export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, DampedJacobiPreconditioner, AMGPreconditioner
 using ILUZero
 
 abstract type TervPreconditioner end
 
-function update!(preconditioner, lsys)
+function update!(preconditioner::Nothing, arg...)
+    # Do nothing.
+end
+function update!(preconditioner, lsys, model, storage, recorder)
     J = jacobian(lsys)
     r = residual(lsys)
     update!(preconditioner, J, r)
+end
+
+function partial_update!(p, A, b)
+    update!(p, A, b)
 end
 
 function get_factorization(precond)
@@ -63,6 +70,94 @@ function apply!(x, p::TervPreconditioner, y, arg...)
     else
         error("Neither left or right preconditioner?")
     end
+end
+
+"""
+AMG on CPU (Julia native)
+"""
+mutable struct AMGPreconditioner <: TervPreconditioner
+    method
+    factor
+    hierarchy
+    function AMGPreconditioner(method = ruge_stuben)
+        new(method, nothing, nothing)
+    end
+end
+
+function update!(amg::AMGPreconditioner, A, b)
+    @debug string("Setting up preconditioner ", amg.method)
+    t_amg = @elapsed amg.hierarchy = amg.method(A)
+    @debug "Set up AMG in $t_amg seconds."
+    amg.factor = aspreconditioner(amg.hierarchy)
+end
+
+function partial_update!(amg::AMGPreconditioner, A, b)
+    amg.hierarchy = update_hierarchy!(amg.hierarchy, A)
+end
+
+function update_hierarchy!(h, A)
+    levels = h.levels
+    n = length(levels)
+    for i = 1:n
+        l = levels[i]
+        P, R = l.P, l.R
+        levels[i] = AlgebraicMultigrid.Level(A, P, R)
+        A = R*A*P
+    end
+    return AlgebraicMultigrid.MultiLevel(levels, A, AlgebraicMultigrid.Pinv(A), h.presmoother, h.postsmoother, h.workspace)
+end
+
+"""
+Damped Jacobi preconditioner on CPU
+"""
+mutable struct DampedJacobiPreconditioner <: TervPreconditioner
+    factor
+    dim
+    w
+    function DampedJacobiPreconditioner(; w = 1)
+        new(nothing, nothing, w)
+    end
+end
+
+
+function update!(jac::DampedJacobiPreconditioner, A, b)
+    ω = jac.w
+    if isnothing(jac.factor)
+        D = Diagonal(A)
+        for i in 1:size(D, 1)
+            D.diag[i] = ω*inv(D.diag[i])
+        end
+        jac.factor = D
+        d = length(b[1])
+        jac.dim = d .* size(A)
+    else
+        D = jac.factor
+        for i in 1:size(D, 1)
+            D.diag[i] = ω*inv(A[i, i])
+        end
+    end
+end
+
+function apply!(x, jac::DampedJacobiPreconditioner, y, arg...)
+    # Very hacky.
+    D = jac.factor
+
+    s = D.diag[1]
+    N = size(s, 1)
+    T = eltype(s)
+    Vt = SVector{N, T}
+    as_svec = (x) -> reinterpret(Vt, x)
+
+    # Solve by reinterpreting vectors to block (=SVector) vectors
+    tmp = D*as_svec(y)
+    xv = as_svec(x)
+    xv .= tmp
+    # f! = ilu_f(type)
+    # f!(as_svec(x), ilu, as_svec(y))
+end
+
+function operator_nrows(ilu::DampedJacobiPreconditioner)
+    return ilu.dim[1]
 end
 
 """
@@ -136,6 +231,11 @@ mutable struct TrivialPreconditioner <: TervPreconditioner
         new(nothing)
     end
 end
+
+function update!(preconditioner::TrivialPreconditioner, lsys, model, storage, recorder)
+    # No need to update.
+end
+
 """
 Full LU factorization as preconditioner (intended for smaller subsystems)
 """
@@ -165,7 +265,9 @@ end
 Trivial / identity preconditioner with size for use in subsystems.
 """
 # Trivial precond
-function update!(tp::TrivialPreconditioner, A, b)
+function update!(tp::TrivialPreconditioner, lsys, model, storage, recorder)
+    A = jacobian(lsys)
+    b = residual(lsys)
     tp.dim = size(A).*length(b[1])
 end
 
@@ -183,12 +285,12 @@ mutable struct GroupWisePreconditioner <: TervPreconditioner
     end
 end
 
-function update!(prec::GroupWisePreconditioner, lsys::MultiLinearizedSystem)
+function update!(prec::GroupWisePreconditioner, lsys::MultiLinearizedSystem, arg...)
     s = lsys.subsystems
     n = size(s, 1)
     @assert n == length(prec.preconditioners)
     for i in 1:n
-        update!(prec.preconditioners[i], s[i, i])
+        update!(prec.preconditioners[i], s[i, i], arg...)
     end
 end
 
