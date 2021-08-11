@@ -42,5 +42,5 @@ function select_secondary_variables_system!(S, domain, system::SimpleElyte, form
 end
 
 function minimum_output_variables(system::SimpleElyte, primary_variables)
-    return [:ChargeAcc, :MassAcc, :Conductivity, :Diffusivity, :TPkGrad_Phi, :TPkGrad_C]
+    return [:ChargeAcc, :MassAcc, :Conductivity, :Diffusivity, :TPkGrad_Phi, :TPkGrad_C, :TotalCurrent, :ChargeCarrierFlux]
 end

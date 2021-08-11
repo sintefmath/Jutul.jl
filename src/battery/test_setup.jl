@@ -1,7 +1,7 @@
 using Terv
 
 export get_cc_grid, get_boundary, get_tensorprod
-export exported_model_to_domain
+export exported_model_to_domain, get_ref_states
 
 function get_boundary(name)
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, "_T.mat")
@@ -96,3 +96,14 @@ function exported_model_to_domain(exported; bc=[], b_T_hf=[])
     return D
 end
 
+function get_ref_states(j2m, ref_states)
+    m2j = Dict(value => key for (key, value) in j2m)
+    rs = [ 
+        Dict(m2j[k] => v[:, 1] for (k, v) in state if k in keys(m2j))
+        for state in ref_states
+        ]
+    if :C in keys(j2m)
+        [s[:C] = s[:C][1][:, 1] for s in rs]
+    end
+    return rs
+end
