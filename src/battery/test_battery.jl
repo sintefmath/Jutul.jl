@@ -38,9 +38,13 @@ function make_system(exported,sys,bcfaces,srccells)
     phi0 = 1.0
     C0 = 1.
     T0 = 1.
-    D = 1.
-    σ = 1.0 #exported["EffectiveElectricalConductivity"][1]
-    λ = 1.0 #exported["thermalConductivity"][1]
+    D = 1e-9 # ???   
+    if isa("EffectiveElectricalConductivity",Matrix)
+        σ = exported["EffectiveElectricalConductivity"][1]
+    else
+        σ = 1.0
+    end
+    λ = exported["thermalConductivity"][1]
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
@@ -84,7 +88,7 @@ end
 #end
 
 
-#function test_ac()
+function test_ac()
     name="model1d"
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
     exported_all = MAT.matread(fn)
@@ -105,36 +109,69 @@ end
     (model_nam, G_nam, state0_nam, parm_nam, init_nam) = 
         make_system(exported_nam,sys_nam,bcfaces,srccells)
 
-    sys_elyte = CurrentCollector()#
-    #sys_elyte = SimpleElyte()
+    #sys_elyte = CurrentCollector()#
+    sys_elyte = SimpleElyte()
     exported_elyte = exported_all["model"]["Electrolyte"]
     bcfaces=[]
-    srccells = [30]
+    srccells = []
     (model_elyte, G_elyte, state0_elyte, parm_elyte, init_elyte) = 
         make_system(exported_elyte,sys_elyte,bcfaces,srccells)
 
-    timesteps = diff(LinRange(0, 10, 10)[2:end])
-    
+    sys_pam = Grafite()
+    exported_pam = exported_all["model"]["PositiveElectrode"]["ElectrodeActiveComponent"];
+    # sys = ECComponent()
+    bcfaces=[]
+    srccells = []
+    (model_pam, G_pam, state0_pam, parm_pam, init_pam) = 
+        make_system(exported_pam,sys_pam,bcfaces,srccells)   
+   
+    exported_pp = exported_all["model"]["PositiveElectrode"]["CurrentCollector"];
+        # sys = ECComponent()
+        # sys = ACMaterial();
+        #sys = Grafite()
+        sys_pp = CurrentCollector()
+        bcfaces=[]
+        srccells = [10]
+        (model_pp, G_pp, state0_pp, parm_pp,init_pp) = 
+        make_system(exported_pp,sys_pp, bcfaces, srccells)
+        #sys_nam = CurrentCollector()
+
     groups = nothing
-    model = MultiModel((CC = model_cc, NAM = model_nam, ELYTE = model_elyte), groups = groups)
-    init_cc[:BCCharge]  = 0.0  
-    #init_nam[:BoundaryPhi] = -3e-6
+    model = MultiModel((CC = model_cc, NAM = model_nam, 
+                        ELYTE = model_elyte, 
+                        PAM = model_pam, PP = model_pp), groups = groups)
+    #init_cc[:BCCharge]  = 0.0
+    init_cc[:Phi] = state0["NegativeElectrode"]["CurrentCollector"]["phi"][1]
+    init_pp[:Phi] = state0["PositiveElectrode"]["CurrentCollector"]["phi"][1]
+    init_nam[:Phi] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["phi"][1]
+    init_nam[:C] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["c"][1] 
+    init_nam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1]
+    init_pam[:C] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["c"][1]
+    init_elyte[:Phi] = state0["Electolyte"]["phi"][1]
+    init_elyte[:C] = state0["Electrolyte"]["c"][1]
+
     init = Dict(
         :CC => init_cc,
         :NAM => init_nam,
-        :ELYTE => init_elyte
+        :ELYTE => init_elyte,
+        :PAM => init_pam,
+        :PP => init_pp
     )
     # state0 = setup_state(model, Dict(:CC => state0_cc, :NAM => state0_nam))
     state0 = setup_state(model, init)
     forces = Dict(
         :CC => nothing,
         :NAM => nothing,
-        :ELYTE => nothing
+        :ELYTE => nothing,
+        :PAM => nothing,
+        :PP => nothing
     )
     parameters = Dict(
         :CC => parm_cc,
         :NAM => parm_nam,
-        :ELYTE => parm_elyte
+        :ELYTE => parm_elyte,
+        :PAM => parm_pam,
+        :PP => parm_pp
     )
 
     # setup coupling CC <-> NAM
@@ -143,7 +180,9 @@ end
     )
     source = Dict( :model => :CC,
                 :equation => :charge_conservation)
-    intersection = ( [10], [1], Cells(), Cells())
+    srange = Int64.(exported_all["model"]["NegativeElectrode"]["couplingTerm"]["couplingcells"][:,1])          
+    trange = Int64.(exported_all["model"]["NegativeElectrode"]["couplingTerm"]["couplingcells"][:,2])
+    intersection = ( srange, trange, Cells(), Cells())
     crosstermtype = InjectiveCrossTerm
     issym = true
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
@@ -155,33 +194,67 @@ end
     )
     source = Dict( :model => :NAM,
                 :equation => :charge_conservation)
-    range = Vector{Int64}(undef,10) 
-    for i in [1:10]
-        range[i]=i
-        range[i]=i
-    end
-    intersection = ( range, range, Cells(), Cells())
+
+    srange=Int64.(exported_all["model"]["couplingTerms"][1]["couplingcells"][:,1])
+    trange=Int64.(exported_all["model"]["couplingTerms"][1]["couplingcells"][:,2])
+    intersection = ( srange, trange, Cells(), Cells())
     crosstermtype = InjectiveCrossTerm
     issym = true
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings,coupling)
+
+     # setup coupling PAM <-> ELYTE
+    target = Dict( :model => :ELYTE,
+        :equation => :charge_conservation
+        )
+    source = Dict( :model => :PAM,
+        :equation => :charge_conservation)
+    srange=Int64.(exported_all["model"]["couplingTerms"][2]["couplingcells"][:,1])
+    trange=Int64.(exported_all["model"]["couplingTerms"][2]["couplingcells"][:,2])
+    intersection = ( srange, trange, Cells(), Cells())
+    crosstermtype = InjectiveCrossTerm
+    issym = true
+    coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
+    push!(model.couplings,coupling)
+
+    # setup coupling PP <-> PAM
+    target = Dict( :model => :PAM,
+            :equation => :charge_conservation
+    )
+    source = Dict( :model => :PP,
+         :equation => :charge_conservation)
+    srange = Int64.(exported_all["model"]["PositiveElectrode"]["couplingTerm"]["couplingcells"][:,1])          
+    trange = Int64.(exported_all["model"]["PositiveElectrode"]["couplingTerm"]["couplingcells"][:,2])
+    intersection = ( srange, trange, Cells(), Cells())
+    crosstermtype = InjectiveCrossTerm
+    issym = true
+    coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
+    push!(model.couplings,coupling)
+
+ #########################
+
     #parameters = setup_parameters(model) # Dict(:CC => parm_cc, :NAM => parm_cc))
     #forces = Dict(:CC => state0_cc, :NAM => state0_nam)
     sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
+    #timesteps = diff(LinRange(0, 10, 10)[2:end])
+    timesteps = exported_all["schedule"]["step"]["val"][1:4]
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
     states = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
     grids = Dict(:CC => G_cc,
                 :NAM =>G_nam,
-                :ELYTE => G_elyte
+                :ELYTE => G_elyte,
+                :PAM => G_pam,
+                :PP => G_pp
                 )
     return states, grids, state0, stateref, parameters, init, exported_all
-#end
+end
 
 
-#@time states, grids, state0, stateref, parameters, init, exported_all = test_ac();
-
+@time states, grids, state0, stateref, parameters, init, exported_all = test_ac();
+states = states[1]
+refstep=1
 ## f= plot_interactive(G, states);
 #fields = ["CurrentCollector","ElectrodeActiveMaterial"]
 
@@ -200,20 +273,23 @@ p3 = Plots.plot(;title="C")
     #p2 = Plots.plot([xf[end]],[state0[:BCCharge][1]];title="Flux")
     #Plots.plot!(p2,xfi,j_ref;linecolor="red")
 fields = ["CurrentCollector","ElectrodeActiveComponent"]
-for field in fields
-    G = exported_all["model"]["NegativeElectrode"][field]["G"]
-    x = G["cells"]["centroids"]
-    xf= G["faces"]["centroids"][end]
-    xfi= G["faces"]["centroids"][2:end-1]
-    #state0=states[1]
-    state = stateref[10]["NegativeElectrode"]
-    phi_ref = state[field]["phi"]
-    j_ref = state[field]["j"]
-    Plots.plot!(p1,x,phi_ref;linecolor="red")
-    Plots.plot!(p2,xfi,j_ref;title="Flux",linecolor="red")
-    if haskey(state,"c")
-        c = state[field]["c"]
-        Plots.plot!(p3,xfi,j_ref;title="Flux",linecolor="red")
+components = ["NegativeElectrode","PositiveElectrode"]
+for component = components
+    for field in fields
+        G = exported_all["model"]["NegativeElectrode"][field]["G"]
+        x = G["cells"]["centroids"]
+        xf= G["faces"]["centroids"][end]
+        xfi= G["faces"]["centroids"][2:end-1]
+        #state0=states[1]
+        state = stateref[refstep]["NegativeElectrode"]
+        phi_ref = state[field]["phi"]
+        j_ref = state[field]["j"]
+        Plots.plot!(p1,x,phi_ref;linecolor="red")
+        Plots.plot!(p2,xfi,j_ref;title="Flux",linecolor="red")
+        if haskey(state[field],"c")
+            c = state[field]["c"]
+            Plots.plot!(p3,x,c;title="Flux",linecolor="red")
+        end
     end
 end
 fields = ["Electrolyte"]
@@ -223,14 +299,14 @@ for field in fields
     xf= G["faces"]["centroids"][end]
     xfi= G["faces"]["centroids"][2:end-1]
     #state0=states[1]
-    state = stateref[10]
+    state = stateref[refstep]
     phi_ref = state[field]["phi"]
     j_ref = state[field]["j"]
     Plots.plot!(p1,x,phi_ref;linecolor="red")
     Plots.plot!(p2,xfi,j_ref;title="Flux",linecolor="red")
-    if haskey(state,"c")
+    if haskey(state[field],"c")
         c = state[field]["c"]
-        Plots.plot!(p3,xfi,j_ref;title="Flux",linecolor="red")
+        Plots.plot!(p3,x,c;title="Flux",linecolor="red")
     end
 end
 #display(plot!(p1, p2, layout = (1, 2), legend = false))
@@ -241,11 +317,11 @@ for key in keys(grids)
     xf= G["faces"]["centroids"][end]
     xfi= G["faces"]["centroids"][2:end-1]     
     p=plot(p1, p2, layout = (1, 2), legend = false)
-    Plots.plot!(p1,x,states[end][key].Phi;markershape=:circle)
-    Plots.plot!(p2,xfi,states[end][key].TPkGrad_Phi[1:2:end-1];markershape=:circle)
+    Plots.plot!(p1,x,states[end][key].Phi;markershape=:circle,linestyle=:dot, seriestype = :scatter)
+    Plots.plot!(p2,xfi,states[end][key].TPkGrad_Phi[1:2:end-1];markershape=:circle,linestyle=:dot, seriestype = :scatter)
     if(haskey(states[end][key],:C))
         cc=states[end][key].C
-        Plots.plot!(p3,x,cc;markershape=:circle)
+        Plots.plot!(p3,x,cc;markershape=:circle,linestyle=:dot, seriestype = :scatter)
     end
     display(plot!(p1, p2,p3,layout = (3, 1), legend = false))
 end
