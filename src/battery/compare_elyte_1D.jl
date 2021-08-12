@@ -32,7 +32,7 @@ function test_simple_elyte_1d()
     sys = SimpleElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
-    parameters[:tolerances][:default] = 1e-12
+    parameters[:tolerances][:default] = 1e-8
     parameters[:t] = ex_model["sp"]["t"][1]
     parameters[:z] = ex_model["sp"]["z"][1]
 
