@@ -7,9 +7,10 @@ include("test_setup.jl")
 
 include("elchem_component.jl")
 include("elyte.jl")
-include("activematerial.jl")
 include("current_collector.jl")
 include("current_collector_temp.jl")
+include("activematerial.jl")
 include("ocd.jl")
 include("simple_elyte.jl")
-# include("cross_terms.jl") # did not work includ in currencolletor
+
+include("cross_terms.jl") # Works now

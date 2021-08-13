@@ -4,6 +4,9 @@ export ActiveMaterial, ACMaterial, ActiveMaterialModel
 abstract type ActiveMaterial <: ElectroChemicalComponent end
 struct ACMaterial <: ActiveMaterial end
 struct Ocd <: ScalarVariable end
+struct Diffusion <: ScalarVariable end
+struct ReactionRateConst <: ScalarVariable end
+
 const ActiveMaterialModel = SimulationModel{<:Any, <:ActiveMaterial, <:Any, <:Any}
 function minimum_output_variables(
     system::ActiveMaterial, primary_variables
@@ -58,6 +61,9 @@ function update_as_secondary!(
     @tullio vocd[i] = ocd(300.0, C[i], s)
 end
 )
+
+diffusion_rate(T, C, s) = 1
+
 @terv_secondary(
 function update_as_secondary!(
     vdiffusion, tv::Diffusion, model::ActiveMaterialModel, param, C)
@@ -66,10 +72,12 @@ function update_as_secondary!(
 end
 )
 
+reaction_rate_const(T, c, s) = 1
+
 @terv_secondary(
 function update_as_secondary!(
     vReactionRateConst, tv::ReactionRateConst, model::ActiveMaterialModel, param, C)
     s = model.system
-    @tullio vdiffusion[i] = reaction_rate_const(300.0, C[i], s)
+    @tullio vReactionRateConst[i] = reaction_rate_const(300.0, C[i], s)
 end
 )
