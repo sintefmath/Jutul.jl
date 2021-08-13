@@ -45,7 +45,9 @@ function ocd(T,c, ::NMC111)
 refT = 298.15
 #T=300
 #c=0.1
-cmax = 1.0
+#D0: 1.0000e-14
+#EaD: 5000
+cmax = 55554.0
 theta= c./cmax
 
 refOCP = coeff1_refOCP(theta)./ coeff2_refOCP(theta);    
@@ -75,7 +77,10 @@ const  coeff2= Polynomial([1,
         + 165705.8597]);
         
 function ocd(T,c, ::Grafite)
-    cmax=1.0
+    cmax=30555.0
+  #  EaD: 5000
+  #  D0: 3.9000e-14
+  #cmax: 30555
     theta = c./cmax
     refT = 298.15
     refOCP = (0.7222 

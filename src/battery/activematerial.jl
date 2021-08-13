@@ -34,6 +34,7 @@ function select_secondary_variables_system!(
     S[:Diffusivity] = Diffusivity()
     # S[:ThermalConductivity] = ThermalConductivity()
     S[:Ocd] = Ocd()
+    S[:ReactionRateConst]
 end
 
 function select_equations_system!(
@@ -55,5 +56,20 @@ function update_as_secondary!(
     s = model.system
     # @tullio vocd[i] = ocd(T[i], C[i], s)
     @tullio vocd[i] = ocd(300.0, C[i], s)
+end
+)
+@terv_secondary(
+function update_as_secondary!(
+    vdiffusion, tv::Diffusion, model::ActiveMaterialModel, param, C)
+    s = model.system
+    @tullio vdiffusion[i] = diffusion_rate(300.0, C[i], s)
+end
+)
+)
+@terv_secondary(
+function update_as_secondary!(
+    vReactionRateConst, tv::ReactionRateConst, model::ActiveMaterialModel, param, C)
+    s = model.system
+    @tullio vdiffusion[i] = reaction_rate_const(300.0, C[i], s)
 end
 )

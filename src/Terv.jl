@@ -72,5 +72,5 @@ include("battery/activematerial.jl")
 include("battery/ocd.jl")
 include("plot_graph.jl")
 include("battery/simple_elyte.jl")
-
+#include("battery/cross_terms.jl") # did not work includ in currencolletor
 end # module
