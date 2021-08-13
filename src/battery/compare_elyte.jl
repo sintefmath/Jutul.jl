@@ -6,42 +6,50 @@ using Terv
 using MAT
 ENV["JULIA_DEBUG"] = Terv;
 
-##
-
-function test_simple_elyte()
+function get_simple_elyte_model()
     name="modelElectrolyte"
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
     exported = MAT.matread(fn)
     ex_model = exported["model"]
+
     boundary = ex_model["bcstruct"]["dirichlet"]
 
-    b_phi = boundary["phi"][:, 1]
-    b_c = boundary["conc"][:, 1]
     b_faces = Int64.(boundary["faces"])
-
     T_all = ex_model["operators"]["T_all"]
     N_all = Int64.(ex_model["G"]["faces"]["neighbors"])
     isboundary = (N_all[b_faces, 1].==0) .| (N_all[b_faces, 2].==0)
     @assert all(isboundary)
     bc_cells = N_all[b_faces, 1] + N_all[b_faces, 2]
-    b_T_hf   = T_all[b_faces] 
+    b_T_hf   = T_all[b_faces]
 
     domain = exported_model_to_domain(ex_model, bc=bc_cells, b_T_hf=b_T_hf)
 
-    timesteps = exported["schedule"]["step"]["val"][:, 1]
-    
-    G = ex_model["G"]
     sys = SimpleElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
-    parameters = setup_parameters(model)
-    parameters[:tolerances][:default] = 1e-8
-    parameters[:t] = ex_model["sp"]["t"][1]
-    parameters[:z] = ex_model["sp"]["z"][1]
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
     S[:BoundaryC] = BoundaryPotential{C}()
 
+    return model, exported
+end
+
+##
+
+function plot_elyte()
+    model, _ = get_simple_elyte_model()
+    return plot_graph(model)
+end
+
+plot_elyte()
+
+##
+
+function test_simple_elyte()
+    model, exported = get_simple_elyte_model()
+    boundary = exported["model"]["bcstruct"]["dirichlet"]
+    b_phi = boundary["phi"][:, 1]
+    b_c = boundary["conc"][:, 1]
     init_states = exported["state0"]
     init = Dict(
         :Phi            => init_states["phi"][:, 1],
@@ -52,6 +60,15 @@ function test_simple_elyte()
         )
 
     state0 = setup_state(model, init)
+
+    parameters = setup_parameters(model)
+    parameters[:tolerances][:default] = 1e-8
+    parameters[:t] = exported["model"]["sp"]["t"][1]
+    parameters[:z] = exported["model"]["sp"]["z"][1]
+ 
+    timesteps = exported["schedule"]["step"]["val"][:, 1]
+
+    G = exported["model"]["G"]
   
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
@@ -104,7 +121,7 @@ function print_diff(s, sref, n, k)
     println("Δ = $(maximum(Δ))")
 end
 
-ks = (:C, :Phi)
+ks = (:Phi, :C)
 
 for n in 1:20
     println("Step $n")

@@ -31,7 +31,8 @@ function test_elyte()
     one = ones(size(bcells))
     bcells = [bcells..., (bcells .+ 9)...]
     T_hf = [T_hf..., T_hf...]
-    domain, exported = get_cc_grid(;name=name, extraout=true, bc=bcells, b_T_hf=T_hf)
+    domain, exported = 
+        get_cc_grid(name=name, extraout=true, bc=bcells, b_T_hf=T_hf, tensor_map=true)
     t = LinRange(0, 10, 20)
     timesteps = diff(t)
     G = exported["G"]

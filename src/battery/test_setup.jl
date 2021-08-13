@@ -28,7 +28,7 @@ function get_tensorprod(name="square_current_collector")
 end
 
 function get_cc_grid(
-    ;name="square_current_collector", extraout = false, bc=[], b_T_hf=[]
+    ;name="square_current_collector", extraout = false, bc=[], b_T_hf=[], tensor_map=false
     )
     fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     exported = MAT.matread(fn)
@@ -62,7 +62,7 @@ function get_cc_grid(
     P, S = get_tensorprod(name)
     G = MinimalECTPFAGrid(volumes, N, bc, b_T_hf, P, S)
 
-    flow = TPFlow(G, T; tensor_map=false)
+    flow = TPFlow(G, T; tensor_map=tensor_map)
     disc = (charge_flow = flow,)
     D = DiscretizedDomain(G, disc)
 
