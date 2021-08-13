@@ -59,7 +59,8 @@ function regularizedSqrt(x, th)
         else
             y[i] = x[i]/th*sqrt(th)
         end
-     return y   
+    end
+    return y   
 end
 
 function reaction_rate(phi_a,c_a,R,ocd,
@@ -93,7 +94,7 @@ end
 function update_cross_term!(ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc}, 
     target_storage, source_storage, 
     target_model::ActiveMaterialModel, source_model::ElectrolyteModel, 
-    target, source, dt) # where {TS <: ActiveMaterial, SS <:ElectrolyteModel}
+    target, source, dt)
     activematerial = TS
     electrolyte = SS 
     phi_e = target_storage.state.Phi[ct.impact.target]

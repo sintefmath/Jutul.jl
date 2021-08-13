@@ -9,15 +9,15 @@ ENV["JULIA_DEBUG"] = Terv;
 
 function test_cc(name="square_current_collector")
     domain, exported = get_cc_grid(name=name, extraout=true, bc=[1, 9], b_T_hf=[2., 2.])
-    timesteps = [1., ]
+    timesteps = [10.,]
     G = exported["G"]
 
     sys = CurrentCollector()
     model = SimulationModel(domain, sys, context = DefaultContext())
 
     # State is dict with pressure in each cell
-    phi = 0.
-    boudary_phi = [1, 2]
+    phi = 1.
+    boudary_phi = [1., 2.]
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
@@ -27,6 +27,7 @@ function test_cc(name="square_current_collector")
         
     # Model parameters
     parameters = setup_parameters(model)
+    parameters[:tolerances][:default] = 1e-8
 
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)

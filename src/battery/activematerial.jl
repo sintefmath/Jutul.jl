@@ -1,6 +1,6 @@
 using Terv, Polynomials
 
-export ActiveMaterial, ACMaterial
+export ActiveMaterial, ACMaterial, ActiveMaterialModel
 abstract type ActiveMaterial <: ElectroChemicalComponent end
 struct ACMaterial <: ActiveMaterial end
 struct Ocd <: ScalarVariable end
@@ -65,7 +65,7 @@ function update_as_secondary!(
     @tullio vdiffusion[i] = diffusion_rate(300.0, C[i], s)
 end
 )
-)
+
 @terv_secondary(
 function update_as_secondary!(
     vReactionRateConst, tv::ReactionRateConst, model::ActiveMaterialModel, param, C)
