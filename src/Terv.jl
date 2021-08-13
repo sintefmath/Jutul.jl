@@ -58,19 +58,7 @@ include("multimodel/multimodel.jl")
 include("applications/reservoir_simulator/reservoir_simulator.jl")
 include("applications/test_systems/test_systems.jl")
 
-include("battery/battery_types.jl")
-include("battery/physical_constants.jl")
-include("battery/tensor_tools.jl")
-include("battery/elchem_component.jl")
-include("battery/physics.jl")
-include("battery/battery.jl")
-include("battery/test_setup.jl")
-include("battery/elyte.jl")
-include("battery/current_collector.jl")
-include("battery/current_collector_temp.jl")
-include("battery/activematerial.jl")
-include("battery/ocd.jl")
 include("plot_graph.jl")
-include("battery/simple_elyte.jl")
-#include("battery/cross_terms.jl") # did not work includ in currencolletor
+include("battery/battery_include.jl")
+
 end # module
