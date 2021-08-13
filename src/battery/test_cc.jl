@@ -22,7 +22,7 @@ function test_cc(name="square_current_collector")
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
 
-    init = Dict(:Phi => phi, :BoundaryPhi=>boudary_phi)
+    init = Dict(:Phi => phi, :BoundaryPhi=>boudary_phi, :Conductivity=>1.)
     state0 = setup_state(model, init)
         
     # Model parameters
@@ -32,7 +32,7 @@ function test_cc(name="square_current_collector")
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    states, report = simulate(sim, timesteps, config = cfg)
+    states, _ = simulate(sim, timesteps, config = cfg)
     return state0, states, model, G
 end
 
@@ -66,10 +66,10 @@ function test_mixed_bc()
 
     phi0 = 1.
     init = Dict(
-        :Phi            => phi0,
-        :Conductivity   => 1., 
-        :BoundaryPhi    => one,
+        :Phi            => phi0, 
+        :BoundaryPhi    => one, 
         :BCCharge       => one,
+        :Conductivity   => one
         )
     state0 = setup_state(model, init)
     parameters = setup_parameters(model)
@@ -77,9 +77,9 @@ function test_mixed_bc()
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    cfg[:info_level] = 2
     cfg[:debug_level] = 2
-    states, report = simulate(sim, timesteps, config = cfg)
+    cfg[:info_level] = 2
+    states = simulate(sim, timesteps, config = cfg)
 
     return states, G
 end

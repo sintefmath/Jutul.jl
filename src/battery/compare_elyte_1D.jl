@@ -131,9 +131,8 @@ for (n, state) in enumerate(states[1:end])
     print_diff(states, ref_states, n, k1)
 
     plot!(plot2, xfi, states[n][:TotalCurrent][2:2:end], color="red")
-    # !OBS fudge factor somhow makes states almost equal
-    scatter!(plot2, xfi, ref_states[n][:TotalCurrent] .* 1.011,color="blue", m=:circle)
-    # print_diff_j(states, ref_states, n, k2)
+    scatter!(plot2, xfi, ref_states[n][:TotalCurrent] ,color="blue", m=:circle)
+    print_diff_j(states, ref_states, n, k2)
 
     display(plot!(plot1, plot2, layout = (1, 2), legend = false))
 end

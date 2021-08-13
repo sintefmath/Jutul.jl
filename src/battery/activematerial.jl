@@ -37,7 +37,7 @@ function select_secondary_variables_system!(
     S[:Diffusivity] = Diffusivity()
     # S[:ThermalConductivity] = ThermalConductivity()
     S[:Ocd] = Ocd()
-    S[:ReactionRateConst]
+    S[:ReactionRateConst] = ReactionRateConst()
 end
 
 function select_equations_system!(
