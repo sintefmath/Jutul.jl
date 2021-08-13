@@ -56,7 +56,7 @@ function get_cc_grid(
     T_hf = compute_half_face_trans(
     cell_centroids, face_centroids, face_normals, face_areas, one, N
         )
-    T = compute_face_trans(T_hf, N)
+    T = compute_face_trans(T_hf, N) * 2
 
     # TODO: move P, S, boundary to discretization
     P, S = get_tensorprod(name)

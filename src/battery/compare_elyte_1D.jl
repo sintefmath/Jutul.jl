@@ -33,7 +33,7 @@ function test_simple_elyte_1d()
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
     parameters[:tolerances][:default] = 1e-8
-    parameters[:t] = ex_model["sp"]["t"][1]
+    parameters[:t] = ex_model["sp"]["t"][1] # / (-2)  yields better results, why?
     parameters[:z] = ex_model["sp"]["z"][1]
 
     S = model.secondary_variables
@@ -54,15 +54,17 @@ function test_simple_elyte_1d()
     sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
+    cfg[:debug_level] = 2
+    cfg[:info_level] = 2
     states, report = simulate(sim, timesteps, config = cfg)
 
     rs = exported["states"][:, 1]
-    return states, G, model, rs
+    return states, G, model, rs, exported
 end
 
-states, G, model, rs = test_simple_elyte_1d();
+states, G, model, rs, exported = test_simple_elyte_1d();
 
-##
+
 # Transelate bw states from matlab and julia
 j2m = Dict{Symbol, String}(
     :C                  => "cs",
@@ -74,6 +76,7 @@ j2m = Dict{Symbol, String}(
     :ChargeCarrierFlux  => "LiFlux" 
 )
 ref_states = get_ref_states(j2m, rs);
+println(states[end][:Phi] - ref_states[end][:Phi])
 
 ##
 
@@ -85,13 +88,13 @@ xf = G["faces"]["centroids"][end]
 xfi= G["faces"]["centroids"][2:10]
 
 function print_diff(s, sref, n, k)
-    Δ = abs.(1 .- s[n][k] ./ sref[n][k])
+    Δ = abs.(s[n][k] .-sref[n][k])
     println("k = $k, n = $n")
     println("rel.diff = $(maximum(Δ))")
 end
 
 function print_diff_j(s, sref, n, k)
-    Δ = abs.(1 .- s[n][k][2:2:end] ./ (sref[n][k]*1.011))
+    Δ = abs.(s[n][k][2:2:end] .- (sref[n][k]))
     println("k = $k, n = $n")
     println("rel.diff = $(maximum(Δ))")
 end
@@ -109,9 +112,8 @@ for (n, state) in enumerate(states[1:end])
     print_diff(states, ref_states, n, k1)
 
     plot!(plot2, xfi, states[n][:TotalCurrent][2:2:end], color="red")
-    # !OBS fudge factor somhow makes states almost equal
-    scatter!(plot2, xfi, ref_states[n][:TotalCurrent] .* 1.011,color="blue", m=:circle)
-    # print_diff_j(states, ref_states, n, k2)
+    scatter!(plot2, xfi, ref_states[n][:TotalCurrent], color="blue", m=:circle)
+    print_diff_j(states, ref_states, n, k2)
 
     display(plot!(plot1, plot2, layout = (1, 2), legend = false))
 end
