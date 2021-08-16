@@ -88,13 +88,13 @@ xf = G["faces"]["centroids"][end]
 xfi= G["faces"]["centroids"][2:10]
 
 function print_diff(s, sref, n, k)
-    Δ = abs.(s[n][k] .-sref[n][k])
+    Δ = abs.(1 .-sref[n][k] ./ s[n][k])
     println("k = $k, n = $n")
     println("rel.diff = $(maximum(Δ))")
 end
 
 function print_diff_j(s, sref, n, k)
-    Δ = abs.(s[n][k][2:2:end] .- (sref[n][k]))
+    Δ = abs.(1 .- (sref[n][k]) ./ s[n][k][2:2:end])
     println("k = $k, n = $n")
     println("rel.diff = $(maximum(Δ))")
 end
