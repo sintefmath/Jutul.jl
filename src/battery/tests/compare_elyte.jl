@@ -63,8 +63,11 @@ function test_simple_elyte()
 
     parameters = setup_parameters(model)
     parameters[:tolerances][:default] = 1e-8
-    parameters[:t] = exported["model"]["sp"]["t"][1] / (-2) # Gir bedre svar, hvorfor?
-    parameters[:z] = exported["model"]["sp"]["z"][1]
+    t1, t2 = exported["model"]["sp"]["t"]
+    z1, z2 = exported["model"]["sp"]["z"]
+    tDivz_eff = (t1/z1 + t2/z2)
+    parameters[:t] = tDivz_eff
+    parameters[:z] = 1
  
     timesteps = exported["schedule"]["step"]["val"][:, 1]
 
