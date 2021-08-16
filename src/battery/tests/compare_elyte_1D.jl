@@ -32,7 +32,7 @@ function test_simple_elyte_1d()
     sys = SimpleElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
-    parameters[:tolerances][:default] = 1e-8
+    parameters[:tolerances][:default] = 1e-10
     t1, t2 = exported["model"]["sp"]["t"]
     z1, z2 = exported["model"]["sp"]["z"]
     tDivz_eff = (t1/z1 + t2/z2)
@@ -76,7 +76,7 @@ j2m = Dict{Symbol, String}(
     :Conductivity       => "conductivity",
     :Diffusivity        => "D",
     :TotalCurrent       => "j",
-    :ChargeCarrierFlux  => "LiFlux" 
+    :ChargeCarrierFlux  => "LiFlux" # This is not correct - CC is more than Li
 )
 ref_states = get_ref_states(j2m, rs);
 println(states[end][:Phi] - ref_states[end][:Phi])
@@ -109,13 +109,13 @@ plot2 = Plots.plot([], []; title = "Current", size=(1000, 800))
 p = plot!(plot1, plot2, layout = (1, 2), legend = false)
 k1 = :Phi; k2 = :TotalCurrent
 
-for (n, state) in enumerate(states[1:end])
+for (n, state) in enumerate(states)
     plot!(plot1, x, states[n][k1], color="red", m=:cross)
     scatter!(plot1, x, ref_states[n][k1], color="blue", m=:circle)
     print_diff(states, ref_states, n, k1)
 
-    plot!(plot2, xfi, states[n][:TotalCurrent][2:2:end], color="red")
-    scatter!(plot2, xfi, ref_states[n][:TotalCurrent], color="blue", m=:circle)
+    plot!(plot2, xfi, states[n][k2][2:2:end], color="red")
+    scatter!(plot2, xfi, ref_states[n][k2], color="blue", m=:circle)
     print_diff_j(states, ref_states, n, k2)
 
     display(plot!(plot1, plot2, layout = (1, 2), legend = false))
@@ -130,13 +130,13 @@ plot2 = Plots.plot([], [], title = "CC Flux", size=(1000, 800))
 p = plot(plot1, plot2, layout = (1, 2), legend = false)
 k1 = :C; k2 = :ChargeCarrierFlux
 
-for (n, state) in enumerate(states[1:end])
+for (n, state) in enumerate(states)
     plot!(plot1, x, states[n][k1], color="red", m=:cross)
     scatter!(plot1, x, ref_states[n][k1], color="blue", m=:circle)
     print_diff(states, ref_states, n, k1)
 
-    plot!(plot2, xfi, states[n][:TotalCurrent][2:2:end], color="red")
-    scatter!(plot2, xfi, ref_states[n][:TotalCurrent] ,color="blue", m=:circle)
+    plot!(plot2, xfi, states[n][k2][2:2:end], color="red")
+    scatter!(plot2, xfi, ref_states[n][k2] ,color="blue", m=:circle)
     print_diff_j(states, ref_states, n, k2)
 
     display(plot!(plot1, plot2, layout = (1, 2), legend = false))
