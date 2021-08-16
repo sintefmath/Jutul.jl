@@ -1,9 +1,8 @@
 using Terv
 
-# TODO: These are not all needed
 export ElectroChemicalComponent, CurrentCollector, Electectrolyte, TestElyte
 export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
-export ChargeFlow, MixedFlow, Conservation, BoundaryPotential, BoundaryCurrent
+export ChargeFlow, Conservation, BoundaryPotential, BoundaryCurrent
 export Phi, C, T, Charge, Mass, Energy, KGrad
 export BOUNDARY_CURRENT, corr_type
 
@@ -36,9 +35,6 @@ struct Conservation{T} <: TervEquation
 end
 
 # Accumulation variables
-# ! Naming mistakes: the time derivatives of these variables
-# ! are actually the accumulation variable, these are densities
-# TODO: Rename accumulation to conserved
 abstract type Conserved <: ScalarVariable end
 struct Charge <: Conserved end
 struct Mass <: Conserved end
@@ -59,10 +55,9 @@ function corr_type(::Conservation{Energy}) Energy() end
 abstract type KGrad{T} <: ScalarVariable end
 struct TPkGrad{T} <: KGrad{T} end
 
-# TODO: What part of this is necessary?
 abstract type ECFlow <: FlowType end
 struct ChargeFlow <: ECFlow end
-struct MixedFlow <: ECFlow end
+
 
 struct BoundaryPotential{T} <: ScalarVariable end
 struct BoundaryCurrent{T} <: ScalarVariable 
@@ -167,7 +162,6 @@ function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[], S=[])
     end
     @assert all(pv .> 0)
     @assert size(bc) == size(T_hf)
-    
 
     MinimalECTPFAGrid{eltype(pv), eltype(N)}(pv, N, bc, T_hf, P, S)
 end
@@ -177,7 +171,7 @@ function Conservation(
     flow_discretization = model.domain.discretizations[1], kwarg...
     )
     """
-    A conservation law corresponding to the underlying potential pvar
+    A conservation law corresponding to a conserved charge acc_type
     """
 
     accumulation_symbol = acc_symbol(acc_type)
