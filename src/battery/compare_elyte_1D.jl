@@ -33,7 +33,7 @@ function test_simple_elyte_1d()
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
     parameters[:tolerances][:default] = 1e-8
-    parameters[:t] = ex_model["sp"]["t"][1] # / (-2)  yields better results, why?
+    parameters[:t] = ex_model["sp"]["t"][1]  / (-2) # yields better results, why?
     parameters[:z] = ex_model["sp"]["z"][1]
 
     S = model.secondary_variables
