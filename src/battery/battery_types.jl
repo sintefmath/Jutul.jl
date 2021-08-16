@@ -18,10 +18,10 @@ const ECModel = SimulationModel{<:Any, <:ElectroChemicalComponent, <:Any, <:Any}
 abstract type ElectroChemicalGrid <: TervGrid end
 
 # Potentials
-# ? introduce abstract type Potential?
-struct Phi <: ScalarVariable end
-struct C <: ScalarVariable end
-struct T <: ScalarVariable end
+abstract type Potential <: ScalarVariable end
+struct Phi <: Potential end
+struct C <: Potential end
+struct T <: Potential end
 
 struct Conductivity <: ScalarVariable end
 struct Diffusivity <: ScalarVariable end
@@ -59,6 +59,7 @@ function corr_type(::Conservation{Energy}) Energy() end
 abstract type KGrad{T} <: ScalarVariable end
 struct TPkGrad{T} <: KGrad{T} end
 
+# TODO: What part of this is necessary?
 abstract type ECFlow <: FlowType end
 struct ChargeFlow <: ECFlow end
 struct MixedFlow <: ECFlow end

@@ -22,25 +22,9 @@ end
 # All EC-comps #
 ################
 
-# TODO: Remove the uncessecary ones
+# ? Is this necessary?
 function single_unique_potential(model::ECModel)
     return false
-end
-
-function degrees_of_freedom_per_unit(model, sf::Charge)
-    return 1
-end
-
-function degrees_of_freedom_per_unit(model, sf::Mass)
-    return 1
-end
-
-function degrees_of_freedom_per_unit(model, sf::KGrad)
-    return 1
-end
-
-function degrees_of_freedom_per_unit(model::ECModel, sf::Phi)
-    return 1
 end
 
 function number_of_units(model, pv::KGrad)
@@ -48,15 +32,7 @@ function number_of_units(model, pv::KGrad)
     return 2*count_units(model.domain, Faces())
 end
 
-function number_of_units(model, ::Phi)
-    return count_units(model.domain, Cells())
-end
-
-function number_of_units(model, ::C)
-    return count_units(model.domain, Cells())
-end
-
-function number_of_units(model, ::T)
+function number_of_units(model, ::Potential)
     return count_units(model.domain, Cells())
 end
 

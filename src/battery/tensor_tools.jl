@@ -25,8 +25,6 @@ end
 ##############
 # Tensormaps #
 ##############
-# TODO: These should all be computed initially, to avoid serach later
-
 
 # ! Boundary current is not included
 function face_to_cell!(j_cell, J, c, model)
