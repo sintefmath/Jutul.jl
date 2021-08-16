@@ -43,3 +43,19 @@ end
 
 # Use the @run macro instaed of "run debugger"
 @run test_cc()
+# This runs much faster, esp. the second time
+
+##
+
+# Use infiltrate to dump a state inside a function to the REPL
+using Infiltrator
+
+function f(x, y)
+    z = x * y
+    @infiltrate cond = true
+    return x + y 
+end
+
+# This will launch REPL into infil mode, with acces to the scope within f
+f(2, 3)
+# use ctrl+d to exit 
