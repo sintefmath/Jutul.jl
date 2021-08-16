@@ -1,22 +1,44 @@
 using Terv
 
+# interface flux between current conductors
+# 1e7 should be the harmonic mean of hftrans/conductivity
+function ccinterfaceflux!(src, phi_1,phi_2)
+    for i in eachindex(phi_1)
+        src[i] = (phi_2[i] - phi_1[i])
+        src[i] *= 1e7
+    end
+end
 
 function update_cross_term!(
     ct::InjectiveCrossTerm, eq::Conservation{Charge}, 
-    target_storage, source_storage, 
-    target_model, source_model, 
+    target_storage,
+    source_storage,
+    target_model::SimulationModel{<:Any, TT, <:Any, <:Any}, 
+    source_model::SimulationModel{<:Any, <:Any, <:Any, <:Any}, 
     target, source, dt
-    )
+    ) where {TT <: CurrentCollector} # or TS <: CurrentCollector
     phi_t = target_storage.state.Phi[ct.impact.target]
     phi_s = source_storage.state.Phi[ct.impact.source]
-    function interfaceflux!(src, phi_1,phi_2)
-        for i in eachindex(phi_1)
-            src[i] = (phi_2[i] - phi_1[i])
-            src[i] *= 1e7
-        end
-    end
-    interfaceflux!(ct.crossterm_source,phi_s,value.(phi_t))
-    interfaceflux!(ct.crossterm_target,value.(phi_s),phi_t)
+    ccinterfaceflux!(ct.crossterm_source,phi_s,value.(phi_t))
+    ccinterfaceflux!(ct.crossterm_target,value.(phi_s),phi_t)
+    #@. ct.crossterm_source = flux(phi_s,value.(phi_t))
+    #@. ct.crossterm_target = flux(value.(phi_s), phi_t)
+    #error("Cross term must be specialized for your equation and models. Did not understand how to specialize $target ($(typeof(target_model))) to $source ($(typeof(source_model)))")
+end
+
+function update_cross_term!(
+    ct::InjectiveCrossTerm, eq::Conservation{Charge}, 
+    target_storage,
+    source_storage,
+    target_model::SimulationModel{<:Any, <:Any, <:Any, <:Any}, 
+    source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    target, source, dt
+    ) where {TS <: CurrentCollector}
+    phi_t = target_storage.state.Phi[ct.impact.target]
+    phi_s = source_storage.state.Phi[ct.impact.source]
+
+    ccinterfaceflux!(ct.crossterm_source,phi_s,value.(phi_t))
+    ccinterfaceflux!(ct.crossterm_target,value.(phi_s),phi_t)
     #@. ct.crossterm_source = flux(phi_s,value.(phi_t))
     #@. ct.crossterm_target = flux(value.(phi_s), phi_t)
     #error("Cross term must be specialized for your equation and models. Did not understand how to specialize $target ($(typeof(target_model))) to $source ($(typeof(source_model)))")
@@ -67,18 +89,18 @@ end
 function update_cross_term!(
     ct::InjectiveCrossTerm, eq::Conservation{Charge}, 
     target_storage, source_storage, 
-    target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    target_model::SimulationModel{<:Any, SS, <:Any, <:Any}, 
     source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
     target, source, dt
-    ) where TS <: ActiveMaterial
-    activematerial = TS
-    electrolyte = SS 
+    ) where {SS <: ActiveMaterial, TS <: Electrolyte} 
+    activematerial = SS
+    electrolyte = TS
     phi_e = target_storage.state.Phi[ct.impact.target]
     phi_a = source_storage.state.Phi[ct.impact.source]  
     ocd = source_storage.state.Ocd[ct.impact.source]
     R = source_storage.state.ReactionRateConst[ct.impact.source]
-    c_e = source_storage.state.C[ct.impact.source]
-    c_a = target_storage.state.C[ct.impact.target]
+    c_e = source_storage.state.C[ct.impact.target]
+    c_a = target_storage.state.C[ct.impact.source]
 
     eE, eM = sourceElectricMaterial(
         phi_a,c_a,R,ocd,
@@ -101,16 +123,16 @@ function update_cross_term!(
     ct::InjectiveCrossTerm, eq::Conservation{Charge}, 
     target_storage, source_storage, 
     target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
-    source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    source_model::SimulationModel{<:Any, SS, <:Any, <:Any}, 
     target, source, dt
-    ) where {TS <: ActiveMaterial, SS <:ElectrolyteModel}
+    ) where {TS <: ActiveMaterial, SS <:Electrolyte}
     
     activematerial = TS
     electrolyte = SS 
-    phi_e = target_storage.state.Phi[ct.impact.target]
-    phi_a = source_storage.state.Phi[ct.impact.source]  
-    ocd = source_storage.state.Ocd[ct.impact.source]
-    R = source_storage.state.ReactionRateConst[ct.impact.source]
+    phi_e = source_storage.state.Phi[ct.impact.target]
+    phi_a = target_storage.state.Phi[ct.impact.source]  
+    ocd = target_storage.state.Ocd[ct.impact.source]
+    R = target_storage.state.ReactionRateConst[ct.impact.source]
     c_e = source_storage.state.C[ct.impact.source]
     c_a = target_storage.state.C[ct.impact.target]
 
@@ -127,7 +149,7 @@ function update_cross_term!(
         phi_e, c_e,
         activematerial,electrolyte  
     )
-    
+       
     ct.crossterm_target = eE
 
 end
@@ -136,16 +158,16 @@ function update_cross_term!(
     ct::InjectiveCrossTerm, eq::Conservation{Mass}, 
     target_storage, source_storage, 
     target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
-    source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    source_model::SimulationModel{<:Any, SS, <:Any, <:Any}, 
     target, source, dt
-    ) where {TS <: ActiveMaterial, SS <:ElectrolyteModel}
+    ) where {TS <: ActiveMaterial, SS <:Electrolyte}
 
     activematerial = TS
     electrolyte = SS 
-    phi_e = target_storage.state.Phi[ct.impact.target]
-    phi_a = source_storage.state.Phi[ct.impact.source]  
-    ocd = source_storage.state.Ocd[ct.impact.source]
-    R = source_storage.state.ReactionRateConst[ct.impact.source]
+    phi_e = source_storage.state.Phi[ct.impact.target]
+    phi_a = target_storage.state.Phi[ct.impact.source]  
+    ocd = target_storage.state.Ocd[ct.impact.source]
+    R = target_storage.state.ReactionRateConst[ct.impact.source]
     c_e = source_storage.state.C[ct.impact.source]
     c_a = target_storage.state.C[ct.impact.target]
 
@@ -170,18 +192,18 @@ function update_cross_term!(
     ct::InjectiveCrossTerm, eq::Conservation{Mass}, 
     target_storage, source_storage, 
     target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
-    source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    source_model::SimulationModel{<:Any, SS, <:Any, <:Any}, 
     target, source, dt
-    ) where {TS <: ActiveMaterial, SS <:ElectrolyteModel}
+    ) where {SS <: ActiveMaterial, TS <:Electrolyte}
 
-    activematerial = TS
-    electrolyte = SS 
+    activematerial = SS
+    electrolyte = TS 
     phi_e = target_storage.state.Phi[ct.impact.target]
     phi_a = source_storage.state.Phi[ct.impact.source]  
     ocd = source_storage.state.Ocd[ct.impact.source]
     R = source_storage.state.ReactionRateConst[ct.impact.source]
-    c_e = source_storage.state.C[ct.impact.source]
-    c_a = target_storage.state.C[ct.impact.target]
+    c_a = source_storage.state.C[ct.impact.source]
+    c_e = target_storage.state.C[ct.impact.target]
 
     eE, eM = sourceElectricMaterial(
         phi_a,c_a,R,ocd,
@@ -195,8 +217,6 @@ function update_cross_term!(
         value.(phi_a),value.(c_a),value.(R),value.(ocd),
         phi_e, c_e,
         activematerial,electrolyte  
-    )
-    
+    )   
     ct.crossterm_target = eM
-
 end

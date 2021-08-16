@@ -141,14 +141,15 @@ function test_ac()
                         ELYTE = model_elyte, 
                         PAM = model_pam, PP = model_pp), groups = groups)
     #init_cc[:BCCharge]  = 0.0
+    state0 = exported_all["state0"]
     init_cc[:Phi] = state0["NegativeElectrode"]["CurrentCollector"]["phi"][1]
     init_pp[:Phi] = state0["PositiveElectrode"]["CurrentCollector"]["phi"][1]
     init_nam[:Phi] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["phi"][1]
     init_nam[:C] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["c"][1] 
     init_nam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1]
     init_pam[:C] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["c"][1]
-    init_elyte[:Phi] = state0["Electolyte"]["phi"][1]
-    init_elyte[:C] = state0["Electrolyte"]["c"][1]
+    init_elyte[:Phi] = state0["Electrolyte"]["phi"][1]
+    init_elyte[:C] = state0["Electrolyte"]["cs"][1][1]
 
     init = Dict(
         :CC => init_cc,

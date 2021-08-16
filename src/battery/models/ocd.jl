@@ -1,6 +1,6 @@
 using Terv, Polynomials
 
-export Grafite, NMC111, OCD
+export Grafite, NMC111, OCD, nChargeCarriers, cMax
 
 struct Grafite <: ActiveMaterial end
 struct NMC111 <: ActiveMaterial end
@@ -96,6 +96,19 @@ function ocd(T,c, ::Grafite)
 
         vocd = refOCP + (T - refT) .* dUdT;
         return vocd        
+end
+
+function nChargeCarriers(:Grafite)
+        return 1
+end
+function nChargeCarriers(:NMC111)
+        return 1
+end
+function cMax(:Grafite)
+        return 30555.0
+end
+function cMax(:NMC111)
+        return 55554.0
 end
 ##
 #grafite = Grafite()
