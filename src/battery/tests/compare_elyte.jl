@@ -62,7 +62,7 @@ function test_simple_elyte()
     state0 = setup_state(model, init)
 
     parameters = setup_parameters(model)
-    parameters[:tolerances][:default] = 1e-8
+    parameters[:tolerances][:default] = 1e-10
     t1, t2 = exported["model"]["sp"]["t"]
     z1, z2 = exported["model"]["sp"]["z"]
     tDivz_eff = (t1/z1 + t2/z2)
