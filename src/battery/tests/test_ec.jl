@@ -14,7 +14,7 @@ function test_ec()
     bcells, T_hf = get_boundary(name)
     one = ones(size(bcells))
     domain, exported = get_cc_grid(; name=name, extraout=true, bc=bcells, b_T_hf=T_hf)
-    timesteps = LinRange(0, 10, 10)[2:end]
+    timesteps = diff(LinRange(0, 10, 20))
     G = exported["G"]
     
     sys = ECComponent()
