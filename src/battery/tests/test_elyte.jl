@@ -53,7 +53,7 @@ function test_elyte()
         :T                      => 298.,
         :ThermalConductivity    => 6e-05,
         :BoundaryPhi            => [one..., 0*one...],
-        :BoundaryC              => [2*one..., one...],
+        :BoundaryC              => [10*one..., one...],
         :BoundaryT              => [273 .* one..., 300 .* one...]
     )
 
@@ -79,7 +79,7 @@ display(f)
 accstates = []
 for i in 1:18
     state = Dict{Symbol, Any}()
-    state[:MassAcc] = (states[i+1][:MassAcc] .- states[i][:MassAcc])
+    state[:MassAcc] = (states[i+1][:Mass] .- states[i][:Mass]) # /dt
     push!(accstates, state)
 end
 

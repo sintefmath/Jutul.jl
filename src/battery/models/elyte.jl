@@ -22,9 +22,9 @@ struct EnergyDensity <: ScalarNonDiagVaraible end
 struct EDDiag <: ScalarVariable end
 
 function select_equations_system!(eqs, domain, system::Electrolyte, formulation)
-    charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
-    mass_cons = (arg...; kwarg...) -> Conservation(MassAcc(), arg...; kwarg...)
-    energy_cons = (arg...; kwarg...) -> Conservation(EnergyAcc(), arg...; kwarg...)
+    charge_cons = (arg...; kwarg...) -> Conservation(Charge(), arg...; kwarg...)
+    mass_cons = (arg...; kwarg...) -> Conservation(Mass(), arg...; kwarg...)
+    energy_cons = (arg...; kwarg...) -> Conservation(Energy(), arg...; kwarg...)
     
     eqs[:charge_conservation] = (charge_cons, 1)
     eqs[:mass_conservation] = (mass_cons, 1)
@@ -60,9 +60,9 @@ function select_secondary_variables_system!(S, domain, system::Electrolyte, form
 
     S[:EnergyDensity] = EnergyDensity()
 
-    S[:ChargeAcc] = ChargeAcc()
-    S[:MassAcc] = MassAcc()
-    S[:EnergyAcc] = EnergyAcc()
+    S[:Charge] = Charge()
+    S[:Mass] = Mass()
+    S[:Energy] = Energy()
 
     # Variables for plotting
     S[:DGradCSqDiag] = DGradCSqDiag()
@@ -73,14 +73,14 @@ end
 # Must be available to evaluate time derivatives
 function minimum_output_variables(system::Electrolyte, primary_variables)
     [
-        :ChargeAcc, :MassAcc, :EnergyAcc, :Conductivity, :Diffusivity,
+        :Charge, :Mass, :Energy, :Conductivity, :Diffusivity,
         :TotalCurrent, :DGradCSqDiag, :JSqDiag, :EnergyDensity
     ]
 end
 
 
 function update_linearized_system_equation!(
-    nz, r, model::TestElyteModel, law::Conservation{EnergyAcc}
+    nz, r, model::TestElyteModel, law::Conservation{Energy}
     )
     
     acc = get_diagonal_cache(law)
@@ -297,26 +297,26 @@ function update_as_secondary!(ρ_diag, sc::EDDiag, model, param, EnergyDensity)
 end
 )
 
-function update_density!(law::Conservation{EnergyAcc}, storage, model::ElectrolyteModel)
+function update_density!(law::Conservation{Energy}, storage, model::ElectrolyteModel)
     ρ = storage.state.EnergyDensity
     ρ_law = get_entries(law.density)
     @tullio ρ[c] = ρ_law[i]
 end
 
 function get_flux(
-    storage,  model::ElectrolyteModel, law::Conservation{ChargeAcc}
+    storage,  model::ElectrolyteModel, law::Conservation{Charge}
     )
     return storage.state.TotalCurrent
 end
 
 function get_flux(
-    storage,  model::ElectrolyteModel, law::Conservation{MassAcc}
+    storage,  model::ElectrolyteModel, law::Conservation{Mass}
     )
     return storage.state.ChargeCarrierFlux
 end
 
 function get_flux(
-    storage,  model::ElectrolyteModel, law::Conservation{EnergyAcc}
+    storage,  model::ElectrolyteModel, law::Conservation{Energy}
     )
     return - storage.state.TPkGrad_T
 end
@@ -348,7 +348,7 @@ end
 
 
 function apply_boundary_potential!(
-    acc, state, parameters, model::ElectrolyteModel, eq::Conservation{ChargeAcc}
+    acc, state, parameters, model::ElectrolyteModel, eq::Conservation{Charge}
     )
     # values
     Phi = state[:Phi]
@@ -372,7 +372,7 @@ end
 
 
 function apply_boundary_potential!(
-    acc, state, parameters, model::ElectrolyteModel, eq::Conservation{MassAcc}
+    acc, state, parameters, model::ElectrolyteModel, eq::Conservation{Mass}
     )
     # values
     Phi = state[:Phi]
@@ -404,7 +404,7 @@ function apply_boundary_potential!(
 end
 
 function apply_boundary_potential!(
-    acc, state, parameters, model::ElectrolyteModel, eq::Conservation{EnergyAcc}
+    acc, state, parameters, model::ElectrolyteModel, eq::Conservation{Energy}
     )
     # values
     T = state[:T]

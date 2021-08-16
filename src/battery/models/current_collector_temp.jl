@@ -11,7 +11,7 @@ struct EDensityDiag <: ScalarVariable end
 function minimum_output_variables(
     system::CurrentCollectorT, primary_variables
     )
-    [:ChargeAcc, :EnergyAcc, :EDensityDiag]
+    [:Charge, :Energy, :EDensityDiag]
 end
 
 function select_primary_variables_system!(
@@ -27,8 +27,8 @@ function select_secondary_variables_system!(
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:TPkGrad_T] = TPkGrad{T}()
 
-    S[:ChargeAcc] = ChargeAcc()
-    S[:EnergyAcc] = EnergyAcc()
+    S[:Charge] = Charge()
+    S[:Energy] = Energy()
 
     S[:Conductivity] = Conductivity()
     S[:ThermalConductivity] = ThermalConductivity()
@@ -45,14 +45,14 @@ end
 function select_equations_system!(
     eqs, domain, system::CurrentCollectorT, formulation
     )
-    charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
-    energy_cons = (arg...; kwarg...) -> Conservation(EnergyAcc(), arg...; kwarg...)
+    charge_cons = (arg...; kwarg...) -> Conservation(Charge(), arg...; kwarg...)
+    energy_cons = (arg...; kwarg...) -> Conservation(Energy(), arg...; kwarg...)
     eqs[:charge_conservation] = (charge_cons, 1)
     eqs[:energy_conservation] = (energy_cons, 1)
 end
 
 function update_linearized_system_equation!(
-    nz, r, model::CCT, law::Conservation{EnergyAcc}
+    nz, r, model::CCT, law::Conservation{Energy}
     )
     
     acc = get_diagonal_cache(law)
@@ -65,7 +65,7 @@ function update_linearized_system_equation!(
 end
 
 
-function update_density!(law::Conservation{EnergyAcc}, storage, model::CCT)
+function update_density!(law::Conservation{Energy}, storage, model::CCT)
     ρ = storage.state.EDensity
     ρ_law = get_entries(law.density)
     @tullio ρ_law[i] = ρ[i]

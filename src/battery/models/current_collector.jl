@@ -6,7 +6,7 @@ struct CurrentCollector <: ElectroChemicalComponent end
 function minimum_output_variables(
     system::CurrentCollector, primary_variables
     )
-    [:TPkGrad_Phi, :ChargeAcc]
+    [:TPkGrad_Phi, :Charge]
 end
 
 function select_primary_variables_system!(
@@ -19,12 +19,12 @@ function select_secondary_variables_system!(
     S, domain, system::CurrentCollector, formulation
     )
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
-    S[:ChargeAcc] = ChargeAcc()
+    S[:Charge] = Charge()
     S[:Conductivity] = Conductivity()
 end
 
 function select_equations_system!(
     eqs, domain, system::CurrentCollector, formulation    )
-    charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
+    charge_cons = (arg...; kwarg...) -> Conservation(Charge(), arg...; kwarg...)
     eqs[:charge_conservation] = (charge_cons, 1)
 end

@@ -39,8 +39,8 @@ function make_system(exported, sys, bcfaces, srccells)
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
     S[:BoundaryC] = BoundaryPotential{C}()
  
-    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(srccells)
-    S[:BCMass] = BoundaryCurrent{MassAcc}(srccells)
+    S[:BCCharge] = BoundaryCurrent{Charge}(srccells)
+    S[:BCMass] = BoundaryCurrent{Mass}(srccells)
  
     phi0 = 0.
     init = Dict(

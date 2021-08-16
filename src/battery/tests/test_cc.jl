@@ -62,14 +62,14 @@ function test_mixed_bc()
 
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
-    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(2 .+bcells)
+    S[:BCCharge] = BoundaryCurrent{Charge}(2 .+bcells)
 
     phi0 = 1.
     init = Dict(
         :Phi            => phi0, 
         :BoundaryPhi    => one, 
         :BCCharge       => one,
-        :Conductivity   => one
+        :Conductivity   => 1.
         )
     state0 = setup_state(model, init)
     parameters = setup_parameters(model)

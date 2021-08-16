@@ -55,15 +55,15 @@ function update_half_face_flux!(
 end
 
 
-function get_flux(storage,  model::ECModel, law::Conservation{ChargeAcc})
+function get_flux(storage,  model::ECModel, law::Conservation{Charge})
     return - storage.state.TPkGrad_Phi
 end
 
-function get_flux(storage,  model::ECModel, law::Conservation{MassAcc})
+function get_flux(storage,  model::ECModel, law::Conservation{Mass})
     return - storage.state.TPkGrad_C
 end
 
-function get_flux(storage, model::ECModel, law::Conservation{EnergyAcc})
+function get_flux(storage, model::ECModel, law::Conservation{Energy})
     return - storage.state.TPkGrad_T
 end
 
@@ -98,7 +98,7 @@ end
 
 
 function apply_boundary_potential!(
-    acc, state, parameters, model, eq::Conservation{ChargeAcc}
+    acc, state, parameters, model, eq::Conservation{Charge}
     )
     # values
     Phi = state[:Phi]
@@ -114,7 +114,7 @@ function apply_boundary_potential!(
 end
 
 function apply_boundary_potential!(
-    acc, state, parameters, model, eq::Conservation{MassAcc}
+    acc, state, parameters, model, eq::Conservation{Mass}
     )
     # values
     C = state[:C]
@@ -131,7 +131,7 @@ function apply_boundary_potential!(
 end
 
 function apply_boundary_potential!(
-    acc, state, parameters, model, eq::Conservation{EnergyAcc}
+    acc, state, parameters, model, eq::Conservation{Energy}
     )
     # values
     T = state[:T]

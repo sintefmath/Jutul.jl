@@ -94,7 +94,7 @@ display(f)
 accstates = []
 for i in 1:19
     state = Dict{Symbol, Any}()
-    state[:MassAcc] = (states[i+1][:MassAcc] .- states[i][:MassAcc])
+    state[:Mass] = (states[i+1][:Mass] .- states[i][:Mass])
     push!(accstates, state)
 end
 

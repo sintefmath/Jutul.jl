@@ -11,7 +11,7 @@ const ActiveMaterialModel = SimulationModel{<:Any, <:ActiveMaterial, <:Any, <:An
 function minimum_output_variables(
     system::ActiveMaterial, primary_variables
     )
-    [:ChargeAcc, :MassAcc, :EnergyAcc, :Ocd, :TPkGrad_Phi]
+    [:Charge, :Mass, :Ocd, :T, :TPkGrad_Phi]
 end
 
 function select_primary_variables_system!(
@@ -19,7 +19,6 @@ function select_primary_variables_system!(
     )
     S[:Phi] = Phi()
     S[:C] = C()
-    # S[:T] = T()
 end
 
 function select_secondary_variables_system!(
@@ -27,15 +26,13 @@ function select_secondary_variables_system!(
     )
     S[:TPkGrad_Phi] = TPkGrad{Phi}()
     S[:TPkGrad_C] = TPkGrad{C}()
-    # S[:TPkGrad_T] = TPkGrad{T}()
+    S[:T] = T()
     
-    S[:ChargeAcc] = ChargeAcc()
-    S[:MassAcc] = MassAcc()
-    S[:EnergyAcc] = MassAcc()
+    S[:Charge] = Charge()
+    S[:Mass] = Mass()
 
     S[:Conductivity] = Conductivity()
     S[:Diffusivity] = Diffusivity()
-    # S[:ThermalConductivity] = ThermalConductivity()
     S[:Ocd] = Ocd()
     S[:ReactionRateConst] = ReactionRateConst()
 end
@@ -43,12 +40,10 @@ end
 function select_equations_system!(
     eqs, domain, system::ActiveMaterial, formulation
     )
-    charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
-    mass_cons = (arg...; kwarg...) -> Conservation(MassAcc(), arg...; kwarg...)
-    # energy_cons = (arg...; kwarg...) -> Conservation(EnergyAcc(), arg...; kwarg...)
+    charge_cons = (arg...; kwarg...) -> Conservation(Charge(), arg...; kwarg...)
+    mass_cons = (arg...; kwarg...) -> Conservation(Mass(), arg...; kwarg...)
     eqs[:charge_conservation] = (charge_cons, 1)
     eqs[:mass_conservation] = (mass_cons, 1)
-    # eqs[:energy_conservation] = (energy_cons, 1)
 end
 
 # ? Does this maybe look better ?

@@ -4,7 +4,7 @@ using Terv
 export ElectroChemicalComponent, CurrentCollector, Electectrolyte, TestElyte
 export vonNeumannBC, DirichletBC, BoundaryCondition, MinimalECTPFAGrid
 export ChargeFlow, MixedFlow, Conservation, BoundaryPotential, BoundaryCurrent
-export Phi, C, T, ChargeAcc, MassAcc, EnergyAcc, KGrad
+export Phi, C, T, Charge, Mass, Energy, KGrad
 export BOUNDARY_CURRENT, corr_type
 
 ###########
@@ -39,21 +39,21 @@ end
 # ! Naming mistakes: the time derivatives of these variables
 # ! are actually the accumulation variable, these are densities
 # TODO: Rename accumulation to conserved
-abstract type AccumulationVariable <: ScalarVariable end
-struct ChargeAcc <: AccumulationVariable end
-struct MassAcc <: AccumulationVariable end
-struct EnergyAcc <: AccumulationVariable end
+abstract type Conserved <: ScalarVariable end
+struct Charge <: Conserved end
+struct Mass <: Conserved end
+struct Energy <: Conserved end
 
 # Currents corresponding to a accumulation type
 const BOUNDARY_CURRENT = Dict(
-    ChargeAcc() => :BCCharge,
-    MassAcc()   => :BCMass,
-    EnergyAcc() => :BCEnergy,
+    Charge() => :BCCharge,
+    Mass()   => :BCMass,
+    Energy() => :BCEnergy,
 )
 # TODO: Can this not be automated????
-function corr_type(::Conservation{ChargeAcc}) ChargeAcc() end
-function corr_type(::Conservation{MassAcc}) MassAcc() end
-function corr_type(::Conservation{EnergyAcc}) EnergyAcc() end
+function corr_type(::Conservation{Charge}) Charge() end
+function corr_type(::Conservation{Mass}) Mass() end
+function corr_type(::Conservation{Energy}) Energy() end
 
 # Represents k∇T, where k is a tensor, T a potential
 abstract type KGrad{T} <: ScalarVariable end
@@ -205,14 +205,14 @@ function Conservation(
 end
 
 
-function acc_symbol(::ChargeAcc)
-    return :ChargeAcc
+function acc_symbol(::Charge)
+    return :Charge
 end
 
-function acc_symbol(::MassAcc)
-    return :MassAcc
+function acc_symbol(::Mass)
+    return :Mass
 end
 
-function acc_symbol(::EnergyAcc)
-    return :EnergyAcc
+function acc_symbol(::Energy)
+    return :Energy
 end

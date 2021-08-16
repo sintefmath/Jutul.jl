@@ -36,9 +36,9 @@ function test_ac()
     S[:BoundaryC] = BoundaryPotential{C}()
     S[:BoundaryT] = BoundaryPotential{T}()
 
-    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(bcells.+9)
-    S[:BCMass] = BoundaryCurrent{MassAcc}(bcells.+9)
-    S[:BCEnergy] = BoundaryCurrent{EnergyAcc}(bcells.+9)
+    S[:BCCharge] = BoundaryCurrent{Charge}(bcells.+9)
+    S[:BCMass] = BoundaryCurrent{Mass}(bcells.+9)
+    S[:BCEnergy] = BoundaryCurrent{Energy}(bcells.+9)
 
     phi0 = 1.
     init = Dict(

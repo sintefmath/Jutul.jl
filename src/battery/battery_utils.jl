@@ -27,11 +27,11 @@ function single_unique_potential(model::ECModel)
     return false
 end
 
-function degrees_of_freedom_per_unit(model, sf::ChargeAcc)
+function degrees_of_freedom_per_unit(model, sf::Charge)
     return 1
 end
 
-function degrees_of_freedom_per_unit(model, sf::MassAcc)
+function degrees_of_freedom_per_unit(model, sf::Mass)
     return 1
 end
 
@@ -333,21 +333,21 @@ end
 
 
 @terv_secondary function update_as_secondary!(
-    acc, tv::MassAcc, model, param, C
+    acc, tv::Mass, model, param, C
     )
     V = get_flow_volume(model.domain.grid)
     @tullio acc[i] = C[i] * V[i]
 end
 
 @terv_secondary function update_as_secondary!(
-    acc, tv::EnergyAcc, model, param, T
+    acc, tv::Energy, model, param, T
     )
     V = get_flow_volume(model.domain.grid)
     @tullio acc[i] = T[i] * V[i]
 end
 
 @terv_secondary function update_as_secondary!(
-    acc, tv::ChargeAcc, model, param, Phi # only for the graph
+    acc, tv::Charge, model, param, Phi # only for the graph
     )
     @tullio acc[i] = 0 # Charge neutrality
 end

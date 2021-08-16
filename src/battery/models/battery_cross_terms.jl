@@ -2,7 +2,7 @@ using Terv
 
 
 function update_cross_term!(
-    ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc}, 
+    ct::InjectiveCrossTerm, eq::Conservation{Charge}, 
     target_storage, source_storage, 
     target_model, source_model, 
     target, source, dt
@@ -65,7 +65,7 @@ end
 
 
 function update_cross_term!(
-    ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc}, 
+    ct::InjectiveCrossTerm, eq::Conservation{Charge}, 
     target_storage, source_storage, 
     target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
     source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
@@ -98,7 +98,7 @@ function update_cross_term!(
  end
 
 function update_cross_term!(
-    ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc}, 
+    ct::InjectiveCrossTerm, eq::Conservation{Charge}, 
     target_storage, source_storage, 
     target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
     source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
@@ -133,7 +133,7 @@ function update_cross_term!(
 end
 
 function update_cross_term!(
-    ct::InjectiveCrossTerm, eq::Conservation{MassAcc}, 
+    ct::InjectiveCrossTerm, eq::Conservation{Mass}, 
     target_storage, source_storage, 
     target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
     source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
@@ -166,7 +166,8 @@ function update_cross_term!(
     ct.crossterm_source = eM
  end
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq::Conservation{MassAcc}, 
+function update_cross_term!(
+    ct::InjectiveCrossTerm, eq::Conservation{Mass}, 
     target_storage, source_storage, 
     target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
     source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 

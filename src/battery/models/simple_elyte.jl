@@ -15,8 +15,8 @@ function select_primary_variables_system!(S, domain, system::SimpleElyte, formul
 end
 
 function select_equations_system!(eqs, domain, system::SimpleElyte, formulation)
-    charge_cons = (arg...; kwarg...) -> Conservation(ChargeAcc(), arg...; kwarg...)
-    mass_cons = (arg...; kwarg...) -> Conservation(MassAcc(), arg...; kwarg...)
+    charge_cons = (arg...; kwarg...) -> Conservation(Charge(), arg...; kwarg...)
+    mass_cons = (arg...; kwarg...) -> Conservation(Mass(), arg...; kwarg...)
     
     eqs[:charge_conservation] = (charge_cons, 1)
     eqs[:mass_conservation] = (mass_cons, 1)
@@ -37,13 +37,13 @@ function select_secondary_variables_system!(S, domain, system::SimpleElyte, form
     S[:TotalCurrent] = TotalCurrent()
     S[:ChargeCarrierFlux] = ChargeCarrierFlux()
 
-    S[:ChargeAcc] = ChargeAcc()
-    S[:MassAcc] = MassAcc()
+    S[:Charge] = Charge()
+    S[:Mass] = Mass()
 end
 
 function minimum_output_variables(system::SimpleElyte, primary_variables)
     return [
-        :ChargeAcc, :MassAcc, :Conductivity, :Diffusivity, :TPkGrad_Phi, :TPkGrad_C, 
+        :Charge, :Mass, :Conductivity, :Diffusivity,
         :TotalCurrent, :ChargeCarrierFlux
         ]
 end

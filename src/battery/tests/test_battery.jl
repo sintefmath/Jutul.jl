@@ -51,9 +51,9 @@ function make_system(exported,sys,bcfaces,srccells)
     S[:BoundaryC] = BoundaryPotential{Phi}()
     S[:BoundaryT] = BoundaryPotential{T}()
 
-    S[:BCCharge] = BoundaryCurrent{ChargeAcc}(srccells)
-    S[:BCMass] = BoundaryCurrent{MassAcc}(srccells)
-    S[:BCEnergy] = BoundaryCurrent{EnergyAcc}(srccells)
+    S[:BCCharge] = BoundaryCurrent{Charge}(srccells)
+    S[:BCMass] = BoundaryCurrent{Mass}(srccells)
+    S[:BCEnergy] = BoundaryCurrent{Energy}(srccells)
 
     phi0 = 0.
     init = Dict(
