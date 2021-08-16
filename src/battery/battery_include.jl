@@ -13,4 +13,4 @@ include("models/activematerial.jl")
 include("models/ocd.jl")
 include("models/simple_elyte.jl")
 
-include("models/cross_terms.jl") # Works now
+include("models/battery_cross_terms.jl") # Works now
