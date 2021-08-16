@@ -1,10 +1,12 @@
 using Terv
 
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc}, 
+function update_cross_term!(
+    ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc}, 
     target_storage, source_storage, 
     target_model, source_model, 
-    target, source, dt)
+    target, source, dt
+    )
     phi_t = target_storage.state.Phi[ct.impact.target]
     phi_s = source_storage.state.Phi[ct.impact.source]
     function interfaceflux!(src, phi_1,phi_2)
@@ -33,8 +35,9 @@ function regularizedSqrt(x, th)
     return y   
 end
 
-function reaction_rate(phi_a,c_a,R,ocd,
-    phi_e,c_e,activematerial,electrolyte
+function reaction_rate(
+    phi_a, c_a, R, ocd,
+    phi_e, c_e, activematerial, electrolyte
     )
     T = 298.15 # for now
     n = nChargeCarriers(activematerial)
@@ -49,10 +52,10 @@ function reaction_rate(phi_a,c_a,R,ocd,
 end
 
 function sourceElectricMaterial(
-    phi_a,c_a,R,ocd,
-    phi_e,c_e,activematerial,electrolyte  
-)
-    R = reaction_rate(phi_a,c_a,R,ocd,phi_e,c_e,activematerial,electrolyte)
+    phi_a, c_a, R,  ocd,
+    phi_e, c_e, activematerial, electrolyte
+    )
+    R = reaction_rate(phi_a, c_a, R, ocd, phi_e, c_e, activematerial, electrolyte)
     vols =1.0 # volums of cells
 
     eS = vols.*R*n*F
@@ -61,10 +64,13 @@ function sourceElectricMaterial(
 end
 
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc}, 
+function update_cross_term!(
+    ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc}, 
     target_storage, source_storage, 
-    target_model::ActiveMaterialModel, source_model::ElectrolyteModel, 
-    target, source, dt)
+    target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    target, source, dt
+    ) where TS <: ActiveMaterial
     activematerial = TS
     electrolyte = SS 
     phi_e = target_storage.state.Phi[ct.impact.target]
@@ -91,10 +97,14 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc},
     ct.crossterm_source = eE
  end
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc}, 
+function update_cross_term!(
+    ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc}, 
     target_storage, source_storage, 
-    target_model::ElectrolyteModel, source_model::ActiveMaterialModel, 
-    target, source, dt) # where {TS <: ActiveMaterial, SS <:ElectrolyteModel}
+    target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    target, source, dt
+    ) where {TS <: ActiveMaterial, SS <:ElectrolyteModel}
+    
     activematerial = TS
     electrolyte = SS 
     phi_e = target_storage.state.Phi[ct.impact.target]
@@ -122,10 +132,14 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::Conservation{ChargeAcc},
 
 end
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq::Conservation{MassAcc}, 
+function update_cross_term!(
+    ct::InjectiveCrossTerm, eq::Conservation{MassAcc}, 
     target_storage, source_storage, 
-    target_model::ActiveMaterialModel, source_model::ElectrolyteModel, 
-    target, source, dt) # where {TS <: ActiveMaterial, SS <:ElectrolyteModel}
+    target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    target, source, dt
+    ) where {TS <: ActiveMaterial, SS <:ElectrolyteModel}
+
     activematerial = TS
     electrolyte = SS 
     phi_e = target_storage.state.Phi[ct.impact.target]
@@ -154,8 +168,11 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::Conservation{MassAcc},
 
 function update_cross_term!(ct::InjectiveCrossTerm, eq::Conservation{MassAcc}, 
     target_storage, source_storage, 
-    target_model::ElectrolyteModel, source_model::ActiveMaterialModel, 
-    target, source, dt) # where {TS <: ActiveMaterial, SS <:ElectrolyteModel}
+    target_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    source_model::SimulationModel{<:Any, TS, <:Any, <:Any}, 
+    target, source, dt
+    ) where {TS <: ActiveMaterial, SS <:ElectrolyteModel}
+
     activematerial = TS
     electrolyte = SS 
     phi_e = target_storage.state.Phi[ct.impact.target]
