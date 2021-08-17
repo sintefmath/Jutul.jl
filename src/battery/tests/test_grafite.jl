@@ -10,7 +10,7 @@ ENV["JULIA_DEBUG"] = Terv;
 
 
 function test_ac()
-    name="square_current_collector_10by10"
+    name="square_current_collector"
     bcells, T_hf = get_boundary(name)
     one = ones(size(bcells))
     domain, exported = get_cc_grid(name=name, extraout=true, bc=bcells, b_T_hf=T_hf)

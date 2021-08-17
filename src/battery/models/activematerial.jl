@@ -49,30 +49,34 @@ end
 # ? Does this maybe look better ?
 @terv_secondary(
 function update_as_secondary!(
-    vocd, tv::Ocd, model::ActiveMaterialModel, param, C
-    )
+    vocd, tv::Ocd, model::SimulationModel{<:Any, MaterialType, <:Any, <:Any}, param, C
+    ) where   {MaterialType <:ActiveMaterial}
     s = model.system
     # @tullio vocd[i] = ocd(T[i], C[i], s)
-    @tullio vocd[i] = ocd(300.0, C[i], s)
+    refT = 298.15
+    @tullio vocd[i] = ocd(refT, C[i], s)
 end
 )
 
-diffusion_rate(T, C, s) = 1
+
 
 @terv_secondary(
 function update_as_secondary!(
-    vdiffusion, tv::Diffusion, model::ActiveMaterialModel, param, C)
+    vdiffusion, tv::Diffusion, model::SimulationModel{<:Any, MaterialType, <:Any, <:Any}, param, C
+    ) where   {MaterialType <:ActiveMaterial}
     s = model.system
-    @tullio vdiffusion[i] = diffusion_rate(300.0, C[i], s)
+    refT = 298.15
+    @tullio vdiffusion[i] = diffusion_rate(refT, C[i], s)
 end
 )
 
-reaction_rate_const(T, c, s) = 1
 
 @terv_secondary(
 function update_as_secondary!(
-    vReactionRateConst, tv::ReactionRateConst, model::ActiveMaterialModel, param, C)
+    vReactionRateConst, tv::ReactionRateConst, model::SimulationModel{<:Any, MaterialType, <:Any, <:Any}, param, C
+    ) where   {MaterialType <:ActiveMaterial}
     s = model.system
-    @tullio vReactionRateConst[i] = reaction_rate_const(300.0, C[i], s)
+    refT = 298.15
+    @tullio vReactionRateConst[i] = reaction_rate_const(refT, C[i], s)
 end
 )
