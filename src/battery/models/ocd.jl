@@ -117,6 +117,38 @@ end
 function volumetricSurfaceArea(::NMC111)
         return 885000.0
 end
+
+function reaction_rate_const(T, c, ::Grafite)
+        refT = 298.15
+        k0 = 5.0310e-11
+        Eak = 5000
+        val = k0.*exp(-Eak./FARADAY_CONST .*(1.0./T - 1/refT));
+        return val  
+end
+
+function reaction_rate_const(T, c, ::NMC111)
+        refT = 298.15
+        k0 = 2.3300e-11
+        Eak = 5000
+        val = k0.*exp(-Eak./FARADAY_CONST .*(1.0./T - 1/refT));
+        return val  
+end
+
+
+function diffusion_rate(T,c,::Grafite)
+        refT = 298.15
+        D0 = 3.900000000000000e-14
+        Ead = 5000
+        val = D0.*exp(-Ead./FARADAY_CONST .*(1.0./T - 1/refT));
+        return val      
+end
+function diffusion_rate(T,c,::NMC111)
+        refT = 298.15
+        D0 = 1.000000000000000e-14
+        Ead = 5000
+        val = D0.*exp(-Ead./FARADAY_CONST .*(1.0./T - 1/refT));
+        return val   
+end
 ##
 #grafite = Grafite()
 #nmc111 = NMC111()

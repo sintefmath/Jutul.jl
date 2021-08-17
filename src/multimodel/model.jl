@@ -442,10 +442,10 @@ end
 
 function update_cross_terms!(storage, model::MultiModel, arg...)
     models = model.models
-    for target in keys(models)
+    @sync for target in keys(models)
         for source in keys(models)
             if source != target
-                update_cross_terms_for_pair!(storage, model, source, target, arg...)
+                @async update_cross_terms_for_pair!(storage, model, source, target, arg...)
             end
         end
     end

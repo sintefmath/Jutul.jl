@@ -146,7 +146,7 @@ function test_ac()
     init_pp[:Phi] = state0["PositiveElectrode"]["CurrentCollector"]["phi"][1]
     init_nam[:Phi] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["phi"][1]
     init_nam[:C] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["c"][1] 
-    init_nam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1]
+    init_pam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1]
     init_pam[:C] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["c"][1]
     init_elyte[:Phi] = state0["Electrolyte"]["phi"][1]
     init_elyte[:C] = state0["Electrolyte"]["cs"][1][1]
@@ -175,7 +175,7 @@ function test_ac()
         :PP => parm_pp
     )
 
-    # setup coupling CC <-> NAM
+    # setup coupling CC <-> NAM charge
     target = Dict( :model => :NAM,
                    :equation => :charge_conservation
     )
@@ -189,7 +189,7 @@ function test_ac()
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings,coupling)
 
-    # setup coupling NAM <-> ELYTE
+    # setup coupling NAM <-> ELYTE charge
     target = Dict( :model => :ELYTE,
                    :equation => :charge_conservation
     )
@@ -204,7 +204,23 @@ function test_ac()
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings,coupling)
 
-     # setup coupling PAM <-> ELYTE
+ # setup coupling NAM <-> ELYTE mass
+    target = Dict( :model => :ELYTE,
+                   :equation => :mass_conservation
+    )
+    source = Dict( :model => :NAM,
+                :equation => :mass_conservation)
+
+    srange=Int64.(exported_all["model"]["couplingTerms"][1]["couplingcells"][:,1])
+    trange=Int64.(exported_all["model"]["couplingTerms"][1]["couplingcells"][:,2])
+    intersection = ( srange, trange, Cells(), Cells())
+    crosstermtype = InjectiveCrossTerm
+    issym = true
+    coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
+    push!(model.couplings,coupling)
+
+
+     # setup coupling PAM <-> ELYTE charge
     target = Dict( :model => :ELYTE,
         :equation => :charge_conservation
         )
@@ -218,7 +234,22 @@ function test_ac()
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings,coupling)
 
-    # setup coupling PP <-> PAM
+   # setup coupling PAM <-> ELYTE mass
+   target = Dict( :model => :ELYTE,
+   :equation => :mass_conservation
+   )
+    source = Dict( :model => :PAM,
+        :equation => :mass_conservation)
+    srange=Int64.(exported_all["model"]["couplingTerms"][2]["couplingcells"][:,1])
+    trange=Int64.(exported_all["model"]["couplingTerms"][2]["couplingcells"][:,2])
+    intersection = ( srange, trange, Cells(), Cells())
+    crosstermtype = InjectiveCrossTerm
+    issym = true
+    coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
+    push!(model.couplings,coupling)
+
+
+    # setup coupling PP <-> PAM charge
     target = Dict( :model => :PAM,
             :equation => :charge_conservation
     )
