@@ -253,7 +253,7 @@ function test_ac()
 end
 
 
-@time states, grids, state0, stateref, parameters, init, exported_all = test_ac();
+states, grids, state0, stateref, parameters, init, exported_all = test_ac();
 states = states[1]
 refstep=1
 ## f= plot_interactive(G, states);
