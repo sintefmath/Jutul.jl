@@ -65,8 +65,8 @@ function test_ec()
     states, report = simulate(sim, timesteps, config = cfg)
     return states, G
 end
-
-states, G = test_ec();
+##
+test_ec();
 
 ##
 f = plot_interactive(G, states);

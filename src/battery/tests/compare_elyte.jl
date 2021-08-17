@@ -6,34 +6,6 @@ using Terv
 using MAT
 ENV["JULIA_DEBUG"] = Terv;
 
-function get_simple_elyte_model()
-    name="modelElectrolyte"
-    fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
-    exported = MAT.matread(fn)
-    ex_model = exported["model"]
-
-    boundary = ex_model["bcstruct"]["dirichlet"]
-
-    b_faces = Int64.(boundary["faces"])
-    T_all = ex_model["operators"]["T_all"]
-    N_all = Int64.(ex_model["G"]["faces"]["neighbors"])
-    isboundary = (N_all[b_faces, 1].==0) .| (N_all[b_faces, 2].==0)
-    @assert all(isboundary)
-    bc_cells = N_all[b_faces, 1] + N_all[b_faces, 2]
-    b_T_hf   = T_all[b_faces]
-
-    domain = exported_model_to_domain(ex_model, bc=bc_cells, b_T_hf=b_T_hf)
-
-    sys = SimpleElyte()
-    model = SimulationModel(domain, sys, context = DefaultContext())
-
-    S = model.secondary_variables
-    S[:BoundaryPhi] = BoundaryPotential{Phi}()
-    S[:BoundaryC] = BoundaryPotential{C}()
-
-    return model, exported
-end
-
 ##
 
 function plot_elyte()
@@ -47,38 +19,16 @@ plot_elyte()
 
 function test_simple_elyte()
     model, exported = get_simple_elyte_model()
-    boundary = exported["model"]["bcstruct"]["dirichlet"]
-    b_phi = boundary["phi"][:, 1]
-    b_c = boundary["conc"][:, 1]
-    init_states = exported["state0"]
-    init = Dict(
-        :Phi            => init_states["phi"][:, 1],
-        :C              => init_states["cs"][1][:, 1],
-        :T              => init_states["T"][:, 1],
-        :BoundaryPhi    => b_phi,
-        :BoundaryC      => b_c,
-        )
-
-    state0 = setup_state(model, init)
-
-    parameters = setup_parameters(model)
-    parameters[:tolerances][:default] = 1e-10
-    t1, t2 = exported["model"]["sp"]["t"]
-    z1, z2 = exported["model"]["sp"]["z"]
-    tDivz_eff = (t1/z1 + t2/z2)
-    parameters[:t] = tDivz_eff
-    parameters[:z] = 1
- 
+    sim = get_simple_elyte_sim(model, exported)
     timesteps = exported["schedule"]["step"]["val"][:, 1]
-
     G = exported["model"]["G"]
   
-    sim = Simulator(model, state0=state0, parameters=parameters)
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
     cfg[:info_level] = 2
     cfg[:debug_level] = 2
     states, report = simulate(sim, timesteps, config = cfg)
+    
     rs = exported["states"][:, 1]
     return states, G, model, rs
 end
