@@ -232,10 +232,6 @@ mutable struct TrivialPreconditioner <: TervPreconditioner
     end
 end
 
-function update!(preconditioner::TrivialPreconditioner, lsys, model, storage, recorder)
-    # No need to update.
-end
-
 """
 Full LU factorization as preconditioner (intended for smaller subsystems)
 """
