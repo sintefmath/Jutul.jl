@@ -82,8 +82,13 @@ function exported_model_to_domain(exported; bc=[], b_T_hf=[], tensor_map=false)
     face_areas = vec(exported["G"]["faces"]["areas"][internal_faces])
     face_normals = exported["G"]["faces"]["normals"][internal_faces, :]./face_areas
     face_normals = copy(face_normals')
-    volumes = vec(exported["G"]["cells"]["volumes"])
-
+    if length(exported["G"]["cells"]["volumes"])==1
+        volumes = exported["G"]["cells"]["volumes"]
+        volumes = Vector{Float64}(undef,1)
+        volumes[1] = exported["G"]["cells"]["volumes"]
+    else
+        volumes = vec(exported["G"]["cells"]["volumes"])
+    end
     P = exported["operators"]["cellFluxOp"]["P"]
     S = exported["operators"]["cellFluxOp"]["S"]
     G = MinimalECTPFAGrid(volumes, N, bc, b_T_hf, P, S)
