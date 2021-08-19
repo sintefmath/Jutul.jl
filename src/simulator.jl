@@ -140,6 +140,8 @@ function simulator_config(sim; kwarg...)
     for key in keys(kwarg)
         cfg[key] = kwarg[key]
     end
+    # Max residue before warning is issued
+    cfg[:max_residue] = 1e10
     return cfg
 end
 
@@ -224,7 +226,7 @@ function solve_ministep(sim, dt, forces, maxIterations, cfg)
         if done
             break
         end
-        too_large = e > 1e20
+        too_large = e > cfg[:max_residue]
         non_finite = !isfinite(e)
         failure = non_finite || too_large
         if failure

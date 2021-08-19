@@ -91,7 +91,7 @@ function setup_model(exported_all)
     (model_elyte, G_elyte, state0_elyte, parm_elyte, init_elyte) = 
         make_system(exported_elyte,sys_elyte,bcfaces,srccells)
 
-    sys_pam = Grafite()
+    sys_pam = NMC111()
     exported_pam = exported_all["model"]["PositiveElectrode"]["ElectrodeActiveComponent"];
     bcfaces=[]
     srccells = []
@@ -118,11 +118,11 @@ function setup_model(exported_all)
 
     state0 = exported_all["state0"]
 
-    init_cc[:Phi] = state0["NegativeElectrode"]["CurrentCollector"]["phi"][1]           * 0
-    init_pp[:Phi] = state0["PositiveElectrode"]["CurrentCollector"]["phi"][1]           * 0
-    init_nam[:Phi] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["phi"][1]  * 0
-    init_elyte[:Phi] = state0["Electrolyte"]["phi"][1]                                  * 0
-    init_pam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1]  * 0
+    init_cc[:Phi] = state0["NegativeElectrode"]["CurrentCollector"]["phi"][1]          
+    init_pp[:Phi] = state0["PositiveElectrode"]["CurrentCollector"]["phi"][1]          
+    init_nam[:Phi] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["phi"][1] 
+    init_elyte[:Phi] = state0["Electrolyte"]["phi"][1]                                 
+    init_pam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1] 
     init_nam[:C] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["c"][1] 
     init_pam[:C] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["c"][1]
     init_elyte[:C] = state0["Electrolyte"]["cs"][1][1]
@@ -290,12 +290,10 @@ function test_battery()
 
     sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
     timesteps = exported_all["schedule"]["step"]["val"][1:5]
-    for _ in 1:15
-        push!(timesteps, 0.5)
-    end
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
     cfg[:info_level] = 2
+    cfg[:max_residue] = 1e20
     states, report = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
 
@@ -318,22 +316,27 @@ plot1 = Plots.plot([], []; title = "Phi", size=(1000, 800))
 
 p = plot!(plot1, legend = false)
 submodels = (:CC, :NAM, :ELYTE, :PAM, :PP)
-submodels = (:NAM, :ELYTE, :PAM)
-var = :C
-i = 5 # Timestep
+# submodels = (:NAM, :ELYTE, :PAM)
+submodels = (:CC, :NAM)
+# submodels = (:ELYTE,)
+submodels = (:PP, :PAM)
+var = :Phi
+
 steps = size(states, 1)
 for i in 1:steps
     for mod in submodels
         x = grids[mod]["cells"]["centroids"]
-        c = i / steps / 2
-        plot!(plot1, x, states[i][mod][var], lw=2, color=RGBA(0, 0, c, 1))
+        # c = i / steps / 2
+        plot!(plot1, x, states[i][mod][var], lw=2, color=RGBA(0.5, 0.5, 0.5, 0.5))
     end
-    display(plot1)
 end
+display(plot1)
 
+##
 closeall()
 
-
+##
+display(plot1)
 ##
 states = states[1]
 refstep=1
