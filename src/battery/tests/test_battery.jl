@@ -32,7 +32,7 @@ function make_system(exported,sys,bcfaces,srccells)
     C0 = 1.
     T0 = 1.
     D = 1e-9 # ???   
-    if isa("EffectiveElectricalConductivity",Matrix)
+    if isa(exported["EffectiveElectricalConductivity"],Matrix)
         σ = exported["EffectiveElectricalConductivity"][1]
     else
         σ = 1.0
@@ -58,7 +58,7 @@ function make_system(exported,sys,bcfaces,srccells)
         :BoundaryPhi            => bcvaluephi, 
         :BoundaryC              => bcvaluephi, 
         :BoundaryT              => bcvaluephi,
-        :BCCharge               => -bcvaluesrc.*0,
+        :BCCharge               => -bcvaluesrc.*2e-2,
         :BCMass                 => bcvaluesrc,
         :BCEnergy               => bcvaluesrc,
         )
@@ -293,6 +293,7 @@ p3 = Plots.plot(;title="C")
     #Plots.plot!(p2,xfi,j_ref;linecolor="red")
 fields = ["CurrentCollector","ElectrodeActiveComponent"]
 components = ["NegativeElectrode","PositiveElectrode"]
+#components = ["NegativeElectrode"]
 for component = components
     for field in fields
         G = exported_all["model"][component][field]["G"]
@@ -311,6 +312,7 @@ for component = components
         end
     end
 end
+fields = [] 
 fields = ["Electrolyte"]
 for field in fields
     G = exported_all["model"][field]["G"]
@@ -330,7 +332,10 @@ for field in fields
 end
 #display(plot!(p1, p2, layout = (1, 2), legend = false))
 ##
-for key in keys(grids)
+mykeys =  keys(grids)
+#mykeys = [:CC, :NAM, :ELYTE]
+#mykeys = [:PP, :PAM]
+for key in mykeys
     G = grids[key]
     x = G["cells"]["centroids"]
     xf= G["faces"]["centroids"][end]
@@ -348,11 +353,3 @@ for key in keys(grids)
     end
     display(plot!(p1, p2,p3,layout = (3, 1), legend = false))
 end
-##
-#for (n,state) in enumerate(states)
-#        println(n)
-#        Plots.plot!(p1,x,states[n].Phi)
-#        Plots.plot!(p2,xfi,states[n].TPkGrad_Phi[1:2:end-1])
-#        display(plot!(p1, p2, layout = (1, 2), legend = false))
-#end
-##
