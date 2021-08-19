@@ -10,6 +10,9 @@ using Plots
 
 ENV["JULIA_DEBUG"] = Terv;
 
+# TODO: implementere volume fraction
+# TODO: Use scondary_variable T in cross terms
+
 ##
 function make_system(exported,sys,bcfaces,srccells)
     T_all = exported["operators"]["T_all"]
@@ -21,7 +24,11 @@ function make_system(exported,sys,bcfaces,srccells)
     bcvaluesrc = ones(size(srccells))
     bcvaluephi = ones(size(bccells)).*0.0
 
-    domain = exported_model_to_domain(exported, bc = bccells, b_T_hf = T_hf)  
+    vf = []
+    if haskey(exported, "volumeFraction")
+        vf = exported["volumeFraction"][:, 1]
+    end
+    domain = exported_model_to_domain(exported, bc = bccells, b_T_hf = T_hf, vf=vf)
     G = exported["G"]    
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
@@ -30,9 +37,9 @@ function make_system(exported,sys,bcfaces,srccells)
     # State is dict with pressure in each cell
     phi0 = 1.0
     C0 = 1.
-    T0 = 1.
-    D = 1e-9 # ???   
-    if isa(exported["EffectiveElectricalConductivity"],Matrix)
+    T0 = 298.15
+    D = 1e-9 # ???
+    if isa(exported["EffectiveElectricalConductivity"], Matrix)
         σ = exported["EffectiveElectricalConductivity"][1]
     else
         σ = 1.0
@@ -58,7 +65,7 @@ function make_system(exported,sys,bcfaces,srccells)
         :BoundaryPhi            => bcvaluephi, 
         :BoundaryC              => bcvaluephi, 
         :BoundaryT              => bcvaluephi,
-        :BCCharge               => -bcvaluesrc.*2e-2,
+        :BCCharge               => bcvaluesrc.*2e-2,
         :BCMass                 => bcvaluesrc,
         :BCEnergy               => bcvaluesrc,
         )
@@ -82,14 +89,14 @@ function setup_model(exported_all)
     bcfaces=[]
     srccells = []
     (model_nam, G_nam, state0_nam, parm_nam, init_nam) = 
-        make_system(exported_nam,sys_nam,bcfaces,srccells)
+        make_system(exported_nam, sys_nam, bcfaces, srccells)
 
     sys_elyte = SimpleElyte()
     exported_elyte = exported_all["model"]["Electrolyte"]
     bcfaces=[]
     srccells = []
     (model_elyte, G_elyte, state0_elyte, parm_elyte, init_elyte) = 
-        make_system(exported_elyte,sys_elyte,bcfaces,srccells)
+        make_system(exported_elyte, sys_elyte, bcfaces, srccells)
 
 
     sys_pam = NMC111()
@@ -305,27 +312,24 @@ function test_battery()
     states, report = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
 
-    return states, grids, state0, stateref, parameters, init, exported_all
+    return states, grids, state0, stateref, parameters, exported_all, model
 end
 
 ##
 
-states, grids, state0, stateref, parameters, init, exported_all = test_battery();
+states, grids, state0, stateref, parameters, exported_all, model = test_battery();
 
 ##
 
 using Plots
 
-x = G["cells"]["centroids"][:, 1]
-xf = G["faces"]["centroids"][end]
-xfi= G["faces"]["centroids"][2:10]
 
 plot1 = Plots.plot([], []; title = "Phi", size=(1000, 800))
 
 p = plot!(plot1, legend = false)
-submodels = (:CC, :NAM, :ELYTE, :PAM, :PP)
-
-# submodels = (:CC, :NAM)
+# submodels = (:CC, :NAM, :ELYTE, :PAM, :PP)
+# submodels = (:NAM, :ELYTE, :PAM)
+submodels = (:CC, :NAM)
 # submodels = (:ELYTE,)
 # submodels = (:PP, :PAM)
 
@@ -336,12 +340,10 @@ for i in 1:steps
         x = grids[mod]["cells"]["centroids"]
         plot!(plot1, x, states[i][mod][var], lw=2, color=RGBA(0.5, 0.5, 0.5, 0.5))
     end
-    display(plot1)
 end
 closeall()
-
-##
 display(plot1)
+
 ##
 #states = states[1]
 
@@ -369,7 +371,7 @@ p3 = Plots.plot(;title="C")
     #Plots.plot!(p2,xfi,j_ref;linecolor="red")
 fields = ["CurrentCollector","ElectrodeActiveComponent"]
 components = ["NegativeElectrode","PositiveElectrode"]
-components = ["NegativeElectrode"]
+# components = ["NegativeElectrode"]
 #components=[]
 for component = components
     for field in fields
@@ -390,7 +392,7 @@ for component = components
     end
 end
 fields = [] 
-#fields = ["Electrolyte"]
+fields = ["Electrolyte"]
 for field in fields
     G = exported_all["model"][field]["G"]
     x = G["cells"]["centroids"]
@@ -410,7 +412,7 @@ end
 #display(plot!(p1, p2, layout = (1, 2), legend = false))
 ##
 mykeys =  keys(grids)
-mykeys = [:CC, :NAM] # :ELYTE]
+# mykeys = [:CC, :NAM] # :ELYTE]
 #mykeys = [:PP, :PAM]
 #mykeys = [:ELYTE]
 for key in mykeys
@@ -421,9 +423,9 @@ for key in mykeys
     p=plot(p1, p2, layout = (1, 2), legend = false)
     Plots.plot!(p1,x,states[sim_step][key].Phi;markershape=:circle,linestyle=:dot, seriestype = :scatter)
     if haskey(states[sim_step][key],:TotalCurrent)
-        Plots.plot!(p2,xfi,-states[end][key].TotalCurrent[1:2:end-1];markershape=:circle,linestyle=:dot, seriestype = :scatter)
+        Plots.plot!(p2,xfi,states[end][key].TotalCurrent[1:2:end-1];markershape=:circle,linestyle=:dot, seriestype = :scatter)
     else
-        Plots.plot!(p2,xfi,states[end][key].TPkGrad_Phi[1:2:end-1];markershape=:circle,linestyle=:dot, seriestype = :scatter)
+        Plots.plot!(p2,xfi,-states[end][key].TPkGrad_Phi[1:2:end-1];markershape=:circle,linestyle=:dot, seriestype = :scatter)
     end
     if(haskey(states[end][key],:C))
         cc=states[sim_step][key].C

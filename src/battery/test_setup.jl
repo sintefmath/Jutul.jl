@@ -73,7 +73,7 @@ function get_cc_grid(
     end
 end
 
-function exported_model_to_domain(exported; bc=[], b_T_hf=[], tensor_map=false)
+function exported_model_to_domain(exported; bc=[], b_T_hf=[], tensor_map=false, vf=vf)
     N = exported["G"]["faces"]["neighbors"]
     N = Int64.(N)
     internal_faces = (N[:, 2] .> 0) .& (N[:, 1] .> 0)
@@ -91,7 +91,7 @@ function exported_model_to_domain(exported; bc=[], b_T_hf=[], tensor_map=false)
     end
     P = exported["operators"]["cellFluxOp"]["P"]
     S = exported["operators"]["cellFluxOp"]["S"]
-    G = MinimalECTPFAGrid(volumes, N, bc, b_T_hf, P, S)
+    G = MinimalECTPFAGrid(volumes, N, bc, b_T_hf, P, S, vf)
 
     T = exported["operators"]["T"].*2.0
     flow = TPFlow(G, T, tensor_map=tensor_map)

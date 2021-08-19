@@ -22,7 +22,7 @@ end
 end
 
 @inline function grad(c_self, c_other, p::AbstractArray)
-    return p[c_self] - value(p[c_other])
+    return +(p[c_self] - value(p[c_other]))
 end
 
 @inline function half_face_two_point_kgrad(
@@ -126,7 +126,7 @@ function apply_boundary_potential!(
     T_hf = model.domain.grid.boundary_T_hf
 
     for (i, c) in enumerate(bc)
-        @inbounds acc[c] -= - D[c]*T_hf[i]*(C[c] - BoundaryC[i])
+        @inbounds acc[c] += - D[c]*T_hf[i]*(C[c] - BoundaryC[i])
     end
 end
 
@@ -142,7 +142,7 @@ function apply_boundary_potential!(
     T_hf = model.domain.grid.boundary_T_hf
 
     for (i, c) in enumerate(bc)
-        @inbounds acc[c] -= - λ[c]*T_hf[i]*(T[c] - BoundaryT[i])
+        @inbounds acc[c] += - λ[c]*T_hf[i]*(T[c] - BoundaryT[i])
     end
 end
 
