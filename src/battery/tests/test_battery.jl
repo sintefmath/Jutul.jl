@@ -65,7 +65,7 @@ function make_system(exported,sys,bcfaces,srccells)
         :BoundaryPhi            => bcvaluephi, 
         :BoundaryC              => bcvaluephi, 
         :BoundaryT              => bcvaluephi,
-        :BCCharge               => bcvaluesrc.*2e-2,
+        :BCCharge               => bcvaluesrc.*0.0227702,
         :BCMass                 => bcvaluesrc,
         :BCEnergy               => bcvaluesrc,
         )
@@ -323,7 +323,6 @@ states, grids, state0, stateref, parameters, exported_all, model = test_battery(
 
 using Plots
 
-
 plot1 = Plots.plot([], []; title = "Phi", size=(1000, 800))
 
 p = plot!(plot1, legend = false)
@@ -345,44 +344,29 @@ closeall()
 display(plot1)
 
 ##
-#states = states[1]
 
 refstep=1
 sim_step=1
-## f= plot_interactive(G, states);
-#fields = ["CurrentCollector","ElectrodeActiveMaterial"]
 
-#phi_ref = stateref[10]["NegativeElectrode"]["CurrentCollector"]["phi"]
-#j_ref = stateref[10]["NegativeElectrode"]["CurrentCollector"]["j"]
-## set up for current collector first
-mykey = :ELYTE
-G = grids[mykey]
-x = G["cells"]["centroids"]
-xf= G["faces"]["centroids"][end]
-xfi= G["faces"]["centroids"][2:end-1]
-#state0=states[1]
-#p1 = Plots.plot(x,state0[mykey][:Phi];title="Phi")
-p1 = Plots.plot(;title="Phi")
-p2 = Plots.plot(;title="Flux")
-#Plots.plot!(p1,x,phi_ref;linecolor="red")
-#p2 = Plots.plot(xfi,states[1][mykey].TPkGrad_Phi[1:2:end-1];title="Flux",markershape=:circle)
-p3 = Plots.plot(;title="C")
-    #p2 = Plots.plot([xf[end]],[state0[:BCCharge][1]];title="Flux")
-    #Plots.plot!(p2,xfi,j_ref;linecolor="red")
+
+p1 = Plots.plot(title="Phi", size=(1000, 800))
+p2 = Plots.plot(title="Flux", size=(1000, 800))
+p3 = Plots.plot(title="C", size=(1000, 800))
+
 fields = ["CurrentCollector","ElectrodeActiveComponent"]
 components = ["NegativeElectrode","PositiveElectrode"]
-# components = ["NegativeElectrode"]
-#components=[]
+
 for component = components
     for field in fields
         G = exported_all["model"][component][field]["G"]
         x = G["cells"]["centroids"]
         xf= G["faces"]["centroids"][end]
         xfi= G["faces"]["centroids"][2:end-1]
-        #state0=states[1]
+
         state = stateref[refstep][component]
         phi_ref = state[field]["phi"]
         j_ref = state[field]["j"]
+
         Plots.plot!(p1,x,phi_ref;linecolor="red")
         Plots.plot!(p2,xfi,j_ref;linecolor="red")
         if haskey(state[field],"c")
@@ -391,17 +375,20 @@ for component = components
         end
     end
 end
+
 fields = [] 
 fields = ["Electrolyte"]
+
 for field in fields
     G = exported_all["model"][field]["G"]
     x = G["cells"]["centroids"]
     xf= G["faces"]["centroids"][end]
     xfi= G["faces"]["centroids"][2:end-1]
-    #state0=states[1]
+
     state = stateref[refstep]
     phi_ref = state[field]["phi"]
     j_ref = state[field]["j"]
+
     Plots.plot!(p1,x,phi_ref;linecolor="red")
     Plots.plot!(p2,xfi,j_ref;linecolor="red")
     if haskey(state[field],"cs")
@@ -409,27 +396,34 @@ for field in fields
         Plots.plot!(p3,x,c;linecolor="red")
     end
 end
-#display(plot!(p1, p2, layout = (1, 2), legend = false))
+
 ##
+
 mykeys =  keys(grids)
 # mykeys = [:CC, :NAM] # :ELYTE]
-#mykeys = [:PP, :PAM]
-#mykeys = [:ELYTE]
+# mykeys = [:PP, :PAM]
+# mykeys = [:ELYTE]
 for key in mykeys
     G = grids[key]
     x = G["cells"]["centroids"]
     xf= G["faces"]["centroids"][end]
     xfi= G["faces"]["centroids"][2:end-1]     
-    p=plot(p1, p2, layout = (1, 2), legend = false)
-    Plots.plot!(p1,x,states[sim_step][key].Phi;markershape=:circle,linestyle=:dot, seriestype = :scatter)
-    if haskey(states[sim_step][key],:TotalCurrent)
-        Plots.plot!(p2,xfi,states[end][key].TotalCurrent[1:2:end-1];markershape=:circle,linestyle=:dot, seriestype = :scatter)
+    p = plot(p1, p2, layout = (1, 2), legend = false)
+    phi = states[sim_step][key].Phi
+    Plots.plot!(
+        p1, x, phi; markershape=:circle, linestyle=:dot, seriestype = :scatter
+        )
+    
+    if haskey(states[sim_step][key], :TotalCurrent)
+        j = states[end][key].TotalCurrent[1:2:end-1]
     else
-        Plots.plot!(p2,xfi,-states[end][key].TPkGrad_Phi[1:2:end-1];markershape=:circle,linestyle=:dot, seriestype = :scatter)
+        j = -states[end][key].TPkGrad_Phi[1:2:end-1]
     end
-    if(haskey(states[end][key],:C))
-        cc=states[sim_step][key].C
-        Plots.plot!(p3,x,cc;markershape=:circle,linestyle=:dot, seriestype = :scatter)
+    
+    Plots.plot!(p2, xfi, j; markershape=:circle,linestyle=:dot, seriestype = :scatter)
+    if(haskey(states[end][key], :C))
+        cc = states[sim_step][key].C
+        Plots.plot!(p3, x, cc; markershape=:circle, linestyle=:dot, seriestype = :scatter)
     end
-    display(plot!(p1, p2,p3,layout = (3, 1), legend = false))
+    display(plot!(p1, p2, p3,layout = (3, 1), legend = false))
 end
