@@ -118,7 +118,7 @@ const p2 = Polynomial(poly_param[1:end, 2])
 const p3 = Polynomial(poly_param[1:end, 3])
 
 @inline function cond(T::Real, C::Real, ::Electrolyte)
-    fact = 1e-4  * 500 # fudge factor
+    fact = 1e-4  # * 500 # fudge factor
     return fact * C * (p1(C) + p2(C) * T + p3(C) * T^2)^2
 end
 

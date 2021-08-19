@@ -85,7 +85,7 @@ function sourceElectricMaterial!(eS,eM,
     for (i, val) in enumerate(phi_a)
         R = reaction_rate(phi_a[i], c_a[i], R0[i], ocd[i],
         phi_e[i], c_e[i], activematerial, electrolyte)
-        vols = 1.0 # volums of cells
+        vols = 1e-5 # volums of cells
 
         eS[i] = vols*R*n*FARADAY_CONST
         eM[i] = vols*R
