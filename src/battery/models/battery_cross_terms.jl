@@ -5,7 +5,7 @@ using Terv
 function ccinterfaceflux!(src, phi_1,phi_2)
     for i in eachindex(phi_1)
         src[i] = (phi_2[i] - phi_1[i])
-        src[i] *= 1e7
+        src[i] *= -1e7
     end
 end
 
@@ -87,8 +87,8 @@ function sourceElectricMaterial!(eS,eM,
         phi_e[i], c_e[i], activematerial, electrolyte)
         vols = 1e-5 # volums of cells
 
-        eS[i] = vols*R*n*FARADAY_CONST
-        eM[i] = vols*R
+        eS[i] = -1.0*vols*R*n*FARADAY_CONST
+        eM[i] = 1.0*vols*R
     end
     return (eS, eM)
 end

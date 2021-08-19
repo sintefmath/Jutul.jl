@@ -355,7 +355,9 @@ p3 = Plots.plot(title="C", size=(1000, 800))
 
 fields = ["CurrentCollector","ElectrodeActiveComponent"]
 components = ["NegativeElectrode","PositiveElectrode"]
-
+components = ["NegativeElectrode"]
+#components = ["PositiveElectrode"]
+#components = []
 for component = components
     for field in fields
         G = exported_all["model"][component][field]["G"]
@@ -377,7 +379,7 @@ for component = components
 end
 
 fields = [] 
-fields = ["Electrolyte"]
+#fields = ["Electrolyte"]
 
 for field in fields
     G = exported_all["model"][field]["G"]
@@ -400,9 +402,9 @@ end
 ##
 
 mykeys =  keys(grids)
-# mykeys = [:CC, :NAM] # :ELYTE]
-# mykeys = [:PP, :PAM]
-# mykeys = [:ELYTE]
+ mykeys = [:CC, :NAM] # :ELYTE]
+ #mykeys = [:PP, :PAM]
+#mykeys = [:ELYTE]
 for key in mykeys
     G = grids[key]
     x = G["cells"]["centroids"]

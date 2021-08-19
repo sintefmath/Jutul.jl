@@ -93,7 +93,7 @@ function exported_model_to_domain(exported; bc=[], b_T_hf=[], tensor_map=false, 
     S = exported["operators"]["cellFluxOp"]["S"]
     G = MinimalECTPFAGrid(volumes, N, bc, b_T_hf, P, S, vf)
 
-    T = exported["operators"]["T"].*2.0
+    T = exported["operators"]["T"].*2.0*-1.0
     flow = TPFlow(G, T, tensor_map=tensor_map)
     disc = (charge_flow = flow,)
     D = DiscretizedDomain(G, disc)
