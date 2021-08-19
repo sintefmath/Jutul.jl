@@ -164,6 +164,10 @@ function MinimalECTPFAGrid(pv, N, bc=[], T_hf=[], P=[], S=[], vf=[])
     @assert all(pv .> 0)
     @assert size(bc) == size(T_hf)
 
+    if size(vf) != nc
+        vf = ones(nc)
+    end
+
     MinimalECTPFAGrid{eltype(pv), eltype(N)}(pv, N, bc, T_hf, P, S, vf)
 end
 

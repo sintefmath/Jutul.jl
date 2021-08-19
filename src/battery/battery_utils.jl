@@ -312,14 +312,16 @@ end
     acc, tv::Mass, model, param, C
     )
     V = get_flow_volume(model.domain.grid)
-    @tullio acc[i] = C[i] * V[i]
+    vf = model.domain.grid.vol_frac
+    @tullio acc[i] = C[i] * V[i] * vf[i]
 end
 
 @terv_secondary function update_as_secondary!(
     acc, tv::Energy, model, param, T
     )
     V = get_flow_volume(model.domain.grid)
-    @tullio acc[i] = T[i] * V[i]
+    vf = model.domain.grid.vol_frac
+    @tullio acc[i] = T[i] * V[i] * vf[i]
 end
 
 @terv_secondary function update_as_secondary!(

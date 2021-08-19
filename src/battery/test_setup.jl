@@ -73,7 +73,7 @@ function get_cc_grid(
     end
 end
 
-function exported_model_to_domain(exported; bc=[], b_T_hf=[], tensor_map=false, vf=vf)
+function exported_model_to_domain(exported; bc=[], b_T_hf=[], tensor_map=false, vf=[])
     N = exported["G"]["faces"]["neighbors"]
     N = Int64.(N)
     internal_faces = (N[:, 2] .> 0) .& (N[:, 1] .> 0)

@@ -152,7 +152,8 @@ function update_as_secondary!(
     con, tv::Conductivity, model::ElectrolyteModel, param, T, C
     )
     s = model.system
-    @tullio con[i] = cond(T[i], C[i], s)
+    vf = model.domain.grid.vol_frac
+    @tullio con[i] = cond(T[i], C[i], s) * vf[i]^1.5
 end
 )
 
@@ -160,7 +161,8 @@ end
     D, sv::Diffusivity, model::ElectrolyteModel, param, C, T
     )
     s = model.system
-    @tullio D[i] = diffusivity(T[i], C[i], s)
+    vf = model.domain.grid.vol_frac
+    @tullio D[i] = diffusivity(T[i], C[i], s)  * vf[i]^1.5
 end
 
 
