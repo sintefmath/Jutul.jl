@@ -177,7 +177,7 @@ function setup_coupling!(model, exported_all)
     intersection = ( srange, trange, Cells(), Cells())
     crosstermtype = InjectiveCrossTerm
     issym = true
-    coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
+    coupling = MultiModelCoupling(source, target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings, coupling)
 
     # setup coupling NAM <-> ELYTE charge
@@ -195,7 +195,7 @@ function setup_coupling!(model, exported_all)
     intersection = ( srange, trange, Cells(), Cells())
     crosstermtype = InjectiveCrossTerm
     issym = true
-    coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
+    coupling = MultiModelCoupling(source, target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings, coupling)
 
     # setup coupling NAM <-> ELYTE mass
@@ -213,7 +213,7 @@ function setup_coupling!(model, exported_all)
     intersection = ( srange, trange, Cells(), Cells())
     crosstermtype = InjectiveCrossTerm
     issym = true
-    coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
+    coupling = MultiModelCoupling(source, target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings, coupling)
 
     # setup coupling PAM <-> ELYTE charge
@@ -230,7 +230,7 @@ function setup_coupling!(model, exported_all)
     intersection = ( srange, trange, Cells(), Cells())
     crosstermtype = InjectiveCrossTerm
     issym = true
-    coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
+    coupling = MultiModelCoupling(source, target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings,coupling)
 
     # setup coupling PAM <-> ELYTE mass
@@ -317,23 +317,20 @@ plot1 = Plots.plot([], []; title = "Phi", size=(1000, 800))
 
 p = plot!(plot1, legend = false)
 submodels = (:CC, :NAM, :ELYTE, :PAM, :PP)
-# submodels = (:NAM, :ELYTE, :PAM)
-submodels = (:CC, :NAM)
-# submodels = (:ELYTE,)
-submodels = (:PP, :PAM)
-var = :Phi
 
+# submodels = (:CC, :NAM)
+# submodels = (:ELYTE,)
+# submodels = (:PP, :PAM)
+
+var = :Phi
 steps = size(states, 1)
 for i in 1:steps
     for mod in submodels
         x = grids[mod]["cells"]["centroids"]
-        # c = i / steps / 2
         plot!(plot1, x, states[i][mod][var], lw=2, color=RGBA(0.5, 0.5, 0.5, 0.5))
     end
+    display(plot1)
 end
-display(plot1)
-
-##
 closeall()
 
 ##
