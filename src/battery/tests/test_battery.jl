@@ -67,18 +67,16 @@ function make_system(exported,sys,bcfaces,srccells)
     return model, G, state0, parameters, init
 end
 
-
 ##
-function test_ac()
-    name="model1d"
-    fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
-    exported_all = MAT.matread(fn)
+
+function setup_model(exported_all)
     exported_cc = exported_all["model"]["NegativeElectrode"]["CurrentCollector"];
 
     sys_cc = CurrentCollector()
     bcfaces=[1]
     srccells = []
-    (model_cc, G_cc, state0_cc, parm_cc,init_cc) = make_system(exported_cc,sys_cc, bcfaces, srccells)
+    (model_cc, G_cc, state0_cc, parm_cc,init_cc) = make_system(exported_cc, sys_cc, bcfaces, srccells)
+    
     sys_nam = Grafite()
     exported_nam = exported_all["model"]["NegativeElectrode"]["ElectrodeActiveComponent"];
     bcfaces=[]
@@ -120,11 +118,11 @@ function test_ac()
 
     state0 = exported_all["state0"]
 
-    init_cc[:Phi] = state0["NegativeElectrode"]["CurrentCollector"]["phi"][1]           *0
-    init_pp[:Phi] = state0["PositiveElectrode"]["CurrentCollector"]["phi"][1]           *0
-    init_nam[:Phi] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["phi"][1]  *0
-    init_elyte[:Phi] = state0["Electrolyte"]["phi"][1]                                  *0
-    init_pam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1]  *0
+    init_cc[:Phi] = state0["NegativeElectrode"]["CurrentCollector"]["phi"][1]           * 0
+    init_pp[:Phi] = state0["PositiveElectrode"]["CurrentCollector"]["phi"][1]           * 0
+    init_nam[:Phi] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["phi"][1]  * 0
+    init_elyte[:Phi] = state0["Electrolyte"]["phi"][1]                                  * 0
+    init_pam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1]  * 0
     init_nam[:C] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["c"][1] 
     init_pam[:C] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["c"][1]
     init_elyte[:C] = state0["Electrolyte"]["cs"][1][1]
@@ -138,13 +136,6 @@ function test_ac()
     )
 
     state0 = setup_state(model, init)
-    forces = Dict(
-        :CC => nothing,
-        :NAM => nothing,
-        :ELYTE => nothing,
-        :PAM => nothing,
-        :PP => nothing
-    )
     parameters = Dict(
         :CC => parm_cc,
         :NAM => parm_nam,
@@ -153,6 +144,20 @@ function test_ac()
         :PP => parm_pp
     )
 
+    grids = Dict(
+        :CC => G_cc,
+        :NAM =>G_nam,
+        :ELYTE => G_elyte,
+        :PAM => G_pam,
+        :PP => G_pp
+        )
+
+    return model, state0, parameters, grids
+end
+
+##
+
+function setup_coupling!(model, exported_all)
     # setup coupling CC <-> NAM charge
     target = Dict( 
         :model => :NAM,
@@ -162,13 +167,17 @@ function test_ac()
         :model => :CC,
         :equation => :charge_conservation
         )
-    srange = Int64.(exported_all["model"]["NegativeElectrode"]["couplingTerm"]["couplingcells"][:,1])          
-    trange = Int64.(exported_all["model"]["NegativeElectrode"]["couplingTerm"]["couplingcells"][:,2])
+    srange = Int64.(
+        exported_all["model"]["NegativeElectrode"]["couplingTerm"]["couplingcells"][:,1]
+        )
+    trange = Int64.(
+        exported_all["model"]["NegativeElectrode"]["couplingTerm"]["couplingcells"][:,2]
+        )
     intersection = ( srange, trange, Cells(), Cells())
     crosstermtype = InjectiveCrossTerm
     issym = true
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
-    push!(model.couplings,coupling)
+    push!(model.couplings, coupling)
 
     # setup coupling NAM <-> ELYTE charge
     target = Dict( 
@@ -186,7 +195,7 @@ function test_ac()
     crosstermtype = InjectiveCrossTerm
     issym = true
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
-    push!(model.couplings,coupling)
+    push!(model.couplings, coupling)
 
     # setup coupling NAM <-> ELYTE mass
     target = Dict( 
@@ -204,15 +213,17 @@ function test_ac()
     crosstermtype = InjectiveCrossTerm
     issym = true
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
-    push!(model.couplings,coupling)
+    push!(model.couplings, coupling)
 
-
-     # setup coupling PAM <-> ELYTE charge
-    target = Dict( :model => :ELYTE,
+    # setup coupling PAM <-> ELYTE charge
+    target = Dict( 
+        :model => :ELYTE,
         :equation => :charge_conservation
         )
-    source = Dict( :model => :PAM,
-        :equation => :charge_conservation)
+    source = Dict( 
+        :model => :PAM,
+        :equation => :charge_conservation
+        )
     srange=Int64.(exported_all["model"]["couplingTerms"][2]["couplingcells"][:,1])
     trange=Int64.(exported_all["model"]["couplingTerms"][2]["couplingcells"][:,2])
     intersection = ( srange, trange, Cells(), Cells())
@@ -221,19 +232,22 @@ function test_ac()
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings,coupling)
 
-   # setup coupling PAM <-> ELYTE mass
-   target = Dict( :model => :ELYTE,
-   :equation => :mass_conservation
-   )
-    source = Dict( :model => :PAM,
-        :equation => :mass_conservation)
+    # setup coupling PAM <-> ELYTE mass
+    target = Dict( 
+        :model => :ELYTE,
+        :equation => :mass_conservation
+        )
+    source = Dict( 
+        :model => :PAM,
+        :equation => :mass_conservation
+        )
     srange=Int64.(exported_all["model"]["couplingTerms"][2]["couplingcells"][:,1])
     trange=Int64.(exported_all["model"]["couplingTerms"][2]["couplingcells"][:,2])
     intersection = ( srange, trange, Cells(), Cells())
     crosstermtype = InjectiveCrossTerm
     issym = true
-    coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
-    push!(model.couplings,coupling)
+    coupling = MultiModelCoupling(source, target, intersection; crosstype = crosstermtype, issym = issym)
+    push!(model.couplings, coupling)
 
 
     # setup coupling PP <-> PAM charge
@@ -241,16 +255,34 @@ function test_ac()
             :equation => :charge_conservation
     )
     source = Dict( :model => :PP,
-         :equation => :charge_conservation)
+            :equation => :charge_conservation)
     srange = Int64.(exported_all["model"]["PositiveElectrode"]["couplingTerm"]["couplingcells"][:,1])          
     trange = Int64.(exported_all["model"]["PositiveElectrode"]["couplingTerm"]["couplingcells"][:,2])
     intersection = ( srange, trange, Cells(), Cells())
     crosstermtype = InjectiveCrossTerm
     issym = true
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
-    push!(model.couplings,coupling)
+    push!(model.couplings, coupling)
+end
 
-   #########################
+
+##
+
+function test_battery()
+    name="model1d"
+    fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
+    exported_all = MAT.matread(fn)
+
+    model, state0, parameters,grids = setup_model(exported_all)    
+    setup_coupling!(model, exported_all)
+    
+    forces = Dict(
+        :CC => nothing,
+        :NAM => nothing,
+        :ELYTE => nothing,
+        :PAM => nothing,
+        :PP => nothing
+    )
 
     sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
     timesteps = exported_all["schedule"]["step"]["val"][1:4]
@@ -258,19 +290,16 @@ function test_ac()
     cfg[:linear_solver] = nothing
     states, report = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
-    grids = Dict(
-        :CC => G_cc,
-        :NAM =>G_nam,
-        :ELYTE => G_elyte,
-        :PAM => G_pam,
-        :PP => G_pp
-        )
+
     return states, grids, state0, stateref, parameters, init, exported_all
 end
 
 ##
 
-states, grids, state0, stateref, parameters, init, exported_all = test_ac();
+states, grids, state0, stateref, parameters, init, exported_all = test_battery();
+
+
+##
 states = states[1]
 refstep=1
 ## f= plot_interactive(G, states);
