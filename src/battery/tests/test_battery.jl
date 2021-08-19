@@ -9,7 +9,13 @@ using MAT
 using Plots
 
 ENV["JULIA_DEBUG"] = Terv;
-
+struct SourceAtCell
+    cell
+    src
+    function SourceAtCell(cell,src)
+        new(cell,src)
+    end 
+end
 # TODO: implementere volume fraction
 # TODO: Use scondary_variable T in cross terms
 
@@ -65,7 +71,7 @@ function make_system(exported,sys,bcfaces,srccells)
         :BoundaryPhi            => bcvaluephi, 
         :BoundaryC              => bcvaluephi, 
         :BoundaryT              => bcvaluephi,
-        :BCCharge               => bcvaluesrc.*0.0227702,
+        :BCCharge               => bcvaluesrc.*0,#0.0227702,
         :BCMass                 => bcvaluesrc,
         :BCEnergy               => bcvaluesrc,
         )
@@ -109,7 +115,7 @@ function setup_model(exported_all)
     exported_pp = exported_all["model"]["PositiveElectrode"]["CurrentCollector"];
     sys_pp = CurrentCollector()
     bcfaces=[]
-    srccells = [10]
+    srccells = []
     (model_pp, G_pp, state0_pp, parm_pp,init_pp) = 
     make_system(exported_pp,sys_pp, bcfaces, srccells)
 
@@ -288,19 +294,20 @@ end
 ##
 
 function test_battery()
-    name="model1d"
+    name="model1d_notemp"
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
     exported_all = MAT.matread(fn)
 
     model, state0, parameters, grids = setup_model(exported_all)    
     setup_coupling!(model, exported_all)
     
+    forces_pp = (src =SourceAtCell(10,-0.0227702),)
     forces = Dict(
         :CC => nothing,
         :NAM => nothing,
         :ELYTE => nothing,
         :PAM => nothing,
-        :PP => nothing
+        :PP => forces_pp
     )
 
     sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
@@ -355,7 +362,7 @@ p3 = Plots.plot(title="C", size=(1000, 800))
 
 fields = ["CurrentCollector","ElectrodeActiveComponent"]
 components = ["NegativeElectrode","PositiveElectrode"]
-components = ["NegativeElectrode"]
+#components = ["NegativeElectrode"]
 #components = ["PositiveElectrode"]
 #components = []
 for component = components
@@ -379,7 +386,7 @@ for component = components
 end
 
 fields = [] 
-#fields = ["Electrolyte"]
+fields = ["Electrolyte"]
 
 for field in fields
     G = exported_all["model"][field]["G"]
@@ -401,10 +408,11 @@ end
 
 ##
 
-mykeys =  keys(grids)
+
  mykeys = [:CC, :NAM] # :ELYTE]
- #mykeys = [:PP, :PAM]
+ mykeys = [:PP, :PAM]
 #mykeys = [:ELYTE]
+mykeys =  keys(grids)
 for key in mykeys
     G = grids[key]
     x = G["cells"]["centroids"]

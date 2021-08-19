@@ -28,3 +28,16 @@ function select_equations_system!(
     charge_cons = (arg...; kwarg...) -> Conservation(Charge(), arg...; kwarg...)
     eqs[:charge_conservation] = (charge_cons, 1)
 end
+
+function apply_forces_to_equation!(storage, 
+    model::SimulationModel{<:Any, <:CurrentCollector, <:Any, <:Any},
+    law::Conservation{Charge}, force)
+    cell = force.cell
+    rate = force.src
+    #equation = get_entries(eq)
+    acc = get_entries(law.accumulation)
+    acc[cell] += rate
+    #for cell in cells
+    #    equation[cell] += rate
+    #end
+end
