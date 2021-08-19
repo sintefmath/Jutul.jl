@@ -26,7 +26,7 @@ plot_elyte()
 ##
 
 function test_elyte()
-    name="square_current_collector_10by10"
+    name="square_current_collector"
     bcells, T_hf = get_boundary(name)
     one = ones(size(bcells))
     bcells = [bcells..., (bcells .+ 9)...]
