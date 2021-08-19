@@ -224,7 +224,7 @@ function solve_ministep(sim, dt, forces, maxIterations, cfg)
         if done
             break
         end
-        too_large = e > 1e10
+        too_large = e > 1e20
         non_finite = !isfinite(e)
         failure = non_finite || too_large
         if failure

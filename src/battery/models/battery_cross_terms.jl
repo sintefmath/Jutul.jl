@@ -56,8 +56,10 @@ function regularizedSqrt(x, th)
 end
 
 function butlerVolmerEquation(j0,alpha, n, eta, T)
-    res = j0 .* (   exp(  alpha .* n .* FARADAY_CONST .* eta ./ (GAS_CONSTANT  .* T ) ) - 
-                    exp( -(1-alpha) .* n .* FARADAY_CONST .* eta ./ ( GAS_CONSTANT .* T ) ) )
+    res = j0 .* (   
+        + exp(  alpha .* n .* FARADAY_CONST .* eta ./ (GAS_CONSTANT  .* T ) ) 
+        - exp( -(1-alpha) .* n .* FARADAY_CONST .* eta ./ ( GAS_CONSTANT .* T ) ) 
+        )
     return res                   
 end
 
@@ -77,7 +79,8 @@ function reaction_rate(
     return R./(n*FARADAY_CONST);
 end
 
-function sourceElectricMaterial!(eS,eM,
+function sourceElectricMaterial!(
+    eS,eM,
     phi_a, c_a, R0,  ocd,
     phi_e, c_e, activematerial, electrolyte
     )
@@ -113,7 +116,8 @@ function update_cross_term!(
     c_a = source_storage.state.C[ct.impact.source]
 
     eM  = similar(ct.crossterm_source)
-    sourceElectricMaterial!(ct.crossterm_source,eM,
+    sourceElectricMaterial!(
+        ct.crossterm_source,eM,
         phi_a,c_a,R,ocd,
         value.(phi_e),value.(c_e),
         activematerial,electrolyte  
@@ -122,7 +126,8 @@ function update_cross_term!(
     #ct.crossterm_target = eE
     eM = similar(ct.crossterm_target)
     #eE, eM = 
-    sourceElectricMaterial!(ct.crossterm_target,eM,
+    sourceElectricMaterial!(
+        ct.crossterm_target,eM,
         value.(phi_a),value.(c_a),value.(R),value.(ocd),
         phi_e, c_e,
         activematerial,electrolyte  

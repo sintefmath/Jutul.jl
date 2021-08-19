@@ -7,18 +7,11 @@ and conductivity, diffusivity is constant.
 @time using Terv
 using MAT
 using Plots
-ENV["JULIA_DEBUG"] = Terv;
 
+ENV["JULIA_DEBUG"] = Terv;
 
 ##
 function make_system(exported,sys,bcfaces,srccells)
-    #name="model1d"
-    #fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
-    #exported_all = MAT.matread(fn)
-    #exported = exported_all["model"]["NegativeElectrode"]["CurrentCollector"];
-    ## for boundary
-    # bcfaces = [1]
-    # bcfaces = Int64.(bfaces)
     T_all = exported["operators"]["T_all"]
     N_all = Int64.(exported["G"]["faces"]["neighbors"])
     isboundary = (N_all[bcfaces,1].==0) .| (N_all[bcfaces,2].==0)
@@ -55,7 +48,6 @@ function make_system(exported,sys,bcfaces,srccells)
     S[:BCMass] = BoundaryCurrent{Mass}(srccells)
     S[:BCEnergy] = BoundaryCurrent{Energy}(srccells)
 
-    phi0 = 0.
     init = Dict(
         :Phi                    => phi0,
         :C                      => C0,
@@ -75,41 +67,25 @@ function make_system(exported,sys,bcfaces,srccells)
     return model, G, state0, parameters, init
 end
 
-# function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, target_storage, source_storage, target_model, source_model, target, source, dt)
-#    X_T = target_storage.state.XVar
-#    X_S = source_storage.state.XVar
-#    function f(X_S, X_T)
-#        X_T - X_S
-#    end
-#    # Source term with AD context from source model - will end up as off-diagonal block
-#    @. ct.crossterm_source = f(X_S, value(X_T))
-#    # Source term with AD context from target model - will be inserted into equation
-#    @. ct.crossterm_target = f(value(X_S), X_T)
-#end
 
-
+##
 function test_ac()
     name="model1d"
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
     exported_all = MAT.matread(fn)
     exported_cc = exported_all["model"]["NegativeElectrode"]["CurrentCollector"];
-    # sys = ECComponent()
-    # sys = ACMaterial();
-    #sys = Grafite()
+
     sys_cc = CurrentCollector()
     bcfaces=[1]
     srccells = []
     (model_cc, G_cc, state0_cc, parm_cc,init_cc) = make_system(exported_cc,sys_cc, bcfaces, srccells)
-    #sys_nam = CurrentCollector()
     sys_nam = Grafite()
     exported_nam = exported_all["model"]["NegativeElectrode"]["ElectrodeActiveComponent"];
-    # sys = ECComponent()
     bcfaces=[]
     srccells = []
     (model_nam, G_nam, state0_nam, parm_nam, init_nam) = 
         make_system(exported_nam,sys_nam,bcfaces,srccells)
 
-    #sys_elyte = CurrentCollector()#
     sys_elyte = SimpleElyte()
     exported_elyte = exported_all["model"]["Electrolyte"]
     bcfaces=[]
@@ -119,36 +95,38 @@ function test_ac()
 
     sys_pam = Grafite()
     exported_pam = exported_all["model"]["PositiveElectrode"]["ElectrodeActiveComponent"];
-    # sys = ECComponent()
     bcfaces=[]
     srccells = []
     (model_pam, G_pam, state0_pam, parm_pam, init_pam) = 
         make_system(exported_pam,sys_pam,bcfaces,srccells)   
    
     exported_pp = exported_all["model"]["PositiveElectrode"]["CurrentCollector"];
-        # sys = ECComponent()
-        # sys = ACMaterial();
-        #sys = Grafite()
-        sys_pp = CurrentCollector()
-        bcfaces=[]
-        srccells = [10]
-        (model_pp, G_pp, state0_pp, parm_pp,init_pp) = 
-        make_system(exported_pp,sys_pp, bcfaces, srccells)
-        #sys_nam = CurrentCollector()
+    sys_pp = CurrentCollector()
+    bcfaces=[]
+    srccells = [10]
+    (model_pp, G_pp, state0_pp, parm_pp,init_pp) = 
+    make_system(exported_pp,sys_pp, bcfaces, srccells)
 
     groups = nothing
-    model = MultiModel((CC = model_cc, NAM = model_nam, 
-                        ELYTE = model_elyte, 
-                        PAM = model_pam, PP = model_pp), groups = groups)
-    #init_cc[:BCCharge]  = 0.0
+    model = MultiModel(
+        (
+            CC = model_cc, 
+            NAM = model_nam, 
+            ELYTE = model_elyte, 
+            PAM = model_pam, 
+            PP = model_pp
+        ), 
+        groups = groups)
+
     state0 = exported_all["state0"]
-    init_cc[:Phi] = state0["NegativeElectrode"]["CurrentCollector"]["phi"][1]
-    init_pp[:Phi] = state0["PositiveElectrode"]["CurrentCollector"]["phi"][1]
-    init_nam[:Phi] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["phi"][1]
+
+    init_cc[:Phi] = state0["NegativeElectrode"]["CurrentCollector"]["phi"][1]           *0
+    init_pp[:Phi] = state0["PositiveElectrode"]["CurrentCollector"]["phi"][1]           *0
+    init_nam[:Phi] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["phi"][1]  *0
+    init_elyte[:Phi] = state0["Electrolyte"]["phi"][1]                                  *0
+    init_pam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1]  *0
     init_nam[:C] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["c"][1] 
-    init_pam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1]
     init_pam[:C] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["c"][1]
-    init_elyte[:Phi] = state0["Electrolyte"]["phi"][1]
     init_elyte[:C] = state0["Electrolyte"]["cs"][1][1]
 
     init = Dict(
@@ -158,7 +136,7 @@ function test_ac()
         :PAM => init_pam,
         :PP => init_pp
     )
-    # state0 = setup_state(model, Dict(:CC => state0_cc, :NAM => state0_nam))
+
     state0 = setup_state(model, init)
     forces = Dict(
         :CC => nothing,
@@ -176,11 +154,14 @@ function test_ac()
     )
 
     # setup coupling CC <-> NAM charge
-    target = Dict( :model => :NAM,
-                   :equation => :charge_conservation
+    target = Dict( 
+        :model => :NAM,
+        :equation => :charge_conservation
     )
-    source = Dict( :model => :CC,
-                :equation => :charge_conservation)
+    source = Dict( 
+        :model => :CC,
+        :equation => :charge_conservation
+        )
     srange = Int64.(exported_all["model"]["NegativeElectrode"]["couplingTerm"]["couplingcells"][:,1])          
     trange = Int64.(exported_all["model"]["NegativeElectrode"]["couplingTerm"]["couplingcells"][:,2])
     intersection = ( srange, trange, Cells(), Cells())
@@ -190,11 +171,14 @@ function test_ac()
     push!(model.couplings,coupling)
 
     # setup coupling NAM <-> ELYTE charge
-    target = Dict( :model => :ELYTE,
-                   :equation => :charge_conservation
+    target = Dict( 
+        :model => :ELYTE,
+        :equation => :charge_conservation
     )
-    source = Dict( :model => :NAM,
-                :equation => :charge_conservation)
+    source = Dict( 
+        :model => :NAM, 
+        :equation => :charge_conservation
+        )
 
     srange=Int64.(exported_all["model"]["couplingTerms"][1]["couplingcells"][:,1])
     trange=Int64.(exported_all["model"]["couplingTerms"][1]["couplingcells"][:,2])
@@ -204,12 +188,15 @@ function test_ac()
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings,coupling)
 
- # setup coupling NAM <-> ELYTE mass
-    target = Dict( :model => :ELYTE,
-                   :equation => :mass_conservation
+    # setup coupling NAM <-> ELYTE mass
+    target = Dict( 
+        :model => :ELYTE,
+        :equation => :mass_conservation
     )
-    source = Dict( :model => :NAM,
-                :equation => :mass_conservation)
+    source = Dict( 
+        :model => :NAM,
+        :equation => :mass_conservation
+        )
 
     srange=Int64.(exported_all["model"]["couplingTerms"][1]["couplingcells"][:,1])
     trange=Int64.(exported_all["model"]["couplingTerms"][1]["couplingcells"][:,2])
@@ -263,26 +250,25 @@ function test_ac()
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings,coupling)
 
- #########################
+   #########################
 
-    #parameters = setup_parameters(model) # Dict(:CC => parm_cc, :NAM => parm_cc))
-    #forces = Dict(:CC => state0_cc, :NAM => state0_nam)
     sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
-    #timesteps = diff(LinRange(0, 10, 10)[2:end])
     timesteps = exported_all["schedule"]["step"]["val"][1:4]
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
     states, report = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
-    grids = Dict(:CC => G_cc,
-                :NAM =>G_nam,
-                :ELYTE => G_elyte,
-                :PAM => G_pam,
-                :PP => G_pp
-                )
+    grids = Dict(
+        :CC => G_cc,
+        :NAM =>G_nam,
+        :ELYTE => G_elyte,
+        :PAM => G_pam,
+        :PP => G_pp
+        )
     return states, grids, state0, stateref, parameters, init, exported_all
 end
 
+##
 
 states, grids, state0, stateref, parameters, init, exported_all = test_ac();
 states = states[1]
