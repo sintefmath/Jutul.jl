@@ -256,9 +256,13 @@ function setup_coupling!(model, exported_all)
     )
     source = Dict( :model => :PP,
             :equation => :charge_conservation)
-    srange = Int64.(exported_all["model"]["PositiveElectrode"]["couplingTerm"]["couplingcells"][:,1])          
-    trange = Int64.(exported_all["model"]["PositiveElectrode"]["couplingTerm"]["couplingcells"][:,2])
-    intersection = ( srange, trange, Cells(), Cells())
+    srange = Int64.(
+        exported_all["model"]["PositiveElectrode"]["couplingTerm"]["couplingcells"][:,1]
+        )
+    trange = Int64.(
+        exported_all["model"]["PositiveElectrode"]["couplingTerm"]["couplingcells"][:,2]
+        )
+    intersection = (srange, trange, Cells(), Cells())
     crosstermtype = InjectiveCrossTerm
     issym = true
     coupling = MultiModelCoupling(source,target, intersection; crosstype = crosstermtype, issym = issym)
@@ -273,7 +277,7 @@ function test_battery()
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
     exported_all = MAT.matread(fn)
 
-    model, state0, parameters,grids = setup_model(exported_all)    
+    model, state0, parameters, grids = setup_model(exported_all)    
     setup_coupling!(model, exported_all)
     
     forces = Dict(
@@ -285,9 +289,13 @@ function test_battery()
     )
 
     sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
-    timesteps = exported_all["schedule"]["step"]["val"][1:4]
+    timesteps = exported_all["schedule"]["step"]["val"][1:5]
+    for _ in 1:15
+        push!(timesteps, 0.5)
+    end
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
+    cfg[:info_level] = 2
     states, report = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
 
@@ -297,6 +305,33 @@ end
 ##
 
 states, grids, state0, stateref, parameters, init, exported_all = test_battery();
+
+##
+
+using Plots
+
+x = G["cells"]["centroids"][:, 1]
+xf = G["faces"]["centroids"][end]
+xfi= G["faces"]["centroids"][2:10]
+
+plot1 = Plots.plot([], []; title = "Phi", size=(1000, 800))
+
+p = plot!(plot1, legend = false)
+submodels = (:CC, :NAM, :ELYTE, :PAM, :PP)
+submodels = (:NAM, :ELYTE, :PAM)
+var = :C
+i = 5 # Timestep
+steps = size(states, 1)
+for i in 1:steps
+    for mod in submodels
+        x = grids[mod]["cells"]["centroids"]
+        c = i / steps / 2
+        plot!(plot1, x, states[i][mod][var], lw=2, color=RGBA(0, 0, c, 1))
+    end
+    display(plot1)
+end
+
+closeall()
 
 
 ##

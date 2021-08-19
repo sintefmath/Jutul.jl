@@ -162,7 +162,8 @@ function conv_table_fn(model_errors, has_models = false)
                              alignment = alignment, 
                              body_hlines = body_hlines,
                              highlighters = highlighers, 
-                             formatters = ft_printf("%2.4e"))
+                             formatters = ft_printf("%2.4e"),
+                             crop=:none)
 end
 
 function report_stats(reports)
