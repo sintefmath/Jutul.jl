@@ -237,6 +237,8 @@ function update_cross_term!(
         value.(phi_a),value.(c_a),value.(R),value.(ocd),
         phi_e, c_e,
         activematerial,electrolyte  
-    )   
+    )
+    ct.crossterm_target .*= -1.0
+    ct.crossterm_source .*= -1.0  
     #ct.crossterm_target = eM
 end
