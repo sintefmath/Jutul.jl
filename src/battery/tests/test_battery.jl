@@ -58,7 +58,7 @@ function make_system(exported,sys,bcfaces,srccells)
         :BoundaryPhi            => bcvaluephi, 
         :BoundaryC              => bcvaluephi, 
         :BoundaryT              => bcvaluephi,
-        :BCCharge               => -bcvaluesrc.*9.4575,
+        :BCCharge               => -bcvaluesrc.*0,
         :BCMass                 => bcvaluesrc,
         :BCEnergy               => bcvaluesrc,
         )
@@ -93,7 +93,8 @@ function test_ac()
     (model_elyte, G_elyte, state0_elyte, parm_elyte, init_elyte) = 
         make_system(exported_elyte,sys_elyte,bcfaces,srccells)
 
-    sys_pam = Grafite()
+    #sys_pam = Grafite()
+    sys_pam = NMC111()
     exported_pam = exported_all["model"]["PositiveElectrode"]["ElectrodeActiveComponent"];
     bcfaces=[]
     srccells = []
@@ -120,11 +121,11 @@ function test_ac()
 
     state0 = exported_all["state0"]
 
-    init_cc[:Phi] = state0["NegativeElectrode"]["CurrentCollector"]["phi"][1]           *0
-    init_pp[:Phi] = state0["PositiveElectrode"]["CurrentCollector"]["phi"][1]           *0
-    init_nam[:Phi] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["phi"][1]  *0
-    init_elyte[:Phi] = state0["Electrolyte"]["phi"][1]                                  *0
-    init_pam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1]  *0
+    init_cc[:Phi] = state0["NegativeElectrode"]["CurrentCollector"]["phi"][1]           #*0
+    init_pp[:Phi] = state0["PositiveElectrode"]["CurrentCollector"]["phi"][1]           #*0
+    init_nam[:Phi] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["phi"][1]  #*0
+    init_elyte[:Phi] = state0["Electrolyte"]["phi"][1]                                  #*0
+    init_pam[:Phi] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][1]  #*0
     init_nam[:C] = state0["NegativeElectrode"]["ElectrodeActiveComponent"]["c"][1] 
     init_pam[:C] = state0["PositiveElectrode"]["ElectrodeActiveComponent"]["c"][1]
     init_elyte[:C] = state0["Electrolyte"]["cs"][1][1]
@@ -271,7 +272,7 @@ end
 ##
 
 states, grids, state0, stateref, parameters, init, exported_all = test_ac();
-states = states[1]
+#states = states[1]
 refstep=1
 ## f= plot_interactive(G, states);
 #fields = ["CurrentCollector","ElectrodeActiveMaterial"]
@@ -294,19 +295,19 @@ fields = ["CurrentCollector","ElectrodeActiveComponent"]
 components = ["NegativeElectrode","PositiveElectrode"]
 for component = components
     for field in fields
-        G = exported_all["model"]["NegativeElectrode"][field]["G"]
+        G = exported_all["model"][component][field]["G"]
         x = G["cells"]["centroids"]
         xf= G["faces"]["centroids"][end]
         xfi= G["faces"]["centroids"][2:end-1]
         #state0=states[1]
-        state = stateref[refstep]["NegativeElectrode"]
+        state = stateref[refstep][component]
         phi_ref = state[field]["phi"]
         j_ref = state[field]["j"]
         Plots.plot!(p1,x,phi_ref;linecolor="red")
-        Plots.plot!(p2,xfi,j_ref;title="Flux",linecolor="red")
+        Plots.plot!(p2,xfi,j_ref;linecolor="red")
         if haskey(state[field],"c")
             c = state[field]["c"]
-            Plots.plot!(p3,x,c;title="Flux",linecolor="red")
+            Plots.plot!(p3,x,c;linecolor="red")
         end
     end
 end
@@ -321,10 +322,10 @@ for field in fields
     phi_ref = state[field]["phi"]
     j_ref = state[field]["j"]
     Plots.plot!(p1,x,phi_ref;linecolor="red")
-    Plots.plot!(p2,xfi,j_ref;title="Flux",linecolor="red")
-    if haskey(state[field],"c")
-        c = state[field]["c"]
-        Plots.plot!(p3,x,c;title="Flux",linecolor="red")
+    Plots.plot!(p2,xfi,j_ref;linecolor="red")
+    if haskey(state[field],"cs")
+        c = state[field]["cs"][1]
+        Plots.plot!(p3,x,c;linecolor="red")
     end
 end
 #display(plot!(p1, p2, layout = (1, 2), legend = false))
@@ -336,7 +337,11 @@ for key in keys(grids)
     xfi= G["faces"]["centroids"][2:end-1]     
     p=plot(p1, p2, layout = (1, 2), legend = false)
     Plots.plot!(p1,x,states[end][key].Phi;markershape=:circle,linestyle=:dot, seriestype = :scatter)
-    Plots.plot!(p2,xfi,states[end][key].TPkGrad_Phi[1:2:end-1];markershape=:circle,linestyle=:dot, seriestype = :scatter)
+    if haskey(states[end][key],:ChargeCarrierFlux)
+        Plots.plot!(p2,xfi,states[end][key].ChargeCarrierFlux[1:2:end-1];markershape=:circle,linestyle=:dot, seriestype = :scatter)
+    else
+        Plots.plot!(p2,xfi,states[end][key].TPkGrad_Phi[1:2:end-1];markershape=:circle,linestyle=:dot, seriestype = :scatter)
+    end
     if(haskey(states[end][key],:C))
         cc=states[end][key].C
         Plots.plot!(p3,x,cc;markershape=:circle,linestyle=:dot, seriestype = :scatter)
