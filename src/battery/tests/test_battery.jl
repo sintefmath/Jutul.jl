@@ -16,8 +16,6 @@ struct SourceAtCell
         new(cell,src)
     end 
 end
-# TODO: implementere volume fraction
-# TODO: Use scondary_variable T in cross terms
 
 ##
 function make_system(exported,sys,bcfaces,srccells)
@@ -149,8 +147,6 @@ function setup_model(exported_all)
         :PP => init_pp
     )
 
-
-
     state0 = setup_state(model, init)
     parameters = Dict(
         :CC => parm_cc,
@@ -270,13 +266,15 @@ function setup_coupling!(model, exported_all)
     coupling = MultiModelCoupling(source, target, intersection; crosstype = crosstermtype, issym = issym)
     push!(model.couplings, coupling)
 
-
     # setup coupling PP <-> PAM charge
-    target = Dict( :model => :PAM,
-            :equation => :charge_conservation
-    )
-    source = Dict( :model => :PP,
-            :equation => :charge_conservation)
+    target = Dict( 
+        :model => :PAM,
+        :equation => :charge_conservation
+        )
+    source = Dict( 
+        :model => :PP,
+        :equation => :charge_conservation
+        )
     srange = Int64.(
         exported_all["model"]["PositiveElectrode"]["couplingTerm"]["couplingcells"][:,1]
         )
@@ -301,7 +299,7 @@ function test_battery()
     model, state0, parameters, grids = setup_model(exported_all)    
     setup_coupling!(model, exported_all)
     
-    forces_pp = (src =SourceAtCell(10,-0.0227702),)
+    forces_pp = (src = SourceAtCell(10,-0.0227702),)
     forces = Dict(
         :CC => nothing,
         :NAM => nothing,
@@ -319,34 +317,38 @@ function test_battery()
     states, report = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
 
-    return states, grids, state0, stateref, parameters, exported_all, model
+    return states, grids, state0, stateref, parameters, exported_all, model, timesteps
 end
 
 ##
 
-states, grids, state0, stateref, parameters, exported_all, model = test_battery();
+states, grids, state0, stateref, parameters, exported_all, model, timesteps = test_battery();
 
 ##
 
 using Plots
 
-plot1 = Plots.plot([], []; title = "Phi", size=(1000, 800))
+function plot_phi()
+    plot1 = Plots.plot([], []; title = "Phi", size=(1000, 800))
 
-p = plot!(plot1, legend = false)
-# submodels = (:CC, :NAM, :ELYTE, :PAM, :PP)
-# submodels = (:NAM, :ELYTE, :PAM)
-submodels = (:CC, :NAM)
-# submodels = (:ELYTE,)
-# submodels = (:PP, :PAM)
+    p = plot!(plot1, legend = false)
+    # submodels = (:CC, :NAM, :ELYTE, :PAM, :PP)
+    submodels = (:NAM, :ELYTE, :PAM)
+    # submodels = (:CC, :NAM)
+    # submodels = (:ELYTE,)
+    # submodels = (:PP, :PAM)
 
-var = :Phi
-steps = size(states, 1)
-for i in 1:steps
-    for mod in submodels
-        x = grids[mod]["cells"]["centroids"]
-        plot!(plot1, x, states[i][mod][var], lw=2, color=RGBA(0.5, 0.5, 0.5, 0.5))
+    var = :Phi
+    steps = size(states, 1)
+    for i in 1:steps
+        for mod in submodels
+            x = grids[mod]["cells"]["centroids"]
+            plot!(plot1, x, states[i][mod][var], lw=2, color=RGBA(0.5, 0.5, 0.5, 0.5))
+        end
     end
+    return plot1
 end
+plot1 = plot_phi()
 closeall()
 display(plot1)
 
@@ -354,7 +356,6 @@ display(plot1)
 
 refstep=1
 sim_step=1
-
 
 p1 = Plots.plot(title="Phi", size=(1000, 800))
 p2 = Plots.plot(title="Flux", size=(1000, 800))
