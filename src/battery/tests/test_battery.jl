@@ -8,7 +8,7 @@ and conductivity, diffusivity is constant.
 using MAT
 using Plots
 
-ENV["JULIA_DEBUG"] = Terv;
+ENV["JULIA_DEBUG"] = 0;
 struct SourceAtCell
     cell
     src
@@ -307,12 +307,16 @@ function test_battery()
         :PAM => nothing,
         :PP => forces_pp
     )
+    for (k, p) in parameters
+        p[:tolerances][:default] = 1e-5
+    end
 
     sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
     timesteps = exported_all["schedule"]["step"]["val"][1:27]
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
-    cfg[:info_level] = 2
+    cfg[:info_level] = 1
+    cfg[:debug_level] = 0
     cfg[:max_residue] = 1e20
     states, report = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
@@ -450,3 +454,48 @@ for step in 1:27
     phi_ref = stateref[step]["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][10]
     E[step,2] = phi_ref
 end
+
+##
+function print_diff_j(s, sref, n)
+    k = :TotalCurrent
+    if haskey(s[n], k)
+        Δ = abs.(1 .+ (sref[n][k]) ./ s[n][k][2:2:end])
+    else
+        Δ = abs.(1 .+ (-sref[n][k]) ./ s[n][:TPkGrad_Phi][2:2:end])
+    end
+    println("k = $k, n = $n")
+    println("rel.diff = $(maximum(Δ))")
+end
+##
+EAC = "ElectrodeActiveComponent"
+PE = "PositiveElectrode"
+NE = "NegativeElectrode"
+
+# Transelate bw states from matlab and julia
+j2m = Dict{Symbol, String}(
+    # :C                  => "cs",
+    :T                  => "T",
+    :Phi                => "phi", 
+    :Conductivity       => "conductivity",
+    :Diffusivity        => "D",
+    :TotalCurrent       => "j",
+    :ChargeCarrierFlux  => "LiFlux", # This is not correct - CC is more than Li
+    :ELYTE              => "Electrolyte"
+)
+m2j = Dict(value => key for (key, value) in j2m)
+
+rs = stateref[:, 1]
+rs_elyte = [s[j2m[:ELYTE]] for s in rs];
+rs_pam = [s[PE][EAC] for s in rs];
+
+states_pam = [s[:PAM] for s in states];
+states_elyte = [s[:ELYTE] for s in states];
+##
+
+states_comp = states_elyte
+ref_states = get_ref_states(j2m, rs_elyte);
+for (n, state) in enumerate(states_comp)
+    print_diff_j(states_comp, ref_states, n)
+end
+
+
