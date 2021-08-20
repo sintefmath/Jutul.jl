@@ -72,7 +72,6 @@ function reaction_rate(
     eta = (phi_a - phi_e - ocd);
     th = 1e-3*cmax;
     j0 = R0*regularizedSqrt(c_e*(cmax - c_a)*c_a, th)*n*FARADAY_CONST;
-    print(T)
     R = vsa*butlerVolmerEquation(j0, 0.5, n, eta, T);
 
     return R./(n*FARADAY_CONST);
