@@ -81,12 +81,14 @@ end
 
 @inline function set_jacobian_pos!(c::CompactAutoDiffCache, index, eqNo, partial_index, pos)
     set_jacobian_pos!(c.jacobian_positions, index, eqNo, partial_index, c.npartials, pos)
-    c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
+    # c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
 end
 
 @inline function set_jacobian_pos!(jpos, index, eqNo, partial_index, npartials, pos)
-    jpos[(eqNo-1)*npartials + partial_index, index] = pos
+    jpos[jacobian_cart_ix(index, eqNo, partial_index, npartials)] = pos
 end
+
+jacobian_cart_ix(index, eqNo, partial_index, npartials) = CartesianIndex((eqNo-1)*npartials + partial_index, index)
 
 @inline function ad_dims(cache::CompactAutoDiffCache{I, D})::Tuple{I, I, I} where {I, D}
     return (cache.number_of_units, cache.equations_per_unit, cache.npartials)
