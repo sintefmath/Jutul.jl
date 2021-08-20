@@ -427,17 +427,18 @@ for (i, dt) in enumerate(timesteps)
             )
         
         if haskey(states[sim_step][key], :TotalCurrent)
-            j = states[end][key].TotalCurrent[1:2:end-1]
+            j = states[sim_step][key].TotalCurrent[1:2:end-1]
         else
-            j = -states[end][key].TPkGrad_Phi[1:2:end-1]
+            j = -states[sim_step][key].TPkGrad_Phi[1:2:end-1]
         end
         
         Plots.plot!(p2, xfi, j; markershape=:circle,linestyle=:dot, seriestype = :scatter)
-        if(haskey(states[end][key], :C))
+        if(haskey(states[sim_step][key], :C))
             cc = states[sim_step][key].C
             Plots.plot!(p3, x, cc; markershape=:circle, linestyle=:dot, seriestype = :scatter)
         end
     end
+
     display(plot!(p1, p2, p3,layout = (3, 1), legend = false))
 end
 
