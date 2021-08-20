@@ -311,7 +311,7 @@ function test_battery()
     )
 
     sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
-    timesteps = exported_all["schedule"]["step"]["val"][1:5]
+    timesteps = exported_all["schedule"]["step"]["val"][1:27]
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
     cfg[:info_level] = 2
@@ -352,8 +352,8 @@ display(plot1)
 
 ##
 
-refstep=1
-sim_step=1
+refstep=27
+sim_step=27
 
 
 p1 = Plots.plot(title="Phi", size=(1000, 800))
@@ -436,4 +436,13 @@ for key in mykeys
         Plots.plot!(p3, x, cc; markershape=:circle, linestyle=:dot, seriestype = :scatter)
     end
     display(plot!(p1, p2, p3,layout = (3, 1), legend = false))
+end
+
+##
+E = Matrix{Float64}(undef,27,2)
+for step in 1:27
+    phi = states[step][:PP].Phi[10]
+    E[step,1] = phi
+    phi_ref = stateref[step]["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][10]
+    E[step,2] = phi_ref
 end

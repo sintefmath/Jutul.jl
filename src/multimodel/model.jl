@@ -638,9 +638,9 @@ function update_before_step!(storage, model::MultiModel, dt, forces)
     end
 end
 
-function apply_forces!(storage, model::MultiModel, dt, forces::Dict)
+function apply_forces!(storage, model::MultiModel, dt, forces::Dict; time = NaN)
     for key in submodels_symbols(model)
-        apply_forces!(storage[key], model.models[key], dt, forces[key])
+        apply_forces!(storage[key], model.models[key], dt, forces[key]; time = time)
     end
 end
 

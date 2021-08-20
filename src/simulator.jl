@@ -72,8 +72,9 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     report = OrderedDict()
     timing_out = config[:debug_level] > 1
     # Update the properties and equations
-    t_asm = @elapsed begin 
-        update_state_dependents!(storage, model, dt, forces)
+    t_asm = @elapsed begin
+        time =  config[:ProgressRecorder].recorder.time + dt
+        update_state_dependents!(storage, model, dt, forces; time = time)
     end
     if timing_out
         @debug "Assembled equations in $t_asm seconds."
