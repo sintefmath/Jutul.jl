@@ -189,21 +189,51 @@ function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, n
 
     layout = matrix_layout(context)
     jpos = cache.jacobian_positions
-    function kernel(jpos, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
-        index, e, d = threadIdx()
+
+
+    @kernel function algn(jpos, rows, cols, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
+        index, e, d = @index(Global, NTuple)
         target = target_index[index]
         source = source_index[index]
 
-        pos = find_jac_position(jac, target + target_offset, source + source_offset, e, d, 
+        row, col = row_col_sparse(target + target_offset, source + source_offset, e, d, 
         nu_t, nu_s,
         ne, np,
         layout)
-        set_jacobian_pos!(jpos, index, e, d, np, pos)
-        return
+
+        ix = find_sparse_position(rows, cols, row, col)
+        # jpos[jacobian_cart_ix(index, e, d, np)] = ix
     end
     ns = length(source_index)
 
-    @cuda threads=(ns, ne, np) kernel(jpos, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
+    dims = (ns, Int64(ne), Int64(np))
+    kernel = algn(context.device, context.block_size)
+    
+    rows = jac.rowVal
+    cols = jac.colPtr
+    @info "Launching kernel..."
+    event_jac = kernel(jpos, rows, cols, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout, ndrange = dims)
+    wait(event_jac)
+    @info "Kernel done."
+
+        if false
+        function kernel(jpos, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
+            index, e, d = threadIdx()
+            target = target_index[index]
+            source = source_index[index]
+
+            row, col = row_col_sparse(target + target_offset, source + source_offset, e, d, 
+            nu_t, nu_s,
+            ne, np,
+            layout)
+
+            pos = find_sparse_position(cols, rows, row, col, layout)
+            set_jacobian_pos!(jpos, index, e, d, np, pos)
+            return
+        end
+
+        @cuda threads=(ns, ne, np) kernel(jpos, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
+    end
 end
 
 """

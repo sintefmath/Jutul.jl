@@ -3,6 +3,32 @@
     # Why does CUDA and Base differ on capitalization?
     return jac.nzVal
 end
+
+
+function build_jacobian(sparse_arg, context::SingleCUDAContext, layout)
+    # TODO: Fix me.
+
+    @assert sparse_arg.layout == layout
+    I, J, n, m = ijnm(sparse_arg)
+    bz = block_size(sparse_arg)
+    Jt = jacobian_eltype(context, layout, bz)
+    Ft = float_type(context)
+    It = index_type(context)
+
+    V = zeros(Jt, length(I))
+    jac_cpu = sparse(It.(I), It.(J), V, n, m)
+    display(typeof(jac_cpu))
+    jac = CUDA.CUSPARSE.CuSparseMatrixCSC{Ft}(jac_cpu)
+
+    nzval = get_nzval(jac)
+    if Ft == Jt
+        V_buf = nzval
+    else
+        V_buf = reinterpret(reshape, Ft, nzval)
+    end
+    return (jac, V_buf, bz)
+end
+
 #
 function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
     F_t = float_type(context)

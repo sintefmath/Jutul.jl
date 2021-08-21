@@ -8,47 +8,59 @@ function find_jac_position(A, target_unit_index, source_unit_index, # Typically 
     eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
     context::TervContext)
     layout = matrix_layout(context)
+
     find_jac_position(A, target_unit_index, source_unit_index,
     equation_index, partial_index,
     nunits_target, nunits_source,
     eqs_per_unit, partials_per_unit, layout)
 end
 
-function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
+function find_jac_position(A, target_unit_index, source_unit_index,
+    equation_index, partial_index,
+    nunits_target, nunits_source,
+    eqs_per_unit, partials_per_unit, layout::TervMatrixLayout)
+
+    row, col = row_col_sparse(target_unit_index, source_unit_index,
+    equation_index, partial_index,
+    nunits_target, nunits_source,
+    eqs_per_unit, partials_per_unit, layout)
+    return find_sparse_position(A, row, col, layout)
+end
+
+function find_jac_position(A, target_unit_index, source_unit_index,
+    equation_index, partial_index,
+    nunits_target, nunits_source,
+    eqs_per_unit, partials_per_unit, layout::BlockMajorLayout)
+    row, col = row_col_sparse(target_unit_index, source_unit_index,
+    equation_index, partial_index,
+    nunits_target, nunits_source,
+    eqs_per_unit, partials_per_unit, layout)
+
+    row = target_unit_index
+    col = source_unit_index
+
+    pos = find_sparse_position(A, row, col, layout)
+    return (pos-1)*eqs_per_unit*partials_per_unit + eqs_per_unit*(partial_index-1) + equation_index
+end
+
+function row_col_sparse(target_unit_index, source_unit_index, # Typically row and column - global index
                               equation_index, partial_index,        # Index of equation and partial derivative - local index
                               nunits_target, nunits_source,         # Row and column sizes for each sub-system
                               eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
                               layout::EquationMajorLayout)
     row = nunits_target*(equation_index-1) + target_unit_index
     col = nunits_source*(partial_index-1) + source_unit_index
-    find_sparse_position(A, row, col, layout)
+    return (row, col)
 end
 
-function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
+function row_col_sparse(target_unit_index, source_unit_index, # Typically row and column - global index
     equation_index, partial_index,        # Index of equation and partial derivative - local index
     nunits_target, nunits_source,         # Row and column sizes for each sub-system
     eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
     layout::UnitMajorLayout)
     row = eqs_per_unit*(target_unit_index-1) + equation_index
     col = partials_per_unit*(source_unit_index-1) + partial_index
-
-    find_sparse_position(A, row, col, layout)
-end
-
-function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
-    equation_index, partial_index,        # Index of equation and partial derivative - local index
-    nunits_target, nunits_source,         # Row and column sizes for each sub-system
-    eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
-    layout::BlockMajorLayout)
-    row = target_unit_index
-    col = source_unit_index
-
-    pos = find_sparse_position(A, row, col, layout)
-    # We now have the I+J position.
-    # We assume that the nzval has eqs_per_unit*partials_per_unit rows,
-    # with columns equal to nunits_target * nunits*source
-    # return (pos-1)*eqs_per_unit*partials_per_unit + partials_per_unit*(equation_index-1) + partial_index
-    return (pos-1)*eqs_per_unit*partials_per_unit + eqs_per_unit*(partial_index-1) + equation_index
+    return (row, col)
 end
 
 function find_sparse_position(A::SparseMatrixCSC, row, col, layout::TervMatrixLayout)
@@ -68,8 +80,12 @@ function find_sparse_position(A::SparseMatrixCSC, row, col, is_adjoint)
 end
 
 function find_sparse_position(A::SparseMatrixCSC, row, col)
-    for pos = A.colptr[col]:A.colptr[col+1]-1
-        if A.rowval[pos] == row
+    return find_sparse_position(A.rowval, A.colptr, row, col)
+end
+
+function find_sparse_position(rowval::T, colPtr::T, row::I, col::I) where {T<:AbstractArray, I<:Integer}
+    for pos = colPtr[col]:colPtr[col+1]-1
+        if rowval[pos] == row
             return pos
         end
     end
