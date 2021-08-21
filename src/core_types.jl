@@ -54,7 +54,7 @@ abstract type TervMatrixLayout end
 Equations are stored sequentially in rows, derivatives of same type in columns:
 """
 struct EquationMajorLayout <: TervMatrixLayout
-    as_adjoint
+    as_adjoint::Bool
 end
 function EquationMajorLayout() EquationMajorLayout(false) end
 function is_cell_major(::EquationMajorLayout) false end
@@ -62,7 +62,7 @@ function is_cell_major(::EquationMajorLayout) false end
 Domain units sequentially in rows:
 """
 struct UnitMajorLayout <: TervMatrixLayout
-    as_adjoint
+    as_adjoint::Bool
 end
 function UnitMajorLayout() UnitMajorLayout(false) end
 function is_cell_major(::UnitMajorLayout) true end
@@ -71,7 +71,7 @@ function is_cell_major(::UnitMajorLayout) true end
 Same as UnitMajorLayout, but the nzval is a matrix
 """
 struct BlockMajorLayout <: TervMatrixLayout
-    as_adjoint
+    as_adjoint::Bool
 end
 function BlockMajorLayout() BlockMajorLayout(false) end
 function is_cell_major(::BlockMajorLayout) true end
