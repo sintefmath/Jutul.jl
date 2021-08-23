@@ -198,15 +198,11 @@ function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, n
     layout = matrix_layout(context)
     jpos = cache.jacobian_positions
 
-    @info jpos
-    @info size(jpos)
     ns = length(source_index)
 
     dims = (ns, ne, np)
     # dims = (ns, Int64(ne), Int64(np))
     # dims = (Int32(ns), ne, np)
-    display(dims)
-    display(typeof(dims))
     
     @kernel function cu_injective_align(jpos, 
                                     @Const(rows), @Const(cols),
@@ -235,15 +231,12 @@ function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, n
         j_ix = jacobian_row_ix(e, d, np)
         jpos[j_ix, index] = ix
     end
-    # error()
     kernel = cu_injective_align(context.device, context.block_size)
     
     rows = jac.rowVal
     cols = jac.colPtr
-    @info "Launching kernel..."
     event_jac = kernel(jpos, rows, cols,target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout, ndrange = dims)
     wait(event_jac)
-    @info "Kernel done."
 end
 
 """

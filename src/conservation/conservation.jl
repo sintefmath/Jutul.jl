@@ -124,10 +124,8 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::Si
 
     rows = Int64.(jac.rowVal)
     cols = Int64.(jac.colPtr)
-    @info "Launching face kernel..."
     event_jac = kernel(fpos, cd, rows, cols, N, nu, ne, np, target_offset, source_offset, layout, ndrange = dims)
     wait(event_jac)
-    @info "Kernel done."
 end
 
 
@@ -182,7 +180,7 @@ end
 
 function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context::SingleCUDAContext)
     nc, ne, np = ad_dims(acc)
-    dims = (nc, ne)
+    dims = (nc, ne, np)
     # kdims = dims .+ (0, 0, 1)
 
     centries = acc.entries
@@ -192,34 +190,46 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
 
 
     @kernel function cu_fill(nz, r, conn_pos, centries, fentries, cp, fp, np)
-        cell, e = @index(Global, NTuple)
+        cell, e, d = @index(Global, NTuple)
 
         # diag_entry = get_entry(acc, cell, e, centries)
-        diag_entry = centries[e, cell]
+        diag_entry = centries[e, cell].partials[d]
         for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             # q = get_entry(cell_flux, i, e, fentries)
-            q = fentries[e, i]
-            for d = 1:np
-                fpos = get_jacobian_pos(np, i, e, d, fp)
-                @inbounds nz[fpos] = q.partials[d]
-            end
+            q = fentries[e, i].partials[d]
+            fpos = get_jacobian_pos(np, i, e, d, fp)
+            @inbounds nz[fpos] = q
             diag_entry -= q
         end
     
-        r[e, cell] = diag_entry.value
+        # r[e, cell] = diag_entry.value
         for d = 1:np
             apos = get_jacobian_pos(np, cell, e, d, cp)
-            @inbounds nz[apos] = diag_entry.partials[d]
+            @inbounds nz[apos] = diag_entry
         end
     end
     kernel = cu_fill(context.device, context.block_size)
 
-    @info "Launching assembly kernel..."
-    @info typeof(r)
     event_jac = kernel(nz, r, conn_pos, centries, fentries, cp, fp, np, ndrange = dims)
-    wait(event_jac)
-    @info "Kernel done."
 
+    # @tullio r[e, cell] = centries[e, cell].value - 
+    if true
+        @kernel function cu_fill_r(r, conn_pos, centries, fentries)
+            cell, e = @index(Global, NTuple)
+
+            diag_entry = centries[e, cell].value
+            for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+                q = fentries[e, i].value
+                diag_entry -= q
+            end
+            r[e, cell] = diag_entry
+        end
+        kernel_r = cu_fill_r(context.device, context.block_size)
+        event_r = kernel_r(r, conn_pos, centries, fentries, ndrange = (nc, ne))
+        wait(event_r)
+    end
+
+    wait(event_jac)
 end
 
 function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context)
