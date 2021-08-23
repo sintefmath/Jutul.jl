@@ -87,7 +87,7 @@ function find_sparse_position(A::SparseMatrixCSC, row, col)
     return pos
 end
 
-@inline function find_sparse_position_CSC(rowval::T, colPtr::T, row::I, col::I) where {T<:AbstractArray{I}, I<:Integer}
+@inline function find_sparse_position_CSC(rowval::T, colPtr::T, row::I, col::I) where {T<:AbstractVector{I}} where  {I<:Integer}
     ix = 0
     for pos = colPtr[col]:colPtr[col+1]-1
         if rowval[pos] == row
