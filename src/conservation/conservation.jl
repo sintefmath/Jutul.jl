@@ -188,22 +188,26 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
     fp = cell_flux.jacobian_positions
     Threads.@threads for cell = 1:nc
         for e in 1:ne
-            diag_entry = get_entry(acc, cell, e, centries)
-            @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-                q = get_entry(cell_flux, i, e, fentries)
-                @turbo for d = 1:np
-                    fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
-                    @inbounds nz[fpos] = q.partials[d]
-                end
-                diag_entry -= q
-            end
-
-            @inbounds r[e, cell] = diag_entry.value
-            @turbo for d = 1:np
-                apos = get_jacobian_pos(acc, cell, e, d, cp)
-                @inbounds nz[apos] = diag_entry.partials[d]
-            end
+            fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flux, cp, fp, conn_pos, np)
         end
+    end
+end
+
+function fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flux, cp, fp, conn_pos, np)
+    diag_entry = get_entry(acc, cell, e, centries)
+    @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+        q = get_entry(cell_flux, i, e, fentries)
+        @turbo for d = 1:np
+            fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
+            @inbounds nz[fpos] = q.partials[d]
+        end
+        diag_entry -= q
+    end
+
+    @inbounds r[e, cell] = diag_entry.value
+    @turbo for d = 1:np
+        apos = get_jacobian_pos(acc, cell, e, d, cp)
+        @inbounds nz[apos] = diag_entry.partials[d]
     end
 end
 
