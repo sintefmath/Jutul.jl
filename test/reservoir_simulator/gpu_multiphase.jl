@@ -13,7 +13,7 @@ ENV["JULIA_DEBUG"] = Terv
 # casename = "tarbert_layer"
 # casename = "spe10_symrmc"
 # casename = "tarbert"
-
+ 
 # target = "cuda"
 # target = "cpukernel"
 # target = "cpu"
@@ -33,7 +33,7 @@ function test_single_phase_gpu(casename = "pico", target = "cuda", pvfrac=0.05, 
     sys = SinglePhaseSystem(phase)
     # Simulation model wraps grid and system together with context (which will be used for GPU etc)
     if target == "cuda"
-        ctx = SingleCUDAContext()
+        ctx = SingleCUDAContext(Float64, Int64)
         # ctx = SingleCUDAContext(Float64, Int64)
         linsolve = CuSparseSolver("??", 1e-3)
     elseif target == "cpukernel"

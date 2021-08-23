@@ -80,20 +80,22 @@ function find_sparse_position(A::SparseMatrixCSC, row, col, is_adjoint)
 end
 
 function find_sparse_position(A::SparseMatrixCSC, row, col)
-    pos = find_sparse_position(A.rowval, A.colptr, row, col)
+    pos = find_sparse_position_CSC(A.rowval, A.colptr, row, col)
     if pos == 0
         @warn "Unable to map $row, $col: Not allocated in matrix."
     end
     return pos
 end
 
-function find_sparse_position(rowval::T, colPtr::T, row::I, col::I) where {T<:AbstractArray, I<:Integer}
+@inline function find_sparse_position_CSC(rowval::T, colPtr::T, row::I, col::I) where {T<:AbstractArray{I}, I<:Integer}
+    ix = 0
     for pos = colPtr[col]:colPtr[col+1]-1
         if rowval[pos] == row
-            return pos
+            ix = pos
+            break
         end
     end
-    return 0
+    return ix
 end
 
 function select_equations(domain, system, formulation)

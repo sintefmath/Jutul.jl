@@ -88,7 +88,9 @@ end
     jpos[jacobian_cart_ix(index, eqNo, partial_index, npartials)] = pos
 end
 
-jacobian_cart_ix(index, eqNo, partial_index, npartials) = CartesianIndex((eqNo-1)*npartials + partial_index, index)
+
+@inline jacobian_row_ix(eqNo, partial_index, npartials) = (eqNo-1)*npartials + partial_index
+@inline jacobian_cart_ix(index, eqNo, partial_index, npartials) = CartesianIndex((eqNo-1)*npartials + partial_index, index)
 
 @inline function ad_dims(cache::CompactAutoDiffCache{I, D})::Tuple{I, I, I} where {I, D}
     return (cache.number_of_units, cache.equations_per_unit, cache.npartials)
@@ -185,13 +187,29 @@ function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, n
     end
 end
 
+
+
 function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext)
 
     layout = matrix_layout(context)
     jpos = cache.jacobian_positions
 
+    @info jpos
+    @info size(jpos)
+    ns = length(source_index)
 
-    @kernel function algn(jpos, rows, cols, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
+    dims = (ns, ne, np)
+    # dims = (ns, Int64(ne), Int64(np))
+    # dims = (Int32(ns), ne, np)
+    display(dims)
+    display(typeof(dims))
+    
+    @kernel function cu_injective_align(jpos, 
+                                    @Const(rows), @Const(cols),
+                                    @Const(target_index), @Const(source_index),
+                                    nu_t, nu_s, ne, np, 
+                                    target_offset, source_offset,
+                                    layout)
         index, e, d = @index(Global, NTuple)
         target = target_index[index]
         source = source_index[index]
@@ -200,19 +218,26 @@ function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, n
         nu_t, nu_s,
         ne, np,
         layout)
+        
+        # ix = find_sparse_position_CSC(rows, cols, row, col)
 
-        ix = find_sparse_position(rows, cols, row, col)
-        jpos[jacobian_cart_ix(index, e, d, np)] = ix
+        ix = zero(eltype(cols))
+        for pos = cols[col]:cols[col+1]-1
+            if rows[pos] == row
+                ix = pos
+                break
+            end
+        end
+        j_ix = jacobian_row_ix(e, d, np)
+        jpos[j_ix, index] = ix
     end
-    ns = length(source_index)
-
-    dims = (ns, Int64(ne), Int64(np))
-    kernel = algn(context.device, context.block_size)
+    # error()
+    kernel = cu_injective_align(context.device, context.block_size)
     
     rows = jac.rowVal
     cols = jac.colPtr
     @info "Launching kernel..."
-    event_jac = kernel(jpos, rows, cols, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout, ndrange = dims)
+    event_jac = kernel(jpos, rows, cols,target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout, ndrange = dims)
     wait(event_jac)
     @info "Kernel done."
 end

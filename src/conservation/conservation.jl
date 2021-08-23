@@ -51,29 +51,83 @@ function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation
 end
 
 function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, N, flow_disc; target_offset = 0, source_offset = 0)
-    nu, ne, np = ad_dims(acc_cache)
+    # nu, ne, np = ad_dims(acc_cache)
+    dims = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
+    cd = flow_disc.conn_data
     Threads.@threads for cell in 1:nc
         @inbounds for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
-            f = flow_disc.conn_data[f_ix].face
-            if N[1, f] == cell
-                other = N[2, f]
-            else
-                other = N[1, f]
-            end
-            for e in 1:ne
-                for d = 1:np
-                    pos = find_jac_position(jac, other + target_offset, cell + source_offset, e, d, nu, nu, ne, np, context)
-                    set_jacobian_pos!(face_cache, f_ix, e, d, pos)
-                end
-            end
+            align_half_face_cells(face_cache, jac, cd, f_ix, cell, N, dims, context, target_offset, source_offset)
+        end
+    end
+end
+
+function align_half_face_cells(face_cache, jac, cd, f_ix, cell, N, dims, context, target_offset, source_offset)
+    nu, ne, np = dims
+    f = cd[f_ix].face
+    if N[1, f] == cell
+        other = N[2, f]
+    else
+        other = N[1, f]
+    end
+    for e in 1:ne
+        for d = 1:np
+            pos = find_jac_position(jac, other + target_offset, cell + source_offset, e, d, nu, nu, ne, np, context)
+            set_jacobian_pos!(face_cache, f_ix, e, d, pos)
         end
     end
 end
 
 function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::SingleCUDAContext, N, flow_disc; target_offset = 0, source_offset = 0)
-    
+    dims = ad_dims(acc_cache)
+    nu, ne, np = dims
+    # error()
+    facepos = flow_disc.conn_pos
+    nc = length(facepos) - 1
+    cd = flow_disc.conn_data
+
+    # 
+    layout = matrix_layout(context)
+    fpos = face_cache.jacobian_positions
+
+
+    @kernel function algn(fpos, cd, rows, cols, N, nu, ne, np, target_offset, source_offset, layout)
+        cell, e, d = @index(Global, NTuple)
+
+        for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
+            f = cd[f_ix].face
+            if N[1, f] == cell
+                other = N[2, f]
+            else
+                other = N[1, f]
+            end
+            row, col = row_col_sparse(other + target_offset, cell + source_offset, e, d, 
+            nu, nu,
+            ne, np,
+            layout)
+
+            ix = zero(eltype(cols))
+            for pos = cols[col]:cols[col+1]-1
+                if rows[pos] == row
+                    ix = pos
+                    break
+                end
+            end
+            # ix = find_sparse_position_CSC(rows, cols, row, col)
+            fpos[jacobian_cart_ix(f_ix, e, d, np)] = ix
+        end
+    end
+    nf = size(N, 2)
+    dims = (nc, ne, np)
+    kernel = algn(context.device, context.block_size)
+
+    rows = Int64.(jac.rowVal)
+    cols = Int64.(jac.colPtr)
+    @info "Launching face kernel..."
+    event_jac = kernel(fpos, cd, rows, cols, N, nu, ne, np, target_offset, source_offset, layout, ndrange = dims)
+    wait(event_jac)
+    @info "Kernel done."
 end
 
 
