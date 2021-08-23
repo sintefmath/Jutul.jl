@@ -29,6 +29,15 @@ function build_jacobian(sparse_arg, context::SingleCUDAContext, layout)
     return (jac, V_buf, bz)
 end
 
+function get_jacobian_vector(n, context::SingleCUDAContext, layout, v = nothing, bz = 1)
+    Ft = float_type(context)
+    It = index_type(context)
+    @assert isnothing(v)
+    @assert bz == 1
+    v = CuArray(zeros(Ft, n))
+    return (v, v)
+end
+
 #
 function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
     F_t = float_type(context)

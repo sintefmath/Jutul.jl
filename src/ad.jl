@@ -79,6 +79,10 @@ end
     @inbounds pos[(eqNo-1)*c.npartials + partial_index, index]
 end
 
+@inline function get_jacobian_pos(np::I, index, eqNo, partial_index, pos)::I where {I<:Integer}
+    @inbounds pos[(eqNo-1)*np + partial_index, index]
+end
+
 @inline function set_jacobian_pos!(c::CompactAutoDiffCache, index, eqNo, partial_index, pos)
     set_jacobian_pos!(c.jacobian_positions, index, eqNo, partial_index, c.npartials, pos)
     # c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
