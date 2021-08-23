@@ -91,7 +91,7 @@ function solve!(sys::LinearizedSystem, solver::CuSparseSolver)
         
         y = similar(r)
         T = eltype(r)
-        op = LinearOperator(T, n, n, false, false, x -> ldiv!(y, prec, x))
+        op = LinearOperator(T, n, n, false, false, (y, x, α, β) -> ldiv!(y, prec, x))
         
         rt = convert(eltype(r), solver.reltol)
         (x, stats) = dqgmres(J, r, M = op, rtol = rt, verbose = 0, itmax=20)
