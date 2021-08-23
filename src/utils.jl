@@ -21,7 +21,7 @@ function fapply!(out, f, inputs...)
     # then fapply!(z, *, x, y) is equal to a parallel call of
     # z .= x.*y
     # If JuliaLang Issue #19777 gets resolved we can get rid of fapply!
-    @threads for i in eachindex(out)
+    Threads.@threads for i in eachindex(out)
         @inbounds out[i] = f(map((x) -> x[i], inputs)...)
     end
 end

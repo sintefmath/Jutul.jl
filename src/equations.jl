@@ -80,7 +80,11 @@ function find_sparse_position(A::SparseMatrixCSC, row, col, is_adjoint)
 end
 
 function find_sparse_position(A::SparseMatrixCSC, row, col)
-    return find_sparse_position(A.rowval, A.colptr, row, col)
+    pos = find_sparse_position(A.rowval, A.colptr, row, col)
+    if pos == 0
+        @warn "Unable to map $row, $col: Not allocated in matrix."
+    end
+    return pos
 end
 
 function find_sparse_position(rowval::T, colPtr::T, row::I, col::I) where {T<:AbstractArray, I<:Integer}
@@ -89,7 +93,6 @@ function find_sparse_position(rowval::T, colPtr::T, row::I, col::I) where {T<:Ab
             return pos
         end
     end
-    @warn "Unable to map $row, $col: Not allocated in matrix."
     return 0
 end
 

@@ -54,7 +54,7 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, N,
     nu, ne, np = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
-    @threads for cell in 1:nc
+    Threads.@threads for cell in 1:nc
         @inbounds for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
             f = flow_disc.conn_data[f_ix].face
             if N[1, f] == cell
@@ -71,6 +71,11 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, N,
         end
     end
 end
+
+function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::SingleCUDAContext, N, flow_disc; target_offset = 0, source_offset = 0)
+    
+end
+
 
 function align_to_jacobian!(law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
@@ -127,7 +132,7 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
     fentries = cell_flux.entries
     cp = acc.jacobian_positions
     fp = cell_flux.jacobian_positions
-    @threads for cell = 1:nc
+    Threads.@threads for cell = 1:nc
         for e in 1:ne
             diag_entry = get_entry(acc, cell, e, centries)
             @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
@@ -153,7 +158,7 @@ function update_linearized_system_subset_conservation_sources!(nz, r, model, acc
     rv_src = rowvals(src)
     nz_src = nonzeros(src)
     cp = acc.jacobian_positions
-    @threads for cell in 1:nc
+    Threads.@threads for cell in 1:nc
         for rp in nzrange(src, cell)
             e = rv_src[rp]
             v = nz_src[rp]
@@ -174,7 +179,7 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
     fentries = face_flux.entries
     fp = face_flux.jacobian_positions
     nc = length(conn_pos) - 1
-    @threads for cell = 1:nc
+    Threads.@threads for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
                 c = conn_data[i]
