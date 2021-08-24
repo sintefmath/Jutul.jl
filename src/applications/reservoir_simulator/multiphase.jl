@@ -222,29 +222,50 @@ function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::Co
     insert_phase_sources(kr, mu, rhoS, acc, force)
 end
 
+function local_mobility(kr::Real, mu, ph, c)
+    return kr./mu[ph, c]
+end
+
+function local_mobility(kr, mu, ph, c)
+    return kr[ph, c]./mu[ph, c]
+end
+
+function phase_source(src, rhoS, kr, mu, ph)
+    v = src.value
+    c = src.cell
+    if v > 0
+        q = in_phase_source(src, v, c, kr, mu, ph)
+    else
+        q = out_phase_source(src, v, c, kr, mu, ph)
+    end
+    return rhoS[ph]*q
+end
+
+
+function in_phase_source(src, v, c, kr, mu, ph)
+    f = src.fractional_flow[ph]
+    return v*f
+end
+
+function out_phase_source(src, v, c, kr, mu, ph)
+    mobT = 0
+    mob = 0
+    for i = 1:size(mu, 1)
+        mi = local_mobility(kr, mu, i, c)
+        mobT += mi
+        if ph == i
+            mob = mi
+        end
+    end
+    f = mob/mobT
+    return v*f
+end
+
 function insert_phase_sources(kr, mu, rhoS, acc, sources)
     nph = size(acc, 1)
     for src in sources
-        v = src.value
-        c = src.cell
-        if isa(kr, Real)
-            mob = kr./mu[:, c]
-        else
-            mob = kr[:, c]./mu[:, c]
-        end
-        mobt = sum(mob)
-        if v > 0
-            for index in 1:nph
-                f = src.fractional_flow[index]
-                q = rhoS[index]*v*f
-                @inbounds acc[index, c] -= q
-            end
-        else
-            for index in 1:nph
-                f = mob[index]/mobt
-                q = rhoS[index]*v*f
-                @inbounds acc[index, c] -= q
-            end
+        for ph = 1:nph
+            @inbounds acc[ph, src.cell] -= phase_source(src, rhoS, kr, mu, ph)
         end
     end
 end
