@@ -10,7 +10,7 @@ ENV["JULIA_DEBUG"] = Terv
 # ENV["JULIA_DEBUG"] = nothing
 # casename = "pico"
 # casename = "spe10"
-# casename = "tarbert_layer"
+# casename = "tarbert_layer" 
 # casename = "spe10_symrmc"
 # casename = "tarbert"
  
@@ -48,10 +48,11 @@ function test_single_phase_gpu(casename = "pico", target = "cuda", pvfrac=0.05, 
     # System state
     pv = model.domain.grid.pore_volumes
     timesteps = tstep*3600*24 # 1 day, 2 days
-    tot_time = sum(timesteps)
+    tot_time = sum(timesteps) 
     irate = pvfrac*sum(pv)/tot_time
     src = [SourceTerm(1, irate), 
            SourceTerm(nc, -irate)]
+    src = CuArray(src)
     forces = build_forces(model, sources = src)
 
     # State is dict with pressure in each cell
@@ -62,7 +63,7 @@ function test_single_phase_gpu(casename = "pico", target = "cuda", pvfrac=0.05, 
 
     # linsolve = nothing
     sim = Simulator(model, state0 = state0, parameters = parameters)
-    simulate(sim, timesteps, forces = forces)
+    simulate(sim, timesteps, forces = forces, linear_solver = linsolve, debug_level = 2)
 end
 CUDA.allowscalar(false)
 

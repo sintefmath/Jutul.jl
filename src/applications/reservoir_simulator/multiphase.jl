@@ -22,19 +22,17 @@ function number_of_phases(sys::MultiPhaseSystem)
     return length(get_phases(sys))
 end
 
-struct SourceTerm <: TervForce
-    cell
-    value
-    fractional_flow
-    composition
+struct SourceTerm{I, F} <: TervForce
+    cell::I
+    value::F
+    fractional_flow::Tuple
+    function SourceTerm(cell, value; fractional_flow = [1.0])
+        @assert sum(fractional_flow) == 1.0 "Fractional flow for source term in cell $cell must sum to 1."
+        return new{typeof(cell), typeof(value)}(cell, value, Tuple(fractional_flow))
+    end
 end
 
-function SourceTerm(cell, value; fractional_flow = [1.0], compositions = nothing)
-    @assert sum(fractional_flow) == 1.0 "Fractional flow for source term in cell $cell must sum to 1."
-    cell::Integer
-    value::AbstractFloat
-    SourceTerm(cell, value, fractional_flow, compositions)
-end
+
 
 function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:Any, S<:MultiPhaseSystem}
     return (sources = sources,)
@@ -209,7 +207,7 @@ function get_flow_volume(grid)
     1
 end
 
-function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
+function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm{I, F}}) where {D<:Any, S<:MultiPhaseSystem, I, F}
     acc = get_diagonal_entries(eq)
     state = storage.state
     if haskey(state, :RelativePermeabilities)
@@ -270,11 +268,14 @@ function insert_phase_sources(kr, mu, rhoS, acc, sources)
     end
 end
 
-@inline function insert_phase_sources(mob::CuArray, acc::CuArray, sources)
-    @assert false "Not updated."
-    s = cu(map(x -> x.values[phNo], sources))
-    i = cu(map(x -> x.cell, sources))
-    @. acc[i] -= s
+function insert_phase_sources(kr, mu, rhoS, acc::CuArray, sources)
+    nph = size(acc, 1)
+    sources::CuArray
+    i = map(x -> x.cell, sources)
+    for ph in 1:nph
+        qi = map((src) -> phase_source(src, rhoS, kr, mu, ph), sources)
+        @. acc[ph, i] -= qi
+    end
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}

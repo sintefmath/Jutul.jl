@@ -13,7 +13,7 @@ function ConservationLaw(model, number_of_equations;
                             flow_discretization = model.domain.discretizations.mass_flow,
                             accumulation_symbol = :TotalMasses,
                             kwarg...)
-    D = model.domain
+    D, ctx = model.domain, model.context
     cell_unit = Cells()
     face_unit = Faces()
     nc = count_units(D, cell_unit)
@@ -22,12 +22,12 @@ function ConservationLaw(model, number_of_equations;
     face_partials = degrees_of_freedom_per_unit(model, face_unit)
     alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(number_of_equations, n, model,
                                                                                 unit = unit, n_units_pos = n_units_pos, 
-                                                                                context = model.context; kwarg...)
+                                                                                context = ctx; kwarg...)
     # Accumulation terms
     acc = alloc(nc, cell_unit, nc)
     # Source terms - as sparse matrix
     t_acc = eltype(acc.entries)
-    src = sparse(zeros(0), zeros(0), zeros(t_acc, 0), size(acc.entries)...)
+    src = transfer(ctx, sparse(zeros(0), zeros(0), zeros(t_acc, 0), size(acc.entries)...))
     # Half face fluxes - differentiated with respect to pairs of cells
     hf_cells = alloc(nhf, cell_unit, nhf)
     # Half face fluxes - differentiated with respect to the faces
@@ -169,7 +169,9 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
     @sync begin 
         @async begin 
             update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos, ctx)
-            update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
+            if use_sparse_sources(law)
+                update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
+            end
         end
         if !isnothing(face_flux)
             conn_data = law.flow_discretization.conn_data
@@ -194,9 +196,9 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
 
         # diag_entry = get_entry(acc, cell, e, centries)
         diag_entry = centries[e, cell].partials[d]
-        for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+        @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             # q = get_entry(cell_flux, i, e, fentries)
-            q = fentries[e, i].partials[d]
+            @inbounds q = fentries[e, i].partials[d]
             fpos = get_jacobian_pos(np, i, e, d, fp)
             @inbounds nz[fpos] = q
             diag_entry -= q
@@ -208,7 +210,7 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
             @inbounds nz[apos] = diag_entry
         end
     end
-    kernel = cu_fill(context.device, context.block_size)
+    kernel = cu_fill(context.device, context.block_size, dims)
 
     event_jac = kernel(nz, r, conn_pos, centries, fentries, cp, fp, np, ndrange = dims)
 
@@ -217,15 +219,15 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
         @kernel function cu_fill_r(r, conn_pos, centries, fentries)
             cell, e = @index(Global, NTuple)
 
-            diag_entry = centries[e, cell].value
-            for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-                q = fentries[e, i].value
-                diag_entry -= q
+            @inbounds diag_entry = centries[e, cell].value
+            @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+                @inbounds diag_entry -= fentries[e, i].value
             end
-            r[e, cell] = diag_entry
+            @inbounds r[e, cell] = diag_entry
         end
-        kernel_r = cu_fill_r(context.device, context.block_size)
-        event_r = kernel_r(r, conn_pos, centries, fentries, ndrange = (nc, ne))
+        rdims = (nc, ne)
+        kernel_r = cu_fill_r(context.device, context.block_size, rdims)
+        event_r = kernel_r(r, conn_pos, centries, fentries, ndrange = rdims)
         wait(event_r)
     end
 
@@ -369,7 +371,7 @@ end
 
 function update_equation!(law::ConservationLaw, storage, model, dt)
     # Zero out any sparse indices
-    @. law.sources = 0
+    reset_sources!(law)
     # Next, update accumulation, "intrinsic" sources and fluxes
     update_accumulation!(law, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt)
@@ -380,10 +382,24 @@ function update_half_face_flux!(law::ConservationLaw, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt, fd)
 end
 
+function reset_sources!(law::ConservationLaw)
+    if use_sparse_sources(law)
+        @. law.sources = 0
+    end
+end
+
 @inline function get_diagonal_cache(eq::ConservationLaw)
     return eq.accumulation
 end
 
 @inline function get_diagonal_entries(eq::ConservationLaw)
-    return eq.sources
+    if use_sparse_sources(eq)
+        return eq.sources
+    else
+        # Hack.
+        return eq.accumulation.entries
+    end
 end
+
+is_cuda_eq(eq::ConservationLaw) = isa(eq.accumulation.entries, CuArray)
+use_sparse_sources(eq) = !is_cuda_eq(eq)

@@ -32,6 +32,10 @@ function transfer(context::SingleCUDAContext, v::AbstractArray{F}) where {F<:Abs
     return CuArray{context.float_t}(v)
 end
 
+function transfer(context::SingleCUDAContext, v::SparseMatrixCSC)
+    return CUDA.CUSPARSE.CuSparseMatrixCSC(v)
+end
+
 function transfer(context, t::NamedTuple)
     k = keys(t)
     v = map((x) -> transfer(context, x), values(t))
