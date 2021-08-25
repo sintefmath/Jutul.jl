@@ -22,16 +22,20 @@ function number_of_phases(sys::MultiPhaseSystem)
     return length(get_phases(sys))
 end
 
-struct SourceTerm{I, F} <: TervForce
+struct SourceTerm{I, F, T} <: TervForce
     cell::I
     value::F
-    fractional_flow::Tuple
+    fractional_flow::T
     function SourceTerm(cell, value; fractional_flow = [1.0])
         @assert sum(fractional_flow) == 1.0 "Fractional flow for source term in cell $cell must sum to 1."
-        return new{typeof(cell), typeof(value)}(cell, value, Tuple(fractional_flow))
+        f = Tuple(fractional_flow...)
+        return new{typeof(cell), typeof(value), typeof(f)}(cell, value, f)
     end
 end
 
+function cell(s::SourceTerm{I, T}) where {I, T} 
+    return s.cell::I
+end
 
 
 function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:Any, S<:MultiPhaseSystem}
@@ -207,7 +211,7 @@ function get_flow_volume(grid)
     1
 end
 
-function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm{I, F}}) where {D<:Any, S<:MultiPhaseSystem, I, F}
+function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::V) where {V<: AbstractVector{SourceTerm{I, F}}, D, S<:MultiPhaseSystem} where {I, F}
     acc = get_diagonal_entries(eq)
     state = storage.state
     if haskey(state, :RelativePermeabilities)
@@ -271,9 +275,10 @@ end
 function insert_phase_sources(kr, mu, rhoS, acc::CuArray, sources)
     nph = size(acc, 1)
     sources::CuArray
-    i = map(x -> x.cell, sources)
+    i = map(cell, sources)
     for ph in 1:nph
         qi = map((src) -> phase_source(src, rhoS, kr, mu, ph), sources)
+        @info value.(Matrix(qi))
         @. acc[ph, i] -= qi
     end
 end
