@@ -211,7 +211,7 @@ function get_flow_volume(grid)
     1
 end
 
-function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::V) where {V<: AbstractVector{SourceTerm{I, F}}, D, S<:MultiPhaseSystem} where {I, F}
+function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::V) where {V <: AbstractVector{SourceTerm{I, F, T}}, D, S<:MultiPhaseSystem} where {I, F, T}
     acc = get_diagonal_entries(eq)
     state = storage.state
     if haskey(state, :RelativePermeabilities)
@@ -221,7 +221,7 @@ function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::Co
     end
     mu = state.PhaseViscosities
     rhoS = get_reference_densities(model, storage)
-    insert_phase_sources(kr, mu, rhoS, acc, force)
+    insert_phase_sources!(acc, kr, mu, rhoS, force)
 end
 
 function local_mobility(kr::Real, mu, ph, c)
@@ -263,7 +263,7 @@ function out_phase_source(src, v, c, kr, mu, ph)
     return v*f
 end
 
-function insert_phase_sources(kr, mu, rhoS, acc, sources)
+function insert_phase_sources!(acc, kr, mu, rhoS, sources)
     nph = size(acc, 1)
     for src in sources
         for ph = 1:nph
@@ -272,7 +272,7 @@ function insert_phase_sources(kr, mu, rhoS, acc, sources)
     end
 end
 
-function insert_phase_sources(kr, mu, rhoS, acc::CuArray, sources)
+function insert_phase_sources!(acc::CuArray, kr, mu, rhoS, sources)
     nph = size(acc, 1)
     sources::CuArray
     i = map(cell, sources)
