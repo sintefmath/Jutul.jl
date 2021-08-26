@@ -275,12 +275,13 @@ end
 function insert_phase_sources!(acc::CuArray, kr, mu, rhoS, sources)
     nph = size(acc, 1)
     sources::CuArray
+    rhoS = CuArray(rhoS)
     i = map(cell, sources)
     for ph in 1:nph
         qi = map((src) -> phase_source(src, rhoS, kr, mu, ph), sources)
-        @info value.(Matrix(qi))
         @. acc[ph, i] -= qi
     end
+    CUDA.synchronize()
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}

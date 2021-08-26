@@ -64,6 +64,7 @@ function test_single_phase_gpu(casename = "pico", target = "cuda", pvfrac=0.05, 
     # linsolve = nothing
     sim = Simulator(model, state0 = state0, parameters = parameters)
     simulate(sim, timesteps, forces = forces, linear_solver = linsolve, debug_level = 2)
+    return true
 end
 CUDA.allowscalar(false)
 
