@@ -19,7 +19,7 @@ function build_jacobian(sparse_arg, context::SingleCUDAContext, layout)
     jac_cpu = sparse(It.(I), It.(J), V, n, m)
     display(typeof(jac_cpu))
     jac = CUDA.CUSPARSE.CuSparseMatrixCSC{Ft}(jac_cpu)
-
+    # A = CUDA.CUSPARSE.CuSparseMatrixBSR{Float64}(sparse(rand(6, 6)), 2)
     nzval = get_nzval(jac)
     if Ft == Jt
         V_buf = nzval
@@ -77,10 +77,15 @@ function solve!(sys::LinearizedSystem, solver::CuSparseSolver)
     J = sys.jac
     r = sys.r
     n = length(r)
+    CUDA.synchronize()
 
     t_solve = @elapsed begin
-        prec = ilu02(J, 'O')
-        
+        if isnothing(solver.storage)
+            solver.storage = ilu02(J, 'O')
+        else
+            ilu02!(solver.storage, 'O')
+        end
+        prec = solver.storage
         function ldiv!(y, prec, x)
             # Perform inversion of upper and lower part of ILU preconditioner
             copyto!(y, x)
@@ -95,8 +100,9 @@ function solve!(sys::LinearizedSystem, solver::CuSparseSolver)
         
         rt = convert(eltype(r), solver.reltol)
         (x, stats) = dqgmres(J, r, M = op, rtol = rt, verbose = 0, itmax=20)
+        sys.dx .= -x
     end
     @debug "Solved linear system to with message '$(stats.status)' in $t_solve seconds."
-    sys.dx .= -x
+
 end
 
