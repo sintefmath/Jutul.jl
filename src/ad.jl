@@ -197,13 +197,13 @@ function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, n
 
     layout = matrix_layout(context)
     jpos = cache.jacobian_positions
+    t = index_type(context)
 
-    ns = length(source_index)
-
+    ns = t(length(source_index))
+    nu_t = t(nu_t)
     dims = (ns, ne, np)
-    # dims = (ns, Int64(ne), Int64(np))
-    # dims = (Int32(ns), ne, np)
-    
+    target_index = UnitRange{t}(target_index)
+    source_index = UnitRange{t}(source_index)
     @kernel function cu_injective_align(jpos, 
                                     @Const(rows), @Const(cols),
                                     @Const(target_index), @Const(source_index),
@@ -221,21 +221,22 @@ function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, n
         
         # ix = find_sparse_position_CSC(rows, cols, row, col)
 
-        ix = zero(eltype(cols))
+        T = eltype(cols)
+        ix = zero(T)
         for pos = cols[col]:cols[col+1]-1
             if rows[pos] == row
-                ix = pos
+                ix = T(pos)
                 break
             end
         end
         j_ix = jacobian_row_ix(e, d, np)
-        jpos[j_ix, index] = ix
+        jpos[j_ix, index] = T(ix)
     end
     kernel = cu_injective_align(context.device, context.block_size)
     
     rows = jac.rowVal
     cols = jac.colPtr
-    event_jac = kernel(jpos, rows, cols,target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout, ndrange = dims)
+    event_jac = kernel(jpos, rows, cols, target_index, source_index, nu_t, nu_s, ne, np, t(target_offset), t(source_offset), layout, ndrange = dims)
     wait(event_jac)
 end
 
@@ -342,15 +343,16 @@ julia> allocate_array_ad(2, 2, diag_pos = [1, 2], npartials = 2)
 function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), diag_pos = nothing, npartials = 1, kwarg...) where {R<:Integer}
     # allocate a n length zero vector with space for derivatives
     T = float_type(context)
+    z_val = zero(T)
     if npartials == 0
-        A = allocate_array(context, T(0), n...)
+        A = allocate_array(context, z_val, n...)
     else
         if isa(diag_pos, AbstractVector)
             @assert n[1] == length(diag_pos) "diag_pos must be specified for all columns."
-            d = map(x -> get_ad_unit_scalar(T(0.0), npartials, x; kwarg...), diag_pos)
+            d = map(x -> get_ad_unit_scalar(z_val, npartials, x; kwarg...), diag_pos)
             A = allocate_array(context, d, 1, n[2:end]...)
         else
-            d = get_ad_unit_scalar(T(0.0), npartials, diag_pos; kwarg...)
+            d = get_ad_unit_scalar(z_val, npartials, diag_pos; kwarg...)
             A = allocate_array(context, d, n...)
         end
     end
@@ -393,7 +395,9 @@ Get scalar with partial derivatives as AD instance.
 function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing; diag_value = 1.0, tag = nothing) where {T<:Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
     if npartials > 0
-        v = ForwardDiff.Dual{tag}(v, diag_value.*ntuple(x -> T.(x == diag_pos), npartials))
+        D = diag_value.*ntuple(x -> T.(x == diag_pos), npartials)
+        partials = ForwardDiff.Partials{npartials, T}(D)
+        v = ForwardDiff.Dual{tag, T, npartials}(v, partials)
     end
     return v
 end

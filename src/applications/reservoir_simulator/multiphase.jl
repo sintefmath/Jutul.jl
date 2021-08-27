@@ -28,7 +28,7 @@ struct SourceTerm{I, F, T} <: TervForce
     fractional_flow::T
     function SourceTerm(cell, value; fractional_flow = [1.0])
         @assert sum(fractional_flow) == 1.0 "Fractional flow for source term in cell $cell must sum to 1."
-        f = Tuple(fractional_flow...)
+        f = Tuple(fractional_flow)
         return new{typeof(cell), typeof(value), typeof(f)}(cell, value, f)
     end
 end
@@ -267,7 +267,7 @@ function insert_phase_sources!(acc, kr, mu, rhoS, sources)
     nph = size(acc, 1)
     for src in sources
         for ph = 1:nph
-            @inbounds acc[ph, src.cell] -= phase_source(src, rhoS, kr, mu, ph)
+            @inbounds acc[ph, src.cell] -= phase_source(src, rhoS[ph], kr, mu, ph)
         end
     end
 end

@@ -27,7 +27,10 @@ function ConservationLaw(model, number_of_equations;
     acc = alloc(nc, cell_unit, nc)
     # Source terms - as sparse matrix
     t_acc = eltype(acc.entries)
-    src = transfer(ctx, sparse(zeros(0), zeros(0), zeros(t_acc, 0), size(acc.entries)...))
+    src = sparse(zeros(0), zeros(0), zeros(t_acc, 0), size(acc.entries)...)
+    # @debug typeof(src_sparse)
+    # src = transfer(ctx, src_sparse)
+    # @debug typeof(src)
     # Half face fluxes - differentiated with respect to pairs of cells
     hf_cells = alloc(nhf, cell_unit, nhf)
     # Half face fluxes - differentiated with respect to the faces
