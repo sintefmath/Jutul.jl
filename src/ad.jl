@@ -222,15 +222,15 @@ function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, n
         # ix = find_sparse_position_CSC(rows, cols, row, col)
 
         T = eltype(cols)
-        ix = zero(T)
+        ix = 0
         for pos = cols[col]:cols[col+1]-1
             if rows[pos] == row
-                ix = T(pos)
+                ix = pos
                 break
             end
         end
         j_ix = jacobian_row_ix(e, d, np)
-        jpos[j_ix, index] = T(ix)
+        jpos[j_ix, index] = ix
     end
     kernel = cu_injective_align(context.device, context.block_size)
     
