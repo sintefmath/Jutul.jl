@@ -94,7 +94,7 @@ function conv_table_fn(model_errors, has_models = false)
     pos = 1
     for (model, errors) in model_errors
         for (mix, eq) in enumerate(errors)
-            for (i, e) in enumerate(eq.error)
+            for (i, e) in enumerate(Array(eq.error))
                 if i == 1
                     nm = String(eq.name)
                     tt = eq.tolerance
