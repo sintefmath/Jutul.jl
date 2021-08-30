@@ -273,16 +273,14 @@ function insert_phase_sources!(acc, kr, mu, rhoS, sources)
 end
 
 function insert_phase_sources!(acc::CuArray, kr, mu, rhoS, sources)
-    nph = size(acc, 1)
     sources::CuArray
-    # rhoS = CuArray(rhoS)
-    i = map(cell, sources)
-    for ph in 1:nph
-        ρ = rhoS[ph]
-        qi = map((src) -> phase_source(src, ρ, kr, mu, ph), sources)
-        @. acc[ph, i] -= qi
+    ix = map(cell, sources)
+    if !isa(rhoS, CuArray)
+        @warn "SurfaceDensities is not a CuArray, will convert whenever needed. Improve performance by converting once."  maxlog=1
+        rhoS = CuArray(rhoS)
     end
-    CUDA.synchronize()
+    rhoS::CuArray
+    @tullio acc[ph, ix[i]] = acc[ph, ix[i]] - phase_source(sources[i], rhoS[ph], kr, mu, ph)
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}
