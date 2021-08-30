@@ -156,6 +156,25 @@ Perform single-point upwinding based on signed potential, then multiply the resu
     return θ*λᶠ
 end
 
+@inline function spu_upwind_index(c_self::I, c_other::I, index::I, θ::R, λ::AbstractArray{R}) where {R<:Real, I<:Integer}
+    if θ < 0
+        # Flux is leaving the cell
+        @inbounds λᶠ = λ[index, c_self]
+    else
+        # Flux is entering the cell
+        @inbounds λᶠ = value(λ[index, c_other])
+    end
+    return λᶠ
+end
+
+"""
+Perform single-point upwinding based on signed potential, then multiply the result with that potential
+"""
+@inline function spu_upwind_mult_index(c_self, c_other, index, θ, λ)
+    λᶠ = spu_upwind_index(c_self, c_other, index, θ, λ)
+    return θ*λᶠ
+end
+
 """
 Two-point potential drop (with derivatives only respect to "c_self")
 """
