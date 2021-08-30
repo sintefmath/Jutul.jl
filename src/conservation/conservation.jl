@@ -217,7 +217,6 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
 
     event_jac = kernel(nz, r, conn_pos, centries, fentries, cp, fp, np, ndrange = dims)
 
-    # @tullio r[e, cell] = centries[e, cell].value - 
     if true
         @kernel function cu_fill_r(r, conn_pos, centries, fentries)
             cell, e = @index(Global, NTuple)
@@ -233,7 +232,6 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
         event_r = kernel_r(r, conn_pos, centries, fentries, ndrange = rdims)
         wait(event_r)
     end
-
     wait(event_jac)
 end
 
