@@ -116,7 +116,7 @@ struct ConstantCompressibilityDensities <: PhaseMassDensities
     reference_pressure
     reference_densities
     compressibility
-    function ConstantCompressibilityDensities(sys_or_nph::Union{MultiPhaseSystem, Integer}, reference_pressure = 101325, reference_density = 1000, compressibility = 1e-10)
+    function ConstantCompressibilityDensities(sys_or_nph::Union{MultiPhaseSystem, Integer}, reference_pressure = 101325.0, reference_density = 1000.0, compressibility = 1e-10)
         if isa(sys_or_nph, Integer)
             nph = sys_or_nph
         else
