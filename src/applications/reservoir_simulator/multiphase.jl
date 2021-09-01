@@ -199,17 +199,11 @@ function select_equations_system!(eqs, domain, system::MultiPhaseSystem, formula
     eqs[:mass_conservation] = (ConservationLaw, nph)
 end
 
-function get_pore_volume(model)
-    get_flow_volume(model.domain.grid)'
-end
+get_pore_volume(model) = get_flow_volume(model.domain.grid)
 
-function get_flow_volume(grid::MinimalTPFAGrid)
-    grid.pore_volumes
-end
+get_flow_volume(grid::MinimalTPFAGrid) = grid.pore_volumes
+get_flow_volume(grid) = 1
 
-function get_flow_volume(grid)
-    1
-end
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::V) where {V <: AbstractVector{SourceTerm{I, F, T}}, D, S<:MultiPhaseSystem} where {I, F, T}
     acc = get_diagonal_entries(eq)

@@ -170,8 +170,8 @@ end
 """
 Perform single-point upwinding based on signed potential, then multiply the result with that potential
 """
-@inline function spu_upwind_mult_index(c_self, c_other, index, θ, λ)
-    λᶠ = spu_upwind_index(c_self, c_other, index, θ, λ)
+@inline function spu_upwind_mult_index(c, index, θ, λ)
+    λᶠ = spu_upwind_index(c.self, c.other, index, θ, λ)
     return θ*λᶠ
 end
 
