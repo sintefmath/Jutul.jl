@@ -95,9 +95,8 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::Si
     fpos = face_cache.jacobian_positions
 
 
-    @kernel function algn(fpos, cd, rows, cols, N, nu, ne, np, target_offset, source_offset, layout)
+    @kernel function algn(fpos, @Const(cd), @Const(rows), @Const(cols), @Const(N), nu, ne, np, target_offset, source_offset, layout)
         cell, e, d = @index(Global, NTuple)
-
         for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
             f = cd[f_ix].face
             if N[1, f] == cell
@@ -193,10 +192,8 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
     cp = acc.jacobian_positions
     fp = cell_flux.jacobian_positions
 
-
-    @kernel function cu_fill(nz, r, conn_pos, centries, fentries, cp, fp, np)
+    @kernel function cu_fill(nz, @Const(r), @Const(conn_pos), @Const(centries), @Const(fentries), cp, fp, np)
         cell, e, d = @index(Global, NTuple)
-
         # diag_entry = get_entry(acc, cell, e, centries)
         diag_entry = centries[e, cell].partials[d]
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
@@ -213,25 +210,22 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
             @inbounds nz[apos] = diag_entry
         end
     end
-    kernel = cu_fill(context.device, context.block_size, dims)
-
+    kernel = cu_fill(context.device, context.block_size)
     event_jac = kernel(nz, r, conn_pos, centries, fentries, cp, fp, np, ndrange = dims)
 
-    if true
-        @kernel function cu_fill_r(r, conn_pos, centries, fentries)
-            cell, e = @index(Global, NTuple)
+    @kernel function cu_fill_r(r, @Const(conn_pos), @Const(centries), @Const(fentries))
+        cell, e = @index(Global, NTuple)
 
-            @inbounds diag_entry = centries[e, cell].value
-            @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-                @inbounds diag_entry -= fentries[e, i].value
-            end
-            @inbounds r[e, cell] = diag_entry
+        @inbounds diag_entry = centries[e, cell].value
+        @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+            @inbounds diag_entry -= fentries[e, i].value
         end
-        rdims = (nc, ne)
-        kernel_r = cu_fill_r(context.device, context.block_size, rdims)
-        event_r = kernel_r(r, conn_pos, centries, fentries, ndrange = rdims)
-        wait(event_r)
+        @inbounds r[e, cell] = diag_entry
     end
+    rdims = (nc, ne)
+    kernel_r = cu_fill_r(context.device, context.block_size)
+    event_r = kernel_r(r, conn_pos, centries, fentries, ndrange = rdims)
+    wait(event_r)
     wait(event_jac)
 end
 
