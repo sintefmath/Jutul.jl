@@ -56,7 +56,7 @@ end
 
 function apply_forces_to_equation!(storage, 
     model::SimulationModel{<:Any, <:CurrentCollector, <:Any, <:Any},
-    law::Conservation{Charge}, force; time = NaN)
+    law::Conservation{Charge}, force, time)
     cell = force.cell
     rate = force.src
     tup = 0.1

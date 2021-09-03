@@ -422,7 +422,7 @@ function apply_forces!(storage, model::TervModel, dt, forces::NamedTuple; time =
         eq = equations[key]
         for fkey in keys(forces)
             force = forces[fkey]
-            apply_forces_to_equation!(storage, model, eq, force; time = time)
+            apply_forces_to_equation!(storage, model, eq, force, time)
         end
     end
 end

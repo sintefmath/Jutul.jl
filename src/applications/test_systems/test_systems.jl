@@ -50,7 +50,7 @@ function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<
     return (sources = sources,)
 end
 
-function apply_forces_to_equation!(storage, model, eq::ScalarTestEquation, force::ScalarTestForce; time = NaN)
+function apply_forces_to_equation!(storage, model, eq::ScalarTestEquation, force::ScalarTestForce, time)
     equation = get_entries(eq)
     @. equation -= force.value
 end
