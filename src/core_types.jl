@@ -1,8 +1,8 @@
-export TervSystem, TervDomain, TervVariables
-export SimulationModel, TervVariables, TervFormulation
-export setup_parameters, kernel_compatibility
+export TervSystem, TervDomain, TervVariables, TervGrid, TervContext
+export SimulationModel, TervVariables, TervFormulation, TervEquation
+export setup_parameters, kernel_compatibility, TervForce
 export Cells, Nodes, Faces
-export ConstantVariables
+export ConstantVariables, ScalarVariable, GroupedVariables
 
 export SingleCUDAContext, SharedMemoryContext, DefaultContext
 export BlockMajorLayout, EquationMajorLayout, UnitMajorLayout

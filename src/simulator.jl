@@ -72,8 +72,9 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     report = OrderedDict()
     timing_out = config[:debug_level] > 1
     # Update the properties and equations
-    t_asm = @elapsed begin 
-        update_state_dependents!(storage, model, dt, forces)
+    t_asm = @elapsed begin
+        time =  config[:ProgressRecorder].recorder.time + dt
+        update_state_dependents!(storage, model, dt, forces; time = time)
     end
     if timing_out
         @debug "Assembled equations in $t_asm seconds."
@@ -93,8 +94,18 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
             get_convergence_table(errors)
         end
         if converged
-            do_solve = iteration == 1
-            @debug "Step converged."
+            if iteration == 1
+                # Should always do one iteration. 
+                do_solve = true
+                # Ensures secondary variables are updated, and correct error
+                converged = false
+    
+            else
+                do_solve = false
+                @debug "Step converged."
+            end
+        else
+            do_solve = true
         end
     end
 
@@ -126,6 +137,9 @@ function simulator_config(sim; kwarg...)
     cfg[:info_level] = 1
     # Define a default progress ProgressRecorder
     cfg[:ProgressRecorder] = ProgressRecorder()
+    # Max residual before error is issued
+    cfg[:max_residual] = 1e10
+
     # Overwrite with varargin
     for key in keys(kwarg)
         cfg[key] = kwarg[key]
@@ -214,7 +228,7 @@ function solve_ministep(sim, dt, forces, maxIterations, cfg)
         if done
             break
         end
-        too_large = e > 1e10
+        too_large = e > cfg[:max_residual]
         non_finite = !isfinite(e)
         failure = non_finite || too_large
         if failure

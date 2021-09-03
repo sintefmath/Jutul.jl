@@ -321,10 +321,20 @@ Perform updates of everything that depends on the state.
 
 This includes properties, governing equations and the linearized system
 """
-function update_state_dependents!(storage, model::TervModel, dt, forces)
+function update_state_dependents!(storage, model::TervModel, dt, forces; time = NaN)
     update_secondary_variables!(storage, model)
     update_equations!(storage, model, dt)
-    apply_forces!(storage, model, dt, forces)
+    apply_forces!(storage, model, dt, forces; time = time)
+    apply_boundary_conditions!(storage, model)
+end
+
+function apply_boundary_conditions!(storage, model::TervModel)
+    parameters = storage.parameters
+    apply_boundary_conditions!(storage, parameters, model)
+end
+
+function apply_boundary_conditions!(storage, parameters, model)
+    nothing
 end
 
 function update_equations!(storage, model, dt = nothing)
@@ -406,18 +416,18 @@ end
 Apply a set of forces to all equations. Equations that don't support a given force
 will just ignore them, thanks to the power of multiple dispatch.
 """
-function apply_forces!(storage, model::TervModel, dt, forces::NamedTuple)
+function apply_forces!(storage, model::TervModel, dt, forces::NamedTuple; time = NaN)
     equations = storage.equations
     for key in keys(equations)
         eq = equations[key]
         for fkey in keys(forces)
             force = forces[fkey]
-            apply_forces_to_equation!(storage, model, eq, force)
+            apply_forces_to_equation!(storage, model, eq, force, time)
         end
     end
 end
 
-function apply_forces!(storage, model, dt, ::Nothing)
+function apply_forces!(storage, model, dt, ::Nothing; time = NaN)
 
 end
 

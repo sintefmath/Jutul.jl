@@ -2,17 +2,20 @@ export allocate_array_ad, get_ad_unit_scalar, update_values!
 export value, find_sparse_position
 
 
+
 function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
     equation_index, partial_index,        # Index of equation and partial derivative - local index
     nunits_target, nunits_source,         # Row and column sizes for each sub-system
     eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
     context::TervContext)
     layout = matrix_layout(context)
-
-    find_jac_position(A, target_unit_index, source_unit_index,
-    equation_index, partial_index,
-    nunits_target, nunits_source,
-    eqs_per_unit, partials_per_unit, layout)
+    find_jac_position(
+        A, target_unit_index, source_unit_index, 
+        equation_index, partial_index,
+        nunits_target, nunits_source, 
+        eqs_per_unit, partials_per_unit, 
+        layout
+        )
 end
 
 function find_jac_position(A, target_unit_index, source_unit_index,
@@ -307,7 +310,7 @@ Update an equation with the effect of a force. The default behavior
 for any force we do not know about is to assume that the force does
 not impact this particular equation.
 """
-function apply_forces_to_equation!(storage, model, eq, force) end
+function apply_forces_to_equation!(storage, model, eq, force, time) end
 
 function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
     n = number_of_equations_per_unit(eq)
