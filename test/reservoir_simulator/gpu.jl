@@ -30,7 +30,6 @@ function test_single_phase_gpu(casename = "pico"; float_type = Float32, pvfrac=0
     sys = SinglePhaseSystem(phase)
     # Simulation model wraps grid and system together with context (which will be used for GPU etc)
     ctx = SingleCUDAContext(float_type)
-    linsolve = CuSparseSolver("??", 1e-3)
     linsolve = GenericKrylov(Krylov.dqgmres, preconditioner = ILUZeroPreconditioner())
     model = SimulationModel(G, sys, context = ctx)
 
@@ -61,7 +60,7 @@ function test_single_phase_gpu(casename = "pico"; float_type = Float32, pvfrac=0
 end
 if has_cuda_gpu()
     CUDA.allowscalar(false)
-
+    casename = "pico"
     @testset "GPU multiphase" begin
         @testset "Basic flow - single precision" begin
             @test test_single_phase_gpu(casename, float_type = Float32)
