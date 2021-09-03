@@ -101,7 +101,7 @@ function build_jacobian(sparse_arg, context, layout)
 
     V = zeros(Jt, length(I))
     jac = sparse(I, J, V, n, m)
-    nzval = get_nzval(jac)
+    nzval = nonzeros(jac)
     if Ft == Jt
         V_buf = nzval
     else
@@ -191,10 +191,6 @@ end
 
 function update_dx_from_vector!(sys, dx)
     sys.dx .= -dx
-end
-
-@inline function get_nzval(jac)
-    return jac.nzval
 end
 
 function block_size(lsys::LSystem) 1 end
