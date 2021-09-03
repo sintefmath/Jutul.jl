@@ -177,14 +177,31 @@ end
 is_left_preconditioner(p::ILUZeroPreconditioner) = p.left
 is_right_preconditioner(p::ILUZeroPreconditioner) = p.right
 
+function set_dim!(ilu, A, b)
+    T = eltype(b)
+    if T<:AbstractFloat
+        d = 1
+    else
+        d = length(T)
+    end
+    ilu.dim = d .* size(A)
+end
+
 function update!(ilu::ILUZeroPreconditioner, A, b)
     if isnothing(ilu.factor)
         ilu.factor = ilu0(A, eltype(b))
-        d = length(b[1])
-        ilu.dim = d .* size(A)
+        set_dim!(ilu, A, b)
     else
         ilu0!(ilu.factor, A)
     end
+end
+
+function update!(ilu::ILUZeroPreconditioner, A::CuSparseMatrix, b::CuArray)
+    if isnothing(ilu.factor)
+        ilu.factor = copy(A)
+        set_dim!(ilu, A, b)
+    end
+    ilu02!(ilu.factor, 'O')
 end
 
 function apply!(x, ilu::ILUZeroPreconditioner, y, arg...)
@@ -206,6 +223,13 @@ end
 function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
     f! = ilu_f(type)
     f!(x, f, y)
+end
+
+function ilu_apply!(x::AbstractArray{F}, f::CuSparseMatrix{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
+    x .= y
+    ix = 'O'
+    sv2!('N', 'L', 'N', 1.0, f, x, ix)
+    sv2!('N', 'U', 'U', 1.0, f, x, ix)
 end
 
 function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)

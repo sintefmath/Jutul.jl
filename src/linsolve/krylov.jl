@@ -26,7 +26,7 @@ mutable struct GenericKrylov
     preconditioner
     x
     config::IterativeSolverConfig
-    function GenericKrylov(solver = gmres!; preconditioner = nothing, kwarg...)
+    function GenericKrylov(solver = IterativeSolvers.gmres!; preconditioner = nothing, kwarg...)
         new(solver, preconditioner, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
@@ -74,7 +74,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     max_it = cfg.max_iterations
     rt = rtol(cfg)
     at = atol(cfg)
-    if from_IterativeSolvers(solver)
+    if Base.parentmodule(solver) == IterativeSolvers
         # Pl = krylov.preconditioner.factor
         if is_mutating(solver)
             if isnothing(krylov.x)
@@ -124,7 +124,4 @@ end
 
 function is_mutating(f)
     return String(Symbol(f))[end] == '!'
-end
-function from_IterativeSolvers(f)
-    return f == gmres || f == gmres! || f == bicgstabl || f == bicgstabl!
 end
