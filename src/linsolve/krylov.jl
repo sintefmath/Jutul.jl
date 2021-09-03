@@ -31,14 +31,14 @@ mutable struct GenericKrylov
     end
 end
 
-function atol(cfg)
+function atol(cfg, T = Float64)
     tol = cfg.absolute_tolerance
-    return isnothing(tol) ? 0.0 : Float64(tol)
+    return isnothing(tol) ? 0.0 : T(tol)
 end
 
-function rtol(cfg)
+function rtol(cfg, T = Float64)
     tol = cfg.relative_tolerance
-    return isnothing(tol) ? 0.0 : Float64(tol)
+    return isnothing(tol) ? 0.0 : T(tol)
 end
 
 function verbose(cfg)
@@ -63,6 +63,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     solver = krylov.solver
     cfg = krylov.config
     prec = krylov.preconditioner
+    Ft = float_type(model.context)
 
     prepare_solve!(sys)
     r = vector_residual(sys)
@@ -72,10 +73,9 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     R = preconditioner(krylov, sys, model, storage, recorder, :right)
     v = verbose(cfg)
     max_it = cfg.max_iterations
-    rt = rtol(cfg)
-    at = atol(cfg)
+    rt = rtol(cfg, Ft)
+    at = atol(cfg, Ft)
     if Base.parentmodule(solver) == IterativeSolvers
-        # Pl = krylov.preconditioner.factor
         if is_mutating(solver)
             if isnothing(krylov.x)
                 krylov.x = similar(r)
