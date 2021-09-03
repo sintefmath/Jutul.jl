@@ -24,7 +24,6 @@ using PrettyTables
 using DataInterpolations
 using ILUZero
 
-using Base.Threads
 # Main types
 include("core_types.jl")
 

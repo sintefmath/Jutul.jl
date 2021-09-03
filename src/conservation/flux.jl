@@ -92,7 +92,7 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
         el = get_el(1, 1) # Could be junk, we just need eltype
         
         conn_data = Vector{typeof(el)}(undef, nhf)
-        @threads for cell = 1:nc
+        Threads.@threads for cell = 1:nc
             @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
                 conn_data[fpos] = get_el(faces[fpos], cell)
             end
@@ -153,6 +153,25 @@ Perform single-point upwinding based on signed potential, then multiply the resu
 """
 @inline function spu_upwind_mult(c_self, c_other, θ, λ)
     λᶠ = spu_upwind(c_self, c_other, θ, λ)
+    return θ*λᶠ
+end
+
+@inline function spu_upwind_index(c_self::I, c_other::I, index::I, θ::R, λ::AbstractArray{R}) where {R<:Real, I<:Integer}
+    if θ < 0
+        # Flux is leaving the cell
+        @inbounds λᶠ = λ[index, c_self]
+    else
+        # Flux is entering the cell
+        @inbounds λᶠ = value(λ[index, c_other])
+    end
+    return λᶠ
+end
+
+"""
+Perform single-point upwinding based on signed potential, then multiply the result with that potential
+"""
+@inline function spu_upwind_mult_index(c, index, θ, λ)
+    λᶠ = spu_upwind_index(c.self, c.other, index, θ, λ)
     return θ*λᶠ
 end
 

@@ -286,7 +286,8 @@ function setup_linearized_system!(storage, model::TervModel)
     # layout = matrix_layout(model.context)
     sparg = get_sparse_arguments(storage, model)
     lsys = setup_linearized_system(sparg, model)
-    storage[:LinearizedSystem] = transfer(model.context, lsys)
+    storage[:LinearizedSystem] = lsys
+    # storage[:LinearizedSystem] = transfer(model.context, lsys)
     return lsys
 end
 

@@ -1,4 +1,4 @@
-using Terv
+using Terv, AlgebraicMultigrid
 using Test
 
 function test_single_phase(grid = "pico"; linear_solver = nothing, kwarg...)
@@ -15,9 +15,11 @@ end
     @test test_single_phase(fuse_flux = true)
 end
 
+agg = AMGPreconditioner(smoothed_aggregation)
+rs = AMGPreconditioner(ruge_stuben)
 @testset "Single-phase linear solvers" begin
-    @test test_single_phase(linear_solver = AMGSolver(:ruge_stuben))
-    @test test_single_phase(linear_solver = AMGSolver(:smoothed_aggregation, relative_tolerance = 1e-3))
+    @test test_single_phase(linear_solver = GenericKrylov(preconditioner = agg))
+    @test test_single_phase(linear_solver = GenericKrylov(preconditioner = rs))
     @test test_single_phase(linear_solver = GenericKrylov())
     @test test_single_phase(linear_solver = GenericKrylov(preconditioner = ILUZeroPreconditioner()))
 end

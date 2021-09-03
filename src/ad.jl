@@ -79,14 +79,22 @@ end
     @inbounds pos[(eqNo-1)*c.npartials + partial_index, index]
 end
 
+@inline function get_jacobian_pos(np::I, index, eqNo, partial_index, pos)::I where {I<:Integer}
+    @inbounds pos[(eqNo-1)*np + partial_index, index]
+end
+
 @inline function set_jacobian_pos!(c::CompactAutoDiffCache, index, eqNo, partial_index, pos)
     set_jacobian_pos!(c.jacobian_positions, index, eqNo, partial_index, c.npartials, pos)
-    c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
+    # c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
 end
 
 @inline function set_jacobian_pos!(jpos, index, eqNo, partial_index, npartials, pos)
-    jpos[(eqNo-1)*npartials + partial_index, index] = pos
+    jpos[jacobian_cart_ix(index, eqNo, partial_index, npartials)] = pos
 end
+
+
+@inline jacobian_row_ix(eqNo, partial_index, npartials) = (eqNo-1)*npartials + partial_index
+@inline jacobian_cart_ix(index, eqNo, partial_index, npartials) = CartesianIndex((eqNo-1)*npartials + partial_index, index)
 
 @inline function ad_dims(cache::CompactAutoDiffCache{I, D})::Tuple{I, I, I} where {I, D}
     return (cache.number_of_units, cache.equations_per_unit, cache.npartials)
@@ -102,7 +110,7 @@ function fill_equation_entries!(nz, r, model, cache::TervAutoDiffCache)
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
     jp = cache.jacobian_positions
-    @threads for i in 1:nu
+    Threads.@threads for i in 1:nu
         for e in 1:ne
             a = get_entry(cache, i, e, entries)
             @inbounds r[i + nu*(e-1)] = a.value
@@ -118,7 +126,7 @@ function fill_equation_entries!(nz, r::Nothing, model, cache::TervAutoDiffCache)
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
     jp = cache.jacobian_positions
-    @threads for i in 1:nu
+    Threads.@threads for i in 1:nu
         for e in 1:ne
             a = get_entry(cache, i, e, entries)
             @turbo for d = 1:np
@@ -167,43 +175,69 @@ end
 
 function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context)
     layout = matrix_layout(context)
+    jpos = cache.jacobian_positions
+    np = cache.npartials
     for index in 1:length(source_index)
         target = target_index[index]
         source = source_index[index]
         for e in 1:ne
             for d = 1:np
-                pos = find_jac_position(
-                    jac, target + target_offset, source + source_offset, 
-                    e, d, 
-                    nu_t, nu_s,
-                    ne, np,
-                    layout
-                    )
-                set_jacobian_pos!(cache, index, e, d, pos)
+                jpos[jacobian_cart_ix(index, e, d, np)] = find_jac_position(jac, target + target_offset, source + source_offset, e, d, 
+                nu_t, nu_s,
+                ne, np,
+                layout)
             end
         end
     end
 end
 
+
+
 function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext)
 
     layout = matrix_layout(context)
     jpos = cache.jacobian_positions
-    function kernel(jpos, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
-        index, e, d = threadIdx()
+    t = index_type(context)
+
+    ns = t(length(source_index))
+    nu_t = t(nu_t)
+    dims = (ns, ne, np)
+    target_index = UnitRange{t}(target_index)
+    source_index = UnitRange{t}(source_index)
+    @kernel function cu_injective_align(jpos, 
+                                    @Const(rows), @Const(cols),
+                                    @Const(target_index), @Const(source_index),
+                                    nu_t, nu_s, ne, np, 
+                                    target_offset, source_offset,
+                                    layout)
+        index, e, d = @index(Global, NTuple)
         target = target_index[index]
         source = source_index[index]
 
-        pos = find_jac_position(jac, target + target_offset, source + source_offset, e, d, 
+        row, col = row_col_sparse(target + target_offset, source + source_offset, e, d, 
         nu_t, nu_s,
         ne, np,
         layout)
-        set_jacobian_pos!(jpos, index, e, d, np, pos)
-        return
-    end
-    ns = length(source_index)
+        
+        # ix = find_sparse_position_CSC(rows, cols, row, col)
 
-    @cuda threads=(ns, ne, np) kernel(jpos, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, layout)
+        T = eltype(cols)
+        ix = 0
+        for pos = cols[col]:cols[col+1]-1
+            if rows[pos] == row
+                ix = pos
+                break
+            end
+        end
+        j_ix = jacobian_row_ix(e, d, np)
+        jpos[j_ix, index] = ix
+    end
+    kernel = cu_injective_align(context.device, context.block_size)
+    
+    rows = jac.rowVal
+    cols = jac.colPtr
+    event_jac = kernel(jpos, rows, cols, target_index, source_index, nu_t, nu_s, ne, np, t(target_offset), t(source_offset), layout, ndrange = dims)
+    wait(event_jac)
 end
 
 """
@@ -309,15 +343,16 @@ julia> allocate_array_ad(2, 2, diag_pos = [1, 2], npartials = 2)
 function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), diag_pos = nothing, npartials = 1, kwarg...) where {R<:Integer}
     # allocate a n length zero vector with space for derivatives
     T = float_type(context)
+    z_val = zero(T)
     if npartials == 0
-        A = allocate_array(context, T(0), n...)
+        A = allocate_array(context, z_val, n...)
     else
         if isa(diag_pos, AbstractVector)
             @assert n[1] == length(diag_pos) "diag_pos must be specified for all columns."
-            d = map(x -> get_ad_unit_scalar(T(0.0), npartials, x; kwarg...), diag_pos)
+            d = map(x -> get_ad_unit_scalar(z_val, npartials, x; kwarg...), diag_pos)
             A = allocate_array(context, d, 1, n[2:end]...)
         else
-            d = get_ad_unit_scalar(T(0.0), npartials, diag_pos; kwarg...)
+            d = get_ad_unit_scalar(z_val, npartials, diag_pos; kwarg...)
             A = allocate_array(context, d, n...)
         end
     end
@@ -360,7 +395,9 @@ Get scalar with partial derivatives as AD instance.
 function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing; diag_value = 1.0, tag = nothing) where {T<:Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
     if npartials > 0
-        v = ForwardDiff.Dual{tag}(v, diag_value.*ntuple(x -> T.(x == diag_pos), npartials))
+        D = diag_value.*ntuple(x -> T.(x == diag_pos), npartials)
+        partials = ForwardDiff.Partials{npartials, T}(D)
+        v = ForwardDiff.Dual{tag, T, npartials}(v, partials)
     end
     return v
 end

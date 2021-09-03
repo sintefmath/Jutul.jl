@@ -14,8 +14,8 @@ casename = "egg"
 # casename = "single_inj_single_cell"
 # casename = "intermediate"
 # casename = "mini"
-casename = "spe10_2ph_1"
-casename = "spe10_2ph_1_85"
+# casename = "spe10_2ph_1"
+# casename = "spe10_2ph_1_85"
 
 simple_well = false
 block_backend = true
@@ -288,7 +288,7 @@ max_it = 50
 # max_it = 1
 krylov = bicgstab
 krylov = dqgmres
-krylov = gmres!
+krylov = IterativeSolvers.gmres!
 # prec = nothing 
 lsolve = GenericKrylov(krylov, verbose = 0, preconditioner = prec, 
                         relative_tolerance = rtol, absolute_tolerance = atol,
