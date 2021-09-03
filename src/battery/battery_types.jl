@@ -125,7 +125,7 @@ function TPFlow(grid::TervGrid, T; tensor_map = false)
     el_type = typeof(get_el(1, 1))
     
     conn_data = Vector{el_type}(undef, nhf)
-    @threads for cell = 1:nc
+    Threads.@threads for cell = 1:nc
         @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
             conn_data[fpos] = get_el(faces[fpos], cell)
         end

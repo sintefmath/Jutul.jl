@@ -140,7 +140,7 @@ function density_alignment!(
     nc = length(facepos) - 1
     cc = flow_disc.cellcell
 
-    @threads for cell in 1:nc
+    Threads.@threads for cell in 1:nc
         for cn in cc.pos[cell]:(cc.pos[cell+1]-1)
             c, n = cc.tbl[cn]
             @assert c == cell
@@ -207,7 +207,7 @@ function fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
     jp = cell_flux.jacobian_positions
 
     # Fill accumulation + diag flux
-    @threads for cell = 1:nc
+    Threads.@threads for cell = 1:nc
         for e in 1:ne
             diag_entry = get_entry(acc, cell, e, centries)
 
@@ -224,7 +224,7 @@ function fill_jac_flux_and_acc!(nz, r, model, acc, cell_flux, cpos)
     end
 
     # Fill of-diagonal flux
-    @threads for i in 1:nu
+    Threads.@threads for i in 1:nu
         for e in 1:ne
             a = get_entry(cell_flux, i, e, fentries)
             for d in 1:np
@@ -250,7 +250,7 @@ function fill_jac_density!(nz, r, model, density)
     dp = density.jacobian_positions
 
     # Fill density term
-    @threads for i = 1:nud
+    Threads.@threads for i = 1:nud
         for e in 1:ne
             entry = get_entry(density, i, e, dentries)
 
@@ -266,7 +266,7 @@ function fill_jac_density!(nz, r, model, density)
     mf = model.domain.discretizations.charge_flow
     cc = mf.cellcell
     nc = number_of_cells(model.domain)
-    @threads for cn in cc.pos[1:end-1] # The diagonal elements
+    Threads.@threads for cn in cc.pos[1:end-1] # The diagonal elements
         for e in 1:ne
             @inbounds c, n = cc.tbl[cn]
             @assert c == n
