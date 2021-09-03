@@ -34,7 +34,7 @@ function find_jac_position(A, target_unit_index, source_unit_index,
     row, col = row_col_sparse(target_unit_index, source_unit_index,
     equation_index, partial_index,
     nunits_target, nunits_source,
-    eqs_per_unit, partials_per_unit, layout)
+    eqs_per_unit, partials_per_unit, EquationMajorLayout()) # Pass of eqn. major version since we are looking for "scalar" index
 
     row = target_unit_index
     col = source_unit_index
