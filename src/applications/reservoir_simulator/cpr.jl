@@ -67,7 +67,7 @@ function update_pressure_system!(A_p, A, w_p, bz)
     rv = A_p.rowval
     n = A.n
     # Update the pressure system with the same pattern in-place
-    @threads for i in 1:n
+    Threads.@threads for i in 1:n
         @inbounds for j in cp[i]:cp[i+1]-1
             row = rv[j]
             Ji = nz_s[j]
@@ -162,7 +162,7 @@ end
 
 function quasi_impes!(w, J, r, n, bz)
     r_p = SVector{bz}(r)
-    @threads for cell = 1:n
+    Threads.@threads for cell = 1:n
         J_b = J[cell, cell]'
         invert_w!(w, J_b, r_p, cell, bz)
     end
@@ -176,7 +176,7 @@ end
 end
 
 function update_p_rhs!(r_p, y, bz, w_p)
-    @threads for i in eachindex(r_p)
+    Threads.@threads for i in eachindex(r_p)
         v = 0
         @inbounds for b = 1:bz
             v += y[(i-1)*bz + b]*w_p[b, i]

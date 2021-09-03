@@ -488,7 +488,7 @@ function update_linearized_system_crossterms!(lsys, storage, model::MultiModel, 
     eqs = storage_t[:equations]
     for ekey in keys(eqs)
         ct = cross_terms[ekey]
-        nz = get_nzval(lsys.jac)
+        nz = nonzeros(lsys.jac)
         if !isnothing(ct)
             update_linearized_system_crossterm!(nz, model_t, model_s, ct::CrossTerm)
         end

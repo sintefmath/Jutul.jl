@@ -13,7 +13,7 @@ function ConservationLaw(model, number_of_equations;
                             flow_discretization = model.domain.discretizations.mass_flow,
                             accumulation_symbol = :TotalMasses,
                             kwarg...)
-    D = model.domain
+    D, ctx = model.domain, model.context
     cell_unit = Cells()
     face_unit = Faces()
     nc = count_units(D, cell_unit)
@@ -22,12 +22,15 @@ function ConservationLaw(model, number_of_equations;
     face_partials = degrees_of_freedom_per_unit(model, face_unit)
     alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(number_of_equations, n, model,
                                                                                 unit = unit, n_units_pos = n_units_pos, 
-                                                                                context = model.context; kwarg...)
+                                                                                context = ctx; kwarg...)
     # Accumulation terms
     acc = alloc(nc, cell_unit, nc)
     # Source terms - as sparse matrix
     t_acc = eltype(acc.entries)
     src = sparse(zeros(0), zeros(0), zeros(t_acc, 0), size(acc.entries)...)
+    # @debug typeof(src_sparse)
+    # src = transfer(ctx, src_sparse)
+    # @debug typeof(src)
     # Half face fluxes - differentiated with respect to pairs of cells
     hf_cells = alloc(nhf, cell_unit, nhf)
     # Half face fluxes - differentiated with respect to the faces
@@ -51,26 +54,82 @@ function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation
 end
 
 function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, N, flow_disc; target_offset = 0, source_offset = 0)
-    nu, ne, np = ad_dims(acc_cache)
+    # nu, ne, np = ad_dims(acc_cache)
+    dims = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
-    @threads for cell in 1:nc
+    cd = flow_disc.conn_data
+    Threads.@threads for cell in 1:nc
         @inbounds for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
-            f = flow_disc.conn_data[f_ix].face
+            align_half_face_cells(face_cache, jac, cd, f_ix, cell, N, dims, context, target_offset, source_offset)
+        end
+    end
+end
+
+function align_half_face_cells(face_cache, jac, cd, f_ix, cell, N, dims, context, target_offset, source_offset)
+    nu, ne, np = dims
+    f = cd[f_ix].face
+    if N[1, f] == cell
+        other = N[2, f]
+    else
+        other = N[1, f]
+    end
+    for e in 1:ne
+        for d = 1:np
+            pos = find_jac_position(jac, other + target_offset, cell + source_offset, e, d, nu, nu, ne, np, context)
+            set_jacobian_pos!(face_cache, f_ix, e, d, pos)
+        end
+    end
+end
+
+function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::SingleCUDAContext, N, flow_disc; target_offset = 0, source_offset = 0)
+    dims = ad_dims(acc_cache)
+    nu, ne, np = dims
+    # error()
+    facepos = flow_disc.conn_pos
+    nc = length(facepos) - 1
+    cd = flow_disc.conn_data
+
+    # 
+    layout = matrix_layout(context)
+    fpos = face_cache.jacobian_positions
+
+
+    @kernel function algn(fpos, @Const(cd), @Const(rows), @Const(cols), @Const(N), nu, ne, np, target_offset, source_offset, layout)
+        cell, e, d = @index(Global, NTuple)
+        for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
+            f = cd[f_ix].face
             if N[1, f] == cell
                 other = N[2, f]
             else
                 other = N[1, f]
             end
-            for e in 1:ne
-                for d = 1:np
-                    pos = find_jac_position(jac, other + target_offset, cell + source_offset, e, d, nu, nu, ne, np, context)
-                    set_jacobian_pos!(face_cache, f_ix, e, d, pos)
+            row, col = row_col_sparse(other + target_offset, cell + source_offset, e, d, 
+            nu, nu,
+            ne, np,
+            layout)
+
+            ix = zero(eltype(cols))
+            for pos = cols[col]:cols[col+1]-1
+                if rows[pos] == row
+                    ix = pos
+                    break
                 end
             end
+            # ix = find_sparse_position_CSC(rows, cols, row, col)
+            fpos[jacobian_cart_ix(f_ix, e, d, np)] = ix
         end
     end
+    nf = size(N, 2)
+    dims = (nc, ne, np)
+    kernel = algn(context.device, context.block_size)
+
+    rows = Int64.(jac.rowVal)
+    cols = Int64.(jac.colPtr)
+    event_jac = kernel(fpos, cd, rows, cols, N, nu, ne, np, target_offset, source_offset, layout, ndrange = dims)
+    wait(event_jac)
 end
+
 
 function align_to_jacobian!(law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
@@ -108,11 +167,13 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
     face_flux = law.half_face_flux_faces
     src = law.sources
     cpos = law.flow_discretization.conn_pos
-
+    ctx = model.context
     @sync begin 
         @async begin 
-            update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos)
-            update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
+            update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos, ctx)
+            if use_sparse_sources(law)
+                update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
+            end
         end
         if !isnothing(face_flux)
             conn_data = law.flow_discretization.conn_data
@@ -121,30 +182,81 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
     end
 end
 
-function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos)
+function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context::SingleCUDAContext)
+    nc, ne, np = ad_dims(acc)
+    dims = (nc, ne, np)
+    # kdims = dims .+ (0, 0, 1)
+
+    centries = acc.entries
+    fentries = cell_flux.entries
+    cp = acc.jacobian_positions
+    fp = cell_flux.jacobian_positions
+
+    @kernel function cu_fill(nz, @Const(r), @Const(conn_pos), @Const(centries), @Const(fentries), cp, fp, np)
+        cell, e, d = @index(Global, NTuple)
+        # diag_entry = get_entry(acc, cell, e, centries)
+        diag_entry = centries[e, cell].partials[d]
+        @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+            # q = get_entry(cell_flux, i, e, fentries)
+            @inbounds q = fentries[e, i].partials[d]
+            fpos = get_jacobian_pos(np, i, e, d, fp)
+            @inbounds nz[fpos] = q
+            diag_entry -= q
+        end
+    
+        # r[e, cell] = diag_entry.value
+        for d = 1:np
+            apos = get_jacobian_pos(np, cell, e, d, cp)
+            @inbounds nz[apos] = diag_entry
+        end
+    end
+    kernel = cu_fill(context.device, context.block_size)
+    event_jac = kernel(nz, r, conn_pos, centries, fentries, cp, fp, np, ndrange = dims)
+
+    @kernel function cu_fill_r(r, @Const(conn_pos), @Const(centries), @Const(fentries))
+        cell, e = @index(Global, NTuple)
+
+        @inbounds diag_entry = centries[e, cell].value
+        @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+            @inbounds diag_entry -= fentries[e, i].value
+        end
+        @inbounds r[e, cell] = diag_entry
+    end
+    rdims = (nc, ne)
+    kernel_r = cu_fill_r(context.device, context.block_size)
+    event_r = kernel_r(r, conn_pos, centries, fentries, ndrange = rdims)
+    wait(event_r)
+    wait(event_jac)
+end
+
+function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context)
     nc, ne, np = ad_dims(acc)
     centries = acc.entries
     fentries = cell_flux.entries
     cp = acc.jacobian_positions
     fp = cell_flux.jacobian_positions
-    @threads for cell = 1:nc
+    Threads.@threads for cell = 1:nc
         for e in 1:ne
-            diag_entry = get_entry(acc, cell, e, centries)
-            @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-                q = get_entry(cell_flux, i, e, fentries)
-                @turbo for d = 1:np
-                    fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
-                    @inbounds nz[fpos] = q.partials[d]
-                end
-                diag_entry -= q
-            end
-
-            @inbounds r[e, cell] = diag_entry.value
-            @turbo for d = 1:np
-                apos = get_jacobian_pos(acc, cell, e, d, cp)
-                @inbounds nz[apos] = diag_entry.partials[d]
-            end
+            fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flux, cp, fp, conn_pos, np)
         end
+    end
+end
+
+function fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flux, cp, fp, conn_pos, np)
+    diag_entry = get_entry(acc, cell, e, centries)
+    @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+        q = get_entry(cell_flux, i, e, fentries)
+        @turbo for d = 1:np
+            fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
+            @inbounds nz[fpos] = q.partials[d]
+        end
+        diag_entry -= q
+    end
+
+    @inbounds r[e, cell] = diag_entry.value
+    @turbo for d = 1:np
+        apos = get_jacobian_pos(acc, cell, e, d, cp)
+        @inbounds nz[apos] = diag_entry.partials[d]
     end
 end
 
@@ -153,7 +265,7 @@ function update_linearized_system_subset_conservation_sources!(nz, r, model, acc
     rv_src = rowvals(src)
     nz_src = nonzeros(src)
     cp = acc.jacobian_positions
-    @threads for cell in 1:nc
+    Threads.@threads for cell in 1:nc
         for rp in nzrange(src, cell)
             e = rv_src[rp]
             v = nz_src[rp]
@@ -174,7 +286,7 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
     fentries = face_flux.entries
     fp = face_flux.jacobian_positions
     nc = length(conn_pos) - 1
-    @threads for cell = 1:nc
+    Threads.@threads for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
                 c = conn_data[i]
@@ -254,7 +366,7 @@ end
 
 function update_equation!(law::ConservationLaw, storage, model, dt)
     # Zero out any sparse indices
-    @. law.sources = 0
+    reset_sources!(law)
     # Next, update accumulation, "intrinsic" sources and fluxes
     update_accumulation!(law, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt)
@@ -265,10 +377,24 @@ function update_half_face_flux!(law::ConservationLaw, storage, model, dt)
     update_half_face_flux!(law, storage, model, dt, fd)
 end
 
+function reset_sources!(law::ConservationLaw)
+    if use_sparse_sources(law)
+        @. law.sources = 0
+    end
+end
+
 @inline function get_diagonal_cache(eq::ConservationLaw)
     return eq.accumulation
 end
 
 @inline function get_diagonal_entries(eq::ConservationLaw)
-    return eq.sources
+    if use_sparse_sources(eq)
+        return eq.sources
+    else
+        # Hack.
+        return eq.accumulation.entries
+    end
 end
+
+is_cuda_eq(eq::ConservationLaw) = isa(eq.accumulation.entries, CuArray)
+use_sparse_sources(eq) = !is_cuda_eq(eq)

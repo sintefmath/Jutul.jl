@@ -116,7 +116,7 @@ struct ConstantCompressibilityDensities <: PhaseMassDensities
     reference_pressure
     reference_densities
     compressibility
-    function ConstantCompressibilityDensities(sys_or_nph::Union{MultiPhaseSystem, Integer}, reference_pressure = 101325, reference_density = 1000, compressibility = 1e-10)
+    function ConstantCompressibilityDensities(sys_or_nph::Union{MultiPhaseSystem, Integer}, reference_pressure = 101325.0, reference_density = 1000.0, compressibility = 1e-10)
         if isa(sys_or_nph, Integer)
             nph = sys_or_nph
         else
@@ -167,13 +167,13 @@ end
 
 @terv_secondary function update_as_secondary!(ρλ_i, tv::MassMobilities, model::SimulationModel{D, S}, param, PhaseMassDensities, PhaseViscosities) where {D, S<:SinglePhaseSystem}
     μ, ρ = PhaseViscosities, PhaseMassDensities
-    @tullio ρλ_i[i] = ρ[i]/μ[i]
+    @tullio ρλ_i[ph, i] = ρ[ph, i]/μ[ph, i]
 end
 
 # Total masses
 @terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities) where {G, S<:SinglePhaseSystem}
     pv = get_pore_volume(model)
-    @tullio totmass[i] = PhaseMassDensities[i]*pv[i]
+    @tullio totmass[ph, i] = PhaseMassDensities[ph, i]*pv[i]
 end
 
 @terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities, Saturations) where {G, S<:ImmiscibleSystem}

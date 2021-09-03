@@ -78,15 +78,17 @@ AMG on CPU (Julia native)
 mutable struct AMGPreconditioner <: TervPreconditioner
     method
     factor
+    dim
     hierarchy
     function AMGPreconditioner(method = ruge_stuben)
-        new(method, nothing, nothing)
+        new(method, nothing, nothing, nothing)
     end
 end
 
 function update!(amg::AMGPreconditioner, A, b)
     @debug string("Setting up preconditioner ", amg.method)
     t_amg = @elapsed amg.hierarchy = amg.method(A)
+    amg.dim = size(A)
     @debug "Set up AMG in $t_amg seconds."
     amg.factor = aspreconditioner(amg.hierarchy)
 end
@@ -94,6 +96,8 @@ end
 function partial_update!(amg::AMGPreconditioner, A, b)
     amg.hierarchy = update_hierarchy!(amg.hierarchy, A)
 end
+
+operator_nrows(amg::AMGPreconditioner) = amg.dim[1]
 
 function update_hierarchy!(h, A)
     levels = h.levels
@@ -177,14 +181,31 @@ end
 is_left_preconditioner(p::ILUZeroPreconditioner) = p.left
 is_right_preconditioner(p::ILUZeroPreconditioner) = p.right
 
+function set_dim!(ilu, A, b)
+    T = eltype(b)
+    if T<:AbstractFloat
+        d = 1
+    else
+        d = length(T)
+    end
+    ilu.dim = d .* size(A)
+end
+
 function update!(ilu::ILUZeroPreconditioner, A, b)
     if isnothing(ilu.factor)
         ilu.factor = ilu0(A, eltype(b))
-        d = length(b[1])
-        ilu.dim = d .* size(A)
+        set_dim!(ilu, A, b)
     else
         ilu0!(ilu.factor, A)
     end
+end
+
+function update!(ilu::ILUZeroPreconditioner, A::CuSparseMatrix, b::CuArray)
+    if isnothing(ilu.factor)
+        ilu.factor = copy(A)
+        set_dim!(ilu, A, b)
+    end
+    ilu02!(ilu.factor, 'O')
 end
 
 function apply!(x, ilu::ILUZeroPreconditioner, y, arg...)
@@ -206,6 +227,13 @@ end
 function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
     f! = ilu_f(type)
     f!(x, f, y)
+end
+
+function ilu_apply!(x::AbstractArray{F}, f::CuSparseMatrix{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
+    x .= y
+    ix = 'O'
+    sv2!('N', 'L', 'N', 1.0, f, x, ix)
+    sv2!('N', 'U', 'U', 1.0, f, x, ix)
 end
 
 function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)

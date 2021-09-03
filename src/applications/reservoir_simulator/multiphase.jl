@@ -22,19 +22,21 @@ function number_of_phases(sys::MultiPhaseSystem)
     return length(get_phases(sys))
 end
 
-struct SourceTerm <: TervForce
-    cell
-    value
-    fractional_flow
-    composition
+struct SourceTerm{I, F, T} <: TervForce
+    cell::I
+    value::F
+    fractional_flow::T
+    function SourceTerm(cell, value; fractional_flow = [1.0])
+        @assert sum(fractional_flow) == 1.0 "Fractional flow for source term in cell $cell must sum to 1."
+        f = Tuple(fractional_flow)
+        return new{typeof(cell), typeof(value), typeof(f)}(cell, value, f)
+    end
 end
 
-function SourceTerm(cell, value; fractional_flow = [1.0], compositions = nothing)
-    @assert sum(fractional_flow) == 1.0 "Fractional flow for source term in cell $cell must sum to 1."
-    cell::Integer
-    value::AbstractFloat
-    SourceTerm(cell, value, fractional_flow, compositions)
+function cell(s::SourceTerm{I, T}) where {I, T} 
+    return s.cell::I
 end
+
 
 function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:Any, S<:MultiPhaseSystem}
     return (sources = sources,)
@@ -155,7 +157,7 @@ function update_primary_variable!(state, p::Saturations, state_symbol, model, dx
     minval = minimum_value(p)
 
     s = state[state_symbol]
-    @threads for cell = 1:nu
+    Threads.@threads for cell = 1:nu
     # for cell = 1:nu
         dlast = 0
         @inbounds for ph = 1:(nph-1)
@@ -197,19 +199,13 @@ function select_equations_system!(eqs, domain, system::MultiPhaseSystem, formula
     eqs[:mass_conservation] = (ConservationLaw, nph)
 end
 
-function get_pore_volume(model)
-    get_flow_volume(model.domain.grid)'
-end
+get_pore_volume(model) = get_flow_volume(model.domain.grid)
 
-function get_flow_volume(grid::MinimalTPFAGrid)
-    grid.pore_volumes
-end
+get_flow_volume(grid::MinimalTPFAGrid) = grid.pore_volumes
+get_flow_volume(grid) = 1
 
-function get_flow_volume(grid)
-    1
-end
 
-function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::Vector{SourceTerm}) where {D<:Any, S<:MultiPhaseSystem}
+function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::V) where {V <: AbstractVector{SourceTerm{I, F, T}}, D, S<:MultiPhaseSystem} where {I, F, T}
     acc = get_diagonal_entries(eq)
     state = storage.state
     if haskey(state, :RelativePermeabilities)
@@ -219,41 +215,66 @@ function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::Co
     end
     mu = state.PhaseViscosities
     rhoS = get_reference_densities(model, storage)
-    insert_phase_sources(kr, mu, rhoS, acc, force)
+    insert_phase_sources!(acc, kr, mu, rhoS, force)
 end
 
-function insert_phase_sources(kr, mu, rhoS, acc, sources)
+function local_mobility(kr::Real, mu, ph, c)
+    return kr./mu[ph, c]
+end
+
+function local_mobility(kr, mu, ph, c)
+    return kr[ph, c]./mu[ph, c]
+end
+
+function phase_source(src, rhoS, kr, mu, ph)
+    v = src.value
+    c = src.cell
+    if v > 0
+        q = in_phase_source(src, v, c, kr, mu, ph)
+    else
+        q = out_phase_source(src, v, c, kr, mu, ph)
+    end
+    return rhoS*q
+end
+
+
+function in_phase_source(src, v, c, kr, mu, ph)
+    f = src.fractional_flow[ph]
+    return v*f
+end
+
+function out_phase_source(src, v, c, kr, mu, ph)
+    mobT = 0
+    mob = 0
+    for i = 1:size(mu, 1)
+        mi = local_mobility(kr, mu, i, c)
+        mobT += mi
+        if ph == i
+            mob = mi
+        end
+    end
+    f = mob/mobT
+    return v*f
+end
+
+function insert_phase_sources!(acc, kr, mu, rhoS, sources)
     nph = size(acc, 1)
     for src in sources
-        v = src.value
-        c = src.cell
-        if isa(kr, Real)
-            mob = kr./mu[:, c]
-        else
-            mob = kr[:, c]./mu[:, c]
-        end
-        mobt = sum(mob)
-        if v > 0
-            for index in 1:nph
-                f = src.fractional_flow[index]
-                q = rhoS[index]*v*f
-                @inbounds acc[index, c] -= q
-            end
-        else
-            for index in 1:nph
-                f = mob[index]/mobt
-                q = rhoS[index]*v*f
-                @inbounds acc[index, c] -= q
-            end
+        for ph = 1:nph
+            @inbounds acc[ph, src.cell] -= phase_source(src, rhoS[ph], kr, mu, ph)
         end
     end
 end
 
-@inline function insert_phase_sources(mob::CuArray, acc::CuArray, sources)
-    @assert false "Not updated."
-    s = cu(map(x -> x.values[phNo], sources))
-    i = cu(map(x -> x.cell, sources))
-    @. acc[i] -= s
+function insert_phase_sources!(acc::CuArray, kr, mu, rhoS, sources)
+    sources::CuArray
+    ix = map(cell, sources)
+    if !isa(rhoS, CuArray)
+        @warn "SurfaceDensities is not a CuArray, will convert whenever needed. Improve performance by converting once."  maxlog=1
+        rhoS = CuArray(rhoS)
+    end
+    rhoS::CuArray
+    @tullio acc[ph, ix[i]] = acc[ph, ix[i]] - phase_source(sources[i], rhoS[ph], kr, mu, ph)
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}
@@ -267,156 +288,11 @@ end
 
 function get_reference_densities(model, storage)
     prm = storage.parameters
+    t = float_type(model.context)
     if haskey(prm, :reference_densities)
         rhos = prm.reference_densities
     else
-        rhos = ones(number_of_phases(model.system))
+        rhos = ones(t, number_of_phases(model.system))
     end
-    return rhos::Vector{float_type(model.context)}
-end
-
-# Accumulation: Base implementation
-"Fill acculation term onto diagonal with pre-determined access pattern into jac"
-function fill_accumulation!(jac, r, acc, apos, neq, context, ::KernelDisallowed)
-    nzval = get_nzval(jac)
-    nc = size(apos, 2)
-    dim = size(apos, 1)
-    nder = dim ÷ neq
-    @inbounds @threads for cell = 1:nc
-        for eq = 1:neq
-            r[cell + (eq-1)*nc] = acc[eq, cell].value
-        end
-        fill_accumulation_jac!(nzval, acc, apos, cell, nder, neq)
-    end
-end
-
-@inline function fill_accumulation_jac!(nzval, acc, apos, cell, nder, neq)
-    for eqNo = 1:neq
-        a = acc[eqNo, cell]
-        for derNo = 1:nder
-            nzval[apos[derNo + (eqNo-1)*nder, cell]] = a.partials[derNo]
-        end
-    end
-end
-# Kernel / CUDA version follows
-function fill_accumulation!(jac, r, acc, apos, neq, context, ::KernelAllowed)
-    @assert false "Not updated"
-    @. r = value(acc)
-    jz = get_nzval(jac)
-    @inbounds for i = 1:size(apos, 1)
-        jz[apos[i, :]] = map((x) -> x.partials[i], acc)
-    end
-    # kernel = fill_accumulation_jac_kernel(context.device, context.block_size)
-    # event = kernel(jz, acc, apos, ndrange = size(apos))
-    # wait(event)
-end
-
-"Kernel for filling Jacobian from accumulation term"
-@kernel function fill_accumulation_jac_kernel(nzval, @Const(acc), @Const(apos))
-    derNo, col = @index(Global, NTuple)
-    @inbounds nzval[apos[derNo, col]] = acc[col].partials[derNo]
-    # i = @index(Global, Linear)
-    # @inbounds nzval[apos[1, i]] = acc[i].partials[1]
-end
-
-# Fluxes: Base implementation
-"Fill fluxes onto diagonal with pre-determined access pattern into jac. Essentially performs Div ( flux )"
-function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, neq, context, ::KernelDisallowed)
-    Jz = get_nzval(jac)
-    nc = size(apos, 2)
-    n = size(apos, 1)
-    nder = n ÷ neq
-    # @threads for cell = 1:nc
-    for cell = 1:nc
-        for i = conn_pos[cell]:(conn_pos[cell+1]-1)
-            for eqNo = 1:neq
-                # Update diagonal value
-                f = half_face_flux[eqNo, i]
-                r[cell + (eqNo-1)*nc] += f.value
-                # Fill inn Jacobian values
-                for derNo = 1:nder
-                    i_pos = derNo + (eqNo-1)*nder
-
-                    index = fpos[i_pos, i]
-                    diag_index = apos[i_pos, cell]
-                    df_di = f.partials[derNo]
-                    Jz[index] = -df_di
-                    Jz[diag_index] += df_di
-                end
-            end
-        end
-    end
-end
-
-# Kernel / CUDA version follows
-function fill_half_face_fluxes(jac, r, conn_pos, half_face_flux, apos, fpos, context, ::KernelAllowed)
-    d = size(apos)
-    Jz = get_nzval(jac)
-
-    # println(":: HF, value")
-    begin
-        ncol = d[2]
-        kernel = fill_half_face_fluxes_val_kernel(context.device, context.block_size, ncol)
-        event_val = kernel(r, half_face_flux, conn_pos, ndrange = ncol)
-        # wait(event_val)
-    end
-
-    # println(":: HF, offdiag")
-    if true
-        begin
-            @inbounds for i = 1:size(fpos, 1)
-                Jz[fpos[i, :]] = map((x) -> -x.partials[i], half_face_flux)
-            end
-        end
-        # println(":: HF, diag")
-        begin
-            kernel = fill_half_face_fluxes_jac_diag_kernel(context.device, context.block_size, d)
-            event_jac = kernel(Jz, half_face_flux, apos, conn_pos, ndrange = d)
-            # wait(event_jac)
-        end
-        wait(event_val)
-        wait(event_jac)
-    else
-        println(":: HF, full kernel")
-        @time begin
-            kernel = fill_half_face_fluxes_jac_kernel(context.device, context.block_size, d)
-            event_jac = kernel(Jz, half_face_flux, apos, fpos, conn_pos, ndrange = d)
-            wait(event_jac)
-        end
-    end
-end
-
-@kernel function fill_half_face_fluxes_val_kernel(r, @Const(half_face_flux), @Const(conn_pos))
-    col = @index(Global, Linear)
-    v = 0
-    @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
-        # Update diagonal value
-        v += half_face_flux[i].value
-    end
-    @inbounds r[col] += v
-end
-
-
-@kernel function fill_half_face_fluxes_jac_diag_kernel(nzval, @Const(half_face_flux), @Const(apos), @Const(conn_pos))
-    derNo, col = @index(Global, NTuple)
-    v = 0
-    @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
-        v += half_face_flux[i].partials[derNo]
-    end
-    @inbounds nzval[apos[derNo, col]] += v
-    nothing
-end
-
-@kernel function fill_half_face_fluxes_jac_kernel(nzval, @Const(half_face_flux), @Const(apos), @Const(fpos), @Const(conn_pos))
-    derNo, col = @index(Global, NTuple)
-    v = 0
-    @inbounds for i = conn_pos[col]:(conn_pos[col+1]-1)
-        index = fpos[derNo, i]
-        df_di = half_face_flux[i].partials[derNo]
-        nzval[index] = -df_di
-        v += df_di
-    end
-    @inbounds diag_index = apos[derNo, col]
-    @inbounds nzval[diag_index] += v # Should this be atomic?
-    nothing
+    return rhos::AbstractVector{t}
 end

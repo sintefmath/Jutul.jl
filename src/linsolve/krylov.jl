@@ -26,19 +26,19 @@ mutable struct GenericKrylov
     preconditioner
     x
     config::IterativeSolverConfig
-    function GenericKrylov(solver = gmres!; preconditioner = nothing, kwarg...)
+    function GenericKrylov(solver = IterativeSolvers.gmres!; preconditioner = nothing, kwarg...)
         new(solver, preconditioner, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
 
-function atol(cfg)
+function atol(cfg, T = Float64)
     tol = cfg.absolute_tolerance
-    return isnothing(tol) ? 0.0 : Float64(tol)
+    return T(isnothing(tol) ? 0.0 : tol)
 end
 
-function rtol(cfg)
+function rtol(cfg, T = Float64)
     tol = cfg.relative_tolerance
-    return isnothing(tol) ? 0.0 : Float64(tol)
+    return T(isnothing(tol) ? 0.0 : tol)
 end
 
 function verbose(cfg)
@@ -63,6 +63,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     solver = krylov.solver
     cfg = krylov.config
     prec = krylov.preconditioner
+    Ft = float_type(model.context)
 
     prepare_solve!(sys)
     r = vector_residual(sys)
@@ -72,10 +73,9 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     R = preconditioner(krylov, sys, model, storage, recorder, :right)
     v = verbose(cfg)
     max_it = cfg.max_iterations
-    rt = rtol(cfg)
-    at = atol(cfg)
-    if from_IterativeSolvers(solver)
-        # Pl = krylov.preconditioner.factor
+    rt = rtol(cfg, Ft)
+    at = atol(cfg, Ft)
+    if Base.parentmodule(solver) == IterativeSolvers
         if is_mutating(solver)
             if isnothing(krylov.x)
                 krylov.x = similar(r)
@@ -124,7 +124,4 @@ end
 
 function is_mutating(f)
     return String(Symbol(f))[end] == '!'
-end
-function from_IterativeSolvers(f)
-    return f == gmres || f == gmres! || f == bicgstabl || f == bicgstabl!
 end
