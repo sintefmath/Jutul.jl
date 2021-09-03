@@ -9,17 +9,6 @@ function find_jac_position(A, target_unit_index, source_unit_index, # Typically 
     eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
     context::TervContext)
     layout = matrix_layout(context)
-
-    find_jac_position(A, target_unit_index, source_unit_index,
-    equation_index, partial_index,
-    # Row and column sizes for each sub-system
-    nunits_target, nunits_source,
-    # Sizes of the smallest inner system
-    eqs_per_unit, partials_per_unit,
-    context::TervContext
-    )
-    
-    layout = matrix_layout(context)
     find_jac_position(
         A, target_unit_index, source_unit_index, 
         equation_index, partial_index,
