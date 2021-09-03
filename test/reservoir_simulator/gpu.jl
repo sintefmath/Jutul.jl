@@ -17,7 +17,6 @@ ENV["JULIA_DEBUG"] = Terv
 # target = "cuda"
 # target = "cpukernel"
 # target = "cpu"
-CUDA.allowscalar(false)
 function test_single_phase_gpu(casename = "pico"; float_type = Float32, pvfrac=0.05, tstep = [1.0])#[1.0, 2.0])
     @time G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
     println("Setting up simulation case.")
@@ -60,14 +59,15 @@ function test_single_phase_gpu(casename = "pico"; float_type = Float32, pvfrac=0
             debug_level = debug_level, info_level = info_level, output_states = false)
     return true
 end
-CUDA.allowscalar(false)
+if has_cuda_gpu()
+    CUDA.allowscalar(false)
 
-@testset "GPU multiphase" begin
-    @testset "Basic flow - single precision" begin
-        @test test_single_phase_gpu(casename, float_type = Float32)
-    end
-    @testset "Basic flow - double precision" begin
-        @test test_single_phase_gpu(casename, float_type = Float64)
+    @testset "GPU multiphase" begin
+        @testset "Basic flow - single precision" begin
+            @test test_single_phase_gpu(casename, float_type = Float32)
+        end
+        @testset "Basic flow - double precision" begin
+            @test test_single_phase_gpu(casename, float_type = Float64)
+        end
     end
 end
-
