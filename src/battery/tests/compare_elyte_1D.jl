@@ -7,7 +7,7 @@ using MAT
 ##
 
 function test_simple_elyte_1d()
-    name = "test_electrolyte1D"
+    name = "model1d_"
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
     exported = MAT.matread(fn)
     ex_model = exported["model"]
@@ -32,7 +32,7 @@ function test_simple_elyte_1d()
     sys = SimpleElyte()
     model = SimulationModel(domain, sys, context = DefaultContext())
     parameters = setup_parameters(model)
-    parameters[:tolerances][:default] = 1e-10
+    parameters[:tolerances][:default] = 1e-8
     t1, t2 = exported["model"]["sp"]["t"]
     z1, z2 = exported["model"]["sp"]["z"]
     tDivz_eff = (t1/z1 + t2/z2)

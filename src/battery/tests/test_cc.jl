@@ -8,20 +8,23 @@ ENV["JULIA_DEBUG"] = Terv;
 
 
 function test_cc(name="square_current_collector")
-    domain, exported = get_cc_grid(name=name, extraout=true, bc=[1, 9], b_T_hf=[2., 2.])
+    # Get grid from .mat file
+    domain, exported = get_cc_grid(name=name, extraout=true, bc=[1, 10], b_T_hf=[2., 2.])
     timesteps = [10.,]
     G = exported["G"]
 
+    # System type for function overloading
     sys = CurrentCollector()
+    # Setup model
     model = SimulationModel(domain, sys, context = DefaultContext())
 
     # State is dict with pressure in each cell
     phi = 1.
     boudary_phi = [1., 2.]
-
     S = model.secondary_variables
     S[:BoundaryPhi] = BoundaryPotential{Phi}()
 
+    # Inital values for variable. Variables w/o update_as_secondary must be set here
     init = Dict(:Phi => phi, :BoundaryPhi=>boudary_phi, :Conductivity=>1.)
     state0 = setup_state(model, init)
         
@@ -29,9 +32,13 @@ function test_cc(name="square_current_collector")
     parameters = setup_parameters(model)
     parameters[:tolerances][:default] = 1e-8
 
+    # Contains storage
     sim = Simulator(model, state0=state0, parameters=parameters)
+
     cfg = simulator_config(sim)
     cfg[:linear_solver] = nothing
+
+    # Run simulation
     states, _ = simulate(sim, timesteps, config = cfg)
     return state0, states, model, G
 end
@@ -41,6 +48,7 @@ state0, states, model, G = test_cc();
 
 # Can't plot if the first value in state does not match the grid
 s = [Dict(k => state[k] for k in keys(state) if k != :TPkGrad_Phi) for state in states]
+
 f = plot_interactive(G, s)
 display(f)
 
