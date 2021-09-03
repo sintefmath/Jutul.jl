@@ -23,7 +23,7 @@ end
 is_left_preconditioner(::TervPreconditioner) = true
 is_right_preconditioner(::TervPreconditioner) = false
 
-function linear_operator(precond::TervPreconditioner, side::Symbol = :left)
+function linear_operator(precond::TervPreconditioner, side::Symbol = :left, float_t = Float64)
     n = operator_nrows(precond)
     function local_mul!(res, x, α, β::T, type) where T
         if β == zero(T)
@@ -43,14 +43,14 @@ function linear_operator(precond::TervPreconditioner, side::Symbol = :left)
             else
                 f! = (r, x, α, β) -> local_mul!(r, x, α, β, :both)
             end
-            op = LinearOperator(Float64, n, n, false, false, f!)
+            op = LinearOperator(float_t, n, n, false, false, f!)
         else
             op = opEye(n, n)
         end
     elseif side == :right
         if is_right_preconditioner(precond)
             f! = (r, x, α, β) -> local_mul!(r, x, α, β, :right)
-            op = LinearOperator(Float64, n, n, false, false, f!)
+            op = LinearOperator(float_t, n, n, false, false, f!)
         else
             op = opEye(n, n)
         end
