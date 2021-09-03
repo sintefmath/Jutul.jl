@@ -137,12 +137,13 @@ function simulator_config(sim; kwarg...)
     cfg[:info_level] = 1
     # Define a default progress ProgressRecorder
     cfg[:ProgressRecorder] = ProgressRecorder()
+    # Max residual before error is issued
+    cfg[:max_residual] = 1e10
+
     # Overwrite with varargin
     for key in keys(kwarg)
         cfg[key] = kwarg[key]
     end
-    # Max residue before warning is issued
-    cfg[:max_residue] = 1e10
     return cfg
 end
 
@@ -227,7 +228,7 @@ function solve_ministep(sim, dt, forces, maxIterations, cfg)
         if done
             break
         end
-        too_large = e > cfg[:max_residue]
+        too_large = e > cfg[:max_residual]
         non_finite = !isfinite(e)
         failure = non_finite || too_large
         if failure

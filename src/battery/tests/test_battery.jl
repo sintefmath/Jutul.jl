@@ -317,7 +317,7 @@ function test_battery()
     cfg[:linear_solver] = nothing
     cfg[:info_level] = 1
     cfg[:debug_level] = 0
-    cfg[:max_residue] = 1e20
+    cfg[:max_residual] = 1e20
     states, report = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
 
