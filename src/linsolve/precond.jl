@@ -78,15 +78,17 @@ AMG on CPU (Julia native)
 mutable struct AMGPreconditioner <: TervPreconditioner
     method
     factor
+    dim
     hierarchy
     function AMGPreconditioner(method = ruge_stuben)
-        new(method, nothing, nothing)
+        new(method, nothing, nothing, nothing)
     end
 end
 
 function update!(amg::AMGPreconditioner, A, b)
     @debug string("Setting up preconditioner ", amg.method)
     t_amg = @elapsed amg.hierarchy = amg.method(A)
+    amg.dim = size(A)
     @debug "Set up AMG in $t_amg seconds."
     amg.factor = aspreconditioner(amg.hierarchy)
 end
@@ -94,6 +96,8 @@ end
 function partial_update!(amg::AMGPreconditioner, A, b)
     amg.hierarchy = update_hierarchy!(amg.hierarchy, A)
 end
+
+operator_nrows(amg::AMGPreconditioner) = amg.dim[1]
 
 function update_hierarchy!(h, A)
     levels = h.levels
