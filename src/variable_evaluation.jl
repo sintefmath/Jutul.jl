@@ -16,8 +16,7 @@ function get_dependencies(var::MyVarType, model)
    return [:a, :b, :c]
 end
 
-#! Tror dette skal være 'function update_secondary_variable!(...'
-function update_as_secondary!(array_target, var::MyVarType, model, parameters, state)
+function update_secondary_variable!(array_target, var::MyVarType, model, parameters, state)
     update_as_secondary!(array_target, var, model, parameters, state.a, state.b, state.c)
 end
 
