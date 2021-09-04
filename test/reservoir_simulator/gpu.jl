@@ -29,7 +29,7 @@ function test_single_phase_gpu(casename = "pico"; float_type = Float32, pvfrac=0
     sys = SinglePhaseSystem(phase)
     # Simulation model wraps grid and system together with context (which will be used for GPU etc)
     ctx = SingleCUDAContext(float_type)
-    linsolve = GenericKrylov(Krylov.dqgmres, preconditioner = ILUZeroPreconditioner())
+    linsolve = GenericKrylov(Krylov.dqgmres, preconditioner = ILUZeroPreconditioner(), relative_tolerance = 0.01)
     model = SimulationModel(G, sys, context = ctx)
 
 
