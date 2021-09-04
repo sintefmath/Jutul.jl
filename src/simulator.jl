@@ -99,7 +99,6 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
                 do_solve = true
                 # Ensures secondary variables are updated, and correct error
                 converged = false
-    
             else
                 do_solve = false
                 @debug "Step converged."
@@ -156,13 +155,18 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     no_steps = length(timesteps)
     maxIterations = config[:max_nonlinear_iterations]
     rec = config[:ProgressRecorder]
-    @info "Starting simulation"
+    output = config[:info_level] >= 0
+    if output
+        @info "Starting simulation"
+    end
     for (step_no, dT) in enumerate(timesteps)
         nextstep_global!(rec, dT)
         subrep = OrderedDict()
         ministep_reports = []
         t_step = @elapsed begin
-            @info "Solving step $step_no/$no_steps of length $(get_tstr(dT))."
+            if output
+                @info "Solving step $step_no/$no_steps of length $(get_tstr(dT))."
+            end
             dt = dT
             done = false
             t_local = 0
@@ -180,12 +184,16 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                 else
                     max_cuts = config[:max_timestep_cuts]
                     if cut_count + 1 > max_cuts
-                        @warn "Unable to converge time step $step_no/$no_steps. Aborting."
+                        if output
+                            @warn "Unable to converge time step $step_no/$no_steps. Aborting."
+                        end
                         return states
                     end
                     cut_count += 1
                     dt = min(dt/2, dT - t_local)
-                    @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut $cut_count of $max_cuts allowed."
+                    if output
+                        @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut $cut_count of $max_cuts allowed."
+                    end
                 end
                 ctr += 1
                 nextstep_local!(rec, dt, ok)
