@@ -168,23 +168,20 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
     src = law.sources
     cpos = law.flow_discretization.conn_pos
     ctx = model.context
-    @sync begin 
-        @async begin 
-            update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos, ctx)
-            if use_sparse_sources(law)
-                update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
-            end
-        end
-        if !isnothing(face_flux)
-            conn_data = law.flow_discretization.conn_data
-            @async update_linearized_system_subset_face_flux!(nz, model, face_flux, cpos, conn_data)
-        end
+    update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos, ctx)
+    if use_sparse_sources(law)
+        update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
+    end
+    if !isnothing(face_flux)
+        conn_data = law.flow_discretization.conn_data
+        update_linearized_system_subset_face_flux!(nz, model, face_flux, cpos, conn_data)
     end
 end
 
 function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context::SingleCUDAContext)
     nc, ne, np = ad_dims(acc)
     dims = (nc, ne, np)
+    CUDA.synchronize()
     # kdims = dims .+ (0, 0, 1)
 
     centries = acc.entries
@@ -204,11 +201,8 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
             diag_entry -= q
         end
     
-        # r[e, cell] = diag_entry.value
-        for d = 1:np
-            apos = get_jacobian_pos(np, cell, e, d, cp)
-            @inbounds nz[apos] = diag_entry
-        end
+        apos = get_jacobian_pos(np, cell, e, d, cp)
+        @inbounds nz[apos] = diag_entry
     end
     kernel = cu_fill(context.device, context.block_size)
     event_jac = kernel(nz, r, conn_pos, centries, fentries, cp, fp, np, ndrange = dims)
@@ -227,6 +221,7 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
     event_r = kernel_r(r, conn_pos, centries, fentries, ndrange = rdims)
     wait(event_r)
     wait(event_jac)
+    CUDA.synchronize()
 end
 
 function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context)

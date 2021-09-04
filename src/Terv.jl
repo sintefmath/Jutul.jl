@@ -12,14 +12,14 @@ Base.iszero(d::ForwardDiff.Dual) = false# iszero(d.value) && iszero(d.partials)
 using LinearAlgebra
 using BenchmarkTools
 using SparseArrays
-using KernelAbstractions, CUDA, CUDAKernels
 using Logging
 using MappedArrays
 using Printf
 using Dates
 using DataStructures, OrderedCollections
-using LoopVectorization
 using Tullio
+using LoopVectorization
+using CUDA, CUDAKernels, KernelAbstractions
 using PrettyTables
 using DataInterpolations
 using ILUZero
