@@ -18,8 +18,7 @@ ENV["JULIA_DEBUG"] = Terv
 # target = "cpukernel"
 # target = "cpu"
 function test_single_phase_gpu(casename = "pico"; float_type = Float32, pvfrac=0.05, tstep = [1.0])#[1.0, 2.0])
-    @time G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
-    println("Setting up simulation case.")
+    G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
     nc = number_of_cells(G)
     # Parameters
     bar = 1e5
@@ -32,6 +31,13 @@ function test_single_phase_gpu(casename = "pico"; float_type = Float32, pvfrac=0
     ctx = SingleCUDAContext(float_type)
     linsolve = GenericKrylov(Krylov.dqgmres, preconditioner = ILUZeroPreconditioner())
     model = SimulationModel(G, sys, context = ctx)
+
+
+    s = model.secondary_variables
+
+    mu_c = transfer(ctx, repeat([1e-3], 1, nc))
+    mu = ConstantVariables(mu_c, Cells(), false)
+    s[:PhaseViscosities] = mu
 
     # System state
     pv = model.domain.grid.pore_volumes

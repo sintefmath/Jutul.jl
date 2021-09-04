@@ -343,6 +343,9 @@ struct ConstantVariables <: GroupedVariables
         if isnothing(single_unit)
             single_unit = isa(constants, AbstractVector)
         end
+        if isa(constants, CuArray) && single_unit
+            @warn "Single unit constants have led to crashes on CUDA/Tullio kernels!" maxlog = 5
+        end
         new(constants, unit, single_unit)
     end
 end
