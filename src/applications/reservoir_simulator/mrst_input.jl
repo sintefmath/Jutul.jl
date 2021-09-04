@@ -194,7 +194,7 @@ function get_test_setup(grid_name; case_name = "single_phase_simple", context = 
         # s = 0.1
         # s0 = 0.9
         src  = [SourceTerm(1, irate, fractional_flow = [1 - s, s]), 
-                SourceTerm(nc, -irate)]
+                SourceTerm(nc, -irate, fractional_flow = [1.0, 0.0])]
         forces = build_forces(model, sources = src)
 
         # State is dict with pressure in each cell

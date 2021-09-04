@@ -49,7 +49,7 @@ function perform_test(nc = 100, tstep = repeat([0.02], 150))
     sim = Simulator(model, state0 = state0, parameters = parameters)
     cfg = simulator_config(sim, max_nonlinear_iterations = 20)
     println("Starting simulation.")
-    states = simulate(sim, timesteps, config = cfg)
+    states, = simulate(sim, timesteps, config = cfg)
     s = states[end]
     p = s.Pressure
     @printf("Final pressure ranges from %f to %f bar.\n", maximum(p)/bar, minimum(p)/bar)
