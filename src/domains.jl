@@ -1,18 +1,18 @@
-function declare_units(G::TervGrid)
-    return [(unit = Cells(), count = 1)]
+function declare_entities(G::TervGrid)
+    return [(entity = Cells(), count = 1)]
 end
 
-function get_units(D::TervDomain)
+function get_entities(D::TervDomain)
     return [Cells()]
 end
 
-function count_units(D::TervDomain, ::Cells)
+function count_entities(D::TervDomain, ::Cells)
     # The default implementation yields a single cell and nothing else.
     1
 end
 
-function get_units(D::DiscretizedDomain)
-    return keys(D.units)
+function get_entities(D::DiscretizedDomain)
+    return keys(D.entities)
 end
 
 
@@ -43,31 +43,31 @@ function select_primary_variables_domain!(S, domain, system, formulation, disc)
 
 end
 
-function count_units(D::DiscretizedDomain, unit::Cells)
-    D.units[unit]
+function count_entities(D::DiscretizedDomain, entity::Cells)
+    D.entities[entity]
 end
 
-function count_units(D::DiscretizedDomain, unit)
-    D.units[unit]
+function count_entities(D::DiscretizedDomain, entity)
+    D.entities[entity]
 end
 
 function number_of_cells(D::DiscretizedDomain)
-    return count_units(D, Cells())
+    return count_entities(D, Cells())
 end
 
 function number_of_faces(D::DiscretizedDomain)
-    return count_units(D, Faces())
+    return count_entities(D, Faces())
 end
 
 function number_of_half_faces(D::DiscretizedDomain)
     return 2*number_of_faces(D)
 end
 
-function positional_map(domain::TervDomain, source_unit::TervUnit, target_unit::TervUnit)
-    positional_map(domain.grid, source_unit, target_unit)
+function positional_map(domain::TervDomain, source_entity::TervUnit, target_entity::TervUnit)
+    positional_map(domain.grid, source_entity, target_entity)
 end
 
-function positional_map(grid::TervGrid, source_unit, target_unit)
+function positional_map(grid::TervGrid, source_entity, target_entity)
     error("Not implemented.")
 end
 

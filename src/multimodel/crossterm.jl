@@ -6,17 +6,17 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
     layout = matrix_layout(source.context)
     impact_target = ct.impact[1]
     impact_source = ct.impact[2]
-    punits = get_primary_variable_ordered_units(source)
-    nu_t = count_units(target.domain, ct.units.target)
-    for u in punits
-        nu_s = count_units(source.domain, u)
+    pentities = get_primary_variable_ordered_entities(source)
+    nu_t = count_entities(target.domain, ct.entities.target)
+    for u in pentities
+        nu_s = count_entities(source.domain, u)
         injective_alignment!(cs, jac, u, layout,
                                                 target_index = impact_target,
                                                 source_index = impact_source,
                                                 target_offset = equation_offset,
                                                 source_offset = variable_offset,
-                                                number_of_units_source = nu_s,
-                                                number_of_units_target = nu_t)
+                                                number_of_entities_source = nu_s,
+                                                number_of_entities_target = nu_t)
         variable_offset += number_of_degrees_of_freedom(source, u)
     end
 end
@@ -32,9 +32,9 @@ function update_linearized_system_crossterm!(nz, model_t, model_s, ct::Injective
     fill_equation_entries!(nz, nothing, model_s, ct.crossterm_source_cache)
 end
 
-function declare_pattern(target_model, source_model, x::InjectiveCrossTerm, unit)
-    source_unit = x.units.source
-    if unit == source_unit
+function declare_pattern(target_model, source_model, x::InjectiveCrossTerm, entity)
+    source_entity = x.entities.source
+    if entity == source_entity
         target_impact = x.impact.target
         source_impact = x.impact.source
 
@@ -45,34 +45,34 @@ function declare_pattern(target_model, source_model, x::InjectiveCrossTerm, unit
     return out
 end
 
-function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout::EquationMajorLayout)
-    primitive = declare_pattern(target_model, source_model, x, unit)
+function declare_sparsity(target_model, source_model, x::CrossTerm, entity, layout::EquationMajorLayout)
+    primitive = declare_pattern(target_model, source_model, x, entity)
     if isnothing(primitive)
         out = nothing
     else
         target_impact = primitive[1]
         source_impact = primitive[2]
-        source_unit = x.units.source
-        target_unit = x.units.target
-        nunits_source = count_units(source_model.domain, source_unit)
-        nunits_target = count_units(target_model.domain, target_unit)
+        source_entity = x.entities.source
+        target_entity = x.entities.target
+        nentities_source = count_entities(source_model.domain, source_entity)
+        nentities_target = count_entities(target_model.domain, target_entity)
 
         n_partials = x.npartials_source
-        n_eqs = x.equations_per_unit
+        n_eqs = x.equations_per_entity
         F = eltype(target_impact)
         I = Vector{Vector{F}}()
         J = Vector{Vector{F}}()
         for eqno in 1:n_eqs
             for derno in 1:n_partials
-                push!(I, target_impact .+ (eqno-1)*nunits_target)
-                push!(J, source_impact .+ (derno-1)*nunits_source)
+                push!(I, target_impact .+ (eqno-1)*nentities_target)
+                push!(J, source_impact .+ (derno-1)*nentities_source)
             end
         end
         I = vcat(I...)
         J = vcat(J...)
 
-        n = n_eqs*nunits_target
-        m = n_partials*nunits_source
+        n = n_eqs*nentities_target
+        m = n_partials*nentities_source
         out = SparsePattern(I, J, n, m, layout)
         @assert maximum(I) <= n "I index exceeded declared row count $n (largest value: $(maximum(I)))"
         @assert maximum(J) <= m "J index exceeded declared column count $m (largest value: $(maximum(J)))"
@@ -83,23 +83,23 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout
     return out
 end
 
-function declare_sparsity(target_model, source_model, x::CrossTerm, unit, layout::BlockMajorLayout)
-    primitive = declare_pattern(target_model, source_model, x, unit)
+function declare_sparsity(target_model, source_model, x::CrossTerm, entity, layout::BlockMajorLayout)
+    primitive = declare_pattern(target_model, source_model, x, entity)
     if isnothing(primitive)
         out = nothing
     else
         target_impact = primitive[1]
         source_impact = primitive[2]
-        source_unit = x.units.source
-        target_unit = x.units.target
-        nunits_source = count_units(source_model.domain, source_unit)
-        nunits_target = count_units(target_model.domain, target_unit)
+        source_entity = x.entities.source
+        target_entity = x.entities.target
+        nentities_source = count_entities(source_model.domain, source_entity)
+        nentities_target = count_entities(target_model.domain, target_entity)
 
         I = target_impact
         J = source_impact
 
-        n = nunits_target
-        m = nunits_source
+        n = nentities_target
+        m = nentities_source
         out = SparsePattern(I, J, n, m, layout)
     end
     return out

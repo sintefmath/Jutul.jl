@@ -35,9 +35,9 @@ function number_of_faces(G)
     size(get_neighborship(G), 2)
 end
 
-function declare_units(G::MinimalTPFAGrid)
-    c = (unit = Cells(), count = number_of_cells(G)) # Cells equal to number of pore volumes
-    f = (unit = Faces(), count = number_of_faces(G)) # Faces
+function declare_entities(G::MinimalTPFAGrid)
+    c = (entity = Cells(), count = number_of_cells(G)) # Cells equal to number of pore volumes
+    f = (entity = Faces(), count = number_of_faces(G)) # Faces
     return [c, f]
 end
 

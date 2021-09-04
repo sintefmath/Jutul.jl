@@ -4,13 +4,13 @@ function get_model_intersection(u, target_model, source_model, target, source)
 end
 
 """
-For a given unit in domain target_d, find any indices into that unit that is connected to
-any units in source_d. The interface is limited to a single unit-unit impact.
-The return value is a tuple of indices and the corresponding unit
+For a given entity in domain target_d, find any indices into that entity that is connected to
+any entities in source_d. The interface is limited to a single entity-entity impact.
+The return value is a tuple of indices and the corresponding entity
 """
 function get_domain_intersection(u, target_d, source_d, target_symbol, source_symbol)
     source_symbol::Union{Nothing, Symbol}
-    (target = nothing, source = nothing, target_unit = u, source_unit = Cells())
+    (target = nothing, source = nothing, target_entity = u, source_entity = Cells())
 end
 
 function update_cross_term!(ct::InjectiveCrossTerm, eq, target_storage, source_storage, target_model, source_model, target, source, dt)

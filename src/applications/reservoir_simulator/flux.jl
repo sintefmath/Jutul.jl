@@ -19,7 +19,7 @@ function single_unique_potential(model)
     return model.domain.discretizations.mass_flow.gravity
 end
 
-function degrees_of_freedom_per_unit(model, sf::CellNeighborPotentialDifference)
+function degrees_of_freedom_per_entity(model, sf::CellNeighborPotentialDifference)
     if single_unique_potential(model)
         n = number_of_phases(model.system)
     else
@@ -28,14 +28,14 @@ function degrees_of_freedom_per_unit(model, sf::CellNeighborPotentialDifference)
     return n
 end
 
-function associated_unit(::CellNeighborPotentialDifference)
+function associated_entity(::CellNeighborPotentialDifference)
     Cells()
 end
 
-function number_of_units(model, pv::CellNeighborPotentialDifference)
-    # We have two units of potential difference per face of the domain since the difference
+function number_of_entities(model, pv::CellNeighborPotentialDifference)
+    # We have two entities of potential difference per face of the domain since the difference
     # is taken with respect to cells
-    return 2*count_units(model.domain, Faces())
+    return 2*count_entities(model.domain, Faces())
 end
 
 @terv_secondary function update_as_secondary!(pot, tv::CellNeighborPotentialDifference, model, param, Pressure, PhaseMassDensities)

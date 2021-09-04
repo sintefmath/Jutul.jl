@@ -4,14 +4,14 @@ export HistoryMode, PredictionMode, Wells
 
 
 """
-Well variables - units that we have exactly one of per well (and usually relates to the surface connection)
+Well variables - entities that we have exactly one of per well (and usually relates to the surface connection)
 """
 
-function count_units(wg::WellGroup, ::Wells)
+function count_entities(wg::WellGroup, ::Wells)
     return length(wg.well_symbols)
 end
 
-function count_units(::WellGroup, ::Any)
+function count_entities(::WellGroup, ::Any)
     error("Unit not found in well group.")
 end
 
@@ -19,21 +19,21 @@ function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, sourc
                                            target_symbol, source_symbol) where {W<:WellGrid}
     # From controller to top well cell
     pos = get_well_position(source_d, target_symbol)
-    (target = [1], source = [pos], target_unit = u, source_unit = Wells())
+    (target = [1], source = [pos], target_entity = u, source_entity = Wells())
 end
 
 function get_domain_intersection(u::Wells, target_d::WellControllerDomain, source_d::DiscretizedDomain{W},
                                            target_symbol, source_symbol) where {W<:WellGrid}
     # From top cell in well to control equation
     pos = get_well_position(target_d, source_symbol)
-    (target = [pos], source = [1], target_unit = u, source_unit = Cells())
+    (target = [pos], source = [1], target_entity = u, source_entity = Cells())
 end
 
 function get_well_position(d, symbol)
     return findall(d.well_symbols .== symbol)[]
 end
 
-function associated_unit(::TotalSurfaceMassRate) Wells() end
+function associated_entity(::TotalSurfaceMassRate) Wells() end
 
 function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_symbol, model, dx)
     v = state[state_symbol]
@@ -139,7 +139,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
     end
 end
 
-function associated_unit(::ControlEquationWell) Wells() end
+function associated_entity(::ControlEquationWell) Wells() end
 
 function update_equation!(eq::ControlEquationWell, storage, model, dt)
     state = storage.state

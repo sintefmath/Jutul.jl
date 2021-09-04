@@ -10,11 +10,11 @@ function get_flow_volume(grid::MinimalECTPFAGrid)
     grid.volumes
 end
 
-function declare_units(G::MinimalECTPFAGrid)
+function declare_entities(G::MinimalECTPFAGrid)
     # Cells equal to number of pore volumes
-    c = (unit = Cells(), count = length(G.volumes))
+    c = (entity = Cells(), count = length(G.volumes))
     # Faces
-    f = (unit = Faces(), count = size(G.neighborship, 2))
+    f = (entity = Faces(), count = size(G.neighborship, 2))
     return [c, f]
 end
 
@@ -27,41 +27,41 @@ function single_unique_potential(model::ECModel)
     return false
 end
 
-function number_of_units(model, pv::KGrad)
+function number_of_entities(model, pv::KGrad)
     """ Two fluxes per face """
-    return 2*count_units(model.domain, Faces())
+    return 2*count_entities(model.domain, Faces())
 end
 
-function number_of_units(model, ::Potential)
-    return count_units(model.domain, Cells())
+function number_of_entities(model, ::Potential)
+    return count_entities(model.domain, Cells())
 end
 
-function number_of_units(model, BP::BoundaryPotential)
+function number_of_entities(model, BP::BoundaryPotential)
     return size(model.domain.grid.boundary_cells)[1]
 end
-function number_of_units(model, BP::BoundaryCurrent)
+function number_of_entities(model, BP::BoundaryCurrent)
     return size(BP.cells)[1]
 end
 
-function number_of_units(model, pv::NonDiagCellVariables)
+function number_of_entities(model, pv::NonDiagCellVariables)
     """ Each value depends on a cell and all its neighbours """
     return size(model.domain.discretizations.charge_flow.cellcell.tbl, 1) #! Assumes 2D
 end
 
-function values_per_unit(model, u::CellVector)
+function values_per_entity(model, u::CellVector)
     return 2
 end
 
-function values_per_unit(model, u::ScalarNonDiagVaraible)
+function values_per_entity(model, u::ScalarNonDiagVaraible)
     return 1
 end
 
-function degrees_of_freedom_per_unit(model, sf::NonDiagCellVariables)
-    return values_per_unit(model, sf) 
+function degrees_of_freedom_per_entity(model, sf::NonDiagCellVariables)
+    return values_per_entity(model, sf) 
 end
 
 # ?Why not faces?
-function associated_unit(::KGrad)
+function associated_entity(::KGrad)
     Cells()
 end
 
@@ -72,8 +72,8 @@ end
 function initialize_variable_value(
     model, pvar::NonDiagCellVariables, val; perform_copy=true
     )
-    nu = number_of_units(model, pvar)
-    nv = values_per_unit(model, pvar)
+    nu = number_of_entities(model, pvar)
+    nv = values_per_entity(model, pvar)
     
     @assert length(val) == nu * nv "Expected val length $(nu*nv), got $(length(val))"
     val::AbstractVector
@@ -87,7 +87,7 @@ end
 function initialize_variable_value!(
     state, model, pvar::NonDiagCellVariables, symb::Symbol, val::Number
     )
-    num_val = number_of_units(model, pvar)*values_per_unit(model, pvar)
+    num_val = number_of_entities(model, pvar)*values_per_entity(model, pvar)
     V = repeat([val], num_val)
     return initialize_variable_value!(state, model, pvar, symb, V)
 end
@@ -158,7 +158,7 @@ end
 function declare_pattern(model, e::Conservation, ::Cells)
     df = e.flow_discretization
     hfd = Array(df.conn_data)
-    n = number_of_units(model, e)
+    n = number_of_entities(model, e)
     # Fluxes
     I = map(x -> x.self, hfd)
     J = map(x -> x.other, hfd)

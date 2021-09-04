@@ -18,11 +18,11 @@ end
 
 @inline major_to_minor(n, m, i) = n*((i - 1) % m) + 1 + ((i - 1) ÷ m)
 @inline from_block_index(bz, nc, i) = major_to_minor(bz, nc, i)
-@inline from_unit_index(bz, nc, i) = major_to_minor(nc, bz, i)
+@inline from_entity_index(bz, nc, i) = major_to_minor(nc, bz, i)
 
 
 @inline from_block_urange(bz, n, b) = (b-1)*n+1:b*n
-@inline from_unit_urange(bz, n, b) = b:bz:((n-1)*bz+b)
+@inline from_entity_urange(bz, n, b) = b:bz:((n-1)*bz+b)
 
 
 function prepare_solve!(sys::MultiLinearizedSystem)
@@ -162,14 +162,14 @@ function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x
     n = N ÷ block_size
     # Convert to cell major view
     @inbounds for b = 1:block_size
-        @. a_buf[from_block_urange(block_size, n, b)] = x[from_unit_urange(block_size, n, b)]
+        @. a_buf[from_block_urange(block_size, n, b)] = x[from_entity_urange(block_size, n, b)]
     end
     mul!(b_buf, D, a_buf)
     ldiv!(E, b_buf)
     mul!(a_buf, C, b_buf)
     # Convert back to block major and subtract
     @inbounds for b = 1:block_size
-        @. res[from_unit_urange(block_size, n, b)] -= a_buf[from_block_urange(block_size, n, b)]
+        @. res[from_entity_urange(block_size, n, b)] -= a_buf[from_block_urange(block_size, n, b)]
     end
     # Simple version:
     # res .= B*x - C*(E\(D*x))
