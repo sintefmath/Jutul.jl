@@ -202,10 +202,9 @@ end
 
 function update!(ilu::ILUZeroPreconditioner, A::CuSparseMatrix, b::CuArray)
     if isnothing(ilu.factor)
-        ilu.factor = copy(A)
         set_dim!(ilu, A, b)
     end
-    ilu02!(ilu.factor, 'O')
+    ilu.factor = ilu02(A, 'O')
 end
 
 function apply!(x, ilu::ILUZeroPreconditioner, y, arg...)
