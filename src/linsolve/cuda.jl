@@ -8,7 +8,6 @@ function build_jacobian(sparse_arg, context::SingleCUDAContext, layout)
 
     V = zeros(Jt, length(I))
     jac_cpu = sparse(It.(I), It.(J), V, n, m)
-    display(typeof(jac_cpu))
     jac = CUDA.CUSPARSE.CuSparseMatrixCSC{Ft}(jac_cpu)
     # A = CUDA.CUSPARSE.CuSparseMatrixBSR{Float64}(sparse(rand(6, 6)), 2)
     nzval = nonzeros(jac)
