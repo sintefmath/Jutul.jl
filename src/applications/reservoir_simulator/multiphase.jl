@@ -125,11 +125,11 @@ struct Saturations <: GroupedVariables
     end
 end
 
-function degrees_of_freedom_per_unit(model, v::Saturations)
-    return values_per_unit(model, v) - 1
+function degrees_of_freedom_per_entity(model, v::Saturations)
+    return values_per_entity(model, v) - 1
 end
 
-function values_per_unit(model, v::Saturations)
+function values_per_entity(model, v::Saturations)
     number_of_phases(model.system)
 end
 
@@ -138,7 +138,7 @@ end
 @inline function absolute_increment_limit(p::Saturations) p.dsMax end
 
 function initialize_primary_variable_ad!(state, model, pvar::Saturations, state_symbol, npartials; offset = 0, kwarg...)
-    nph = values_per_unit(model, pvar)
+    nph = values_per_entity(model, pvar)
     # nph - 1 primary variables, with the last saturation being initially zero AD
     dp = vcat((1:nph-1) .+ offset, 0)
     v = state[state_symbol]
@@ -174,7 +174,7 @@ end
 # Total component masses
 struct TotalMasses <: GroupedVariables end
 
-function degrees_of_freedom_per_unit(model::SimulationModel{G, S}, v::TotalMasses) where {G<:Any, S<:MultiPhaseSystem}
+function degrees_of_freedom_per_entity(model::SimulationModel{G, S}, v::TotalMasses) where {G<:Any, S<:MultiPhaseSystem}
     number_of_phases(model.system)
 end
 
@@ -278,7 +278,7 @@ function insert_phase_sources!(acc::CuArray, kr, mu, rhoS, sources)
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}
-    n = number_of_equations_per_unit(eq)
+    n = number_of_equations_per_entity(eq)
     Φ = get_pore_volume(model)
     e = zeros(n)
     ρ = storage.state.PhaseMassDensities

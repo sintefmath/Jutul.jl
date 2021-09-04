@@ -10,20 +10,20 @@ Cache that holds an AD vector/matrix together with their positions.
 """
 struct CompactAutoDiffCache{I, ∂x} <: TervAutoDiffCache where {I <: Integer, ∂x <: Real}
     entries
-    unit
+    entity
     jacobian_positions
-    equations_per_unit::I
-    number_of_units::I
+    equations_per_entity::I
+    number_of_entities::I
     npartials::I
-    function CompactAutoDiffCache(equations_per_unit, n_units, npartials_or_model = 1; 
-                                                        unit = Cells(),
+    function CompactAutoDiffCache(equations_per_entity, n_entities, npartials_or_model = 1; 
+                                                        entity = Cells(),
                                                         context = DefaultContext(),
                                                         tag = nothing,
-                                                        n_units_pos = nothing,
+                                                        n_entities_pos = nothing,
                                                         kwarg...)
         if isa(npartials_or_model, TervModel)
             model = npartials_or_model
-            npartials = degrees_of_freedom_per_unit(model, unit)
+            npartials = degrees_of_freedom_per_entity(model, entity)
         else
             npartials = npartials_or_model
         end
@@ -31,25 +31,25 @@ struct CompactAutoDiffCache{I, ∂x} <: TervAutoDiffCache where {I <: Integer, �
 
         I = index_type(context)
         # Storage for AD variables
-        t = get_unit_tag(tag, unit)
-        entries = allocate_array_ad(equations_per_unit, n_units, context = context, npartials = npartials, tag = t; kwarg...)
+        t = get_entity_tag(tag, entity)
+        entries = allocate_array_ad(equations_per_entity, n_entities, context = context, npartials = npartials, tag = t; kwarg...)
         D = eltype(entries)
         # Position in sparse matrix - only allocated, then filled in later.
         # Since partials are all fetched together with the value, we make partials the fastest index.
-        if isnothing(n_units_pos)
+        if isnothing(n_entities_pos)
             # This can be overriden - if a custom assembly is planned.
-            n_units_pos = n_units
+            n_entities_pos = n_entities
         end
-        pos = zeros(I, equations_per_unit*npartials, n_units_pos)
+        pos = zeros(I, equations_per_entity*npartials, n_entities_pos)
         pos = transfer(context, pos)
-        new{I, D}(entries, unit, pos, equations_per_unit, n_units, npartials)
+        new{I, D}(entries, entity, pos, equations_per_entity, n_entities, npartials)
     end
 end
 
 """
-Get number of units a cache is defined on.
+Get number of entities a cache is defined on.
 """
-@inline function number_of_units(c::TervAutoDiffCache) c.number_of_units end
+@inline function number_of_entities(c::TervAutoDiffCache) c.number_of_entities end
 
 """
 Get the entries of the main autodiff cache for an equation.
@@ -97,7 +97,7 @@ end
 @inline jacobian_cart_ix(index, eqNo, partial_index, npartials) = CartesianIndex((eqNo-1)*npartials + partial_index, index)
 
 @inline function ad_dims(cache::CompactAutoDiffCache{I, D})::Tuple{I, I, I} where {I, D}
-    return (cache.number_of_units, cache.equations_per_unit, cache.npartials)
+    return (cache.number_of_entities, cache.equations_per_entity, cache.npartials)
 end
 
 @inline function update_jacobian_entry!(nzval, c::CompactAutoDiffCache, index, eqNo, partial_index, 
@@ -142,30 +142,30 @@ function fill_equation_entries!(nz, r::Nothing, model, cache::TervAutoDiffCache)
     end
 end
 
-function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_units, kwarg...)
+function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_entities, kwarg...)
     injective_alignment!(cache, arg...; target_index = eq_index, source_index = eq_index, kwarg...)
 end
 
-function injective_alignment!(cache::TervAutoDiffCache, jac, unit, context;
-                                    target_index = 1:cache.number_of_units,
-                                    source_index = 1:cache.number_of_units,
-                                    number_of_units_source = nothing,
-                                    number_of_units_target = nothing,
+function injective_alignment!(cache::TervAutoDiffCache, jac, entity, context;
+                                    target_index = 1:cache.number_of_entities,
+                                    source_index = 1:cache.number_of_entities,
+                                    number_of_entities_source = nothing,
+                                    number_of_entities_target = nothing,
                                     target_offset = 0,
                                     source_offset = 0)
-    unit::TervUnit
-    cache.unit::TervUnit
-    if unit == cache.unit
+    entity::TervUnit
+    cache.entity::TervUnit
+    if entity == cache.entity
         nu_c, ne, np = ad_dims(cache)
-        if isnothing(number_of_units_source)
+        if isnothing(number_of_entities_source)
             nu_s = nu_c
         else
-            nu_s = number_of_units_source
+            nu_s = number_of_entities_source
         end
-        if isnothing(number_of_units_target)
+        if isnothing(number_of_entities_target)
             nu_t = length(target_index)
         else
-            nu_t = number_of_units_target
+            nu_t = number_of_entities_target
         end
         N = length(source_index)
         @assert length(target_index) == N
@@ -252,7 +252,7 @@ function convert_state_ad(model, state, tag = nothing)
     primary = get_primary_variables(model)
     # Loop over primary variables and set them to AD, with ones at the correct diagonal
     # @debug "Found $n_partials primary variables."
-    last_unit = nothing
+    last_entity = nothing
     offset = 0
     outstr = ""
     if isnothing(tag)
@@ -264,37 +264,37 @@ function convert_state_ad(model, state, tag = nothing)
     total_number_of_partials = 0
     total_number_of_groups = 0
     for (pkey, pvar) in primary
-        u = associated_unit(pvar)
-        # Number of partials for this unit
-        n_partials = degrees_of_freedom_per_unit(model, u)
-        if last_unit != u
-            n_units = count_units(model.domain, u)
-            outstr *= "Variable group:\n\t$(n_units) $(typeof(u)) with $n_partials partial derivatives each ($(n_partials*n_units) total).\n"
-            # Note: We assume that the variables are sorted by units.
+        u = associated_entity(pvar)
+        # Number of partials for this entity
+        n_partials = degrees_of_freedom_per_entity(model, u)
+        if last_entity != u
+            n_entities = count_entities(model.domain, u)
+            outstr *= "Variable group:\n\t$(n_entities) $(typeof(u)) with $n_partials partial derivatives each ($(n_partials*n_entities) total).\n"
+            # Note: We assume that the variables are sorted by entities.
             # This is asserted for in the model constructor.
-            last_unit = u
+            last_entity = u
             # Reset the offset to zero, since we have entered a new group.
             offset = 0
             total_number_of_groups += 1
         end
         # Number of partials this primary variable contributes
-        n_local = degrees_of_freedom_per_unit(model, pvar)
-        t = get_unit_tag(tag, u)
+        n_local = degrees_of_freedom_per_entity(model, pvar)
+        t = get_entity_tag(tag, u)
         outstr *= "→ $pkey:\n\t$n_local of $n_partials partials on all $(typeof(u)), covers $(offset+1) → $(offset + n_local)\n"
         stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = t, offset = offset, context = context)
         offset += n_local
         total_number_of_partials += n_local
     end
-    outstr *= "Primary variables set up: $(number_of_degrees_of_freedom(model)) degrees of freedom\n\t → $total_number_of_partials distinct primary variables over $total_number_of_groups different units.\n"
+    outstr *= "Primary variables set up: $(number_of_degrees_of_freedom(model)) degrees of freedom\n\t → $total_number_of_partials distinct primary variables over $total_number_of_groups different entities.\n"
     secondary = get_secondary_variables(model)
     # Loop over secondary variables and initialize as AD with zero partials
     outstr *= "Setting up secondary variables...\n"
     for (skey, svar) in secondary
-        u = associated_unit(svar)
+        u = associated_entity(svar)
         outstr *= "\t$skey: Defined on $(typeof(u))\n"
 
-        t = get_unit_tag(tag, u)
-        n_partials = degrees_of_freedom_per_unit(model, u)
+        t = get_entity_tag(tag, u)
+        n_partials = degrees_of_freedom_per_entity(model, u)
         stateAD = initialize_secondary_variable_ad!(stateAD, model, svar, skey, n_partials, tag = t, context = context)
     end
     @debug outstr
@@ -312,9 +312,9 @@ Allocate vector or matrix as AD with optionally provided context and a specified
 
 # Keyword arguments
 - `npartials = 1`: Number of partials derivatives to allocate for each element
-- `diag_pos = nothing`: Indices of where to put units on the diagonal (if any)
+- `diag_pos = nothing`: Indices of where to put entities on the diagonal (if any)
 
-Other keyword arguments are passed onto `get_ad_unit_scalar`.
+Other keyword arguments are passed onto `get_ad_entity_scalar`.
 
 # Examples:
 
@@ -349,10 +349,10 @@ function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), dia
     else
         if isa(diag_pos, AbstractVector)
             @assert n[1] == length(diag_pos) "diag_pos must be specified for all columns."
-            d = map(x -> get_ad_unit_scalar(z_val, npartials, x; kwarg...), diag_pos)
+            d = map(x -> get_ad_entity_scalar(z_val, npartials, x; kwarg...), diag_pos)
             A = allocate_array(context, d, 1, n[2:end]...)
         else
-            d = get_ad_unit_scalar(z_val, npartials, diag_pos; kwarg...)
+            d = get_ad_entity_scalar(z_val, npartials, diag_pos; kwarg...)
             A = allocate_array(context, d, n...)
         end
     end
@@ -380,7 +380,7 @@ function allocate_array_ad(v::AbstractMatrix; kwarg...)
 end
 
 """
-    get_ad_unit_scalar(v::Real, npartials, diag_pos = nothing; <keyword_arguments>)
+    get_ad_entity_scalar(v::Real, npartials, diag_pos = nothing; <keyword_arguments>)
 
 Get scalar with partial derivatives as AD instance.
 
@@ -392,7 +392,7 @@ Get scalar with partial derivatives as AD instance.
 # Keyword arguments
 - `tag = nothing`: Tag for AD instance. Two AD values of the different tag cannot interoperate to avoid perturbation confusion (see ForwardDiff documentation).
 """
-function get_ad_unit_scalar(v::T, npartials, diag_pos = nothing; diag_value = 1.0, tag = nothing) where {T<:Real}
+function get_ad_entity_scalar(v::T, npartials, diag_pos = nothing; diag_value = 1.0, tag = nothing) where {T<:Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
     if npartials > 0
         D = diag_value.*ntuple(x -> T.(x == diag_pos), npartials)
@@ -441,11 +441,11 @@ Only useful for AD arrays, otherwise it does nothing.
 end
 
 """
-Combine a base tag (which can be nothing) with a unit to get a tag that
-captures base tag + unit tag for use with AD initialization.
+Combine a base tag (which can be nothing) with a entity to get a tag that
+captures base tag + entity tag for use with AD initialization.
 """
-function get_unit_tag(basetag, unit)
-    utag = Symbol(typeof(unit))
+function get_entity_tag(basetag, entity)
+    utag = Symbol(typeof(entity))
     if !isnothing(basetag)
         utag = Symbol(String(utag)*"∈"*String(basetag))
     end

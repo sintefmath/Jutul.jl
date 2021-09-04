@@ -69,8 +69,8 @@ struct TotalCurrent <: Current end
 struct ChargeCarrierFlux <: Current end
 struct EnergyFlux <: Current end
 
-function number_of_units(model, pv::Current)
-    return 2*count_units(model.domain, Faces())
+function number_of_entities(model, pv::Current)
+    return 2*count_entities(model.domain, Faces())
 end
 
 abstract type NonDiagCellVariables <: TervVariables end
@@ -182,22 +182,22 @@ function Conservation(
     accumulation_symbol = acc_symbol(acc_type)
 
     D = model.domain
-    cell_unit = Cells()
-    face_unit = Faces()
-    nc = count_units(D, cell_unit)
-    nf = count_units(D, face_unit)
+    cell_entity = Cells()
+    face_entity = Faces()
+    nc = count_entities(D, cell_entity)
+    nf = count_entities(D, face_entity)
     nhf = 2 * nf
     nn = size(get_neighborship(D.grid), 2)
     n_tot = nc + 2 * nn
 
-    alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(
-        number_of_equations, n, model, unit = unit, n_units_pos = n_units_pos,
+    alloc = (n, entity, n_entities_pos) -> CompactAutoDiffCache(
+        number_of_equations, n, model, entity = entity, n_entities_pos = n_entities_pos,
         context = model.context; kwarg...
     )
 
-    acc = alloc(nc, cell_unit, nc)
-    hf_cells = alloc(nhf, cell_unit, nhf)
-    density = alloc(n_tot, cell_unit, n_tot)
+    acc = alloc(nc, cell_entity, nc)
+    hf_cells = alloc(nhf, cell_entity, nhf)
+    density = alloc(n_tot, cell_entity, n_tot)
 
     Conservation{typeof(acc_type)}(
         acc, accumulation_symbol, hf_cells, density, flow_discretization

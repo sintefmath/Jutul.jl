@@ -1,23 +1,23 @@
 # Primary variables
 
 """
-Number of units (e.g. Cells, Faces) a variable is defined on.
+Number of entities (e.g. Cells, Faces) a variable is defined on.
 """
-function number_of_units(model, pv::TervVariables)
+function number_of_entities(model, pv::TervVariables)
     # By default, each primary variable exists on all cells of a discretized domain
-    return count_units(model.domain, associated_unit(pv))
+    return count_entities(model.domain, associated_entity(pv))
 end
 
 """
-The unit a variable is associated with, and can hold partial derivatives with respect to.
+The entity a variable is associated with, and can hold partial derivatives with respect to.
 """
-function associated_unit(::TervVariables)
-    # The default unit for all primary variables is Cells()
+function associated_entity(::TervVariables)
+    # The default entity for all primary variables is Cells()
     return Cells()
 end
 
 """
-Total number of degrees of freedom for a model, over all primary variables and all units.
+Total number of degrees of freedom for a model, over all primary variables and all entities.
 """
 function number_of_degrees_of_freedom(model::TervModel)
     ndof = 0
@@ -28,39 +28,39 @@ function number_of_degrees_of_freedom(model::TervModel)
 end
 
 function number_of_degrees_of_freedom(model::TervModel, u::TervUnit)
-    ndof = degrees_of_freedom_per_unit(model, u)*count_units(model.domain, u)
+    ndof = degrees_of_freedom_per_entity(model, u)*count_entities(model.domain, u)
     return ndof
 end
 
-function degrees_of_freedom_per_unit(model::TervModel, u::TervUnit)
+function degrees_of_freedom_per_entity(model::TervModel, u::TervUnit)
     ndof = 0
     for pvar in values(get_primary_variables(model))
-        if associated_unit(pvar) == u
-            ndof += degrees_of_freedom_per_unit(model, pvar)
+        if associated_entity(pvar) == u
+            ndof += degrees_of_freedom_per_entity(model, pvar)
         end
     end
     return ndof
 end
 
 function number_of_degrees_of_freedom(model, pvars::TervVariables)
-    return number_of_units(model, pvars)*degrees_of_freedom_per_unit(model, pvars)
+    return number_of_entities(model, pvars)*degrees_of_freedom_per_entity(model, pvars)
 end
 
 function value_dim(model, pvars::TervVariables)
-    return (values_per_unit(model, pvars), number_of_units(model, pvars))
+    return (values_per_entity(model, pvars), number_of_entities(model, pvars))
 end
 
 """
-Number of independent primary variables / degrees of freedom per computational unit.
+Number of independent primary variables / degrees of freedom per computational entity.
 """
-function degrees_of_freedom_per_unit(model, ::ScalarVariable)
+function degrees_of_freedom_per_entity(model, ::ScalarVariable)
     return 1
 end
 
 """
 Constant variables hold no degrees of freedom.
 """
-function degrees_of_freedom_per_unit(model, ::ConstantVariables)
+function degrees_of_freedom_per_entity(model, ::ConstantVariables)
     return 0 # A constant has no freedom
 end
 
@@ -68,8 +68,8 @@ end
 Number of values held by a primary variable. Normally this is equal to the number of degrees of freedom,
 but some special primary variables are most conveniently defined by having N values and N-1 independent variables.
 """
-function values_per_unit(model, u::TervVariables)
-    return degrees_of_freedom_per_unit(model, u)
+function values_per_entity(model, u::TervVariables)
+    return degrees_of_freedom_per_entity(model, u)
 end
 
 ## Update functions
@@ -95,7 +95,7 @@ function minimum_value(::TervVariables) nothing end
 
 function update_primary_variable!(state, p::TervVariables, state_symbol, model, dx)
     names = get_names(p)
-    nu = number_of_units(model, p)
+    nu = number_of_entities(model, p)
     abs_max = absolute_increment_limit(p)
     rel_max = relative_increment_limit(p)
     maxval = maximum_value(p)
@@ -197,8 +197,8 @@ function initialize_variable_ad(state, model, pvar, symb, npartials, diag_pos; k
 end
 
 function initialize_variable_value(model, pvar, val; perform_copy = true)
-    nu = number_of_units(model, pvar)
-    nv = values_per_unit(model, pvar)
+    nu = number_of_entities(model, pvar)
+    nv = values_per_entity(model, pvar)
     
     if isa(pvar, ScalarVariable)
         @assert length(val) == nu
@@ -241,7 +241,7 @@ end
 
 # Scalar primary variables
 function initialize_variable_value!(state, model, pvar::ScalarVariable, symb::Symbol, val::Number)
-    V = repeat([val], number_of_units(model, pvar))
+    V = repeat([val], number_of_entities(model, pvar))
     return initialize_variable_value!(state, model, pvar, symb, V)
 end
 
@@ -249,40 +249,40 @@ end
 Initializer for the value of non-scalar primary variables
 """
 function initialize_variable_value!(state, model, pvar::GroupedVariables, symb::Symbol, val::AbstractVector)
-    n = values_per_unit(model, pvar)
+    n = values_per_entity(model, pvar)
     t = typeof(pvar)
     @assert length(val) == n "Variable $t should have initializer of length $n"
-    V = repeat(val, 1, number_of_units(model, pvar))
+    V = repeat(val, 1, number_of_entities(model, pvar))
     return initialize_variable_value!(state, model, pvar, symb, V)
 end
 
 function initialize_variable_value!(state, model, pvar::GroupedVariables, symb::Symbol, val::Number)
-    n = values_per_unit(model, pvar)
+    n = values_per_entity(model, pvar)
     return initialize_variable_value!(state, model, pvar, symb, repeat([val], n))
 end
 
 # Specific variable implementations that are generic for many types of system follow
 
 
-function values_per_unit(model, var::ConstantVariables)
+function values_per_entity(model, var::ConstantVariables)
     c = var.constants
-    if var.single_unit
+    if var.single_entity
         n = length(c)
     else
         n = size(c, 1)
     end
 end
-associated_unit(model, var::ConstantVariables) = var.unit
+associated_entity(model, var::ConstantVariables) = var.entity
 
 function transfer(context, v::ConstantVariables)
     constants = transfer(context, v.constants)
-    return ConstantVariables(constants, v.unit, v.single_unit)
+    return ConstantVariables(constants, v.entity, v.single_entity)
 end
 
 function initialize_variable_value(model, var::ConstantVariables, val; perform_copy = true)
     # Ignore initializer since we already know the constants
-    nu = number_of_units(model, var)
-    if var.single_unit
+    nu = number_of_entities(model, var)
+    if var.single_entity
         it = index_type(model.context)
         # use instance as view to avoid allocating lots of copies
         var_val = view(var.constants, :, ones(it, nu))

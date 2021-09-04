@@ -13,28 +13,28 @@ function get_variables(model::SimulationModel)
 end
 
 """
-Get only the units where primary variables are present,
+Get only the entities where primary variables are present,
 sorted by their order in the primary variables.
 """
-function get_primary_variable_ordered_units(model::SimulationModel)
+function get_primary_variable_ordered_entities(model::SimulationModel)
     out = []
-    current_unit = nothing
+    current_entity = nothing
     for p in values(model.primary_variables)
-        u = associated_unit(p)
-        if u != current_unit
-            # Note: We assume that primary variables for the same unit follows
+        u = associated_entity(p)
+        if u != current_entity
+            # Note: We assume that primary variables for the same entity follows
             # each other. This is currently asserted in the model constructor.
             push!(out, u)
-            current_unit = u
+            current_entity = u
         end
     end
     return out
 end
 
-function number_of_partials_per_unit(model::SimulationModel, unit::TervUnit)
+function number_of_partials_per_entity(model::SimulationModel, entity::TervUnit)
     n = 0
     for pvar in values(get_primary_variables(model))
-        if associated_unit(pvar) == unit
+        if associated_entity(pvar) == entity
             n += 1
         end
     end
@@ -173,10 +173,10 @@ function setup_equations!(eqs, storage, model::TervModel; tag = nothing, kwarg..
             extra = []
         end
         e = proto(model, num; extra..., tag = tag, kwarg...)
-        ne = number_of_units(model, e)
+        ne = number_of_entities(model, e)
         n = num*ne
 
-        outstr *= "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_unit(e)) for $n equations in total.\n"
+        outstr *= "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_entity(e)) for $n equations in total.\n"
         eqs[sym] = e
         counter += 1
         num_equations_total += n
@@ -197,14 +197,14 @@ function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout,
     I = []
     J = []
     numrows = 0
-    primary_units = get_primary_variable_ordered_units(model)
+    primary_entities = get_primary_variable_ordered_entities(model)
     for eq in values(eqs)
         numcols = 0
-        for u in primary_units
+        for u in primary_entities
             S = declare_sparsity(model, eq, u, layout)
             if !isnothing(S)
                 push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
-                push!(J, S.J .+ numcols) # Column indices, offset by the partials in units we have passed
+                push!(J, S.J .+ numcols) # Column indices, offset by the partials in entities we have passed
             end
             numcols += number_of_degrees_of_freedom(model, u)
         end
@@ -222,24 +222,24 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
     I = []
     J = []
     numrows = 0
-    primary_units = get_primary_variable_ordered_units(model)
-    block_size = degrees_of_freedom_per_unit(model, primary_units[1])
+    primary_entities = get_primary_variable_ordered_entities(model)
+    block_size = degrees_of_freedom_per_entity(model, primary_entities[1])
     ndof = number_of_degrees_of_freedom(model) ÷ block_size
     for eq in values(eqs)
         numcols = 0
-        eqs_per_unit = number_of_equations_per_unit(eq)
-        for u in primary_units
-            dof_per_unit = degrees_of_freedom_per_unit(model, u)
-            @assert dof_per_unit == eqs_per_unit == block_size "Block major layout only supported for square blocks."
+        eqs_per_entity = number_of_equations_per_entity(eq)
+        for u in primary_entities
+            dof_per_entity = degrees_of_freedom_per_entity(model, u)
+            @assert dof_per_entity == eqs_per_entity == block_size "Block major layout only supported for square blocks."
             S = declare_sparsity(model, eq, u, layout)
             if !isnothing(S)
                 push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
-                push!(J, S.J .+ numcols) # Column indices, offset by the partials in units we have passed
+                push!(J, S.J .+ numcols) # Column indices, offset by the partials in entities we have passed
             end
-            numcols += count_units(model.domain, u)
+            numcols += count_entities(model.domain, u)
         end
         @assert numcols == ndof "Assumed square block, was $numcols x $ndof"
-        numrows += number_of_units(model, eq)
+        numrows += number_of_entities(model, eq)
     end
     it = index_type(model.context)
 
@@ -255,11 +255,11 @@ function get_sparse_arguments2(storage, model, layout::UnitMajorLayout)
     J = []
     numrows = 0
     numcols = 0
-    primary_units = get_primary_variable_ordered_units(model)
+    primary_entities = get_primary_variable_ordered_entities(model)
 
-    for (u_no, u) in enumerate(primary_units)
-        npartials = degrees_of_freedom_per_unit(model, u)
-        nu = count_units(model.domain, u)
+    for (u_no, u) in enumerate(primary_entities)
+        npartials = degrees_of_freedom_per_entity(model, u)
+        nu = count_entities(model.domain, u)
         for (eq_no, eq) in enumerate(values(eqs))
             S = declare_sparsity(model, eq, u, layout)
             row_ix = (S.I-1)*u_no + 1
@@ -356,7 +356,7 @@ function update_linearized_system!(lsys, equations, model::TervModel; equation_o
         eq = equations[key]
         nz = lsys.jac_buffer
         N = number_of_equations(model, eq)
-        n = number_of_equations_per_unit(eq)
+        n = number_of_equations_per_entity(eq)
         m = N ÷ n
         r = as_cell_major_matrix(r_buf, n, m, model, equation_offset)
 
@@ -384,7 +384,7 @@ function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra
     for key in keys(eqs)
         eq = eqs[key]
         N = number_of_equations(model, eq)
-        n = number_of_equations_per_unit(eq)
+        n = number_of_equations_per_entity(eq)
         m = N ÷ n
         r_v = as_cell_major_matrix(r_buf, n, m, model, offset)
 
@@ -461,9 +461,9 @@ function update_primary_variables!(primary_storage, dx, model::TervModel; check 
     primary = get_primary_variables(model)
     if cell_major
         offset = 0 # Offset into global r array
-        for u in get_primary_variable_ordered_units(model)
-            np = number_of_partials_per_unit(model, u)
-            nu = count_units(model.domain, u)
+        for u in get_primary_variable_ordered_entities(model)
+            np = number_of_partials_per_entity(model, u)
+            nu = count_entities(model.domain, u)
             t = isa(layout, BlockMajorLayout)
             if t
                 Dx = get_matrix_view(dx, np, nu, true, offset)
@@ -473,10 +473,10 @@ function update_primary_variables!(primary_storage, dx, model::TervModel; check 
             local_offset = 0
             for (pkey, p) in primary
                 # This is a bit inefficient
-                if u != associated_unit(p)
+                if u != associated_entity(p)
                     continue
                 end
-                ni = degrees_of_freedom_per_unit(model, p)
+                ni = degrees_of_freedom_per_entity(model, p)
                 dxi = view(Dx, :, (local_offset+1):(local_offset+ni))
                 if check
                     check_increment(dxi, p, pkey)

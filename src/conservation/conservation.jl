@@ -14,17 +14,17 @@ function ConservationLaw(model, number_of_equations;
                             accumulation_symbol = :TotalMasses,
                             kwarg...)
     D, ctx = model.domain, model.context
-    cell_unit = Cells()
-    face_unit = Faces()
-    nc = count_units(D, cell_unit)
-    nf = count_units(D, face_unit)
+    cell_entity = Cells()
+    face_entity = Faces()
+    nc = count_entities(D, cell_entity)
+    nf = count_entities(D, face_entity)
     nhf = 2 * nf
-    face_partials = degrees_of_freedom_per_unit(model, face_unit)
-    alloc = (n, unit, n_units_pos) -> CompactAutoDiffCache(number_of_equations, n, model,
-                                                                                unit = unit, n_units_pos = n_units_pos, 
+    face_partials = degrees_of_freedom_per_entity(model, face_entity)
+    alloc = (n, entity, n_entities_pos) -> CompactAutoDiffCache(number_of_equations, n, model,
+                                                                                entity = entity, n_entities_pos = n_entities_pos, 
                                                                                 context = ctx; kwarg...)
     # Accumulation terms
-    acc = alloc(nc, cell_unit, nc)
+    acc = alloc(nc, cell_entity, nc)
     # Source terms - as sparse matrix
     t_acc = eltype(acc.entries)
     src = sparse(zeros(0), zeros(0), zeros(t_acc, 0), size(acc.entries)...)
@@ -32,10 +32,10 @@ function ConservationLaw(model, number_of_equations;
     # src = transfer(ctx, src_sparse)
     # @debug typeof(src)
     # Half face fluxes - differentiated with respect to pairs of cells
-    hf_cells = alloc(nhf, cell_unit, nhf)
+    hf_cells = alloc(nhf, cell_entity, nhf)
     # Half face fluxes - differentiated with respect to the faces
     if face_partials > 0
-        hf_faces = alloc(nf, face_unit, nhf)
+        hf_faces = alloc(nf, face_entity, nhf)
     else
         hf_faces = nothing
     end
@@ -302,7 +302,7 @@ end
 function declare_pattern(model, e::ConservationLaw, ::Cells)
     df = e.flow_discretization
     hfd = Array(df.conn_data)
-    n = number_of_units(model, e)
+    n = number_of_entities(model, e)
     # Fluxes
     I = map(x -> x.self, hfd)
     J = map(x -> x.other, hfd)

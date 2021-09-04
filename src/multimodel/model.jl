@@ -147,14 +147,14 @@ end
 
 
 function transpose_intersection(intersection)
-    target, source, target_unit, source_unit = intersection
-    (source, target, source_unit, target_unit)
+    target, source, target_entity, source_entity = intersection
+    (source, target, source_entity, target_entity)
 end
 
 
 function declare_cross_term(eq::TervEquation, target_model, source_model; target = nothing, source = nothing)
-    target_unit = associated_unit(eq)
-    intersection = get_model_intersection(target_unit, target_model, source_model, target, source)
+    target_entity = associated_entity(eq)
+    intersection = get_model_intersection(target_entity, target_model, source_model, target, source)
     if isnothing(intersection.target)
         # Declare nothing, so we can easily spot no overlap
         ct = nothing
@@ -281,7 +281,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
             x = cross_terms[key]
             if !isnothing(x)
                 variable_offset = 0
-                for u in get_primary_variable_ordered_units(source_model)
+                for u in get_primary_variable_ordered_entities(source_model)
                     S = declare_sparsity(target_model, source_model, x, u, layout)
                     if !isnothing(S)
                         push!(I, S.I .+ equation_offset)

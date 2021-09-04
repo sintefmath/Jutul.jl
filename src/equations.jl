@@ -1,68 +1,68 @@
-export allocate_array_ad, get_ad_unit_scalar, update_values!
+export allocate_array_ad, get_ad_entity_scalar, update_values!
 export value, find_sparse_position
 
 
 
-function find_jac_position(A, target_unit_index, source_unit_index, # Typically row and column - global index
+function find_jac_position(A, target_entity_index, source_entity_index, # Typically row and column - global index
     equation_index, partial_index,        # Index of equation and partial derivative - local index
-    nunits_target, nunits_source,         # Row and column sizes for each sub-system
-    eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
+    nentities_target, nentities_source,         # Row and column sizes for each sub-system
+    eqs_per_entity, partials_per_entity,      # Sizes of the smallest inner system
     context::TervContext)
     layout = matrix_layout(context)
     find_jac_position(
-        A, target_unit_index, source_unit_index, 
+        A, target_entity_index, source_entity_index, 
         equation_index, partial_index,
-        nunits_target, nunits_source, 
-        eqs_per_unit, partials_per_unit, 
+        nentities_target, nentities_source, 
+        eqs_per_entity, partials_per_entity, 
         layout
         )
 end
 
-function find_jac_position(A, target_unit_index, source_unit_index,
+function find_jac_position(A, target_entity_index, source_entity_index,
     equation_index, partial_index,
-    nunits_target, nunits_source,
-    eqs_per_unit, partials_per_unit, layout::TervMatrixLayout)
+    nentities_target, nentities_source,
+    eqs_per_entity, partials_per_entity, layout::TervMatrixLayout)
 
-    row, col = row_col_sparse(target_unit_index, source_unit_index,
+    row, col = row_col_sparse(target_entity_index, source_entity_index,
     equation_index, partial_index,
-    nunits_target, nunits_source,
-    eqs_per_unit, partials_per_unit, layout)
+    nentities_target, nentities_source,
+    eqs_per_entity, partials_per_entity, layout)
     return find_sparse_position(A, row, col, layout)
 end
 
-function find_jac_position(A, target_unit_index, source_unit_index,
+function find_jac_position(A, target_entity_index, source_entity_index,
     equation_index, partial_index,
-    nunits_target, nunits_source,
-    eqs_per_unit, partials_per_unit, layout::BlockMajorLayout)
-    row, col = row_col_sparse(target_unit_index, source_unit_index,
+    nentities_target, nentities_source,
+    eqs_per_entity, partials_per_entity, layout::BlockMajorLayout)
+    row, col = row_col_sparse(target_entity_index, source_entity_index,
     equation_index, partial_index,
-    nunits_target, nunits_source,
-    eqs_per_unit, partials_per_unit, EquationMajorLayout()) # Pass of eqn. major version since we are looking for "scalar" index
+    nentities_target, nentities_source,
+    eqs_per_entity, partials_per_entity, EquationMajorLayout()) # Pass of eqn. major version since we are looking for "scalar" index
 
-    row = target_unit_index
-    col = source_unit_index
+    row = target_entity_index
+    col = source_entity_index
 
     pos = find_sparse_position(A, row, col, layout)
-    return (pos-1)*eqs_per_unit*partials_per_unit + eqs_per_unit*(partial_index-1) + equation_index
+    return (pos-1)*eqs_per_entity*partials_per_entity + eqs_per_entity*(partial_index-1) + equation_index
 end
 
-function row_col_sparse(target_unit_index, source_unit_index, # Typically row and column - global index
+function row_col_sparse(target_entity_index, source_entity_index, # Typically row and column - global index
                               equation_index, partial_index,        # Index of equation and partial derivative - local index
-                              nunits_target, nunits_source,         # Row and column sizes for each sub-system
-                              eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
+                              nentities_target, nentities_source,         # Row and column sizes for each sub-system
+                              eqs_per_entity, partials_per_entity,      # Sizes of the smallest inner system
                               layout::EquationMajorLayout)
-    row = nunits_target*(equation_index-1) + target_unit_index
-    col = nunits_source*(partial_index-1) + source_unit_index
+    row = nentities_target*(equation_index-1) + target_entity_index
+    col = nentities_source*(partial_index-1) + source_entity_index
     return (row, col)
 end
 
-function row_col_sparse(target_unit_index, source_unit_index, # Typically row and column - global index
+function row_col_sparse(target_entity_index, source_entity_index, # Typically row and column - global index
     equation_index, partial_index,        # Index of equation and partial derivative - local index
-    nunits_target, nunits_source,         # Row and column sizes for each sub-system
-    eqs_per_unit, partials_per_unit,      # Sizes of the smallest inner system
+    nentities_target, nentities_source,         # Row and column sizes for each sub-system
+    eqs_per_entity, partials_per_entity,      # Sizes of the smallest inner system
     layout::UnitMajorLayout)
-    row = eqs_per_unit*(target_unit_index-1) + equation_index
-    col = partials_per_unit*(source_unit_index-1) + partial_index
+    row = eqs_per_entity*(target_entity_index-1) + equation_index
+    col = partials_per_entity*(source_entity_index-1) + partial_index
     return (row, col)
 end
 
@@ -123,39 +123,39 @@ function select_equations_formulation!(eqs, arg...)
 end
 
 """
-Return the domain unit the equation is associated with
+Return the domain entity the equation is associated with
 """
-function associated_unit(::TervEquation)
+function associated_entity(::TervEquation)
     return Cells()
 end
 
 """
-Get the number of equations per unit. For example, mass balance of two
-components will have two equations per grid cell (= unit)
+Get the number of equations per entity. For example, mass balance of two
+components will have two equations per grid cell (= entity)
 """
-function number_of_equations_per_unit(e::TervEquation)
-    # Default: One equation per unit (= cell,  face, ...)
-    return get_diagonal_cache(e).equations_per_unit
+function number_of_equations_per_entity(e::TervEquation)
+    # Default: One equation per entity (= cell,  face, ...)
+    return get_diagonal_cache(e).equations_per_entity
 end
 
 """
-Get the number of units (e.g. the number of cells) that the equation is defined on.
+Get the number of entities (e.g. the number of cells) that the equation is defined on.
 """
-function number_of_units(model, e::TervEquation)
-    return count_units(model.domain, associated_unit(e))
+function number_of_entities(model, e::TervEquation)
+    return count_entities(model.domain, associated_entity(e))
 end
 
 """
 Get the total number of equations on the domain of model.
 """
 function number_of_equations(model, e::TervEquation)
-    return number_of_equations_per_unit(e)*number_of_units(model, e)
+    return number_of_equations_per_entity(e)*number_of_entities(model, e)
 end
 
 """
 Get the number of partials
 """
-function number_of_partials_per_unit(e::TervEquation)
+function number_of_partials_per_entity(e::TervEquation)
     return get_diagonal_cache(e).npartials
 end
 
@@ -163,8 +163,8 @@ end
 Give out I, J arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_sparsity(model, e::TervEquation, unit, layout::EquationMajorLayout)
-    primitive = declare_pattern(model, e, unit)
+function declare_sparsity(model, e::TervEquation, entity, layout::EquationMajorLayout)
+    primitive = declare_pattern(model, e, entity)
     if isnothing(primitive)
         out = nothing
     else
@@ -172,13 +172,13 @@ function declare_sparsity(model, e::TervEquation, unit, layout::EquationMajorLay
         ni = length(I)
         nj = length(J)
         if length(I) != length(J)
-            error("Pattern I, J for $(typeof(e)) must have equal lengths for unit $(typeof(unit)). (|I| = $ni != $nj = |J|)")
+            error("Pattern I, J for $(typeof(e)) must have equal lengths for entity $(typeof(entity)). (|I| = $ni != $nj = |J|)")
         end
-        nu = number_of_units(model, e)
-        nu_other = count_units(model.domain, unit)
-        nrow_blocks = number_of_equations_per_unit(e)
-        ncol_blocks = number_of_partials_per_unit(model, unit)
-        nunits = count_units(model.domain, unit)
+        nu = number_of_entities(model, e)
+        nu_other = count_entities(model.domain, entity)
+        nrow_blocks = number_of_equations_per_entity(e)
+        ncol_blocks = number_of_partials_per_entity(model, entity)
+        nentities = count_entities(model.domain, entity)
         if nrow_blocks > 1
             I = vcat(map((x) -> (x-1)*nu .+ I, 1:nrow_blocks)...)
             J = repeat(J, nrow_blocks)
@@ -188,30 +188,30 @@ function declare_sparsity(model, e::TervEquation, unit, layout::EquationMajorLay
             J = vcat(map((x) -> (x-1)*nu_other .+ J, 1:ncol_blocks)...)
         end
         n = number_of_equations(model, e)
-        m = nunits*ncol_blocks
+        m = nentities*ncol_blocks
         out = SparsePattern(I, J, n, m, layout)
     end
     return out
 end
 
-function declare_sparsity(model, e::TervEquation, unit, layout::BlockMajorLayout)
-    primitive = declare_pattern(model, e, unit)
+function declare_sparsity(model, e::TervEquation, entity, layout::BlockMajorLayout)
+    primitive = declare_pattern(model, e, entity)
     if isnothing(primitive)
         out = nothing
     else
         I, J = primitive
         n = number_of_equations(model, e)
-        m = count_units(model.domain, unit)
+        m = count_entities(model.domain, entity)
 
-        n_bz = number_of_equations_per_unit(e)
-        m_bz = degrees_of_freedom_per_unit(model, unit)
+        n_bz = number_of_equations_per_entity(e)
+        m_bz = degrees_of_freedom_per_entity(model, entity)
         out = SparsePattern(I, J, n, m, layout, n_bz, m_bz)
     end
     return out
 end
 
-function declare_sparsity(model, e::TervEquation, unit, layout::UnitMajorLayout)
-    primitive = declare_pattern(model, e, unit)
+function declare_sparsity(model, e::TervEquation, entity, layout::UnitMajorLayout)
+    primitive = declare_pattern(model, e, entity)
     if isnothing(primitive)
         out = nothing
     else
@@ -219,13 +219,13 @@ function declare_sparsity(model, e::TervEquation, unit, layout::UnitMajorLayout)
         ni = length(I)
         nj = length(J)
         if length(I) != length(J)
-            error("Pattern I, J for $(typeof(e)) must have equal lengths for unit $(typeof(unit)). (|I| = $ni != $nj = |J|)")
+            error("Pattern I, J for $(typeof(e)) must have equal lengths for entity $(typeof(entity)). (|I| = $ni != $nj = |J|)")
         end
-        nu = number_of_units(model, e)
-        nu_other = count_units(model.domain, unit)
-        nrow_blocks = number_of_equations_per_unit(e)
-        ncol_blocks = number_of_partials_per_unit(model, unit)
-        nunits = count_units(model.domain, unit)
+        nu = number_of_entities(model, e)
+        nu_other = count_entities(model.domain, entity)
+        nrow_blocks = number_of_equations_per_entity(e)
+        ncol_blocks = number_of_partials_per_entity(model, entity)
+        nentities = count_entities(model.domain, entity)
         if nrow_blocks > 1
             I = vcat(map((x) -> nrow_blocks*(I .- 1) .+ x, 1:nrow_blocks)...)
             J = repeat(J, nrow_blocks)
@@ -235,7 +235,7 @@ function declare_sparsity(model, e::TervEquation, unit, layout::UnitMajorLayout)
             J = vcat(map((x) -> (J .- 1)*ncol_blocks .+ x, 1:ncol_blocks)...)
         end
         n = number_of_equations(model, e)
-        m = nunits*ncol_blocks
+        m = nentities*ncol_blocks
         out = SparsePattern(I, J, n, m, layout)
     end
     return out
@@ -245,9 +245,9 @@ end
 Give out source, target arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_pattern(model, e, unit)
-    if unit == associated_unit(e)
-        n = count_units(model.domain, unit)
+function declare_pattern(model, e, entity)
+    if entity == associated_entity(e)
+        n = count_entities(model.domain, entity)
         I = collect(1:n)
         return (I, I)
     else
@@ -271,20 +271,20 @@ Update an equation so that it knows where to store its derivatives
 in the Jacobian representation.
 """
 function align_to_jacobian!(eq::TervEquation, jac, model; equation_offset = 0, variable_offset = 0)
-    punits = get_primary_variable_ordered_units(model)
-    for u in punits
+    pentities = get_primary_variable_ordered_entities(model)
+    for u in pentities
         align_to_jacobian!(eq, jac, model, u, equation_offset = equation_offset, variable_offset = variable_offset) 
         variable_offset += number_of_degrees_of_freedom(model, u)
     end
 end
 
 
-function align_to_jacobian!(eq, jac, model, unit; equation_offset = 0, variable_offset = 0)
-    if unit == associated_unit(eq)
-        # By default we perform a diagonal alignment if we match the associated unit.
-        # A diagonal alignment means that the equation for some unit depends only on the values inside that unit.
+function align_to_jacobian!(eq, jac, model, entity; equation_offset = 0, variable_offset = 0)
+    if entity == associated_entity(eq)
+        # By default we perform a diagonal alignment if we match the associated entity.
+        # A diagonal alignment means that the equation for some entity depends only on the values inside that entity.
         # For instance, an equation defined on all Cells will have each entry depend on all values in that Cell.
-        diagonal_alignment!(eq.equation, jac, unit, model.context, target_offset = equation_offset, source_offset = variable_offset)
+        diagonal_alignment!(eq.equation, jac, entity, model.context, target_offset = equation_offset, source_offset = variable_offset)
     end
 end
 
@@ -313,7 +313,7 @@ not impact this particular equation.
 function apply_forces_to_equation!(storage, model, eq, force, time) end
 
 function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
-    n = number_of_equations_per_unit(eq)
+    n = number_of_equations_per_entity(eq)
     e = zeros(n)
     for i = 1:n
         e[i] = norm(r[i, :], Inf)

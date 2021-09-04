@@ -59,7 +59,7 @@ end
 function EquationMajorLayout() EquationMajorLayout(false) end
 function is_cell_major(::EquationMajorLayout) false end
 """
-Domain units sequentially in rows:
+Domain entities sequentially in rows:
 """
 struct UnitMajorLayout <: TervMatrixLayout
     as_adjoint::Bool
@@ -184,16 +184,16 @@ abstract type TervDomain end
 struct DiscretizedDomain{G} <: TervDomain
     grid::G
     discretizations
-    units
+    entities
 end
 
 function DiscretizedDomain(grid, disc = nothing)
-    units = declare_units(grid)
+    entities = declare_entities(grid)
     u = Dict{Any, Int64}() # Is this a good definition?
-    for unit in units
-        num = unit.count
+    for entity in entities
+        num = entity.count
         @assert num >= 0 "Units must have non-negative counts."
-        u[unit.unit] = num
+        u[entity.entity] = num
     end
     DiscretizedDomain(grid, disc, u)
 end
@@ -209,7 +209,7 @@ function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
     k = keys(d_cpu)
     val = map(t, values(d_cpu))
     d = (;zip(k, val)...)
-    u = domain.units
+    u = domain.entities
     return DiscretizedDomain(g, d, u)
 end
 
@@ -246,7 +246,7 @@ struct SimulationModel{O<:TervDomain,
         primary = select_primary_variables(domain, system, formulation)
         primary = transfer(context, primary)
         function check_prim(pvar)
-            a = map(associated_unit, values(pvar))
+            a = map(associated_entity, values(pvar))
             for u in unique(a)
                 ut = typeof(u)
                 deltas =  diff(findall(typeof.(a) .== ut))
@@ -278,9 +278,9 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
         if f == :primary_variables || f == :secondary_variables
             ctr = 1
             for (key, pvar) in p
-                nv = degrees_of_freedom_per_unit(model, pvar)
-                nu = number_of_units(model, pvar)
-                u = associated_unit(pvar)
+                nv = degrees_of_freedom_per_entity(model, pvar)
+                nu = number_of_entities(model, pvar)
+                u = associated_entity(pvar)
                 print("   $ctr) $key (")
                 if nv > 1
                     print("$nv×")
@@ -317,7 +317,7 @@ end
 ## Grid
 abstract type TervGrid end
 
-## Discretized units
+## Discretized entities
 abstract type TervUnit end
 
 struct Cells <: TervUnit end
@@ -333,20 +333,20 @@ function SimulationModel(g::TervGrid, system; discretization = nothing, kwarg...
 end
 
 """
-A set of constants, repeated over the entire set of Cells or some other unit
+A set of constants, repeated over the entire set of Cells or some other entity
 """
 struct ConstantVariables <: GroupedVariables
     constants
-    unit::TervUnit
-    single_unit::Bool
-    function ConstantVariables(constants, unit = Cells(), single_unit = nothing)
-        if isnothing(single_unit)
-            single_unit = isa(constants, AbstractVector)
+    entity::TervUnit
+    single_entity::Bool
+    function ConstantVariables(constants, entity = Cells(), single_entity = nothing)
+        if isnothing(single_entity)
+            single_entity = isa(constants, AbstractVector)
         end
-        if isa(constants, CuArray) && single_unit
-            @warn "Single unit constants have led to crashes on CUDA/Tullio kernels!" maxlog = 5
+        if isa(constants, CuArray) && single_entity
+            @warn "Single entity constants have led to crashes on CUDA/Tullio kernels!" maxlog = 5
         end
-        new(constants, unit, single_unit)
+        new(constants, entity, single_entity)
     end
 end
 

@@ -33,7 +33,7 @@ end
 relative_increment_limit(tmf::TotalMassFlux) = tmf.max_rel
 absolute_increment_limit(tmf::TotalMassFlux) = tmf.max_abs
 
-function associated_unit(::TotalMassFlux) Faces() end
+function associated_entity(::TotalMassFlux) Faces() end
 variable_scale(t::TotalMassFlux) = t.scale
 
 struct SimpleWell <: WellGrid
@@ -187,20 +187,20 @@ end
 
 function PotentialDropBalanceWell(model::TervModel, number_of_equations::Integer; kwarg...)
     D = model.domain
-    cell_unit = Cells()
-    face_unit = Faces()
-    nf = count_units(D, face_unit)
+    cell_entity = Cells()
+    face_entity = Faces()
+    nf = count_entities(D, face_entity)
 
-    alloc = (n, unit) -> CompactAutoDiffCache(number_of_equations, n, model, unit = unit; kwarg...)
+    alloc = (n, entity) -> CompactAutoDiffCache(number_of_equations, n, model, entity = entity; kwarg...)
     # One equation per velocity
-    eq = alloc(nf, face_unit)
+    eq = alloc(nf, face_entity)
     # Two cells per face -> 2*nf allocated
-    eq_cells = alloc(2*nf, cell_unit)
+    eq_cells = alloc(2*nf, cell_entity)
 
     PotentialDropBalanceWell(eq, eq_cells)
 end
 
-function associated_unit(::PotentialDropBalanceWell) Faces() end
+function associated_entity(::PotentialDropBalanceWell) Faces() end
 
 function tolerance_scale(::PotentialDropBalanceWell) 1e6 end
 
@@ -228,7 +228,7 @@ function align_to_jacobian!(eq::PotentialDropBalanceWell, jac, model, u::Cells; 
     cache = eq.equation_cells
     layout = matrix_layout(model.context)
     N = model.domain.grid.neighborship
-    nc = count_units(model.domain, u)
+    nc = count_entities(model.domain, u)
     potential_drop_cells_alignment!(cache, jac, N, layout, nc; kwarg...)
 end
 
@@ -355,10 +355,10 @@ function number_of_cells(W::WellGrid)
     length(W.volumes)
 end
 
-function declare_units(W::WellGrid)
-    c = (unit = Cells(),         count = number_of_cells(W))
-    f = (unit = Faces(),         count = number_of_faces(W))
-    p = (unit = Perforations(),  count = length(W.perforations.self))
+function declare_entities(W::WellGrid)
+    c = (entity = Cells(),         count = number_of_cells(W))
+    f = (entity = Faces(),         count = number_of_faces(W))
+    p = (entity = Perforations(),  count = length(W.perforations.self))
     return [c, f, p]
 end
 
@@ -377,7 +377,7 @@ function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{G}, sourc
         t = nothing
         s = nothing
     end
-    return (target = t, source = s, target_unit = Cells(), source_unit = Cells())
+    return (target = t, source = s, target_entity = Cells(), source_entity = Cells())
 end
 
 """
@@ -385,15 +385,15 @@ Intersection of reservoir with well cells
 """
 function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, source_d::DiscretizedDomain{G}, target_symbol, source_symbol) where {W<:WellGrid, G<:ReservoirGrid}
     # transpose the connections
-    source, target, source_unit, target_unit = get_domain_intersection(u, source_d, target_d, source_symbol, target_symbol)
-    return (target = target, source = source, target_unit = target_unit, source_unit = source_unit)
+    source, target, source_entity, target_entity = get_domain_intersection(u, source_d, target_d, source_symbol, target_symbol)
+    return (target = target, source = source, target_entity = target_entity, source_entity = source_entity)
 end
 
 """
 Intersection of wells to wells
 """
 #function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, source_d::DiscretizedDomain{W}, target_symbol, source_symbol) where {W<:WellGrid}
-#    return (target = nothing, source = nothing, target_unit = u, source_unit = u)
+#    return (target = nothing, source = nothing, target_entity = u, source_entity = u)
 #end
 
 """

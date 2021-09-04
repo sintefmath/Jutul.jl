@@ -76,12 +76,12 @@ struct ControlEquationWell <: TervEquation
     # Equation:
     #        q_t - target = 0
     #        p|top cell - target = 0
-    # We need to store derivatives with respect to q_t (same unit) and the top cell (other unit)
+    # We need to store derivatives with respect to q_t (same entity) and the top cell (other entity)
     equation::TervAutoDiffCache
     function ControlEquationWell(model, number_of_equations; kwarg...)
         # @assert number_of_equations == 1
-        nw = count_units(model.domain, Wells())
-        alloc = (unit) -> CompactAutoDiffCache(number_of_equations, nw, model, unit = unit; kwarg...)
+        nw = count_entities(model.domain, Wells())
+        alloc = (entity) -> CompactAutoDiffCache(number_of_equations, nw, model, entity = entity; kwarg...)
         # One potential drop per velocity
         target_well = alloc(Wells())
         new(target_well)
