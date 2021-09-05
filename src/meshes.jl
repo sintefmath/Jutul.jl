@@ -118,7 +118,7 @@ function triangulate_outer_surface(m::Dict)
     return triangulate_outer_surface(mm)
 end
 
-function triangulate_outer_surface(m::MRSTWrapMesh)
+function triangulate_outer_surface(m::MRSTWrapMesh, is_depth = true)
     G = m.data
     d = dim(m)
 
@@ -206,6 +206,10 @@ function triangulate_outer_surface(m::MRSTWrapMesh)
                 edge_pts = npts[local_nodes, :]
                 # Face centroid first, then nodes
                 local_pts = [center'; edge_pts]
+                if is_depth
+                    # TODO: Reverse zaxis for Makie instead of doing it here.
+                    local_pts[:, 3] *= -1
+                end
                 n = length(local_nodes)
                 local_tri = cyclical_tesselation(n)
                 # Out
