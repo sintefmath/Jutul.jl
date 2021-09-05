@@ -113,6 +113,10 @@ function cell_to_surface(m::MRSTWrapMesh, celldata)
     return facedata
 end
 
+function triangulate_outer_surface(m::Dict)
+    mm = MRSTWrapMesh(m)
+    return triangulate_outer_surface(mm)
+end
 
 function triangulate_outer_surface(m::MRSTWrapMesh)
     G = m.data
