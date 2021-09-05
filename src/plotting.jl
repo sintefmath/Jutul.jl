@@ -37,7 +37,11 @@ function plot_interactive(grid, states; plot_type = nothing)
     on(sl_x.selected_index) do n
         state_index[] = sl_x.selected_index.val
     end
-    ax = Axis(fig[1, 2])
+    if size(pts, 2) == 3
+        ax = Axis3(fig[1, 2])
+    else
+        ax = Axis(fig[1, 2])
+    end
     ys = @lift(mapper.Cells(select_data(states[$state_index], $prop_name)))
     scat = Makie.mesh!(ax, pts, tri, color = ys)
     # cb = Colorbar(fig[1, 3], scat, vertical = true, width = 30)
@@ -114,5 +118,9 @@ function get_vector(d::Vector)
 end
 
 function get_vector(d::Matrix)
-    get_vector(d[1, :])
+    if size(d, 1) == 1 || size(d, 2) == 1
+        return vec(d)
+    else
+        return get_vector(d[1, :])
+    end
 end

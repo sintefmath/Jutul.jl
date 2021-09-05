@@ -17,3 +17,7 @@ data = G.cells.centroids[:, 1]
 f = mesh(pts, tri, color = mapper.Cells(data))
 display(f)
 ##
+r = mrst_data["rock"]
+d = Dict(:permx => r["perm"][:, 1], :poro => r["poro"])
+fake_states = [d]
+plot_interactive(m, fake_states)
