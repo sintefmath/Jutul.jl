@@ -119,6 +119,7 @@ function triangulate_outer_surface(m::MRSTWrapMesh)
     d = dim(m)
     if d == 2
         # For each cell, rotate around and add all nodes and triangles that include the center cell
+        error("Not implemented.")
     else
         @assert d == 3
         # Find boundary faces
@@ -133,13 +134,12 @@ function triangulate_outer_surface(m::MRSTWrapMesh)
         nodePos = Int64.(G.faces.nodePos)
         gnodes = Int64.(G.faces.nodes)
         npts = G.nodes.coords
-        
         fcent = G.faces.centroids
-        ##
-        
+
         pts = []
         tri = []
         cell_index = []
+        face_index = []
         offset = 0
         for i in 1:length(exterior)
             cell = cells[i]
@@ -156,24 +156,35 @@ function triangulate_outer_surface(m::MRSTWrapMesh)
                 local_pts = [center'; edge_pts]
                 n = length(local_nodes)
                 c = ones(Int64, n)
-
+                # Create a triangulation of face, assuming convexity
+                # Each tri is two successive points on boundary connected to centroid
                 start = 2
                 stop = n+1
                 l = start:stop
                 r = [stop, (start:stop-1)...]
 
                 local_tri = hcat(l, c, r)
-        
+                # Out
                 push!(pts, local_pts)
                 push!(tri, local_tri .+ offset)
-                offset = offset + n + 1
+
+                new_vert_count = n + 1
+                push!(cell_index, repeat([cell], new_vert_count))
+                push!(face_index, repeat([f], new_vert_count))
+
+                offset = offset + new_vert_count
             end
         end
-        
         pts = vcat(pts...)
         tri = vcat(tri...)
+
+        cell_index = vcat(cell_index...)
+        face_index = vcat(face_index...)
     end
-    # Get boundary faces
-    # For each face
-    return (pts, tri)
+    mapper = (
+                Cells = (cell_data) -> cell_data[cell_index],
+                Faces = (face_data) -> face_data[face_index],
+                indices = (Cells = cell_index, Faces = face_index)
+              )
+    return (pts, tri, mapper)
 end
