@@ -22,7 +22,7 @@ function perform_test(casename, doPlot = false, pvfrac=1, tstep = ones(25))
     mu = 1e-3    # 1 cP
     cl = 1e-5/bar
     pRef = 100*bar
-    rhoLS = 1000
+    rhoLS = 1000.0
 
     # Two phase liquid-vapor system
     L = LiquidPhase()
@@ -41,7 +41,7 @@ function perform_test(casename, doPlot = false, pvfrac=1, tstep = ones(25))
     tot_time = sum(timesteps)
     irate = rhoLS*pvfrac*sum(pv)/(tot_time)
     src  = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
-            SourceTerm(nc, -irate)]
+            SourceTerm(nc, -irate, fractional_flow = [1.0, 0.0])]
     forces = build_forces(model, sources = src)
 
     # State is dict with pressure in each cell
@@ -54,7 +54,7 @@ function perform_test(casename, doPlot = false, pvfrac=1, tstep = ones(25))
     sim = Simulator(model, state0 = state0, parameters = parameters)
     cfg = simulator_config(sim, max_nonlinear_iterations = 20)
     println("Starting simulation.")
-    states = simulate(sim, timesteps, forces = forces, config = cfg)
+    states, = simulate(sim, timesteps, forces = forces, config = cfg)
     s = states[end]
     p = s.Pressure
     @printf("Final pressure ranges from %f to %f bar.\n", maximum(p)/bar, minimum(p)/bar)
