@@ -4,11 +4,12 @@ function plot_interactive(grid, states; plot_type = nothing)
     fig = Figure()
     data = states[1]
     datakeys = collect(keys(data))
+    initial_prop = datakeys[1]
     state_index = Node{Int64}(1)
-    prop_name = Node{Symbol}(datakeys[1])
+    prop_name = Node{Symbol}(initial_prop)
     loop_mode = Node{Int64}(0)
 
-    menu = Menu(fig, options = datakeys)
+    menu = Menu(fig, options = datakeys, prompt = String(initial_prop))
     nstates = length(states)
 
     function change_index(ix)
@@ -25,8 +26,8 @@ function plot_interactive(grid, states; plot_type = nothing)
 
     # funcs = [sqrt, x->x^2, sin, cos]
     # menu2 = Menu(fig, options = zip(["Square Root", "Square", "Sine", "Cosine"], funcs))
-    fig[1, 1] = vgrid!(
-        Label(fig, "Property", width = nothing),
+    fig[2, 3] = vgrid!(
+        #Label(fig, "Property", width = nothing),
         menu,
         # Label(fig, "Function", width = nothing),
         # menu2
@@ -38,9 +39,9 @@ function plot_interactive(grid, states; plot_type = nothing)
         state_index[] = sl_x.selected_index.val
     end
     if size(pts, 2) == 3
-        ax = Axis3(fig[1, 2])
+        ax = Axis3(fig[1, :])
     else
-        ax = Axis(fig[1, 2])
+        ax = Axis(fig[1, :])
     end
     ys = @lift(mapper.Cells(select_data(states[$state_index], $prop_name)))
     scat = Makie.mesh!(ax, pts, tri, color = ys)
@@ -79,7 +80,7 @@ function plot_interactive(grid, states; plot_type = nothing)
 
     # @lift(loop($loop_mode))
 
-    fig[2, 1] = buttongrid = GridLayout(tellwidth = false)
+    fig[2, 1] = buttongrid = GridLayout()
     rewind = Button(fig, label = "⏪")
     on(rewind.clicks) do n
         increment_index(-nstates)
