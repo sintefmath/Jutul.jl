@@ -155,10 +155,13 @@ function triangulate_outer_surface(m::MRSTWrapMesh)
                 # Face centroid first, then nodes
                 local_pts = [center'; edge_pts]
                 n = length(local_nodes)
-                @info "Face..." f center edge_pts local_pts
-                c = ones(Int64, n-1)
-                l = (2:n)
-                r = (3:n+1)
+                c = ones(Int64, n)
+
+                start = 2
+                stop = n+1
+                l = start:stop
+                r = [stop, (start:stop-1)...]
+
                 local_tri = hcat(l, c, r)
         
                 push!(pts, local_pts)
