@@ -1,3 +1,4 @@
+export plot_well!
 function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kwarg...)
     pts, tri, mapper = triangulate_outer_surface(grid)
 
@@ -124,4 +125,31 @@ function get_vector(d::Matrix)
     else
         return get_vector(d[1, :])
     end
+end
+
+function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth = 5, top_factor = 0.2, kwarg...)
+    if isnothing(textcolor)
+        textcolor = color
+    end
+    raw = g.data
+    coord_range(i) = maximum(raw.cells.centroids[:, i]) - minimum(raw.cells.centroids[:, i])
+
+    z = raw.cells.centroids[:, 3]
+    bottom = maximum(z)
+    top = minimum(z)
+
+    xrng = coord_range(1)
+    yrng = coord_range(2)
+    textsize = 2.5e-2*(xrng + yrng)/2
+
+    rng = top - bottom
+    s = top + top_factor*rng
+
+    c = vec(Int64.(w["cells"]))
+    pts = raw.cells.centroids[[c[1], c...], :]
+    pts[1, 3] = s
+
+    l = pts[1, :]
+    text!(w["name"], position = Tuple([l[1], l[2], -l[3]]), space = :data, color = textcolor, align = (:center, :baseline), textsize = textsize)
+    lines!(ax, vec(pts[:, 1]), vec(pts[:, 2]), -vec(pts[:, 3]), linewidth = linewidth, color = color, kwarg...)
 end

@@ -322,30 +322,15 @@ res_states = map((x) -> x[:Reservoir], states)
 g = MRSTWrapMesh(mrst_data["G"])
 fig, ax = plot_interactive(g, res_states, colormap = :roma)
 ##
-function plot_well!(ax, g, w; color = :red, textcolor = nothing, linewidth = 5, top_factor = 0.2, kwarg...)
-    if isnothing(textcolor)
-        textcolor = color
-    end
-    raw = g.data
-    z = raw.cells.centroids[:, 3]
-    bottom = maximum(z)
-    top = minimum(z)
-
-    rng = top - bottom
-    s = top + top_factor*rng
-
-    c = vec(Int64.(w["cells"]))
-    pts = raw.cells.centroids[[c[1], c...], :]
-    pts[1, 3] = s
-
-    l = pts[1, :]
-    text!(w["name"], position = Tuple([l[1], l[2], -l[3]]), space = :data, color = textcolor)
-    lines!(ax, vec(pts[:, 1]), vec(pts[:, 2]), -vec(pts[:, 3]), linewidth = linewidth, color = color, kwarg...)
-end
 
 w_raw = mrst_data["W"]
 for w in w_raw
-    plot_well!(ax, g, w)
+    if w["sign"] > 0
+        c = :midnightblue
+    else
+        c = :firebrick
+    end
+    plot_well!(ax, g, w, color = c)
 end
 ##
 using PrettyTables
