@@ -38,14 +38,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     
     # Cells
     cell_centroids = copy((exported["G"]["cells"]["centroids"])')
-    # Faces
-    face_centroids = copy((exported["G"]["faces"]["centroids"][internal_faces, :])')
-    face_areas = vec(exported["G"]["faces"]["areas"][internal_faces])
-    face_normals = exported["G"]["faces"]["normals"][internal_faces, :]./face_areas
-    face_normals = copy(face_normals')
-    if isnothing(perm)
-        perm = copy((exported["rock"]["perm"])')
-    end
+
 
     # Deal with cell data
     if isnothing(poro)
@@ -57,10 +50,23 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     pv = poro.*volumes
     nc = length(pv)
 
-    @debug "Data unpack complete. Starting transmissibility calculations."
     # Deal with face data
-    T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
-    T = compute_face_trans(T_hf, N)
+    if haskey(exported, "T") && length(exported["T"]) > 0
+        @debug "Found precomputed transmissibilities, reusing"
+        T = vec(exported["T"])
+    else
+        @debug "Data unpack complete. Starting transmissibility calculations."
+        # Faces
+        face_centroids = copy((exported["G"]["faces"]["centroids"][internal_faces, :])')
+        face_areas = vec(exported["G"]["faces"]["areas"][internal_faces])
+        face_normals = exported["G"]["faces"]["normals"][internal_faces, :]./face_areas
+        face_normals = copy(face_normals')
+        if isnothing(perm)
+            perm = copy((exported["rock"]["perm"])')
+        end
+        T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
+        T = compute_face_trans(T_hf, N)
+    end
     G = MinimalTPFAGrid(pv, N)
     if size(cell_centroids, 1) == 3 && grav_on
         z = cell_centroids[3, :]
