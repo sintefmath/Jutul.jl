@@ -1,4 +1,4 @@
-function plot_interactive(grid, states; plot_type = nothing)
+function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kwarg...)
     pts, tri, mapper = triangulate_outer_surface(grid)
 
     fig = Figure()
@@ -44,7 +44,7 @@ function plot_interactive(grid, states; plot_type = nothing)
         ax = Axis(fig[1, 1:2])
     end
     ys = @lift(mapper.Cells(select_data(states[$state_index], $prop_name)))
-    scat = Makie.mesh!(ax, pts, tri, color = ys, size = 60)
+    scat = Makie.mesh!(ax, pts, tri, color = ys, size = 60; kwarg...)
     cb = Colorbar(fig[1, 3], scat)
 
     on(menu.selection) do s
@@ -106,7 +106,7 @@ function plot_interactive(grid, states; plot_type = nothing)
     buttons = buttongrid[1, 1:5] = [rewind, prev, play, next, ffwd]
     
     display(fig)
-    return fig
+    return fig, ax
 end
 
 function select_data(state, fld)

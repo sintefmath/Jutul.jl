@@ -305,7 +305,7 @@ max_cuts = 0
 max_cuts = 5
 il = 3
 dl = 0
-dt = dt[[1]]
+# dt = dt[[1]]
 # 24.7 s
 # 27.6
 # lsolve = nothing
@@ -313,10 +313,40 @@ sim = Simulator(mmodel, state0 = state0, parameters = deepcopy(parameters))
 cfg = simulator_config(sim, info_level = il, debug_level = dl,
                             max_nonlinear_iterations = m,
                             max_timestep_cuts = max_cuts,
-                            output_states = false,
+                            output_states = true,
                             linear_solver = lsolve)
 @time states, reports = simulate(sim, dt, forces = forces, config = cfg)
 error("Early termination")
+##
+res_states = map((x) -> x[:Reservoir], states)
+g = MRSTWrapMesh(mrst_data["G"])
+fig, ax = plot_interactive(g, res_states, colormap = :roma)
+##
+function plot_well!(ax, g, w; color = :red, textcolor = nothing, linewidth = 5, top_factor = 0.2, kwarg...)
+    if isnothing(textcolor)
+        textcolor = color
+    end
+    raw = g.data
+    z = raw.cells.centroids[:, 3]
+    bottom = maximum(z)
+    top = minimum(z)
+
+    rng = top - bottom
+    s = top + top_factor*rng
+
+    c = vec(Int64.(w["cells"]))
+    pts = raw.cells.centroids[[c[1], c...], :]
+    pts[1, 3] = s
+
+    l = pts[1, :]
+    text!(w["name"], position = Tuple([l[1], l[2], -l[3]]), space = :data, color = textcolor)
+    lines!(ax, vec(pts[:, 1]), vec(pts[:, 2]), -vec(pts[:, 3]), linewidth = linewidth, color = color, kwarg...)
+end
+
+w_raw = mrst_data["W"]
+for w in w_raw
+    plot_well!(ax, g, w)
+end
 ##
 using PrettyTables
 stats = report_stats(reports)
