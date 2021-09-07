@@ -37,7 +37,7 @@ struct BrooksCoreyRelPerm <: RelativePermeabilities
     residuals
     endpoints
     residual_total
-    function BrooksCoreyRelPerm(sys_or_nph::Union{MultiPhaseSystem, Integer}, exponents = 1, residuals = 0, endpoints = 1)
+    function BrooksCoreyRelPerm(sys_or_nph::Union{MultiPhaseSystem, Integer}, exponents = 1.0, residuals = 0.0, endpoints = 1.0)
         if isa(sys_or_nph, Integer)
             nph = sys_or_nph
         else
@@ -75,7 +75,7 @@ end
 function brooks_corey_relperm(s::Real, n::Real, sr::Real, kwm::Real, sr_tot::Real)
     den = 1 - sr_tot;
     sat = ((s - sr)./den);
-    sat = max(min(sat, 1), 0);
+    sat = max(min(sat, 1.0), 0.0);
     return kwm*sat^n;
 end
 
