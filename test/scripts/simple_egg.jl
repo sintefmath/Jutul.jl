@@ -5,6 +5,7 @@ ENV["JULIA_DEBUG"] = nothing
 ##
 # casename = "simple_egg"
 casename = "egg"
+casename = "egg_with_ws"
 # casename = "egg_ministeps"
 
 # casename = "gravity_test"
@@ -95,8 +96,8 @@ function setup_res(G, mrst_data; block_backend = false, use_groups = false)
     ## Model parameters
     param_res = setup_parameters(model)
     param_res[:reference_densities] = vec(rhoS)
-    param_res[:tolerances][:default] = 0.01
-    param_res[:tolerances][:mass_conservation] = 0.01
+    # param_res[:tolerances][:default] = 0.01
+    # param_res[:tolerances][:mass_conservation] = 0.01
 
     return (model, init, param_res)
 end
@@ -179,6 +180,7 @@ for i = 1:num_wells
     end
     param_w = setup_parameters(wi)
     param_w[:reference_densities] = vec(param_res[:reference_densities])
+    # param_w[:tolerances][:mass_conservation] = 0.01
 
     well_parameters[sym] = param_w
     controls[sym] = ctrl
@@ -267,9 +269,14 @@ p_solve = AMGPreconditioner(smoothed_aggregation)
 cpr_type = :true_impes
 # cpr_type = :quasi_impes
 # cpr_type = :none
-prec = CPRPreconditioner(p_solve, strategy = cpr_type, 
-                    update_interval = :ministep, partial_update = true)
+update_interval = :iteration
+update_interval = :ministep
+update_interval = :once
 
+prec = CPRPreconditioner(p_solve, strategy = cpr_type, 
+                    update_interval = update_interval, partial_update = false)
+
+# prec = ILUZeroPreconditioner()
 atol = 1e-12
 rtol = 1e-12
 
@@ -277,8 +284,8 @@ atol = 1e-12
 rtol = 1e-2
 # rtol = 0.01
 rtol = 0.05
-rtol = 0.001
-rtol = 1e-2
+# rtol = 0.001
+# rtol = 1e-2
 
 max_it = 50
 # atol = 1e-18
@@ -289,6 +296,7 @@ max_it = 50
 krylov = bicgstab
 krylov = dqgmres
 krylov = IterativeSolvers.gmres!
+# krylov = Krylov.dqgmres
 # prec = nothing 
 lsolve = GenericKrylov(krylov, verbose = 0, preconditioner = prec, 
                         relative_tolerance = rtol, absolute_tolerance = atol,
@@ -303,8 +311,9 @@ m = 20
 
 max_cuts = 0
 max_cuts = 5
-il = 3
+il = 1
 dl = 0
+# dt = dt[1:3]
 # dt = dt[[1]]
 # 24.7 s
 # 27.6
@@ -319,10 +328,9 @@ cfg = simulator_config(sim, info_level = il, debug_level = dl,
 error("Early termination")
 ##
 res_states = map((x) -> x[:Reservoir], states)
+res_states = [Dict(:permx => mrst_data["rock"]["perm"][:, 1])]
 g = MRSTWrapMesh(mrst_data["G"])
 fig, ax = plot_interactive(g, res_states, colormap = :roma)
-##
-
 w_raw = mrst_data["W"]
 for w in w_raw
     if w["sign"] > 0
@@ -330,73 +338,8 @@ for w in w_raw
     else
         c = :firebrick
     end
-    plot_well!(ax, g, w, color = c)
+    plot_well!(ax, g, w, color = c, textscale = 5e-2)
 end
-##
-using PrettyTables
-stats = report_stats(reports)
-print_stats(reports)
-
-##
-# return (states, mmodel, well_symbols)
-# end
-##
-# 4, 1
-krylov = gmres
-krylov = dqgmres
-sim2 = Simulator(model, state0 = state0[:Reservoir], parameters = param_res)
-p = ILUZeroPreconditioner(right = false)
-# p = DampedJacobiPreconditioner()
-# p = TrivialPreconditioner()
-# p = nothing
-
-lsr = GenericKrylov(krylov, verbose = 0, preconditioner = p, max_iterations = 1000, 
-                relative_tolerance = 0.01, absolute_tolerance = nothing)
-# lsr = GenericKrylov(verbose = 10, preconditioner = , max_iterations = 100)
-
-# lsr = GenericKrylov(verbose = 10, max_iterations = 100000)
-# lsr = nothing
-# lsr = GenericKrylov(verbose = 1, preconditioner = LUPreconditioner(), max_iterations = 100000)
-s = 0.5
-
-dtt = dt
-#dtt = dt[1:1]
-
-
-s = 0
-# irate = 1000*1e-3
-irate = sum(model.domain.grid.pore_volumes)/sum(dtt)
-# dtt = dtt[[1]]
-# irate = 0.0
-src  = [SourceTerm(1, irate, fractional_flow = [1 - s, s]), 
-        SourceTerm(number_of_cells(model.domain), -irate)]
-forces = build_forces(model, sources = src)
-
-cfg = simulator_config(sim, info_level = il, debug_level = dl,
-                            max_nonlinear_iterations = m,
-                            max_timestep_cuts = max_cuts,
-                            linear_solver = lsr)
-
-@time states2 = simulate(sim2, dtt, forces = forces, config = cfg)
-nothing
-##
- # states, model, well_symbols = run_immiscible_mrst(casename, false)
-# nothing
-##
-d = map((x) -> x[:Reservoir][:Pressure][1], states)
-# d = map((x) -> x[:W1][:Saturations][1], states)
-# d = map((x) -> x[:Reservoir][:Saturations][1], states)
-# d = map((x) -> x[:Reservoir][:Saturations][1, end], states)
-# d = states[end][:Reservoir].Saturations'
-# d = states[end][:Reservoir].Pressure
-
-# d = map((x) -> x[:W1][:Pressure][2] - x[:Reservoir][:Pressure][1], states)
-
-using Plots
-Plots.plot(d)
-##
-# Plots.plot()
-##
 
 function get_qws(ix)
     s = well_symbols[ix]
@@ -408,77 +351,90 @@ function get_qos(ix)
     map((x) -> x[:Facility][:TotalSurfaceMassRate][ix]*x[s][:Saturations][2, 1], states)
 end
 
-ix = 9:12
-w = well_symbols[ix]
-# d = map((x) -> x[w][:Saturations][1], states)
-
-s = states
-# s = states_analytical
-# s = states_swof_bc
-d = map((x) -> -x[:Facility][:TotalSurfaceMassRate][ix], s)
-d = hcat(d...)'
-h = Plots.plot(d)
-# ylims!(h, (0, 6e-3))
-##
-d = map(get_qws, ix)
-d = hcat(d...)
-h = Plots.plot(-d)
-# ylims!(h, (0, 6e-3))
-##
-d = map(get_qos, ix)
-d = hcat(d...)
-h = Plots.plot(-d)
-# ylims!(h, (0, 6e-3))
-
-##
-
 function get_bhp(ix)
     s = well_symbols[ix]
     map((x) -> x[s][:Pressure][1], states)
 end
 
-ix = 1:8
-d = map(get_bhp, ix)
-d = hcat(d...)
-h = Plots.plot(d)
-# ylims!(h, (0, 6e-3))
-##
-# svar = model.models.Reservoir.secondary_variables
-# kr = svar[:RelativePermeabilities]
+d = map((x) -> x[:Reservoir][:Pressure][1], states)
+# d = map((x) -> x[:W1][:Saturations][1], states)
+# d = map((x) -> x[:Reservoir][:Saturations][1], states)
+# d = map((x) -> x[:Reservoir][:Saturations][1, end], states)
+# d = states[end][:Reservoir].Saturations'
+# d = states[end][:Reservoir].Pressure
 
+# d = map((x) -> x[:W1][:Pressure][2] - x[:Reservoir][:Pressure][1], states)
+wd = mrst_data["well_data"]
+injectors = findall(map((w) -> w["sign"] > 0, mrst_data["W"]))
+producers = findall(map((w) -> w["sign"] <= 0, mrst_data["W"]))
 
-krw = kr.interpolators[1]
-kro = kr.interpolators[2]
+t = cumsum(dt)./(3600*24);
+simulators = ["Julia", "MRST"]
+using GLMakie, ColorSchemes
+## Plot injector bhp
+colors = ColorSchemes.Paired_8.colors
+fig = Figure(resolution = (1000, 500))
+ax = Axis(fig[1:2, 1], ylabel = "Bottom-hole pressure (bar)", xlabel = "Time (days)")
+bhp_m = (wd["bhp"][:, injectors])
+bhp = hcat(map(get_bhp, injectors)...)
 
-sw = collect(-0.2:0.1:1.2)
-so = 1 .- sw
-Plots.plot(sw, krw.(sw))
-Plots.plot!(sw, kro.(so))
+for (i, wix) in enumerate(injectors)
+    GLMakie.lines!(ax, t, bhp[:, i]/1e5, width = 2, color = colors[i])
+    GLMakie.scatter!(ax, t, bhp_m[:, i]/1e5, color = colors[i], markersize = 5)
+end
 
-##
-using ForwardDiff
-krw = kr.interpolators[1]
-kro = kr.interpolators[2]
+labels = String.(well_symbols[injectors])
+elements = [PolyElement(polycolor = colors[i]) for i in 1:length(labels)]
+title = "Injector"
+Legend(fig[1,2], elements, labels, title)
 
+elements = [MarkerElement(color = :black, marker = Circle, markersize = 5),
+            LineElement(strokewidth  = 5)]
+title = "Simulator"
+Legend(fig[2,2], elements, simulators, title)
+display(fig)
+## Plot water rates
+colors = ColorSchemes.Paired_4.colors
 
-##
-so = ForwardDiff.Dual(0.80, -1)
-kro(so)
-##
-sw = ForwardDiff.Dual(0.2, 1)
-krw(sw)
-##
-sw = collect(0:0.01:1)
-so = 1 .- sw
-der = (x) -> x.partials[1]
-##
-fo = (s) -> kro(ForwardDiff.Dual(s, -1))
-ko = fo.(so)
-Plots.plot(so, value.(ko), title = "kro")
-Plots.plot!(so, der.(ko))
-##
-fw = (s) -> krw(ForwardDiff.Dual(s, 1))
-kw = fw.(sw)
-dw = der.(kw)
-Plots.plot(sw, value.(kw), title = "krw")
-Plots.plot!(sw, dw)
+rhos = mrst_data["fluid"]["rhoS"]
+fig = Figure(resolution = (1000, 500))
+ax = Axis(fig[1:2, 1], ylabel = "Water production (m³/s)", xlabel = "Time (days)")
+qw_m = -(wd["qWs"][:, producers])
+qw = -hcat(map(get_qws, producers)...)./rhos[1]
+
+for (i, wix) in enumerate(producers)
+    GLMakie.lines!(ax, t, qw_m[:, i], width = 2, color = colors[i])
+    GLMakie.scatter!(ax, t, qw[:, i], color = colors[i], markersize = 5)
+end
+
+labels = String.(well_symbols[producers])
+elements = [PolyElement(polycolor = colors[i]) for i in 1:length(labels)]
+title = "Producer"
+Legend(fig[1,2], elements, labels, title)
+
+elements = [MarkerElement(color = :black, marker = Circle, markersize = 5),
+            LineElement(strokewidth  = 5)]
+title = "Simulator"
+Legend(fig[2,2], elements, simulators, title)
+display(fig)
+## Plot Oil rates
+fig = Figure(resolution = (1000, 500))
+ax = Axis(fig[1:2, 1], ylabel = "Oil production (m³/s)", xlabel = "Time (days)")
+qo_m = -(wd["qOs"][:, producers])
+qo = -hcat(map(get_qos, producers)...)./rhos[2]
+
+for (i, wix) in enumerate(producers)
+    GLMakie.lines!(ax, qo_m[:, i], width = 2, color = colors[i])
+    GLMakie.scatter!(ax, qo[:, i], color = colors[i], markersize = 5)
+end
+
+labels = String.(well_symbols[producers])
+elements = [PolyElement(polycolor = colors[i]) for i in 1:length(labels)]
+title = "Producer"
+Legend(fig[1,2], elements, labels, title)
+
+elements = [MarkerElement(color = :black, marker = Circle, markersize = 5),
+            LineElement(strokewidth  = 5)]
+title = "Simulator"
+Legend(fig[2,2], elements, simulators, title)
+display(fig)
