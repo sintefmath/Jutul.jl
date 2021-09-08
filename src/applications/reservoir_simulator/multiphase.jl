@@ -78,29 +78,22 @@ function subscript(prefix::String, phase::AbstractPhase)
 end
 # Aqueous phase
 struct AqueousPhase <: AbstractPhase end
-
-function get_name(::AqueousPhase)
-    return "Aqueous"
-end
+get_name(::AqueousPhase) = "Aqueous"
 
 # Liquid phase
 struct LiquidPhase <: AbstractPhase end
-
-function get_name(::LiquidPhase)
-    return "Liquid"
-end
+get_name(::LiquidPhase) = "Liquid"
 
 # Vapor phases
 struct VaporPhase <: AbstractPhase end
-
-function get_name(::VaporPhase)
-    return "Vapor"
-end
+get_name(::VaporPhase) = "Vapor"
 
 ## Main implementation
 # Primary variable logic
 
-# Pressure as primary variable
+"""
+Pressure
+"""
 struct Pressure <: ScalarVariable
     dpMaxAbs
     dpMaxRel
@@ -110,12 +103,9 @@ struct Pressure <: ScalarVariable
     end
 end
 
-function variable_scale(p::Pressure)
-    return p.scale
-end
-
-@inline function absolute_increment_limit(p::Pressure) p.dpMaxAbs end
-@inline function relative_increment_limit(p::Pressure) p.dpMaxRel end
+variable_scale(p::Pressure) = p.scale
+absolute_increment_limit(p::Pressure) = p.dpMaxAbs
+relative_increment_limit(p::Pressure) = p.dpMaxRel
 
 # Saturations as primary variable
 struct Saturations <: GroupedVariables
@@ -125,17 +115,12 @@ struct Saturations <: GroupedVariables
     end
 end
 
-function degrees_of_freedom_per_entity(model, v::Saturations)
-    return values_per_entity(model, v) - 1
-end
+degrees_of_freedom_per_entity(model, v::Saturations) =  values_per_entity(model, v) - 1
+values_per_entity(model, v::Saturations) = number_of_phases(model.system)
 
-function values_per_entity(model, v::Saturations)
-    number_of_phases(model.system)
-end
-
-@inline function maximum_value(::Saturations) 1.0 end
-@inline function minimum_value(::Saturations) 0.0 end
-@inline function absolute_increment_limit(p::Saturations) p.dsMax end
+maximum_value(::Saturations) = 1.0
+minimum_value(::Saturations) = 0.0
+absolute_increment_limit(s::Saturations) = s.dsMax
 
 function initialize_primary_variable_ad!(state, model, pvar::Saturations, state_symbol, npartials; offset = 0, kwarg...)
     nph = values_per_entity(model, pvar)
@@ -153,12 +138,9 @@ end
 function update_primary_variable!(state, p::Saturations, state_symbol, model, dx)
     nph, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
-    maxval = maximum_value(p)
-    minval = minimum_value(p)
-
+    maxval, minval = maximum_value(p), minimum_value(p)
     s = state[state_symbol]
     Threads.@threads for cell = 1:nu
-    # for cell = 1:nu
         dlast = 0
         @inbounds for ph = 1:(nph-1)
             v = value(s[ph, cell])

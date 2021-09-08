@@ -2,19 +2,15 @@
 
 """
 Number of entities (e.g. Cells, Faces) a variable is defined on.
+By default, each primary variable exists on all cells of a discretized domain
+
 """
-function number_of_entities(model, pv::TervVariables)
-    # By default, each primary variable exists on all cells of a discretized domain
-    return count_entities(model.domain, associated_entity(pv))
-end
+number_of_entities(model, pv::TervVariables) = count_entities(model.domain, associated_entity(pv))
 
 """
 The entity a variable is associated with, and can hold partial derivatives with respect to.
 """
-function associated_entity(::TervVariables)
-    # The default entity for all primary variables is Cells()
-    return Cells()
-end
+associated_entity(::TervVariables) = Cells()
 
 """
 Total number of degrees of freedom for a model, over all primary variables and all entities.
@@ -53,45 +49,39 @@ end
 """
 Number of independent primary variables / degrees of freedom per computational entity.
 """
-function degrees_of_freedom_per_entity(model, ::ScalarVariable)
-    return 1
-end
-
+degrees_of_freedom_per_entity(model, ::ScalarVariable) = 1
 """
 Constant variables hold no degrees of freedom.
 """
-function degrees_of_freedom_per_entity(model, ::ConstantVariables)
-    return 0 # A constant has no freedom
-end
+degrees_of_freedom_per_entity(model, ::ConstantVariables) = 0
 
 """
 Number of values held by a primary variable. Normally this is equal to the number of degrees of freedom,
 but some special primary variables are most conveniently defined by having N values and N-1 independent variables.
 """
-function values_per_entity(model, u::TervVariables)
-    return degrees_of_freedom_per_entity(model, u)
-end
-
+values_per_entity(model, u::TervVariables) = degrees_of_freedom_per_entity(model, u)
 ## Update functions
-"Absolute allowable change for variable during a nonlinear update."
-function absolute_increment_limit(::TervVariables) nothing end
+"""
+Absolute allowable change for variable during a nonlinear update.
+"""
+absolute_increment_limit(::TervVariables) = nothing
 
 """
 Relative allowable change for variable during a nonlinear update.
 A variable with value |x| and relative limit 0.2 cannot change more
 than |x|*0.2.
 """
-function relative_increment_limit(::TervVariables) nothing end
+relative_increment_limit(::TervVariables) = nothing
 
 """
 Upper (inclusive) limit for variable.
 """
-function maximum_value(::TervVariables) nothing end
+maximum_value(::TervVariables) = nothing
 
 """
 Lower (inclusive) limit for variable.
 """
-function minimum_value(::TervVariables) nothing end
+minimum_value(::TervVariables) = nothing
 
 function update_primary_variable!(state, p::TervVariables, state_symbol, model, dx)
     names = get_names(p)
@@ -117,21 +107,12 @@ end
     dv = limit_upper(v, dv, maxval)
     return dv
 end
-
-
 # Limit absolute
-@inline function limit_abs(dv, abs_change)
-    dv = sign(dv)*min(abs(dv), abs_change)
-end
-
-@inline function limit_abs(dv, ::Nothing) dv end
-
+limit_abs(dv, abs_change) = sign(dv)*min(abs(dv), abs_change)
+limit_abs(dv, ::Nothing) = dv
 # Limit relative 
-@inline function limit_rel(v, dv, rel_change)
-    dv = limit_abs(dv, rel_change*abs(v))
-end
-
-@inline function limit_rel(v, dv, ::Nothing) dv end
+limit_rel(v, dv, rel_change) = limit_abs(dv, rel_change*abs(v))
+limit_rel(v, dv, ::Nothing) = dv
 # Lower bounds
 function limit_upper(v, dv, maxval)
     if dv > 0 && v + dv > maxval
@@ -139,8 +120,7 @@ function limit_upper(v, dv, maxval)
     end
     return dv
 end
-
-@inline function limit_upper(v, dv, maxval::Nothing) dv end
+limit_upper(v, dv, maxval::Nothing) = dv
 
 # Upper bounds
 @inline function limit_lower(v, dv, minval)
@@ -149,20 +129,15 @@ end
     end
     return dv
 end
-
-@inline function limit_lower(v, dv, minval::Nothing) dv end
+limit_lower(v, dv, minval::Nothing) = dv
 
 # Scaling
-@inline function scale_increment(dv, scale)
-    return dv*scale
-end
-
-@inline scale_increment(dv, ::Nothing) = dv
+scale_increment(dv, scale) = dv*scale
+scale_increment(dv, ::Nothing) = dv
 
 @inline function update_value(v, dv, arg...)
     return v + choose_increment(value(v), dv, arg...)
 end
-
 
 function get_names(v::TervVariables)
     return [get_name(v)]
@@ -217,9 +192,7 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
     return transfer(model.context, val)
 end
 
-function default_value(v)
-    return 0.0
-end
+default_value(v) = 0.0
 
 function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     state[symb] = initialize_variable_value(model, pvar, val; kwarg...)
