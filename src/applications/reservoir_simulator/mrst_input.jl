@@ -22,7 +22,6 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     g = MRSTWrapMesh(exported["G"])
     geo = tpfv_geometry(g)
 
-    N = geo.neighbors
     function get_vec(d)
         if isa(d, AbstractArray)
             return vec(d)
@@ -30,8 +29,6 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
             return [d]
         end
     end
-    # Cells
-    cell_centroids = geo.cell_centroids
 
     # Deal with cell data
     if isnothing(poro)
