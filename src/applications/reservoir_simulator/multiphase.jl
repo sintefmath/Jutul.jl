@@ -110,9 +110,7 @@ relative_increment_limit(p::Pressure) = p.dpMaxRel
 # Saturations as primary variable
 struct Saturations <: GroupedVariables
     dsMax
-    function Saturations(dsMax = 0.2)
-        new(dsMax)
-    end
+    Saturations(dsMax = 0.2) = new(dsMax)
 end
 
 degrees_of_freedom_per_entity(model, v::Saturations) =  values_per_entity(model, v) - 1
