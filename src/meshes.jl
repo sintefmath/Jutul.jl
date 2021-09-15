@@ -30,6 +30,8 @@ struct TwoPointFiniteVolumeGeometry <: TervGeometry
     end
 end
 
+dim(g::TwoPointFiniteVolumeGeometry) = size(g.cell_centroids, 1)
+
 abstract type AbstractTervMesh end
 
 dim(t::AbstractTervMesh) = 2

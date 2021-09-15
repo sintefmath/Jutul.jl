@@ -10,8 +10,7 @@ struct MRSTPlotData
     data::Vector
 end
 
-
-function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false, fuse_flux = false, grav_on = true)
+function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false, kwarg...)
     if relative_path
         fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
     else
@@ -41,7 +40,6 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     if !isnothing(volumes)
         geo.volumes .= volumes
     end
-    pv = poro.*geo.volumes
 
     # Deal with face data
     if haskey(exported, "T") && length(exported["T"]) > 0
@@ -52,25 +50,9 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
         if isnothing(perm)
             perm = copy((exported["rock"]["perm"])')
         end
-        T_hf = compute_half_face_trans(geo, perm)
-        T = compute_face_trans(T_hf, N)
+        T = nothing
     end
-    G = MinimalTPFAGrid(pv, N)
-    if size(cell_centroids, 1) == 3 && grav_on
-        z = cell_centroids[3, :]
-        g = gravity_constant
-    else
-        z = nothing
-        g = nothing
-    end
-    if fuse_flux
-        ft = DarcyMassMobilityFlowFused()
-    else
-        ft = DarcyMassMobilityFlow()
-    end
-    flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
-    disc = (mass_flow = flow,)
-    D = DiscretizedDomain(G, disc)
+    D = discretized_domain_tpfv_flow(geo, porosity = poro, permeability = perm, T = T; kwarg...)
 
     if extraout
         return (D, exported)

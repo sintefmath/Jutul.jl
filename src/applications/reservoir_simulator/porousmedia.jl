@@ -71,3 +71,37 @@ function compute_face_trans(T_hf, N)
     return T
     # (N[:, 2] .> 0) .& (N[:, 1] .> 0)
 end
+
+function discretized_domain_tpfv_flow(geometry; porosity = 0.1, 
+                                                permeability = 1.0, 
+                                                T = nothing,
+                                                fuse_flux = false,
+                                                gravity = true,
+                                                pore_volume = nothing)
+    N = geometry.neighbors
+    if isnothing(pore_volume)
+        pore_volume = porosity.*geometry.volumes
+    end
+    if isnothing(T)
+        T_hf = compute_half_face_trans(geometry, permeability)
+        T = compute_face_trans(T_hf, N)
+    end
+
+    G = MinimalTPFAGrid(pore_volume, N)
+    if dim(geometry) == 3 && gravity
+        z = geometry.cell_centroids[3, :]
+        g = gravity_constant
+    else
+        z = nothing
+        g = nothing
+    end
+
+    if fuse_flux
+        ft = DarcyMassMobilityFlowFused()
+    else
+        ft = DarcyMassMobilityFlow()
+    end
+    flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
+    disc = (mass_flow = flow,)
+    return DiscretizedDomain(G, disc)
+end
