@@ -1,83 +1,69 @@
 # using Meshes, MeshViz
 
-export MRSTWrapMesh, triangulate_outer_surface# , Polyogonal2DMesh
+export MRSTWrapMesh, triangulate_outer_surface, tpfv_geometry, TwoPointFiniteVolumeGeometry# , Polyogonal2DMesh
 
-struct BasicFiniteVolumeGeometry
+abstract type TervGeometry end
+
+struct TwoPointFiniteVolumeGeometry <: TervGeometry
+    neighbors
     areas
     volumes
     normals
-    face_centers
-    cell_centers
+    cell_centroids
+    face_centroids
+    function TwoPointFiniteVolumeGeometry(neighbors, A, V, N, C_c, C_f)
+        nf = size(neighbors, 2)
+        dim, nc = size(C_c)
+
+        # Sanity check
+        @assert dim == 2 || dim == 3
+        # Check cell centroids
+        @assert size(C_c) == (dim, nc)
+        # Check face centroids
+        @assert size(C_f) == (dim, nf)
+        # Check normals
+        @assert size(N) == (dim, nf)
+        # Check areas
+        @assert length(A) == nf
+        @assert length(V) == nc
+        return new(neighbors, vec(A), vec(V), N, C_c, C_f)
+    end
 end
 
 abstract type AbstractTervMesh end
 
 dim(t::AbstractTervMesh) = 2
 
-# struct Polyogonal2DMesh <: AbstractTervMesh
-#     simple_mesh
-# end
-
 struct MRSTWrapMesh <: AbstractTervMesh
     data
-    # neighbors
-    # simple_mesh
     function MRSTWrapMesh(G)
         @assert haskey(G, "cells")
         @assert haskey(G, "faces")
-        @assert haskey(G, "nodes")
-        G = convert_to_immutable_storage(G)
+        if !haskey(G, "nodes")
+            @warn "Grid is missing nodes. Coarse grid? Plotting will not work."
+        end
+        G = convert_to_immutable_storage(deepcopy(G))
         return new(G)
-
-        # coord = G["nodes"]["coords"]
-        # n = size(coord, 1)
-        # d = Int64(G["griddim"])
-        # # Convert coordinate array
-        # if d == 3
-        #     P = Meshes.Point3
-        # else
-        #     P = Meshes.Point2
-        # end
-        # pts = Vector{P}(undef, n)
-        # for i = 1:n
-        #     pts[i] = P(coord[i, :]...)
-        # end
-        # # Indirection map cells -> faces
-        # facePos = Int64.(G["cells"]["facePos"])
-        # faces = Int64.(G["cells"]["faces"])
-        # # Indirection map faces -> nodes
-        # nodePos = Int64.(G["faces"]["nodePos"])
-        # gnodes = Int64.(G["faces"]["nodes"])
-        # # Number of cells
-        # nc = Int64(G["cells"]["num"])
-        # nf = Int64(G["faces"]["num"])
-        # conn = []
-        # @info d
-        # if d == 2
-        #     for c = 1:nc
-        #         tmp = []
-        #         for (i, ix) in enumerate(facePos[c]:facePos[c+1]-1)
-        #             f = faces[ix]
-        #             npts = gnodes(nodePos[f]:nodePos[f+1]-1)
-        #             if i == 1
-        #                 push!(tmp, npts[1])
-        #             end
-        #             push!(tmp, npts[2])
-        #         end
-        #         push!(conn, Tuple(tmp))
-        #     end
-        # else
-        #     for f = 1:nf
-        #         local_nodes = gnodes[nodePos[f]:nodePos[f+1]-1]
-        #         local_nodes = reverse(local_nodes)
-        #         push!(conn, Tuple(local_nodes))
-        #     end
-        # end
-        # display(conn)
-        # C = connect.(conn)
-        # m = SimpleMesh(pts, C)
-        # new(G, nothing, m)
     end
+end
+
+function tpfv_geometry(g::MRSTWrapMesh)
+    exported = g.data
+    faces = exported.faces
+    cells = exported.cells
+
+    N = Int64.(faces.neighbors)
+    internal_faces = (N[:, 2] .> 0) .& (N[:, 1] .> 0)
+    N = copy(N[internal_faces, :]')
+
+    face_centroids = copy((faces.centroids[internal_faces, :])')
+    face_areas = vec(faces.areas[internal_faces])
+    face_normals = faces.normals[internal_faces, :]./face_areas
+    face_normals = copy(face_normals')
+    cell_centroids = copy((cells.centroids)')
+    V = cells.volumes
+
+    return TwoPointFiniteVolumeGeometry(N, face_areas, V, face_normals, cell_centroids, face_centroids)
 end
 
 dim(t::MRSTWrapMesh) = Int64(t.data.griddim)
