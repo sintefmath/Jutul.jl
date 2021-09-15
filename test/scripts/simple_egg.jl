@@ -17,6 +17,7 @@ casename = "egg_with_ws"
 # casename = "mini"
 # casename = "spe10_2ph_1"
 # casename = "spe10_2ph_1_85"
+# casename = "olympus_simple"
 
 simple_well = false
 block_backend = true
@@ -96,8 +97,8 @@ function setup_res(G, mrst_data; block_backend = false, use_groups = false)
     ## Model parameters
     param_res = setup_parameters(model)
     param_res[:reference_densities] = vec(rhoS)
-    # param_res[:tolerances][:default] = 0.01
-    # param_res[:tolerances][:mass_conservation] = 0.01
+    param_res[:tolerances][:default] = 0.01
+    param_res[:tolerances][:mass_conservation] = 0.01
 
     return (model, init, param_res)
 end
@@ -180,7 +181,7 @@ for i = 1:num_wells
     end
     param_w = setup_parameters(wi)
     param_w[:reference_densities] = vec(param_res[:reference_densities])
-    # param_w[:tolerances][:mass_conservation] = 0.01
+    param_w[:tolerances][:mass_conservation] = 0.01
 
     well_parameters[sym] = param_w
     controls[sym] = ctrl
@@ -231,7 +232,7 @@ end
 # dt = [1.0]
 # dt = [1.0, 1.0, 10.0, 10.0, 100.0]*3600*24#
 dt = timesteps
-# dt = dt[1:1]
+# dt = dt[1:2]
 # dt = dt[1:20]
 # dt = dt[1:3]
 # dt[1] = 1
@@ -265,7 +266,7 @@ else
 end
 using AlgebraicMultigrid
 p_solve = AMGPreconditioner(smoothed_aggregation)
-#p_solve = LUPreconditioner()
+# p_solve = LUPreconditioner()
 cpr_type = :true_impes
 # cpr_type = :quasi_impes
 # cpr_type = :none
@@ -315,6 +316,7 @@ il = 1
 dl = 0
 # dt = dt[1:3]
 # dt = dt[[1]]
+# dt = [1.0, 100.0, 10000.0]
 # 24.7 s
 # 27.6
 # lsolve = nothing
@@ -338,9 +340,10 @@ for w in w_raw
     else
         c = :firebrick
     end
-    plot_well!(ax, g, w, color = c, textscale = 5e-2)
+    plot_well!(ax, g, w, color = c, textscale = 0*5e-2)
 end
-
+display(fig)
+##
 function get_qws(ix)
     s = well_symbols[ix]
     map((x) -> x[:Facility][:TotalSurfaceMassRate][ix]*x[s][:Saturations][1, 1], states)

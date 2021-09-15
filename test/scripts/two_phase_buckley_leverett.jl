@@ -32,18 +32,16 @@ end
 n, n_f = 100, 1000
 states, model, report = perform_test(nc = n)
 states_refined, = perform_test(nc = n_f, nstep = 1000)
-
 ## Plot results
 using GLMakie
 x = range(0, stop = 1, length = n)
 x_f = range(0, stop = 1, length = n_f)
 tmp = vcat(map((x) -> x.Saturations[1, :]', states)...)
 f = Figure()
-ax = Axis(f[1, 1], xlabel = "Cell", ylabel = "Saturation", title = "Buckley-Leverett")
+ax = Axis(f[1, 1], ylabel = "Saturation", title = "Buckley-Leverett")
 for i in 1:6:length(states)
     GLMakie.lines!(ax, x, states[i].Saturations[1, :], color = :darkgray)
 end
 # Plot refined reference
 GLMakie.lines!(ax, x_f, states_refined[end].Saturations[1, :], color = :red)
-
 display(f)

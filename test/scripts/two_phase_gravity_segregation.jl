@@ -26,7 +26,7 @@ function perform_test(nc = 100, tstep = repeat([0.02], 150))
     return states, model, report
 end
 ## Perform test
-states, model, report = perform_test()
+states, model, report = perform_test();
 ## Plot results
 using GLMakie
 tmp = vcat(map((x) -> x.Saturations[1, :]', states)...)
