@@ -1,6 +1,10 @@
 export compute_half_face_trans, compute_face_trans
 using LinearAlgebra
 
+function compute_half_face_trans(g, perm)
+    compute_half_face_trans(g.cell_centroids, g.face_centroids, g.normals, g.areas, perm, g.neighbors)
+end
+
 function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
     nf = size(N, 2)
     nhf = 2*nf
