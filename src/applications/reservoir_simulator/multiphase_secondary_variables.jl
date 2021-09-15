@@ -160,9 +160,10 @@ Mobility of the mass of each component, in each phase (TBD how to represent this
 """
 struct MassMobilities <: PhaseAndComponentVariable end
 
-@terv_secondary function update_as_secondary!(ρλ_i, tv::MassMobilities, model, param, PhaseMassDensities, PhaseViscosities, RelativePermeabilities)
-    kr, μ, ρ = RelativePermeabilities, PhaseViscosities, PhaseMassDensities
-    @tullio ρλ_i[ph, i] = kr[ph, i]*ρ[ph, i]/μ[ph, i]
+@terv_secondary function update_as_secondary!(ρλ, tv::MassMobilities, model, param, 
+                                PhaseMassDensities, PhaseViscosities, RelativePermeabilities)
+    kᵣ, μ, ρ = RelativePermeabilities, PhaseViscosities, PhaseMassDensities
+    @tullio ρλ[α, i] = kᵣ[α, i]*ρ[α, i]/μ[α, i]
 end
 
 @terv_secondary function update_as_secondary!(ρλ_i, tv::MassMobilities, model::SimulationModel{D, S}, param, PhaseMassDensities, PhaseViscosities) where {D, S<:SinglePhaseSystem}
