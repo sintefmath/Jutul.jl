@@ -127,7 +127,7 @@ function get_vector(d::Matrix)
     end
 end
 
-function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth = 5, top_factor = 0.2, kwarg...)
+function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth = 5, top_factor = 0.2, textscale = 2.5e-2, kwarg...)
     if isnothing(textcolor)
         textcolor = color
     end
@@ -140,7 +140,7 @@ function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth =
 
     xrng = coord_range(1)
     yrng = coord_range(2)
-    textsize = 2.5e-2*(xrng + yrng)/2
+    textsize = textscale*(xrng + yrng)/2
 
     rng = top - bottom
     s = top + top_factor*rng
