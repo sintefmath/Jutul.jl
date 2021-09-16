@@ -78,6 +78,7 @@ function tpfv_geometry(g::CartesianMesh)
         isX = D == 1
         isY = D == 2
         isZ = D == 3
+        @info isX
         index = cell_index(x, y, z)
         N[1, pos] = index
         N[2, pos] = cell_index(x + isX, y + isY, z + isZ)
@@ -94,18 +95,19 @@ function tpfv_geometry(g::CartesianMesh)
     # Note: The following loops are arranged to reproduce the MRST ordering.
     pos = 1
     # Faces with X-normal > 0
-    for y in 1:ny
-        for z = 1:nz
+    for z = 1:nz
+        for y in 1:ny
             for x in 1:(nx-1)
                 add_face!(face_areas, face_normals, face_centroids, x, y, z, 1, pos)
                 pos += 1
+                @info N[:, pos-1]
             end
         end
     end
     # Faces with Y-normal > 0
     for y in 1:(ny-1)
-        for x in 1:nx
-            for z = 1:nz
+        for z = 1:nz
+            for x in 1:nx
                 add_face!(face_areas, face_normals, face_centroids, x, y, z, 2, pos)
                 pos += 1
             end
