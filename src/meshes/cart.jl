@@ -47,25 +47,29 @@ function tpfv_geometry(g::CartesianMesh)
     get_deltas(x, y, z) = (get_delta(Δ, x, 1), get_delta(Δ, y, 2), get_delta(Δ, z, 3))
     # Cell data first - volumes and centroids
     nc = nx*ny*nz
-    if isa(Δ[1], AbstractFloat)
-        # Uniform mesh
-        V = repeat([prod(Δ)], nc)
+    
+    function cell_center(pos, i, δ)
+        if isa(δ, AbstractFloat)
+            return (pos[i] - 0.5)*δ
+        else
+            return sum(δ[1:(i-1)]) + δ[i]/2
+        end
+    end
+    V = zeros(nc)
+    cell_centroids = zeros(d, nc)
+    for x in 1:nx
+        for y in 1:ny
+            for z = 1:nz
+                pos = (x, y, z)
+                c = cell_index(pos...)
+                Δx, Δy, Δz  = get_deltas(pos...)
+                V[c] = Δx*Δy*Δz
 
-        cell_centroids = zeros(d, nc)
-        for x in 1:nx
-            for y in 1:ny
-                for z = 1:nz
-                    for i in 1:d
-                        pos = (x, y, z)
-                        c = cell_index(pos...)
-                        δ = Δ[i]
-                        cell_centroids[i, c] = (pos[i] - 0.5)*δ + g.origin[i]
-                    end
+                for i in 1:d
+                    cell_centroids[i, c] = cell_center(pos, i, Δ[i]) + g.origin[i]
                 end
             end
         end
-    else
-        error("Variable strides not implemented yet")
     end
 
     # Then face data:
