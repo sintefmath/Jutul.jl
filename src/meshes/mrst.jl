@@ -1,41 +1,3 @@
-# using Meshes, MeshViz
-
-export MRSTWrapMesh, triangulate_outer_surface, tpfv_geometry, TwoPointFiniteVolumeGeometry# , Polyogonal2DMesh
-
-abstract type TervGeometry end
-
-struct TwoPointFiniteVolumeGeometry <: TervGeometry
-    neighbors
-    areas
-    volumes
-    normals
-    cell_centroids
-    face_centroids
-    function TwoPointFiniteVolumeGeometry(neighbors, A, V, N, C_c, C_f)
-        nf = size(neighbors, 2)
-        dim, nc = size(C_c)
-
-        # Sanity check
-        @assert dim == 2 || dim == 3
-        # Check cell centroids
-        @assert size(C_c) == (dim, nc)
-        # Check face centroids
-        @assert size(C_f) == (dim, nf)
-        # Check normals
-        @assert size(N) == (dim, nf)
-        # Check areas
-        @assert length(A) == nf
-        @assert length(V) == nc
-        return new(neighbors, vec(A), vec(V), N, C_c, C_f)
-    end
-end
-
-dim(g::TwoPointFiniteVolumeGeometry) = size(g.cell_centroids, 1)
-
-abstract type AbstractTervMesh end
-
-dim(t::AbstractTervMesh) = 2
-
 struct MRSTWrapMesh <: AbstractTervMesh
     data
     function MRSTWrapMesh(G)
@@ -74,7 +36,6 @@ number_of_faces(t::MRSTWrapMesh) = Int64(t.data.faces.num)
 neighbor(t::MRSTWrapMesh, f, i) = Int64(t.data.faces.neighbors[f, i])
 
 
-cell_to_surface(m::AbstractTervMesh, celldata) = celldata
 
 function cell_to_surface(m::MRSTWrapMesh, celldata)
     d = dim(m)

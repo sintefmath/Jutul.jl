@@ -61,7 +61,7 @@ include("applications/reservoir_simulator/reservoir_simulator.jl")
 include("applications/test_systems/test_systems.jl")
 # Graph plotting
 include("plot_graph.jl")
-include("meshes.jl")
+include("meshes/meshes.jl")
 include("plotting.jl")
 # Battery/electrolyte
 include("battery/battery_include.jl")
