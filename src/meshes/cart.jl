@@ -11,23 +11,18 @@ struct CartesianMesh <: AbstractTervMesh
             origin = zeros(dim)
         end
         function generate_deltas(deltas_or_size)
-            first = deltas_or_size[1]
             deltas = Vector(undef, dim)
-            if isa(first, AbstractFloat)
-                # Deltas are actually size of domain in each direction
-                for i = 1:dim
-                    deltas[i] = deltas_or_size[i]/dims[i]
+            for (i, D) = enumerate(deltas_or_size)
+                if isa(D, AbstractFloat)
+                    # Deltas are actually size of domain in each direction
+                    deltas[i] = D/dims[i]
+                else
+                    # Deltas are the actual cell widths
+                    @assert length(D) == dims[i]
+                    deltas[i] = D
                 end
-                δ = Tuple(deltas)
-            else
-                # Deltas are the actual cell widths
-                first::AbstractVector
-                for i = 1:dim
-                    @assert length(deltas_or_size[i]) == dims[i]
-                end
-                δ = deltas_or_size
             end
-            return δ
+            return Tuple(deltas)
         end
         @assert length(deltas_or_size) == dim
         deltas = generate_deltas(deltas_or_size)
@@ -76,7 +71,7 @@ function tpfv_geometry(g::CartesianMesh)
     nf = (nx-1)*ny*nz + (ny-1)*nx*nz + (nz-1)*ny*nx
     N = Matrix{Int}(undef, 2, nf)
     face_areas = Vector{Float64}(undef, nf)
-    face_centroids = Matrix{Float64}(undef, d, nf)
+    face_centroids = zeros(d, nf)
     face_normals = zeros(d, nf)
 
     pos = 1
@@ -93,9 +88,8 @@ function tpfv_geometry(g::CartesianMesh)
                 face_normals[1, pos] = 1.0
 
                 face_centroids[:, pos] = cell_centroids[:, index]
-                Δx_next = get_delta(Δ, x+1, 1)
                 # Offset by the grid size
-                @. face_centroids[1, :] += (Δx_next + Δx)/4.0
+                face_centroids[1, pos] += Δx/2.0
                 pos += 1
             end
         end
@@ -113,9 +107,8 @@ function tpfv_geometry(g::CartesianMesh)
                 face_normals[2, pos] = 1.0
 
                 face_centroids[:, pos] = cell_centroids[:, index]
-                Δy_next = get_delta(Δ, y+1, 2)
                 # Offset by the grid size
-                @. face_centroids[2, :] += (Δy_next + Δy)/4.0
+                face_centroids[2, pos] += Δy/2.0
                 pos += 1
             end
         end
@@ -133,9 +126,8 @@ function tpfv_geometry(g::CartesianMesh)
                 face_normals[3, pos] = 1.0
 
                 face_centroids[:, pos] = cell_centroids[:, index]
-                Δz_next = get_delta(Δ, z+1, 3)
                 # Offset by the grid size
-                @. face_centroids[3, :] += (Δz_next + Δz)/4.0
+                face_centroids[3, pos] += Δz/2.0
                 pos += 1
             end
         end
