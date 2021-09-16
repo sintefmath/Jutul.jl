@@ -74,60 +74,48 @@ function tpfv_geometry(g::CartesianMesh)
     face_centroids = zeros(d, nf)
     face_normals = zeros(d, nf)
 
+    function add_face!(face_areas, face_normals, face_centroids, x, y, z, D, pos)
+        isX = D == 1
+        isY = D == 2
+        isZ = D == 3
+        index = cell_index(x, y, z)
+        N[1, pos] = index
+        N[2, pos] = cell_index(x + isX, y + isY, z + isZ)
+
+        Δx, Δy, Δz  = get_deltas(x, y, z)
+
+        face_areas[pos] = (Δx*!isX)*(Δy*!isY)*(Δz*!isZ)
+        face_normals[D, pos] = 1.0
+
+        face_centroids[:, pos] = cell_centroids[:, index]
+        # Offset by the grid size
+        face_centroids[D, pos] += Δy/2.0
+    end
+    # Note: The following loops are arranged to reproduce the MRST ordering.
     pos = 1
+    # Faces with X-normal > 0
     for y in 1:ny
         for z = 1:nz
             for x in 1:(nx-1)
-                index = cell_index(x, y, z)
-                N[1, pos] = index
-                N[2, pos] = cell_index(x+1, y, z)
-
-                Δx, Δy, Δz  = get_deltas(x, y, z)
-
-                face_areas[pos] = Δy*Δz
-                face_normals[1, pos] = 1.0
-
-                face_centroids[:, pos] = cell_centroids[:, index]
-                # Offset by the grid size
-                face_centroids[1, pos] += Δx/2.0
+                add_face!(face_areas, face_normals, face_centroids, x, y, z, 1, pos)
                 pos += 1
             end
         end
     end
+    # Faces with Y-normal > 0
     for y in 1:(ny-1)
         for x in 1:nx
             for z = 1:nz
-                index = cell_index(x, y, z)
-                N[1, pos] = index
-                N[2, pos] = cell_index(x, y+1, z)
-
-                Δx, Δy, Δz  = get_deltas(x, y, z)
-
-                face_areas[pos] = Δx*Δz
-                face_normals[2, pos] = 1.0
-
-                face_centroids[:, pos] = cell_centroids[:, index]
-                # Offset by the grid size
-                face_centroids[2, pos] += Δy/2.0
+                add_face!(face_areas, face_normals, face_centroids, x, y, z, 2, pos)
                 pos += 1
             end
         end
     end
+    # Faces with Z-normal > 0
     for z = 1:(nz-1)
         for y in 1:ny
             for x in 1:nx
-                index = cell_index(x, y, z)
-                N[1, pos] = index
-                N[2, pos] = cell_index(x, y, z+1)
-
-                Δx, Δy, Δz  = get_deltas(x, y, z)
-
-                face_areas[pos] = Δx*Δy
-                face_normals[3, pos] = 1.0
-
-                face_centroids[:, pos] = cell_centroids[:, index]
-                # Offset by the grid size
-                face_centroids[3, pos] += Δz/2.0
+                add_face!(face_areas, face_normals, face_centroids, x, y, z, 3, pos)
                 pos += 1
             end
         end
