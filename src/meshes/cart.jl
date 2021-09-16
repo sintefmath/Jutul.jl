@@ -42,7 +42,9 @@ function tpfv_geometry(g::CartesianMesh)
     d = dim(g)
 
     nx, ny, nz = get_3d_dims(g)
+
     cell_index(x, y, z) = (z-1)*nx*ny + (y-1)*nx + x
+    get_deltas(x, y, z) = (get_delta(Δ, x, 1), get_delta(Δ, y, 2), get_delta(Δ, z, 3))
     # Cell data first - volumes and centroids
     nc = nx*ny*nz
     if isa(Δ[1], AbstractFloat)
@@ -53,34 +55,19 @@ function tpfv_geometry(g::CartesianMesh)
         for x in 1:nx
             for y in 1:ny
                 for z = 1:nz
-
+                    for i in 1:d
+                        pos = (x, y, z)
+                        c = cell_index(pos...)
+                        δ = Δ[i]
+                        cell_centroids[i, c] = (pos[i] - 0.5)*δ + g.origin[i]
+                    end
                 end
-            end
-        end
-        for i in 1:d
-            δ = Δ[i]
-            
-            for c = 1:nc
-                cell_centroids[i, c] = (c - 0.5)*δ + g.origin[i]
             end
         end
     else
         error("Variable strides not implemented yet")
     end
 
-    function get_delta(Δ, index, d)
-        if length(Δ) >= d
-            δ = Δ[d]
-            if isa(δ, AbstractFloat)
-                v = δ
-            else
-                v = δ[index]
-            end
-        else
-            v = 1.0
-        end
-        return v
-    end
     # Then face data:
     nf = (nx-1)*ny*nz + (ny-1)*nx*nz + (nz-1)*ny*nx
     N = Matrix{Int}(undef, 2, nf)
@@ -96,9 +83,7 @@ function tpfv_geometry(g::CartesianMesh)
                 N[1, pos] = index
                 N[2, pos] = cell_index(x+1, y, z)
 
-                Δx = get_delta(Δ, x, 1)
-                Δy = get_delta(Δ, y, 2)
-                Δz = get_delta(Δ, z, 3)
+                Δx, Δy, Δz  = get_deltas(x, y, z)
 
                 face_areas[pos] = Δy*Δz
                 face_normals[1, pos] = 1.0
@@ -118,9 +103,8 @@ function tpfv_geometry(g::CartesianMesh)
                 N[1, pos] = index
                 N[2, pos] = cell_index(x, y+1, z)
 
-                Δx = get_delta(Δ, x, 1)
-                Δy = get_delta(Δ, y, 2)
-                Δz = get_delta(Δ, z, 3)
+                Δx, Δy, Δz  = get_deltas(x, y, z)
+
                 face_areas[pos] = Δx*Δz
                 face_normals[2, pos] = 1.0
 
@@ -139,9 +123,8 @@ function tpfv_geometry(g::CartesianMesh)
                 N[1, pos] = index
                 N[2, pos] = cell_index(x, y, z+1)
 
-                Δx = get_delta(Δ, x, 1)
-                Δy = get_delta(Δ, y, 2)
-                Δz = get_delta(Δ, z, 3)
+                Δx, Δy, Δz  = get_deltas(x, y, z)
+
                 face_areas[pos] = Δx*Δy
                 face_normals[3, pos] = 1.0
 
@@ -170,4 +153,19 @@ function get_3d_dims(g)
         nx, ny, nz = g.dims
     end
     return (nx, ny, nz)
+end
+
+
+function get_delta(Δ, index, d)
+    if length(Δ) >= d
+        δ = Δ[d]
+        if isa(δ, AbstractFloat)
+            v = δ
+        else
+            v = δ[index]
+        end
+    else
+        v = 1.0
+    end
+    return v
 end
