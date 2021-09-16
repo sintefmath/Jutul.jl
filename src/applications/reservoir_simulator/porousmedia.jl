@@ -13,6 +13,12 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     T_hf = similar(cell_centroids, nhf)
     faces, facePos = get_facepos(N)
     nc = length(facePos)-1
+    if isa(perm, AbstractFloat)
+        perm = repeat([perm], 1, nc)
+    else
+        perm::AbstractVecOrMat
+    end
+
     # Sanity check
     @assert(dim == 2 || dim == 3)
     # Check cell centroids

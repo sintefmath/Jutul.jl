@@ -75,22 +75,21 @@ function tpfv_geometry(g::CartesianMesh)
     face_normals = zeros(d, nf)
 
     function add_face!(face_areas, face_normals, face_centroids, x, y, z, D, pos)
-        isX = D == 1
-        isY = D == 2
-        isZ = D == 3
-        @info isX
         index = cell_index(x, y, z)
         N[1, pos] = index
-        N[2, pos] = cell_index(x + isX, y + isY, z + isZ)
-
-        Δx, Δy, Δz  = get_deltas(x, y, z)
-
-        face_areas[pos] = (Δx*!isX)*(Δy*!isY)*(Δz*!isZ)
+        N[2, pos] = cell_index(x + (D == 1), y + (D == 2), z + (D == 3))
+        Δ  = get_deltas(x, y, z)
+        # Face area
+        A = 1
+        for i in setdiff(1:3, D)
+            A *= Δ[i]
+        end
+        face_areas[pos] = A
         face_normals[D, pos] = 1.0
 
         face_centroids[:, pos] = cell_centroids[:, index]
         # Offset by the grid size
-        face_centroids[D, pos] += Δy/2.0
+        face_centroids[D, pos] += Δ[D]/2.0
     end
     # Note: The following loops are arranged to reproduce the MRST ordering.
     pos = 1
@@ -100,7 +99,6 @@ function tpfv_geometry(g::CartesianMesh)
             for x in 1:(nx-1)
                 add_face!(face_areas, face_normals, face_centroids, x, y, z, 1, pos)
                 pos += 1
-                @info N[:, pos-1]
             end
         end
     end

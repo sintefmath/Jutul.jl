@@ -1,7 +1,7 @@
 # using Meshes, MeshViz
 
 export MRSTWrapMesh, CartesianMesh, TwoPointFiniteVolumeGeometry
-export triangulate_outer_surface, tpfv_geometry
+export triangulate_outer_surface, tpfv_geometry, discretized_domain_tpfv_flow
 
 abstract type TervGeometry end
 
