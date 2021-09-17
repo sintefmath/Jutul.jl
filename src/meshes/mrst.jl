@@ -35,33 +35,6 @@ number_of_cells(t::MRSTWrapMesh) = Int64(t.data.cells.num)
 number_of_faces(t::MRSTWrapMesh) = Int64(t.data.faces.num)
 neighbor(t::MRSTWrapMesh, f, i) = Int64(t.data.faces.neighbors[f, i])
 
-
-
-function cell_to_surface(m::MRSTWrapMesh, celldata)
-    d = dim(m)
-    if d == 2
-        facedata = celldata
-    else
-        @assert d == 3
-        nf = number_of_faces(m)
-        facedata = zeros(nf)
-        for i = 1:nf
-            count = 0
-            v = 0
-            for j = 1:2
-                cell = neighbor(m, i, j)
-                if cell > 0
-                    v += celldata[cell]
-                    count += 1
-                end
-            end
-            facedata[i] = v/count
-        end
-    end
-    @info "Updated."
-    return facedata
-end
-
 function triangulate_outer_surface(m::Dict)
     mm = MRSTWrapMesh(m)
     return triangulate_outer_surface(mm)

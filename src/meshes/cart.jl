@@ -31,6 +31,17 @@ struct CartesianMesh <: AbstractTervMesh
 end
 
 dim(t::CartesianMesh) = length(t.dims)
+number_of_cells(t::CartesianMesh) = prod(t.dims)
+function number_of_faces(t::CartesianMesh)
+    nx, ny, nz = get_3d_dims(t)
+    return (nx-1)*ny*nz + (ny-1)*nx*nz + (nz-1)*ny*nx
+end
+
+"""
+Lower corner for one dimension, without any transforms applied
+"""
+coord_offset(pos, δ::AbstractFloat) = (pos-1)*δ
+coord_offset(pos, δ::AbstractVector) = sum(δ[1:(pos-1)])
 
 function tpfv_geometry(g::CartesianMesh)
     Δ = g.deltas
@@ -39,17 +50,9 @@ function tpfv_geometry(g::CartesianMesh)
     nx, ny, nz = get_3d_dims(g)
 
     cell_index(x, y, z) = (z-1)*nx*ny + (y-1)*nx + x
-    get_deltas(x, y, z) = (get_delta(Δ, x, 1), get_delta(Δ, y, 2), get_delta(Δ, z, 3))
+    cell_dims(x, y, z) = (get_delta(Δ, x, 1), get_delta(Δ, y, 2), get_delta(Δ, z, 3))
     # Cell data first - volumes and centroids
     nc = nx*ny*nz
-    
-    function cell_center(pos, i, δ)
-        if isa(δ, AbstractFloat)
-            return (pos[i] - 0.5)*δ
-        else
-            return sum(δ[1:(i-1)]) + δ[i]/2
-        end
-    end
     V = zeros(nc)
     cell_centroids = zeros(d, nc)
     for x in 1:nx
@@ -57,18 +60,18 @@ function tpfv_geometry(g::CartesianMesh)
             for z = 1:nz
                 pos = (x, y, z)
                 c = cell_index(pos...)
-                Δx, Δy, Δz  = get_deltas(pos...)
-                V[c] = Δx*Δy*Δz
+                cdim  = cell_dims(pos...)
+                V[c] = prod(cdim)
 
                 for i in 1:d
-                    cell_centroids[i, c] = cell_center(pos, i, Δ[i]) + g.origin[i]
+                    cell_centroids[i, c] = coord_offset(pos[i], Δ[i]) + cdim[i]/2 + g.origin[i]
                 end
             end
         end
     end
 
     # Then face data:
-    nf = (nx-1)*ny*nz + (ny-1)*nx*nz + (nz-1)*ny*nx
+    nf = number_of_faces(g)
     N = Matrix{Int}(undef, 2, nf)
     face_areas = Vector{Float64}(undef, nf)
     face_centroids = zeros(d, nf)
@@ -78,7 +81,7 @@ function tpfv_geometry(g::CartesianMesh)
         index = cell_index(x, y, z)
         N[1, pos] = index
         N[2, pos] = cell_index(x + (D == 1), y + (D == 2), z + (D == 3))
-        Δ  = get_deltas(x, y, z)
+        Δ  = cell_dims(x, y, z)
         # Face area
         A = 1
         for i in setdiff(1:3, D)
@@ -152,4 +155,40 @@ function get_delta(Δ, index, d)
         v = 1.0
     end
     return v
+end
+
+
+function triangulate_outer_surface(m::CartesianMesh, is_depth = true)
+    pts = []
+    tri = []
+    cell_index = []
+    face_index = []
+    offset = 0
+    d = dim(m)
+    nc = number_of_cells(m)
+    if d == 2
+        cell_index = 1:nc
+        for i = 1:nc
+            local_pts = []
+            local_tri = [1 2 3; 3 4 1]
+            push!(pts, local_pts)
+            push!(tri, local_tri .+ offset)
+            offset += 4
+        end
+    else
+        @assert d == 3
+
+    end
+    pts = vcat(pts...)
+    tri = vcat(tri...)
+
+    cell_index = vcat(cell_index...)
+    face_index = vcat(face_index...)
+
+    mapper = (
+                Cells = (cell_data) -> cell_data[cell_index],
+                Faces = (face_data) -> face_data[face_index],
+                indices = (Cells = cell_index, Faces = face_index)
+              )
+    return (pts, tri, mapper)
 end

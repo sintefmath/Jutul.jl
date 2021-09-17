@@ -35,7 +35,8 @@ dim(g::TwoPointFiniteVolumeGeometry) = size(g.cell_centroids, 1)
 
 abstract type AbstractTervMesh end
 dim(t::AbstractTervMesh) = 2
-cell_to_surface(m::AbstractTervMesh, celldata) = celldata
+number_of_cells(t::AbstractTervMesh) = 1
+number_of_faces(t::AbstractTervMesh) = 0
 
 include("mrst.jl")
 include("cart.jl")
