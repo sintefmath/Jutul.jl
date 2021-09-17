@@ -52,6 +52,14 @@ function cell_index(g, pos)
     return (z-1)*nx*ny + (y-1)*nx + x
 end
 
+function lower_corner_3d(g, index)
+    pos = get_3d_pos(g, index)
+    Δ = g.deltas
+    f = (i) -> coord_offset(pos[i], Δ[i])
+    return Tuple(map(f, 1:3))
+end
+
+
 """
 Cell dimensions (as 3 tuple)
 """
@@ -202,6 +210,14 @@ function triangulate_outer_surface(m::CartesianMesh, is_depth = true)
     offset = 0
     d = dim(m)
     # nc = number_of_cells(m)
+    function append_face!(pts, tri, cell_ix, t, v, offset)
+        local_pts, local_tri = v
+        n = size(local_pts, 1)
+        push!(pts, local_pts)
+        push!(tri, local_tri .+ offset)
+        push!(cell_ix, repeat([cell_index(m, t)], n))
+        return n
+    end
     if d == 2
         nx, ny, = m.dims
         Δ = m.deltas
@@ -214,7 +230,7 @@ function triangulate_outer_surface(m::CartesianMesh, is_depth = true)
 
                 local_pts = [x0      y0;
                              x0 + dx y0;
-                             x0 + dx y0 + dy
+                             x0 + dx y0 + dy;
                              x0      y0 + dy]
                 local_tri = [1 2 3; 3 4 1]
                 push!(pts, local_pts)
@@ -225,7 +241,63 @@ function triangulate_outer_surface(m::CartesianMesh, is_depth = true)
         end
     else
         @assert d == 3
+        nx, ny, nz = m.dims
+        function get_surface(t, planar_dim, is_end)
+            dx, dy, dz = cell_dims(m, t)
+            x0, y0, z0 = lower_corner_3d(m, t)
 
+            if planar_dim == 1
+                x = x0
+                if is_end
+                    x += dx
+                end
+                local_pts = [x y0      z0;
+                             x y0      z0 + dz
+                             x y0 + dy z0 + dz;
+                             x y0 + dy z0]
+            elseif planar_dim == 2
+                y = y0
+                if is_end
+                    y += dy
+                end
+                local_pts = [x0      y z0;
+                             x0 + dx y z0
+                             x0 + dx y z0 + dz;
+                             x0      y z0 + dz]
+            else
+                z = z0
+                if is_end
+                    z += dz
+                end
+                local_pts = [x0      y0      z;
+                             x0 + dx y0      z
+                             x0 + dx y0 + dy z;
+                             x0      y0 + dy z]
+            end
+            local_tri = [1 2 3; 3 4 1]
+
+            return (local_pts, local_tri)
+        end
+        include_all = false
+        for y in 1:ny
+            for x in 1:nx
+                for z in 1:nz
+                    t = (x, y, z)
+                    if x == 1 || x == nx || include_all
+                        v = get_surface(t, 1, x == nx)
+                        offset += append_face!(pts, tri, cell_ix, t, v, offset)
+                    end
+                    if y == 1 || y == ny || include_all
+                        v = get_surface(t, 2, y == ny)
+                        offset += append_face!(pts, tri, cell_ix, t, v, offset)    
+                    end
+                    if z == 1 || z == nz || include_all
+                        v = get_surface(t, 3, z == nz)
+                        offset += append_face!(pts, tri, cell_ix, t, v, offset)    
+                    end
+                end
+            end
+        end
     end
     pts = vcat(pts...)
     tri = vcat(tri...)
