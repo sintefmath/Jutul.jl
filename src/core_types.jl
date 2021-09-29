@@ -358,10 +358,13 @@ struct ConstantWrapper{R}
     end
 end
 Base.size(c::ConstantWrapper) = (length(c.data), c.nrows)
+Base.size(c::ConstantWrapper, i) = i == 1 ? length(c.data) : c.nrows
 Base.getindex(c::ConstantWrapper, i) = error("Not implemented")
 Base.getindex(c::ConstantWrapper{R}, i, j) where R = c.data[i]::R
 Base.setindex!(c::ConstantWrapper, arg...) = setindex!(c.data, arg...)
 Base.ndims(c::ConstantWrapper) = 2
+Base.view(c::ConstantWrapper, ::Colon, i) = c.data
+
 function Base.axes(c::ConstantWrapper, d)
     if d == 1
         return Base.OneTo(length(c.data))

@@ -436,9 +436,10 @@ Create a mapped array that produces only the values when indexed.
 
 Only useful for AD arrays, otherwise it does nothing.
 """
-@inline function as_value(x)
+@inline function as_value(x::AbstractArray{D}) where D<:ForwardDiff.Dual
     mappedarray(value, x)
 end
+@inline as_value(x) = x
 
 """
 Combine a base tag (which can be nothing) with a entity to get a tag that
