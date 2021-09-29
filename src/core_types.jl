@@ -11,7 +11,7 @@ export transfer, allocate_array
 
 export TervStorage
 
-import Base: show
+import Base: show, size, setindex!, getindex, ndims
 
 # Physical system
 abstract type TervSystem end
@@ -347,6 +347,26 @@ struct ConstantVariables <: GroupedVariables
             @warn "Single entity constants have led to crashes on CUDA/Tullio kernels!" maxlog = 5
         end
         new(constants, entity, single_entity)
+    end
+end
+
+struct ConstantWrapper{R}
+    data::Vector{R}
+    nrows::Integer
+    function ConstantWrapper(data, n)
+        new{eltype(data)}(data, n)
+    end
+end
+Base.size(c::ConstantWrapper) = (length(c.data), c.nrows)
+Base.getindex(c::ConstantWrapper, i) = error("Not implemented")
+Base.getindex(c::ConstantWrapper{R}, i, j) where R = c.data[i]::R
+Base.setindex!(c::ConstantWrapper, arg...) = setindex!(c.data, arg...)
+Base.ndims(c::ConstantWrapper) = 2
+function Base.axes(c::ConstantWrapper, d)
+    if d == 1
+        return Base.OneTo(length(c.data))
+    else
+        return Base.OneTo(c.nrows)
     end
 end
 
