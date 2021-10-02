@@ -43,6 +43,6 @@ group_precond = GroupWisePreconditioner([TrivialPreconditioner(), TrivialPrecond
     end
     @testset "Multiple sparse matrices" begin
         @test test_multi(use_groups = true, linear_solver = GenericKrylov())
-        @test test_multi(use_groups = true, linear_solver = GenericKrylov(preconditioner = group_precond))
+        # @test test_multi(use_groups = true, linear_solver = GenericKrylov(preconditioner = group_precond))
     end
 end

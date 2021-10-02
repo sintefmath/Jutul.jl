@@ -37,7 +37,7 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     # Check N, just in case
     @assert(size(N, 2) == nf)
     Threads.@threads for cell = 1:nc
-        for fpos = facePos[cell]:(facePos[cell+1]-1)
+        @inbounds for fpos = facePos[cell]:(facePos[cell+1]-1)
             face = faces[fpos]
 
             A = face_areas[face]
@@ -79,7 +79,7 @@ function compute_face_trans(T_hf, N)
 end
 
 function discretized_domain_tpfv_flow(geometry; porosity = 0.1, 
-                                                permeability = 1.0, 
+                                                permeability = 9.8692e-15, # 100 mD 
                                                 T = nothing,
                                                 fuse_flux = false,
                                                 gravity = true,

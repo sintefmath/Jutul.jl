@@ -10,11 +10,18 @@ ENV["JULIA_DEBUG"] = Terv
 # ENV["JULIA_DEBUG"] = nothing
 
 
-function perform_test(casename, doPlot = false, pvfrac=1, tstep = ones(25))
+function perform_test(mesh_or_casename, doPlot = false, pvfrac=1, tstep = ones(25); kwarg...)
     # Minimal TPFA grid: Simple grid that only contains connections and
     # fields required to compute two-point fluxes
-    G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
-    G = get_minimal_tpfa_grid_from_mrst(casename)
+    if isa(mesh_or_casename, String)
+        G, mrst_data = get_minimal_tpfa_grid_from_mrst(mesh_or_casename, extraout = true)
+        mesh = MRSTWrapMesh(mrst_data["G"])
+    else
+        mesh = mesh_or_casename
+        geo = tpfv_geometry(mesh)
+        G = discretized_domain_tpfv_flow(geo; kwarg...)
+    end
+
     nc = number_of_cells(G)
     # Parameters
     bar = 1e5
@@ -62,15 +69,15 @@ function perform_test(casename, doPlot = false, pvfrac=1, tstep = ones(25))
     @printf("Final liquid saturation ranges from %f to %f.\n", maximum(sl), minimum(sl))
 
     if doPlot
-        ax = plot_interactive(mrst_data["G"], states)
-        display(ax)
+        ax = plot_interactive(mesh, states)
     else
         ax = nothing
     end
     return (sim, ax)
 end
 ## Perform test, with plotting
-casename = "pico"
+G = CartesianMesh((3, 3, 1), (3.0, 3.0, 1.0))
 doPlot = true
-perform_test(casename, doPlot)
+perform_test(G, doPlot)
+# perform_test("pico", doPlot)
 println("All done with $casename case!")
