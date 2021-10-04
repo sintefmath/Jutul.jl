@@ -13,14 +13,8 @@ using CUDA
 # Abstract multiphase system
 abstract type MultiPhaseSystem <: TervSystem end
 
-
-function get_phases(sys::MultiPhaseSystem)
-    return sys.phases
-end
-
-function number_of_phases(sys::MultiPhaseSystem)
-    return length(get_phases(sys))
-end
+get_phases(sys::MultiPhaseSystem) = sys.phases
+number_of_phases(sys::MultiPhaseSystem) = length(get_phases(sys))
 
 struct SourceTerm{I, F, T} <: TervForce
     cell::I
@@ -36,7 +30,6 @@ end
 function cell(s::SourceTerm{I, T}) where {I, T} 
     return s.cell::I
 end
-
 
 function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:Any, S<:MultiPhaseSystem}
     return (sources = sources,)
@@ -120,24 +113,33 @@ maximum_value(::Saturations) = 1.0
 minimum_value(::Saturations) = 0.0
 absolute_increment_limit(s::Saturations) = s.dsMax
 
-function initialize_primary_variable_ad!(state, model, pvar::Saturations, state_symbol, npartials; offset = 0, kwarg...)
+function initialize_primary_variable_ad!(state, model, pvar::Saturations, state_symbol, npartials; kwarg...)
     nph = values_per_entity(model, pvar)
-    # nph - 1 primary variables, with the last saturation being initially zero AD
-    dp = vcat((1:nph-1) .+ offset, 0)
     v = state[state_symbol]
+    state[state_symbol] = unit_sum_init(v, model, npartials, nph; kwarg...)
+    return state
+end
+
+function unit_sum_init(v, model, npartials, N; offset = 0, kwarg...)
+    # nph - 1 primary variables, with the last saturation being initially zero AD
+    dp = vcat((1:N-1) .+ offset, 0)
     v = allocate_array_ad(v, diag_pos = dp, context = model.context, npartials = npartials; kwarg...)
     for i in 1:size(v, 2)
         v[end, i] = 1 - sum(v[1:end-1, i])
     end
-    state[state_symbol] = v
-    return state
+    return v
 end
 
+
 function update_primary_variable!(state, p::Saturations, state_symbol, model, dx)
+    s = state[state_symbol]
+    unit_sum_update!(s, p, model, dx)
+end
+
+function unit_sum_update!(s, p, model, dx)
     nph, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
     maxval, minval = maximum_value(p), minimum_value(p)
-    s = state[state_symbol]
     Threads.@threads for cell = 1:nu
         dlast = 0
         @inbounds for ph = 1:(nph-1)

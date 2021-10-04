@@ -14,3 +14,6 @@ struct TwoPhaseCompositionalSystem <: CompositionalSystem
         new(phases, c, equation_of_state, flash_method)
     end
 end
+
+get_components(sys::MultiComponentSystem) = sys.components
+number_of_components(sys::MultiComponentSystem) = length(get_components(sys))
