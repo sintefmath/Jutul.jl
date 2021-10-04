@@ -21,3 +21,19 @@ n = length(z0)
 
 eos = GenericCubicEOS(mixture)
 ##
+nc = 5
+G = get_1d_reservoir(nc)
+nc = number_of_cells(G)
+# Definition of fluid phases
+rhoLS, rhoVS = 1000.0, 100.0
+L, V = LiquidPhase(), VaporPhase()
+# Define system and realize on grid
+sys = TwoPhaseCompositionalSystem([L, V], eos)
+model = SimulationModel(G, sys)
+s = model.secondary_variables
+s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, p0, [rhoLS, rhoVS], [cl, cv])
+state0 = setup_state(model, Dict(:Pressure => p0, :OverallCompositions => z0))
+timesteps = tstep*3600*24 # Convert time-steps from days to seconds
+# Simulate and return
+sim = Simulator(model, state0 = state0)
+states, report = simulate(sim, timesteps)

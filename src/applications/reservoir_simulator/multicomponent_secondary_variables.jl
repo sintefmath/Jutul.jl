@@ -22,3 +22,18 @@ function update_primary_variable!(state, p::OverallCompositions, state_symbol, m
     s = state[state_symbol]
     unit_sum_update!(s, p, model, dx)
 end
+
+struct FlashResults <: ScalarVariable
+end
+
+
+
+function select_secondary_variables_system!(S, domain, system::CompositionalSystem, formulation)
+    nph = number_of_phases(system)
+    S[:PhaseMassDensities] = ConstantCompressibilityDensities(nph)
+    S[:TotalMasses] = TotalMasses()
+    S[:FlashResults] = FlashResults()
+    S[:PhaseViscosities] = ConstantVariables(1e-3*ones(nph)) # 1 cP for all phases by default
+end
+
+degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_components(model.system)
