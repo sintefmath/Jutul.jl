@@ -35,6 +35,18 @@ function initialize_variable_value!(state, model, pvar::FlashResults, symb, val:
     initialize_variable_value!(state, model, pvar, symb, V)
 end
 
+function initialize_variable_ad(state, model, pvar::FlashResults, symb, npartials, diag_pos; context = DefaultContext(), kwarg...)
+    # state[symb] = allocate_array_ad(state[symb], diag_pos = diag_pos, context = model.context, npartials = npartials; kwarg...)
+    n = number_of_entities(model, pvar)
+    v_ad = get_ad_entity_scalar(1.0, npartials, diag_pos; kwarg...)
+    ∂T = typeof(v_ad)
+
+    r = FlashedMixture2Phase(model.system.equation_of_state, ∂T)
+    @info r
+    state[symb] = repeat([r], n)
+    return state
+end
+
 function select_secondary_variables_system!(S, domain, system::CompositionalSystem, formulation)
     nph = number_of_phases(system)
     S[:PhaseMassDensities] = ConstantCompressibilityDensities(nph)
