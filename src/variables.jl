@@ -176,7 +176,7 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
     nv = values_per_entity(model, pvar)
     
     if isa(pvar, ScalarVariable)
-        @assert length(val) == nu
+        @assert length(val) == nu "Expected $(length(val)) == $nu"
         # Type-assert that this should be scalar, with a vector input
         val::AbstractVector
     else
@@ -192,7 +192,7 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
     return transfer(model.context, val)
 end
 
-default_value(v) = 0.0
+default_value(model, variable) = 0.0
 
 function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     state[symb] = initialize_variable_value(model, pvar, val; kwarg...)
@@ -207,7 +207,7 @@ function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict;
         error("The key $symb must be present to initialize the state. Found symbols: $k")
     else
         # We do not really need to initialize this, as it will be updated elsewhere.
-        value = default_value(pvar)
+        value = default_value(model, pvar)
     end
     return initialize_variable_value!(state, model, pvar, symb, value)
 end

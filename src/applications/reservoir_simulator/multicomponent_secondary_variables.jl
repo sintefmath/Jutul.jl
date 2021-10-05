@@ -26,14 +26,22 @@ end
 struct FlashResults <: ScalarVariable
 end
 
+default_value(model, ::FlashResults) = FlashedMixture2Phase(model.system.equation_of_state)
 
+function initialize_variable_value!(state, model, pvar::FlashResults, symb, val::AbstractDict; need_value = false)
+    @assert need_value == false
+    v = default_value(model, pvar)
+    V = repeat([v], number_of_entities(model, pvar))
+    initialize_variable_value!(state, model, pvar, symb, V)
+end
 
 function select_secondary_variables_system!(S, domain, system::CompositionalSystem, formulation)
     nph = number_of_phases(system)
     S[:PhaseMassDensities] = ConstantCompressibilityDensities(nph)
     S[:TotalMasses] = TotalMasses()
     S[:FlashResults] = FlashResults()
+    S[:Saturations] = Saturations()
     S[:PhaseViscosities] = ConstantVariables(1e-3*ones(nph)) # 1 cP for all phases by default
 end
 
-degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_components(model.system)
+degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model.system)*number_of_components(model.system)
