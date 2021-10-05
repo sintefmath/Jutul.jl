@@ -31,3 +31,12 @@ function select_equations_system!(eqs, domain, system::MultiComponentSystem, for
     nc = number_of_components(system)
     eqs[:mass_conservation] = (ConservationLaw, nc)
 end
+
+function setup_storage_system!(storage, model, system::TwoPhaseCompositionalSystem)
+    eos = model.system.equation_of_state
+    n = number_of_components(eos)
+    c = (p = 101325, T = 273.15 + 20, z = zeros(n))
+    m = model.flash_method
+    np = number_of_partials_per_entity(model, Cells())
+    storage[:flash] = flash_storage(eos, c, m, inc_jac = true, diff_externals = true, npartials = np)
+end

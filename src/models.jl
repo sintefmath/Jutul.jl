@@ -131,6 +131,7 @@ function setup_storage!(storage, model::TervModel; setup_linearized_system = tru
         storage[:state] = convert_state_ad(model, state0, tag)
         storage[:primary_variables] = reference_primary_variables(storage, model) 
     end
+    setup_storage_model(storage, model)
     storage[:equations] = setup_equations(storage, model; tag = tag, kwarg...) 
     if setup_linearized_system
         storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
@@ -138,6 +139,25 @@ function setup_storage!(storage, model::TervModel; setup_linearized_system = tru
         # Give the equations a chance to figure out their place in the Jacobians.
         align_equations_to_linearized_system!(storage, model)
     end
+end
+
+function setup_storage_model(storage, model)
+    setup_storage_domain!(storage, model, model.domain)
+    setup_storage_system!(storage, model, model.system)
+    setup_storage_formulation!(storage,  model, model.formulation)
+end
+
+
+function setup_storage_domain!(storage, model, domain)
+    # Do nothing
+end
+
+function setup_storage_system!(storage, model, system)
+    # Do nothing
+end
+
+function setup_storage_formulation!(storage,  model, formulation)
+    # Do nothing
 end
 
 function reference_primary_variables(storage, model::TervModel; kwarg...)
