@@ -36,20 +36,22 @@ function initialize_variable_value!(state, model, pvar::FlashResults, symb, val:
 end
 
 function initialize_variable_ad(state, model, pvar::FlashResults, symb, npartials, diag_pos; context = DefaultContext(), kwarg...)
-    # state[symb] = allocate_array_ad(state[symb], diag_pos = diag_pos, context = model.context, npartials = npartials; kwarg...)
     n = number_of_entities(model, pvar)
     v_ad = get_ad_entity_scalar(1.0, npartials, diag_pos; kwarg...)
     ∂T = typeof(v_ad)
 
     r = FlashedMixture2Phase(model.system.equation_of_state, ∂T)
-    @info r
     state[symb] = repeat([r], n)
     return state
 end
 
+struct TwoPhaseCompositionalDensities <: PhaseMassDensities
+end
+
+
 function select_secondary_variables_system!(S, domain, system::CompositionalSystem, formulation)
     nph = number_of_phases(system)
-    S[:PhaseMassDensities] = ConstantCompressibilityDensities(nph)
+    S[:PhaseMassDensities] = TwoPhaseCompositionalDensities()
     S[:TotalMasses] = TotalMasses()
     S[:FlashResults] = FlashResults()
     S[:Saturations] = Saturations()
@@ -57,3 +59,22 @@ function select_secondary_variables_system!(S, domain, system::CompositionalSyst
 end
 
 degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model.system)*number_of_components(model.system)
+
+
+@terv_secondary function update_as_secondary!(f, fr::FlashResults, model, param, Pressure, OverallCompositions)
+    error()
+end
+
+@terv_secondary function update_as_secondary!(Sat, s::Saturations, model::SimulationModel{D, S}, param, Pressure, OverallCompositions) where {D, S<:CompositionalSystem}
+    error()
+end
+
+@terv_secondary function update_as_secondary!(massmob, m::MassMobilities, model::SimulationModel{D, S}, param) where {D, S<:CompositionalSystem}
+    error()
+end
+
+@terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
+    error()
+end
+
+

@@ -1,4 +1,5 @@
 using Terv, MultiComponentFlash
+ENV["JULIA_DEBUG"] = Terv
 # Pkg.develop(PackageSpec(path = "D:/jobb\\bitbucket\\moyner.jl\\pvt\\MultiComponentFlash"))
 ##
 # Multicomponent flow
