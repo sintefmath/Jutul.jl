@@ -89,20 +89,31 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
         c = (p = p, T = T, z = z)
         # Perform flash
         vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false)
-        single_phase = isnan(vapor_frac)
-        
-        if single_phase
-            error()
+
+        l, v = f.liquid, f.vapor
+        x = l.mole_fractions
+        y = v.mole_fractions
+
+        if isnan(vapor_frac)
+            # Single phase condition. Life is easy.
+            Z_L = mixture_compressibility_factor(eos, (p = P, T = T, z = Z))
+            Z_V = Z_L
+            @. x = Z
+            @. y = Z
+            V = single_phase_label(eos.mixture, c)
+            if V > 0.5
+                phase_state = SinglePhaseVapor()
+            else
+                phase_state = SinglePhaseLiquid()
+            end
         else
-            # Update the actual values
-            l, v = f.liquid, f.vapor
-            x = l.mole_fractions
-            y = v.mole_fractions
+            # Two-phase condition: We have some work to do.
             @. x = liquid_mole_fraction(Z, K, vapor_frac)
             @. y = vapor_mole_fraction(x, K)
             if eltype(x)<:ForwardDiff.Dual
                 inverse_flash_update!(S, eos, c, vapor_frac)
                 ∂c = (p = P, T = T, z = Z)
+                @info x
                 V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
                 set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
                 set_partials_phase_mole_fractions!(y, S, eos, ∂c, :vapor)
@@ -119,7 +130,7 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
     end
 end
 
-@terv_secondary function update_as_secondary!(Sat, s::Saturations, model::SimulationModel{D, S}, param, Pressure, OverallCompositions) where {D, S<:CompositionalSystem}
+@terv_secondary function update_as_secondary!(Sat, s::Saturations, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
     # error()
 end
 
