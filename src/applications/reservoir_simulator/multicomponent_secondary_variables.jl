@@ -26,10 +26,11 @@ end
 struct FlashResults <: ScalarVariable
     storage
     method
-    function FlashResults(domain, system; method = SSIFlash())
-        eos = model.equation_of_state
-        np = number_of_partials_per_entity(model, Cells())
-        s = flash_storage(eos, method = method, inc_jac = true, diff_externals = true, npartials = np)
+    function FlashResults(system; method = SSIFlash(), kwarg...)
+        eos = system.equation_of_state
+        # np = number_of_partials_per_entity(system, Cells())
+        n = MultiComponentFlash.number_of_components(eos)
+        s = flash_storage(eos, method = method, inc_jac = true, diff_externals = true, npartials = n)
         new(s, method)
     end
 end
@@ -61,7 +62,7 @@ function select_secondary_variables_system!(S, domain, system::CompositionalSyst
     nph = number_of_phases(system)
     S[:PhaseMassDensities] = TwoPhaseCompositionalDensities()
     S[:TotalMasses] = TotalMasses()
-    S[:FlashResults] = FlashResults()
+    S[:FlashResults] = FlashResults(system)
     S[:Saturations] = Saturations()
     S[:Temperature] = ConstantVariables([273.15 + 30.0])
     S[:PhaseViscosities] = ConstantVariables(1e-3*ones(nph)) # 1 cP for all phases by default
@@ -70,13 +71,44 @@ end
 degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model.system)*number_of_components(model.system)
 
 
-@terv_secondary function update_as_secondary!(f, fr::FlashResults, model, param, Pressure, Temperature, OverallCompositions)
+@terv_secondary function update_as_secondary!(flash_results, fr::FlashResults, model, param, Pressure, Temperature, OverallCompositions)
     # S = flash_storage(eos)
-    for i in eachindex(f)
-        p = value(Pressure[i])
-        T = value(Temperature[1, i]) #Constant var hack
-        z = value.(OverallCompositions[:, i])
-        V, K, = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = true)
+    S = fr.storage
+    m = fr.method
+    eos = model.system.equation_of_state
+    @time for (i, f) in enumerate(flash_results)
+        K = f.K
+        P = Pressure[i]
+        T = Temperature[1, i]
+        # Grab values
+        p = value(P)
+        t = value(T)
+        Z = view(OverallCompositions, :, i)
+        z = value.(Z)
+        # Conditions
+        c = (p = p, T = T, z = z)
+        # Perform flash
+        vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false)
+        single_phase = isnan(vapor_frac)
+        
+        if single_phase
+
+        else
+            # Update the actual values
+            l, v = f.liquid, f.vapor
+            x = l.mole_fractions
+            y = v.mole_fractions
+            @debug "Info:" Z K v
+            @. x = liquid_mole_fraction(Z, K, vapor_frac)
+            @. y = vapor_mole_fraction(x, K)
+
+            ∂c = (p = P, T = T, z = Z)
+
+            V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
+            set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
+            set_partials_phase_mole_fractions!(y, S, eos, ∂c, :vapor)
+
+        end
     end
     x + y + z
     error() 
