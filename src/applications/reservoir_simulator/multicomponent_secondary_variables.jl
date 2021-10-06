@@ -24,6 +24,14 @@ function update_primary_variable!(state, p::OverallCompositions, state_symbol, m
 end
 
 struct FlashResults <: ScalarVariable
+    storage
+    method
+    function FlashResults(domain, system; method = SSIFlash())
+        eos = model.equation_of_state
+        np = number_of_partials_per_entity(model, Cells())
+        s = flash_storage(eos, method = method, inc_jac = true, diff_externals = true, npartials = np)
+        new(s, method)
+    end
 end
 
 default_value(model, ::FlashResults) = FlashedMixture2Phase(model.system.equation_of_state)
@@ -55,14 +63,23 @@ function select_secondary_variables_system!(S, domain, system::CompositionalSyst
     S[:TotalMasses] = TotalMasses()
     S[:FlashResults] = FlashResults()
     S[:Saturations] = Saturations()
+    S[:Temperature] = ConstantVariables([273.15 + 30.0])
     S[:PhaseViscosities] = ConstantVariables(1e-3*ones(nph)) # 1 cP for all phases by default
 end
 
 degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model.system)*number_of_components(model.system)
 
 
-@terv_secondary function update_as_secondary!(f, fr::FlashResults, model, param, Pressure, OverallCompositions)
-    error()
+@terv_secondary function update_as_secondary!(f, fr::FlashResults, model, param, Pressure, Temperature, OverallCompositions)
+    # S = flash_storage(eos)
+    for i in eachindex(f)
+        p = value(Pressure[i])
+        T = value(Temperature[1, i]) #Constant var hack
+        z = value.(OverallCompositions[:, i])
+        V, K, = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = true)
+    end
+    x + y + z
+    error() 
 end
 
 @terv_secondary function update_as_secondary!(Sat, s::Saturations, model::SimulationModel{D, S}, param, Pressure, OverallCompositions) where {D, S<:CompositionalSystem}
