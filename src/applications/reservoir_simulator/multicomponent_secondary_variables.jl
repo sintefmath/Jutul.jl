@@ -92,38 +92,43 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
         single_phase = isnan(vapor_frac)
         
         if single_phase
-
+            error()
         else
             # Update the actual values
             l, v = f.liquid, f.vapor
             x = l.mole_fractions
             y = v.mole_fractions
-            @debug "Info:" Z K v
+            @debug "Info:" Z K v x y
             @. x = liquid_mole_fraction(Z, K, vapor_frac)
             @. y = vapor_mole_fraction(x, K)
+            if eltype(x)<:ForwardDiff.Dual
+                ∂c = (p = P, T = T, z = Z)
+                V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
+                set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
+                set_partials_phase_mole_fractions!(y, S, eos, ∂c, :vapor)
+            else
+                V = vapor_frac
+            end
+            # TODO: Fix so these don't allocate memory
+            Z_L = mixture_compressibility_factor(eos, (p = P, T = T, z = x))
+            Z_V = mixture_compressibility_factor(eos, (p = P, T = T, z = y))
 
-            ∂c = (p = P, T = T, z = Z)
-
-            V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
-            set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
-            set_partials_phase_mole_fractions!(y, S, eos, ∂c, :vapor)
-
+            phase_state = TwoPhaseLiquidVapor()
         end
+        flash_results[i] = FlashedMixture2Phase(phase_state, K, V, x, y, Z_L, Z_V)
     end
-    x + y + z
-    error() 
 end
 
 @terv_secondary function update_as_secondary!(Sat, s::Saturations, model::SimulationModel{D, S}, param, Pressure, OverallCompositions) where {D, S<:CompositionalSystem}
-    error()
+    # error()
 end
 
 @terv_secondary function update_as_secondary!(massmob, m::MassMobilities, model::SimulationModel{D, S}, param) where {D, S<:CompositionalSystem}
-    error()
+    # error()
 end
 
 @terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
-    error()
+    # error()
 end
 
 
