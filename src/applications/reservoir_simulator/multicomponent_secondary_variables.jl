@@ -98,10 +98,10 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
             l, v = f.liquid, f.vapor
             x = l.mole_fractions
             y = v.mole_fractions
-            @debug "Info:" Z K v x y
             @. x = liquid_mole_fraction(Z, K, vapor_frac)
             @. y = vapor_mole_fraction(x, K)
             if eltype(x)<:ForwardDiff.Dual
+                inverse_flash_update!(S, eos, c, vapor_frac)
                 ∂c = (p = P, T = T, z = Z)
                 V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
                 set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
