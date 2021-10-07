@@ -32,7 +32,7 @@ L, V = LiquidPhase(), VaporPhase()
 sys = TwoPhaseCompositionalSystem([L, V], eos)
 model = SimulationModel(G, sys)
 state0 = setup_state(model, Dict(:Pressure => p0, :OverallCompositions => z0))
-tstep = 1
+tstep = [1.0]
 timesteps = tstep*3600*24 # Convert time-steps from days to seconds
 # Simulate and return
 

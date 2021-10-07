@@ -57,10 +57,17 @@ end
 struct TwoPhaseCompositionalDensities <: PhaseMassDensities
 end
 
+struct PhaseMassFractions <: PhaseMassDensities
+    phase
+end
+
+values_per_entity(model, v::PhaseMassFractions) = number_of_components(model.system)
 
 function select_secondary_variables_system!(S, domain, system::CompositionalSystem, formulation)
     nph = number_of_phases(system)
     S[:PhaseMassDensities] = TwoPhaseCompositionalDensities()
+    S[:LiquidMassFractions] = PhaseMassFractions(:liquid)
+    S[:VaporMassFractions] = PhaseMassFractions(:vapor)
     S[:TotalMasses] = TotalMasses()
     S[:FlashResults] = FlashResults(system)
     S[:Saturations] = Saturations()
@@ -141,6 +148,32 @@ end
 
 @terv_secondary function update_as_secondary!(massmob, m::MassMobilities, model::SimulationModel{D, S}, param) where {D, S<:CompositionalSystem}
     # error()
+end
+
+@terv_secondary function update_as_secondary!(X, m::PhaseMassFractions, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
+    molar_mass = map((x) -> x.mw, model.system.equation_of_state.mixture.properties)
+    phase = m.phase
+    for (i, f) in enumerate(FlashResults)
+        if phase_is_present(phase, f.state)
+            X_i = view(X, :, i)
+            r = getfield(f, phase)
+            x_i = r.mole_fractions
+            @debug "Updating $i:" X_i r molar_mass x_i
+            update_mass_fractions!(X_i, x_i, molar_mass)
+        end
+    end
+end
+
+
+
+function update_mass_fractions!(X, x, molar_masses)
+    t = 0
+    for i in 1:length(x)
+        tmp = molar_masses[i]*x[i]
+        t += tmp
+        X[i] = tmp
+    end
+    @. X = X/t
 end
 
 @terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, Pressure, Temperature, OverallCompositions, FlashResults) where {D, S<:CompositionalSystem}
