@@ -136,14 +136,26 @@ end
         Sat[1, i] = S_l
         Sat[2, i] = S_v
     end
+    @debug "Saturations complete" Sat
 end
 
 @terv_secondary function update_as_secondary!(massmob, m::MassMobilities, model::SimulationModel{D, S}, param) where {D, S<:CompositionalSystem}
     # error()
 end
 
-@terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
-    # error()
+@terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, Pressure, Temperature, OverallCompositions, FlashResults) where {D, S<:CompositionalSystem}
+    eos = model.system.equation_of_state
+    for i in 1:size(Sat, 2)
+        p = Pressure[i]
+        T = Temperature[1, i]
+        z = view(OverallCompositions, :, i)
+        cond = (p = p, T = T, z = z)
+
+        ρ_l, ρ_l = mass_densities(eos, cond, FlashResults[i])
+        rho[1, i] = ρ_l
+        rho[2, i] = ρ_l
+    end
+    @debug "Densities complete" rho
 end
 
 
