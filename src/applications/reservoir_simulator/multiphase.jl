@@ -11,7 +11,6 @@ export Pressure, Saturations, TotalMasses, TotalMass
 
 using CUDA
 # Abstract multiphase system
-abstract type MultiPhaseSystem <: TervSystem end
 
 get_phases(sys::MultiPhaseSystem) = sys.phases
 number_of_phases(sys::MultiPhaseSystem) = length(get_phases(sys))

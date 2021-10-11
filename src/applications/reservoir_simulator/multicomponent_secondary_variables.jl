@@ -4,7 +4,7 @@ struct OverallCompositions <: GroupedVariables
     OverallCompositions(dzMax = 0.2) = new(dzMax)
 end
 
-degrees_of_freedom_per_entity(model, v::OverallCompositions) =  values_per_entity(model, v) - 1
+degrees_of_freedom_per_entity(model, v::OverallCompositions) = values_per_entity(model, v) - 1
 values_per_entity(model, v::OverallCompositions) = number_of_components(model.system)
 
 maximum_value(::OverallCompositions) = 1.0
@@ -183,6 +183,17 @@ end
         rho[1, i] = ρ_l
         rho[2, i] = ρ_l
     end
+end
+
+# Total masses
+@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities, Saturations, VaporMassFractions, LiquidMassFractions) where {G, S<:CompositionalSystem}
+    pv = get_pore_volume(model)
+    ρ = PhaseMassDensities
+    X = LiquidMassFractions
+    Y = VaporMassFractions
+    Sat = Saturations
+
+    @tullio totmass[c, i] = (ρ[1, i]*Sat[1, i]*X[c, i] + ρ[2, i]*Sat[2, i]*Y[c, i])*pv[i]
 end
 
 
