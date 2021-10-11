@@ -35,7 +35,7 @@ function number_of_partials_per_entity(model::SimulationModel, entity::TervUnit)
     n = 0
     for pvar in values(get_primary_variables(model))
         if associated_entity(pvar) == entity
-            n += 1
+            n += degrees_of_freedom_per_entity(model, pvar)
         end
     end
     return n
