@@ -10,7 +10,9 @@ function select_secondary_variables_flow_type!(S, domain, system, formulation, f
     if !isa(system, SinglePhaseSystem)
         S[:RelativePermeabilities] = BrooksCoreyRelPerm(system)
     end
-    S[:MassMobilities] = MassMobilities()
+    if isa(system, ImmiscibleSystem)
+        S[:MassMobilities] = MassMobilities()
+    end
 end
 
 
@@ -66,6 +68,26 @@ function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentia
         @tullio flux[ph, i] = spu_upwind_mult_index(conn_data[i], ph, pot[ph, i], mob)
     end
 end
+
+"""
+Half face Darcy flux with separate potential. (Compositional version)
+"""
+function update_half_face_flux!(law, storage, model::SimulationModel{D, S}, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {D,S<:TwoPhaseCompositionalSystem,U,K,T<:DarcyMassMobilityFlow}
+    pot = storage.state.CellNeighborPotentialDifference
+    X = storage.state.LiquidMassFractions
+    Y = storage.state.VaporMassFractions
+    error()
+    flux = get_entries(law.half_face_flux_cells)
+    conn_data = law.flow_discretization.conn_data
+    if size(pot, 1) == 1
+        # Scalar potential
+        @tullio flux[c, i] = spu_upwind_mult_index(conn_data[i], ph, pot[1, i], mob)
+    else
+        # Multiphase potential
+        @tullio flux[c, i] = spu_upwind_mult_index(conn_data[i], ph, pot[ph, i], mob)
+    end
+end
+
 
 """
 Half face Darcy flux in a single fused operation (faster for immiscible models)
