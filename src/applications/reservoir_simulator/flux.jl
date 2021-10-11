@@ -73,16 +73,26 @@ end
 Half face Darcy flux with separate potential. (Compositional version)
 """
 function update_half_face_flux!(law, storage, model::SimulationModel{D, S}, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {D,S<:TwoPhaseCompositionalSystem,U,K,T<:DarcyMassMobilityFlow}
-    pot = storage.state.CellNeighborPotentialDifference
-    X = storage.state.LiquidMassFractions
-    Y = storage.state.VaporMassFractions
-    error()
+    state = storage.state
+    pot = state.CellNeighborPotentialDifference
+    X = state.LiquidMassFractions
+    Y = state.VaporMassFractions
+    kr = state.RelativePermeabilities
+    μ = state.PhaseViscosities
+    ρ = state.PhaseMassDensities
+    fr = state.FlashResults
+
     flux = get_entries(law.half_face_flux_cells)
     conn_data = law.flow_discretization.conn_data
+    @info size(pot, 1)
+
     if size(pot, 1) == 1
         # Scalar potential
-        @tullio flux[c, i] = spu_upwind_mult_index(conn_data[i], ph, pot[1, i], mob)
+        for i in 1:length(pot)
+            @views compositional_flux_single_pot!(flux[:, i], fr, conn_data[i], pot[1, i], X, Y, ρ, kr, μ)
+        end
     else
+        error()
         # Multiphase potential
         @tullio flux[c, i] = spu_upwind_mult_index(conn_data[i], ph, pot[ph, i], mob)
     end
@@ -170,4 +180,50 @@ Two point Darcy flux with gravity - inner version that takes in cells and transm
 @inline function half_face_two_point_kgradp_gravity(c_self::I, c_other::I, T, p::AbstractArray{R}, gΔz, ρ::AbstractArray{R}) where {R<:Real, I<:Integer}
     v = -T*two_point_potential_drop_half_face(c_self, c_other, p, gΔz, ρ)
     return v
+end
+
+
+function compositional_flux_single_pot!(q, flash_state, conn_data, θ, X, Y, ρ, kr, μ)
+    if θ < 0
+        ix = conn_data.self
+        f = (x) -> x
+    else
+        ix = conn_data.other
+        f = value
+    end
+    s = flash_state[ix].state
+    compositional_flux_single_pot!(q, s, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
+end
+
+function compositional_flux_single_pot!(q, ::TwoPhaseLiquidVapor, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
+    kr_l = f(kr[1, ix])
+    kr_v = f(kr[2, ix])
+    ρ_l = f(ρ[1, ix])
+    ρ_v = f(ρ[2, ix])
+    μ_l = f(μ[1, ix])
+    μ_v = f(μ[2, ix])
+
+    for i in eachindex(q)
+        q[i] = ((kr_l/μ_l)*f(X[i, ix])*ρ_l + (kr_v/μ_v)*f(Y[i, ix])*ρ_v)*θ
+    end
+end
+
+function compositional_flux_single_pot!(q, ::SinglePhaseLiquid, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
+    kr_l = f(kr[1, ix])
+    ρ_l = f(ρ[1, ix])
+    μ_l = f(μ[1, ix])
+
+    for i in eachindex(q)
+        q[i] = (kr_l/μ_l)*f(X[i, ix])*ρ_l*θ
+    end
+end
+
+function compositional_flux_single_pot!(q, ::SinglePhaseVapor, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
+    kr_v = f(kr[2, ix])
+    ρ_v = f(ρ[2, ix])
+    μ_v = f(μ[2, ix])
+
+    for i in eachindex(q)
+        q[i] = (kr_v/μ_v)*f(Y[i, ix])*ρ_v*θ
+    end
 end

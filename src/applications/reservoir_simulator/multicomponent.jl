@@ -18,6 +18,14 @@ function select_equations_system!(eqs, domain, system::MultiComponentSystem, for
     eqs[:mass_conservation] = (ConservationLaw, nc)
 end
 
+function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:TwoPhaseCompositionalSystem}
+    Φ = get_pore_volume(model)
+    ρ = storage.state.PhaseMassDensities
+    s = storage.state.Saturations
+    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[1, i]*s[1, i] + ρ[2, i]*s[2, i])*Φ[i])
+    return (e, tolerance_scale(eq))
+end
+
 # function setup_storage_system!(storage, model, system::TwoPhaseCompositionalSystem)
 #     s = model.system
 #     eos = s.equation_of_state
