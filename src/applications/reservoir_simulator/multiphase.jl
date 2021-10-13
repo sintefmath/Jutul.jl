@@ -87,17 +87,21 @@ get_name(::VaporPhase) = "Vapor"
 Pressure
 """
 struct Pressure <: ScalarVariable
-    dpMaxAbs
-    dpMaxRel
+    max_abs
+    max_rel
+    minimum_pressure
+    maximum_pressure
     scale
-    function Pressure(dpMaxAbs = nothing, dpMaxRel = nothing, scale = 1e8)
-        new(dpMaxAbs, dpMaxRel, scale)
+    function Pressure(; max_abs = nothing, max_rel = nothing, scale = 1e8, maximum = Inf, minimum = -Inf)
+        new(max_abs, max_rel, minimum, maximum, scale)
     end
 end
 
 variable_scale(p::Pressure) = p.scale
-absolute_increment_limit(p::Pressure) = p.dpMaxAbs
-relative_increment_limit(p::Pressure) = p.dpMaxRel
+absolute_increment_limit(p::Pressure) = p.max_abs
+relative_increment_limit(p::Pressure) = p.max_rel
+maximum_value(p::Pressure) = p.maximum_pressure
+minimum_value(p::Pressure) = p.minimum_pressure
 
 # Saturations as primary variable
 struct Saturations <: GroupedVariables
