@@ -179,9 +179,9 @@ end
         z = view(OverallCompositions, :, i)
         cond = (p = p, T = T, z = z)
 
-        ρ_l, ρ_l = mass_densities(eos, cond, FlashResults[i])
+        ρ_l, ρ_v = mass_densities(eos, cond, FlashResults[i])
         rho[1, i] = ρ_l
-        rho[2, i] = ρ_l
+        rho[2, i] = ρ_v
     end
 end
 
