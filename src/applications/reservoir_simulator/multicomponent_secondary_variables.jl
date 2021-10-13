@@ -173,7 +173,7 @@ end
 
 @terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, Pressure, Temperature, OverallCompositions, FlashResults) where {D, S<:CompositionalSystem}
     eos = model.system.equation_of_state
-    for i in 1:size(Sat, 2)
+    for i in 1:size(rho, 2)
         p = Pressure[i]
         T = Temperature[1, i]
         z = view(OverallCompositions, :, i)
@@ -186,14 +186,30 @@ end
 end
 
 # Total masses
-@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities, Saturations, VaporMassFractions, LiquidMassFractions) where {G, S<:CompositionalSystem}
+@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, FlashResults, PhaseMassDensities, Saturations, VaporMassFractions, LiquidMassFractions) where {G, S<:CompositionalSystem}
     pv = get_pore_volume(model)
     ρ = PhaseMassDensities
     X = LiquidMassFractions
     Y = VaporMassFractions
     Sat = Saturations
+    F = FlashResults
 
-    @tullio totmass[c, i] = (ρ[1, i]*Sat[1, i]*X[c, i] + ρ[2, i]*Sat[2, i]*Y[c, i])*pv[i]
+    # @info "Total mass" value.(Sat) value.(X) value.(Y) value.(ρ)
+    @tullio totmass[c, i] = two_phase_compositional_mass(F[i].state, ρ, X, Y, Sat, c, i)*pv[i]
 end
 
+function two_phase_compositional_mass(::SinglePhaseVapor, ρ, X, Y, Sat, c, i)
+    M = ρ[2, i]*Sat[2, i]*Y[c, i]
+    return M
+end
 
+function two_phase_compositional_mass(::SinglePhaseLiquid, ρ, X, Y, Sat, c, i)
+    M = ρ[1, i]*Sat[1, i]*X[c, i]
+    return M
+end
+
+function two_phase_compositional_mass(::TwoPhaseLiquidVapor, ρ, X, Y, S, c, i)
+    M_v = ρ[1, i]*S[1, i]*X[c, i]
+    M_l = ρ[2, i]*S[2, i]*Y[c, i]
+    return M_l + M_v
+end
