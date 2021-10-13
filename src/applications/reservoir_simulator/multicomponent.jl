@@ -10,7 +10,7 @@ end
 
 function select_primary_variables_system!(S, domain, system::CompositionalSystem, formulation)
     S[:Pressure] = Pressure()
-    S[:OverallCompositions] = OverallCompositions()
+    S[:OverallMoleFractions] = OverallMoleFractions()
 end
 
 function select_equations_system!(eqs, domain, system::MultiComponentSystem, formulation)

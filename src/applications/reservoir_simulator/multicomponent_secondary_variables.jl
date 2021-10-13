@@ -1,16 +1,16 @@
 # Saturations as primary variable
-struct OverallCompositions <: FractionVariables
+struct OverallMoleFractions <: FractionVariables
     dz_max
-    OverallCompositions(;dz_max = 0.2) = new(dz_max)
+    OverallMoleFractions(;dz_max = 0.2) = new(dz_max)
 end
 
-values_per_entity(model, v::OverallCompositions) = number_of_components(model.system)
+values_per_entity(model, v::OverallMoleFractions) = number_of_components(model.system)
 
-minimum_value(::OverallCompositions) = MultiComponentFlash.MINIMUM_COMPOSITION
-absolute_increment_limit(z::OverallCompositions) = z.dz_max
+minimum_value(::OverallMoleFractions) = MultiComponentFlash.MINIMUM_COMPOSITION
+absolute_increment_limit(z::OverallMoleFractions) = z.dz_max
 
 
-function update_primary_variable!(state, p::OverallCompositions, state_symbol, model, dx)
+function update_primary_variable!(state, p::OverallMoleFractions, state_symbol, model, dx)
     s = state[state_symbol]
     unit_sum_update!(s, p, model, dx)
 end
@@ -70,7 +70,7 @@ end
 degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model.system)#*number_of_components(model.system)
 
 
-@terv_secondary function update_as_secondary!(flash_results, fr::FlashResults, model, param, Pressure, Temperature, OverallCompositions)
+@terv_secondary function update_as_secondary!(flash_results, fr::FlashResults, model, param, Pressure, Temperature, OverallMoleFractions)
     # S = flash_storage(eos)
     S = fr.storage
     m = fr.method
@@ -82,7 +82,7 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
         # Grab values
         p = value(P)
         t = value(T)
-        Z = view(OverallCompositions, :, i)
+        Z = view(OverallMoleFractions, :, i)
         z = value.(Z)
         # Conditions
         c = (p = p, T = T, z = z)
@@ -163,12 +163,12 @@ function update_mass_fractions!(X, x, molar_masses)
     @. X = X/t
 end
 
-@terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, Pressure, Temperature, OverallCompositions, FlashResults) where {D, S<:CompositionalSystem}
+@terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, Pressure, Temperature, OverallMoleFractions, FlashResults) where {D, S<:CompositionalSystem}
     eos = model.system.equation_of_state
     for i in 1:size(rho, 2)
         p = Pressure[i]
         T = Temperature[1, i]
-        z = view(OverallCompositions, :, i)
+        z = view(OverallMoleFractions, :, i)
         cond = (p = p, T = T, z = z)
 
         ρ_l, ρ_v = mass_densities(eos, cond, FlashResults[i])
@@ -188,20 +188,24 @@ end
 
     # @info "Total mass" value.(Sat) value.(X) value.(Y) value.(ρ)
     @tullio totmass[c, i] = two_phase_compositional_mass(F[i].state, ρ, X, Y, Sat, c, i)*pv[i]
+    # @debug "Total mass updated:" totmass'
 end
 
 function two_phase_compositional_mass(::SinglePhaseVapor, ρ, X, Y, Sat, c, i)
     M = ρ[2, i]*Sat[2, i]*Y[c, i]
+    # @info "Vapor cell $i component $c" M
     return M
 end
 
 function two_phase_compositional_mass(::SinglePhaseLiquid, ρ, X, Y, Sat, c, i)
     M = ρ[1, i]*Sat[1, i]*X[c, i]
+    # @info "Liquid cell $i component $c" M X[c, i] Sat[1, i] ρ[:, i]
     return M
 end
 
 function two_phase_compositional_mass(::TwoPhaseLiquidVapor, ρ, X, Y, S, c, i)
     M_v = ρ[1, i]*S[1, i]*X[c, i]
     M_l = ρ[2, i]*S[2, i]*Y[c, i]
+    # @info "Two-phase cell $i component $c" M_v M_l
     return M_l + M_v
 end

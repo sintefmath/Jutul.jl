@@ -41,7 +41,7 @@ p .= p0
 # p[1] *= 10
 # p[end] /= 10
 
-state0 = setup_state(model, Dict(:Pressure => p0, :OverallCompositions => z0))
+state0 = setup_state(model, Dict(:Pressure => p0, :OverallMoleFractions => z0))
 tstep = [1.0]
 timesteps = tstep*3600*24 # Convert time-steps from days to seconds
 # Simulate and return
