@@ -263,19 +263,43 @@ function update_primary_variable!(state, p::FractionVariables, state_symbol, mod
 end
 
 function unit_sum_update!(s, p, model, dx)
-    nph, nu = value_dim(model, p)
+    nf, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
     maxval, minval = maximum_value(p), minimum_value(p)
-    Threads.@threads for cell = 1:nu
-        dlast = 0
-        @inbounds for ph = 1:(nph-1)
-            v = value(s[ph, cell])
-            dv = dx[cell + (ph-1)*nu]
+    if nf == 2
+        maxval = min(1 - minval, maxval)
+        minval = max(minval, maxval - 1)
+        for cell = 1:nu
+            dlast = 0
+            v = value(s[1, cell])
+            dv = dx[cell]
             dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
-            dlast -= dv
-            s[ph, cell] += dv
+            @inbounds s[1, cell] += dv
+            @inbounds s[2, cell] -= dv
         end
-        @inbounds s[nph, cell] += dlast
+    else
+        for cell = 1:nu
+            w = 1.0
+            # First pass: Find the relaxation factors that keep all fractions in [0, 1]
+            # and obeying the maximum change targets
+            dlast0 = 0
+            @inbounds for i = 1:(nf-1)
+                v = value(s[i, cell])
+                dv0 = dx[cell + (i-1)*nu]
+                dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
+                dlast0 -= dv
+                # dv0*w = dv -> w = dv/dv0
+                w = min(w, dv/dv0)
+            end
+            # Do the same thing for the implicit update of the last value
+            dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
+            w = min(w, dlast/dlast0)
+
+            @inbounds for i = 1:(nf-1)
+                s[i, cell] += w*dx[cell + (i-1)*nu]
+            end
+            @inbounds s[nf, cell] += w*dlast0
+        end
     end
 end
 
