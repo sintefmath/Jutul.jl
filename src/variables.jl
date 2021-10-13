@@ -235,7 +235,49 @@ function initialize_variable_value!(state, model, pvar::GroupedVariables, symb::
 end
 
 # Specific variable implementations that are generic for many types of system follow
+degrees_of_freedom_per_entity(model, v::FractionVariables) =  values_per_entity(model, v) - 1
+maximum_value(::FractionVariables) = 1.0
+minimum_value(::FractionVariables) = 0.0
 
+
+function initialize_primary_variable_ad!(state, model, pvar::FractionVariables, state_symbol, npartials; kwarg...)
+    n = values_per_entity(model, pvar)
+    v = state[state_symbol]
+    state[state_symbol] = unit_sum_init(v, model, npartials, n; kwarg...)
+    return state
+end
+
+function unit_sum_init(v, model, npartials, N; offset = 0, kwarg...)
+    # nph - 1 primary variables, with the last saturation being initially zero AD
+    dp = vcat((1:N-1) .+ offset, 0)
+    v = allocate_array_ad(v, diag_pos = dp, context = model.context, npartials = npartials; kwarg...)
+    for i in 1:size(v, 2)
+        v[end, i] = 1 - sum(v[1:end-1, i])
+    end
+    return v
+end
+
+function update_primary_variable!(state, p::FractionVariables, state_symbol, model, dx)
+    s = state[state_symbol]
+    unit_sum_update!(s, p, model, dx)
+end
+
+function unit_sum_update!(s, p, model, dx)
+    nph, nu = value_dim(model, p)
+    abs_max = absolute_increment_limit(p)
+    maxval, minval = maximum_value(p), minimum_value(p)
+    Threads.@threads for cell = 1:nu
+        dlast = 0
+        @inbounds for ph = 1:(nph-1)
+            v = value(s[ph, cell])
+            dv = dx[cell + (ph-1)*nu]
+            dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
+            dlast -= dv
+            s[ph, cell] += dv
+        end
+        @inbounds s[nph, cell] += dlast
+    end
+end
 
 function values_per_entity(model, var::ConstantVariables)
     c = var.constants

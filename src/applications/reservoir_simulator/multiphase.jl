@@ -104,56 +104,19 @@ maximum_value(p::Pressure) = p.maximum_pressure
 minimum_value(p::Pressure) = p.minimum_pressure
 
 # Saturations as primary variable
-struct Saturations <: GroupedVariables
-    dsMax
-    Saturations(dsMax = 0.2) = new(dsMax)
+struct Saturations <: FractionVariables
+    ds_max
+    Saturations(;ds_max = 0.2) = new(ds_max)
 end
 
-degrees_of_freedom_per_entity(model, v::Saturations) =  values_per_entity(model, v) - 1
 values_per_entity(model, v::Saturations) = number_of_phases(model.system)
-
-maximum_value(::Saturations) = 1.0
-minimum_value(::Saturations) = 0.0
-absolute_increment_limit(s::Saturations) = s.dsMax
+absolute_increment_limit(s::Saturations) = s.ds_max
 
 function initialize_primary_variable_ad!(state, model, pvar::Saturations, state_symbol, npartials; kwarg...)
     nph = values_per_entity(model, pvar)
     v = state[state_symbol]
     state[state_symbol] = unit_sum_init(v, model, npartials, nph; kwarg...)
     return state
-end
-
-function unit_sum_init(v, model, npartials, N; offset = 0, kwarg...)
-    # nph - 1 primary variables, with the last saturation being initially zero AD
-    dp = vcat((1:N-1) .+ offset, 0)
-    v = allocate_array_ad(v, diag_pos = dp, context = model.context, npartials = npartials; kwarg...)
-    for i in 1:size(v, 2)
-        v[end, i] = 1 - sum(v[1:end-1, i])
-    end
-    return v
-end
-
-
-function update_primary_variable!(state, p::Saturations, state_symbol, model, dx)
-    s = state[state_symbol]
-    unit_sum_update!(s, p, model, dx)
-end
-
-function unit_sum_update!(s, p, model, dx)
-    nph, nu = value_dim(model, p)
-    abs_max = absolute_increment_limit(p)
-    maxval, minval = maximum_value(p), minimum_value(p)
-    Threads.@threads for cell = 1:nu
-        dlast = 0
-        @inbounds for ph = 1:(nph-1)
-            v = value(s[ph, cell])
-            dv = dx[cell + (ph-1)*nu]
-            dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
-            dlast -= dv
-            s[ph, cell] += dv
-        end
-        @inbounds s[nph, cell] += dlast
-    end
 end
 
 # Total component masses

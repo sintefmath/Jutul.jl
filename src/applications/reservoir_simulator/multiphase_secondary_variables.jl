@@ -3,19 +3,14 @@ export BrooksCoreyRelPerm, TabulatedRelPermSimple
 
 abstract type PhaseVariables <: GroupedVariables end
 abstract type ComponentVariable <: GroupedVariables end
-abstract type PhaseAndComponentVariable <: GroupedVariables end
 
 function degrees_of_freedom_per_entity(model, sf::PhaseVariables) number_of_phases(model.system) end
 
 # Single-phase specialization
 function degrees_of_freedom_per_entity(model::SimulationModel{D, S}, sf::ComponentVariable) where {D, S<:SinglePhaseSystem} 1 end
-function degrees_of_freedom_per_entity(model::SimulationModel{D, S}, sf::PhaseAndComponentVariable) where {D, S<:SinglePhaseSystem} 1 end
 
 # Immiscible specialization
 function degrees_of_freedom_per_entity(model::SimulationModel{D, S}, sf::ComponentVariable) where {D, S<:ImmiscibleSystem}
-    number_of_phases(model.system)
-end
-function degrees_of_freedom_per_entity(model::SimulationModel{D, S}, sf::PhaseAndComponentVariable) where {D, S<:ImmiscibleSystem}
     number_of_phases(model.system)
 end
 
@@ -156,9 +151,9 @@ function constant_expansion(p::Real, p_ref::Real, c::Real, f_ref::Real)
 end
 
 """
-Mobility of the mass of each component, in each phase (TBD how to represent this in general)
+Mobility of the mass in each phase (TBD how to represent this in general)
 """
-struct MassMobilities <: PhaseAndComponentVariable end
+struct MassMobilities <: PhaseVariables end
 
 @terv_secondary function update_as_secondary!(ρλ, tv::MassMobilities, model, param, 
                                 PhaseMassDensities, PhaseViscosities, RelativePermeabilities)

@@ -1,22 +1,14 @@
 # Saturations as primary variable
-struct OverallCompositions <: GroupedVariables
-    dzMax
-    OverallCompositions(dzMax = 0.2) = new(dzMax)
+struct OverallCompositions <: FractionVariables
+    dz_max
+    OverallCompositions(;dz_max = 0.2) = new(dz_max)
 end
 
-degrees_of_freedom_per_entity(model, v::OverallCompositions) = values_per_entity(model, v) - 1
 values_per_entity(model, v::OverallCompositions) = number_of_components(model.system)
 
-maximum_value(::OverallCompositions) = 1.0
 minimum_value(::OverallCompositions) = MultiComponentFlash.MINIMUM_COMPOSITION
-absolute_increment_limit(z::OverallCompositions) = z.dzMax
+absolute_increment_limit(z::OverallCompositions) = z.dz_max
 
-function initialize_primary_variable_ad!(state, model, pvar::OverallCompositions, state_symbol, npartials; kwarg...)
-    n = values_per_entity(model, pvar)
-    v = state[state_symbol]
-    state[state_symbol] = unit_sum_init(v, model, npartials, n; kwarg...)
-    return state
-end
 
 function update_primary_variable!(state, p::OverallCompositions, state_symbol, model, dx)
     s = state[state_symbol]
@@ -57,7 +49,7 @@ end
 struct TwoPhaseCompositionalDensities <: PhaseMassDensities
 end
 
-struct PhaseMassFractions <: PhaseMassDensities
+struct PhaseMassFractions <: FractionVariables
     phase
 end
 
@@ -75,7 +67,7 @@ function select_secondary_variables_system!(S, domain, system::CompositionalSyst
     S[:PhaseViscosities] = ConstantVariables(1e-3*ones(nph)) # 1 cP for all phases by default
 end
 
-degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model.system)*number_of_components(model.system)
+degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model.system)#*number_of_components(model.system)
 
 
 @terv_secondary function update_as_secondary!(flash_results, fr::FlashResults, model, param, Pressure, Temperature, OverallCompositions)
