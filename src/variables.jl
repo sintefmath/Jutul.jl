@@ -280,7 +280,6 @@ function unit_sum_update!(s, p, model, dx)
     else
         if false
             # Preserve direction
-            s0 = value.(s)
             for cell = 1:nu
                 w = 1.0
                 # First pass: Find the relaxation factors that keep all fractions in [0, 1]
@@ -292,7 +291,6 @@ function unit_sum_update!(s, p, model, dx)
                     dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
                     dlast0 -= dv0
                     w = pick_relaxation(w, dv, dv0)
-                    @info "Update $i:" dv dv0 dv/dv0 w
                 end
                 # Do the same thing for the implicit update of the last value
                 dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
@@ -302,14 +300,9 @@ function unit_sum_update!(s, p, model, dx)
                     s[i, cell] += w*dx[cell + (i-1)*nu]
                 end
                 @inbounds s[nf, cell] += w*dlast0
-                initial = s0[:, cell]
-                new = value.(s[:, cell])
-                delta = [dx[cell], dx[cell + nu], dlast0]
-                @info "Update done: " initial delta new w
             end
         else
             # Preserve update magnitude
-            s0 = value.(s)
             for cell = 1:nu
                 # First pass: Find the relaxation factors that keep all fractions in [0, 1]
                 # and obeying the maximum change targets
@@ -333,14 +326,9 @@ function unit_sum_update!(s, p, model, dx)
                         s[i, cell] /= t
                     end
                 end
-                initial = s0[:, cell]
-                new = value.(s[:, cell])
-                delta = [dx[cell], dx[cell + nu], dlast0]
-                @info "Update done: " initial delta new sum(new)
             end
         end
     end
-    @assert all(value(s) .> 0)
 end
 
 function pick_relaxation(w, dv, dv0)
