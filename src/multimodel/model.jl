@@ -658,12 +658,11 @@ function submodels_storage_apply!(storage, model, f!, arg...)
 end
 
 function get_output_state(storage, model::MultiModel)
-    out = Dict{Symbol, NamedTuple}()
+    out = Dict{Symbol, Any}()
     models = model.models
     for key in keys(models)
         out[key] = get_output_state(storage[key], models[key])
     end
-    out = convert_to_immutable_storage(out)
     return out
 end
 

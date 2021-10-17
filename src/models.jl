@@ -551,7 +551,12 @@ end
 
 function get_output_state(storage, model)
     # As this point (after a converged step) state0 should be state without AD.
-    return deepcopy(storage.state0)
+    s0 = storage.state0
+    D = Dict{Symbol, Any}()
+    for k in keys(s0)
+        D[k] = copy(s0[k])
+    end
+    return D
 end
 
 function reset_to_previous_state!(storage, model)

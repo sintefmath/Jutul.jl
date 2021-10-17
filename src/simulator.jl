@@ -151,7 +151,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         config = simulator_config(sim; kwarg...)
     end
     reports = []
-    states = []
+    states = Vector{Dict{Symbol, Any}}()
     no_steps = length(timesteps)
     maxIterations = config[:max_nonlinear_iterations]
     rec = config[:ProgressRecorder]
