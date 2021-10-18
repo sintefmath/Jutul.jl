@@ -53,6 +53,8 @@ struct PhaseMassFractions <: FractionVariables
     phase
 end
 
+struct LBCViscosities <: PhaseVariables end
+
 values_per_entity(model, v::PhaseMassFractions) = number_of_components(model.system)
 
 function select_secondary_variables_system!(S, domain, system::CompositionalSystem, formulation)
@@ -64,7 +66,7 @@ function select_secondary_variables_system!(S, domain, system::CompositionalSyst
     S[:FlashResults] = FlashResults(system)
     S[:Saturations] = Saturations()
     S[:Temperature] = ConstantVariables([273.15 + 30.0])
-    S[:PhaseViscosities] = ConstantVariables(1e-3*ones(nph)) # 1 cP for all phases by default
+    S[:PhaseViscosities] = LBCViscosities() # 1 cP for all phases by default
 end
 
 degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model.system)#*number_of_components(model.system)
@@ -80,12 +82,10 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
         P = Pressure[i]
         T = Temperature[1, i]
         # Grab values
-        p = value(P)
-        t = value(T)
         Z = view(OverallMoleFractions, :, i)
         z = value.(Z)
         # Conditions
-        c = (p = p, T = T, z = z)
+        c = (p = value(P), T = value(T), z = z)
         # Perform flash
         vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false)
 
@@ -142,6 +142,7 @@ end
 
 @terv_secondary function update_as_secondary!(X, m::PhaseMassFractions, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
     molar_mass = map((x) -> x.mw, model.system.equation_of_state.mixture.properties)
+    @info molar_mass
     phase = m.phase
     for (i, f) in enumerate(FlashResults)
         if phase_is_present(phase, f.state)
@@ -155,7 +156,7 @@ end
 
 function update_mass_fractions!(X, x, molar_masses)
     t = 0
-    for i in 1:length(x)
+    for i in eachindex(x)
         tmp = molar_masses[i]*x[i]
         t += tmp
         X[i] = tmp
@@ -163,15 +164,23 @@ function update_mass_fractions!(X, x, molar_masses)
     @. X = X/t
 end
 
-@terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, Pressure, Temperature, OverallMoleFractions, FlashResults) where {D, S<:CompositionalSystem}
+@terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, Pressure, Temperature, FlashResults) where {D, S<:CompositionalSystem}
     eos = model.system.equation_of_state
     for i in 1:size(rho, 2)
         p = Pressure[i]
         T = Temperature[1, i]
-        z = view(OverallMoleFractions, :, i)
-        cond = (p = p, T = T, z = z)
+        ρ_l, ρ_v = mass_densities(eos, p, T, FlashResults[i])
+        rho[1, i] = ρ_l
+        rho[2, i] = ρ_v
+    end
+end
 
-        ρ_l, ρ_v = mass_densities(eos, cond, FlashResults[i])
+@terv_secondary function update_as_secondary!(rho, m::LBCViscosities, model::SimulationModel{D, S}, param, Pressure, Temperature, FlashResults) where {D, S<:CompositionalSystem}
+    eos = model.system.equation_of_state
+    for i in 1:size(rho, 2)
+        p = Pressure[i]
+        T = Temperature[1, i]
+        ρ_l, ρ_v = lbc_viscosities(eos, p, T, FlashResults[i])
         rho[1, i] = ρ_l
         rho[2, i] = ρ_v
     end
@@ -199,13 +208,11 @@ end
 
 function two_phase_compositional_mass(::SinglePhaseLiquid, ρ, X, Y, Sat, c, i)
     M = ρ[1, i]*Sat[1, i]*X[c, i]
-    # @info "Liquid cell $i component $c" M X[c, i] Sat[1, i] ρ[:, i]
     return M
 end
 
 function two_phase_compositional_mass(::TwoPhaseLiquidVapor, ρ, X, Y, S, c, i)
     M_v = ρ[1, i]*S[1, i]*X[c, i]
     M_l = ρ[2, i]*S[2, i]*Y[c, i]
-    # @info "Two-phase cell $i component $c" M_v M_l
     return M_l + M_v
 end
