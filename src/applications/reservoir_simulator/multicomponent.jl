@@ -45,39 +45,54 @@ function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::Co
     mu = state.PhaseViscosities
     X = state.LiquidMassFractions
     Y = state.VaporMassFractions
+    Sat = state.Saturations
     FR = state.FlashResults
     rhoS = get_reference_densities(model, storage)
-    insert_component_sources!(acc, kr, mu, FR, X, Y, rho, rhoS, force)
+    insert_component_sources!(acc, Sat, kr, mu, FR, X, Y, rho, rhoS, force)
 end
 
-function insert_component_sources!(acc, kr, mu, F, X, Y, rho, rhoS, sources)
+function insert_component_sources!(acc, S, kr, mu, F, X, Y, rho, rhoS, sources)
     ncomp = size(acc, 1)
     for src in sources
         for c = 1:ncomp
-            @inbounds acc[c, src.cell] -= component_source(src, kr, mu, F, X, Y, rho, rhoS, c)
+            @inbounds acc[c, src.cell] -= component_source(src, S, kr, mu, F, X, Y, rho, rhoS, c)
         end
     end
 end
 
-function component_source(src, kr, mu, F, X, Y, rho, rhoS, c)
+function component_source(src, S, kr, mu, F, X, Y, rho, rhoS, c)
     # Treat inflow as volumetric with respect to surface conditions
     # Treat outflow as volumetric sources
     v = src.value
     cell = src.cell
-    if v > 0
-        f = src.fractional_flow[c]
+    # :mass -> source terms are already masses
+    # :volume -> source terms are volumes at medium conditions
+    t = src.type
+    if t == :mass
+        if v > 0
+            # Source term is already density
+            f = src.fractional_flow[c]
+        else
+            f = compositional_out_f(kr, mu, X, Y, rho, c, cell, t, F[cell].state)
+        end
+    elseif t == :volume
+        if v > 0
+            # Saturation-averaged density
+            ρ_mix = S[1, cell]*rho[1, cell] + S[2, cell]*rho[2, cell]
+            f = src.fractional_flow[c]*ρ_mix
+        else
+            f = compositional_out_f(kr, mu, X, Y, rho, c, cell, t, F[cell].state)
+        end
     else
-        f = compositional_out_f(kr, mu, X, Y, rho, c, cell, F[cell].state)
+        error("Not supported source term type: $t")
     end
     q = v*f
-    @debug value(q)
     return q
 end
 
-function compositional_out_f(kr, mu, X, Y, rho, c, cell, ::TwoPhaseLiquidVapor)
+function compositional_out_f(kr, mu, X, Y, rho, c, cell, t, ::TwoPhaseLiquidVapor)
     λ_l = local_mobility(kr, mu, 1, cell)
     λ_v = local_mobility(kr, mu, 2, cell)
-    λ_t = λ_l + λ_v
 
     ρ_l = rho[1, cell]
     ρ_v = rho[2, cell]
@@ -85,17 +100,36 @@ function compositional_out_f(kr, mu, X, Y, rho, c, cell, ::TwoPhaseLiquidVapor)
     x = X[c, cell]
     y = Y[c, cell]
 
-    return (λ_l*x*ρ_l + λ_v*y*ρ_v)/λ_t
+    if t == :mass
+        m_l = ρ_l*λ_l
+        m_v = ρ_v*λ_v
+        m_t = m_l + m_v
+        f = (m_l*x + m_v*y)/m_t
+    else
+        λ_t = λ_l + λ_v
+        f = (λ_l*x*ρ_l + λ_v*y*ρ_v)/λ_t
+    end
+    return f
 end
 
-function compositional_out_f(kr, mu, X, Y, rho, c, cell, ::SinglePhaseLiquid)
+function compositional_out_f(kr, mu, X, Y, rho, c, cell, t, ::SinglePhaseLiquid)
     ρ_l = rho[1, cell]
-    y = X[c, cell]
-    return y*ρ_l
+    x = X[c, cell]
+    if t == :mass
+        f = x
+    else
+        f = x*ρ_l
+    end
+    return f
 end
 
-function compositional_out_f(kr, mu, X, Y, rho, c, cell, ::SinglePhaseVapor)
+function compositional_out_f(kr, mu, X, Y, rho, c, cell, t, ::SinglePhaseVapor)
     ρ_v = rho[2, cell]
     y = Y[c, cell]
-    return y*ρ_v
+    if t == :mass
+        f = y
+    else
+        f = y*ρ_v
+    end
+    return f
 end

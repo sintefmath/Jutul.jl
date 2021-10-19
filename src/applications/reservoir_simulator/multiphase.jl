@@ -19,10 +19,11 @@ struct SourceTerm{I, F, T} <: TervForce
     cell::I
     value::F
     fractional_flow::T
-    function SourceTerm(cell, value; fractional_flow = [1.0])
+    type::Symbol
+    function SourceTerm(cell, value; fractional_flow = [1.0], type = :mass)
         @assert sum(fractional_flow) == 1.0 "Fractional flow for source term in cell $cell must sum to 1."
         f = Tuple(fractional_flow)
-        return new{typeof(cell), typeof(value), typeof(f)}(cell, value, f)
+        return new{typeof(cell), typeof(value), typeof(f)}(cell, value, f, type)
     end
 end
 
