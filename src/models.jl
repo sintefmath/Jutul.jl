@@ -455,8 +455,16 @@ function setup_parameters(model)
     d = Dict{Symbol, Any}()
     d[:tolerances] = Dict{Symbol, Any}()
     d[:tolerances][:default] = 1e-3
+    setup_parameters_domain!(d, model, model.domain)
+    setup_parameters_system!(d, model, model.system)
+    setup_parameters_context!(d, model, model.context)
+    setup_parameters_formulation!(d, model, model.formulation)
     return d
 end
+setup_parameters_domain!(d, model, ::Any) = nothing
+setup_parameters_system!(d, model, ::Any) = nothing
+setup_parameters_context!(d, model, ::Any) = nothing
+setup_parameters_formulation!(d, model, ::Any) = nothing
 
 function build_forces(model::TervModel)
     return NamedTuple()

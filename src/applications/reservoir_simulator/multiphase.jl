@@ -236,10 +236,11 @@ end
 function get_reference_densities(model, storage)
     prm = storage.parameters
     t = float_type(model.context)
-    if haskey(prm, :reference_densities)
-        rhos = prm.reference_densities
-    else
-        rhos = ones(t, number_of_phases(model.system))
-    end
+    rhos = prm.reference_densities
     return rhos::AbstractVector{t}
+end
+
+function setup_parameters_system!(d, model, sys::MultiPhaseSystem)
+    nph = number_of_phases(sys)
+    d[:reference_densities] = transfer(model.context, ones(nph))
 end
