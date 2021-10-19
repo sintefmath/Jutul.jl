@@ -142,7 +142,6 @@ end
 
 @terv_secondary function update_as_secondary!(X, m::PhaseMassFractions, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
     molar_mass = map((x) -> x.mw, model.system.equation_of_state.mixture.properties)
-    @info molar_mass
     phase = m.phase
     for (i, f) in enumerate(FlashResults)
         if phase_is_present(phase, f.state)
