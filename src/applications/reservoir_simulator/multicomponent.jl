@@ -78,7 +78,7 @@ end
 
 function out_component_source(src, kr, mu, X, Y, rho, rhoS, c, v, cell)
     λ_l = local_mobility(kr, mu, 1, cell)
-    λ_v = local_mobility(kr, mu, 1, cell)
+    λ_v = local_mobility(kr, mu, 2, cell)
     λ_t = λ_l + λ_v
 
     ρ_l = rho[1, cell]
