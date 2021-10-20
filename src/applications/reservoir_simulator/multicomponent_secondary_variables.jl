@@ -15,15 +15,25 @@ function update_primary_variable!(state, p::OverallMoleFractions, state_symbol, 
     unit_sum_update!(s, p, model, dx)
 end
 
+mutable struct InPlaceFlashBuffer
+    z
+    forces
+    function InPlaceFlashBuffer(n)
+        z = zeros(n)
+        new(z, nothing)
+    end
+end
+
 struct FlashResults <: ScalarVariable
     storage
     method
+    update_buffer
     function FlashResults(system; method = SSIFlash(), kwarg...)
         eos = system.equation_of_state
         # np = number_of_partials_per_entity(system, Cells())
         n = MultiComponentFlash.number_of_components(eos)
         s = flash_storage(eos, method = method, inc_jac = true, diff_externals = true, npartials = n)
-        new(s, method)
+        new(s, method, InPlaceFlashBuffer(n))
     end
 end
 
@@ -38,6 +48,7 @@ function initialize_variable_value!(state, model, pvar::FlashResults, symb, val:
     for i in 1:n
         V[i] = default_value(model, pvar)
     end
+    # V = repeat([v], n)
     initialize_variable_value!(state, model, pvar, symb, V)
 end
 
@@ -84,36 +95,41 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
 
 @terv_secondary function update_as_secondary!(flash_results, fr::FlashResults, model, param, Pressure, Temperature, OverallMoleFractions)
     # S = flash_storage(eos)
-    S = fr.storage
-    m = fr.method
+    S, m, buf = fr.storage, fr.method, fr.update_buffer
     eos = model.system.equation_of_state
     @time for i in eachindex(flash_results)
         f = flash_results[i]
-        flash_results[i] = update_flash_result(S, i, m, eos, f, Pressure, Temperature, OverallMoleFractions)
+        P = Pressure[i]
+        T = Temperature[1, i]
+        Z = @view OverallMoleFractions[:, i]
+
+        flash_results[i] = update_flash_result(S, i, m, buf, eos, f, P, T, Z)
     end
-    @debug "outer" flash_results[1].liquid.mole_fractions
 end
 
-function update_flash_result(S, i, m, eos, f, Pressure, Temperature, OverallMoleFractions)
+function update_flash_result(S, i, m, buffer, eos, f, P, T, Z)
     K = f.K
-    P = Pressure[i]
-    T = Temperature[1, i]
-    # Grab values
-    # Z = view(OverallMoleFractions, :, i)
-    Z = OverallMoleFractions[:, i]
-    z = value.(Z)
+    z, forces = buffer.z, buffer.forces
+    @. z = value(Z)
     # Conditions
     c = (p = value(P), T = value(T), z = z)
     # Perform flash
     vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false)
+    if isnothing(forces)
+        # Initialize.
+        forces = force_coefficients(eos, (p = P, T = T, z = Z))
+    end
 
     l, v = f.liquid, f.vapor
     x = l.mole_fractions
     y = v.mole_fractions
 
+
     if isnan(vapor_frac)
         # Single phase condition. Life is easy.
-        Z_L = mixture_compressibility_factor(eos, (p = P, T = T, z = Z))
+        ∂cond = (p = P, T = T, z = Z)
+        force_coefficients!(forces, eos, ∂cond)
+        Z_L = mixture_compressibility_factor(eos, ∂cond, forces)
         Z_V = Z_L
         @. x = Z
         @. y = Z
@@ -136,9 +152,13 @@ function update_flash_result(S, i, m, eos, f, Pressure, Temperature, OverallMole
         else
             V = vapor_frac
         end
-        # TODO: Fix so these don't allocate memory
-        Z_L = mixture_compressibility_factor(eos, (p = P, T = T, z = x))
-        Z_V = mixture_compressibility_factor(eos, (p = P, T = T, z = y))
+        c_l = (p = P, T = T, z = x)
+        force_coefficients!(forces, eos, c_l)
+        Z_L = mixture_compressibility_factor(eos, c_l, forces)
+
+        c_v = (p = P, T = T, z = y)
+        force_coefficients!(forces, eos, c_v)
+        Z_V = mixture_compressibility_factor(eos, c_v, forces)
 
         phase_state = TwoPhaseLiquidVapor()
     end
