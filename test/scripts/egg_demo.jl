@@ -49,7 +49,7 @@ function setup_res(G, mrst_data; block_backend = false, use_groups = false)
     mu = ConstantVariables(mu)
 
     p = model.primary_variables
-    p[:Pressure] = Pressure(50*1e5, 0.2)
+    p[:Pressure] = Pressure(max_rel = 0.2)
     s = model.secondary_variables
     s[:PhaseMassDensities] = rho
     s[:RelativePermeabilities] = kr
@@ -114,7 +114,7 @@ for i = 1:num_wells
     sv[:PhaseViscosities] = model.secondary_variables[:PhaseViscosities]
 
     pw = wi.primary_variables
-    pw[:Pressure] = Pressure(50*1e5, 0.2)
+    pw[:Pressure] = Pressure(max_rel = 0.2)
 
     models[sym] = wi
 
@@ -178,7 +178,7 @@ dt = timesteps
 using AlgebraicMultigrid
 p_solve = AMGPreconditioner(smoothed_aggregation)
 cpr_type = :true_impes
-update_interval = :step
+update_interval = :once
 
 prec = CPRPreconditioner(p_solve, strategy = cpr_type, 
                     update_interval = update_interval, partial_update = false)
