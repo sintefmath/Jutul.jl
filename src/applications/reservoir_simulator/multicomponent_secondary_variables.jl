@@ -97,17 +97,17 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
     # S = flash_storage(eos)
     S, m, buf = fr.storage, fr.method, fr.update_buffer
     eos = model.system.equation_of_state
-    @time for i in eachindex(flash_results)
+    for i in eachindex(flash_results)
         f = flash_results[i]
         P = Pressure[i]
         T = Temperature[1, i]
         Z = @view OverallMoleFractions[:, i]
 
-        flash_results[i] = update_flash_result(S, i, m, buf, eos, f, P, T, Z)
+        flash_results[i] = update_flash_result(S, m, buf, eos, f, P, T, Z)
     end
 end
 
-function update_flash_result(S, i, m, buffer, eos, f, P, T, Z)
+function update_flash_result(S, m, buffer, eos, f, P, T, Z)
     K = f.K
     z, forces = buffer.z, buffer.forces
     @. z = value(Z)
@@ -125,11 +125,12 @@ function update_flash_result(S, i, m, buffer, eos, f, P, T, Z)
     y = v.mole_fractions
     if isnan(vapor_frac)
         # Single phase condition. Life is easy.
-        Z_L, Z_V, V, phase_state = single_phase_update!(P, T, Z, x, y, forces, eos, c)
+        vals = single_phase_update!(P, T, Z, x, y, forces, eos, c)
     else
-        Z_L, Z_V, V, phase_state = two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
         # Two-phase condition: We have some work to do.
+        vals = two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
     end
+    Z_L, Z_V, V, phase_state = vals
     return FlashedMixture2Phase(phase_state, K, V, x, y, Z_L, Z_V)
 end
 
@@ -140,6 +141,7 @@ function get_compressibility_factor(forces, eos, P, T, Z)
 end
 
 function single_phase_update!(P, T, Z, x, y, forces, eos, c)
+    AD = Base.promote_type(eltype(Z), typeof(P), typeof(T))
     Z_L = get_compressibility_factor(forces, eos, P, T, Z)
     Z_V = Z_L
     @. x = Z
@@ -150,7 +152,8 @@ function single_phase_update!(P, T, Z, x, y, forces, eos, c)
     else
         phase_state = SinglePhaseLiquid()
     end
-    return (Z_L, Z_V, V, phase_state)
+    out = (Z_L::AD, Z_V::AD, V::Float64, phase_state::Union{SinglePhaseVapor, SinglePhaseLiquid})
+    return out
 end
 
 function two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
@@ -240,7 +243,7 @@ end
 
     # @info "Total mass" value.(Sat) value.(X) value.(Y) value.(ρ)
     @tullio totmass[c, i] = two_phase_compositional_mass(F[i].state, ρ, X, Y, Sat, c, i)*pv[i]
-    # @debug "Total mass updated:" totmass'
+    # @debug "Total mass updated:" totmass[:, 1] ρ[:, 1] Sat[:, 1] pv[1]
 end
 
 function two_phase_compositional_mass(::SinglePhaseVapor, ρ, X, Y, Sat, c, i)
