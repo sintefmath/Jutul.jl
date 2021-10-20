@@ -123,46 +123,53 @@ function update_flash_result(S, i, m, buffer, eos, f, P, T, Z)
     l, v = f.liquid, f.vapor
     x = l.mole_fractions
     y = v.mole_fractions
-
-
     if isnan(vapor_frac)
         # Single phase condition. Life is easy.
-        ∂cond = (p = P, T = T, z = Z)
-        force_coefficients!(forces, eos, ∂cond)
-        Z_L = mixture_compressibility_factor(eos, ∂cond, forces)
-        Z_V = Z_L
-        @. x = Z
-        @. y = Z
-        V = single_phase_label(eos.mixture, c)
-        if V > 0.5
-            phase_state = SinglePhaseVapor()
-        else
-            phase_state = SinglePhaseLiquid()
-        end
+        Z_L, Z_V, V, phase_state = single_phase_update!(P, T, Z, x, y, forces, eos, c)
     else
+        Z_L, Z_V, V, phase_state = two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
         # Two-phase condition: We have some work to do.
-        @. x = liquid_mole_fraction(Z, K, vapor_frac)
-        @. y = vapor_mole_fraction(x, K)
-        if eltype(x)<:ForwardDiff.Dual
-            inverse_flash_update!(S, eos, c, vapor_frac)
-            ∂c = (p = P, T = T, z = Z)
-            V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
-            set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
-            set_partials_phase_mole_fractions!(y, S, eos, ∂c, :vapor)
-        else
-            V = vapor_frac
-        end
-        c_l = (p = P, T = T, z = x)
-        force_coefficients!(forces, eos, c_l)
-        Z_L = mixture_compressibility_factor(eos, c_l, forces)
-
-        c_v = (p = P, T = T, z = y)
-        force_coefficients!(forces, eos, c_v)
-        Z_V = mixture_compressibility_factor(eos, c_v, forces)
-
-        phase_state = TwoPhaseLiquidVapor()
     end
     return FlashedMixture2Phase(phase_state, K, V, x, y, Z_L, Z_V)
+end
+
+function get_compressibility_factor(forces, eos, P, T, Z)
+    ∂cond = (p = P, T = T, z = Z)
+    force_coefficients!(forces, eos, ∂cond)
+    return mixture_compressibility_factor(eos, ∂cond, forces)
+end
+
+function single_phase_update!(P, T, Z, x, y, forces, eos, c)
+    Z_L = get_compressibility_factor(forces, eos, P, T, Z)
+    Z_V = Z_L
+    @. x = Z
+    @. y = Z
+    V = single_phase_label(eos.mixture, c)
+    if V > 0.5
+        phase_state = SinglePhaseVapor()
+    else
+        phase_state = SinglePhaseLiquid()
+    end
+    return (Z_L, Z_V, V, phase_state)
+end
+
+function two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
+    @. x = liquid_mole_fraction(Z, K, vapor_frac)
+    @. y = vapor_mole_fraction(x, K)
+    if eltype(x)<:ForwardDiff.Dual
+        inverse_flash_update!(S, eos, c, vapor_frac)
+        ∂c = (p = P, T = T, z = Z)
+        V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
+        set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
+        set_partials_phase_mole_fractions!(y, S, eos, ∂c, :vapor)
+    else
+        V = vapor_frac
+    end
+    Z_L = get_compressibility_factor(forces, eos, P, T, x)
+    Z_V = get_compressibility_factor(forces, eos, P, T, y)
+    phase_state = TwoPhaseLiquidVapor()
+
+    return (Z_L, Z_V, V, phase_state)
 end
 
 @terv_secondary function update_as_secondary!(Sat, s::Saturations, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
