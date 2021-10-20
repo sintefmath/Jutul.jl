@@ -6,6 +6,7 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
     data = states[1]
     labels = Vector{String}()
     pos = Vector{Any}()
+    limits = Dict()
     for k in keys(data)
         d = data[k]
         if isa(d, AbstractVector)
@@ -17,11 +18,13 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
                 push!(pos, (k, i))
             end
         end
+        limits[k] = (minimum(d), maximum(d))
     end
     datakeys = collect(zip(labels, pos))
     initial_prop = datakeys[1]
     state_index = Node{Int64}(1)
     prop_name = Node{Any}(initial_prop[2])
+    lims = Node(limits[get_label(initial_prop[2])])
 
     menu = Menu(fig, options = datakeys, prompt = initial_prop[1])
     nstates = length(states)
@@ -38,31 +41,34 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
         change_index(state_index.val + inc)
     end
 
-    fig[2, 3] = vgrid!(
+    fig[3, 3] = vgrid!(
         #Label(fig, "Property", width = nothing),
         menu,
         # Label(fig, "Function", width = nothing),
         # menu2
-        ; tellheight = false, width = 200)
+        ; tellheight = false, width = 300)
     
-    sl_x = Slider(fig[2, 2], range = 1:nstates, value = state_index, snap = true)
+    sl_x = Slider(fig[3, 2], range = 1:nstates, value = state_index, snap = true)
     # point = sl_x.value
     on(sl_x.selected_index) do n
-        state_index[] = sl_x.selected_index.val
+        val = sl_x.selected_index.val
+        state_index[] = val
     end
     if size(pts, 2) == 3
-        ax = Axis3(fig[1, 1:2])
+        ax = Axis3(fig[1, 1:3])
     else
-        ax = Axis(fig[1, 1:2])
+        ax = Axis(fig[1, 1:3])
     end
     is_3d = size(pts, 2) == 3
     ys = @lift(mapper.Cells(select_data(states[$state_index], $prop_name)))
-    scat = Makie.mesh!(ax, pts, tri, color = ys, size = 60; shading = is_3d, kwarg...)
-    cb = Colorbar(fig[1, 3], scat)
+    scat = Makie.mesh!(ax, pts, tri, color = ys, colorrange = lims, size = 60; shading = is_3d, kwarg...)
+    cb = Colorbar(fig[2, 1:3], scat, vertical = false)
 
     on(menu.selection) do s
         prop_name[] = s
-        autolimits!(ax)
+        pos = get_label(s)
+        lims[] = limits[pos]
+        # autolimits!(ax)
     end
 
     function loopy()
@@ -84,7 +90,7 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
         end
     end
 
-    fig[2, 1] = buttongrid = GridLayout()
+    fig[3, 1] = buttongrid = GridLayout()
     rewind = Button(fig, label = "⏪")
     on(rewind.clicks) do n
         increment_index(-nstates)
@@ -112,8 +118,10 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
     return fig, ax
 end
 
-select_data(state, fld::Tuple) = state[fld[1]][fld[2], :]
+get_label(x::Tuple) = x[1]
+get_label(x) = x
 
+select_data(state, fld::Tuple) = state[get_label(fld)][fld[2], :]
 select_data(state, fld) = state[fld]
 
 function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth = 5, top_factor = 0.2, textscale = 2.5e-2, kwarg...)
