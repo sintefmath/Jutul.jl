@@ -18,7 +18,14 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
                 push!(pos, (k, i))
             end
         end
-        limits[k] = (minimum(d), maximum(d))
+        mv = Inf
+        Mv = -Inf
+        for s in states
+            di = s[k]
+            mv = min(minimum(di), mv)
+            Mv = max(maximum(di), Mv)
+        end
+        limits[k] = (mv, Mv)
     end
     datakeys = collect(zip(labels, pos))
     initial_prop = datakeys[1]
