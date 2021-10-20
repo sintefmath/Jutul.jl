@@ -44,8 +44,9 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
     else
         ax = Axis(fig[1, 1:2])
     end
+    is_3d = size(pts, 2) == 3
     ys = @lift(mapper.Cells(select_data(states[$state_index], $prop_name)))
-    scat = Makie.mesh!(ax, pts, tri, color = ys, size = 60; kwarg...)
+    scat = Makie.mesh!(ax, pts, tri, color = ys, size = 60; shading = is_3d, kwarg...)
     cb = Colorbar(fig[1, 3], scat)
 
     on(menu.selection) do s
