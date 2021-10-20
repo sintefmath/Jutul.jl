@@ -52,34 +52,24 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
         prop_name[] = s
         autolimits!(ax)
     end
-    # on(menu2.selection) do s
-    # end
-    # menu2.is_open = true
 
-    function loop(a)
-        # looping = !looping
-        # println("Loop function called")
-        if false
-            if loop_mode.val > 0
-                # println("Doing loop")
-                start = state_index.val
-                if start == nstates
-                    start = 1
-                end
-                for i = start:nstates
-                    newindex = increment_index()
-                    if newindex > nstates
-                        break
-                    end
-                    notify(state_index)
-                    force_update!()
-                    sleep(1/30)
-                end
+    function loopy()
+        start = state_index.val
+        if start == nstates
+            start = 1
+        end
+        previndex = start
+        for i = start:nstates
+            newindex = increment_index()
+            if newindex > nstates || previndex != newindex-1
+                break
             end
+            notify(state_index)
+            force_update!()
+            previndex = newindex
+            sleep(1/30)
         end
     end
-
-    # @lift(loop($loop_mode))
 
     fig[2, 1] = buttongrid = GridLayout()
     rewind = Button(fig, label = "⏪")
@@ -93,8 +83,7 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
 
     play = Button(fig, label = "⏯️")
     on(play.clicks) do n
-        println("Play button is not implemented.")
-        # loop_mode[] = loop_mode.val + 1
+        @async loopy()
     end
     next =   Button(fig, label = "▶️")
     on(next.clicks) do n
@@ -121,7 +110,7 @@ end
 
 function get_vector(d::Matrix)
     if size(d, 1) == 1 || size(d, 2) == 1
-        return vec(d)
+        return get_vector(vec(d))
     else
         return get_vector(d[1, :])
     end
