@@ -31,8 +31,13 @@ default_value(model, ::FlashResults) = FlashedMixture2Phase(model.system.equatio
 
 function initialize_variable_value!(state, model, pvar::FlashResults, symb, val::AbstractDict; need_value = false)
     @assert need_value == false
+    n = number_of_entities(model, pvar)
     v = default_value(model, pvar)
-    V = repeat([v], number_of_entities(model, pvar))
+    T = typeof(v)
+    V = Vector{T}(undef, n)
+    for i in 1:n
+        V[i] = default_value(model, pvar)
+    end
     initialize_variable_value!(state, model, pvar, symb, V)
 end
 
@@ -42,7 +47,12 @@ function initialize_variable_ad(state, model, pvar::FlashResults, symb, npartial
     ∂T = typeof(v_ad)
 
     r = FlashedMixture2Phase(model.system.equation_of_state, ∂T)
-    state[symb] = repeat([r], n)
+    T = typeof(r)
+    V = Vector{T}(undef, n)
+    for i in 1:n
+        V[i] = FlashedMixture2Phase(model.system.equation_of_state, ∂T)
+    end
+    state[symb] = V
     return state
 end
 
@@ -77,55 +87,62 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
     S = fr.storage
     m = fr.method
     eos = model.system.equation_of_state
-    @time for (i, f) in enumerate(flash_results)
-        K = f.K
-        P = Pressure[i]
-        T = Temperature[1, i]
-        # Grab values
-        Z = view(OverallMoleFractions, :, i)
-        z = value.(Z)
-        # Conditions
-        c = (p = value(P), T = value(T), z = z)
-        # Perform flash
-        vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false)
-
-        l, v = f.liquid, f.vapor
-        x = l.mole_fractions
-        y = v.mole_fractions
-
-        if isnan(vapor_frac)
-            # Single phase condition. Life is easy.
-            Z_L = mixture_compressibility_factor(eos, (p = P, T = T, z = Z))
-            Z_V = Z_L
-            @. x = Z
-            @. y = Z
-            V = single_phase_label(eos.mixture, c)
-            if V > 0.5
-                phase_state = SinglePhaseVapor()
-            else
-                phase_state = SinglePhaseLiquid()
-            end
-        else
-            # Two-phase condition: We have some work to do.
-            @. x = liquid_mole_fraction(Z, K, vapor_frac)
-            @. y = vapor_mole_fraction(x, K)
-            if eltype(x)<:ForwardDiff.Dual
-                inverse_flash_update!(S, eos, c, vapor_frac)
-                ∂c = (p = P, T = T, z = Z)
-                V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
-                set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
-                set_partials_phase_mole_fractions!(y, S, eos, ∂c, :vapor)
-            else
-                V = vapor_frac
-            end
-            # TODO: Fix so these don't allocate memory
-            Z_L = mixture_compressibility_factor(eos, (p = P, T = T, z = x))
-            Z_V = mixture_compressibility_factor(eos, (p = P, T = T, z = y))
-
-            phase_state = TwoPhaseLiquidVapor()
-        end
-        flash_results[i] = FlashedMixture2Phase(phase_state, K, V, x, y, Z_L, Z_V)
+    @time for i in eachindex(flash_results)
+        f = flash_results[i]
+        flash_results[i] = update_flash_result(S, i, m, eos, f, Pressure, Temperature, OverallMoleFractions)
     end
+    @debug "outer" flash_results[1].liquid.mole_fractions
+end
+
+function update_flash_result(S, i, m, eos, f, Pressure, Temperature, OverallMoleFractions)
+    K = f.K
+    P = Pressure[i]
+    T = Temperature[1, i]
+    # Grab values
+    # Z = view(OverallMoleFractions, :, i)
+    Z = OverallMoleFractions[:, i]
+    z = value.(Z)
+    # Conditions
+    c = (p = value(P), T = value(T), z = z)
+    # Perform flash
+    vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false)
+
+    l, v = f.liquid, f.vapor
+    x = l.mole_fractions
+    y = v.mole_fractions
+
+    if isnan(vapor_frac)
+        # Single phase condition. Life is easy.
+        Z_L = mixture_compressibility_factor(eos, (p = P, T = T, z = Z))
+        Z_V = Z_L
+        @. x = Z
+        @. y = Z
+        V = single_phase_label(eos.mixture, c)
+        if V > 0.5
+            phase_state = SinglePhaseVapor()
+        else
+            phase_state = SinglePhaseLiquid()
+        end
+    else
+        # Two-phase condition: We have some work to do.
+        @. x = liquid_mole_fraction(Z, K, vapor_frac)
+        @. y = vapor_mole_fraction(x, K)
+        if eltype(x)<:ForwardDiff.Dual
+            inverse_flash_update!(S, eos, c, vapor_frac)
+            ∂c = (p = P, T = T, z = Z)
+            V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
+            set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
+            set_partials_phase_mole_fractions!(y, S, eos, ∂c, :vapor)
+        else
+            V = vapor_frac
+        end
+        # TODO: Fix so these don't allocate memory
+        Z_L = mixture_compressibility_factor(eos, (p = P, T = T, z = x))
+        Z_V = mixture_compressibility_factor(eos, (p = P, T = T, z = y))
+
+        phase_state = TwoPhaseLiquidVapor()
+    end
+    return FlashedMixture2Phase(phase_state, K, V, x, y, Z_L, Z_V)
 end
 
 @terv_secondary function update_as_secondary!(Sat, s::Saturations, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}

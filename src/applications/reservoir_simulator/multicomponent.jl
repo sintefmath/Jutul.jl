@@ -68,29 +68,30 @@ function component_source(src, S, kr, mu, F, X, Y, rho, rhoS, c)
     # :mass -> source terms are already masses
     # :volume -> source terms are volumes at medium conditions
     t = src.type
-    if t == :mass
-        if v > 0
-            # Source term is already density
-            f = src.fractional_flow[c]
-        else
-            f = compositional_out_f(kr, mu, X, Y, rho, c, cell, t, F[cell].state)
-        end
-    elseif t == :volume
-        if v > 0
+    f_c = src.fractional_flow[c]
+    if v > 0
+        if t == :mass
+            # Source term is already as masses. Injection is straightforward, 
+            # production is weighted according to mobility*density
+            f = f_c
+        elseif t == :standard_volume
+            f = rhoS[1]*f_c
+        elseif t == :volume
             # Saturation-averaged density
             ρ_mix = S[1, cell]*rho[1, cell] + S[2, cell]*rho[2, cell]
-            f = src.fractional_flow[c]*ρ_mix
+            f = f_c*ρ_mix
         else
-            f = compositional_out_f(kr, mu, X, Y, rho, c, cell, t, F[cell].state)
+            error("Not supported source term type: $t")
         end
     else
-        error("Not supported source term type: $t")
+        f = compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, F[cell].state)
     end
     q = v*f
+    # @info "$c:" q f
     return q
 end
 
-function compositional_out_f(kr, mu, X, Y, rho, c, cell, t, ::TwoPhaseLiquidVapor)
+function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::TwoPhaseLiquidVapor)
     λ_l = local_mobility(kr, mu, 1, cell)
     λ_v = local_mobility(kr, mu, 2, cell)
 
@@ -105,31 +106,41 @@ function compositional_out_f(kr, mu, X, Y, rho, c, cell, t, ::TwoPhaseLiquidVapo
         m_v = ρ_v*λ_v
         m_t = m_l + m_v
         f = (m_l*x + m_v*y)/m_t
-    else
+    elseif t == :volume
         λ_t = λ_l + λ_v
         f = (λ_l*x*ρ_l + λ_v*y*ρ_v)/λ_t
+    else
+        ρ_ls = rhoS[1]
+        ρ_vs = rhoS[2]
+    
+        λ_t = λ_l + λ_v
+        f = (ρ_ls*λ_l*x* + ρ_vs*λ_v*y*ρ_v)/λ_t
     end
     return f
 end
 
-function compositional_out_f(kr, mu, X, Y, rho, c, cell, t, ::SinglePhaseLiquid)
+function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseLiquid)
     ρ_l = rho[1, cell]
     x = X[c, cell]
     if t == :mass
         f = x
-    else
+    elseif t == :volume
         f = x*ρ_l
+    else
+        f = rhoS[1]*x
     end
     return f
 end
 
-function compositional_out_f(kr, mu, X, Y, rho, c, cell, t, ::SinglePhaseVapor)
+function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseVapor)
     ρ_v = rho[2, cell]
     y = Y[c, cell]
     if t == :mass
         f = y
-    else
+    elseif t == :volume
         f = y*ρ_v
+    else
+        f = rhoS[2]*y
     end
     return f
 end
