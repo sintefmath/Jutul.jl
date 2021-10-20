@@ -4,13 +4,26 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
 
     fig = Figure()
     data = states[1]
-    datakeys = collect(keys(data))
+    labels = Vector{String}()
+    pos = Vector{Any}()
+    for k in keys(data)
+        d = data[k]
+        if isa(d, AbstractVector)
+            push!(labels, "$k")
+            push!(pos, k)
+        else
+            for i = 1:size(d, 1)
+                push!(labels, "$k: $i")
+                push!(pos, (k, i))
+            end
+        end
+    end
+    datakeys = collect(zip(labels, pos))
     initial_prop = datakeys[1]
     state_index = Node{Int64}(1)
-    prop_name = Node{Symbol}(initial_prop)
-    loop_mode = Node{Int64}(0)
+    prop_name = Node{Any}(initial_prop[2])
 
-    menu = Menu(fig, options = datakeys, prompt = String(initial_prop))
+    menu = Menu(fig, options = datakeys, prompt = initial_prop[1])
     nstates = length(states)
 
     function change_index(ix)
@@ -25,8 +38,6 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
         change_index(state_index.val + inc)
     end
 
-    # funcs = [sqrt, x->x^2, sin, cos]
-    # menu2 = Menu(fig, options = zip(["Square Root", "Square", "Sine", "Cosine"], funcs))
     fig[2, 3] = vgrid!(
         #Label(fig, "Property", width = nothing),
         menu,
@@ -57,6 +68,7 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
     function loopy()
         start = state_index.val
         if start == nstates
+            increment_index(-nstates)
             start = 1
         end
         previndex = start
@@ -100,22 +112,9 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
     return fig, ax
 end
 
-function select_data(state, fld)
-    v = state[fld]
-    return get_vector(v)
-end
+select_data(state, fld::Tuple) = state[fld[1]][fld[2], :]
 
-function get_vector(d::Vector)
-    return d
-end
-
-function get_vector(d::Matrix)
-    if size(d, 1) == 1 || size(d, 2) == 1
-        return get_vector(vec(d))
-    else
-        return get_vector(d[1, :])
-    end
-end
+select_data(state, fld) = state[fld]
 
 function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth = 5, top_factor = 0.2, textscale = 2.5e-2, kwarg...)
     if isnothing(textcolor)
