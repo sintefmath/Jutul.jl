@@ -141,6 +141,9 @@ function simulator_config(sim; kwarg...)
 
     # Overwrite with varargin
     for key in keys(kwarg)
+        if !haskey(cfg, key)
+            @warn "Key $key is not found in default config. Misspelled?"
+        end
         cfg[key] = kwarg[key]
     end
     return cfg
