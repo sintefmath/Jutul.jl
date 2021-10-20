@@ -87,7 +87,6 @@ function component_source(src, S, kr, mu, F, X, Y, rho, rhoS, c)
         f = compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, F[cell].state)
     end
     q = v*f
-    # @info "$c:" q f
     return q
 end
 
@@ -109,12 +108,14 @@ function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::TwoPhaseLiqu
     elseif t == :volume
         λ_t = λ_l + λ_v
         f = (λ_l*x*ρ_l + λ_v*y*ρ_v)/λ_t
-    else
+    elseif t == :standard_volume
         ρ_ls = rhoS[1]
         ρ_vs = rhoS[2]
     
         λ_t = λ_l + λ_v
-        f = (ρ_ls*λ_l*x* + ρ_vs*λ_v*y*ρ_v)/λ_t
+        f_l = λ_l/λ_t
+        f_v = λ_v/λ_t
+        f = ρ_ls*x*f_l + ρ_vs*y*f_v
     end
     return f
 end
@@ -126,7 +127,7 @@ function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseL
         f = x
     elseif t == :volume
         f = x*ρ_l
-    else
+    elseif t == :standard_volume
         f = rhoS[1]*x
     end
     return f
@@ -139,7 +140,7 @@ function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseV
         f = y
     elseif t == :volume
         f = y*ρ_v
-    else
+    elseif t == :standard_volume
         f = rhoS[2]*y
     end
     return f
