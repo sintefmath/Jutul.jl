@@ -10,7 +10,7 @@ function select_secondary_variables_flow_type!(S, domain, system, formulation, f
     if !isa(system, SinglePhaseSystem)
         S[:RelativePermeabilities] = BrooksCoreyRelPerm(system)
     end
-    if isa(system, ImmiscibleSystem)
+    if isa(system, ImmiscibleSystem) || isa(system, SinglePhaseSystem)
         S[:MassMobilities] = MassMobilities()
     end
 end
