@@ -117,7 +117,7 @@ function update_flash_result(S, m, buffer, eos, f, P, T, Z)
     vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false)
     if isnothing(forces)
         # Initialize.
-        forces = force_coefficients(eos, (p = P, T = T, z = Z))
+        forces = force_coefficients(eos, (p = P, T = T, z = Z), static_size = true)
     end
 
     l, v = f.liquid, f.vapor
