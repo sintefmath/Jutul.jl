@@ -84,7 +84,6 @@ function update_half_face_flux!(law, storage, model::SimulationModel{D, S}, dt, 
 
     flux = get_entries(law.half_face_flux_cells)
     conn_data = law.flow_discretization.conn_data
-    @info size(pot, 1)
 
     if size(pot, 1) == 1
         # Scalar potential

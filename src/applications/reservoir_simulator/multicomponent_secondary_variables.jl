@@ -32,7 +32,7 @@ struct FlashResults <: ScalarVariable
         eos = system.equation_of_state
         # np = number_of_partials_per_entity(system, Cells())
         n = MultiComponentFlash.number_of_components(eos)
-        s = flash_storage(eos, method = method, inc_jac = true, diff_externals = true, npartials = n)
+        s = flash_storage(eos, method = method, inc_jac = true, diff_externals = true, npartials = n, static_size = true)
         new(s, method, InPlaceFlashBuffer(n))
     end
 end
