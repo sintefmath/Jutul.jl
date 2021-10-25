@@ -109,7 +109,10 @@ function initialize_storage!(storage, model::TervModel; initialize_state0 = true
         # copy over those values before returning them back
         state0 = Dict()
         for key in model.output_variables
-            state0[key] = state0_eval[key]
+            v = state0_eval[key]
+            if !isa(v, ConstantWrapper) && eltype(v)<:Real
+                state0[key] = v
+            end
         end
         storage[:state0] = state0
     end
