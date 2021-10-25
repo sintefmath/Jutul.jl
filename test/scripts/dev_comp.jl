@@ -2,7 +2,7 @@
 @time using MultiComponentFlash
 ENV["JULIA_DEBUG"] = Terv
 ENV["JULIA_DEBUG"] = nothing
-# Pkg.develop(PackageSpec(path = "D:/jobb\\bitbucket\\moyner.jl\\pvt\\MultiComponentFlash"))
+# using Pkg; Pkg.develop(PackageSpec(path = "D:/jobb\\bitbucket\\moyner.jl\\pvt\\MultiComponentFlash"))
 ##
 # Multicomponent flow
 # Variables:
@@ -38,15 +38,15 @@ end
 p0 = 10e5
 T0 = 300.0
 n = length(z0)
-
+ 
 eos = GenericCubicEOS(mixture)
 ##
 nc = 10000
-# nc = 2
+nc = 100
 # G = get_1d_reservoir(nc)
-# mesh = CartesianMesh((nc, 1), (100.0, 1.0))
-nc = 50
-mesh = CartesianMesh((nc, nc), (100.0, 100.0))
+mesh = CartesianMesh((nc, 1), (100.0, 1.0))
+# nc = 50
+# mesh = CartesianMesh((nc, nc), (100.0, 100.0))
 geo = tpfv_geometry(mesh)
 G = discretized_domain_tpfv_flow(geo)
 
@@ -78,8 +78,8 @@ pvfrac = 0.4
 # pvfrac = 0.0
 pv = G.grid.pore_volumes
 irate = pvfrac*sum(pv)/tot_time
-src = [SourceTerm(1, irate, fractional_flow = zi, type = :standard_volume), 
-       SourceTerm(nc, -irate, fractional_flow = zi, type = :standard_volume)]
+src = [SourceTerm(1, irate, fractional_flow = zi, type = StandardVolumeSource), 
+       SourceTerm(nc, -irate, fractional_flow = zi, type = StandardVolumeSource)]
 forces = build_forces(model, sources = src)
 # forces = nothing
 sim = Simulator(model, state0 = state0, parameters = parameters)

@@ -1,5 +1,6 @@
 using MultiComponentFlash
 export TwoPhaseCompositionalSystem
+export StandardVolumeSource, VolumeSource, MassSource
 
 get_components(sys::MultiComponentSystem) = sys.components
 number_of_components(sys::MultiComponentSystem) = length(get_components(sys))
@@ -65,18 +66,18 @@ function component_source(src, S, kr, mu, F, X, Y, rho, rhoS, c)
     # Treat outflow as volumetric sources
     v = src.value
     cell = src.cell
-    # :mass -> source terms are already masses
-    # :volume -> source terms are volumes at medium conditions
+    # MassSource -> source terms are already masses
+    # VolumeSource -> source terms are volumes at medium conditions
     t = src.type
     f_c = src.fractional_flow[c]
     if v > 0
-        if t == :mass
+        if t == MassSource
             # Source term is already as masses. Injection is straightforward, 
             # production is weighted according to mobility*density
             f = f_c
-        elseif t == :standard_volume
+        elseif t == StandardVolumeSource
             f = rhoS[1]*f_c
-        elseif t == :volume
+        elseif t == VolumeSource
             # Saturation-averaged density
             ρ_mix = S[1, cell]*rho[1, cell] + S[2, cell]*rho[2, cell]
             f = f_c*ρ_mix
@@ -100,15 +101,15 @@ function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::TwoPhaseLiqu
     x = X[c, cell]
     y = Y[c, cell]
 
-    if t == :mass
+    if t == MassSource
         m_l = ρ_l*λ_l
         m_v = ρ_v*λ_v
         m_t = m_l + m_v
         f = (m_l*x + m_v*y)/m_t
-    elseif t == :volume
+    elseif t == VolumeSource
         λ_t = λ_l + λ_v
         f = (λ_l*x*ρ_l + λ_v*y*ρ_v)/λ_t
-    elseif t == :standard_volume
+    elseif t == StandardVolumeSource
         ρ_ls = rhoS[1]
         ρ_vs = rhoS[2]
     
@@ -123,11 +124,11 @@ end
 function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseLiquid)
     ρ_l = rho[1, cell]
     x = X[c, cell]
-    if t == :mass
+    if t == MassSource
         f = x
-    elseif t == :volume
+    elseif t == VolumeSource
         f = x*ρ_l
-    elseif t == :standard_volume
+    elseif t == StandardVolumeSource
         f = rhoS[1]*x
     end
     return f
@@ -136,11 +137,11 @@ end
 function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseVapor)
     ρ_v = rho[2, cell]
     y = Y[c, cell]
-    if t == :mass
+    if t == MassSource
         f = y
-    elseif t == :volume
+    elseif t == VolumeSource
         f = y*ρ_v
-    elseif t == :standard_volume
+    elseif t == StandardVolumeSource
         f = rhoS[2]*y
     end
     return f
