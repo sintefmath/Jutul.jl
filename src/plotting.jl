@@ -5,13 +5,13 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
     fig = Figure()
     data = states[1]
     labels = Vector{String}()
-    pos = Vector{Any}()
+    pos = Vector{Tuple{Symbol, Integer}}()
     limits = Dict()
     for k in keys(data)
         d = data[k]
         if isa(d, AbstractVector)
             push!(labels, "$k")
-            push!(pos, k)
+            push!(pos, (k, 1))
         else
             for i = 1:size(d, 1)
                 push!(labels, "$k: $i")
@@ -32,7 +32,6 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
     state_index = Node{Int64}(1)
     prop_name = Node{Any}(initial_prop[2])
     lims = Node(limits[get_label(initial_prop[2])])
-
     menu = Menu(fig, options = datakeys, prompt = initial_prop[1])
     nstates = length(states)
 
@@ -128,8 +127,11 @@ end
 get_label(x::Tuple) = x[1]
 get_label(x) = x
 
-select_data(state, fld::Tuple) = state[get_label(fld)][fld[2], :]
-select_data(state, fld) = state[fld]
+select_data(state, fld::Tuple) = unpack(state[get_label(fld)], fld[2])
+
+unpack(x, ix) = x[ix, :]
+unpack(x::AbstractVector, ix) = x
+
 
 function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth = 5, top_factor = 0.2, textscale = 2.5e-2, kwarg...)
     if isnothing(textcolor)
