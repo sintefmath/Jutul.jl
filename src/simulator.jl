@@ -141,6 +141,9 @@ function simulator_config(sim; kwarg...)
 
     # Overwrite with varargin
     for key in keys(kwarg)
+        if !haskey(cfg, key)
+            @warn "Key $key is not found in default config. Misspelled?"
+        end
         cfg[key] = kwarg[key]
     end
     return cfg
@@ -151,7 +154,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         config = simulator_config(sim; kwarg...)
     end
     reports = []
-    states = []
+    states = Vector{Dict{Symbol, Any}}()
     no_steps = length(timesteps)
     maxIterations = config[:max_nonlinear_iterations]
     rec = config[:ProgressRecorder]
@@ -159,7 +162,11 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     if output
         @info "Starting simulation"
     end
+    early_termination = false
     for (step_no, dT) in enumerate(timesteps)
+        if early_termination
+            break
+        end
         nextstep_global!(rec, dT)
         subrep = OrderedDict()
         ministep_reports = []
@@ -187,7 +194,8 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                         if output
                             @warn "Unable to converge time step $step_no/$no_steps. Aborting."
                         end
-                        return states
+                        early_termination = true
+                        break
                     end
                     cut_count += 1
                     dt = min(dt/2, dT - t_local)
@@ -210,7 +218,12 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
 
     if info_level >= 0 && length(reports) > 0
         stats = report_stats(reports)
-        @info "Simulation complete. Completed $(stats.steps) time-steps in $(stats.time_sum.total) seconds with $(stats.newtons) iterations."
+        if early_termination
+            endstr = "Simulation aborted. Completed $(stats.steps-1) of $(length(timesteps)) time-steps"
+        else
+            endstr = "Simulation complete. Completed $(stats.steps) time-steps"
+        end
+        @info "$endstr in $(stats.time_sum.total) seconds with $(stats.newtons) iterations."
         if info_level > 0
             print_stats(stats)
         end

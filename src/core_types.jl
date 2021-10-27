@@ -24,7 +24,7 @@ abstract type TervDiscretization end
 abstract type TervVariables end
 abstract type ScalarVariable <: TervVariables end
 abstract type GroupedVariables <: TervVariables end
-
+abstract type FractionVariables <: GroupedVariables end
 
 # Functions of the state
 abstract type TervStateFunction <: TervVariables end

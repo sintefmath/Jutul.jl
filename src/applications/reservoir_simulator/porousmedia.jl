@@ -79,7 +79,7 @@ function compute_face_trans(T_hf, N)
 end
 
 function discretized_domain_tpfv_flow(geometry; porosity = 0.1, 
-                                                permeability = 9.8692e-15, # 100 mD 
+                                                permeability = 9.869232667160131e-14, # 100 mD 
                                                 T = nothing,
                                                 fuse_flux = false,
                                                 gravity = true,

@@ -1,9 +1,13 @@
-
+include("types.jl")
 include("porousmedia_grids.jl")
 include("flux.jl")
 # Definitions for multiphase flow
 include("multiphase.jl")
 include("multiphase_secondary_variables.jl")
+
+include("multicomponent.jl")
+include("multicomponent_secondary_variables.jl")
+
 # Wells etc.
 include("facility/types.jl")
 

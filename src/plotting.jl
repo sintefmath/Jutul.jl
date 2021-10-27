@@ -4,13 +4,35 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
 
     fig = Figure()
     data = states[1]
-    datakeys = collect(keys(data))
+    labels = Vector{String}()
+    pos = Vector{Tuple{Symbol, Integer}}()
+    limits = Dict()
+    for k in keys(data)
+        d = data[k]
+        if isa(d, AbstractVector)
+            push!(labels, "$k")
+            push!(pos, (k, 1))
+        else
+            for i = 1:size(d, 1)
+                push!(labels, "$k: $i")
+                push!(pos, (k, i))
+            end
+        end
+        mv = Inf
+        Mv = -Inf
+        for s in states
+            di = s[k]
+            mv = min(minimum(di), mv)
+            Mv = max(maximum(di), Mv)
+        end
+        limits[k] = (mv, Mv)
+    end
+    datakeys = collect(zip(labels, pos))
     initial_prop = datakeys[1]
     state_index = Node{Int64}(1)
-    prop_name = Node{Symbol}(initial_prop)
-    loop_mode = Node{Int64}(0)
-
-    menu = Menu(fig, options = datakeys, prompt = String(initial_prop))
+    prop_name = Node{Any}(initial_prop[2])
+    lims = Node(limits[get_label(initial_prop[2])])
+    menu = Menu(fig, options = datakeys, prompt = initial_prop[1])
     nstates = length(states)
 
     function change_index(ix)
@@ -25,63 +47,56 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
         change_index(state_index.val + inc)
     end
 
-    # funcs = [sqrt, x->x^2, sin, cos]
-    # menu2 = Menu(fig, options = zip(["Square Root", "Square", "Sine", "Cosine"], funcs))
-    fig[2, 3] = vgrid!(
+    fig[3, 3] = vgrid!(
         #Label(fig, "Property", width = nothing),
         menu,
         # Label(fig, "Function", width = nothing),
         # menu2
-        ; tellheight = false, width = 200)
+        ; tellheight = false, width = 300)
     
-    sl_x = Slider(fig[2, 2], range = 1:nstates, value = state_index, snap = true)
+    sl_x = Slider(fig[3, 2], range = 1:nstates, value = state_index, snap = true)
     # point = sl_x.value
     on(sl_x.selected_index) do n
-        state_index[] = sl_x.selected_index.val
+        val = sl_x.selected_index.val
+        state_index[] = val
     end
     if size(pts, 2) == 3
-        ax = Axis3(fig[1, 1:2])
+        ax = Axis3(fig[1, 1:3])
     else
-        ax = Axis(fig[1, 1:2])
+        ax = Axis(fig[1, 1:3])
     end
+    is_3d = size(pts, 2) == 3
     ys = @lift(mapper.Cells(select_data(states[$state_index], $prop_name)))
-    scat = Makie.mesh!(ax, pts, tri, color = ys, size = 60; kwarg...)
-    cb = Colorbar(fig[1, 3], scat)
+    scat = Makie.mesh!(ax, pts, tri, color = ys, colorrange = lims, size = 60; shading = is_3d, kwarg...)
+    cb = Colorbar(fig[2, 1:3], scat, vertical = false)
 
     on(menu.selection) do s
         prop_name[] = s
-        autolimits!(ax)
+        pos = get_label(s)
+        lims[] = limits[pos]
+        # autolimits!(ax)
     end
-    # on(menu2.selection) do s
-    # end
-    # menu2.is_open = true
 
-    function loop(a)
-        # looping = !looping
-        # println("Loop function called")
-        if false
-            if loop_mode.val > 0
-                # println("Doing loop")
-                start = state_index.val
-                if start == nstates
-                    start = 1
-                end
-                for i = start:nstates
-                    newindex = increment_index()
-                    if newindex > nstates
-                        break
-                    end
-                    notify(state_index)
-                    force_update!()
-                    sleep(1/30)
-                end
+    function loopy()
+        start = state_index.val
+        if start == nstates
+            increment_index(-nstates)
+            start = 1
+        end
+        previndex = start
+        for i = start:nstates
+            newindex = increment_index()
+            if newindex > nstates || previndex != newindex-1
+                break
             end
+            notify(state_index)
+            force_update!()
+            previndex = newindex
+            sleep(1/30)
         end
     end
 
-    # @lift(loop($loop_mode))
-
-    fig[2, 1] = buttongrid = GridLayout()
+    fig[3, 1] = buttongrid = GridLayout()
     rewind = Button(fig, label = "⏪")
     on(rewind.clicks) do n
         increment_index(-nstates)
@@ -93,8 +108,7 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
 
     play = Button(fig, label = "⏯️")
     on(play.clicks) do n
-        println("Play button is not implemented.")
-        # loop_mode[] = loop_mode.val + 1
+        @async loopy()
     end
     next =   Button(fig, label = "▶️")
     on(next.clicks) do n
@@ -110,22 +124,14 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
     return fig, ax
 end
 
-function select_data(state, fld)
-    v = state[fld]
-    return get_vector(v)
-end
+get_label(x::Tuple) = x[1]
+get_label(x) = x
 
-function get_vector(d::Vector)
-    return d
-end
+select_data(state, fld::Tuple) = unpack(state[get_label(fld)], fld[2])
 
-function get_vector(d::Matrix)
-    if size(d, 1) == 1 || size(d, 2) == 1
-        return vec(d)
-    else
-        return get_vector(d[1, :])
-    end
-end
+unpack(x, ix) = x[ix, :]
+unpack(x::AbstractVector, ix) = x
+
 
 function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth = 5, top_factor = 0.2, textscale = 2.5e-2, kwarg...)
     if isnothing(textcolor)

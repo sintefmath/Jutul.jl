@@ -176,7 +176,7 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
     nv = values_per_entity(model, pvar)
     
     if isa(pvar, ScalarVariable)
-        @assert length(val) == nu
+        @assert length(val) == nu "Expected $(length(val)) == $nu"
         # Type-assert that this should be scalar, with a vector input
         val::AbstractVector
     else
@@ -192,7 +192,7 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
     return transfer(model.context, val)
 end
 
-default_value(v) = 0.0
+default_value(model, variable) = 0.0
 
 function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     state[symb] = initialize_variable_value(model, pvar, val; kwarg...)
@@ -207,7 +207,7 @@ function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict;
         error("The key $symb must be present to initialize the state. Found symbols: $k")
     else
         # We do not really need to initialize this, as it will be updated elsewhere.
-        value = default_value(pvar)
+        value = default_value(model, pvar)
     end
     return initialize_variable_value!(state, model, pvar, symb, value)
 end
@@ -235,7 +235,110 @@ function initialize_variable_value!(state, model, pvar::GroupedVariables, symb::
 end
 
 # Specific variable implementations that are generic for many types of system follow
+degrees_of_freedom_per_entity(model, v::FractionVariables) =  values_per_entity(model, v) - 1
+maximum_value(::FractionVariables) = 1.0
+minimum_value(::FractionVariables) = 0.0
 
+
+function initialize_primary_variable_ad!(state, model, pvar::FractionVariables, state_symbol, npartials; kwarg...)
+    n = values_per_entity(model, pvar)
+    v = state[state_symbol]
+    state[state_symbol] = unit_sum_init(v, model, npartials, n; kwarg...)
+    return state
+end
+
+function unit_sum_init(v, model, npartials, N; offset = 0, kwarg...)
+    # nph - 1 primary variables, with the last saturation being initially zero AD
+    dp = vcat((1:N-1) .+ offset, 0)
+    v = allocate_array_ad(v, diag_pos = dp, context = model.context, npartials = npartials; kwarg...)
+    for i in 1:size(v, 2)
+        v[end, i] = 1 - sum(v[1:end-1, i])
+    end
+    return v
+end
+
+function update_primary_variable!(state, p::FractionVariables, state_symbol, model, dx)
+    s = state[state_symbol]
+    unit_sum_update!(s, p, model, dx)
+end
+
+function unit_sum_update!(s, p, model, dx)
+    nf, nu = value_dim(model, p)
+    abs_max = absolute_increment_limit(p)
+    maxval, minval = maximum_value(p), minimum_value(p)
+    if nf == 2
+        maxval = min(1 - minval, maxval)
+        minval = max(minval, maxval - 1)
+        for cell = 1:nu
+            dlast = 0
+            v = value(s[1, cell])
+            dv = dx[cell]
+            dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
+            @inbounds s[1, cell] += dv
+            @inbounds s[2, cell] -= dv
+        end
+    else
+        if false
+            # Preserve direction
+            for cell = 1:nu
+                w = 1.0
+                # First pass: Find the relaxation factors that keep all fractions in [0, 1]
+                # and obeying the maximum change targets
+                dlast0 = 0
+                @inbounds for i = 1:(nf-1)
+                    v = value(s[i, cell])
+                    dv0 = dx[cell + (i-1)*nu]
+                    dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
+                    dlast0 -= dv0
+                    w = pick_relaxation(w, dv, dv0)
+                end
+                # Do the same thing for the implicit update of the last value
+                dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
+                w = pick_relaxation(w, dlast, dlast0)
+
+                @inbounds for i = 1:(nf-1)
+                    s[i, cell] += w*dx[cell + (i-1)*nu]
+                end
+                @inbounds s[nf, cell] += w*dlast0
+            end
+        else
+            # Preserve update magnitude
+            for cell = 1:nu
+                # First pass: Find the relaxation factors that keep all fractions in [0, 1]
+                # and obeying the maximum change targets
+                dlast0 = 0
+                @inbounds for i = 1:(nf-1)
+                    v = value(s[i, cell])
+                    dv = dx[cell + (i-1)*nu]
+                    dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
+                    s[i, cell] += dv
+                    dlast0 -= dv
+                end
+                # Do the same thing for the implicit update of the last value
+                dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
+                s[nf, cell] += dlast
+                if dlast != dlast0
+                    t = 0.0
+                    for i = 1:nf
+                        t += s[i, cell]
+                    end
+                    for i = 1:nf
+                        s[i, cell] /= t
+                    end
+                end
+            end
+        end
+    end
+end
+
+function pick_relaxation(w, dv, dv0)
+    # dv0*w = dv -> w = dv/dv0
+    r = dv/dv0
+    if dv0 != 0
+        w = min(w, r)
+    end
+    return w
+end
 
 function values_per_entity(model, var::ConstantVariables)
     c = var.constants

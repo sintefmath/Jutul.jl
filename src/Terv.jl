@@ -24,6 +24,8 @@ using PrettyTables
 using DataInterpolations
 using ILUZero
 
+using MultiComponentFlash
+
 # Main types
 include("core_types.jl")
 

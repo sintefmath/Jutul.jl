@@ -11,32 +11,31 @@ export Pressure, Saturations, TotalMasses, TotalMass
 
 using CUDA
 # Abstract multiphase system
-abstract type MultiPhaseSystem <: TervSystem end
 
+get_phases(sys::MultiPhaseSystem) = sys.phases
+number_of_phases(sys::MultiPhaseSystem) = length(get_phases(sys))
 
-function get_phases(sys::MultiPhaseSystem)
-    return sys.phases
-end
-
-function number_of_phases(sys::MultiPhaseSystem)
-    return length(get_phases(sys))
+@enum FlowSourceType begin
+    MassSource
+    StandardVolumeSource
+    VolumeSource
 end
 
 struct SourceTerm{I, F, T} <: TervForce
     cell::I
     value::F
     fractional_flow::T
-    function SourceTerm(cell, value; fractional_flow = [1.0])
+    type::FlowSourceType
+    function SourceTerm(cell, value; fractional_flow = [1.0], type = MassSource)
         @assert sum(fractional_flow) == 1.0 "Fractional flow for source term in cell $cell must sum to 1."
         f = Tuple(fractional_flow)
-        return new{typeof(cell), typeof(value), typeof(f)}(cell, value, f)
+        return new{typeof(cell), typeof(value), typeof(f)}(cell, value, f, type)
     end
 end
 
 function cell(s::SourceTerm{I, T}) where {I, T} 
     return s.cell::I
 end
-
 
 function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:Any, S<:MultiPhaseSystem}
     return (sources = sources,)
@@ -95,60 +94,36 @@ get_name(::VaporPhase) = "Vapor"
 Pressure
 """
 struct Pressure <: ScalarVariable
-    dpMaxAbs
-    dpMaxRel
+    max_abs
+    max_rel
+    minimum_pressure
+    maximum_pressure
     scale
-    function Pressure(dpMaxAbs = nothing, dpMaxRel = nothing, scale = 1e8)
-        new(dpMaxAbs, dpMaxRel, scale)
+    function Pressure(; max_abs = nothing, max_rel = nothing, scale = 1e8, maximum = Inf, minimum = -Inf)
+        new(max_abs, max_rel, minimum, maximum, scale)
     end
 end
 
 variable_scale(p::Pressure) = p.scale
-absolute_increment_limit(p::Pressure) = p.dpMaxAbs
-relative_increment_limit(p::Pressure) = p.dpMaxRel
+absolute_increment_limit(p::Pressure) = p.max_abs
+relative_increment_limit(p::Pressure) = p.max_rel
+maximum_value(p::Pressure) = p.maximum_pressure
+minimum_value(p::Pressure) = p.minimum_pressure
 
 # Saturations as primary variable
-struct Saturations <: GroupedVariables
-    dsMax
-    Saturations(dsMax = 0.2) = new(dsMax)
+struct Saturations <: FractionVariables
+    ds_max
+    Saturations(;ds_max = 0.2) = new(ds_max)
 end
 
-degrees_of_freedom_per_entity(model, v::Saturations) =  values_per_entity(model, v) - 1
 values_per_entity(model, v::Saturations) = number_of_phases(model.system)
+absolute_increment_limit(s::Saturations) = s.ds_max
 
-maximum_value(::Saturations) = 1.0
-minimum_value(::Saturations) = 0.0
-absolute_increment_limit(s::Saturations) = s.dsMax
-
-function initialize_primary_variable_ad!(state, model, pvar::Saturations, state_symbol, npartials; offset = 0, kwarg...)
+function initialize_primary_variable_ad!(state, model, pvar::Saturations, state_symbol, npartials; kwarg...)
     nph = values_per_entity(model, pvar)
-    # nph - 1 primary variables, with the last saturation being initially zero AD
-    dp = vcat((1:nph-1) .+ offset, 0)
     v = state[state_symbol]
-    v = allocate_array_ad(v, diag_pos = dp, context = model.context, npartials = npartials; kwarg...)
-    for i in 1:size(v, 2)
-        v[end, i] = 1 - sum(v[1:end-1, i])
-    end
-    state[state_symbol] = v
+    state[state_symbol] = unit_sum_init(v, model, npartials, nph; kwarg...)
     return state
-end
-
-function update_primary_variable!(state, p::Saturations, state_symbol, model, dx)
-    nph, nu = value_dim(model, p)
-    abs_max = absolute_increment_limit(p)
-    maxval, minval = maximum_value(p), minimum_value(p)
-    s = state[state_symbol]
-    Threads.@threads for cell = 1:nu
-        dlast = 0
-        @inbounds for ph = 1:(nph-1)
-            v = value(s[ph, cell])
-            dv = dx[cell + (ph-1)*nu]
-            dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
-            dlast -= dv
-            s[ph, cell] += dv
-        end
-        @inbounds s[nph, cell] += dlast
-    end
 end
 
 # Total component masses
@@ -267,10 +242,11 @@ end
 function get_reference_densities(model, storage)
     prm = storage.parameters
     t = float_type(model.context)
-    if haskey(prm, :reference_densities)
-        rhos = prm.reference_densities
-    else
-        rhos = ones(t, number_of_phases(model.system))
-    end
+    rhos = prm.reference_densities
     return rhos::AbstractVector{t}
+end
+
+function setup_parameters_system!(d, model, sys::MultiPhaseSystem)
+    nph = number_of_phases(sys)
+    d[:reference_densities] = transfer(model.context, ones(nph))
 end

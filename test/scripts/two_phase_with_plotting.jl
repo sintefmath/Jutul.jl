@@ -59,13 +59,13 @@ function perform_test(mesh_or_casename, doPlot = false, pvfrac=1, tstep = ones(2
     parameters[:reference_densities] = [rhoLS, rhoLS]
 
     sim = Simulator(model, state0 = state0, parameters = parameters)
-    cfg = simulator_config(sim, max_nonlinear_iterations = 20)
+    cfg = simulator_config(sim, max_nonlinear_iterations = 20, info_level = 2)
     println("Starting simulation.")
     states, = simulate(sim, timesteps, forces = forces, config = cfg)
     s = states[end]
-    p = s.Pressure
+    p = s[:Pressure]
     @printf("Final pressure ranges from %f to %f bar.\n", maximum(p)/bar, minimum(p)/bar)
-    sl = s.Saturations[1, :]
+    sl = s[:Saturations][1, :]
     @printf("Final liquid saturation ranges from %f to %f.\n", maximum(sl), minimum(sl))
 
     if doPlot

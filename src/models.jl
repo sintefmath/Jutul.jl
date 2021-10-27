@@ -35,7 +35,7 @@ function number_of_partials_per_entity(model::SimulationModel, entity::TervUnit)
     n = 0
     for pvar in values(get_primary_variables(model))
         if associated_entity(pvar) == entity
-            n += 1
+            n += degrees_of_freedom_per_entity(model, pvar)
         end
     end
     return n
@@ -109,7 +109,10 @@ function initialize_storage!(storage, model::TervModel; initialize_state0 = true
         # copy over those values before returning them back
         state0 = Dict()
         for key in model.output_variables
-            state0[key] = state0_eval[key]
+            v = state0_eval[key]
+            if !isa(v, ConstantWrapper) && eltype(v)<:Real
+                state0[key] = v
+            end
         end
         storage[:state0] = state0
     end
@@ -131,6 +134,7 @@ function setup_storage!(storage, model::TervModel; setup_linearized_system = tru
         storage[:state] = convert_state_ad(model, state0, tag)
         storage[:primary_variables] = reference_primary_variables(storage, model) 
     end
+    setup_storage_model(storage, model)
     storage[:equations] = setup_equations(storage, model; tag = tag, kwarg...) 
     if setup_linearized_system
         storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
@@ -138,6 +142,25 @@ function setup_storage!(storage, model::TervModel; setup_linearized_system = tru
         # Give the equations a chance to figure out their place in the Jacobians.
         align_equations_to_linearized_system!(storage, model)
     end
+end
+
+function setup_storage_model(storage, model)
+    setup_storage_domain!(storage, model, model.domain)
+    setup_storage_system!(storage, model, model.system)
+    setup_storage_formulation!(storage,  model, model.formulation)
+end
+
+
+function setup_storage_domain!(storage, model, domain)
+    # Do nothing
+end
+
+function setup_storage_system!(storage, model, system)
+    # Do nothing
+end
+
+function setup_storage_formulation!(storage,  model, formulation)
+    # Do nothing
 end
 
 function reference_primary_variables(storage, model::TervModel; kwarg...)
@@ -435,8 +458,16 @@ function setup_parameters(model)
     d = Dict{Symbol, Any}()
     d[:tolerances] = Dict{Symbol, Any}()
     d[:tolerances][:default] = 1e-3
+    setup_parameters_domain!(d, model, model.domain)
+    setup_parameters_system!(d, model, model.system)
+    setup_parameters_context!(d, model, model.context)
+    setup_parameters_formulation!(d, model, model.formulation)
     return d
 end
+setup_parameters_domain!(d, model, ::Any) = nothing
+setup_parameters_system!(d, model, ::Any) = nothing
+setup_parameters_context!(d, model, ::Any) = nothing
+setup_parameters_formulation!(d, model, ::Any) = nothing
 
 function build_forces(model::TervModel)
     return NamedTuple()
@@ -531,7 +562,12 @@ end
 
 function get_output_state(storage, model)
     # As this point (after a converged step) state0 should be state without AD.
-    return deepcopy(storage.state0)
+    s0 = storage.state0
+    D = Dict{Symbol, Any}()
+    for k in keys(s0)
+        D[k] = copy(s0[k])
+    end
+    return D
 end
 
 function reset_to_previous_state!(storage, model)
