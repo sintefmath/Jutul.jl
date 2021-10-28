@@ -101,8 +101,15 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
 end
 
 
-function get_test_setup(grid_name; case_name = "single_phase_simple", context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05, fuse_flux = false, kwarg...)
-    G = get_minimal_tpfa_grid_from_mrst(grid_name, fuse_flux = fuse_flux)
+function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05, fuse_flux = false, kwarg...)
+    if isa(mesh_or_casename, String)
+        G, mrst_data = get_minimal_tpfa_grid_from_mrst(mesh_or_casename, extraout = true, fuse_flux = fuse_flux)
+        mesh = MRSTWrapMesh(mrst_data["G"])
+    else
+        mesh = mesh_or_casename
+        geo = tpfv_geometry(mesh)
+        G = discretized_domain_tpfv_flow(geo; kwarg...)
+    end
     nc = number_of_cells(G)
     pv = G.grid.pore_volumes
     timesteps = timesteps*3600*24
