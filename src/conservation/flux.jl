@@ -57,6 +57,23 @@ function get_connection(face, cell, faces, N, T, z, g, inc_face_sign)
     return convert_to_immutable_storage(D)
 end
 
+function remap_connection(conn, self, other, face)
+    D = Dict()
+    for k in keys(conn)
+        if k == :self
+            newval = self
+        elseif k == :other
+            newval = other
+        elseif k == :face
+            newval = face
+        else
+            newval = conn[k]
+        end
+        D[k] = conn[k]
+    end
+    return convert_to_immutable_storage(D)
+end
+
 struct TwoPointPotentialFlow{U <: Union{UpwindDiscretization, Nothing}, K <:Union{PotentialFlowDiscretization, Nothing}, F <: FlowType} <: FlowDiscretization
     upwind::U
     grad::K
@@ -107,6 +124,37 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
     TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
 end
 
+function subdiscretization(disc::TwoPointPotentialFlow, subg, mapper::FiniteVolumeGlobalMap)
+    u, k, flow_type, has_grav = disc.upwind, disc.grad, disc.flow_type, disc.gravity
+
+    face_pos_global, conn_data_global = disc.conn_pos, disc.conn_data
+    N = get_neighborship(subg)
+    faces, face_pos = get_facepos(N)
+
+    T = eltype(conn_data_global)
+    conn_data = Vector{T}(undef, length(faces))
+    for c in 1:number_of_cells(subg)
+        c_g = global_cell(c, mapper)
+        # Loop over half-faces for this cell
+        for f_p in face_pos[c]:face_pos[c+1]-1
+            f = faces[f_p]
+            f_g = global_face(f, mapper)
+            # Loop over the corresponding global half-faces
+            for f_i in face_pos_global[c_g]:face_pos_global[c_g+1]-1
+                conn = conn_data_global[f_i]
+                @info conn.face
+                if conn.face == f_g
+                    # verify that this is actually the right global cell!
+                    @assert conn.self == c_g
+                    other = local_cell(conn.other, mapper)
+                    conn_data[f_p] = remap_connection(conn, c, other, f)
+                    break
+                end
+            end
+        end
+    end
+    return TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
+end
 
 function select_secondary_variables_discretization!(S, domain, system, formulation, fd::TwoPointPotentialFlow)
     select_secondary_variables_flow_type!(S, domain, system, formulation, fd.flow_type)

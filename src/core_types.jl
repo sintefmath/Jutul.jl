@@ -137,7 +137,7 @@ kernel_compatibility(::SingleCUDAContext) = KernelAllowed()
 struct SharedMemoryKernelContext <: CPUTervContext
     block_size
     device
-    function SharedMemoryKernelContext(block_size = nthreads())
+    function SharedMemoryKernelContext(block_size = Threads.nthreads())
         # Remark: No idea what block_size means here.
         return new(block_size, CPU())
     end
@@ -185,9 +185,10 @@ struct DiscretizedDomain{G} <: TervDomain
     grid::G
     discretizations
     entities
+    global_map
 end
 
-function DiscretizedDomain(grid, disc = nothing)
+function DiscretizedDomain(grid, disc = nothing; global_map = TrivialGlobalMap())
     entities = declare_entities(grid)
     u = Dict{Any, Int64}() # Is this a good definition?
     for entity in entities
@@ -195,7 +196,7 @@ function DiscretizedDomain(grid, disc = nothing)
         @assert num >= 0 "Units must have non-negative counts."
         u[entity.entity] = num
     end
-    DiscretizedDomain(grid, disc, u)
+    DiscretizedDomain(grid, disc, u, global_map)
 end
 
 function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
