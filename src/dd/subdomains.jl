@@ -10,6 +10,8 @@ local_cell(f, ::TrivialGlobalMap) = f
 "Global face -> local face (full set)"
 local_face(c, ::TrivialGlobalMap) = c
 
+interior_cell(c, ::TrivialGlobalMap) = c
+
 interior_face(f, m) = f
 
 map_to_active(V, domain, entity) = map_to_active(V, domain, domain.global_map, entity)
