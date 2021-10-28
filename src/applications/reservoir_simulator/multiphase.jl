@@ -235,7 +235,9 @@ end
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}
     Φ = get_pore_volume(model)
     ρ = storage.state.PhaseMassDensities
-    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, i])*Φ[i])
+    a = active_entities(model.domain, Cells())
+
+    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, a[i]])*Φ[a[i]])
     return (e, tolerance_scale(eq))
 end
 

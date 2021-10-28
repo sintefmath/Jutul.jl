@@ -439,3 +439,36 @@ function Base.show(io::IO, t::TervStorage, storage::TervStorage)
         println("  $key: $(typeof(data[key]))")
     end
 end
+
+abstract type AbstractGlobalMap end
+struct TrivialGlobalMap end
+
+struct FiniteVolumeGlobalMap <: AbstractGlobalMap
+    # Full set -> global set
+    cells::AbstractVector{Integer}
+    # Inner set -> full set
+    inner_to_full_cells::AbstractVector{Integer}
+    # Full set -> inner set
+    full_to_inner_cells::AbstractVector{Integer}
+    faces::AbstractVector{Integer}
+    cell_is_boundary::AbstractVector{Bool}
+    function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing)
+        n = length(cells)
+        if isnothing(is_boundary)
+            inner_to_full_cells = cells
+            bnd = repeat([true], length(cells))
+        else
+            inner_to_full_cells = cells[is_boundary]
+            full_to_inner_cells = Vector{Integer}(undef, n)
+            for i = 1:n
+                v = only(indexin(i, inner_to_full_cells))
+                if isnothing(v)
+                    v = 0
+                end
+                full_to_inner_cells[i] = v
+            end
+            bnd = is_boundary
+        end
+        new(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary)
+    end
+end

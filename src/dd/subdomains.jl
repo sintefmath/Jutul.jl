@@ -1,31 +1,17 @@
 export subdomain, submap_cells
 
-abstract type AbstractGlobalMap end
-struct TrivialGlobalMap end
+"Local face -> global face (full set)"
 global_face(f, ::TrivialGlobalMap) = f
+"Local cell -> global cell (full set)"
 global_cell(c, ::TrivialGlobalMap) = c
 
+"Global cell -> local cell (full set)"
 local_cell(f, ::TrivialGlobalMap) = f
+"Global face -> local face (full set)"
 local_face(c, ::TrivialGlobalMap) = c
 
 interior_face(f, m) = f
 
-struct FiniteVolumeGlobalMap <: AbstractGlobalMap
-    cells::AbstractVector{Integer}
-    solution_cells::AbstractVector{Integer}
-    faces::AbstractVector{Integer}
-    cell_is_boundary::AbstractVector{Bool}
-    function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing)
-        if isnothing(is_boundary)
-            scells = cells
-            bnd = repeat([true], length(cells))
-        else
-            scells = cells[is_boundary]
-            bnd = is_boundary
-        end
-        new(cells, scells, faces, is_boundary)
-    end
-end
 map_to_active(V, domain, entity) = map_to_active(V, domain, domain.global_map, entity)
 map_to_active(V, domain, m, entity) = V
 
@@ -48,12 +34,18 @@ global_cell(c, m::FiniteVolumeGlobalMap) = m.cells[c]
 local_cell(c_global, m::FiniteVolumeGlobalMap) = only(indexin(c_global, m.cells))
 local_face(f_global, m::FiniteVolumeGlobalMap) = only(indexin(f_global, m.faces))
 
-interior_cell(c, m::FiniteVolumeGlobalMap) = only(indexin(c, m.solution_cells))
+function interior_cell(c, m::FiniteVolumeGlobalMap)
+    c_i = m.full_to_inner_cells[c]
+    return c_i == 0 ? nothing : c_i
+end
+# interior_cell(c, m::FiniteVolumeGlobalMap) = only(indexin(c, m.inner_to_full_cells))
+
+#global_map
 
 # Specialize cells, leave faces be (probably already filtered)
 active_cells(model) = active_entities(model.domain, Cells())
 
-active_entities(d, m::FiniteVolumeGlobalMap, ::Cells) = m.solution_cells
+active_entities(d, m::FiniteVolumeGlobalMap, ::Cells) = m.inner_to_full_cells
 active_entities(d, m::FiniteVolumeGlobalMap, f::Faces) = 1:count_entities(d, f)
 
 active_entities(d::DiscretizedDomain, entity) = active_entities(d, d.global_map, entity)
