@@ -88,7 +88,10 @@ minimum_value(::TervVariables) = nothing
 
 function update_primary_variable!(state, p::TervVariables, state_symbol, model, dx)
     names = get_names(p)
-    nu = number_of_entities(model, p)
+    entity = associated_entity(p)
+    active = active_entities(model.domain, entity)
+
+    nu = length(active)
     abs_max = absolute_increment_limit(p)
     rel_max = relative_increment_limit(p)
     maxval = maximum_value(p)
@@ -98,7 +101,7 @@ function update_primary_variable!(state, p::TervVariables, state_symbol, model, 
     for (index, nm) in enumerate(names)
         offset = nu*(index-1)
         v = state[state_symbol]
-        @tullio v[i] = update_value(v[i], dx[i+offset], abs_max, rel_max, minval, maxval, scale)
+        @tullio v[active[i]] = update_value(v[active[i]], dx[i+offset], abs_max, rel_max, minval, maxval, scale)
     end
 end
 
@@ -269,13 +272,13 @@ function unit_sum_update!(s, p, model, dx)
     nf, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
     maxval, minval = maximum_value(p), minimum_value(p)
+    active_cells = active_entities(model.domain, Cells())
     if nf == 2
         maxval = min(1 - minval, maxval)
         minval = max(minval, maxval - 1)
-        for cell = 1:nu
-            dlast = 0
+        for (i, cell) in enumerate(active_cells)
             v = value(s[1, cell])
-            dv = dx[cell]
+            dv = dx[i]
             dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
             @inbounds s[1, cell] += dv
             @inbounds s[2, cell] -= dv
@@ -283,7 +286,7 @@ function unit_sum_update!(s, p, model, dx)
     else
         if false
             # Preserve direction
-            for cell = 1:nu
+            for cell in active_cells
                 w = 1.0
                 # First pass: Find the relaxation factors that keep all fractions in [0, 1]
                 # and obeying the maximum change targets
@@ -306,7 +309,7 @@ function unit_sum_update!(s, p, model, dx)
             end
         else
             # Preserve update magnitude
-            for cell = 1:nu
+            for cell in active_cells
                 # First pass: Find the relaxation factors that keep all fractions in [0, 1]
                 # and obeying the maximum change targets
                 dlast0 = 0
