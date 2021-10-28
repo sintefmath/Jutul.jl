@@ -32,35 +32,30 @@ global_cell(c, m::FiniteVolumeGlobalMap) = m.cells[c]
 local_cell(c_global, m::FiniteVolumeGlobalMap) = only(indexin(c_global, m.cells))
 local_face(f_global, m::FiniteVolumeGlobalMap) = only(indexin(f_global, m.faces))
 
-function solution_entities(d::DiscretizedDomain, unit = Cells())
-    return solution_entities(d, d.global_map, unit)
-end
+# Specialize cells, leave faces be (probably already filtered)
+active_entities(d, m::FiniteVolumeGlobalMap, ::Cells) = m.solution_cells
+active_entities(d, m::FiniteVolumeGlobalMap, f::Faces) = 1:count_entities(d, f)
 
-solution_entities(d, sg, ::TrivialGlobalMap, unit) = 1:count_entities(domain, unit)
-subdiscretization(disc, sg, ::TrivialGlobalMap) = disc
+
+active_entities(d::DiscretizedDomain, unit) = active_entities(d, d.global_map, unit)
+active_entities(d::DiscretizedDomain, ::TrivialGlobalMap, unit) = 1:count_entities(domain, unit)
+
+subdiscretization(disc, ::TrivialGlobalMap) = disc
 
 function subdomain(d::DiscretizedDomain, indices; entity = Cells(), buffer = 0)
-
     grid = d.grid
     disc = d.discretizations
 
-
     N = grid.neighborship
     cells, faces, is_boundary = submap_cells(N, indices, buffer = buffer)
-
     mapper = FiniteVolumeGlobalMap(cells, faces, is_boundary)
-    # Uniqueify etc
-    @info grid
     sg = subgrid(grid, cells = cells, faces = faces)
     d = Dict()
     for k in keys(disc)
         d[k] = subdiscretization(disc[k], sg, mapper)
     end
     subdisc = convert_to_immutable_storage(d)
-    # subdisc = subdiscretizations(grid, subgrid, disc)#?
-
-
-    # return DiscretizedDomain(subgrid, subdisc)
+    return DiscretizedDomain(sg, subdisc)
 end
 
 function submap_cells(N, indices; nc = maximum(N), buffer = 0)
