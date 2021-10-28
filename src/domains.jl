@@ -43,13 +43,11 @@ function select_primary_variables_domain!(S, domain, system, formulation, disc)
 
 end
 
-function count_entities(D::DiscretizedDomain, entity::Cells)
-    D.entities[entity]
-end
+count_entities(D::DiscretizedDomain, entity::Cells) = D.entities[entity]
+count_entities(D::DiscretizedDomain, entity) = D.entities[entity]
 
-function count_entities(D::DiscretizedDomain, entity)
-    D.entities[entity]
-end
+count_active_entities(D, entity) = count_entities(D, entity)
+count_active_entities(D::DiscretizedDomain, entity) = count_active_entities(D, D.global_map, entity)
 
 function number_of_cells(D::DiscretizedDomain)
     return count_entities(D, Cells())

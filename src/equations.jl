@@ -142,7 +142,7 @@ end
 Get the number of entities (e.g. the number of cells) that the equation is defined on.
 """
 function number_of_entities(model, e::TervEquation)
-    return count_entities(model.domain, associated_entity(e))
+    return count_active_entities(model.domain, associated_entity(e))
 end
 
 """
@@ -169,26 +169,30 @@ function declare_sparsity(model, e::TervEquation, entity, layout::EquationMajorL
         out = nothing
     else
         I, J = primitive
+        I = map_to_active(I, model.domain, entity)
+        J = map_to_active(J, model.domain, entity)
+
+        # Limit to active set somehow
         ni = length(I)
         nj = length(J)
         if length(I) != length(J)
             error("Pattern I, J for $(typeof(e)) must have equal lengths for entity $(typeof(entity)). (|I| = $ni != $nj = |J|)")
         end
         nu = number_of_entities(model, e)
-        nu_other = count_entities(model.domain, entity)
+        nentities = count_active_entities(model.domain, entity)
         nrow_blocks = number_of_equations_per_entity(e)
         ncol_blocks = number_of_partials_per_entity(model, entity)
-        nentities = count_entities(model.domain, entity)
         if nrow_blocks > 1
             I = vcat(map((x) -> (x-1)*nu .+ I, 1:nrow_blocks)...)
             J = repeat(J, nrow_blocks)
         end
         if ncol_blocks > 1
             I = repeat(I, ncol_blocks)
-            J = vcat(map((x) -> (x-1)*nu_other .+ J, 1:ncol_blocks)...)
+            J = vcat(map((x) -> (x-1)*nentities .+ J, 1:ncol_blocks)...)
         end
         n = number_of_equations(model, e)
         m = nentities*ncol_blocks
+        @debug "Equation:" I J n m
         out = SparsePattern(I, J, n, m, layout)
     end
     return out

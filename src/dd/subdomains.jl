@@ -8,6 +8,7 @@ global_cell(c, ::TrivialGlobalMap) = c
 local_cell(f, ::TrivialGlobalMap) = f
 local_face(c, ::TrivialGlobalMap) = c
 
+interior_face(f, m) = f
 
 struct FiniteVolumeGlobalMap <: AbstractGlobalMap
     cells::AbstractVector{Integer}
@@ -25,6 +26,21 @@ struct FiniteVolumeGlobalMap <: AbstractGlobalMap
         new(cells, scells, faces, is_boundary)
     end
 end
+map_to_active(V, domain, entity) = map_to_active(V, domain, domain.global_map, entity)
+map_to_active(V, domain, m, entity) = V
+
+function map_to_active(V, domain, m::FiniteVolumeGlobalMap, ::Cells)
+    W = similar(V, 0)
+    for i in V
+        ix = interior_cell(i, m)
+        if !isnothing(ix)
+            push!(W, ix)
+        end
+    end
+    return W
+    # return filter(i -> m.cell_is_boundary[i], V)
+end
+
 
 global_face(f, m::FiniteVolumeGlobalMap) = m.faces[f]
 global_cell(c, m::FiniteVolumeGlobalMap) = m.cells[c]
@@ -32,13 +48,20 @@ global_cell(c, m::FiniteVolumeGlobalMap) = m.cells[c]
 local_cell(c_global, m::FiniteVolumeGlobalMap) = only(indexin(c_global, m.cells))
 local_face(f_global, m::FiniteVolumeGlobalMap) = only(indexin(f_global, m.faces))
 
+interior_cell(c, m::FiniteVolumeGlobalMap) = only(indexin(c, m.solution_cells))
+
 # Specialize cells, leave faces be (probably already filtered)
+active_cells(model) = active_entities(model.domain, Cells())
+
 active_entities(d, m::FiniteVolumeGlobalMap, ::Cells) = m.solution_cells
 active_entities(d, m::FiniteVolumeGlobalMap, f::Faces) = 1:count_entities(d, f)
 
+active_entities(d::DiscretizedDomain, entity) = active_entities(d, d.global_map, entity)
+active_entities(d::DiscretizedDomain, ::TrivialGlobalMap, entity) = 1:count_entities(d, entity)
 
-active_entities(d::DiscretizedDomain, unit) = active_entities(d, d.global_map, unit)
-active_entities(d::DiscretizedDomain, ::TrivialGlobalMap, unit) = 1:count_entities(domain, unit)
+
+# TODO: Probably a bit inefficient
+count_active_entities(d, m, e) = length(active_entities(d, m, e))
 
 subdiscretization(disc, ::TrivialGlobalMap) = disc
 
@@ -55,7 +78,7 @@ function subdomain(d::DiscretizedDomain, indices; entity = Cells(), buffer = 0)
         d[k] = subdiscretization(disc[k], sg, mapper)
     end
     subdisc = convert_to_immutable_storage(d)
-    return DiscretizedDomain(sg, subdisc)
+    return DiscretizedDomain(sg, subdisc, global_map = mapper)
 end
 
 function submap_cells(N, indices; nc = maximum(N), buffer = 0)
