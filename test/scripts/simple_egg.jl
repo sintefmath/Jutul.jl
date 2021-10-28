@@ -71,7 +71,7 @@ function setup_res(G, mrst_data; block_backend = false, use_groups = false)
     mu = ConstantVariables(mu)
 
     p = model.primary_variables
-    p[:Pressure] = Pressure(50*1e5, 0.2)
+    # p[:Pressure] = Pressure(50*1e5, 0.2)
     s = model.secondary_variables
     s[:PhaseMassDensities] = rho
     s[:RelativePermeabilities] = kr
@@ -151,7 +151,7 @@ for i = 1:num_wells
     sv[:PhaseViscosities] = model.secondary_variables[:PhaseViscosities]
 
     pw = wi.primary_variables
-    pw[:Pressure] = Pressure(50*1e5, 0.2)
+    # pw[:Pressure] = Pressure(50*1e5, 0.2)
 
     models[sym] = wi
 
