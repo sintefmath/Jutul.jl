@@ -192,7 +192,6 @@ function declare_sparsity(model, e::TervEquation, entity, layout::EquationMajorL
         end
         n = number_of_equations(model, e)
         m = nentities*ncol_blocks
-        @debug "Equation:" I J n m
         out = SparsePattern(I, J, n, m, layout)
     end
     return out

@@ -24,7 +24,7 @@ function number_of_degrees_of_freedom(model::TervModel)
 end
 
 function number_of_degrees_of_freedom(model::TervModel, u::TervUnit)
-    ndof = degrees_of_freedom_per_entity(model, u)*count_entities(model.domain, u)
+    ndof = degrees_of_freedom_per_entity(model, u)*count_active_entities(model.domain, u)
     return ndof
 end
 
@@ -39,7 +39,10 @@ function degrees_of_freedom_per_entity(model::TervModel, u::TervUnit)
 end
 
 function number_of_degrees_of_freedom(model, pvars::TervVariables)
-    return number_of_entities(model, pvars)*degrees_of_freedom_per_entity(model, pvars)
+    e = associated_entity(pvars)
+    n = count_active_entities(model.domain, e)
+    m = degrees_of_freedom_per_entity(model, pvars)
+    return n*m
 end
 
 function value_dim(model, pvars::TervVariables)
