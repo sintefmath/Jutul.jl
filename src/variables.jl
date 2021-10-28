@@ -210,7 +210,7 @@ function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict;
         value = val[symb]
     elseif need_value
         k = keys(val)
-        error("The key $symb must be present to initialize the state. Found symbols: $k")
+        error("The key $symb must be present to initialize the state. Provided symbols in initialization Dict: $k")
     else
         # We do not really need to initialize this, as it will be updated elsewhere.
         value = default_value(model, pvar)

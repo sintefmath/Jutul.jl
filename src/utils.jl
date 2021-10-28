@@ -1,4 +1,4 @@
-export convert_to_immutable_storage, gravity_constant, report_stats, print_stats
+export convert_to_immutable_storage, convert_to_mutable_storage, gravity_constant, report_stats, print_stats
 
 const gravity_constant = 9.80665
 
@@ -10,6 +10,19 @@ function convert_to_immutable_storage(dct::AbstractDict)
 end
 
 function convert_to_immutable_storage(v::Any)
+    # Silently do nothing
+    return v
+end
+
+function convert_to_mutable_storage(v::NamedTuple)
+    D = Dict{Symbol, Any}()
+    for k in keys(v)
+        D[k] = convert_to_mutable_storage(v[k])
+    end
+    return D
+end
+
+function convert_to_mutable_storage(v::Any)
     # Silently do nothing
     return v
 end
