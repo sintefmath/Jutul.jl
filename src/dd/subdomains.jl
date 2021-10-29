@@ -1,4 +1,4 @@
-export subdomain, submap_cells
+export subdomain, submap_cells, subforces, subforce
 
 "Local face -> global face (full set)"
 global_face(f, ::TrivialGlobalMap) = f
@@ -124,4 +124,33 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0)
         end
     end
     return (cells = cells, faces = faces, is_boundary = is_boundary)
+end
+
+function subforces(forces, submodel)
+    D = Dict{Symbol, Any}()
+    for k in keys(forces)
+        D[k] = subforce(forces[k], submodel)
+    end
+    return convert_to_immutable_storage(D)
+end
+
+function subforce(s::AbstractVector{S}, model) where S<:SourceTerm
+    # Just to be safe
+    s = deepcopy(s)
+    m = model.domain.global_map
+
+    n = length(s)
+    keep = repeat([false], n)
+    for (i, src) in enumerate(s)
+        c_l = local_cell(src.cell, m)
+        # Cell must be in local domain, and not on boundary
+        inner = !isnothing(interior_cell(c_l, m))
+        in_domain = !isnothing(c_l)
+        keep[i] = in_domain && inner
+        if keep[i]
+            s[i] = SourceTerm(c_l, src.value, fractional_flow = src.fractional_flow)
+        end
+    end
+    s = s[keep]
+    return s
 end
