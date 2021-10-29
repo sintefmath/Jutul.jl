@@ -53,7 +53,7 @@ end
 """
 Initialize primary variables and other state fields, given initial values as a Dict
 """
-function setup_state!(state, model::TervModel, init_values::Dict)
+function setup_state!(state, model::TervModel, init_values::Dict = Dict())
     for (psym, pvar) in get_primary_variables(model)
         initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true)
     end
