@@ -272,10 +272,12 @@ function solve_ministep(sim, dt, forces, max_iter, cfg)
         end
         report[:finalize_time] = t_finalize
     else
-        reset_to_previous_state!(sim.storage, sim.model)
+        reset_to_previous_state!(sim)
     end
     return (done, report)
 end
+
+reset_to_previous_state!(sim) = reset_to_previous_state!(sim.storage, sim.model)
 
 function update_before_step!(sim, dt, forces)
     update_before_step!(sim.storage, sim.model, dt, forces)
