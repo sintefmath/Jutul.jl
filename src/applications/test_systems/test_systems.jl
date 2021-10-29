@@ -4,6 +4,7 @@ export XVar
 struct ScalarTestSystem <: TervSystem end
 
 struct ScalarTestDomain <: TervDomain end
+active_entities(d::ScalarTestDomain, ::Any) = [1]
 
 function number_of_cells(::ScalarTestDomain) 1 end
 

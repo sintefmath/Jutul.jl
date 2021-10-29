@@ -211,7 +211,7 @@ function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
     val = map(t, values(d_cpu))
     d = (;zip(k, val)...)
     u = domain.entities
-    return DiscretizedDomain(g, d, u)
+    return DiscretizedDomain(g, d, u, domain.global_map)
 end
 
 

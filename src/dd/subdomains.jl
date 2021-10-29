@@ -16,7 +16,8 @@ interior_cell(c, ::TrivialGlobalMap) = c
 
 interior_face(f, m) = f
 
-map_to_active(V, domain, entity) = map_to_active(V, domain, domain.global_map, entity)
+map_to_active(V, domain::DiscretizedDomain, entity) = map_to_active(V, domain, domain.global_map, entity)
+map_to_active(V, domain, entity) = V
 map_to_active(V, domain, m, entity) = V
 
 function map_to_active(V, domain, m::FiniteVolumeGlobalMap, ::Cells)
