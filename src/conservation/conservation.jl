@@ -75,7 +75,7 @@ function align_half_face_cells(face_cache, jac, cd, f_ix, cell, N, dims, context
     else
         other = N[1, f]
     end
-    other_i = interior_cell(N[2, f], global_map)
+    other_i = interior_cell(other, global_map)
     cell_i = interior_cell(cell, global_map)
     if isnothing(other_i) || isnothing(cell_i)
         # Either of the two cells is active - we set to zero.
