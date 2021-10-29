@@ -242,7 +242,8 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
     fentries = cell_flux.entries
     cp = acc.jacobian_positions
     fp = cell_flux.jacobian_positions
-    Threads.@threads for cell = 1:nc
+    tb = thread_batch(context)
+    @batch minbatch=tb for cell = 1:nc
         for e in 1:ne
             fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flux, cp, fp, conn_pos, np)
         end
@@ -272,7 +273,8 @@ function update_linearized_system_subset_conservation_sources!(nz, r, model, acc
     rv_src = rowvals(src)
     nz_src = nonzeros(src)
     cp = acc.jacobian_positions
-    Threads.@threads for cell in 1:nc
+    tb = thread_batch(context)
+    @batch minbatch=tb for cell = 1:nc
         for rp in nzrange(src, cell)
             e = rv_src[rp]
             v = nz_src[rp]
@@ -293,7 +295,8 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
     fentries = face_flux.entries
     fp = face_flux.jacobian_positions
     nc = length(conn_pos) - 1
-    Threads.@threads for cell = 1:nc
+    tb = thread_batch(model.context)
+    @batch minbatch=tb for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
                 c = conn_data[i]

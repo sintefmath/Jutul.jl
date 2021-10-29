@@ -110,7 +110,8 @@ function fill_equation_entries!(nz, r, model, cache::TervAutoDiffCache)
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
     jp = cache.jacobian_positions
-    Threads.@threads for i in 1:nu
+    tb = thread_batch(model.context)
+    @batch minbatch = tb for i in 1:nu
         for e in 1:ne
             a = get_entry(cache, i, e, entries)
             @inbounds r[i + nu*(e-1)] = a.value
@@ -126,7 +127,8 @@ function fill_equation_entries!(nz, r::Nothing, model, cache::TervAutoDiffCache)
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
     jp = cache.jacobian_positions
-    Threads.@threads for i in 1:nu
+    tb = thread_batch(model.context)
+    @batch minbatch = tb for i in 1:nu
         for e in 1:ne
             a = get_entry(cache, i, e, entries)
             @inbounds for d = 1:np

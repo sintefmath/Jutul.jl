@@ -23,6 +23,7 @@ using CUDA, CUDAKernels, KernelAbstractions
 using PrettyTables
 using DataInterpolations
 using ILUZero
+using Polyester
 
 using MultiComponentFlash
 

@@ -151,6 +151,8 @@ end
 
 broadcast_compatibility(::SharedMemoryContext) = BroadcastDisallowed()
 
+thread_batch(::Any) = 1000
+
 "Default context - not really intended for threading"
 struct DefaultContext <: CPUTervContext
     matrix_layout

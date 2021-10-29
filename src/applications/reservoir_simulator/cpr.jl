@@ -55,19 +55,20 @@ function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage, rec
     initialize_storage!(cpr, A, s)
     if do_p_update || cpr.partial_update
         w_p = update_weights!(cpr, storage, A)
-        update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size)
+        update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size, model.context)
     end
     return do_p_update
 end
 
-function update_pressure_system!(A_p, A, w_p, bz)
+function update_pressure_system!(A_p, A, w_p, bz, ctx)
     cp = A_p.colptr
     nz = A_p.nzval
     nz_s = A.nzval
     rv = A_p.rowval
     n = A.n
     # Update the pressure system with the same pattern in-place
-    Threads.@threads for i in 1:n
+    tb = thread_batch(ctx)
+    @batch minbatch=tb for i in 1:n
         @inbounds for j in cp[i]:cp[i+1]-1
             row = rv[j]
             Ji = nz_s[j]
@@ -162,7 +163,7 @@ end
 
 function quasi_impes!(w, J, r, n, bz)
     r_p = SVector{bz}(r)
-    Threads.@threads for cell = 1:n
+    @batch for cell = 1:n
         J_b = J[cell, cell]'
         invert_w!(w, J_b, r_p, cell, bz)
     end
@@ -176,7 +177,7 @@ end
 end
 
 function update_p_rhs!(r_p, y, bz, w_p)
-    Threads.@threads for i in eachindex(r_p)
+    @batch for i in eachindex(r_p)
         v = 0
         @inbounds for b = 1:bz
             v += y[(i-1)*bz + b]*w_p[b, i]
