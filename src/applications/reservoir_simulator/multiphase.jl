@@ -41,6 +41,27 @@ function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<
     return (sources = sources,)
 end
 
+function subforce(s::AbstractVector{S}, model) where S<:SourceTerm
+    # Just to be safe
+    s = deepcopy(s)
+    m = model.domain.global_map
+
+    n = length(s)
+    keep = repeat([false], n)
+    for (i, src) in enumerate(s)
+        c_l = local_cell(src.cell, m)
+        # Cell must be in local domain, and not on boundary
+        inner = !isnothing(interior_cell(c_l, m))
+        in_domain = !isnothing(c_l)
+        keep[i] = in_domain && inner
+        if keep[i]
+            s[i] = SourceTerm(c_l, src.value, fractional_flow = src.fractional_flow)
+        end
+    end
+    s = s[keep]
+    return s
+end
+
 ## Systems
 # Immiscible multiphase system
 struct ImmiscibleSystem <: MultiPhaseSystem
