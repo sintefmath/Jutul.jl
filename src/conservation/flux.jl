@@ -142,7 +142,6 @@ function subdiscretization(disc::TwoPointPotentialFlow, subg, mapper::FiniteVolu
             # Loop over the corresponding global half-faces
             for f_i in face_pos_global[c_g]:face_pos_global[c_g+1]-1
                 conn = conn_data_global[f_i]
-                @info conn.face
                 if conn.face == f_g
                     # verify that this is actually the right global cell!
                     @assert conn.self == c_g

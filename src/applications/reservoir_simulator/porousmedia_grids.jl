@@ -160,5 +160,16 @@ end
 
 function subgrid(g::MinimalTPFAGrid; cells = nothing, faces = nothing)
     pv, N = g.pore_volumes, g.neighborship
-    return MinimalTPFAGrid(pv[cells], N[:, faces])
+    nc = number_of_cells(g)
+
+    renumeration = zeros(Integer, nc)
+    for (i, c) in enumerate(cells)
+        renumeration[c] = i
+    end
+    N_new = N[:, faces]
+    for i in eachindex(N_new)
+        N_new[i] = renumeration[N_new[i]]
+        @assert N_new[i] != 0
+    end
+    return MinimalTPFAGrid(pv[cells], N_new)
 end
