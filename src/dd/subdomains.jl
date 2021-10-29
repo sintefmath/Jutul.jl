@@ -6,9 +6,11 @@ global_face(f, ::TrivialGlobalMap) = f
 global_cell(c, ::TrivialGlobalMap) = c
 
 "Global cell -> local cell (full set)"
-local_cell(f, ::TrivialGlobalMap) = f
+local_cell(c, ::TrivialGlobalMap) = c
+cell_is_boundary(c, ::TrivialGlobalMap) = false
+
 "Global face -> local face (full set)"
-local_face(c, ::TrivialGlobalMap) = c
+local_face(f, ::TrivialGlobalMap) = f
 
 interior_cell(c, ::TrivialGlobalMap) = c
 
@@ -35,6 +37,9 @@ global_cell(c, m::FiniteVolumeGlobalMap) = m.cells[c]
 
 local_cell(c_global, m::FiniteVolumeGlobalMap) = only(indexin(c_global, m.cells))
 local_face(f_global, m::FiniteVolumeGlobalMap) = only(indexin(f_global, m.faces))
+
+cell_is_boundary(c, m::FiniteVolumeGlobalMap) = m.cell_is_boundary[c]
+
 
 function interior_cell(c, m::FiniteVolumeGlobalMap)
     c_i = m.full_to_inner_cells[c]
