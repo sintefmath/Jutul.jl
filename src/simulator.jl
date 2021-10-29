@@ -156,7 +156,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     reports = []
     states = Vector{Dict{Symbol, Any}}()
     no_steps = length(timesteps)
-    maxIterations = config[:max_nonlinear_iterations]
+    max_its = config[:max_nonlinear_iterations]
     rec = config[:ProgressRecorder]
     output = config[:info_level] >= 0
     if output
@@ -181,7 +181,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
             ctr = 1
             nextstep_local!(rec, dt, false)
             while !done
-                ok, s = solve_ministep(sim, dt, forces, maxIterations, config)
+                ok, s = solve_ministep(sim, dt, forces, max_its, config)
                 push!(ministep_reports, s)
                 if ok
                     t_local += dt
@@ -235,14 +235,14 @@ function get_tstr(dT)
     Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
 end
 
-function solve_ministep(sim, dt, forces, maxIterations, cfg)
+function solve_ministep(sim, dt, forces, max_iter, cfg)
     done = false
     rec = cfg[:ProgressRecorder]
     report = OrderedDict()
     report[:dt] = dt
     step_reports = []
     update_before_step!(sim, dt, forces)
-    for it = 1:maxIterations
+    for it = 1:max_iter
         next_iteration!(rec)
         e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it)
         push!(step_reports, r)
