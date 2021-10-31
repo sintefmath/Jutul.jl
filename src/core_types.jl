@@ -1,6 +1,6 @@
 export TervSystem, TervDomain, TervVariables, TervGrid, TervContext
 export SimulationModel, TervVariables, TervFormulation, TervEquation
-export setup_parameters, kernel_compatibility, TervForce
+export setup_parameters, TervForce
 export Cells, Nodes, Faces
 export ConstantVariables, ScalarVariable, GroupedVariables
 
@@ -36,17 +36,6 @@ abstract type TervForce end
 abstract type TervContext end
 abstract type GPUTervContext <: TervContext end
 abstract type CPUTervContext <: TervContext end
-# Traits for context
-abstract type KernelSupport end
-struct KernelAllowed <: KernelSupport end
-struct KernelDisallowed <: KernelSupport end
-
-kernel_compatibility(::Any) = KernelDisallowed()
-# Trait if we are to use broadcasting
-abstract type BroadcastSupport end
-struct BroadcastAllowed <: BroadcastSupport end
-struct BroadcastDisallowed <: BroadcastSupport end
-broadcast_compatibility(::Any) = BroadcastAllowed()
 
 # Traits etc for matrix ordering
 abstract type TervMatrixLayout end
@@ -131,7 +120,6 @@ struct SingleCUDAContext <: GPUTervContext
     end
 end
 matrix_layout(c::SingleCUDAContext) = c.matrix_layout
-kernel_compatibility(::SingleCUDAContext) = KernelAllowed()
 
 "Context that uses KernelAbstractions for GPU parallelization"
 struct SharedMemoryKernelContext <: CPUTervContext
@@ -142,14 +130,11 @@ struct SharedMemoryKernelContext <: CPUTervContext
         return new(block_size, CPU())
     end
 end
-kernel_compatibility(::SharedMemoryKernelContext) = KernelAllowed()
 
 "Context that uses threads etc to accelerate loops"
 struct SharedMemoryContext <: CPUTervContext
 
 end
-
-broadcast_compatibility(::SharedMemoryContext) = BroadcastDisallowed()
 
 thread_batch(::Any) = 1000
 
@@ -227,11 +212,12 @@ abstract type DiagonalEquation <: TervEquation end
 
 # Models
 abstract type TervModel end
+abstract type AbstractSimulationModel <: TervModel end
 
 struct SimulationModel{O<:TervDomain,
                        S<:TervSystem,
                        F<:TervFormulation,
-                       C<:TervContext} <: TervModel
+                       C<:TervContext} <: AbstractSimulationModel
     domain::O
     system::S
     context::C
