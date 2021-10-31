@@ -411,21 +411,30 @@ function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra
         m = N ÷ n
         r_v = as_cell_major_matrix(r_buf, n, m, model, offset)
 
-        errors, tscale = convergence_criterion(model, storage, eq, r_v; kwarg...)
-
-        if haskey(prm, key)
-            t_e = prm[key]
-        else
-            t_e = tol
+        all_crits = convergence_criterion(model, storage, eq, r_v; kwarg...)
+        e_keys = keys(all_crits)
+        tols = Dict()
+        for e_k in e_keys
+            if haskey(prm, key)
+                v = prm[key]
+                if isa(v, AbstractFloat)
+                    t_e = v
+                else
+                    t_e = v[e_k]
+                end
+            else
+                t_e = tol
+            end
+            errors = all_crits[e_k].errors
+            ok = errors .< t_e
+            converged = converged && all(ok)
+            e = maximum([e, maximum(errors)/t_e])
+            tols[e_k] = t_e
         end
-        errors = errors./tscale
-        ok = errors .< t_e
-        converged = converged && all(ok)
-        e = maximum([e, maximum(errors)/t_e])
         offset += N
         eoffset += n
         if extra_out
-            push!(output, (name = key, error = errors, tolerance = t_e))
+            push!(output, (name = key, criterions = all_crits, tolerances = tols))
         end
     end
     if extra_out

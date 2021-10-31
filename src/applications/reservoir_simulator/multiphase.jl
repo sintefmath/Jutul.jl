@@ -259,7 +259,9 @@ function convergence_criterion(model::SimulationModel{D, S}, storage, eq::Conser
     a = active_entities(model.domain, Cells())
 
     @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, a[i]])*Φ[a[i]])
-    return (e, tolerance_scale(eq))
+    names = get_name.(model.system.phases)
+    R = Dict("CNV" => (errors = e, names = names))
+    return R
 end
 
 function get_reference_densities(model, storage)

@@ -77,8 +77,8 @@ function get_convergence_table(errors)
 end
 
 function conv_table_fn(model_errors, has_models = false)
-    header = ["Equation", "‖R‖", "ϵ"]
-    alignment = [:l, :r, :r]
+    header = ["Equation", "Type", "Name", "‖R‖", "ϵ"]
+    alignment = [:l, :l, :l, :r, :r]
     if has_models
         # Make the code easier to have for both multimodel and single model case.
         header = ["Model", header...]
@@ -88,36 +88,50 @@ function conv_table_fn(model_errors, has_models = false)
     tols = Vector{Float64}()
     body_hlines = Vector{Int64}()
     pos = 1
-    for (model, errors) in model_errors
-        for (mix, eq) in enumerate(errors)
-            for (i, e) in enumerate(Array(eq.error))
-                if i == 1
-                    nm = String(eq.name)
-                    tt = eq.tolerance
-                else
-                    nm = ""
-                    tt = ""
-                end
-                if has_models
-                    if mix == 1 && i == 1
-                        m = String(model)
+    # Loop over models
+    for (model, equations) in model_errors
+        # Loop over equations 
+        for (mix, eq) in enumerate(equations)
+            criterions = eq.criterions
+            tolerances = eq.tolerances
+            for crit in keys(criterions)
+                C = criterions[crit]
+                local_errors = C.errors
+                local_names = C.names
+                tol = tolerances[crit]
+
+                for (i, e) in enumerate(Array(local_errors))
+                    if i == 1
+                        nm = eq.name
+                        T = crit
+                        tt = tol
                     else
-                        m = ""
+                        nm = ""
+                        T = ""
+                        tt = ""
                     end
-                    t = [m nm e tt]
-                else
-                    t = [nm e tt]
+                    nm2 = local_names[i]
+                    if has_models
+                        if mix == 1 && i == 1
+                            m = String(model)
+                        else
+                            m = ""
+                        end
+                        t = [m nm T nm2 e tt]
+                    else
+                        t = [nm T nm2 e tt]
+                    end
+                    push!(tbl, t)
+                    push!(tols, tol)
+                    pos += 1
                 end
-                push!(tbl, t)
-                push!(tols, eq.tolerance)
-                pos += 1
+                push!(body_hlines, pos-1)
             end
-            push!(body_hlines, pos-1)
         end
     end
     tbl = vcat(tbl...)
 
-    rpos = (2 + Int64(has_models))
+    rpos = (4 + Int64(has_models))
     nearly_factor = 10
     function not_converged(data, i, j)
         if j == rpos

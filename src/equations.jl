@@ -318,14 +318,16 @@ function apply_forces_to_equation!(storage, model, eq, force, time) end
 function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
     n = number_of_equations_per_entity(eq)
     e = zeros(n)
+    names = Vector{String}(undef, n)
     for i = 1:n
         e[i] = norm(r[i, :], Inf)
+        names[i] = "R_$i"
     end
-    return (e, tolerance_scale(eq))
-end
-
-function tolerance_scale(eq)
-    return 1.0
+    if n == 1
+        names = "R"
+    end
+    R = Dict("AbsMax" => (errors = e, names = names))
+    return R
 end
 
 @inline function get_diagonal_entries(eq::TervEquation)
