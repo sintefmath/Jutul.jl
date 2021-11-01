@@ -220,8 +220,8 @@ function plot_mrstdata(mrst_grid, data)
     return ax
 end
 
-function setup_case_from_mrst(casename; simple_well = false, block_backend = true)
-    G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false)
+function setup_case_from_mrst(casename; simple_well = false, block_backend = true, kwarg...)
+    G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false; kwarg...)
     function setup_res(G, mrst_data; block_backend = false, use_groups = false)
         ## Set up reservoir part
         f = mrst_data["fluid"]
