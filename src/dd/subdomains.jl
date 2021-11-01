@@ -1,4 +1,22 @@
 export subdomain, submap_cells, subforces, subforce
+export SimplePartition, number_of_subdomains, entity_subset
+
+abstract type AbstractDomainPartition end
+
+struct SimplePartition <: AbstractDomainPartition
+    partition
+    entity
+    function SimplePartition(p; entity = Cells())
+        for i in 1:maximum(p)
+            @assert any(x -> x == i, p)
+        end
+        new(p, entity)
+    end
+end
+
+number_of_subdomains(sp::SimplePartition) = maximum(sp.partition)
+entity_subset(sp, index, entity = Cells()) = entity_subset(sp, index, entity)
+entity_subset(sp::SimplePartition, index, e::Cells) = findall(sp.partition .== index)
 
 "Local face -> global face (full set)"
 global_face(f, ::TrivialGlobalMap) = f
