@@ -65,18 +65,22 @@ end
 #     view(v, row, :)
 # end
 
-function get_convergence_table(errors::AbstractDict)
+function get_convergence_table(errors::AbstractDict, info_level)
     # Already a dict
-    conv_table_fn(errors, true)
+    conv_table_fn(errors, true, info_level)
 end
 
-function get_convergence_table(errors)
+function get_convergence_table(errors, info_level)
     d = OrderedDict()
     d[:Base] = errors
-    conv_table_fn(d, false)
+    conv_table_fn(d, false, info_level)
 end
 
-function conv_table_fn(model_errors, has_models = false)
+function conv_table_fn(model_errors, has_models = false, info_level = 3)
+    # Info level 1: Function should never be called
+    # Info level 2: Just print the non-converged parts?
+    # Info level 3: Full print
+    print_converged = info_level > 2
     header = ["Equation", "Type", "Name", "‖R‖", "ϵ"]
     alignment = [:l, :l, :l, :r, :r]
     if has_models
@@ -99,9 +103,10 @@ function conv_table_fn(model_errors, has_models = false)
                 local_errors = C.errors
                 local_names = C.names
                 tol = tolerances[crit]
-
+                touched = false
                 for (i, e) in enumerate(Array(local_errors))
-                    if i == 1
+                    touch = print_converged || e > tol
+                    if touch && !touched
                         nm = eq.name
                         T = crit
                         tt = tol
@@ -110,6 +115,7 @@ function conv_table_fn(model_errors, has_models = false)
                         T = ""
                         tt = ""
                     end
+                    touched = touch
                     nm2 = local_names[i]
                     if has_models
                         if mix == 1 && i == 1
@@ -121,59 +127,64 @@ function conv_table_fn(model_errors, has_models = false)
                     else
                         t = [nm T nm2 e tt]
                     end
-                    push!(tbl, t)
-                    push!(tols, tol)
-                    pos += 1
+                    if touch
+                        push!(tbl, t)
+                        push!(tols, tol)
+                        pos += 1
+                    end
                 end
                 push!(body_hlines, pos-1)
             end
         end
     end
     tbl = vcat(tbl...)
-    m_offset = Int64(has_models)
-    rpos = (4 + m_offset)
-    nearly_factor = 10
-    function not_converged(data, i, j)
-        if j == rpos
-            d = data[i, j]
-            t = tols[i]
-            return d > t && d > 10*t
-        else
-            return false
+    if size(tbl, 1) > 0
+        m_offset = Int64(has_models)
+        rpos = (4 + m_offset)
+        nearly_factor = 10
+        function not_converged(data, i, j)
+            if j == rpos
+                d = data[i, j]
+                t = tols[i]
+                return d > t && d > 10*t
+            else
+                return false
+            end
         end
-    end
-    h1 = Highlighter(f = not_converged,
-                     crayon = crayon"red" )
-
-    function nearly_converged(data, i, j)
-        if j == rpos
-            d = data[i, j]
-            t = tols[i]
-            return d > t && d < nearly_factor*t
-        else
-            return false
+        h1 = Highlighter(f = not_converged,
+                         crayon = crayon"red" )
+    
+        function nearly_converged(data, i, j)
+            if j == rpos
+                d = data[i, j]
+                t = tols[i]
+                return d > t && d < nearly_factor*t
+            else
+                return false
+            end
         end
-    end
-    h2 = Highlighter(f = nearly_converged,
-                     crayon = crayon"yellow")
-
-    function converged(data, i, j)
-        if j == rpos
-            return data[i, j] <= tols[i]
-        else
-            return false
+        h2 = Highlighter(f = nearly_converged,
+                         crayon = crayon"yellow")
+    
+        function converged(data, i, j)
+            if j == rpos
+                return data[i, j] <= tols[i]
+            else
+                return false
+            end
         end
+        h3 = Highlighter(f = converged,
+                         crayon = crayon"green")
+    
+        highlighers = (h1, h2, h3)
+    
+        pretty_table(tbl, header = header,
+                                alignment = alignment, 
+                                body_hlines = body_hlines,
+                                highlighters = highlighers, 
+                                formatters = ft_printf("%2.3e", [m_offset + 4]),
+                                crop=:none)
     end
-    h3 = Highlighter(f = converged,
-                     crayon = crayon"green")
-
-    highlighers = (h1, h2, h3)
-    return pretty_table(tbl, header = header,
-                             alignment = alignment, 
-                             body_hlines = body_hlines,
-                             highlighters = highlighers, 
-                             formatters = ft_printf("%2.3e", [m_offset + 4]),
-                             crop=:none)
 end
 
 function report_stats(reports)

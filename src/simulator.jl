@@ -89,9 +89,10 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     end
     report[:convergence_time] = @elapsed begin
         converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
-        if config[:info_level] > 1
+        il = config[:info_level]
+        if il > 1
             @info "Convergence report, iteration $iteration:"
-            get_convergence_table(errors)
+            get_convergence_table(errors, il)
         end
         if converged
             if iteration == 1
