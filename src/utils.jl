@@ -79,7 +79,10 @@ end
 function conv_table_fn(model_errors, has_models = false, info_level = 3)
     # Info level 1: Function should never be called
     # Info level 2: Just print the non-converged parts?
-    # Info level 3: Full print
+    # Info level 3+: Full print
+    if info_level == 1
+        return
+    end
     print_converged = info_level > 2
     header = ["Equation", "Type", "Name", "‖R‖", "ϵ"]
     alignment = [:l, :l, :l, :r, :r]
@@ -187,6 +190,8 @@ function conv_table_fn(model_errors, has_models = false, info_level = 3)
                                 highlighters = highlighers, 
                                 formatters = ft_printf("%2.3e", [m_offset + 4]),
                                 crop=:none)
+    else
+        println("All equations are converged.")
     end
 end
 
