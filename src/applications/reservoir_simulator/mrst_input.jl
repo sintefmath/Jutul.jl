@@ -359,9 +359,9 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     if facility_grouping == :onegroup
         add_facility!(well_symbols, :Facility)
     elseif facility_grouping == :perwell
-        for (i, sym) in enumerate(well_symbols)
+        for sym in well_symbols
             gsym = Symbol(string(sym)*string(:_controller))
-            add_facility!(well_symbols, gsym)
+            add_facility!([sym], gsym)
         end
     else
         error("Unknown grouping $facility_grouping")
