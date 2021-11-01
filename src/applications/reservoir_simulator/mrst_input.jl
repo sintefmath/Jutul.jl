@@ -367,7 +367,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         error("Unknown grouping $facility_grouping")
     end
 
-    return (models, parameters, initializer, timesteps, forces)
+    return (models, parameters, initializer, timesteps, forces, mrst_data)
 end
 
 
