@@ -69,7 +69,7 @@ function remap_connection(conn, self, other, face)
         else
             newval = conn[k]
         end
-        D[k] = conn[k]
+        D[k] = newval
     end
     return convert_to_immutable_storage(D)
 end
