@@ -446,7 +446,7 @@ struct FiniteVolumeGlobalMap <: AbstractGlobalMap
             inner_to_full_cells = cells
             bnd = repeat([true], length(cells))
         else
-            inner_to_full_cells = filter(x -> !is_boundary[x], cells)
+            inner_to_full_cells = cells[is_boundary .== false]
             full_to_inner_cells = Vector{Integer}(undef, n)
             for i = 1:n
                 v = only(indexin(i, inner_to_full_cells))
