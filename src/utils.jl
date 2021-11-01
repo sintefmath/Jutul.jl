@@ -130,8 +130,8 @@ function conv_table_fn(model_errors, has_models = false)
         end
     end
     tbl = vcat(tbl...)
-
-    rpos = (4 + Int64(has_models))
+    m_offset = Int64(has_models)
+    rpos = (4 + m_offset)
     nearly_factor = 10
     function not_converged(data, i, j)
         if j == rpos
@@ -172,7 +172,7 @@ function conv_table_fn(model_errors, has_models = false)
                              alignment = alignment, 
                              body_hlines = body_hlines,
                              highlighters = highlighers, 
-                             formatters = ft_printf("%2.4e"),
+                             formatters = ft_printf("%2.3e", [m_offset + 4]),
                              crop=:none)
 end
 

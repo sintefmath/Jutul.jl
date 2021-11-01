@@ -360,7 +360,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         add_facility!(well_symbols, :Facility)
     elseif facility_grouping == :perwell
         for sym in well_symbols
-            gsym = Symbol(string(sym)*string(:_controller))
+            gsym = Symbol(string(sym)*string(:_ctrl))
             add_facility!([sym], gsym)
         end
     else
