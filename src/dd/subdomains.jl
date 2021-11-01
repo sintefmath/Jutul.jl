@@ -1,5 +1,5 @@
 export subdomain, submap_cells, subforces, subforce
-export SimplePartition, number_of_subdomains, entity_subset
+export SimplePartition, SimpleMultiModelPartition, number_of_subdomains, entity_subset
 
 abstract type AbstractDomainPartition end
 
@@ -13,10 +13,20 @@ struct SimplePartition <: AbstractDomainPartition
         new(p, entity)
     end
 end
-
 number_of_subdomains(sp::SimplePartition) = maximum(sp.partition)
 entity_subset(sp, index, entity = Cells()) = entity_subset(sp, index, entity)
 entity_subset(sp::SimplePartition, index, e::Cells) = findall(sp.partition .== index)
+
+struct SimpleMultiModelPartition <: AbstractDomainPartition
+    partition
+    main_symbol::Symbol
+    function SimpleMultiModelPartition(p, m)
+        new(p, m)
+    end
+end
+main_partition(mp::SimpleMultiModelPartition) = mp.partition[mp.main_symbol]
+number_of_subdomains(mp::SimpleMultiModelPartition) = number_of_subdomains(main_partition(mp))
+
 
 "Local face -> global face (full set)"
 global_face(f, ::TrivialGlobalMap) = f
