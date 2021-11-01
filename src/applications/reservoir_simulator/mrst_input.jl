@@ -1,6 +1,6 @@
 using GLMakie
 using MAT # .MAT file loading
-export get_minimal_tpfa_grid_from_mrst, plot_mrstdata, plot_interactive, get_test_setup, get_well_from_mrst_data
+export get_minimal_tpfa_grid_from_mrst, plot_interactive, get_test_setup, get_well_from_mrst_data
 export setup_case_from_mrst
 using SparseArrays # Sparse pattern
 using GLMakie
@@ -197,30 +197,7 @@ function read_patch_plot(filename::String)
     MRSTPlotData(f, v, d)
 end
 
-function plot_mrstdata(mrst_grid, data)
-    if any([t == "cartGrid" for t in mrst_grid["type"]])
-        cartDims = Int64.(mrst_grid["cartDims"])
-        if mrst_grid["griddim"] == 2 || cartDims[end] == 1
-            fig = Figure()
-
-            Axis(fig[1, 1])
-            heatmap!(reshape(data, cartDims[1:2]...))
-            ul = (minimum(data), maximum(data))
-            # vertical colorbars
-            Colorbar(fig[1, 2], limits = ul)
-            ax = fig
-        else
-            ax = volume(reshape(data, cartDims...), algorithm = :mip, colormap = :jet)
-        end
-        plot
-    else
-        println("Non-Cartesian plot not implemented.")
-        ax = nothing
-    end
-    return ax
-end
-
-function setup_case_from_mrst(casename; simple_well = false, block_backend = true, kwarg...)
+function setup_case_from_mrst(casename; simple_well = false, block_backend = true, facility_grouping = :onegroup, kwarg...)
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false; kwarg...)
     function setup_res(G, mrst_data; block_backend = false, use_groups = false)
         ## Set up reservoir part
@@ -362,17 +339,45 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         initializer[sym] = w0
     end
     #
-    g = WellGroup(well_symbols)
     mode = PredictionMode()
-    WG = SimulationModel(g, mode)
     F0 = Dict(:TotalSurfaceMassRate => 0.0)
-    
-    facility_forces = build_forces(WG, control = controls)
-    models[:Facility] = WG
-    initializer[:Facility] = F0
-    forces[:Facility] = facility_forces
 
-    parameters[:Facility] = setup_parameters(WG)
+
+    function add_facility!(wsymbols, sym)
+        g, ctrls = facility_subset(wsymbols, controls)
+        WG = SimulationModel(g, mode)
+        facility_forces = build_forces(WG, control = ctrls)
+        # Specifics
+        @assert !haskey(models, sym)
+        models[sym] = WG
+        forces[sym] = facility_forces
+        # Generics
+        initializer[sym] = F0
+        parameters[sym] = setup_parameters(WG)
+    end
+
+    if facility_grouping == :onegroup
+        add_facility!(well_symbols, :Facility)
+    elseif facility_grouping == :perwell
+        for (i, sym) in enumerate(well_symbols)
+            gsym = Symbol(string(sym)*string(:_controller))
+            add_facility!(well_symbols, gsym)
+        end
+    else
+        error("Unknown grouping $facility_grouping")
+    end
 
     return (models, parameters, initializer, timesteps, forces)
+end
+
+
+function facility_subset(well_symbols, controls)
+    g = WellGroup(well_symbols)
+    ctrls = Dict()
+    for k in keys(controls)
+        if any(well_symbols .== k)
+            ctrls[k] = controls[k]
+        end
+    end
+    return g, ctrls
 end
