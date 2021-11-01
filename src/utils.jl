@@ -98,6 +98,7 @@ function conv_table_fn(model_errors, has_models = false, info_level = 3)
         for (mix, eq) in enumerate(equations)
             criterions = eq.criterions
             tolerances = eq.tolerances
+            eq_touched = false
             for crit in keys(criterions)
                 C = criterions[crit]
                 local_errors = C.errors
@@ -116,21 +117,23 @@ function conv_table_fn(model_errors, has_models = false, info_level = 3)
                         tt = ""
                     end
                     touched = touch
-                    nm2 = local_names[i]
-                    if has_models
-                        if mix == 1 && i == 1
-                            m = String(model)
-                        else
-                            m = ""
-                        end
-                        t = [m nm T nm2 e tt]
-                    else
-                        t = [nm T nm2 e tt]
-                    end
+
                     if touch
+                        nm2 = local_names[i]
+                        if has_models
+                            if eq_touched
+                                m = ""
+                            else
+                                m = String(model)
+                            end
+                            t = [m nm T nm2 e tt]
+                        else
+                            t = [nm T nm2 e tt]
+                        end
                         push!(tbl, t)
                         push!(tols, tol)
                         pos += 1
+                        eq_touched = true
                     end
                 end
                 push!(body_hlines, pos-1)
