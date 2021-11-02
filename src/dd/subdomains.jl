@@ -157,6 +157,7 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0)
             end
         end
     end
+    faces = unique(faces)
     return (cells = cells, faces = faces, is_boundary = is_boundary)
 end
 
