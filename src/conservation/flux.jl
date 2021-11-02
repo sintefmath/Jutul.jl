@@ -132,9 +132,18 @@ function subdiscretization(disc::TwoPointPotentialFlow, subg, mapper::FiniteVolu
     faces, face_pos = get_facepos(N)
 
     T = eltype(conn_data_global)
-    conn_data = Vector{T}(undef, length(faces))
-    for c in 1:number_of_cells(subg)
+    # Feil her! Burde bare mappe de med aktive self celler.
+    new_conn = Vector{Any}()
+    new_offsets = [1]
+
+    nc = length(mapper.inner_to_full_cells)
+    for local_cell_no in 1:nc
+        # Map inner index -> full index
+        c = mapper.inner_to_full_cells[local_cell_no]
+        # c = interior_cell(local_cell_no, )
         c_g = global_cell(c, mapper)
+        cd_local = Vector{T}()
+
         # Loop over half-faces for this cell
         for f_p in face_pos[c]:face_pos[c+1]-1
             f = faces[f_p]
@@ -146,12 +155,17 @@ function subdiscretization(disc::TwoPointPotentialFlow, subg, mapper::FiniteVolu
                     # verify that this is actually the right global cell!
                     @assert conn.self == c_g
                     other = local_cell(conn.other, mapper)
-                    conn_data[f_p] = remap_connection(conn, c, other, f)
+                    push!(cd_local, remap_connection(conn, c, other, f))
+                    # @debug "$(cd_local[end].self) -> $(cd_local[end].other)"
                     break
                 end
             end
         end
+        push!(new_offsets, new_offsets[local_cell_no] + length(cd_local))
+        push!(new_conn, cd_local)
     end
+    face_pos = new_offsets
+    conn_data = vcat(new_conn...)
     return TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
 end
 
