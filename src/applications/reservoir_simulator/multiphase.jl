@@ -51,12 +51,15 @@ function subforce(s::AbstractVector{S}, model) where S<:SourceTerm
     for (i, src) in enumerate(s)
         c_l = local_cell(src.cell, m)
         # Cell must be in local domain, and not on boundary
-        inner = !isnothing(interior_cell(c_l, m))
         in_domain = !isnothing(c_l)
-        keep[i] = in_domain && inner
-        if keep[i]
-            s[i] = SourceTerm(c_l, src.value, fractional_flow = src.fractional_flow)
+        if !in_domain
+            continue
         end
+        inner = !isnothing(interior_cell(c_l, m))
+        if !inner
+            continue
+        end
+        s[i] = SourceTerm(c_l, src.value, fractional_flow = src.fractional_flow)
     end
     s = s[keep]
     return s
