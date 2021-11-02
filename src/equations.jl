@@ -169,9 +169,9 @@ function declare_sparsity(model, e::TervEquation, entity, layout::EquationMajorL
         out = nothing
     else
         I, J = primitive
-        I = map_to_active(I, model.domain, entity)
-        J = map_to_active(J, model.domain, entity)
-
+        @debug "Before active map:" collect(zip(I, J)) model.domain.global_map
+        I, J = map_ij_to_active(I, J, model.domain, entity)
+        @debug "After active map:" collect(zip(I, J)) model.domain.global_map
         # Limit to active set somehow
         ni = length(I)
         nj = length(J)

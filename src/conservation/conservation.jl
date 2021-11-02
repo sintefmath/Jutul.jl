@@ -317,7 +317,9 @@ end
 function declare_pattern(model, e::ConservationLaw, ::Cells)
     df = e.flow_discretization
     hfd = Array(df.conn_data)
-    n = number_of_entities(model, e)
+    # n = number_of_entities(model, e)
+    # Take all entities since these will be remapped later on...
+    n = count_entities(model.domain, associated_entity(e))
     # Fluxes
     I = map(x -> x.self, hfd)
     J = map(x -> x.other, hfd)

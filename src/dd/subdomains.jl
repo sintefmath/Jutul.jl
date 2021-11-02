@@ -60,6 +60,28 @@ function map_to_active(V, domain, m::FiniteVolumeGlobalMap, ::Cells)
     # return filter(i -> m.cell_is_boundary[i], V)
 end
 
+map_ij_to_active(I, J, domain, entity) = map_ij_to_active(I, J, domain, domain.global_map, entity)
+
+function map_ij_to_active(I, J, domain, m::FiniteVolumeGlobalMap, ::Cells)
+    n = length(I)
+    @assert n == length(J)
+    In = copy(I)
+    Jn = copy(J)
+    active = Vector{Bool}(undef, n)
+    for k in 1:n
+        i_new = interior_cell(I[k], m)
+        j_new = interior_cell(J[k], m)
+        keep = !isnothing(i_new) && !isnothing(j_new)
+        if keep
+            In[k] = i_new
+            Jn[k] = j_new
+        end
+        active[k] = keep
+    end
+    return (In[active], Jn[active])
+end
+
+map_ij_to_active(I, J, domain, m::TrivialGlobalMap, entity) = (I, J)
 
 global_face(f, m::FiniteVolumeGlobalMap) = m.faces[f]
 global_cell(c, m::FiniteVolumeGlobalMap) = m.cells[c]
