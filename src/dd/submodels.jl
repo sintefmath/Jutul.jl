@@ -8,7 +8,15 @@ function submodel(model::SimulationModel, p_i::AbstractVector; kwarg...)
     domain = model.domain
     sys = model.system
     d_l = subdomain(domain, p_i, entity = Cells(); kwarg...)
-    return SimulationModel(d_l, sys)
+    new_model = SimulationModel(d_l, sys)
+    function transfer_vars!(new, old)
+        for k in keys(old)
+            new[k] = old[k]
+        end
+    end
+    transfer_vars!(new_model.primary_variables, model.primary_variables)
+    transfer_vars!(new_model.secondary_variables, model.secondary_variables)
+    return new_model
 end
 
 
@@ -25,7 +33,6 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
         if k == main
             new_submodels[main] = main_submodel
         elseif mp.partition[k] == index
-            @info index mp.partition[k]
             # Include the whole model
             # TODO: Renumber
             m = deepcopy(submodels[k])

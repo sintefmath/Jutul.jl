@@ -55,14 +55,15 @@ function subforce(s::AbstractVector{S}, model) where S<:SourceTerm
         if !in_domain
             continue
         end
-        inner = !isnothing(interior_cell(c_l, m))
+        c_i = interior_cell(c_l, m)
+        inner = !isnothing(c_i)
         if !inner
             continue
         end
-        s[i] = SourceTerm(c_l, src.value, fractional_flow = src.fractional_flow)
+        keep[i] = true
+        s[i] = SourceTerm(c_i, src.value, fractional_flow = src.fractional_flow)
     end
-    s = s[keep]
-    return s
+    return s[keep]
 end
 
 ## Systems
