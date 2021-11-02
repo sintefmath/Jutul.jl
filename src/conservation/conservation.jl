@@ -314,15 +314,15 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
 end
 
 
-function declare_pattern(model, e::ConservationLaw, ::Cells)
+function declare_pattern(model, e::ConservationLaw, entity::Cells)
     df = e.flow_discretization
     hfd = Array(df.conn_data)
-    # n = number_of_entities(model, e)
-    # Take all entities since these will be remapped later on...
-    n = count_entities(model.domain, associated_entity(e))
+    n = number_of_entities(model, e)
     # Fluxes
     I = map(x -> x.self, hfd)
     J = map(x -> x.other, hfd)
+    I, J = map_ij_to_active(I, J, model.domain, entity)
+
     # Diagonals
     D = [i for i in 1:n]
 
@@ -332,11 +332,13 @@ function declare_pattern(model, e::ConservationLaw, ::Cells)
     return (I, J)
 end
 
-function declare_pattern(model, e::ConservationLaw, ::Faces)
+function declare_pattern(model, e::ConservationLaw, entity::Faces)
     df = e.flow_discretization
     cd = df.conn_data
     I = map(x -> x.self, cd)
     J = map(x -> x.face, cd)
+    I, J = map_ij_to_active(I, J, model.domain, entity)
+
     return (I, J)
 end
 

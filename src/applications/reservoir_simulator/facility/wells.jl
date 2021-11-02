@@ -201,6 +201,7 @@ function associated_entity(::PotentialDropBalanceWell) Faces() end
 function tolerance_scale(::PotentialDropBalanceWell) 1e6 end
 
 function declare_pattern(model, e::PotentialDropBalanceWell, ::Cells)
+    # TODO: Fix active.
     D = model.domain
     N = D.grid.neighborship
     nf = number_of_faces(D)
