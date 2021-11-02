@@ -83,6 +83,8 @@ struct TwoPointPotentialFlow{U <: Union{UpwindDiscretization, Nothing}, K <:Unio
     conn_data
 end
 
+number_of_half_faces(tp::TwoPointPotentialFlow) = length(tp.conn_data)
+
 function get_neighborship(grid)
     return grid.neighborship
 end

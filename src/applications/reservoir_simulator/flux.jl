@@ -36,8 +36,8 @@ end
 
 function number_of_entities(model, pv::CellNeighborPotentialDifference)
     # We have two entities of potential difference per face of the domain since the difference
-    # is taken with respect to cells
-    return 2*count_entities(model.domain, Faces())
+    # is taken with respect to cells, but there is a possibility of some cells being inactive.
+    return number_of_half_faces(model.domain.discretizations.mass_flow)
 end
 
 @terv_secondary function update_as_secondary!(pot, tv::CellNeighborPotentialDifference, model, param, Pressure, PhaseMassDensities)
