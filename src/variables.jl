@@ -182,7 +182,7 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
     nv = values_per_entity(model, pvar)
     
     if isa(pvar, ScalarVariable)
-        @assert length(val) == nu "Expected $(length(val)) == $nu"
+        @assert length(val) == nu "Expected $nu entries, but got $(length(val)) for $(typeof(pvar))"
         # Type-assert that this should be scalar, with a vector input
         val::AbstractVector
     else
