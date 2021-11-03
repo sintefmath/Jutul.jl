@@ -26,7 +26,7 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     submodels = model.models
     new_submodels = Dict()
     # First deal with main
-    main_submodel = submodel(submodels[main], p, index)
+    main_submodel = submodel(submodels[main], p, index; kwarg...)
     M = main_submodel.domain.global_map
 
     for k in keys(submodels)
