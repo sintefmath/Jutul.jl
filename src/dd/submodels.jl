@@ -33,7 +33,7 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
         if k == main
             new_submodels[main] = main_submodel
         elseif mp.partition[k] == index
-            # Include the whole model
+            # Include the whole model, somewhat of a hack for wells
             # TODO: Renumber
             m = deepcopy(submodels[k])
             d = m.domain
@@ -49,6 +49,7 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
             else
                 error("Not yet supported: $k")
             end
+            new_submodels[k] = m
         end
     end
     # TODO: Groups, reduction, etc.

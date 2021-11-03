@@ -1,4 +1,4 @@
-export subdomain, submap_cells, subforces, subforce
+export subdomain, submap_cells, subforces, subforce, global_map
 export SimplePartition, SimpleMultiModelPartition, number_of_subdomains, entity_subset
 
 abstract type AbstractDomainPartition end
@@ -17,6 +17,9 @@ end
 number_of_subdomains(sp::SimplePartition) = maximum(sp.partition)
 entity_subset(sp, index, entity = Cells()) = entity_subset(sp, index, entity)
 entity_subset(sp::SimplePartition, index, e::Cells) = findall(sp.partition .== index)
+
+global_map(domain::DiscretizedDomain) = domain.global_map
+global_map(domain) = TrivialGlobalMap()
 
 struct SimpleMultiModelPartition <: AbstractDomainPartition
     partition
