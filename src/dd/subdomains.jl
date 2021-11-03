@@ -198,8 +198,25 @@ end
 
 function subforces(forces, submodel)
     D = Dict{Symbol, Any}()
+    if isnothing(forces)
+        return nothing
+    else
+        for k in keys(forces)
+            D[k] = subforce(forces[k], submodel)
+        end
+        return convert_to_immutable_storage(D)
+    end
+end
+
+function subforces(forces, submodel::MultiModel)
+    D = Dict{Symbol, Any}()
     for k in keys(forces)
-        D[k] = subforce(forces[k], submodel)
+        if haskey(submodel.models, k)
+            D[k] = subforces(forces[k], submodel.models[k])
+        end
     end
     return convert_to_immutable_storage(D)
 end
+
+subforce(::Nothing, model) = nothing
+subforce(t, model) = t # A bit dangerous.
