@@ -139,27 +139,37 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0)
 
     facelist, facepos = get_facepos(N)
 
-    insert_face!(f) = push!(faces, f)
+    function insert_face!(f)
+        if !in(f, faces)
+            push!(faces, f)
+        end
+    end
     function insert_cell!(gc, is_bnd)
         push!(cells, gc)
         push!(is_boundary, is_bnd)
     end
-    for (i, gc) in enumerate(indices)
+    # Loop over all cells and add them to the global list
+    for gc in indices
         # Include global cell
-        might_be_bound = false
+        partition_boundary = false
         for fi in facepos[gc]:facepos[gc+1]-1
             face = facelist[fi]
             l, r = N[1, face], N[2, face]
-            # If both cells are in the interior, we add it
+            # If both cells are in the interior, we add the face to the list
             if in(l, indices) && in(r, indices)
                 insert_face!(face)
             else
-                might_be_bound = true
+                # Cell is on the boundary of the partition since it has an exterior face.
+                # This might be the global boundary of the subdomain, if buffer == 0
+                partition_boundary = true
             end
         end
-        is_bnd = might_be_bound && buffer == 0
+        is_bnd = partition_boundary && buffer == 0
         insert_cell!(gc, is_bnd)
-        if buffer == 1
+    end
+    # If we have a buffer, we also need to go over and add the buffer cells
+    if buffer == 1
+        for gc in indices
             # Also add the neighbors, if not already present
             for fi in facepos[gc]:facepos[gc+1]-1
                 face = facelist[fi]
@@ -179,7 +189,6 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0)
             end
         end
     end
-    faces = unique(faces)
     return (cells = cells, faces = faces, is_boundary = is_boundary)
 end
 
