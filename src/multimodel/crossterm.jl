@@ -7,9 +7,9 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
     impact_target = ct.impact[1]
     impact_source = ct.impact[2]
     pentities = get_primary_variable_ordered_entities(source)
-    nu_t = count_entities(target.domain, ct.entities.target)
+    nu_t = count_active_entities(target.domain, ct.entities.target)
     for u in pentities
-        nu_s = count_entities(source.domain, u)
+        nu_s = count_active_entities(source.domain, u)
         injective_alignment!(cs, jac, u, layout,
                                                 target_index = impact_target,
                                                 source_index = impact_source,
