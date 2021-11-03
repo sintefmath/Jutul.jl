@@ -10,6 +10,7 @@ struct SimplePartition <: AbstractDomainPartition
         for i in 1:maximum(p)
             @assert any(x -> x == i, p)
         end
+        @assert minimum(p) == 1
         new(p, entity)
     end
 end
