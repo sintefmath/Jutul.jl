@@ -24,7 +24,8 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     p = main_partition(mp)
     main = mp.main_symbol
     submodels = model.models
-    new_submodels = Dict()
+    # Preserve order of models (at least of those that will be included)
+    new_submodels = OrderedDict()
     # First deal with main
     main_submodel = submodel(submodels[main], p, index; kwarg...)
     M = main_submodel.domain.global_map
@@ -43,7 +44,9 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
             elseif isa(m.domain.grid, WellGrid)
                 perf = m.domain.grid.perforations.reservoir
                 for i in eachindex(perf)
-                    new_index = local_cell(perf[i], M)
+                    c_l = local_cell(perf[i], M)
+                    @assert !isnothing(c_l)
+                    new_index = interior_cell(c_l, M)
                     perf[i] = new_index
                 end
             else
