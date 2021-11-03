@@ -245,14 +245,16 @@ function report_stats(reports)
     
     n = total_its
     m = total_linearizations
+    linscale = v -> v / max(m, 1)
+    itscale = v -> v / max(n, 1)
     each = (
-                assembly = total_assembly / m,
-                linear_system = total_linear_update / m,
-                linear_solve = total_linear_solve / n,
-                update_time = total_update / n,
-                convergence = total_convergence / m,
-                other = other_time / n,
-                total = total_time / n
+                assembly = linscale(total_assembly),
+                linear_system = linscale(total_linear_update),
+                linear_solve = itscale(total_linear_solve),
+                update_time = itscale(total_update),
+                convergence = linscale(total_convergence),
+                other = itscale(other_time),
+                total = itscale(total_time)
             )
     return (
             newtons = total_its,
@@ -313,7 +315,23 @@ function print_timing(stats)
         data[i, 2] = 100*tsum/tot
         data[i, 3] = tsum
     end
-    pretty_table(data; header = (["Each", "Total", "Total"], ["seconds", "%", "seconds"]), 
+    function pick_unit(t)
+        m = maximum(t)
+        units = [(24*3600, "Days"), (3600, "Hours"), (60, "Minutes"), (1, "Seconds"), (1e-3, "Milliseconds"), (1e-6, "Microseconds"), (1e-9, "Nanoseconds")]
+        for u in units
+            if m > u[1]
+                return u
+            end
+        end
+    end
+
+    u, s = pick_unit(data[:, 1])
+    u_t, s_t = pick_unit(data[:, 3])
+
+    @. data[:, 1] /= u
+    @. data[:, 3] /= u_t
+
+    pretty_table(data; header = (["Each", "Total", "Total"], [s, "%", s_t]), 
                       row_names = flds,
                       formatters = (ft_printf("%3.2e", 1), ft_printf("%3.2f", 2:3)),
                       title = "Simulator timing",
@@ -321,3 +339,4 @@ function print_timing(stats)
                       body_hlines = [n-1],
                       row_name_column_title = "Type")
 end
+
