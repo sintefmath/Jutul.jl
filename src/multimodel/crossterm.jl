@@ -54,8 +54,8 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, entity, layo
         source_impact = primitive[2]
         source_entity = x.entities.source
         target_entity = x.entities.target
-        nentities_source = count_entities(source_model.domain, source_entity)
-        nentities_target = count_entities(target_model.domain, target_entity)
+        nentities_source = count_active_entities(source_model.domain, source_entity)
+        nentities_target = count_active_entities(target_model.domain, target_entity)
 
         n_partials = x.npartials_source
         n_eqs = x.equations_per_entity
