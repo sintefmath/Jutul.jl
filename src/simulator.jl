@@ -95,8 +95,8 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
             get_convergence_table(errors, il)
         end
         if converged
-            if iteration == 1
-                # Should always do one iteration. 
+            if iteration < config[:min_nonlinear_iterations]
+                # Should always do at least 
                 do_solve = true
                 # Ensures secondary variables are updated, and correct error
                 converged = false
@@ -128,6 +128,7 @@ function simulator_config(sim; kwarg...)
     cfg = Dict()
     cfg[:max_timestep_cuts] = 5
     cfg[:max_nonlinear_iterations] = 15
+    cfg[:min_nonlinear_iterations] = 1
     cfg[:linear_solver] = nothing
     cfg[:output_states] = true
     # Extra checks on values etc
