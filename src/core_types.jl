@@ -88,10 +88,10 @@ struct SparsePattern{L}
             I::AbstractVector{T}
             J::AbstractVector{T}
             @assert length(I) == length(J)
-            @assert maximum(I) <= n
-            @assert minimum(I) > 0
-            @assert maximum(J) <= m
-            @assert minimum(J) > 0
+            @assert maximum(I) <= n "Maximum row index $(maximum(I)) exceeded $n"
+            @assert minimum(I) > 0  "Minimum row index $(minimum(I)) was below 1"
+            @assert maximum(J) <= m "Maximum column index $(maximum(J)) exceeded $m"
+            @assert minimum(J) > 0  "Minimum column index $(minimum(J)) was below 1"
         else
             # Empty vectors might be Any, and the asserts above
             # cannot be used.
