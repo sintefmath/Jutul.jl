@@ -126,6 +126,11 @@ end
 
 function simulator_config(sim; kwarg...)
     cfg = Dict()
+    simulator_config!(cfg, sim; kwarg...)
+    return cfg
+end
+
+function simulator_config!(cfg, sim; kwarg...)
     cfg[:max_timestep_cuts] = 5
     cfg[:max_nonlinear_iterations] = 15
     cfg[:min_nonlinear_iterations] = 1
@@ -141,6 +146,11 @@ function simulator_config(sim; kwarg...)
     # Max residual before error is issued
     cfg[:max_residual] = 1e10
 
+    overwrite_by_kwargs(cfg; kwarg...)
+    return cfg
+end
+
+function overwrite_by_kwargs(cfg; kwarg...)
     # Overwrite with varargin
     for key in keys(kwarg)
         if !haskey(cfg, key)
@@ -148,7 +158,6 @@ function simulator_config(sim; kwarg...)
         end
         cfg[key] = kwarg[key]
     end
-    return cfg
 end
 
 function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, kwarg...)
