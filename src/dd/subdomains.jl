@@ -220,3 +220,16 @@ end
 
 subforce(::Nothing, model) = nothing
 subforce(t, model) = t # A bit dangerous.
+
+export subparameters
+subparameters(model, param) = deepcopy(param)
+
+function subparameters(model::MultiModel, param)
+    D = typeof(param)()
+    for (k, v) in param
+        if haskey(model.models, k)
+            D[k] = deepcopy(v)
+        end
+    end
+    return D
+end
