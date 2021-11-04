@@ -45,16 +45,15 @@ end
 "Update positions of law's derivatives in global Jacobian"
 function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
-    neighborship = get_neighborship(model.domain.grid)
     global_map = model.domain.global_map
 
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
     diagonal_alignment!(acc, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
-    half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, global_map, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
+    half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, global_map, fd, target_offset = equation_offset, source_offset = variable_offset)
 end
 
-function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, global_map, N, flow_disc; target_offset = 0, source_offset = 0)
+function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, global_map, flow_disc; target_offset = 0, source_offset = 0)
     # nu, ne, np = ad_dims(acc_cache)
     dims = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
@@ -62,19 +61,17 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, gl
     cd = flow_disc.conn_data
     for cell in 1:nc
         @inbounds for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
-            align_half_face_cells(face_cache, jac, cd, f_ix, cell, N, dims, context, global_map, target_offset, source_offset)
+            align_half_face_cells(face_cache, jac, cd, f_ix, cell, dims, context, global_map, target_offset, source_offset)
         end
     end
 end
 
-function align_half_face_cells(face_cache, jac, cd, f_ix, cell, N, dims, context, global_map, target_offset, source_offset)
+function align_half_face_cells(face_cache, jac, cd, f_ix, cell, dims, context, global_map, target_offset, source_offset)
     nu, ne, np = dims
-    f = cd[f_ix].face
-    if N[1, f] == cell
-        other = N[2, f]
-    else
-        other = N[1, f]
-    end
+    cd_f = cd[f_ix]
+    f = cd_f.face
+    other = cd_f.other
+    @assert cell == cd_f.self
     other_i = interior_cell(other, global_map)
     cell_i = interior_cell(cell, global_map)
     if isnothing(other_i) || isnothing(cell_i)
