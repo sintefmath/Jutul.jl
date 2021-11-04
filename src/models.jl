@@ -448,7 +448,7 @@ end
 Apply a set of forces to all equations. Equations that don't support a given force
 will just ignore them, thanks to the power of multiple dispatch.
 """
-function apply_forces!(storage, model::TervModel, dt, forces::NamedTuple; time = NaN)
+function apply_forces!(storage, model, dt, forces; time = NaN)
     equations = storage.equations
     for key in keys(equations)
         eq = equations[key]
