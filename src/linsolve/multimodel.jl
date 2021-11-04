@@ -4,6 +4,11 @@ function Base.getindex(ls::MultiLinearizedSystem, i, j = i)
     return ls.subsystems[i, j]
 end
 
+function Base.getindex(ls::LinearizedSystem, i, j = i)
+    @assert i == j == 1
+    return ls
+end
+
 do_schur(sys) = sys.reduction == :schur_apply
 
 function equation_major_to_block_major_view(a, block_size)
