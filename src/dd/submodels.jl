@@ -63,8 +63,16 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
         # We didn't continue, so we can append the group
         push!(groups, groups_0[i])
     end
+    if length(groups) == 1
+        groups = nothing
+        reduction = nothing
+        ctx = submodels[1].context
+    else
+        reduction = model.reduction
+        ctx = model.context
+    end
     # TODO: Renumber groups in case only one group persists.
     sm = convert_to_immutable_storage(new_submodels)
-    return MultiModel(sm, groups = groups, reduction = model.reduction, context = model.context)
+    return MultiModel(sm, groups = groups, reduction = reduction, context = ctx)
 end
 

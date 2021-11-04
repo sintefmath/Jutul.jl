@@ -40,6 +40,13 @@ struct MultiModel <: TervModel
                 reduction = nothing
             end
         end
+        if isnothing(groups) && !isnothing(context)
+            for (i, m) in enumerate(models)
+                if m.context != context
+                    error("No groups provided, but the outer context does not match the inner context for model $i")
+                end
+            end
+        end
         new(models, couplings, groups, context, ndof, reduction)
     end
 end

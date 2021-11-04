@@ -36,7 +36,7 @@ function initialize_storage!(cpr, J, s)
         m = J.m
         n = J.n
         cpr.block_size = bz = size(eltype(J), 1)
-        @assert n == m == length(s.state.Pressure)
+        # @assert n == m == length(s.state.Pressure) "Expected Jacobian dimensions ($m by $n) to both equal number of pressures $(length(s.state.Pressure))"
         nzval = zeros(length(J.nzval))
 
         cpr.A_p = SparseMatrixCSC(n, n, J.colptr, J.rowval, nzval)
@@ -96,11 +96,14 @@ function apply!(x, cpr::CPRPreconditioner, y, arg...)
     increment_pressure!(x, Δp, bz)
 end
 
-function reservoir_residual(lsys)
+reservoir_residual(lsys) = lsys.r
+reservoir_jacobian(lsys) = lsys.jac
+
+function reservoir_residual(lsys::MultiLinearizedSystem)
     return lsys[1, 1].r
 end
 
-function reservoir_jacobian(lsys)
+function reservoir_jacobian(lsys::MultiLinearizedSystem)
     return lsys[1, 1].jac
 end
 
