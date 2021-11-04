@@ -604,7 +604,7 @@ end
 
 function update_primary_variables!(storage, model::MultiModel; kwarg...)
     lsys = storage.LinearizedSystem
-    dx = lsys.dx
+    dx = lsys.dx_buffer
     models = model.models
 
     offset = 0
