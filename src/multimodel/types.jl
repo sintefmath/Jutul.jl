@@ -34,7 +34,11 @@ struct MultiModel <: TervModel
         end
         ndof = map(number_of_degrees_of_freedom, models)
         if reduction == :schur_apply
-            @assert num_groups == 2
+            if length(groups) > 1
+                @assert num_groups == 2
+            else
+                reduction = nothing
+            end
         end
         new(models, couplings, groups, context, ndof, reduction)
     end
