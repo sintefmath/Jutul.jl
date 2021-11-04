@@ -65,6 +65,6 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     end
     # TODO: Renumber groups in case only one group persists.
     sm = convert_to_immutable_storage(new_submodels)
-    return MultiModel(sm, groups = groups, reduction = model.reduction)
+    return MultiModel(sm, groups = groups, reduction = model.reduction, context = model.context)
 end
 
