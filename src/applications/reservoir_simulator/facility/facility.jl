@@ -215,10 +215,10 @@ end
 function update_before_step_domain!(storage, model::SimulationModel, domain::WellGroup, dt, forces)
     # Set control to whatever is on the forces
     cfg = storage.state.WellGroupConfiguration
-    for (key, val) in forces.control
-        cfg.control[key] = val
+    for key in keys(forces.control)
+        cfg.control[key] = forces.control[key]
     end
-    for (key, val) in forces.limits
-        cfg.limits[key] = val
+    for key in keys(forces.limits)
+        cfg.limits[key] = forces.limits[key]
     end
 end
