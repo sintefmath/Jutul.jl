@@ -113,6 +113,9 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         nextstep_global!(rec, dT)
         subrep = OrderedDict()
         ministep_reports = []
+        subrep[:ministeps] = ministep_reports
+        # Insert so that the current reports are accessible
+        push!(reports, subrep)
         t_step = @elapsed begin
             if output
                 @info "Solving step $step_no/$no_steps of length $(get_tstr(dT))."
@@ -124,7 +127,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
             ctr = 1
             nextstep_local!(rec, dt, false)
             while !done
-                # Make sure that we hit the endpoint in case time-step selection is too optimistic.
+                # Make sure that we hit the endpoint in case timestep selection is too optimistic.
                 dt = min(dt, dT - t_local)
                 # Attempt to solve current step
                 ok, s = solve_ministep(sim, dt, forces, max_its, config)
@@ -135,11 +138,14 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                     if t_local >= dT
                         # Onto the next one
                         break
+                    else
+                        # Pick another for the next step...
+                        dt = pick_timestep(sim, config, dt, dT, reports, step_index = step_no, new_step = false)
                     end
                 else
                     dt = cut_timestep(sim, config, dt, dT, reports, step_index = step_no, cut_count = cut_count)
                     if isnan(dt)
-                        # Time-step too small, cut too many times, ...
+                        # Timestep too small, cut too many times, ...
                         if output
                             @warn "Unable to converge time step $step_no/$no_steps. Aborting."
                         end
@@ -147,14 +153,12 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                         break
                     elseif output
                         cut_count += 1
-                        @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut #$cut_count.."
+                        @warn "Cutting timestep. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut #$cut_count.."
                     end
                 end
                 ctr += 1
                 nextstep_local!(rec, dt, ok)
             end
-            subrep[:ministeps] = ministep_reports
-            push!(reports, subrep)
             if config[:output_states]
                 store_output!(states, sim)
             end
@@ -241,9 +245,9 @@ function final_simulation_message(simulator, reports, info_level, aborted)
     if info_level >= 0 && length(reports) > 0
         stats = report_stats(reports)
         if aborted
-            endstr = "Simulation aborted. Completed $(stats.steps-1) of $(length(timesteps)) time-steps"
+            endstr = "Simulation aborted. Completed $(stats.steps-1) of $(length(timesteps)) timesteps"
         else
-            endstr = "Simulation complete. Completed $(stats.steps) time-steps"
+            endstr = "Simulation complete. Completed $(stats.steps) timesteps"
         end
         @info "$endstr in $(stats.time_sum.total) seconds with $(stats.newtons) iterations."
         if info_level > 0
@@ -253,13 +257,14 @@ function final_simulation_message(simulator, reports, info_level, aborted)
 end
 
 function pick_timestep(sim, config, dt_prev, dT, reports; step_index = NaN, new_step = false)
-    dt = dt_prev
+    dt = dT
     for sel in config[:timestep_selectors]
         if new_step && step_index == 1
             candidate = pick_first_timestep(sel, sim, config, dT)
         else
             candidate = pick_next_timestep(sel, sim, config, dt, dT, reports, step_index, new_step)
         end
+        # @info "Found:" get_tstr(candidate) get_tstr(dt_prev) get_tstr(dt) sel.increase
         dt = min(dt, candidate)
     end
     # The selectors might go crazy, so we have some safety bounds
@@ -269,7 +274,7 @@ function pick_timestep(sim, config, dt_prev, dT, reports; step_index = NaN, new_
         dt = min(max(dt, min_allowable), max_allowable)
     end
     if config[:info_level] > 1
-        @debug "Selected new time-step $(get_tstr(dt)) from previous $(get_tstr(dt_prev))."
+        @info "Selected new sub-timestep $(get_tstr(dt)) from previous $(get_tstr(dt_prev))."
     end
     return dt
 end
