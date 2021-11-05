@@ -281,7 +281,7 @@ end
 
 function cut_timestep(sim, config, dt, dT, reports; step_index = NaN, cut_count = 0)
     for sel in config[:timestep_selectors]
-        candidate = pick_next_timestep(sel, sim, config, dt, dT, reports, step_index, cut_count)
+        candidate = pick_cut_timestep(sel, sim, config, dt, dT, reports, cut_count)
         dt = min(dt, candidate)
     end
     return dt
