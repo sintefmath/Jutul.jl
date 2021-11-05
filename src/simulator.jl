@@ -143,6 +143,9 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:info_level] = 1
     # Define a default progress ProgressRecorder
     cfg[:ProgressRecorder] = ProgressRecorder()
+    cfg[:timestep_selectors] = [TimestepSelector()]
+    cfg[:timestep_max_increase] = 10.0
+    cfg[:timestep_max_decrease] = 0.1
     # Max residual before error is issued
     cfg[:max_residual] = 1e10
 
@@ -174,7 +177,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         @info "Starting simulation"
     end
     early_termination = false
-    dt = NaN
+    dt = timesteps[1]
     for (step_no, dT) in enumerate(timesteps)
         if early_termination
             break
@@ -193,11 +196,16 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
             ctr = 1
             nextstep_local!(rec, dt, false)
             while !done
+                # Make sure that we hit the endpoint in case time-step selection is too optimistic.
+                dt = min(dt, dT - t_local)
+                # Attempt to solve current step
                 ok, s = solve_ministep(sim, dt, forces, max_its, config)
+                # We store the report even if it is a failure.
                 push!(ministep_reports, s)
                 if ok
                     t_local += dt
                     if t_local >= dT
+                        # Onto the next one
                         break
                     end
                 else
@@ -213,8 +221,6 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                         cut_count += 1
                         @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut #$cut_count.."
                     end
-                    # Make sure that we hit the endpoint.
-                    dt = min(dt, dT - t_local)
                 end
                 ctr += 1
                 nextstep_local!(rec, dt, ok)
@@ -246,19 +252,35 @@ function final_simulation_message(simulator, reports, info_level, aborted)
     end
 end
 
-function pick_timestep(sim, config, dt, dT, reports; step_index = NaN, new_step = false)
-    return dT
-end
-
-function cut_timestep(sim, config, dt, dT, reports; step_index = NaN, cut_count = 0)
-    if cut_count + 1 > config[:max_timestep_cuts]
-        dt = nan
-    else
-        dt = min(dt/2, dT - t_local)
+function pick_timestep(sim, config, dt_prev, dT, reports; step_index = NaN, new_step = false)
+    dt = dt_prev
+    for sel in config[:timestep_selectors]
+        if new_step && step_index == 1
+            candidate = pick_first_timestep(sel, sim, config, dT)
+        else
+            candidate = pick_next_timestep(sel, sim, config, dt, dT, reports, step_index, new_step)
+        end
+        dt = min(dt, candidate)
+    end
+    # The selectors might go crazy, so we have some safety bounds
+    if isfinite(dt_prev)
+        min_allowable = config[:timestep_max_decrease]*dt_prev
+        max_allowable = config[:timestep_max_increase]*dt_prev
+        dt = min(max(dt, min_allowable), max_allowable)
+    end
+    if config[:info_level] > 1
+        @debug "Selected new time-step $(get_tstr(dt)) from previous $(get_tstr(dt_prev))."
     end
     return dt
 end
 
+function cut_timestep(sim, config, dt, dT, reports; step_index = NaN, cut_count = 0)
+    for sel in config[:timestep_selectors]
+        candidate = pick_next_timestep(sel, sim, config, dt, dT, reports, step_index, cut_count)
+        dt = min(dt, candidate)
+    end
+    return dt
+end
 
 function get_tstr(dT)
     Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
