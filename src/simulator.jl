@@ -62,68 +62,6 @@ function Base.show(io::IO, t::MIME"text/plain", sim::Simulator)
     end
 end
 
-function perform_step!(simulator::TervSimulator, dt, forces, config; vararg...)
-    perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
-end
-
-function perform_step!(storage, model, dt, forces, config; iteration = NaN)
-    do_solve, e, converged = true, nothing, false
-
-    report = OrderedDict()
-    timing_out = config[:debug_level] > 1
-    # Update the properties and equations
-    t_asm = @elapsed begin
-        time =  config[:ProgressRecorder].recorder.time + dt
-        update_state_dependents!(storage, model, dt, forces; time = time)
-    end
-    if timing_out
-        @debug "Assembled equations in $t_asm seconds."
-    end
-    report[:assembly_time] = t_asm
-    # Update the linearized system
-    report[:linear_system_time] = @elapsed begin
-        update_linearized_system!(storage, model)
-    end
-    if timing_out
-        @debug "Updated linear system in $(report[:linear_system_time]) seconds."
-    end
-    report[:convergence_time] = @elapsed begin
-        converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
-        il = config[:info_level]
-        if il > 1
-            @info "Convergence report, iteration $iteration:"
-            get_convergence_table(errors, il)
-        end
-        if converged
-            if iteration < config[:min_nonlinear_iterations]
-                # Should always do at least 
-                do_solve = true
-                # Ensures secondary variables are updated, and correct error
-                converged = false
-            else
-                do_solve = false
-                @debug "Step converged."
-            end
-        else
-            do_solve = true
-        end
-    end
-
-    if do_solve
-        lsolve = config[:linear_solver]
-        check = config[:safe_mode]
-        rec = config[:ProgressRecorder]
-        t_solve, t_update = solve_and_update!(storage, model::TervModel, dt, linear_solver = lsolve, check = check, recorder = rec)
-        if timing_out
-            @debug "Solved linear system in $t_solve seconds."
-            @debug "Updated state $t_update seconds."
-        end
-        report[:linear_solve_time] = t_solve
-        report[:update_time] = t_update
-    end
-    return (e, converged, report)
-end
-
 function simulator_config(sim; kwarg...)
     cfg = Dict()
     simulator_config!(cfg, sim; kwarg...)
@@ -147,20 +85,10 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:timestep_max_increase] = 10.0
     cfg[:timestep_max_decrease] = 0.1
     # Max residual before error is issued
-    cfg[:max_residual] = 1e10
+    cfg[:max_residual] = 1e20
 
     overwrite_by_kwargs(cfg; kwarg...)
     return cfg
-end
-
-function overwrite_by_kwargs(cfg; kwarg...)
-    # Overwrite with varargin
-    for key in keys(kwarg)
-        if !haskey(cfg, key)
-            @warn "Key $key is not found in default config. Misspelled?"
-        end
-        cfg[key] = kwarg[key]
-    end
 end
 
 function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, kwarg...)
@@ -235,6 +163,78 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     end
     final_simulation_message(sim, reports, config[:info_level], early_termination)
     return (states, reports)
+end
+
+function perform_step!(simulator::TervSimulator, dt, forces, config; vararg...)
+    perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
+end
+
+function perform_step!(storage, model, dt, forces, config; iteration = NaN)
+    do_solve, e, converged = true, nothing, false
+
+    report = OrderedDict()
+    timing_out = config[:debug_level] > 1
+    # Update the properties and equations
+    t_asm = @elapsed begin
+        time =  config[:ProgressRecorder].recorder.time + dt
+        update_state_dependents!(storage, model, dt, forces; time = time)
+    end
+    if timing_out
+        @debug "Assembled equations in $t_asm seconds."
+    end
+    report[:assembly_time] = t_asm
+    # Update the linearized system
+    report[:linear_system_time] = @elapsed begin
+        update_linearized_system!(storage, model)
+    end
+    if timing_out
+        @debug "Updated linear system in $(report[:linear_system_time]) seconds."
+    end
+    report[:convergence_time] = @elapsed begin
+        converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
+        il = config[:info_level]
+        if il > 1
+            @info "Convergence report, iteration $iteration:"
+            get_convergence_table(errors, il)
+        end
+        if converged
+            if iteration < config[:min_nonlinear_iterations]
+                # Should always do at least 
+                do_solve = true
+                # Ensures secondary variables are updated, and correct error
+                converged = false
+            else
+                do_solve = false
+                @debug "Step converged."
+            end
+        else
+            do_solve = true
+        end
+    end
+
+    if do_solve
+        lsolve = config[:linear_solver]
+        check = config[:safe_mode]
+        rec = config[:ProgressRecorder]
+        t_solve, t_update = solve_and_update!(storage, model::TervModel, dt, linear_solver = lsolve, check = check, recorder = rec)
+        if timing_out
+            @debug "Solved linear system in $t_solve seconds."
+            @debug "Updated state $t_update seconds."
+        end
+        report[:linear_solve_time] = t_solve
+        report[:update_time] = t_update
+    end
+    return (e, converged, report)
+end
+
+function overwrite_by_kwargs(cfg; kwarg...)
+    # Overwrite with varargin
+    for key in keys(kwarg)
+        if !haskey(cfg, key)
+            @warn "Key $key is not found in default config. Misspelled?"
+        end
+        cfg[key] = kwarg[key]
+    end
 end
 
 function final_simulation_message(simulator, reports, info_level, aborted)
