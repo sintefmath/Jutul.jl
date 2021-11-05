@@ -168,8 +168,10 @@ function subgrid(g::MinimalTPFAGrid; cells = nothing, faces = nothing)
     end
     N_new = N[:, faces]
     for i in eachindex(N_new)
-        N_new[i] = renumeration[N_new[i]]
-        @assert N_new[i] != 0
+        old = N_new[i]
+        new = renumeration[old]
+        @assert new != 0
+        N_new[i] = new
     end
     return MinimalTPFAGrid(pv[cells], N_new)
 end
