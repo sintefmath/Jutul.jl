@@ -174,6 +174,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         @info "Starting simulation"
     end
     early_termination = false
+    dt = NaN
     for (step_no, dT) in enumerate(timesteps)
         if early_termination
             break
@@ -185,7 +186,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
             if output
                 @info "Solving step $step_no/$no_steps of length $(get_tstr(dT))."
             end
-            dt = dT
+            dt = pick_timestep(sim, config, dt, dT, reports, step_index = step_no, new_step = true)
             done = false
             t_local = 0
             cut_count = 0
@@ -200,19 +201,20 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                         break
                     end
                 else
-                    max_cuts = config[:max_timestep_cuts]
-                    if cut_count + 1 > max_cuts
+                    dt = cut_timestep(sim, config, dt, dT, reports, step_index = step_no, cut_count = cut_count)
+                    if isnan(dt)
+                        # Time-step too small, cut too many times, ...
                         if output
                             @warn "Unable to converge time step $step_no/$no_steps. Aborting."
                         end
                         early_termination = true
                         break
+                    elseif output
+                        cut_count += 1
+                        @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut #$cut_count.."
                     end
-                    cut_count += 1
-                    dt = min(dt/2, dT - t_local)
-                    if output
-                        @warn "Cutting time-step. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut $cut_count of $max_cuts allowed."
-                    end
+                    # Make sure that we hit the endpoint.
+                    dt = min(dt, dT - t_local)
                 end
                 ctr += 1
                 nextstep_local!(rec, dt, ok)
@@ -225,11 +227,14 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         end
         subrep[:total_time] = t_step
     end
-    info_level = config[:info_level]
+    final_simulation_message(sim, reports, config[:info_level], early_termination)
+    return (states, reports)
+end
 
+function final_simulation_message(simulator, reports, info_level, aborted)
     if info_level >= 0 && length(reports) > 0
         stats = report_stats(reports)
-        if early_termination
+        if aborted
             endstr = "Simulation aborted. Completed $(stats.steps-1) of $(length(timesteps)) time-steps"
         else
             endstr = "Simulation complete. Completed $(stats.steps) time-steps"
@@ -239,8 +244,21 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
             print_stats(stats)
         end
     end
-    return (states, reports)
 end
+
+function pick_timestep(sim, config, dt, dT, reports; step_index = NaN, new_step = false)
+    return dT
+end
+
+function cut_timestep(sim, config, dt, dT, reports; step_index = NaN, cut_count = 0)
+    if cut_count + 1 > config[:max_timestep_cuts]
+        dt = nan
+    else
+        dt = min(dt/2, dT - t_local)
+    end
+    return dt
+end
+
 
 function get_tstr(dT)
     Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
