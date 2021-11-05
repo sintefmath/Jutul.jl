@@ -259,8 +259,8 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         ## Model parameters
         param_res = setup_parameters(model)
         param_res[:reference_densities] = vec(rhoS)
-        param_res[:tolerances][:default] = 0.01
-        param_res[:tolerances][:mass_conservation] = 0.01
+        # param_res[:tolerances][:default] = 0.01
+        # param_res[:tolerances][:mass_conservation] = 0.01
     
         return (model, init, param_res)
     end
@@ -331,7 +331,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         end
         param_w = setup_parameters(wi)
         param_w[:reference_densities] = vec(param_res[:reference_densities])
-        param_w[:tolerances][:mass_conservation] = 0.01
+        # param_w[:tolerances][:mass_conservation] = 0.01
     
         parameters[sym] = param_w
         controls[sym] = ctrl
