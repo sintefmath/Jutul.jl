@@ -246,7 +246,7 @@ function get_tstr(dT)
     Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
 end
 
-function solve_ministep(sim, dt, forces, max_iter, cfg)
+function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
     done = false
     rec = cfg[:ProgressRecorder]
     report = OrderedDict()
@@ -276,7 +276,9 @@ function solve_ministep(sim, dt, forces, max_iter, cfg)
         report[:failure] = failure
     end
     report[:steps] = step_reports
-    if done
+    if skip_finalize
+        report[:finalize_time] = 0.0
+    elseif done
         t_finalize = @elapsed update_after_step!(sim, dt, forces)
         if cfg[:debug_level] > 1
             @debug "Finalized in $t_finalize seconds."
