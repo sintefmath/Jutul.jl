@@ -45,12 +45,12 @@ end
 "Update positions of law's derivatives in global Jacobian"
 function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
-    global_map = model.domain.global_map
+    M = global_map(model.domain)
 
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
     diagonal_alignment!(acc, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
-    half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, global_map, fd, target_offset = equation_offset, source_offset = variable_offset)
+    half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, M, fd, target_offset = equation_offset, source_offset = variable_offset)
 end
 
 function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, global_map, flow_disc; target_offset = 0, source_offset = 0)
@@ -75,7 +75,7 @@ function align_half_face_cells(face_cache, jac, cd, f_ix, cell, dims, context, g
     other_i = interior_cell(other, global_map)
     cell_i = interior_cell(cell, global_map)
     if isnothing(other_i) || isnothing(cell_i)
-        # Either of the two cells is active - we set to zero.
+        # Either of the two cells is inactive - we set to zero.
         for e in 1:ne
             for d = 1:np
                 set_jacobian_pos!(face_cache, f_ix, e, d, 0)
