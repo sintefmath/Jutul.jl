@@ -185,8 +185,8 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0)
                 end
                 # If a bounded cell is not in the global list of interior cells and not in the current
                 # set of processed cells, we add it and flag as a global boundary
+                insert_face!(face)
                 if !in(other, cells) && !in(other, indices)
-                    insert_face!(face)
                     # This cell is now guaranteed to be on the boundary.
                     insert_cell!(other, true)
                 end
