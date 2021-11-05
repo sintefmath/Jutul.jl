@@ -172,7 +172,7 @@ mutable struct ILUZeroPreconditioner <: TervPreconditioner
     dim
     left::Bool
     right::Bool
-    function ILUZeroPreconditioner(; left = true, right = true)
+    function ILUZeroPreconditioner(; left = true, right = false)
         @assert left || right "Left or right preconditioning must be enabled or it will have no effect."
         new(nothing, nothing, left, right)
     end
