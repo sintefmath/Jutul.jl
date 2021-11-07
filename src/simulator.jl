@@ -165,7 +165,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         end
         subrep[:total_time] = t_step
     end
-    final_simulation_message(sim, reports, config[:info_level], early_termination)
+    final_simulation_message(sim, reports, timesteps, config[:info_level], early_termination)
     return (states, reports)
 end
 
@@ -241,7 +241,7 @@ function overwrite_by_kwargs(cfg; kwarg...)
     end
 end
 
-function final_simulation_message(simulator, reports, info_level, aborted)
+function final_simulation_message(simulator, reports, timesteps, info_level, aborted)
     if info_level >= 0 && length(reports) > 0
         stats = report_stats(reports)
         if aborted
