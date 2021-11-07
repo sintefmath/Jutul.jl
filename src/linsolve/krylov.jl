@@ -99,7 +99,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
                                 rtol = rt,
                                 history = true,
                                 atol = at,
-                                M = L, N = R)
+                                M = L)
         res = stats.residuals
         n = length(res) - 1
         solved = stats.solved
@@ -109,8 +109,8 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
         initial_res = res[1]
         final_res = res[end]
     else
-        initial_res = 0
-        final_res = 0
+        initial_res = norm(r)
+        final_res = norm(op*x - r)
     end
 
     if !solved
