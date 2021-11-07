@@ -258,17 +258,19 @@ end
 
 function pick_timestep(sim, config, dt_prev, dT, reports; step_index = NaN, new_step = false)
     dt = dT
-    for sel in config[:timestep_selectors]
-        if new_step && step_index == 1
+    selectors = config[:timestep_selectors]
+    is_first = new_step && step_index == 1
+    if is_first
+        for sel in config[:timestep_selectors]
             candidate = pick_first_timestep(sel, sim, config, dT)
-        else
-            candidate = pick_next_timestep(sel, sim, config, dt, dT, reports, step_index, new_step)
+            dt = min(dt, candidate)
         end
-        # @info "Found:" get_tstr(candidate) get_tstr(dt_prev) get_tstr(dt) sel.increase
-        dt = min(dt, candidate)
-    end
-    # The selectors might go crazy, so we have some safety bounds
-    if isfinite(dt_prev)
+    else
+        for sel in config[:timestep_selectors]
+            candidate = pick_next_timestep(sel, sim, config, dt, dT, reports, step_index, new_step)
+            dt = min(dt, candidate)
+        end
+        # The selectors might go crazy, so we have some safety bounds
         min_allowable = config[:timestep_max_decrease]*dt_prev
         max_allowable = config[:timestep_max_increase]*dt_prev
         dt = min(max(dt, min_allowable), max_allowable)
