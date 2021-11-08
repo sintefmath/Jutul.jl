@@ -53,9 +53,10 @@ function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage, rec
     A = reservoir_jacobian(lsys)
     cpr.A_ps = linear_operator(lsys)
     initialize_storage!(cpr, A, s)
+    ps = model.models.Reservoir.primary_variables[:Pressure].scale
     if do_p_update || cpr.partial_update
-        w_p = update_weights!(cpr, storage, A)
-        update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size, model.context)
+        w_p = update_weights!(cpr, s, A, ps)
+        update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size, model.context, s)
     end
     return do_p_update
 end
@@ -65,6 +66,7 @@ function update_pressure_system!(A_p, A, w_p, bz, ctx)
     nz = A_p.nzval
     nz_s = A.nzval
     rv = A_p.rowval
+    @assert size(nz) == size(nz_s)
     n = A.n
     # Update the pressure system with the same pattern in-place
     tb = thread_batch(ctx)
@@ -72,7 +74,7 @@ function update_pressure_system!(A_p, A, w_p, bz, ctx)
         @inbounds for j in cp[i]:cp[i+1]-1
             row = rv[j]
             Ji = nz_s[j]
-            tmp = 0
+            tmp = 0.0
             @inbounds for b = 1:bz
                 tmp += Ji[b, 1]*w_p[b, row]
             end
@@ -107,7 +109,7 @@ function reservoir_jacobian(lsys::MultiLinearizedSystem)
     return lsys[1, 1].jac
 end
 
-function update_weights!(cpr, storage, J)
+function update_weights!(cpr, res_storage, J, ps)
     n = size(cpr.A_p, 1)
     bz = cpr.block_size
     if isnothing(cpr.w_p)
@@ -115,12 +117,12 @@ function update_weights!(cpr, storage, J)
     end
     w = cpr.w_p
     r = zeros(bz)
-    r[1] = 1
+    r[1] = 1.0
     
     if cpr.strategy == :true_impes
-        eq = storage.Reservoir.equations[:mass_conservation]
+        eq = res_storage.equations[:mass_conservation]
         acc = eq.accumulation.entries
-        true_impes!(w, acc, r, n, bz)
+        true_impes!(w, acc, r, n, bz, ps)
     elseif cpr.strategy == :quasi_impes
         quasi_impes!(w, J, r, n, bz)
     elseif cpr.strategy == :none
@@ -131,32 +133,42 @@ function update_weights!(cpr, storage, J)
     return w
 end
 
-function true_impes!(w, acc, r, n, bz)
+function true_impes!(w, acc, r, n, bz, p_scale)
     if bz == 2
         # Hard coded variant
-        true_impes_2!(w, acc, r, n, bz)
+        true_impes_2!(w, acc, r, n, bz, p_scale)
     else
-        true_impes_gen!(w, acc, r, n, bz)
+        true_impes_gen!(w, acc, r, n, bz, p_scale)
     end
 end
 
-function true_impes_2!(w, acc, r, n, bz)
+function true_impes_2!(w, acc, r, n, bz, p_scale)
     r_p = SVector{2}(r)
     for cell in 1:n
-        A = @SMatrix [acc[1, cell].partials[1] acc[2, cell].partials[1]; 
-                      acc[1, cell].partials[2] acc[2, cell].partials[2]]        
+        W = acc[1, cell]
+        O = acc[2, cell]
+
+        ∂W∂p = W.partials[1]*p_scale
+        ∂O∂p = O.partials[1]*p_scale
+
+        ∂W∂s = W.partials[2]
+        ∂O∂s = O.partials[2]
+
+        A = @SMatrix [∂W∂p ∂O∂p; 
+                      ∂W∂s ∂O∂s]
         invert_w!(w, A, r_p, cell, bz)
     end
 end
 
 
-function true_impes_gen!(w, acc, r, n, bz)
+function true_impes_gen!(w, acc, r, n, bz, p_scale)
     r_p = SVector{bz}(r)
     A = MMatrix{bz, bz, eltype(r)}(zeros(bz, bz))
     for cell in 1:n
         @inbounds for i = 1:bz
             v = acc[i, cell]
-            @inbounds for j = 1:bz
+            @inbounds A[1, i] = v.partials[1]*p_scale
+            @inbounds for j = 2:bz
                 A[j, i] = v.partials[j]
             end
         end
@@ -181,7 +193,7 @@ end
 
 function update_p_rhs!(r_p, y, bz, w_p)
     @batch for i in eachindex(r_p)
-        v = 0
+        v = 0.0
         @inbounds for b = 1:bz
             v += y[(i-1)*bz + b]*w_p[b, i]
         end
