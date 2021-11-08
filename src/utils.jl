@@ -145,7 +145,7 @@ function conv_table_fn(model_errors, has_models = false, info_level = 3)
                         eq_touched = true
                     end
                     count_crit += 1
-                    count_ok += e > tol
+                    count_ok += e <= tol
                     e_scale = e/tol
                     if e_scale > worst_val
                         worst_val = e_scale
@@ -211,9 +211,10 @@ function conv_table_fn(model_errors, has_models = false, info_level = 3)
                                 crop=:none)
     else
         if count_crit == count_ok
-            println("All equations are converged.")
+            println("✔ $count_ok/$count_crit criteria converged.")
         else
-            println("$count_ok of $count_crit criteria are converged. Worst: $worst_name at $(worst_val*worst_tol)")
+            worst_print = @sprintf "%2.3e (ϵ = %2.3e)" worst_val*worst_tol worst_tol
+            println("✘ $count_ok/$count_crit criteria converged.\n\t$worst_name at $worst_print is furthest from convergence.")
         end
     end
 end
