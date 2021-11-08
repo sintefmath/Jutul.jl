@@ -202,11 +202,11 @@ function update_p_rhs!(r_p, y, bz, w_p)
 end
 
 function correct_residual_for_dp!(y, x, Δp, bz, buf, A)
-    # x = x' + p
-    # A (x' + p) = y
+    # x = x' + Δx
+    # A (x' + Δx) = y
     # A x' = y'
-    # y' = y - A*x
-    # x = A \ y + p
+    # y' = y - A*Δx
+    # x = A \ y' + Δx
     @inbounds for i in eachindex(Δp)
         x[(i-1)*bz + 1] = Δp[i]
         @inbounds for j = 2:bz
