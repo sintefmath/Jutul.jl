@@ -78,12 +78,18 @@ end
 
 function conv_table_fn(model_errors, has_models = false, info_level = 3)
     # Info level 1: Function should never be called
-    # Info level 2: Just print the non-converged parts?
-    # Info level 3+: Full print
+    # Info level 2:
+    # Info level 3: Just print the non-converged parts?
+    # Info level 4+: Full print
     if info_level == 1
         return
     end
-    print_converged = info_level > 2
+    count_crit = 0
+    count_ok = 0
+    worst_val = 0.0
+    worst_tol = 0.0
+    worst_name = ""
+    print_converged = info_level > 3
     header = ["Equation", "Type", "Name", "‖R‖", "ϵ"]
     alignment = [:l, :l, :l, :r, :r]
     if has_models
@@ -138,13 +144,26 @@ function conv_table_fn(model_errors, has_models = false, info_level = 3)
                         pos += 1
                         eq_touched = true
                     end
+                    count_crit += 1
+                    count_ok += e > tol
+                    e_scale = e/tol
+                    if e_scale > worst_val
+                        worst_val = e_scale
+                        worst_tol = tol
+                        if has_models
+                            mstr = " from model "*String(model)
+                        else
+                            mstr = ""
+                        end
+                        worst_name = "$(eq.name)$mstr ($(local_names[i]))"
+                    end
                 end
                 push!(body_hlines, pos-1)
             end
         end
     end
     tbl = vcat(tbl...)
-    if size(tbl, 1) > 0
+    if size(tbl, 1) > 0 && info_level > 2
         m_offset = Int64(has_models)
         rpos = (4 + m_offset)
         nearly_factor = 10
@@ -183,7 +202,7 @@ function conv_table_fn(model_errors, has_models = false, info_level = 3)
                          crayon = crayon"green")
     
         highlighers = (h1, h2, h3)
-    
+        
         pretty_table(tbl, header = header,
                                 alignment = alignment, 
                                 body_hlines = body_hlines,
@@ -191,7 +210,11 @@ function conv_table_fn(model_errors, has_models = false, info_level = 3)
                                 formatters = ft_printf("%2.3e", [m_offset + 4]),
                                 crop=:none)
     else
-        println("All equations are converged.")
+        if count_crit == count_ok
+            println("All equations are converged.")
+        else
+            println("$count_ok of $count_crit criteria are converged. Worst: $worst_name at $(worst_val*worst_tol)")
+        end
     end
 end
 

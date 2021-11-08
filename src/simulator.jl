@@ -261,12 +261,12 @@ function pick_timestep(sim, config, dt_prev, dT, reports; step_index = NaN, new_
     selectors = config[:timestep_selectors]
     is_first = new_step && step_index == 1
     if is_first
-        for sel in config[:timestep_selectors]
+        for sel in selectors
             candidate = pick_first_timestep(sel, sim, config, dT)
             dt = min(dt, candidate)
         end
     else
-        for sel in config[:timestep_selectors]
+        for sel in selectors
             candidate = pick_next_timestep(sel, sim, config, dt, dT, reports, step_index, new_step)
             dt = min(dt, candidate)
         end
