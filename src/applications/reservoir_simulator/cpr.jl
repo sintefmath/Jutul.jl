@@ -207,10 +207,10 @@ function correct_residual_for_dp!(y, x, Δp, bz, buf, A)
     # A x' = y'
     # y' = y - A*Δx
     # x = A \ y' + Δx
-    @inbounds for i in eachindex(Δp)
-        x[(i-1)*bz + 1] = Δp[i]
+    @batch for i in eachindex(Δp)
+        @inbounds x[(i-1)*bz + 1] = Δp[i]
         @inbounds for j = 2:bz
-            x[(i-1)*bz + j] = 0
+            x[(i-1)*bz + j] = 0.0
         end
     end
     mul!(buf, A, x)
