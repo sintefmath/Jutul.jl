@@ -143,7 +143,7 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
     D⁰, Dⁱ = f.D_outer, f.D_inner
     R, L = f.roughness, f.L
     ΔD = D⁰-Dⁱ
-    s = v > 0.0 ? 1.0 : 0.0
+    s = v > 0.0 ? 1.0 : -1.0
     e = eps(typeof(value(v)))
     v = s*max(abs(v), e)
     # Scaling - assuming input is total mass rate
@@ -167,7 +167,7 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
             f = f_l + (Δf / ΔRe)*(Re - Re_l);
         end
     end
-    Δp = -(2*s*L/ΔD)*(f*ρ*v^2);
+    Δp = -(2*s*L/ΔD)*(f*ρ*v^2)
     return Δp
 end
 
