@@ -198,8 +198,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
         converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
         il = config[:info_level]
         if il > 1
-            @info "Convergence report, iteration $iteration:"
-            get_convergence_table(errors, il)
+            get_convergence_table(errors, il, iteration, config)
         end
         if converged
             if iteration < config[:min_nonlinear_iterations]

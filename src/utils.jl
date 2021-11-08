@@ -65,18 +65,18 @@ end
 #     view(v, row, :)
 # end
 
-function get_convergence_table(errors::AbstractDict, info_level)
+function get_convergence_table(errors::AbstractDict, arg...)
     # Already a dict
-    conv_table_fn(errors, true, info_level)
+    conv_table_fn(errors, true, arg...)
 end
 
-function get_convergence_table(errors, info_level)
+function get_convergence_table(errors, arg...)
     d = OrderedDict()
     d[:Base] = errors
-    conv_table_fn(d, false, info_level)
+    conv_table_fn(d, false, arg...)
 end
 
-function conv_table_fn(model_errors, has_models = false, info_level = 3)
+function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
     # Info level 1: Function should never be called
     # Info level 2:
     # Info level 3: Just print the non-converged parts?
@@ -210,12 +210,14 @@ function conv_table_fn(model_errors, has_models = false, info_level = 3)
                                 formatters = ft_printf("%2.3e", [m_offset + 4]),
                                 crop=:none)
     else
+        max_its = cfg[:max_nonlinear_iterations]
         if count_crit == count_ok
-            println("✔ $count_ok/$count_crit criteria converged.")
+            s = " ✔"
         else
             worst_print = @sprintf "%2.3e (ϵ = %2.3e)" worst_val*worst_tol worst_tol
-            println("✘ $count_ok/$count_crit criteria converged.\n\t$worst_name at $worst_print is furthest from convergence.")
+            s = ". Worst value:\n\t - $worst_name at $worst_print."
         end
+        @info "It. $iteration/$max_its: $count_ok/$count_crit criteria converged$s"
     end
 end
 
