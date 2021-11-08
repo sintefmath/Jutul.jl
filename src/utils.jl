@@ -163,7 +163,19 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
         end
     end
     tbl = vcat(tbl...)
-    if size(tbl, 1) > 0 && info_level > 2
+    print_table = size(tbl, 1) > 0 && info_level > 2
+    max_its = cfg[:max_nonlinear_iterations]
+    if print_table
+        s  = ":"
+    elseif count_crit == count_ok
+        s = " ✔"
+    else
+        worst_print = @sprintf "%2.3e (ϵ = %2.3e)" worst_val*worst_tol worst_tol
+        s = ". Worst value:\n\t - $worst_name at $worst_print."
+    end
+    @info "It. $iteration/$max_its: $count_ok/$count_crit criteria converged$s"
+
+    if print_table
         m_offset = Int64(has_models)
         rpos = (4 + m_offset)
         nearly_factor = 10
@@ -209,15 +221,6 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                                 highlighters = highlighers, 
                                 formatters = ft_printf("%2.3e", [m_offset + 4]),
                                 crop=:none)
-    else
-        max_its = cfg[:max_nonlinear_iterations]
-        if count_crit == count_ok
-            s = " ✔"
-        else
-            worst_print = @sprintf "%2.3e (ϵ = %2.3e)" worst_val*worst_tol worst_tol
-            s = ". Worst value:\n\t - $worst_name at $worst_print."
-        end
-        @info "It. $iteration/$max_its: $count_ok/$count_crit criteria converged$s"
     end
 end
 
