@@ -151,11 +151,11 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                         worst_val = e_scale
                         worst_tol = tol
                         if has_models
-                            mstr = " from model "*String(model)
+                            mstr = "from model "*String(model)
                         else
                             mstr = ""
                         end
-                        worst_name = "$(eq.name)$mstr ($(local_names[i]))"
+                        worst_name = "$(eq.name) ($(local_names[i])) $mstr"
                     end
                 end
                 push!(body_hlines, pos-1)
