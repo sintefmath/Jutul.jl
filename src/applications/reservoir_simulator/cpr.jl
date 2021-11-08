@@ -56,7 +56,7 @@ function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage, rec
     ps = model.models.Reservoir.primary_variables[:Pressure].scale
     if do_p_update || cpr.partial_update
         w_p = update_weights!(cpr, s, A, ps)
-        update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size, model.context, s)
+        update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size, model.context)
     end
     return do_p_update
 end
