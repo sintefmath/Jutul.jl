@@ -142,7 +142,7 @@ function subdomain(d::DiscretizedDomain, indices; entity = Cells(), buffer = 0)
         @assert sort(mapper_f.faces) == sort(mapper.faces)
 
         @assert count(mapper_f.cell_is_boundary) == count(mapper.cell_is_boundary)
-        @info ":" mapper.cell_is_boundary mapper_f.cell_is_boundary
+        # @info ":" mapper.cell_is_boundary mapper_f.cell_is_boundary
         for new = 1:length(mapper_f.cells)
             gcell = mapper_f.cells[new]
             # Index to same global cell, in old
@@ -157,10 +157,15 @@ function subdomain(d::DiscretizedDomain, indices; entity = Cells(), buffer = 0)
 
             # @info "$new:" new old gcell mapper.cells[old] bnd_old any(indices .== gcell)
             @assert bnd_old == bnd_new "Expected $bnd_old == $bnd_new ($new, $old)"
+            i_n = interior_cell(new, mapper_f)
+            i_o = interior_cell(old, mapper)
+
             if bnd_new
-                i_n = interior_cell(new, mapper_f)
-                i_o = interior_cell(old, mapper)
                 @assert isnothing(i_n) && isnothing(i_o)
+            else
+                @assert !isnothing(i_n)
+                @assert !isnothing(i_o)
+
                 # @assert i_o == 0 "Expected 0, got $i_o"
                 # @assert i_n == 0 "Expected 0, got $i_n"
             end
