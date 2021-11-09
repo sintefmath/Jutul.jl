@@ -276,12 +276,12 @@ function unit_sum_update!(s, p, model, dx)
     if nf == 2
         maxval = min(1 - minval, maxval)
         minval = max(minval, maxval - 1)
-        for (i, cell) in enumerate(active_cells)
+        @inbounds for (i, cell) in enumerate(active_cells)
             v = value(s[1, cell])
             dv = dx[i]
             dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
-            @inbounds s[1, cell] += dv
-            @inbounds s[2, cell] -= dv
+            s[1, cell] += dv
+            s[2, cell] -= dv
         end
     else
         if false
@@ -310,29 +310,33 @@ function unit_sum_update!(s, p, model, dx)
         else
             # Preserve update magnitude
             for cell in active_cells
-                # First pass: Find the relaxation factors that keep all fractions in [0, 1]
-                # and obeying the maximum change targets
-                dlast0 = 0
-                @inbounds for i = 1:(nf-1)
-                    v = value(s[i, cell])
-                    dv = dx[cell + (i-1)*nu]
-                    dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
-                    s[i, cell] += dv
-                    dlast0 -= dv
-                end
-                # Do the same thing for the implicit update of the last value
-                dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
-                s[nf, cell] += dlast
-                if dlast != dlast0
-                    t = 0.0
-                    for i = 1:nf
-                        t += s[i, cell]
-                    end
-                    for i = 1:nf
-                        s[i, cell] /= t
-                    end
-                end
+                unit_update_local(s, dx, nf, nu, abs_max, minval, maxval)
             end
+        end
+    end
+end
+
+function unit_update_local(s, dx, nf, nu, abs_max, minval, maxval)
+    # First pass: Find the relaxation factors that keep all fractions in [0, 1]
+    # and obeying the maximum change targets
+    dlast0 = 0
+    @inbounds for i = 1:(nf-1)
+        v = value(s[i, cell])
+        dv = dx[cell + (i-1)*nu]
+        dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
+        s[i, cell] += dv
+        dlast0 -= dv
+    end
+    # Do the same thing for the implicit update of the last value
+    dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
+    s[nf, cell] += dlast
+    if dlast != dlast0
+        t = 0.0
+        for i = 1:nf
+            @inbounds t += s[i, cell]
+        end
+        for i = 1:nf
+            @inbounds s[i, cell] /= t
         end
     end
 end

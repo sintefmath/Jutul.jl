@@ -431,14 +431,14 @@ end
 abstract type AbstractGlobalMap end
 struct TrivialGlobalMap end
 
-struct FiniteVolumeGlobalMap <: AbstractGlobalMap
+struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
     # Full set -> global set
-    cells::AbstractVector{Integer}
+    cells::AbstractVector{T}
     # Inner set -> full set
-    inner_to_full_cells::AbstractVector{Integer}
+    inner_to_full_cells::AbstractVector{T}
     # Full set -> inner set
-    full_to_inner_cells::AbstractVector{Integer}
-    faces::AbstractVector{Integer}
+    full_to_inner_cells::AbstractVector{T}
+    faces::AbstractVector{T}
     cell_is_boundary::AbstractVector{Bool}
     function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing)
         n = length(cells)
@@ -457,6 +457,6 @@ struct FiniteVolumeGlobalMap <: AbstractGlobalMap
             end
             bnd = is_boundary
         end
-        new(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary)
+        new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary)
     end
 end

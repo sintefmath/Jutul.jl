@@ -71,7 +71,7 @@ function align_half_face_cells(face_cache, jac, cd, f_ix, cell, dims, context, g
     cd_f = cd[f_ix]
     f = cd_f.face
     other = cd_f.other
-    @assert cell == cd_f.self
+    @assert cell == cd_f.self "Expected $cell, was $(cd_f.self) for conn $cd_f"
     other_i = interior_cell(other, global_map)
     cell_i = interior_cell(cell, global_map)
     if isnothing(other_i) || isnothing(cell_i)
