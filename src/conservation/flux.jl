@@ -186,12 +186,14 @@ function subdiscretization_fast(disc, subg, mapper)
     faces, face_pos = get_facepos(N)
 
     T = eltype(conn_data_global)
+    # @info "Starting"
 
     nc = length(mapper.inner_to_full_cells)
     @time counts = compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_global, mapper, nc)
-    face_pos = cumsum([1; counts])
-    @time conn_data = conn_data_subdisc(face_pos, faces, face_pos_global, conn_data_global::Vector{T}, mapper, nc)
+    next_face_pos = cumsum([1; counts])
 
+    @time conn_data = conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn_data_global::Vector{T}, mapper, nc)
+    face_pos = next_face_pos
     # face_pos = new_offsets
     # conn_data = vcat(new_conn...)
     return TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
@@ -224,34 +226,42 @@ function compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_glob
     return counts
 end
 
-function conn_data_subdisc(face_pos, faces, face_pos_global, conn_data_global::Vector{T}, mapper, nc) where T
-    conn_data = Vector{T}(undef, face_pos[end]-1)
+function conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn_data_global::Vector{T}, mapper, nc) where T
+    conn_data = Vector{T}(undef, next_face_pos[end]-1)
+    touched = BitVector(false for i = 1:length(conn_data))
     for local_cell_no in 1:nc
         # Map inner index -> full index
         c = mapper.inner_to_full_cells[local_cell_no]
         c_g = global_cell(c, mapper)
         counter = 0
-        start = face_pos[local_cell_no]
-        stop = face_pos[local_cell_no+1]-1
-        hf_offset = start-1
+        start = face_pos[c]
+        stop = face_pos[c+1]-1
+        hf_offset = next_face_pos[local_cell_no]-1
         # Loop over half-faces for this cell
         for f_p in start:stop
             f = faces[f_p]
             f_g = global_face(f, mapper)
+            done = false
             # Loop over the corresponding global half-faces
             for f_i in face_pos_global[c_g]:face_pos_global[c_g+1]-1
                 conn = conn_data_global[f_i]::T
+                # @info "$f_i" conn.face f_g f
                 if conn.face == f_g
                     # verify that this is actually the right global cell!
                     @assert conn.self == c_g
                     counter += 1
                     other = local_cell(conn.other, mapper) # bad performance??
                     conn_data[hf_offset + counter] = remap_connection(conn, c, other, f)
+                    touched[hf_offset + counter] = true
+                    done = true
+                    # @info conn_data[hf_offset + counter]
                     break
                 end
             end
+            @assert done
         end
     end
+    @assert all(touched) "Only $(count(touched))/$(length(touched))"
     return conn_data
 end
 
