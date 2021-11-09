@@ -186,14 +186,11 @@ function subdiscretization_fast(disc, subg, mapper)
     faces, face_pos = get_facepos(N)
 
     T = eltype(conn_data_global)
-    @info "Starting"
 
     nc = length(mapper.inner_to_full_cells)
     @time counts = compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_global, mapper, nc)
     face_pos = cumsum([1; counts])
     @time conn_data = conn_data_subdisc(face_pos, faces, face_pos_global, conn_data_global::Vector{T}, mapper, nc)
-    @info "Done"
-
 
     # face_pos = new_offsets
     # conn_data = vcat(new_conn...)
@@ -228,15 +225,17 @@ function compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_glob
 end
 
 function conn_data_subdisc(face_pos, faces, face_pos_global, conn_data_global::Vector{T}, mapper, nc) where T
-    @time conn_data = Vector{T}(undef, face_pos[end]-1)
+    conn_data = Vector{T}(undef, face_pos[end]-1)
     for local_cell_no in 1:nc
         # Map inner index -> full index
         c = mapper.inner_to_full_cells[local_cell_no]
         c_g = global_cell(c, mapper)
         counter = 0
-        hf_offset = face_pos[local_cell_no]-1
+        start = face_pos[local_cell_no]
+        stop = face_pos[local_cell_no+1]-1
+        hf_offset = start-1
         # Loop over half-faces for this cell
-        for f_p in face_pos[c]:face_pos[c+1]-1
+        for f_p in start:stop
             f = faces[f_p]
             f_g = global_face(f, mapper)
             # Loop over the corresponding global half-faces
