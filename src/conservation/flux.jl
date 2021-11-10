@@ -203,7 +203,7 @@ function compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_glob
     counts = zeros(Int64, nc)
     for local_cell_no in 1:nc
         # Map inner index -> full index
-        c = mapper.inner_to_full_cells[local_cell_no]
+        c = full_cell(local_cell_no, mapper)
         c_g = global_cell(c, mapper)
         counter = 0
         # Loop over half-faces for this cell
@@ -231,7 +231,7 @@ function conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn
     touched = BitVector(false for i = 1:length(conn_data))
     for local_cell_no in 1:nc
         # Map inner index -> full index
-        c = mapper.inner_to_full_cells[local_cell_no]
+        c = full_cell(local_cell_no, mapper)
         c_g = global_cell(c, mapper)
         counter = 0
         start = face_pos[c]
@@ -261,7 +261,7 @@ function conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn
             @assert done
         end
     end
-    @assert all(touched) "Only $(count(touched))/$(length(touched))"
+    @assert all(touched) "Only $(count(touched))/$(length(touched)) were kept? Something is wrong."
     return conn_data
 end
 
