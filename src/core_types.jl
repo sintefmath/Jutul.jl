@@ -443,19 +443,21 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
     function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing)
         n = length(cells)
         if isnothing(is_boundary)
-            inner_to_full_cells = cells
-            bnd = repeat([true], length(cells))
-        else
-            inner_to_full_cells = findall(is_boundary .== false)
-            full_to_inner_cells = Vector{Integer}(undef, n)
-            for i = 1:n
-                v = only(indexin(i, inner_to_full_cells))
-                if isnothing(v)
-                    v = 0
-                end
-                full_to_inner_cells[i] = v
+            is_boundary = repeat([false], length(cells))
+        end
+        @assert length(is_boundary) == length(cells)
+        inner_to_full_cells = findall(is_boundary .== false)
+        full_to_inner_cells = Vector{Integer}(undef, n)
+        for i = 1:n
+            v = only(indexin(i, inner_to_full_cells))
+            if isnothing(v)
+                v = 0
             end
-            bnd = is_boundary
+            @assert v >= 0 && v <= n
+            full_to_inner_cells[i] = v
+        end
+        for i in inner_to_full_cells
+            @assert i > 0 && i <= n
         end
         new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary)
     end

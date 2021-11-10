@@ -46,6 +46,11 @@ local_face(f, ::TrivialGlobalMap) = f
 "Local cell in full set -> inner cell (or zero)"
 interior_cell(c, ::TrivialGlobalMap) = c
 
+"Inner cell to local cell (full set)"
+full_cell(c, ::TrivialGlobalMap) = c
+full_cell(c, m::FiniteVolumeGlobalMap) = m.inner_to_full_cells[c]
+
+
 interior_face(f, m) = f
 
 map_to_active(V, domain::DiscretizedDomain, entity) = map_to_active(V, domain, domain.global_map, entity)
