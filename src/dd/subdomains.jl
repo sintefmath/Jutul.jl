@@ -133,106 +133,22 @@ function subdomain(d::DiscretizedDomain, indices; entity = Cells(), buffer = 0)
     disc = d.discretizations
 
     N = grid.neighborship
-    @info "Starting domain with $(length(indices)) cells"
-    uf = false
-    @time cells, faces, is_boundary = submap_cells(N, indices, buffer = buffer, use_fast = true)
-
-
-    # error()
-
-    mapper = FiniteVolumeGlobalMap(cells, faces, is_boundary)
-    if true
-        @time cells_f, faces_f, is_boundary_f = submap_cells(N, indices, buffer = buffer, use_fast = false)
-        mapper_f = FiniteVolumeGlobalMap(cells_f, faces_f, is_boundary_f)
-        @assert length(mapper_f.cells) == length(mapper.cells)
-        @assert sort(mapper_f.cells) == sort(mapper.cells)
-        @assert sort(mapper_f.faces) == sort(mapper.faces)
-
-        @assert count(mapper_f.cell_is_boundary) == count(mapper.cell_is_boundary)
-        # @info ":" mapper.cell_is_boundary mapper_f.cell_is_boundary
-        for new = 1:length(mapper_f.cells)
-            gcell = mapper_f.cells[new]
-            # Index to same global cell, in old
-            old = findfirst(isequal(gcell), mapper.cells)
-
-            bnd_old = mapper.cell_is_boundary[old]
-            bnd_new = mapper_f.cell_is_boundary[new]
-
-            @assert global_cell(new, mapper_f) == global_cell(old, mapper)
-            @assert local_cell(gcell, mapper_f) == new
-            @assert local_cell(gcell, mapper) == old
-
-            # @info "$new:" new old gcell mapper.cells[old] bnd_old any(indices .== gcell)
-            @assert bnd_old == bnd_new "Expected $bnd_old == $bnd_new ($new, $old)"
-            i_n = interior_cell(new, mapper_f)
-            i_o = interior_cell(old, mapper)
-
-            if bnd_new
-                @assert isnothing(i_n) && isnothing(i_o)
-            else
-                @assert !isnothing(i_n)
-                @assert !isnothing(i_o)
-
-                # @assert i_o == 0 "Expected 0, got $i_o"
-                # @assert i_n == 0 "Expected 0, got $i_n"
-            end
-            # mapper.inner_to_full_cells
+    t = @elapsed begin
+        cells, faces, is_boundary = submap_cells(N, indices, buffer = buffer, use_fast = true)
+        mapper = FiniteVolumeGlobalMap(cells, faces, is_boundary)
+        sg = subgrid(grid, cells = cells, faces = faces)
+        d = Dict()
+        for k in keys(disc)
+            d[k] = subdiscretization(disc[k], sg, mapper)
         end
-        act_old = mapper.inner_to_full_cells
-        act_new = mapper_f.inner_to_full_cells
-        @assert length(act_old) == length(act_new)
-        for i in eachindex(act_old)
-            o = act_old[i]
-            n = act_new[i]
-            @assert !mapper.cell_is_boundary[o]
-            @assert !mapper_f.cell_is_boundary[n]
-
-            # @info "" act_old act_new
-        end
-        # error()
-        #     cells::AbstractVector{T}
-        # Inner set -> full set
-        #inner_to_full_cells::AbstractVector{T}
-        # Full set -> inner set
-        #full_to_inner_cells::AbstractVector{T}
-        #faces::AbstractVector{T}
-        #cell_is_boundary::AbstractVector{Bool}
-
-        for i = 1:length(mapper_f.cells)
-            # @info ()
-        end
-        @assert all(sort(mapper_f.cells) .== sort(mapper.cells))
+        subdisc = convert_to_immutable_storage(d)
     end
-    sg = subgrid(grid, cells = cells, faces = faces)
-    d = Dict()
-    for k in keys(disc)
-        @time d[k] = subdiscretization(disc[k], sg, mapper)
-    end
-    subdisc = convert_to_immutable_storage(d)
+    @debug "Created domain with $(length(indices)) cells in $t seconds."
     return DiscretizedDomain(sg, subdisc, global_map = mapper)
 end
 
 function submap_cells(N, indices; nc = maximum(N), buffer = 0, use_fast = false)
     @assert buffer == 0 || buffer == 1
-
-
-    if false
-        fast_out = submap_cells_fast(N, indices, nc, buffer)
-        slow_out = submap_cells_slow(N, indices, nc, buffer)
-
-        @info "DD:" sort(slow_out.cells) sort(fast_out.cells)
-        
-        @assert length(fast_out.cells) == length(slow_out.cells)
-        @assert length(fast_out.faces) == length(slow_out.faces)
-        @assert length(fast_out.is_boundary) == length(slow_out.is_boundary)
-
-        # fast_sorted = sort(fast_out.cells)
-        # slow_sorted = sort(slow_out.cells)
-        @assert all(sort(fast_out.cells) .== sort(slow_out.cells))
-        @assert all(sort(fast_out.faces) .== sort(slow_out.faces))
-        @assert all(fast_out.is_boundary .== slow_out.is_boundary)
-        # @assert count(fast_out.is_boundary) == count(slow_out.is_boundary)
-    end
     if use_fast
         out = submap_cells_fast(N, indices, nc, buffer)
     else
@@ -310,12 +226,8 @@ function submap_cells_fast(N, indices, nc = maximum(N), buffer = 0)
         end
     end
     faces = findall(face_active)
-
-    # @info "..." cells is_boundary faces
     return (cells = cells, faces = faces, is_boundary = is_boundary)
-
 end
-
 
 function submap_cells_slow(N, indices, nc = maximum(N), buffer = 0)
     cells = Vector{Integer}()

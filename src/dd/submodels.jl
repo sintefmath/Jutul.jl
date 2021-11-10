@@ -57,7 +57,7 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
             end
             new_submodels[k] = m
         else
-            @debug "Skipping submodel #$i: $k, not found in local partition."
+            # @debug "Skipping submodel #$i: $k, not found in local partition."
             continue
         end
         # We didn't continue, so we can append the group

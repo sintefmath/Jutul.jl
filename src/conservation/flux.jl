@@ -189,10 +189,10 @@ function subdiscretization_fast(disc, subg, mapper)
     # @info "Starting"
 
     nc = length(mapper.inner_to_full_cells)
-    @time counts = compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_global, mapper, nc)
+    counts = compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_global, mapper, nc)
     next_face_pos = cumsum([1; counts])
 
-    @time conn_data = conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn_data_global::Vector{T}, mapper, nc)
+    conn_data = conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn_data_global::Vector{T}, mapper, nc)
     face_pos = next_face_pos
     # face_pos = new_offsets
     # conn_data = vcat(new_conn...)
