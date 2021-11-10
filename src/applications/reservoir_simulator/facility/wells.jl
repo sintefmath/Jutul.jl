@@ -368,7 +368,7 @@ function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{G}, sourc
     if target_symbol == well.reservoir_symbol
         # The symbol matches up and this well exists in this reservoir
         p = well.perforations
-        t = p.reservoir::AbstractVector
+        t = map(i -> interior_cell(i, global_map(target_d)), p.reservoir)::AbstractVector
         s = p.self::AbstractVector
     else
         t = nothing

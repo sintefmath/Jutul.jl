@@ -49,8 +49,8 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
                 for i in eachindex(perf)
                     c_l = local_cell(perf[i], M)
                     @assert !isnothing(c_l)
-                    new_index = interior_cell(c_l, M)
-                    perf[i] = new_index
+                    # new_index = interior_cell(c_l, M)
+                    perf[i] = c_l
                 end
             else
                 error("Not yet supported: $k")
