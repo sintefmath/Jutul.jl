@@ -49,12 +49,11 @@ function subforce(s::AbstractVector{S}, model) where S<:SourceTerm
     n = length(s)
     keep = repeat([false], n)
     for (i, src) in enumerate(s)
-        c_l = local_cell(src.cell, m)
         # Cell must be in local domain, and not on boundary
-        in_domain = !isnothing(c_l)
-        if !in_domain
+        if !global_cell_inside_domain(src.cell, m)
             continue
         end
+        c_l = local_cell(src.cell, m)
         c_i = interior_cell(c_l, m)
         inner = !isnothing(c_i)
         if !inner

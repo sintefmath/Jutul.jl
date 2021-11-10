@@ -50,6 +50,8 @@ interior_cell(c, ::TrivialGlobalMap) = c
 full_cell(c, ::TrivialGlobalMap) = c
 full_cell(c, m::FiniteVolumeGlobalMap) = m.inner_to_full_cells[c]
 
+global_cell_inside_domain(c, m) = true
+global_cell_inside_domain(c, m::FiniteVolumeGlobalMap) = any(isequal(c), m.cells)
 
 interior_face(f, m) = f
 
