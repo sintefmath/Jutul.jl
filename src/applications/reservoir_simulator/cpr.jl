@@ -54,9 +54,10 @@ function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage, rec
     A = reservoir_jacobian(lsys)
     cpr.A_ps = linear_operator(lsys)
     initialize_storage!(cpr, A, s)
-    ps = model.models.Reservoir.primary_variables[:Pressure].scale
+    rmodel = model.models.Reservoir
+    ps = rmodel.primary_variables[:Pressure].scale
     if do_p_update || cpr.partial_update
-        w_p = update_weights!(cpr, s, A, ps)
+        w_p = update_weights!(cpr, rmodel, s, A, ps)
         update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size, model.context)
     end
     return do_p_update
@@ -135,7 +136,7 @@ function reservoir_jacobian(lsys::MultiLinearizedSystem)
     return lsys[1, 1].jac
 end
 
-function update_weights!(cpr, res_storage, J, ps)
+function update_weights!(cpr, model, res_storage, J, ps)
     n = size(cpr.A_p, 1)
     bz = cpr.block_size
     if isnothing(cpr.w_p)
@@ -149,6 +150,9 @@ function update_weights!(cpr, res_storage, J, ps)
         eq = res_storage.equations[:mass_conservation]
         acc = eq.accumulation.entries
         true_impes!(w, acc, r, n, bz, ps, scaling)
+    elseif cpr.strategy == :analytical
+        rstate = res_storage.state
+        cpr_weights_no_partials!(w, model, rstate, r, n, bz, scaling)
     elseif cpr.strategy == :quasi_impes
         quasi_impes!(w, J, r, n, bz, scaling)
     elseif cpr.strategy == :none
