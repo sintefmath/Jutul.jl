@@ -91,11 +91,13 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
             f = (op, r; kwarg...) -> solver(op, r; kwarg...)
         end
         if is_bicgstabl
-            f_o = (op, r; kwarg...) ->  f(op, r, max_mv_products = 4*max_it; kwarg...)
+            sym = :max_mv_products
+            target_it = 4*max_it
         else
-            f_o = (op, r; kwarg...) ->  f(op, r, maxiter = max_it; kwarg...)
+            sym = :maxiter
+            target_it = max_it
         end
-        (x, history) = f_o(op, r, abstol = at, reltol = rt, log = true, verbose = v > 0, Pl = L)
+        (x, history) = f(op, r; sym => target_it, abstol = at, reltol = rt, log = true, verbose = v > 0, Pl = L)
         solved = history.isconverged
         msg = history
         n = history.iters
