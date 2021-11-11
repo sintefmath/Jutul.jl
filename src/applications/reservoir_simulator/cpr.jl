@@ -187,7 +187,7 @@ end
 @inline function invert_w!(w, J, r, cell, bz)
     tmp = J\r
     @inbounds for i = 1:bz
-        w[i, cell] = tmp[i]
+        w[i, cell] = tmp[i]/sum(tmp)
     end
 end
 
