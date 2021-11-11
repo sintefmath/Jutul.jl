@@ -76,16 +76,16 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     rt = rtol(cfg, Ft)
     at = atol(cfg, Ft)
     if Base.parentmodule(solver) == IterativeSolvers
+        kwarg = (abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)
         if is_mutating(solver)
             if isnothing(krylov.x)
                 krylov.x = similar(r)
             end
             x = krylov.x
             x .= zero(eltype(r))
-
-            (x, history) = solver(x, op, r, initially_zero = true, abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)#, Pr = R)
+            (x, history) = solver(x, op, r, initially_zero = true, kwarg...)#, Pr = R)
         else
-            (x, history) = solver(op, r, abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)#, Pr = R)
+            (x, history) = solver(op, r, kwarg...)#, Pr = R)
         end
         
         solved = history.isconverged
