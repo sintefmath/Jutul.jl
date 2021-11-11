@@ -12,12 +12,13 @@ mutable struct CPRPreconditioner <: TervPreconditioner
     pressure_precond
     system_precond
     strategy
+    weight_scaling
     block_size
     update_frequency::Integer # Update frequency for AMG hierarchy (and pressure part if partial_update = false)
     update_interval::Symbol   # iteration, ministep, step, ...
     partial_update            # Perform partial update of AMG and update pressure system
-    function CPRPreconditioner(p = LUPreconditioner(), s = ILUZeroPreconditioner(); strategy = :quasi_impes, update_frequency = 1, update_interval = :iteration, partial_update = true)
-        new(nothing, nothing, nothing, nothing, nothing, nothing, p, s, strategy, nothing, update_frequency, update_interval, partial_update)
+    function CPRPreconditioner(p = LUPreconditioner(), s = ILUZeroPreconditioner(); strategy = :quasi_impes, weight_scaling = :unit, update_frequency = 1, update_interval = :iteration, partial_update = true)
+        new(nothing, nothing, nothing, nothing, nothing, nothing, p, s, strategy, weight_scaling, nothing, update_frequency, update_interval, partial_update)
     end
 end
 
@@ -87,15 +88,40 @@ function operator_nrows(cpr::CPRPreconditioner)
     return length(cpr.r_p)*cpr.block_size
 end
 
-function apply!(x, cpr::CPRPreconditioner, y, arg...)
+function apply!(x, cpr::CPRPreconditioner, r, arg...)
     r_p, w_p, bz, Δp = cpr.r_p, cpr.w_p, cpr.block_size, cpr.p
-    # Construct right hand side by the weights
-    update_p_rhs!(r_p, y, bz, w_p)
-    # Apply preconditioner to pressure part
-    apply!(Δp, cpr.pressure_precond, r_p)
-    correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
-    apply!(x, cpr.system_precond, y)
-    increment_pressure!(x, Δp, bz)
+    if false
+        y = copy(r)
+        # y = r
+        # Construct right hand side by the weights
+        norm0 = norm(r)
+        do_cpr = true
+        update_p_rhs!(r_p, y, bz, w_p)
+        println("**************************************************************")
+        # Apply preconditioner to pressure part
+        @info "Before pressure correction" norm(y) norm(r_p)
+        if do_cpr
+            apply!(Δp, cpr.pressure_precond, r_p)
+            correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
+            norm_after = norm(y)
+            @info "After pressure correction" norm(y) norm(cpr.A_p*Δp - r_p) norm_after/norm0
+        end
+        apply!(x, cpr.system_precond, y)
+        if do_cpr
+            @info "After second stage" norm(cpr.A_ps*x - y)
+            increment_pressure!(x, Δp, bz)
+        end
+        @info "Final" norm(cpr.A_ps*x - r) norm(cpr.A_ps*x - r)/norm0
+    else
+        y = r
+        # Construct right hand side by the weights
+        update_p_rhs!(r_p, y, bz, w_p)
+        # Apply preconditioner to pressure part
+        apply!(Δp, cpr.pressure_precond, r_p)
+        correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
+        apply!(x, cpr.system_precond, y)
+        increment_pressure!(x, Δp, bz)
+    end
 end
 
 reservoir_residual(lsys) = lsys.r
@@ -118,13 +144,13 @@ function update_weights!(cpr, res_storage, J, ps)
     w = cpr.w_p
     r = zeros(bz)
     r[1] = 1.0
-    
+    scaling = cpr.weight_scaling
     if cpr.strategy == :true_impes
         eq = res_storage.equations[:mass_conservation]
         acc = eq.accumulation.entries
-        true_impes!(w, acc, r, n, bz, ps)
+        true_impes!(w, acc, r, n, bz, ps, scaling)
     elseif cpr.strategy == :quasi_impes
-        quasi_impes!(w, J, r, n, bz)
+        quasi_impes!(w, J, r, n, bz, scaling)
     elseif cpr.strategy == :none
         # Do nothing. Already set to one.
     else
@@ -133,16 +159,16 @@ function update_weights!(cpr, res_storage, J, ps)
     return w
 end
 
-function true_impes!(w, acc, r, n, bz, p_scale)
+function true_impes!(w, acc, r, n, bz, arg...)
     if bz == 2
         # Hard coded variant
-        true_impes_2!(w, acc, r, n, bz, p_scale)
+        true_impes_2!(w, acc, r, n, bz, arg...)
     else
-        true_impes_gen!(w, acc, r, n, bz, p_scale)
+        true_impes_gen!(w, acc, r, n, bz, arg...)
     end
 end
 
-function true_impes_2!(w, acc, r, n, bz, p_scale)
+function true_impes_2!(w, acc, r, n, bz, p_scale, scaling)
     r_p = SVector{2}(r)
     for cell in 1:n
         W = acc[1, cell]
@@ -156,12 +182,12 @@ function true_impes_2!(w, acc, r, n, bz, p_scale)
 
         A = @SMatrix [∂W∂p ∂O∂p; 
                       ∂W∂s ∂O∂s]
-        invert_w!(w, A, r_p, cell, bz)
+        invert_w!(w, A, r_p, cell, bz, scaling)
     end
 end
 
 
-function true_impes_gen!(w, acc, r, n, bz, p_scale)
+function true_impes_gen!(w, acc, r, n, bz, p_scale, scaling)
     r_p = SVector{bz}(r)
     A = MMatrix{bz, bz, eltype(r)}(zeros(bz, bz))
     for cell in 1:n
@@ -172,22 +198,27 @@ function true_impes_gen!(w, acc, r, n, bz, p_scale)
                 A[j, i] = v.partials[j]
             end
         end
-        invert_w!(w, A, r_p, cell, bz)
+        invert_w!(w, A, r_p, cell, bz, scaling)
     end
 end
 
-function quasi_impes!(w, J, r, n, bz)
+function quasi_impes!(w, J, r, n, bz, scaling)
     r_p = SVector{bz}(r)
     @batch for cell = 1:n
         J_b = J[cell, cell]'
-        invert_w!(w, J_b, r_p, cell, bz)
+        invert_w!(w, J_b, r_p, cell, bz, scaling)
     end
 end
 
-@inline function invert_w!(w, J, r, cell, bz)
+@inline function invert_w!(w, J, r, cell, bz, scaling)
     tmp = J\r
+    if scaling == :unit
+        s = 1.0/sum(tmp)
+    else
+        s = 1.0
+    end
     @inbounds for i = 1:bz
-        w[i, cell] = tmp[i]/sum(tmp)
+        w[i, cell] = tmp[i]*s
     end
 end
 
