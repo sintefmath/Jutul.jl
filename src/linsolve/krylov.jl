@@ -91,7 +91,20 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
         else
             f = (op, r; kwarg...) -> solver(op, r; kwarg...)
         end
-        (x, history) = f(op, r, abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)
+        if solver == IterativeSolvers.bicgstabl || solver == IterativeSolvers.bicgstabl!
+            f_o = (op, r; kwarg...) ->  f(op, r, max_mv_products = 4*max_it; kwarg...)
+        else
+            f_o = (op, r; kwarg...) ->  f(op, r, maxiter = max_it; kwarg...)
+        end
+        (x, history) = f_o(op, r, abstol = at, reltol = rt, log = true, verbose = v > 0, Pl = L)
+
+
+        if solver == IterativeSolvers.bicgstabl || solver == IterativeSolvers.bicgstabl!
+            (x, history) = f(op, r, abstol = at, reltol = rt, log = true, max_mv_products = 4*max_it, verbose = v > 0, Pl = L)
+        else
+            (x, history) = f(op, r, abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)
+        end
+            # max_mv_products
         solved = history.isconverged
         msg = history
         n = history.iters
@@ -124,6 +137,8 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     elseif v > 0 
         @debug "Final residual $final_res, rel. value $(final_res/initial_res) after $n iterations."
     end
+    @info "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
+
     update_dx_from_vector!(sys, x)
 end
 
