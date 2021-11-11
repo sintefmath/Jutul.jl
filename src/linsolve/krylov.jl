@@ -23,11 +23,15 @@ end
 
 mutable struct GenericKrylov
     solver
+    provider
     preconditioner
     x
     config::IterativeSolverConfig
-    function GenericKrylov(solver = IterativeSolvers.gmres!; preconditioner = nothing, kwarg...)
-        new(solver, preconditioner, nothing, IterativeSolverConfig(;kwarg...))
+    function GenericKrylov(solver = IterativeSolvers.gmres!; preconditioner = nothing, provider = nothing, kwarg...)
+        if isnothing(provider)
+            provider = Base.parentmodule(solver)
+        end
+        new(solver, provider, preconditioner, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
 
@@ -75,7 +79,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     max_it = cfg.max_iterations
     rt = rtol(cfg, Ft)
     at = atol(cfg, Ft)
-    if Base.parentmodule(solver) == IterativeSolvers
+    if krylov.provider == IterativeSolvers
         kwarg = (abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)
         if is_mutating(solver)
             if isnothing(krylov.x)
@@ -83,16 +87,16 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
             end
             x = krylov.x
             x .= zero(eltype(r))
-            (x, history) = solver(x, op, r, initially_zero = true, kwarg...)#, Pr = R)
+            f = (op, r; kwarg...) -> solver(x, op, r, initially_zero = true; kwarg...)
         else
-            (x, history) = solver(op, r, kwarg...)#, Pr = R)
+            f = (op, r; kwarg...) -> solver(op, r; kwarg...)
         end
-        
+        (x, history) = f(op, r, abstol = at, reltol = rt, log = true, maxiter = max_it, verbose = v > 0, Pl = L)
         solved = history.isconverged
         msg = history
         n = history.iters
         res = history.data[:resnorm]
-    else
+    elseif krylov.provider == Krylov
         (x, stats) = solver(op, r, 
                                 itmax = max_it,
                                 verbose = v,
@@ -104,6 +108,8 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
         n = length(res) - 1
         solved = stats.solved
         msg = stats.status
+    else
+        error("Unknown provider $(krylov.provider)")
     end
     if n > 1
         initial_res = res[1]
