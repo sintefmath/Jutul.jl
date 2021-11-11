@@ -30,8 +30,11 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     # First deal with main
     main_submodel = submodel(submodels[main], p, index; kwarg...)
     M = main_submodel.domain.global_map
-    groups = Vector{Integer}()
     groups_0 = model.groups
+    has_groups = !isnothing(groups_0)
+    if has_groups
+        groups = Vector{Integer}()
+    end
 
     for (i, k) in enumerate(keys(submodels))
         if k == main
@@ -61,9 +64,11 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
             continue
         end
         # We didn't continue, so we can append the group
-        push!(groups, groups_0[i])
+        if has_groups
+            push!(groups, groups_0[i])
+        end
     end
-    if length(groups) == 1
+    if !has_groups || length(groups) == 1
         groups = nothing
         reduction = nothing
         ctx = submodels[1].context
