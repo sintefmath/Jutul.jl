@@ -295,6 +295,15 @@ function report_stats(reports)
            )
 end
 
+function pick_time_unit(t)
+    m = maximum(t)
+    units = [(24*3600, "Days"), (3600, "Hours"), (60, "Minutes"), (1, "Seconds"), (1e-3, "Milliseconds"), (1e-6, "Microseconds"), (1e-9, "Nanoseconds")]
+    for u in units
+        if m > u[1]
+            return u
+        end
+    end
+end
 
 function print_stats(reports::AbstractArray)
     stats = report_stats(reports)
@@ -308,22 +317,27 @@ end
 
 function print_iterations(stats)
     flds = [:newtons, :linearizations]
-    data = Array{Any}(undef, length(flds), 3)
+    data = Array{Any}(undef, length(flds), 4)
     nstep = stats.steps
     nmini = stats.ministeps
 
+    tot_time = stats.time_sum.total
+    u, s = pick_time_unit(tot_time)
+
     for (i, f) in enumerate(flds)
         raw = stats[f]
-        data[i, 3] = raw
         data[i, 1] = raw/nstep
         data[i, 2] = raw/nmini
+        data[i, 3] = (tot_time/raw)/u
+        data[i, 4] = raw
     end
+
     
-    
-    pretty_table(data; header = (["Per step", "Per ministep", "Total"], ["#$nstep", "#$nmini", ""]), 
+    pretty_table(data; header = (["Avg/step", "Avg/ministep", "Time per", "Total"], ["$nstep steps", "$nmini ministeps", s, ""]), 
                       row_names = flds,
                       title = "Number of iterations",
                       title_alignment = :c,
+                      formatters = (ft_printf("%3.4f", 3)),
                       row_name_column_title = "Type")
 end
 
@@ -333,39 +347,29 @@ function print_timing(stats)
     n = length(flds)
     hl_last = Highlighter(f = (data, i, j) -> i == n, crayon = Crayon(background = :light_blue))
     
-    tscale = 1
-    tscale_each = 1
     data = Array{Any}(undef, n, 3)
-    tot = stats.time_sum.total*tscale
+    tot = stats.time_sum.total
     for (i, f) in enumerate(flds)
-        teach = stats.time_each[f]*tscale_each
-        tsum = stats.time_sum[f]*tscale
+        teach = stats.time_each[f]
+        tsum = stats.time_sum[f]
         data[i, 1] = teach
         data[i, 2] = 100*tsum/tot
         data[i, 3] = tsum
     end
-    function pick_unit(t)
-        m = maximum(t)
-        units = [(24*3600, "Days"), (3600, "Hours"), (60, "Minutes"), (1, "Seconds"), (1e-3, "Milliseconds"), (1e-6, "Microseconds"), (1e-9, "Nanoseconds")]
-        for u in units
-            if m > u[1]
-                return u
-            end
-        end
-    end
 
-    u, s = pick_unit(data[:, 1])
-    u_t, s_t = pick_unit(data[:, 3])
+    u, s = pick_time_unit(data[:, 1])
+    u_t, s_t = pick_time_unit(data[:, 3])
 
     @. data[:, 1] /= u
     @. data[:, 3] /= u_t
 
-    pretty_table(data; header = (["Each", "Total", "Total"], [s, "%", s_t]), 
+    pretty_table(data; header = (["Each", "Fraction", "Total"], [s, "Percent", s_t]), 
                       row_names = flds,
-                      formatters = (ft_printf("%3.2e", 1), ft_printf("%3.2f", 2:3)),
+                      formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
                       title = "Simulator timing",
                       title_alignment = :c,
+                      alignment = [:r, :r, :r],
                       body_hlines = [n-1],
-                      row_name_column_title = "Type")
+                      row_name_column_title = "Name")
 end
 
