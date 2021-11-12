@@ -1,4 +1,4 @@
-export subdomain, submap_cells, subforces, subforce, global_map
+export subdomain, submap_cells, subforces, subforce, global_map, coarse_neighborhood
 export SimplePartition, SimpleMultiModelPartition, number_of_subdomains, entity_subset
 
 abstract type AbstractDomainPartition end
@@ -325,4 +325,15 @@ function subparameters(model::MultiModel, param)
         end
     end
     return D
+end
+
+function coarse_neighborhood(p, submodel)
+    M = global_map(submodel.domain)
+    cells = M.cells
+    return unique(p.partition[cells])
+end
+
+function coarse_neighborhood(p::SimpleMultiModelPartition, submodel::MultiModel)
+    s = p.main_symbol
+    return coarse_neighborhood(main_partition(p), submodel.models[s])
 end
