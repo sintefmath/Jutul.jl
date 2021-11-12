@@ -250,24 +250,18 @@ function report_stats(reports)
                 total_finalize += mini_rep[:finalize_time]
             end
 
-            local_linearizations = 0
-            local_its = 0
-            for rep in mini_rep[:steps]
-                local_linearizations += 1
-                if haskey(rep, :update_time)
-                    local_its += 1
-                    total_update += rep[:update_time]
-                    total_linear_solve += rep[:linear_solve_time]
-                end
-                total_assembly += rep[:assembly_time]
-                total_linear_update += rep[:linear_system_time]
-                total_convergence += rep[:convergence_time]
-            end
-            total_linearizations += local_linearizations
-            total_its += local_its
+            s = stats_ministep(mini_rep[:steps])
+            total_linearizations += s.linearizations
+            total_its += s.newtons
+            total_linear_update += s.linear_system
+            total_linear_solve += s.linear_solve
+            total_update += s.update_time
+            total_assembly += s.assembly
+            total_convergence += s.convergence
+
             if !mini_rep[:success]
-                wasted_its += local_its
-                wasted_linearizations += local_linearizations
+                wasted_its += s.newtons
+                wasted_linearizations += s.linearizations
             end
         end
     end
@@ -307,6 +301,34 @@ function report_stats(reports)
            )
 end
 
+function stats_ministep(reports)
+    local_linearizations = 0
+    local_its = 0
+    local_assembly = 0
+    local_convergence = 0
+    local_linear_update = 0
+    update = 0
+    linsolve = 0
+    for rep in reports
+        local_linearizations += 1
+        if haskey(rep, :update_time)
+            local_its += 1
+            update += rep[:update_time]
+            linsolve += rep[:linear_solve_time]
+        end
+        local_assembly += rep[:assembly_time]
+        local_linear_update += rep[:linear_system_time]
+        local_convergence += rep[:convergence_time]
+    end
+    return (linearizations = local_linearizations,
+            newtons = local_its, 
+            assembly = local_assembly,
+            convergence = local_convergence,
+            update_time = update,
+            linear_solve = linsolve,
+            linear_system = local_linear_update)
+end
+
 function pick_time_unit(t)
     m = maximum(t)
     units = [(24*3600, "Days"), (3600, "Hours"), (60, "Minutes"), (1, "Seconds"), (1e-3, "Milliseconds"), (1e-6, "Microseconds"), (1e-9, "Nanoseconds")]
@@ -327,7 +349,7 @@ function print_stats(stats)
     print_timing(stats)
 end
 
-function print_iterations(stats)
+function print_iterations(stats; title = "Number of iterations")
     flds = [:newtons, :linearizations]
     data = Array{Any}(undef, length(flds), 5)
     nstep = stats.steps
@@ -348,13 +370,13 @@ function print_iterations(stats)
     
     pretty_table(data; header = (["Avg/step", "Avg/ministep", "Time per", "Wasted", "Total"], ["$nstep steps", "$nmini ministeps", s, "", ""]), 
                       row_names = flds,
-                      title = "Number of iterations",
+                      title = title,
                       title_alignment = :c,
                       formatters = (ft_printf("%3.4f", 3)),
                       row_name_column_title = "Type")
 end
 
-function print_timing(stats)
+function print_timing(stats; title = "Simulator timing")
     flds = collect(keys(stats.time_each))
     
     n = length(flds)
@@ -376,10 +398,14 @@ function print_timing(stats)
     @. data[:, 1] /= u
     @. data[:, 3] /= u_t
 
+    # hl = Highlighter((data, i, j) -> (i == length(flds)), crayon"fg:bold");
+    # highlighters = hl,
+
+
     pretty_table(data; header = (["Each", "Fraction", "Total"], [s, "Percent", s_t]), 
                       row_names = flds,
                       formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
-                      title = "Simulator timing",
+                      title = title,
                       title_alignment = :c,
                       alignment = [:r, :r, :r],
                       body_hlines = [n-1],
