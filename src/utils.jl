@@ -229,6 +229,9 @@ function report_stats(reports)
     # Counts
     total_its = 0
     total_linearizations = 0
+    # Same, but for wasted (iterations that were part of a cut time-step)
+    wasted_its = 0
+    wasted_linearizations = 0
     # Various timings
     total_finalize = 0
     total_assembly = 0
@@ -247,16 +250,24 @@ function report_stats(reports)
                 total_finalize += mini_rep[:finalize_time]
             end
 
+            local_linearizations = 0
+            local_its = 0
             for rep in mini_rep[:steps]
-                total_linearizations += 1
+                local_linearizations += 1
                 if haskey(rep, :update_time)
-                    total_its += 1
+                    local_its += 1
                     total_update += rep[:update_time]
                     total_linear_solve += rep[:linear_solve_time]
                 end
                 total_assembly += rep[:assembly_time]
                 total_linear_update += rep[:linear_system_time]
                 total_convergence += rep[:convergence_time]
+            end
+            total_linearizations += local_linearizations
+            total_its += local_its
+            if !mini_rep[:success]
+                wasted_its += local_its
+                wasted_linearizations += local_linearizations
             end
         end
     end
@@ -288,6 +299,7 @@ function report_stats(reports)
     return (
             newtons = total_its,
             linearizations = total_linearizations,
+            wasted = (newtons = wasted_its, linearizations = wasted_linearizations),
             steps = total_steps,
             ministeps = total_ministeps,
             time_sum = totals,
@@ -317,7 +329,7 @@ end
 
 function print_iterations(stats)
     flds = [:newtons, :linearizations]
-    data = Array{Any}(undef, length(flds), 4)
+    data = Array{Any}(undef, length(flds), 5)
     nstep = stats.steps
     nmini = stats.ministeps
 
@@ -326,14 +338,15 @@ function print_iterations(stats)
 
     for (i, f) in enumerate(flds)
         raw = stats[f]
-        data[i, 1] = raw/nstep
-        data[i, 2] = raw/nmini
-        data[i, 3] = (tot_time/raw)/u
-        data[i, 4] = raw
+        data[i, 1] = raw/nstep         # Avg per step
+        data[i, 2] = raw/nmini         # Avg per mini
+        data[i, 3] = (tot_time/raw)/u  # Time each
+        data[i, 4] = stats[:wasted][f] # Wasted total
+        data[i, 5] = raw               # Total
     end
 
     
-    pretty_table(data; header = (["Avg/step", "Avg/ministep", "Time per", "Total"], ["$nstep steps", "$nmini ministeps", s, ""]), 
+    pretty_table(data; header = (["Avg/step", "Avg/ministep", "Time per", "Wasted", "Total"], ["$nstep steps", "$nmini ministeps", s, "", ""]), 
                       row_names = flds,
                       title = "Number of iterations",
                       title_alignment = :c,

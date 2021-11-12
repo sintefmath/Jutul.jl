@@ -322,6 +322,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
         report[:failure] = failure
     end
     report[:steps] = step_reports
+    report[:success] = done
     if skip_finalize
         report[:finalize_time] = 0.0
     elseif done
