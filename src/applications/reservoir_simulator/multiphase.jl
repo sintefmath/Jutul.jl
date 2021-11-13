@@ -80,6 +80,8 @@ struct SinglePhaseSystem <: MultiPhaseSystem
     phase
 end
 
+phase_names(system) = get_name.(get_phases(system))
+
 function get_phases(sys::SinglePhaseSystem)
     return [sys.phase]
 end
@@ -262,7 +264,7 @@ function convergence_criterion(model::SimulationModel{D, S}, storage, eq::Conser
     a = active_entities(model.domain, Cells())
 
     @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, a[i]])*Φ[a[i]])
-    names = get_name.(model.system.phases)
+    names = phase_names(model.system)
     R = Dict("CNV" => (errors = e, names = names))
     return R
 end
