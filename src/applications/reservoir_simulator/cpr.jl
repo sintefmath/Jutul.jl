@@ -12,12 +12,13 @@ mutable struct CPRPreconditioner <: TervPreconditioner
     pressure_precond
     system_precond
     strategy
+    weight_scaling
     block_size
     update_frequency::Integer # Update frequency for AMG hierarchy (and pressure part if partial_update = false)
     update_interval::Symbol   # iteration, ministep, step, ...
     partial_update            # Perform partial update of AMG and update pressure system
-    function CPRPreconditioner(p = LUPreconditioner(), s = ILUZeroPreconditioner(); strategy = :quasi_impes, update_frequency = 1, update_interval = :iteration, partial_update = true)
-        new(nothing, nothing, nothing, nothing, nothing, nothing, p, s, strategy, nothing, update_frequency, update_interval, partial_update)
+    function CPRPreconditioner(p = LUPreconditioner(), s = ILUZeroPreconditioner(); strategy = :quasi_impes, weight_scaling = :unit, update_frequency = 1, update_interval = :iteration, partial_update = true)
+        new(nothing, nothing, nothing, nothing, nothing, nothing, p, s, strategy, weight_scaling, nothing, update_frequency, update_interval, partial_update)
     end
 end
 
@@ -36,7 +37,7 @@ function initialize_storage!(cpr, J, s)
         m = J.m
         n = J.n
         cpr.block_size = bz = size(eltype(J), 1)
-        @assert n == m == length(s.state.Pressure)
+        # @assert n == m == length(s.state.Pressure) "Expected Jacobian dimensions ($m by $n) to both equal number of pressures $(length(s.state.Pressure))"
         nzval = zeros(length(J.nzval))
 
         cpr.A_p = SparseMatrixCSC(n, n, J.colptr, J.rowval, nzval)
@@ -53,25 +54,29 @@ function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage, rec
     A = reservoir_jacobian(lsys)
     cpr.A_ps = linear_operator(lsys)
     initialize_storage!(cpr, A, s)
+    rmodel = model.models.Reservoir
+    ps = rmodel.primary_variables[:Pressure].scale
     if do_p_update || cpr.partial_update
-        w_p = update_weights!(cpr, storage, A)
-        update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size)
+        w_p = update_weights!(cpr, rmodel, s, A, ps)
+        update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size, model.context)
     end
     return do_p_update
 end
 
-function update_pressure_system!(A_p, A, w_p, bz)
+function update_pressure_system!(A_p, A, w_p, bz, ctx)
     cp = A_p.colptr
     nz = A_p.nzval
     nz_s = A.nzval
     rv = A_p.rowval
+    @assert size(nz) == size(nz_s)
     n = A.n
     # Update the pressure system with the same pattern in-place
-    Threads.@threads for i in 1:n
+    tb = thread_batch(ctx)
+    @batch minbatch=tb for i in 1:n
         @inbounds for j in cp[i]:cp[i+1]-1
             row = rv[j]
             Ji = nz_s[j]
-            tmp = 0
+            tmp = 0.0
             @inbounds for b = 1:bz
                 tmp += Ji[b, 1]*w_p[b, row]
             end
@@ -84,26 +89,54 @@ function operator_nrows(cpr::CPRPreconditioner)
     return length(cpr.r_p)*cpr.block_size
 end
 
-function apply!(x, cpr::CPRPreconditioner, y, arg...)
+function apply!(x, cpr::CPRPreconditioner, r, arg...)
     r_p, w_p, bz, Δp = cpr.r_p, cpr.w_p, cpr.block_size, cpr.p
-    # Construct right hand side by the weights
-    update_p_rhs!(r_p, y, bz, w_p)
-    # Apply preconditioner to pressure part
-    apply!(Δp, cpr.pressure_precond, r_p)
-    correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
-    apply!(x, cpr.system_precond, y)
-    increment_pressure!(x, Δp, bz)
+    if false
+        y = copy(r)
+        # y = r
+        # Construct right hand side by the weights
+        norm0 = norm(r)
+        do_cpr = true
+        update_p_rhs!(r_p, y, bz, w_p)
+        println("**************************************************************")
+        # Apply preconditioner to pressure part
+        @info "Before pressure correction" norm(y) norm(r_p)
+        if do_cpr
+            apply!(Δp, cpr.pressure_precond, r_p)
+            correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
+            norm_after = norm(y)
+            @info "After pressure correction" norm(y) norm(cpr.A_p*Δp - r_p) norm_after/norm0
+        end
+        apply!(x, cpr.system_precond, y)
+        if do_cpr
+            @info "After second stage" norm(cpr.A_ps*x - y)
+            increment_pressure!(x, Δp, bz)
+        end
+        @info "Final" norm(cpr.A_ps*x - r) norm(cpr.A_ps*x - r)/norm0
+    else
+        y = r
+        # Construct right hand side by the weights
+        update_p_rhs!(r_p, y, bz, w_p)
+        # Apply preconditioner to pressure part
+        apply!(Δp, cpr.pressure_precond, r_p)
+        correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
+        apply!(x, cpr.system_precond, y)
+        increment_pressure!(x, Δp, bz)
+    end
 end
 
-function reservoir_residual(lsys)
+reservoir_residual(lsys) = lsys.r
+reservoir_jacobian(lsys) = lsys.jac
+
+function reservoir_residual(lsys::MultiLinearizedSystem)
     return lsys[1, 1].r
 end
 
-function reservoir_jacobian(lsys)
+function reservoir_jacobian(lsys::MultiLinearizedSystem)
     return lsys[1, 1].jac
 end
 
-function update_weights!(cpr, storage, J)
+function update_weights!(cpr, model, res_storage, J, ps)
     n = size(cpr.A_p, 1)
     bz = cpr.block_size
     if isnothing(cpr.w_p)
@@ -111,14 +144,17 @@ function update_weights!(cpr, storage, J)
     end
     w = cpr.w_p
     r = zeros(bz)
-    r[1] = 1
-    
+    r[1] = 1.0
+    scaling = cpr.weight_scaling
     if cpr.strategy == :true_impes
-        eq = storage.Reservoir.equations[:mass_conservation]
+        eq = res_storage.equations[:mass_conservation]
         acc = eq.accumulation.entries
-        true_impes!(w, acc, r, n, bz)
+        true_impes!(w, acc, r, n, bz, ps, scaling)
+    elseif cpr.strategy == :analytical
+        rstate = res_storage.state
+        cpr_weights_no_partials!(w, model, rstate, r, n, bz, scaling)
     elseif cpr.strategy == :quasi_impes
-        quasi_impes!(w, J, r, n, bz)
+        quasi_impes!(w, J, r, n, bz, scaling)
     elseif cpr.strategy == :none
         # Do nothing. Already set to one.
     else
@@ -127,57 +163,72 @@ function update_weights!(cpr, storage, J)
     return w
 end
 
-function true_impes!(w, acc, r, n, bz)
+function true_impes!(w, acc, r, n, bz, arg...)
     if bz == 2
         # Hard coded variant
-        true_impes_2!(w, acc, r, n, bz)
+        true_impes_2!(w, acc, r, n, bz, arg...)
     else
-        true_impes_gen!(w, acc, r, n, bz)
+        true_impes_gen!(w, acc, r, n, bz, arg...)
     end
 end
 
-function true_impes_2!(w, acc, r, n, bz)
+function true_impes_2!(w, acc, r, n, bz, p_scale, scaling)
     r_p = SVector{2}(r)
     for cell in 1:n
-        A = @SMatrix [acc[1, cell].partials[1] acc[2, cell].partials[1]; 
-                      acc[1, cell].partials[2] acc[2, cell].partials[2]]        
-        invert_w!(w, A, r_p, cell, bz)
+        W = acc[1, cell]
+        O = acc[2, cell]
+
+        ∂W∂p = W.partials[1]*p_scale
+        ∂O∂p = O.partials[1]*p_scale
+
+        ∂W∂s = W.partials[2]
+        ∂O∂s = O.partials[2]
+
+        A = @SMatrix [∂W∂p ∂O∂p; 
+                      ∂W∂s ∂O∂s]
+        invert_w!(w, A, r_p, cell, bz, scaling)
     end
 end
 
 
-function true_impes_gen!(w, acc, r, n, bz)
+function true_impes_gen!(w, acc, r, n, bz, p_scale, scaling)
     r_p = SVector{bz}(r)
     A = MMatrix{bz, bz, eltype(r)}(zeros(bz, bz))
     for cell in 1:n
         @inbounds for i = 1:bz
             v = acc[i, cell]
-            @inbounds for j = 1:bz
+            @inbounds A[1, i] = v.partials[1]*p_scale
+            @inbounds for j = 2:bz
                 A[j, i] = v.partials[j]
             end
         end
-        invert_w!(w, A, r_p, cell, bz)
+        invert_w!(w, A, r_p, cell, bz, scaling)
     end
 end
 
-function quasi_impes!(w, J, r, n, bz)
+function quasi_impes!(w, J, r, n, bz, scaling)
     r_p = SVector{bz}(r)
-    Threads.@threads for cell = 1:n
+    @batch for cell = 1:n
         J_b = J[cell, cell]'
-        invert_w!(w, J_b, r_p, cell, bz)
+        invert_w!(w, J_b, r_p, cell, bz, scaling)
     end
 end
 
-@inline function invert_w!(w, J, r, cell, bz)
+@inline function invert_w!(w, J, r, cell, bz, scaling)
     tmp = J\r
+    if scaling == :unit
+        s = 1.0/sum(tmp)
+    else
+        s = 1.0
+    end
     @inbounds for i = 1:bz
-        w[i, cell] = tmp[i]
+        w[i, cell] = tmp[i]*s
     end
 end
 
 function update_p_rhs!(r_p, y, bz, w_p)
-    Threads.@threads for i in eachindex(r_p)
-        v = 0
+    @batch for i in eachindex(r_p)
+        v = 0.0
         @inbounds for b = 1:bz
             v += y[(i-1)*bz + b]*w_p[b, i]
         end
@@ -186,15 +237,15 @@ function update_p_rhs!(r_p, y, bz, w_p)
 end
 
 function correct_residual_for_dp!(y, x, Δp, bz, buf, A)
-    # x = x' + p
-    # A (x' + p) = y
+    # x = x' + Δx
+    # A (x' + Δx) = y
     # A x' = y'
-    # y' = y - A*x
-    # x = A \ y + p
-    @inbounds for i in eachindex(Δp)
-        x[(i-1)*bz + 1] = Δp[i]
+    # y' = y - A*Δx
+    # x = A \ y' + Δx
+    @batch for i in eachindex(Δp)
+        @inbounds x[(i-1)*bz + 1] = Δp[i]
         @inbounds for j = 2:bz
-            x[(i-1)*bz + j] = 0
+            x[(i-1)*bz + j] = 0.0
         end
     end
     mul!(buf, A, x)

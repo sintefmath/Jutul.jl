@@ -7,9 +7,9 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
     impact_target = ct.impact[1]
     impact_source = ct.impact[2]
     pentities = get_primary_variable_ordered_entities(source)
-    nu_t = count_entities(target.domain, ct.entities.target)
+    nu_t = count_active_entities(target.domain, ct.entities.target)
     for u in pentities
-        nu_s = count_entities(source.domain, u)
+        nu_s = count_active_entities(source.domain, u)
         injective_alignment!(cs, jac, u, layout,
                                                 target_index = impact_target,
                                                 source_index = impact_source,
@@ -54,8 +54,8 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, entity, layo
         source_impact = primitive[2]
         source_entity = x.entities.source
         target_entity = x.entities.target
-        nentities_source = count_entities(source_model.domain, source_entity)
-        nentities_target = count_entities(target_model.domain, target_entity)
+        nentities_source = count_active_entities(source_model.domain, source_entity)
+        nentities_target = count_active_entities(target_model.domain, target_entity)
 
         n_partials = x.npartials_source
         n_eqs = x.equations_per_entity

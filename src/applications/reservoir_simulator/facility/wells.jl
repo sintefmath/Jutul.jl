@@ -143,7 +143,7 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
     D⁰, Dⁱ = f.D_outer, f.D_inner
     R, L = f.roughness, f.L
     ΔD = D⁰-Dⁱ
-    s = v > 0.0 ? 1.0 : 0.0
+    s = v > 0.0 ? 1.0 : -1.0
     e = eps(typeof(value(v)))
     v = s*max(abs(v), e)
     # Scaling - assuming input is total mass rate
@@ -167,7 +167,7 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
             f = f_l + (Δf / ΔRe)*(Re - Re_l);
         end
     end
-    Δp = -(2*s*L/ΔD)*(f*ρ*v^2);
+    Δp = -(2*s*L/ΔD)*(f*ρ*v^2)
     return Δp
 end
 
@@ -201,6 +201,7 @@ function associated_entity(::PotentialDropBalanceWell) Faces() end
 function tolerance_scale(::PotentialDropBalanceWell) 1e6 end
 
 function declare_pattern(model, e::PotentialDropBalanceWell, ::Cells)
+    # TODO: Fix active.
     D = model.domain
     N = D.grid.neighborship
     nf = number_of_faces(D)
@@ -367,7 +368,7 @@ function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{G}, sourc
     if target_symbol == well.reservoir_symbol
         # The symbol matches up and this well exists in this reservoir
         p = well.perforations
-        t = p.reservoir::AbstractVector
+        t = map(i -> interior_cell(i, global_map(target_d)), p.reservoir)::AbstractVector
         s = p.self::AbstractVector
     else
         t = nothing

@@ -23,8 +23,13 @@ function convergence_criterion(model::SimulationModel{D, S}, storage, eq::Conser
     Φ = get_pore_volume(model)
     ρ = storage.state.PhaseMassDensities
     s = storage.state.Saturations
-    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[1, i]*s[1, i] + ρ[2, i]*s[2, i])*Φ[i])
-    return (e, tolerance_scale(eq))
+    a = active_entities(model.domain, Cells())
+
+    names = model.system.equation_of_state.mixture.component_names
+
+    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[1, a[i]]*s[1, a[i]] + ρ[2, i]*s[2, i])*Φ[a[i]])
+    R = Dict("CNV" => (errors = e, names = names))
+    return R
 end
 
 # function setup_storage_system!(storage, model, system::TwoPhaseCompositionalSystem)

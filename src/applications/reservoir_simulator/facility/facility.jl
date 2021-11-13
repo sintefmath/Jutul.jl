@@ -19,18 +19,37 @@ function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, sourc
                                            target_symbol, source_symbol) where {W<:WellGrid}
     # From controller to top well cell
     pos = get_well_position(source_d, target_symbol)
-    (target = [1], source = [pos], target_entity = u, source_entity = Wells())
+    if isnothing(pos)
+        t = nothing
+        s = nothing
+    else
+        t = [1]
+        s = [pos]
+    end
+    (target = t, source = s, target_entity = u, source_entity = Wells())
 end
 
 function get_domain_intersection(u::Wells, target_d::WellControllerDomain, source_d::DiscretizedDomain{W},
                                            target_symbol, source_symbol) where {W<:WellGrid}
     # From top cell in well to control equation
     pos = get_well_position(target_d, source_symbol)
-    (target = [pos], source = [1], target_entity = u, source_entity = Cells())
+    if isnothing(pos)
+        t = nothing
+        s = nothing
+    else
+        t = [pos]
+        s = [1]
+    end
+    (target = t, source = s, target_entity = u, source_entity = Cells())
 end
 
 function get_well_position(d, symbol)
-    return findall(d.well_symbols .== symbol)[]
+    match = findall(d.well_symbols .== symbol)
+    if length(match) == 0
+        return nothing
+    else
+        return only(match)
+    end
 end
 
 function associated_entity(::TotalSurfaceMassRate) Wells() end
@@ -196,10 +215,10 @@ end
 function update_before_step_domain!(storage, model::SimulationModel, domain::WellGroup, dt, forces)
     # Set control to whatever is on the forces
     cfg = storage.state.WellGroupConfiguration
-    for (key, val) in forces.control
-        cfg.control[key] = val
+    for key in keys(forces.control)
+        cfg.control[key] = forces.control[key]
     end
-    for (key, val) in forces.limits
-        cfg.limits[key] = val
+    for key in keys(forces.limits)
+        cfg.limits[key] = forces.limits[key]
     end
 end

@@ -34,7 +34,18 @@ struct MultiModel <: TervModel
         end
         ndof = map(number_of_degrees_of_freedom, models)
         if reduction == :schur_apply
-            @assert num_groups == 2
+            if length(groups) > 1
+                @assert num_groups == 2
+            else
+                reduction = nothing
+            end
+        end
+        if isnothing(groups) && !isnothing(context)
+            for (i, m) in enumerate(models)
+                if m.context != context
+                    error("No groups provided, but the outer context does not match the inner context for model $i")
+                end
+            end
         end
         new(models, couplings, groups, context, ndof, reduction)
     end
@@ -54,15 +65,15 @@ and is added into that position upon application)
 
 struct InjectiveCrossTerm <: CrossTerm
     impact                 # 2 by N - first row is target, second is source
-    entities                  # tuple - first tuple is target, second is source
+    entities               # tuple - first tuple is target, second is source
     crossterm_target       # The cross-term, with AD values taken relative to the targe
     crossterm_source       # Same cross-term, AD values taken relative to the source
     crossterm_source_cache # The cache that holds crossterm_source together with the entries.
-    equations_per_entity     # Number of equations per impact
+    equations_per_entity   # Number of equations per impact
     npartials_target       # Number of partials per equation (in target)
     npartials_source       # (in source)
-    target_symbol
-    source_symbol
+    target_symbol          # Symbol of target model
+    source_symbol          # Symbol of source model
     function InjectiveCrossTerm(target_eq, target_model, source_model, intersection = nothing; target = nothing, source = nothing)
         context = target_model.context
         target_entity = associated_entity(target_eq)

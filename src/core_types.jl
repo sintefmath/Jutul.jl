@@ -1,6 +1,6 @@
 export TervSystem, TervDomain, TervVariables, TervGrid, TervContext
 export SimulationModel, TervVariables, TervFormulation, TervEquation
-export setup_parameters, kernel_compatibility, TervForce
+export setup_parameters, TervForce
 export Cells, Nodes, Faces
 export ConstantVariables, ScalarVariable, GroupedVariables
 
@@ -36,17 +36,6 @@ abstract type TervForce end
 abstract type TervContext end
 abstract type GPUTervContext <: TervContext end
 abstract type CPUTervContext <: TervContext end
-# Traits for context
-abstract type KernelSupport end
-struct KernelAllowed <: KernelSupport end
-struct KernelDisallowed <: KernelSupport end
-
-kernel_compatibility(::Any) = KernelDisallowed()
-# Trait if we are to use broadcasting
-abstract type BroadcastSupport end
-struct BroadcastAllowed <: BroadcastSupport end
-struct BroadcastDisallowed <: BroadcastSupport end
-broadcast_compatibility(::Any) = BroadcastAllowed()
 
 # Traits etc for matrix ordering
 abstract type TervMatrixLayout end
@@ -99,10 +88,10 @@ struct SparsePattern{L}
             I::AbstractVector{T}
             J::AbstractVector{T}
             @assert length(I) == length(J)
-            @assert maximum(I) <= n
-            @assert minimum(I) > 0
-            @assert maximum(J) <= m
-            @assert minimum(J) > 0
+            @assert maximum(I) <= n "Maximum row index $(maximum(I)) exceeded $n"
+            @assert minimum(I) > 0  "Minimum row index $(minimum(I)) was below 1"
+            @assert maximum(J) <= m "Maximum column index $(maximum(J)) exceeded $m"
+            @assert minimum(J) > 0  "Minimum column index $(minimum(J)) was below 1"
         else
             # Empty vectors might be Any, and the asserts above
             # cannot be used.
@@ -131,25 +120,23 @@ struct SingleCUDAContext <: GPUTervContext
     end
 end
 matrix_layout(c::SingleCUDAContext) = c.matrix_layout
-kernel_compatibility(::SingleCUDAContext) = KernelAllowed()
 
 "Context that uses KernelAbstractions for GPU parallelization"
 struct SharedMemoryKernelContext <: CPUTervContext
     block_size
     device
-    function SharedMemoryKernelContext(block_size = nthreads())
+    function SharedMemoryKernelContext(block_size = Threads.nthreads())
         # Remark: No idea what block_size means here.
         return new(block_size, CPU())
     end
 end
-kernel_compatibility(::SharedMemoryKernelContext) = KernelAllowed()
 
 "Context that uses threads etc to accelerate loops"
 struct SharedMemoryContext <: CPUTervContext
 
 end
 
-broadcast_compatibility(::SharedMemoryContext) = BroadcastDisallowed()
+thread_batch(::Any) = 1000
 
 "Default context - not really intended for threading"
 struct DefaultContext <: CPUTervContext
@@ -185,9 +172,10 @@ struct DiscretizedDomain{G} <: TervDomain
     grid::G
     discretizations
     entities
+    global_map
 end
 
-function DiscretizedDomain(grid, disc = nothing)
+function DiscretizedDomain(grid, disc = nothing; global_map = TrivialGlobalMap())
     entities = declare_entities(grid)
     u = Dict{Any, Int64}() # Is this a good definition?
     for entity in entities
@@ -195,7 +183,7 @@ function DiscretizedDomain(grid, disc = nothing)
         @assert num >= 0 "Units must have non-negative counts."
         u[entity.entity] = num
     end
-    DiscretizedDomain(grid, disc, u)
+    DiscretizedDomain(grid, disc, u, global_map)
 end
 
 function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
@@ -210,7 +198,7 @@ function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
     val = map(t, values(d_cpu))
     d = (;zip(k, val)...)
     u = domain.entities
-    return DiscretizedDomain(g, d, u)
+    return DiscretizedDomain(g, d, u, domain.global_map)
 end
 
 
@@ -224,11 +212,12 @@ abstract type DiagonalEquation <: TervEquation end
 
 # Models
 abstract type TervModel end
+abstract type AbstractSimulationModel <: TervModel end
 
 struct SimulationModel{O<:TervDomain,
                        S<:TervSystem,
                        F<:TervFormulation,
-                       C<:TervContext} <: TervModel
+                       C<:TervContext} <: AbstractSimulationModel
     domain::O
     system::S
     context::C
@@ -436,5 +425,40 @@ function Base.show(io::IO, t::TervStorage, storage::TervStorage)
     end
     for key in keys(data)
         println("  $key: $(typeof(data[key]))")
+    end
+end
+
+abstract type AbstractGlobalMap end
+struct TrivialGlobalMap end
+
+struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
+    # Full set -> global set
+    cells::AbstractVector{T}
+    # Inner set -> full set
+    inner_to_full_cells::AbstractVector{T}
+    # Full set -> inner set
+    full_to_inner_cells::AbstractVector{T}
+    faces::AbstractVector{T}
+    cell_is_boundary::AbstractVector{Bool}
+    function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing)
+        n = length(cells)
+        if isnothing(is_boundary)
+            is_boundary = repeat([false], length(cells))
+        end
+        @assert length(is_boundary) == length(cells)
+        inner_to_full_cells = findall(is_boundary .== false)
+        full_to_inner_cells = Vector{Integer}(undef, n)
+        for i = 1:n
+            v = only(indexin(i, inner_to_full_cells))
+            if isnothing(v)
+                v = 0
+            end
+            @assert v >= 0 && v <= n
+            full_to_inner_cells[i] = v
+        end
+        for i in inner_to_full_cells
+            @assert i > 0 && i <= n
+        end
+        new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary)
     end
 end

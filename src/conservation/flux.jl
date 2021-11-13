@@ -57,6 +57,23 @@ function get_connection(face, cell, faces, N, T, z, g, inc_face_sign)
     return convert_to_immutable_storage(D)
 end
 
+function remap_connection(conn::T, self::I, other::I, face::I) where {T, I<:Integer}
+    D = Dict()
+    for k in keys(conn)
+        if k == :self
+            newval = self
+        elseif k == :other
+            newval = other
+        elseif k == :face
+            newval = face
+        else
+            newval = conn[k]
+        end
+        D[k] = newval
+    end
+    return convert_to_immutable_storage(D)::T
+end
+
 struct TwoPointPotentialFlow{U <: Union{UpwindDiscretization, Nothing}, K <:Union{PotentialFlowDiscretization, Nothing}, F <: FlowType} <: FlowDiscretization
     upwind::U
     grad::K
@@ -65,6 +82,8 @@ struct TwoPointPotentialFlow{U <: Union{UpwindDiscretization, Nothing}, K <:Unio
     conn_pos
     conn_data
 end
+
+number_of_half_faces(tp::TwoPointPotentialFlow) = length(tp.conn_data)
 
 function get_neighborship(grid)
     return grid.neighborship
@@ -92,8 +111,8 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
         el = get_el(1, 1) # Could be junk, we just need eltype
         
         conn_data = Vector{typeof(el)}(undef, nhf)
-        Threads.@threads for cell = 1:nc
-            @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
+        @batch for cell = 1:nc
+                @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
                 conn_data[fpos] = get_el(faces[fpos], cell)
             end
         end
@@ -107,6 +126,144 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
     TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
 end
 
+function subdiscretization(disc::TwoPointPotentialFlow, subg, mapper::FiniteVolumeGlobalMap)
+    return subdiscretization_fast(disc, subg, mapper)
+    # return subdiscretization_slow(disc, subg, mapper)
+end
+
+function subdiscretization_slow(disc, subg, mapper)
+    error()
+    u, k, flow_type, has_grav = disc.upwind, disc.grad, disc.flow_type, disc.gravity
+
+    face_pos_global, conn_data_global = disc.conn_pos, disc.conn_data
+    N = get_neighborship(subg)
+    faces, face_pos = get_facepos(N)
+
+    T = eltype(conn_data_global)
+    new_conn = Vector{Vector{T}}()
+    new_offsets = [1]
+
+    nc = length(mapper.inner_to_full_cells)
+    for local_cell_no in 1:nc
+        # Map inner index -> full index
+        c = mapper.inner_to_full_cells[local_cell_no]
+        # c = interior_cell(local_cell_no, )
+        c_g = global_cell(c, mapper)
+        cd_local = Vector{T}()
+        sizehint!(cd_local, face_pos[c+1]-face_pos[c])
+
+        # Loop over half-faces for this cell
+        for f_p in face_pos[c]:face_pos[c+1]-1
+            f = faces[f_p]
+            f_g = global_face(f, mapper)
+            # Loop over the corresponding global half-faces
+            for f_i in face_pos_global[c_g]:face_pos_global[c_g+1]-1
+                conn = conn_data_global[f_i]
+                if conn.face == f_g
+                    # verify that this is actually the right global cell!
+                    @assert conn.self == c_g
+                    other = local_cell(conn.other, mapper)
+                    rc =  remap_connection(conn, c, other, f)
+                    push!(cd_local, rc)
+                    # @debug "$(cd_local[end].self) -> $(cd_local[end].other)"
+                    break
+                end
+            end
+        end
+        push!(new_offsets, new_offsets[local_cell_no] + length(cd_local))
+        push!(new_conn, cd_local)
+    end
+    face_pos = new_offsets
+    conn_data = vcat(new_conn...)
+    return TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
+end
+
+function subdiscretization_fast(disc, subg, mapper)
+    u, k, flow_type, has_grav = disc.upwind, disc.grad, disc.flow_type, disc.gravity
+
+    face_pos_global, conn_data_global = disc.conn_pos, disc.conn_data
+    N = get_neighborship(subg)
+    faces, face_pos = get_facepos(N)
+
+    T = eltype(conn_data_global)
+    # @info "Starting"
+
+    nc = length(mapper.inner_to_full_cells)
+    counts = compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_global, mapper, nc)
+    next_face_pos = cumsum([1; counts])
+
+    conn_data = conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn_data_global::Vector{T}, mapper, nc)
+    face_pos = next_face_pos
+    # face_pos = new_offsets
+    # conn_data = vcat(new_conn...)
+    return TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
+end
+
+function compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_global, mapper, nc)
+    counts = zeros(Int64, nc)
+    for local_cell_no in 1:nc
+        # Map inner index -> full index
+        c = full_cell(local_cell_no, mapper)
+        c_g = global_cell(c, mapper)
+        counter = 0
+        # Loop over half-faces for this cell
+        for f_p in face_pos[c]:face_pos[c+1]-1
+            f = faces[f_p]
+            f_g = global_face(f, mapper)
+            # Loop over the corresponding global half-faces
+            for f_i in face_pos_global[c_g]:face_pos_global[c_g+1]-1
+                conn = conn_data_global[f_i]
+                if conn.face == f_g
+                    # verify that this is actually the right global cell!
+                    @assert conn.self == c_g
+                    counter += 1
+                    break
+                end
+            end
+        end
+        counts[local_cell_no] = counter
+    end
+    return counts
+end
+
+function conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn_data_global::Vector{T}, mapper, nc) where T
+    conn_data = Vector{T}(undef, next_face_pos[end]-1)
+    touched = BitVector(false for i = 1:length(conn_data))
+    for local_cell_no in 1:nc
+        # Map inner index -> full index
+        c = full_cell(local_cell_no, mapper)
+        c_g = global_cell(c, mapper)
+        counter = 0
+        start = face_pos[c]
+        stop = face_pos[c+1]-1
+        hf_offset = next_face_pos[local_cell_no]-1
+        # Loop over half-faces for this cell
+        for f_p in start:stop
+            f = faces[f_p]
+            f_g = global_face(f, mapper)
+            done = false
+            # Loop over the corresponding global half-faces
+            for f_i in face_pos_global[c_g]:face_pos_global[c_g+1]-1
+                conn = conn_data_global[f_i]::T
+                # @info "$f_i" conn.face f_g f
+                if conn.face == f_g
+                    # verify that this is actually the right global cell!
+                    @assert conn.self == c_g
+                    counter += 1
+                    other = local_cell(conn.other, mapper) # bad performance??
+                    conn_data[hf_offset + counter] = remap_connection(conn, c, other, f)
+                    touched[hf_offset + counter] = true
+                    done = true
+                    # @info conn_data[hf_offset + counter]
+                    break
+                end
+            end
+            @assert done
+        end
+    end
+    @assert all(touched) "Only $(count(touched))/$(length(touched)) were kept? Something is wrong."
+    return conn_data
+end
 
 function select_secondary_variables_discretization!(S, domain, system, formulation, fd::TwoPointPotentialFlow)
     select_secondary_variables_flow_type!(S, domain, system, formulation, fd.flow_type)

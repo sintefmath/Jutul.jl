@@ -162,7 +162,7 @@ function select_output_variables(domain, system, formulation, primary_variables,
             outputs = vcat(outputs, mapped)
         end
     end
-    return outputs
+    return unique(outputs)
 end
 
 function sort_secondary_variables!(model::TervModel)

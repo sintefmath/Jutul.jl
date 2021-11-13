@@ -77,20 +77,23 @@ AMG on CPU (Julia native)
 """
 mutable struct AMGPreconditioner <: TervPreconditioner
     method
+    method_kwarg
+    cycle
     factor
     dim
     hierarchy
-    function AMGPreconditioner(method = ruge_stuben)
-        new(method, nothing, nothing, nothing)
+    function AMGPreconditioner(method = ruge_stuben; cycle = AlgebraicMultigrid.V(), kwarg...)
+        new(method, kwarg, cycle, nothing, nothing, nothing)
     end
 end
 
 function update!(amg::AMGPreconditioner, A, b)
+    kw = amg.method_kwarg
     @debug string("Setting up preconditioner ", amg.method)
-    t_amg = @elapsed amg.hierarchy = amg.method(A)
+    t_amg = @elapsed amg.hierarchy = amg.method(A; kw...)
     amg.dim = size(A)
     @debug "Set up AMG in $t_amg seconds."
-    amg.factor = aspreconditioner(amg.hierarchy)
+    amg.factor = aspreconditioner(amg.hierarchy, amg.cycle)
 end
 
 function partial_update!(amg::AMGPreconditioner, A, b)
@@ -172,7 +175,7 @@ mutable struct ILUZeroPreconditioner <: TervPreconditioner
     dim
     left::Bool
     right::Bool
-    function ILUZeroPreconditioner(; left = true, right = true)
+    function ILUZeroPreconditioner(; left = true, right = false)
         @assert left || right "Left or right preconditioning must be enabled or it will have no effect."
         new(nothing, nothing, left, right)
     end
@@ -288,7 +291,7 @@ end
 Trivial / identity preconditioner with size for use in subsystems.
 """
 # Trivial precond
-function update!(tp::TrivialPreconditioner, lsys, model, storage, recorder)
+function update!(tp::TrivialPreconditioner, lsys, arg...)
     A = jacobian(lsys)
     b = residual(lsys)
     tp.dim = size(A).*length(b[1])

@@ -41,6 +41,30 @@ function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<
     return (sources = sources,)
 end
 
+function subforce(s::AbstractVector{S}, model) where S<:SourceTerm
+    # Just to be safe
+    s = deepcopy(s)
+    m = model.domain.global_map
+
+    n = length(s)
+    keep = repeat([false], n)
+    for (i, src) in enumerate(s)
+        # Cell must be in local domain, and not on boundary
+        if !global_cell_inside_domain(src.cell, m)
+            continue
+        end
+        c_l = local_cell(src.cell, m)
+        c_i = interior_cell(c_l, m)
+        inner = !isnothing(c_i)
+        if !inner
+            continue
+        end
+        keep[i] = true
+        s[i] = SourceTerm(c_i, src.value, fractional_flow = src.fractional_flow)
+    end
+    return s[keep]
+end
+
 ## Systems
 # Immiscible multiphase system
 struct ImmiscibleSystem <: MultiPhaseSystem
@@ -55,6 +79,8 @@ end
 struct SinglePhaseSystem <: MultiPhaseSystem
     phase
 end
+
+phase_names(system) = get_name.(get_phases(system))
 
 function get_phases(sys::SinglePhaseSystem)
     return [sys.phase]
@@ -235,8 +261,12 @@ end
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}
     Φ = get_pore_volume(model)
     ρ = storage.state.PhaseMassDensities
-    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, i])*Φ[i])
-    return (e, tolerance_scale(eq))
+    a = active_entities(model.domain, Cells())
+
+    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, a[i]])*Φ[a[i]])
+    names = phase_names(model.system)
+    R = Dict("CNV" => (errors = e, names = names))
+    return R
 end
 
 function get_reference_densities(model, storage)
@@ -249,4 +279,15 @@ end
 function setup_parameters_system!(d, model, sys::MultiPhaseSystem)
     nph = number_of_phases(sys)
     d[:reference_densities] = transfer(model.context, ones(nph))
+end
+
+function cpr_weights_no_partials!(w, model::SimulationModel{R, S}, state, r, n, bz, scaling) where {R, S<:ImmiscibleSystem}
+    ρ = state.PhaseMassDensities
+    tb = thread_batch(model.context)
+    nph, nc = size(ρ)
+    @batch minbatch = tb for i in 1:nc
+        for ph in 1:nph
+            @inbounds w[ph, i] = 1/value(ρ[ph, i])
+        end
+    end
 end

@@ -24,7 +24,7 @@ function number_of_degrees_of_freedom(model::TervModel)
 end
 
 function number_of_degrees_of_freedom(model::TervModel, u::TervUnit)
-    ndof = degrees_of_freedom_per_entity(model, u)*count_entities(model.domain, u)
+    ndof = degrees_of_freedom_per_entity(model, u)*count_active_entities(model.domain, u)
     return ndof
 end
 
@@ -39,7 +39,10 @@ function degrees_of_freedom_per_entity(model::TervModel, u::TervUnit)
 end
 
 function number_of_degrees_of_freedom(model, pvars::TervVariables)
-    return number_of_entities(model, pvars)*degrees_of_freedom_per_entity(model, pvars)
+    e = associated_entity(pvars)
+    n = count_active_entities(model.domain, e)
+    m = degrees_of_freedom_per_entity(model, pvars)
+    return n*m
 end
 
 function value_dim(model, pvars::TervVariables)
@@ -85,7 +88,10 @@ minimum_value(::TervVariables) = nothing
 
 function update_primary_variable!(state, p::TervVariables, state_symbol, model, dx)
     names = get_names(p)
-    nu = number_of_entities(model, p)
+    entity = associated_entity(p)
+    active = active_entities(model.domain, entity)
+
+    nu = length(active)
     abs_max = absolute_increment_limit(p)
     rel_max = relative_increment_limit(p)
     maxval = maximum_value(p)
@@ -95,7 +101,7 @@ function update_primary_variable!(state, p::TervVariables, state_symbol, model, 
     for (index, nm) in enumerate(names)
         offset = nu*(index-1)
         v = state[state_symbol]
-        @tullio v[i] = update_value(v[i], dx[i+offset], abs_max, rel_max, minval, maxval, scale)
+        @tullio v[active[i]] = update_value(v[active[i]], dx[i+offset], abs_max, rel_max, minval, maxval, scale)
     end
 end
 
@@ -176,7 +182,7 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
     nv = values_per_entity(model, pvar)
     
     if isa(pvar, ScalarVariable)
-        @assert length(val) == nu "Expected $(length(val)) == $nu"
+        @assert length(val) == nu "Expected $nu entries, but got $(length(val)) for $(typeof(pvar))"
         # Type-assert that this should be scalar, with a vector input
         val::AbstractVector
     else
@@ -204,7 +210,7 @@ function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict;
         value = val[symb]
     elseif need_value
         k = keys(val)
-        error("The key $symb must be present to initialize the state. Found symbols: $k")
+        error("The key $symb must be present to initialize the state. Provided symbols in initialization Dict: $k")
     else
         # We do not really need to initialize this, as it will be updated elsewhere.
         value = default_value(model, pvar)
@@ -266,21 +272,21 @@ function unit_sum_update!(s, p, model, dx)
     nf, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
     maxval, minval = maximum_value(p), minimum_value(p)
+    active_cells = active_entities(model.domain, Cells())
     if nf == 2
         maxval = min(1 - minval, maxval)
         minval = max(minval, maxval - 1)
-        for cell = 1:nu
-            dlast = 0
+        @inbounds for (i, cell) in enumerate(active_cells)
             v = value(s[1, cell])
-            dv = dx[cell]
+            dv = dx[i]
             dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
-            @inbounds s[1, cell] += dv
-            @inbounds s[2, cell] -= dv
+            s[1, cell] += dv
+            s[2, cell] -= dv
         end
     else
         if false
             # Preserve direction
-            for cell = 1:nu
+            for cell in active_cells
                 w = 1.0
                 # First pass: Find the relaxation factors that keep all fractions in [0, 1]
                 # and obeying the maximum change targets
@@ -303,30 +309,34 @@ function unit_sum_update!(s, p, model, dx)
             end
         else
             # Preserve update magnitude
-            for cell = 1:nu
-                # First pass: Find the relaxation factors that keep all fractions in [0, 1]
-                # and obeying the maximum change targets
-                dlast0 = 0
-                @inbounds for i = 1:(nf-1)
-                    v = value(s[i, cell])
-                    dv = dx[cell + (i-1)*nu]
-                    dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
-                    s[i, cell] += dv
-                    dlast0 -= dv
-                end
-                # Do the same thing for the implicit update of the last value
-                dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
-                s[nf, cell] += dlast
-                if dlast != dlast0
-                    t = 0.0
-                    for i = 1:nf
-                        t += s[i, cell]
-                    end
-                    for i = 1:nf
-                        s[i, cell] /= t
-                    end
-                end
+            for cell in active_cells
+                unit_update_local(s, dx, nf, nu, abs_max, minval, maxval)
             end
+        end
+    end
+end
+
+function unit_update_local(s, dx, nf, nu, abs_max, minval, maxval)
+    # First pass: Find the relaxation factors that keep all fractions in [0, 1]
+    # and obeying the maximum change targets
+    dlast0 = 0
+    @inbounds for i = 1:(nf-1)
+        v = value(s[i, cell])
+        dv = dx[cell + (i-1)*nu]
+        dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
+        s[i, cell] += dv
+        dlast0 -= dv
+    end
+    # Do the same thing for the implicit update of the last value
+    dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
+    s[nf, cell] += dlast
+    if dlast != dlast0
+        t = 0.0
+        for i = 1:nf
+            @inbounds t += s[i, cell]
+        end
+        for i = 1:nf
+            @inbounds s[i, cell] /= t
         end
     end
 end

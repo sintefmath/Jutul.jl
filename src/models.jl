@@ -53,7 +53,7 @@ end
 """
 Initialize primary variables and other state fields, given initial values as a Dict
 """
-function setup_state!(state, model::TervModel, init_values::Dict)
+function setup_state!(state, model::TervModel, init_values::Dict = Dict())
     for (psym, pvar) in get_primary_variables(model)
         initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true)
     end
@@ -259,7 +259,7 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
                 push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
                 push!(J, S.J .+ numcols) # Column indices, offset by the partials in entities we have passed
             end
-            numcols += count_entities(model.domain, u)
+            numcols += count_active_entities(model.domain, u)
         end
         @assert numcols == ndof "Assumed square block, was $numcols x $ndof"
         numrows += number_of_entities(model, eq)
@@ -411,21 +411,30 @@ function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra
         m = N ÷ n
         r_v = as_cell_major_matrix(r_buf, n, m, model, offset)
 
-        errors, tscale = convergence_criterion(model, storage, eq, r_v; kwarg...)
-
-        if haskey(prm, key)
-            t_e = prm[key]
-        else
-            t_e = tol
+        all_crits = convergence_criterion(model, storage, eq, r_v; kwarg...)
+        e_keys = keys(all_crits)
+        tols = Dict()
+        for e_k in e_keys
+            if haskey(prm, key)
+                v = prm[key]
+                if isa(v, AbstractFloat)
+                    t_e = v
+                else
+                    t_e = v[e_k]
+                end
+            else
+                t_e = tol
+            end
+            errors = all_crits[e_k].errors
+            ok = errors .< t_e
+            converged = converged && all(ok)
+            e = maximum([e, maximum(errors)/t_e])
+            tols[e_k] = t_e
         end
-        errors = errors./tscale
-        ok = errors .< t_e
-        converged = converged && all(ok)
-        e = maximum([e, maximum(errors)/t_e])
         offset += N
         eoffset += n
         if extra_out
-            push!(output, (name = key, error = errors, tolerance = t_e))
+            push!(output, (name = key, criterions = all_crits, tolerances = tols))
         end
     end
     if extra_out
@@ -439,7 +448,7 @@ end
 Apply a set of forces to all equations. Equations that don't support a given force
 will just ignore them, thanks to the power of multiple dispatch.
 """
-function apply_forces!(storage, model::TervModel, dt, forces::NamedTuple; time = NaN)
+function apply_forces!(storage, model, dt, forces; time = NaN)
     equations = storage.equations
     for key in keys(equations)
         eq = equations[key]

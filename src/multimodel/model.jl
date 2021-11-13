@@ -442,10 +442,10 @@ end
 
 function update_cross_terms!(storage, model::MultiModel, arg...)
     models = model.models
-    @sync for target in keys(models)
+    for target in keys(models)
         for source in keys(models)
             if source != target
-                @async update_cross_terms_for_pair!(storage, model, source, target, arg...)
+                update_cross_terms_for_pair!(storage, model, source, target, arg...)
             end
         end
     end
@@ -466,10 +466,10 @@ end
 
 function apply_cross_terms!(storage, model::MultiModel, arg...)
     models = model.models
-    @sync for target in keys(models)
+    for target in keys(models)
         for source in keys(models)
             if source != target
-                @async apply_cross_terms_for_pair!(storage, model, source, target, arg...)
+                apply_cross_terms_for_pair!(storage, model, source, target, arg...)
             end
         end
     end
@@ -513,21 +513,21 @@ function update_linearized_system!(storage, model::MultiModel; equation_offset =
 end
 
 function update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
-    @sync for (index, key) in enumerate(model_keys)
+    for (index, key) in enumerate(model_keys)
         m = model.models[key]
         s = storage[key]
         eqs = s.equations
-        @async update_linearized_system!(lsys, eqs, m; equation_offset = offsets[index])
+        update_linearized_system!(lsys, eqs, m; equation_offset = offsets[index])
     end
 end
 
 function update_cross_term_linearized_system_subgroup!(storage, model, model_keys, linearized_system)
     # Then, update cross terms
-    @sync for target in model_keys
+    for target in model_keys
         for source in model_keys
             if source != target
                 lsys = get_linearized_system_model_pair(storage, model, source, target, linearized_system)
-                @async update_linearized_system_crossterms!(lsys, storage, model, source, target)
+                update_linearized_system_crossterms!(lsys, storage, model, source, target)
             end
         end
     end
@@ -604,7 +604,7 @@ end
 
 function update_primary_variables!(storage, model::MultiModel; kwarg...)
     lsys = storage.LinearizedSystem
-    dx = lsys.dx
+    dx = lsys.dx_buffer
     models = model.models
 
     offset = 0
@@ -638,7 +638,7 @@ function update_before_step!(storage, model::MultiModel, dt, forces)
     end
 end
 
-function apply_forces!(storage, model::MultiModel, dt, forces::Dict; time = NaN)
+function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN)
     for key in submodels_symbols(model)
         apply_forces!(storage[key], model.models[key], dt, forces[key]; time = time)
     end
@@ -652,8 +652,8 @@ end
 
 
 function submodels_storage_apply!(storage, model, f!, arg...)
-    @sync for key in submodels_symbols(model)
-        @async f!(storage[key], model.models[key], arg...)
+    for key in submodels_symbols(model)
+        f!(storage[key], model.models[key], arg...)
     end
 end
 

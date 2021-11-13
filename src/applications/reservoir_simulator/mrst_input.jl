@@ -1,6 +1,7 @@
 using GLMakie
 using MAT # .MAT file loading
-export get_minimal_tpfa_grid_from_mrst, plot_mrstdata, plot_interactive, get_test_setup, get_well_from_mrst_data
+export get_minimal_tpfa_grid_from_mrst, plot_interactive, get_test_setup, get_well_from_mrst_data
+export setup_case_from_mrst
 using SparseArrays # Sparse pattern
 using GLMakie
 
@@ -196,26 +197,187 @@ function read_patch_plot(filename::String)
     MRSTPlotData(f, v, d)
 end
 
-function plot_mrstdata(mrst_grid, data)
-    if any([t == "cartGrid" for t in mrst_grid["type"]])
-        cartDims = Int64.(mrst_grid["cartDims"])
-        if mrst_grid["griddim"] == 2 || cartDims[end] == 1
-            fig = Figure()
-
-            Axis(fig[1, 1])
-            heatmap!(reshape(data, cartDims[1:2]...))
-            ul = (minimum(data), maximum(data))
-            # vertical colorbars
-            Colorbar(fig[1, 2], limits = ul)
-            ax = fig
+function setup_case_from_mrst(casename; simple_well = false, block_backend = true, facility_grouping = :onegroup, kwarg...)
+    G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false; kwarg...)
+    function setup_res(G, mrst_data; block_backend = false, use_groups = false)
+        ## Set up reservoir part
+        f = mrst_data["fluid"]
+        p = vec(f["p"])
+        c = vec(f["c"])
+        mu = vec(f["mu"])
+        nkr = vec(f["nkr"])
+        rhoS = vec(f["rhoS"])
+    
+        water = AqueousPhase()
+        oil = LiquidPhase()
+        sys = ImmiscibleSystem([water, oil])
+        bctx = DefaultContext(matrix_layout = BlockMajorLayout())
+        # bctx = DefaultContext(matrix_layout = UnitMajorLayout())
+        dctx = DefaultContext()
+    
+        if block_backend && use_groups
+            res_context = bctx
         else
-            ax = volume(reshape(data, cartDims...), algorithm = :mip, colormap = :jet)
+            res_context = dctx
         end
-        plot
-    else
-        println("Non-Cartesian plot not implemented.")
-        ax = nothing
+    
+        model = SimulationModel(G, sys, context = res_context)
+        rho = ConstantCompressibilityDensities(sys, p, rhoS, c)
+    
+        if haskey(f, "swof")
+            swof = f["swof"]
+        else
+            swof = []
+        end
+    
+        if isempty(swof)
+            kr = BrooksCoreyRelPerm(sys, nkr)
+        else
+            s, krt = preprocess_relperm_table(swof)
+            kr = TabulatedRelPermSimple(s, krt)
+        end
+        mu = ConstantVariables(mu)
+    
+        p = model.primary_variables
+        p[:Pressure] = Pressure(max_rel = 0.2)
+        s = model.secondary_variables
+        s[:PhaseMassDensities] = rho
+        s[:RelativePermeabilities] = kr
+        s[:PhaseViscosities] = mu
+    
+        ##
+        state0 = mrst_data["state0"]
+        p0 = state0["pressure"]
+        if isa(p0, AbstractArray)
+            p0 = vec(p0)
+        else
+            p0 = [p0]
+        end
+        s0 = state0["s"]'
+        init = Dict(:Pressure => p0, :Saturations => s0)
+    
+        ## Model parameters
+        param_res = setup_parameters(model)
+        param_res[:reference_densities] = vec(rhoS)
+        # param_res[:tolerances][:default] = 0.01
+        # param_res[:tolerances][:mass_conservation] = 0.01
+    
+        return (model, init, param_res)
     end
-    return ax
+    
+    # Set up initializers
+    models = OrderedDict()
+    initializer = Dict()
+    forces = Dict()
+    
+    
+    model, init, param_res = setup_res(G, mrst_data; block_backend = block_backend, use_groups = true)
+    
+    dt = mrst_data["dt"]
+    if isa(dt, Real)
+        dt = [dt]
+    end
+    timesteps = vec(dt)
+    res_context = model.context
+    w_context = DefaultContext()
+    
+    initializer[:Reservoir] = init
+    forces[:Reservoir] = nothing
+    models[:Reservoir] = model
+    
+    slw = 1.0
+    w0 = Dict(:Pressure => mean(init[:Pressure]), :TotalMassFlux => 1e-12, :Saturations => [slw, 1-slw])
+    
+    well_symbols = map((x) -> Symbol(x["name"]), vec(mrst_data["W"]))
+    num_wells = length(well_symbols)
+    
+    parameters = Dict{Symbol, Any}()
+    parameters[:Reservoir] = param_res
+    controls = Dict()
+    sys = model.system
+    for i = 1:num_wells
+        sym = well_symbols[i]
+    
+        wi, wdata = get_well_from_mrst_data(mrst_data, sys, i, 
+                extraout = true, volume = 1e-2, simple = simple_well, context = w_context)
+    
+        sv = wi.secondary_variables
+        sv[:PhaseMassDensities] = model.secondary_variables[:PhaseMassDensities]
+        sv[:PhaseViscosities] = model.secondary_variables[:PhaseViscosities]
+    
+        pw = wi.primary_variables
+        pw[:Pressure] = Pressure(max_rel = 0.2)
+    
+        models[sym] = wi
+    
+        t_mrst = wdata["val"]
+        is_injector = wdata["sign"] > 0
+        is_shut = wdata["status"] < 1
+        if wdata["type"] == "rate"
+            target = SinglePhaseRateTarget(t_mrst, AqueousPhase())
+        else
+            target = BottomHolePressureTarget(t_mrst)
+        end
+    
+        if is_shut
+            println("Shut well")
+            ctrl = DisabledControl()
+        elseif is_injector
+            ci = wdata["compi"]
+            # ci = [0.5, 0.5]
+            ctrl = InjectorControl(target, ci)
+        else
+            ctrl = ProducerControl(target)
+        end
+        param_w = setup_parameters(wi)
+        param_w[:reference_densities] = vec(param_res[:reference_densities])
+        # param_w[:tolerances][:mass_conservation] = 0.01
+    
+        parameters[sym] = param_w
+        controls[sym] = ctrl
+        forces[sym] = nothing
+        initializer[sym] = w0
+    end
+    #
+    mode = PredictionMode()
+    F0 = Dict(:TotalSurfaceMassRate => 0.0)
+
+
+    function add_facility!(wsymbols, sym)
+        g, ctrls = facility_subset(wsymbols, controls)
+        WG = SimulationModel(g, mode)
+        facility_forces = build_forces(WG, control = ctrls)
+        # Specifics
+        @assert !haskey(models, sym)
+        models[sym] = WG
+        forces[sym] = facility_forces
+        # Generics
+        initializer[sym] = F0
+        parameters[sym] = setup_parameters(WG)
+    end
+
+    if facility_grouping == :onegroup
+        add_facility!(well_symbols, :Facility)
+    elseif facility_grouping == :perwell
+        for sym in well_symbols
+            gsym = Symbol(string(sym)*string(:_ctrl))
+            add_facility!([sym], gsym)
+        end
+    else
+        error("Unknown grouping $facility_grouping")
+    end
+
+    return (models, parameters, initializer, timesteps, forces, mrst_data)
 end
 
+
+function facility_subset(well_symbols, controls)
+    g = WellGroup(well_symbols)
+    ctrls = Dict()
+    for k in keys(controls)
+        if any(well_symbols .== k)
+            ctrls[k] = controls[k]
+        end
+    end
+    return g, ctrls
+end

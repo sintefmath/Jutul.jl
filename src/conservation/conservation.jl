@@ -16,9 +16,9 @@ function ConservationLaw(model, number_of_equations;
     D, ctx = model.domain, model.context
     cell_entity = Cells()
     face_entity = Faces()
-    nc = count_entities(D, cell_entity)
-    nf = count_entities(D, face_entity)
-    nhf = 2 * nf
+    nc = count_active_entities(D, cell_entity)
+    nf = count_active_entities(D, face_entity)
+    nhf = number_of_half_faces(flow_discretization)
     face_partials = degrees_of_freedom_per_entity(model, face_entity)
     alloc = (n, entity, n_entities_pos) -> CompactAutoDiffCache(number_of_equations, n, model,
                                                                                 entity = entity, n_entities_pos = n_entities_pos, 
@@ -45,44 +45,54 @@ end
 "Update positions of law's derivatives in global Jacobian"
 function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
-    neighborship = get_neighborship(model.domain.grid)
+    M = global_map(model.domain)
 
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
     diagonal_alignment!(acc, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
-    half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
+    half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, M, fd, target_offset = equation_offset, source_offset = variable_offset)
 end
 
-function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, N, flow_disc; target_offset = 0, source_offset = 0)
+function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, global_map, flow_disc; target_offset = 0, source_offset = 0)
     # nu, ne, np = ad_dims(acc_cache)
     dims = ad_dims(acc_cache)
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
     cd = flow_disc.conn_data
-    Threads.@threads for cell in 1:nc
+    for cell in 1:nc
         @inbounds for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
-            align_half_face_cells(face_cache, jac, cd, f_ix, cell, N, dims, context, target_offset, source_offset)
+            align_half_face_cells(face_cache, jac, cd, f_ix, cell, dims, context, global_map, target_offset, source_offset)
         end
     end
 end
 
-function align_half_face_cells(face_cache, jac, cd, f_ix, cell, N, dims, context, target_offset, source_offset)
+function align_half_face_cells(face_cache, jac, cd, f_ix, active_cell_i, dims, context, global_map, target_offset, source_offset)
     nu, ne, np = dims
-    f = cd[f_ix].face
-    if N[1, f] == cell
-        other = N[2, f]
+    cd_f = cd[f_ix]
+    f = cd_f.face
+    other = cd_f.other
+    cell = full_cell(active_cell_i, global_map)
+    @assert cell == cd_f.self "Expected $cell, was $(cd_f.self) for conn $cd_f"
+    other_i = interior_cell(other, global_map)
+    # cell_i = interior_cell(cell, global_map)
+    if isnothing(other_i) || isnothing(active_cell_i)
+        # Either of the two cells is inactive - we set to zero.
+        for e in 1:ne
+            for d = 1:np
+                set_jacobian_pos!(face_cache, f_ix, e, d, 0)
+            end
+        end
     else
-        other = N[1, f]
-    end
-    for e in 1:ne
-        for d = 1:np
-            pos = find_jac_position(jac, other + target_offset, cell + source_offset, e, d, nu, nu, ne, np, context)
-            set_jacobian_pos!(face_cache, f_ix, e, d, pos)
+        for e in 1:ne
+            for d = 1:np
+                pos = find_jac_position(jac, other_i + target_offset, active_cell_i + source_offset, e, d, nu, nu, ne, np, context)
+                set_jacobian_pos!(face_cache, f_ix, e, d, pos)
+            end
         end
     end
 end
 
-function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::SingleCUDAContext, N, flow_disc; target_offset = 0, source_offset = 0)
+function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::SingleCUDAContext, map, flow_disc; target_offset = 0, source_offset = 0)
     dims = ad_dims(acc_cache)
     nu, ne, np = dims
     # error()
@@ -95,15 +105,12 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::Si
     fpos = face_cache.jacobian_positions
 
 
-    @kernel function algn(fpos, @Const(cd), @Const(rows), @Const(cols), @Const(N), nu, ne, np, target_offset, source_offset, layout)
+    @kernel function algn(fpos, @Const(cd), @Const(rows), @Const(cols), nu, ne, np, target_offset, source_offset, layout)
         cell, e, d = @index(Global, NTuple)
         for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
-            f = cd[f_ix].face
-            if N[1, f] == cell
-                other = N[2, f]
-            else
-                other = N[1, f]
-            end
+            cd_f = cd[f_ix]
+            f = cd_f.face
+            other = cd_f.other
             row, col = row_col_sparse(other + target_offset, cell + source_offset, e, d, 
             nu, nu,
             ne, np,
@@ -120,13 +127,13 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::Si
             fpos[jacobian_cart_ix(f_ix, e, d, np)] = ix
         end
     end
-    nf = size(N, 2)
+    # nf = size(N, 2)
     dims = (nc, ne, np)
     kernel = algn(context.device, context.block_size)
 
     rows = Int64.(jac.rowVal)
     cols = Int64.(jac.colPtr)
-    event_jac = kernel(fpos, cd, rows, cols, N, nu, ne, np, target_offset, source_offset, layout, ndrange = dims)
+    event_jac = kernel(fpos, cd, rows, cols, nu, ne, np, target_offset, source_offset, layout, ndrange = dims)
     wait(event_jac)
 end
 
@@ -230,7 +237,8 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
     fentries = cell_flux.entries
     cp = acc.jacobian_positions
     fp = cell_flux.jacobian_positions
-    Threads.@threads for cell = 1:nc
+    tb = thread_batch(context)
+    @batch minbatch=tb for cell = 1:nc
         for e in 1:ne
             fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flux, cp, fp, conn_pos, np)
         end
@@ -243,6 +251,10 @@ function fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flu
         q = get_entry(cell_flux, i, e, fentries)
         @inbounds for d = 1:np
             fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
+            if fpos == 0
+                # Boundary face.
+                break
+            end
             @inbounds nz[fpos] = q.partials[d]
         end
         diag_entry -= q
@@ -260,7 +272,8 @@ function update_linearized_system_subset_conservation_sources!(nz, r, model, acc
     rv_src = rowvals(src)
     nz_src = nonzeros(src)
     cp = acc.jacobian_positions
-    Threads.@threads for cell in 1:nc
+    tb = thread_batch(context)
+    @batch minbatch=tb for cell = 1:nc
         for rp in nzrange(src, cell)
             e = rv_src[rp]
             v = nz_src[rp]
@@ -281,7 +294,8 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
     fentries = face_flux.entries
     fp = face_flux.jacobian_positions
     nc = length(conn_pos) - 1
-    Threads.@threads for cell = 1:nc
+    tb = thread_batch(model.context)
+    @batch minbatch=tb for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
                 c = conn_data[i]
@@ -299,13 +313,15 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
 end
 
 
-function declare_pattern(model, e::ConservationLaw, ::Cells)
+function declare_pattern(model, e::ConservationLaw, entity::Cells)
     df = e.flow_discretization
     hfd = Array(df.conn_data)
     n = number_of_entities(model, e)
     # Fluxes
     I = map(x -> x.self, hfd)
     J = map(x -> x.other, hfd)
+    I, J = map_ij_to_active(I, J, model.domain, entity)
+
     # Diagonals
     D = [i for i in 1:n]
 
@@ -315,11 +331,13 @@ function declare_pattern(model, e::ConservationLaw, ::Cells)
     return (I, J)
 end
 
-function declare_pattern(model, e::ConservationLaw, ::Faces)
+function declare_pattern(model, e::ConservationLaw, entity::Faces)
     df = e.flow_discretization
     cd = df.conn_data
     I = map(x -> x.self, cd)
     J = map(x -> x.face, cd)
+    I, J = map_ij_to_active(I, J, model.domain, entity)
+
     return (I, J)
 end
 
@@ -354,7 +372,8 @@ function update_accumulation!(law, storage, model, dt)
     acc = get_entries(law.accumulation)
     m = storage.state[conserved]
     m0 = storage.state0[conserved]
-    @tullio acc[c, i] = (m[c, i] - m0[c, i])/dt
+    active = active_entities(model.domain, Cells())
+    @tullio acc[c, i] = (m[c, active[i]] - m0[c, active[i]])/dt
     return acc
 end
 

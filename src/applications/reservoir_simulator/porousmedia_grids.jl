@@ -1,6 +1,7 @@
 export MinimalTPFAGrid
 export get_cell_faces, get_facepos, get_cell_neighbors
 export number_of_cells, number_of_faces, number_of_half_faces
+export subgrid
 
 export transfer, get_1d_reservoir
 
@@ -155,4 +156,22 @@ function get_1d_reservoir(nc; L = 1, perm = 9.8692e-14, # 0.1 darcy
     disc = (mass_flow = flow,)
     D = DiscretizedDomain(G, disc)
     return D
+end
+
+function subgrid(g::MinimalTPFAGrid; cells = nothing, faces = nothing)
+    pv, N = g.pore_volumes, g.neighborship
+    nc = number_of_cells(g)
+
+    renumeration = zeros(Integer, nc)
+    for (i, c) in enumerate(cells)
+        renumeration[c] = i
+    end
+    N_new = N[:, faces]
+    for i in eachindex(N_new)
+        old = N_new[i]
+        new = renumeration[old]
+        @assert new != 0
+        N_new[i] = new
+    end
+    return MinimalTPFAGrid(pv[cells], N_new)
 end
