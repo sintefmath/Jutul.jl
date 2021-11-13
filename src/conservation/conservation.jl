@@ -92,7 +92,7 @@ function align_half_face_cells(face_cache, jac, cd, f_ix, active_cell_i, dims, c
     end
 end
 
-function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::SingleCUDAContext, N, flow_disc; target_offset = 0, source_offset = 0)
+function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::SingleCUDAContext, map, flow_disc; target_offset = 0, source_offset = 0)
     dims = ad_dims(acc_cache)
     nu, ne, np = dims
     # error()
@@ -105,15 +105,12 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::Si
     fpos = face_cache.jacobian_positions
 
 
-    @kernel function algn(fpos, @Const(cd), @Const(rows), @Const(cols), @Const(N), nu, ne, np, target_offset, source_offset, layout)
+    @kernel function algn(fpos, @Const(cd), @Const(rows), @Const(cols), nu, ne, np, target_offset, source_offset, layout)
         cell, e, d = @index(Global, NTuple)
         for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
-            f = cd[f_ix].face
-            if N[1, f] == cell
-                other = N[2, f]
-            else
-                other = N[1, f]
-            end
+            cd_f = cd[f_ix]
+            f = cd_f.face
+            other = cd_f.other
             row, col = row_col_sparse(other + target_offset, cell + source_offset, e, d, 
             nu, nu,
             ne, np,
@@ -130,13 +127,13 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::Si
             fpos[jacobian_cart_ix(f_ix, e, d, np)] = ix
         end
     end
-    nf = size(N, 2)
+    # nf = size(N, 2)
     dims = (nc, ne, np)
     kernel = algn(context.device, context.block_size)
 
     rows = Int64.(jac.rowVal)
     cols = Int64.(jac.colPtr)
-    event_jac = kernel(fpos, cd, rows, cols, N, nu, ne, np, target_offset, source_offset, layout, ndrange = dims)
+    event_jac = kernel(fpos, cd, rows, cols, nu, ne, np, target_offset, source_offset, layout, ndrange = dims)
     wait(event_jac)
 end
 
