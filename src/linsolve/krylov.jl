@@ -128,9 +128,8 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     if !solved
         @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rt, atol = $at, max_it = $max_it"
     elseif v > 0 
-        @debug "Final residual $final_res, rel. value $(final_res/initial_res) after $n iterations."
+        @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end
-    @info "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
 
     update_dx_from_vector!(sys, x)
 end

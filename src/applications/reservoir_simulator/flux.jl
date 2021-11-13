@@ -44,6 +44,7 @@ end
     mf = model.domain.discretizations.mass_flow
     conn_data = mf.conn_data
     if mf.gravity
+        return
         @tullio pot[ph, i] = half_face_two_point_kgradp_gravity(conn_data[i], Pressure, view(PhaseMassDensities, ph, :))
     else
         @tullio pot[i] = half_face_two_point_kgradp(conn_data[i], Pressure)
@@ -56,7 +57,11 @@ Half face Darcy flux with separate potential.
 """
 function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
     pot = storage.state.CellNeighborPotentialDifference
-    mob = storage.state.MassMobilities
+    # mob = storage.state.MassMobilities
+    rho = storage.state.PhaseMassDensities
+    kr = storage.state.RelativePermeabilities
+    mu = storage.state.PhaseViscosities
+    p = storage.state.Pressure
 
     flux = get_entries(law.half_face_flux_cells)
     conn_data = law.flow_discretization.conn_data
@@ -65,8 +70,41 @@ function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentia
         @tullio flux[ph, i] = spu_upwind_mult_index(conn_data[i], ph, pot[1, i], mob)
     else
         # Multiphase potential
-        @tullio flux[ph, i] = spu_upwind_mult_index(conn_data[i], ph, pot[ph, i], mob)
+        # error()
+        @tullio flux[ph, i] = myflux_outer(conn_data[i], ph, p, rho, kr, mu)
+
+        # @tullio flux[ph, i] = spu_upwind_mult_index(conn_data[i], ph, pot[ph, i], mob)
     end
+end
+
+function myflux_outer(conn_data, ph, p, rho, kr, mu)
+    # θ = -T*two_point_potential_drop_half_face(c_self, c_other, p, gΔz, ρ)
+
+    self = conn_data.self
+    gΔz = conn_data.gdz
+    other = conn_data.other
+    ∂ = (x) -> LocalPerspectiveAD(x, self)
+    return myflux(self, other, ph, ∂(kr), mu, ∂(rho), ∂(p), conn_data.T, gΔz)
+    # rho * kr/mu * K (grad p + gdz rho)
+end
+
+function myflux(c, i, ph, kr, μ, ρ, P, T, gΔz)
+    ρ_c = ρ[ph, c]
+    ρ_i = ρ[ph, i]
+
+    P_c = P[c]
+    P_i = P[i]
+
+    ρ_avg = 0.5*(ρ_i + ρ_c)
+    θ = -T*(P_c - P_i + gΔz*ρ_avg)
+    if θ < 0
+        # Flux is leaving the cell
+        @inbounds ρλᶠ = ρ_c*kr[ph, c]/μ[ph, c]
+    else
+        # Flux is entering the cell
+        @inbounds ρλᶠ = ρ_i*kr[ph, i]/μ[ph, i]
+    end
+    return ρλᶠ*θ
 end
 
 """
