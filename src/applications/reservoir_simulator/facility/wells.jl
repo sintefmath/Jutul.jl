@@ -431,9 +431,10 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
 
     res_q = ct.crossterm_source
     well_q = ct.crossterm_target
-    sys = target_model.system
-    @assert sys == source_model.system "Wells must have the same fluid system as the reservoir"
-    apply_well_reservoir_sources!(sys, res_q, well_q, state_res, state_well, perforations, 1)
+    sys_t = target_model.system
+    # sys_s = source_model.system
+    # @assert sys_t == sys_s "Wells must have the same fluid system as the reservoir ($sys_t ≠ $sys_s)"
+    apply_well_reservoir_sources!(sys_t, res_q, well_q, state_res, state_well, perforations, 1)
 end
 
 
