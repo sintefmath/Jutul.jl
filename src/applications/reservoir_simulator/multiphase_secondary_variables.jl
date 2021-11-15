@@ -21,6 +21,14 @@ function select_secondary_variables_system!(S, domain, system::MultiPhaseSystem,
     S[:PhaseViscosities] = ConstantVariables(1e-3*ones(nph)) # 1 cP for all phases by default
 end
 
+function select_secondary_variables_system!(S, domain, system::SinglePhaseSystem, formulation)
+    S[:PhaseMassDensities] = ConstantCompressibilityDensities(1)
+    S[:TotalMasses] = TotalMasses()
+    S[:PhaseViscosities] = ConstantVariables([1e-3]) # 1 cP for all phases by default
+    S[:Saturations] = ConstantVariables([1.0])
+end
+
+
 function minimum_output_variables(system::MultiPhaseSystem, primary_variables)
     [:TotalMasses]
 end

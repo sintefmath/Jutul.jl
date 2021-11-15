@@ -6,14 +6,14 @@ struct DarcyMassMobilityFlowFused <: FlowType end
 struct CellNeighborPotentialDifference <: GroupedVariables end
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::Union{DarcyMassMobilityFlow, DarcyMassMobilityFlowFused})
-    S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
+    # S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
     if isa(system, SinglePhaseSystem)
         S[:RelativePermeabilities] = ConstantVariables([1.0])
     else
         S[:RelativePermeabilities] = BrooksCoreyRelPerm(system)
     end
     if isa(system, ImmiscibleSystem) || isa(system, SinglePhaseSystem)
-        S[:MassMobilities] = MassMobilities()
+        # S[:MassMobilities] = MassMobilities()
     end
 end
 
@@ -58,13 +58,8 @@ end
 Half face Darcy flux with separate potential.
 """
 function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
-    pot = storage.state.CellNeighborPotentialDifference
-    # mob = storage.state.MassMobilities
-    rho = storage.state.PhaseMassDensities
-    kr = storage.state.RelativePermeabilities
-    mu = storage.state.PhaseViscosities
-    p = storage.state.Pressure
-
+    s = storage.state
+    rho, kr, mu, p = s.PhaseMassDensities, s.RelativePermeabilities, s.PhaseViscosities, s.Pressure
     flux = get_entries(law.half_face_flux_cells)
     flow_disc = law.flow_discretization
     conn_data = flow_disc.conn_data

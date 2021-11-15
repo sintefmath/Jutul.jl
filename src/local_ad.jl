@@ -11,8 +11,9 @@ function LocalPerspectiveAD(a::A, index::I_t) where {A<:AbstractArray, I_t<:Inte
     LocalPerspectiveAD{eltype(a), ndims(A), A, I_t}(index, a)
 end
 
-local_ad(v, i) = LocalPerspectiveAD(v, i)
-local_ad(v::ConstantWrapper, i) = v
+local_ad(v::AbstractArray, i::Integer) = LocalPerspectiveAD(v, i)
+local_ad(v::ConstantWrapper, i::Integer) = v
+local_ad(v, ::Nothing) = as_value(v)
 
 @inline local_entity(a::LocalPerspectiveAD) = a.index
 
