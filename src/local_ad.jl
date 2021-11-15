@@ -21,7 +21,7 @@ local_ad(v, ::Nothing) = as_value(v)
     if entity == local_entity(A)
         return v
     else
-        return value(v)
+        return T(value(v))
     end
 end
 
