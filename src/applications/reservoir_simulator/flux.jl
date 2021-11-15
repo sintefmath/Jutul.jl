@@ -6,14 +6,10 @@ struct DarcyMassMobilityFlowFused <: FlowType end
 struct CellNeighborPotentialDifference <: GroupedVariables end
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::Union{DarcyMassMobilityFlow, DarcyMassMobilityFlowFused})
-    # S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
     if isa(system, SinglePhaseSystem)
         S[:RelativePermeabilities] = ConstantVariables([1.0])
     else
         S[:RelativePermeabilities] = BrooksCoreyRelPerm(system)
-    end
-    if isa(system, ImmiscibleSystem) || isa(system, SinglePhaseSystem)
-        # S[:MassMobilities] = MassMobilities()
     end
 end
 
@@ -46,7 +42,6 @@ end
     mf = model.domain.discretizations.mass_flow
     conn_data = mf.conn_data
     if mf.gravity
-        return
         @tullio pot[ph, i] = half_face_two_point_kgradp_gravity(conn_data[i], Pressure, view(PhaseMassDensities, ph, :))
     else
         @tullio pot[i] = half_face_two_point_kgradp(conn_data[i], Pressure)
@@ -75,11 +70,12 @@ end
 function get_immiscible_flux_gravity(cd, ph, p, rho, kr, mu)
     c, i, gΔz, T = cd.self, cd.other, cd.gdz, cd.T
     ∂ = (x) -> local_ad(x, c)
-    return immiscible_flux_gravity(c, i, ph, ∂(kr), mu, ∂(rho), ∂(p), T, gΔz)
+    return immiscible_flux_gravity(c, i, ph, ∂(kr), ∂(mu), ∂(rho), ∂(p), T, gΔz)
 end
 
 function immiscible_flux_gravity(c, i, ph, kᵣ, μ, ρ, P, T, gΔz)
-    @inbounds ρ_c, ρ_i = ρ[ph, c], ρ[ph, i]
+    @inbounds ρ_c = ρ[ph, c]
+    @inbounds ρ_i = ρ[ph, i]
     ρ_avg = 0.5*(ρ_i + ρ_c)
     @inbounds θ = -T*(P[c] - P[i] + gΔz*ρ_avg)
     if θ < 0
@@ -95,10 +91,10 @@ end
 function get_immiscible_flux_no_gravity(cd, ph, p, rho, kr, mu)
     c, i, T = cd.self, cd.other, cd.T
     ∂ = (x) -> local_ad(x, c)
-    return immiscible_flux_no_gravity(c, i, ph, ∂(kr), mu, ∂(rho), ∂(p), T)
+    return immiscible_flux_no_gravity(c, i, ph, ∂(kr), ∂(mu), ∂(rho), ∂(p), T)
 end
 
-function immiscible_flux_no_gravity(c, i, ph, kᵣ, μ, ρ, P, T, gΔz)
+function immiscible_flux_no_gravity(c, i, ph, kᵣ, μ, ρ, P, T)
     @inbounds θ = -T*(P[c] - P[i])
     if θ < 0
         # Flux is leaving the cell
