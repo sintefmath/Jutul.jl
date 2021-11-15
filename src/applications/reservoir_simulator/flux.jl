@@ -6,10 +6,12 @@ struct DarcyMassMobilityFlowFused <: FlowType end
 struct CellNeighborPotentialDifference <: GroupedVariables end
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::Union{DarcyMassMobilityFlow, DarcyMassMobilityFlowFused})
-    if isa(system, SinglePhaseSystem)
-        S[:RelativePermeabilities] = ConstantVariables([1.0])
-    else
+    S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
+    if !isa(system, SinglePhaseSystem)
         S[:RelativePermeabilities] = BrooksCoreyRelPerm(system)
+    end
+    if isa(system, ImmiscibleSystem) || isa(system, SinglePhaseSystem)
+        S[:MassMobilities] = MassMobilities()
     end
 end
 
@@ -53,60 +55,19 @@ end
 Half face Darcy flux with separate potential.
 """
 function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
-    s = storage.state
-    rho, kr, mu, p = s.PhaseMassDensities, s.RelativePermeabilities, s.PhaseViscosities, s.Pressure
+    pot = storage.state.CellNeighborPotentialDifference
+    mob = storage.state.MassMobilities
+
     flux = get_entries(law.half_face_flux_cells)
-    flow_disc = law.flow_discretization
-    conn_data = flow_disc.conn_data
-    if flow_disc.gravity
-        # Multiphase potential
-        @tullio flux[ph, i] = get_immiscible_flux_gravity(conn_data[i], ph, p, rho, kr, mu)
-    else
+    conn_data = law.flow_discretization.conn_data
+    if size(pot, 1) == 1
         # Scalar potential
-        @tullio flux[ph, i] = get_immiscible_flux_no_gravity(conn_data[i], ph, p, rho, kr, mu)
-    end
-end
-
-function get_immiscible_flux_gravity(cd, ph, p, rho, kr, mu)
-    c, i, gΔz, T = cd.self, cd.other, cd.gdz, cd.T
-    ∂ = (x) -> local_ad(x, c)
-    return immiscible_flux_gravity(c, i, ph, ∂(kr), ∂(mu), ∂(rho), ∂(p), T, gΔz)
-end
-
-function immiscible_flux_gravity(c, i, ph, kᵣ, μ, ρ, P, T, gΔz)
-    @inbounds ρ_c = ρ[ph, c]
-    @inbounds ρ_i = ρ[ph, i]
-    ρ_avg = 0.5*(ρ_i + ρ_c)
-    @inbounds θ = -T*(P[c] - P[i] + gΔz*ρ_avg)
-    if θ < 0
-        # Flux is leaving the cell
-        @inbounds ρλᶠ = ρ_c*kᵣ[ph, c]/μ[ph, c]
+        @tullio flux[ph, i] = spu_upwind_mult_index(conn_data[i], ph, pot[1, i], mob)
     else
-        # Flux is entering the cell
-        @inbounds ρλᶠ = ρ_i*kᵣ[ph, i]/μ[ph, i]
+        # Multiphase potential
+        @tullio flux[ph, i] = spu_upwind_mult_index(conn_data[i], ph, pot[ph, i], mob)
     end
-    return ρλᶠ*θ
 end
-
-function get_immiscible_flux_no_gravity(cd, ph, p, rho, kr, mu)
-    c, i, T = cd.self, cd.other, cd.T
-    ∂ = (x) -> local_ad(x, c)
-    return immiscible_flux_no_gravity(c, i, ph, ∂(kr), ∂(mu), ∂(rho), ∂(p), T)
-end
-
-function immiscible_flux_no_gravity(c, i, ph, kᵣ, μ, ρ, P, T)
-    @inbounds θ = -T*(P[c] - P[i])
-    if θ < 0
-        # Flux is leaving the cell
-        up_c = c
-    else
-        # Flux is entering the cell
-        up_c = i
-    end
-    @inbounds ρλᶠ = ρ[ph, up_c]*kᵣ[ph, up_c]/μ[ph, up_c]
-    return ρλᶠ*θ
-end
-
 
 """
 Half face Darcy flux with separate potential. (Compositional version)

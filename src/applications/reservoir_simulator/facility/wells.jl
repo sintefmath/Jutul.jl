@@ -411,7 +411,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     res_q = ct.crossterm_target
     well_q = ct.crossterm_source
 
-    apply_well_reservoir_sources!(target_model.system, res_q, well_q, state_res, state_well, perforations, -1)
+    apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, -1)
     # @debug "($source → $target, from wellbore): $(value.(res_q)), s: $(value.(state_well.Saturations))"
 end
 
@@ -431,33 +431,38 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
 
     res_q = ct.crossterm_source
     well_q = ct.crossterm_target
-    sys = target_model.system
-    @assert sys == source_model.system "Wells must have the same fluid system as the reservoir"
-    apply_well_reservoir_sources!(sys, res_q, well_q, state_res, state_well, perforations, 1)
+    apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, 1)
 end
 
 
-function apply_well_reservoir_sources!(sys::MultiPhaseSystem, res_q, well_q, state_res, state_well, perforations, sgn)
+function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, sgn)
     p_res = state_res.Pressure
     p_well = state_well.Pressure
-
-    val = x -> local_ad(x, nothing)
-
+    if haskey(state_res, :RelativePermeabilities)
+        kr = state_res.RelativePermeabilities
+        kr_value = as_value(kr)
+    else
+        kr = nothing
+        kr_value = nothing
+    end
     μ = state_res.PhaseViscosities
-    kr = state_res.RelativePermeabilities
-    ρ = state_res.PhaseMassDensities
-    # ρλ_i = state_res.MassMobilities
+    ρλ_i = state_res.MassMobilities
 
     ρ_w = state_well.PhaseMassDensities
-    s_w = state_well.Saturations
-
-    perforation_sources_immiscible!(well_q, perforations, val(p_res),         p_well,  val(kr), val(μ), val(ρ),    ρ_w,      s_w, sgn)
-    perforation_sources_immiscible!(res_q,  perforations,     p_res,      val(p_well),     kr,      μ,      ρ, val(ρ_w), val(s_w), sgn)
+    if haskey(state_well, :Saturations)
+        s_w = state_well.Saturations
+        s_w_v = as_value(s_w)
+    else
+        s_w = nothing
+        s_w_v = nothing
+    end
+    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          ρ_w,  s_w, sgn)
+    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i, as_value(ρ_w), s_w_v, sgn)
 end
 
-function perforation_sources_immiscible!(target, perf, p_res, p_well, kr, μ, ρ, ρ_w, s_w, sgn)
+function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, ρ_w, s_w, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
-    nc = size(ρ, 1)
+    nc = size(ρλ_i, 1)
     nph = size(μ, 1)
 
     @inbounds for i in eachindex(perf.self)
@@ -466,7 +471,11 @@ function perforation_sources_immiscible!(target, perf, p_res, p_well, kr, μ, ρ
         wi = perf.WI[i]
         gdz = perf.gdz[i]
         if gdz != 0
-            ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
+            if isnothing(s_w)
+                ρ_mix = ρ_w[1, si]
+            else
+                ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
+            end
             ρgdz = gdz*ρ_mix
         else
             ρgdz = 0
@@ -476,18 +485,25 @@ function perforation_sources_immiscible!(target, perf, p_res, p_well, kr, μ, ρ
             # Injection
             λ_t = 0
             for ph in 1:nph
-                λ_t += kr[ph, ri]/μ[ph, ri]
+                if isnothing(kr)
+                    λ_t += 1/μ[ph, ri]
+                else
+                    λ_t += kr[ph, ri]/μ[ph, ri]
+                end
             end
             # @debug "λ_t: $(value(λ_t)) dp: $(value(dp)) ρgdz: $(value(ρgdz))"
             for c in 1:nc
-                mass_mix = s_w[c, si]*ρ_w[c, si]
+                if isnothing(s_w)
+                    mass_mix = ρ_w[c, si]
+                else
+                    mass_mix = s_w[c, si]*ρ_w[c, si]
+                end
                 target[c, i] = sgn*mass_mix*λ_t*dp
             end
         else
             # Production
-            for ph in 1:nc
-                c_i = ρ[ph, ri]*kr[ph, ri]/μ[ph, ri]
-                target[ph, i] = sgn*c_i*dp
+            for c in 1:nc
+                target[c, i] = sgn*ρλ_i[c, ri]*dp
             end
         end
     end
