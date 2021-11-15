@@ -7,7 +7,9 @@ struct CellNeighborPotentialDifference <: GroupedVariables end
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::Union{DarcyMassMobilityFlow, DarcyMassMobilityFlowFused})
     S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
-    if !isa(system, SinglePhaseSystem)
+    if isa(system, SinglePhaseSystem)
+        S[:RelativePermeabilities] = ConstantVariables([1.0])
+    else
         S[:RelativePermeabilities] = BrooksCoreyRelPerm(system)
     end
     if isa(system, ImmiscibleSystem) || isa(system, SinglePhaseSystem)
@@ -64,48 +66,56 @@ function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentia
     p = storage.state.Pressure
 
     flux = get_entries(law.half_face_flux_cells)
-    conn_data = law.flow_discretization.conn_data
-    if size(pot, 1) == 1
-        # Scalar potential
-        @tullio flux[ph, i] = spu_upwind_mult_index(conn_data[i], ph, pot[1, i], mob)
-    else
+    flow_disc = law.flow_discretization
+    conn_data = flow_disc.conn_data
+    if flow_disc.gravity
         # Multiphase potential
-        # error()
-        @tullio flux[ph, i] = myflux_outer(conn_data[i], ph, p, rho, kr, mu)
-
-        # @tullio flux[ph, i] = spu_upwind_mult_index(conn_data[i], ph, pot[ph, i], mob)
+        @tullio flux[ph, i] = get_immiscible_flux_gravity(conn_data[i], ph, p, rho, kr, mu)
+    else
+        # Scalar potential
+        @tullio flux[ph, i] = get_immiscible_flux_no_gravity(conn_data[i], ph, p, rho, kr, mu)
     end
 end
 
-function myflux_outer(conn_data, ph, p, rho, kr, mu)
-    # θ = -T*two_point_potential_drop_half_face(c_self, c_other, p, gΔz, ρ)
-
-    self = conn_data.self
-    gΔz = conn_data.gdz
-    other = conn_data.other
-    ∂ = (x) -> LocalPerspectiveAD(x, self)
-    return myflux(self, other, ph, ∂(kr), mu, ∂(rho), ∂(p), conn_data.T, gΔz)
-    # rho * kr/mu * K (grad p + gdz rho)
+function get_immiscible_flux_gravity(cd, ph, p, rho, kr, mu)
+    c, i, gΔz, T = cd.self, cd.other, cd.gdz, cd.T
+    ∂ = (x) -> local_ad(x, c)
+    return immiscible_flux_gravity(c, i, ph, ∂(kr), mu, ∂(rho), ∂(p), T, gΔz)
 end
 
-function myflux(c, i, ph, kr, μ, ρ, P, T, gΔz)
-    ρ_c = ρ[ph, c]
-    ρ_i = ρ[ph, i]
-
-    P_c = P[c]
-    P_i = P[i]
-
+function immiscible_flux_gravity(c, i, ph, kᵣ, μ, ρ, P, T, gΔz)
+    @inbounds ρ_c, ρ_i = ρ[ph, c], ρ[ph, i]
     ρ_avg = 0.5*(ρ_i + ρ_c)
-    θ = -T*(P_c - P_i + gΔz*ρ_avg)
+    @inbounds θ = -T*(P[c] - P[i] + gΔz*ρ_avg)
     if θ < 0
         # Flux is leaving the cell
-        @inbounds ρλᶠ = ρ_c*kr[ph, c]/μ[ph, c]
+        @inbounds ρλᶠ = ρ_c*kᵣ[ph, c]/μ[ph, c]
     else
         # Flux is entering the cell
-        @inbounds ρλᶠ = ρ_i*kr[ph, i]/μ[ph, i]
+        @inbounds ρλᶠ = ρ_i*kᵣ[ph, i]/μ[ph, i]
     end
     return ρλᶠ*θ
 end
+
+function get_immiscible_flux_no_gravity(cd, ph, p, rho, kr, mu)
+    c, i, T = cd.self, cd.other, cd.T
+    ∂ = (x) -> local_ad(x, c)
+    return immiscible_flux_no_gravity(c, i, ph, ∂(kr), mu, ∂(rho), ∂(p), T)
+end
+
+function immiscible_flux_no_gravity(c, i, ph, kᵣ, μ, ρ, P, T, gΔz)
+    @inbounds θ = -T*(P[c] - P[i])
+    if θ < 0
+        # Flux is leaving the cell
+        up_c = c
+    else
+        # Flux is entering the cell
+        up_c = i
+    end
+    @inbounds ρλᶠ = ρ[ph, up_c]*kᵣ[ph, up_c]/μ[ph, up_c]
+    return ρλᶠ*θ
+end
+
 
 """
 Half face Darcy flux with separate potential. (Compositional version)

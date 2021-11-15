@@ -5,11 +5,14 @@ import ForwardDiff: value, Dual
 struct LocalPerspectiveAD{T, N, A<:AbstractArray{T,N}, I} <: AbstractArray{T,N}
     index::I
     data::A
-    function LocalPerspectiveAD(a::A, index::I_t) where {A<:AbstractArray, I_t<:Integer}
-        # T,ndims(data),typeof(data),typeof(f)
-        new{eltype(a), ndims(A), A, I_t}(index, a)
-    end
 end
+
+function LocalPerspectiveAD(a::A, index::I_t) where {A<:AbstractArray, I_t<:Integer}
+    LocalPerspectiveAD{eltype(a), ndims(A), A, I_t}(index, a)
+end
+
+local_ad(v, i) = LocalPerspectiveAD(v, i)
+local_ad(v::ConstantWrapper, i) = v
 
 @inline local_entity(a::LocalPerspectiveAD) = a.index
 
