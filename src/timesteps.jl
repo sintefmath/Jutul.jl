@@ -11,17 +11,23 @@ decrease_factor(sel) = 2.0
 increase_factor(sel) = Inf
 initial_relative(sel) = 1.0
 initial_absolute(sel) = Inf
+maximum_timestep(sel) = Inf
+minimum_timestep(sel) = 1e-20
+
+valid_timestep(sel, dt) = min(max(dt, minimum_timestep(sel)), maximum_timestep(sel))
 
 struct TimestepSelector <: AbstractTimestepSelector
     init_rel
     init_abs
     decrease
     increase
-    function TimestepSelector(factor = Inf; decrease = 2.0, initial_relative = 1.0, initial_absolute = Inf)
+    max
+    min
+    function TimestepSelector(factor = Inf; decrease = 2.0, initial_relative = 1.0, initial_absolute = Inf, max = Inf, min = 0.0)
         if isnothing(decrease)
             decrease = factor
         end
-        new(initial_relative, initial_absolute, decrease, factor)
+        new(initial_relative, initial_absolute, decrease, factor, max, min)
     end
 end
 
@@ -29,6 +35,8 @@ decrease_factor(sel::TimestepSelector) = sel.decrease
 increase_factor(sel::TimestepSelector) = sel.increase
 initial_relative(sel::TimestepSelector) = sel.init_rel
 initial_absolute(sel::TimestepSelector) = sel.init_abs
+maximum_timestep(sel::TimestepSelector) = sel.max
+minimum_timestep(sel::TimestepSelector) = sel.min
 
 function pick_cut_timestep(sel::TimestepSelector, sim, config, dt, dT, reports, cut_count)
     if cut_count + 1 > config[:max_timestep_cuts]

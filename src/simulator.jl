@@ -274,6 +274,10 @@ function pick_timestep(sim, config, dt_prev, dT, reports; step_index = NaN, new_
         max_allowable = config[:timestep_max_increase]*dt_prev
         dt = min(max(dt, min_allowable), max_allowable)
     end
+    # Make sure that the final timestep is still within the limits of all selectors
+    for sel in selectors
+        dt = valid_timestep(sel, dt)
+    end
     if config[:info_level] > 1
         @info "Selected new sub-timestep $(get_tstr(dt)) from previous $(get_tstr(dt_prev))."
     end
