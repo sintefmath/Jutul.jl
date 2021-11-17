@@ -79,7 +79,8 @@ function immiscible_flux_gravity(c, i, ph, kᵣ, μ, ρ, P, pc, T, gΔz, ref_ind
     @inbounds ρ_i = ρ[ph, i]
     ρ_avg = 0.5*(ρ_i + ρ_c)
     Δpc = capillary_gradient(pc, c, i, ph, ref_index)
-    @inbounds θ = -T*(P[c] - P[i] + gΔz*ρ_avg)
+    @inbounds Δp = P[c] - P[i] + Δpc
+    θ = -T*(Δp + gΔz*ρ_avg)
     if θ < 0
         # Flux is leaving the cell
         @inbounds ρλᶠ = ρ_c*kᵣ[ph, c]/μ[ph, c]
