@@ -274,15 +274,7 @@ function unit_sum_update!(s, p, model, dx)
     maxval, minval = maximum_value(p), minimum_value(p)
     active_cells = active_entities(model.domain, Cells())
     if nf == 2
-        maxval = min(1 - minval, maxval)
-        minval = max(minval, maxval - 1)
-        @inbounds for (i, cell) in enumerate(active_cells)
-            v = value(s[1, cell])
-            dv = dx[i]
-            dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
-            s[1, cell] += dv
-            s[2, cell] -= dv
-        end
+        unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
     else
         if false
             # Preserve direction
@@ -309,14 +301,31 @@ function unit_sum_update!(s, p, model, dx)
             end
         else
             # Preserve update magnitude
-            for cell in active_cells
-                unit_update_local(s, dx, nf, nu, abs_max, minval, maxval)
-            end
+            unit_update_multiple!(s, dx, nf, nu, minval, maxval, abs_max)
         end
     end
 end
 
-function unit_update_local(s, dx, nf, nu, abs_max, minval, maxval)
+function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
+    F = eltype(dx)
+    maxval = min(1 - minval, maxval)
+    minval = max(minval, maxval - 1)
+    for (i, cell) in enumerate(active_cells)
+        v = value(s[1, cell])::F
+        dv = dx[i]
+        dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
+        s[1, cell] += dv
+        s[2, cell] -= dv
+    end
+end
+
+function unit_update_multiple!(s, dx, nf, nu, minval, maxval, abs_max)
+    for cell in active_cells
+        unit_update_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
+    end
+end
+
+function unit_update_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
     # First pass: Find the relaxation factors that keep all fractions in [0, 1]
     # and obeying the maximum change targets
     dlast0 = 0
