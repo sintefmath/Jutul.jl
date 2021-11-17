@@ -58,25 +58,27 @@ function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentia
     flux = get_entries(law.half_face_flux_cells)
     flow_disc = law.flow_discretization
     conn_data = flow_disc.conn_data
+    pc, ref_index = capillary_pressure(model, s)
     if flow_disc.gravity
         # Multiphase potential
-        @tullio flux[ph, i] = get_immiscible_flux_gravity(conn_data[i], ph, p, rho, kr, mu)
+        @tullio flux[ph, i] = get_immiscible_flux_gravity(conn_data[i], ph, p, rho, kr, mu, pc, ref_index)
     else
         # Scalar potential
         @tullio flux[ph, i] = get_immiscible_flux_no_gravity(conn_data[i], ph, p, rho, kr, mu)
     end
 end
 
-function get_immiscible_flux_gravity(cd, ph, p, rho, kr, mu)
+function get_immiscible_flux_gravity(cd, ph, p, rho, kr, mu, pc, ref_index)
     c, i, gΔz, T = cd.self, cd.other, cd.gdz, cd.T
     ∂ = (x) -> local_ad(x, c)
-    return immiscible_flux_gravity(c, i, ph, ∂(kr), ∂(mu), ∂(rho), ∂(p), T, gΔz)
+    return immiscible_flux_gravity(c, i, ph, ∂(kr), ∂(mu), ∂(rho), ∂(p), ∂(pc), T, gΔz, ref_index)
 end
 
-function immiscible_flux_gravity(c, i, ph, kᵣ, μ, ρ, P, T, gΔz)
+function immiscible_flux_gravity(c, i, ph, kᵣ, μ, ρ, P, pc, T, gΔz, ref_index)
     @inbounds ρ_c = ρ[ph, c]
     @inbounds ρ_i = ρ[ph, i]
     ρ_avg = 0.5*(ρ_i + ρ_c)
+    Δpc = capillary_gradient(pc, c, i, ph, ref_index)
     @inbounds θ = -T*(P[c] - P[i] + gΔz*ρ_avg)
     if θ < 0
         # Flux is leaving the cell
@@ -105,6 +107,18 @@ function immiscible_flux_no_gravity(c, i, ph, kᵣ, μ, ρ, P, T)
     end
     @inbounds ρλᶠ = ρ[ph, up_c]*kᵣ[ph, up_c]/μ[ph, up_c]
     return ρλᶠ*θ
+end
+
+
+capillary_gradient(::Nothing, c_l, c_r, ph, ph_ref) = 0.0
+function capillary_gradient(pc, c_l, c_r, ph, ph_ref)
+    if ph == ph_ref
+        Δp_c = 0.0
+    elseif ph < ph_ref
+        Δp_c = pc[ph, c_l] - pc[ph, c_r]
+    else
+        Δp_c = pc[ph-1, c_l] - pc[ph-1, c_r]
+    end
 end
 
 

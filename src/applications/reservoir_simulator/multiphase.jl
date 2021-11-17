@@ -292,3 +292,15 @@ function cpr_weights_no_partials!(w, model::SimulationModel{R, S}, state, r, n, 
         end
     end
 end
+
+function capillary_pressure(model, s)
+    pck = :CapillaryPressures
+    if haskey(s, pck)
+        pc = s[pck]
+        ref_index = min(2, number_of_phases(model.system))
+    else
+        pc = nothing
+        ref_index = 1
+    end
+    return(pc, ref_index)
+end

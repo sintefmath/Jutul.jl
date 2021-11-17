@@ -14,6 +14,8 @@ end
 local_ad(v::AbstractArray, i::Integer) = LocalPerspectiveAD(v, i)
 local_ad(v::ConstantWrapper, i::Integer) = v
 local_ad(v, ::Nothing) = as_value(v)
+local_ad(v, i) = v
+
 
 @inline local_entity(a::LocalPerspectiveAD) = a.index
 
