@@ -204,8 +204,10 @@ function solve!(sys::LSystem, linsolve::Nothing)
 end
 
 function solve!(sys)
-    if length(sys.dx) > 50000
-        error("System too big for default direct solver.")
+    limit = 50000
+    n = length(sys.dx)
+    if n > limit
+        error("System too big for default direct solver. (Limit is $limit, system was $n by $n.")
     end
     J = sys.jac
     r = sys.r
