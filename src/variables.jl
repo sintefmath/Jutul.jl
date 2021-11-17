@@ -388,3 +388,5 @@ function initialize_primary_variable_ad!(state, model, var::ConstantVariables, s
     error("$sym is declared to be constants - cannot be primary variables.")
 end
 
+default_value(model, variable::ConstantVariables) = nothing
+
