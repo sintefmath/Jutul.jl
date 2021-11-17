@@ -26,12 +26,13 @@ mutable struct GenericKrylov
     provider
     preconditioner
     x
+    r_norm
     config::IterativeSolverConfig
     function GenericKrylov(solver = IterativeSolvers.gmres!; preconditioner = nothing, provider = nothing, kwarg...)
         if isnothing(provider)
             provider = Base.parentmodule(solver)
         end
-        new(solver, provider, preconditioner, nothing, IterativeSolverConfig(;kwarg...))
+        new(solver, provider, preconditioner, nothing, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
 
@@ -68,7 +69,6 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     cfg = krylov.config
     prec = krylov.preconditioner
     Ft = float_type(model.context)
-
     prepare_solve!(sys)
     r = vector_residual(sys)
     op = linear_operator(sys)
@@ -79,6 +79,20 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     max_it = cfg.max_iterations
     rt = rtol(cfg, Ft)
     at = atol(cfg, Ft)
+
+    rtol_nl = cfg.nonlinear_relative_tolerance    
+    if !isnothing(recorder) && !isnothing(rtol_nl)
+        it = subiteration(recorder)
+        rtol_relaxed = cfg.relaxed_relative_tolerance
+        r_k = norm(r)
+        if it == 1
+            krylov.r_norm = r_k
+        elseif !isnothing(rtol_nl)
+            r_0 = krylov.r_norm
+            maybe_rtol = r_0*rtol_nl/r_k
+            rt = max(min(maybe_rtol, rtol_relaxed), rt)
+        end
+    end
     if krylov.provider == IterativeSolvers
         is_bicgstabl = solver == IterativeSolvers.bicgstabl || solver == IterativeSolvers.bicgstabl!
         if is_mutating(solver)

@@ -4,10 +4,18 @@ mutable struct IterativeSolverConfig
     relative_tolerance
     absolute_tolerance
     max_iterations
+    nonlinear_relative_tolerance
+    relaxed_relative_tolerance
     verbose
     arguments
-    function IterativeSolverConfig(; relative_tolerance = 1e-3, absolute_tolerance = nothing, max_iterations = 100, verbose = false, kwarg...)
-        new(relative_tolerance, absolute_tolerance, max_iterations, verbose, kwarg)
+    function IterativeSolverConfig(;relative_tolerance = 1e-3,
+                                    absolute_tolerance = nothing, 
+                                    max_iterations = 100,
+                                    verbose = false,
+                                    nonlinear_relative_tolerance = nothing,
+                                    relaxed_relative_tolerance = 0.1,
+                                    kwarg...)
+        new(relative_tolerance, absolute_tolerance, max_iterations, nonlinear_relative_tolerance, relaxed_relative_tolerance, verbose, kwarg)
     end
 end
 

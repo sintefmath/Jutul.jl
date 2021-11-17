@@ -121,18 +121,22 @@ function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
         A = view(sys.dx, 1:n)
         B = view(sys.dx, (n+1):m)
 
-        @. A = -dx
+        @tullio A[i] = -dx[i]
         buf_a = sys.schur_buffer[1]
         buf_b = sys.schur_buffer[2]
         # We want to do (in-place):
         # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
-        buf_a .= Δx
+        @inbounds for i in eachindex(Δx)
+            buf_a[i] = Δx[i]
+        end
         mul!(buf_b, D, buf_a)
         # now buf_b = D*Δx
-        @. buf_b -= b
+        @inbounds for i in eachindex(b)
+            buf_b[i] -= b[i]
+        end
         ldiv!(B, E, buf_b)
     else
-        sys.dx .= -dx
+        @tullio sys.dx[i] = -dx[i]
     end
 end
 
