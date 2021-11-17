@@ -95,14 +95,14 @@ end
 map_ij_to_active(I, J, domain, m::TrivialGlobalMap, entity) = (I, J)
 
 global_face(f, m::FiniteVolumeGlobalMap) = m.faces[f]
-global_cell(c, m::FiniteVolumeGlobalMap) = m.cells[c]
+Base.@propagate_inbounds global_cell(c, m::FiniteVolumeGlobalMap{R}) where R = m.cells[c]::R
 
 # local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(indexin(c_global, m.cells))::R
 local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(findfirst(isequal(c_global), m.cells))::R
 
 local_face(f_global, m::FiniteVolumeGlobalMap) = only(indexin(f_global, m.faces))
 
-cell_is_boundary(c, m::FiniteVolumeGlobalMap) = m.cell_is_boundary[c]
+Base.@propagate_inbounds cell_is_boundary(c, m::FiniteVolumeGlobalMap) = m.cell_is_boundary[c]::Bool
 
 
 function interior_cell(c, m::FiniteVolumeGlobalMap)

@@ -433,13 +433,13 @@ struct TrivialGlobalMap end
 
 struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
     # Full set -> global set
-    cells::AbstractVector{T}
+    cells::Vector{T}
     # Inner set -> full set
-    inner_to_full_cells::AbstractVector{T}
+    inner_to_full_cells::Vector{T}
     # Full set -> inner set
-    full_to_inner_cells::AbstractVector{T}
-    faces::AbstractVector{T}
-    cell_is_boundary::AbstractVector{Bool}
+    full_to_inner_cells::Vector{T}
+    faces::Vector{T}
+    cell_is_boundary::Vector{Bool}
     function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing)
         n = length(cells)
         if isnothing(is_boundary)
