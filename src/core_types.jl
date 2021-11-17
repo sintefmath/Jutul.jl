@@ -328,9 +328,15 @@ struct ConstantVariables <: GroupedVariables
     constants
     entity::TervUnit
     single_entity::Bool
-    function ConstantVariables(constants, entity = Cells(), single_entity = nothing)
+    function ConstantVariables(constants, entity = Cells(); single_entity = nothing)
         if isnothing(single_entity)
+            # Single entity means that we have one (or more) values that are given for all entities
+            # by a single representative entity
             single_entity = isa(constants, AbstractVector)
+        end
+        if !isa(constants, AbstractArray)
+            @assert length(constants) == 1
+            constants = [constants]
         end
         if isa(constants, CuArray) && single_entity
             @warn "Single entity constants have led to crashes on CUDA/Tullio kernels!" maxlog = 5
@@ -339,6 +345,8 @@ struct ConstantVariables <: GroupedVariables
     end
 end
 
+import Base: getindex, @propagate_inbounds, parent, size, axes
+
 struct ConstantWrapper{R}
     data::Vector{R}
     nrows::Integer
@@ -346,10 +354,10 @@ struct ConstantWrapper{R}
         new{eltype(data)}(data, n)
     end
 end
+Base.length(c::ConstantWrapper) = length(c.data)
 Base.size(c::ConstantWrapper) = (length(c.data), c.nrows)
 Base.size(c::ConstantWrapper, i) = i == 1 ? length(c.data) : c.nrows
-Base.getindex(c::ConstantWrapper, i) = error("Not implemented")
-Base.getindex(c::ConstantWrapper{R}, i, j) where R = c.data[i]::R
+Base.@propagate_inbounds Base.getindex(c::ConstantWrapper{R}, i, j) where R = c.data[i]::R
 Base.setindex!(c::ConstantWrapper, arg...) = setindex!(c.data, arg...)
 Base.ndims(c::ConstantWrapper) = 2
 Base.view(c::ConstantWrapper, ::Colon, i) = c.data

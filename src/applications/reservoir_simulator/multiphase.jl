@@ -179,10 +179,12 @@ function select_equations_system!(eqs, domain, system::MultiPhaseSystem, formula
     eqs[:mass_conservation] = (ConservationLaw, nph)
 end
 
-get_pore_volume(model) = get_flow_volume(model.domain.grid)
+pore_volume(model::SimulationModel) = fluid_volume(model.domain.grid)
+pore_volume(grid) = fluid_volume(grid)
 
-get_flow_volume(grid::MinimalTPFAGrid) = grid.pore_volumes
-get_flow_volume(grid) = 1
+fluid_volume(domain::DiscretizedDomain) = fluid_volume(domain.grid)
+fluid_volume(grid::MinimalTPFAGrid) = grid.pore_volumes
+fluid_volume(grid) = 1.0
 
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::V, time) where {V <: AbstractVector{SourceTerm{I, F, T}}, D, S<:MultiPhaseSystem} where {I, F, T}
@@ -258,7 +260,7 @@ function insert_phase_sources!(acc::CuArray, kr, mu, rhoS, sources)
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}
-    Φ = get_pore_volume(model)
+    Φ = storage.state.FluidVolume
     ρ = storage.state.PhaseMassDensities
     a = active_entities(model.domain, Cells())
 

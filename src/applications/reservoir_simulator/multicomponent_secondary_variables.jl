@@ -233,8 +233,14 @@ end
 end
 
 # Total masses
-@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, FlashResults, PhaseMassDensities, Saturations, VaporMassFractions, LiquidMassFractions) where {G, S<:CompositionalSystem}
-    pv = get_pore_volume(model)
+@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, 
+                                                                                                    FlashResults,
+                                                                                                    PhaseMassDensities,
+                                                                                                    Saturations,
+                                                                                                    VaporMassFractions,
+                                                                                                    LiquidMassFractions,
+                                                                                                    FluidVolume) where {G, S<:CompositionalSystem}
+    pv = FluidVolume
     ρ = PhaseMassDensities
     X = LiquidMassFractions
     Y = VaporMassFractions

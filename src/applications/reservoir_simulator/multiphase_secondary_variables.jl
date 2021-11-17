@@ -15,17 +15,21 @@ function degrees_of_freedom_per_entity(model::SimulationModel{D, S}, sf::Compone
 end
 
 function select_secondary_variables_system!(S, domain, system::MultiPhaseSystem, formulation)
-    nph = number_of_phases(system)
-    S[:PhaseMassDensities] = ConstantCompressibilityDensities(nph)
-    S[:TotalMasses] = TotalMasses()
-    S[:PhaseViscosities] = ConstantVariables(1e-3*ones(nph)) # 1 cP for all phases by default
+    select_default_darcy!(S, domain, system, formulation)
 end
 
 function select_secondary_variables_system!(S, domain, system::SinglePhaseSystem, formulation)
-    S[:PhaseMassDensities] = ConstantCompressibilityDensities(1)
-    S[:TotalMasses] = TotalMasses()
-    S[:PhaseViscosities] = ConstantVariables([1e-3]) # 1 cP for all phases by default
+    select_default_darcy!(S, domain, system, formulation)
     S[:Saturations] = ConstantVariables([1.0])
+end
+
+function select_default_darcy!(S, domain, system, formulation)
+    nph = number_of_phases(system)
+    S[:PhaseMassDensities] = ConstantCompressibilityDensities(nph)
+    S[:TotalMasses] = TotalMasses()
+    S[:PhaseViscosities] = ConstantVariables(1e-3*ones(nph), Cells()) # 1 cP for all phases by default
+    fv = fluid_volume(domain)
+    S[:FluidVolume] = ConstantVariables(fv, Cells(), single_entity = !isa(fv, AbstractArray))
 end
 
 
@@ -175,16 +179,14 @@ end
 end
 
 # Total masses
-@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities) where {G, S<:SinglePhaseSystem}
-    pv = get_pore_volume(model)
-    @tullio totmass[ph, i] = PhaseMassDensities[ph, i]*pv[i]
+@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities, FluidVolume) where {G, S<:SinglePhaseSystem}
+    @tullio totmass[ph, i] = PhaseMassDensities[ph, i]*FluidVolume[i]
 end
 
-@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities, Saturations) where {G, S<:ImmiscibleSystem}
-    pv = get_pore_volume(model)
+@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G, S}, param, PhaseMassDensities, Saturations, FluidVolume) where {G, S<:ImmiscibleSystem}
     rho = PhaseMassDensities
     s = Saturations
-    @tullio totmass[ph, i] = rho[ph, i]*pv[i]*s[ph, i]
+    @tullio totmass[ph, i] = rho[ph, i]*FluidVolume[i]*s[ph, i]
 end
 
 # Total mass

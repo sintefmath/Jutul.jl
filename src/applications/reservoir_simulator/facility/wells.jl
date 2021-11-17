@@ -329,7 +329,7 @@ function update_linearized_system_equation!(nz, r, model, equation::PotentialDro
 end
 
 
-function get_flow_volume(grid::WellGrid)
+function fluid_volume(grid::WellGrid)
     return grid.volumes
 end
 

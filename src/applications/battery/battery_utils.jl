@@ -1,12 +1,12 @@
 using Terv
-export get_flow_volume
+export fluid_volume
 
 #########
 # utils #
 #########
 
 
-function get_flow_volume(grid::MinimalECTPFAGrid)
+function fluid_volume(grid::MinimalECTPFAGrid)
     grid.volumes
 end
 
@@ -311,7 +311,7 @@ end
 @terv_secondary function update_as_secondary!(
     acc, tv::Mass, model, param, C
     )
-    V = get_flow_volume(model.domain.grid)
+    V = fluid_volume(model.domain.grid)
     vf = model.domain.grid.vol_frac
     @tullio acc[i] = C[i] * V[i] * vf[i]
 end
@@ -319,7 +319,7 @@ end
 @terv_secondary function update_as_secondary!(
     acc, tv::Energy, model, param, T
     )
-    V = get_flow_volume(model.domain.grid)
+    V = fluid_volume(model.domain.grid)
     vf = model.domain.grid.vol_frac
     @tullio acc[i] = T[i] * V[i] * vf[i]
 end

@@ -362,7 +362,7 @@ associated_entity(model, var::ConstantVariables) = var.entity
 
 function transfer(context, v::ConstantVariables)
     constants = transfer(context, v.constants)
-    return ConstantVariables(constants, v.entity, v.single_entity)
+    return ConstantVariables(constants, v.entity, single_entity = v.single_entity)
 end
 
 function initialize_variable_value(model, var::ConstantVariables, val; perform_copy = true)

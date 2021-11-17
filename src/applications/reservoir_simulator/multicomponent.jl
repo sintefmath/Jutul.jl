@@ -20,9 +20,10 @@ function select_equations_system!(eqs, domain, system::MultiComponentSystem, for
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:TwoPhaseCompositionalSystem}
-    Φ = get_pore_volume(model)
-    ρ = storage.state.PhaseMassDensities
-    s = storage.state.Saturations
+    state = storage.state
+    Φ = state.FluidVolume
+    ρ = state.PhaseMassDensities
+    s = state.Saturations
     a = active_entities(model.domain, Cells())
 
     names = model.system.equation_of_state.mixture.component_names
