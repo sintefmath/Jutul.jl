@@ -390,3 +390,22 @@ end
 
 default_value(model, variable::ConstantVariables) = nothing
 
+subvariable(var::ConstantVariables, map::TrivialGlobalMap) = var
+
+function subvariable(var::ConstantVariables, map::FiniteVolumeGlobalMap)
+    if var.entity == Cells()
+        if !var.single_entity
+            c = copy(var.constants)
+            p_i = map.cells
+            if isa(c, AbstractVector)
+                c = c[p_i]
+            else
+                c = c[:, p_i]
+            end
+            var = ConstantVariables(c, var.entity, single_entity = false)
+        end
+    else
+        error("Mappings other than cells not implemented")
+    end
+    return var
+end

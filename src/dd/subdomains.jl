@@ -134,7 +134,7 @@ function subdomain(d::DiscretizedDomain, indices; entity = Cells(), buffer = 0)
 
     N = grid.neighborship
     t = @elapsed begin
-        cells, faces, is_boundary = submap_cells(N, indices, buffer = buffer, use_fast = true)
+        cells, faces, is_boundary = submap_cells(N, indices, buffer = buffer)
         mapper = FiniteVolumeGlobalMap(cells, faces, is_boundary)
         sg = subgrid(grid, cells = cells, faces = faces)
         d = Dict()
@@ -147,17 +147,8 @@ function subdomain(d::DiscretizedDomain, indices; entity = Cells(), buffer = 0)
     return DiscretizedDomain(sg, subdisc, global_map = mapper)
 end
 
-function submap_cells(N, indices; nc = maximum(N), buffer = 0, use_fast = false)
+function submap_cells(N, indices; nc = maximum(N), buffer = 0)
     @assert buffer == 0 || buffer == 1
-    if use_fast
-        out = submap_cells_fast(N, indices, nc, buffer)
-    else
-        out = submap_cells_slow(N, indices, nc, buffer)
-    end
-    return out
-end
-
-function submap_cells_fast(N, indices, nc = maximum(N), buffer = 0)
 
     facelist, facepos = get_facepos(N)
     nf = size(N, 2)
@@ -226,66 +217,6 @@ function submap_cells_fast(N, indices, nc = maximum(N), buffer = 0)
         end
     end
     faces = findall(face_active)
-    return (cells = cells, faces = faces, is_boundary = is_boundary)
-end
-
-function submap_cells_slow(N, indices, nc = maximum(N), buffer = 0)
-    cells = Vector{Integer}()
-    faces = Vector{Integer}()
-    is_boundary = Vector{Bool}()
-
-    facelist, facepos = get_facepos(N)
-
-    function insert_face!(f)
-        if !in(f, faces)
-            push!(faces, f)
-        end
-    end
-    function insert_cell!(gc, is_bnd)
-        push!(cells, gc)
-        push!(is_boundary, is_bnd)
-    end
-    # Loop over all cells and add them to the global list
-    for gc in indices
-        # Include global cell
-        partition_boundary = false
-        for fi in facepos[gc]:facepos[gc+1]-1
-            face = facelist[fi]
-            l, r = N[1, face], N[2, face]
-            # If both cells are in the interior, we add the face to the list
-            if in(l, indices) && in(r, indices)
-                insert_face!(face)
-            else
-                # Cell is on the boundary of the partition since it has an exterior face.
-                # This might be the global boundary of the subdomain, if buffer == 0
-                partition_boundary = true
-            end
-        end
-        is_bnd = partition_boundary && buffer == 0
-        insert_cell!(gc, is_bnd)
-    end
-    # If we have a buffer, we also need to go over and add the buffer cells
-    if buffer == 1
-        for gc in indices
-            # Also add the neighbors, if not already present
-            for fi in facepos[gc]:facepos[gc+1]-1
-                face = facelist[fi]
-                l, r = N[1, face], N[2, face]
-                if l == gc
-                    other = r
-                else
-                    other = l
-                end
-                # If a bounded cell is not in the global list of interior cells and not in the current
-                # set of processed cells, we add it and flag as a global boundary
-                insert_face!(face)
-                if !in(other, cells) && !in(other, indices)
-                    # This cell is now guaranteed to be on the boundary.
-                    insert_cell!(other, true)
-                end
-            end
-        end
-    end
     return (cells = cells, faces = faces, is_boundary = is_boundary)
 end
 

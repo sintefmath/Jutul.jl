@@ -10,9 +10,10 @@ function submodel(model::SimulationModel, p_i::AbstractVector; kwarg...)
     c, f = model.context, model.formulation
     d_l = subdomain(domain, p_i, entity = Cells(); kwarg...)
     new_model = SimulationModel(d_l, sys, context = c, formulation = f)
+    M = global_map(new_model.domain)
     function transfer_vars!(new, old)
         for k in keys(old)
-            new[k] = old[k]
+            new[k] = subvariable(old[k], M)
         end
     end
     transfer_vars!(new_model.primary_variables, model.primary_variables)
@@ -81,3 +82,4 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     return MultiModel(sm, groups = groups, reduction = reduction, context = ctx)
 end
 
+subvariable(var, map) = var
