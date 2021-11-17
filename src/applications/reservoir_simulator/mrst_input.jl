@@ -1,9 +1,5 @@
-using GLMakie
-using MAT # .MAT file loading
 export get_minimal_tpfa_grid_from_mrst, plot_interactive, get_test_setup, get_well_from_mrst_data
 export setup_case_from_mrst
-using SparseArrays # Sparse pattern
-using GLMakie
 
 struct MRSTPlotData
     faces::Array

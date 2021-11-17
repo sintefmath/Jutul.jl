@@ -1,4 +1,3 @@
-using Terv
 using Plots, GraphRecipes
 
 export plot_graph

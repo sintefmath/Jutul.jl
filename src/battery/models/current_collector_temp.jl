@@ -1,4 +1,3 @@
-using Terv
 export CurrentCollectorT
 
 struct CurrentCollectorT <: ElectroChemicalComponent end

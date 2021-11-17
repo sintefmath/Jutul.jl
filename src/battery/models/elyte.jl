@@ -1,5 +1,3 @@
-using Terv, Polynomials
-
 export Electrolyte, TestElyte, DmuDc, ConsCoeff
 export p1, p2, p3, cnst, diffusivity
 

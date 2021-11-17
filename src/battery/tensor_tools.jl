@@ -1,4 +1,3 @@
-using Terv
 
 export vec_to_scalar!, face_to_cell!, get_cellcell_map, get_cellcellvec_map
 export get_cfcv2ccv_map, get_cfcv2cc_map, get_cfcv2fc_map

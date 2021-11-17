@@ -1,4 +1,3 @@
-using Terv
 
 export half_face_two_point_kgrad
 

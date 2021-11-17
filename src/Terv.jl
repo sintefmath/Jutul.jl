@@ -10,7 +10,6 @@ import Base.iszero
 Base.iszero(d::ForwardDiff.Dual) = false# iszero(d.value) && iszero(d.partials)
 
 using LinearAlgebra
-using BenchmarkTools
 using SparseArrays
 using Logging
 using MappedArrays
@@ -24,8 +23,11 @@ using PrettyTables
 using DataInterpolations
 using ILUZero
 using Polyester
-
+using MAT # .MAT file loading
+using ExprTools, LightGraphs
+using Polynomials
 using MultiComponentFlash
+using Requires
 
 # Main types
 include("core_types.jl")
@@ -65,10 +67,14 @@ include("applications/reservoir_simulator/reservoir_simulator.jl")
 # Test systems
 include("applications/test_systems/test_systems.jl")
 # Graph plotting
-include("plot_graph.jl")
+
 include("meshes/meshes.jl")
-include("plotting.jl")
+
 # Battery/electrolyte
 include("battery/battery_include.jl")
 
+function __init__()
+    @require GLMakie="e9467ef8-e4e7-5192-8a1a-b1aee30e663a" include("plotting.jl")
+    @require Plots="91a5bcdd-55d7-5caf-9e0b-520d859cae80" include("plot_graph.jl")
+end
 end # module

@@ -1,5 +1,3 @@
-using Terv
-
 export ECComponent
 
 struct ECComponent <: ElectroChemicalComponent end # Not a good name

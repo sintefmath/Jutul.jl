@@ -1,8 +1,6 @@
 #=
 Compare the simulation of electrolyte in 1D in Julia and Matlab
 =#
-using Terv
-using MAT
 
 ##
 

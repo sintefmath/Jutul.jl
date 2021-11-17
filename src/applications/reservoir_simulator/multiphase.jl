@@ -9,7 +9,6 @@ export setup_storage, update_equations!
 
 export Pressure, Saturations, TotalMasses, TotalMass
 
-using CUDA
 # Abstract multiphase system
 
 get_phases(sys::MultiPhaseSystem) = sys.phases

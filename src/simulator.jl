@@ -194,7 +194,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     if timing_out
         @debug "Updated linear system in $(report[:linear_system_time]) seconds."
     end
-    report[:convergence_time] = @elapsed begin
+    t_conv = @elapsed begin
         converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
         il = config[:info_level]
         if il > 1
@@ -213,13 +213,16 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
         else
             do_solve = true
         end
+        report[:converged] = converged
+        report[:errors] = errors
     end
+    report[:convergence_time] = t_conv
 
     if do_solve
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
         rec = config[:ProgressRecorder]
-        t_solve, t_update = solve_and_update!(storage, model::TervModel, dt, linear_solver = lsolve, check = check, recorder = rec)
+        t_solve, t_update = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec)
         if timing_out
             @debug "Solved linear system in $t_solve seconds."
             @debug "Updated state $t_update seconds."

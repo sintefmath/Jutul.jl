@@ -1,4 +1,3 @@
-using Terv
 
 export get_cc_grid, get_boundary, get_tensorprod, get_simple_elyte_model
 export exported_model_to_domain, get_ref_states, get_simple_elyte_sim

@@ -1,4 +1,3 @@
-using ExprTools, LightGraphs
 export sort_secondary_variables!, build_variable_graph
 """
 Designate the function as updating a secondary variable.
