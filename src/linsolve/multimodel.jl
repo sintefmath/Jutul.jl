@@ -177,8 +177,12 @@ function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x
     ldiv!(E, b_buf)
     mul!(a_buf, C, b_buf)
     # Convert back to block major and subtract
-    @inbounds for b = 1:block_size
-        @. res[from_entity_urange(block_size, n, b)] -= a_buf[from_block_urange(block_size, n, b)]
+    for i = 1:n
+        for b = 1:block_size
+            ix = (i-1)*block_size + b
+            jx = (b-1)*n + i
+            @inbounds res[ix] -= a_buf[jx]
+        end
     end
     # Simple version:
     # res .= B*x - C*(E\(D*x))
