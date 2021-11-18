@@ -5,7 +5,7 @@ ENV["JULIA_DEBUG"] = nothing
 
 casename = "sleipner_ecl_bo"
 # casename = "olympus_simple"
-models, parameters, initializer, timesteps, forces = setup_case_from_mrst(casename);
+models, parameters, initializer, timesteps, forces = setup_case_from_mrst(casename, block_backend = true);
 ##
 
 # Reservoir as first group
@@ -23,7 +23,7 @@ dt = timesteps[1:10]
 dt = timesteps[1:1].*0.01
 # dt = timesteps
 # Set up linear solver and preconditioner
-lsolve = reservoir_linsolve(mmodel, :cpr)
+lsolve = reservoir_linsolve(mmodel.models[:Reservoir], :cpr)
 m = 20
 il = 1
 dl = 0
