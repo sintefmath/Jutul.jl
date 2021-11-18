@@ -165,15 +165,11 @@ end
 
 function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x_v, α, β::T) where T
     @assert β == zero(T) "Only β == 0 implemented."
-    # compute B*x
-    mul!(res_v, B, x_v)
     N = length(res)
     n = N ÷ block_size
-    # Convert to cell major view
-    # @inbounds for b = 1:block_size
-    #     @. a_buf[from_block_urange(block_size, n, b)] = x[from_entity_urange(block_size, n, b)]
-    # end
-    @batch minbatch = 1000 for i = 1:n
+    # compute B*x
+    mul!(res_v, B, x_v)
+    for i = 1:n
         for b = 1:block_size
             ix = (i-1)*block_size + b
             jx = (b-1)*n + i

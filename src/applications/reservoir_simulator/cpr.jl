@@ -227,7 +227,7 @@ end
 end
 
 function update_p_rhs!(r_p, y, bz, w_p)
-    @batch for i in eachindex(r_p)
+    @batch minbatch = 1000 for i in eachindex(r_p)
         v = 0.0
         @inbounds for b = 1:bz
             v += y[(i-1)*bz + b]*w_p[b, i]
@@ -242,14 +242,21 @@ function correct_residual_for_dp!(y, x, Δp, bz, buf, A)
     # A x' = y'
     # y' = y - A*Δx
     # x = A \ y' + Δx
-    @batch for i in eachindex(Δp)
-        @inbounds x[(i-1)*bz + 1] = Δp[i]
-        @inbounds for j = 2:bz
-            x[(i-1)*bz + j] = 0.0
-        end
+    @batch minbatch = 1000 for i in eachindex(Δp)
+        set_dp!(x, bz, Δp, i)
     end
     mul!(buf, A, x)
-    @. y -= buf
+    @batch minbatch = 1000 for i in eachindex(y)
+        @inbounds y[i] -= buf[i]
+    end
+    # @. y -= buf
+end
+
+@inline function set_dp!(x, bz, Δp, i)
+    @inbounds x[(i-1)*bz + 1] = Δp[i]
+    @inbounds for j = 2:bz
+        x[(i-1)*bz + j] = 0.0
+    end
 end
 
 function increment_pressure!(x, Δp, bz)
