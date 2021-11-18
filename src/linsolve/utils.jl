@@ -28,18 +28,20 @@ function reservoir_linsolve(model, method = :cpr; rtol = nothing, v = 0, provide
         cyc = AlgebraicMultigrid.V()
         p_solve = AMGPreconditioner(ruge_stuben, cycle = cyc, presmoother = GaussSeidel(iter = gs_its), postsmoother = GaussSeidel(iter = gs_its))
         # p_solve = AMGPreconditioner()
-        p_solve = AMGPreconditioner(smoothed_aggregation, cycle = cyc, 
-                                smooth = JacobiProlongation(2.0/3.0), 
-                                presmoother = GaussSeidel(iter = gs_its), postsmoother = GaussSeidel(iter = gs_its))
+        #p_solve = AMGPreconditioner(smoothed_aggregation, cycle = cyc, 
+        #                        smooth = JacobiProlongation(2.0/3.0), 
+        #                        presmoother = GaussSeidel(iter = gs_its), postsmoother = GaussSeidel(iter = gs_its))
+        # p_solve = AMGPreconditioner(ruge_stuben)
+        # p_solve = AMGPreconditioner(smoothed_aggregation)
 
         cpr_type = :true_impes
         cpr_type = :analytical
         update_interval = :iteration
         update_interval = :ministep
-        # update_interval = :once
+        update_interval = :once
 
         prec = CPRPreconditioner(p_solve, strategy = cpr_type, 
-        update_interval = update_interval, partial_update = false)
+        update_interval = update_interval, partial_update = update_interval == :once)
         rtol = isnothing(rtol) ? 0.001 : rtol
         max_it = 2
         max_it = 200
@@ -64,8 +66,12 @@ function reservoir_linsolve(model, method = :cpr; rtol = nothing, v = 0, provide
     #     krylov = IterativeSolvers.bicgstabl!
     #     pv = IterativeSolvers
     # end
+    nl_reltol = 1e-3
+    relaxed_reltol = 0.25
 
     lsolve = GenericKrylov(solver, provider = provider, verbose = v, preconditioner = prec, 
+            nonlinear_relative_tolerance = nl_reltol,
+            relaxed_relative_tolerance = relaxed_reltol,
             relative_tolerance = rtol, absolute_tolerance = atol,
             max_iterations = max_it)
     return lsolve
