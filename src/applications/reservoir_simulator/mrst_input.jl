@@ -193,55 +193,64 @@ function read_patch_plot(filename::String)
     MRSTPlotData(f, v, d)
 end
 
+function model_from_mat(G, mrst_data, res_context)
+    ## Set up reservoir part
+    f = mrst_data["fluid"]
+    p = vec(f["p"])
+    c = vec(f["c"])
+    mu = vec(f["mu"])
+    nkr = vec(f["nkr"])
+    rhoS = vec(f["rhoS"])
+
+    water = AqueousPhase()
+    oil = LiquidPhase()
+    sys = ImmiscibleSystem([water, oil])
+
+    model = SimulationModel(G, sys, context = res_context)
+    rho = ConstantCompressibilityDensities(sys, p, rhoS, c)
+
+    if haskey(f, "swof")
+        swof = f["swof"]
+    else
+        swof = []
+    end
+
+    if isempty(swof)
+        kr = BrooksCoreyRelPerm(sys, nkr)
+    else
+        s, krt = preprocess_relperm_table(swof)
+        kr = TabulatedRelPermSimple(s, krt)
+    end
+    mu = ConstantVariables(mu)
+
+    p = model.primary_variables
+    p[:Pressure] = Pressure(max_rel = 0.2)
+    s = model.secondary_variables
+    s[:PhaseMassDensities] = rho
+    s[:RelativePermeabilities] = kr
+    s[:PhaseViscosities] = mu
+    
+    ## Model parameters
+    param = setup_parameters(model)
+    param[:reference_densities] = vec(rhoS)
+
+    return (model, param)
+end
+
 function setup_case_from_mrst(casename; simple_well = false, block_backend = true, facility_grouping = :onegroup, kwarg...)
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false; kwarg...)
     function setup_res(G, mrst_data; block_backend = false, use_groups = false)
-        ## Set up reservoir part
-        f = mrst_data["fluid"]
-        p = vec(f["p"])
-        c = vec(f["c"])
-        mu = vec(f["mu"])
-        nkr = vec(f["nkr"])
-        rhoS = vec(f["rhoS"])
-    
-        water = AqueousPhase()
-        oil = LiquidPhase()
-        sys = ImmiscibleSystem([water, oil])
         bctx = DefaultContext(matrix_layout = BlockMajorLayout())
         # bctx = DefaultContext(matrix_layout = UnitMajorLayout())
         dctx = DefaultContext()
-    
         if block_backend && use_groups
             res_context = bctx
         else
             res_context = dctx
         end
-    
-        model = SimulationModel(G, sys, context = res_context)
-        rho = ConstantCompressibilityDensities(sys, p, rhoS, c)
-    
-        if haskey(f, "swof")
-            swof = f["swof"]
-        else
-            swof = []
-        end
-    
-        if isempty(swof)
-            kr = BrooksCoreyRelPerm(sys, nkr)
-        else
-            s, krt = preprocess_relperm_table(swof)
-            kr = TabulatedRelPermSimple(s, krt)
-        end
-        mu = ConstantVariables(mu)
-    
-        p = model.primary_variables
-        p[:Pressure] = Pressure(max_rel = 0.2)
-        s = model.secondary_variables
-        s[:PhaseMassDensities] = rho
-        s[:RelativePermeabilities] = kr
-        s[:PhaseViscosities] = mu
-    
-        ##
+
+        model, param_res = model_from_mat(G, mrst_data, res_context)
+
         state0 = mrst_data["state0"]
         p0 = state0["pressure"]
         if isa(p0, AbstractArray)
@@ -251,10 +260,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         end
         s0 = state0["s"]'
         init = Dict(:Pressure => p0, :Saturations => s0)
-    
-        ## Model parameters
-        param_res = setup_parameters(model)
-        param_res[:reference_densities] = vec(rhoS)
+
         # param_res[:tolerances][:default] = 0.01
         # param_res[:tolerances][:mass_conservation] = 0.01
     
