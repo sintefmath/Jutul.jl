@@ -4,15 +4,13 @@ export BrooksCoreyRelPerm, TabulatedRelPermSimple
 abstract type PhaseVariables <: GroupedVariables end
 abstract type ComponentVariable <: GroupedVariables end
 
-function degrees_of_freedom_per_entity(model, sf::PhaseVariables) number_of_phases(model.system) end
+degrees_of_freedom_per_entity(model, sf::PhaseVariables) = number_of_phases(model.system)
 
 # Single-phase specialization
-function degrees_of_freedom_per_entity(model::SimulationModel{D, S}, sf::ComponentVariable) where {D, S<:SinglePhaseSystem} 1 end
+degrees_of_freedom_per_entity(model::SimulationModel{D, S}, sf::ComponentVariable) where {D, S<:SinglePhaseSystem} = 1
 
 # Immiscible specialization
-function degrees_of_freedom_per_entity(model::SimulationModel{D, S}, sf::ComponentVariable) where {D, S<:ImmiscibleSystem}
-    number_of_phases(model.system)
-end
+degrees_of_freedom_per_entity(model::SimulationModel{D, S}, sf::ComponentVariable) where {D, S<:ImmiscibleSystem} = number_of_phases(model.system)
 
 function select_secondary_variables_system!(S, domain, system::MultiPhaseSystem, formulation)
     select_default_darcy!(S, domain, system, formulation)
@@ -32,10 +30,7 @@ function select_default_darcy!(S, domain, system, formulation)
     S[:FluidVolume] = ConstantVariables(fv, Cells(), single_entity = !isa(fv, AbstractArray))
 end
 
-
-function minimum_output_variables(system::MultiPhaseSystem, primary_variables)
-    [:TotalMasses]
-end
+minimum_output_variables(system::MultiPhaseSystem, primary_variables) = [:TotalMasses]
 
 abstract type RelativePermeabilities <: PhaseVariables end
 

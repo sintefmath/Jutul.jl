@@ -1,4 +1,5 @@
 include("types.jl")
+include("deck_types.jl")
 include("porousmedia_grids.jl")
 include("flux.jl")
 # Definitions for multiphase flow
@@ -20,3 +21,4 @@ include("mrst_input.jl")
 # Various input tricks
 include("io.jl")
 include("cpr.jl")
+include("deck_support.jl")

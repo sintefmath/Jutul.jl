@@ -195,6 +195,18 @@ end
 
 function model_from_mat(G, mrst_data, res_context)
     ## Set up reservoir part
+    if haskey(mrst_data, "fluid")
+        f = model_from_mat_fluid
+    elseif haskey(mrst_data, "deck")
+        f = model_from_mat_deck
+    else
+        error("I don't know how this model was made")
+    end
+    return f(G, mrst_data, res_context)
+end
+
+function model_from_mat_fluid(G, mrst_data, res_context)
+    ## Set up reservoir part
     f = mrst_data["fluid"]
     p = vec(f["p"])
     c = vec(f["c"])
@@ -222,6 +234,66 @@ function model_from_mat(G, mrst_data, res_context)
         kr = TabulatedRelPermSimple(s, krt)
     end
     mu = ConstantVariables(mu)
+
+    p = model.primary_variables
+    p[:Pressure] = Pressure(max_rel = 0.2)
+    s = model.secondary_variables
+    s[:PhaseMassDensities] = rho
+    s[:RelativePermeabilities] = kr
+    s[:PhaseViscosities] = mu
+    
+    ## Model parameters
+    param = setup_parameters(model)
+    param[:reference_densities] = vec(rhoS)
+
+    return (model, param)
+end
+
+function model_from_mat_deck(G, mrst_data, res_context)
+    ## Set up reservoir part
+    deck = mrst_data["deck"]
+    props = deck["PROPS"]
+    phases = mrst_data["phases"]
+
+    has_wat = phases[1]
+    has_oil = phases[2]
+    has_gas = phases[3]
+    dens = vec(props["DENSITY"])
+    if has_wat && has_oil
+        @assert !has_gas
+        sat_table = props["SWOF"]
+        pvt_1 = PVTW(props["PVTW"])
+        pvt_2 = PVDO(props["PVDO"])
+
+        water = AqueousPhase()
+        oil = LiquidPhase()
+        sys = ImmiscibleSystem([water, oil])
+        rhoS = dens[1:2]
+    elseif has_oil && has_gas
+        @assert !has_wat
+        sat_table = props["SGOF"]
+        pvt_1 = PVDO(props["PVDO"])
+        pvt_2 = PVDG(props["PVDG"])
+
+        gas = VaporPhase()
+        oil = LiquidPhase()
+        sys = ImmiscibleSystem([oil, gas])
+        rhoS = dens[2:3]
+    else
+        error("Not supported")
+    end
+    # PVT
+    pvt = (pvt_1, pvt_2)
+    rho = DeckDensity(pvt)
+    mu = DeckViscosity(pvt)
+    # Rel perm
+    kr_from_deck = only(sat_table)
+    s, krt = preprocess_relperm_table(kr_from_deck)
+    kr = TabulatedRelPermSimple(s, krt)
+    # pc = 
+
+    model = SimulationModel(G, sys, context = res_context)
+    # rho = ConstantCompressibilityDensities(sys, p, rhoS, c)
 
     p = model.primary_variables
     p[:Pressure] = Pressure(max_rel = 0.2)
@@ -290,6 +362,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     slw = 1.0
     w0 = Dict(:Pressure => mean(init[:Pressure]), :TotalMassFlux => 1e-12, :Saturations => [slw, 1-slw])
     
+    @info vec(mrst_data["W"])
     well_symbols = map((x) -> Symbol(x["name"]), vec(mrst_data["W"]))
     num_wells = length(well_symbols)
     
