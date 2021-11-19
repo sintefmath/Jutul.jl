@@ -263,7 +263,11 @@ function model_from_mat_deck(G, mrst_data, res_context)
         @assert !has_gas
         sat_table = props["SWOF"]
         pvt_1 = PVTW(props["PVTW"])
-        pvt_2 = PVDO(props["PVDO"])
+        if haskey(props, "PVDO")
+            pvt_2 = PVDO(props["PVDO"])
+        else
+            pvt_2 = PVCDO(props["PVCDO"])
+        end
 
         water = AqueousPhase()
         oil = LiquidPhase()
@@ -361,8 +365,6 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     
     slw = 1.0
     w0 = Dict(:Pressure => mean(init[:Pressure]), :TotalMassFlux => 1e-12, :Saturations => [slw, 1-slw])
-    
-    @info vec(mrst_data["W"])
     well_symbols = map((x) -> Symbol(x["name"]), vec(mrst_data["W"]))
     num_wells = length(well_symbols)
     

@@ -20,7 +20,8 @@ end
 
 function MuBTable(pvtx::T; kwarg...) where T<:AbstractMatrix
     p = vec(pvtx[:, 1])
-    b = vec(pvtx[:, 2])
+    B = vec(pvtx[:, 2])
+    b = 1.0./B
     mu = vec(pvtx[:, 3])
     MuBTable(p, b, mu; kwarg...)
 end
@@ -85,11 +86,25 @@ struct PVTW <: AbstractTablePVT
     tab::NTuple
 end
 
-function PVTW(pvdo::AbstractArray)
-    c = map(x -> ConstMuBTable(vec(x)), pvdo)
+function PVTW(pvtw::AbstractArray)
+    if eltype(pvtw)<:AbstractFloat
+        pvtw = [pvtw]
+    end
+    c = map(x -> ConstMuBTable(vec(x)), pvtw)
     PVTW(Tuple(c))
 end
 
+struct PVCDO <: AbstractTablePVT
+    tab::NTuple
+end
+
+function PVCDO(pvcdo::AbstractArray)
+    if eltype(pvcdo)<:AbstractFloat
+        pvcdo = [pvcdo]
+    end
+    c = map(x -> ConstMuBTable(vec(x)), pvcdo)
+    PVCDO(Tuple(c))
+end
 # abstract type AbstractTableSaturation <: AbstractTableDeck end
 
 # struct RelativePermeabilityTable <: AbstractTableSaturation
