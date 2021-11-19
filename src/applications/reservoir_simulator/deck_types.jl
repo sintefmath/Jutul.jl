@@ -64,26 +64,28 @@ function shrinkage(tbl::ConstMuBTable, p)
     return b_r*(1 + F + 0.5*F^2)
 end
 
-struct PVDO <: AbstractTablePVT
-    tab::NTuple
+struct PVDO{T} <: AbstractTablePVT
+    tab::T
 end
 
 function PVDO(pvdo::AbstractArray)
     c = map(MuBTable, pvdo)
-    PVDO(Tuple(c))
+    ct = Tuple(c)
+    PVDO{typeof(ct)}(ct)
 end
 
-struct PVDG <: AbstractTablePVT
-    tab::NTuple
+struct PVDG{T} <: AbstractTablePVT
+    tab::T
 end
 
 function PVDG(pvdo::AbstractArray)
     c = map(MuBTable, pvdo)
-    PVDG(Tuple(c))
+    ct = Tuple(c)
+    PVDG{typeof(ct)}(ct)
 end
 
-struct PVTW <: AbstractTablePVT
-    tab::NTuple
+struct PVTW{N, T} <: AbstractTablePVT
+    tab::NTuple{N, T}
 end
 
 function PVTW(pvtw::AbstractArray)
@@ -91,11 +93,14 @@ function PVTW(pvtw::AbstractArray)
         pvtw = [pvtw]
     end
     c = map(x -> ConstMuBTable(vec(x)), pvtw)
-    PVTW(Tuple(c))
+    ct = Tuple(c)
+    N = length(ct)
+    T = typeof(ct[1])
+    PVTW{N, T}(ct)
 end
 
-struct PVCDO <: AbstractTablePVT
-    tab::NTuple
+struct PVCDO{N, T} <: AbstractTablePVT
+    tab::NTuple{N, T}
 end
 
 function PVCDO(pvcdo::AbstractArray)
@@ -103,7 +108,11 @@ function PVCDO(pvcdo::AbstractArray)
         pvcdo = [pvcdo]
     end
     c = map(x -> ConstMuBTable(vec(x)), pvcdo)
-    PVCDO(Tuple(c))
+    ct = Tuple(c)
+    N = length(c)
+    N = length(ct)
+    T = typeof(ct[1])
+    PVCDO{N, T}(ct)
 end
 # abstract type AbstractTableSaturation <: AbstractTableDeck end
 

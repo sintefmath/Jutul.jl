@@ -17,7 +17,11 @@ region(::Nothing, cell) = 1
 
 function get_pvt(mu::DeckPhaseVariables, ph, cell)
     reg = region(mu, cell)
-    return mu.pvt[ph].tab[reg]
+    return get_pvt_tab(mu.pvt[ph], reg)
+end
+
+function get_pvt_tab(pvt, reg)
+    return pvt.tab[reg]
 end
 
 function get_sat(mu::DeckPhaseVariables, ph, cell)
@@ -55,14 +59,12 @@ end
 @terv_secondary function update_as_secondary!(b, b_def::DeckDensity, model, param, Pressure)
     rhos = param[:reference_densities]
     # Note immiscible assumption
-    # pvt = get_pvt(b_def, 1, 1)
-    # @tullio b[ph, i] = rhos[ph]*shrinkage(pvt, Pressure[i])
-    for ph = 1:size(b, 1)
-        for i = 1:size(b, 2)
-            b[ph, i] = rhos[ph]*shrinkage(get_pvt(b_def, ph, i), Pressure[i])
-        end
-    end
+    pvt = b_def.pvt
+    # @tullio b[ph, i] = rhos[ph]*shrinkage(pvt[ph].tab[1], Pressure[i])
     # @tullio b[ph, i] = rhos[ph]*shrinkage(get_pvt(b_def, ph, i), Pressure[i])
+    # @info size(b)
+    @tullio b[ph, i] = rhos[ph]*shrinkage(get_pvt_tab(pvt[ph], region(b_def, i)), Pressure[i])
+
 end
 
 # struct DeckRelativePermeability <: DeckPhaseVariables
