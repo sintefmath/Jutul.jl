@@ -17,10 +17,10 @@ region(::Nothing, cell) = 1
 
 function get_pvt(mu::DeckPhaseVariables, ph, cell)
     reg = region(mu, cell)
-    return get_pvt_tab(mu.pvt[ph], reg)
+    return tab_by_region(mu.pvt[ph], reg)
 end
 
-function get_pvt_tab(pvt, reg)
+function tab_by_region(pvt, reg)
     return pvt.tab[reg]
 end
 
@@ -38,9 +38,8 @@ struct DeckViscosity <: DeckPhaseVariables
     end
 end
 
-@terv_secondary function update_as_secondary!(mu, mu_def::DeckViscosity, model, param, Pressure)
-    pvt = mu_def.pvt
-    reg = mu_def.regions
+@terv_secondary function update_as_secondary!(mu, μ::DeckViscosity, model, param, Pressure)
+    pvt, reg = μ.pvt, μ.regions
     @tullio mu[ph, i] = viscosity(pvt[ph], reg, Pressure[i], i)
 end
 
@@ -53,12 +52,11 @@ struct DeckDensity <: DeckPhaseVariables
     end
 end
 
-@terv_secondary function update_as_secondary!(b, b_def::DeckDensity, model, param, Pressure)
+@terv_secondary function update_as_secondary!(rho, ρ::DeckDensity, model, param, Pressure)
     rhos = param[:reference_densities]
+    pvt, reg = ρ.pvt, ρ.regions
     # Note immiscible assumption
-    pvt = b_def.pvt
-    reg = b_def.regions
-    @tullio b[ph, i] = rhos[ph]*shrinkage(pvt[ph], reg, Pressure[i], i)
+    @tullio rho[ph, i] = rhos[ph]*shrinkage(pvt[ph], reg, Pressure[i], i)
 end
 
 # struct DeckRelativePermeability <: DeckPhaseVariables

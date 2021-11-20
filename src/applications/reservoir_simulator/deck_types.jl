@@ -47,7 +47,7 @@ function ConstMuBTable(pvtw::M) where M<:AbstractVector
 end
 
 function viscosity(pvt::AbstractTablePVT, reg, p, cell)
-    tbl = get_pvt_tab(pvt, region(reg, cell))
+    tbl = tab_by_region(pvt, region(reg, cell))
     return viscosity(tbl, p)
 end
 
@@ -63,7 +63,7 @@ end
 
 # 
 function shrinkage(pvt::AbstractTablePVT, reg, p, cell)
-    tbl = get_pvt_tab(pvt, region(reg, cell))
+    tbl = tab_by_region(pvt, region(reg, cell))
     return shrinkage(tbl, p)
 end
 
