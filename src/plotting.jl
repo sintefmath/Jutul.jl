@@ -1,4 +1,5 @@
-export plot_well!
+export plot_well!, plot_interactive
+using .GLMakie
 function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kwarg...)
     pts, tri, mapper = triangulate_outer_surface(grid)
 
