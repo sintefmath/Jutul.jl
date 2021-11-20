@@ -39,12 +39,9 @@ struct DeckViscosity <: DeckPhaseVariables
 end
 
 @terv_secondary function update_as_secondary!(mu, mu_def::DeckViscosity, model, param, Pressure)
-    for ph = 1:size(mu, 1)
-        for i = 1:size(mu, 2)
-            mu[ph, i] = viscosity(get_pvt(mu_def, ph, i), Pressure[i])
-        end
-    end
-    # @tullio mu[ph, i] = viscosity(get_pvt(mu_def, ph, i), Pressure[i])
+    pvt = mu_def.pvt
+    reg = mu_def.regions
+    @tullio mu[ph, i] = viscosity(pvt[ph], reg, Pressure[i], i)
 end
 
 struct DeckDensity <: DeckPhaseVariables
@@ -60,11 +57,8 @@ end
     rhos = param[:reference_densities]
     # Note immiscible assumption
     pvt = b_def.pvt
-    # @tullio b[ph, i] = rhos[ph]*shrinkage(pvt[ph].tab[1], Pressure[i])
-    # @tullio b[ph, i] = rhos[ph]*shrinkage(get_pvt(b_def, ph, i), Pressure[i])
-    # @info size(b)
-    @tullio b[ph, i] = rhos[ph]*shrinkage(get_pvt_tab(pvt[ph], region(b_def, i)), Pressure[i])
-
+    reg = b_def.regions
+    @tullio b[ph, i] = rhos[ph]*shrinkage(pvt[ph], reg, Pressure[i], i)
 end
 
 # struct DeckRelativePermeability <: DeckPhaseVariables
