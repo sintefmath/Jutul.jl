@@ -85,8 +85,8 @@ function well_control_equation(ctrl, t::BottomHolePressureTarget, qt)
 end
 
 function well_control_equation(ctrl, t::SinglePhaseRateTarget, qt)
-    # TODO: Add some notion of surface density
-    return t.value - qt
+    # Note: This equation will get the corresponding phase rate subtracted by the well
+    return t.value
 end
 
 
@@ -148,14 +148,43 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
     fstate = target_storage.state
     ctrl = fstate.WellGroupConfiguration.control[well_symbol]
     target = ctrl.target
-    if isa(target, BottomHolePressureTarget)
-        # Treat top node as bhp reference point
-        bhp_contribution = -source_storage.state.Pressure[1]
 
-        # Cross-term in well
-        ct.crossterm_source[1] = bhp_contribution
-        ct.crossterm_target[1] = value(bhp_contribution)
+    pos = get_well_position(target_model.domain, well_symbol)
+    q_t = fstate.TotalSurfaceMassRate[pos]
+
+    well_state = source_storage.state
+    bhp = well_state.Pressure[1]
+    masses = well_state.TotalMasses[:, 1]
+    param = source_storage.parameters
+    # Note: partial derivative mixing here, fix.
+
+    # w_t = -well_target(target, q_t, source_model, param, bhp, masses)
+    ct.crossterm_source[1] = -well_target(target, source_model, param, value(q_t), bhp, masses) 
+    ct.crossterm_target[1] = -well_target(target, source_model, param, q_t, value(bhp), value.(masses))
+end
+
+# function well_target(target, q_t, well_model, well_param, well_state)
+#     return 0.0
+# end
+
+well_target(target::BottomHolePressureTarget, well_model, well_param, q_t, bhp, masses) = bhp
+
+function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, well_param, q_t, bhp, masses) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
+    phases = get_phases(well_model.system)
+    pos = findfirst(isequal(target.phase), phases)
+    @assert !isnothing(pos)
+    rhoS = well_param[:reference_densities]
+    if value(q_t) > 0
+        q = q_t
+    else
+        t = 0.0
+        for i = 1:length(phases)
+            t += masses[i]
+        end
+        mass_fraction = masses[pos]/t
+        q = mass_fraction*q_t
     end
+    return q/rhoS[pos]
 end
 
 function associated_entity(::ControlEquationWell) Wells() end
