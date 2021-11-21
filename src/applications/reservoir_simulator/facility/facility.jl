@@ -159,30 +159,35 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
     # Note: partial derivative mixing here, fix.
 
     # w_t = -well_target(target, q_t, source_model, param, bhp, masses)
-    ct.crossterm_source[1] = -well_target(target, source_model, param, value(q_t), bhp, masses) 
-    ct.crossterm_target[1] = -well_target(target, source_model, param, q_t, value(bhp), value.(masses))
+    ct.crossterm_source[1] = -well_target(target, source_model, param, value(q_t), well_state, x -> x) 
+    ct.crossterm_target[1] = -well_target(target, source_model, param, q_t, well_state, value)
 end
 
 # function well_target(target, q_t, well_model, well_param, well_state)
 #     return 0.0
 # end
+bottom_hole_pressure(ws) = ws.Pressure[1]
 
-well_target(target::BottomHolePressureTarget, well_model, well_param, q_t, bhp, masses) = bhp
+function top_node_component_mass_fraction(ws, c_ix)
+    tm = ws.TotalMasses
+    t = ws.TotalMass
+    mass_fraction = tm[1, c_ix]/t[1]
+    return mass_fraction
+end
 
-function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, well_param, q_t, bhp, masses) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
+well_target(target::BottomHolePressureTarget, well_model, well_param, q_t, well_state, f) = f(bottom_hole_pressure(well_state))
+
+function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, well_param, q_t, well_state, f) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
+    rhoS = well_param[:reference_densities]
     phases = get_phases(well_model.system)
     pos = findfirst(isequal(target.phase), phases)
     @assert !isnothing(pos)
-    rhoS = well_param[:reference_densities]
-    if value(q_t) > 0
+
+    if value(q_t) >= 0
         q = q_t
     else
-        t = 0.0
-        for i = 1:length(phases)
-            t += masses[i]
-        end
-        mass_fraction = masses[pos]/t
-        q = mass_fraction*q_t
+        mf = f(top_node_component_mass_fraction(well_state, pos))
+        q = q_t*mf
     end
     return q/rhoS[pos]
 end
