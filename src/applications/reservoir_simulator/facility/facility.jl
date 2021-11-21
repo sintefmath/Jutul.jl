@@ -148,24 +148,34 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
     fstate = target_storage.state
     ctrl = fstate.WellGroupConfiguration.control[well_symbol]
     target = ctrl.target
-
-    pos = get_well_position(target_model.domain, well_symbol)
-    q_t = fstate.TotalSurfaceMassRate[pos]
-
+    # q_t = facility_surface_mass_rate_for_well(target_model, well_symbol, fstate)
     well_state = source_storage.state
-    bhp = well_state.Pressure[1]
-    masses = well_state.TotalMasses[:, 1]
     param = source_storage.parameters
-    # Note: partial derivative mixing here, fix.
+    rhoS = param[:reference_densities]
 
-    # w_t = -well_target(target, q_t, source_model, param, bhp, masses)
-    ct.crossterm_source[1] = -well_target(target, source_model, param, value(q_t), well_state, x -> x) 
-    ct.crossterm_target[1] = -well_target(target, source_model, param, q_t, well_state, value)
+    update_facility_control_crossterm!(ct.crossterm_source, ct.crossterm_target, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
+    # # Operation twice, to get both partials
+    # ct.crossterm_source[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x) 
+    # ct.crossterm_target[1] = -well_target(target, source_model, rhoS, q_t, well_state, value)
 end
 
-# function well_target(target, q_t, well_model, well_param, well_state)
-#     return 0.0
-# end
+function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
+    q_t = facility_surface_mass_rate_for_well(target_model, well_symbol, fstate)
+
+    # well_state = source_storage.state
+    # param = source_storage.parameters
+    # rhoS = param[:reference_densities]
+    # Operation twice, to get both partials
+    s_buf[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x) 
+    t_buf[1] = -well_target(target, source_model, rhoS, q_t, well_state, value)
+
+end
+
+function facility_surface_mass_rate_for_well(model::SimulationModel, wsym, fstate)
+    pos = get_well_position(model.domain, wsym)
+    return fstate.TotalSurfaceMassRate[pos]
+end
+
 bottom_hole_pressure(ws) = ws.Pressure[1]
 
 function top_node_component_mass_fraction(ws, c_ix)
@@ -175,10 +185,10 @@ function top_node_component_mass_fraction(ws, c_ix)
     return mass_fraction
 end
 
-well_target(target::BottomHolePressureTarget, well_model, well_param, q_t, well_state, f) = f(bottom_hole_pressure(well_state))
+well_target(target, well_model, rhoS, q_t, well_state, f) = 0.0
+well_target(target::BottomHolePressureTarget, well_model, rhoS, q_t, well_state, f) = f(bottom_hole_pressure(well_state))
 
-function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, well_param, q_t, well_state, f) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
-    rhoS = well_param[:reference_densities]
+function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
     phases = get_phases(well_model.system)
     pos = findfirst(isequal(target.phase), phases)
     @assert !isnothing(pos)
