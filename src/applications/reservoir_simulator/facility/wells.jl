@@ -270,16 +270,17 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
     conn_data = mass_flow.conn_data
 
     for cd in conn_data
-        update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W, single_phase)
+        f = cd.face
+        seg = W.segment_models[f]
+        update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W, seg, single_phase)
     end
 end
 
-function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W, single_phase)
+function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W, seg_model, single_phase)
     gΔz = cd.gdz
     self = cd.self
     other = cd.other
     face = cd.face
-    seg_model = W.segment_models[face]
 
     if single_phase
         s_self, s_other = s, s
