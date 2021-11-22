@@ -42,8 +42,18 @@ function sort_secondary_variables!(model::MultiModel)
     end
 end
 
+function cross_term(storage, target)
+    return storage[:cross_terms][target]
+end
+
 function cross_term_pair(storage, source, target)
-    return storage.cross_terms[target][source]
+    ct = cross_term(storage, target)
+    if haskey(ct, source)
+        x = ct[source]
+    else
+        x = nothing
+    end
+    return x
 end
 
 @inline submodel_symbols(model::MultiModel) = keys(model.models)
@@ -144,8 +154,6 @@ function setup_cross_terms(storage, model::MultiModel)
             if found
                 sources[source] = d
                 debugstr *= tmpstr
-            else
-                sources[source] = nothing
             end
         end
         crossd[target] = sources
@@ -232,7 +240,6 @@ end
 
 function align_crossterms_subgroup!(storage, models, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset)
     base_variable_offset = variable_offset
-    cross_terms = storage[:cross_terms]
     # Iterate over targets (= rows)
     for target in target_keys
         target_model = models[target]
@@ -241,7 +248,7 @@ function align_crossterms_subgroup!(storage, models, target_keys, source_keys, n
         for source in source_keys
             source_model = models[source]
             if source != target
-                ct = cross_terms[target][source]
+                ct = cross_term_pair(storage, source, target)
                 eqs = storage[target][:equations]
                 align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, equation_offset = equation_offset, variable_offset = variable_offset)
                 # Same number of rows as target, same number of columns as source
@@ -285,7 +292,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         equations = storage[target][:equations]
-        cross_terms = storage[:cross_terms][target][source]
+        cross_terms = cross_term_pair(storage, source, target)
         equation_offset = 0
         for (key, eq) in equations
             if !isnothing(cross_terms) && haskey(cross_terms, key)
