@@ -138,8 +138,8 @@ function setup_cross_terms(storage, model::MultiModel)
                 if !isnothing(ct)
                     found = true
                     tmpstr *= String(key)*": Cross-term found.\n"
+                    d[key] = ct
                 end
-                d[key] = ct
             end
             if found
                 sources[source] = d
@@ -256,7 +256,7 @@ end
 function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, target::TervModel, source::TervModel; equation_offset = 0, variable_offset = 0)
     for ekey in keys(equations)
         eq = equations[ekey]
-        if !isnothing(crossterms)
+        if !isnothing(crossterms) && haskey(crossterms, ekey)
             ct = crossterms[ekey]
             if !isnothing(ct)
                 align_to_jacobian!(ct, lsys.jac, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
@@ -288,7 +288,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         cross_terms = storage[:cross_terms][target][source]
         equation_offset = 0
         for (key, eq) in equations
-            if !isnothing(cross_terms)
+            if !isnothing(cross_terms) && haskey(cross_terms, key)
                 x = cross_terms[key]
                 if !isnothing(x)
                     variable_offset = 0
@@ -473,7 +473,7 @@ function update_cross_terms_for_pair!(cross_terms, storage, model, source::Symbo
     model_t, model_s = get_submodels(model, target, source)
 
     eqs = storage_t.equations
-    for ekey::Symbol in keys(eqs)
+    for ekey::Symbol in keys(cross_terms)
         ct = cross_terms[ekey]
         if !isnothing(ct)
             # @info "$source -> $target: $ekey"
@@ -501,7 +501,7 @@ function apply_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol
     model_t, model_s = get_submodels(model, target, source)
 
     eqs = storage_t[:equations]
-    for ekey::Symbol in keys(eqs)
+    for ekey::Symbol in keys(cross_terms)
         ct = cross_terms[ekey]
         if !isnothing(ct)
             apply_cross_term!(eqs[ekey], ct, model_t, model_s, dt)
@@ -562,7 +562,7 @@ function update_linearized_system_crossterms!(lsys, cross_terms, storage, model:
     model_t, model_s = get_submodels(model, target, source)
 
     eqs = storage_t[:equations]
-    for ekey in keys(eqs)
+    for ekey in keys(cross_terms)
         ct = cross_terms[ekey]
         nz = nonzeros(lsys.jac)
         if !isnothing(ct)
