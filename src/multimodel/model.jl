@@ -42,6 +42,10 @@ function sort_secondary_variables!(model::MultiModel)
     end
 end
 
+function cross_term_pair(storage, source, target)
+    return storage.cross_terms[target][source]
+end
+
 @inline submodel_symbols(model::MultiModel) = keys(model.models)
 
 function setup_state!(state, model::MultiModel, init_values)
@@ -137,9 +141,11 @@ function setup_cross_terms(storage, model::MultiModel)
                 end
                 d[key] = ct
             end
-            sources[source] = d
             if found
+                sources[source] = d
                 debugstr *= tmpstr
+            else
+                sources[source] = nothing
             end
         end
         crossd[target] = sources
@@ -250,10 +256,11 @@ end
 function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, target::TervModel, source::TervModel; equation_offset = 0, variable_offset = 0)
     for ekey in keys(equations)
         eq = equations[ekey]
-        ct = crossterms[ekey]
-
-        if !isnothing(ct)
-            align_to_jacobian!(ct, lsys.jac, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
+        if !isnothing(crossterms)
+            ct = crossterms[ekey]
+            if !isnothing(ct)
+                align_to_jacobian!(ct, lsys.jac, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
+            end
         end
         equation_offset += number_of_equations(target, eq)
     end
@@ -281,16 +288,18 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         cross_terms = storage[:cross_terms][target][source]
         equation_offset = 0
         for (key, eq) in equations
-            x = cross_terms[key]
-            if !isnothing(x)
-                variable_offset = 0
-                for u in get_primary_variable_ordered_entities(source_model)
-                    S = declare_sparsity(target_model, source_model, x, u, layout)
-                    if !isnothing(S)
-                        push!(I, S.I .+ equation_offset)
-                        push!(J, S.J .+ variable_offset)
+            if !isnothing(cross_terms)
+                x = cross_terms[key]
+                if !isnothing(x)
+                    variable_offset = 0
+                    for u in get_primary_variable_ordered_entities(source_model)
+                        S = declare_sparsity(target_model, source_model, x, u, layout)
+                        if !isnothing(S)
+                            push!(I, S.I .+ equation_offset)
+                            push!(J, S.J .+ variable_offset)
+                        end
+                        variable_offset += number_of_degrees_of_freedom(source_model, u)
                     end
-                    variable_offset += number_of_degrees_of_freedom(source_model, u)
                 end
             end
             equation_offset += number_of_equations(target_model, eq)
@@ -450,16 +459,16 @@ function update_cross_terms!(storage, model::MultiModel, dt)
             target::Symbol
             source::Symbol
             if source != target
-                # @info "$source -> $target"
-                update_cross_terms_for_pair!(storage, model, source, target, dt)
+                cross_terms = cross_term_pair(storage, source, target)
+                update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
             end
         end
     end
 end
 
-function update_cross_terms_for_pair!(storage, model, source::Symbol, target::Symbol, dt)
-    cross_terms = storage.cross_terms[target][source]
+update_cross_terms_for_pair!(cross_terms::Nothing, storage, model, source::Symbol, target::Symbol, dt) = nothing
 
+function update_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol, target::Symbol, dt)
     storage_t, storage_s = get_submodel_storage(storage, target, source)
     model_t, model_s = get_submodels(model, target, source)
 
@@ -478,15 +487,16 @@ function apply_cross_terms!(storage, model::MultiModel, dt)
     for target::Symbol in model_keys
         for source::Symbol in model_keys
             if source != target
-                apply_cross_terms_for_pair!(storage, model, source, target, dt)
+                cross_terms = cross_term_pair(storage, source, target)
+                apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
             end
         end
     end
 end
 
-function apply_cross_terms_for_pair!(storage, model, source::Symbol, target::Symbol, arg...)
-    cross_terms = storage[:cross_terms][target][source]
+apply_cross_terms_for_pair!(cross_terms::Nothing, storage, model, source::Symbol, target::Symbol, dt) = nothing
 
+function apply_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol, target::Symbol, dt)
     storage_t, = get_submodel_storage(storage, target)
     model_t, model_s = get_submodels(model, target, source)
 
@@ -494,7 +504,7 @@ function apply_cross_terms_for_pair!(storage, model, source::Symbol, target::Sym
     for ekey::Symbol in keys(eqs)
         ct = cross_terms[ekey]
         if !isnothing(ct)
-            apply_cross_term!(eqs[ekey], ct, model_t, model_s, arg...)
+            apply_cross_term!(eqs[ekey], ct, model_t, model_s, dt)
         end
     end
 end
@@ -535,17 +545,19 @@ function update_cross_term_linearized_system_subgroup!(storage, model, model_key
     for target in model_keys
         for source in model_keys
             if source != target
+                cross_terms = cross_term_pair(storage, source, target)
+                if isnothing(cross_terms)
+                    continue
+                end
                 lsys = get_linearized_system_model_pair(storage, model, source, target, linearized_system)
-                update_linearized_system_crossterms!(lsys, storage, model, source, target)
+                update_linearized_system_crossterms!(lsys, cross_terms, storage, model, source, target)
             end
         end
     end
 end
 
 
-function update_linearized_system_crossterms!(lsys, storage, model::MultiModel, source, target)
-    cross_terms = storage[:cross_terms][target][source]
-
+function update_linearized_system_crossterms!(lsys, cross_terms, storage, model::MultiModel, source, target)
     storage_t, = get_submodel_storage(storage, target)
     model_t, model_s = get_submodels(model, target, source)
 
