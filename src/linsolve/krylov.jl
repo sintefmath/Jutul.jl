@@ -13,7 +13,8 @@ end
 
 Base.eltype(p::PrecondWrapper) = eltype(p.op)
 
-LinearAlgebra.mul!(x, p::PrecondWrapper, arg...) = mul!(x, p.op, arg...)
+LinearAlgebra.mul!(x, p::PrecondWrapper, y) = mul!(x, p.op, y)
+LinearAlgebra.mul!(x, p::PrecondWrapper, y, α, β) = mul!(x, p.op, y, α, β)
 
 function LinearAlgebra.ldiv!(p::PrecondWrapper, x)
     y = p.x

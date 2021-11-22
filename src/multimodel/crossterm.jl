@@ -21,8 +21,10 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, sour
     end
 end
 
+target_impact(ct) = ct.impact.target
+
 function apply_cross_term!(eq, ct, model_t, model_s, arg...)
-    ix = ct.impact.target
+    ix = target_impact(ct)
     d = get_diagonal_entries(eq)
     # NOTE: We do not use += here due to sparse oddities with ForwardDiff.
     @tullio d[i, ix[j]] = d[i, ix[j]] + ct.crossterm_target[i, j]

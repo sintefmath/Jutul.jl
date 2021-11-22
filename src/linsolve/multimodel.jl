@@ -107,37 +107,41 @@ end
 
 function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
     if do_schur(sys)
-        B, C, D, E, a, b = get_schur_blocks!(sys)
         bz = block_size(sys[1, 1])
         if bz == 1
             Δx = dx
         else
             Δx = block_major_to_equation_major_view(dx, bz)
         end
-
+        buf_a = sys.schur_buffer[1]
+        buf_b = sys.schur_buffer[2]
+        _, C, D, E, a, b = get_schur_blocks!(sys)
         n = length(dx)
         m = length(sys.dx)
 
         A = view(sys.dx, 1:n)
         B = view(sys.dx, (n+1):m)
 
-        @tullio A[i] = -dx[i]
-        buf_a = sys.schur_buffer[1]
-        buf_b = sys.schur_buffer[2]
-        # We want to do (in-place):
-        # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
-        @inbounds for i in eachindex(Δx)
-            buf_a[i] = Δx[i]
-        end
-        mul!(buf_b, D, buf_a)
-        # now buf_b = D*Δx
-        @inbounds for i in eachindex(b)
-            buf_b[i] -= b[i]
-        end
-        ldiv!(B, E, buf_b)
+        schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_a, buf_b)
     else
         @tullio sys.dx[i] = -dx[i]
     end
+end
+
+function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_a, buf_b)
+
+    @tullio A[i] = -dx[i]
+    # We want to do (in-place):
+    # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
+    @inbounds for i in eachindex(Δx)
+        buf_a[i] = Δx[i]
+    end
+    mul!(buf_b, D, buf_a)
+    # now buf_b = D*Δx
+    @inbounds for i in eachindex(b)
+        buf_b[i] -= b[i]
+    end
+    ldiv!(B, E, buf_b)
 end
 
 function schur_mul3!(res, r_type::Float64, B, C, D, E, x, α, β::T) where T
