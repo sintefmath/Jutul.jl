@@ -15,7 +15,7 @@ function count_entities(::WellGroup, ::Any)
     error("Unit not found in well group.")
 end
 
-function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, source_d::WellControllerDomain, 
+function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, source_d::WellControllerDomain,
                                            target_symbol, source_symbol) where {W<:WellGrid}
     # From controller to top well cell
     pos = get_well_position(source_d, target_symbol)
@@ -99,12 +99,12 @@ end
 """
 Impact from well group in facility on conservation equation inside well
 """
-function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_storage, facility_storage, 
-                            target_model::SimulationModel{D, S}, source_model::SimulationModel{WG}, 
-                            well_symbol, source, dt) where 
-                            {D<:DiscretizedDomain{W} where W<:WellGrid, 
-                            S<:Union{ImmiscibleSystem, SinglePhaseSystem}, 
-                            WG<:WellGroup} 
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_storage, facility_storage,
+                            target_model::SimulationModel{D, S}, source_model::SimulationModel{WG},
+                            well_symbol, source, dt) where
+                            {D<:DiscretizedDomain{W} where W<:WellGrid,
+                            S<:Union{ImmiscibleSystem, SinglePhaseSystem},
+                            WG<:WellGroup}
     fstate = facility_storage.state
     wstate = well_storage.state
     # Stuff from facility
@@ -128,22 +128,24 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
         mass = sum(masses)
         mix = masses./mass
     end
-
-    function update_topnode_sources!(src, qT, mix)
-        for i in eachindex(mix)
-            src[i] = -mix[i]*qT
-        end
-    end
-    update_topnode_sources!(ct.crossterm_source, qT, value.(mix))
-    update_topnode_sources!(ct.crossterm_target, value(qT), mix)
+    update_topnode_sources!(ct.crossterm_source, ct.crossterm_target, qT, mix)
 end
+
+function update_topnode_sources!(cts, ctt, qT, mix)
+    @inbounds for i in eachindex(mix)
+        m = -mix[i]
+        cts[i] = value(m)*qT
+        ctt[i] = m*value(qT)
+    end
+end
+
 """
 Cross term from well on control equation for well
 """
-function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell, 
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
                             target_storage, source_storage,
                             target_model::SimulationModel{WG},
-                            source_model::SimulationModel{D}, 
+                            source_model::SimulationModel{D},
                             target, well_symbol, dt) where {D<:DiscretizedDomain{W} where W<:WellGrid, WG<:WellGroup}
     fstate = target_storage.state
     ctrl = fstate.WellGroupConfiguration.control[well_symbol]
@@ -155,7 +157,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
 
     update_facility_control_crossterm!(ct.crossterm_source, ct.crossterm_target, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
     # # Operation twice, to get both partials
-    # ct.crossterm_source[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x) 
+    # ct.crossterm_source[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x)
     # ct.crossterm_target[1] = -well_target(target, source_model, rhoS, q_t, well_state, value)
 end
 
@@ -166,7 +168,7 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
     # param = source_storage.parameters
     # rhoS = param[:reference_densities]
     # Operation twice, to get both partials
-    s_buf[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x) 
+    s_buf[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x)
     t_buf[1] = -well_target(target, source_model, rhoS, q_t, well_state, value)
 
 end
@@ -238,7 +240,7 @@ function control_equation_top_cell_alignment!(cache, jac, layout; equation_offse
 end
 
 # Selection of primary variables
-function select_primary_variables_domain!(S, domain::WellGroup, system, formulation) 
+function select_primary_variables_domain!(S, domain::WellGroup, system, formulation)
     S[:TotalSurfaceMassRate] = TotalSurfaceMassRate()
 end
 

@@ -458,13 +458,13 @@ function update_cross_terms!(storage, model::MultiModel, dt)
 end
 
 function update_cross_terms_for_pair!(storage, model, source::Symbol, target::Symbol, dt)
-    cross_terms = storage[:cross_terms][target][source]
+    cross_terms = storage.cross_terms[target][source]
 
     storage_t, storage_s = get_submodel_storage(storage, target, source)
     model_t, model_s = get_submodels(model, target, source)
 
     eqs = storage_t.equations
-    for ekey in keys(eqs)
+    for ekey::Symbol in keys(eqs)
         ct = cross_terms[ekey]
         if !isnothing(ct)
             # @info "$source -> $target: $ekey"
@@ -475,8 +475,8 @@ end
 
 function apply_cross_terms!(storage, model::MultiModel, dt)
     model_keys = submodel_symbols(model)
-    for target in model_keys
-        for source in model_keys
+    for target::Symbol in model_keys
+        for source::Symbol in model_keys
             if source != target
                 apply_cross_terms_for_pair!(storage, model, source, target, dt)
             end
@@ -491,7 +491,7 @@ function apply_cross_terms_for_pair!(storage, model, source::Symbol, target::Sym
     model_t, model_s = get_submodels(model, target, source)
 
     eqs = storage_t[:equations]
-    for ekey in keys(eqs)
+    for ekey::Symbol in keys(eqs)
         ct = cross_terms[ekey]
         if !isnothing(ct)
             apply_cross_term!(eqs[ekey], ct, model_t, model_s, arg...)
