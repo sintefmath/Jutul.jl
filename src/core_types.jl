@@ -379,36 +379,34 @@ struct TervStorage
 end
 
 function convert_to_immutable_storage(S::TervStorage)
-    return TervStorage(convert_to_immutable_storage(S.data))
+    tup = convert_to_immutable_storage(data(S))
+    return TervStorage(tup)
 end
 
 function Base.getproperty(S::TervStorage, name::Symbol)
-    data = getfield(S, :data)
-    if name == :data
-        return data
-    else
-        return getproperty(data, name)
-    end
+    Base.getproperty(data(S), name)
 end
 
+data(S::TervStorage) = getfield(S, :data)
+
 function Base.setproperty!(S::TervStorage, name::Symbol, x)
-    setproperty!(S.data, name, x)
+    Base.setproperty!(data(S), name, x)
 end
 
 function Base.setindex!(S::TervStorage, x, name::Symbol)
-    setindex!(S.data, x, name)
+    setindex!(data(S), x, name)
 end
 
 function Base.getindex(S::TervStorage, name::Symbol)
-    getindex(S.data, name)
+    getindex(data(S), name)
 end
 
 function Base.haskey(S::TervStorage, name::Symbol)
-    return haskey(S.data, name)
+    return Base.haskey(data(S), name)
 end
 
 function Base.keys(S::TervStorage)
-    return keys(S.data)
+    return Base.keys(data(S))
 end
 
 
