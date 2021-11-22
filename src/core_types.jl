@@ -411,14 +411,14 @@ end
 
 
 function Base.show(io::IO, t::MIME"text/plain", storage::TervStorage)
-    data = storage.data
-    if isa(data, AbstractDict)
+    D = data(storage)
+    if isa(D, AbstractDict)
         println("TervStorage (mutable) with fields:")
     else
         println("TervStorage (immutable) with fields:")
     end
-    for key in keys(data)
-        println("  $key: $(typeof(data[key]))")
+    for key in keys(D)
+        println("  $key: $(typeof(D[key]))")
     end
 end
 
