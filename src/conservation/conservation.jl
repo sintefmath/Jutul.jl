@@ -366,12 +366,13 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, equa
     end
 end
 
+state_pair(storage, conserved) = (storage.state0[conserved], storage.state[conserved])
+
 # Update of discretization terms
 function update_accumulation!(law, storage, model, dt)
     conserved = law.accumulation_symbol
     acc = get_entries(law.accumulation)
-    m = storage.state[conserved]
-    m0 = storage.state0[conserved]
+    m0, m = state_pair(storage, conserved)
     active = active_entities(model.domain, Cells())
     @tullio acc[c, i] = (m[c, active[i]] - m0[c, active[i]])/dt
     return acc
