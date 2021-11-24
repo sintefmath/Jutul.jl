@@ -36,9 +36,13 @@ function test_single_phase_gpu(casename = "pico"; float_type = Float32, pvfrac=0
     s = model.secondary_variables
 
     mu_c = transfer(ctx, repeat([1e-3], 1, nc))
-    mu = ConstantVariables(mu_c, Cells(), false)
+    mu = ConstantVariables(mu_c, Cells(), single_entity = false)
     s[:PhaseViscosities] = mu
 
+    s_d = transfer(ctx, ones(1, nc))
+    sat = ConstantVariables(s_d, Cells(), single_entity = false)
+    s[:Saturations] = sat
+    s[:RelativePermeabilities] = sat
     # System state
     pv = model.domain.grid.pore_volumes
     timesteps = tstep*3600*24 # 1 day, 2 days

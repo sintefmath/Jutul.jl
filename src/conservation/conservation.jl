@@ -366,15 +366,20 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, equa
     end
 end
 
-state_pair(storage, conserved) = (storage.state0[conserved], storage.state[conserved])
+function state_pair(storage, conserved, model)
+    m0 = storage.state0[conserved]
+    m = storage.state[conserved]
+    M = global_map(model.domain)
+    v = x -> active_view(x, M)
+    return (v(m0), v(m))
+end
 
 # Update of discretization terms
 function update_accumulation!(law, storage, model, dt)
     conserved = law.accumulation_symbol
     acc = get_entries(law.accumulation)
-    m0, m = state_pair(storage, conserved)
-    active = active_entities(model.domain, Cells())
-    @tullio acc[c, i] = (m[c, active[i]] - m0[c, active[i]])/dt
+    m0, m = state_pair(storage, conserved, model)
+    @tullio acc[c, i] = (m[c, i] - m0[c, i])/dt
     return acc
 end
 

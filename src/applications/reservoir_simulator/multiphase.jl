@@ -260,11 +260,12 @@ function insert_phase_sources!(acc::CuArray, kr, mu, rhoS, sources)
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}
-    Φ = storage.state.FluidVolume
-    ρ = storage.state.PhaseMassDensities
-    a = active_entities(model.domain, Cells())
+    M = global_map(model.domain)
+    v = x -> active_view(x, M)
+    Φ = v(storage.state.FluidVolume)
+    ρ = v(storage.state.PhaseMassDensities)
 
-    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, a[i]])*Φ[a[i]])
+    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, i])*Φ[i])
     names = phase_names(model.system)
     R = Dict("CNV" => (errors = e, names = names))
     return R
