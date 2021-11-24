@@ -86,10 +86,10 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
         it = subiteration(recorder)
         rtol_relaxed = cfg.relaxed_relative_tolerance
         r_k = norm(r)
+        r_0 = krylov.r_norm
         if it == 1
             krylov.r_norm = r_k
-        elseif !isnothing(rtol_nl)
-            r_0 = krylov.r_norm
+        elseif !isnothing(rtol_nl) && !isnothing(r_0)
             maybe_rtol = r_0*rtol_nl/r_k
             rt = max(min(maybe_rtol, rtol_relaxed), rt)
         end
