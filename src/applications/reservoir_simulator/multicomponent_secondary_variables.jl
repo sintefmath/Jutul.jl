@@ -79,15 +79,14 @@ struct LBCViscosities <: PhaseVariables end
 values_per_entity(model, v::PhaseMassFractions) = number_of_components(model.system)
 
 function select_secondary_variables_system!(S, domain, system::CompositionalSystem, formulation)
-    nph = number_of_phases(system)
+    select_default_darcy!(S, domain, system, formulation)
     S[:PhaseMassDensities] = TwoPhaseCompositionalDensities()
     S[:LiquidMassFractions] = PhaseMassFractions(:liquid)
     S[:VaporMassFractions] = PhaseMassFractions(:vapor)
-    S[:TotalMasses] = TotalMasses()
     S[:FlashResults] = FlashResults(system)
     S[:Saturations] = Saturations()
     S[:Temperature] = ConstantVariables([273.15 + 30.0])
-    S[:PhaseViscosities] = LBCViscosities() # 1 cP for all phases by default
+    S[:PhaseViscosities] = LBCViscosities()
 end
 
 degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model.system)#*number_of_components(model.system)
