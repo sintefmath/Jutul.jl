@@ -122,6 +122,10 @@ active_entities(d, m::FiniteVolumeGlobalMap, f::Faces) = 1:count_entities(d, f)
 active_entities(d::DiscretizedDomain, entity) = active_entities(d, d.global_map, entity)
 active_entities(d::DiscretizedDomain, ::TrivialGlobalMap, entity) = 1:count_entities(d, entity)
 
+active_view(x::AbstractVector, map::FiniteVolumeGlobalMap) = view(x, map.inner_to_full_cells)
+active_view(x::AbstractMatrix, map::FiniteVolumeGlobalMap) = view(x, :, map.inner_to_full_cells)
+
+active_view(x, map) = x
 
 # TODO: Probably a bit inefficient
 count_active_entities(d, m, e) = length(active_entities(d, m, e))
