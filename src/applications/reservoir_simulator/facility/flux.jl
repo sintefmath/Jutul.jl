@@ -7,7 +7,7 @@ include_face_sign(::TotalMassVelocityMassFractionsFlow) = true
 """
 Total velocity half face flux with mass fractions for TotalMassVelocityMassFractionsFlow
 """
-function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TotalMassVelocityMassFractionsFlow}
+function update_half_face_flux!(law::ConservationLaw, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TotalMassVelocityMassFractionsFlow}
     state = storage.state
     masses = state.TotalMasses
     total = state.TotalMass
