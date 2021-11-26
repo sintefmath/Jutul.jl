@@ -127,12 +127,6 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
 end
 
 function subdiscretization(disc::TwoPointPotentialFlow, subg, mapper::FiniteVolumeGlobalMap)
-    return subdiscretization_fast(disc, subg, mapper)
-    # return subdiscretization_slow(disc, subg, mapper)
-end
-
-function subdiscretization_slow(disc, subg, mapper)
-    error()
     u, k, flow_type, has_grav = disc.upwind, disc.grad, disc.flow_type, disc.gravity
 
     face_pos_global, conn_data_global = disc.conn_pos, disc.conn_data
@@ -140,54 +134,6 @@ function subdiscretization_slow(disc, subg, mapper)
     faces, face_pos = get_facepos(N)
 
     T = eltype(conn_data_global)
-    new_conn = Vector{Vector{T}}()
-    new_offsets = [1]
-
-    nc = length(mapper.inner_to_full_cells)
-    for local_cell_no in 1:nc
-        # Map inner index -> full index
-        c = mapper.inner_to_full_cells[local_cell_no]
-        # c = interior_cell(local_cell_no, )
-        c_g = global_cell(c, mapper)
-        cd_local = Vector{T}()
-        sizehint!(cd_local, face_pos[c+1]-face_pos[c])
-
-        # Loop over half-faces for this cell
-        for f_p in face_pos[c]:face_pos[c+1]-1
-            f = faces[f_p]
-            f_g = global_face(f, mapper)
-            # Loop over the corresponding global half-faces
-            for f_i in face_pos_global[c_g]:face_pos_global[c_g+1]-1
-                conn = conn_data_global[f_i]
-                if conn.face == f_g
-                    # verify that this is actually the right global cell!
-                    @assert conn.self == c_g
-                    other = local_cell(conn.other, mapper)
-                    rc =  remap_connection(conn, c, other, f)
-                    push!(cd_local, rc)
-                    # @debug "$(cd_local[end].self) -> $(cd_local[end].other)"
-                    break
-                end
-            end
-        end
-        push!(new_offsets, new_offsets[local_cell_no] + length(cd_local))
-        push!(new_conn, cd_local)
-    end
-    face_pos = new_offsets
-    conn_data = vcat(new_conn...)
-    return TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
-end
-
-function subdiscretization_fast(disc, subg, mapper)
-    u, k, flow_type, has_grav = disc.upwind, disc.grad, disc.flow_type, disc.gravity
-
-    face_pos_global, conn_data_global = disc.conn_pos, disc.conn_data
-    N = get_neighborship(subg)
-    faces, face_pos = get_facepos(N)
-
-    T = eltype(conn_data_global)
-    # @info "Starting"
-
     nc = length(mapper.inner_to_full_cells)
     counts = compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_global, mapper, nc)
     next_face_pos = cumsum([1; counts])
