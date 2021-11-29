@@ -337,6 +337,8 @@ function pick_time_unit(t)
             return u
         end
     end
+    # Fallback
+    return (1, "Seconds")
 end
 
 function print_stats(reports::AbstractArray)
