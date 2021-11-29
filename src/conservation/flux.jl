@@ -233,7 +233,7 @@ end
 
 
 # Half face flux - trivial version which should only be used when there are no faces
-function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TrivialFlow}
+function update_half_face_flux!(::ConservationLaw, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TrivialFlow}
 
 end
 
