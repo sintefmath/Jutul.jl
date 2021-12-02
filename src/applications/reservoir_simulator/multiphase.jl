@@ -197,7 +197,7 @@ function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::Co
     end
     mu = state.PhaseViscosities
     rhoS = get_reference_densities(model, storage)
-    insert_phase_sources!(acc, kr, mu, rhoS, force)
+    insert_phase_sources!(acc, model, kr, mu, rhoS, force)
 end
 
 function local_mobility(kr::Real, mu, ph, c)
@@ -208,9 +208,9 @@ function local_mobility(kr, mu, ph, c)
     return kr[ph, c]./mu[ph, c]
 end
 
-function phase_source(src, rhoS, kr, mu, ph)
+function phase_source(c, src, rhoS, kr, mu, ph)
     v = src.value
-    c = src.cell
+    # c = src.cell
     if v > 0
         q = in_phase_source(src, v, c, kr, mu, ph)
     else
@@ -239,16 +239,19 @@ function out_phase_source(src, v, c, kr, mu, ph)
     return v*f
 end
 
-function insert_phase_sources!(acc, kr, mu, rhoS, sources)
+function insert_phase_sources!(acc, model, kr, mu, rhoS, sources)
     nph = size(acc, 1)
+    M = global_map(model.domain)
     for src in sources
+        c = full_cell(src.cell, M)
         for ph = 1:nph
-            @inbounds acc[ph, src.cell] -= phase_source(src, rhoS[ph], kr, mu, ph)
+            q_ph = phase_source(c, src, rhoS[ph], kr, mu, ph)
+            @inbounds acc[ph, src.cell] -= q_ph
         end
     end
 end
 
-function insert_phase_sources!(acc::CuArray, kr, mu, rhoS, sources)
+function insert_phase_sources!(acc::CuArray, model, kr, mu, rhoS, sources)
     sources::CuArray
     ix = map(cell, sources)
     if !isa(rhoS, CuArray)
@@ -256,7 +259,7 @@ function insert_phase_sources!(acc::CuArray, kr, mu, rhoS, sources)
         rhoS = CuArray(rhoS)
     end
     rhoS::CuArray
-    @tullio acc[ph, ix[i]] = acc[ph, ix[i]] - phase_source(sources[i], rhoS[ph], kr, mu, ph)
+    @tullio acc[ph, ix[i]] = acc[ph, ix[i]] - phase_source(sources[i].cell, sources[i], rhoS[ph], kr, mu, ph)
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}
