@@ -9,6 +9,9 @@ function Base.getindex(ls::LinearizedSystem, i, j = i)
     return ls
 end
 
+number_of_subsystems(ls::LinearizedSystem) = 1
+number_of_subsystems(ls::MultiLinearizedSystem) = size(ls.subsystems, 1)
+
 do_schur(sys) = sys.reduction == :schur_apply
 
 function equation_major_to_block_major_view(a, block_size)
