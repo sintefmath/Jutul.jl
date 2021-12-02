@@ -38,7 +38,11 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     # Deal with face data
     if haskey(exported, "T") && length(exported["T"]) > 0
         @debug "Found precomputed transmissibilities, reusing"
-        T = vec(exported["T"])
+        T_raw = exported["T"]
+        if isa(T_raw, AbstractFloat)
+            T_raw = [T_raw]
+        end
+        T = vec(T_raw)
     else
         @debug "Data unpack complete. Starting transmissibility calculations."
         if isnothing(perm)
