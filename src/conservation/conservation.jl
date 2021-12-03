@@ -418,3 +418,10 @@ end
 
 is_cuda_eq(eq::ConservationLaw) = isa(eq.accumulation.entries, CuArray)
 use_sparse_sources(eq) = !is_cuda_eq(eq)
+
+
+
+# Half face flux - trivial version which should only be used when there are no faces
+function update_half_face_flux!(::ConservationLaw, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TrivialFlow}
+
+end
