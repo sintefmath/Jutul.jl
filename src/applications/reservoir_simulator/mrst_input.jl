@@ -146,9 +146,6 @@ function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", con
 
         # State is dict with pressure in each cell
         init = Dict(:Pressure => p0)
-        state0 = setup_state(model, init)
-        # Model parameters
-        parameters = setup_parameters(model)
     elseif case_name == "two_phase_simple"
         bar = 1e5
         p0 = 100*bar # 100 bar
@@ -180,11 +177,49 @@ function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", con
 
         # State is dict with pressure in each cell
         init = Dict(:Pressure => p0, :Saturations => [1 - s0, s0])
-        # Model parameters
-        parameters = setup_parameters(model)
+    elseif case_name == "two_phase_fake_wells"
+        inj = 1
+        prod = nc
+        G.grid.pore_volumes[inj] *= 1000
+        G.grid.pore_volumes[prod] *= 1000
+
+        bar = 1e5
+        p0 = 100*bar # 100 bar
+        s0 = 1.0
+
+        mu = 1e-3    # 1 cP
+        cl = 1e-5/bar
+        pRef = 100*bar
+        rhoLS = 1000
+        L = LiquidPhase()
+        V = VaporPhase()
+        sys = ImmiscibleSystem([L, V])
+        model = SimulationModel(G, sys, context = context)
+
+        kr = BrooksCoreyRelPerm(sys, [2, 3])
+        s = model.secondary_variables
+        s[:RelativePermeabilities] = kr
+        s[:PhaseViscosities] = ConstantVariables([mu, mu/2])
+        s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
+
+        tot_time = sum(timesteps)
+        forces = build_forces(model)
+
+        p_init = repeat([p0], nc)
+        p_init[inj] = 2*p0
+        p_init[prod] = p0/2
+
+        s_init = repeat([1 - s0, s0], 1, nc)
+        s_init[1, inj] = s0
+        s_init[2, inj] = 1 - s0
+
+        # State is dict with pressure in each cell
+        init = Dict(:Pressure => p_init, :Saturations => s_init)
     else
         error("Unknown case $case_name")
     end
+    # Model parameters
+    parameters = setup_parameters(model)
     state0 = setup_state(model, init)
     return (state0, model, parameters, forces, timesteps)
 end
