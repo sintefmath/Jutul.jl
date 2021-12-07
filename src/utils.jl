@@ -84,6 +84,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
     if info_level == 1
         return
     end
+    id = haskey(cfg, :id) ? "$(cfg[:id]): " : ""
     count_crit = 0
     count_ok = 0
     worst_val = 0.0
@@ -173,7 +174,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
         worst_print = @sprintf "%2.3e (ϵ = %2.3e)" worst_val*worst_tol worst_tol
         s = ". Worst value:\n\t - $worst_name at $worst_print."
     end
-    @info "It. $iteration/$max_its: $count_ok/$count_crit criteria converged$s"
+    @info "$(id)It. $iteration/$max_its: $count_ok/$count_crit criteria converged$s"
 
     if print_table
         m_offset = Int64(has_models)
