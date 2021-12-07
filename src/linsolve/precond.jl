@@ -239,10 +239,9 @@ function ilu_apply!(x::AbstractArray{F}, f::CuSparseMatrix{F}, y::AbstractArray{
 end
 
 function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)
-    # Very hacky.
-    s = ilu.l_nzval[1]
-    N = size(s, 1)
-    T = eltype(s)
+    T = eltype(ilu.l_nzval)
+    N = size(T, 1)
+    T = eltype(T)
     Vt = SVector{N, T}
     as_svec = (x) -> reinterpret(Vt, x)
 
