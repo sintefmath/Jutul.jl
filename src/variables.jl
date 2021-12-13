@@ -301,7 +301,7 @@ function unit_sum_update!(s, p, model, dx)
             end
         else
             # Preserve update magnitude
-            unit_update_multiple!(s, dx, nf, nu, minval, maxval, abs_max)
+            unit_update_multiple!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
         end
     end
 end
@@ -319,7 +319,7 @@ function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
     end
 end
 
-function unit_update_multiple!(s, dx, nf, nu, minval, maxval, abs_max)
+function unit_update_multiple!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
     for cell in active_cells
         unit_update_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
     end

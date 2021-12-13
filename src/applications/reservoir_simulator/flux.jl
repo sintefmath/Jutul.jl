@@ -192,7 +192,7 @@ end
 """
 Half face Darcy flux with separate potential. (Compositional version)
 """
-function update_half_face_flux!(law, storage, model::SimulationModel{D, S}, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {D,S<:TwoPhaseCompositionalSystem,U,K,T<:DarcyMassMobilityFlow}
+function update_half_face_flux!(law::ConservationLaw, storage, model::SimulationModel{D, S}, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {D,S<:TwoPhaseCompositionalSystem,U,K,T<:DarcyMassMobilityFlow}
     state = storage.state
     # pot = state.CellNeighborPotentialDifference
     X = state.LiquidMassFractions
@@ -242,9 +242,7 @@ end
 function compute_compositional_flux_gravity!(q, c, i, fr, P, X, Y, ρ, kr, Sat, μ, pc, T, gΔz, ref_index)
     l = 1
     v = 2
-    # @inbounds ρ_l_c = ρ[l, c]
-    # @inbounds ρ_l_i = ρ[v, i]
-    # ρ_l_avg = 0.5*(ρ_l_c + ρ_l_i)
+
     ρ_l, ρ_lc, ρ_li = dens(ρ, l, Sat, c, i)
     ρ_v, ρ_vc, ρ_vi = dens(ρ, v, Sat, c, i)
 
@@ -252,13 +250,30 @@ function compute_compositional_flux_gravity!(q, c, i, fr, P, X, Y, ρ, kr, Sat, 
     Δpc_v = capillary_gradient(pc, c, i, v, ref_index)
 
     @inbounds Δp = P[c] - P[i]
-    # + Δpc
-    # θ = -T*(Δp + gΔz*ρ_avg)
+
     Ψ_l = -T*(Δp + Δpc_l + gΔz*ρ_l)
     Ψ_v = -T*(Δp + Δpc_v + gΔz*ρ_v)
 
+    F_l, c_l = phase_mass_flux(Ψ_l, c, i, ρ_lc, ρ_li, kr, μ, l)
+    F_v, c_v = phase_mass_flux(Ψ_v, c, i, ρ_vc, ρ_vi, kr, μ, v)
+
     for i in eachindex(q)
-        # q[i] = 
+        q[i] = F_l*X[l, c_l] + F_v*Y[v, c_v]
+    end
+end
+
+function phase_mass_flux(Ψ, c, i, ρ_c, ρ_i, kr, μ, ph)
+    upc = upwind_cell(Ψ, c, i)
+    ρ = upwind_cell(Ψ, ρ_c, ρ_i)
+    F = ρ*(kr[ph, upc]/μ[ph, upc])*Ψ_l
+    return (F, upc)
+end
+
+function upwind_cell(pot, l, r)
+    if pot < 0
+        c = l
+    else
+        c = r
     end
 end
 
