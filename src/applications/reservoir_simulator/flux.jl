@@ -212,11 +212,11 @@ function update_half_face_flux!(law::ConservationLaw, storage, model::Simulation
     nc, nf = size(flux)
     for i = 1:nf
         @views qi = flux[:, i]
-        compositional_flux_gravity!(qi, conn_data[i], fr, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
+        compositional_flux_gravity!(qi, conn_data[i], P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
     end
 end
 
-function compositional_flux_gravity!(q, cd, fr, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
+function compositional_flux_gravity!(q, cd, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
     c, i, T = cd.self, cd.other, cd.T
     if haskey(cd, :gdz)
         gΔz = cd.gdz
@@ -224,10 +224,10 @@ function compositional_flux_gravity!(q, cd, fr, P, X, Y, ρ, kr, Sat, μ, pc, re
         gΔz = 0.0
     end
     ∂ = (x) -> local_ad(x, c)
-    return compute_compositional_flux_gravity!(q, c, i, fr, ∂(P), ∂(X), ∂(Y), ∂(ρ), ∂(kr), ∂(Sat), ∂(μ), ∂(pc), T, gΔz, ref_index)
+    return compute_compositional_flux_gravity!(q, c, i, ∂(P), ∂(X), ∂(Y), ∂(ρ), ∂(kr), ∂(Sat), ∂(μ), ∂(pc), T, gΔz, ref_index)
 end
 
-function compute_compositional_flux_gravity!(q, c, i, fr, P, X, Y, ρ, kr, Sat, μ, pc, T, gΔz, ref_index)
+function compute_compositional_flux_gravity!(q, c, i, P, X, Y, ρ, kr, Sat, μ, pc, T, gΔz, ref_index)
     l = 1
     v = 2
 
@@ -252,7 +252,7 @@ function compute_compositional_flux_gravity!(q, c, i, fr, P, X, Y, ρ, kr, Sat, 
     F_v, c_v = phase_mass_flux(Ψ_v, c, i, ρ, kr, μ, v)
 
     for i in eachindex(q)
-        q[i] = F_l*X[l, c_l] + F_v*Y[v, c_v]
+        q[i] = F_l*X[i, c_l] + F_v*Y[i, c_v]
     end
 end
 
@@ -278,49 +278,4 @@ function saturation_averaged_density(ρ, ph, sat, c1, c2)
 
     avg = (ρ_1*S_1 + ρ_2*S_2)/max(S_1 + S_2, 1e-12)
     return avg
-end
-
-function compositional_flux_single_pot!(q, flash_state, conn_data, θ, X, Y, ρ, kr, μ)
-    if θ < 0
-        ix = conn_data.self
-        f = (x) -> x
-    else
-        ix = conn_data.other
-        f = value
-    end
-    s = flash_state[ix].state
-    compositional_flux_single_pot!(q, s, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
-end
-
-function compositional_flux_single_pot!(q, ::TwoPhaseLiquidVapor, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
-    kr_l = f(kr[1, ix])
-    kr_v = f(kr[2, ix])
-    ρ_l = f(ρ[1, ix])
-    ρ_v = f(ρ[2, ix])
-    μ_l = f(μ[1, ix])
-    μ_v = f(μ[2, ix])
-
-    for i in eachindex(q)
-        q[i] = ((kr_l/μ_l)*f(X[i, ix])*ρ_l + (kr_v/μ_v)*f(Y[i, ix])*ρ_v)*θ
-    end
-end
-
-function compositional_flux_single_pot!(q, ::SinglePhaseLiquid, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
-    kr_l = f(kr[1, ix])
-    ρ_l = f(ρ[1, ix])
-    μ_l = f(μ[1, ix])
-
-    for i in eachindex(q)
-        q[i] = (kr_l/μ_l)*f(X[i, ix])*ρ_l*θ
-    end
-end
-
-function compositional_flux_single_pot!(q, ::SinglePhaseVapor, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
-    kr_v = f(kr[2, ix])
-    ρ_v = f(ρ[2, ix])
-    μ_v = f(μ[2, ix])
-
-    for i in eachindex(q)
-        q[i] = (kr_v/μ_v)*f(Y[i, ix])*ρ_v*θ
-    end
 end
