@@ -202,39 +202,27 @@ function update_half_face_flux!(law::ConservationLaw, storage, model::Simulation
     ρ = state.PhaseMassDensities
     P = state.Pressure
     fr = state.FlashResults
-    sat = state.Saturations
+    Sat = state.Saturations
 
     flux = get_entries(law.half_face_flux_cells)
     flow_disc = law.flow_discretization
     conn_data = flow_disc.conn_data
     pc, ref_index = capillary_pressure(model, state)
 
-    #if size(pot, 1) == 1
-    #    # Scalar potential
-    #    for i in 1:length(pot)
-    #        @views compositional_flux_single_pot!(flux[:, i], fr, conn_data[i], pot[1, i], X, Y, ρ, kr, μ)
-    #    end
-    #else
-    #    error()
-    #    # Multiphase potential
-    #    @tullio flux[c, i] = spu_upwind_mult_index(conn_data[i], ph, pot[ph, i], mob)
-    # end
-    if flow_disc.gravity
-        # Multiphase potential
-        nc, nf = size(flux)
-        for i = 1:nf
-            @views qi = flux[:, i]
-            compositional_flux_gravity!(conn_data[i], fr, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
-        end
-       #  @tullio flux[c, i] = get_compositional_flux_gravity(conn_data[i], c, fr, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
-    else
-        # Scalar potential
-        # @tullio flux[c, i] = get_compositional_flux_no_gravity(conn_data[i], c, p, rho, kr, mu)
+    nc, nf = size(flux)
+    for i = 1:nf
+        @views qi = flux[:, i]
+        compositional_flux_gravity!(qi, conn_data[i], fr, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
     end
 end
 
-function compositional_flux_gravity!(q, fr, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
-    c, i, gΔz, T = cd.self, cd.other, cd.gdz, cd.T
+function compositional_flux_gravity!(q, cd, fr, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
+    c, i, T = cd.self, cd.other, cd.T
+    if haskey(cd, :gdz)
+        gΔz = cd.gdz
+    else
+        gΔz = 0.0
+    end
     ∂ = (x) -> local_ad(x, c)
     return compute_compositional_flux_gravity!(q, c, i, fr, ∂(P), ∂(X), ∂(Y), ∂(ρ), ∂(kr), ∂(Sat), ∂(μ), ∂(pc), T, gΔz, ref_index)
 end
@@ -243,29 +231,34 @@ function compute_compositional_flux_gravity!(q, c, i, fr, P, X, Y, ρ, kr, Sat, 
     l = 1
     v = 2
 
-    ρ_l, ρ_lc, ρ_li = dens(ρ, l, Sat, c, i)
-    ρ_v, ρ_vc, ρ_vi = dens(ρ, v, Sat, c, i)
+    if gΔz != 0.0
+        ρ_l = saturation_averaged_density(ρ, l, Sat, c, i)
+        ρ_v = saturation_averaged_density(ρ, v, Sat, c, i)
+        G_l = gΔz*ρ_l
+        G_v = gΔz*ρ_v
+    else
+        G_l = G_v = 0.0
+    end
 
     Δpc_l = capillary_gradient(pc, c, i, l, ref_index)
     Δpc_v = capillary_gradient(pc, c, i, v, ref_index)
 
     @inbounds Δp = P[c] - P[i]
 
-    Ψ_l = -T*(Δp + Δpc_l + gΔz*ρ_l)
-    Ψ_v = -T*(Δp + Δpc_v + gΔz*ρ_v)
+    Ψ_l = -T*(Δp + Δpc_l + G_l)
+    Ψ_v = -T*(Δp + Δpc_v + G_v)
 
-    F_l, c_l = phase_mass_flux(Ψ_l, c, i, ρ_lc, ρ_li, kr, μ, l)
-    F_v, c_v = phase_mass_flux(Ψ_v, c, i, ρ_vc, ρ_vi, kr, μ, v)
+    F_l, c_l = phase_mass_flux(Ψ_l, c, i, ρ, kr, μ, l)
+    F_v, c_v = phase_mass_flux(Ψ_v, c, i, ρ, kr, μ, v)
 
     for i in eachindex(q)
         q[i] = F_l*X[l, c_l] + F_v*Y[v, c_v]
     end
 end
 
-function phase_mass_flux(Ψ, c, i, ρ_c, ρ_i, kr, μ, ph)
+function phase_mass_flux(Ψ, c, i, ρ, kr, μ, ph)
     upc = upwind_cell(Ψ, c, i)
-    ρ = upwind_cell(Ψ, ρ_c, ρ_i)
-    F = ρ*(kr[ph, upc]/μ[ph, upc])*Ψ_l
+    F = ρ[ph, upc]*(kr[ph, upc]/μ[ph, upc])*Ψ
     return (F, upc)
 end
 
@@ -277,14 +270,14 @@ function upwind_cell(pot, l, r)
     end
 end
 
-function dens(ρ, ph, sat, c1, c2)
+function saturation_averaged_density(ρ, ph, sat, c1, c2)
     ρ_1 = ρ[ph, c1]
     ρ_2 = ρ[ph, c2]
     S_1 = sat[ph, c1]
     S_2 = sat[ph, c2]
 
     avg = (ρ_1*S_1 + ρ_2*S_2)/max(S_1 + S_2, 1e-12)
-    return (avg, ρ_1, ρ_2)
+    return avg
 end
 
 function compositional_flux_single_pot!(q, flash_state, conn_data, θ, X, Y, ρ, kr, μ)
