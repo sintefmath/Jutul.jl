@@ -515,7 +515,7 @@ function apply_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol
 end
 
 
-function update_linearized_system!(storage, model::MultiModel; equation_offset = 0)
+function update_linearized_system!(storage, model::MultiModel; equation_offset = 0, targets = submodel_symbols(model), sources = targets)
     lsys = storage.LinearizedSystem
     model_keys = submodel_symbols(model)
     if has_groups(model)
@@ -524,15 +524,16 @@ function update_linearized_system!(storage, model::MultiModel; equation_offset =
         for g in 1:ng
             lsys_g = lsys[g, g]
             subs = groups .== g
-            group_keys = model_keys[subs]
+            group_targets = model_keys[subs]
+            group_keys = intersect(group_targets, targets)
             offsets = get_submodel_degree_of_freedom_offsets(model, g)
             update_main_linearized_system_subgroup!(storage, model, group_keys, offsets, lsys_g)
         end
     else
         offsets = get_submodel_degree_of_freedom_offsets(model)
-        update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
+        update_main_linearized_system_subgroup!(storage, model, targets, offsets, lsys)
     end
-    update_cross_term_linearized_system_subgroup!(storage, model, model_keys, lsys)
+    update_cross_term_linearized_system_subgroup!(storage, model, targets, sources, lsys)
 end
 
 function update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
@@ -544,10 +545,10 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
     end
 end
 
-function update_cross_term_linearized_system_subgroup!(storage, model, model_keys, linearized_system)
+function update_cross_term_linearized_system_subgroup!(storage, model, targets, sources, linearized_system)
     # Then, update cross terms
-    for target in model_keys
-        for source in model_keys
+    for target in targets
+        for source in sources
             if source != target
                 cross_terms = cross_term_pair(storage, source, target)
                 if isnothing(cross_terms)
