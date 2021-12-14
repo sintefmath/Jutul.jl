@@ -459,10 +459,9 @@ function update_equations!(storage, model::MultiModel, dt)
     apply_cross_terms!(storage, model::MultiModel, dt)
 end
 
-function update_cross_terms!(storage, model::MultiModel, dt)
-    model_keys = submodel_symbols(model)
-    for target in model_keys
-        for source in model_keys
+function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
+    for target in targets
+        for source in sources
             target::Symbol
             source::Symbol
             if source != target
@@ -489,10 +488,9 @@ function update_cross_terms_for_pair!(cross_terms, storage, model, source::Symbo
     end
 end
 
-function apply_cross_terms!(storage, model::MultiModel, dt)
-    model_keys = submodel_symbols(model)
-    for target::Symbol in model_keys
-        for source::Symbol in model_keys
+function apply_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
+    for target::Symbol in targets
+        for source::Symbol in sources
             if source != target
                 cross_terms = cross_term_pair(storage, source, target)
                 apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
@@ -519,7 +517,6 @@ end
 
 function update_linearized_system!(storage, model::MultiModel; equation_offset = 0)
     lsys = storage.LinearizedSystem
-    models = model.models
     model_keys = submodel_symbols(model)
     if has_groups(model)
         ng = number_of_groups(model)
@@ -655,26 +652,26 @@ function reset_to_previous_state!(storage, model::MultiModel)
     submodels_storage_apply!(storage, model, reset_to_previous_state!)
 end
 
-function update_after_step!(storage, model::MultiModel, dt, forces)
-    for key in submodels_symbols(model)
+function update_after_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model))
+    for key in targets
         update_after_step!(storage[key], model.models[key], dt, forces[key])
     end
 end
 
-function update_before_step!(storage, model::MultiModel, dt, forces)
-    for key in submodels_symbols(model)
+function update_before_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model))
+    for key in targets
         update_before_step!(storage[key], model.models[key], dt, forces[key])
     end
 end
 
-function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN)
-    for key in submodels_symbols(model)
+function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model))
+    for key in targets
         apply_forces!(storage[key], model.models[key], dt, forces[key]; time = time)
     end
 end
 
-function apply_boundary_conditions!(storage, model::MultiModel)
-    for key in submodels_symbols(model)
+function apply_boundary_conditions!(storage, model::MultiModel; targets = submodels_symbols(model))
+    for key in targets
         apply_boundary_conditions!(storage[key], storage[key].parameters, model.models[key])
     end
 end
