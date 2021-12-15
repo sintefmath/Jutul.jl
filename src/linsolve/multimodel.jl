@@ -89,8 +89,8 @@ function vector_residual(sys::MultiLinearizedSystem)
     return r
 end
 
-function linear_operator(sys::MultiLinearizedSystem)
-    if do_schur(sys)
+function linear_operator(sys::MultiLinearizedSystem; skip_red = false)
+    if do_schur(sys) && !skip_red
         B, C, D, E = get_schur_blocks!(sys, false)
         # A = B - CE\D
         n = size(C, 1)
