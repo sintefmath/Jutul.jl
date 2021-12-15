@@ -142,7 +142,7 @@ function prepare_solve!(sys)
     # Default is to do nothing.
 end
 
-function linear_operator(sys::LinearizedSystem)
+function linear_operator(sys::LinearizedSystem; skip_red = false)
     if block_size(sys) == 1
         op = LinearOperator(sys.jac)
     else
@@ -153,11 +153,11 @@ function linear_operator(sys::LinearizedSystem)
     return op
 end
 
-function linear_operator(block::LinearizedBlock{T, T}) where {T <: Any}
+function linear_operator(block::LinearizedBlock{T, T}; skip_red = false) where {T <: Any}
     return LinearOperator(block.jac)
 end
 
-function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorLayout})
+function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorLayout}; skip_red = false)
     # Handle this case specifically:
     # A linearized block at [i,j] where residual vector entry [j] is from a system
     # with block ordering, but row [i] has equation major ordering
