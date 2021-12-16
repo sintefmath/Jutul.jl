@@ -78,6 +78,21 @@ function system_1()
     return (A = A_b, B = B, C = C, D = D, X = X_b, Y = Y)
 end
 
+function system_rand(;bz = 2, nb = 5, ns = 8, dens = 0.8)
+    Mat = SMatrix{bz, bz}
+    Vec = SVector{bz}
+
+    A_b = sprand(Mat, nb, nb, dens)
+
+    B = sprand(nb*bz, ns, dens)
+    C = sprand(ns, nb*bz, dens)
+    D = sprand(ns, ns, dens)
+
+    X_b = rand(Vec, nb)
+    Y = rand(ns)
+
+    return (A = A_b, B = B, C = C, D = D, X = X_b, Y = Y)
+end
 
 function test_system(system)
     A_b, B, C, D, X_b, Y = system
@@ -119,9 +134,22 @@ function test_system(system)
     @test res_b[1:nf] ≈ renum    
 end
 
+
 @testset "Mixed block-scalar system" begin
     @testset "Test system 1" begin
         sys = system_1()
         test_system(sys)
+    end
+    block_sizes = 2:10
+    matrix_sizes = 1:10
+    for bz in block_sizes
+        for ns in matrix_sizes
+            for nb in matrix_sizes
+                @testset "Rand" begin
+                    sys = system_rand(bz = bz, ns = ns, nb = nb)
+                    test_system(sys)
+                end
+            end
+        end
     end
 end
