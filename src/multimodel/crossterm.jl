@@ -3,14 +3,13 @@
 function align_to_jacobian!(ct::InjectiveCrossTerm, jac, target::TervModel, source::TervModel; equation_offset = 0, variable_offset = 0)
     cs = ct.crossterm_source_cache
 
-    layout = matrix_layout(source.context)
     impact_target = ct.impact[1]
     impact_source = ct.impact[2]
     pentities = get_primary_variable_ordered_entities(source)
     nu_t = count_active_entities(target.domain, ct.entities.target)
     for u in pentities
         nu_s = count_active_entities(source.domain, u)
-        injective_alignment!(cs, jac, u, layout,
+        injective_alignment!(cs, jac, u, source.context,
                                                 target_index = impact_target,
                                                 source_index = impact_source,
                                                 target_offset = equation_offset,
