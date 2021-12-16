@@ -167,14 +167,7 @@ function linear_operator(block::LinearizedBlock{EquationMajorLayout, EquationMaj
         # Note: This is unfortunately allocating, but applying
         # with a simple view leads to degraded performance.
         x_v = collect(reshape(reshape(x, bz, :)', :))
-        if β == zero(T)
-            mul!(res, jac, x_v)
-            if α != one(T)
-                lmul!(α, res)
-            end
-        else
-            error("Not implemented.")
-        end
+        mul!(res, jac, x_v, α, β)
     end
     n, m = size(jac)
     return LinearOperator(Float64, n, m, false, false, apply!)
