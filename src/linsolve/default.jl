@@ -32,19 +32,19 @@ struct LinearizedSystem{L} <: TervLinearSystem
     matrix_layout::L
 end
 
-struct LinearizedBlock{R, C} <: TervLinearSystem
+struct LinearizedBlock{M, R, C} <: TervLinearSystem
     jac
     jac_buffer
-    matrix_layout::R
-    residual_layout::C
-    residual_block_size::Integer
-    function LinearizedBlock(sparse_arg, context, layout, layout_r, residual_block_size = 1)
+    matrix_layout::M
+    rowcol_block_size::NTuple{2, Int}
+    function LinearizedBlock(sparse_arg, context, layout, layout_row, layout_col, rowcol_dim)
         jac, jac_buf = build_jacobian(sparse_arg, context, layout)
-        I = typeof(layout)
-        J = typeof(layout_r)
-        new{I, J}(jac, jac_buf, layout, layout_r, residual_block_size)
+        new{typeof(layout), typeof(layout_row), typeof(layout_col)}(jac, jac_buf, layout, rowcol_dim)
     end
 end
+
+row_block_size(b::LinearizedBlock) = b.rowcol_block_size[1]
+col_block_size(b::LinearizedBlock) = b.rowcol_block_size[2]
 
 LinearizedType = Union{LinearizedSystem, LinearizedBlock}
 
@@ -153,20 +153,16 @@ function linear_operator(sys::LinearizedSystem; skip_red = false)
     return op
 end
 
-function linear_operator(block::LinearizedBlock{T, T}; skip_red = false) where {T <: Any}
+function linear_operator(block::LinearizedBlock{T, T, T}; skip_red = false) where T
     return LinearOperator(block.jac)
 end
 
-function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorLayout}; skip_red = false)
-    # Handle this case specifically:
-    # A linearized block at [i,j] where residual vector entry [j] is from a system
-    # with block ordering, but row [i] has equation major ordering
-    bz = block.residual_block_size
+function linear_operator(block::LinearizedBlock{EquationMajorLayout, EquationMajorLayout, BlockMajorLayout}; skip_red = false)
+    # Matrix is equation major.
+    # Row (and output) is equation major.
+    # Column (and vector we multiply with) is block major
+    bz = col_block_size(block)
     jac = block.jac
-    return linear_operator_mixed_block(jac, bz)
-end
-
-function linear_operator_mixed_block(jac, bz)
     function apply!(res, x, α, β::T) where T
         # Note: This is unfortunately allocating, but applying
         # with a simple view leads to degraded performance.
@@ -181,8 +177,37 @@ function linear_operator_mixed_block(jac, bz)
         end
     end
     n, m = size(jac)
-    op = LinearOperator(Float64, n, m, false, false, apply!)
-    return op
+    return LinearOperator(Float64, n, m, false, false, apply!)
+end
+
+function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorLayout, EquationMajorLayout}; skip_red = false)
+    # Handle this case specifically:
+    # Matrix is equation major.
+    # Row (and output) is block major.
+    # Column (and vector we multiply with) is equation major.
+    bz = row_block_size(block)
+    jac = block.jac
+
+    function apply!(res, x, α, β::T) where T
+        # mul!(C, A, B, α, β) -> C
+        # A*B*α + C*β
+        tmp_cell_major = jac*x
+        if α != one(T)
+            lmul!(α, tmp_cell_major)
+        end
+        tmp_block_major = equation_major_to_block_major_view(tmp_cell_major, bz)
+
+        if β == zero(T)
+            @. res = tmp_block_major
+        else
+            if β != one(T)
+                lmul!(β, res)
+            end
+            @. res += tmp_block_major
+        end
+    end
+    n, m = size(jac)
+    return LinearOperator(Float64, n, m, false, false, apply!)
 end
 
 function vector_residual(sys)

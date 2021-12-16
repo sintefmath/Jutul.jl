@@ -46,13 +46,11 @@ function LinearizedSystem(A, r = nothing)
     return sys
 end
 
-function LinearizedBlock(A, r)
+function LinearizedBlock(A, bz::Tuple, row_layout, col_layout)
     pattern = to_sparse_pattern(A)
     layout = matrix_layout(A)
     context = DefaultContext(matrix_layout = layout)
-    layout_r = matrix_layout(r)
-    bz = block_dims(r)
-    sys = LinearizedBlock(pattern, context, layout, layout_r, bz)
+    sys = LinearizedBlock(pattern, context, layout, row_layout, col_layout, bz)
     J = sys.jac
     for (i, j, entry) in zip(findnz(A)...)
         J[i, j] = entry
@@ -143,8 +141,8 @@ V_s = [X_s; Y]
 X_sb = block_vector_to_scalar(X_b, reorder = false)
 
 A_sys = LinearizedSystem(A_b)
-B_sys = LinearizedBlock(B, Y)
-C_sys = LinearizedBlock(C, X_b)
+B_sys = LinearizedBlock(B, (bz, 1), BlockMajorLayout(), EquationMajorLayout())
+C_sys = LinearizedBlock(C, (1, bz), EquationMajorLayout(), BlockMajorLayout())
 D_sys = LinearizedSystem(D)
 
 
@@ -162,6 +160,19 @@ res_s = M_s*V_s
 
 nf = length(X_s)
 @test res_b[nf+1:end] == res_s[nf+1:end]
+##
 renum = collect(reshape(reshape(res_s[1:nf], bz, :)', :))
 @test res_b[1:nf] == renum
+##
+S = sys.subsystems
+d = size(S, 2)
+ops = map(linear_operator, S)
 
+#
+# ops = map(linear_operator, vec(permutedims(S)))
+
+# op = hvcat(d, ops...)
+
+
+op = vcat(hcat(ops[1, 1], ops[1, 2]), hcat(ops[2, 1], ops[2, 2]))
+op*V_op

@@ -101,9 +101,15 @@ function linear_operator(sys::MultiLinearizedSystem; skip_red = false)
         op = LinearOperator(Float64, n, n, false, false, apply!)
     else
         S = sys.subsystems
-        d = size(S, 2)
-        ops = map(linear_operator, permutedims(S))
-        op = hvcat(d, ops...)
+        if true
+            @assert size(S) == (2, 2) "Only supported for 2x2 blocks"
+            ops = map(linear_operator, S)
+            op = vcat(hcat(ops[1, 1], ops[1, 2]), hcat(ops[2, 1], ops[2, 2]))
+        else
+            d = size(S, 2)
+            ops = map(linear_operator, vec(S))
+            op = hvcat(size(S), ops...)
+        end
     end
     return op
 end
