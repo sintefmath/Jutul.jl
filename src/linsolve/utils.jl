@@ -19,7 +19,14 @@ mutable struct IterativeSolverConfig
     end
 end
 
-function reservoir_linsolve(model, method = :cpr; rtol = nothing, v = 0, provider = Krylov, solver = Krylov.bicgstab)
+function reservoir_linsolve(model, method = :cpr;
+                                   rtol = nothing,
+                                   v = 0,
+                                   provider = Krylov,
+                                   solver = Krylov.bicgstab,
+                                    update_interval = :ministep,
+                                    partial_update = update_interval == :once,
+                                    kwarg...)
     if model.context == DefaultContext()
         return nothing
     end
@@ -36,24 +43,21 @@ function reservoir_linsolve(model, method = :cpr; rtol = nothing, v = 0, provide
 
         cpr_type = :true_impes
         cpr_type = :analytical
-        update_interval = :iteration
-        update_interval = :ministep
-        update_interval = :once
+        # update_interval = :iteration
+        # update_interval = :ministep
+        # update_interval = :once
 
         prec = CPRPreconditioner(p_solve, strategy = cpr_type, 
-        update_interval = update_interval, partial_update = update_interval == :once)
+        update_interval = update_interval, partial_update = partial_update)
         rtol = isnothing(rtol) ? 0.001 : rtol
-        max_it = 2
-        max_it = 200
-        # max_it = 10
     elseif method == :ilu0
         prec = ILUZeroPreconditioner(right = false)
         rtol = isnothing(rtol) ? 0.001 : rtol
-        max_it = 200
     else
         return nothing
     end
-    atol = 1e-12
+    max_it = 200
+    atol = 0.0#1e-12
     # v = -1
     # v = 0
     # v = 1
@@ -66,13 +70,45 @@ function reservoir_linsolve(model, method = :cpr; rtol = nothing, v = 0, provide
     #     krylov = IterativeSolvers.bicgstabl!
     #     pv = IterativeSolvers
     # end
-    nl_reltol = 1e-3
-    relaxed_reltol = 0.25
+    # nl_reltol = 1e-3
+    # relaxed_reltol = 0.25
+    # nonlinear_relative_tolerance = nl_reltol,
+    # relaxed_relative_tolerance = relaxed_reltol,
 
     lsolve = GenericKrylov(solver, provider = provider, verbose = v, preconditioner = prec, 
-            nonlinear_relative_tolerance = nl_reltol,
-            relaxed_relative_tolerance = relaxed_reltol,
             relative_tolerance = rtol, absolute_tolerance = atol,
-            max_iterations = max_it)
+            max_iterations = max_it; kwarg...)
     return lsolve
 end
+
+function to_sparse_pattern(A::SparseMatrixCSC{Tv, Ti}) where {Tv, Ti}
+    I, J, _ = findnz(A)
+    n, m = size(A)
+    layout = matrix_layout(A)
+    block_n, block_m = block_dims(A)
+    return SparsePattern(I, J, n, m, layout, block_n, block_m)
+end
+
+function matrix_layout(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:Real, Ti}
+    return EquationMajorLayout()
+end
+
+function matrix_layout(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:StaticMatrix, Ti}
+    layout = BlockMajorLayout()
+    return layout
+end
+
+matrix_layout(A::AbstractVector{T}) where {T<:StaticVector} = BlockMajorLayout()
+
+function block_dims(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:Real, Ti}
+    return (1, 1)
+end
+
+function block_dims(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:StaticMatrix, Ti}
+    n, m = size(Tv)
+    return (n, m)
+end
+
+block_dims(A::AbstractVector) = 1
+block_dims(A::AbstractVector{T}) where T<:StaticVector = length(T)
+

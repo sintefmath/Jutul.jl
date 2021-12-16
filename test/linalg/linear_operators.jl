@@ -1,62 +1,7 @@
 using Test, StaticArrays, Terv, SparseArrays
 using Terv: SparsePattern, LinearizedSystem, LinearizedBlock, MultiLinearizedSystem, BlockMajorLayout, EquationMajorLayout, DefaultContext
-using Terv: linear_operator
+using Terv: linear_operator, block_major_to_equation_major_view, equation_major_to_block_major_view
 
-function to_sparse_pattern(A::SparseMatrixCSC{Tv, Ti}) where {Tv, Ti}
-    I, J, _ = findnz(A)
-    n, m = size(A)
-    layout = matrix_layout(A)
-    block_n, block_m = block_dims(A)
-    return SparsePattern(I, J, n, m, layout, block_n, block_m)
-end
-
-function matrix_layout(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:Real, Ti}
-    return EquationMajorLayout()
-end
-
-function matrix_layout(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:StaticMatrix, Ti}
-    layout = BlockMajorLayout()
-    return layout
-end
-
-matrix_layout(A::AbstractVector{T}) where {T<:StaticVector} = BlockMajorLayout()
-matrix_layout(A) = EquationMajorLayout()
-
-function block_dims(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:Real, Ti}
-    return (1, 1)
-end
-
-function block_dims(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:StaticMatrix, Ti}
-    n, m = size(Tv)
-    return (n, m)
-end
-
-block_dims(A::AbstractVector) = 1
-block_dims(A::AbstractVector{T}) where T<:StaticVector = length(T)
-
-function LinearizedSystem(A, r = nothing)
-    pattern = to_sparse_pattern(A)
-    layout = matrix_layout(A)
-    context = DefaultContext(matrix_layout = layout)
-    sys = LinearizedSystem(pattern, context, layout, r = r)
-    J = sys.jac
-    for (i, j, entry) in zip(findnz(A)...)
-        J[i, j] = entry
-    end
-    return sys
-end
-
-function LinearizedBlock(A, bz::Tuple, row_layout, col_layout)
-    pattern = to_sparse_pattern(A)
-    layout = matrix_layout(A)
-    context = DefaultContext(matrix_layout = layout)
-    sys = LinearizedBlock(pattern, context, layout, row_layout, col_layout, bz)
-    J = sys.jac
-    for (i, j, entry) in zip(findnz(A)...)
-        J[i, j] = entry
-    end
-    return sys
-end
 # Make the same system twice
 # Convert to block system
 
@@ -113,66 +58,70 @@ function block_vector_to_scalar(x; reorder = false)
     return newx
 end
 
-a = @SMatrix [1.0 2; 3 4]
-b = @SMatrix [5.0 6; 7 8]
-c = @SMatrix [9.0 10; 11 12]
+function system_1()
+    a = @SMatrix [1.0 2; 3 4]
+    b = @SMatrix [5.0 6; 7 8]
+    c = @SMatrix [9.0 10; 11 12]
+    
+    x1 = @SVector [π, 3.0]
+    x2 = @SVector [sqrt(3), 23.1]
+    
+    
+    A_b = sparse([1, 1, 2], [1, 2, 1], [a, b, c], 2, 2)
+    B = sparse([1.0 3 7.0; 10 6 1; 9 11 2; 7 13 5])
+    C = sparse([0.1 3 7 2; 6 4 1.2 5; 1 1 6 3])
+    D = sparse([9 8 7; 6 5 4; 3 2 1])
 
-x1 = @SVector [π, 3.0]
-x2 = @SVector [sqrt(3), 23.1]
+    X_b = [x1, x2]
+    Y = [3.0, 7.2, 5.1]
 
-bz = length(x1)
-
-A_b = sparse([1, 1, 2], [1, 2, 1], [a, b, c], 2, 2)
-A_s = block_system_to_scalar(A_b, reorder = true)
-# Vector to multiply with
-X_b = [x1, x2]
-X_s = block_vector_to_scalar(X_b, reorder = true)
-# Scalar version of system
-B = sparse([1.0 3 7.0; 10 6 1; 9 11 2; 7 13 5])
-C = sparse([0.1 3 7 2; 6 4 1.2 5; 1 1 6 3])
-D = sparse([9 8 7; 6 5 4; 3 2 1])
-
-Y = [3.0, 7.2, 5.1]
-
-M_s = [A_s B; C D]
-V_s = [X_s; Y]
-## Multi with standard types
-## Mult as linearized system
-X_sb = block_vector_to_scalar(X_b, reorder = false)
-
-A_sys = LinearizedSystem(A_b)
-B_sys = LinearizedBlock(B, (bz, 1), BlockMajorLayout(), EquationMajorLayout())
-C_sys = LinearizedBlock(C, (1, bz), EquationMajorLayout(), BlockMajorLayout())
-D_sys = LinearizedSystem(D)
+    return (A = A_b, B = B, C = C, D = D, X = X_b, Y = Y)
+end
 
 
-A_op = linear_operator(A_sys)
-# @test A_op*X_sb
-B_op = linear_operator(B_sys)
-B_op*Y
-##
-systems = [A_sys B_sys; C_sys D_sys]
-sys = MultiLinearizedSystem(systems, DefaultContext(), EquationMajorLayout())
-op = linear_operator(sys)
-V_op = [X_sb; Y]
-res_b = op*V_op
-res_s = M_s*V_s
+function test_system(system)
+    A_b, B, C, D, X_b, Y = system
+    bz = length(eltype(X_b))
+    A_s = block_system_to_scalar(A_b, reorder = true)
+    # Vector to multiply with
+    X_s = block_vector_to_scalar(X_b, reorder = true)
+    # Scalar version of system
+    
+    M_s = [A_s B; C D]
+    V_s = [X_s; Y]
+    ## Multi with standard types
+    ## Mult as linearized system
+    X_sb = block_vector_to_scalar(X_b, reorder = false)
+    
+    A_sys = LinearizedSystem(A_b)
+    B_sys = LinearizedBlock(B, (bz, 1), BlockMajorLayout(), EquationMajorLayout())
+    C_sys = LinearizedBlock(C, (1, bz), EquationMajorLayout(), BlockMajorLayout())
+    D_sys = LinearizedSystem(D)
+    
+    
+    A_op = linear_operator(A_sys)
+    # Test that the linear operator of a block system, acting on a scalar system
+    # with that same ordering, produces the same result as the non-block ordering
+    @test A_op*X_sb ≈ equation_major_to_block_major_view(A_s*X_s, bz)
 
-nf = length(X_s)
-@test res_b[nf+1:end] == res_s[nf+1:end]
-##
-renum = collect(reshape(reshape(res_s[1:nf], bz, :)', :))
-@test res_b[1:nf] == renum
-##
-S = sys.subsystems
-d = size(S, 2)
-ops = map(linear_operator, S)
+    systems = [A_sys B_sys; C_sys D_sys]
+    sys = MultiLinearizedSystem(systems, DefaultContext(), EquationMajorLayout())
+    op = linear_operator(sys)
+    V_op = [X_sb; Y]
+    res_b = op*V_op
+    res_s = M_s*V_s
+    
+    nf = length(X_s)
+    # Test that the equation ordered part is ok
+    @test res_b[nf+1:end] ≈ res_s[nf+1:end]
+    # Test that the block ordered part is ok
+    renum = equation_major_to_block_major_view(res_s[1:nf], bz)
+    @test res_b[1:nf] ≈ renum    
+end
 
-#
-# ops = map(linear_operator, vec(permutedims(S)))
-
-# op = hvcat(d, ops...)
-
-
-op = vcat(hcat(ops[1, 1], ops[1, 2]), hcat(ops[2, 1], ops[2, 2]))
-op*V_op
+@testset "Mixed block-scalar system" begin
+    @testset "Test system 1" begin
+        sys = system_1()
+        test_system(sys)
+    end
+end

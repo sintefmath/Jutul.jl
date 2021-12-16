@@ -43,6 +43,18 @@ struct LinearizedBlock{M, R, C} <: TervLinearSystem
     end
 end
 
+function LinearizedBlock(A, bz::Tuple, row_layout, col_layout)
+    pattern = to_sparse_pattern(A)
+    layout = matrix_layout(A)
+    context = DefaultContext(matrix_layout = layout)
+    sys = LinearizedBlock(pattern, context, layout, row_layout, col_layout, bz)
+    J = sys.jac
+    for (i, j, entry) in zip(findnz(A)...)
+        J[i, j] = entry
+    end
+    return sys
+end
+
 row_block_size(b::LinearizedBlock) = b.rowcol_block_size[1]
 col_block_size(b::LinearizedBlock) = b.rowcol_block_size[2]
 
@@ -91,6 +103,19 @@ function LinearizedSystem(sparse_arg, context, layout; r = nothing, dx = nothing
 
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
 end
+
+function LinearizedSystem(A, r = nothing)
+    pattern = to_sparse_pattern(A)
+    layout = matrix_layout(A)
+    context = DefaultContext(matrix_layout = layout)
+    sys = LinearizedSystem(pattern, context, layout, r = r)
+    J = sys.jac
+    for (i, j, entry) in zip(findnz(A)...)
+        J[i, j] = entry
+    end
+    return sys
+end
+
 
 function build_jacobian(sparse_arg, context, layout)
     @assert sparse_arg.layout == layout
