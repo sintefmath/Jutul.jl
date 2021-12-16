@@ -38,7 +38,7 @@ struct LinearizedBlock{R, C} <: TervLinearSystem
     matrix_layout::R
     residual_layout::C
     residual_block_size::Integer
-    function LinearizedBlock(sparse_arg, context, layout, layout_r, residual_block_size)
+    function LinearizedBlock(sparse_arg, context, layout, layout_r, residual_block_size = 1)
         jac, jac_buf = build_jacobian(sparse_arg, context, layout)
         I = typeof(layout)
         J = typeof(layout_r)
