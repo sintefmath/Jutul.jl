@@ -439,7 +439,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
 end
 
 
-function apply_well_reservoir_sources!(sys::MultiPhaseSystem, res_q, well_q, state_res, state_well, perforations, sgn)
+function apply_well_reservoir_sources!(sys::Union{ImmiscibleSystem, SinglePhaseSystem}, res_q, well_q, state_res, state_well, perforations, sgn)
     p_res = state_res.Pressure
     p_well = state_well.Pressure
 
@@ -499,6 +499,73 @@ function unpack_perf(perf, i)
     @inbounds gdz = perf.gdz[i]
     return (si, ri, wi, gdz)
 end
+
+function apply_well_reservoir_sources!(sys::Union{TwoPhaseCompositionalSystem}, res_q, well_q, state_res, state_well, perforations, sgn)
+    p_res = state_res.Pressure
+    p_well = state_well.Pressure
+
+    val = x -> local_ad(x, nothing)
+
+    μ = state_res.PhaseViscosities
+    kr = state_res.RelativePermeabilities
+    ρ = state_res.PhaseMassDensities
+    X = state_res.LiquidMassFractions
+    Y = state_res.VaporMassFractions
+
+    ρ_w = state_well.PhaseMassDensities
+    s_w = state_well.Saturations
+    X_w = state_well.LiquidMassFractions
+    Y_w = state_well.VaporMassFractions
+    perforation_sources_comp!(well_q, perforations, val(p_res),     p_well,  val(kr), val(μ), val(ρ), val(X), val(Y),    ρ_w,      s_w,      X_w,      Y_w, sgn)
+    perforation_sources_comp!(res_q,  perforations,     p_res,  val(p_well),     kr,      μ,      ρ,      X,      Y, val(ρ_w), val(s_w), val(X_w), val(Y_w), sgn)
+end
+
+function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y, ρ_w, s_w, X_w, Y_w, sgn)
+    # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
+    nc = size(X, 1)
+    nph = size(μ, 1)
+    @assert nph == 2
+    L = 1
+    V = 2
+
+    @inbounds for i in eachindex(perf.self)
+        si, ri, wi, gdz = unpack_perf(perf, i)
+        if gdz != 0
+            ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
+            ρgdz = gdz*ρ_mix
+        else
+            ρgdz = 0
+        end
+        @inbounds dp = wi*(p_well[si] - p_res[ri] + ρgdz)
+        λ_l = kr[L, ri]/μ[L, ri]
+        λ_v = kr[V, ri]/μ[V, ri]
+
+        if dp > 0
+            # Injection
+            ρ_l = ρ_w[L, si]
+            ρ_v = ρ_w[V, si]
+
+            S_l = s_w[L, si]
+            S_v = s_w[V, si]
+
+            λ_t = λ_l + λ_v
+            @inbounds for c in 1:nc
+                mass_mix = S_l*ρ_l*X_w[c, si] + S_v*ρ_v*Y_w[c, si]
+                target[c, i] = sgn*mass_mix*λ_t*dp
+            end
+        else
+            ρ_l = ρ[L, ri]
+            ρ_v = ρ[V, ri]
+
+            # Production
+            @inbounds for c in 1:nc
+                c_i = ρ_l*λ_l*X[c, ri] + ρ_v*λ_v*Y[c, ri]
+                target[c, i] = sgn*c_i*dp
+            end
+        end
+    end
+end
+
 
 
 # Selection of primary variables
