@@ -463,36 +463,41 @@ function perforation_sources_immiscible!(target, perf, p_res, p_well, kr, μ, ρ
     nph = size(μ, 1)
 
     @inbounds for i in eachindex(perf.self)
-        si = perf.self[i]
-        ri = perf.reservoir[i]
-        wi = perf.WI[i]
-        gdz = perf.gdz[i]
+        si, ri, wi, gdz = unpack_perf(perf, i)
         if gdz != 0
             ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
             ρgdz = gdz*ρ_mix
         else
             ρgdz = 0
         end
-        dp = wi*(p_well[si] - p_res[ri] + ρgdz)
+        @inbounds dp = wi*(p_well[si] - p_res[ri] + ρgdz)
         if dp > 0
             # Injection
             λ_t = 0
-            for ph in 1:nph
+            @inbounds for ph in 1:nph
                 λ_t += kr[ph, ri]/μ[ph, ri]
             end
             # @debug "λ_t: $(value(λ_t)) dp: $(value(dp)) ρgdz: $(value(ρgdz))"
-            for c in 1:nc
+            @inbounds for c in 1:nc
                 mass_mix = s_w[c, si]*ρ_w[c, si]
                 target[c, i] = sgn*mass_mix*λ_t*dp
             end
         else
             # Production
-            for ph in 1:nc
+            @inbounds for ph in 1:nc
                 c_i = ρ[ph, ri]*kr[ph, ri]/μ[ph, ri]
                 target[ph, i] = sgn*c_i*dp
             end
         end
     end
+end
+
+function unpack_perf(perf, i)
+    @inbounds si = perf.self[i]
+    @inbounds ri = perf.reservoir[i]
+    @inbounds wi = perf.WI[i]
+    @inbounds gdz = perf.gdz[i]
+    return (si, ri, wi, gdz)
 end
 
 
@@ -508,7 +513,7 @@ end
 # Some utilities
 function mix_by_mass(masses, total, values)
     v = 0
-    for i in eachindex(masses)
+    @inbounds for i in eachindex(masses)
         v += masses[i]*values[i]
     end
     return v/total
@@ -516,7 +521,7 @@ end
 
 function mix_by_saturations(s, values)
     v = 0
-    for i in eachindex(s)
+    @inbounds for i in eachindex(s)
         v += s[i]*values[i]
     end
     return v

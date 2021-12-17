@@ -356,9 +356,7 @@ function apply_boundary_conditions!(storage, model::TervModel)
     apply_boundary_conditions!(storage, parameters, model)
 end
 
-function apply_boundary_conditions!(storage, parameters, model)
-    nothing
-end
+apply_boundary_conditions!(storage, parameters, model) = nothing
 
 function update_equations!(storage, model, dt = nothing)
     equations = storage.equations

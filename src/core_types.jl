@@ -45,16 +45,16 @@ Equations are stored sequentially in rows, derivatives of same type in columns:
 struct EquationMajorLayout <: TervMatrixLayout
     as_adjoint::Bool
 end
-function EquationMajorLayout() EquationMajorLayout(false) end
-function is_cell_major(::EquationMajorLayout) false end
+EquationMajorLayout() = EquationMajorLayout(false)
+is_cell_major(::EquationMajorLayout) = false
 """
 Domain entities sequentially in rows:
 """
 struct UnitMajorLayout <: TervMatrixLayout
     as_adjoint::Bool
 end
-function UnitMajorLayout() UnitMajorLayout(false) end
-function is_cell_major(::UnitMajorLayout) true end
+UnitMajorLayout() = UnitMajorLayout(false)
+is_cell_major(::UnitMajorLayout) = true
 
 """
 Same as UnitMajorLayout, but the nzval is a matrix
@@ -62,13 +62,11 @@ Same as UnitMajorLayout, but the nzval is a matrix
 struct BlockMajorLayout <: TervMatrixLayout
     as_adjoint::Bool
 end
-function BlockMajorLayout() BlockMajorLayout(false) end
-function is_cell_major(::BlockMajorLayout) true end
+BlockMajorLayout() = BlockMajorLayout(false)
+is_cell_major(::BlockMajorLayout) = true
 
 matrix_layout(::Nothing) = EquationMajorLayout(false)
-function represented_as_adjoint(layout)
-    layout.as_adjoint
-end
+represented_as_adjoint(layout) = layout.as_adjoint
 
 struct SparsePattern{L}
     I

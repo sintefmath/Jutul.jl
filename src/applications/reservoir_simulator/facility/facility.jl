@@ -213,11 +213,16 @@ function update_equation!(eq::ControlEquationWell, storage, model, dt)
     # T = ctrl.target
     surf_rate = state.TotalSurfaceMassRate
     # bhp = state.Pressure[1]
+    entries = eq.equation.entries
+    control_equations!(entries, wells, ctrl, surf_rate)
+end
+
+function control_equations!(entries, wells, ctrl, surf_rate)
     @inbounds for (i, key) in enumerate(wells)
         C = ctrl[key]
         T = C.target
         # @debug "Well $key operating using $T"
-        eq.equation.entries[i] = well_control_equation(ctrl, T, surf_rate[i])
+        entries[i] = well_control_equation(ctrl, T, surf_rate[i])
     end
 end
 
