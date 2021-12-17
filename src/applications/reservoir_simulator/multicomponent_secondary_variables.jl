@@ -222,12 +222,12 @@ end
 
 @terv_secondary function update_as_secondary!(rho, m::LBCViscosities, model::SimulationModel{D, S}, param, Pressure, Temperature, FlashResults) where {D, S<:CompositionalSystem}
     eos = model.system.equation_of_state
-    for i in 1:size(rho, 2)
+    @inbounds for i in 1:size(rho, 2)
         p = Pressure[i]
         T = Temperature[1, i]
-        ρ_l, ρ_v = lbc_viscosities(eos, p, T, FlashResults[i])
-        rho[1, i] = ρ_l
-        rho[2, i] = ρ_v
+        μ_l, μ_v = lbc_viscosities(eos, p, T, FlashResults[i])
+        rho[1, i] = max(μ_l, 1e-18)
+        rho[2, i] = max(μ_v, 1e-18)
     end
 end
 
