@@ -56,6 +56,10 @@ function cross_term_pair(storage, source, target)
     return x
 end
 
+function target_cross_term_keys(storage, target)
+    return keys(cross_term(storage, target))
+end
+
 @inline submodel_symbols(model::MultiModel) = keys(model.models)
 
 function setup_state!(state, model::MultiModel, init_values)
@@ -464,13 +468,9 @@ end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     for target in targets
-        for source in sources
-            target::Symbol
-            source::Symbol
-            if source != target
-                cross_terms = cross_term_pair(storage, source, target)
-                update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
-            end
+        for source in intersect(target_cross_term_keys(storage, target), sources)
+            cross_terms = cross_term_pair(storage, source, target)
+            update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
         end
     end
 end
@@ -491,12 +491,10 @@ function update_cross_terms_for_pair!(cross_terms, storage, model, source::Symbo
 end
 
 function apply_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
-    for target::Symbol in targets
-        for source::Symbol in sources
-            if source != target
-                cross_terms = cross_term_pair(storage, source, target)
-                apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
-            end
+    for target in targets
+        for source in intersect(target_cross_term_keys(storage, target), sources)
+            cross_terms = cross_term_pair(storage, source, target)
+            apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
         end
     end
 end
@@ -556,25 +554,20 @@ end
 function update_offdiagonal_blocks!(storage, model, targets, sources)
     linearized_system = storage.LinearizedSystem
     for target in targets
-        for source in sources
-            if source != target
-                cross_terms = cross_term_pair(storage, source, target)
-                if isnothing(cross_terms)
-                    continue
-                end
-                lsys = get_linearized_system_model_pair(storage, model, source, target, linearized_system)
-                update_linearized_system_crossterms!(lsys, cross_terms, storage, model, source, target)
-            end
+        for source in intersect(target_cross_term_keys(storage, target), sources)
+            cross_terms = cross_term_pair(storage, source, target)
+            lsys = get_linearized_system_model_pair(storage, model, source, target, linearized_system)
+            update_linearized_system_crossterms!(lsys, cross_terms, storage, model, source, target)
         end
     end
 end
 
 
 function update_linearized_system_crossterms!(lsys, cross_terms, storage, model::MultiModel, source, target)
-    storage_t, = get_submodel_storage(storage, target)
+    # storage_t, = get_submodel_storage(storage, target)
     model_t, model_s = get_submodels(model, target, source)
 
-    eqs = storage_t[:equations]
+    # eqs = storage_t[:equations]
     for ekey in keys(cross_terms)
         ct = cross_terms[ekey]
         nz = nonzeros(lsys.jac)
