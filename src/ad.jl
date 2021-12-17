@@ -1,4 +1,4 @@
-export CompactAutoDiffCache, as_value, TervAutoDiffCache
+export CompactAutoDiffCache, as_value, TervAutoDiffCache, number_of_entities
 
 """
 An AutoDiffCache is a type that holds both a set of AD values and a map into some
@@ -49,7 +49,18 @@ end
 """
 Get number of entities a cache is defined on.
 """
-@inline function number_of_entities(c::TervAutoDiffCache) c.number_of_entities end
+@inline number_of_entities(c::TervAutoDiffCache) = c.number_of_entities
+
+
+"""
+Number of entities for vector stored in state (just the number of elements)
+"""
+@inline number_of_entities(c::T) where T<:AbstractVector = length(c)
+
+"""
+Number of entities for matrix stored in state (convention is number of columns)
+"""
+@inline number_of_entities(c::T) where T<:AbstractArray = size(c, 2)
 
 """
 Get the entries of the main autodiff cache for an equation.
