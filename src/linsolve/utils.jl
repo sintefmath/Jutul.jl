@@ -25,6 +25,7 @@ function reservoir_linsolve(model, method = :cpr;
                                    provider = Krylov,
                                    solver = Krylov.bicgstab,
                                     update_interval = :ministep,
+                                    cpr_type = nothing,
                                     partial_update = update_interval == :once,
                                     kwarg...)
     if model.context == DefaultContext()
@@ -33,20 +34,20 @@ function reservoir_linsolve(model, method = :cpr;
     if method == :cpr
         gs_its = 1
         cyc = AlgebraicMultigrid.V()
-        p_solve = AMGPreconditioner(ruge_stuben, cycle = cyc, presmoother = GaussSeidel(iter = gs_its), postsmoother = GaussSeidel(iter = gs_its))
+        p_solve = AMGPreconditioner(smoothed_aggregation, cycle = cyc, presmoother = GaussSeidel(iter = gs_its), postsmoother = GaussSeidel(iter = gs_its))
         # p_solve = AMGPreconditioner()
         #p_solve = AMGPreconditioner(smoothed_aggregation, cycle = cyc, 
         #                        smooth = JacobiProlongation(2.0/3.0), 
         #                        presmoother = GaussSeidel(iter = gs_its), postsmoother = GaussSeidel(iter = gs_its))
         # p_solve = AMGPreconditioner(ruge_stuben)
         # p_solve = AMGPreconditioner(smoothed_aggregation)
-
-        cpr_type = :true_impes
-        cpr_type = :analytical
-        # update_interval = :iteration
-        # update_interval = :ministep
-        # update_interval = :once
-
+        if isnothing(cpr_type)
+            if isa(model.system, ImmiscibleSystem)
+                cpr_type = :analytical
+            else
+                cpr_type = :true_impes
+            end
+        end
         prec = CPRPreconditioner(p_solve, strategy = cpr_type, 
         update_interval = update_interval, partial_update = partial_update)
         rtol = isnothing(rtol) ? 0.001 : rtol
