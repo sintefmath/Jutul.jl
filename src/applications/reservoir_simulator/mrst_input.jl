@@ -285,6 +285,14 @@ function model_from_mat_comp(G, mrst_data, res_context)
     # p[:Pressure] = Pressure(max_rel = 0.2)
     s = model.secondary_variables
     s[:RelativePermeabilities] = kr
+    T = vec(mrst_data["state0"]["T"])
+    if length(unique(T)) == 1
+        TV = ConstantVariables(T[1], single_entity = true)
+    else
+        TV = ConstantVariables(T, single_entity = false)
+    end
+
+    s[:Temperature] = TV
     
     ## Model parameters
     param = setup_parameters(model)
@@ -411,7 +419,7 @@ function init_from_mat(mrst_data)
     end
     if haskey(state0, "components")
         z0 = state0["components"]'
-        init = Dict(:Pressure => p0, :OverallMoleFractions => z0)
+        init = Dict(:Pressure => p0, :OverallMoleFractions => z0)#, :Temperature => T)
     else
         s0 = state0["s"]'
         init = Dict(:Pressure => p0, :Saturations => s0)
@@ -479,6 +487,9 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         sv = wi.secondary_variables
         sv[:PhaseMassDensities] = model.secondary_variables[:PhaseMassDensities]
         sv[:PhaseViscosities] = model.secondary_variables[:PhaseViscosities]
+        if haskey(sv, :Temperature)
+            sv[:Temperature] = model.secondary_variables[:Temperature]
+        end
     
         pw = wi.primary_variables
         pw[:Pressure] = Pressure(max_rel = 0.2)

@@ -356,6 +356,7 @@ Base.length(c::ConstantWrapper) = length(c.data)
 Base.size(c::ConstantWrapper) = (length(c.data), c.nrows)
 Base.size(c::ConstantWrapper, i) = i == 1 ? length(c.data) : c.nrows
 Base.@propagate_inbounds Base.getindex(c::ConstantWrapper{R}, i, j) where R = c.data[i]::R
+Base.@propagate_inbounds Base.getindex(c::ConstantWrapper{R}, i) where R = c.data[1]::R
 Base.setindex!(c::ConstantWrapper, arg...) = setindex!(c.data, arg...)
 Base.ndims(c::ConstantWrapper) = 2
 Base.view(c::ConstantWrapper, ::Colon, i) = c.data

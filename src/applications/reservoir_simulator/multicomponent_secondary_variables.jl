@@ -99,7 +99,7 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
     for i in eachindex(flash_results)
         f = flash_results[i]
         P = Pressure[i]
-        T = Temperature[1, i]
+        T = Temperature[i]
         Z = @view OverallMoleFractions[:, i]
 
         flash_results[i] = update_flash_result(S, m, buf, eos, f, P, T, Z)
