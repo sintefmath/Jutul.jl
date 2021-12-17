@@ -13,7 +13,6 @@ export Pressure, Saturations, TotalMasses, TotalMass
 
 get_phases(sys::MultiPhaseSystem) = sys.phases
 number_of_phases(sys::MultiPhaseSystem) = length(get_phases(sys))
-number_of_components(sys::ImmiscibleSystem) = number_of_phases(sys)
 
 @enum FlowSourceType begin
     MassSource
@@ -70,6 +69,8 @@ end
 struct ImmiscibleSystem <: MultiPhaseSystem
     phases::AbstractVector
 end
+
+number_of_components(sys::ImmiscibleSystem) = number_of_phases(sys)
 
 # function ImmiscibleSystem(phases)
 #    @assert length(phases) > 1 "System should have at least two phases. For single-phase, use SinglePhaseSystem instead."
