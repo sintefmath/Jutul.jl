@@ -266,7 +266,7 @@ function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, ta
         if !isnothing(crossterms) && haskey(crossterms, ekey)
             ct = crossterms[ekey]
             if !isnothing(ct)
-                align_to_jacobian!(ct, lsys.jac, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
+                align_to_jacobian!(ct, lsys, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
             end
         end
         equation_offset += number_of_equations(target, eq)

@@ -65,7 +65,7 @@ end
 function BlockMajorLayout() BlockMajorLayout(false) end
 function is_cell_major(::BlockMajorLayout) true end
 
-matrix_layout(::Any) = EquationMajorLayout(false)
+matrix_layout(::Nothing) = EquationMajorLayout(false)
 function represented_as_adjoint(layout)
     layout.as_adjoint
 end

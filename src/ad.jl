@@ -149,6 +149,7 @@ function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_entitie
 end
 
 function injective_alignment!(cache::TervAutoDiffCache, jac, entity, context;
+                                    layout = matrix_layout(context),
                                     target_index = 1:cache.number_of_entities,
                                     source_index = 1:cache.number_of_entities,
                                     number_of_entities_source = nothing,
@@ -171,12 +172,11 @@ function injective_alignment!(cache::TervAutoDiffCache, jac, entity, context;
         end
         N = length(source_index)
         @assert length(target_index) == N
-        do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context)
+        do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
     end
 end
 
-function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context)
-    layout = matrix_layout(context)
+function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
     jpos = cache.jacobian_positions
     np = cache.npartials
     for index in 1:length(source_index)
@@ -195,9 +195,7 @@ end
 
 
 
-function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext)
-
-    layout = matrix_layout(context)
+function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext, layout)
     jpos = cache.jacobian_positions
     t = index_type(context)
 

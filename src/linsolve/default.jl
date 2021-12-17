@@ -191,7 +191,7 @@ function linear_operator(block::LinearizedBlock{EquationMajorLayout, EquationMaj
     function apply!(res, x, α, β::T) where T
         # Note: This is unfortunately allocating, but applying
         # with a simple view leads to degraded performance.
-        x_v = collect(reshape(reshape(x, bz, :)', :))
+        x_v = collect(block_major_to_equation_major_view(x, bz))
         mul!(res, jac, x_v, α, β)
     end
     n, m = size(jac)

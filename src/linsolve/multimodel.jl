@@ -153,18 +153,6 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_a, buf_b)
     ldiv!(B, E, buf_b)
 end
 
-function schur_mul3!(res, r_type::Float64, B, C, D, E, x, α, β::T) where T
-    if β == zero(T)
-        tmp = B*x - C*(E\(D*x))
-        res .= tmp
-        if α != one(T)
-            lmul!(α, res)
-        end
-    else
-        error("Not implemented yet.")
-    end
-end
-
 function schur_mul_float!(res, B, C, D, E, x, α, β::T) where T
     @assert β == zero(T) "Only β == 0 implemented."
     # compute B*x
