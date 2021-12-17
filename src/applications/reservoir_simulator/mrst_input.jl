@@ -234,8 +234,11 @@ end
 
 function model_from_mat(G, mrst_data, res_context)
     ## Set up reservoir part
-    if haskey(mrst_data, "fluid")
-        f = model_from_mat_fluid
+    @info "Loading model" keys(mrst_data)
+    if haskey(mrst_data, "mixture")
+        f = model_from_mat_comp
+    elseif haskey(mrst_data, "fluid")
+        f = model_from_mat_fluid_immiscible
     elseif haskey(mrst_data, "deck")
         f = model_from_mat_deck
     else
@@ -244,7 +247,53 @@ function model_from_mat(G, mrst_data, res_context)
     return f(G, mrst_data, res_context)
 end
 
-function model_from_mat_fluid(G, mrst_data, res_context)
+function model_from_mat_comp(G, mrst_data, res_context)
+    ## Set up reservoir part
+    f = mrst_data["fluid"]
+    nkr = vec(f["nkr"])
+    rhoS = vec(f["rhoS"])
+
+    mixture = mrst_data["mixture"]
+    comps = mixture["components"]
+    names = vec(mixture["names"])
+    n = length(comps)
+
+    components = map(x -> MolecularProperty(x["mw"], x["pc"], x["Tc"], x["Vc"], x["acf"]), comps)
+    mixture = MultiComponentMixture(components, names = names)
+    eos = GenericCubicEOS(mixture)
+
+    liq = LiquidPhase()
+    vap = VaporPhase()
+    sys = TwoPhaseCompositionalSystem([liq, vap], eos)
+
+    model = SimulationModel(G, sys, context = res_context)
+
+    if haskey(f, "sgof")
+        sgof = f["sgof"]
+    else
+        sgof = []
+    end
+
+    if isempty(sgof)
+        kr = BrooksCoreyRelPerm(sys, nkr)
+    else
+        s, krt = preprocess_relperm_table(sgof)
+        kr = TabulatedRelPermSimple(s, krt)
+    end
+
+    # p = model.primary_variables
+    # p[:Pressure] = Pressure(max_rel = 0.2)
+    s = model.secondary_variables
+    s[:RelativePermeabilities] = kr
+    
+    ## Model parameters
+    param = setup_parameters(model)
+    param[:reference_densities] = vec(rhoS)
+
+    return (model, param)
+end
+
+function model_from_mat_fluid_immiscible(G, mrst_data, res_context)
     ## Set up reservoir part
     f = mrst_data["fluid"]
     p = vec(f["p"])
@@ -352,6 +401,24 @@ function model_from_mat_deck(G, mrst_data, res_context)
     return (model, param)
 end
 
+function init_from_mat(mrst_data)
+    state0 = mrst_data["state0"]
+    p0 = state0["pressure"]
+    if isa(p0, AbstractArray)
+        p0 = vec(p0)
+    else
+        p0 = [p0]
+    end
+    if haskey(state0, "components")
+        z0 = state0["components"]'
+        init = Dict(:Pressure => p0, :OverallMoleFractions => z0)
+    else
+        s0 = state0["s"]'
+        init = Dict(:Pressure => p0, :Saturations => s0)
+    end
+    return init
+end
+
 function setup_case_from_mrst(casename; simple_well = false, block_backend = true, facility_grouping = :onegroup, kwarg...)
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false; kwarg...)
     function setup_res(G, mrst_data; block_backend = false, use_groups = false)
@@ -365,16 +432,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         end
 
         model, param_res = model_from_mat(G, mrst_data, res_context)
-
-        state0 = mrst_data["state0"]
-        p0 = state0["pressure"]
-        if isa(p0, AbstractArray)
-            p0 = vec(p0)
-        else
-            p0 = [p0]
-        end
-        s0 = state0["s"]'
-        init = Dict(:Pressure => p0, :Saturations => s0)
+        init = init_from_mat(mrst_data)
 
         # param_res[:tolerances][:default] = 0.01
         # param_res[:tolerances][:mass_conservation] = 0.01
@@ -402,8 +460,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     forces[:Reservoir] = nothing
     models[:Reservoir] = model
     
-    slw = 1.0
-    w0 = Dict(:Pressure => mean(init[:Pressure]), :TotalMassFlux => 1e-12, :Saturations => [slw, 1-slw])
+
     well_symbols = map((x) -> Symbol(x["name"]), vec(mrst_data["W"]))
     num_wells = length(well_symbols)
     
@@ -416,7 +473,8 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     
         wi, wdata = get_well_from_mrst_data(mrst_data, sys, i, 
                 extraout = true, volume = 1e-2, simple = simple_well, context = w_context)
-    
+        wc = wi.domain.grid.perforations.reservoir
+
         sv = wi.secondary_variables
         sv[:PhaseMassDensities] = model.secondary_variables[:PhaseMassDensities]
         sv[:PhaseViscosities] = model.secondary_variables[:PhaseViscosities]
@@ -447,8 +505,14 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         end
         param_w = setup_parameters(wi)
         param_w[:reference_densities] = vec(param_res[:reference_densities])
-        # param_w[:tolerances][:mass_conservation] = 0.01
-    
+
+        w0 = Dict{Symbol, Any}(:Pressure => mean(init[:Pressure]), :TotalMassFlux => 1e-12)
+        if haskey(init, :OverallMoleFractions)
+            w0[:OverallMoleFractions] = vec(init[:OverallMoleFractions][:, wc[1]])
+        elseif haskey(init, :Saturations)
+            w0[:Saturations] = vec(init[:Saturations][:, wc[1]])
+        end
+
         parameters[sym] = param_w
         controls[sym] = ctrl
         forces[sym] = nothing
