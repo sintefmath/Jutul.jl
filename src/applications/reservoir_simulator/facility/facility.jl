@@ -103,7 +103,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
                             target_model::SimulationModel{D, S}, source_model::SimulationModel{WG},
                             well_symbol, source, dt) where
                             {D<:DiscretizedDomain{W} where W<:WellGrid,
-                            S<:Union{ImmiscibleSystem, SinglePhaseSystem},
+                            S<:MultiPhaseSystem,
                             WG<:WellGroup}
     fstate = facility_storage.state
     wstate = well_storage.state
@@ -118,7 +118,9 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
             @warn "Injector $well_symbol is producing?"
         end
         mix = ctrl.injection_mixture
-        @assert length(mix) == number_of_phases(target_model.system) "Injection composition must match number of phases."
+        nmix = length(mix)
+        ncomp = number_of_components(target_model.system)
+        @assert nmix == ncomp "Injection composition length ($nmix) must match number of components ($ncomp)."
     else
         if value(qT) > 0
             @warn "Producer $well_symbol is injecting?"

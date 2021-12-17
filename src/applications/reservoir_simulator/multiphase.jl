@@ -13,6 +13,7 @@ export Pressure, Saturations, TotalMasses, TotalMass
 
 get_phases(sys::MultiPhaseSystem) = sys.phases
 number_of_phases(sys::MultiPhaseSystem) = length(get_phases(sys))
+number_of_components(sys::ImmiscibleSystem) = number_of_phases(sys)
 
 @enum FlowSourceType begin
     MassSource
@@ -81,13 +82,8 @@ end
 
 phase_names(system) = get_name.(get_phases(system))
 
-function get_phases(sys::SinglePhaseSystem)
-    return [sys.phase]
-end
-
-function number_of_phases(::SinglePhaseSystem)
-    return 1
-end
+get_phases(sys::SinglePhaseSystem) = [sys.phase]
+number_of_phases(::SinglePhaseSystem) = 1
 
 ## Phases
 # Abstract phase

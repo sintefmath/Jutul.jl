@@ -447,7 +447,8 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     
     
     model, init, param_res = setup_res(G, mrst_data; block_backend = block_backend, use_groups = true)
-    
+    is_comp = haskey(init, :OverallMoleFractions)
+
     dt = mrst_data["dt"]
     if isa(dt, Real)
         dt = [dt]
@@ -497,8 +498,11 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
             println("Shut well")
             ctrl = DisabledControl()
         elseif is_injector
-            ci = wdata["compi"]
-            # ci = [0.5, 0.5]
+            if is_comp
+                ci = wdata["components"]
+            else
+                ci = wdata["compi"]
+            end
             ctrl = InjectorControl(target, ci)
         else
             ctrl = ProducerControl(target)
@@ -507,7 +511,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         param_w[:reference_densities] = vec(param_res[:reference_densities])
 
         w0 = Dict{Symbol, Any}(:Pressure => mean(init[:Pressure]), :TotalMassFlux => 1e-12)
-        if haskey(init, :OverallMoleFractions)
+        if is_comp
             w0[:OverallMoleFractions] = vec(init[:OverallMoleFractions][:, wc[1]])
         elseif haskey(init, :Saturations)
             w0[:Saturations] = vec(init[:Saturations][:, wc[1]])
