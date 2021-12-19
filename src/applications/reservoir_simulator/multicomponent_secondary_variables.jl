@@ -96,7 +96,7 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
     # S = flash_storage(eos)
     S, m, buf = fr.storage, fr.method, fr.update_buffer
     eos = model.system.equation_of_state
-    for i in eachindex(flash_results)
+    @inbounds for i in eachindex(flash_results)
         f = flash_results[i]
         P = Pressure[i]
         T = Temperature[i]
@@ -106,6 +106,9 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
     end
 end
 
+get_forces(forces::Nothing, eos, p, T, z) = force_coefficients(eos, (p = p, T = T, z = z), static_size = true)
+get_forces(forces, eos, p, T, z) = forces
+
 function update_flash_result(S, m, buffer, eos, f, P, T, Z)
     K = f.K
     z, forces = buffer.z, buffer.forces
@@ -114,11 +117,7 @@ function update_flash_result(S, m, buffer, eos, f, P, T, Z)
     c = (p = value(P), T = value(T), z = z)
     # Perform flash
     vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false)
-    if isnothing(forces)
-        # Initialize.
-        forces = force_coefficients(eos, (p = P, T = T, z = Z), static_size = true)
-    end
-
+    forces = get_forces(forces, eos, P, T, Z)
     l, v = f.liquid, f.vapor
     x = l.mole_fractions
     y = v.mole_fractions
@@ -155,18 +154,22 @@ function single_phase_update!(P, T, Z, x, y, forces, eos, c)
     return out
 end
 
+function two_phase_pre!(S, P, T, Z, x::AbstractVector{AD}, y::AbstractVector{AD}, vapor_frac::AD, eos, c) where {AD <: ForwardDiff.Dual}
+    inverse_flash_update!(S, eos, c, vapor_frac)
+    ∂c = (p = P, T = T, z = Z)
+    V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
+    set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
+    set_partials_phase_mole_fractions!(y, S, eos, ∂c, :vapor)
+    return V
+end
+
+two_phase_pre!(S, P, T, Z, x, y, V, eos, c) = V
+
+
 function two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
     @. x = liquid_mole_fraction(Z, K, vapor_frac)
     @. y = vapor_mole_fraction(x, K)
-    if eltype(x)<:ForwardDiff.Dual
-        inverse_flash_update!(S, eos, c, vapor_frac)
-        ∂c = (p = P, T = T, z = Z)
-        V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
-        set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
-        set_partials_phase_mole_fractions!(y, S, eos, ∂c, :vapor)
-    else
-        V = vapor_frac
-    end
+    V = two_phase_pre!(S, P, T, Z, x, y, vapor_frac, eos, c)
     Z_L = get_compressibility_factor(forces, eos, P, T, x)
     Z_V = get_compressibility_factor(forces, eos, P, T, y)
     phase_state = TwoPhaseLiquidVapor()
@@ -175,7 +178,7 @@ function two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
 end
 
 @terv_secondary function update_as_secondary!(Sat, s::Saturations, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
-    for i in 1:size(Sat, 2)
+    @inbounds for i in 1:size(Sat, 2)
         S_l, S_v = phase_saturations(FlashResults[i])
         Sat[1, i] = S_l
         Sat[2, i] = S_v
