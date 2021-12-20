@@ -518,6 +518,10 @@ function apply_well_reservoir_sources!(sys::Union{TwoPhaseCompositionalSystem}, 
     Y_w = state_well.VaporMassFractions
     perforation_sources_comp!(well_q, perforations, val(p_res),     p_well,  val(kr), val(μ), val(ρ), val(X), val(Y),    ρ_w,      s_w,      X_w,      Y_w, sgn)
     perforation_sources_comp!(res_q,  perforations,     p_res,  val(p_well),     kr,      μ,      ρ,      X,      Y, val(ρ_w), val(s_w), val(X_w), val(Y_w), sgn)
+    if sgn > 0
+        @info "well sources" value.(res_q) value.(state_well.OverallMoleFractions) value.(X_w) value.(Y_w) value.(s_w) value.(ρ_w) 
+    end
+
 end
 
 function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y, ρ_w, s_w, X_w, Y_w, sgn)
@@ -530,8 +534,14 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y
 
     @inbounds for i in eachindex(perf.self)
         si, ri, wi, gdz = unpack_perf(perf, i)
+        S_l = s_w[L, si]
+        ρ_l = ρ_w[L, si]
+
+        S_v = s_w[V, si]
+        ρ_v = ρ_w[V, si]
+
         if gdz != 0
-            ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
+            ρ_mix = ρ_l*S_l + ρ_v*S_v
             ρgdz = gdz*ρ_mix
         else
             ρgdz = 0
@@ -542,12 +552,6 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y
 
         if dp > 0
             # Injection
-            ρ_l = ρ_w[L, si]
-            ρ_v = ρ_w[V, si]
-
-            S_l = s_w[L, si]
-            S_v = s_w[V, si]
-
             λ_t = λ_l + λ_v
             volume_rate = sgn*λ_t*dp
             q_L = S_l*ρ_l*volume_rate
