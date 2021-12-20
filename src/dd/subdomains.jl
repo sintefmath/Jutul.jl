@@ -133,13 +133,13 @@ count_active_entities(d, m, e) = length(active_entities(d, m, e))
 
 subdiscretization(disc, ::TrivialGlobalMap) = disc
 
-function subdomain(d::DiscretizedDomain, indices; entity = Cells(), buffer = 0)
+function subdomain(d::DiscretizedDomain, indices; entity = Cells(), kwarg...)
     grid = d.grid
     disc = d.discretizations
 
     N = grid.neighborship
     t = @elapsed begin
-        cells, faces, is_boundary = submap_cells(N, indices, buffer = buffer)
+        cells, faces, is_boundary = submap_cells(N, indices; kwarg...)
         mapper = FiniteVolumeGlobalMap(cells, faces, is_boundary)
         sg = subgrid(grid, cells = cells, faces = faces)
         d = Dict()
@@ -152,7 +152,7 @@ function subdomain(d::DiscretizedDomain, indices; entity = Cells(), buffer = 0)
     return DiscretizedDomain(sg, subdisc, global_map = mapper)
 end
 
-function submap_cells(N, indices; nc = maximum(N), buffer = 0)
+function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
     @assert buffer == 0 || buffer == 1
 
     facelist, facepos = get_facepos(N)
@@ -199,6 +199,9 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0)
                     other = r
                 else
                     other = l
+                end
+                if in(other, excluded)
+                    continue
                 end
                 # If a bounded cell is not in the global list of interior cells and not in the current
                 # set of processed cells, we add it and flag as a global boundary
