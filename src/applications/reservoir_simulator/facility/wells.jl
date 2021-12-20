@@ -549,9 +549,12 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y
             S_v = s_w[V, si]
 
             λ_t = λ_l + λ_v
+            volume_rate = sgn*λ_t*dp
+            q_L = S_l*ρ_l*volume_rate
+            q_V = S_v*ρ_v*volume_rate
             @inbounds for c in 1:nc
-                mass_mix = S_l*ρ_l*X_w[c, si] + S_v*ρ_v*Y_w[c, si]
-                target[c, i] = sgn*mass_mix*λ_t*dp
+                component_mass_rate = q_L*X_w[c, si] + q_V*Y_w[c, si]
+                target[c, i] = component_mass_rate
             end
         else
             ρ_l = ρ[L, ri]

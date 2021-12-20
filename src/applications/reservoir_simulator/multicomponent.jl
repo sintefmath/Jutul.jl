@@ -10,7 +10,7 @@ function degrees_of_freedom_per_entity(model::SimulationModel{G, S}, v::TotalMas
 end
 
 function select_primary_variables_system!(S, domain, system::CompositionalSystem, formulation)
-    S[:Pressure] = Pressure()
+    S[:Pressure] = Pressure(max_rel = 0.2, minimum = 101325)
     S[:OverallMoleFractions] = OverallMoleFractions()
 end
 

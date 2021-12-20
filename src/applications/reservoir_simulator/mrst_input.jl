@@ -515,24 +515,39 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         if is_shut
             println("Shut well")
             ctrl = DisabledControl()
+            factor = 1.0
         elseif is_injector
             if is_comp
-                ci = wdata["components"]
+                ci = vec(wdata["components"])
+                props = model.system.equation_of_state.mixture.properties
+                ci = map((x, c) -> max(c.mw*x, 1e-10), ci, props)
+                ci = normalize(ci, 1)
             else
                 ci = comp_i
             end
             ctrl = InjectorControl(target, ci)
+            factor = 1.01
         else
+            factor = 0.99
             ctrl = ProducerControl(target)
+            ci = nothing
         end
+        @debug "$sym: Well $i/$num_wells" target typeof(ctrl) ci
         param_w = setup_parameters(wi)
         param_w[:reference_densities] = vec(param_res[:reference_densities])
 
-        w0 = Dict{Symbol, Any}(:Pressure => mean(init[:Pressure]), :TotalMassFlux => 1e-12)
+        first_well_cell = wc[1]
+        pw = factor*init[:Pressure][first_well_cell]
+        w0 = Dict{Symbol, Any}(:Pressure => pw, :TotalMassFlux => 1e-12)
         if is_comp
-            w0[:OverallMoleFractions] = vec(init[:OverallMoleFractions][:, wc[1]])
+            if isnothing(ci)
+                cw_0 = vec(init[:OverallMoleFractions][:, first_well_cell])
+            else
+                cw_0 = ci
+            end
+            w0[:OverallMoleFractions] = cw_0
         elseif haskey(init, :Saturations)
-            w0[:Saturations] = vec(init[:Saturations][:, wc[1]])
+            w0[:Saturations] = vec(init[:Saturations][:, first_well_cell])
         end
 
         parameters[sym] = param_w

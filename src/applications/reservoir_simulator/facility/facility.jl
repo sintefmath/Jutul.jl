@@ -185,14 +185,14 @@ bottom_hole_pressure(ws) = ws.Pressure[1]
 function top_node_component_mass_fraction(ws, c_ix)
     tm = ws.TotalMasses
     t = ws.TotalMass
-    mass_fraction = tm[1, c_ix]/t[1]
+    mass_fraction = tm[c_ix, 1]/t[1]
     return mass_fraction
 end
 
 well_target(target, well_model, rhoS, q_t, well_state, f) = 0.0
 well_target(target::BottomHolePressureTarget, well_model, rhoS, q_t, well_state, f) = f(bottom_hole_pressure(well_state))
 
-function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:Union{MultiPhaseSystem, SinglePhaseSystem}}
+function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
     phases = get_phases(well_model.system)
     pos = findfirst(isequal(target.phase), phases)
     @assert !isnothing(pos)
@@ -200,6 +200,21 @@ function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{
     if value(q_t) >= 0
         q = q_t
     else
+        mf = f(top_node_component_mass_fraction(well_state, pos))
+        q = q_t*mf
+    end
+    return q/rhoS[pos]
+end
+
+function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:MultiComponentSystem}
+    phases = get_phases(well_model.system)
+    pos = findfirst(isequal(target.phase), phases)
+    @assert !isnothing(pos)
+
+    if value(q_t) >= 0
+        q = q_t
+    else
+        error("Not implemented yet.")
         mf = f(top_node_component_mass_fraction(well_state, pos))
         q = q_t*mf
     end
