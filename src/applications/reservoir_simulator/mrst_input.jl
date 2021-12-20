@@ -80,17 +80,20 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
     else
         z = zeros(length(rc))
     end
+    res_volume = vec(mrst_data["G"]["cells"]["volumes"])
 
+    well_cell_volume = sum(res_volume[rc])
+    well_volume = volume*sum(well_cell_volume)
     if simple
         # For simple well, distance from ref depth to perf
         dz = ref_depth .- z
-        W = SimpleWell(rc, WI = WI, dz = dz)
+        W = SimpleWell(rc, WI = WI, dz = dz, volume = well_volume)
         wmodel = SimulationModel(W, system; kwarg...)
         flow = TwoPointPotentialFlow(nothing, nothing, TrivialFlow(), W)
     else
         # For a MS well, this is the drop from the perforated cell center to the perforation (assumed zero here)
         dz = zeros(length(rc))
-        W = MultiSegmentWell(volume*ones(n), rc, WI = WI, reference_depth = ref_depth, dz = dz)
+        W = MultiSegmentWell((well_volume/n)*ones(n), rc, WI = WI, reference_depth = ref_depth, dz = dz)
 
         z = vcat(ref_depth, z)
         flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), TotalMassVelocityMassFractionsFlow(), W, nothing, z)
