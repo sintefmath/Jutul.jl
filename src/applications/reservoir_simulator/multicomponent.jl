@@ -11,7 +11,7 @@ end
 
 function select_primary_variables_system!(S, domain, system::CompositionalSystem, formulation)
     S[:Pressure] = Pressure(max_rel = 0.2, minimum = 101325)
-    S[:OverallMoleFractions] = OverallMoleFractions()
+    S[:OverallMoleFractions] = OverallMoleFractions(dz_max = 0.1)
 end
 
 function select_equations_system!(eqs, domain, system::MultiComponentSystem, formulation)
@@ -21,14 +21,19 @@ end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:TwoPhaseCompositionalSystem}
     state = storage.state
-    Φ = state.FluidVolume
-    ρ = state.PhaseMassDensities
-    s = state.Saturations
+    Φ = as_value(state.FluidVolume)
+    ρ = as_value(state.PhaseMassDensities)
+    s = as_value(state.Saturations)
     a = active_entities(model.domain, Cells())
 
     names = model.system.equation_of_state.mixture.component_names
 
-    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[1, a[i]]*s[1, a[i]] + ρ[2, i]*s[2, i])*Φ[a[i]])
+    function scale(i)
+        c = a[i]
+        mass = ρ[1, c]*s[1, c] + ρ[2, c]*s[2, c]
+        return mass*Φ[c]
+    end
+    @tullio max e[j] := abs(r[j, i]) * dt / scale(i)
     R = Dict("CNV" => (errors = e, names = names))
     return R
 end
