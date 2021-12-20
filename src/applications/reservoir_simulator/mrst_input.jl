@@ -489,14 +489,15 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         wc = wi.domain.grid.perforations.reservoir
 
         sv = wi.secondary_variables
-        sv[:PhaseMassDensities] = model.secondary_variables[:PhaseMassDensities]
-        sv[:PhaseViscosities] = model.secondary_variables[:PhaseViscosities]
+        sv_m = model.secondary_variables
+        sv[:PhaseMassDensities] = sv_m[:PhaseMassDensities]
+        sv[:PhaseViscosities] = sv_m[:PhaseViscosities]
         if haskey(sv, :Temperature)
-            sv[:Temperature] = model.secondary_variables[:Temperature]
+            sv[:Temperature] = sv_m[:Temperature]
         end
     
         pw = wi.primary_variables
-        pw[:Pressure] = Pressure(max_rel = 0.2)
+        # pw[:Pressure] = Pressure(max_rel = 0.2)
     
         models[sym] = wi
     
