@@ -276,34 +276,42 @@ function unit_sum_update!(s, p, model, dx)
     if nf == 2
         unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
     else
-        if false
+        if true
             # Preserve direction
-            for cell in active_cells
-                w = 1.0
-                # First pass: Find the relaxation factors that keep all fractions in [0, 1]
-                # and obeying the maximum change targets
-                dlast0 = 0
-                @inbounds for i = 1:(nf-1)
-                    v = value(s[i, cell])
-                    dv0 = dx[cell + (i-1)*nu]
-                    dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
-                    dlast0 -= dv0
-                    w = pick_relaxation(w, dv, dv0)
-                end
-                # Do the same thing for the implicit update of the last value
-                dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
-                w = pick_relaxation(w, dlast, dlast0)
-
-                @inbounds for i = 1:(nf-1)
-                    s[i, cell] += w*dx[cell + (i-1)*nu]
-                end
-                @inbounds s[nf, cell] += w*dlast0
-            end
+            unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
         else
             # Preserve update magnitude
-            unit_update_multiple!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
+            unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
         end
     end
+end
+
+function unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
+    @batch minbatch = 1000 for cell in active_cells
+        unit_update_direction_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
+    end
+end
+
+function unit_update_direction_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
+    w = 1.0
+    # First pass: Find the relaxation factors that keep all fractions in [0, 1]
+    # and obeying the maximum change targets
+    dlast0 = 0
+    @inbounds for i = 1:(nf-1)
+        v = value(s[i, cell])
+        dv0 = dx[cell + (i-1)*nu]
+        dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
+        dlast0 -= dv0
+        w = pick_relaxation(w, dv, dv0)
+    end
+    # Do the same thing for the implicit update of the last value
+    dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
+    w = pick_relaxation(w, dlast, dlast0)
+
+    @inbounds for i = 1:(nf-1)
+        s[i, cell] += w*dx[cell + (i-1)*nu]
+    end
+    @inbounds s[nf, cell] += w*dlast0
 end
 
 function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
@@ -319,13 +327,13 @@ function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
     end
 end
 
-function unit_update_multiple!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
-    for cell in active_cells
-        unit_update_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
+function unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
+    @batch minbatch = 1000 for cell in active_cells
+        unit_update_magnitude_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
     end
 end
 
-function unit_update_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
+function unit_update_magnitude_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
     # First pass: Find the relaxation factors that keep all fractions in [0, 1]
     # and obeying the maximum change targets
     dlast0 = 0
