@@ -96,39 +96,45 @@ degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model
     # S = flash_storage(eos)
     S, m, buf = fr.storage, fr.method, fr.update_buffer
     eos = model.system.equation_of_state
+    if isnothing(buf.forces) || eltype(buf.forces.A_ij) != eltype(OverallMoleFractions)
+        P = Pressure[1]
+        T = Temperature[1]
+        Z = @view OverallMoleFractions[:, 1]
+        buf.forces = force_coefficients(eos, (p = P, T = T, z = Z), static_size = true)
+    end
+    forces = buf.forces
+    z = buf.z
+
     @inbounds for i in eachindex(flash_results)
         f = flash_results[i]
         P = Pressure[i]
         T = Temperature[i]
         Z = @view OverallMoleFractions[:, i]
 
-        flash_results[i] = update_flash_result(S, m, buf, eos, f, P, T, Z)
+        K = f.K
+        x = f.liquid.mole_fractions
+        y = f.vapor.mole_fractions
+
+        flash_results[i] = update_flash_result(S, m, buf, eos, K, x, y, z, forces, P, T, Z)
     end
 end
 
-get_forces(forces::Nothing, eos, p, T, z) = force_coefficients(eos, (p = p, T = T, z = z), static_size = true)
-get_forces(forces, eos, p, T, z) = forces
 
-function update_flash_result(S, m, buffer, eos, f, P, T, Z)
-    K = f.K
-    z, forces = buffer.z, buffer.forces
+function update_flash_result(S, m, buffer, eos, K, x, y, z, forces, P, T, Z)
     @. z = value(Z)
     # Conditions
     c = (p = value(P), T = value(T), z = z)
     # Perform flash
     vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false)
-    forces = get_forces(forces, eos, P, T, Z)
-    l, v = f.liquid, f.vapor
-    x = l.mole_fractions
-    y = v.mole_fractions
+    force_coefficients!(forces, eos, (p = P, T = T, z = Z))
+
     if isnan(vapor_frac)
         # Single phase condition. Life is easy.
-        vals = single_phase_update!(P, T, Z, x, y, forces, eos, c)
+        Z_L, Z_V, V, phase_state = single_phase_update!(P, T, Z, x, y, forces, eos, c)
     else
         # Two-phase condition: We have some work to do.
-        vals = two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
+        Z_L, Z_V, V, phase_state = two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
     end
-    Z_L, Z_V, V, phase_state = vals
     return FlashedMixture2Phase(phase_state, K, V, x, y, Z_L, Z_V)
 end
 
