@@ -197,16 +197,16 @@ function true_impes_2!(w, acc, r, n, bz, p_scale, scaling)
 end
 
 function M_entry(acc, i, j, c)
-    return acc[i, c].partials[j]
+    return @inbounds acc[j, c].partials[i]
 end
 
 function true_impes_3!(w, acc, r, n, bz, s, scaling)
     r_p = SVector{3}(r)
     f(i, j, c) = M_entry(acc, i, j, c)
     for c in 1:n
-        A = @SMatrix    [s*f(1, 1, c) f(1, 2, c) f(1, 3, c);
-                         s*f(2, 1, c) f(2, 2, c) f(2, 3, c);
-                         s*f(3, 1, c) f(3, 2, c) f(3, 3, c);]
+        A = @SMatrix    [s*f(1, 1, c) s*f(1, 2, c) s*f(1, 3, c);
+                           f(2, 1, c) f(2, 2, c) f(2, 3, c);
+                           f(3, 1, c) f(3, 2, c) f(3, 3, c)]
         invert_w!(w, A, r_p, c, bz, scaling)
     end
 end
@@ -215,10 +215,10 @@ function true_impes_4!(w, acc, r, n, bz, s, scaling)
     r_p = SVector{4}(r)
     f(i, j, c) = M_entry(acc, i, j, c)
     for c in 1:n
-        A = @SMatrix    [s*f(1, 1, c) f(1, 2, c) f(1, 3, c) f(1, 4, c);
-                         s*f(2, 1, c) f(2, 2, c) f(2, 3, c) f(2, 4, c);
-                         s*f(3, 1, c) f(3, 2, c) f(3, 3, c) f(3, 4, c);
-                         s*f(4, 1, c) f(4, 2, c) f(4, 3, c) f(4, 4, c)]
+        A = @SMatrix    [s*f(1, 1, c) s*f(1, 2, c) s*f(1, 3, c) s*f(1, 4, c);
+                           f(2, 1, c) f(2, 2, c) f(2, 3, c) f(2, 4, c);
+                           f(3, 1, c) f(3, 2, c) f(3, 3, c) f(3, 4, c);
+                           f(4, 1, c) f(4, 2, c) f(4, 3, c) f(4, 4, c)]
         invert_w!(w, A, r_p, c, bz, scaling)
     end
 end
@@ -227,11 +227,11 @@ function true_impes_5!(w, acc, r, n, bz, s, scaling)
     r_p = SVector{5}(r)
     f(i, j, c) = M_entry(acc, i, j, c)
     for c in 1:n
-        A = @SMatrix    [s*f(1, 1, c) f(1, 2, c) f(1, 3, c) f(1, 4, c) f(1, 5, c);
-                         s*f(2, 1, c) f(2, 2, c) f(2, 3, c) f(2, 4, c) f(2, 5, c);
-                         s*f(3, 1, c) f(3, 2, c) f(3, 3, c) f(3, 4, c) f(3, 5, c);
-                         s*f(4, 1, c) f(4, 2, c) f(4, 3, c) f(4, 4, c) f(4, 5, c);
-                         s*f(5, 1, c) f(5, 2, c) f(5, 3, c) f(5, 4, c) f(5, 5, c)]
+        A = @SMatrix    [s*f(1, 1, c) s*f(1, 2, c) s*f(1, 3, c) s*f(1, 4, c) s*f(1, 5, c);
+                         f(2, 1, c) f(2, 2, c) f(2, 3, c) f(2, 4, c) f(2, 5, c);
+                         f(3, 1, c) f(3, 2, c) f(3, 3, c) f(3, 4, c) f(3, 5, c);
+                         f(4, 1, c) f(4, 2, c) f(4, 3, c) f(4, 4, c) f(4, 5, c);
+                         f(5, 1, c) f(5, 2, c) f(5, 3, c) f(5, 4, c) f(5, 5, c)]
         invert_w!(w, A, r_p, c, bz, scaling)
     end
 end
