@@ -192,7 +192,7 @@ end
 well_target(target, well_model, rhoS, q_t, well_state, f) = 0.0
 well_target(target::BottomHolePressureTarget, well_model, rhoS, q_t, well_state, f) = f(bottom_hole_pressure(well_state))
 
-function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
+function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:Union{MultiPhaseSystem, SinglePhaseSystem}}
     phases = get_phases(well_model.system)
     pos = findfirst(isequal(target.phase), phases)
     @assert !isnothing(pos)

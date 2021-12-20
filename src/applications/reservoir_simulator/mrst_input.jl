@@ -75,7 +75,11 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
     # dz = awrap(w.dZ)
     WI = awrap(w.WI)
     cell_centroids = copy((mrst_data["G"]["cells"]["centroids"])')
-    z = cell_centroids[3, rc]
+    if size(cell_centroids, 1) == 3
+        z = cell_centroids[3, rc]
+    else
+        z = zeros(length(rc))
+    end
 
     if simple
         # For simple well, distance from ref depth to perf
@@ -499,8 +503,11 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         t_mrst = wdata["val"]
         is_injector = wdata["sign"] > 0
         is_shut = wdata["status"] < 1
+        comp_i = vec(wdata["compi"])
+        phases = Terv.get_phases(model.system)
         if wdata["type"] == "rate"
-            target = SinglePhaseRateTarget(t_mrst, AqueousPhase())
+            target_phase = phases[only(findall(comp_i .> 0))]
+            target = SinglePhaseRateTarget(t_mrst, target_phase)
         else
             target = BottomHolePressureTarget(t_mrst)
         end
@@ -512,7 +519,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
             if is_comp
                 ci = wdata["components"]
             else
-                ci = wdata["compi"]
+                ci = comp_i
             end
             ctrl = InjectorControl(target, ci)
         else
