@@ -430,6 +430,10 @@ Take value of AD.
     return ForwardDiff.value(x)
 end
 
+@inline function value(x::AbstractArray)
+    return value.(x)
+end
+
 """
     value(d::Dict)
 Call value on all elements of some Dict.
@@ -437,7 +441,7 @@ Call value on all elements of some Dict.
 function value(d::AbstractDict)
     v = copy(d)
     for key in keys(v)
-        v[key] = value.(v[key])
+        v[key] = value(v[key])
     end
     return v
 end
