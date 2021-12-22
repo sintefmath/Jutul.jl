@@ -144,7 +144,7 @@ function get_compressibility_factor(forces, eos, P, T, Z)
     return mixture_compressibility_factor(eos, ∂cond, forces)
 end
 
-function single_phase_update!(P, T, Z, x, y, forces, eos, c)
+@inline function single_phase_update!(P, T, Z, x, y, forces, eos, c)
     AD = Base.promote_type(eltype(Z), typeof(P), typeof(T))
     Z_L = get_compressibility_factor(forces, eos, P, T, Z)
     Z_V = Z_L
@@ -172,7 +172,7 @@ end
 two_phase_pre!(S, P, T, Z, x, y, V, eos, c) = V
 
 
-function two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
+@inline function two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
     @. x = liquid_mole_fraction(Z, K, vapor_frac)
     @. y = vapor_mole_fraction(x, K)
     V = two_phase_pre!(S, P, T, Z, x, y, vapor_frac, eos, c)
