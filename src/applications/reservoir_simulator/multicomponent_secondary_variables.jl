@@ -163,7 +163,7 @@ end
 function two_phase_pre!(S, P, T, Z, x::AbstractVector{AD}, y::AbstractVector{AD}, vapor_frac, eos, c) where {AD <: ForwardDiff.Dual}
     inverse_flash_update!(S, eos, c, vapor_frac)
     ∂c = (p = P, T = T, z = Z)
-    V = set_partials_vapor_fraction(convert(eltype(x), vapor_frac), S, eos, ∂c)
+    V = set_partials_vapor_fraction(convert(AD, vapor_frac), S, eos, ∂c)
     set_partials_phase_mole_fractions!(x, S, eos, ∂c, :liquid)
     set_partials_phase_mole_fractions!(y, S, eos, ∂c, :vapor)
     return V
