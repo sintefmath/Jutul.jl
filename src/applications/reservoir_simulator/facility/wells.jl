@@ -448,7 +448,6 @@ function apply_well_reservoir_sources!(sys::Union{ImmiscibleSystem, SinglePhaseS
     μ = state_res.PhaseViscosities
     kr = state_res.RelativePermeabilities
     ρ = state_res.PhaseMassDensities
-    # ρλ_i = state_res.MassMobilities
 
     ρ_w = state_well.PhaseMassDensities
     s_w = state_well.Saturations

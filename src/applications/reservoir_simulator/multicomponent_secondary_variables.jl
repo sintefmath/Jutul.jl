@@ -89,9 +89,6 @@ function select_secondary_variables_system!(S, domain, system::CompositionalSyst
     S[:PhaseViscosities] = LBCViscosities()
 end
 
-degrees_of_freedom_per_entity(model, v::MassMobilities) = number_of_phases(model.system)#*number_of_components(model.system)
-
-
 @terv_secondary function update_as_secondary!(flash_results, fr::FlashResults, model, param, Pressure, Temperature, OverallMoleFractions)
     # S = flash_storage(eos)
     S, m, buf = fr.storage, fr.method, fr.update_buffer

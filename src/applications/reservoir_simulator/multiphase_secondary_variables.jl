@@ -1,4 +1,4 @@
-export PhaseMassDensities, ConstantCompressibilityDensities, MassMobilities
+export PhaseMassDensities, ConstantCompressibilityDensities
 export BrooksCoreyRelPerm, TabulatedRelPermSimple
 
 abstract type PhaseVariables <: GroupedVariables end
@@ -155,22 +155,6 @@ end
 function constant_expansion(p::Real, p_ref::Real, c::Real, f_ref::Real)
     Δ = p - p_ref
     return f_ref * exp(Δ * c)
-end
-
-"""
-Mobility of the mass in each phase (TBD how to represent this in general)
-"""
-struct MassMobilities <: PhaseVariables end
-
-@terv_secondary function update_as_secondary!(ρλ, tv::MassMobilities, model, param, 
-                                PhaseMassDensities, PhaseViscosities, RelativePermeabilities)
-    kᵣ, μ, ρ = RelativePermeabilities, PhaseViscosities, PhaseMassDensities
-    @tullio ρλ[α, i] = kᵣ[α, i]*ρ[α, i]/μ[α, i]
-end
-
-@terv_secondary function update_as_secondary!(ρλ_i, tv::MassMobilities, model::SimulationModel{D, S}, param, PhaseMassDensities, PhaseViscosities) where {D, S<:SinglePhaseSystem}
-    μ, ρ = PhaseViscosities, PhaseMassDensities
-    @tullio ρλ_i[ph, i] = ρ[ph, i]/μ[ph, i]
 end
 
 # Total masses
