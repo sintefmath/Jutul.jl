@@ -104,34 +104,52 @@ end
 @terv_secondary function update_as_secondary!(flash_results, fr::FlashResults, model, param, Pressure, Temperature, OverallMoleFractions)
     storage, m, buffers = fr.storage, fr.method, fr.update_buffer
     eos = model.system.equation_of_state
-    N = Threads.nthreads()
-    for buf in buffers
-        if isnothing(buf.forces) || eltype(buf.forces.A_ij) != eltype(OverallMoleFractions)
-            P = Pressure[1]
-            T = Temperature[1]
-            Z = OverallMoleFractions[:, 1]
-            buf.forces = force_coefficients(eos, (p = P, T = T, z = Z), static_size = true)
+
+    flash_cell(i, S, buf) = internal_flash!(flash_results, S, m, eos, buf, Pressure, Temperature, OverallMoleFractions, i)
+    __update!(buf) = update_flash_buffer!(buf, eos, Pressure, Temperature, OverallMoleFractions)
+    if true
+        for buf in buffers
+            __update!(buf)
+        end
+        @inbounds Threads.@threads for i in eachindex(flash_results)
+            # Unpack thread specific storage
+            thread_id = Threads.threadid()
+            S = storage[thread_id]
+            thread_buffer = buffers[thread_id]
+            # Do flash
+            flash_cell(i, S, thread_buffer)
+        end
+    else
+        S = storage[1]
+        buf = buffers[1]
+        __update!(buf)
+        @inbounds for i in eachindex(flash_results)
+            flash_cell(i, S, buf)
         end
     end
-    @inbounds Threads.@threads for i in eachindex(flash_results)
-        # Unpack thread specific storage
-        thread_id = Threads.threadid()
-        # forces_thread = forces[thread_id]
-        S = storage[thread_id]
-        thread_buffer = buffers[thread_id]
+end
 
-        # Ready to work
-        f = flash_results[i]
-        P = Pressure[i]
-        T = Temperature[i]
-        Z = @view OverallMoleFractions[:, i]
-
-        K = f.K
-        x = f.liquid.mole_fractions
-        y = f.vapor.mole_fractions
-
-        flash_results[i] = update_flash_result(S, m, thread_buffer, eos, K, x, y, thread_buffer.z, thread_buffer.forces, P, T, Z)
+function update_flash_buffer!(buf, eos, Pressure, Temperature, OverallMoleFractions)
+    if isnothing(buf.forces) || eltype(buf.forces.A_ij) != eltype(OverallMoleFractions)
+        P = Pressure[1]
+        T = Temperature[1]
+        Z = OverallMoleFractions[:, 1]
+        buf.forces = force_coefficients(eos, (p = P, T = T, z = Z), static_size = true)
     end
+end
+
+function internal_flash!(flash_results, S, m, eos, buf, Pressure, Temperature, OverallMoleFractions, i)
+    # Ready to work
+    f = flash_results[i]
+    P = Pressure[i]
+    T = Temperature[i]
+    Z = @view OverallMoleFractions[:, i]
+
+    K = f.K
+    x = f.liquid.mole_fractions
+    y = f.vapor.mole_fractions
+
+    flash_results[i] = update_flash_result(S, m, buf, eos, K, x, y, buf.z, buf.forces, P, T, Z)
 end
 
 
