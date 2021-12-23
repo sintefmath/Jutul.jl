@@ -32,8 +32,18 @@ struct FlashResults <: ScalarVariable
         eos = system.equation_of_state
         # np = number_of_partials_per_entity(system, Cells())
         n = MultiComponentFlash.number_of_components(eos)
-        s = flash_storage(eos, method = method, inc_jac = true, diff_externals = true, npartials = n, static_size = true)
-        new(s, method, InPlaceFlashBuffer(n))
+        storage = []
+        buffers = []
+        N = Threads.nthreads()
+        for i = 1:N
+            s = flash_storage(eos, method = method, inc_jac = true, diff_externals = true, npartials = n, static_size = true)
+            push!(storage, s)
+            b = InPlaceFlashBuffer(n)
+            push!(buffers, b)
+        end
+        storage = tuple(storage...)
+        buffers = tuple(buffers...)
+        new(storage, method, buffers)
     end
 end
 
@@ -92,19 +102,25 @@ function select_secondary_variables_system!(S, domain, system::CompositionalSyst
 end
 
 @terv_secondary function update_as_secondary!(flash_results, fr::FlashResults, model, param, Pressure, Temperature, OverallMoleFractions)
-    # S = flash_storage(eos)
-    S, m, buf = fr.storage, fr.method, fr.update_buffer
+    storage, m, buffers = fr.storage, fr.method, fr.update_buffer
     eos = model.system.equation_of_state
-    if isnothing(buf.forces) || eltype(buf.forces.A_ij) != eltype(OverallMoleFractions)
-        P = Pressure[1]
-        T = Temperature[1]
-        Z = @view OverallMoleFractions[:, 1]
-        buf.forces = force_coefficients(eos, (p = P, T = T, z = Z), static_size = true)
+    N = Threads.nthreads()
+    for buf in buffers
+        if isnothing(buf.forces) || eltype(buf.forces.A_ij) != eltype(OverallMoleFractions)
+            P = Pressure[1]
+            T = Temperature[1]
+            Z = OverallMoleFractions[:, 1]
+            buf.forces = force_coefficients(eos, (p = P, T = T, z = Z), static_size = true)
+        end
     end
-    forces = buf.forces
-    z = buf.z
+    @inbounds Threads.@threads for i in eachindex(flash_results)
+        # Unpack thread specific storage
+        thread_id = Threads.threadid()
+        # forces_thread = forces[thread_id]
+        S = storage[thread_id]
+        thread_buffer = buffers[thread_id]
 
-    @inbounds for i in eachindex(flash_results)
+        # Ready to work
         f = flash_results[i]
         P = Pressure[i]
         T = Temperature[i]
@@ -114,7 +130,7 @@ end
         x = f.liquid.mole_fractions
         y = f.vapor.mole_fractions
 
-        flash_results[i] = update_flash_result(S, m, buf, eos, K, x, y, z, forces, P, T, Z)
+        flash_results[i] = update_flash_result(S, m, thread_buffer, eos, K, x, y, thread_buffer.z, thread_buffer.forces, P, T, Z)
     end
 end
 
