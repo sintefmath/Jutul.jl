@@ -186,7 +186,8 @@ two_phase_pre!(S, P, T, Z, x, y, V, eos, c) = V
 end
 
 @terv_secondary function update_as_secondary!(Sat, s::Saturations, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
-    @inbounds for i in 1:size(Sat, 2)
+    tb = thread_batch(model.context)
+    @inbounds @batch minbatch = tb for i in 1:size(Sat, 2)
         S_l, S_v = phase_saturations(FlashResults[i])
         Sat[1, i] = S_l
         Sat[2, i] = S_v
@@ -208,7 +209,7 @@ end
 
 function update_mass_fractions!(X, x, molar_masses)
     t = 0
-    for i in eachindex(x)
+    @inbounds for i in eachindex(x)
         tmp = molar_masses[i]*x[i]
         t += tmp
         X[i] = tmp
@@ -218,19 +219,21 @@ end
 
 @terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, Pressure, Temperature, FlashResults) where {D, S<:CompositionalSystem}
     eos = model.system.equation_of_state
-    for i in 1:size(rho, 2)
+    tb = thread_batch(model.context)
+    @inbounds @batch minbatch = tb for i in 1:size(rho, 2)
         p = Pressure[i]
         T = Temperature[1, i]
         rho[1, i], rho[2, i] = mass_densities(eos, p, T, FlashResults[i])
     end
 end
 
-@terv_secondary function update_as_secondary!(rho, m::LBCViscosities, model::SimulationModel{D, S}, param, Pressure, Temperature, FlashResults) where {D, S<:CompositionalSystem}
+@terv_secondary function update_as_secondary!(mu, m::LBCViscosities, model::SimulationModel{D, S}, param, Pressure, Temperature, FlashResults) where {D, S<:CompositionalSystem}
     eos = model.system.equation_of_state
-    @inbounds for i in 1:size(rho, 2)
+    tb = thread_batch(model.context)
+    @inbounds @batch minbatch = tb for i in 1:size(mu, 2)
         p = Pressure[i]
         T = Temperature[1, i]
-        rho[1, i], rho[2, i] = lbc_viscosities(eos, p, T, FlashResults[i])
+        mu[1, i], mu[2, i] = lbc_viscosities(eos, p, T, FlashResults[i])
     end
 end
 
