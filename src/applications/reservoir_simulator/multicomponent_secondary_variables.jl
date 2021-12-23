@@ -56,12 +56,14 @@ function initialize_variable_ad(state, model, pvar::FlashResults, symb, npartial
     n = number_of_entities(model, pvar)
     v_ad = get_ad_entity_scalar(1.0, npartials, diag_pos; kwarg...)
     ∂T = typeof(v_ad)
+    eos = model.system.equation_of_state
 
-    r = FlashedMixture2Phase(model.system.equation_of_state, ∂T)
+    r = FlashedMixture2Phase(eos, ∂T)
     T = typeof(r)
+    # T = MultiComponentFlash.flashed_mixture_array_type(eos, ∂T)
     V = Vector{T}(undef, n)
     for i in 1:n
-        V[i] = FlashedMixture2Phase(model.system.equation_of_state, ∂T)
+        V[i] = FlashedMixture2Phase(eos, ∂T)
     end
     state[symb] = V
     return state
@@ -124,7 +126,6 @@ function update_flash_result(S, m, buffer, eos, K, x, y, z, forces, P, T, Z)
     # Perform flash
     vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false)
     force_coefficients!(forces, eos, (p = P, T = T, z = Z))
-
     if isnan(vapor_frac)
         # Single phase condition. Life is easy.
         Z_L, Z_V, V, phase_state = single_phase_update!(P, T, Z, x, y, forces, eos, c)
@@ -132,7 +133,10 @@ function update_flash_result(S, m, buffer, eos, K, x, y, z, forces, P, T, Z)
         # Two-phase condition: We have some work to do.
         Z_L, Z_V, V, phase_state = two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
     end
-    return FlashedMixture2Phase(phase_state, K, V, x, y, Z_L, Z_V)
+    out = FlashedMixture2Phase(phase_state, K, V, x, y, Z_L, Z_V)
+    # @info "MARK:" typeof(out) typeof(Z_L) typeof(V) typeof(P)
+
+    return out
 end
 
 function get_compressibility_factor(forces, eos, P, T, Z)
@@ -149,11 +153,12 @@ end
     @. y = Z
     V = single_phase_label(eos.mixture, c)
     if V > 0.5
-        phase_state = SinglePhaseVapor()
+        phase_state = MultiComponentFlash.single_phase_v
     else
-        phase_state = SinglePhaseLiquid()
+        phase_state = MultiComponentFlash.single_phase_l
     end
-    out = (Z_L::AD, Z_V::AD, V::Float64, phase_state::Union{SinglePhaseVapor, SinglePhaseLiquid})
+    V = convert(AD, V)
+    out = (Z_L::AD, Z_V::AD, V::AD, phase_state::PhaseState2Phase)
     return out
 end
 
@@ -175,7 +180,7 @@ two_phase_pre!(S, P, T, Z, x, y, V, eos, c) = V
     V = two_phase_pre!(S, P, T, Z, x, y, vapor_frac, eos, c)
     Z_L = get_compressibility_factor(forces, eos, P, T, x)
     Z_V = get_compressibility_factor(forces, eos, P, T, y)
-    phase_state = TwoPhaseLiquidVapor()
+    phase_state = MultiComponentFlash.two_phase_lv
 
     return (Z_L, Z_V, V, phase_state)
 end
@@ -186,10 +191,6 @@ end
         Sat[1, i] = S_l
         Sat[2, i] = S_v
     end
-end
-
-@terv_secondary function update_as_secondary!(massmob, m::MassMobilities, model::SimulationModel{D, S}, param) where {D, S<:CompositionalSystem}
-    # error()
 end
 
 @terv_secondary function update_as_secondary!(X, m::PhaseMassFractions, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
@@ -252,24 +253,21 @@ end
     Sat = Saturations
     F = FlashResults
 
-    # @info "Total mass" value.(Sat) value.(X) value.(Y) value.(ρ)
     @tullio totmass[c, i] = two_phase_compositional_mass(F[i].state, ρ, X, Y, Sat, c, i)*pv[i]
-    # @debug "Total mass updated:" totmass[:, 1] ρ[:, 1] Sat[:, 1] pv[1]
 end
 
-function two_phase_compositional_mass(::SinglePhaseVapor, ρ, X, Y, Sat, c, i)
-    M = ρ[2, i]*Sat[2, i]*Y[c, i]
-    # @info "Vapor cell $i component $c" M
-    return M
-end
+function two_phase_compositional_mass(state, ρ, X, Y, S, c, i)
+    T = eltype(ρ)
+    if liquid_phase_present(state)
+        @inbounds M_l = ρ[1, i]*S[1, i]*X[c, i]
+    else
+        M_l = zero(T)
+    end
 
-function two_phase_compositional_mass(::SinglePhaseLiquid, ρ, X, Y, Sat, c, i)
-    M = ρ[1, i]*Sat[1, i]*X[c, i]
-    return M
-end
-
-function two_phase_compositional_mass(::TwoPhaseLiquidVapor, ρ, X, Y, S, c, i)
-    M_v = ρ[1, i]*S[1, i]*X[c, i]
-    M_l = ρ[2, i]*S[2, i]*Y[c, i]
+    if vapor_phase_present(state)
+        @inbounds M_v = ρ[2, i]*S[2, i]*Y[c, i]
+    else
+        M_v = zero(T)
+    end
     return M_l + M_v
 end

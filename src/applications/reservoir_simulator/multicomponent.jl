@@ -102,7 +102,7 @@ function component_source(src, S, kr, mu, F, X, Y, rho, rhoS, c)
     return q
 end
 
-function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::TwoPhaseLiquidVapor)
+function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, state)
     λ_l = local_mobility(kr, mu, 1, cell)
     λ_v = local_mobility(kr, mu, 2, cell)
 
@@ -132,28 +132,28 @@ function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::TwoPhaseLiqu
     return f
 end
 
-function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseLiquid)
-    ρ_l = rho[1, cell]
-    x = X[c, cell]
-    if t == MassSource
-        f = x
-    elseif t == VolumeSource
-        f = x*ρ_l
-    elseif t == StandardVolumeSource
-        f = rhoS[1]*x
-    end
-    return f
-end
+# function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseLiquid)
+#     ρ_l = rho[1, cell]
+#     x = X[c, cell]
+#     if t == MassSource
+#         f = x
+#     elseif t == VolumeSource
+#         f = x*ρ_l
+#     elseif t == StandardVolumeSource
+#         f = rhoS[1]*x
+#     end
+#     return f
+# end
 
-function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseVapor)
-    ρ_v = rho[2, cell]
-    y = Y[c, cell]
-    if t == MassSource
-        f = y
-    elseif t == VolumeSource
-        f = y*ρ_v
-    elseif t == StandardVolumeSource
-        f = rhoS[2]*y
-    end
-    return f
-end
+# function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseVapor)
+#     ρ_v = rho[2, cell]
+#     y = Y[c, cell]
+#     if t == MassSource
+#         f = y
+#     elseif t == VolumeSource
+#         f = y*ρ_v
+#     elseif t == StandardVolumeSource
+#         f = rhoS[2]*y
+#     end
+#     return f
+# end
