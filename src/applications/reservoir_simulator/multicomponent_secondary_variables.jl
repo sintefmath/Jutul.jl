@@ -221,9 +221,7 @@ end
     for i in 1:size(rho, 2)
         p = Pressure[i]
         T = Temperature[1, i]
-        ρ_l, ρ_v = mass_densities(eos, p, T, FlashResults[i])
-        rho[1, i] = ρ_l
-        rho[2, i] = ρ_v
+        rho[1, i], rho[2, i] = mass_densities(eos, p, T, FlashResults[i])
     end
 end
 
@@ -232,9 +230,7 @@ end
     @inbounds for i in 1:size(rho, 2)
         p = Pressure[i]
         T = Temperature[1, i]
-        μ_l, μ_v = lbc_viscosities(eos, p, T, FlashResults[i])
-        rho[1, i] = max(μ_l, 1e-18)
-        rho[2, i] = max(μ_v, 1e-18)
+        rho[1, i], rho[2, i] = lbc_viscosities(eos, p, T, FlashResults[i])
     end
 end
 
