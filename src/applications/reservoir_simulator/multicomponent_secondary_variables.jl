@@ -209,6 +209,7 @@ two_phase_pre!(S, P, T, Z, x, y, V, eos, c) = V
 
 
 @inline function two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
+    AD = Base.promote_type(typeof(P), eltype(Z), typeof(T))
     @. x = liquid_mole_fraction(Z, K, vapor_frac)
     @. y = vapor_mole_fraction(x, K)
     V = two_phase_pre!(S, P, T, Z, x, y, vapor_frac, eos, c)
@@ -216,7 +217,7 @@ two_phase_pre!(S, P, T, Z, x, y, V, eos, c) = V
     Z_V = get_compressibility_factor(forces, eos, P, T, y)
     phase_state = MultiComponentFlash.two_phase_lv
 
-    return (Z_L, Z_V, V, phase_state)
+    return (Z_L::AD, Z_V::AD, V::AD, phase_state)
 end
 
 @terv_secondary function update_as_secondary!(Sat, s::Saturations, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
