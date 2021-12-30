@@ -75,10 +75,10 @@ end
 end
 
 function brooks_corey_relperm(s::Real, n::Real, sr::Real, kwm::Real, sr_tot::Real)
-    den = 1 - sr_tot;
-    sat = (s - sr) / den;
-    sat = max(min(sat, 1.0), 0.0);
-    return kwm*sat^n;
+    den = 1 - sr_tot
+    sat = (s - sr) / den
+    sat = max(min(sat, 1.0), 0.0)
+    return kwm*sat^n
 end
 
 """

@@ -105,12 +105,15 @@ end
     storage, m, buffers = fr.storage, fr.method, fr.update_buffer
     eos = model.system.equation_of_state
 
+    for buf in buffers
+        update_flash_buffer!(buf, eos, Pressure, Temperature, OverallMoleFractions)
+    end
+    perform_flash_for_all_cells!(flash_results, storage, m, eos, buffers, Pressure, Temperature, OverallMoleFractions)
+end
+
+function perform_flash_for_all_cells!(flash_results, storage, m, eos, buffers, Pressure, Temperature, OverallMoleFractions; threads = true)
     flash_cell(i, S, buf) = internal_flash!(flash_results, S, m, eos, buf, Pressure, Temperature, OverallMoleFractions, i)
-    __update!(buf) = update_flash_buffer!(buf, eos, Pressure, Temperature, OverallMoleFractions)
-    if true
-        for buf in buffers
-            __update!(buf)
-        end
+    if threads
         function thread_buffers()
             thread_id = Threads.threadid()
             S = storage[thread_id]
@@ -124,9 +127,6 @@ end
             flash_cell(i, S, thread_buffer)
         end
     else
-        S = storage[1]
-        buf = buffers[1]
-        __update!(buf)
         @inbounds for i in eachindex(flash_results)
             flash_cell(i, S, buf)
         end
