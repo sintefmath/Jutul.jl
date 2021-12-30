@@ -111,15 +111,16 @@ end
     perform_flash_for_all_cells!(flash_results, storage, m, eos, buffers, Pressure, Temperature, OverallMoleFractions)
 end
 
-function perform_flash_for_all_cells!(flash_results, storage, m, eos, buffers, Pressure, Temperature, OverallMoleFractions; threads = true)
-    flash_cell(i, S, buf) = internal_flash!(flash_results, S, m, eos, buf, Pressure, Temperature, OverallMoleFractions, i)
+function perform_flash_for_all_cells!(flash_results, storage, m, eos, buffers, P, T, z; threads = true)
+    flash_cell(i, S, buf) = internal_flash!(flash_results, S, m, eos, buf, P, T, z, i)
+    function thread_buffers()
+        thread_id = Threads.threadid()
+        S = storage[thread_id]
+        thread_buffer = buffers[thread_id]
+        return (S, thread_buffer)
+    end
+
     if threads
-        function thread_buffers()
-            thread_id = Threads.threadid()
-            S = storage[thread_id]
-            thread_buffer = buffers[thread_id]
-            return (S, thread_buffer)
-        end
         @inbounds @batch threadlocal=thread_buffers() for i in eachindex(flash_results)
             # Unpack thread specific storage
             S, thread_buffer = threadlocal
@@ -127,6 +128,7 @@ function perform_flash_for_all_cells!(flash_results, storage, m, eos, buffers, P
             flash_cell(i, S, thread_buffer)
         end
     else
+        S, buf = thread_buffers()
         @inbounds for i in eachindex(flash_results)
             flash_cell(i, S, buf)
         end
