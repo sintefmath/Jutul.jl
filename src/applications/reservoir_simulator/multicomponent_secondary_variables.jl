@@ -111,11 +111,15 @@ end
         for buf in buffers
             __update!(buf)
         end
-        @inbounds Threads.@threads for i in eachindex(flash_results)
-            # Unpack thread specific storage
+        function thread_buffers()
             thread_id = Threads.threadid()
             S = storage[thread_id]
             thread_buffer = buffers[thread_id]
+            return (S, thread_buffer)
+        end
+        @inbounds @batch threadlocal=thread_buffers() for i in eachindex(flash_results)
+            # Unpack thread specific storage
+            S, thread_buffer = threadlocal
             # Do flash
             flash_cell(i, S, thread_buffer)
         end
@@ -140,16 +144,18 @@ end
 
 function internal_flash!(flash_results, S, m, eos, buf, Pressure, Temperature, OverallMoleFractions, i)
     # Ready to work
-    f = flash_results[i]
-    P = Pressure[i]
-    T = Temperature[i]
-    Z = @view OverallMoleFractions[:, i]
+    @inbounds begin
+        f = flash_results[i]
+        P = Pressure[i]
+        T = Temperature[i]
+        Z = @view OverallMoleFractions[:, i]
 
-    K = f.K
-    x = f.liquid.mole_fractions
-    y = f.vapor.mole_fractions
+        K = f.K
+        x = f.liquid.mole_fractions
+        y = f.vapor.mole_fractions
 
-    flash_results[i] = update_flash_result(S, m, buf, eos, K, x, y, buf.z, buf.forces, P, T, Z)
+        flash_results[i] = update_flash_result(S, m, buf, eos, K, x, y, buf.z, buf.forces, P, T, Z)
+    end
 end
 
 
