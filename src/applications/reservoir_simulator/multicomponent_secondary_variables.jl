@@ -82,8 +82,8 @@ end
 struct TwoPhaseCompositionalDensities <: PhaseMassDensities
 end
 
-struct PhaseMassFractions <: FractionVariables
-    phase
+struct PhaseMassFractions{T} <: FractionVariables
+    phase::T
 end
 
 struct LBCViscosities <: PhaseVariables end
@@ -174,8 +174,6 @@ function update_flash_result(S, m, buffer, eos, K, x, y, z, forces, P, T, Z)
         Z_L, Z_V, V, phase_state = two_phase_update!(S, P, T, Z, x, y, K, vapor_frac, forces, eos, c)
     end
     out = FlashedMixture2Phase(phase_state, K, V, x, y, Z_L, Z_V)
-    # @info "MARK:" typeof(out) typeof(Z_L) typeof(V) typeof(P)
-
     return out
 end
 
@@ -238,7 +236,9 @@ end
 @terv_secondary function update_as_secondary!(X, m::PhaseMassFractions, model::SimulationModel{D, S}, param, FlashResults) where {D, S<:CompositionalSystem}
     molar_mass = map((x) -> x.mw, model.system.equation_of_state.mixture.properties)
     phase = m.phase
-    for (i, f) in enumerate(FlashResults)
+    tb = thread_batch(model.context)
+    @inbounds @batch minbatch = tb for i in eachindex(FlashResults)
+        f = FlashResults[i]
         if phase_is_present(phase, f.state)
             X_i = view(X, :, i)
             r = getfield(f, phase)
@@ -260,8 +260,9 @@ end
 
 @terv_secondary function update_as_secondary!(rho, m::TwoPhaseCompositionalDensities, model::SimulationModel{D, S}, param, Pressure, Temperature, FlashResults) where {D, S<:CompositionalSystem}
     eos = model.system.equation_of_state
+    n = size(rho, 2)
     tb = thread_batch(model.context)
-    @inbounds @batch minbatch = tb for i in 1:size(rho, 2)
+    @inbounds @batch minbatch = tb for i in 1:n
         p = Pressure[i]
         T = Temperature[1, i]
         rho[1, i], rho[2, i] = mass_densities(eos, p, T, FlashResults[i])
