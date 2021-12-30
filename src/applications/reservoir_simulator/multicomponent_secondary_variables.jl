@@ -248,8 +248,8 @@ end
     end
 end
 
-function update_mass_fractions!(X, x, molar_masses)
-    t = 0
+@inline function update_mass_fractions!(X, x, molar_masses)
+    t = zero(eltype(X))
     @inbounds for i in eachindex(x)
         tmp = molar_masses[i]*x[i]
         t += tmp
