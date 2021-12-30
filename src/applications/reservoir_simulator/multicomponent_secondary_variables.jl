@@ -241,7 +241,7 @@ end
         f = FlashResults[i]
         if phase_is_present(phase, f.state)
             X_i = view(X, :, i)
-            r = getfield(f, phase)
+            r = phase_data(f, phase)
             x_i = r.mole_fractions
             update_mass_fractions!(X_i, x_i, molar_mass)
         end
