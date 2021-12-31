@@ -359,13 +359,14 @@ function print_iterations(stats; title = "Number of iterations")
     nmini = stats.ministeps
 
     tot_time = stats.time_sum.total
-    u, s = pick_time_unit(tot_time)
+    time = map(f -> tot_time/stats[f], flds)
+    u, s = pick_time_unit(time)
 
     for (i, f) in enumerate(flds)
         raw = stats[f]
         data[i, 1] = raw/nstep         # Avg per step
         data[i, 2] = raw/nmini         # Avg per mini
-        data[i, 3] = (tot_time/raw)/u  # Time each
+        data[i, 3] = time[i]/u         # Time each
         data[i, 4] = stats[:wasted][f] # Wasted total
         data[i, 5] = raw               # Total
     end

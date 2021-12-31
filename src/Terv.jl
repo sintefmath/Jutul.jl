@@ -37,6 +37,9 @@ using ExprTools
 using LightGraphs
 using PrettyTables
 using Polynomials
+# Nice progress bars
+using ProgressMeter
+
 # PVT
 using MultiComponentFlash
 # Conditional code loading
