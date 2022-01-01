@@ -20,20 +20,18 @@ function select_equations_system!(eqs, domain, system::MultiComponentSystem, for
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:TwoPhaseCompositionalSystem}
-    state = storage.state
-    Φ = as_value(state.FluidVolume)
-    ρ = as_value(state.PhaseMassDensities)
-    s = as_value(state.Saturations)
+    tm = storage.state0.TotalMasses
     a = active_entities(model.domain, Cells())
-
-    names = model.system.equation_of_state.mixture.component_names
-
     function scale(i)
-        c = a[i]
-        mass = ρ[1, c]*s[1, c] + ρ[2, c]*s[2, c]
-        return mass*Φ[c]
+        @inbounds c = a[i]
+        t = 0.0
+        @inbounds for i = 1:size(tm, 1)
+            t += tm[i, c]
+        end
+        return t
     end
     @tullio max e[j] := abs(r[j, i]) * dt / scale(i)
+    names = model.system.equation_of_state.mixture.component_names
     R = Dict("CNV" => (errors = e, names = names))
     return R
 end
