@@ -28,13 +28,18 @@ struct FlashResults <: ScalarVariable
     storage
     method
     update_buffer
-    function FlashResults(system; method = SSIFlash(), kwarg...)
+    use_threads::Bool
+    function FlashResults(system; method = SSIFlash(), threads = true)
         eos = system.equation_of_state
         # np = number_of_partials_per_entity(system, Cells())
         n = MultiComponentFlash.number_of_components(eos)
         storage = []
         buffers = []
-        N = Threads.nthreads()
+        if threads
+            N = Threads.nthreads()
+        else
+            N = 1
+        end
         for i = 1:N
             s = flash_storage(eos, method = method, inc_jac = true, diff_externals = true, npartials = n, static_size = true)
             push!(storage, s)
@@ -43,7 +48,7 @@ struct FlashResults <: ScalarVariable
         end
         storage = tuple(storage...)
         buffers = tuple(buffers...)
-        new(storage, method, buffers)
+        new(storage, method, buffers, threads)
     end
 end
 
@@ -108,7 +113,7 @@ end
     for buf in buffers
         update_flash_buffer!(buf, eos, Pressure, Temperature, OverallMoleFractions)
     end
-    perform_flash_for_all_cells!(flash_results, storage, m, eos, buffers, Pressure, Temperature, OverallMoleFractions)
+    perform_flash_for_all_cells!(flash_results, storage, m, eos, buffers, Pressure, Temperature, OverallMoleFractions, threads = fr.use_threads)
 end
 
 function perform_flash_for_all_cells!(flash_results, storage, m, eos, buffers, P, T, z; threads = true)
