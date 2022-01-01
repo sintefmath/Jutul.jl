@@ -107,6 +107,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
     dt = timesteps[1]
+    t_tot = sum(timesteps)
     for (step_no, dT) in enumerate(timesteps)
         if early_termination
             break
@@ -118,7 +119,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         # Insert so that the current reports are accessible
         push!(reports, subrep)
         t_step = @elapsed begin
-            new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT)
+            new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot)
             # Initialize time-stepping
             dt = pick_timestep(sim, config, dt, dT, reports, step_index = step_no, new_step = true)
             done = false
@@ -165,7 +166,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         end
         subrep[:total_time] = t_step
     end
-    final_simulation_message(sim, reports, timesteps, config, early_termination)
+    final_simulation_message(sim, p, reports, timesteps, config, early_termination)
     return (states, reports)
 end
 
@@ -248,25 +249,27 @@ function start_simulation_message(info_level, timesteps)
     n = length(timesteps)
     msg = "Simulating $n steps... "
     if info_level > 0
-        tot_t = sum(timesteps)
-        avg_t = mean(timesteps)
         @info msg
     end
     if info_level == 0
-        p = Progress(n, desc = msg)
+        p = Progress(n, dt = 0.5, desc = msg)
     end
     return p
 end
 
-function new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT)
+function new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot)
     if info_level == 0
-        next!(p)
+        r = rec.recorder
+        frac = (r.time + dT)/t_tot
+        perc = @sprintf("%2.2f", 100*frac)
+        msg = "Solving step $step_no/$no_steps ($perc% of time interval complete)"
+        next!(p; showvalues = [(:Status, msg)])
     elseif info_level > 0
         @info "Solving step $step_no/$no_steps of length $(get_tstr(dT))."
     end
 end
 
-function final_simulation_message(simulator, reports, timesteps, config, aborted)
+function final_simulation_message(simulator, p, reports, timesteps, config, aborted)
     info_level = config[:info_level]
     if info_level >= 0 && length(reports) > 0
         stats = report_stats(reports)
@@ -276,10 +279,21 @@ function final_simulation_message(simulator, reports, timesteps, config, aborted
             endstr = "Simulation complete. Completed $(stats.steps) timesteps"
         end
         t_tot = stats.time_sum.total
-        @info "$endstr in $(get_tstr(t_tot))) seconds with $(stats.newtons) iterations."
+        final_message = "$endstr in $(get_tstr(t_tot)) seconds with $(stats.newtons) iterations."
+        if info_level == 0
+            if aborted
+                cancel(p, final_message)
+            else
+                finish!(p)
+            end
+        else
+            @info final_message
+        end
         if config[:end_report]
             print_stats(stats)
         end
+    elseif info_level == 0
+        cancel(p)
     end
 end
 
