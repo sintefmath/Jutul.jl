@@ -70,10 +70,10 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     cfg = krylov.config
     prec = krylov.preconditioner
     Ft = float_type(model.context)
-    prepare_solve!(sys)
+    @timeit "prepare" prepare_solve!(sys)
     r = vector_residual(sys)
     op = linear_operator(sys)
-    update_preconditioner!(prec, sys, model, storage, recorder)
+    @timeit "precond" update_preconditioner!(prec, sys, model, storage, recorder)
     L = preconditioner(krylov, sys, model, storage, recorder, :left, Ft)
     R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
     v = verbose(cfg)
@@ -112,13 +112,13 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
             sym = :maxiter
             target_it = max_it
         end
-        (x, history) = f(op, r; sym => target_it, abstol = at, reltol = rt, log = true, verbose = v > 0, Pl = L)
+        @timeit "solve" (x, history) = f(op, r; sym => target_it, abstol = at, reltol = rt, log = true, verbose = v > 0, Pl = L)
         solved = history.isconverged
         msg = history
         n = history.iters
         res = history.data[:resnorm]
     elseif krylov.provider == Krylov
-        (x, stats) = solver(op, r, 
+        @timeit "solve" (x, stats) = solver(op, r, 
                                 itmax = max_it,
                                 verbose = v,
                                 rtol = rt,
@@ -146,7 +146,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end
 
-    update_dx_from_vector!(sys, x)
+    @timeit "update dx" update_dx_from_vector!(sys, x)
 end
 
 function is_mutating(f)

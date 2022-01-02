@@ -345,10 +345,10 @@ Perform updates of everything that depends on the state.
 This includes properties, governing equations and the linearized system
 """
 function update_state_dependents!(storage, model::TervModel, dt, forces; time = NaN)
-    update_secondary_variables!(storage, model)
-    update_equations!(storage, model, dt)
-    apply_forces!(storage, model, dt, forces; time = time)
-    apply_boundary_conditions!(storage, model)
+    @timeit "secondary variables" update_secondary_variables!(storage, model)
+    @timeit "equations" update_equations!(storage, model, dt)
+    @timeit "forces" apply_forces!(storage, model, dt, forces; time = time)
+    @timeit "boundary conditions" apply_boundary_conditions!(storage, model)
 end
 
 function apply_boundary_conditions!(storage, model::TervModel)
@@ -361,7 +361,7 @@ apply_boundary_conditions!(storage, parameters, model) = nothing
 function update_equations!(storage, model, dt = nothing)
     equations = storage.equations
     for key in keys(equations)
-        update_equation!(equations[key], storage, model, dt)
+        @timeit "$key" update_equation!(equations[key], storage, model, dt)
     end
 end
 
@@ -374,15 +374,17 @@ end
 function update_linearized_system!(lsys, equations, model::TervModel; equation_offset = 0)
     r_buf = lsys.r_buffer
     for key in keys(equations)
-        eq = equations[key]
-        nz = lsys.jac_buffer
-        N = number_of_equations(model, eq)
-        n = number_of_equations_per_entity(eq)
-        m = N ÷ n
-        r = as_cell_major_matrix(r_buf, n, m, model, equation_offset)
+        @timeit "$key" begin
+            eq = equations[key]
+            nz = lsys.jac_buffer
+            N = number_of_equations(model, eq)
+            n = number_of_equations_per_entity(eq)
+            m = N ÷ n
+            r = as_cell_major_matrix(r_buf, n, m, model, equation_offset)
 
-        update_linearized_system_equation!(nz, r, model, eq)
-        equation_offset += number_of_equations(model, eq)
+            update_linearized_system_equation!(nz, r, model, eq)
+            equation_offset += number_of_equations(model, eq)
+        end
     end
 end
 
@@ -409,7 +411,7 @@ function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra
         m = N ÷ n
         r_v = as_cell_major_matrix(r_buf, n, m, model, offset)
 
-        all_crits = convergence_criterion(model, storage, eq, r_v; kwarg...)
+        @timeit "$key" all_crits = convergence_criterion(model, storage, eq, r_v; kwarg...)
         e_keys = keys(all_crits)
         tols = Dict()
         for e_k in e_keys
@@ -482,8 +484,8 @@ end
 
 function solve_and_update!(storage, model::TervModel, dt = nothing; linear_solver = nothing, recorder = nothing, kwarg...)
     lsys = storage.LinearizedSystem
-    t_solve = @elapsed solve!(lsys, linear_solver, model, storage, dt, recorder)
-    t_update = @elapsed update_primary_variables!(storage, model; kwarg...)
+    t_solve = @elapsed @timeit "linear solve" solve!(lsys, linear_solver, model, storage, dt, recorder)
+    t_update = @elapsed @timeit "primary variables" update_primary_variables!(storage, model; kwarg...)
     return (t_solve, t_update)
 end
 
@@ -519,7 +521,7 @@ function update_primary_variables!(primary_storage, dx, model::TervModel; check 
                 if check
                     check_increment(dxi, p, pkey)
                 end
-                update_primary_variable!(primary_storage, p, pkey, model, dxi)
+                @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi)
                 local_offset += ni
             end
             offset += nu*np
@@ -532,7 +534,7 @@ function update_primary_variables!(primary_storage, dx, model::TervModel; check 
             if check
                 check_increment(dxi, p, pkey)
             end
-            update_primary_variable!(primary_storage, p, pkey, model, dxi)
+            @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi)
             offset += n
         end
     end

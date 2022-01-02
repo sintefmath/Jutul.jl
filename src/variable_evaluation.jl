@@ -77,7 +77,7 @@ end
 
 function update_secondary_variables!(state, model, parameters)
     for (symbol, var) in model.secondary_variables
-        update_secondary_variable!(state[symbol], var, model, parameters, state)
+        @timeit "$symbol" update_secondary_variable!(state[symbol], var, model, parameters, state)
     end
 end
 

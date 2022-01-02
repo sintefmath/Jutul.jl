@@ -39,7 +39,8 @@ using PrettyTables
 using Polynomials
 # Nice progress bars
 using ProgressMeter
-
+# Timing
+using TimerOutputs
 # PVT
 using MultiComponentFlash
 # Conditional code loading

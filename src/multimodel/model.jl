@@ -459,18 +459,20 @@ end
 
 function update_equations!(storage, model::MultiModel, dt)
     # First update all equations
-    submodels_storage_apply!(storage, model, update_equations!, dt)
+    @timeit "model equations" submodels_storage_apply!(storage, model, update_equations!, dt)
     # Then update the cross terms
-    update_cross_terms!(storage, model::MultiModel, dt)
+    @timeit "crossterm update" update_cross_terms!(storage, model::MultiModel, dt)
     # Finally apply cross terms to the equations
-    apply_cross_terms!(storage, model::MultiModel, dt)
+    @timeit "crossterm apply" apply_cross_terms!(storage, model::MultiModel, dt)
 end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     for target in targets
         for source in intersect(target_cross_term_keys(storage, target), sources)
-            cross_terms = cross_term_pair(storage, source, target)
-            update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
+            @timeit "$source→$target" begin
+                cross_terms = cross_term_pair(storage, source, target)
+                update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
+            end
         end
     end
 end
@@ -493,8 +495,10 @@ end
 function apply_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     for target in targets
         for source in intersect(target_cross_term_keys(storage, target), sources)
-            cross_terms = cross_term_pair(storage, source, target)
-            apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
+            @timeit "$source→$target" begin
+                cross_terms = cross_term_pair(storage, source, target)
+                apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
+            end
         end
     end
 end
@@ -517,9 +521,9 @@ end
 function update_linearized_system!(storage, model::MultiModel; equation_offset = 0, targets = submodel_symbols(model), sources = targets)
     @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
     # Update diagonal blocks (model with respect to itself)
-    update_diagonal_blocks!(storage, model, targets)
+    @timeit "models" update_diagonal_blocks!(storage, model, targets)
     # Then, update cross terms (models' impact on other models)
-    update_offdiagonal_blocks!(storage, model, targets, sources)
+    @timeit "cross-model" update_offdiagonal_blocks!(storage, model, targets, sources)
 end
 
 function update_diagonal_blocks!(storage, model::MultiModel, targets)

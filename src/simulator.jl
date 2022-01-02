@@ -78,7 +78,17 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:safe_mode] = true
     # Define debug level. If debugging is on, this determines the amount of output.
     cfg[:debug_level] = 1
+    # Info level determines the runtime output to the terminal:
+    # < 0 - no output.
+    # 0   - gives very little output (just a progress bar by default, and a final report)
+    # 1   - gives some more details, priting at the start of each step
+    # 2   - as 1, but also printing the current worst residual at each iteration
+    # 3   - as 1, but prints a table of all non-converged residuals at each iteration
+    # 4   - as 3, but all residuals are printed (even converged values)
+    # The interpretation of this number is subject to change
     cfg[:info_level] = 1
+    # Output extra, highly detailed performance report at simulation end
+    cfg[:extra_timing] = false
     # Define a default progress ProgressRecorder
     cfg[:ProgressRecorder] = ProgressRecorder()
     cfg[:timestep_selectors] = [TimestepSelector()]
@@ -98,16 +108,18 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     end
-    reports = []
-    states = Vector{Dict{Symbol, Any}}()
+    states, reports = initial_setup!(sim, config)
+    # Time-step info to keep around
     no_steps = length(timesteps)
+    t_tot = sum(timesteps)
+    # Config options
     max_its = config[:max_nonlinear_iterations]
     rec = config[:ProgressRecorder]
     info_level = config[:info_level]
+    # Initialize loop
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
     dt = timesteps[1]
-    t_tot = sum(timesteps)
     for (step_no, dT) in enumerate(timesteps)
         if early_termination
             break
@@ -131,7 +143,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                 # Make sure that we hit the endpoint in case timestep selection is too optimistic.
                 dt = min(dt, dT - t_local)
                 # Attempt to solve current step
-                ok, s = solve_ministep(sim, dt, forces, max_its, config)
+                @timeit "solve" ok, s = solve_ministep(sim, dt, forces, max_its, config)
                 # We store the report even if it is a failure.
                 push!(ministep_reports, s)
                 if ok
@@ -161,12 +173,26 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                 nextstep_local!(rec, dt, ok)
             end
             if config[:output_states]
-                store_output!(states, sim)
+                @timeit "output" store_output!(states, sim)
             end
         end
         subrep[:total_time] = t_step
     end
     final_simulation_message(sim, p, reports, timesteps, config, early_termination)
+    return (states, reports)
+end
+
+function initial_setup!(sim, config)
+    # Timing stuff
+    if config[:extra_timing]
+        enable_timer!()
+        reset_timer!()
+    else
+        disable_timer!()
+    end
+    # Set up storage
+    reports = []
+    states = Vector{Dict{Symbol, Any}}()
     return (states, reports)
 end
 
@@ -190,13 +216,13 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     report[:assembly_time] = t_asm
     # Update the linearized system
     report[:linear_system_time] = @elapsed begin
-        update_linearized_system!(storage, model)
+        @timeit "linear system" update_linearized_system!(storage, model)
     end
     if timing_out
         @debug "Updated linear system in $(report[:linear_system_time]) seconds."
     end
     t_conv = @elapsed begin
-        converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
+        @timeit "convergence" converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
         il = config[:info_level]
         if il > 1
             get_convergence_table(errors, il, iteration, config)
@@ -294,6 +320,10 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
         end
     elseif info_level == 0
         cancel(p)
+    end
+    if config[:extra_timing]
+        @info "Detailed timing:"
+        print_timer()
     end
 end
 
