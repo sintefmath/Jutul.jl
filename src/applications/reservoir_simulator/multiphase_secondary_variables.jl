@@ -34,29 +34,23 @@ minimum_output_variables(system::MultiPhaseSystem, primary_variables) = [:TotalM
 
 abstract type RelativePermeabilities <: PhaseVariables end
 
-struct BrooksCoreyRelPerm <: RelativePermeabilities
-    exponents
-    residuals
-    endpoints
-    residual_total
+struct BrooksCoreyRelPerm{V, T} <: RelativePermeabilities
+    exponents::V
+    residuals::V
+    endpoints::V
+    residual_total::T
     function BrooksCoreyRelPerm(sys_or_nph::Union{MultiPhaseSystem, Integer}, exponents = 1.0, residuals = 0.0, endpoints = 1.0)
         if isa(sys_or_nph, Integer)
             nph = sys_or_nph
         else
             nph = number_of_phases(sys_or_nph)
         end
-
-        expand(v::Real) = [v for i in 1:nph]
-        function expand(v::AbstractVector)
-            @assert length(v) == nph
-            return v
-        end
-        e = expand(exponents)
-        r = expand(residuals)
-        epts = expand(endpoints)
+        e = expand_to_phases(exponents, nph)
+        r = expand_to_phases(residuals, nph)
+        epts = expand_to_phases(endpoints, nph)
 
         total = sum(residuals)
-        new(e, r, epts, total)
+        new{typeof(e), typeof(total)}(e, r, epts, total)
     end
 end
 
@@ -74,10 +68,10 @@ end
     @tullio kr[ph, i] = brooks_corey_relperm(Saturations[ph, i], n[ph], sr[ph], kwm[ph], sr_tot)
 end
 
-function brooks_corey_relperm(s::Real, n::Real, sr::Real, kwm::Real, sr_tot::Real)
+function brooks_corey_relperm(s::T, n::Real, sr::Real, kwm::Real, sr_tot::Real) where T
     den = 1 - sr_tot
     sat = (s - sr) / den
-    sat = max(min(sat, 1.0), 0.0)
+    sat = clamp(sat, zero(T), one(T))
     return kwm*sat^n
 end
 
@@ -114,10 +108,10 @@ Mass density of each phase
 """
 abstract type PhaseMassDensities <: PhaseVariables end
 
-struct ConstantCompressibilityDensities <: PhaseMassDensities
-    reference_pressure
-    reference_densities
-    compressibility
+struct ConstantCompressibilityDensities{T} <: PhaseMassDensities
+    reference_pressure::T
+    reference_densities::T
+    compressibility::T
     function ConstantCompressibilityDensities(sys_or_nph::Union{MultiPhaseSystem, Integer}, reference_pressure = 101325.0, reference_density = 1000.0, compressibility = 1e-10)
         if isa(sys_or_nph, Integer)
             nph = sys_or_nph
@@ -125,16 +119,11 @@ struct ConstantCompressibilityDensities <: PhaseMassDensities
             nph = number_of_phases(sys_or_nph)
         end
 
-        expand(v::Real) = [v for i in 1:nph]
-        function expand(v::AbstractVector)
-            @assert length(v) == nph
-            return v
-        end
-        pref = expand(reference_pressure)
-        rhoref = expand(reference_density)
-        c = expand(compressibility)
-
-        new(pref, rhoref, c)
+        pref = expand_to_phases(reference_pressure, nph)
+        rhoref = expand_to_phases(reference_density, nph)
+        c = expand_to_phases(compressibility, nph)
+        T = typeof(c)
+        new{T}(pref, rhoref, c)
     end
 end
 
@@ -152,7 +141,7 @@ end
     @tullio rho[ph, i] = constant_expansion(Pressure[i], p_ref[ph], c[ph], rho_ref[ph])
 end
 
-function constant_expansion(p::Real, p_ref::Real, c::Real, f_ref::Real)
+@inline function constant_expansion(p::Real, p_ref::Real, c::Real, f_ref::Real)
     Δ = p - p_ref
     return f_ref * exp(Δ * c)
 end
@@ -171,4 +160,10 @@ end
 # Total mass
 @terv_secondary function update_as_secondary!(totmass, tv::TotalMass, model::SimulationModel{G, S}, param, TotalMasses) where {G, S<:MultiPhaseSystem}
     @tullio totmass[i] = TotalMasses[ph, i]
+end
+
+expand_to_phases(v::Real, nph) = SVector{nph}([v for i in 1:nph])
+function expand_to_phases(v::AbstractVector, nph)
+    @assert length(v) == nph
+    return SVector{nph}(v)
 end
