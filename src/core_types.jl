@@ -136,13 +136,16 @@ end
 
 thread_batch(::Any) = 1000
 
-"Default context - not really intended for threading"
+"Default context"
 struct DefaultContext <: CPUTervContext
     matrix_layout
-    function DefaultContext(; matrix_layout = EquationMajorLayout())
-        new(matrix_layout)
+    minbatch::Int64
+    function DefaultContext(; matrix_layout = EquationMajorLayout(), minbatch = 1000)
+        new(matrix_layout, minbatch)
     end
 end
+
+thread_batch(c::DefaultContext) = c.minbatch
 
 matrix_layout(c::DefaultContext) = c.matrix_layout
 

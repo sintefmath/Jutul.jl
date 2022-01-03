@@ -434,12 +434,12 @@ function init_from_mat(mrst_data)
     return init
 end
 
-function setup_case_from_mrst(casename; simple_well = false, block_backend = true, facility_grouping = :onegroup, kwarg...)
+function setup_case_from_mrst(casename; simple_well = false, block_backend = true, facility_grouping = :onegroup, minbatch = 1000, kwarg...)
     G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true, fuse_flux = false; kwarg...)
     function setup_res(G, mrst_data; block_backend = false, use_groups = false)
-        bctx = DefaultContext(matrix_layout = BlockMajorLayout())
+        bctx = DefaultContext(matrix_layout = BlockMajorLayout(), minbatch = minbatch)
         # bctx = DefaultContext(matrix_layout = UnitMajorLayout())
-        dctx = DefaultContext()
+        dctx = DefaultContext(minbatch = minbatch)
         if block_backend && use_groups
             res_context = bctx
         else
