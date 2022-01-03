@@ -164,9 +164,11 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                         end
                         early_termination = true
                         break
-                    elseif info_level > 0
+                    else
                         cut_count += 1
-                        @warn "Cutting timestep. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut #$cut_count for step $step_no."
+                        if info_level > 0
+                            @warn "Cutting timestep. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut #$cut_count for step $step_no."
+                        end
                     end
                 end
                 ctr += 1
