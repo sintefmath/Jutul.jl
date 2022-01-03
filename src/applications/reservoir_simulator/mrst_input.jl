@@ -241,12 +241,15 @@ end
 
 function model_from_mat(G, mrst_data, res_context)
     ## Set up reservoir part
-    @info "Loading model" keys(mrst_data)
+    @debug "Loading model from MRST:" keys(mrst_data)
     if haskey(mrst_data, "mixture")
+        @debug "Found compositional model"
         f = model_from_mat_comp
     elseif haskey(mrst_data, "fluid")
+        @debug "Found immiscible model"
         f = model_from_mat_fluid_immiscible
     elseif haskey(mrst_data, "deck")
+        @debug "Found deck model"
         f = model_from_mat_deck
     else
         error("I don't know how this model was made")

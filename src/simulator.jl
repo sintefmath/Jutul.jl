@@ -80,13 +80,13 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:debug_level] = 1
     # Info level determines the runtime output to the terminal:
     # < 0 - no output.
-    # 0   - gives very little output (just a progress bar by default, and a final report)
+    # 0   - gives minimal output (just a progress bar by default, and a final report)
     # 1   - gives some more details, priting at the start of each step
     # 2   - as 1, but also printing the current worst residual at each iteration
     # 3   - as 1, but prints a table of all non-converged residuals at each iteration
     # 4   - as 3, but all residuals are printed (even converged values)
     # The interpretation of this number is subject to change
-    cfg[:info_level] = 1
+    cfg[:info_level] = 0
     # Output extra, highly detailed performance report at simulation end
     cfg[:extra_timing] = false
     # Define a default progress ProgressRecorder
@@ -159,12 +159,12 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                     dt = cut_timestep(sim, config, dt, dT, reports, step_index = step_no, cut_count = cut_count)
                     if isnan(dt)
                         # Timestep too small, cut too many times, ...
-                        if output
+                        if info_level > -1
                             @warn "Unable to converge time step $step_no/$no_steps. Aborting."
                         end
                         early_termination = true
                         break
-                    elseif output
+                    elseif info_level > 0
                         cut_count += 1
                         @warn "Cutting timestep. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut #$cut_count for step $step_no."
                     end
