@@ -210,9 +210,11 @@ function update_half_face_flux!(law::ConservationLaw, storage, model::Simulation
     pc, ref_index = capillary_pressure(model, state)
 
     nc, nf = size(flux)
-    for i = 1:nf
-        @views qi = flux[:, i]
-        compositional_flux_gravity!(qi, conn_data[i], P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
+    tb = thread_batch(model.context)
+    @batch minbatch = tb for i = 1:nf
+        qi = view(flux, :, i)
+        cd = conn_data[i]
+        compositional_flux_gravity!(qi, cd, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
     end
 end
 
@@ -258,11 +260,11 @@ end
 
 function phase_mass_flux(Ψ, c, i, ρ, kr, μ, ph)
     upc = upwind_cell(Ψ, c, i)
-    F = ρ[ph, upc]*(kr[ph, upc]/μ[ph, upc])*Ψ
+    @inbounds F = ρ[ph, upc]*(kr[ph, upc]/μ[ph, upc])*Ψ
     return (F, upc)
 end
 
-function upwind_cell(pot, l, r)
+@inline function upwind_cell(pot, l, r)
     if pot < 0
         c = l
     else
@@ -271,10 +273,10 @@ function upwind_cell(pot, l, r)
 end
 
 function saturation_averaged_density(ρ, ph, sat, c1, c2)
-    ρ_1 = ρ[ph, c1]
-    ρ_2 = ρ[ph, c2]
-    S_1 = sat[ph, c1]
-    S_2 = sat[ph, c2]
+    @inbounds ρ_1 = ρ[ph, c1]
+    @inbounds ρ_2 = ρ[ph, c2]
+    @inbounds S_1 = sat[ph, c1]
+    @inbounds S_2 = sat[ph, c2]
 
     avg = (ρ_1*S_1 + ρ_2*S_2)/max(S_1 + S_2, 1e-12)
     return avg
