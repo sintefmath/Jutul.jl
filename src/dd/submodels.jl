@@ -4,10 +4,14 @@ function submodel(model::SimulationModel, partition::AbstractDomainPartition, in
     return submodel(model, p_i; kwarg...)
 end
 
-function submodel(model::SimulationModel, p_i::AbstractVector; kwarg...)
+function submodel(model::SimulationModel, p_i::AbstractVector; minbatch = nothing, kwarg...)
     domain = model.domain
     sys = model.system
     c, f = model.context, model.formulation
+    if !isnothing(minbatch)
+        @assert isa(c, DefaultContext)
+        c = DefaultContext(matrix_layout = c.matrix_layout, minbatch = minbatch)
+    end
     d_l = subdomain(domain, p_i, entity = Cells(); kwarg...)
     new_model = SimulationModel(d_l, sys, context = c, formulation = f)
     M = global_map(new_model.domain)
