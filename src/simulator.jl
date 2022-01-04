@@ -125,55 +125,11 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
             break
         end
         nextstep_global!(rec, dT)
-        ministep_reports = []
-        # Insert so that the current reports are accessible
-        t_step = @elapsed begin
-            new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot)
-            # Initialize time-stepping
-            dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = true)
-            done = false
-            t_local = 0
-            cut_count = 0
-            ctr = 1
-            nextstep_local!(rec, dt, false)
-            while !done
-                # Make sure that we hit the endpoint in case timestep selection is too optimistic.
-                dt = min(dt, dT - t_local)
-                # Attempt to solve current step
-                @timeit "solve" ok, s = solve_ministep(sim, dt, forces, max_its, config)
-                # We store the report even if it is a failure.
-                push!(ministep_reports, s)
-                if ok
-                    t_local += dt
-                    if t_local >= dT
-                        # Onto the next one
-                        break
-                    else
-                        # Pick another for the next step...
-                        dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = false)
-                    end
-                else
-                    dt = cut_timestep(sim, config, dt, dT, reports, step_index = step_no, cut_count = cut_count)
-                    if isnan(dt)
-                        # Timestep too small, cut too many times, ...
-                        if info_level > -1
-                            @warn "Unable to converge time step $step_no/$no_steps. Aborting."
-                        end
-                        early_termination = true
-                        break
-                    else
-                        cut_count += 1
-                        if info_level > 0
-                            @warn "Cutting timestep. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut #$cut_count for step $step_no."
-                        end
-                    end
-                end
-                ctr += 1
-                nextstep_local!(rec, dt, ok)
-            end
-            if config[:output_states]
-                @timeit "output" store_output!(states, sim)
-            end
+        new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot)
+        t_step = @elapsed ministep_reports, early_termination = solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = reports, step_no = step_no, rec = rec)
+
+        if config[:output_states]
+            @timeit "output" store_output!(states, sim)
         end
         subrep = OrderedDict()
         subrep[:ministeps] = ministep_reports
@@ -197,6 +153,56 @@ function initial_setup!(sim, config)
     reports = []
     states = Vector{Dict{Symbol, Any}}()
     return (states, reports)
+end
+
+function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = nothing, step_no = NaN, 
+                                                        info_level = config[:info_level],
+                                                        rec = config[:ProgressRecorder])
+    ministep_reports = []
+    # Initialize time-stepping
+    dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = true)
+    done = false
+    t_local = 0
+    cut_count = 0
+    ctr = 1
+    early_termination = false
+    nextstep_local!(rec, dt, false)
+    while !done
+        # Make sure that we hit the endpoint in case timestep selection is too optimistic.
+        dt = min(dt, dT - t_local)
+        # Attempt to solve current step
+        @timeit "solve" ok, s = solve_ministep(sim, dt, forces, max_its, config)
+        # We store the report even if it is a failure.
+        push!(ministep_reports, s)
+        if ok
+            t_local += dt
+            if t_local >= dT
+                # Onto the next one
+                break
+            else
+                # Pick another for the next step...
+                dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = false)
+            end
+        else
+            dt = cut_timestep(sim, config, dt, dT, reports, step_index = step_no, cut_count = cut_count)
+            if isnan(dt)
+                # Timestep too small, cut too many times, ...
+                if info_level > -1
+                    @warn "Unable to converge time step $step_no/$no_steps. Aborting."
+                end
+                early_termination = true
+                break
+            else
+                cut_count += 1
+                if info_level > 0
+                    @warn "Cutting timestep. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut #$cut_count for step $step_no."
+                end
+            end
+        end
+        ctr += 1
+        nextstep_local!(rec, dt, ok)
+    end
+    return (ministep_reports, early_termination)
 end
 
 function perform_step!(simulator::TervSimulator, dt, forces, config; vararg...)
