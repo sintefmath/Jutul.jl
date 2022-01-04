@@ -188,7 +188,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
             if isnan(dt)
                 # Timestep too small, cut too many times, ...
                 if info_level > -1
-                    @warn "Unable to converge time step $step_no/$no_steps. Aborting."
+                    @warn "Unable to converge time step $step_no. Aborting."
                 end
                 break
             else
