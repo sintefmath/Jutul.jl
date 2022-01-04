@@ -71,26 +71,29 @@ function update_half_face_flux!(flux::AbstractArray, state, model, dt, flow_disc
     end
 end
 
-function get_immiscible_flux_gravity(cd, ph, p, rho, kr, mu, pc, ref_index)
+@inline function get_immiscible_flux_gravity(cd, ph, p, rho, kr, mu, pc, ref_index)
     c, i, gΔz, T = cd.self, cd.other, cd.gdz, cd.T
     ∂ = (x) -> local_ad(x, c)
     return immiscible_flux_gravity(c, i, ph, ∂(kr), ∂(mu), ∂(rho), ∂(p), ∂(pc), T, gΔz, ref_index)
 end
 
-function immiscible_flux_gravity(c, i, ph, kᵣ, μ, ρ, P, pc, T, gΔz, ref_index)
+@inline function immiscible_flux_gravity(c, i, ph, kᵣ, μ, ρ, P, pc, T, gΔz, ref_index)
     @inbounds ρ_c = ρ[ph, c]
     @inbounds ρ_i = ρ[ph, i]
-    ρ_avg = 0.5*(ρ_i + ρ_c)
+    ρ_avg = (ρ_i + ρ_c)/2
     Δpc = capillary_gradient(pc, c, i, ph, ref_index)
     @inbounds Δp = P[c] - P[i] + Δpc
     θ = -T*(Δp + gΔz*ρ_avg)
     if θ < 0
         # Flux is leaving the cell
-        @inbounds ρλᶠ = ρ_c*kᵣ[ph, c]/μ[ph, c]
+        up = c
+        ρ = ρ_c
     else
         # Flux is entering the cell
-        @inbounds ρλᶠ = ρ_i*kᵣ[ph, i]/μ[ph, i]
+        up = i
+        ρ = ρ_i
     end
+    @inbounds ρλᶠ = ρ*kᵣ[ph, up]/μ[ph, up]
     return ρλᶠ*θ
 end
 
