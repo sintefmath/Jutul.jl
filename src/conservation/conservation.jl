@@ -388,8 +388,8 @@ function update_equation!(law::ConservationLaw, storage, model, dt)
     # Zero out any sparse indices
     reset_sources!(law)
     # Next, update accumulation, "intrinsic" sources and fluxes
-    update_accumulation!(law, storage, model, dt)
-    update_half_face_flux!(law, storage, model, dt)
+    @timeit "accumulation" update_accumulation!(law, storage, model, dt)
+    @timeit "fluxes" update_half_face_flux!(law, storage, model, dt)
 end
 
 function update_half_face_flux!(law::ConservationLaw, storage, model, dt)

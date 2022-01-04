@@ -24,8 +24,8 @@ end
 
 function update!(cpr::CPRPreconditioner, arg...)
     update_p = update_cpr_internals!(cpr, arg...)
-    update!(cpr.system_precond, arg...)
-    if update_p
+    @timeit "s-precond" update!(cpr.system_precond, arg...)
+    @timeit "p-precond" if update_p
         update!(cpr.pressure_precond, cpr.A_p, cpr.r_p)
     elseif cpr.partial_update
         partial_update!(cpr.pressure_precond, cpr.A_p, cpr.r_p)
@@ -57,8 +57,8 @@ function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage, rec
     rmodel = model.models.Reservoir
     ps = rmodel.primary_variables[:Pressure].scale
     if do_p_update || cpr.partial_update
-        w_p = update_weights!(cpr, rmodel, s, A, ps)
-        update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size, model.context)
+        @timeit "weights" w_p = update_weights!(cpr, rmodel, s, A, ps)
+        @timeit "pressure system" update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size, model.context)
     end
     return do_p_update
 end
