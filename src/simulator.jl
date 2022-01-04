@@ -126,13 +126,13 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
         end
         nextstep_global!(rec, dT)
         new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot)
-        t_step = @elapsed ministep_reports, early_termination = solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = reports, step_no = step_no, rec = rec)
-
+        t_step = @elapsed step_done, rep = solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = reports, step_no = step_no, rec = rec)
+        early_termination = !step_done
         if config[:output_states]
             @timeit "output" store_output!(states, sim)
         end
         subrep = OrderedDict()
-        subrep[:ministeps] = ministep_reports
+        subrep[:ministeps] = rep
         subrep[:total_time] = t_step
         push!(reports, subrep)
     end
@@ -165,7 +165,6 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
     t_local = 0
     cut_count = 0
     ctr = 1
-    early_termination = false
     nextstep_local!(rec, dt, false)
     while !done
         # Make sure that we hit the endpoint in case timestep selection is too optimistic.
@@ -178,6 +177,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
             t_local += dt
             if t_local >= dT
                 # Onto the next one
+                done = true
                 break
             else
                 # Pick another for the next step...
@@ -190,7 +190,6 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                 if info_level > -1
                     @warn "Unable to converge time step $step_no/$no_steps. Aborting."
                 end
-                early_termination = true
                 break
             else
                 cut_count += 1
@@ -202,7 +201,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
         ctr += 1
         nextstep_local!(rec, dt, ok)
     end
-    return (ministep_reports, early_termination)
+    return (done, ministep_reports)
 end
 
 function perform_step!(simulator::TervSimulator, dt, forces, config; vararg...)
