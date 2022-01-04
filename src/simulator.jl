@@ -125,15 +125,12 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
             break
         end
         nextstep_global!(rec, dT)
-        subrep = OrderedDict()
         ministep_reports = []
-        subrep[:ministeps] = ministep_reports
         # Insert so that the current reports are accessible
-        push!(reports, subrep)
         t_step = @elapsed begin
             new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot)
             # Initialize time-stepping
-            dt = pick_timestep(sim, config, dt, dT, reports, step_index = step_no, new_step = true)
+            dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = true)
             done = false
             t_local = 0
             cut_count = 0
@@ -153,7 +150,7 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                         break
                     else
                         # Pick another for the next step...
-                        dt = pick_timestep(sim, config, dt, dT, reports, step_index = step_no, new_step = false)
+                        dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = false)
                     end
                 else
                     dt = cut_timestep(sim, config, dt, dT, reports, step_index = step_no, cut_count = cut_count)
@@ -178,11 +175,15 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
                 @timeit "output" store_output!(states, sim)
             end
         end
+        subrep = OrderedDict()
+        subrep[:ministeps] = ministep_reports
         subrep[:total_time] = t_step
+        push!(reports, subrep)
     end
     final_simulation_message(sim, p, reports, timesteps, config, early_termination)
     return (states, reports)
 end
+
 
 function initial_setup!(sim, config)
     # Timing stuff
@@ -329,7 +330,7 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
     end
 end
 
-function pick_timestep(sim, config, dt_prev, dT, reports; step_index = NaN, new_step = false)
+function pick_timestep(sim, config, dt_prev, dT, reports, current_reports; step_index = NaN, new_step = false)
     dt = dT
     selectors = config[:timestep_selectors]
     is_first = new_step && step_index == 1
@@ -340,7 +341,7 @@ function pick_timestep(sim, config, dt_prev, dT, reports; step_index = NaN, new_
         end
     else
         for sel in selectors
-            candidate = pick_next_timestep(sel, sim, config, dt, dT, reports, step_index, new_step)
+            candidate = pick_next_timestep(sel, sim, config, dt, dT, reports, current_reports, step_index, new_step)
             dt = min(dt, candidate)
         end
         # The selectors might go crazy, so we have some safety bounds

@@ -3,7 +3,7 @@ export TimestepSelector, IterationTimestepSelector
 abstract type AbstractTimestepSelector end
 
 pick_first_timestep(sel, sim, config, dT) = min(dT*initial_relative(sel), initial_absolute(sel))
-pick_next_timestep(sel, sim, config, dt_prev, dT, reports, step_index, new_step) = dt_prev*increase_factor(sel)
+pick_next_timestep(sel, sim, config, dt_prev, dT, reports, current_reports, step_index, new_step) = dt_prev*increase_factor(sel)
 
 pick_cut_timestep(sel, sim, config, dt, dT, reports, cut_count) = dt
 
@@ -56,13 +56,13 @@ struct IterationTimestepSelector <: AbstractTimestepSelector
     end
 end
 
-function pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev, dT, reports, step_index, new_step)
+function pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev, dT, reports, current_reports, step_index, new_step)
     if new_step
-        R = reports[step_index-1]
+        R = reports[step_index-1][:ministeps]
     else
-        R = reports[step_index]
+        R = current_reports
     end
-    r = R[:ministeps][end]
+    r = R[end]
     # Previous number of iterations
     its_p = length(r[:steps]) - 1
     # Target
