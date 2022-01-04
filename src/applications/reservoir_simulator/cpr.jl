@@ -272,13 +272,18 @@ end
 end
 
 function update_p_rhs!(r_p, y, bz, w_p)
-    @batch minbatch = 1000 for i in eachindex(r_p)
-        v = 0.0
-        @inbounds for b = 1:bz
-            v += y[(i-1)*bz + b]*w_p[b, i]
+    if false
+        @batch minbatch = 1000 for i in eachindex(r_p)
+            v = 0.0
+            @inbounds for b = 1:bz
+                v += y[(i-1)*bz + b]*w_p[b, i]
+            end
+            @inbounds r_p[i] = v
         end
-        @inbounds r_p[i] = v
     end
+    n = length(y) ÷ bz
+    yv = reshape(y, bz, n)
+    @tullio r_p[i] = yv[b, i]*w_p[b, i]
 end
 
 function correct_residual_for_dp!(y, x, Δp, bz, buf, A)

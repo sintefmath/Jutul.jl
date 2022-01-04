@@ -40,7 +40,8 @@ function reservoir_linsolve(model, method = :cpr;
         #                        smooth = JacobiProlongation(2.0/3.0), 
         #                        presmoother = GaussSeidel(iter = gs_its), postsmoother = GaussSeidel(iter = gs_its))
         # p_solve = AMGPreconditioner(ruge_stuben)
-        # p_solve = AMGPreconditioner(smoothed_aggregation)
+        gs = GaussSeidel(ForwardSweep(), gs_its)
+        p_solve = AMGPreconditioner(smoothed_aggregation, max_coarse = 5000, presmoother = gs, postsmoother = gs)
         if isnothing(cpr_type)
             if isa(model.system, ImmiscibleSystem)
                 cpr_type = :analytical
