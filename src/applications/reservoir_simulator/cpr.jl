@@ -116,12 +116,12 @@ function apply!(x, cpr::CPRPreconditioner, r, arg...)
     else
         y = r
         # Construct right hand side by the weights
-        update_p_rhs!(r_p, y, bz, w_p)
+        @timeit "p rhs" update_p_rhs!(r_p, y, bz, w_p)
         # Apply preconditioner to pressure part
-        apply!(Δp, cpr.pressure_precond, r_p)
-        correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
-        apply!(x, cpr.system_precond, y)
-        increment_pressure!(x, Δp, bz)
+        @timeit "p apply" apply!(Δp, cpr.pressure_precond, r_p)
+        @timeit "r update" correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
+        @timeit "s apply" apply!(x, cpr.system_precond, y)
+        @timeit "Δp" increment_pressure!(x, Δp, bz)
     end
 end
 
@@ -290,9 +290,13 @@ function correct_residual_for_dp!(y, x, Δp, bz, buf, A)
     @batch minbatch = 1000 for i in eachindex(Δp)
         set_dp!(x, bz, Δp, i)
     end
-    mul!(buf, A, x)
-    @batch minbatch = 1000 for i in eachindex(y)
-        @inbounds y[i] -= buf[i]
+    if false
+        mul!(buf, A, x)
+        @batch minbatch = 1000 for i in eachindex(y)
+            @inbounds y[i] -= buf[i]
+        end
+    else
+        mul!(y, A, x, -1.0, 1.0)
     end
     # @. y -= buf
 end

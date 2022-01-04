@@ -165,11 +165,11 @@ function schur_mul_float!(res, B, C, D, E, x, α, β::T) where T
 end
 
 function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x_v, α, β::T) where T
-    @assert β == zero(T) "Only β == 0 implemented."
+    # @assert β == zero(T) "Only β == 0 implemented."
     N = length(res)
     n = N ÷ block_size
     # compute B*x
-    mul!(res_v, B, x_v)
+    mul!(res_v, B, x_v, α, β)
     for i = 1:n
         for b = 1:block_size
             ix = (i-1)*block_size + b
@@ -190,9 +190,6 @@ function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x
     end
     # Simple version:
     # res .= B*x - C*(E\(D*x))
-    if α != one(T)
-        lmul!(α, res)
-    end
 end
 
 function schur_mul!(res, a_buf, b_buf, r_type, B, C, D, E, x, α, β)
