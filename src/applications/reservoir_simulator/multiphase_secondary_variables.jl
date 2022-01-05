@@ -78,23 +78,30 @@ end
 """
 Interpolated multiphase rel. perm. that is simple (single region, no magic for more than two phases)
 """
-struct TabulatedRelPermSimple <: RelativePermeabilities
-    s
-    kr
-    interpolators
+struct TabulatedRelPermSimple{V, M, I} <: RelativePermeabilities
+    s::V
+    kr::M
+    interpolators::I
     function TabulatedRelPermSimple(s::AbstractVector, kr::AbstractMatrix; kwarg...)
         nph, n = size(kr)
         @assert nph > 0
+        T = eltype(kr)
+        if n <= 50
+            V = SVector{n, T}
+        else
+            V = Vector{T}
+        end
         if eltype(s)<:AbstractVector
             # We got a set of different vectors that correspond to rows of kr
             @assert all(map(length, s) .== n)
-            interpolators = map((ix) -> get_1d_interpolator(s[ix], kr[ix, :]; kwarg...), 1:nph)
+            interpolators = map((ix) -> get_1d_interpolator(V(s[ix]), V(kr[ix, :]); kwarg...), 1:nph)
         else
             # We got a single vector that is used for all rows
             @assert length(s) == n
-            interpolators = map((ix) -> get_1d_interpolator(s, kr[ix, :]; kwarg...), 1:nph)
+            interpolators = map((ix) -> get_1d_interpolator(V(s), V(kr[ix, :]); kwarg...), 1:nph)
         end
-        new(s, kr, interpolators)
+        i_t = Tuple(interpolators)
+        new{typeof(s), typeof(kr), typeof(i_t)}(s, kr, i_t)
     end
 end
 
