@@ -252,7 +252,7 @@ function model_from_mat(G, mrst_data, res_context)
         @debug "Found deck model"
         f = model_from_mat_deck
     else
-        error("I don't know how this model was made")
+        error("I don't know how this model was made: $(keys(mrst_data))")
     end
     return f(G, mrst_data, res_context)
 end

@@ -61,7 +61,7 @@ struct MultiSegmentWell <: WellGrid
                                                         perforation_cells = nothing,
                                                         segment_models = nothing,
                                                         reference_depth = 0,
-                                                        accumulator_volume = 1e-3*mean(volumes),
+                                                        accumulator_volume = mean(volumes),
                                                         reservoir_symbol = :Reservoir, kwarg...)
         nv = length(volumes)
         nc = nv + 1
@@ -84,7 +84,7 @@ struct MultiSegmentWell <: WellGrid
         perforation_cells = vec(perforation_cells)
 
         if isnothing(segment_models)
-            Δp = SegmentWellBoreFrictionHB(100.0, 1e-4, 0.1)
+            Δp = SegmentWellBoreFrictionHB(1.0, 1e-4, 0.1)
             segment_models = repeat([Δp], nseg)
         else
             segment_models::AbstractVector
@@ -100,7 +100,7 @@ end
 
 function common_well_setup(nr; dz = nothing, WI = nothing, gravity = gravity_constant)
     if isnothing(dz)
-        @warn "dz provided for well. Assuming no gravity."
+        @warn "dz not provided for well. Assuming no gravity."
         gdz = zeros(nr)
     else
         @assert length(dz) == nr  "Must have one connection drop dz per perforated cell"
