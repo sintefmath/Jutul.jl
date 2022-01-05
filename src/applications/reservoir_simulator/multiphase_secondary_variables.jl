@@ -100,7 +100,18 @@ end
 
 @terv_secondary function update_as_secondary!(kr, kr_def::TabulatedRelPermSimple, model, param, Saturations)
     I = kr_def.interpolators
-    @tullio kr[ph, i] = I[ph](Saturations[ph, i])
+    if false
+        @tullio kr[ph, i] = I[ph](Saturations[ph, i])
+    else
+        tb = thread_batch(model.context)
+        nph, nc = size(kr)
+        for ph in 1:nph
+            I_ph = I[ph]
+            @batch minbatch = tb for i in 1:nc
+                @inbounds kr[ph, i] = I_ph(Saturations[ph, i])
+            end
+        end
+    end
 end
 
 """
