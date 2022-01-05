@@ -64,10 +64,48 @@ function update_half_face_flux!(flux::AbstractArray, state, model, dt, flow_disc
     conn_data = flow_disc.conn_data
     if flow_disc.gravity
         # Multiphase potential
-        @tullio flux[ph, i] = get_immiscible_flux_gravity(conn_data[i], ph, p, rho, kr, mu, pc, ref_index)
+        # @tullio flux[ph, i] = get_immiscible_flux_gravity(conn_data[i], ph, p, rho, kr, mu, pc, ref_index)
+        mb = thread_batch(model.context)
+        @batch minbatch = mb for i in eachindex(conn_data)
+            @inbounds cd = conn_data[i]
+            @inbounds for ph = 1:size(rho, 1)
+                flux[ph, i] = get_immiscible_flux_gravity(cd, ph, p, rho, kr, mu, pc, ref_index)
+            end
+        end
     else
         # Scalar potential
         @tullio flux[ph, i] = get_immiscible_flux_no_gravity(conn_data[i], ph, p, rho, kr, mu)
+    end
+    ctx = model.context
+    use_tullio = isa(ctx, GPUTervContext)
+    if use_tullio
+        if flow_disc.gravity
+            # Multiphase potential
+            @tullio flux[ph, i] = get_immiscible_flux_gravity(conn_data[i], ph, p, rho, kr, mu, pc, ref_index)
+        else
+            # Scalar potential
+            @tullio flux[ph, i] = get_immiscible_flux_no_gravity(conn_data[i], ph, p, rho, kr, mu)
+        end
+    else
+        mb = thread_batch(ctx)
+        nph = size(flux, 1)
+        if flow_disc.gravity
+            # Multiphase potential
+            @batch minbatch = mb for i in eachindex(conn_data)
+                @inbounds cd = conn_data[i]
+                @inbounds for ph = 1:nph
+                    flux[ph, i] = get_immiscible_flux_gravity(cd, ph, p, rho, kr, mu, pc, ref_index)
+                end
+            end
+        else
+            # Scalar potential
+            @batch minbatch = mb for i in eachindex(conn_data)
+                @inbounds cd = conn_data[i]
+                @inbounds for ph = 1:nph
+                    flux[ph, i] = get_immiscible_flux_no_gravity(cd, ph, p, rho, kr, mu)
+                end
+            end
+        end
     end
 end
 
