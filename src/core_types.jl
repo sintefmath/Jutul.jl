@@ -330,14 +330,14 @@ struct ConstantVariables <: GroupedVariables
     entity::TervUnit
     single_entity::Bool
     function ConstantVariables(constants, entity = Cells(); single_entity = nothing)
+        if !isa(constants, AbstractArray)
+            @assert length(constants) == 1
+            constants = [constants]
+        end
         if isnothing(single_entity)
             # Single entity means that we have one (or more) values that are given for all entities
             # by a single representative entity
             single_entity = isa(constants, AbstractVector)
-        end
-        if !isa(constants, AbstractArray)
-            @assert length(constants) == 1
-            constants = [constants]
         end
         if isa(constants, CuArray) && single_entity
             @warn "Single entity constants have led to crashes on CUDA/Tullio kernels!" maxlog = 5
