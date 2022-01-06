@@ -31,7 +31,6 @@ function reservoir_linsolve(model, method = :cpr;
                                     partial_update = update_interval == :once,
                                     kwarg...)
     res_model(model) = model
-    res_model(model::MultiModel) = model.models.reservoir
     model = res_model(model)
     if model.context == DefaultContext()
         return nothing
