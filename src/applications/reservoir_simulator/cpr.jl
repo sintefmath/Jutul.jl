@@ -17,9 +17,22 @@ mutable struct CPRPreconditioner <: TervPreconditioner
     update_frequency::Integer # Update frequency for AMG hierarchy (and pressure part if partial_update = false)
     update_interval::Symbol   # iteration, ministep, step, ...
     partial_update            # Perform partial update of AMG and update pressure system
-    function CPRPreconditioner(p = LUPreconditioner(), s = ILUZeroPreconditioner(); strategy = :quasi_impes, weight_scaling = :unit, update_frequency = 1, update_interval = :iteration, partial_update = true)
+    function CPRPreconditioner(p = default_psolve(), s = ILUZeroPreconditioner(); strategy = :quasi_impes, weight_scaling = :unit, update_frequency = 1, update_interval = :iteration, partial_update = true)
         new(nothing, nothing, nothing, nothing, nothing, nothing, p, s, strategy, weight_scaling, nothing, update_frequency, update_interval, partial_update)
     end
+end
+
+function default_psolve(; max_coarse = 500, type = :smoothed_aggregation)
+    gs_its = 1
+    cyc = AlgebraicMultigrid.V()
+    if type == :smoothed_aggregation
+        m = smoothed_aggregation
+    else
+        m = ruge_stuben
+    end
+    p_solve = AMGPreconditioner(smoothed_aggregation, cycle = cyc, presmoother = GaussSeidel(iter = gs_its), postsmoother = GaussSeidel(iter = gs_its))
+    gs = GaussSeidel(ForwardSweep(), gs_its)
+    return AMGPreconditioner(smoothed_aggregation, max_coarse = max_coarse, presmoother = gs, postsmoother = gs)
 end
 
 function update!(cpr::CPRPreconditioner, arg...)

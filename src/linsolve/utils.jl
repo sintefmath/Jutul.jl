@@ -20,7 +20,7 @@ mutable struct IterativeSolverConfig
 end
 
 function reservoir_linsolve(model, method = :cpr;
-                                   rtol = nothing,
+                                   rtol = 0.005,
                                    v = 0,
                                    provider = Krylov,
                                    solver = Krylov.bicgstab,
@@ -32,16 +32,6 @@ function reservoir_linsolve(model, method = :cpr;
         return nothing
     end
     if method == :cpr
-        gs_its = 1
-        cyc = AlgebraicMultigrid.V()
-        p_solve = AMGPreconditioner(smoothed_aggregation, cycle = cyc, presmoother = GaussSeidel(iter = gs_its), postsmoother = GaussSeidel(iter = gs_its))
-        # p_solve = AMGPreconditioner()
-        #p_solve = AMGPreconditioner(smoothed_aggregation, cycle = cyc, 
-        #                        smooth = JacobiProlongation(2.0/3.0), 
-        #                        presmoother = GaussSeidel(iter = gs_its), postsmoother = GaussSeidel(iter = gs_its))
-        # p_solve = AMGPreconditioner(ruge_stuben)
-        gs = GaussSeidel(ForwardSweep(), gs_its)
-        p_solve = AMGPreconditioner(smoothed_aggregation, max_coarse = 5000, presmoother = gs, postsmoother = gs)
         if isnothing(cpr_type)
             if isa(model.system, ImmiscibleSystem)
                 cpr_type = :analytical
@@ -49,12 +39,11 @@ function reservoir_linsolve(model, method = :cpr;
                 cpr_type = :true_impes
             end
         end
-        prec = CPRPreconditioner(p_solve, strategy = cpr_type, 
-        update_interval = update_interval, partial_update = partial_update)
-        rtol = isnothing(rtol) ? 0.001 : rtol
+        prec = CPRPreconditioner(strategy = cpr_type, 
+                                 update_interval = update_interval,
+                                 partial_update = partial_update)
     elseif method == :ilu0
-        prec = ILUZeroPreconditioner(right = false)
-        rtol = isnothing(rtol) ? 0.001 : rtol
+        prec = ILUZeroPreconditioner()
     else
         return nothing
     end
