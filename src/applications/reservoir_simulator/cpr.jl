@@ -23,7 +23,6 @@ mutable struct CPRPreconditioner <: TervPreconditioner
 end
 
 function default_psolve(; max_levels = 10, max_coarse = 10, type = :smoothed_aggregation)
-    # Note
     gs_its = 1
     cyc = AlgebraicMultigrid.V()
     if type == :smoothed_aggregation

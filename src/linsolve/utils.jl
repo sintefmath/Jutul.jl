@@ -25,9 +25,14 @@ function reservoir_linsolve(model, method = :cpr;
                                    provider = Krylov,
                                    solver = Krylov.bicgstab,
                                     update_interval = :ministep,
+                                    amg_type = :smoothed_aggregation,
+                                    max_coarse = nothing,
                                     cpr_type = nothing,
                                     partial_update = update_interval == :once,
                                     kwarg...)
+    res_model(model) = model
+    res_model(model::MultiModel) = model.models.reservoir
+    model = res_model(model)
     if model.context == DefaultContext()
         return nothing
     end
@@ -39,7 +44,12 @@ function reservoir_linsolve(model, method = :cpr;
                 cpr_type = :true_impes
             end
         end
-        prec = CPRPreconditioner(strategy = cpr_type, 
+        if isnothing(max_coarse)
+            max_coarse = Int64(ceil(0.05*number_of_cells(model.domain)))
+            max_coarse = min(1000, max_coarse)
+        end
+        p_solve = default_psolve(max_coarse = max_coarse, type = amg_type)
+        prec = CPRPreconditioner(p_solve, strategy = cpr_type, 
                                  update_interval = update_interval,
                                  partial_update = partial_update)
     elseif method == :ilu0
