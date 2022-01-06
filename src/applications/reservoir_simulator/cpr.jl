@@ -22,7 +22,8 @@ mutable struct CPRPreconditioner <: TervPreconditioner
     end
 end
 
-function default_psolve(; max_coarse = 1000, type = :smoothed_aggregation)
+function default_psolve(; max_levels = 10, max_coarse = 10, type = :smoothed_aggregation)
+    # Note
     gs_its = 1
     cyc = AlgebraicMultigrid.V()
     if type == :smoothed_aggregation
@@ -31,7 +32,7 @@ function default_psolve(; max_coarse = 1000, type = :smoothed_aggregation)
         m = ruge_stuben
     end
     gs = GaussSeidel(ForwardSweep(), gs_its)
-    return AMGPreconditioner(m, max_coarse = max_coarse, presmoother = gs, postsmoother = gs, cycle = cyc)
+    return AMGPreconditioner(m, max_levels = max_levels, max_coarse = max_coarse, presmoother = gs, postsmoother = gs, cycle = cyc)
 end
 
 function update!(cpr::CPRPreconditioner, arg...)
