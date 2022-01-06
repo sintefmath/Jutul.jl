@@ -157,7 +157,7 @@ end
 
 function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = nothing, step_no = NaN, 
                                                         info_level = config[:info_level],
-                                                        rec = config[:ProgressRecorder])
+                                                        rec = config[:ProgressRecorder], kwarg...)
     ministep_reports = []
     # Initialize time-stepping
     dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = true)
@@ -170,7 +170,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
         # Make sure that we hit the endpoint in case timestep selection is too optimistic.
         dt = min(dt, dT - t_local)
         # Attempt to solve current step
-        @timeit "solve" ok, s = solve_ministep(sim, dt, forces, max_its, config)
+        @timeit "solve" ok, s = solve_ministep(sim, dt, forces, max_its, config; kwarg...)
         # We store the report even if it is a failure.
         push!(ministep_reports, s)
         if ok
