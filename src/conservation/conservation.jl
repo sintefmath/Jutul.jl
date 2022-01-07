@@ -272,13 +272,18 @@ function fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flu
 end
 
 function update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
-    nc, _, np = ad_dims(acc)
+    dims = ad_dims(acc)
     rv_src = rowvals(src)
     nz_src = nonzeros(src)
     cp = acc.jacobian_positions
+    update_lsys_sources_theaded!(nz, r, acc, src, rv_src, nz_src, cp, model.context, dims)
+end
+
+function update_lsys_sources_theaded!(nz, r, acc, src, rv_src, nz_src, cp, context, dims)
+    nc, _, np = dims
     tb = thread_batch(context)
     @batch minbatch=tb for cell = 1:nc
-        for rp in nzrange(src, cell)
+        @inbounds for rp in nzrange(src, cell)
             e = rv_src[rp]
             v = nz_src[rp]
             # Value
