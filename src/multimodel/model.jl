@@ -113,7 +113,16 @@ function setup_cross_terms!(storage, model::MultiModel, couplings)#::ModelCoupli
                               crosstype;transpose = false)
 
         @assert !isnothing(ct)
-        storage[:cross_terms][target][source][def_target_eq] = ct
+        if !haskey(storage[:cross_terms][target],source)
+            setindex!(storage[:cross_terms][target], Dict(def_source_eq => ct), source)
+        else
+            if !haskey(storage[:cross_terms][target][source], def_source_eq)
+                setindex!(storage[:cross_terms][target][source],ct, def_source_eq)
+            else
+                storage[:cross_terms][target][source][def_target_eq] = ct 
+            end
+        end
+        
         if(issym)
             source_eq = storage[target][:equations][def_source_eq]
             cs = setup_cross_term(source_eq,
@@ -124,7 +133,16 @@ function setup_cross_terms!(storage, model::MultiModel, couplings)#::ModelCoupli
                               intersection,
                               crosstype;
                               transpose = true)
-            storage[:cross_terms][source][target][def_source_eq] = cs
+            if !haskey(storage[:cross_terms][source],target)
+                setindex!(storage[:cross_terms][source], Dict(def_source_eq => cs), target)
+            else
+                if !haskey(storage[:cross_terms][source][target], def_source_eq)
+                    setindex!(storage[:cross_terms][source][target],cs, def_source_eq)
+                else
+                    storage[:cross_terms][source][target][def_source_eq] = cs 
+                end
+            end                  
+            #storage[:cross_terms][source][target][def_source_eq] = cs
         end
     end
     #storage[:cross_terms] = crossd
