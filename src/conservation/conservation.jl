@@ -232,11 +232,15 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
 end
 
 function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context)
-    nc, ne, np = ad_dims(acc)
     centries = acc.entries
     fentries = cell_flux.entries
     cp = acc.jacobian_positions
     fp = cell_flux.jacobian_positions
+    threaded_fill_conservation_eq!(nz, r, context, centries, fentries, acc, cell_flux, cp, fp, conn_pos, ad_dims(acc))
+end
+
+function threaded_fill_conservation_eq!(nz, r, context, centries, fentries, acc, cell_flux, cp, fp, conn_pos, dims)
+    nc, ne, np = dims
     tb = thread_batch(context)
     @batch minbatch=tb for cell = 1:nc
         for e in 1:ne
