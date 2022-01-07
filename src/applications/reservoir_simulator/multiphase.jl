@@ -66,9 +66,11 @@ end
 
 ## Systems
 # Immiscible multiphase system
-struct ImmiscibleSystem <: MultiPhaseSystem
-    phases::AbstractVector
+struct ImmiscibleSystem{T} <: MultiPhaseSystem where T<:Tuple
+    phases::T
 end
+
+ImmiscibleSystem(phases::AbstractVector) = ImmiscibleSystem(tuple(phases...))
 
 number_of_components(sys::ImmiscibleSystem) = number_of_phases(sys)
 

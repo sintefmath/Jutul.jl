@@ -63,36 +63,8 @@ function update_half_face_flux!(flux::AbstractArray, state, model, dt, flow_disc
     pc, ref_index = capillary_pressure(model, state)
     conn_data = flow_disc.conn_data
     ctx = model.context
-    use_tullio = isa(ctx, GPUTervContext)
     single_potential = !flow_disc.gravity && isnothing(pc)
     update_immiscible_fluxes!(flux, ctx, conn_data, rho, kr, mu, p, pc, ref_index, single_potential)
-    return
-    if use_tullio
-        if flow_disc.gravity
-            # Multiphase potential
-            @tullio flux[ph, i] = immiscible_flux_for_phase_multi_pot(conn_data[i], ph, p, rho, kr, mu, pc, ref_index)
-        else
-            # Scalar potential
-            @tullio flux[ph, i] = immiscible_flux_for_phase_single_pot(conn_data[i], ph, p, rho, kr, mu)
-        end
-    else
-        mb = thread_batch(ctx)
-        nph = size(flux, 1)
-        
-        if flow_disc.gravity
-            # Multiphase potential
-            @batch minbatch = mb for i in eachindex(conn_data)
-                immiscible_multiphase_flux_multi_pot!(flux, i, conn_data, nph, p, rho, kr, mu, pc, ref_index)
-            end
-            # get_flux(i) -> immiscible_flux_for_phase_multi_pot(cd, ph, p, rho, kr, mu, pc, ref_index)
-        else
-            # Scalar potential
-            # get_flux(i) -> immiscible_flux_for_phase_single_pot(cd, ph, p, rho, kr, mu)
-        end
-        #@batch minbatch = mb for i in eachindex(conn_data)
-        #    update_flux!(i)
-        #end
-    end
 end
 
 function update_immiscible_fluxes!(flux, context, conn_data, rho, kr, mu, p, pc, ref_index, single_potential)
@@ -171,7 +143,6 @@ function immiscible_multiphase_flux_single_pot!(flux, conn_i, conn_data, nph, p,
     mu = ∂(mu)
     rho = ∂(rho)
     p = ∂(p)
-    pc = ∂(pc)
     for ph = 1:nph
         @inbounds flux[ph, conn_i] = immiscible_flux_no_gravity(self, other, ph, kr, mu, rho, p, T)
     end
