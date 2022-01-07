@@ -294,11 +294,16 @@ function update_linearized_system_subset_conservation_sources!(nz, r, model, acc
 end
 
 function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_pos, conn_data)
-    _, ne, np = ad_dims(face_flux)
+    dims = ad_dims(face_flux)
     fentries = face_flux.entries
     fp = face_flux.jacobian_positions
+    update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, model.context, dims)
+end
+
+function update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, context, dims)
+    _, ne, np = dims
     nc = length(conn_pos) - 1
-    tb = thread_batch(model.context)
+    tb = thread_batch(context)
     @batch minbatch=tb for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
@@ -315,7 +320,6 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
         end
     end
 end
-
 
 function declare_pattern(model, e::ConservationLaw, entity::Cells)
     df = e.flow_discretization
