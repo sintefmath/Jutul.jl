@@ -64,20 +64,20 @@ function update_half_face_flux!(flux::AbstractArray, state, model, dt, flow_disc
     conn_data = flow_disc.conn_data
     ctx = model.context
     single_potential = !flow_disc.gravity && isnothing(pc)
-    update_immiscible_fluxes!(flux, ctx, conn_data, rho, kr, mu, p, pc, ref_index, single_potential)
+    phases = get_phases(model.system)
+    update_immiscible_fluxes!(flux, ctx, conn_data, rho, kr, mu, p, pc, ref_index, phases, single_potential)
 end
 
-function update_immiscible_fluxes!(flux, context, conn_data, rho, kr, mu, p, pc, ref_index, single_potential)
+function update_immiscible_fluxes!(flux, context, conn_data, rho, kr, mu, p, pc, ref_index, phases, single_potential)
     mb = thread_batch(context)
-    nph = size(flux, 1)
     if single_potential
         @batch minbatch = mb for i in eachindex(conn_data)
-            immiscible_multiphase_flux_single_pot!(flux, i, conn_data, nph, p, rho, kr, mu)
+            immiscible_multiphase_flux_single_pot!(flux, i, conn_data, phases, p, rho, kr, mu)
         end
     else
         # Multiphase potential
         @batch minbatch = mb for i in eachindex(conn_data)
-            immiscible_multiphase_flux_multi_pot!(flux, i, conn_data, nph, p, rho, kr, mu, pc, ref_index)
+            immiscible_multiphase_flux_multi_pot!(flux, i, conn_data, phases, p, rho, kr, mu, pc, ref_index)
         end
     end
 end
@@ -92,7 +92,7 @@ function update_immiscible_fluxes!(flux, context::SingleCUDAContext, conn_data, 
     end
 end
 
-function immiscible_multiphase_flux_multi_pot!(flux, conn_i, conn_data, nph, p, rho, kr, mu, pc, ref_index)
+function immiscible_multiphase_flux_multi_pot!(flux, conn_i, conn_data, phases, p, rho, kr, mu, pc, ref_index)
     @inbounds cd = conn_data[conn_i]
     self, other, gΔz, T = cd.self, cd.other, cd.gdz, cd.T
     ∂ = (x) -> local_ad(x, self)
@@ -102,7 +102,7 @@ function immiscible_multiphase_flux_multi_pot!(flux, conn_i, conn_data, nph, p, 
     rho = ∂(rho)
     p = ∂(p)
     pc = ∂(pc)
-    for ph = 1:nph
+    for ph in eachindex(phases)
         @inbounds flux[ph, conn_i] = immiscible_flux_gravity(self, other, ph, kr, mu, rho, p, pc, T, gΔz, ref_index)
     end
 end
@@ -134,7 +134,7 @@ end
 end
 
 
-function immiscible_multiphase_flux_single_pot!(flux, conn_i, conn_data, nph, p, rho, kr, mu)
+function immiscible_multiphase_flux_single_pot!(flux, conn_i, conn_data, phases, p, rho, kr, mu)
     @inbounds cd = conn_data[conn_i]
     self, other, T = cd.self, cd.other, cd.T
     ∂ = (x) -> local_ad(x, self)
@@ -143,7 +143,7 @@ function immiscible_multiphase_flux_single_pot!(flux, conn_i, conn_data, nph, p,
     mu = ∂(mu)
     rho = ∂(rho)
     p = ∂(p)
-    for ph = 1:nph
+    for ph in eachindex(phases)
         @inbounds flux[ph, conn_i] = immiscible_flux_no_gravity(self, other, ph, kr, mu, rho, p, T)
     end
 end
