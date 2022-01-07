@@ -236,7 +236,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
             get_convergence_table(errors, il, iteration, config)
         end
         if converged
-            if iteration < config[:min_nonlinear_iterations]
+            if iteration <= config[:min_nonlinear_iterations]
                 # Should always do at least 
                 do_solve = true
                 # Ensures secondary variables are updated, and correct error
