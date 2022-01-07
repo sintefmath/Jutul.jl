@@ -4,6 +4,7 @@ A component with electric potential, concentration and temperature
 The different potentials are independent (diagonal onsager matrix),
 and conductivity, diffusivity is constant.
 =#
+using Revise
 @time using Terv
 using MAT
 using Plots
