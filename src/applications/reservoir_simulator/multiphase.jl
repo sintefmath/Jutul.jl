@@ -43,7 +43,7 @@ end
 function subforce(s::AbstractVector{S}, model) where S<:SourceTerm
     # Just to be safe
     s = deepcopy(s)
-    m = model.domain.global_map
+    m = global_map(model.domain)
 
     n = length(s)
     keep = repeat([false], n)
