@@ -202,7 +202,7 @@ end
     t = param.t
     z = param.z
     F = FARADAY_CONST
-    @tullio N[i] =  - TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
+    @tullio N[i] =  + TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
 end
 
 @terv_secondary(

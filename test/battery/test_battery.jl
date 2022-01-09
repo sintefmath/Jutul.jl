@@ -5,7 +5,7 @@ The different potentials are independent (diagonal onsager matrix),
 and conductivity, diffusivity is constant.
 =#
 using Revise
-@time using Terv
+using Terv
 using MAT
 using Plots
 
@@ -43,7 +43,7 @@ function make_system(exported,sys,bcfaces,srccells)
     phi0 = 1.0
     C0 = 1.
     T0 = 298.15
-    D = 1e-9 # ???
+    D = -0.7e-10 # ???
     if isa(exported["EffectiveElectricalConductivity"], Matrix)
         σ = exported["EffectiveElectricalConductivity"][1]
     else
@@ -292,6 +292,7 @@ end
 
 ##
 
+
 function test_battery()
     name="model1d_notemp"
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
@@ -309,7 +310,7 @@ function test_battery()
         :PP => forces_pp
     )
     for (k, p) in parameters
-        p[:tolerances][:default] = 1e-5
+        p[:tolerances][:default] = 1e-14
     end
 
     sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
@@ -319,15 +320,17 @@ function test_battery()
     cfg[:info_level] = 1
     cfg[:debug_level] = 0
     cfg[:max_residual] = 1e20
+    cfg[:min_nonlinear_iterations] = 10
+
     states, report = simulate(sim, timesteps, forces = forces, config = cfg)
     stateref = exported_all["states"]
 
-    return states, grids, state0, stateref, parameters, exported_all, model, timesteps
+    return states, grids, state0, stateref, parameters, exported_all, model, timesteps, cfg
 end
 
 ##
 
-states, grids, state0, stateref, parameters, exported_all, model, timesteps = test_battery();
+states, grids, state0, stateref, parameters, exported_all, model, timesteps, cfg = test_battery();
 
 ##
 
@@ -426,20 +429,20 @@ for (i, dt) in enumerate(timesteps)
         xf= G["faces"]["centroids"][end]
         xfi= G["faces"]["centroids"][2:end-1]     
         p = plot(p1, p2, layout = (1, 2), legend = false)
-        phi = states[sim_step][key].Phi
+        phi = states[sim_step][key][:Phi]
         Plots.plot!(
             p1, x, phi; markershape=:circle, linestyle=:dot, seriestype = :scatter
             )
         
         if haskey(states[sim_step][key], :TotalCurrent)
-            j = states[sim_step][key].TotalCurrent[1:2:end-1]
+            j = states[sim_step][key][:TotalCurrent][1:2:end-1]
         else
-            j = -states[sim_step][key].TPkGrad_Phi[1:2:end-1]
+            j = -states[sim_step][key][:TPkGrad_Phi][1:2:end-1]
         end
         
         Plots.plot!(p2, xfi, j; markershape=:circle,linestyle=:dot, seriestype = :scatter)
         if(haskey(states[sim_step][key], :C))
-            cc = states[sim_step][key].C
+            cc = states[sim_step][key][:C]
             Plots.plot!(p3, x, cc; markershape=:circle, linestyle=:dot, seriestype = :scatter)
         end
     end
@@ -450,7 +453,7 @@ end
 ##
 E = Matrix{Float64}(undef,27,2)
 for step in 1:27
-    phi = states[step][:PP].Phi[10]
+    phi = states[step][:PP][:Phi][10]
     E[step,1] = phi
     phi_ref = stateref[step]["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][10]
     E[step,2] = phi_ref
@@ -499,4 +502,10 @@ for (n, state) in enumerate(states_comp)
     print_diff_j(states_comp, ref_states, n)
 end
 
-
+plot(E)
+##
+i=4;plot([states[i][:ELYTE][:C], stateref[i]["Electrolyte"]["cs"][:,1]])
+##
+i=10;plot([states[i][:PAM][:C], stateref[i]["Electrolyte"]["cs"][:,1]])
+i=10;plot([states[i][:NAM][:C], stateref[i]["NegativeElectrode"]["ElectrodeActiveComponent"]["c"][:,1]])
+i=10;plot([states[i][:PAM][:C], stateref[i]["PositiveElectrode"]["ElectrodeActiveComponent"]["c"][:,1]])
