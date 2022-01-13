@@ -1,5 +1,4 @@
 export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, DampedJacobiPreconditioner, AMGPreconditioner
-using ILUZero
 
 abstract type TervPreconditioner end
 
@@ -218,11 +217,11 @@ end
 function ilu_f(type::Symbol)
     # Why must this be qualified?
     if type == :left
-        f = ILUZero.forward_substitution!
+        f = forward_substitution!
     elseif type == :right
-        f = ILUZero.backward_substitution!
+        f = backward_substitution!
     else
-        f = ILUZero.ldiv!
+        f = ldiv!
     end
 end
 

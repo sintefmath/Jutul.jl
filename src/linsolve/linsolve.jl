@@ -1,3 +1,6 @@
+# Local version of ILUZero module. Can be deleted once changes are upstreamed.
+include("ilu/ilu.jl")
+
 include("default.jl")
 include("utils.jl")
 # Wrapper for Krylov.jl

@@ -29,7 +29,6 @@ using KernelAbstractions
 using DataInterpolations
 using Polyester
 # Linear solvers and preconditioners
-using ILUZero
 
 # Misc. utils
 using MAT
