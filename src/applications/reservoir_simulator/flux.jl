@@ -246,9 +246,7 @@ end
 """
 Half face Darcy flux with separate potential. (Compositional version)
 """
-function update_half_face_flux!(law::ConservationLaw, storage, model::SimulationModel{D, S}, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {D,S<:TwoPhaseCompositionalSystem,U,K,T<:DarcyMassMobilityFlow}
-    state = storage.state
-    # pot = state.CellNeighborPotentialDifference
+function update_half_face_flux!(flux::AbstractArray, state, model::SimulationModel{D, S}, dt, flow_disc::TwoPointPotentialFlow{U, K, T}) where {D,S<:TwoPhaseCompositionalSystem,U,K,T<:DarcyMassMobilityFlow}
     X = state.LiquidMassFractions
     Y = state.VaporMassFractions
     kr = state.RelativePermeabilities
@@ -258,8 +256,6 @@ function update_half_face_flux!(law::ConservationLaw, storage, model::Simulation
     fr = state.FlashResults
     Sat = state.Saturations
 
-    flux = get_entries(law.half_face_flux_cells)
-    flow_disc = law.flow_discretization
     conn_data = flow_disc.conn_data
     pc, ref_index = capillary_pressure(model, state)
 
