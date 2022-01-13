@@ -222,6 +222,53 @@ function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", con
 
         # State is dict with pressure in each cell
         init = Dict(:Pressure => p_init, :Saturations => s_init)
+    elseif case_name == "three_phase_fake_wells"
+        inj = 1
+        prod = nc
+        G.grid.pore_volumes[inj] *= 1000
+        G.grid.pore_volumes[prod] *= 1000
+
+        bar = 1e5
+        p0 = 100*bar # 100 bar
+
+        mu = 1e-3    # 1 cP
+        cl = 1e-5/bar
+        pRef = 100*bar
+        rhoLS = 1000
+        A = AqueousPhase()
+        L = LiquidPhase()
+        V = VaporPhase()
+        sys = ImmiscibleSystem([A, L, V])
+        model = SimulationModel(G, sys, context = context)
+
+        kr = BrooksCoreyRelPerm(sys, [2, 2, 2])
+        s = model.secondary_variables
+        s[:RelativePermeabilities] = kr
+        s[:PhaseViscosities] = ConstantVariables([mu, mu, mu])
+        s[:PhaseMassDensities] = ConstantCompressibilityDensities(sys, pRef, rhoLS, cl)
+
+        tot_time = sum(timesteps)
+        forces = build_forces(model)
+
+        p_init = repeat([p0], nc)
+        p_init[inj] = 2*p0
+        p_init[prod] = p0/2
+
+        s_inj = [0.5, 0.3, 0.2]
+        s_res = [0.3, 0.3, 0.4]
+
+        s_inj = [0.1, 0.0, 0.9]
+        s_res = [0.9, 0.0, 0.1]
+
+        s_inj = [0.1, 0.9, 0.0]
+        s_res = [0.9, 0.1, 0.0]
+
+        s_init = repeat(s_inj, 1, nc)
+        s_init[:, inj] .= s_inj
+
+        # State is dict with pressure in each cell
+        init = Dict(:Pressure => p_init, :Saturations => s_init)
+
     elseif case_name == "simple_compositional_fake_wells"
         inj = 1
         prod = nc
