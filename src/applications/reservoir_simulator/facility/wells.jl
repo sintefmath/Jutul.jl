@@ -412,7 +412,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     res_q = ct.crossterm_target
     well_q = ct.crossterm_source
 
-    apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, -1)
+    apply_well_reservoir_sources!(target_model.system, res_q, well_q, state_res, state_well, perforations, -1)
     # @debug "($source → $target, from wellbore): $(value.(res_q)), s: $(value.(state_well.Saturations))"
 end
 
@@ -442,42 +442,29 @@ end
 function apply_well_reservoir_sources!(sys::Union{ImmiscibleSystem, SinglePhaseSystem}, res_q, well_q, state_res, state_well, perforations, sgn)
     p_res = state_res.Pressure
     p_well = state_well.Pressure
-    if haskey(state_res, :RelativePermeabilities)
-        kr = state_res.RelativePermeabilities
-        kr_value = as_value(kr)
-    else
-        kr = nothing
-        kr_value = nothing
-    end
+
+    val = x -> local_ad(x, nothing)
+
     μ = state_res.PhaseViscosities
     kr = state_res.RelativePermeabilities
     ρ = state_res.PhaseMassDensities
 
     ρ_w = state_well.PhaseMassDensities
-    if haskey(state_well, :Saturations)
-        s_w = state_well.Saturations
-        s_w_v = as_value(s_w)
-    else
-        s_w = nothing
-        s_w_v = nothing
-    end
-    perforation_sources!(well_q, perforations, as_value(p_res),         p_well,  kr_value, as_value(μ), as_value(ρλ_i),          ρ_w,  s_w, sgn)
-    perforation_sources!(res_q,  perforations,          p_res, as_value(p_well),       kr,           μ,           ρλ_i, as_value(ρ_w), s_w_v, sgn)
+    s_w = state_well.Saturations
+
+    perforation_sources_immiscible!(well_q, perforations, val(p_res),         p_well,  val(kr), val(μ), val(ρ),    ρ_w,      s_w, sgn)
+    perforation_sources_immiscible!(res_q,  perforations,     p_res,      val(p_well),     kr,      μ,      ρ, val(ρ_w), val(s_w), sgn)
 end
 
-function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, ρ_w, s_w, sgn)
+function perforation_sources_immiscible!(target, perf, p_res, p_well, kr, μ, ρ, ρ_w, s_w, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
-    nc = size(ρλ_i, 1)
+    nc = size(ρ, 1)
     nph = size(μ, 1)
 
     @inbounds for i in eachindex(perf.self)
         si, ri, wi, gdz = unpack_perf(perf, i)
         if gdz != 0
-            if isnothing(s_w)
-                ρ_mix = ρ_w[1, si]
-            else
-                ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
-            end
+            ρ_mix = @views mix_by_saturations(s_w[:, si], ρ_w[:, si])
             ρgdz = gdz*ρ_mix
         else
             ρgdz = 0

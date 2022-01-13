@@ -6,12 +6,10 @@ struct DarcyMassMobilityFlowFused <: FlowType end
 struct CellNeighborPotentialDifference <: GroupedVariables end
 
 function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type::Union{DarcyMassMobilityFlow, DarcyMassMobilityFlowFused})
-    S[:CellNeighborPotentialDifference] = CellNeighborPotentialDifference()
-    if !isa(system, SinglePhaseSystem)
+    if isa(system, SinglePhaseSystem)
+        S[:RelativePermeabilities] = ConstantVariables([1.0])
+    else
         S[:RelativePermeabilities] = BrooksCoreyRelPerm(system)
-    end
-    if isa(system, ImmiscibleSystem) || isa(system, SinglePhaseSystem)
-        S[:MassMobilities] = MassMobilities()
     end
 end
 
@@ -165,6 +163,8 @@ function immiscible_flux_no_gravity(c, i, ph, kᵣ, μ, ρ, P, T)
         # Flux is entering the cell
         up_c = i
     end
+    @inbounds ρλᶠ = ρ[ph, up_c]*kᵣ[ph, up_c]/μ[ph, up_c]
+    return ρλᶠ*θ
 end
 
 
