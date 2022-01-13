@@ -1,5 +1,3 @@
-using Terv, Polynomials
-
 export Electrolyte, TestElyte, DmuDc, ConsCoeff
 export p1, p2, p3, cnst, diffusivity
 
@@ -204,7 +202,7 @@ end
     t = param.t
     z = param.z
     F = FARADAY_CONST
-    @tullio N[i] =  - TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
+    @tullio N[i] =  + TPDGrad_C[i] + t / (F * z) * TotalCurrent[i]
 end
 
 @terv_secondary(
@@ -328,7 +326,7 @@ function align_to_jacobian!(
     variable_offset = 0
     )
     fd = law.flow_discretization
-    neighborship = get_neighborship(model.domain.grid)
+    M = global_map(model.domain)
 
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
@@ -339,7 +337,7 @@ function align_to_jacobian!(
         target_offset = equation_offset, source_offset = variable_offset
         )
     half_face_flux_cells_alignment!(
-        hflux_cells, acc, jac, model.context, neighborship, fd, 
+        hflux_cells, acc, jac, model.context, M, fd, 
         target_offset = equation_offset, source_offset = variable_offset
         )
     density_alignment!(

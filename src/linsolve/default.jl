@@ -32,19 +32,31 @@ struct LinearizedSystem{L} <: TervLinearSystem
     matrix_layout::L
 end
 
-struct LinearizedBlock{R, C} <: TervLinearSystem
+struct LinearizedBlock{M, R, C} <: TervLinearSystem
     jac
     jac_buffer
-    matrix_layout::R
-    residual_layout::C
-    residual_block_size::Integer
-    function LinearizedBlock(sparse_arg, context, layout, layout_r, residual_block_size)
+    matrix_layout::M
+    rowcol_block_size::NTuple{2, Int}
+    function LinearizedBlock(sparse_arg, context, layout, layout_row, layout_col, rowcol_dim)
         jac, jac_buf = build_jacobian(sparse_arg, context, layout)
-        I = typeof(layout)
-        J = typeof(layout_r)
-        new{I, J}(jac, jac_buf, layout, layout_r, residual_block_size)
+        new{typeof(layout), typeof(layout_row), typeof(layout_col)}(jac, jac_buf, layout, rowcol_dim)
     end
 end
+
+function LinearizedBlock(A, bz::Tuple, row_layout, col_layout)
+    pattern = to_sparse_pattern(A)
+    layout = matrix_layout(A)
+    context = DefaultContext(matrix_layout = layout)
+    sys = LinearizedBlock(pattern, context, layout, row_layout, col_layout, bz)
+    J = sys.jac
+    for (i, j, entry) in zip(findnz(A)...)
+        J[i, j] = entry
+    end
+    return sys
+end
+
+row_block_size(b::LinearizedBlock) = b.rowcol_block_size[1]
+col_block_size(b::LinearizedBlock) = b.rowcol_block_size[2]
 
 LinearizedType = Union{LinearizedSystem, LinearizedBlock}
 
@@ -91,6 +103,19 @@ function LinearizedSystem(sparse_arg, context, layout; r = nothing, dx = nothing
 
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
 end
+
+function LinearizedSystem(A, r = nothing)
+    pattern = to_sparse_pattern(A)
+    layout = matrix_layout(A)
+    context = DefaultContext(matrix_layout = layout)
+    sys = LinearizedSystem(pattern, context, layout, r = r)
+    J = sys.jac
+    for (i, j, entry) in zip(findnz(A)...)
+        J[i, j] = entry
+    end
+    return sys
+end
+
 
 function build_jacobian(sparse_arg, context, layout)
     @assert sparse_arg.layout == layout
@@ -142,7 +167,7 @@ function prepare_solve!(sys)
     # Default is to do nothing.
 end
 
-function linear_operator(sys::LinearizedSystem)
+function linear_operator(sys::LinearizedSystem; skip_red = false)
     if block_size(sys) == 1
         op = LinearOperator(sys.jac)
     else
@@ -153,36 +178,54 @@ function linear_operator(sys::LinearizedSystem)
     return op
 end
 
-function linear_operator(block::LinearizedBlock{T, T}) where {T <: Any}
+function linear_operator(block::LinearizedBlock{T, T, T}; skip_red = false) where T
     return LinearOperator(block.jac)
 end
 
-function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorLayout})
-    # Handle this case specifically:
-    # A linearized block at [i,j] where residual vector entry [j] is from a system
-    # with block ordering, but row [i] has equation major ordering
-    bz = block.residual_block_size
+function linear_operator(block::LinearizedBlock{EquationMajorLayout, EquationMajorLayout, BlockMajorLayout}; skip_red = false)
+    # Matrix is equation major.
+    # Row (and output) is equation major.
+    # Column (and vector we multiply with) is block major
+    bz = col_block_size(block)
     jac = block.jac
-    return linear_operator_mixed_block(jac, bz)
-end
-
-function linear_operator_mixed_block(jac, bz)
     function apply!(res, x, α, β::T) where T
         # Note: This is unfortunately allocating, but applying
         # with a simple view leads to degraded performance.
-        x_v = collect(reshape(reshape(x, bz, :)', :))
+        x_v = collect(block_major_to_equation_major_view(x, bz))
+        mul!(res, jac, x_v, α, β)
+    end
+    n, m = size(jac)
+    return LinearOperator(Float64, n, m, false, false, apply!)
+end
+
+function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorLayout, EquationMajorLayout}; skip_red = false)
+    # Handle this case specifically:
+    # Matrix is equation major.
+    # Row (and output) is block major.
+    # Column (and vector we multiply with) is equation major.
+    bz = row_block_size(block)
+    jac = block.jac
+
+    function apply!(res, x, α, β::T) where T
+        # mul!(C, A, B, α, β) -> C
+        # A*B*α + C*β
+        tmp_cell_major = jac*x
+        if α != one(T)
+            lmul!(α, tmp_cell_major)
+        end
+        tmp_block_major = equation_major_to_block_major_view(tmp_cell_major, bz)
+
         if β == zero(T)
-            mul!(res, jac, x_v)
-            if α != one(T)
-                lmul!(α, res)
-            end
+            @. res = tmp_block_major
         else
-            error("Not implemented.")
+            if β != one(T)
+                lmul!(β, res)
+            end
+            @. res += tmp_block_major
         end
     end
     n, m = size(jac)
-    op = LinearOperator(Float64, n, m, false, false, apply!)
-    return op
+    return LinearOperator(Float64, n, m, false, false, apply!)
 end
 
 function vector_residual(sys)
@@ -204,8 +247,10 @@ function solve!(sys::LSystem, linsolve::Nothing)
 end
 
 function solve!(sys)
-    if length(sys.dx) > 50000
-        error("System too big for default direct solver.")
+    limit = 50000
+    n = length(sys.dx)
+    if n > limit
+        error("System too big for default direct solver. (Limit is $limit, system was $n by $n.")
     end
     J = sys.jac
     r = sys.r

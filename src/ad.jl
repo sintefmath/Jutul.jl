@@ -1,4 +1,4 @@
-export CompactAutoDiffCache, as_value, TervAutoDiffCache
+export CompactAutoDiffCache, as_value, TervAutoDiffCache, number_of_entities
 
 """
 An AutoDiffCache is a type that holds both a set of AD values and a map into some
@@ -49,7 +49,18 @@ end
 """
 Get number of entities a cache is defined on.
 """
-@inline function number_of_entities(c::TervAutoDiffCache) c.number_of_entities end
+@inline number_of_entities(c::TervAutoDiffCache) = c.number_of_entities
+
+
+"""
+Number of entities for vector stored in state (just the number of elements)
+"""
+@inline number_of_entities(c::T) where T<:AbstractVector = length(c)
+
+"""
+Number of entities for matrix stored in state (convention is number of columns)
+"""
+@inline number_of_entities(c::T) where T<:AbstractArray = size(c, 2)
 
 """
 Get the entries of the main autodiff cache for an equation.
@@ -149,6 +160,7 @@ function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_entitie
 end
 
 function injective_alignment!(cache::TervAutoDiffCache, jac, entity, context;
+                                    layout = matrix_layout(context),
                                     target_index = 1:cache.number_of_entities,
                                     source_index = 1:cache.number_of_entities,
                                     number_of_entities_source = nothing,
@@ -171,12 +183,11 @@ function injective_alignment!(cache::TervAutoDiffCache, jac, entity, context;
         end
         N = length(source_index)
         @assert length(target_index) == N
-        do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context)
+        do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
     end
 end
 
-function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context)
-    layout = matrix_layout(context)
+function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
     jpos = cache.jacobian_positions
     np = cache.npartials
     for index in 1:length(source_index)
@@ -195,9 +206,7 @@ end
 
 
 
-function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext)
-
-    layout = matrix_layout(context)
+function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext, layout)
     jpos = cache.jacobian_positions
     t = index_type(context)
 
@@ -421,6 +430,10 @@ Take value of AD.
     return ForwardDiff.value(x)
 end
 
+@inline function value(x::AbstractArray)
+    return value.(x)
+end
+
 """
     value(d::Dict)
 Call value on all elements of some Dict.
@@ -428,7 +441,7 @@ Call value on all elements of some Dict.
 function value(d::AbstractDict)
     v = copy(d)
     for key in keys(v)
-        v[key] = value.(v[key])
+        v[key] = value(v[key])
     end
     return v
 end

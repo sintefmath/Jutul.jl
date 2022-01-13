@@ -268,55 +268,76 @@ function update_primary_variable!(state, p::FractionVariables, state_symbol, mod
     unit_sum_update!(s, p, model, dx)
 end
 
-function unit_sum_update!(s, p, model, dx)
+function unit_sum_update!(s, p, model, dx, entity = Cells())
     nf, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
     maxval, minval = maximum_value(p), minimum_value(p)
-    active_cells = active_entities(model.domain, Cells())
+    active_cells = active_entities(model.domain, entity)
     if nf == 2
-        maxval = min(1 - minval, maxval)
-        minval = max(minval, maxval - 1)
-        @inbounds for (i, cell) in enumerate(active_cells)
-            v = value(s[1, cell])
-            dv = dx[i]
-            dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
-            s[1, cell] += dv
-            s[2, cell] -= dv
-        end
+        unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
     else
-        if false
+        if true
             # Preserve direction
-            for cell in active_cells
-                w = 1.0
-                # First pass: Find the relaxation factors that keep all fractions in [0, 1]
-                # and obeying the maximum change targets
-                dlast0 = 0
-                @inbounds for i = 1:(nf-1)
-                    v = value(s[i, cell])
-                    dv0 = dx[cell + (i-1)*nu]
-                    dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
-                    dlast0 -= dv0
-                    w = pick_relaxation(w, dv, dv0)
-                end
-                # Do the same thing for the implicit update of the last value
-                dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
-                w = pick_relaxation(w, dlast, dlast0)
-
-                @inbounds for i = 1:(nf-1)
-                    s[i, cell] += w*dx[cell + (i-1)*nu]
-                end
-                @inbounds s[nf, cell] += w*dlast0
-            end
+            unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
         else
             # Preserve update magnitude
-            for cell in active_cells
-                unit_update_local(s, dx, nf, nu, abs_max, minval, maxval)
-            end
+            unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
         end
     end
 end
 
-function unit_update_local(s, dx, nf, nu, abs_max, minval, maxval)
+function unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
+    nactive = length(active_cells)
+    @batch minbatch = 1000 for active_ix in eachindex(active_cells)
+        full_cell = active_cells[active_ix]
+        unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nactive, minval, maxval, abs_max)
+    end
+end
+
+function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minval, maxval, abs_max)
+    # active_ix: Index into active cells (used to access dx)
+    # full_cell: Index into full set of cells (used to access s)
+    w = 1.0
+    # First pass: Find the relaxation factors that keep all fractions in [0, 1]
+    # and obeying the maximum change targets
+    dlast0 = 0
+    @inbounds for i = 1:(nf-1)
+        v = value(s[i, full_cell])
+        dv0 = dx[active_ix + (i-1)*nu]
+        dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
+        dlast0 -= dv0
+        w = pick_relaxation(w, dv, dv0)
+    end
+    # Do the same thing for the implicit update of the last value
+    dlast = choose_increment(value(s[nf, full_cell]), dlast0, abs_max, nothing, minval, maxval)
+    w = pick_relaxation(w, dlast, dlast0)
+
+    @inbounds for i = 1:(nf-1)
+        s[i, full_cell] += w*dx[active_ix + (i-1)*nu]
+    end
+    @inbounds s[nf, full_cell] += w*dlast0
+end
+
+function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
+    F = eltype(dx)
+    maxval = min(1 - minval, maxval)
+    minval = max(minval, maxval - 1)
+    @inbounds for (i, cell) in enumerate(active_cells)
+        v = value(s[1, cell])::F
+        dv = dx[i]
+        dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
+        s[1, cell] += dv
+        s[2, cell] -= dv
+    end
+end
+
+function unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
+    @batch minbatch = 1000 for cell in active_cells
+        unit_update_magnitude_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
+    end
+end
+
+function unit_update_magnitude_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
     # First pass: Find the relaxation factors that keep all fractions in [0, 1]
     # and obeying the maximum change targets
     dlast0 = 0
@@ -362,7 +383,7 @@ associated_entity(model, var::ConstantVariables) = var.entity
 
 function transfer(context, v::ConstantVariables)
     constants = transfer(context, v.constants)
-    return ConstantVariables(constants, v.entity, v.single_entity)
+    return ConstantVariables(constants, v.entity, single_entity = v.single_entity)
 end
 
 function initialize_variable_value(model, var::ConstantVariables, val; perform_copy = true)
@@ -388,3 +409,24 @@ function initialize_primary_variable_ad!(state, model, var::ConstantVariables, s
     error("$sym is declared to be constants - cannot be primary variables.")
 end
 
+default_value(model, variable::ConstantVariables) = nothing
+
+subvariable(var::ConstantVariables, map::TrivialGlobalMap) = var
+
+function subvariable(var::ConstantVariables, map::FiniteVolumeGlobalMap)
+    if var.entity == Cells()
+        if !var.single_entity
+            c = copy(var.constants)
+            p_i = map.cells
+            if isa(c, AbstractVector)
+                c = c[p_i]
+            else
+                c = c[:, p_i]
+            end
+            var = ConstantVariables(c, var.entity, single_entity = false)
+        end
+    else
+        error("Mappings other than cells not implemented")
+    end
+    return var
+end

@@ -1,4 +1,5 @@
-export plot_well!
+export plot_well!, plot_interactive
+using .GLMakie
 function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kwarg...)
     pts, tri, mapper = triangulate_outer_surface(grid)
 
@@ -140,7 +141,11 @@ function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth =
     raw = g.data
     coord_range(i) = maximum(raw.cells.centroids[:, i]) - minimum(raw.cells.centroids[:, i])
 
-    z = raw.cells.centroids[:, 3]
+    if size(raw.cells.centroids, 2) == 3
+        z = raw.cells.centroids[:, 3]
+    else
+        z = [0.0, 1.0]
+    end
     bottom = maximum(z)
     top = minimum(z)
 
@@ -151,8 +156,15 @@ function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth =
     rng = top - bottom
     s = top + top_factor*rng
 
-    c = vec(Int64.(w["cells"]))
+    wc = w["cells"]
+    if !isa(wc, AbstractArray)
+        wc = [wc]
+    end
+    c = vec(Int64.(wc))
     pts = raw.cells.centroids[[c[1], c...], :]
+    if size(pts, 2) == 2
+        pts = hcat(pts, zeros(size(pts, 1)))
+    end
     pts[1, 3] = s
 
     l = pts[1, :]

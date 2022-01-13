@@ -1,12 +1,12 @@
 using Terv
-export get_flow_volume
+export fluid_volume
 
 #########
 # utils #
 #########
 
 
-function get_flow_volume(grid::MinimalECTPFAGrid)
+function fluid_volume(grid::MinimalECTPFAGrid)
     grid.volumes
 end
 
@@ -98,7 +98,7 @@ function align_to_jacobian!(
     variable_offset = 0
     )
     fd = law.flow_discretization
-    neighborship = get_neighborship(model.domain.grid)
+    M = global_map(model.domain)
 
     acc = law.accumulation
     hflux_cells = law.half_face_flux_cells
@@ -108,7 +108,7 @@ function align_to_jacobian!(
         target_offset = equation_offset, source_offset = variable_offset
         )
     half_face_flux_cells_alignment!(
-        hflux_cells, acc, jac, model.context, neighborship, fd, 
+        hflux_cells, acc, jac, model.context, M, fd, 
         target_offset = equation_offset, source_offset = variable_offset
         )
 end
@@ -311,7 +311,7 @@ end
 @terv_secondary function update_as_secondary!(
     acc, tv::Mass, model, param, C
     )
-    V = get_flow_volume(model.domain.grid)
+    V = fluid_volume(model.domain.grid)
     vf = model.domain.grid.vol_frac
     @tullio acc[i] = C[i] * V[i] * vf[i]
 end
@@ -319,7 +319,7 @@ end
 @terv_secondary function update_as_secondary!(
     acc, tv::Energy, model, param, T
     )
-    V = get_flow_volume(model.domain.grid)
+    V = fluid_volume(model.domain.grid)
     vf = model.domain.grid.vol_frac
     @tullio acc[i] = T[i] * V[i] * vf[i]
 end

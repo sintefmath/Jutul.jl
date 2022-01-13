@@ -1,13 +1,11 @@
 #=
 Compare the simulation of electrolyte in 1D in Julia and Matlab
 =#
-using Terv
-using MAT
 
 ##
 
 function test_simple_elyte_1d()
-    name = "model1d_"
+    name = "model1d"
     fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
     exported = MAT.matread(fn)
     ex_model = exported["model"]

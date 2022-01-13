@@ -2,7 +2,6 @@
 A simple model of electrolyte without energy conservation
 =#
 
-using Terv
 export SimpleElyte
 
 struct SimpleElyte <: Electrolyte end

@@ -1,5 +1,4 @@
 export compute_half_face_trans, compute_face_trans
-using LinearAlgebra
 
 function compute_half_face_trans(g, perm)
     compute_half_face_trans(g.cell_centroids, g.face_centroids, g.normals, g.areas, perm, g.neighbors)

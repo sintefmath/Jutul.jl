@@ -4,7 +4,7 @@ A component with electric potential, concentration and temperature
 The different potentials are independent (diagonal onsager matrix),
 and conductivity, diffusivity is constant.
 =#
-@time using Terv
+using Terv
 using MAT
 using Plots
 
@@ -310,192 +310,19 @@ function test_battery()
     for (k, p) in parameters
         p[:tolerances][:default] = 1e-5
     end
+        sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
+        timesteps = exported_all["schedule"]["step"]["val"][1:27]
+        cfg = simulator_config(sim)
+        cfg[:linear_solver] = nothing
+        cfg[:info_level] = -1
+        cfg[:debug_level] = 0
+        cfg[:max_residual] = 1e20
+        @profiler states, report = simulate(sim, timesteps, forces = forces, config = cfg)
+    # stateref = exported_all["states"]
 
-    sim = Simulator(model, state0 = state0, parameters = parameters, copy_state = true)
-    timesteps = exported_all["schedule"]["step"]["val"][1:27]
-    cfg = simulator_config(sim)
-    cfg[:linear_solver] = nothing
-    cfg[:info_level] = 1
-    cfg[:debug_level] = 0
-    cfg[:max_residual] = 1e20
-    states, report = simulate(sim, timesteps, forces = forces, config = cfg)
-    stateref = exported_all["states"]
-
-    return states, grids, state0, stateref, parameters, exported_all, model, timesteps
+    return nothing # states, grids, state0, stateref, parameters, exported_all, model, timesteps
 end
 
 ##
 
-states, grids, state0, stateref, parameters, exported_all, model, timesteps = test_battery();
-
-##
-
-using Plots
-
-function plot_phi()
-    plot1 = Plots.plot([], []; title = "Phi", size=(1000, 800))
-
-    p = plot!(plot1, legend = false)
-    submodels = (:CC, :NAM, :ELYTE, :PAM, :PP)
-    # submodels = (:NAM, :ELYTE, :PAM)
-    # submodels = (:CC, :NAM)
-    # submodels = (:ELYTE,)
-    # submodels = (:PP, :PAM)
-
-    var = :Phi
-    steps = size(states, 1)
-    for i in 1:steps
-        for mod in submodels
-            x = grids[mod]["cells"]["centroids"]
-            plot!(plot1, x, states[i][mod][var], lw=2, color=RGBA(0.5, 0.5, 0.5, 0.5))
-        end
-    end
-    return plot1
-end
-plot1 = plot_phi()
-closeall()
-display(plot1)
-
-##
-
-for (i, dt) in enumerate(timesteps)
-    refstep=i
-    sim_step=i
-
-    p1 = Plots.plot(title="Phi", size=(1000, 800))
-    p2 = Plots.plot(title="Flux", size=(1000, 800))
-    p3 = Plots.plot(title="C", size=(1000, 800))
-
-    fields = ["CurrentCollector","ElectrodeActiveComponent"]
-    components = ["NegativeElectrode","PositiveElectrode"]
-    #components = ["NegativeElectrode"]
-    #components = ["PositiveElectrode"]
-    #components = []
-    for component = components
-        for field in fields
-            G = exported_all["model"][component][field]["G"]
-            x = G["cells"]["centroids"]
-            xf= G["faces"]["centroids"][end]
-            xfi= G["faces"]["centroids"][2:end-1]
-
-            state = stateref[refstep][component]
-            phi_ref = state[field]["phi"]
-            j_ref = state[field]["j"]
-
-            Plots.plot!(p1,x,phi_ref;linecolor="red")
-            Plots.plot!(p2,xfi,j_ref;linecolor="red")
-            if haskey(state[field],"c")
-                c = state[field]["c"]
-                Plots.plot!(p3,x,c;linecolor="red")
-            end
-        end
-    end
-
-    fields = [] 
-    fields = ["Electrolyte"]
-
-    for field in fields
-        G = exported_all["model"][field]["G"]
-        x = G["cells"]["centroids"]
-        xf= G["faces"]["centroids"][end]
-        xfi= G["faces"]["centroids"][2:end-1]
-
-        state = stateref[refstep]
-        phi_ref = state[field]["phi"]
-        j_ref = state[field]["j"]
-
-        Plots.plot!(p1,x,phi_ref;linecolor="red")
-        Plots.plot!(p2,xfi,j_ref;linecolor="red")
-        if haskey(state[field],"cs")
-            c = state[field]["cs"][1]
-            Plots.plot!(p3,x,c;linecolor="red")
-        end
-    end
-
-    ##
-
-
-    mykeys = [:CC, :NAM] # :ELYTE]
-    mykeys = [:PP, :PAM]
-    #mykeys = [:ELYTE]
-    mykeys =  keys(grids)
-    for key in mykeys
-        G = grids[key]
-        x = G["cells"]["centroids"]
-        xf= G["faces"]["centroids"][end]
-        xfi= G["faces"]["centroids"][2:end-1]     
-        p = plot(p1, p2, layout = (1, 2), legend = false)
-        phi = states[sim_step][key].Phi
-        Plots.plot!(
-            p1, x, phi; markershape=:circle, linestyle=:dot, seriestype = :scatter
-            )
-        
-        if haskey(states[sim_step][key], :TotalCurrent)
-            j = states[sim_step][key].TotalCurrent[1:2:end-1]
-        else
-            j = -states[sim_step][key].TPkGrad_Phi[1:2:end-1]
-        end
-        
-        Plots.plot!(p2, xfi, j; markershape=:circle,linestyle=:dot, seriestype = :scatter)
-        if(haskey(states[sim_step][key], :C))
-            cc = states[sim_step][key].C
-            Plots.plot!(p3, x, cc; markershape=:circle, linestyle=:dot, seriestype = :scatter)
-        end
-    end
-
-    display(plot!(p1, p2, p3,layout = (3, 1), legend = false))
-end
-
-##
-E = Matrix{Float64}(undef,27,2)
-for step in 1:27
-    phi = states[step][:PP].Phi[10]
-    E[step,1] = phi
-    phi_ref = stateref[step]["PositiveElectrode"]["ElectrodeActiveComponent"]["phi"][10]
-    E[step,2] = phi_ref
-end
-
-##
-function print_diff_j(s, sref, n)
-    k = :TotalCurrent
-    if haskey(s[n], k)
-        Δ = abs.(1 .+ (sref[n][k]) ./ s[n][k][2:2:end])
-    else
-        Δ = abs.(1 .+ (-sref[n][k]) ./ s[n][:TPkGrad_Phi][2:2:end])
-    end
-    println("k = $k, n = $n")
-    println("rel.diff = $(maximum(Δ))")
-end
-##
-EAC = "ElectrodeActiveComponent"
-PE = "PositiveElectrode"
-NE = "NegativeElectrode"
-
-# Transelate bw states from matlab and julia
-j2m = Dict{Symbol, String}(
-    # :C                  => "cs",
-    :T                  => "T",
-    :Phi                => "phi", 
-    :Conductivity       => "conductivity",
-    :Diffusivity        => "D",
-    :TotalCurrent       => "j",
-    :ChargeCarrierFlux  => "LiFlux", # This is not correct - CC is more than Li
-    :ELYTE              => "Electrolyte"
-)
-m2j = Dict(value => key for (key, value) in j2m)
-
-rs = stateref[:, 1]
-rs_elyte = [s[j2m[:ELYTE]] for s in rs];
-rs_pam = [s[PE][EAC] for s in rs];
-
-states_pam = [s[:PAM] for s in states];
-states_elyte = [s[:ELYTE] for s in states];
-##
-
-states_comp = states_elyte
-ref_states = get_ref_states(j2m, rs_elyte);
-for (n, state) in enumerate(states_comp)
-    print_diff_j(states_comp, ref_states, n)
-end
-
-
+test_battery();

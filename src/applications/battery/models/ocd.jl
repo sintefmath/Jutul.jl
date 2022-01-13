@@ -1,5 +1,3 @@
-using Terv, Polynomials
-
 export Grafite, NMC111, OCD, nChargeCarriers, cMax, volumetricSurfaceArea
 
 struct Grafite <: ActiveMaterial end

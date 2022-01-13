@@ -42,7 +42,7 @@ struct MultiModel <: TervModel
         end
         if isnothing(groups) && !isnothing(context)
             for (i, m) in enumerate(models)
-                if m.context != context
+                if matrix_layout(m.context) != matrix_layout(context)
                     error("No groups provided, but the outer context does not match the inner context for model $i")
                 end
             end

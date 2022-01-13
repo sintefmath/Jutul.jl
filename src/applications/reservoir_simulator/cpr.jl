@@ -17,15 +17,27 @@ mutable struct CPRPreconditioner <: TervPreconditioner
     update_frequency::Integer # Update frequency for AMG hierarchy (and pressure part if partial_update = false)
     update_interval::Symbol   # iteration, ministep, step, ...
     partial_update            # Perform partial update of AMG and update pressure system
-    function CPRPreconditioner(p = LUPreconditioner(), s = ILUZeroPreconditioner(); strategy = :quasi_impes, weight_scaling = :unit, update_frequency = 1, update_interval = :iteration, partial_update = true)
+    function CPRPreconditioner(p = default_psolve(), s = ILUZeroPreconditioner(); strategy = :quasi_impes, weight_scaling = :unit, update_frequency = 1, update_interval = :iteration, partial_update = true)
         new(nothing, nothing, nothing, nothing, nothing, nothing, p, s, strategy, weight_scaling, nothing, update_frequency, update_interval, partial_update)
     end
 end
 
+function default_psolve(; max_levels = 10, max_coarse = 10, type = :smoothed_aggregation)
+    gs_its = 1
+    cyc = AlgebraicMultigrid.V()
+    if type == :smoothed_aggregation
+        m = smoothed_aggregation
+    else
+        m = ruge_stuben
+    end
+    gs = GaussSeidel(ForwardSweep(), gs_its)
+    return AMGPreconditioner(m, max_levels = max_levels, max_coarse = max_coarse, presmoother = gs, postsmoother = gs, cycle = cyc)
+end
+
 function update!(cpr::CPRPreconditioner, arg...)
     update_p = update_cpr_internals!(cpr, arg...)
-    update!(cpr.system_precond, arg...)
-    if update_p
+    @timeit "s-precond" update!(cpr.system_precond, arg...)
+    @timeit "p-precond" if update_p
         update!(cpr.pressure_precond, cpr.A_p, cpr.r_p)
     elseif cpr.partial_update
         partial_update!(cpr.pressure_precond, cpr.A_p, cpr.r_p)
@@ -57,8 +69,8 @@ function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage, rec
     rmodel = model.models.Reservoir
     ps = rmodel.primary_variables[:Pressure].scale
     if do_p_update || cpr.partial_update
-        w_p = update_weights!(cpr, rmodel, s, A, ps)
-        update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size, model.context)
+        @timeit "weights" w_p = update_weights!(cpr, rmodel, s, A, ps)
+        @timeit "pressure system" update_pressure_system!(cpr.A_p, A, w_p, cpr.block_size, model.context)
     end
     return do_p_update
 end
@@ -116,12 +128,12 @@ function apply!(x, cpr::CPRPreconditioner, r, arg...)
     else
         y = r
         # Construct right hand side by the weights
-        update_p_rhs!(r_p, y, bz, w_p)
+        @timeit "p rhs" update_p_rhs!(r_p, y, bz, w_p)
         # Apply preconditioner to pressure part
-        apply!(Δp, cpr.pressure_precond, r_p)
-        correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
-        apply!(x, cpr.system_precond, y)
-        increment_pressure!(x, Δp, bz)
+        @timeit "p apply" apply!(Δp, cpr.pressure_precond, r_p)
+        @timeit "r update" correct_residual_for_dp!(y, x, Δp, bz, cpr.buf, cpr.A_ps)
+        @timeit "s apply" apply!(x, cpr.system_precond, y)
+        @timeit "Δp" increment_pressure!(x, Δp, bz)
     end
 end
 
@@ -165,8 +177,14 @@ end
 
 function true_impes!(w, acc, r, n, bz, arg...)
     if bz == 2
-        # Hard coded variant
+        # Hard coded variants
         true_impes_2!(w, acc, r, n, bz, arg...)
+    elseif bz == 3
+        true_impes_3!(w, acc, r, n, bz, arg...)
+    elseif bz == 4
+        true_impes_4!(w, acc, r, n, bz, arg...)
+    elseif bz == 5
+        true_impes_5!(w, acc, r, n, bz, arg...)
     else
         true_impes_gen!(w, acc, r, n, bz, arg...)
     end
@@ -190,6 +208,45 @@ function true_impes_2!(w, acc, r, n, bz, p_scale, scaling)
     end
 end
 
+function M_entry(acc, i, j, c)
+    return @inbounds acc[j, c].partials[i]
+end
+
+function true_impes_3!(w, acc, r, n, bz, s, scaling)
+    r_p = SVector{3}(r)
+    f(i, j, c) = M_entry(acc, i, j, c)
+    for c in 1:n
+        A = @SMatrix    [s*f(1, 1, c) s*f(1, 2, c) s*f(1, 3, c);
+                           f(2, 1, c) f(2, 2, c) f(2, 3, c);
+                           f(3, 1, c) f(3, 2, c) f(3, 3, c)]
+        invert_w!(w, A, r_p, c, bz, scaling)
+    end
+end
+
+function true_impes_4!(w, acc, r, n, bz, s, scaling)
+    r_p = SVector{4}(r)
+    f(i, j, c) = M_entry(acc, i, j, c)
+    for c in 1:n
+        A = @SMatrix    [s*f(1, 1, c) s*f(1, 2, c) s*f(1, 3, c) s*f(1, 4, c);
+                           f(2, 1, c) f(2, 2, c) f(2, 3, c) f(2, 4, c);
+                           f(3, 1, c) f(3, 2, c) f(3, 3, c) f(3, 4, c);
+                           f(4, 1, c) f(4, 2, c) f(4, 3, c) f(4, 4, c)]
+        invert_w!(w, A, r_p, c, bz, scaling)
+    end
+end
+
+function true_impes_5!(w, acc, r, n, bz, s, scaling)
+    r_p = SVector{5}(r)
+    f(i, j, c) = M_entry(acc, i, j, c)
+    for c in 1:n
+        A = @SMatrix    [s*f(1, 1, c) s*f(1, 2, c) s*f(1, 3, c) s*f(1, 4, c) s*f(1, 5, c);
+                         f(2, 1, c) f(2, 2, c) f(2, 3, c) f(2, 4, c) f(2, 5, c);
+                         f(3, 1, c) f(3, 2, c) f(3, 3, c) f(3, 4, c) f(3, 5, c);
+                         f(4, 1, c) f(4, 2, c) f(4, 3, c) f(4, 4, c) f(4, 5, c);
+                         f(5, 1, c) f(5, 2, c) f(5, 3, c) f(5, 4, c) f(5, 5, c)]
+        invert_w!(w, A, r_p, c, bz, scaling)
+    end
+end
 
 function true_impes_gen!(w, acc, r, n, bz, p_scale, scaling)
     r_p = SVector{bz}(r)
@@ -227,13 +284,18 @@ end
 end
 
 function update_p_rhs!(r_p, y, bz, w_p)
-    @batch for i in eachindex(r_p)
-        v = 0.0
-        @inbounds for b = 1:bz
-            v += y[(i-1)*bz + b]*w_p[b, i]
+    if false
+        @batch minbatch = 1000 for i in eachindex(r_p)
+            v = 0.0
+            @inbounds for b = 1:bz
+                v += y[(i-1)*bz + b]*w_p[b, i]
+            end
+            @inbounds r_p[i] = v
         end
-        @inbounds r_p[i] = v
     end
+    n = length(y) ÷ bz
+    yv = reshape(y, bz, n)
+    @tullio r_p[i] = yv[b, i]*w_p[b, i]
 end
 
 function correct_residual_for_dp!(y, x, Δp, bz, buf, A)
@@ -242,14 +304,25 @@ function correct_residual_for_dp!(y, x, Δp, bz, buf, A)
     # A x' = y'
     # y' = y - A*Δx
     # x = A \ y' + Δx
-    @batch for i in eachindex(Δp)
-        @inbounds x[(i-1)*bz + 1] = Δp[i]
-        @inbounds for j = 2:bz
-            x[(i-1)*bz + j] = 0.0
-        end
+    @batch minbatch = 1000 for i in eachindex(Δp)
+        set_dp!(x, bz, Δp, i)
     end
-    mul!(buf, A, x)
-    @. y -= buf
+    if false
+        mul!(buf, A, x)
+        @batch minbatch = 1000 for i in eachindex(y)
+            @inbounds y[i] -= buf[i]
+        end
+    else
+        mul!(y, A, x, -1.0, 1.0)
+    end
+    # @. y -= buf
+end
+
+@inline function set_dp!(x, bz, Δp, i)
+    @inbounds x[(i-1)*bz + 1] = Δp[i]
+    @inbounds for j = 2:bz
+        x[(i-1)*bz + j] = 0.0
+    end
 end
 
 function increment_pressure!(x, Δp, bz)

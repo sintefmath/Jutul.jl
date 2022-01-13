@@ -10,8 +10,8 @@ function degrees_of_freedom_per_entity(model::SimulationModel{G, S}, v::TotalMas
 end
 
 function select_primary_variables_system!(S, domain, system::CompositionalSystem, formulation)
-    S[:Pressure] = Pressure()
-    S[:OverallMoleFractions] = OverallMoleFractions()
+    S[:Pressure] = Pressure(max_rel = 0.2, minimum = 101325)
+    S[:OverallMoleFractions] = OverallMoleFractions(dz_max = 0.1)
 end
 
 function select_equations_system!(eqs, domain, system::MultiComponentSystem, formulation)
@@ -20,14 +20,18 @@ function select_equations_system!(eqs, domain, system::MultiComponentSystem, for
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:TwoPhaseCompositionalSystem}
-    Φ = get_pore_volume(model)
-    ρ = storage.state.PhaseMassDensities
-    s = storage.state.Saturations
+    tm = storage.state0.TotalMasses
     a = active_entities(model.domain, Cells())
-
+    function scale(i)
+        @inbounds c = a[i]
+        t = 0.0
+        @inbounds for i = 1:size(tm, 1)
+            t += tm[i, c]
+        end
+        return t
+    end
+    @tullio max e[j] := abs(r[j, i]) * dt / scale(i)
     names = model.system.equation_of_state.mixture.component_names
-
-    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[1, a[i]]*s[1, a[i]] + ρ[2, i]*s[2, i])*Φ[a[i]])
     R = Dict("CNV" => (errors = e, names = names))
     return R
 end
@@ -96,7 +100,7 @@ function component_source(src, S, kr, mu, F, X, Y, rho, rhoS, c)
     return q
 end
 
-function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::TwoPhaseLiquidVapor)
+function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, state)
     λ_l = local_mobility(kr, mu, 1, cell)
     λ_v = local_mobility(kr, mu, 2, cell)
 
@@ -126,28 +130,28 @@ function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::TwoPhaseLiqu
     return f
 end
 
-function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseLiquid)
-    ρ_l = rho[1, cell]
-    x = X[c, cell]
-    if t == MassSource
-        f = x
-    elseif t == VolumeSource
-        f = x*ρ_l
-    elseif t == StandardVolumeSource
-        f = rhoS[1]*x
-    end
-    return f
-end
+# function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseLiquid)
+#     ρ_l = rho[1, cell]
+#     x = X[c, cell]
+#     if t == MassSource
+#         f = x
+#     elseif t == VolumeSource
+#         f = x*ρ_l
+#     elseif t == StandardVolumeSource
+#         f = rhoS[1]*x
+#     end
+#     return f
+# end
 
-function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseVapor)
-    ρ_v = rho[2, cell]
-    y = Y[c, cell]
-    if t == MassSource
-        f = y
-    elseif t == VolumeSource
-        f = y*ρ_v
-    elseif t == StandardVolumeSource
-        f = rhoS[2]*y
-    end
-    return f
-end
+# function compositional_out_f(kr, mu, X, Y, rho, rhoS, c, cell, t, ::SinglePhaseVapor)
+#     ρ_v = rho[2, cell]
+#     y = Y[c, cell]
+#     if t == MassSource
+#         f = y
+#     elseif t == VolumeSource
+#         f = y*ρ_v
+#     elseif t == StandardVolumeSource
+#         f = rhoS[2]*y
+#     end
+#     return f
+# end

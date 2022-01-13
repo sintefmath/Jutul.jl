@@ -61,7 +61,7 @@ struct MultiSegmentWell <: WellGrid
                                                         perforation_cells = nothing,
                                                         segment_models = nothing,
                                                         reference_depth = 0,
-                                                        accumulator_volume = 1e-3*mean(volumes),
+                                                        accumulator_volume = mean(volumes),
                                                         reservoir_symbol = :Reservoir, kwarg...)
         nv = length(volumes)
         nc = nv + 1
@@ -84,7 +84,7 @@ struct MultiSegmentWell <: WellGrid
         perforation_cells = vec(perforation_cells)
 
         if isnothing(segment_models)
-            Δp = SegmentWellBoreFrictionHB(100.0, 1e-4, 0.1)
+            Δp = SegmentWellBoreFrictionHB(1.0, 1e-4, 0.1)
             segment_models = repeat([Δp], nseg)
         else
             segment_models::AbstractVector
@@ -100,7 +100,7 @@ end
 
 function common_well_setup(nr; dz = nothing, WI = nothing, gravity = gravity_constant)
     if isnothing(dz)
-        @warn "dz provided for well. Assuming no gravity."
+        @warn "dz not provided for well. Assuming no gravity."
         gdz = zeros(nr)
     else
         @assert length(dz) == nr  "Must have one connection drop dz per perforated cell"
@@ -147,15 +147,15 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
     e = eps(typeof(value(v)))
     v = s*max(abs(v), e)
     # Scaling - assuming input is total mass rate
-    v = v/(π*ρ*((D⁰/2)^2 - (Dⁱ/2)^2));
-    Re = abs(v*ρ*ΔD)/μ;
+    v = v/(π*ρ*((D⁰/2)^2 - (Dⁱ/2)^2))
+    Re = abs(v*ρ*ΔD)/μ
     # Friction model - empirical relationship
     Re_l, Re_t = f.laminar_limit, f.turbulent_limit
     if is_laminar_flow(f, Re)
-        f = 16/Re_l;
+        f = 16/Re_l
     else
         # Either turbulent or intermediate flow regime. We need turbulent value either way.
-        f_t = (-3.6*log(6.9/Re +(R/(3.7*D⁰))^(10/9))/log(10))^(-2);
+        f_t = (-3.6*log(6.9/Re +(R/(3.7*D⁰))^(10/9))/log(10))^(-2)
         if is_turbulent_flow(f, Re)
             # Turbulent flow
             f = f_t
@@ -164,7 +164,7 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
             f_l = 16/Re_l
             Δf = f_t - f_l
             ΔRe = Re_t - Re_l
-            f = f_l + (Δf / ΔRe)*(Re - Re_l);
+            f = f_l + (Δf / ΔRe)*(Re - Re_l)
         end
     end
     Δp = -(2*s*L/ΔD)*(f*ρ*v^2)
@@ -270,16 +270,17 @@ function update_equation!(eq::PotentialDropBalanceWell, storage, model, dt)
     conn_data = mass_flow.conn_data
 
     for cd in conn_data
-        update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W, single_phase)
+        f = cd.face
+        seg = W.segment_models[f]
+        update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W, seg, single_phase)
     end
 end
 
-function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W, single_phase)
+function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W, seg_model, single_phase)
     gΔz = cd.gdz
     self = cd.self
     other = cd.other
     face = cd.face
-    seg_model = W.segment_models[face]
 
     if single_phase
         s_self, s_other = s, s
@@ -329,7 +330,7 @@ function update_linearized_system_equation!(nz, r, model, equation::PotentialDro
 end
 
 
-function get_flow_volume(grid::WellGrid)
+function fluid_volume(grid::WellGrid)
     return grid.volumes
 end
 
@@ -431,11 +432,14 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
 
     res_q = ct.crossterm_source
     well_q = ct.crossterm_target
-    apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, 1)
+    sys_t = target_model.system
+    # sys_s = source_model.system
+    # @assert sys_t == sys_s "Wells must have the same fluid system as the reservoir ($sys_t ≠ $sys_s)"
+    apply_well_reservoir_sources!(sys_t, res_q, well_q, state_res, state_well, perforations, 1)
 end
 
 
-function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, perforations, sgn)
+function apply_well_reservoir_sources!(sys::Union{ImmiscibleSystem, SinglePhaseSystem}, res_q, well_q, state_res, state_well, perforations, sgn)
     p_res = state_res.Pressure
     p_well = state_well.Pressure
     if haskey(state_res, :RelativePermeabilities)
@@ -446,7 +450,8 @@ function apply_well_reservoir_sources!(res_q, well_q, state_res, state_well, per
         kr_value = nothing
     end
     μ = state_res.PhaseViscosities
-    ρλ_i = state_res.MassMobilities
+    kr = state_res.RelativePermeabilities
+    ρ = state_res.PhaseMassDensities
 
     ρ_w = state_well.PhaseMassDensities
     if haskey(state_well, :Saturations)
@@ -466,10 +471,7 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, ρ_w,
     nph = size(μ, 1)
 
     @inbounds for i in eachindex(perf.self)
-        si = perf.self[i]
-        ri = perf.reservoir[i]
-        wi = perf.WI[i]
-        gdz = perf.gdz[i]
+        si, ri, wi, gdz = unpack_perf(perf, i)
         if gdz != 0
             if isnothing(s_w)
                 ρ_mix = ρ_w[1, si]
@@ -480,34 +482,105 @@ function perforation_sources!(target, perf, p_res, p_well, kr, μ, ρλ_i, ρ_w,
         else
             ρgdz = 0
         end
-        dp = wi*(p_well[si] - p_res[ri] + ρgdz)
+        @inbounds dp = wi*(p_well[si] - p_res[ri] + ρgdz)
         if dp > 0
             # Injection
             λ_t = 0
-            for ph in 1:nph
-                if isnothing(kr)
-                    λ_t += 1/μ[ph, ri]
-                else
-                    λ_t += kr[ph, ri]/μ[ph, ri]
-                end
+            @inbounds for ph in 1:nph
+                λ_t += kr[ph, ri]/μ[ph, ri]
             end
             # @debug "λ_t: $(value(λ_t)) dp: $(value(dp)) ρgdz: $(value(ρgdz))"
-            for c in 1:nc
-                if isnothing(s_w)
-                    mass_mix = ρ_w[c, si]
-                else
-                    mass_mix = s_w[c, si]*ρ_w[c, si]
-                end
+            @inbounds for c in 1:nc
+                mass_mix = s_w[c, si]*ρ_w[c, si]
                 target[c, i] = sgn*mass_mix*λ_t*dp
             end
         else
             # Production
-            for c in 1:nc
-                target[c, i] = sgn*ρλ_i[c, ri]*dp
+            @inbounds for ph in 1:nc
+                c_i = ρ[ph, ri]*kr[ph, ri]/μ[ph, ri]
+                target[ph, i] = sgn*c_i*dp
             end
         end
     end
 end
+
+function unpack_perf(perf, i)
+    @inbounds si = perf.self[i]
+    @inbounds ri = perf.reservoir[i]
+    @inbounds wi = perf.WI[i]
+    @inbounds gdz = perf.gdz[i]
+    return (si, ri, wi, gdz)
+end
+
+function apply_well_reservoir_sources!(sys::Union{TwoPhaseCompositionalSystem}, res_q, well_q, state_res, state_well, perforations, sgn)
+    p_res = state_res.Pressure
+    p_well = state_well.Pressure
+
+    val = x -> local_ad(x, nothing)
+
+    μ = state_res.PhaseViscosities
+    kr = state_res.RelativePermeabilities
+    ρ = state_res.PhaseMassDensities
+    X = state_res.LiquidMassFractions
+    Y = state_res.VaporMassFractions
+
+    ρ_w = state_well.PhaseMassDensities
+    s_w = state_well.Saturations
+    X_w = state_well.LiquidMassFractions
+    Y_w = state_well.VaporMassFractions
+    perforation_sources_comp!(well_q, perforations, val(p_res),     p_well,  val(kr), val(μ), val(ρ), val(X), val(Y),    ρ_w,      s_w,      X_w,      Y_w, sgn)
+    perforation_sources_comp!(res_q,  perforations,     p_res,  val(p_well),     kr,      μ,      ρ,      X,      Y, val(ρ_w), val(s_w), val(X_w), val(Y_w), sgn)
+end
+
+function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y, ρ_w, s_w, X_w, Y_w, sgn)
+    # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
+    nc = size(X, 1)
+    nph = size(μ, 1)
+    @assert nph == 2
+    L = 1
+    V = 2
+
+    @inbounds for i in eachindex(perf.self)
+        si, ri, wi, gdz = unpack_perf(perf, i)
+        S_l = s_w[L, si]
+        ρ_l = ρ_w[L, si]
+
+        S_v = s_w[V, si]
+        ρ_v = ρ_w[V, si]
+
+        if gdz != 0
+            ρ_mix = ρ_l*S_l + ρ_v*S_v
+            ρgdz = gdz*ρ_mix
+        else
+            ρgdz = 0
+        end
+        @inbounds dp = wi*(p_well[si] - p_res[ri] + ρgdz)
+        λ_l = kr[L, ri]/μ[L, ri]
+        λ_v = kr[V, ri]/μ[V, ri]
+
+        if dp > 0
+            # Injection
+            λ_t = λ_l + λ_v
+            volume_rate = sgn*λ_t*dp
+            q_L = S_l*ρ_l*volume_rate
+            q_V = S_v*ρ_v*volume_rate
+            @inbounds for c in 1:nc
+                component_mass_rate = q_L*X_w[c, si] + q_V*Y_w[c, si]
+                target[c, i] = component_mass_rate
+            end
+        else
+            ρ_l = ρ[L, ri]
+            ρ_v = ρ[V, ri]
+
+            # Production
+            @inbounds for c in 1:nc
+                c_i = ρ_l*λ_l*X[c, ri] + ρ_v*λ_v*Y[c, ri]
+                target[c, i] = sgn*c_i*dp
+            end
+        end
+    end
+end
+
 
 
 # Selection of primary variables
@@ -522,7 +595,7 @@ end
 # Some utilities
 function mix_by_mass(masses, total, values)
     v = 0
-    for i in eachindex(masses)
+    @inbounds for i in eachindex(masses)
         v += masses[i]*values[i]
     end
     return v/total
@@ -530,7 +603,7 @@ end
 
 function mix_by_saturations(s, values)
     v = 0
-    for i in eachindex(s)
+    @inbounds for i in eachindex(s)
         v += s[i]*values[i]
     end
     return v

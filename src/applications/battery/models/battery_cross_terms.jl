@@ -1,5 +1,3 @@
-using Terv
-
 # interface flux between current conductors
 # 1e7 should be the harmonic mean of hftrans/conductivity
 function ccinterfaceflux!(src, phi_1,phi_2)

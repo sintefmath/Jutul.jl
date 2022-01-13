@@ -9,6 +9,9 @@ function Base.getindex(ls::LinearizedSystem, i, j = i)
     return ls
 end
 
+number_of_subsystems(ls::LinearizedSystem) = 1
+number_of_subsystems(ls::MultiLinearizedSystem) = size(ls.subsystems, 1)
+
 do_schur(sys) = sys.reduction == :schur_apply
 
 function equation_major_to_block_major_view(a, block_size)
@@ -21,7 +24,7 @@ function block_major_to_equation_major_view(a, block_size)
     return x
 end
 
-@inline major_to_minor(n, m, i) = n*((i - 1) % m) + 1 + ((i - 1) ÷ m)
+@inline major_to_minor(n::I, m::I, i::I) where I = (n*((i - 1) % m) + 1 + ((i - 1) ÷ m))::I
 @inline from_block_index(bz, nc, i) = major_to_minor(bz, nc, i)
 @inline from_entity_index(bz, nc, i) = major_to_minor(nc, bz, i)
 
@@ -86,8 +89,8 @@ function vector_residual(sys::MultiLinearizedSystem)
     return r
 end
 
-function linear_operator(sys::MultiLinearizedSystem)
-    if do_schur(sys)
+function linear_operator(sys::MultiLinearizedSystem; skip_red = false)
+    if do_schur(sys) && !skip_red
         B, C, D, E = get_schur_blocks!(sys, false)
         # A = B - CE\D
         n = size(C, 1)
@@ -98,54 +101,56 @@ function linear_operator(sys::MultiLinearizedSystem)
         op = LinearOperator(Float64, n, n, false, false, apply!)
     else
         S = sys.subsystems
-        d = size(S, 2)
-        ops = map(linear_operator, permutedims(S))
-        op = hvcat(d, ops...)
+        if true
+            @assert size(S) == (2, 2) "Only supported for 2x2 blocks"
+            ops = map(linear_operator, S)
+            op = vcat(hcat(ops[1, 1], ops[1, 2]), hcat(ops[2, 1], ops[2, 2]))
+        else
+            d = size(S, 2)
+            ops = map(linear_operator, vec(S))
+            op = hvcat(size(S), ops...)
+        end
     end
     return op
 end
 
 function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
     if do_schur(sys)
-        B, C, D, E, a, b = get_schur_blocks!(sys)
         bz = block_size(sys[1, 1])
         if bz == 1
             Δx = dx
         else
             Δx = block_major_to_equation_major_view(dx, bz)
         end
-
+        buf_a = sys.schur_buffer[1]
+        buf_b = sys.schur_buffer[2]
+        _, C, D, E, a, b = get_schur_blocks!(sys)
         n = length(dx)
         m = length(sys.dx)
 
         A = view(sys.dx, 1:n)
         B = view(sys.dx, (n+1):m)
 
-        @. A = -dx
-        buf_a = sys.schur_buffer[1]
-        buf_b = sys.schur_buffer[2]
-        # We want to do (in-place):
-        # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
-        buf_a .= Δx
-        mul!(buf_b, D, buf_a)
-        # now buf_b = D*Δx
-        @. buf_b -= b
-        ldiv!(B, E, buf_b)
+        schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_a, buf_b)
     else
-        sys.dx .= -dx
+        @tullio sys.dx[i] = -dx[i]
     end
 end
 
-function schur_mul3!(res, r_type::Float64, B, C, D, E, x, α, β::T) where T
-    if β == zero(T)
-        tmp = B*x - C*(E\(D*x))
-        res .= tmp
-        if α != one(T)
-            lmul!(α, res)
-        end
-    else
-        error("Not implemented yet.")
+function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_a, buf_b)
+
+    @tullio A[i] = -dx[i]
+    # We want to do (in-place):
+    # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
+    @inbounds for i in eachindex(Δx)
+        buf_a[i] = Δx[i]
     end
+    mul!(buf_b, D, buf_a)
+    # now buf_b = D*Δx
+    @inbounds for i in eachindex(b)
+        buf_b[i] -= b[i]
+    end
+    ldiv!(B, E, buf_b)
 end
 
 function schur_mul_float!(res, B, C, D, E, x, α, β::T) where T
@@ -160,27 +165,31 @@ function schur_mul_float!(res, B, C, D, E, x, α, β::T) where T
 end
 
 function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x_v, α, β::T) where T
-    @assert β == zero(T) "Only β == 0 implemented."
-    # compute B*x
-    mul!(res_v, B, x_v)
+    # @assert β == zero(T) "Only β == 0 implemented."
     N = length(res)
     n = N ÷ block_size
-    # Convert to cell major view
-    @inbounds for b = 1:block_size
-        @. a_buf[from_block_urange(block_size, n, b)] = x[from_entity_urange(block_size, n, b)]
+    # compute B*x
+    mul!(res_v, B, x_v, α, β)
+    for i = 1:n
+        for b = 1:block_size
+            ix = (i-1)*block_size + b
+            jx = (b-1)*n + i
+            @inbounds a_buf[jx] = x[ix]
+        end
     end
     mul!(b_buf, D, a_buf)
     ldiv!(E, b_buf)
     mul!(a_buf, C, b_buf)
     # Convert back to block major and subtract
-    @inbounds for b = 1:block_size
-        @. res[from_entity_urange(block_size, n, b)] -= a_buf[from_block_urange(block_size, n, b)]
+    @batch minbatch = 1000 for i = 1:n
+        for b = 1:block_size
+            ix = (i-1)*block_size + b
+            jx = (b-1)*n + i
+            @inbounds res[ix] -= a_buf[jx]
+        end
     end
     # Simple version:
     # res .= B*x - C*(E\(D*x))
-    if α != one(T)
-        lmul!(α, res)
-    end
 end
 
 function schur_mul!(res, a_buf, b_buf, r_type, B, C, D, E, x, α, β)

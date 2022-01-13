@@ -45,16 +45,16 @@ Equations are stored sequentially in rows, derivatives of same type in columns:
 struct EquationMajorLayout <: TervMatrixLayout
     as_adjoint::Bool
 end
-function EquationMajorLayout() EquationMajorLayout(false) end
-function is_cell_major(::EquationMajorLayout) false end
+EquationMajorLayout() = EquationMajorLayout(false)
+is_cell_major(::EquationMajorLayout) = false
 """
 Domain entities sequentially in rows:
 """
 struct UnitMajorLayout <: TervMatrixLayout
     as_adjoint::Bool
 end
-function UnitMajorLayout() UnitMajorLayout(false) end
-function is_cell_major(::UnitMajorLayout) true end
+UnitMajorLayout() = UnitMajorLayout(false)
+is_cell_major(::UnitMajorLayout) = true
 
 """
 Same as UnitMajorLayout, but the nzval is a matrix
@@ -62,13 +62,11 @@ Same as UnitMajorLayout, but the nzval is a matrix
 struct BlockMajorLayout <: TervMatrixLayout
     as_adjoint::Bool
 end
-function BlockMajorLayout() BlockMajorLayout(false) end
-function is_cell_major(::BlockMajorLayout) true end
+BlockMajorLayout() = BlockMajorLayout(false)
+is_cell_major(::BlockMajorLayout) = true
 
-matrix_layout(::Any) = EquationMajorLayout(false)
-function represented_as_adjoint(layout)
-    layout.as_adjoint
-end
+matrix_layout(::Nothing) = EquationMajorLayout(false)
+represented_as_adjoint(layout) = layout.as_adjoint
 
 struct SparsePattern{L}
     I
@@ -138,13 +136,16 @@ end
 
 thread_batch(::Any) = 1000
 
-"Default context - not really intended for threading"
+"Default context"
 struct DefaultContext <: CPUTervContext
     matrix_layout
-    function DefaultContext(; matrix_layout = EquationMajorLayout())
-        new(matrix_layout)
+    minbatch::Int64
+    function DefaultContext(; matrix_layout = EquationMajorLayout(), minbatch = 1000)
+        new(matrix_layout, minbatch)
     end
 end
+
+thread_batch(c::DefaultContext) = c.minbatch
 
 matrix_layout(c::DefaultContext) = c.matrix_layout
 
@@ -328,8 +329,14 @@ struct ConstantVariables <: GroupedVariables
     constants
     entity::TervUnit
     single_entity::Bool
-    function ConstantVariables(constants, entity = Cells(), single_entity = nothing)
+    function ConstantVariables(constants, entity = Cells(); single_entity = nothing)
+        if !isa(constants, AbstractArray)
+            @assert length(constants) == 1
+            constants = [constants]
+        end
         if isnothing(single_entity)
+            # Single entity means that we have one (or more) values that are given for all entities
+            # by a single representative entity
             single_entity = isa(constants, AbstractVector)
         end
         if isa(constants, CuArray) && single_entity
@@ -339,6 +346,8 @@ struct ConstantVariables <: GroupedVariables
     end
 end
 
+import Base: getindex, @propagate_inbounds, parent, size, axes
+
 struct ConstantWrapper{R}
     data::Vector{R}
     nrows::Integer
@@ -346,10 +355,11 @@ struct ConstantWrapper{R}
         new{eltype(data)}(data, n)
     end
 end
+Base.length(c::ConstantWrapper) = length(c.data)
 Base.size(c::ConstantWrapper) = (length(c.data), c.nrows)
 Base.size(c::ConstantWrapper, i) = i == 1 ? length(c.data) : c.nrows
-Base.getindex(c::ConstantWrapper, i) = error("Not implemented")
-Base.getindex(c::ConstantWrapper{R}, i, j) where R = c.data[i]::R
+Base.@propagate_inbounds Base.getindex(c::ConstantWrapper{R}, i, j) where R = c.data[i]::R
+Base.@propagate_inbounds Base.getindex(c::ConstantWrapper{R}, i) where R = c.data[1]::R
 Base.setindex!(c::ConstantWrapper, arg...) = setindex!(c.data, arg...)
 Base.ndims(c::ConstantWrapper) = 2
 Base.view(c::ConstantWrapper, ::Colon, i) = c.data
@@ -371,48 +381,46 @@ struct TervStorage
 end
 
 function convert_to_immutable_storage(S::TervStorage)
-    return TervStorage(convert_to_immutable_storage(S.data))
+    tup = convert_to_immutable_storage(data(S))
+    return TervStorage(tup)
 end
 
 function Base.getproperty(S::TervStorage, name::Symbol)
-    data = getfield(S, :data)
-    if name == :data
-        return data
-    else
-        return getproperty(data, name)
-    end
+    Base.getproperty(data(S), name)
 end
 
+data(S::TervStorage) = getfield(S, :data)
+
 function Base.setproperty!(S::TervStorage, name::Symbol, x)
-    setproperty!(S.data, name, x)
+    Base.setproperty!(data(S), name, x)
 end
 
 function Base.setindex!(S::TervStorage, x, name::Symbol)
-    setindex!(S.data, x, name)
+    setindex!(data(S), x, name)
 end
 
 function Base.getindex(S::TervStorage, name::Symbol)
-    getindex(S.data, name)
+    getindex(data(S), name)
 end
 
 function Base.haskey(S::TervStorage, name::Symbol)
-    return haskey(S.data, name)
+    return Base.haskey(data(S), name)
 end
 
 function Base.keys(S::TervStorage)
-    return keys(S.data)
+    return Base.keys(data(S))
 end
 
 
 function Base.show(io::IO, t::MIME"text/plain", storage::TervStorage)
-    data = storage.data
-    if isa(data, AbstractDict)
+    D = data(storage)
+    if isa(D, AbstractDict)
         println("TervStorage (mutable) with fields:")
     else
         println("TervStorage (immutable) with fields:")
     end
-    for key in keys(data)
-        println("  $key: $(typeof(data[key]))")
+    for key in keys(D)
+        println("  $key: $(typeof(D[key]))")
     end
 end
 
@@ -433,13 +441,13 @@ struct TrivialGlobalMap end
 
 struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
     # Full set -> global set
-    cells::AbstractVector{T}
+    cells::Vector{T}
     # Inner set -> full set
-    inner_to_full_cells::AbstractVector{T}
+    inner_to_full_cells::Vector{T}
     # Full set -> inner set
-    full_to_inner_cells::AbstractVector{T}
-    faces::AbstractVector{T}
-    cell_is_boundary::AbstractVector{Bool}
+    full_to_inner_cells::Vector{T}
+    faces::Vector{T}
+    cell_is_boundary::Vector{Bool}
     function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing)
         n = length(cells)
         if isnothing(is_boundary)

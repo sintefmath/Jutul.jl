@@ -1,4 +1,3 @@
-using Terv
 
 export half_face_two_point_kgrad
 
@@ -90,8 +89,7 @@ function corr_type(::Conservation{T}) return T() end
 # Called from uppdate_state_dependents
 function apply_boundary_conditions!(storage, parameters, model::ECModel)
     equations = storage.equations
-    for key in keys(equations)
-        eq = equations[key]
+    for eq in equations
         apply_bc_to_equation!(storage, parameters, model, eq)
     end
 end

@@ -9,7 +9,6 @@ export setup_storage, update_equations!
 
 export Pressure, Saturations, TotalMasses, TotalMass
 
-using CUDA
 # Abstract multiphase system
 
 get_phases(sys::MultiPhaseSystem) = sys.phases
@@ -44,7 +43,7 @@ end
 function subforce(s::AbstractVector{S}, model) where S<:SourceTerm
     # Just to be safe
     s = deepcopy(s)
-    m = model.domain.global_map
+    m = global_map(model.domain)
 
     n = length(s)
     keep = repeat([false], n)
@@ -67,9 +66,13 @@ end
 
 ## Systems
 # Immiscible multiphase system
-struct ImmiscibleSystem <: MultiPhaseSystem
-    phases::AbstractVector
+struct ImmiscibleSystem{T} <: MultiPhaseSystem where T<:Tuple
+    phases::T
 end
+
+ImmiscibleSystem(phases::AbstractVector) = ImmiscibleSystem(tuple(phases...))
+
+number_of_components(sys::ImmiscibleSystem) = number_of_phases(sys)
 
 # function ImmiscibleSystem(phases)
 #    @assert length(phases) > 1 "System should have at least two phases. For single-phase, use SinglePhaseSystem instead."
@@ -82,13 +85,8 @@ end
 
 phase_names(system) = get_name.(get_phases(system))
 
-function get_phases(sys::SinglePhaseSystem)
-    return [sys.phase]
-end
-
-function number_of_phases(::SinglePhaseSystem)
-    return 1
-end
+get_phases(sys::SinglePhaseSystem) = [sys.phase]
+number_of_phases(::SinglePhaseSystem) = 1
 
 ## Phases
 # Abstract phase
@@ -180,10 +178,12 @@ function select_equations_system!(eqs, domain, system::MultiPhaseSystem, formula
     eqs[:mass_conservation] = (ConservationLaw, nph)
 end
 
-get_pore_volume(model) = get_flow_volume(model.domain.grid)
+pore_volume(model::SimulationModel) = fluid_volume(model.domain.grid)
+pore_volume(grid) = fluid_volume(grid)
 
-get_flow_volume(grid::MinimalTPFAGrid) = grid.pore_volumes
-get_flow_volume(grid) = 1
+fluid_volume(domain::DiscretizedDomain) = fluid_volume(domain.grid)
+fluid_volume(grid::MinimalTPFAGrid) = grid.pore_volumes
+fluid_volume(grid) = 1.0
 
 
 function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::ConservationLaw, force::V, time) where {V <: AbstractVector{SourceTerm{I, F, T}}, D, S<:MultiPhaseSystem} where {I, F, T}
@@ -196,7 +196,7 @@ function apply_forces_to_equation!(storage, model::SimulationModel{D, S}, eq::Co
     end
     mu = state.PhaseViscosities
     rhoS = get_reference_densities(model, storage)
-    insert_phase_sources!(acc, kr, mu, rhoS, force)
+    insert_phase_sources!(acc, model, kr, mu, rhoS, force)
 end
 
 function local_mobility(kr::Real, mu, ph, c)
@@ -207,9 +207,9 @@ function local_mobility(kr, mu, ph, c)
     return kr[ph, c]./mu[ph, c]
 end
 
-function phase_source(src, rhoS, kr, mu, ph)
+function phase_source(c, src, rhoS, kr, mu, ph)
     v = src.value
-    c = src.cell
+    # c = src.cell
     if v > 0
         q = in_phase_source(src, v, c, kr, mu, ph)
     else
@@ -238,16 +238,19 @@ function out_phase_source(src, v, c, kr, mu, ph)
     return v*f
 end
 
-function insert_phase_sources!(acc, kr, mu, rhoS, sources)
+function insert_phase_sources!(acc, model, kr, mu, rhoS, sources)
     nph = size(acc, 1)
+    M = global_map(model.domain)
     for src in sources
+        c = full_cell(src.cell, M)
         for ph = 1:nph
-            @inbounds acc[ph, src.cell] -= phase_source(src, rhoS[ph], kr, mu, ph)
+            q_ph = phase_source(c, src, rhoS[ph], kr, mu, ph)
+            @inbounds acc[ph, src.cell] -= q_ph
         end
     end
 end
 
-function insert_phase_sources!(acc::CuArray, kr, mu, rhoS, sources)
+function insert_phase_sources!(acc::CuArray, model, kr, mu, rhoS, sources)
     sources::CuArray
     ix = map(cell, sources)
     if !isa(rhoS, CuArray)
@@ -255,15 +258,16 @@ function insert_phase_sources!(acc::CuArray, kr, mu, rhoS, sources)
         rhoS = CuArray(rhoS)
     end
     rhoS::CuArray
-    @tullio acc[ph, ix[i]] = acc[ph, ix[i]] - phase_source(sources[i], rhoS[ph], kr, mu, ph)
+    @tullio acc[ph, ix[i]] = acc[ph, ix[i]] - phase_source(sources[i].cell, sources[i], rhoS[ph], kr, mu, ph)
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:MultiPhaseSystem}
-    Φ = get_pore_volume(model)
-    ρ = storage.state.PhaseMassDensities
-    a = active_entities(model.domain, Cells())
+    M = global_map(model.domain)
+    v = x -> active_view(x, M)
+    Φ = v(storage.state.FluidVolume)
+    ρ = v(storage.state.PhaseMassDensities)
 
-    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, a[i]])*Φ[a[i]])
+    @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, i])*Φ[i])
     names = phase_names(model.system)
     R = Dict("CNV" => (errors = e, names = names))
     return R
@@ -290,4 +294,16 @@ function cpr_weights_no_partials!(w, model::SimulationModel{R, S}, state, r, n, 
             @inbounds w[ph, i] = 1/value(ρ[ph, i])
         end
     end
+end
+
+function capillary_pressure(model, s)
+    pck = :CapillaryPressures
+    if haskey(s, pck)
+        pc = s[pck]
+        ref_index = min(2, number_of_phases(model.system))
+    else
+        pc = nothing
+        ref_index = 1
+    end
+    return(pc, ref_index)
 end

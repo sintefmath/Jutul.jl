@@ -49,15 +49,17 @@ function get_matrix_view(v0, n, m, transp = false, offset = 0)
     return v
 end
 
-
 function check_increment(dx, pvar, key)
-    if any(!isfinite, dx)
+    has_bad_values = any(!isfinite, dx)
+    if has_bad_values
         bad = findall(isfinite.(dx) .== false)
         n_bad = length(bad)
         n = min(10, length(bad))
         bad = bad[1:n]
         @warn "$key: $n_bad non-finite values found. Indices: (limited to 10) $bad"
     end
+    ok = !has_bad_values
+    return ok
 end
 
 # function get_row_view(v::AbstractVector, n, m, row, transp = false, offset = 0)
@@ -84,6 +86,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
     if info_level == 1
         return
     end
+    id = haskey(cfg, :id) ? "$(cfg[:id]): " : ""
     count_crit = 0
     count_ok = 0
     worst_val = 0.0
@@ -173,7 +176,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
         worst_print = @sprintf "%2.3e (ϵ = %2.3e)" worst_val*worst_tol worst_tol
         s = ". Worst value:\n\t - $worst_name at $worst_print."
     end
-    @info "It. $iteration/$max_its: $count_ok/$count_crit criteria converged$s"
+    @info "$(id)It. $iteration/$max_its: $count_ok/$count_crit criteria converged$s"
 
     if print_table
         m_offset = Int64(has_models)
@@ -337,6 +340,8 @@ function pick_time_unit(t)
             return u
         end
     end
+    # Fallback
+    return (1, "Seconds")
 end
 
 function print_stats(reports::AbstractArray)
@@ -356,13 +361,14 @@ function print_iterations(stats; title = "Number of iterations")
     nmini = stats.ministeps
 
     tot_time = stats.time_sum.total
-    u, s = pick_time_unit(tot_time)
+    time = map(f -> tot_time/stats[f], flds)
+    u, s = pick_time_unit(time)
 
     for (i, f) in enumerate(flds)
         raw = stats[f]
         data[i, 1] = raw/nstep         # Avg per step
         data[i, 2] = raw/nmini         # Avg per mini
-        data[i, 3] = (tot_time/raw)/u  # Time each
+        data[i, 3] = time[i]/u         # Time each
         data[i, 4] = stats[:wasted][f] # Wasted total
         data[i, 5] = raw               # Total
     end

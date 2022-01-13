@@ -29,7 +29,7 @@ end
 states, model, report = perform_test();
 ## Plot results
 using GLMakie
-tmp = vcat(map((x) -> x.Saturations[1, :]', states)...)
+tmp = vcat(map((x) -> x[:Saturations][1, :]', states)...)
 f = Figure()
 ax = Axis(f[1, 1], xlabel = "Depth", ylabel = "Time", title = "Gravity segregation")
 GLMakie.heatmap!(ax, tmp)

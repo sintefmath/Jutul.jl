@@ -54,70 +54,131 @@ end
 """
 Half face Darcy flux with separate potential.
 """
-function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
-    pot = storage.state.CellNeighborPotentialDifference
-    mob = storage.state.MassMobilities
-
+function update_half_face_flux!(law::ConservationLaw, storage, model, dt, flow_type)
+    state = storage.state
     flux = get_entries(law.half_face_flux_cells)
-    conn_data = law.flow_discretization.conn_data
-    if size(pot, 1) == 1
-        # Scalar potential
-        @tullio flux[ph, i] = spu_upwind_mult_index(conn_data[i], ph, pot[1, i], mob)
-    else
-        # Multiphase potential
-        @tullio flux[ph, i] = spu_upwind_mult_index(conn_data[i], ph, pot[ph, i], mob)
-    end
+    update_half_face_flux!(flux, state, model, dt, flow_type)
 end
 
-"""
-Half face Darcy flux with separate potential. (Compositional version)
-"""
-function update_half_face_flux!(law, storage, model::SimulationModel{D, S}, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {D,S<:TwoPhaseCompositionalSystem,U,K,T<:DarcyMassMobilityFlow}
-    state = storage.state
-    pot = state.CellNeighborPotentialDifference
-    X = state.LiquidMassFractions
-    Y = state.VaporMassFractions
-    kr = state.RelativePermeabilities
-    μ = state.PhaseViscosities
-    ρ = state.PhaseMassDensities
-    fr = state.FlashResults
+function update_half_face_flux!(flux::AbstractArray, state, model, dt, flow_disc::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
+    rho, kr, mu, p = state.PhaseMassDensities, state.RelativePermeabilities, state.PhaseViscosities, state.Pressure
+    pc, ref_index = capillary_pressure(model, state)
+    conn_data = flow_disc.conn_data
+    ctx = model.context
+    single_potential = !flow_disc.gravity && isnothing(pc)
+    phases = get_phases(model.system)
+    update_immiscible_fluxes!(flux, ctx, conn_data, rho, kr, mu, p, pc, ref_index, phases, single_potential)
+end
 
-    flux = get_entries(law.half_face_flux_cells)
-    conn_data = law.flow_discretization.conn_data
-
-    if size(pot, 1) == 1
-        # Scalar potential
-        for i in 1:length(pot)
-            @views compositional_flux_single_pot!(flux[:, i], fr, conn_data[i], pot[1, i], X, Y, ρ, kr, μ)
+function update_immiscible_fluxes!(flux, context, conn_data, rho, kr, mu, p, pc, ref_index, phases, single_potential)
+    mb = thread_batch(context)
+    if single_potential
+        @batch minbatch = mb for i in eachindex(conn_data)
+            immiscible_multiphase_flux_single_pot!(flux, i, conn_data, phases, p, rho, kr, mu)
         end
     else
-        error()
         # Multiphase potential
-        @tullio flux[c, i] = spu_upwind_mult_index(conn_data[i], ph, pot[ph, i], mob)
+        @batch minbatch = mb for i in eachindex(conn_data)
+            immiscible_multiphase_flux_multi_pot!(flux, i, conn_data, phases, p, rho, kr, mu, pc, ref_index)
+        end
     end
 end
 
-
-"""
-Half face Darcy flux in a single fused operation (faster for immiscible models)
-"""
-function update_half_face_flux!(law, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlowFused}
-    mf = model.domain.discretizations.mass_flow
-
-    state = storage.state
-    p = state.Pressure
-    mob = state.MassMobilities
-    rho = state.PhaseMassDensities
-
-    flux = get_entries(law.half_face_flux_cells)
-    mf = law.flow_discretization
-    conn_data = mf.conn_data
-    if mf.gravity
-        @tullio flux[ph, i] = half_face_two_point_flux_fused_gravity(conn_data[i], p, view(mob, ph, :), view(rho, ph, :))
+function update_immiscible_fluxes!(flux, context::SingleCUDAContext, conn_data, rho, kr, mu, p, pc, ref_index, single_potential)
+    if single_potential
+        # Scalar potential
+        @tullio flux[ph, i] = immiscible_flux_for_phase_single_pot(conn_data[i], ph, p, rho, kr, mu)
     else
-        @tullio flux[ph, i] = half_face_two_point_flux_fused(conn_data[i], p, view(mob, ph, :))
+        # Multiphase potential
+        @tullio flux[ph, i] = immiscible_flux_for_phase_multi_pot(conn_data[i], ph, p, rho, kr, mu, pc, ref_index)
     end
 end
+
+function immiscible_multiphase_flux_multi_pot!(flux, conn_i, conn_data, phases, p, rho, kr, mu, pc, ref_index)
+    @inbounds cd = conn_data[conn_i]
+    self, other, gΔz, T = cd.self, cd.other, cd.gdz, cd.T
+    ∂ = (x) -> local_ad(x, self)
+
+    kr = ∂(kr)
+    mu = ∂(mu)
+    rho = ∂(rho)
+    p = ∂(p)
+    pc = ∂(pc)
+    for ph in eachindex(phases)
+        @inbounds flux[ph, conn_i] = immiscible_flux_gravity(self, other, ph, kr, mu, rho, p, pc, T, gΔz, ref_index)
+    end
+end
+
+@inline function immiscible_flux_for_phase_multi_pot(cd, ph, p, rho, kr, mu, pc, ref_index)
+    c, i, gΔz, T = cd.self, cd.other, cd.gdz, cd.T
+    ∂ = (x) -> local_ad(x, c)
+    return immiscible_flux_gravity(c, i, ph, ∂(kr), ∂(mu), ∂(rho), ∂(p), ∂(pc), T, gΔz, ref_index)
+end
+
+@inline function immiscible_flux_gravity(c, i, ph, kᵣ, μ, ρ, P, pc, T, gΔz, ref_index)
+    @inbounds ρ_c = ρ[ph, c]
+    @inbounds ρ_i = ρ[ph, i]
+    ρ_avg = (ρ_i + ρ_c)/2
+    Δpc = capillary_gradient(pc, c, i, ph, ref_index)
+    @inbounds Δp = P[c] - P[i] + Δpc
+    θ = -T*(Δp + gΔz*ρ_avg)
+    if θ < 0
+        # Flux is leaving the cell
+        up = c
+        ρ = ρ_c
+    else
+        # Flux is entering the cell
+        up = i
+        ρ = ρ_i
+    end
+    @inbounds ρλᶠ = ρ*kᵣ[ph, up]/μ[ph, up]
+    return ρλᶠ*θ
+end
+
+
+function immiscible_multiphase_flux_single_pot!(flux, conn_i, conn_data, phases, p, rho, kr, mu)
+    @inbounds cd = conn_data[conn_i]
+    self, other, T = cd.self, cd.other, cd.T
+    ∂ = (x) -> local_ad(x, self)
+
+    kr = ∂(kr)
+    mu = ∂(mu)
+    rho = ∂(rho)
+    p = ∂(p)
+    for ph in eachindex(phases)
+        @inbounds flux[ph, conn_i] = immiscible_flux_no_gravity(self, other, ph, kr, mu, rho, p, T)
+    end
+end
+
+function immiscible_flux_for_phase_single_pot(cd, ph, p, rho, kr, mu)
+    c, i, T = cd.self, cd.other, cd.T
+    ∂ = (x) -> local_ad(x, c)
+    return immiscible_flux_no_gravity(c, i, ph, ∂(kr), ∂(mu), ∂(rho), ∂(p), T)
+end
+
+function immiscible_flux_no_gravity(c, i, ph, kᵣ, μ, ρ, P, T)
+    @inbounds θ = -T*(P[c] - P[i])
+    if θ < 0
+        # Flux is leaving the cell
+        up_c = c
+    else
+        # Flux is entering the cell
+        up_c = i
+    end
+end
+
+
+capillary_gradient(::Nothing, c_l, c_r, ph, ph_ref) = 0.0
+function capillary_gradient(pc, c_l, c_r, ph, ph_ref)
+    if ph == ph_ref
+        Δp_c = 0.0
+    elseif ph < ph_ref
+        Δp_c = pc[ph, c_l] - pc[ph, c_r]
+    else
+        Δp_c = pc[ph-1, c_l] - pc[ph-1, c_r]
+    end
+end
+
 
 
 """
@@ -182,47 +243,90 @@ Two point Darcy flux with gravity - inner version that takes in cells and transm
 end
 
 
-function compositional_flux_single_pot!(q, flash_state, conn_data, θ, X, Y, ρ, kr, μ)
-    if θ < 0
-        ix = conn_data.self
-        f = (x) -> x
+"""
+Half face Darcy flux with separate potential. (Compositional version)
+"""
+function update_half_face_flux!(flux::AbstractArray, state, model::SimulationModel{D, S}, dt, flow_disc::TwoPointPotentialFlow{U, K, T}) where {D,S<:TwoPhaseCompositionalSystem,U,K,T<:DarcyMassMobilityFlow}
+    X = state.LiquidMassFractions
+    Y = state.VaporMassFractions
+    kr = state.RelativePermeabilities
+    μ = state.PhaseViscosities
+    ρ = state.PhaseMassDensities
+    P = state.Pressure
+    Sat = state.Saturations
+
+    conn_data = flow_disc.conn_data
+    pc, ref_index = capillary_pressure(model, state)
+
+    nc, nf = size(flux)
+    tb = thread_batch(model.context)
+    @batch minbatch = tb for i = 1:nf
+        @inbounds qi = view(flux, :, i)
+        @inbounds cd = conn_data[i]
+        compositional_flux_gravity!(qi, cd, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
+    end
+end
+
+function compositional_flux_gravity!(q, cd, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
+    c, i, T = cd.self, cd.other, cd.T
+    if haskey(cd, :gdz)
+        gΔz = cd.gdz
     else
-        ix = conn_data.other
-        f = value
+        gΔz = 0.0
     end
-    s = flash_state[ix].state
-    compositional_flux_single_pot!(q, s, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
+    ∂ = (x) -> local_ad(x, c)
+    return compute_compositional_flux_gravity!(q, c, i, ∂(P), ∂(X), ∂(Y), ∂(ρ), ∂(kr), ∂(Sat), ∂(μ), ∂(pc), T, gΔz, ref_index)
 end
 
-function compositional_flux_single_pot!(q, ::TwoPhaseLiquidVapor, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
-    kr_l = f(kr[1, ix])
-    kr_v = f(kr[2, ix])
-    ρ_l = f(ρ[1, ix])
-    ρ_v = f(ρ[2, ix])
-    μ_l = f(μ[1, ix])
-    μ_v = f(μ[2, ix])
+function compute_compositional_flux_gravity!(q, c, i, P, X, Y, ρ, kr, Sat, μ, pc, T, gΔz, ref_index)
+    l = 1
+    v = 2
+
+    if gΔz != 0.0
+        ρ_l = saturation_averaged_density(ρ, l, Sat, c, i)
+        ρ_v = saturation_averaged_density(ρ, v, Sat, c, i)
+        G_l = gΔz*ρ_l
+        G_v = gΔz*ρ_v
+    else
+        G_l = G_v = 0.0
+    end
+
+    Δpc_l = capillary_gradient(pc, c, i, l, ref_index)
+    Δpc_v = capillary_gradient(pc, c, i, v, ref_index)
+
+    @inbounds Δp = P[c] - P[i]
+
+    Ψ_l = -T*(Δp + Δpc_l + G_l)
+    Ψ_v = -T*(Δp + Δpc_v + G_v)
+
+    F_l, c_l = phase_mass_flux(Ψ_l, c, i, ρ, kr, μ, l)
+    F_v, c_v = phase_mass_flux(Ψ_v, c, i, ρ, kr, μ, v)
 
     for i in eachindex(q)
-        q[i] = ((kr_l/μ_l)*f(X[i, ix])*ρ_l + (kr_v/μ_v)*f(Y[i, ix])*ρ_v)*θ
+        @inbounds q[i] = F_l*X[i, c_l] + F_v*Y[i, c_v]
     end
 end
 
-function compositional_flux_single_pot!(q, ::SinglePhaseLiquid, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
-    kr_l = f(kr[1, ix])
-    ρ_l = f(ρ[1, ix])
-    μ_l = f(μ[1, ix])
+function phase_mass_flux(Ψ, c, i, ρ, kr, μ, ph)
+    upc = upwind_cell(Ψ, c, i)
+    @inbounds F = ρ[ph, upc]*(kr[ph, upc]/μ[ph, upc])*Ψ
+    return (F, upc)
+end
 
-    for i in eachindex(q)
-        q[i] = (kr_l/μ_l)*f(X[i, ix])*ρ_l*θ
+@inline function upwind_cell(pot, l, r)
+    if pot < 0
+        c = l
+    else
+        c = r
     end
 end
 
-function compositional_flux_single_pot!(q, ::SinglePhaseVapor, conn_data, ix, f, θ, X, Y, ρ, kr, μ)
-    kr_v = f(kr[2, ix])
-    ρ_v = f(ρ[2, ix])
-    μ_v = f(μ[2, ix])
+function saturation_averaged_density(ρ, ph, sat, c1, c2)
+    @inbounds ρ_1 = ρ[ph, c1]
+    @inbounds ρ_2 = ρ[ph, c2]
+    @inbounds S_1 = sat[ph, c1]
+    @inbounds S_2 = sat[ph, c2]
 
-    for i in eachindex(q)
-        q[i] = (kr_v/μ_v)*f(Y[i, ix])*ρ_v*θ
-    end
+    avg = (ρ_1*S_1 + ρ_2*S_2)/max(S_1 + S_2, 1e-12)
+    return avg
 end

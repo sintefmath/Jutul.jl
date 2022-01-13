@@ -42,6 +42,26 @@ function sort_secondary_variables!(model::MultiModel)
     end
 end
 
+function cross_term(storage, target)
+    return storage[:cross_terms][target]
+end
+
+function cross_term_pair(storage, source, target)
+    ct = cross_term(storage, target)
+    if haskey(ct, source)
+        x = ct[source]
+    else
+        x = nothing
+    end
+    return x
+end
+
+function target_cross_term_keys(storage, target)
+    return keys(cross_term(storage, target))
+end
+
+@inline submodel_symbols(model::MultiModel) = keys(model.models)
+
 function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
 end
@@ -82,7 +102,7 @@ function setup_cross_terms!(storage, model::MultiModel, couplings)#::ModelCoupli
         tmpstr = "$source → $target:\n"
         target_model = models[target]
         source_model = models[source]
-        
+
         target_eq = storage[target][:equations][def_target_eq]
         ct = setup_cross_term(target_eq,
                               target_model,
@@ -93,7 +113,16 @@ function setup_cross_terms!(storage, model::MultiModel, couplings)#::ModelCoupli
                               crosstype;transpose = false)
 
         @assert !isnothing(ct)
-        storage[:cross_terms][target][source][def_target_eq] = ct
+        if !haskey(storage[:cross_terms][target],source)
+            setindex!(storage[:cross_terms][target], Dict(def_source_eq => ct), source)
+        else
+            if !haskey(storage[:cross_terms][target][source], def_source_eq)
+                setindex!(storage[:cross_terms][target][source],ct, def_source_eq)
+            else
+                storage[:cross_terms][target][source][def_target_eq] = ct 
+            end
+        end
+        
         if(issym)
             source_eq = storage[target][:equations][def_source_eq]
             cs = setup_cross_term(source_eq,
@@ -104,7 +133,16 @@ function setup_cross_terms!(storage, model::MultiModel, couplings)#::ModelCoupli
                               intersection,
                               crosstype;
                               transpose = true)
-            storage[:cross_terms][source][target][def_source_eq] = cs
+            if !haskey(storage[:cross_terms][source],target)
+                setindex!(storage[:cross_terms][source], Dict(def_source_eq => cs), target)
+            else
+                if !haskey(storage[:cross_terms][source][target], def_source_eq)
+                    setindex!(storage[:cross_terms][source][target],cs, def_source_eq)
+                else
+                    storage[:cross_terms][source][target][def_source_eq] = cs 
+                end
+            end                  
+            #storage[:cross_terms][source][target][def_source_eq] = cs
         end
     end
     #storage[:cross_terms] = crossd
@@ -114,9 +152,10 @@ function setup_cross_terms(storage, model::MultiModel)
     crossd = TervStorage()
     models = model.models
     debugstr = "Determining cross-terms\n"
-    for target in keys(models)
+    sms = submodel_symbols(model)
+    for target in sms
         sources = Dict{Symbol, Any}()
-        for source in keys(models)
+        for source in sms
             if target == source
                 continue
             end
@@ -124,18 +163,18 @@ function setup_cross_terms(storage, model::MultiModel)
 
             target_model = models[target]
             source_model = models[source]
-            d = Dict()
+            d = Dict{Symbol, Any}()
             found = false
             for (key, eq) in storage[target][:equations]
                 ct = declare_cross_term(eq, target_model, source_model, target = target, source = source)
                 if !isnothing(ct)
                     found = true
                     tmpstr *= String(key)*": Cross-term found.\n"
+                    d[key] = ct
                 end
-                d[key] = ct
             end
-            sources[source] = d
             if found
+                sources[source] = d
                 debugstr *= tmpstr
             end
         end
@@ -166,7 +205,7 @@ end
 
 function align_equations_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
-    model_keys = keys(models)
+    model_keys = submodel_symbols(model)
     ndofs = model.number_of_degrees_of_freedom
     lsys = storage[:LinearizedSystem]
     if has_groups(model)
@@ -175,7 +214,7 @@ function align_equations_to_linearized_system!(storage, model::MultiModel; equat
         for g in 1:ng
             J = lsys[g, g].jac
             subs = groups .== g
-            align_equations_subgroup!(storage, models, model_keys[subs], ndofs, J, equation_offset, variable_offset)    
+            align_equations_subgroup!(storage, models, model_keys[subs], ndofs, J, equation_offset, variable_offset)
         end
     else
         J = lsys.jac
@@ -199,7 +238,7 @@ end
 function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
     ndofs = model.number_of_degrees_of_freedom
-    model_keys = keys(models)
+    model_keys = submodel_symbols(model)
     ndofs = model.number_of_degrees_of_freedom
 
     lsys = storage[:LinearizedSystem]
@@ -213,7 +252,7 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
                 s_subs = groups .== source_g
                 source_keys = model_keys[s_subs]
                 ls = lsys[target_g, source_g]
-                align_crossterms_subgroup!(storage, models, target_keys, source_keys, ndofs, ls, equation_offset, variable_offset)    
+                align_crossterms_subgroup!(storage, models, target_keys, source_keys, ndofs, ls, equation_offset, variable_offset)
             end
         end
     else
@@ -223,7 +262,6 @@ end
 
 function align_crossterms_subgroup!(storage, models, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset)
     base_variable_offset = variable_offset
-    cross_terms = storage[:cross_terms]
     # Iterate over targets (= rows)
     for target in target_keys
         target_model = models[target]
@@ -232,7 +270,7 @@ function align_crossterms_subgroup!(storage, models, target_keys, source_keys, n
         for source in source_keys
             source_model = models[source]
             if source != target
-                ct = cross_terms[target][source]
+                ct = cross_term_pair(storage, source, target)
                 eqs = storage[target][:equations]
                 align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, equation_offset = equation_offset, variable_offset = variable_offset)
                 # Same number of rows as target, same number of columns as source
@@ -247,10 +285,11 @@ end
 function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, target::TervModel, source::TervModel; equation_offset = 0, variable_offset = 0)
     for ekey in keys(equations)
         eq = equations[ekey]
-        ct = crossterms[ekey]
-
-        if !isnothing(ct)
-            align_to_jacobian!(ct, lsys.jac, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
+        if !isnothing(crossterms) && haskey(crossterms, ekey)
+            ct = crossterms[ekey]
+            if !isnothing(ct)
+                align_to_jacobian!(ct, lsys, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
+            end
         end
         equation_offset += number_of_equations(target, eq)
     end
@@ -275,19 +314,21 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         equations = storage[target][:equations]
-        cross_terms = storage[:cross_terms][target][source]
+        cross_terms = cross_term_pair(storage, source, target)
         equation_offset = 0
         for (key, eq) in equations
-            x = cross_terms[key]
-            if !isnothing(x)
-                variable_offset = 0
-                for u in get_primary_variable_ordered_entities(source_model)
-                    S = declare_sparsity(target_model, source_model, x, u, layout)
-                    if !isnothing(S)
-                        push!(I, S.I .+ equation_offset)
-                        push!(J, S.J .+ variable_offset)
+            if !isnothing(cross_terms) && haskey(cross_terms, key)
+                x = cross_terms[key]
+                if !isnothing(x)
+                    variable_offset = 0
+                    for u in get_primary_variable_ordered_entities(source_model)
+                        S = declare_sparsity(target_model, source_model, x, u, layout)
+                        if !isnothing(S)
+                            push!(I, S.I .+ equation_offset)
+                            push!(J, S.J .+ variable_offset)
+                        end
+                        variable_offset += number_of_degrees_of_freedom(source_model, u)
                     end
-                    variable_offset += number_of_degrees_of_freedom(source_model, u)
                 end
             end
             equation_offset += number_of_equations(target_model, eq)
@@ -354,13 +395,13 @@ function setup_linearized_system!(storage, model::MultiModel)
     models = model.models
     context = model.context
 
-    candidates = [i for i in keys(models)]
+    candidates = [i for i in submodel_symbols(model)]
     if has_groups(model)
         ndof = values(model.number_of_degrees_of_freedom)
         n = sum(ndof)
         groups = model.groups
         ng = number_of_groups(model)
-    
+
         # We have multiple groups. Store as Matrix of linearized systems
         F = float_type(context)
         r = zeros(F, n)
@@ -393,14 +434,16 @@ function setup_linearized_system!(storage, model::MultiModel)
             local_models = groups .== rowg
             local_size = sum(ndof[local_models])
             t = candidates[local_models]
-            row_context = models[t[1]].context
+            row_context = models[first(t)].context
+            row_layout = matrix_layout(row_context)
             for colg in 1:ng
                 if rowg == colg
                     continue
                 end
                 s = candidates[groups .== colg]
-                col_context = models[s[1]].context
+                col_context = models[first(s)].context
                 col_layout = matrix_layout(col_context)
+
                 if has_context
                     ctx = context
                 else
@@ -408,7 +451,8 @@ function setup_linearized_system!(storage, model::MultiModel)
                 end
                 layout = matrix_layout(ctx)
                 sparse_arg = get_sparse_arguments(storage, model, t, s, ctx)
-                subsystems[rowg, colg] = LinearizedBlock(sparse_arg, ctx, layout, col_layout, block_sizes[colg])
+                bz_pair = (block_sizes[rowg], block_sizes[colg])
+                subsystems[rowg, colg] = LinearizedBlock(sparse_arg, ctx, layout, row_layout, col_layout, bz_pair)
             end
             base_pos += local_size
         end
@@ -431,85 +475,93 @@ function initialize_storage!(storage, model::MultiModel; kwarg...)
     end
 end
 
-function update_equations!(storage, model::MultiModel, arg...)
+function update_equations!(storage, model::MultiModel, dt)
     # First update all equations
-    submodels_storage_apply!(storage, model, update_equations!, arg...)
+    @timeit "model equations" submodels_storage_apply!(storage, model, update_equations!, dt)
     # Then update the cross terms
-    update_cross_terms!(storage, model::MultiModel, arg...)
+    @timeit "crossterm update" update_cross_terms!(storage, model::MultiModel, dt)
     # Finally apply cross terms to the equations
-    apply_cross_terms!(storage, model::MultiModel, arg...)
+    @timeit "crossterm apply" apply_cross_terms!(storage, model::MultiModel, dt)
 end
 
-function update_cross_terms!(storage, model::MultiModel, arg...)
-    models = model.models
-    for target in keys(models)
-        for source in keys(models)
-            if source != target
-                update_cross_terms_for_pair!(storage, model, source, target, arg...)
+function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
+    for target in targets
+        for source in intersect(target_cross_term_keys(storage, target), sources)
+            @timeit "$source→$target" begin
+                cross_terms = cross_term_pair(storage, source, target)
+                update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
             end
         end
     end
 end
 
-function update_cross_terms_for_pair!(storage, model, source::Symbol, target::Symbol, arg...)
-    cross_terms = storage[:cross_terms][target][source]
+update_cross_terms_for_pair!(cross_terms::Nothing, storage, model, source::Symbol, target::Symbol, dt) = nothing
 
+function update_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol, target::Symbol, dt)
     storage_t, storage_s = get_submodel_storage(storage, target, source)
     model_t, model_s = get_submodels(model, target, source)
 
-    eqs = storage_t[:equations]
-    for ekey in keys(eqs)
-        ct = cross_terms[ekey]
-        update_cross_term!(ct, eqs[ekey], storage_t, storage_s, model_t, model_s, target, source, arg...)
+    eqs = storage_t.equations
+    for (ekey, ct) in pairs(cross_terms)
+        if !isnothing(ct)
+            # @info "$source -> $target: $ekey"
+            update_cross_term!(ct, eqs[ekey], storage_t, storage_s, model_t, model_s, target, source, dt)
+        end
     end
 end
 
-function apply_cross_terms!(storage, model::MultiModel, arg...)
-    models = model.models
-    for target in keys(models)
-        for source in keys(models)
-            if source != target
-                apply_cross_terms_for_pair!(storage, model, source, target, arg...)
+function apply_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
+    for target in targets
+        for source in intersect(target_cross_term_keys(storage, target), sources)
+            @timeit "$source→$target" begin
+                cross_terms = cross_term_pair(storage, source, target)
+                apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
             end
         end
     end
 end
 
-function apply_cross_terms_for_pair!(storage, model, source::Symbol, target::Symbol, arg...)
-    cross_terms = storage[:cross_terms][target][source]
+apply_cross_terms_for_pair!(cross_terms::Nothing, storage, model, source::Symbol, target::Symbol, dt) = nothing
 
+function apply_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol, target::Symbol, dt)
     storage_t, = get_submodel_storage(storage, target)
     model_t, model_s = get_submodels(model, target, source)
 
     eqs = storage_t[:equations]
-    for ekey in keys(eqs)
-        ct = cross_terms[ekey]
+    for (ekey, ct) in pairs(cross_terms)
         if !isnothing(ct)
-            apply_cross_term!(eqs[ekey], ct, model_t, model_s, arg...)
+            apply_cross_term!(eqs[ekey], ct, model_t, model_s, dt)
         end
     end
 end
 
 
-function update_linearized_system!(storage, model::MultiModel; equation_offset = 0)
+function update_linearized_system!(storage, model::MultiModel; equation_offset = 0, targets = submodel_symbols(model), sources = targets)
+    @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
+    # Update diagonal blocks (model with respect to itself)
+    @timeit "models" update_diagonal_blocks!(storage, model, targets)
+    # Then, update cross terms (models' impact on other models)
+    @timeit "cross-model" update_offdiagonal_blocks!(storage, model, targets, sources)
+end
+
+function update_diagonal_blocks!(storage, model::MultiModel, targets)
     lsys = storage.LinearizedSystem
-    models = model.models
-    model_keys = keys(models)
+    model_keys = submodel_symbols(model)
     if has_groups(model)
         ng = number_of_groups(model)
         groups = model.groups
         for g in 1:ng
             lsys_g = lsys[g, g]
             subs = groups .== g
-            group_keys = model_keys[subs]
+            group_targets = model_keys[subs]
+            group_keys = intersect(group_targets, targets)
             offsets = get_submodel_degree_of_freedom_offsets(model, g)
             update_main_linearized_system_subgroup!(storage, model, group_keys, offsets, lsys_g)
         end
     else
         offsets = get_submodel_degree_of_freedom_offsets(model)
-        update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
+        update_main_linearized_system_subgroup!(storage, model, targets, offsets, lsys)
     end
-    update_cross_term_linearized_system_subgroup!(storage, model, model_keys, lsys)
 end
 
 function update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
@@ -521,27 +573,24 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
     end
 end
 
-function update_cross_term_linearized_system_subgroup!(storage, model, model_keys, linearized_system)
-    # Then, update cross terms
-    for target in model_keys
-        for source in model_keys
-            if source != target
-                lsys = get_linearized_system_model_pair(storage, model, source, target, linearized_system)
-                update_linearized_system_crossterms!(lsys, storage, model, source, target)
-            end
+function update_offdiagonal_blocks!(storage, model, targets, sources)
+    linearized_system = storage.LinearizedSystem
+    for target in targets
+        for source in intersect(target_cross_term_keys(storage, target), sources)
+            cross_terms = cross_term_pair(storage, source, target)
+            lsys = get_linearized_system_model_pair(storage, model, source, target, linearized_system)
+            update_linearized_system_crossterms!(lsys, cross_terms, storage, model, source, target)
         end
     end
 end
 
 
-function update_linearized_system_crossterms!(lsys, storage, model::MultiModel, source, target)
-    cross_terms = storage[:cross_terms][target][source]
-
-    storage_t, = get_submodel_storage(storage, target)
+function update_linearized_system_crossterms!(lsys, cross_terms, storage, model::MultiModel, source, target)
+    # storage_t, = get_submodel_storage(storage, target)
     model_t, model_s = get_submodels(model, target, source)
 
-    eqs = storage_t[:equations]
-    for ekey in keys(eqs)
+    # eqs = storage_t[:equations]
+    for ekey in keys(cross_terms)
         ct = cross_terms[ekey]
         nz = nonzeros(lsys.jac)
         if !isnothing(ct)
@@ -608,7 +657,8 @@ function update_primary_variables!(storage, model::MultiModel; kwarg...)
     models = model.models
 
     offset = 0
-    for (i, key) in enumerate(keys(models))
+    model_keys = submodel_symbols(model)
+    for (i, key) in enumerate(model_keys)
         m = models[key]
         s = storage[key]
         ndof = number_of_degrees_of_freedom(m)
@@ -626,26 +676,26 @@ function reset_to_previous_state!(storage, model::MultiModel)
     submodels_storage_apply!(storage, model, reset_to_previous_state!)
 end
 
-function update_after_step!(storage, model::MultiModel, dt, forces)
-    for key in submodels_symbols(model)
+function update_after_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model))
+    for key in targets
         update_after_step!(storage[key], model.models[key], dt, forces[key])
     end
 end
 
-function update_before_step!(storage, model::MultiModel, dt, forces)
-    for key in submodels_symbols(model)
+function update_before_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model))
+    for key in targets
         update_before_step!(storage[key], model.models[key], dt, forces[key])
     end
 end
 
-function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN)
-    for key in submodels_symbols(model)
+function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model))
+    for key in targets
         apply_forces!(storage[key], model.models[key], dt, forces[key]; time = time)
     end
 end
 
-function apply_boundary_conditions!(storage, model::MultiModel)
-    for key in submodels_symbols(model)
+function apply_boundary_conditions!(storage, model::MultiModel; targets = submodels_symbols(model))
+    for key in targets
         apply_boundary_conditions!(storage[key], storage[key].parameters, model.models[key])
     end
 end
@@ -660,7 +710,7 @@ end
 function get_output_state(storage, model::MultiModel)
     out = Dict{Symbol, Any}()
     models = model.models
-    for key in keys(models)
+    for key in submodel_symbols(model)
         out[key] = get_output_state(storage[key], models[key])
     end
     return out

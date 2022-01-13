@@ -9,23 +9,42 @@ import ForwardDiff.Dual
 import Base.iszero
 Base.iszero(d::ForwardDiff.Dual) = false# iszero(d.value) && iszero(d.partials)
 
+# Arrays etc
 using LinearAlgebra
-using BenchmarkTools
 using SparseArrays
-using Logging
 using MappedArrays
+# Data structures
+using DataStructures
+using OrderedCollections
+# Various bits and bobs from Base
+using Statistics
+using Logging
 using Printf
 using Dates
-using DataStructures, OrderedCollections
+# Gotta go fast
 using Tullio
 using LoopVectorization
-using CUDA, CUDAKernels, KernelAbstractions
-using PrettyTables
+using CUDA, CUDAKernels
+using KernelAbstractions
 using DataInterpolations
-using ILUZero
 using Polyester
+# Linear solvers and preconditioners
+using ILUZero
 
+# Misc. utils
+using MAT
+using ExprTools
+using LightGraphs
+using PrettyTables
+using Polynomials
+# Nice progress bars
+using ProgressMeter
+# Timing
+using TimerOutputs
+# PVT
 using MultiComponentFlash
+# Conditional code loading
+using Requires
 
 # Main types
 include("core_types.jl")
@@ -64,11 +83,16 @@ include("dd/dd.jl")
 include("applications/reservoir_simulator/reservoir_simulator.jl")
 # Test systems
 include("applications/test_systems/test_systems.jl")
-# Graph plotting
-include("plot_graph.jl")
-include("meshes/meshes.jl")
-include("plotting.jl")
 # Battery/electrolyte
-include("battery/battery_include.jl")
+include("applications/battery/battery.jl")
 
+include("meshes/meshes.jl")
+
+# Plotting
+function __init__()
+    @require GLMakie="e9467ef8-e4e7-5192-8a1a-b1aee30e663a" include("plotting.jl")
+    @require GraphRecipes="bd48cda9-67a9-57be-86fa-5b3c104eda73" begin
+        @require Plots="91a5bcdd-55d7-5caf-9e0b-520d859cae80" include("plot_graph.jl")
+    end
+end
 end # module

@@ -15,7 +15,7 @@ function count_entities(::WellGroup, ::Any)
     error("Unit not found in well group.")
 end
 
-function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, source_d::WellControllerDomain, 
+function get_domain_intersection(u::Cells, target_d::DiscretizedDomain{W}, source_d::WellControllerDomain,
                                            target_symbol, source_symbol) where {W<:WellGrid}
     # From controller to top well cell
     pos = get_well_position(source_d, target_symbol)
@@ -85,8 +85,8 @@ function well_control_equation(ctrl, t::BottomHolePressureTarget, qt)
 end
 
 function well_control_equation(ctrl, t::SinglePhaseRateTarget, qt)
-    # TODO: Add some notion of surface density
-    return t.value - qt
+    # Note: This equation will get the corresponding phase rate subtracted by the well
+    return t.value
 end
 
 
@@ -99,12 +99,12 @@ end
 """
 Impact from well group in facility on conservation equation inside well
 """
-function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_storage, facility_storage, 
-                            target_model::SimulationModel{D, S}, source_model::SimulationModel{WG}, 
-                            well_symbol, source, dt) where 
-                            {D<:DiscretizedDomain{W} where W<:WellGrid, 
-                            S<:Union{ImmiscibleSystem, SinglePhaseSystem}, 
-                            WG<:WellGroup} 
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_storage, facility_storage,
+                            target_model::SimulationModel{D, S}, source_model::SimulationModel{WG},
+                            well_symbol, source, dt) where
+                            {D<:DiscretizedDomain{W} where W<:WellGrid,
+                            S<:MultiPhaseSystem,
+                            WG<:WellGroup}
     fstate = facility_storage.state
     wstate = well_storage.state
     # Stuff from facility
@@ -118,7 +118,9 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
             @warn "Injector $well_symbol is producing?"
         end
         mix = ctrl.injection_mixture
-        @assert length(mix) == number_of_phases(target_model.system) "Injection composition must match number of phases."
+        nmix = length(mix)
+        ncomp = number_of_components(target_model.system)
+        @assert nmix == ncomp "Injection composition length ($nmix) must match number of components ($ncomp)."
     else
         if value(qT) > 0
             @warn "Producer $well_symbol is injecting?"
@@ -128,34 +130,95 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
         mass = sum(masses)
         mix = masses./mass
     end
-
-    function update_topnode_sources!(src, qT, mix)
-        for i in eachindex(mix)
-            src[i] = -mix[i]*qT
-        end
-    end
-    update_topnode_sources!(ct.crossterm_source, qT, value.(mix))
-    update_topnode_sources!(ct.crossterm_target, value(qT), mix)
+    update_topnode_sources!(ct.crossterm_source, ct.crossterm_target, qT, mix)
 end
+
+function update_topnode_sources!(cts, ctt, qT, mix)
+    @inbounds for i in eachindex(mix)
+        m = -mix[i]
+        cts[i] = value(m)*qT
+        ctt[i] = m*value(qT)
+    end
+end
+
 """
 Cross term from well on control equation for well
 """
-function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell, 
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
                             target_storage, source_storage,
                             target_model::SimulationModel{WG},
-                            source_model::SimulationModel{D}, 
+                            source_model::SimulationModel{D},
                             target, well_symbol, dt) where {D<:DiscretizedDomain{W} where W<:WellGrid, WG<:WellGroup}
     fstate = target_storage.state
     ctrl = fstate.WellGroupConfiguration.control[well_symbol]
     target = ctrl.target
-    if isa(target, BottomHolePressureTarget)
-        # Treat top node as bhp reference point
-        bhp_contribution = -source_storage.state.Pressure[1]
+    # q_t = facility_surface_mass_rate_for_well(target_model, well_symbol, fstate)
+    well_state = source_storage.state
+    param = source_storage.parameters
+    rhoS = param[:reference_densities]
 
-        # Cross-term in well
-        ct.crossterm_source[1] = bhp_contribution
-        ct.crossterm_target[1] = value(bhp_contribution)
+    update_facility_control_crossterm!(ct.crossterm_source, ct.crossterm_target, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
+    # # Operation twice, to get both partials
+    # ct.crossterm_source[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x)
+    # ct.crossterm_target[1] = -well_target(target, source_model, rhoS, q_t, well_state, value)
+end
+
+function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
+    q_t = facility_surface_mass_rate_for_well(target_model, well_symbol, fstate)
+
+    # well_state = source_storage.state
+    # param = source_storage.parameters
+    # rhoS = param[:reference_densities]
+    # Operation twice, to get both partials
+    s_buf[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x)
+    t_buf[1] = -well_target(target, source_model, rhoS, q_t, well_state, value)
+
+end
+
+function facility_surface_mass_rate_for_well(model::SimulationModel, wsym, fstate)
+    pos = get_well_position(model.domain, wsym)
+    return fstate.TotalSurfaceMassRate[pos]
+end
+
+bottom_hole_pressure(ws) = ws.Pressure[1]
+
+function top_node_component_mass_fraction(ws, c_ix)
+    tm = ws.TotalMasses
+    t = ws.TotalMass
+    mass_fraction = tm[c_ix, 1]/t[1]
+    return mass_fraction
+end
+
+well_target(target, well_model, rhoS, q_t, well_state, f) = 0.0
+well_target(target::BottomHolePressureTarget, well_model, rhoS, q_t, well_state, f) = f(bottom_hole_pressure(well_state))
+
+function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
+    phases = get_phases(well_model.system)
+    pos = findfirst(isequal(target.phase), phases)
+    @assert !isnothing(pos)
+
+    if value(q_t) >= 0
+        q = q_t
+    else
+        mf = f(top_node_component_mass_fraction(well_state, pos))
+        q = q_t*mf
     end
+    return q/rhoS[pos]
+end
+
+function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:MultiComponentSystem}
+    phases = get_phases(well_model.system)
+    pos = findfirst(isequal(target.phase), phases)
+    @assert !isnothing(pos)
+
+    if value(q_t) >= 0
+        q = q_t
+    else
+        error("Not implemented yet.")
+        mf = f(top_node_component_mass_fraction(well_state, pos))
+        q = q_t*mf
+    end
+    return q/rhoS[pos]
 end
 
 function associated_entity(::ControlEquationWell) Wells() end
@@ -167,11 +230,16 @@ function update_equation!(eq::ControlEquationWell, storage, model, dt)
     # T = ctrl.target
     surf_rate = state.TotalSurfaceMassRate
     # bhp = state.Pressure[1]
+    entries = eq.equation.entries
+    control_equations!(entries, wells, ctrl, surf_rate)
+end
+
+function control_equations!(entries, wells, ctrl, surf_rate)
     @inbounds for (i, key) in enumerate(wells)
         C = ctrl[key]
         T = C.target
         # @debug "Well $key operating using $T"
-        eq.equation.entries[i] = well_control_equation(ctrl, T, surf_rate[i])
+        entries[i] = well_control_equation(ctrl, T, surf_rate[i])
     end
 end
 
@@ -194,7 +262,7 @@ function control_equation_top_cell_alignment!(cache, jac, layout; equation_offse
 end
 
 # Selection of primary variables
-function select_primary_variables_domain!(S, domain::WellGroup, system, formulation) 
+function select_primary_variables_domain!(S, domain::WellGroup, system, formulation)
     S[:TotalSurfaceMassRate] = TotalSurfaceMassRate()
 end
 

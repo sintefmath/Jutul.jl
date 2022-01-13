@@ -232,11 +232,15 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
 end
 
 function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context)
-    nc, ne, np = ad_dims(acc)
     centries = acc.entries
     fentries = cell_flux.entries
     cp = acc.jacobian_positions
     fp = cell_flux.jacobian_positions
+    threaded_fill_conservation_eq!(nz, r, context, centries, fentries, acc, cell_flux, cp, fp, conn_pos, ad_dims(acc))
+end
+
+function threaded_fill_conservation_eq!(nz, r, context, centries, fentries, acc, cell_flux, cp, fp, conn_pos, dims)
+    nc, ne, np = dims
     tb = thread_batch(context)
     @batch minbatch=tb for cell = 1:nc
         for e in 1:ne
@@ -268,13 +272,18 @@ function fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flu
 end
 
 function update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
-    nc, _, np = ad_dims(acc)
+    dims = ad_dims(acc)
     rv_src = rowvals(src)
     nz_src = nonzeros(src)
     cp = acc.jacobian_positions
+    update_lsys_sources_theaded!(nz, r, acc, src, rv_src, nz_src, cp, model.context, dims)
+end
+
+function update_lsys_sources_theaded!(nz, r, acc, src, rv_src, nz_src, cp, context, dims)
+    nc, _, np = dims
     tb = thread_batch(context)
     @batch minbatch=tb for cell = 1:nc
-        for rp in nzrange(src, cell)
+        @inbounds for rp in nzrange(src, cell)
             e = rv_src[rp]
             v = nz_src[rp]
             # Value
@@ -290,11 +299,16 @@ function update_linearized_system_subset_conservation_sources!(nz, r, model, acc
 end
 
 function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_pos, conn_data)
-    _, ne, np = ad_dims(face_flux)
+    dims = ad_dims(face_flux)
     fentries = face_flux.entries
     fp = face_flux.jacobian_positions
+    update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, model.context, dims)
+end
+
+function update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, context, dims)
+    _, ne, np = dims
     nc = length(conn_pos) - 1
-    tb = thread_batch(model.context)
+    tb = thread_batch(context)
     @batch minbatch=tb for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne
@@ -311,7 +325,6 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
         end
     end
 end
-
 
 function declare_pattern(model, e::ConservationLaw, entity::Cells)
     df = e.flow_discretization
@@ -366,14 +379,20 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, equa
     end
 end
 
+function state_pair(storage, conserved, model)
+    m0 = storage.state0[conserved]
+    m = storage.state[conserved]
+    M = global_map(model.domain)
+    v = x -> active_view(x, M)
+    return (v(m0), v(m))
+end
+
 # Update of discretization terms
 function update_accumulation!(law, storage, model, dt)
     conserved = law.accumulation_symbol
     acc = get_entries(law.accumulation)
-    m = storage.state[conserved]
-    m0 = storage.state0[conserved]
-    active = active_entities(model.domain, Cells())
-    @tullio acc[c, i] = (m[c, active[i]] - m0[c, active[i]])/dt
+    m0, m = state_pair(storage, conserved, model)
+    @tullio acc[c, i] = (m[c, i] - m0[c, i])/dt
     return acc
 end
 
@@ -382,8 +401,8 @@ function update_equation!(law::ConservationLaw, storage, model, dt)
     # Zero out any sparse indices
     reset_sources!(law)
     # Next, update accumulation, "intrinsic" sources and fluxes
-    update_accumulation!(law, storage, model, dt)
-    update_half_face_flux!(law, storage, model, dt)
+    @timeit "accumulation" update_accumulation!(law, storage, model, dt)
+    @timeit "fluxes" update_half_face_flux!(law, storage, model, dt)
 end
 
 function update_half_face_flux!(law::ConservationLaw, storage, model, dt)
@@ -412,3 +431,10 @@ end
 
 is_cuda_eq(eq::ConservationLaw) = isa(eq.accumulation.entries, CuArray)
 use_sparse_sources(eq) = !is_cuda_eq(eq)
+
+
+
+# Half face flux - trivial version which should only be used when there are no faces
+function update_half_face_flux!(::ConservationLaw, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TrivialFlow}
+
+end

@@ -1,5 +1,3 @@
-using Terv, Polynomials
-
 export ActiveMaterial, ACMaterial, ActiveMaterialModel
 abstract type ActiveMaterial <: ElectroChemicalComponent end
 struct ACMaterial <: ActiveMaterial end
