@@ -253,7 +253,6 @@ function update_half_face_flux!(flux::AbstractArray, state, model::SimulationMod
     μ = state.PhaseViscosities
     ρ = state.PhaseMassDensities
     P = state.Pressure
-    fr = state.FlashResults
     Sat = state.Saturations
 
     conn_data = flow_disc.conn_data
@@ -262,8 +261,8 @@ function update_half_face_flux!(flux::AbstractArray, state, model::SimulationMod
     nc, nf = size(flux)
     tb = thread_batch(model.context)
     @batch minbatch = tb for i = 1:nf
-        qi = view(flux, :, i)
-        cd = conn_data[i]
+        @inbounds qi = view(flux, :, i)
+        @inbounds cd = conn_data[i]
         compositional_flux_gravity!(qi, cd, P, X, Y, ρ, kr, Sat, μ, pc, ref_index)
     end
 end
@@ -304,7 +303,7 @@ function compute_compositional_flux_gravity!(q, c, i, P, X, Y, ρ, kr, Sat, μ, 
     F_v, c_v = phase_mass_flux(Ψ_v, c, i, ρ, kr, μ, v)
 
     for i in eachindex(q)
-        q[i] = F_l*X[i, c_l] + F_v*Y[i, c_v]
+        @inbounds q[i] = F_l*X[i, c_l] + F_v*Y[i, c_v]
     end
 end
 
