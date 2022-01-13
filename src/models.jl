@@ -344,8 +344,10 @@ Perform updates of everything that depends on the state.
 
 This includes properties, governing equations and the linearized system
 """
-function update_state_dependents!(storage, model::TervModel, dt, forces; time = NaN)
-    @timeit "secondary variables" update_secondary_variables!(storage, model)
+function update_state_dependents!(storage, model::TervModel, dt, forces; time = NaN, update_secondary = true)
+    if update_secondary
+        @timeit "secondary variables" update_secondary_variables!(storage, model)
+    end
     @timeit "equations" update_equations!(storage, model, dt)
     @timeit "forces" apply_forces!(storage, model, dt, forces; time = time)
     @timeit "boundary conditions" apply_boundary_conditions!(storage, model)

@@ -104,7 +104,7 @@ function simulator_config!(cfg, sim; kwarg...)
     return cfg
 end
 
-function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, kwarg...)
+function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, initialize = true, kwarg...)
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     end
@@ -119,7 +119,9 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     # Initialize loop
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
-    dt = timesteps[1]
+    if initialize
+        initialize_before_first_timestep!(sim, timesteps[1], forces = forces, config = config)
+    end
     for (step_no, dT) in enumerate(timesteps)
         if early_termination
             break
@@ -140,6 +142,11 @@ function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothin
     return (states, reports)
 end
 
+function initialize_before_first_timestep!(sim, first_dT; forces = forces, config = config)
+    @timeit "solve" begin
+        @timeit "secondary variables" update_secondary_variables!(sim.storage, sim.model)
+    end
+end
 
 function initial_setup!(sim, config)
     # Timing stuff
@@ -216,7 +223,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     # Update the properties and equations
     t_asm = @elapsed begin
         time =  config[:ProgressRecorder].recorder.time + dt
-        update_state_dependents!(storage, model, dt, forces; time = time)
+        update_state_dependents!(storage, model, dt, forces; time = time, update_secondary = iteration > 1)
     end
     if timing_out
         @debug "Assembled equations in $t_asm seconds."
