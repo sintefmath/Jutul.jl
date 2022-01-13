@@ -49,15 +49,17 @@ function get_matrix_view(v0, n, m, transp = false, offset = 0)
     return v
 end
 
-
 function check_increment(dx, pvar, key)
-    if any(!isfinite, dx)
+    has_bad_values = any(!isfinite, dx)
+    if has_bad_values
         bad = findall(isfinite.(dx) .== false)
         n_bad = length(bad)
         n = min(10, length(bad))
         bad = bad[1:n]
         @warn "$key: $n_bad non-finite values found. Indices: (limited to 10) $bad"
     end
+    ok = !has_bad_values
+    return ok
 end
 
 # function get_row_view(v::AbstractVector, n, m, row, transp = false, offset = 0)
