@@ -2,9 +2,9 @@
 Simple current collector
 A conductro with constant conductivity
 =#
-using Terv
+using Jutul
 
-ENV["JULIA_DEBUG"] = Terv;
+ENV["JULIA_DEBUG"] = Jutul;
 
 
 function test_cc(name="square_current_collector")

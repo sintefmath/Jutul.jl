@@ -1,5 +1,5 @@
 
-abstract type MultiPhaseSystem <: TervSystem end
+abstract type MultiPhaseSystem <: JutulSystem end
 abstract type MultiComponentSystem <: MultiPhaseSystem end
 abstract type CompositionalSystem <: MultiComponentSystem end
 

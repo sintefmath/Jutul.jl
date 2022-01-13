@@ -1,4 +1,4 @@
-using Terv, AlgebraicMultigrid
+using Jutul, AlgebraicMultigrid
 using Test
 
 function test_single_phase(grid = "pico"; linear_solver = nothing, kwarg...)

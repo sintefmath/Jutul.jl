@@ -20,7 +20,7 @@ number_of_phases(sys::MultiPhaseSystem) = length(get_phases(sys))
     VolumeSource
 end
 
-struct SourceTerm{I, F, T} <: TervForce
+struct SourceTerm{I, F, T} <: JutulForce
     cell::I
     value::F
     fractional_flow::T

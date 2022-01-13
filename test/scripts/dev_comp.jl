@@ -1,6 +1,6 @@
-@time using Terv
+@time using Jutul
 @time using MultiComponentFlash
-ENV["JULIA_DEBUG"] = Terv
+ENV["JULIA_DEBUG"] = Jutul
 ENV["JULIA_DEBUG"] = nothing
 # using Pkg; Pkg.develop(PackageSpec(path = "D:/jobb\\bitbucket\\moyner.jl\\pvt\\MultiComponentFlash"))
 ##

@@ -172,16 +172,16 @@ function segment_pressure_drop(f::SegmentWellBoreFrictionHB, v, ρ, μ)
 end
 
 
-struct PotentialDropBalanceWell <: TervEquation
+struct PotentialDropBalanceWell <: JutulEquation
     # Equation: pot_diff(p) - pot_diff_model(v, p)
     equation # Differentiated with respect to Velocity
     equation_cells # Differentiated with respect to Cells
-    function PotentialDropBalanceWell(e::TervAutoDiffCache, ec::TervAutoDiffCache)
+    function PotentialDropBalanceWell(e::JutulAutoDiffCache, ec::JutulAutoDiffCache)
         new(e, ec)
     end
 end
 
-function PotentialDropBalanceWell(model::TervModel, number_of_equations::Integer; kwarg...)
+function PotentialDropBalanceWell(model::JutulModel, number_of_equations::Integer; kwarg...)
     D = model.domain
     cell_entity = Cells()
     face_entity = Faces()
@@ -338,7 +338,7 @@ end
 """
 Perforations are connections from well cells to reservoir vcells
 """
-struct Perforations <: TervUnit end
+struct Perforations <: JutulUnit end
 
 function get_neighborship(::SimpleWell)
     # No interior connections.

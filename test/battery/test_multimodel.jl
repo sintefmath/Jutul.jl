@@ -4,10 +4,10 @@ A component with electric potential, concentration and temperature
 The different potentials are independent (diagonal onsager matrix),
 and conductivity, diffusivity is constant.
 =#
-@time using Terv
+@time using Jutul
 using MAT
 using Plots
-ENV["JULIA_DEBUG"] = Terv;
+ENV["JULIA_DEBUG"] = Jutul;
 
 
 ##
@@ -62,7 +62,7 @@ end
 
 function test_ac()
     name="model1d"
-    fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
+    fn = string(dirname(pathof(Jutul)), "/../data/models/", name, ".mat")
     exported_all = MAT.matread(fn)
     exported_cc = exported_all["model"]["NegativeElectrode"]["CurrentCollector"];
 

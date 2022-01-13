@@ -2,9 +2,9 @@
 Compare the simulation of electrolyte in Julia and Matlab
 =#
 
-using Terv
+using Jutul
 using MAT
-ENV["JULIA_DEBUG"] = Terv;
+ENV["JULIA_DEBUG"] = Jutul;
 
 ##
 

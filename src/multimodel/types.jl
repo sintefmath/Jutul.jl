@@ -11,11 +11,11 @@ end
 
 
 
-struct MultiModel <: TervModel
+struct MultiModel <: JutulModel
     models::NamedTuple
     couplings::Vector{MultiModelCoupling}
     groups::Union{Vector, Nothing}
-    context::Union{TervContext, Nothing}
+    context::Union{JutulContext, Nothing}
     number_of_degrees_of_freedom
     reduction
     function MultiModel(models; couplings=Vector{MultiModelCoupling}(undef,0), groups = nothing, context = nothing, reduction = nothing)
@@ -104,7 +104,7 @@ struct InjectiveCrossTerm <: CrossTerm
     end
 end
 
-function setup_cross_term(target_eq::TervEquation, target_model, source_model, target, source, intersection, type::Type{InjectiveCrossTerm}; transpose = false)
+function setup_cross_term(target_eq::JutulEquation, target_model, source_model, target, source, intersection, type::Type{InjectiveCrossTerm}; transpose = false)
     if(transpose)
         intersection = transpose_intersection(intersection)
     end

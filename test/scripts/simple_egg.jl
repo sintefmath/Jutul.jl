@@ -1,6 +1,6 @@
-using Terv
+using Jutul
 using Statistics, DataStructures, LinearAlgebra, Krylov, IterativeSolvers
-ENV["JULIA_DEBUG"] = Terv
+ENV["JULIA_DEBUG"] = Jutul
 ENV["JULIA_DEBUG"] = nothing
 ##
 # casename = "simple_egg"

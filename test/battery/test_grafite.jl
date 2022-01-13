@@ -4,9 +4,9 @@ A component with electric potential, concentration and temperature
 The different potentials are independent (diagonal onsager matrix),
 and conductivity, diffusivity is constant.
 =#
-using Terv
+using Jutul
 
-ENV["JULIA_DEBUG"] = Terv;
+ENV["JULIA_DEBUG"] = Jutul;
 
 
 function test_ac()

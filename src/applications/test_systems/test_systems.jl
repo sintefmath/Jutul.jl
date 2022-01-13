@@ -1,14 +1,14 @@
 export ScalarTestSystem, ScalarTestDomain, ScalarTestForce
 export XVar
 
-struct ScalarTestSystem <: TervSystem end
+struct ScalarTestSystem <: JutulSystem end
 
-struct ScalarTestDomain <: TervDomain end
+struct ScalarTestDomain <: JutulDomain end
 active_entities(d::ScalarTestDomain, ::Any) = [1]
 
 function number_of_cells(::ScalarTestDomain) 1 end
 
-function get_domain_intersection(u::TervUnit, target_d::ScalarTestDomain, source_d::ScalarTestDomain, target_symbol, source_symbol)
+function get_domain_intersection(u::JutulUnit, target_d::ScalarTestDomain, source_d::ScalarTestDomain, target_symbol, source_symbol)
     # This domain always interacts with the single cell in instances of itself, and nothing else
     (target = [1], source = [1], target_entity = Cells(), source_entity = Cells())
 end

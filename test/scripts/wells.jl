@@ -1,5 +1,5 @@
-using Terv
-ENV["JULIA_DEBUG"] = Terv
+using Jutul
+ENV["JULIA_DEBUG"] = Jutul
 single_phase = false
 
 ##

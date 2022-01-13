@@ -1,4 +1,4 @@
-using Terv
+using Jutul
 function perform_test(nc = 100, tstep = repeat([0.02], 150))
     G = get_1d_reservoir(nc, z_max = 1)
     nc = number_of_cells(G)

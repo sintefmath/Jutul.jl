@@ -1,6 +1,6 @@
-using Test, StaticArrays, Terv, SparseArrays
-using Terv: SparsePattern, LinearizedSystem, LinearizedBlock, MultiLinearizedSystem, BlockMajorLayout, EquationMajorLayout, DefaultContext
-using Terv: linear_operator, block_major_to_equation_major_view, equation_major_to_block_major_view
+using Test, StaticArrays, Jutul, SparseArrays
+using Jutul: SparsePattern, LinearizedSystem, LinearizedBlock, MultiLinearizedSystem, BlockMajorLayout, EquationMajorLayout, DefaultContext
+using Jutul: linear_operator, block_major_to_equation_major_view, equation_major_to_block_major_view
 
 # Make the same system twice
 # Convert to block system

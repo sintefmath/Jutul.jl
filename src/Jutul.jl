@@ -1,4 +1,4 @@
-module Terv
+module Jutul
 
 # Use ForwardDiff.Duals
 using ForwardDiff

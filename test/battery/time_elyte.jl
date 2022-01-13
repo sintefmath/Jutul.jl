@@ -2,7 +2,7 @@
 Get timing of the simple elyte model
 =#
 
-@time using Terv
+@time using Jutul
 
 ##
 using MAT

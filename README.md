@@ -1,4 +1,4 @@
-# Terv.jl
+# Jutul.jl
 
 Experimental module for solution of flow and transport in porous media.
 
@@ -10,7 +10,7 @@ instantiate # First time dependency setup
 # Hit backspace to leave package mode
 # prompt changes to julia>
 using Revise
-using Terv
+using Jutul
 # Simple gravity segregation test
 include("test/scripts/two_phase_gravity_segregation.jl")
 # Uses the dumped pico grid (3 x 3 x 1) from MRST:

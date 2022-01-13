@@ -1,16 +1,16 @@
 export TotalMassVelocityMassFractionsFlow
 
-abstract type FacilitySystem <: TervSystem end
+abstract type FacilitySystem <: JutulSystem end
 struct PredictionMode <: FacilitySystem end
 struct HistoryMode <: FacilitySystem end
 
-abstract type SurfaceFacilityDomain <: TervDomain end
+abstract type SurfaceFacilityDomain <: JutulDomain end
 abstract type WellControllerDomain <: SurfaceFacilityDomain end
 struct WellGroup <: WellControllerDomain
     well_symbols::Vector{Symbol}
 end
 
-struct Wells <: TervUnit end
+struct Wells <: JutulUnit end
 struct TotalSurfaceMassRate <: ScalarVariable end
 abstract type WellTarget end
 
@@ -24,7 +24,7 @@ struct SinglePhaseRateTarget <: WellTarget
 end
 
 struct DisabledTarget <: WellTarget end
-abstract type WellForce <: TervForce end
+abstract type WellForce <: JutulForce end
 abstract type WellControlForce <: WellForce end
 
 struct DisabledControl <: WellControlForce
@@ -72,12 +72,12 @@ struct WellGroupConfiguration
     end
 end
 
-struct ControlEquationWell <: TervEquation
+struct ControlEquationWell <: JutulEquation
     # Equation:
     #        q_t - target = 0
     #        p|top cell - target = 0
     # We need to store derivatives with respect to q_t (same entity) and the top cell (other entity)
-    equation::TervAutoDiffCache
+    equation::JutulAutoDiffCache
     function ControlEquationWell(model, number_of_equations; kwarg...)
         # @assert number_of_equations == 1
         nw = count_entities(model.domain, Wells())

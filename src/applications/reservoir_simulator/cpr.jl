@@ -2,7 +2,7 @@ export CPRPreconditioner
 """
 Constrained pressure residual
 """
-mutable struct CPRPreconditioner <: TervPreconditioner
+mutable struct CPRPreconditioner <: JutulPreconditioner
     A_p  # pressure system
     r_p  # pressure residual
     p    # last pressure approximation

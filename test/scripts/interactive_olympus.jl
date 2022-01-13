@@ -1,11 +1,11 @@
-using Terv
+using Jutul
 using GLMakie
 using MAT
 casename = "olympus"
 ##
 G, mrst_data = get_minimal_tpfa_grid_from_mrst(casename, extraout = true)
 ##
-fn = string(dirname(pathof(Terv)), "/../data/testgrids/olympus_rocks.mat")
+fn = string(dirname(pathof(Jutul)), "/../data/testgrids/olympus_rocks.mat")
 rocks = MAT.matread(fn)["rocks"]
 
 ##

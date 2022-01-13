@@ -20,9 +20,9 @@ function update!(f::FactorStore, g, g!, A)
     return f.factor
 end
 
-abstract type TervLinearSystem end
+abstract type JutulLinearSystem end
 
-struct LinearizedSystem{L} <: TervLinearSystem
+struct LinearizedSystem{L} <: JutulLinearSystem
     jac
     r
     dx
@@ -32,7 +32,7 @@ struct LinearizedSystem{L} <: TervLinearSystem
     matrix_layout::L
 end
 
-struct LinearizedBlock{M, R, C} <: TervLinearSystem
+struct LinearizedBlock{M, R, C} <: JutulLinearSystem
     jac
     jac_buffer
     matrix_layout::M
@@ -60,7 +60,7 @@ col_block_size(b::LinearizedBlock) = b.rowcol_block_size[2]
 
 LinearizedType = Union{LinearizedSystem, LinearizedBlock}
 
-struct MultiLinearizedSystem{L} <: TervLinearSystem
+struct MultiLinearizedSystem{L} <: JutulLinearSystem
     subsystems::Matrix{LinearizedType}
     r
     dx

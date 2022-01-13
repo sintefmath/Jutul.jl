@@ -1,4 +1,4 @@
-using Terv
+using Jutul
 using Test
 
 function test_multi(; use_groups = false, kwarg...)

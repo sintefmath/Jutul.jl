@@ -1,11 +1,11 @@
-using Terv
+using Jutul
 using LinearAlgebra
 using Printf
 using GLMakie
 using ForwardDiff
 # Turn on debugging to show output and timing.
 # Turn on by uncommenting or running the following:
-ENV["JULIA_DEBUG"] = Terv
+ENV["JULIA_DEBUG"] = Jutul
 # To disable the debug output:
 # ENV["JULIA_DEBUG"] = nothing
 

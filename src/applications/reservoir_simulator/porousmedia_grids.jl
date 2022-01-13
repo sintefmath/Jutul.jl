@@ -7,7 +7,7 @@ export transfer, get_1d_reservoir
 
 import Base.eltype
 
-abstract type PorousMediumGrid <: TervGrid end
+abstract type PorousMediumGrid <: JutulGrid end
 abstract type ReservoirGrid <: PorousMediumGrid end
 # TPFA grid
 "Minimal struct for TPFA-like grid. Just connection data and pore-volumes"

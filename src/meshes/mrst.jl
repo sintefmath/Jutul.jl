@@ -1,4 +1,4 @@
-struct MRSTWrapMesh <: AbstractTervMesh
+struct MRSTWrapMesh <: AbstractJutulMesh
     data
     function MRSTWrapMesh(G)
         @assert haskey(G, "cells")

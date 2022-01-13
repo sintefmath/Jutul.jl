@@ -9,7 +9,7 @@ end
 
 function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false, kwarg...)
     if relative_path
-        fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
+        fn = string(dirname(pathof(Jutul)), "/../data/testgrids/", name, ".mat")
     else
         fn = name
     end
@@ -127,7 +127,7 @@ function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", con
     elseif isa(context, String)
         error("Unsupported target $context")
     end
-    @assert isa(context, TervContext)
+    @assert isa(context, JutulContext)
 
     if case_name == "single_phase_simple"
         # Parameters
@@ -600,7 +600,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         is_injector = wdata["sign"] > 0
         is_shut = wdata["status"] < 1
         comp_i = vec(wdata["compi"])
-        phases = Terv.get_phases(model.system)
+        phases = Jutul.get_phases(model.system)
         if wdata["type"] == "rate"
             target_phase = phases[only(findall(comp_i .> 0))]
             target = SinglePhaseRateTarget(t_mrst, target_phase)

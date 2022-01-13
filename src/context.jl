@@ -16,7 +16,7 @@ function transfer(context, v::Real)
     return transfer(context, [v])
 end
 
-function transfer(context::TervContext, v::AbstractArray)
+function transfer(context::JutulContext, v::AbstractArray)
     return Array(v)
 end
 
@@ -65,7 +65,7 @@ Synchronize backend after allocations.
 Some backends may require notification that
 storage has been allocated.
 """
-function synchronize(::TervContext)
+function synchronize(::JutulContext)
     # Default: Do nothing
 end
 

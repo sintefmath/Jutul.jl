@@ -5,17 +5,17 @@ Number of entities (e.g. Cells, Faces) a variable is defined on.
 By default, each primary variable exists on all cells of a discretized domain
 
 """
-number_of_entities(model, pv::TervVariables) = count_entities(model.domain, associated_entity(pv))
+number_of_entities(model, pv::JutulVariables) = count_entities(model.domain, associated_entity(pv))
 
 """
 The entity a variable is associated with, and can hold partial derivatives with respect to.
 """
-associated_entity(::TervVariables) = Cells()
+associated_entity(::JutulVariables) = Cells()
 
 """
 Total number of degrees of freedom for a model, over all primary variables and all entities.
 """
-function number_of_degrees_of_freedom(model::TervModel)
+function number_of_degrees_of_freedom(model::JutulModel)
     ndof = 0
     for (pkey, pvar) in get_primary_variables(model)
         ndof += number_of_degrees_of_freedom(model, pvar)
@@ -23,12 +23,12 @@ function number_of_degrees_of_freedom(model::TervModel)
     return ndof
 end
 
-function number_of_degrees_of_freedom(model::TervModel, u::TervUnit)
+function number_of_degrees_of_freedom(model::JutulModel, u::JutulUnit)
     ndof = degrees_of_freedom_per_entity(model, u)*count_active_entities(model.domain, u)
     return ndof
 end
 
-function degrees_of_freedom_per_entity(model::TervModel, u::TervUnit)
+function degrees_of_freedom_per_entity(model::JutulModel, u::JutulUnit)
     ndof = 0
     for pvar in values(get_primary_variables(model))
         if associated_entity(pvar) == u
@@ -38,14 +38,14 @@ function degrees_of_freedom_per_entity(model::TervModel, u::TervUnit)
     return ndof
 end
 
-function number_of_degrees_of_freedom(model, pvars::TervVariables)
+function number_of_degrees_of_freedom(model, pvars::JutulVariables)
     e = associated_entity(pvars)
     n = count_active_entities(model.domain, e)
     m = degrees_of_freedom_per_entity(model, pvars)
     return n*m
 end
 
-function value_dim(model, pvars::TervVariables)
+function value_dim(model, pvars::JutulVariables)
     return (values_per_entity(model, pvars), number_of_entities(model, pvars))
 end
 
@@ -62,31 +62,31 @@ degrees_of_freedom_per_entity(model, ::ConstantVariables) = 0
 Number of values held by a primary variable. Normally this is equal to the number of degrees of freedom,
 but some special primary variables are most conveniently defined by having N values and N-1 independent variables.
 """
-values_per_entity(model, u::TervVariables) = degrees_of_freedom_per_entity(model, u)
+values_per_entity(model, u::JutulVariables) = degrees_of_freedom_per_entity(model, u)
 ## Update functions
 """
 Absolute allowable change for variable during a nonlinear update.
 """
-absolute_increment_limit(::TervVariables) = nothing
+absolute_increment_limit(::JutulVariables) = nothing
 
 """
 Relative allowable change for variable during a nonlinear update.
 A variable with value |x| and relative limit 0.2 cannot change more
 than |x|*0.2.
 """
-relative_increment_limit(::TervVariables) = nothing
+relative_increment_limit(::JutulVariables) = nothing
 
 """
 Upper (inclusive) limit for variable.
 """
-maximum_value(::TervVariables) = nothing
+maximum_value(::JutulVariables) = nothing
 
 """
 Lower (inclusive) limit for variable.
 """
-minimum_value(::TervVariables) = nothing
+minimum_value(::JutulVariables) = nothing
 
-function update_primary_variable!(state, p::TervVariables, state_symbol, model, dx)
+function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx)
     names = get_names(p)
     entity = associated_entity(p)
     active = active_entities(model.domain, entity)
@@ -145,19 +145,19 @@ scale_increment(dv, ::Nothing) = dv
     return v + choose_increment(value(v), dv, arg...)
 end
 
-function get_names(v::TervVariables)
+function get_names(v::JutulVariables)
     return [get_name(v)]
 end
 
-function get_symbol(v::TervVariables)
+function get_symbol(v::JutulVariables)
     return Symbol(typeof(v))
 end
 
-function get_name(v::TervVariables)
+function get_name(v::JutulVariables)
     return String(get_symbol(v))
 end
 
-variable_scale(::TervVariables) = nothing
+variable_scale(::JutulVariables) = nothing
 
 ## Initialization
 function initialize_primary_variable_ad!(state, model, pvar, arg...; offset = 0, kwarg...)

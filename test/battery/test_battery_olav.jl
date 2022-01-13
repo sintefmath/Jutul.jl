@@ -4,7 +4,7 @@ A component with electric potential, concentration and temperature
 The different potentials are independent (diagonal onsager matrix),
 and conductivity, diffusivity is constant.
 =#
-using Terv
+using Jutul
 using MAT
 using Plots
 
@@ -293,7 +293,7 @@ end
 
 function test_battery()
     name="model1d_notemp"
-    fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
+    fn = string(dirname(pathof(Jutul)), "/../data/models/", name, ".mat")
     exported_all = MAT.matread(fn)
 
     model, state0, parameters, grids = setup_model(exported_all)    

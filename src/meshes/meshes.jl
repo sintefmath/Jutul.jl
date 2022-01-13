@@ -3,9 +3,9 @@
 export MRSTWrapMesh, CartesianMesh, TwoPointFiniteVolumeGeometry
 export triangulate_outer_surface, tpfv_geometry, discretized_domain_tpfv_flow
 
-abstract type TervGeometry end
+abstract type JutulGeometry end
 
-struct TwoPointFiniteVolumeGeometry <: TervGeometry
+struct TwoPointFiniteVolumeGeometry <: JutulGeometry
     neighbors
     areas
     volumes
@@ -33,10 +33,10 @@ end
 
 dim(g::TwoPointFiniteVolumeGeometry) = size(g.cell_centroids, 1)
 
-abstract type AbstractTervMesh end
-dim(t::AbstractTervMesh) = 2
-number_of_cells(t::AbstractTervMesh) = 1
-number_of_faces(t::AbstractTervMesh) = 0
+abstract type AbstractJutulMesh end
+dim(t::AbstractJutulMesh) = 2
+number_of_cells(t::AbstractJutulMesh) = 1
+number_of_faces(t::AbstractJutulMesh) = 0
 
 include("mrst.jl")
 include("cart.jl")

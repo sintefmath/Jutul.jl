@@ -3,7 +3,7 @@ A script to lay out the best way to debug
 =#
 
 # Start by compiling the needed code, with breakpoints
-using Terv
+using Jutul
 
 ##
 

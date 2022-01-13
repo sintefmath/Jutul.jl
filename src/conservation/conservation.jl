@@ -1,10 +1,10 @@
 export ConservationLaw
 
-struct ConservationLaw <: TervEquation
-    accumulation::TervAutoDiffCache
+struct ConservationLaw <: JutulEquation
+    accumulation::JutulAutoDiffCache
     accumulation_symbol::Symbol
-    half_face_flux_cells::TervAutoDiffCache
-    half_face_flux_faces::Union{TervAutoDiffCache,Nothing}
+    half_face_flux_cells::JutulAutoDiffCache
+    half_face_flux_faces::Union{JutulAutoDiffCache,Nothing}
     sources::AbstractSparseMatrix
     flow_discretization::FlowDiscretization
 end

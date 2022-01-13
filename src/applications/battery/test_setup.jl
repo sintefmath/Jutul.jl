@@ -3,7 +3,7 @@ export get_cc_grid, get_boundary, get_tensorprod, get_simple_elyte_model
 export exported_model_to_domain, get_ref_states, get_simple_elyte_sim
 
 function get_boundary(name)
-    fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, "_T.mat")
+    fn = string(dirname(pathof(Jutul)), "/../data/testgrids/", name, "_T.mat")
     exported = MAT.matread(fn)
 
     exported
@@ -16,7 +16,7 @@ function get_boundary(name)
 end
 
 function get_tensorprod(name="square_current_collector")
-    fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, "_P.mat")
+    fn = string(dirname(pathof(Jutul)), "/../data/testgrids/", name, "_P.mat")
     exported = MAT.matread(fn)
 
     exported
@@ -29,7 +29,7 @@ end
 function get_cc_grid(
     ;name="square_current_collector", extraout = false, bc=[], b_T_hf=[], tensor_map=false
     )
-    fn = string(dirname(pathof(Terv)), "/../data/testgrids/", name, ".mat")
+    fn = string(dirname(pathof(Jutul)), "/../data/testgrids/", name, ".mat")
     exported = MAT.matread(fn)
 
     N = exported["G"]["faces"]["neighbors"]
@@ -113,7 +113,7 @@ function get_ref_states(j2m, ref_states)
 end
 
 function get_simple_elyte_model(name="modelElectrolyte")
-    fn = string(dirname(pathof(Terv)), "/../data/models/", name, ".mat")
+    fn = string(dirname(pathof(Jutul)), "/../data/models/", name, ".mat")
     exported = MAT.matread(fn)
     ex_model = exported["model"]
 

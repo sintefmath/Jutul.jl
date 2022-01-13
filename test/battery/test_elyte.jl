@@ -2,9 +2,9 @@
 Electectrolyte
 A electrolyte with coupleded potentials (φ, C, T) and |k∇φ|^2-terms
 =#
-using Terv
+using Jutul
 
-ENV["JULIA_DEBUG"] = Terv;
+ENV["JULIA_DEBUG"] = Jutul;
 
 ##
 

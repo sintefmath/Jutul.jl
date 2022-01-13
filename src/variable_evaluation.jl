@@ -83,7 +83,7 @@ end
 
 # Initializers
 function select_secondary_variables(domain, system, formulation)
-    sf = OrderedDict{Symbol, TervVariables}()
+    sf = OrderedDict{Symbol, JutulVariables}()
     select_secondary_variables!(sf, domain, system, formulation)
     return sf
 end
@@ -100,7 +100,7 @@ select_secondary_variables_formulation!(sf, domain, system, formulation) = nothi
 
 ## Definition
 function select_primary_variables(domain, system, formulation)
-    sf = OrderedDict{Symbol, TervVariables}()
+    sf = OrderedDict{Symbol, JutulVariables}()
     select_primary_variables!(sf, domain, system, formulation)
     return sf
 end
@@ -164,7 +164,7 @@ function select_output_variables(domain, system, formulation, primary_variables,
     return unique(outputs)
 end
 
-function sort_secondary_variables!(model::TervModel)
+function sort_secondary_variables!(model::JutulModel)
     # Do nothing for general case.
 end
 

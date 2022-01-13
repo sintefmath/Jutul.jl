@@ -1,13 +1,13 @@
 export SPU, TPFA, TwoPointPotentialFlow, TrivialFlow, get_neighborship
 
-abstract type TwoPointDiscretization <: TervDiscretization end
+abstract type TwoPointDiscretization <: JutulDiscretization end
 
-abstract type PotentialFlowDiscretization <: TervDiscretization end
+abstract type PotentialFlowDiscretization <: JutulDiscretization end
 abstract type KGradDiscretization <: PotentialFlowDiscretization end
 
-abstract type UpwindDiscretization <: TervDiscretization end
+abstract type UpwindDiscretization <: JutulDiscretization end
 
-abstract type FlowType <: TervDiscretization end
+abstract type FlowType <: JutulDiscretization end
 include_face_sign(::FlowType) = false
 
 function select_primary_variables_flow_type(S, domain, system, formulation, flow_type)
@@ -31,7 +31,7 @@ Single-point upwinding.
 struct SPU <: UpwindDiscretization end
 
 "Discretization of kgradp + upwind"
-abstract type FlowDiscretization <: TervDiscretization end
+abstract type FlowDiscretization <: JutulDiscretization end
 
 function get_connection(face, cell, faces, N, T, z, g, inc_face_sign)
     D = Dict()

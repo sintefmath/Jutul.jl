@@ -1,4 +1,4 @@
-using Terv
+using Jutul
 function perform_test(;nc = 100, time = 1.0, nstep = 100)
     tstep = repeat([time/nstep], nstep)
     G = get_1d_reservoir(nc)

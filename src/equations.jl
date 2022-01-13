@@ -7,7 +7,7 @@ function find_jac_position(A, target_entity_index, source_entity_index, # Typica
     equation_index, partial_index,        # Index of equation and partial derivative - local index
     nentities_target, nentities_source,         # Row and column sizes for each sub-system
     eqs_per_entity, partials_per_entity,      # Sizes of the smallest inner system
-    context::TervContext)
+    context::JutulContext)
     layout = matrix_layout(context)
     find_jac_position(
         A, target_entity_index, source_entity_index, 
@@ -21,7 +21,7 @@ end
 function find_jac_position(A, target_entity_index, source_entity_index,
     equation_index, partial_index,
     nentities_target, nentities_source,
-    eqs_per_entity, partials_per_entity, layout::TervMatrixLayout)
+    eqs_per_entity, partials_per_entity, layout::JutulMatrixLayout)
 
     row, col = row_col_sparse(target_entity_index, source_entity_index,
     equation_index, partial_index,
@@ -66,7 +66,7 @@ function row_col_sparse(target_entity_index, source_entity_index, # Typically ro
     return (row, col)
 end
 
-function find_sparse_position(A::SparseMatrixCSC, row, col, layout::TervMatrixLayout)
+function find_sparse_position(A::SparseMatrixCSC, row, col, layout::JutulMatrixLayout)
     adj = represented_as_adjoint(layout)
     find_sparse_position(A, row, col, adj)
 end
@@ -125,7 +125,7 @@ end
 """
 Return the domain entity the equation is associated with
 """
-function associated_entity(::TervEquation)
+function associated_entity(::JutulEquation)
     return Cells()
 end
 
@@ -133,7 +133,7 @@ end
 Get the number of equations per entity. For example, mass balance of two
 components will have two equations per grid cell (= entity)
 """
-function number_of_equations_per_entity(e::TervEquation)
+function number_of_equations_per_entity(e::JutulEquation)
     # Default: One equation per entity (= cell,  face, ...)
     return get_diagonal_cache(e).equations_per_entity
 end
@@ -141,21 +141,21 @@ end
 """
 Get the number of entities (e.g. the number of cells) that the equation is defined on.
 """
-function number_of_entities(model, e::TervEquation)
+function number_of_entities(model, e::JutulEquation)
     return count_active_entities(model.domain, associated_entity(e))
 end
 
 """
 Get the total number of equations on the domain of model.
 """
-function number_of_equations(model, e::TervEquation)
+function number_of_equations(model, e::JutulEquation)
     return number_of_equations_per_entity(e)*number_of_entities(model, e)
 end
 
 """
 Get the number of partials
 """
-function number_of_partials_per_entity(e::TervEquation)
+function number_of_partials_per_entity(e::JutulEquation)
     return get_diagonal_cache(e).npartials
 end
 
@@ -163,7 +163,7 @@ end
 Give out I, J arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_sparsity(model, e::TervEquation, entity, layout::EquationMajorLayout)
+function declare_sparsity(model, e::JutulEquation, entity, layout::EquationMajorLayout)
     primitive = declare_pattern(model, e, entity)
     if isnothing(primitive)
         out = nothing
@@ -194,7 +194,7 @@ function declare_sparsity(model, e::TervEquation, entity, layout::EquationMajorL
     return out
 end
 
-function declare_sparsity(model, e::TervEquation, entity, layout::BlockMajorLayout)
+function declare_sparsity(model, e::JutulEquation, entity, layout::BlockMajorLayout)
     primitive = declare_pattern(model, e, entity)
     if isnothing(primitive)
         out = nothing
@@ -210,7 +210,7 @@ function declare_sparsity(model, e::TervEquation, entity, layout::BlockMajorLayo
     return out
 end
 
-function declare_sparsity(model, e::TervEquation, entity, layout::UnitMajorLayout)
+function declare_sparsity(model, e::JutulEquation, entity, layout::UnitMajorLayout)
     primitive = declare_pattern(model, e, entity)
     if isnothing(primitive)
         out = nothing
@@ -262,7 +262,7 @@ Give out I, J arrays of equal length for a the impact of a model A on
 a given equation E that is attached to some other model B. The sparsity
 is then that of ∂E / ∂P where P are the primary variables of A.
 """
-# function declare_cross_model_sparsity(model, other_model, others_equation::TervEquation)
+# function declare_cross_model_sparsity(model, other_model, others_equation::JutulEquation)
 #    return ([], [])
 # end
 
@@ -270,7 +270,7 @@ is then that of ∂E / ∂P where P are the primary variables of A.
 Update an equation so that it knows where to store its derivatives
 in the Jacobian representation.
 """
-function align_to_jacobian!(eq::TervEquation, jac, model; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq::JutulEquation, jac, model; equation_offset = 0, variable_offset = 0)
     pentities = get_primary_variable_ordered_entities(model)
     for u in pentities
         align_to_jacobian!(eq, jac, model, u, equation_offset = equation_offset, variable_offset = variable_offset) 
@@ -292,7 +292,7 @@ end
 Update a linearized system based on the values and derivatives in the equation.
 """
 
-function update_linearized_system_equation!(nz, r, model, equation::TervEquation)
+function update_linearized_system_equation!(nz, r, model, equation::JutulEquation)
     # NOTE: Default only updates diagonal part
     fill_equation_entries!(nz, r, model, get_diagonal_cache(equation))
 end
@@ -301,7 +301,7 @@ end
 """
 Update equation based on currently stored properties
 """
-function update_equation!(eq::TervEquation, storage, model, dt)
+function update_equation!(eq::JutulEquation, storage, model, dt)
     error("No default implementation exists for $(typeof(eq)).")
 end
 
@@ -312,7 +312,7 @@ not impact this particular equation.
 """
 function apply_forces_to_equation!(storage, model, eq, force, time) end
 
-function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
+function convergence_criterion(model, storage, eq::JutulEquation, r; dt = 1)
     n = number_of_equations_per_entity(eq)
     e = zeros(n)
     names = Vector{String}(undef, n)
@@ -327,10 +327,10 @@ function convergence_criterion(model, storage, eq::TervEquation, r; dt = 1)
     return R
 end
 
-@inline function get_diagonal_entries(eq::TervEquation)
+@inline function get_diagonal_entries(eq::JutulEquation)
     return get_entries(get_diagonal_cache(eq))
 end
 
-@inline function get_diagonal_cache(eq::TervEquation)
+@inline function get_diagonal_cache(eq::JutulEquation)
     return eq.equation
 end

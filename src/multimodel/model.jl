@@ -67,7 +67,7 @@ function setup_state!(state, model::MultiModel, init_values)
 end
 
 function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model))
-    storage = TervStorage()
+    storage = JutulStorage()
     for key in submodels_symbols(model)
         m = model.models[key]
         storage[key] = setup_storage(m,  state0 = state0[key],
@@ -86,7 +86,7 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
 end
 
 function setup_cross_terms!(storage, model::MultiModel, couplings)#::ModelCoupling)
-    crossd = TervStorage()
+    crossd = JutulStorage()
     models = model.models
     debugstr = "Determining cross-terms\n"
     for coupling in couplings
@@ -149,7 +149,7 @@ function setup_cross_terms!(storage, model::MultiModel, couplings)#::ModelCoupli
 end
 
 function setup_cross_terms(storage, model::MultiModel)
-    crossd = TervStorage()
+    crossd = JutulStorage()
     models = model.models
     debugstr = "Determining cross-terms\n"
     sms = submodel_symbols(model)
@@ -191,7 +191,7 @@ function transpose_intersection(intersection)
 end
 
 
-function declare_cross_term(eq::TervEquation, target_model, source_model; target = nothing, source = nothing)
+function declare_cross_term(eq::JutulEquation, target_model, source_model; target = nothing, source = nothing)
     target_entity = associated_entity(eq)
     intersection = get_model_intersection(target_entity, target_model, source_model, target, source)
     if isnothing(intersection.target)
@@ -282,7 +282,7 @@ function align_crossterms_subgroup!(storage, models, target_keys, source_keys, n
     end
 end
 
-function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, target::TervModel, source::TervModel; equation_offset = 0, variable_offset = 0)
+function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, target::JutulModel, source::JutulModel; equation_offset = 0, variable_offset = 0)
     for ekey in keys(equations)
         eq = equations[ekey]
         if !isnothing(crossterms) && haskey(crossterms, ekey)

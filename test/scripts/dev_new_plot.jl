@@ -1,4 +1,4 @@
-using Terv
+using Jutul
 casename = "pico"
 # casename = "1cell3d"
 casename = "norne"

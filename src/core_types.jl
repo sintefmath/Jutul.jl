@@ -1,6 +1,6 @@
-export TervSystem, TervDomain, TervVariables, TervGrid, TervContext
-export SimulationModel, TervVariables, TervFormulation, TervEquation
-export setup_parameters, TervForce
+export JutulSystem, JutulDomain, JutulVariables, JutulGrid, JutulContext
+export SimulationModel, JutulVariables, JutulFormulation, JutulEquation
+export setup_parameters, JutulForce
 export Cells, Nodes, Faces
 export ConstantVariables, ScalarVariable, GroupedVariables
 
@@ -9,40 +9,40 @@ export BlockMajorLayout, EquationMajorLayout, UnitMajorLayout
 
 export transfer, allocate_array
 
-export TervStorage
+export JutulStorage
 
 import Base: show, size, setindex!, getindex, ndims
 
 # Physical system
-abstract type TervSystem end
+abstract type JutulSystem end
 
 # Discretization - currently unused
-abstract type TervDiscretization end
-# struct DefaultDiscretization <: TervDiscretization end
+abstract type JutulDiscretization end
+# struct DefaultDiscretization <: JutulDiscretization end
 
 # Primary/secondary variables
-abstract type TervVariables end
-abstract type ScalarVariable <: TervVariables end
-abstract type GroupedVariables <: TervVariables end
+abstract type JutulVariables end
+abstract type ScalarVariable <: JutulVariables end
+abstract type GroupedVariables <: JutulVariables end
 abstract type FractionVariables <: GroupedVariables end
 
 # Functions of the state
-abstract type TervStateFunction <: TervVariables end
+abstract type JutulStateFunction <: JutulVariables end
 
 # Driving forces
-abstract type TervForce end
+abstract type JutulForce end
 
 # Context
-abstract type TervContext end
-abstract type GPUTervContext <: TervContext end
-abstract type CPUTervContext <: TervContext end
+abstract type JutulContext end
+abstract type GPUJutulContext <: JutulContext end
+abstract type CPUJutulContext <: JutulContext end
 
 # Traits etc for matrix ordering
-abstract type TervMatrixLayout end
+abstract type JutulMatrixLayout end
 """
 Equations are stored sequentially in rows, derivatives of same type in columns:
 """
-struct EquationMajorLayout <: TervMatrixLayout
+struct EquationMajorLayout <: JutulMatrixLayout
     as_adjoint::Bool
 end
 EquationMajorLayout() = EquationMajorLayout(false)
@@ -50,7 +50,7 @@ is_cell_major(::EquationMajorLayout) = false
 """
 Domain entities sequentially in rows:
 """
-struct UnitMajorLayout <: TervMatrixLayout
+struct UnitMajorLayout <: JutulMatrixLayout
     as_adjoint::Bool
 end
 UnitMajorLayout() = UnitMajorLayout(false)
@@ -59,7 +59,7 @@ is_cell_major(::UnitMajorLayout) = true
 """
 Same as UnitMajorLayout, but the nzval is a matrix
 """
-struct BlockMajorLayout <: TervMatrixLayout
+struct BlockMajorLayout <: JutulMatrixLayout
     as_adjoint::Bool
 end
 BlockMajorLayout() = BlockMajorLayout(false)
@@ -106,7 +106,7 @@ ijnm(p::SparsePattern) = (p.I, p.J, p.n, p.m)
 block_size(p::SparsePattern) = (p.block_n, p.block_m)
 
 # CUDA context - everything on the single CUDA device attached to machine
-struct SingleCUDAContext <: GPUTervContext
+struct SingleCUDAContext <: GPUJutulContext
     float_t::Type
     index_t::Type
     block_size
@@ -120,7 +120,7 @@ end
 matrix_layout(c::SingleCUDAContext) = c.matrix_layout
 
 "Context that uses KernelAbstractions for GPU parallelization"
-struct SharedMemoryKernelContext <: CPUTervContext
+struct SharedMemoryKernelContext <: CPUJutulContext
     block_size
     device
     function SharedMemoryKernelContext(block_size = Threads.nthreads())
@@ -130,14 +130,14 @@ struct SharedMemoryKernelContext <: CPUTervContext
 end
 
 "Context that uses threads etc to accelerate loops"
-struct SharedMemoryContext <: CPUTervContext
+struct SharedMemoryContext <: CPUJutulContext
 
 end
 
 thread_batch(::Any) = 1000
 
 "Default context"
-struct DefaultContext <: CPUTervContext
+struct DefaultContext <: CPUJutulContext
     matrix_layout
     minbatch::Int64
     function DefaultContext(; matrix_layout = EquationMajorLayout(), minbatch = 1000)
@@ -157,19 +157,19 @@ function r_eltype(context, layout, block_size)
     return float_type(context)
 end
 
-function jacobian_eltype(context::CPUTervContext, layout::BlockMajorLayout, block_size)
+function jacobian_eltype(context::CPUJutulContext, layout::BlockMajorLayout, block_size)
     return SMatrix{block_size..., float_type(context), prod(block_size)}
 end
 
-function r_eltype(context::CPUTervContext, layout::BlockMajorLayout, block_size)
+function r_eltype(context::CPUJutulContext, layout::BlockMajorLayout, block_size)
     return SVector{block_size[1], float_type(context)}
 end
 
 
 # Domains
-abstract type TervDomain end
+abstract type JutulDomain end
 
-struct DiscretizedDomain{G} <: TervDomain
+struct DiscretizedDomain{G} <: JutulDomain
     grid::G
     discretizations
     entities
@@ -204,21 +204,21 @@ end
 
 
 # Formulation
-abstract type TervFormulation end
-struct FullyImplicit <: TervFormulation end
+abstract type JutulFormulation end
+struct FullyImplicit <: JutulFormulation end
 
 # Equations
-abstract type TervEquation end
-abstract type DiagonalEquation <: TervEquation end
+abstract type JutulEquation end
+abstract type DiagonalEquation <: JutulEquation end
 
 # Models
-abstract type TervModel end
-abstract type AbstractSimulationModel <: TervModel end
+abstract type JutulModel end
+abstract type AbstractSimulationModel <: JutulModel end
 
-struct SimulationModel{O<:TervDomain,
-                       S<:TervSystem,
-                       F<:TervFormulation,
-                       C<:TervContext} <: AbstractSimulationModel
+struct SimulationModel{O<:JutulDomain,
+                       S<:JutulSystem,
+                       F<:JutulFormulation,
+                       C<:JutulContext} <: AbstractSimulationModel
     domain::O
     system::S
     context::C
@@ -305,18 +305,18 @@ end
 # Grids etc
 
 ## Grid
-abstract type TervGrid end
+abstract type JutulGrid end
 
 ## Discretized entities
-abstract type TervUnit end
+abstract type JutulUnit end
 
-struct Cells <: TervUnit end
-struct Faces <: TervUnit end
-struct Nodes <: TervUnit end
+struct Cells <: JutulUnit end
+struct Faces <: JutulUnit end
+struct Nodes <: JutulUnit end
 
 # Sim model
 
-function SimulationModel(g::TervGrid, system; discretization = nothing, kwarg...)
+function SimulationModel(g::JutulGrid, system; discretization = nothing, kwarg...)
     # Simple constructor that assumes
     d = DiscretizedDomain(g, discretization)
     SimulationModel(d, system; kwarg...)
@@ -327,7 +327,7 @@ A set of constants, repeated over the entire set of Cells or some other entity
 """
 struct ConstantVariables <: GroupedVariables
     constants
-    entity::TervUnit
+    entity::JutulUnit
     single_entity::Bool
     function ConstantVariables(constants, entity = Cells(); single_entity = nothing)
         if !isa(constants, AbstractArray)
@@ -373,63 +373,63 @@ function Base.axes(c::ConstantWrapper, d)
 end
 
 
-struct TervStorage
+struct JutulStorage
     data::Union{Dict{Symbol, Any}, NamedTuple}
-    function TervStorage(S = Dict{Symbol, Any}())
+    function JutulStorage(S = Dict{Symbol, Any}())
         new(S)
     end
 end
 
-function convert_to_immutable_storage(S::TervStorage)
+function convert_to_immutable_storage(S::JutulStorage)
     tup = convert_to_immutable_storage(data(S))
-    return TervStorage(tup)
+    return JutulStorage(tup)
 end
 
-function Base.getproperty(S::TervStorage, name::Symbol)
+function Base.getproperty(S::JutulStorage, name::Symbol)
     Base.getproperty(data(S), name)
 end
 
-data(S::TervStorage) = getfield(S, :data)
+data(S::JutulStorage) = getfield(S, :data)
 
-function Base.setproperty!(S::TervStorage, name::Symbol, x)
+function Base.setproperty!(S::JutulStorage, name::Symbol, x)
     Base.setproperty!(data(S), name, x)
 end
 
-function Base.setindex!(S::TervStorage, x, name::Symbol)
+function Base.setindex!(S::JutulStorage, x, name::Symbol)
     setindex!(data(S), x, name)
 end
 
-function Base.getindex(S::TervStorage, name::Symbol)
+function Base.getindex(S::JutulStorage, name::Symbol)
     getindex(data(S), name)
 end
 
-function Base.haskey(S::TervStorage, name::Symbol)
+function Base.haskey(S::JutulStorage, name::Symbol)
     return Base.haskey(data(S), name)
 end
 
-function Base.keys(S::TervStorage)
+function Base.keys(S::JutulStorage)
     return Base.keys(data(S))
 end
 
 
-function Base.show(io::IO, t::MIME"text/plain", storage::TervStorage)
+function Base.show(io::IO, t::MIME"text/plain", storage::JutulStorage)
     D = data(storage)
     if isa(D, AbstractDict)
-        println("TervStorage (mutable) with fields:")
+        println("JutulStorage (mutable) with fields:")
     else
-        println("TervStorage (immutable) with fields:")
+        println("JutulStorage (immutable) with fields:")
     end
     for key in keys(D)
         println("  $key: $(typeof(D[key]))")
     end
 end
 
-function Base.show(io::IO, t::TervStorage, storage::TervStorage)
+function Base.show(io::IO, t::JutulStorage, storage::JutulStorage)
     data = storage.data
     if isa(data, AbstractDict)
-        println("TervStorage (mutable) with fields:")
+        println("JutulStorage (mutable) with fields:")
     else
-        println("TervStorage (immutable) with fields:")
+        println("JutulStorage (immutable) with fields:")
     end
     for key in keys(data)
         println("  $key: $(typeof(data[key]))")

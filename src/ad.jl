@@ -1,14 +1,14 @@
-export CompactAutoDiffCache, as_value, TervAutoDiffCache, number_of_entities
+export CompactAutoDiffCache, as_value, JutulAutoDiffCache, number_of_entities
 
 """
 An AutoDiffCache is a type that holds both a set of AD values and a map into some
 global Jacobian.
 """
-abstract type TervAutoDiffCache end
+abstract type JutulAutoDiffCache end
 """
 Cache that holds an AD vector/matrix together with their positions.
 """
-struct CompactAutoDiffCache{I, ∂x} <: TervAutoDiffCache where {I <: Integer, ∂x <: Real}
+struct CompactAutoDiffCache{I, ∂x} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
     entries
     entity
     jacobian_positions
@@ -21,7 +21,7 @@ struct CompactAutoDiffCache{I, ∂x} <: TervAutoDiffCache where {I <: Integer, �
                                                         tag = nothing,
                                                         n_entities_pos = nothing,
                                                         kwarg...)
-        if isa(npartials_or_model, TervModel)
+        if isa(npartials_or_model, JutulModel)
             model = npartials_or_model
             npartials = degrees_of_freedom_per_entity(model, entity)
         else
@@ -49,7 +49,7 @@ end
 """
 Get number of entities a cache is defined on.
 """
-@inline number_of_entities(c::TervAutoDiffCache) = c.number_of_entities
+@inline number_of_entities(c::JutulAutoDiffCache) = c.number_of_entities
 
 
 """
@@ -67,7 +67,7 @@ Get the entries of the main autodiff cache for an equation.
 
 Note: This only gets the .equation field's entries.
 """
-@inline function get_entries(e::TervEquation)
+@inline function get_entries(e::JutulEquation)
     return get_entries(e.equation)
 end
 
@@ -117,7 +117,7 @@ end
     @inbounds nzval[get_jacobian_pos(c, index, eqNo, partial_index, pos)] = new_value
 end
 
-function fill_equation_entries!(nz, r, model, cache::TervAutoDiffCache)
+function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
     jp = cache.jacobian_positions
@@ -134,7 +134,7 @@ function fill_equation_entries!(nz, r, model, cache::TervAutoDiffCache)
     end
 end
 
-function fill_equation_entries!(nz, r::Nothing, model, cache::TervAutoDiffCache)
+function fill_equation_entries!(nz, r::Nothing, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
     jp = cache.jacobian_positions
@@ -159,7 +159,7 @@ function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_entitie
     injective_alignment!(cache, arg...; target_index = eq_index, source_index = eq_index, kwarg...)
 end
 
-function injective_alignment!(cache::TervAutoDiffCache, jac, entity, context;
+function injective_alignment!(cache::JutulAutoDiffCache, jac, entity, context;
                                     layout = matrix_layout(context),
                                     target_index = 1:cache.number_of_entities,
                                     source_index = 1:cache.number_of_entities,
@@ -167,8 +167,8 @@ function injective_alignment!(cache::TervAutoDiffCache, jac, entity, context;
                                     number_of_entities_target = nothing,
                                     target_offset = 0,
                                     source_offset = 0)
-    entity::TervUnit
-    cache.entity::TervUnit
+    entity::JutulUnit
+    cache.entity::JutulUnit
     if entity == cache.entity
         nu_c, ne, np = ad_dims(cache)
         if isnothing(number_of_entities_source)
@@ -351,7 +351,7 @@ julia> allocate_array_ad(2, 2, diag_pos = [1, 2], npartials = 2)
  Dual{nothing}(0.0,0.0,1.0)  Dual{nothing}(0.0,0.0,1.0)
 ```
 """
-function allocate_array_ad(n::R...; context::TervContext = DefaultContext(), diag_pos = nothing, npartials = 1, kwarg...) where {R<:Integer}
+function allocate_array_ad(n::R...; context::JutulContext = DefaultContext(), diag_pos = nothing, npartials = 1, kwarg...) where {R<:Integer}
     # allocate a n length zero vector with space for derivatives
     T = float_type(context)
     z_val = zero(T)

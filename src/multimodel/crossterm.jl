@@ -1,6 +1,6 @@
 
 
-function align_to_jacobian!(ct::InjectiveCrossTerm, lsys, target::TervModel, source::TervModel; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(ct::InjectiveCrossTerm, lsys, target::JutulModel, source::JutulModel; equation_offset = 0, variable_offset = 0)
     cs = ct.crossterm_source_cache
     jac = lsys.jac
     impact_target = ct.impact[1]

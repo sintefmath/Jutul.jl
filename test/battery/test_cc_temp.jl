@@ -3,9 +3,9 @@ Current collector with temperature
 A conductor with temperature, where the change in temperature is given
 by the current density |j|^2
 =#
-using Terv
+using Jutul
 
-ENV["JULIA_DEBUG"] = Terv;
+ENV["JULIA_DEBUG"] = Jutul;
 
 ##
 

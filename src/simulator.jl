@@ -1,11 +1,11 @@
 export simulate, perform_step!
-export Simulator, TervSimulator, ProgressRecorder
+export Simulator, JutulSimulator, ProgressRecorder
 export simulator_config
 
-abstract type TervSimulator end
-struct Simulator <: TervSimulator
-    model::TervModel
-    storage::TervStorage
+abstract type JutulSimulator end
+struct Simulator <: JutulSimulator
+    model::JutulModel
+    storage::JutulStorage
 end
 
 function Simulator(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true, kwarg...)
@@ -104,7 +104,7 @@ function simulator_config!(cfg, sim; kwarg...)
     return cfg
 end
 
-function simulate(sim::TervSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, initialize = true, kwarg...)
+function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, initialize = true, kwarg...)
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     end
@@ -211,7 +211,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
     return (done, ministep_reports)
 end
 
-function perform_step!(simulator::TervSimulator, dt, forces, config; vararg...)
+function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
     perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
 end
 

@@ -9,11 +9,11 @@ export BOUNDARY_CURRENT, corr_type
 # Classes #
 ###########
 
-abstract type ElectroChemicalComponent <: TervSystem end
+abstract type ElectroChemicalComponent <: JutulSystem end
 # Alias for a genereal Electro Chemical Model
 const ECModel = SimulationModel{<:Any, <:ElectroChemicalComponent, <:Any, <:Any}
 
-abstract type ElectroChemicalGrid <: TervGrid end
+abstract type ElectroChemicalGrid <: JutulGrid end
 
 # Potentials
 abstract type Potential <: ScalarVariable end
@@ -25,11 +25,11 @@ struct Conductivity <: ScalarVariable end
 struct Diffusivity <: ScalarVariable end
 struct ThermalConductivity <: ScalarVariable end
 
-struct Conservation{T} <: TervEquation
-    accumulation::TervAutoDiffCache
+struct Conservation{T} <: JutulEquation
+    accumulation::JutulAutoDiffCache
     accumulation_symbol::Symbol
-    half_face_flux_cells::TervAutoDiffCache
-    density::TervAutoDiffCache
+    half_face_flux_cells::JutulAutoDiffCache
+    density::JutulAutoDiffCache
     flow_discretization::FlowDiscretization
 end
 
@@ -72,7 +72,7 @@ function number_of_entities(model, pv::Current)
     return 2*count_entities(model.domain, Faces())
 end
 
-abstract type NonDiagCellVariables <: TervVariables end
+abstract type NonDiagCellVariables <: JutulVariables end
 
 # Abstract type of a vector that is defined on a cell, from face flux
 abstract type CellVector <: NonDiagCellVariables end
@@ -111,7 +111,7 @@ end
 # Constructors #
 ################
 
-function TPFlow(grid::TervGrid, T; tensor_map = false)
+function TPFlow(grid::JutulGrid, T; tensor_map = false)
     N = get_neighborship(grid)
     faces, face_pos = get_facepos(N)
 

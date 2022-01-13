@@ -31,7 +31,7 @@ function get_primary_variable_ordered_entities(model::SimulationModel)
     return out
 end
 
-function number_of_partials_per_entity(model::SimulationModel, entity::TervUnit)
+function number_of_partials_per_entity(model::SimulationModel, entity::JutulUnit)
     n = 0
     for pvar in values(get_primary_variables(model))
         if associated_entity(pvar) == entity
@@ -44,7 +44,7 @@ end
 """
 Set up a state. You likely want to overload setup_state! instead of this one.
 """
-function setup_state(model::TervModel, arg...)
+function setup_state(model::JutulModel, arg...)
     state = Dict{Symbol, Any}()
     setup_state!(state, model, arg...)
     return state
@@ -53,7 +53,7 @@ end
 """
 Initialize primary variables and other state fields, given initial values as a Dict
 """
-function setup_state!(state, model::TervModel, init_values::Dict = Dict())
+function setup_state!(state, model::JutulModel, init_values::Dict = Dict())
     for (psym, pvar) in get_primary_variables(model)
         initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true)
     end
@@ -66,7 +66,7 @@ end
 """
 Add variables that need to be in state, but are never AD variables (e.g. phase status flag)
 """
-function initialize_extra_state_fields!(state, model::TervModel)
+function initialize_extra_state_fields!(state, model::JutulModel)
     initialize_extra_state_fields_domain!(state, model, model.domain)
     initialize_extra_state_fields_system!(state, model, model.system)
     initialize_extra_state_fields_formulation!(state, model, model.formulation)
@@ -88,8 +88,8 @@ end
 Allocate storage for the model. You should overload setup_storage! if you have a custom
 definition.
 """
-function setup_storage(model::TervModel; kwarg...)
-    d = TervStorage()
+function setup_storage(model::JutulModel; kwarg...)
+    d = JutulStorage()
     setup_storage!(d, model; kwarg...)
     return d
 end
@@ -98,7 +98,7 @@ end
 Initialize the already allocated storage at the beginning of a simulation.
 Use this to e.g. set up extra stuff in state0 needed for initializing the simulation loop.
 """
-function initialize_storage!(storage, model::TervModel; initialize_state0 = true)
+function initialize_storage!(storage, model::JutulModel; initialize_state0 = true)
     if initialize_state0
         # Convert state and parameters to immutable for evaluation
         state0_eval = convert_to_immutable_storage(storage[:state0])
@@ -123,7 +123,7 @@ end
 Allocate storage for a given model. The storage consists of all dynamic quantities used in
 the simulation. The default implementation allocates properties, equations and linearized system.
 """
-function setup_storage!(storage, model::TervModel; setup_linearized_system = true,
+function setup_storage!(storage, model::JutulModel; setup_linearized_system = true,
                                                       state0 = setup_state(model),
                                                       parameters = setup_parameters(model),
                                                       tag = nothing,
@@ -163,7 +163,7 @@ function setup_storage_formulation!(storage,  model, formulation)
     # Do nothing
 end
 
-function reference_primary_variables(storage, model::TervModel; kwarg...)
+function reference_primary_variables(storage, model::JutulModel; kwarg...)
     primaries = OrderedDict()
     state = storage[:state]
     for key in keys(get_primary_variables(model))
@@ -172,14 +172,14 @@ function reference_primary_variables(storage, model::TervModel; kwarg...)
     return primaries
 end
 
-function setup_equations(storage, model::TervModel; kwarg...)
+function setup_equations(storage, model::JutulModel; kwarg...)
     # We use ordered dict since equation alignment with primary variables matter.
     eqs = OrderedDict()
     setup_equations!(eqs, storage, model; kwarg...)
     return eqs
 end
 
-function setup_equations!(eqs, storage, model::TervModel; tag = nothing, kwarg...)
+function setup_equations!(eqs, storage, model::JutulModel; tag = nothing, kwarg...)
     outstr = "Setting up $(length(model.equations)) groups of governing equations...\n"
     if !isnothing(tag)
         outstr = "$tag: "*outstr
@@ -300,7 +300,7 @@ function get_sparse_arguments2(storage, model, layout::UnitMajorLayout)
     return SparsePattern(I, J, numrows, ndof, layout)
 end
 
-function setup_linearized_system!(storage, model::TervModel)
+function setup_linearized_system!(storage, model::JutulModel)
     # Linearized system is going to have dimensions of
     # total number of equations x total number of primary variables
     if !haskey(storage, :equations)
@@ -319,7 +319,7 @@ function setup_linearized_system(sparse_arg, model)
     LinearizedSystem(sparse_arg, context, matrix_layout(context))
 end
 
-function align_equations_to_linearized_system!(storage, model::TervModel; kwarg...)
+function align_equations_to_linearized_system!(storage, model::JutulModel; kwarg...)
     eqs = storage[:equations]
     jac = storage[:LinearizedSystem].jac
     align_equations_to_jacobian!(eqs, jac, model; kwarg...)
@@ -334,7 +334,7 @@ function align_equations_to_jacobian!(equations, jac, model; equation_offset = 0
     equation_offset
 end
 
-function allocate_array(context::TervContext, value, n...)
+function allocate_array(context::JutulContext, value, n...)
     tmp = transfer(context, value)
     return repeat(tmp, n...)
 end
@@ -344,7 +344,7 @@ Perform updates of everything that depends on the state.
 
 This includes properties, governing equations and the linearized system
 """
-function update_state_dependents!(storage, model::TervModel, dt, forces; time = NaN, update_secondary = true)
+function update_state_dependents!(storage, model::JutulModel, dt, forces; time = NaN, update_secondary = true)
     if update_secondary
         @timeit "secondary variables" update_secondary_variables!(storage, model)
     end
@@ -353,7 +353,7 @@ function update_state_dependents!(storage, model::TervModel, dt, forces; time = 
     @timeit "boundary conditions" apply_boundary_conditions!(storage, model)
 end
 
-function apply_boundary_conditions!(storage, model::TervModel)
+function apply_boundary_conditions!(storage, model::JutulModel)
     parameters = storage.parameters
     apply_boundary_conditions!(storage, parameters, model)
 end
@@ -367,13 +367,13 @@ function update_equations!(storage, model, dt = nothing)
     end
 end
 
-function update_linearized_system!(storage, model::TervModel; kwarg...)
+function update_linearized_system!(storage, model::JutulModel; kwarg...)
     equations = storage.equations
     lsys = storage.LinearizedSystem
     update_linearized_system!(lsys, equations, model; kwarg...)
 end
 
-function update_linearized_system!(lsys, equations, model::TervModel; equation_offset = 0)
+function update_linearized_system!(lsys, equations, model::JutulModel; equation_offset = 0)
     r_buf = lsys.r_buffer
     for key in keys(equations)
         @timeit "$key" begin
@@ -480,23 +480,23 @@ setup_parameters_system!(d, model, ::Any) = nothing
 setup_parameters_context!(d, model, ::Any) = nothing
 setup_parameters_formulation!(d, model, ::Any) = nothing
 
-function build_forces(model::TervModel)
+function build_forces(model::JutulModel)
     return NamedTuple()
 end
 
-function solve_and_update!(storage, model::TervModel, dt = nothing; linear_solver = nothing, recorder = nothing, kwarg...)
+function solve_and_update!(storage, model::JutulModel, dt = nothing; linear_solver = nothing, recorder = nothing, kwarg...)
     lsys = storage.LinearizedSystem
     t_solve = @elapsed @timeit "linear solve" solve!(lsys, linear_solver, model, storage, dt, recorder)
     t_update = @elapsed @timeit "primary variables" update_primary_variables!(storage, model; kwarg...)
     return (t_solve, t_update)
 end
 
-function update_primary_variables!(storage, model::TervModel; kwarg...)
+function update_primary_variables!(storage, model::JutulModel; kwarg...)
     dx = storage.LinearizedSystem.dx_buffer
     update_primary_variables!(storage.primary_variables, dx, model; kwarg...)
 end
 
-function update_primary_variables!(primary_storage, dx, model::TervModel; check = false)
+function update_primary_variables!(primary_storage, dx, model::JutulModel; check = false)
     layout = matrix_layout(model.context)
     cell_major = is_cell_major(layout)
     offset = 0

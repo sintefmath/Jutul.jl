@@ -1,4 +1,4 @@
-struct CartesianMesh <: AbstractTervMesh
+struct CartesianMesh <: AbstractJutulMesh
     dims   # Tuple of dimensions (x, y, [z])
     deltas # Either a tuple of scalars (uniform grid) or a tuple of vectors (non-uniform grid)
     origin # Coordinate of lower left corner
