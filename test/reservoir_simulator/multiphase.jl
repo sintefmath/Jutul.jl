@@ -16,7 +16,7 @@ bctx = DefaultContext(matrix_layout = BlockMajorLayout())
 ctx = DefaultContext(matrix_layout = UnitMajorLayout())
 
 @testset "Multi phase flow" begin
-    for setup in ["two_phase_simple", "two_phase_fake_wells", "three_phase_fake_wells"]
+    for setup in ["two_phase_simple", "two_phase_fake_wells", "three_phase_fake_wells", "simple_compositional_fake_wells"]
         @testset "$setup" begin
             @testset "Default, direct solver" begin
                 @test test_multiphase(setup = setup)
