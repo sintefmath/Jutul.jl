@@ -62,11 +62,11 @@ end
 
 function update_cpr_internals!(cpr::CPRPreconditioner, lsys, model, storage, recorder)
     do_p_update = should_update_pressure_subsystem(cpr, recorder)
-    s = storage.Reservoir
+    s = reservoir_storage(model, storage)
     A = reservoir_jacobian(lsys)
+    rmodel = reservoir_model(model)
     cpr.A_ps = linear_operator(lsys)
     initialize_storage!(cpr, A, s)
-    rmodel = model.models.Reservoir
     ps = rmodel.primary_variables[:Pressure].scale
     if do_p_update || cpr.partial_update
         @timeit "weights" w_p = update_weights!(cpr, rmodel, s, A, ps)

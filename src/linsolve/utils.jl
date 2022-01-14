@@ -30,8 +30,7 @@ function reservoir_linsolve(model, method = :cpr;
                                     cpr_type = nothing,
                                     partial_update = update_interval == :once,
                                     kwarg...)
-    res_model(model) = model
-    model = res_model(model)
+    model = reservoir_model(model)
     if model.context == DefaultContext()
         return nothing
     end
@@ -57,23 +56,7 @@ function reservoir_linsolve(model, method = :cpr;
         return nothing
     end
     max_it = 200
-    atol = 0.0#1e-12
-    # v = -1
-    # v = 0
-    # v = 1
-    # if true
-    #     krylov = Krylov.bicgstab
-    #     # krylov = Krylov.gmres
-    #     pv = Krylov
-    # else
-    #     krylov = IterativeSolvers.gmres!
-    #     krylov = IterativeSolvers.bicgstabl!
-    #     pv = IterativeSolvers
-    # end
-    # nl_reltol = 1e-3
-    # relaxed_reltol = 0.25
-    # nonlinear_relative_tolerance = nl_reltol,
-    # relaxed_relative_tolerance = relaxed_reltol,
+    atol = 0.0
 
     lsolve = GenericKrylov(solver, provider = provider, verbose = v, preconditioner = prec, 
             relative_tolerance = rtol, absolute_tolerance = atol,
