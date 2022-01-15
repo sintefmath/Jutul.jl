@@ -26,7 +26,6 @@ end
     rhos = param[:reference_densities]
 
     pvt = m.immiscible_pvt
-    reg = nothing
     n = size(rho, 2)
     tb = thread_batch(model.context)
     a, l, v = phase_indices(sys)
@@ -34,6 +33,6 @@ end
         p = Pressure[i]
         T = Temperature[i]
         rho[l, i], rho[v, i] = mass_densities(eos, p, T, FlashResults[i])
-        rho[a, i] = rhos[a]*shrinkage(pvt, reg, p, i)
+        rho[a, i] = rhos[a]*shrinkage(pvt, p)
     end
 end
