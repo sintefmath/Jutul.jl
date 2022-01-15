@@ -14,8 +14,12 @@ struct FlashResults <: ScalarVariable
     use_threads::Bool
     function FlashResults(system; method = SSIFlash(), threads = true)
         eos = system.equation_of_state
-        # np = number_of_partials_per_entity(system, Cells())
-        n = MultiComponentFlash.number_of_components(eos)
+        nc = MultiComponentFlash.number_of_components(eos)
+        if has_other_phase(system)
+            n = nc + 1
+        else
+            n = nc
+        end
         storage = []
         buffers = []
         if threads
@@ -26,7 +30,7 @@ struct FlashResults <: ScalarVariable
         for i = 1:N
             s = flash_storage(eos, method = method, inc_jac = true, diff_externals = true, npartials = n, static_size = true)
             push!(storage, s)
-            b = InPlaceFlashBuffer(n)
+            b = InPlaceFlashBuffer(nc)
             push!(buffers, b)
         end
         storage = tuple(storage...)
