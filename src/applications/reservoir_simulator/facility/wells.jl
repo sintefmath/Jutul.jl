@@ -499,7 +499,7 @@ function unpack_perf(perf, i)
     return (si, ri, wi, gdz)
 end
 
-function apply_well_reservoir_sources!(sys::Union{TwoPhaseCompositionalSystem}, res_q, well_q, state_res, state_well, perforations, sgn)
+function apply_well_reservoir_sources!(sys::CompositionalSystem, res_q, well_q, state_res, state_well, perforations, sgn)
     p_res = state_res.Pressure
     p_well = state_well.Pressure
 

@@ -246,7 +246,7 @@ end
 """
 Half face Darcy flux with separate potential. (Compositional version)
 """
-function update_half_face_flux!(flux::AbstractArray, state, model::SimulationModel{D, S}, dt, flow_disc::TwoPointPotentialFlow{U, K, T}) where {D,S<:TwoPhaseCompositionalSystem,U,K,T<:DarcyMassMobilityFlow}
+function update_half_face_flux!(flux::AbstractArray, state, model::SimulationModel{D, S}, dt, flow_disc::TwoPointPotentialFlow{U, K, T}) where {D,S<:CompositionalSystem,U,K,T<:DarcyMassMobilityFlow}
     X = state.LiquidMassFractions
     Y = state.VaporMassFractions
     kr = state.RelativePermeabilities

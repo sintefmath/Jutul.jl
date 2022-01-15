@@ -4,21 +4,22 @@ export StandardVolumeSource, VolumeSource, MassSource
 
 const MINIMUM_COMPOSITIONAL_SATURATION = 1e-10
 
-incude("multicomponent_variables/variables.jl")
-
-
-function degrees_of_freedom_per_entity(model::SimulationModel{G, S}, v::TotalMasses) where {G<:Any, S<:MultiComponentSystem}
-    number_of_components(model.system)
-end
+include("variables/variables.jl")
+include("utils.jl")
+include("sources.jl")
 
 function select_primary_variables_system!(S, domain, system::CompositionalSystem, formulation)
     S[:Pressure] = Pressure(max_rel = 0.2, minimum = 101325)
     S[:OverallMoleFractions] = OverallMoleFractions(dz_max = 0.1)
-    if has_other_phase(S)
+    if has_other_phase(system)
         S[:ImmiscibleSaturation] = ImmiscibleSaturation(ds_max = 0.2)
     end
 end
 
+function select_equations_system!(eqs, domain, system::MultiComponentSystem, formulation)
+    nc = number_of_components(system)
+    eqs[:mass_conservation] = (ConservationLaw, nc)
+end
 
 function select_secondary_variables_system!(S, domain, system::CompositionalSystem, formulation)
     select_default_darcy!(S, domain, system, formulation)
@@ -27,13 +28,8 @@ function select_secondary_variables_system!(S, domain, system::CompositionalSyst
     S[:VaporMassFractions] = PhaseMassFractions(:vapor)
     S[:FlashResults] = FlashResults(system)
     S[:Saturations] = Saturations()
-    S[:Temperature] = ConstantVariables([273.15 + 30.0])
+    S[:Temperature] = ConstantVariables(273.15 + 30.0)
     S[:PhaseViscosities] = LBCViscosities()
-end
-
-function select_equations_system!(eqs, domain, system::MultiComponentSystem, formulation)
-    nc = number_of_components(system)
-    eqs[:mass_conservation] = (ConservationLaw, nc)
 end
 
 function convergence_criterion(model::SimulationModel{D, S}, storage, eq::ConservationLaw, r; dt = 1) where {D, S<:CompositionalSystem}

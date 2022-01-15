@@ -291,7 +291,7 @@ function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", con
         nc = number_of_cells(G)
         L, V = LiquidPhase(), VaporPhase()
         # Define system and realize on grid
-        sys = TwoPhaseCompositionalSystem([L, V], eos)
+        sys = MultiPhaseCompositionalSystemLV(eos, (L, V))
         model = SimulationModel(G, sys, context = context)
 
         kr = BrooksCoreyRelPerm(sys, [2, 3])
@@ -361,10 +361,7 @@ function model_from_mat_comp(G, mrst_data, res_context)
     mixture = MultiComponentMixture(components, names = names)
     eos = GenericCubicEOS(mixture)
 
-    liq = LiquidPhase()
-    vap = VaporPhase()
-    sys = TwoPhaseCompositionalSystem([liq, vap], eos)
-
+    sys = MultiPhaseCompositionalSystemLV(eos)
     model = SimulationModel(G, sys, context = res_context)
 
     if haskey(f, "sgof")
