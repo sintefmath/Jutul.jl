@@ -6,6 +6,7 @@ const MINIMUM_COMPOSITIONAL_SATURATION = 1e-10
 
 include("variables/variables.jl")
 include("utils.jl")
+include("flux.jl")
 include("sources.jl")
 
 function select_primary_variables_system!(S, domain, system::CompositionalSystem, formulation)
