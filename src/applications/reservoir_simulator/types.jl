@@ -14,7 +14,7 @@ struct MultiPhaseCompositionalSystemLV{E, T, O} <: CompositionalSystem where T<:
         nph = length(phases)
         @assert nph == 2 || nph == 3
         if nph == 3
-            other = only(filter(x -> !(isa(x, LiquidPhase) || isa(x, VaporPhase)), t))
+            other = only(filter(x -> !(isa(x, LiquidPhase) || isa(x, VaporPhase)), phases))
             O = typeof(other)
             push!(c, other_name)
         else

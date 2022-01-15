@@ -1,6 +1,6 @@
-abstract type AbstractCompositionalViscosity <: PhaseVariables end
+abstract type AbstractCompositionalViscosities <: PhaseVariables end
 
-struct LBCViscosities <: AbstractCompositionalViscosity end
+struct LBCViscosities <: AbstractCompositionalViscosities end
 
 @terv_secondary function update_as_secondary!(mu, m::LBCViscosities, model::SimulationModel{D, S}, param, Pressure, Temperature, FlashResults) where {D, S<:CompositionalSystem}
     eos = model.system.equation_of_state

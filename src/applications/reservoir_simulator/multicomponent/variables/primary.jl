@@ -1,9 +1,20 @@
-struct OverallMoleFractions <: FractionVariables
+abstract type CompositionalFractions <: FractionVariables end
+
+function values_per_entity(model, v::CompositionalFractions)
+    sys = model.system
+    nc = number_of_components(sys)
+    if has_other_phase(sys)
+        nval = nc - 1
+    else
+        nval = nc
+    end
+    return nval
+end
+
+struct OverallMoleFractions <: CompositionalFractions
     dz_max
     OverallMoleFractions(;dz_max = 0.2) = new(dz_max)
 end
-
-values_per_entity(model, v::OverallMoleFractions) = number_of_components(model.system)
 
 minimum_value(::OverallMoleFractions) = MultiComponentFlash.MINIMUM_COMPOSITION
 absolute_increment_limit(z::OverallMoleFractions) = z.dz_max
