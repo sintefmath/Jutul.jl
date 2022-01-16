@@ -396,6 +396,9 @@ function model_from_mat_comp(G, mrst_data, res_context)
     f = mrst_data["fluid"]
     nkr = vec(f["nkr"])
     rhoS = vec(f["rhoS"])
+    nph = length(rhoS)
+    has_water = nph == 3
+    @assert nph == 2 || nph == 3
 
     mixture = mrst_data["mixture"]
     comps = mixture["components"]
@@ -406,7 +409,12 @@ function model_from_mat_comp(G, mrst_data, res_context)
     mixture = MultiComponentMixture(components, names = names)
     eos = GenericCubicEOS(mixture)
 
-    sys = MultiPhaseCompositionalSystemLV(eos)
+    if nph == 2
+        phases = (LiquidPhase(), VaporPhase())
+    else
+        phases = (AqueousPhase(), LiquidPhase(), VaporPhase())
+    end
+    sys = MultiPhaseCompositionalSystemLV(eos, phases)
     model = SimulationModel(G, sys, context = res_context)
 
     if haskey(f, "sgof")
@@ -415,13 +423,22 @@ function model_from_mat_comp(G, mrst_data, res_context)
         sgof = []
     end
 
-    if isempty(sgof)
-        kr = BrooksCoreyRelPerm(sys, nkr)
+    if nph == 2
+        if isempty(sgof)
+            kr = BrooksCoreyRelPerm(nph, nkr)
+        else
+            s, krt = preprocess_relperm_table(sgof)
+            kr = TabulatedRelPermSimple(s, krt)
+        end
     else
-        s, krt = preprocess_relperm_table(sgof)
-        kr = TabulatedRelPermSimple(s, krt)
+        if haskey(f, "swof")
+            swof = f["swof"]
+        else
+            swof = []
+        end
+        @assert isempty(swof) && isempty(sgof) "SWOF + SGOF is not implemented yet"
+        kr = BrooksCoreyRelPerm(nph, nkr)
     end
-
     # p = model.primary_variables
     # p[:Pressure] = Pressure(max_rel = 0.2)
     s = model.secondary_variables
@@ -560,7 +577,13 @@ function init_from_mat(mrst_data)
     end
     if haskey(state0, "components")
         z0 = state0["components"]'
-        init = Dict(:Pressure => p0, :OverallMoleFractions => z0)#, :Temperature => T)
+        init = Dict(:Pressure => p0, :OverallMoleFractions => z0)
+        s = state0["s"]
+        if size(s, 2) == 3
+            init[:ImmiscibleSaturation] = vec(s[:, 1])
+        else
+            @assert size(s, 2) == 2
+        end
     else
         s0 = state0["s"]'
         init = Dict(:Pressure => p0, :Saturations => s0)
@@ -597,6 +620,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     
     model, init, param_res = setup_res(G, mrst_data; block_backend = block_backend, use_groups = true)
     is_comp = haskey(init, :OverallMoleFractions)
+    nph = number_of_phases(model.system)
 
     dt = mrst_data["dt"]
     if isa(dt, Real)
@@ -656,14 +680,21 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
             factor = 1.0
         elseif is_injector
             if is_comp
-                ci = vec(wdata["components"])
+                ci = copy(vec(wdata["components"]))
                 props = model.system.equation_of_state.mixture.properties
                 ci = map((x, c) -> max(c.mw*x, 1e-10), ci, props)
+                ct = copy(ci)
+                if nph == 3
+                    # Should go at end - need better logic if this isn't either one or zero
+                    push!(ct, comp_i[1])
+                end
                 ci = normalize(ci, 1)
+                ct = normalize(ct, 1)
             else
                 ci = comp_i
+                ct = comp_i
             end
-            ctrl = InjectorControl(target, ci)
+            ctrl = InjectorControl(target, ct)
             factor = 1.01
         else
             factor = 0.99
@@ -684,6 +715,9 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                 cw_0 = ci
             end
             w0[:OverallMoleFractions] = cw_0
+            if nph == 3
+                w0[:ImmiscibleSaturation] = init[:ImmiscibleSaturation][first_well_cell]
+            end
         elseif haskey(init, :Saturations)
             w0[:Saturations] = vec(init[:Saturations][:, first_well_cell])
         end
