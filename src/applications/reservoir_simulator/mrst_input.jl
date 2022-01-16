@@ -272,8 +272,8 @@ function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", con
     elseif case_name == "simple_compositional_fake_wells"
         inj = 1
         prod = nc
-        # G.grid.pore_volumes[inj] *= 1000
-        # G.grid.pore_volumes[prod] *= 1000
+        G.grid.pore_volumes[inj] *= 1000
+        G.grid.pore_volumes[prod] *= 1000
         co2 = MolecularProperty(0.0440, 7.38e6, 304.1, 9.412e-5, 0.224)
         c1 = MolecularProperty(0.0160, 4.60e6, 190.6, 9.863e-5, 0.011)
         c10 = MolecularProperty(0.0142, 2.10e6, 617.7, 6.098e-4, 0.488)
@@ -314,8 +314,8 @@ function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", con
     elseif case_name == "compositional_three_phases"
         inj = 1
         prod = nc
-        # G.grid.pore_volumes[inj] *= 1000
-        # G.grid.pore_volumes[prod] *= 1000
+        G.grid.pore_volumes[inj] *= 1000
+        G.grid.pore_volumes[prod] *= 1000
         co2 = MolecularProperty(0.0440, 7.38e6, 304.1, 9.412e-5, 0.224)
         c1 = MolecularProperty(0.0160, 4.60e6, 190.6, 9.863e-5, 0.011)
         c10 = MolecularProperty(0.0142, 2.10e6, 617.7, 6.098e-4, 0.488)

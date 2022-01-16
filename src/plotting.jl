@@ -30,9 +30,9 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
     end
     datakeys = collect(zip(labels, pos))
     initial_prop = datakeys[1]
-    state_index = Node{Int64}(1)
-    prop_name = Node{Any}(initial_prop[2])
-    lims = Node(limits[get_label(initial_prop[2])])
+    state_index = Observable{Int64}(1)
+    prop_name = Observable{Any}(initial_prop[2])
+    lims = Observable(limits[get_label(initial_prop[2])])
     menu = Menu(fig, options = datakeys, prompt = initial_prop[1])
     nstates = length(states)
 
