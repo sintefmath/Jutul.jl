@@ -551,9 +551,9 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y
         λ_v = kr[V, ri]/μ[V, ri]
 
         if has_water
-            λ_a = kr[A, ri]/μ[A, ri]
-            ρ_a = ρ_w[A, si]
-            S_a = s_w[A, si]
+            @inbounds λ_a = kr[A, ri]/μ[A, ri]
+            @inbounds ρ_a = ρ_w[A, si]
+            @inbounds S_a = s_w[A, si]
         else
             λ_a = zero(typeof(λ_l))
         end
@@ -568,7 +568,7 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y
                 target[c, i] = component_mass_rate
             end
             if has_water
-                target[nc+1, i] = S_a*ρ_a*volume_rate
+                @inbounds target[nc+1, i] = S_a*ρ_a*volume_rate
             end
         else
             ρ_l = ρ[L, ri]
@@ -581,7 +581,7 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y
             end
             if has_water
                 ρ_a = ρ[A, ri]
-                target[nc+1, i] = sgn*λ_a*ρ_a*dp
+                @inbounds target[nc+1, i] = sgn*λ_a*ρ_a*dp
             end
         end
     end
