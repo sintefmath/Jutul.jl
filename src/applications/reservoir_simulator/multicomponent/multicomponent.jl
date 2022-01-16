@@ -51,7 +51,7 @@ function convergence_criterion(model::SimulationModel{D, S}, storage, eq::Conser
         return t
     end
     @tullio max e[j] := abs(r[j, i]) * dt / scale(i)
-    names = model.system.equation_of_state.mixture.component_names
+    names = model.system.components
     R = Dict("CNV" => (errors = e, names = names))
     return R
 end
