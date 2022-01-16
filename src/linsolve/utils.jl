@@ -31,7 +31,7 @@ function reservoir_linsolve(model, method = :cpr;
                                     partial_update = update_interval == :once,
                                     kwarg...)
     model = reservoir_model(model)
-    if model.context == DefaultContext()
+    if !is_cell_major(matrix_layout(model.context))
         return nothing
     end
     if method == :cpr
