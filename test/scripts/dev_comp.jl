@@ -56,7 +56,7 @@ nc = number_of_cells(G)
 rhoLS, rhoVS = 1000.0, 100.0
 L, V = LiquidPhase(), VaporPhase()
 # Define system and realize on grid
-sys = TwoPhaseCompositionalSystem([L, V], eos)
+sys = MultiPhaseCompositionalSystemLV(eos, (L, V))
 ctx = DefaultContext(matrix_layout = BlockMajorLayout())
 ctx = DefaultContext()
 model = SimulationModel(G, sys, context = ctx)

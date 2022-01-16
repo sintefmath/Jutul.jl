@@ -64,13 +64,6 @@ function subforce(s::AbstractVector{S}, model) where S<:SourceTerm
     return s[keep]
 end
 
-## Systems
-# Immiscible multiphase system
-struct ImmiscibleSystem{T} <: MultiPhaseSystem where T<:Tuple
-    phases::T
-end
-
-ImmiscibleSystem(phases::AbstractVector) = ImmiscibleSystem(tuple(phases...))
 
 number_of_components(sys::ImmiscibleSystem) = number_of_phases(sys)
 
@@ -79,9 +72,6 @@ number_of_components(sys::ImmiscibleSystem) = number_of_phases(sys)
 # end
 
 # Single-phase
-struct SinglePhaseSystem <: MultiPhaseSystem
-    phase
-end
 
 phase_names(system) = get_name.(get_phases(system))
 

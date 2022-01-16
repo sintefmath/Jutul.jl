@@ -499,7 +499,7 @@ function unpack_perf(perf, i)
     return (si, ri, wi, gdz)
 end
 
-function apply_well_reservoir_sources!(sys::Union{TwoPhaseCompositionalSystem}, res_q, well_q, state_res, state_well, perforations, sgn)
+function apply_well_reservoir_sources!(sys::CompositionalSystem, res_q, well_q, state_res, state_well, perforations, sgn)
     p_res = state_res.Pressure
     p_well = state_well.Pressure
 
@@ -515,17 +515,22 @@ function apply_well_reservoir_sources!(sys::Union{TwoPhaseCompositionalSystem}, 
     s_w = state_well.Saturations
     X_w = state_well.LiquidMassFractions
     Y_w = state_well.VaporMassFractions
-    perforation_sources_comp!(well_q, perforations, val(p_res),     p_well,  val(kr), val(μ), val(ρ), val(X), val(Y),    ρ_w,      s_w,      X_w,      Y_w, sgn)
-    perforation_sources_comp!(res_q,  perforations,     p_res,  val(p_well),     kr,      μ,      ρ,      X,      Y, val(ρ_w), val(s_w), val(X_w), val(Y_w), sgn)
+
+    phase_ix = phase_indices(sys)
+    perforation_sources_comp!(well_q, perforations, val(p_res),     p_well,  val(kr), val(μ), val(ρ), val(X), val(Y),    ρ_w,      s_w,      X_w,      Y_w, phase_ix, sgn)
+    perforation_sources_comp!(res_q,  perforations,     p_res,  val(p_well),     kr,      μ,      ρ,      X,      Y, val(ρ_w), val(s_w), val(X_w), val(Y_w), phase_ix, sgn)
 end
 
-function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y, ρ_w, s_w, X_w, Y_w, sgn)
+function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y, ρ_w, s_w, X_w, Y_w, phase_ix, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     nc = size(X, 1)
     nph = size(μ, 1)
-    @assert nph == 2
-    L = 1
-    V = 2
+    has_water = nph == 3
+    if has_water
+        A, L, V = phase_ix
+    else
+        L, V = phase_ix
+    end
 
     @inbounds for i in eachindex(perf.self)
         si, ri, wi, gdz = unpack_perf(perf, i)
@@ -545,15 +550,25 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y
         λ_l = kr[L, ri]/μ[L, ri]
         λ_v = kr[V, ri]/μ[V, ri]
 
+        if has_water
+            λ_a = kr[A, ri]/μ[A, ri]
+            ρ_a = ρ_w[A, si]
+            S_a = s_w[A, si]
+        else
+            λ_a = zero(typeof(λ_l))
+        end
         if dp > 0
             # Injection
-            λ_t = λ_l + λ_v
+            λ_t = λ_l + λ_v + λ_a
             volume_rate = sgn*λ_t*dp
             q_L = S_l*ρ_l*volume_rate
             q_V = S_v*ρ_v*volume_rate
             @inbounds for c in 1:nc
                 component_mass_rate = q_L*X_w[c, si] + q_V*Y_w[c, si]
                 target[c, i] = component_mass_rate
+            end
+            if has_water
+                target[nc+1, i] = S_a*ρ_a*volume_rate
             end
         else
             ρ_l = ρ[L, ri]
@@ -563,6 +578,10 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y
             @inbounds for c in 1:nc
                 c_i = ρ_l*λ_l*X[c, ri] + ρ_v*λ_v*Y[c, ri]
                 target[c, i] = sgn*c_i*dp
+            end
+            if has_water
+                ρ_a = ρ[A, ri]
+                target[nc+1, i] = sgn*λ_a*ρ_a*dp
             end
         end
     end
