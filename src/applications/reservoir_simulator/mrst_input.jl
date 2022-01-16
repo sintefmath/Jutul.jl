@@ -272,8 +272,8 @@ function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", con
     elseif case_name == "simple_compositional_fake_wells"
         inj = 1
         prod = nc
-        # G.grid.pore_volumes[inj] *= 1000
-        # G.grid.pore_volumes[prod] *= 1000
+        G.grid.pore_volumes[inj] *= 1000
+        G.grid.pore_volumes[prod] *= 1000
         co2 = MolecularProperty(0.0440, 7.38e6, 304.1, 9.412e-5, 0.224)
         c1 = MolecularProperty(0.0160, 4.60e6, 190.6, 9.863e-5, 0.011)
         c10 = MolecularProperty(0.0142, 2.10e6, 617.7, 6.098e-4, 0.488)
@@ -311,6 +311,51 @@ function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", con
 
         # State is dict with pressure in each cell
         init = Dict(:Pressure => p_init, :OverallMoleFractions => z_init)
+    elseif case_name == "compositional_three_phases"
+        inj = 1
+        prod = nc
+        G.grid.pore_volumes[inj] *= 1000
+        G.grid.pore_volumes[prod] *= 1000
+        co2 = MolecularProperty(0.0440, 7.38e6, 304.1, 9.412e-5, 0.224)
+        c1 = MolecularProperty(0.0160, 4.60e6, 190.6, 9.863e-5, 0.011)
+        c10 = MolecularProperty(0.0142, 2.10e6, 617.7, 6.098e-4, 0.488)
+        
+
+        z0 = [0.5, 0.3, 0.2]
+        zi = [0.99, 0.01-1e-3, 1e-3]
+        mixture = MultiComponentMixture([co2, c1, c10], names = ["CO2", "C1", "C10"])
+
+        p0 = 75e5
+        T0 = 423.25
+
+        n = length(z0)
+        eos = GenericCubicEOS(mixture)
+        nc = number_of_cells(G)
+        L, V, A = LiquidPhase(), VaporPhase(), AqueousPhase()
+        # Define system and realize on grid
+        sys = MultiPhaseCompositionalSystemLV(eos, (A, L, V))
+        model = SimulationModel(G, sys, context = context)
+
+        kr = BrooksCoreyRelPerm(sys, [1, 1, 1])
+        s = model.secondary_variables
+        s[:RelativePermeabilities] = kr
+        s[:Temperature] = ConstantVariables(T0)
+
+        tot_time = sum(timesteps)
+        forces = build_forces(model)
+
+        p_init = repeat([p0], nc)
+        p_init[inj] = 2*p0
+        p_init[prod] = p0/2
+
+        z_init = repeat(z0, 1, nc)
+        z_init[:, inj] .= zi
+
+        sw_init = repeat([0.2], nc)
+        sw_init[inj] = 0.5
+
+        # State is dict with pressure in each cell
+        init = Dict(:Pressure => p_init, :OverallMoleFractions => z_init, :ImmiscibleSaturation => sw_init)
     else
         error("Unknown case $case_name")
     end
