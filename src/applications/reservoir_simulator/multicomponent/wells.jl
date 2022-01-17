@@ -1,22 +1,3 @@
-
-function well_target(target::SurfaceVolumeTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:MultiComponentSystem}
-    phases = get_phases(well_model.system)
-    positions = surface_target_phases(target, phases)
-
-    if value(q_t) >= 0
-        pos = only(positions)
-        q = q_t/rhoS[pos]
-    else
-        @assert length(positions) > 0
-        q = zero(q_t)
-        rhoS_sep, S_sep = flash_well_densities(well_model, well_state, rhoS)
-        for (v_frac, ρ, pos) in zip(S_sep, rhoS_sep, positions)
-            q += q_t*f(v_frac/ρ)
-        end
-    end
-    return q
-end
-
 function flash_well_densities(well_model, well_state, rhoS)
     total_masses = well_state.TotalMasses
     T = eltype(total_masses)
