@@ -120,14 +120,15 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
     if initialize
-        forces_step = forces_for_timestep(forces, timesteps, 1)
+        check_forces(sim, forces, timesteps)
+        forces_step = forces_for_timestep(sim, forces, timesteps, 1)
         initialize_before_first_timestep!(sim, timesteps[1], forces = forces_step, config = config)
     end
     for (step_no, dT) in enumerate(timesteps)
         if early_termination
             break
         end
-        forces_step = forces_for_timestep(forces, timesteps, step_no)
+        forces_step = forces_for_timestep(sim, forces, timesteps, step_no)
         nextstep_global!(rec, dT)
         new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot)
         t_step = @elapsed step_done, rep = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dT, reports = reports, step_no = step_no, rec = rec)
@@ -492,6 +493,15 @@ function reset!(r::SolveRecorder, dt = NaN)
     r.dt = dt
 end
 
-# Forces
-forces_for_timestep(f, timesteps, step_index) = f
-forces_for_timestep(f::T, timesteps, step_index) where T<:AbstractArray = f[step_index]
+# Forces - one for the entire sim
+check_forces(sim, forces, timesteps) = nothing
+forces_for_timestep(sim, f, timesteps, step_index) = f
+# Forces as a vector - one per timestep
+forces_for_timestep(sim, f::T, timesteps, step_index) where T<:AbstractArray = f[step_index]
+function check_forces(sim, f::T, timesteps) where T<:AbstractArray
+    nf = length(f)
+    nt = length(timesteps)
+    if nf != nt
+        error("Number of forces must match the number of timesteps ($nt timsteps, $nf forces)")
+    end
+end
