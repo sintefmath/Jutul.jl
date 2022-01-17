@@ -242,7 +242,7 @@ Two point Darcy flux with gravity - inner version that takes in cells and transm
     return v
 end
 
-function phase_mass_flux(Ψ, c, i, ρ, kr, μ, ph)
+@inline function phase_mass_flux(Ψ, c, i, ρ, kr, μ, ph)
     upc = upwind_cell(Ψ, c, i)
     @inbounds F = ρ[ph, upc]*(kr[ph, upc]/μ[ph, upc])*Ψ
     return (F, upc)
@@ -256,7 +256,7 @@ end
     end
 end
 
-function saturation_averaged_density(ρ, ph, sat, c1, c2)
+@inline function saturation_averaged_density(ρ, ph, sat, c1, c2)
     @inbounds ρ_1 = ρ[ph, c1]
     @inbounds ρ_2 = ρ[ph, c2]
     @inbounds S_1 = sat[ph, c1]
