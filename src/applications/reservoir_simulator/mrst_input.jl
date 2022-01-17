@@ -628,6 +628,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         @assert !haskey(mrst_data, "W")
 
         schedule = mrst_data["schedule"]
+        @info "Found schedule" keys(schedule) keys(schedule["control"][1])
 
         dt = schedule["step"]["val"]
         first_ctrl = schedule["control"][1]
@@ -651,6 +652,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     
 
     well_symbols = map((x) -> Symbol(x["name"]), first_well_set)
+    @info "Well s" well_symbols
 
     num_wells = length(well_symbols)
     
@@ -727,10 +729,12 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     mode = PredictionMode()
     F0 = Dict(:TotalSurfaceMassRate => 0.0)
 
-
+    facility_symbols = []
+    facility_owned_wells = []
     function add_facility!(wsymbols, sym)
-        g, ctrls = facility_subset(wsymbols, controls)
+        g = WellGroup(wsymbols)
         WG = SimulationModel(g, mode)
+        ctrls = facility_subset(wsymbols, controls)
         facility_forces = build_forces(WG, control = ctrls)
         # Specifics
         @assert !haskey(models, sym)
@@ -739,6 +743,9 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         # Generics
         initializer[sym] = F0
         parameters[sym] = setup_parameters(WG)
+        # Store the subs
+        push!(facility_symbols, sym)
+        push!(facility_owned_wells, wsymbols)
     end
 
     if facility_grouping == :onegroup
@@ -751,20 +758,43 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     else
         error("Unknown grouping $facility_grouping")
     end
+    if has_schedule
+        control_ix = Int64.(vec(schedule["step"]["control"]))
+        nctrl = maximum(control_ix)
+        current_control = deepcopy(controls)
 
+        all_controls = Vector{typeof(forces)}()
+        for i = 1:nctrl
+            # Create controls for this set of wells
+            local_mrst_wells = vec(schedule["control"][i]["W"])
+            for (wno, wsym) in enumerate(well_symbols)
+                wdata = local_mrst_wells[wno]
+                current_control[wsym] = mrst_well_ctrl(model, wdata, is_comp)
+            end
+            # Now copy into the corresponding facilit(y/ies)
+            new_force = deepcopy(forces)
+            for (fsymbol, wsymbols) in zip(facility_symbols, facility_owned_wells)
+                ctrls = facility_subset(wsymbols, current_control)
+                WG = models[fsymbol]
+                new_force[fsymbol] = build_forces(WG, control = ctrls)
+                @info "$fsymbol:" new_force[fsymbol]
+            end
+            push!(all_controls, new_force)
+        end
+        forces = all_controls[control_ix]
+    end
     return (models, parameters, initializer, timesteps, forces, mrst_data)
 end
 
 
 function facility_subset(well_symbols, controls)
-    g = WellGroup(well_symbols)
     ctrls = Dict()
     for k in keys(controls)
         if any(well_symbols .== k)
             ctrls[k] = controls[k]
         end
     end
-    return g, ctrls
+    return ctrls
 end
 
 function mrst_well_ctrl(model, wdata, is_comp)
