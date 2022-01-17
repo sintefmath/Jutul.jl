@@ -59,8 +59,8 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     end
 end
 
-function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = false, simple = false, kwarg...)
-    W_mrst = mrst_data["W"][ix]
+function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = false, simple = false, W_data = mrst_data["W"], kwarg...)
+    W_mrst = W_data[ix]
     w = convert_to_immutable_storage(W_mrst)
 
     function awrap(x::Any)
@@ -622,7 +622,22 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     is_comp = haskey(init, :OverallMoleFractions)
     nph = number_of_phases(model.system)
 
-    dt = mrst_data["dt"]
+    has_schedule = haskey(mrst_data, "schedule")
+    if has_schedule
+        @assert !haskey(mrst_data, "dt")
+        @assert !haskey(mrst_data, "W")
+
+        schedule = mrst_data["schedule"]
+
+        dt = schedule["step"]["val"]
+        first_ctrl = schedule["control"][1]
+        @info "First control" keys(first_ctrl) first_ctrl
+        first_well_set = vec(first_ctrl["W"])
+        
+    else
+        dt = mrst_data["dt"]
+        first_well_set = vec(mrst_data["W"])
+    end
     if isa(dt, Real)
         dt = [dt]
     end
@@ -635,7 +650,8 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     models[:Reservoir] = model
     
 
-    well_symbols = map((x) -> Symbol(x["name"]), vec(mrst_data["W"]))
+    well_symbols = map((x) -> Symbol(x["name"]), first_well_set)
+
     num_wells = length(well_symbols)
     
     parameters = Dict{Symbol, Any}()
@@ -645,7 +661,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     for i = 1:num_wells
         sym = well_symbols[i]
     
-        wi, wdata = get_well_from_mrst_data(mrst_data, sys, i, 
+        wi, wdata = get_well_from_mrst_data(mrst_data, sys, i, W_data = first_well_set,
                 extraout = true, volume = 1e-2, simple = simple_well, context = w_context)
         wc = wi.domain.grid.perforations.reservoir
 
