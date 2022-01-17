@@ -580,7 +580,9 @@ function init_from_mat(mrst_data)
         init = Dict(:Pressure => p0, :OverallMoleFractions => z0)
         s = state0["s"]
         if size(s, 2) == 3
-            init[:ImmiscibleSaturation] = vec(s[:, 1])
+            sw = vec(s[:, 1])
+            sw = min.(sw, 1 - MINIMUM_COMPOSITIONAL_SATURATION)
+            init[:ImmiscibleSaturation] = sw
         else
             @assert size(s, 2) == 2
         end
@@ -628,11 +630,9 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         @assert !haskey(mrst_data, "W")
 
         schedule = mrst_data["schedule"]
-        @info "Found schedule" keys(schedule) keys(schedule["control"][1])
 
         dt = schedule["step"]["val"]
         first_ctrl = schedule["control"][1]
-        @info "First control" keys(first_ctrl) first_ctrl
         first_well_set = vec(first_ctrl["W"])
         
     else
@@ -649,11 +649,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     initializer[:Reservoir] = init
     forces[:Reservoir] = nothing
     models[:Reservoir] = model
-    
-
     well_symbols = map((x) -> Symbol(x["name"]), first_well_set)
-    @info "Well s" well_symbols
-
     num_wells = length(well_symbols)
     
     parameters = Dict{Symbol, Any}()
@@ -777,7 +773,6 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                 ctrls = facility_subset(wsymbols, current_control)
                 WG = models[fsymbol]
                 new_force[fsymbol] = build_forces(WG, control = ctrls)
-                @info "$fsymbol:" new_force[fsymbol]
             end
             push!(all_controls, new_force)
         end
@@ -804,34 +799,53 @@ function mrst_well_ctrl(model, wdata, is_comp)
     comp_i = vec(wdata["compi"])
     phases = Jutul.get_phases(model.system)
     nph = length(phases)
-
-    if wdata["type"] == "rate"
-        target_phase = phases[only(findall(comp_i .> 0))]
-        target = SinglePhaseRateTarget(t_mrst, target_phase)
-    else
-        target = BottomHolePressureTarget(t_mrst)
-    end
+    name = wdata["name"]
 
     if is_shut
-        println("Shut well")
+        @debug "$name: Shut well (requested)"
         ctrl = DisabledControl()
-    elseif is_injector
-        if is_comp
-            ci = copy(vec(wdata["components"]))
-            props = model.system.equation_of_state.mixture.properties
-            ci = map((x, c) -> max(c.mw*x, 1e-10), ci, props)
-            ct = copy(ci)
-            if nph == 3
-                # Should go at end - need better logic if this isn't either one or zero
-                push!(ct, comp_i[1])
-            end
-            ct = normalize(ct, 1)
-        else
-            ct = comp_i
-        end
-        ctrl = InjectorControl(target, ct)
     else
-        ctrl = ProducerControl(target)
+        wt = wdata["type"]
+        is_rate_ctrl = true
+        if wt == "bhp"
+            target = BottomHolePressureTarget(t_mrst)
+            # Not rate controlled
+            is_rate_ctrl = false
+        elseif wt == "rate"
+            target_phase = phases[only(findall(comp_i .> 0))]
+            target = SinglePhaseRateTarget(t_mrst, target_phase)
+        elseif wt == "wrat"
+            target = SinglePhaseRateTarget(t_mrst, AqueousPhase())
+        elseif wt == "orat"
+            target = SinglePhaseRateTarget(t_mrst, LiquidPhase())
+        elseif wt == "lrat"
+            @warn "This is a hack."
+            target = SinglePhaseRateTarget(t_mrst, LiquidPhase())
+        else
+            error("$wt target is not supported.")
+        end
+
+        if is_rate_ctrl && t_mrst == 0.0
+            @debug "$name: Shut well (zero rate)"
+            ctrl = DisabledControl()
+        elseif is_injector
+            if is_comp
+                ci = copy(vec(wdata["components"]))
+                props = model.system.equation_of_state.mixture.properties
+                ci = map((x, c) -> max(c.mw*x, 1e-10), ci, props)
+                ct = copy(ci)
+                if nph == 3
+                    # Should go at end - need better logic if this isn't either one or zero
+                    push!(ct, comp_i[1])
+                end
+                ct = normalize(ct, 1)
+            else
+                ct = comp_i
+            end
+            ctrl = InjectorControl(target, ct)
+        else
+            ctrl = ProducerControl(target)
+        end
     end
     return ctrl
 end
