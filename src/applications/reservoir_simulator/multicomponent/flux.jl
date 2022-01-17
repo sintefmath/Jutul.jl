@@ -13,15 +13,17 @@ function update_half_face_flux!(flux::AbstractArray, state, model::SimulationMod
     conn_data = flow_disc.conn_data
     pc, ref_index = capillary_pressure(model, state)
 
-    nc, nf = size(flux)
-    tb = thread_batch(model.context)
     sys = model.system
     phase_ix = phase_indices(sys)
     aqua = Val(has_other_phase(sys))
+    compositional_fluxes!(flux, conn_data, P, X, Y, ρ, kr, Sat, μ, pc, ref_index, aqua, phase_ix, model.context)
+end
+
+function compositional_fluxes!(flux, conn_data, P, X, Y, ρ, kr, Sat, μ, pc, ref_index, aqua, phase_ix, context)
+    tb = thread_batch(context)
+    nf = size(flux, 2)
     @batch minbatch = tb for i = 1:nf
-        @inbounds qi = view(flux, :, i)
-        @inbounds cd = conn_data[i]
-        compositional_flux_gravity!(qi, cd, P, X, Y, ρ, kr, Sat, μ, pc, ref_index, aqua, phase_ix)
+        @inbounds @views compositional_flux_gravity!(flux[:, i], conn_data[i], P, X, Y, ρ, kr, Sat, μ, pc, ref_index, aqua, phase_ix)
     end
 end
 
