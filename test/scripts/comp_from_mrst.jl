@@ -5,7 +5,7 @@ ENV["JULIA_DEBUG"] = nothing
 casename = "1d_validation"
 casename = "1d_validation_water"
 # casename = "1d_validation_water_mini"
-
+casename = "1d_validation_water_ctrl_change"
 # casename = "fractures_compositional"
 function bench(casename)
     block = true
@@ -25,18 +25,28 @@ states, reports, sim, mrst_data = bench(casename);
 error("All done.")
 ##
 using GLMakie
-k = :OverallMoleFractions
-k = :Saturations
+sys = sim.model.models.Reservoir.system
+eos = sys.equation_of_state
+if false
+    k = :OverallMoleFractions
+    L = eos.mixture.component_names
+else
+    k = :Saturations
+    L = Jutul.phase_names(sys)
+end
 getdata = x -> x[:Reservoir][k]
 z0 = getdata(states[180])
 
 plotvals = Observable(z0)
-f = Figure()
-ax = Axis(f[1, 1])
-series!(plotvals, color = :Set1)
+# f = Figure()
+# ax = Axis(f[1, 1])
+f, ax, sp = series(plotvals, color = :Set1, labels = L)
+ax.title = "$k"
 GLMakie.ylims!(0, 1)
+axislegend(ax)
 f
 ##
+sleep(5)
 for i = 1:length(states)
     plotvals[] = getdata(states[i])
     sleep(0.01)
@@ -57,4 +67,3 @@ for w in w_raw
     # plot_well!(ax, g, w, color = c, textscale = 1*5e-2)
 end
 display(fig) 
-##
