@@ -14,19 +14,8 @@ region(pv::DeckPhaseVariables, cell) = region(pv.regions, cell)
 region(r::AbstractVector, cell) = @inbounds r[cell]
 region(::Nothing, cell) = 1
 
-
-function get_pvt(mu::DeckPhaseVariables, ph, cell)
-    reg = region(mu, cell)
-    return tab_by_region(mu.pvt[ph], reg)
-end
-
 function tab_by_region(pvt, reg)
     return pvt.tab[reg]
-end
-
-function get_sat(mu::DeckPhaseVariables, ph, cell)
-    reg = region(mu, cell)
-    return mu.sat[ph][reg]
 end
 
 struct DeckViscosity{T, R} <: DeckPhaseVariables
