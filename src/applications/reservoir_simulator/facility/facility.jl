@@ -70,7 +70,8 @@ function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_s
         return update_value(v, dx, nothing, nothing, nothing, -1e-20)
     end
     function do_update(v, dx, ctrl::DisabledControl)
-        return 0.0
+        # Set value to zero since we know it is correct.
+        return update_value(v, -value(v))
     end
     @inbounds for i in eachindex(v)
         s = symbols[i]
