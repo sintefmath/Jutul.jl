@@ -678,44 +678,24 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     
         models[sym] = wi
     
-        t_mrst = wdata["val"]
-        is_injector = wdata["sign"] > 0
-        is_shut = wdata["status"] < 1
-        comp_i = vec(wdata["compi"])
-        phases = Jutul.get_phases(model.system)
-        if wdata["type"] == "rate"
-            target_phase = phases[only(findall(comp_i .> 0))]
-            target = SinglePhaseRateTarget(t_mrst, target_phase)
-        else
-            target = BottomHolePressureTarget(t_mrst)
-        end
-    
-        if is_shut
-            println("Shut well")
-            ctrl = DisabledControl()
-            factor = 1.0
-        elseif is_injector
+        ctrl = mrst_well_ctrl(model, wdata, is_comp)
+        if isa(ctrl, InjectorControl)
+            factor = 1.01
             if is_comp
                 ci = copy(vec(wdata["components"]))
                 props = model.system.equation_of_state.mixture.properties
                 ci = map((x, c) -> max(c.mw*x, 1e-10), ci, props)
-                ct = copy(ci)
-                if nph == 3
-                    # Should go at end - need better logic if this isn't either one or zero
-                    push!(ct, comp_i[1])
-                end
                 ci = normalize(ci, 1)
-                ct = normalize(ct, 1)
             else
                 ci = comp_i
-                ct = comp_i
             end
-            ctrl = InjectorControl(target, ct)
-            factor = 1.01
-        else
+        elseif isa(ctrl, ProducerControl)
             factor = 0.99
-            ctrl = ProducerControl(target)
             ci = nothing
+        else
+            # Shut.
+            ci = nothing
+            factor = 1.0
         end
         @debug "$sym: Well $i/$num_wells" target typeof(ctrl) ci
         param_w = setup_parameters(wi)
@@ -785,4 +765,43 @@ function facility_subset(well_symbols, controls)
         end
     end
     return g, ctrls
+end
+
+function mrst_well_ctrl(model, wdata, is_comp)
+    t_mrst = wdata["val"]
+    is_injector = wdata["sign"] > 0
+    is_shut = wdata["status"] < 1
+    comp_i = vec(wdata["compi"])
+    phases = Jutul.get_phases(model.system)
+    nph = length(phases)
+
+    if wdata["type"] == "rate"
+        target_phase = phases[only(findall(comp_i .> 0))]
+        target = SinglePhaseRateTarget(t_mrst, target_phase)
+    else
+        target = BottomHolePressureTarget(t_mrst)
+    end
+
+    if is_shut
+        println("Shut well")
+        ctrl = DisabledControl()
+    elseif is_injector
+        if is_comp
+            ci = copy(vec(wdata["components"]))
+            props = model.system.equation_of_state.mixture.properties
+            ci = map((x, c) -> max(c.mw*x, 1e-10), ci, props)
+            ct = copy(ci)
+            if nph == 3
+                # Should go at end - need better logic if this isn't either one or zero
+                push!(ct, comp_i[1])
+            end
+            ct = normalize(ct, 1)
+        else
+            ct = comp_i
+        end
+        ctrl = InjectorControl(target, ct)
+    else
+        ctrl = ProducerControl(target)
+    end
+    return ctrl
 end
