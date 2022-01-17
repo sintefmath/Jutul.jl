@@ -120,15 +120,17 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
     if initialize
-        initialize_before_first_timestep!(sim, timesteps[1], forces = forces, config = config)
+        forces_step = forces_for_timestep(forces, timesteps, 1)
+        initialize_before_first_timestep!(sim, timesteps[1], forces = forces_step, config = config)
     end
     for (step_no, dT) in enumerate(timesteps)
         if early_termination
             break
         end
+        forces_step = forces_for_timestep(forces, timesteps, step_no)
         nextstep_global!(rec, dT)
         new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot)
-        t_step = @elapsed step_done, rep = solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = reports, step_no = step_no, rec = rec)
+        t_step = @elapsed step_done, rep = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dT, reports = reports, step_no = step_no, rec = rec)
         early_termination = !step_done
         if config[:output_states]
             @timeit "output" store_output!(states, sim)
@@ -490,4 +492,6 @@ function reset!(r::SolveRecorder, dt = NaN)
     r.dt = dt
 end
 
-
+# Forces
+forces_for_timestep(f, timesteps, step_index) = f
+forces_for_timestep(f::T, timesteps, step_index) where T<:AbstractArray = f[step_index]
