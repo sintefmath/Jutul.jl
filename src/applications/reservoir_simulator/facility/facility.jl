@@ -85,7 +85,7 @@ function well_control_equation(ctrl, t::BottomHolePressureTarget, qt)
     return t.value
 end
 
-function well_control_equation(ctrl, t::SinglePhaseRateTarget, qt)
+function well_control_equation(ctrl, t::SurfaceVolumeTarget, qt)
     # Note: This equation will get the corresponding phase rate subtracted by the well
     return t.value
 end
@@ -193,33 +193,29 @@ end
 well_target(target, well_model, rhoS, q_t, well_state, f) = 0.0
 well_target(target::BottomHolePressureTarget, well_model, rhoS, q_t, well_state, f) = f(bottom_hole_pressure(well_state))
 
-function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
-    phases = get_phases(well_model.system)
-    pos = findfirst(isequal(target.phase), phases)
-    @assert !isnothing(pos)
-
-    if value(q_t) >= 0
-        q = q_t
-    else
-        mf = f(top_node_component_mass_fraction(well_state, pos))
-        q = q_t*mf
-    end
-    return q/rhoS[pos]
+function surface_target_phases(target::SurfaceVolumeTarget, phases)
+    return findall(in(lumped_phases(target)), phases)
 end
 
-function well_target(target::SinglePhaseRateTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:MultiComponentSystem}
+surface_target_phases(target::TotalRateTarget, phases) = eachindex(phases)
+
+function well_target(target::SurfaceVolumeTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
     phases = get_phases(well_model.system)
-    pos = findfirst(isequal(target.phase), phases)
-    @assert !isnothing(pos)
+    positions = surface_target_phases(target, phases)
 
     if value(q_t) >= 0
-        q = q_t
+        # If we are injecting we currently assume a single phase.
+        pos = only(positions)
+        q = q_t/rhoS[pos]
     else
-        error("Not implemented yet.")
-        mf = f(top_node_component_mass_fraction(well_state, pos))
-        q = q_t*mf
+        @assert length(positions) > 0
+        q = zero(q_t)
+        for pos in positions
+            mf = f(top_node_component_mass_fraction(well_state, pos))
+            q += q_t*mf/rhoS[pos]
+        end
     end
-    return q/rhoS[pos]
+    return q
 end
 
 function associated_entity(::ControlEquationWell) Wells() end

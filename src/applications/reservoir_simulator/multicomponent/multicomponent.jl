@@ -8,6 +8,7 @@ include("variables/variables.jl")
 include("utils.jl")
 include("flux.jl")
 include("sources.jl")
+include("wells.jl")
 
 function select_primary_variables_system!(S, domain, system::CompositionalSystem, formulation)
     S[:Pressure] = Pressure(max_rel = 0.2, minimum = 101325)

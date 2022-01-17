@@ -757,26 +757,28 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     if has_schedule
         control_ix = Int64.(vec(schedule["step"]["control"]))
         nctrl = maximum(control_ix)
-        current_control = deepcopy(controls)
-
-        all_controls = Vector{typeof(forces)}()
-        for i = 1:nctrl
-            # Create controls for this set of wells
-            local_mrst_wells = vec(schedule["control"][i]["W"])
-            for (wno, wsym) in enumerate(well_symbols)
-                wdata = local_mrst_wells[wno]
-                current_control[wsym] = mrst_well_ctrl(model, wdata, is_comp)
+        if nctrl > 1
+            # We have multiple controls and need to do further work.
+            current_control = deepcopy(controls)
+            all_controls = Vector{typeof(forces)}()
+            for i = 1:nctrl
+                # Create controls for this set of wells
+                local_mrst_wells = vec(schedule["control"][i]["W"])
+                for (wno, wsym) in enumerate(well_symbols)
+                    wdata = local_mrst_wells[wno]
+                    current_control[wsym] = mrst_well_ctrl(model, wdata, is_comp)
+                end
+                # Now copy into the corresponding facilit(y/ies)
+                new_force = deepcopy(forces)
+                for (fsymbol, wsymbols) in zip(facility_symbols, facility_owned_wells)
+                    ctrls = facility_subset(wsymbols, current_control)
+                    WG = models[fsymbol]
+                    new_force[fsymbol] = build_forces(WG, control = ctrls)
+                end
+                push!(all_controls, new_force)
             end
-            # Now copy into the corresponding facilit(y/ies)
-            new_force = deepcopy(forces)
-            for (fsymbol, wsymbols) in zip(facility_symbols, facility_owned_wells)
-                ctrls = facility_subset(wsymbols, current_control)
-                WG = models[fsymbol]
-                new_force[fsymbol] = build_forces(WG, control = ctrls)
-            end
-            push!(all_controls, new_force)
+            forces = all_controls[control_ix]
         end
-        forces = all_controls[control_ix]
     end
     return (models, parameters, initializer, timesteps, forces, mrst_data)
 end
@@ -815,12 +817,11 @@ function mrst_well_ctrl(model, wdata, is_comp)
             target_phase = phases[only(findall(comp_i .> 0))]
             target = SinglePhaseRateTarget(t_mrst, target_phase)
         elseif wt == "wrat"
-            target = SinglePhaseRateTarget(t_mrst, AqueousPhase())
+            target = SurfaceWaterRateTarget(t_mrst)
         elseif wt == "orat"
-            target = SinglePhaseRateTarget(t_mrst, LiquidPhase())
+            target = SurfaceOilRateTarget(t_mrst)
         elseif wt == "lrat"
-            @warn "This is a hack."
-            target = SinglePhaseRateTarget(t_mrst, LiquidPhase())
+            target = SurfaceLiquidRateTarget(t_mrst)
         else
             error("$wt target is not supported.")
         end

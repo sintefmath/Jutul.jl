@@ -36,16 +36,19 @@ absolute_increment_limit(tmf::TotalMassFlux) = tmf.max_abs
 function associated_entity(::TotalMassFlux) Faces() end
 variable_scale(t::TotalMassFlux) = t.scale
 
+default_surface_cond() = (p = 101325.0, T = 303.15)
+
 struct SimpleWell <: WellGrid
     volumes
     perforations
+    surface
     reservoir_symbol
-    function SimpleWell(reservoir_cells; reference_depth = 0, volume = 1e-3, reservoir_symbol = :Reservoir, kwarg...)
+    function SimpleWell(reservoir_cells; reference_depth = 0, volume = 1e-3, reservoir_symbol = :Reservoir, surface_conditions = default_surface_cond(), kwarg...)
         nr = length(reservoir_cells)
 
         WI, gdz = common_well_setup(nr; kwarg...)
         perf = (self = ones(Int64, nr), reservoir = vec(reservoir_cells), WI = WI, gdz = gdz)
-        new([volume], perf, reservoir_symbol)
+        new([volume], perf, surface_conditions, reservoir_symbol)
     end
 end
 
@@ -54,6 +57,7 @@ struct MultiSegmentWell <: WellGrid
     perforations     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     neighborship     # Well cell connectivity
     top              # "Top" node where scalar well quantities live
+    surface          # p, T at surface
     reservoir_symbol # Symbol of the reservoir the well is coupled to
     segment_models   # Segment pressure drop model
     function MultiSegmentWell(volumes::AbstractVector, reservoir_cells;
@@ -61,6 +65,7 @@ struct MultiSegmentWell <: WellGrid
                                                         perforation_cells = nothing,
                                                         segment_models = nothing,
                                                         reference_depth = 0,
+                                                        surface_conditions = default_surface_cond(),
                                                         accumulator_volume = mean(volumes),
                                                         reservoir_symbol = :Reservoir, kwarg...)
         nv = length(volumes)
@@ -94,7 +99,7 @@ struct MultiSegmentWell <: WellGrid
         WI, gdz = common_well_setup(nr; kwarg...)
         perf = (self = perforation_cells, reservoir = reservoir_cells, WI = WI, gdz = gdz)
         accumulator = (reference_depth = reference_depth, )
-        new(volumes, perf, N, accumulator, reservoir_symbol, segment_models)
+        new(volumes, perf, N, accumulator, surface_conditions, reservoir_symbol, segment_models)
     end
 end
 

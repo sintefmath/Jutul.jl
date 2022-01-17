@@ -13,14 +13,51 @@ end
 struct Wells <: JutulUnit end
 struct TotalSurfaceMassRate <: ScalarVariable end
 abstract type WellTarget end
+abstract type SurfaceVolumeTarget <: WellTarget end
 
 struct BottomHolePressureTarget <: WellTarget
     value::AbstractFloat
 end
 
-struct SinglePhaseRateTarget <: WellTarget
+struct SinglePhaseRateTarget <: SurfaceVolumeTarget
     value::AbstractFloat
     phase::AbstractPhase
+end
+
+lumped_phases(t::SinglePhaseRateTarget) = (t.phase, )
+
+"""
+Liquid rate (reservoir: oil + water but not gas)
+"""
+struct SurfaceLiquidRateTarget{T} <: SurfaceVolumeTarget where T<:AbstractFloat
+    value::T
+end
+
+lumped_phases(::SurfaceLiquidRateTarget) = (AqueousPhase(), LiquidPhase())
+
+"""
+Oil rate target
+"""
+struct SurfaceOilRateTarget{T} <: SurfaceVolumeTarget where T<:AbstractFloat
+    value::T
+end
+
+lumped_phases(::SurfaceOilRateTarget) = (LiquidPhase(), )
+
+"""
+Water rate target
+"""
+struct SurfaceWaterRateTarget{T} <: SurfaceVolumeTarget where T<:AbstractFloat
+    value::T
+end
+
+lumped_phases(::SurfaceWaterRateTarget) = (AqueousPhase(), )
+
+"""
+All rates at surface conditions
+"""
+struct TotalRateTarget{T} <: SurfaceVolumeTarget where T<:AbstractFloat
+    value::T
 end
 
 struct DisabledTarget <: WellTarget end
