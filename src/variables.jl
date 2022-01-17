@@ -195,6 +195,17 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
     if perform_copy
         val = deepcopy(val)
     end
+    if eltype(val)<:Real
+        minv = minimum_value(pvar)
+        if isnothing(minv)
+            minv = -Inf
+        end
+        maxv = maximum_value(pvar)
+        if isnothing(maxv)
+            maxv = Inf
+        end
+        clamp!(val, minv, maxv)
+    end
     return transfer(model.context, val)
 end
 
