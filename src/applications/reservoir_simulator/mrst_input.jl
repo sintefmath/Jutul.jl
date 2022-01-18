@@ -762,14 +762,21 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
             current_control = deepcopy(controls)
             all_controls = Vector{typeof(forces)}()
             for i = 1:nctrl
+                new_force = deepcopy(forces)
                 # Create controls for this set of wells
                 local_mrst_wells = vec(schedule["control"][i]["W"])
                 for (wno, wsym) in enumerate(well_symbols)
                     wdata = local_mrst_wells[wno]
+                    wmodel = models[wsym]
                     current_control[wsym] = mrst_well_ctrl(model, wdata, is_comp)
+                    cstatus = vec(wdata["cstatus"])
+                    if all(cstatus)
+                        new_force[wsym] = nothing
+                    else
+                        new_force[wsym] = build_forces(wmodel, mask = PerforationMask(cstatus))
+                    end
                 end
                 # Now copy into the corresponding facilit(y/ies)
-                new_force = deepcopy(forces)
                 for (fsymbol, wsymbols) in zip(facility_symbols, facility_owned_wells)
                     ctrls = facility_subset(wsymbols, current_control)
                     WG = models[fsymbol]

@@ -126,3 +126,10 @@ struct ControlEquationWell <: JutulEquation
 end
 
 struct TotalMassVelocityMassFractionsFlow <: FlowType end
+
+struct PerforationMask{V} <: JutulForce where V<:AbstractVector
+    values::V
+    function PerforationMask(v::T) where T<:AbstractVecOrMat
+        return new{T}(copy(vec(v)))
+    end
+end

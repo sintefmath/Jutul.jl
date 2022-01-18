@@ -709,8 +709,10 @@ function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; ti
             continue
         end
         for source in intersect(target_cross_term_keys(storage, target), sources)
-            for to_target = [true, false]
-                apply_force_to_cross_terms!(storage, model, source, target, force, dt, time; to_target = to_target)
+            for f in force
+                for to_target = [true, false]
+                    apply_force_to_cross_terms!(storage, model, source, target, f, dt, time; to_target = to_target)
+                end
             end
         end
     end

@@ -623,3 +623,33 @@ end
 function mix_by_saturations(s::Real, values)
     return s*values[]
 end
+
+function build_forces(model::SimulationModel{D, S}; mask = nothing) where {D <: DiscretizedDomain{G}, S<:MultiPhaseSystem} where G<:WellGrid
+    mask::Union{Nothing, PerforationMask}
+    return (mask = mask,)
+end
+
+function apply_mask!(v, pm::PerforationMask)
+    for (i, mask) in enumerate(pm.values)
+        for r in size(v, 1)
+            v[r, i] *= mask
+        end
+    end
+end
+
+function apply_mask!(ct::InjectiveCrossTerm, pm::PerforationMask)
+    apply_mask!(ct.crossterm_target, pm)
+    apply_mask!(ct.crossterm_source, pm)
+end
+
+function apply_force_to_cross_term_target!(ct::InjectiveCrossTerm, equation::ConservationLaw, storage_t, storage_s, model_t, model_s, source, target, force::PerforationMask, dt, time)
+    if source == :Reservoir || target == :Reservoir
+        apply_mask!(ct, force)
+    end
+end
+
+function apply_force_to_cross_term_source!(ct::InjectiveCrossTerm, equation::ConservationLaw, storage_t, storage_s, model_t, model_s, source, target, force::PerforationMask, dt, time)
+    if source == :Reservoir || target == :Reservoir
+        apply_mask!(ct, force)
+    end
+end
