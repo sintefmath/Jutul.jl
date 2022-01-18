@@ -476,10 +476,18 @@ function initialize_storage!(storage, model::MultiModel; kwarg...)
 end
 
 function update_equations!(storage, model::MultiModel, dt)
-    # First update all equations
     @timeit "model equations" submodels_storage_apply!(storage, model, update_equations!, dt)
+end
+
+function update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN)
+    # First update all equations
+    @timeit "equations" update_equations!(storage, model, dt)
     # Then update the cross terms
     @timeit "crossterm update" update_cross_terms!(storage, model::MultiModel, dt)
+    # Apply forces
+    @timeit "forces" apply_forces!(storage, model, dt, forces; time = time)
+    # Apply forces to cross-terms
+    @timeit "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time)
     # Finally apply cross terms to the equations
     @timeit "crossterm apply" apply_cross_terms!(storage, model::MultiModel, dt)
 end
@@ -589,7 +597,6 @@ function update_linearized_system_crossterms!(lsys, cross_terms, storage, model:
     # storage_t, = get_submodel_storage(storage, target)
     model_t, model_s = get_submodels(model, target, source)
 
-    # eqs = storage_t[:equations]
     for ekey in keys(cross_terms)
         ct = cross_terms[ekey]
         nz = nonzeros(lsys.jac)
@@ -622,7 +629,7 @@ function update_secondary_variables!(storage, model::MultiModel)
     submodels_storage_apply!(storage, model, update_secondary_variables!)
 end
 
-function check_convergence(storage, model::MultiModel; tol = 1e-3, extra_out = false, kwarg...)
+function check_convergence(storage, model::MultiModel; tol = nothing, extra_out = false, kwarg...)
     converged = true
     err = 0
     offset = 0
@@ -693,6 +700,45 @@ function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targe
         apply_forces!(storage[key], model.models[key], dt, forces[key]; time = time)
     end
 end
+
+function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model), sources = targets)
+    for target in targets
+        # Target: Model where force has impact
+        force = forces[target]
+        if isnothing(force)
+            continue
+        end
+        for source in intersect(target_cross_term_keys(storage, target), sources)
+            for to_target = [true, false]
+                apply_force_to_cross_terms!(storage, model, source, target, force, dt, time; to_target = to_target)
+            end
+        end
+    end
+end
+
+function apply_force_to_cross_terms!(storage, model, source, target, force, dt, time; to_target = true)
+    storage_t, storage_s = get_submodel_storage(storage, target, source)
+    model_t, model_s = get_submodels(model, target, source)
+    eqs = storage_t.equations
+    # Target matches where the force is assigned.
+    if to_target
+        # Equation comes from target model and we are looking at the cross term for that model.
+        cross_terms = cross_term_pair(storage, source, target)
+        fn = apply_force_to_cross_term_target!
+    else
+        # Equation comes from target, but we are looking at the cross term for the source model
+        cross_terms = cross_term_pair(storage, source, target)
+        fn = apply_force_to_cross_term_source!
+    end
+    for (ekey, ct) in pairs(cross_terms)
+        if !isnothing(ct)
+            fn(ct, eqs[ekey], storage_t, storage_s, model_t, model_s, source, target, force, dt, time)
+        end
+    end
+end
+
+apply_force_to_cross_term_target!(ct, equation, storage_t, storage_s, model_t, model_s, source, target, force, dt, time) = nothing
+apply_force_to_cross_term_source!(ct, equation, storage_t, storage_s, model_t, model_s, source, target, force, dt, time) = nothing
 
 function apply_boundary_conditions!(storage, model::MultiModel; targets = submodels_symbols(model))
     for key in targets

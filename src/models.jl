@@ -348,6 +348,10 @@ function update_state_dependents!(storage, model::JutulModel, dt, forces; time =
     if update_secondary
         @timeit "secondary variables" update_secondary_variables!(storage, model)
     end
+    update_equations_and_apply_forces!(storage, model, dt, forces; time = time)
+end
+
+function update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN)
     @timeit "equations" update_equations!(storage, model, dt)
     @timeit "forces" apply_forces!(storage, model, dt, forces; time = time)
     @timeit "boundary conditions" apply_boundary_conditions!(storage, model)
