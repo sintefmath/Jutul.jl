@@ -479,7 +479,7 @@ function update_equations!(storage, model::MultiModel, dt)
     @timeit "model equations" submodels_storage_apply!(storage, model, update_equations!, dt)
 end
 
-function update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN)
+function update_equations_and_apply_forces!(storage::MultiModel, model, dt, forces; time = NaN)
     # First update all equations
     @timeit "equations" update_equations!(storage, model, dt)
     # Then update the cross terms
