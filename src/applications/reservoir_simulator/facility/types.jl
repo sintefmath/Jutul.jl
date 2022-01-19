@@ -45,6 +45,15 @@ end
 lumped_phases(::SurfaceOilRateTarget) = (LiquidPhase(), )
 
 """
+Gas rate target
+"""
+struct SurfaceGasRateTarget{T} <: SurfaceVolumeTarget where T<:AbstractFloat
+    value::T
+end
+
+lumped_phases(::SurfaceGasRateTarget) = (VaporPhase(), )
+
+"""
 Water rate target
 """
 struct SurfaceWaterRateTarget{T} <: SurfaceVolumeTarget where T<:AbstractFloat
@@ -112,6 +121,7 @@ struct WellGroupConfiguration
 end
 
 operating_control(cfg::WellGroupConfiguration, well::Symbol) = cfg.operating_controls[well]
+current_limits(cfg::WellGroupConfiguration, well::Symbol) = cfg.limits[well]
 
 struct ControlEquationWell <: JutulEquation
     # Equation:

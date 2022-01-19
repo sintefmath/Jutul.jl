@@ -781,7 +781,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                     cstatus = vec(wdata["cstatus"])
                     lims = wdata["lims"]
                     if !isempty(lims)
-                        limits[wsym] = lims
+                        limits[wsym] = convert_to_immutable_storage(lims)
                         found_limits = true
                     end
                     if all(cstatus)
@@ -849,6 +849,8 @@ function mrst_well_ctrl(model, wdata, is_comp)
             target = SurfaceWaterRateTarget(t_mrst)
         elseif wt == "orat"
             target = SurfaceOilRateTarget(t_mrst)
+        elseif wt == "grat"
+            target = SurfaceGasRateTarget(t_mrst)
         elseif wt == "lrat"
             target = SurfaceLiquidRateTarget(t_mrst)
         else

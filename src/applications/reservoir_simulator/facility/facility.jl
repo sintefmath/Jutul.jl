@@ -174,16 +174,11 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
         if is_injecting
             S = nothing
         else
-            rhoS, S = flash_wellstream_at_surface(well_model, well_state, rhoS)
+            rhoS, S = flash_wellstream_at_surface(source_model, well_state, rhoS)
         end
-        current_value(op_target) = well_target(op_target, source_model, well_state, rhoS, S, is_injecting)
-        c_t = current_value(target)
-        target, ok = apply_well_limit!(cfg, value(c_t), target, well_symbol)
-        if !ok
-            @info "Switching well from $target to $new_target..."
-            c_t = current_value(target)
-        end
-        t = -c_t
+        target = apply_well_limit!(cfg, target, source_model, well_state, well_symbol, rhoS, S, value(q_t))
+        # Compute target value with AD relative to well.
+        t = -well_target(target, source_model, well_state, rhoS, S, is_injecting)
         t_∂w = t
         t_∂f = value(t)
 
@@ -245,8 +240,7 @@ function well_target(target::SurfaceVolumeTarget, well_model, well_state, surfac
         w = 1.0/surface_densities[pos]
     else
         @assert length(positions) > 0
-        w = zero(eltype(S_sep))
-        @info value(rhoS_sep) value(S_sep)
+        w = zero(eltype(surface_volume_fractions))
         for pos in positions
             V = surface_volume_fractions[pos]
             ρ = surface_densities[pos]
@@ -255,6 +249,15 @@ function well_target(target::SurfaceVolumeTarget, well_model, well_state, surfac
     end
     return w
 end
+
+function well_target_value(target, q_t, arg...)
+    v = well_target(target, arg...)
+    if rate_weighted(target)
+        v *= value(q_t)
+    end
+    return v
+end
+
 
 function associated_entity(::ControlEquationWell) Wells() end
 
@@ -336,16 +339,95 @@ function update_before_step_domain!(storage, model::SimulationModel, domain::Wel
     end
 end
 
-function apply_well_limit!(ctrl::WellGroupConfiguration, current_val, target, well::Symbol)
-    error()
-    current_lims = ctrl.limits[well]
-    if isnothing(current_lims)
-
-    end
-    for (key, v) in current_lims
-        if !isnothing(key)
-
+function apply_well_limit!(cfg::WellGroupConfiguration, target, wmodel, wstate, well::Symbol, density_s, volume_fraction_s, total_mass_rate)
+    current_lims = current_limits(cfg, well)
+    if !isnothing(current_lims)
+        ctrl = operating_control(cfg, well)
+        target, changed = check_active_limits(ctrl, target, current_lims, wmodel, wstate, well, density_s, volume_fraction_s, total_mass_rate)
+        if changed
+            cfg.operating_controls[well] = target
         end
     end
-    
+    return target
+end
+
+function check_active_limits(control, target, limits, wmodel, wstate, well::Symbol, density_s, volume_fraction_s, total_mass_rate)
+    # current_value(t) = well_target(t, wmodel, wstate, density_s, volume_fraction_s, is_injecting)
+    changed = false
+    for (name, val) in pairs(limits)
+        if isfinite(val)
+            (target_limit, is_lower) = translate_limit(control, name, val)
+            is_injecting = total_mass_rate >= 0
+            ok = check_limit(target_limit, target, is_lower, total_mass_rate, wmodel, wstate, density_s, volume_fraction_s, is_injecting)
+            if !ok
+                @debug "Switching well \"$well\" from $target to $target_limit due to $name limit."
+                changed = true
+                target = target_limit
+                break
+            end
+        end
+    end
+    return (target, changed)
+end
+
+function translate_limit(control::ProducerControl, name, val)
+    is_lower = true
+    if name == :bhp
+        # Lower limit, pressure
+        target_limit = BottomHolePressureTarget(val)
+    elseif name == :orat
+        # Lower limit, surface oil rate
+        target_limit = SurfaceOilRateTarget(val)
+    elseif name == :lrat
+        # Lower limit, surface liquid (water + oil) rate
+        target_limit = SurfaceLiquidRateTarget(val)
+    elseif name == :grat
+        # Lower limit, surface gas rate
+        target_limit = SurfaceGasRateTarget(val)
+    elseif name == :wrat
+        # Lower limit, surface water rate
+        target_limit = SurfaceWaterRateTarget(val)
+    elseif name == :vrat
+        # Upper limit, total volumetric surface rate
+        target_limit = TotalRateTarget(val)
+        is_lower = false
+    else
+        error("$name limit not supported for well acting as producer.")
+    end
+    return (target_limit, is_lower)
+end
+
+function translate_limit(control::InjectorControl, name, val)
+    is_lower = false
+    if name == :bhp
+        # Upper limit, pressure
+        target_limit = BottomHolePressureTarget(val)
+    elseif name == :rate
+        # Lower limit, total volumetric surface rate
+        target_limit = TotalRateTarget(val)
+    elseif name == :vrat
+        # Upper limit, total volumetric surface rate
+        target_limit = TotalRateTarget(val)
+        is_lower = true
+    else
+        error("$name limit not supported for well acting as producer.")
+    end
+    return (target_limit, is_lower)
+end
+
+function check_limit(target_limit, target, is_lower::Bool, q_t, arg...)
+    if typeof(target_limit) == typeof(target)
+        # We are already operating at this target and there is no need to check.
+        ok = true
+    else
+        current_val = well_target_value(target_limit, q_t, arg...)
+        limit_val = target_limit.value
+        if is_lower
+            # Limit is lower bound, check that we are above...
+            ok = current_val > limit_val
+        else
+            ok = current_val <= limit_val
+        end
+    end
+    return ok
 end
