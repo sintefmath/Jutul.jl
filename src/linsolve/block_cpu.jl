@@ -9,7 +9,8 @@ function block_mul!(res, jac, Vt, x, α, β::T) where T
         end
     else
         # TODO: optimize me like the three argument version.
-        res_v .= α.*jac*x_v + β.*res_v
+        # res_v .= α.*jac*x_v + β.*res_v
+        mul!(res_v, jac, x_v, α, β)
     end
 end
 
