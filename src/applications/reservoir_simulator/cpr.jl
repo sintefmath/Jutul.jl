@@ -185,6 +185,8 @@ function true_impes!(w, acc, r, n, bz, arg...)
         true_impes_4!(w, acc, r, n, bz, arg...)
     elseif bz == 5
         true_impes_5!(w, acc, r, n, bz, arg...)
+    elseif bz == 8
+        true_impes_8!(w, acc, r, n, bz, arg...)
     else
         true_impes_gen!(w, acc, r, n, bz, arg...)
     end
@@ -244,6 +246,22 @@ function true_impes_5!(w, acc, r, n, bz, s, scaling)
                          f(3, 1, c) f(3, 2, c) f(3, 3, c) f(3, 4, c) f(3, 5, c);
                          f(4, 1, c) f(4, 2, c) f(4, 3, c) f(4, 4, c) f(4, 5, c);
                          f(5, 1, c) f(5, 2, c) f(5, 3, c) f(5, 4, c) f(5, 5, c)]
+        invert_w!(w, A, r_p, c, bz, scaling)
+    end
+end
+
+function true_impes_8!(w, acc, r, n, bz, s, scaling)
+    r_p = SVector{8}(r)
+    f(i, j, c) = M_entry(acc, i, j, c)
+    for c in 1:n
+        A = @SMatrix    [s*f(1, 1, c) s*f(1, 2, c) s*f(1, 3, c) s*f(1, 4, c) s*f(1, 5, c) s*f(1, 6, c) s*f(1, 7, c) s*f(1, 8, c);
+                         f(2, 1, c) f(2, 2, c) f(2, 3, c) f(2, 4, c) f(2, 5, c) f(2, 6, c) f(2, 7, c) f(2, 8, c);
+                         f(3, 1, c) f(3, 2, c) f(3, 3, c) f(3, 4, c) f(3, 5, c) f(3, 6, c) f(3, 7, c) f(3, 8, c);
+                         f(4, 1, c) f(4, 2, c) f(4, 3, c) f(4, 4, c) f(4, 5, c) f(4, 6, c) f(4, 7, c) f(4, 8, c);
+                         f(5, 1, c) f(5, 2, c) f(5, 3, c) f(5, 4, c) f(5, 5, c) f(5, 6, c) f(5, 7, c) f(5, 8, c);
+                         f(6, 1, c) f(6, 2, c) f(6, 3, c) f(6, 4, c) f(6, 5, c) f(6, 6, c) f(6, 7, c) f(6, 8, c);
+                         f(7, 1, c) f(7, 2, c) f(7, 3, c) f(7, 4, c) f(7, 5, c) f(7, 6, c) f(7, 7, c) f(7, 8, c);
+                         f(8, 1, c) f(8, 2, c) f(8, 3, c) f(8, 4, c) f(8, 5, c) f(8, 6, c) f(8, 7, c) f(8, 8, c)]
         invert_w!(w, A, r_p, c, bz, scaling)
     end
 end
