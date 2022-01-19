@@ -57,7 +57,7 @@ function associated_entity(::TotalSurfaceMassRate) Wells() end
 function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_symbol, model, dx)
     v = state[state_symbol]
     symbols = model.domain.well_symbols
-    cfg = state.WellGroupConfiguration.control
+    cfg = state.WellGroupConfiguration
     # Injectors can only have strictly positive injection rates,
     # producers can only have strictly negative and disabled controls give zero rate.
     function do_update(v, dx, ctrl)
@@ -75,7 +75,7 @@ function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_s
     end
     @inbounds for i in eachindex(v)
         s = symbols[i]
-        v[i] = do_update(v[i], dx[i], cfg[s])
+        v[i] = do_update(v[i], dx[i], operating_control(cfg, s))
     end
 end
 
@@ -111,7 +111,8 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw, well_st
     # Stuff from facility
     mswell = source_model.domain
     pos = get_well_position(mswell, well_symbol)
-    ctrl = fstate.WellGroupConfiguration.control[well_symbol]
+    cfg = fstate.WellGroupConfiguration
+    ctrl = operating_control(cfg, well_symbol)
     qT = fstate.TotalSurfaceMassRate[pos]
 
     if isa(ctrl, InjectorControl)
@@ -151,7 +152,8 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
                             source_model::SimulationModel{D},
                             target, well_symbol, dt) where {D<:DiscretizedDomain{W} where W<:WellGrid, WG<:WellGroup}
     fstate = target_storage.state
-    ctrl = fstate.WellGroupConfiguration.control[well_symbol]
+    cfg = fstate.WellGroupConfiguration
+    ctrl = operating_control(cfg, well_symbol)
     target = ctrl.target
     # q_t = facility_surface_mass_rate_for_well(target_model, well_symbol, fstate)
     well_state = source_storage.state
@@ -165,9 +167,19 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
 end
 
 function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
+    cfg = fstate.WellGroupConfiguration
     q_t = facility_surface_mass_rate_for_well(target_model, well_symbol, fstate)
     is_injecting = value(q_t) >= 0
-    t = -well_target(target, source_model, well_state, rhoS, is_injecting)
+    current_value(op_target) = well_target(op_target, source_model, well_state, rhoS, is_injecting)
+    c_t = current_value(target)
+    ok, new_target = apply_well_limit!(cfg, value(c_t), target, well_symbol)
+    if !ok
+        @info "Switching well from $target to $new_target..."
+        target = new_target
+        t = current_value(new_target)
+    else
+        t = -c_t
+    end
     t_∂w = t
     t_∂f = value(t)
 
@@ -175,6 +187,7 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
         t_∂w *= value(q_t)
         t_∂f *= q_t
     end
+    @info "$well_symbol:" target t_∂w t_∂f
     s_buf[1] = t_∂w
     t_buf[1] = t_∂f
     # s_buf[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x)
@@ -267,7 +280,7 @@ function associated_entity(::ControlEquationWell) Wells() end
 
 function update_equation!(eq::ControlEquationWell, storage, model, dt)
     state = storage.state
-    ctrl = state.WellGroupConfiguration.control
+    ctrl = state.WellGroupConfiguration.operating_controls
     wells = model.domain.well_symbols
     # T = ctrl.target
     surf_rate = state.TotalSurfaceMassRate
@@ -325,10 +338,36 @@ end
 function update_before_step_domain!(storage, model::SimulationModel, domain::WellGroup, dt, forces)
     # Set control to whatever is on the forces
     cfg = storage.state.WellGroupConfiguration
+    op_ctrls = cfg.operating_controls
+    req_ctrls = cfg.requested_controls
     for key in keys(forces.control)
-        cfg.control[key] = forces.control[key]
+        # If the requested control in forces differ from the one we are presently using, we need to switch.
+        # Otherwise, stay the course.
+        newctrl = forces.control[key]
+        oldctrl = req_ctrls[key]
+        if newctrl != oldctrl
+            # We have a new control. Any previous control change is invalid.
+            # Set both operating and requested control to the new one.
+            @debug "Well $key switching from $oldctrl to $newctrl"
+            req_ctrls[key] = newctrl
+            op_ctrls[key] = newctrl
+        end
     end
     for key in keys(forces.limits)
         cfg.limits[key] = forces.limits[key]
     end
+end
+
+function apply_well_limit!(ctrl::WellGroupConfiguration, current_val, target, well::Symbol)
+    error()
+    current_lims = ctrl.limits[well]
+    if isnothing(current_lims)
+
+    end
+    for (key, v) in current_lims
+        if !isnothing(key)
+
+        end
+    end
+    
 end

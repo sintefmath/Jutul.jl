@@ -90,24 +90,28 @@ struct ProducerControl <: WellControlForce
 end
 
 struct WellGroupConfiguration
-    control
-    limits
+    operating_controls # Currently operating control
+    requested_controls # The requested control (which may be different if limits are hit)
+    limits             # Operating limits for the wells
     function WellGroupConfiguration(well_symbols, control = nothing, limits = nothing)
         if isnothing(control)
-            control = OrderedDict{Symbol, WellControlForce}()
+            control = Dict{Symbol, WellControlForce}()
             for s in well_symbols
                 control[s] = DisabledControl()
             end
         end
+        requested = deepcopy(control)
         if isnothing(limits)
-            limits = OrderedDict{Symbol, Any}()
+            limits = Dict{Symbol, Any}()
             for s in well_symbols
                 limits[s] = nothing
             end
         end
-        new(control, limits)
+        new(control, requested, limits)
     end
 end
+
+operating_control(cfg::WellGroupConfiguration, well::Symbol) = cfg.operating_controls[well]
 
 struct ControlEquationWell <: JutulEquation
     # Equation:
@@ -116,10 +120,8 @@ struct ControlEquationWell <: JutulEquation
     # We need to store derivatives with respect to q_t (same entity) and the top cell (other entity)
     equation::JutulAutoDiffCache
     function ControlEquationWell(model, number_of_equations; kwarg...)
-        # @assert number_of_equations == 1
         nw = count_entities(model.domain, Wells())
         alloc = (entity) -> CompactAutoDiffCache(number_of_equations, nw, model, entity = entity; kwarg...)
-        # One potential drop per velocity
         target_well = alloc(Wells())
         new(target_well)
     end
