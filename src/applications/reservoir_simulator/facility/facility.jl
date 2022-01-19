@@ -166,15 +166,25 @@ end
 
 function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
     q_t = facility_surface_mass_rate_for_well(target_model, well_symbol, fstate)
+    is_injecting = value(q_t) >= 0
+    t = -well_target(target, source_model, well_state, rhoS, is_injecting)
+    t_∂w = t
+    t_∂f = value(t)
 
-    # well_state = source_storage.state
-    # param = source_storage.parameters
-    # rhoS = param[:reference_densities]
-    # Operation twice, to get both partials
-    s_buf[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x)
-    t_buf[1] = -well_target(target, source_model, rhoS, q_t, well_state, value)
-
+    if rate_weighted(target)
+        t_∂w *= value(q_t)
+        t_∂f *= q_t
+    end
+    s_buf[1] = t_∂w
+    t_buf[1] = t_∂f
+    # s_buf[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x)
+    # t_buf[1] = -well_target(target, source_model, rhoS, q_t, well_state, value)
 end
+
+rate_weighted(t) = true
+rate_weighted(::BottomHolePressureTarget) = false
+rate_weighted(::DisabledTarget) = false
+
 
 function facility_surface_mass_rate_for_well(model::SimulationModel, wsym, fstate)
     pos = get_well_position(model.domain, wsym)
@@ -190,8 +200,6 @@ function top_node_component_mass_fraction(ws, c_ix)
     return mass_fraction
 end
 
-well_target(target, well_model, rhoS, q_t, well_state, f) = 0.0
-well_target(target::BottomHolePressureTarget, well_model, rhoS, q_t, well_state, f) = f(bottom_hole_pressure(well_state))
 
 function surface_target_phases(target::SurfaceVolumeTarget, phases)
     return findall(in(lumped_phases(target)), phases)
@@ -199,40 +207,57 @@ end
 
 surface_target_phases(target::TotalRateTarget, phases) = eachindex(phases)
 
-function well_target(target::SurfaceVolumeTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
+"""
+Well target contribution from well itself (generic, zero value)
+"""
+well_target(target, well_model, well_state, rhoS, injecting) = 0.0
+
+"""
+Well target contribution from well itself (bhp)
+"""
+well_target(target::BottomHolePressureTarget, well_model, well_state, rhoS, injecting) = bottom_hole_pressure(well_state)
+
+"""
+Well target contribution from well itself (surface volume, immiscible)
+"""
+function well_target(target::SurfaceVolumeTarget, well_model::SimulationModel{D, S}, well_state, rhoS, injecting) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
     phases = get_phases(well_model.system)
     positions = surface_target_phases(target, phases)
 
-    if value(q_t) >= 0
+    if injecting
         # If we are injecting we currently assume a single phase.
         pos = only(positions)
-        q = q_t/rhoS[pos]
+        w = 1.0/rhoS[pos]
     else
         @assert length(positions) > 0
-        q = zero(q_t)
+        w = 0
         for pos in positions
-            mf = f(top_node_component_mass_fraction(well_state, pos))
-            q += q_t*mf/rhoS[pos]
+            mf = top_node_component_mass_fraction(well_state, pos)
+            w += mf/rhoS[pos]
         end
     end
-    return q
+    return w
 end
 
-function well_target(target::SurfaceVolumeTarget, well_model::SimulationModel{D, S}, rhoS, q_t, well_state, f) where {D, S<:MultiComponentSystem}
+"""
+Well target contribution from well itself (surface volume, compositional)
+"""
+function well_target(target::SurfaceVolumeTarget, well_model::SimulationModel{D, S}, well_state, rhoS) where {D, S<:MultiComponentSystem}
     phases = get_phases(well_model.system)
     positions = surface_target_phases(target, phases)
 
-    if value(q_t) >= 0
+    if injecting
         pos = only(positions)
-        q = q_t/rhoS[pos]
+        w = 1/rhoS[pos]
     else
         @assert length(positions) > 0
-        q = zero(q_t)
         rhoS_sep, S_sep = flash_well_densities(well_model, well_state, rhoS)
+        w = zero(eltype(S_sep))
+        @info value(rhoS_sep) value(S_sep)
         for pos in positions
             V = S_sep[pos]
             ρ = rhoS_sep[pos]
-            q += q_t*f(V/ρ)
+            w += V/ρ
         end
     end
     return q
