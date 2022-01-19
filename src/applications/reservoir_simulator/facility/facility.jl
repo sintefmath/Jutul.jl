@@ -242,7 +242,7 @@ end
 """
 Well target contribution from well itself (surface volume, compositional)
 """
-function well_target(target::SurfaceVolumeTarget, well_model::SimulationModel{D, S}, well_state, rhoS) where {D, S<:MultiComponentSystem}
+function well_target(target::SurfaceVolumeTarget, well_model::SimulationModel{D, S}, well_state, rhoS, injecting) where {D, S<:MultiComponentSystem}
     phases = get_phases(well_model.system)
     positions = surface_target_phases(target, phases)
 
@@ -260,7 +260,7 @@ function well_target(target::SurfaceVolumeTarget, well_model::SimulationModel{D,
             w += V/ρ
         end
     end
-    return q
+    return w
 end
 
 function associated_entity(::ControlEquationWell) Wells() end
