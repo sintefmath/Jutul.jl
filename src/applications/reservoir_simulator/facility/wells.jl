@@ -36,7 +36,7 @@ absolute_increment_limit(tmf::TotalMassFlux) = tmf.max_abs
 function associated_entity(::TotalMassFlux) Faces() end
 variable_scale(t::TotalMassFlux) = t.scale
 
-default_surface_cond() = (p = 101325.0, T = 303.15)
+default_surface_cond() = (p = 101325.0, T = 288.15) # Pa and deg. K from ISO 13443:1996 for natural gas
 
 struct SimpleWell <: WellGrid
     volumes
