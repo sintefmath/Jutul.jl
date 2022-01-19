@@ -17,7 +17,14 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     exported = MAT.matread(fn)
     @debug "File read complete. Unpacking data..."
     g = MRSTWrapMesh(exported["G"])
-    geo = tpfv_geometry(g)
+    has_trans = haskey(exported, "T") && length(exported["T"]) > 0
+    if haskey(exported, "N")
+        N = Int64.(exported["N"]')
+        @assert has_trans
+    else
+        N = nothing
+    end
+    geo = tpfv_geometry(g, N = N)
 
     function get_vec(d)
         if isa(d, AbstractArray)
@@ -36,7 +43,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     end
 
     # Deal with face data
-    if haskey(exported, "T") && length(exported["T"]) > 0
+    if has_trans
         @debug "Found precomputed transmissibilities, reusing"
         T_raw = exported["T"]
         if isa(T_raw, AbstractFloat)
@@ -685,7 +692,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                 ci = map((x, c) -> max(c.mw*x, 1e-10), ci, props)
                 ci = normalize(ci, 1)
             else
-                ci = comp_i
+                ci = vec(wdata["compi"])
             end
         elseif isa(ctrl, ProducerControl)
             factor = 0.99
