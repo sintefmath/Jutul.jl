@@ -110,7 +110,11 @@ function update_flash_buffer!(buf, eos, Pressure, Temperature, OverallMoleFracti
     if isnothing(buf.forces) || eltype(buf.forces.A_ij) != eltype(OverallMoleFractions)
         P = Pressure[1]
         T = Temperature[1]
-        Z = OverallMoleFractions[:, 1]
+        if isa(OverallMoleFractions, AbstractVector)
+            Z = OverallMoleFractions
+        else
+            Z = OverallMoleFractions[:, 1]
+        end
         buf.forces = force_coefficients(eos, (p = P, T = T, z = Z), static_size = true)
     end
 end

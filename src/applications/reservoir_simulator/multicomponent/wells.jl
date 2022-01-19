@@ -25,12 +25,7 @@ function flash_well_densities(well_model, well_state, rhoS)
     Pressure = convert(T, sc.p)
     Temperature = convert(T, sc.T)
 
-    mass = total_masses[1:nc, 1]
-    mw = map(x -> x.mw, eos.mixture.properties)
-
-    z = mass./mw
-    zt = sum(z)
-    @. z = z/zt
+    z = SVector{nc}(well_state.OverallMoleFractions[:, 1])
     m = SSIFlash()
     S = flash_storage(eos, method = m, inc_jac = true, diff_externals = true, npartials = n, static_size = true)
     update_flash_buffer!(buf, eos, Pressure, Temperature, z)
