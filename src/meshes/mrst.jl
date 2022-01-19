@@ -11,20 +11,31 @@ struct MRSTWrapMesh <: AbstractJutulMesh
     end
 end
 
-function tpfv_geometry(g::MRSTWrapMesh)
+function tpfv_geometry(g::MRSTWrapMesh; N = nothing)
     exported = g.data
     faces = exported.faces
     cells = exported.cells
-
-    N = Int64.(faces.neighbors)
-    internal_faces = (N[:, 2] .> 0) .& (N[:, 1] .> 0)
-    N = copy(N[internal_faces, :]')
-
-    face_centroids = copy((faces.centroids[internal_faces, :])')
-    face_areas = vec(faces.areas[internal_faces])
-    face_normals = faces.normals[internal_faces, :]./face_areas
-    face_normals = copy(face_normals')
     cell_centroids = copy((cells.centroids)')
+
+    if isnothing(N)
+        N = Int64.(faces.neighbors)
+        internal_faces = (N[:, 2] .> 0) .& (N[:, 1] .> 0)
+        N = copy(N[internal_faces, :]')
+        face_centroids = copy((faces.centroids[internal_faces, :])')
+        face_areas = vec(faces.areas[internal_faces])
+        face_normals = faces.normals[internal_faces, :]./face_areas
+        face_normals = copy(face_normals')
+    else
+        @assert eltype(N)<:Integer
+        @assert size(N, 1) == 2
+        nf = size(N, 2)
+        dim = size(cell_centroids, 1)
+        fake_vec() = repeat([NaN], dim, nf)
+        fake_scalar() = repeat([NaN], nf)
+        face_centroids = fake_vec()
+        face_normals = fake_vec()
+        face_areas = fake_scalar()
+    end
     V = cells.volumes
 
     return TwoPointFiniteVolumeGeometry(N, face_areas, V, face_normals, cell_centroids, face_centroids)
