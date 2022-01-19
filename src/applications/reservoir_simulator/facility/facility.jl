@@ -80,20 +80,16 @@ function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_s
 end
 
 
-function well_control_equation(ctrl, t::BottomHolePressureTarget, qt)
-    # Note: This equation will get the bhp subtracted when coupled to a well
-    return t.value
+function well_control_equation(ctrl, target, qt)
+    # Note: This equation will get the current value subtracted when coupled to a well
+    return target.value
 end
 
-function well_control_equation(ctrl, t::SurfaceVolumeTarget, qt)
-    # Note: This equation will get the corresponding phase rate subtracted by the well
-    return t.value
+function well_control_equation(ctrl, target::DisabledTarget, qt) 
+    # Note: This equation will get the total mass rate subtracted when coupled to a well
+    return 0.0
 end
 
-
-function well_control_equation(ctrl, t::DisabledTarget, qt)
-    return qt
-end
 
 ## Well controls
 
@@ -167,31 +163,38 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
 end
 
 function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
-    cfg = fstate.WellGroupConfiguration
     q_t = facility_surface_mass_rate_for_well(target_model, well_symbol, fstate)
-    is_injecting = value(q_t) >= 0
-    current_value(op_target) = well_target(op_target, source_model, well_state, rhoS, is_injecting)
-    c_t = current_value(target)
-    ok, new_target = apply_well_limit!(cfg, value(c_t), target, well_symbol)
-    if !ok
-        @info "Switching well from $target to $new_target..."
-        target = new_target
-        t = current_value(new_target)
+    if isa(target, DisabledTarget)
+        # Early return - no cross term needed.
+        t_∂w = value(q_t)
+        t_∂f = q_t
     else
+        cfg = fstate.WellGroupConfiguration
+        is_injecting = value(q_t) >= 0
+        if is_injecting
+            S = nothing
+        else
+            rhoS, S = flash_wellstream_at_surface(well_model, well_state, rhoS)
+        end
+        current_value(op_target) = well_target(op_target, source_model, well_state, rhoS, S, is_injecting)
+        c_t = current_value(target)
+        target, ok = apply_well_limit!(cfg, value(c_t), target, well_symbol)
+        if !ok
+            @info "Switching well from $target to $new_target..."
+            c_t = current_value(target)
+        end
         t = -c_t
-    end
-    t_∂w = t
-    t_∂f = value(t)
+        t_∂w = t
+        t_∂f = value(t)
 
-    if rate_weighted(target)
-        t_∂w *= value(q_t)
-        t_∂f *= q_t
+        if rate_weighted(target)
+            t_∂w *= value(q_t)
+            t_∂f *= q_t
+        end
+        @info "$well_symbol:" target t_∂w t_∂f
     end
-    @info "$well_symbol:" target t_∂w t_∂f
     s_buf[1] = t_∂w
     t_buf[1] = t_∂f
-    # s_buf[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x)
-    # t_buf[1] = -well_target(target, source_model, rhoS, q_t, well_state, value)
 end
 
 rate_weighted(t) = true
@@ -223,53 +226,30 @@ surface_target_phases(target::TotalRateTarget, phases) = eachindex(phases)
 """
 Well target contribution from well itself (generic, zero value)
 """
-well_target(target, well_model, well_state, rhoS, injecting) = 0.0
+well_target(target, well_model, well_state, rhoS, S, injecting) = 0.0
 
 """
 Well target contribution from well itself (bhp)
 """
-well_target(target::BottomHolePressureTarget, well_model, well_state, rhoS, injecting) = bottom_hole_pressure(well_state)
+well_target(target::BottomHolePressureTarget, well_model, well_state, rhoS, S, injecting) = bottom_hole_pressure(well_state)
 
 """
-Well target contribution from well itself (surface volume, immiscible)
+Well target contribution from well itself (surface volume)
 """
-function well_target(target::SurfaceVolumeTarget, well_model::SimulationModel{D, S}, well_state, rhoS, injecting) where {D, S<:Union{ImmiscibleSystem, SinglePhaseSystem}}
-    phases = get_phases(well_model.system)
-    positions = surface_target_phases(target, phases)
-
-    if injecting
-        # If we are injecting we currently assume a single phase.
-        pos = only(positions)
-        w = 1.0/rhoS[pos]
-    else
-        @assert length(positions) > 0
-        w = 0
-        for pos in positions
-            mf = top_node_component_mass_fraction(well_state, pos)
-            w += mf/rhoS[pos]
-        end
-    end
-    return w
-end
-
-"""
-Well target contribution from well itself (surface volume, compositional)
-"""
-function well_target(target::SurfaceVolumeTarget, well_model::SimulationModel{D, S}, well_state, rhoS, injecting) where {D, S<:MultiComponentSystem}
+function well_target(target::SurfaceVolumeTarget, well_model, well_state, surface_densities, surface_volume_fractions, injecting)
     phases = get_phases(well_model.system)
     positions = surface_target_phases(target, phases)
 
     if injecting
         pos = only(positions)
-        w = 1/rhoS[pos]
+        w = 1.0/surface_densities[pos]
     else
         @assert length(positions) > 0
-        rhoS_sep, S_sep = flash_well_densities(well_model, well_state, rhoS)
         w = zero(eltype(S_sep))
         @info value(rhoS_sep) value(S_sep)
         for pos in positions
-            V = S_sep[pos]
-            ρ = rhoS_sep[pos]
+            V = surface_volume_fractions[pos]
+            ρ = surface_densities[pos]
             w += V/ρ
         end
     end
@@ -282,9 +262,7 @@ function update_equation!(eq::ControlEquationWell, storage, model, dt)
     state = storage.state
     ctrl = state.WellGroupConfiguration.operating_controls
     wells = model.domain.well_symbols
-    # T = ctrl.target
     surf_rate = state.TotalSurfaceMassRate
-    # bhp = state.Pressure[1]
     entries = eq.equation.entries
     control_equations!(entries, wells, ctrl, surf_rate)
 end
