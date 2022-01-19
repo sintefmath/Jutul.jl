@@ -13,11 +13,12 @@ function setup_reservoir_simulator(models, initializer, parameters = nothing; kw
         groups = repeat([2], length(models))
         groups[1] = 1
         red = :schur_apply
+        outer_context = DefaultContext()
     else
+        outer_context = models[:Reservoir].context
         groups = nothing
         red = nothing
     end
-    outer_context = DefaultContext()
     mmodel = MultiModel(convert_to_immutable_storage(models), groups = groups, 
                                                               context = outer_context,
                                                               reduction = red)
