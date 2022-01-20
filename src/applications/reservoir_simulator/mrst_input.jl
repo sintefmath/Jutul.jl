@@ -784,10 +784,21 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                         limits[wsym] = convert_to_immutable_storage(lims)
                         found_limits = true
                     end
-                    if all(cstatus)
+                    Ω_w = models[wsym].domain
+                    WI = Ω_w.grid.perforations.WI
+                    new_WI = vec(wdata["WI"])
+                    if all(cstatus) && all(WI .== new_WI)
                         new_force[wsym] = nothing
                     else
-                        new_force[wsym] = build_forces(wmodel, mask = PerforationMask(cstatus))
+                        # Set mask to new / static so that static*mask = new.
+                        # In addition: Account for completion closures.
+                        wi_mask = vec(WI./new_WI)
+                        for ix in eachindex(wi_mask)
+                            if !cstatus[ix] || !isfinite(wi_mask[ix])
+                                wi_mask[ix] = 0
+                            end
+                        end
+                        new_force[wsym] = build_forces(wmodel, mask = PerforationMask(wi_mask))
                     end
                 end
                 # Now copy into the corresponding facilit(y/ies)
