@@ -186,7 +186,7 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
             t_∂w *= value(q_t)
             t_∂f *= q_t
         end
-        @info "$well_symbol:" target t_∂w t_∂f
+        # @info "$well_symbol:" target t_∂w t_∂f
     end
     s_buf[1] = t_∂w
     t_buf[1] = t_∂f
@@ -352,7 +352,8 @@ function apply_well_limit!(cfg::WellGroupConfiguration, target, wmodel, wstate, 
         ctrl = operating_control(cfg, well)
         target, changed = check_active_limits(ctrl, target, current_lims, wmodel, wstate, well, density_s, volume_fraction_s, total_mass_rate)
         if changed
-            cfg.operating_controls[well] = target
+            Ct = typeof(ctrl)
+            cfg.operating_controls[well] = Ct(target)
         end
     end
     return target
