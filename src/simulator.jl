@@ -204,7 +204,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
             else
                 cut_count += 1
                 if info_level > 0
-                    @warn "Cutting timestep. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(100*dt/dT)% of full step.\nThis is cut #$cut_count for step $step_no."
+                    @warn "Cutting timestep. Step $(100*t_local/dT) % complete.\nStep fraction reduced to $(get_tstr(dt)) ($(100*dt/dT)% of full step).\nThis is cut #$cut_count for step $step_no."
                 end
             end
         end
