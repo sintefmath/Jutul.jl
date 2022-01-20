@@ -128,7 +128,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                         T = ""
                         tt = ""
                     end
-                    touched = touch
+                    touched = touch || touched
 
                     if touch
                         nm2 = local_names[i]
