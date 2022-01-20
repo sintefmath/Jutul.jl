@@ -240,12 +240,19 @@ function well_target(target::SurfaceVolumeTarget, well_model, well_state, surfac
         w = 1.0/surface_densities[pos]
     else
         @assert length(positions) > 0
-        w = zero(eltype(surface_volume_fractions))
+        Tw = eltype(surface_volume_fractions)
+        # Compute total density at surface conditions by weighting phase volumes at surf
+        ρ_tot = zero(Tw)
+        for (ρ, V) in zip(surface_densities, surface_volume_fractions)
+            ρ_tot += ρ*V
+        end
+        # Divide by total density to get total volume at surface, then multiply that by surface volume fraction
+        w = zero(Tw)
         for pos in positions
             V = surface_volume_fractions[pos]
-            ρ = surface_densities[pos]
-            w += V/ρ
+            w += V
         end
+        w = w/ρ_tot
     end
     return w
 end
