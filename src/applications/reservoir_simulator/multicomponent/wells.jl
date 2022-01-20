@@ -10,8 +10,12 @@ function flash_wellstream_at_surface(well_model::SimulationModel{D, S}, well_sta
 
     if nph == 3
         a, l, v = phase_indices(sys)
-        rho[a] = rhoS[a]
-        S_other = well_state.Saturations[a, 1]
+        rhoWS = rhoS[a]
+        # Convert to surface conditions
+        rhoWW = well_state.PhaseMassDensities[a, 1]
+        S_other = well_state.Saturations[a, 1]*rhoWW/rhoWS
+        # Surface density given for aqueous phase
+        rho[a] = rhoWS
         volfrac[a] = S_other
         n = nc + 1
     else
