@@ -328,6 +328,11 @@ function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W
     end
 end
 
+function convergence_criterion(model, storage, eq::PotentialDropBalanceWell, r; dt = 1)
+    e = [norm(r, Inf)/1e5] # Given as pressure - scale by 1 bar
+    R = Dict("AbsMax" => (errors = e, names = "R"))
+    return R
+end
 
 function update_linearized_system_equation!(nz, r, model, equation::PotentialDropBalanceWell)
     fill_equation_entries!(nz, r, model, equation.equation)
