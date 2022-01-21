@@ -157,6 +157,8 @@ function get_name(v::JutulVariables)
     return String(get_symbol(v))
 end
 
+replace_value(v, new_v) = v - value(v) + new_v
+
 variable_scale(::JutulVariables) = nothing
 
 ## Initialization

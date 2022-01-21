@@ -342,9 +342,23 @@ function update_before_step_domain!(storage, model::SimulationModel, domain::Wel
     end
 end
 
-set_minimum_surface_mass_rate(q_t, ::InjectorControl) = max(MIN_ACTIVE_WELL_RATE, q_t)
-set_minimum_surface_mass_rate(q_t, ::ProducerControl) = min(-MIN_ACTIVE_WELL_RATE, q_t)
-set_minimum_surface_mass_rate(q_t, ::DisabledControl) = zero(q_t)
+function set_minimum_surface_mass_rate(q_t, ::InjectorControl)
+    if q_t < MIN_ACTIVE_WELL_RATE
+        q_t = replace_value(q_t, MIN_ACTIVE_WELL_RATE)
+    end
+    return q_t
+end
+
+function set_minimum_surface_mass_rate(q_t, ::ProducerControl)
+    if q_t > -MIN_ACTIVE_WELL_RATE
+        q_t = replace_value(q_t, -MIN_ACTIVE_WELL_RATE)
+    end
+    return q_t
+end
+
+function set_minimum_surface_mass_rate(q_t, ::DisabledControl)
+    return replace_value(q_t, 0.0)
+end
 
 function apply_well_limit!(cfg::WellGroupConfiguration, target, wmodel, wstate, well::Symbol, density_s, volume_fraction_s, total_mass_rate)
     current_lims = current_limits(cfg, well)
