@@ -155,7 +155,6 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
     well_state = source_storage.state
     param = source_storage.parameters
     rhoS = param[:reference_densities]
-    @info "$well_symbol" target
 
     update_facility_control_crossterm!(ct.crossterm_source, ct.crossterm_target, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
     # # Operation twice, to get both partials

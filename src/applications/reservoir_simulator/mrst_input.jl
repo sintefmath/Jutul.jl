@@ -97,6 +97,7 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
         W = SimpleWell(rc, WI = WI, dz = dz, volume = well_volume)
         wmodel = SimulationModel(W, system; kwarg...)
         flow = TwoPointPotentialFlow(nothing, nothing, TrivialFlow(), W)
+        reservoir_cells = rc[1]
     else
         # For a MS well, this is the drop from the perforated cell center to the perforation (assumed zero here)
         dz = zeros(length(rc))
@@ -104,11 +105,13 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
 
         z = vcat(ref_depth, z)
         flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), TotalMassVelocityMassFractionsFlow(), W, nothing, z)
+
+        reservoir_cells = vcat(rc[1], rc)
     end
     disc = (mass_flow = flow,)
     wmodel = SimulationModel(W, system, discretization = disc; kwarg...)
     if extraout
-        out = (wmodel, W_mrst)
+        out = (wmodel, W_mrst, vec(reservoir_cells))
     else
         out = wmodel
     end
@@ -701,7 +704,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     for i = 1:num_wells
         sym = well_symbols[i]
     
-        wi, wdata = get_well_from_mrst_data(mrst_data, sys, i, W_data = first_well_set,
+        wi, wdata , res_cells = get_well_from_mrst_data(mrst_data, sys, i, W_data = first_well_set,
                 extraout = true, volume = 1e-2, simple = simple_well, context = w_context)
         wc = wi.domain.grid.perforations.reservoir
 
@@ -710,7 +713,14 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         sv[:PhaseMassDensities] = sv_m[:PhaseMassDensities]
         sv[:PhaseViscosities] = sv_m[:PhaseViscosities]
         if haskey(sv, :Temperature)
-            sv[:Temperature] = sv_m[:Temperature]
+            # !!!!
+            temp_var = sv_m[:Temperature]
+            if temp_var.single_entity
+                sv[:Temperature] = temp_var
+            else
+                T_w = vec(temp_var.constants[res_cells])
+                sv[:Temperature] = ConstantVariables(T_w, single_entity = false)
+            end
         end
     
         pw = wi.primary_variables
@@ -742,20 +752,22 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         param_w[:reference_densities] = vec(param_res[:reference_densities])
 
         first_well_cell = wc[1]
-        pw = factor*init[:Pressure][first_well_cell]
+        # pw = factor*init[:Pressure][first_well_cell]
+        pw = vec(init[:Pressure][res_cells])
         w0 = Dict{Symbol, Any}(:Pressure => pw, :TotalMassFlux => 1e-12)
         if is_comp
             if isnothing(ci)
-                cw_0 = vec(init[:OverallMoleFractions][:, first_well_cell])
+                cw_0 = init[:OverallMoleFractions][:, res_cells]
+                cw_0::Matrix{Float64}
             else
                 cw_0 = ci
             end
             w0[:OverallMoleFractions] = cw_0
             if nph == 3
-                w0[:ImmiscibleSaturation] = init[:ImmiscibleSaturation][first_well_cell]
+                w0[:ImmiscibleSaturation] = vec(init[:ImmiscibleSaturation][res_cells])
             end
         elseif haskey(init, :Saturations)
-            w0[:Saturations] = vec(init[:Saturations][:, first_well_cell])
+            w0[:Saturations] = init[:Saturations][:, res_cells]
         end
 
         parameters[sym] = param_w
