@@ -43,7 +43,7 @@ function flash_wellstream_at_surface(well_model::SimulationModel{D, S}, well_sta
 
     rho[l], rho[v] = mass_densities(eos, Pressure, Temperature, fs)
     rem = one(T) - S_other
-    S_l, S_v = phase_saturations(fs)
+    S_l, S_v = phase_saturations(eos, Pressure, Temperature, fs)
 
     volfrac[l] = rem*S_l
     volfrac[v] = rem*S_v
