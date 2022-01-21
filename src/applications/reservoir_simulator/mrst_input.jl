@@ -413,8 +413,43 @@ function model_from_mat_comp(G, mrst_data, res_context)
     n = length(comps)
 
     components = map(x -> MolecularProperty(x["mw"], x["pc"], x["Tc"], x["Vc"], x["acf"]), comps)
-    mixture = MultiComponentMixture(components, names = names)
-    eos = GenericCubicEOS(mixture)
+    if haskey(mrst_data, "eos")
+        eosm = mrst_data["eos"]
+        
+        nm = eosm["name"]
+        if nm == "pr"
+            eos_t = PengRobinson()
+        elseif nm == "prcorr"
+            eos_t = PengRobinsonCorrected()
+        elseif nm == "srk"
+            eos_t = SoaveRedlichKwong()
+        elseif nm == "rk"
+            eos_t = RedlichKwong()
+        elseif nm == "zj"
+            eos_t = ZudkevitchJoffe()
+        else
+            error("$nm not supported")
+        end
+        if isempty(eosm["bic"])
+            bic = nothing
+        else
+            bic = copy(eosm["bic"])
+        end
+        if isempty(eosm["volume_shift"])
+            vs = nothing
+        else
+            vs = copy(eosm["volume_shift"])
+            vs = tuple(vs...)
+        end
+        @info "Found EoS spec in input." eos_t bic vs
+    else
+        eos_t = PengRobinson()
+        vs = nothing
+        bic = nothing
+        @info "Defaulting EoS." eos_t
+    end
+    mixture = MultiComponentMixture(components, names = names, A_ij = bic)
+    eos = GenericCubicEOS(mixture, eos_t, volume_shift = vs)
 
     if nph == 2
         phases = (LiquidPhase(), VaporPhase())
