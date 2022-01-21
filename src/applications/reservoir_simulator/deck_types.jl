@@ -46,7 +46,7 @@ struct ConstMuBTable{R}
 end
 
 function ConstMuBTable(pvtw::M) where M<:AbstractVector
-    return ConstMuBTable(pvtw[1], pvtw[2], pvtw[3], pvtw[4], pvtw[5])
+    return ConstMuBTable(pvtw[1], 1.0/pvtw[2], pvtw[3], pvtw[4], pvtw[5])
 end
 
 function viscosity(pvt::AbstractTablePVT, reg, p, cell)
