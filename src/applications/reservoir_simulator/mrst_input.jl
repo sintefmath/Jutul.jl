@@ -827,7 +827,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                     else
                         # Set mask to new / static so that static*mask = new.
                         # In addition: Account for completion closures.
-                        wi_mask = vec(WI./new_WI)
+                        wi_mask = vec(new_WI./WI)
                         for ix in eachindex(wi_mask)
                             if !cstatus[ix] || !isfinite(wi_mask[ix])
                                 wi_mask[ix] = 0
