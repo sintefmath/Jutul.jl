@@ -333,9 +333,9 @@ function update_before_step_domain!(storage, model::SimulationModel, domain::Wel
             @info "Well $key switching from $oldctrl to $newctrl"
             req_ctrls[key] = newctrl
             op_ctrls[key] = newctrl
-            pos = get_well_position(model.domain, key)
-            q_t[pos] = set_minimum_surface_mass_rate(q_t[pos], newctrl)
         end
+        pos = get_well_position(model.domain, key)
+        q_t[pos] = set_minimum_surface_mass_rate(q_t[pos], newctrl)
     end
     for key in keys(forces.limits)
         cfg.limits[key] = forces.limits[key]
