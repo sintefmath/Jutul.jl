@@ -1,7 +1,7 @@
 export TotalSurfaceMassRate, WellGroup, DisabledControl
 export HistoryMode, PredictionMode, Wells
 
-
+const MIN_ACTIVE_WELL_RATE = 1e-20
 
 """
 Well variables - entities that we have exactly one of per well (and usually relates to the surface connection)
@@ -64,10 +64,10 @@ function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_s
         return update_value(v, dx)
     end
     function do_update(v, dx, ctrl::InjectorControl)
-        return update_value(v, dx, nothing, nothing, 1e-20, nothing)
+        return update_value(v, dx, nothing, nothing, MIN_ACTIVE_WELL_RATE, nothing)
     end
     function do_update(v, dx, ctrl::ProducerControl)
-        return update_value(v, dx, nothing, nothing, nothing, -1e-20)
+        return update_value(v, dx, nothing, nothing, nothing, -MIN_ACTIVE_WELL_RATE)
     end
     function do_update(v, dx, ctrl::DisabledControl)
         # Set value to zero since we know it is correct.
@@ -155,6 +155,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
     well_state = source_storage.state
     param = source_storage.parameters
     rhoS = param[:reference_densities]
+    @info "$well_symbol" target
 
     update_facility_control_crossterm!(ct.crossterm_source, ct.crossterm_target, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
     # # Operation twice, to get both partials
@@ -203,14 +204,6 @@ function facility_surface_mass_rate_for_well(model::SimulationModel, wsym, fstat
 end
 
 bottom_hole_pressure(ws) = ws.Pressure[1]
-
-function top_node_component_mass_fraction(ws, c_ix)
-    tm = ws.TotalMasses
-    t = ws.TotalMass
-    mass_fraction = tm[c_ix, 1]/t[1]
-    return mass_fraction
-end
-
 
 function surface_target_phases(target::SurfaceVolumeTarget, phases)
     return findall(in(lumped_phases(target)), phases)
@@ -326,6 +319,7 @@ end
 function update_before_step_domain!(storage, model::SimulationModel, domain::WellGroup, dt, forces)
     # Set control to whatever is on the forces
     cfg = storage.state.WellGroupConfiguration
+    q_t = storage.state.TotalSurfaceMassRate
     op_ctrls = cfg.operating_controls
     req_ctrls = cfg.requested_controls
     for key in keys(forces.control)
@@ -336,15 +330,21 @@ function update_before_step_domain!(storage, model::SimulationModel, domain::Wel
         if newctrl != oldctrl
             # We have a new control. Any previous control change is invalid.
             # Set both operating and requested control to the new one.
-            @debug "Well $key switching from $oldctrl to $newctrl"
+            @info "Well $key switching from $oldctrl to $newctrl"
             req_ctrls[key] = newctrl
             op_ctrls[key] = newctrl
+            pos = get_well_position(model.domain, key)
+            q_t[pos] = set_minimum_surface_mass_rate(q_t[pos], newctrl)
         end
     end
     for key in keys(forces.limits)
         cfg.limits[key] = forces.limits[key]
     end
 end
+
+set_minimum_surface_mass_rate(q_t, ::InjectorControl) = max(MIN_ACTIVE_WELL_RATE, q_t)
+set_minimum_surface_mass_rate(q_t, ::ProducerControl) = min(-MIN_ACTIVE_WELL_RATE, q_t)
+set_minimum_surface_mass_rate(q_t, ::DisabledControl) = zero(q_t)
 
 function apply_well_limit!(cfg::WellGroupConfiguration, target, wmodel, wstate, well::Symbol, density_s, volume_fraction_s, total_mass_rate)
     current_lims = current_limits(cfg, well)
@@ -368,7 +368,7 @@ function check_active_limits(control, target, limits, wmodel, wstate, well::Symb
             is_injecting = total_mass_rate >= 0
             ok = check_limit(target_limit, target, is_lower, total_mass_rate, wmodel, wstate, density_s, volume_fraction_s, is_injecting)
             if !ok
-                @debug "Switching well \"$well\" from $target to $target_limit due to $name limit."
+                @info "Switching well \"$well\" from $target to $target_limit due to $name limit."
                 changed = true
                 target = target_limit
                 break
