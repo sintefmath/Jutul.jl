@@ -550,48 +550,50 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y
         S_v = s_w[V, si]
         ρ_v = ρ_w[V, si]
 
-        if gdz != 0
-            ρ_mix = ρ_l*S_l + ρ_v*S_v
-            ρgdz = gdz*ρ_mix
-        else
-            ρgdz = 0
-        end
-        @inbounds dp = wi*(p_well[si] - p_res[ri] + ρgdz)
-        λ_l = kr[L, ri]/μ[L, ri]
-        λ_v = kr[V, ri]/μ[V, ri]
-
         if has_water
             @inbounds λ_a = kr[A, ri]/μ[A, ri]
             @inbounds ρ_a = ρ_w[A, si]
             @inbounds S_a = s_w[A, si]
         else
-            λ_a = zero(typeof(λ_l))
+            S_a = λ_a = ρ_a = zero(typeof(λ_l))
         end
+
+        if gdz != 0
+            ρ_mix = ρ_l*S_l + ρ_v*S_v + S_a*ρ_a
+            ρgdz = gdz*ρ_mix
+        else
+            ρgdz = 0
+        end
+        @inbounds dp = p_well[si] - p_res[ri] + ρgdz
+        Ψ = sgn*wi*dp
+        λ_l = kr[L, ri]/μ[L, ri]
+        λ_v = kr[V, ri]/μ[V, ri]
+
         if dp > 0
             # Injection
             λ_t = λ_l + λ_v + λ_a
-            volume_rate = sgn*λ_t*dp
-            q_L = S_l*ρ_l*volume_rate
-            q_V = S_v*ρ_v*volume_rate
+            volume_rate = λ_t*Ψ
+            q_l = S_l*ρ_l*volume_rate
+            q_v = S_v*ρ_v*volume_rate
             @inbounds for c in 1:nc
-                component_mass_rate = q_L*X_w[c, si] + q_V*Y_w[c, si]
+                component_mass_rate = q_l*X_w[c, si] + q_v*Y_w[c, si]
                 target[c, i] = component_mass_rate
             end
             if has_water
                 @inbounds target[nc+1, i] = S_a*ρ_a*volume_rate
             end
         else
-            ρ_l = ρ[L, ri]
-            ρ_v = ρ[V, ri]
+            ρ_lr = ρ[L, ri]
+            ρ_vr = ρ[V, ri]
 
             # Production
             @inbounds for c in 1:nc
-                c_i = ρ_l*λ_l*X[c, ri] + ρ_v*λ_v*Y[c, ri]
-                target[c, i] = sgn*c_i*dp
+                c_i = ρ_lr*λ_l*X[c, ri] + ρ_vr*λ_v*Y[c, ri]
+                target[c, i] = c_i*Ψ
             end
             if has_water
-                ρ_a = ρ[A, ri]
-                @inbounds target[nc+1, i] = sgn*λ_a*ρ_a*dp
+                ρ_ar = ρ[A, ri]
+                @inbounds target[nc+1, i] = λ_a*ρ_ar*Ψ
             end
         end
     end
