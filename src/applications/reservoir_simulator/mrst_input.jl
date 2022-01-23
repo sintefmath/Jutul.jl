@@ -66,7 +66,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     end
 end
 
-function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = false, simple = false, W_data = mrst_data["W"], kwarg...)
+function get_well_from_mrst_data(mrst_data, system, ix; volume = 0.01, extraout = false, simple = false, W_data = mrst_data["W"], kwarg...)
     W_mrst = W_data[ix]
     w = convert_to_immutable_storage(W_mrst)
 
@@ -83,30 +83,54 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
     WI = awrap(w.WI)
     cell_centroids = copy((mrst_data["G"]["cells"]["centroids"])')
     if size(cell_centroids, 1) == 3
-        z = cell_centroids[3, rc]
+        z_res = cell_centroids[3, rc]
     else
-        z = zeros(length(rc))
+        z_res = zeros(length(rc))
     end
     res_volume = vec(mrst_data["G"]["cells"]["volumes"])
 
-    well_cell_volume = sum(res_volume[rc])
-    well_volume = volume*sum(well_cell_volume)
+    well_cell_volume = res_volume[rc]
     if simple
+        well_volume = volume*mean(well_cell_volume)
         # For simple well, distance from ref depth to perf
-        dz = ref_depth .- z
+        dz = ref_depth .- z_res
         W = SimpleWell(rc, WI = WI, dz = dz, volume = well_volume)
         wmodel = SimulationModel(W, system; kwarg...)
         flow = TwoPointPotentialFlow(nothing, nothing, TrivialFlow(), W)
-        reservoir_cells = rc[1]
+        reservoir_cells = [rc[1]]
     else
-        # For a MS well, this is the drop from the perforated cell center to the perforation (assumed zero here)
-        dz = zeros(length(rc))
-        W = MultiSegmentWell((well_volume/n)*ones(n), rc, WI = WI, reference_depth = ref_depth, dz = dz)
-
-        z = vcat(ref_depth, z)
+        if haskey(W_mrst, "isMS") && W_mrst["isMS"]
+            # @info "MS well found" W_mrst
+            nm =  W_mrst["name"]
+            @info "MS well found: $nm"
+            V = vec(copy(W_mrst["nodes"].vol))
+            cn = copy(W_mrst["cells_to_nodes"])
+            # pvol - volume of each node (except for top node)
+            pvol = V[2:end]
+            # accumulator_volume - volume of top node
+            accumulator_volume = V[1]
+            # perf_cells - nodes that belong to the perforations in rc
+            rc = Int64.(vec(cn[:, 1]))
+            perf_cells = Int64.(vec(cn[:, 2]))
+            # well_topo - well topology
+            well_topo = Int64.(copy(W_mrst["topo"])')
+            # z depths of nodes
+            z = vec(copy(W_mrst["nodes"].depth))
+            # depth from tubing to perforation for each perf
+            # dz = nothing # z[perf_cells] - ()
+            dz = z[perf_cells] .- z_res
+            # reservoir_cells - reservoir cells to be used to pick init values from
+            n_nodes = length(z)
+            reservoir_cells = zeros(Int64, n_nodes)
+            for i in 1:n_nodes
+                d = (z[i] .- z_res).^2
+                reservoir_cells[i] = rc[argmin(d)]
+            end
+        else
+            pvol, accumulator_volume, perf_cells, well_topo, z, dz, reservoir_cells = simple_ms_setup(n, volume, well_cell_volume, rc, ref_depth, z_res)
+        end
+        W = MultiSegmentWell(pvol, rc, WI = WI, reference_depth = ref_depth, dz = dz, N = well_topo, perforation_cells = perf_cells, accumulator_volume = accumulator_volume)
         flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), TotalMassVelocityMassFractionsFlow(), W, nothing, z)
-
-        reservoir_cells = vcat(rc[1], rc)
     end
     disc = (mass_flow = flow,)
     wmodel = SimulationModel(W, system, discretization = disc; kwarg...)
@@ -118,6 +142,18 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 1, extraout = f
     return out
 end
 
+function simple_ms_setup(n, volume, well_cell_volume, rc, ref_depth, z_res)
+    well_volume = volume*sum(well_cell_volume)
+    # For a MS well, this is the drop from the perforated cell center to the perforation (assumed zero here)
+    dz = zeros(length(rc))
+    pvol = (well_volume/n)*ones(n)
+    z = vcat(ref_depth, z_res)
+    reservoir_cells = vcat(rc[1], rc)
+    well_topo = nothing
+    perf_cells = nothing
+    accumulator_volume = 0.001*pvol[1]
+    return (pvol, accumulator_volume, perf_cells, well_topo, z, dz, reservoir_cells)
+end
 
 function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", context = "cpu", timesteps = [1.0, 2.0], pvfrac = 0.05, fuse_flux = false, kwarg...)
     if isa(mesh_or_casename, String)
@@ -329,7 +365,6 @@ function get_test_setup(mesh_or_casename; case_name = "single_phase_simple", con
         co2 = MolecularProperty(0.0440, 7.38e6, 304.1, 9.412e-5, 0.224)
         c1 = MolecularProperty(0.0160, 4.60e6, 190.6, 9.863e-5, 0.011)
         c10 = MolecularProperty(0.0142, 2.10e6, 617.7, 6.098e-4, 0.488)
-        
 
         z0 = [0.5, 0.3, 0.2]
         zi = [0.99, 0.01-1e-3, 1e-3]
@@ -705,7 +740,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         sym = well_symbols[i]
     
         wi, wdata , res_cells = get_well_from_mrst_data(mrst_data, sys, i, W_data = first_well_set,
-                extraout = true, volume = 1e-2, simple = simple_well, context = w_context)
+                extraout = true, volume = 1e-3, simple = simple_well, context = w_context)
         wc = wi.domain.grid.perforations.reservoir
 
         sv = wi.secondary_variables
@@ -841,7 +876,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                         # In addition: Account for completion closures.
                         wi_mask = vec(new_WI./WI)
                         for ix in eachindex(wi_mask)
-                            if !cstatus[ix] || !isfinite(wi_mask[ix])
+                            if (!cstatus[ix] || !isfinite(wi_mask[ix]))
                                 wi_mask[ix] = 0
                             end
                         end
