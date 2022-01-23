@@ -123,9 +123,24 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 0.01, extraout 
             n_nodes = length(z)
             reservoir_cells = zeros(Int64, n_nodes)
             for i in 1:n_nodes
-                d = (z[i] .- z_res).^2
-                reservoir_cells[i] = rc[argmin(d)]
+                if i == 1
+                    reservoir_cells[i] = rc[1]
+                else
+                    pos = findall(perf_cells .== i)
+                    if isempty(pos)
+                        # Not connected, guess by depth
+                        z_local = z_res
+                        cells_local = rc
+                    else
+                        z_local = z_res[pos]
+                        cells_local = rc[pos]
+                    end
+                    d = (z[i] .- z_local).^2
+                    # @info i d argmin(d)
+                    reservoir_cells[i] = cells_local[argmin(d)]    
+                end
             end
+            # @info nm reservoir_cells z_res z
         else
             pvol, accumulator_volume, perf_cells, well_topo, z, dz, reservoir_cells = simple_ms_setup(n, volume, well_cell_volume, rc, ref_depth, z_res)
         end
