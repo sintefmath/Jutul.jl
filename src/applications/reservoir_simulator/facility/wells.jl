@@ -317,6 +317,10 @@ function update_dp_eq!(cell_entries, face_entries, cd, p, s, V, μ, densities, W
     end
 
     eq = pot_balance(Δθ, Δp)
+    if self == 3
+        # @info "" value(ρ_mix) value(ρ_mix_self) value(ρ_mix_other) value(Δθ) value(gΔz) value(gΔz*0.5*(ρ_mix_self + ρ_mix_other)) value(eq)
+        # error()
+    end
     if sgn == 1
         # This is a good time to deal with the derivatives of v[face] since it is already fetched.
         Δp_f = segment_pressure_drop(seg_model, v, value(ρ_mix), value(μ_mix))
@@ -517,6 +521,7 @@ function apply_well_reservoir_sources!(sys::CompositionalSystem, res_q, well_q, 
 
     μ = state_res.PhaseViscosities
     kr = state_res.RelativePermeabilities
+    sr = state_res.Saturations
     ρ = state_res.PhaseMassDensities
     X = state_res.LiquidMassFractions
     Y = state_res.VaporMassFractions
@@ -525,13 +530,14 @@ function apply_well_reservoir_sources!(sys::CompositionalSystem, res_q, well_q, 
     s_w = state_well.Saturations
     X_w = state_well.LiquidMassFractions
     Y_w = state_well.VaporMassFractions
+    μ_w = state_well.PhaseViscosities
 
     phase_ix = phase_indices(sys)
-    perforation_sources_comp!(well_q, perforations, val(p_res),     p_well,  val(kr), val(μ), val(ρ), val(X), val(Y),    ρ_w,      s_w,      X_w,      Y_w, phase_ix, sgn)
-    perforation_sources_comp!(res_q,  perforations,     p_res,  val(p_well),     kr,      μ,      ρ,      X,      Y, val(ρ_w), val(s_w), val(X_w), val(Y_w), phase_ix, sgn)
+    perforation_sources_comp!(well_q, perforations, val(p_res),     p_well,  val(kr), val(sr),val(μ), val(ρ), val(X), val(Y),    ρ_w,      s_w,      μ_w,      X_w,      Y_w, phase_ix, sgn)
+    perforation_sources_comp!(res_q,  perforations,     p_res,  val(p_well),     kr,  sr,         μ,      ρ,      X,      Y, val(ρ_w), val(s_w), val(μ_w), val(X_w), val(Y_w), phase_ix, sgn)
 end
 
-function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y, ρ_w, s_w, X_w, Y_w, phase_ix, sgn)
+function perforation_sources_comp!(target, perf, p_res, p_well, kr, s_r, μ, ρ, X, Y, ρ_w, s_w, μ_w, X_w, Y_w, phase_ix, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     nc = size(X, 1)
     nph = size(μ, 1)
@@ -544,30 +550,41 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y
 
     @inbounds for i in eachindex(perf.self)
         si, ri, wi, gdz = unpack_perf(perf, i)
+        mob(phase) = kr[phase, ri]/μ[phase, ri]
+
         S_l = s_w[L, si]
+        S_l_r = s_r[L, ri]
+
         ρ_l = ρ_w[L, si]
+        ρ_l_r = ρ[L, ri]
 
         S_v = s_w[V, si]
+        S_v_r = s_r[V, ri]
         ρ_v = ρ_w[V, si]
+        ρ_v_r = ρ[V, ri]
 
-        if has_water
-            @inbounds λ_a = kr[A, ri]/μ[A, ri]
-            @inbounds ρ_a = ρ_w[A, si]
-            @inbounds S_a = s_w[A, si]
+        @inbounds if has_water
+            λ_a = mob(A)
+            ρ_a = ρ_w[A, si]
+            ρ_a_r = ρ[A, ri]
+            S_a = s_w[A, si]
+            S_a_r = s_r[A, ri]
         else
-            S_a = λ_a = ρ_a = zero(typeof(λ_l))
+            S_a = λ_a = ρ_a = S_a_r = ρ_a_r = zero(typeof(λ_l))
         end
 
         if gdz != 0
-            ρ_mix = ρ_l*S_l + ρ_v*S_v + S_a*ρ_a
+            ρ_mix_w = ρ_l*S_l + ρ_v*S_v + S_a*ρ_a
+            ρ_mix_r = ρ_l_r*S_l_r + ρ_v_r*S_v_r + S_a_r*ρ_a_r
+            ρ_mix = 0.5*(ρ_mix_w + ρ_mix_r)
             ρgdz = gdz*ρ_mix
         else
             ρgdz = 0
         end
         @inbounds dp = p_well[si] - p_res[ri] + ρgdz
         Ψ = sgn*wi*dp
-        λ_l = kr[L, ri]/μ[L, ri]
-        λ_v = kr[V, ri]/μ[V, ri]
+        λ_l = mob(L)
+        λ_v = mob(V)
 
         if dp > 0
             # Injection
@@ -583,17 +600,16 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, μ, ρ, X, Y
                 @inbounds target[nc+1, i] = S_a*ρ_a*volume_rate
             end
         else
-            ρ_lr = ρ[L, ri]
-            ρ_vr = ρ[V, ri]
+            q_l = ρ_l_r*λ_l*Ψ
+            q_v = ρ_v_r*λ_v*Ψ
 
             # Production
             @inbounds for c in 1:nc
-                c_i = ρ_lr*λ_l*X[c, ri] + ρ_vr*λ_v*Y[c, ri]
-                target[c, i] = c_i*Ψ
+                target[c, i] = X[c, ri]*q_l + Y[c, ri]*q_v
             end
             if has_water
-                ρ_ar = ρ[A, ri]
-                @inbounds target[nc+1, i] = λ_a*ρ_ar*Ψ
+                q_a = ρ_a_r*λ_a*Ψ
+                @inbounds target[nc+1, i] = q_a
             end
         end
     end
