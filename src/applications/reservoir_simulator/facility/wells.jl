@@ -483,7 +483,7 @@ function perforation_sources_immiscible!(target, perf, p_res, p_well, kr, μ, ρ
         else
             ρgdz = 0
         end
-        @inbounds dp = wi*(p_well[si] - p_res[ri] + ρgdz)
+        @inbounds dp = wi*(p_well[si] - p_res[ri] - ρgdz)
         if dp > 0
             # Injection
             λ_t = 0
@@ -581,7 +581,7 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, s_r, μ, ρ,
         else
             ρgdz = 0
         end
-        @inbounds dp = p_well[si] - p_res[ri] + ρgdz
+        @inbounds dp = p_well[si] - p_res[ri] - ρgdz
         Ψ = sgn*wi*dp
         λ_l = mob(L)
         λ_v = mob(V)
