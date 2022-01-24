@@ -379,9 +379,9 @@ function check_active_limits(control, target, limits, wmodel, wstate, well::Symb
         if isfinite(val)
             (target_limit, is_lower) = translate_limit(control, name, val)
             is_injecting = total_mass_rate >= 0
-            ok = check_limit(target_limit, target, is_lower, total_mass_rate, wmodel, wstate, density_s, volume_fraction_s, is_injecting)
+            ok, cval, tval = check_limit(target_limit, target, is_lower, total_mass_rate, wmodel, wstate, density_s, volume_fraction_s, is_injecting)
             if !ok
-                @info "Switching well \"$well\" from $target to $target_limit due to $name limit."
+                @info "Switching well \"$well\" from $target to $target_limit: Value of $cval hitting $name limit at $tval."
                 changed = true
                 target = target_limit
                 break
@@ -392,10 +392,15 @@ function check_active_limits(control, target, limits, wmodel, wstate, well::Symb
 end
 
 function translate_limit(control::ProducerControl, name, val)
-    is_lower = true
+    # Note: Negative sign convention for production.
+    # A lower absolute bound on a rate
+    # |q| > |lim| -> q < lim if both sides are negative
+    is_lower = false
     if name == :bhp
         # Lower limit, pressure
         target_limit = BottomHolePressureTarget(val)
+        # Pressures are positive, this is a true lower bound
+        is_lower = true
     elseif name == :orat
         # Lower limit, surface oil rate
         target_limit = SurfaceOilRateTarget(val)
@@ -411,7 +416,8 @@ function translate_limit(control::ProducerControl, name, val)
     elseif name == :vrat
         # Upper limit, total volumetric surface rate
         target_limit = TotalRateTarget(val)
-        is_lower = false
+        # This is an upper limit on production, which acts as a lower bound due to sign.
+        is_lower = true
     else
         error("$name limit not supported for well acting as producer.")
     end
@@ -440,8 +446,9 @@ function check_limit(target_limit, target, is_lower::Bool, q_t, arg...)
     if typeof(target_limit) == typeof(target)
         # We are already operating at this target and there is no need to check.
         ok = true
+        current_val = limit_val = NaN
     else
-        current_val = well_target_value(target_limit, q_t, arg...)
+        current_val = value(well_target_value(target_limit, q_t, arg...))
         limit_val = target_limit.value
         if is_lower
             # Limit is lower bound, check that we are above...
@@ -450,5 +457,5 @@ function check_limit(target_limit, target, is_lower::Bool, q_t, arg...)
             ok = current_val <= limit_val
         end
     end
-    return ok
+    return (ok, current_val, limit_val)
 end
