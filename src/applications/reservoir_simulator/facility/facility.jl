@@ -160,13 +160,21 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
         t_num = 0.0
     else
         cfg = fstate.WellGroupConfiguration
+        limits = current_limits(cfg, well_symbol)
+
         is_injecting = value(q_t) >= 0
-        if is_injecting
-            S = nothing
-        else
+        has_limits = !isnothing(limits)
+        is_bhp = isa(target, BottomHolePressureTarget)
+
+        need_rates = !is_injecting && (!is_bhp || has_limits)
+        if need_rates
             rhoS, S = flash_wellstream_at_surface(source_model, well_state, rhoS)
+        else
+            S = nothing
         end
-        target = apply_well_limit!(cfg, target, source_model, well_state, well_symbol, rhoS, S, value(q_t))
+        if has_limits
+            target = apply_well_limit!(cfg, target, source_model, well_state, well_symbol, rhoS, S, value(q_t), limits)
+        end
         # Compute target value with AD relative to well.
         t = well_target(target, source_model, well_state, rhoS, S, is_injecting)
         t_∂w = t
@@ -320,7 +328,7 @@ function update_before_step_domain!(storage, model::SimulationModel, domain::Wel
         if newctrl != oldctrl
             # We have a new control. Any previous control change is invalid.
             # Set both operating and requested control to the new one.
-            @info "Well $key switching from $oldctrl to $newctrl"
+            @debug "Well $key switching from $oldctrl to $newctrl"
             req_ctrls[key] = newctrl
             op_ctrls[key] = newctrl
         end
@@ -350,8 +358,7 @@ function set_minimum_surface_mass_rate(q_t, ::DisabledControl)
     return replace_value(q_t, 0.0)
 end
 
-function apply_well_limit!(cfg::WellGroupConfiguration, target, wmodel, wstate, well::Symbol, density_s, volume_fraction_s, total_mass_rate)
-    current_lims = current_limits(cfg, well)
+function apply_well_limit!(cfg::WellGroupConfiguration, target, wmodel, wstate, well::Symbol, density_s, volume_fraction_s, total_mass_rate, current_lims = current_limits(cfg, well))
     if !isnothing(current_lims)
         ctrl = operating_control(cfg, well)
         target, changed = check_active_limits(ctrl, target, current_lims, wmodel, wstate, well, density_s, volume_fraction_s, total_mass_rate)

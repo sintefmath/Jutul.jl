@@ -570,7 +570,7 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, s_r, μ, ρ,
             S_a = s_w[A, si]
             S_a_r = s_r[A, ri]
         else
-            S_a = λ_a = ρ_a = S_a_r = ρ_a_r = zero(typeof(λ_l))
+            S_a = λ_a = ρ_a = S_a_r = ρ_a_r = zero(ρ_l)
         end
 
         if gdz != 0
