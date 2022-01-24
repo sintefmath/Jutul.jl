@@ -1,7 +1,7 @@
 export TotalSurfaceMassRate, WellGroup, DisabledControl
 export HistoryMode, PredictionMode, Wells
 
-const MIN_ACTIVE_WELL_RATE = 1e-20
+const MIN_ACTIVE_WELL_RATE = 1e-10
 
 """
 Well variables - entities that we have exactly one of per well (and usually relates to the surface connection)
