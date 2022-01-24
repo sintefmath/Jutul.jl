@@ -652,11 +652,17 @@ function build_forces(model::SimulationModel{D, S}; mask = nothing) where {D <: 
     return (mask = mask,)
 end
 
-function apply_mask!(v, pm::PerforationMask)
+function apply_mask!(v::AbstractMatrix, pm::PerforationMask)
     for (i, mask) in enumerate(pm.values)
-        for r in size(v, 1)
+        for r in 1:size(v, 1)
             v[r, i] *= mask
         end
+    end
+end
+
+function apply_mask!(v::AbstractVector, pm::PerforationMask)
+    for (i, mask) in enumerate(pm.values)
+        v[i] *= mask
     end
 end
 
