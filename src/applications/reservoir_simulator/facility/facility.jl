@@ -80,17 +80,6 @@ function update_primary_variable!(state, massrate::TotalSurfaceMassRate, state_s
 end
 
 
-function well_control_equation(ctrl, target, qt)
-    # Note: This equation will get the current value subtracted when coupled to a well
-    return target.value
-end
-
-function well_control_equation(ctrl, target::DisabledTarget, qt) 
-    # Note: This equation will get the total mass rate subtracted when coupled to a well
-    return 0.0
-end
-
-
 ## Well controls
 
 """
@@ -168,6 +157,7 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
         # Early return - no cross term needed.
         t_∂w = value(q_t)
         t_∂f = q_t
+        t_num = 0.0
     else
         cfg = fstate.WellGroupConfiguration
         is_injecting = value(q_t) >= 0
@@ -178,7 +168,7 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
         end
         target = apply_well_limit!(cfg, target, source_model, well_state, well_symbol, rhoS, S, value(q_t))
         # Compute target value with AD relative to well.
-        t = -well_target(target, source_model, well_state, rhoS, S, is_injecting)
+        t = well_target(target, source_model, well_state, rhoS, S, is_injecting)
         t_∂w = t
         t_∂f = value(t)
 
@@ -186,10 +176,11 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
             t_∂w *= value(q_t)
             t_∂f *= q_t
         end
+        t_num = target.value
         # @info "$well_symbol:" target t_∂w t_∂f
     end
-    s_buf[1] = t_∂w
-    t_buf[1] = t_∂f
+    s_buf[1] = t_∂w - t_num
+    t_buf[1] = t_∂f - t_num
 end
 
 rate_weighted(t) = true
@@ -271,10 +262,7 @@ end
 
 function control_equations!(entries, wells, ctrl, surf_rate)
     @inbounds for (i, key) in enumerate(wells)
-        C = ctrl[key]
-        T = C.target
-        # @debug "Well $key operating using $T"
-        entries[i] = well_control_equation(ctrl, T, surf_rate[i])
+        entries[i] = 0.0
     end
 end
 
