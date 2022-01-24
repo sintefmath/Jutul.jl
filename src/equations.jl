@@ -317,7 +317,8 @@ function convergence_criterion(model, storage, eq::JutulEquation, r; dt = 1)
     e = zeros(n)
     names = Vector{String}(undef, n)
     for i = 1:n
-        e[i] = norm(r[i, :], Inf)
+        @views ri = r[i, :]
+        e[i] = norm(ri, Inf)
         names[i] = "R_$i"
     end
     if n == 1
