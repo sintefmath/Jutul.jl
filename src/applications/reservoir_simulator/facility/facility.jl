@@ -179,14 +179,17 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
         t_num = target.value
         # @info "$well_symbol:" target t_∂w t_∂f
     end
-    s_buf[1] = t_∂w - t_num
-    t_buf[1] = t_∂f - t_num
+    scale = target_scaling(target)
+    s_buf[1] = (t_∂w - t_num)/scale
+    t_buf[1] = (t_∂f - t_num)/scale
 end
 
 rate_weighted(t) = true
 rate_weighted(::BottomHolePressureTarget) = false
 rate_weighted(::DisabledTarget) = false
 
+target_scaling(::Any) = 1.0
+target_scaling(::BottomHolePressureTarget) = 1e5
 
 function facility_surface_mass_rate_for_well(model::SimulationModel, wsym, fstate)
     pos = get_well_position(model.domain, wsym)
@@ -383,29 +386,29 @@ function translate_limit(control::ProducerControl, name, val)
     # Note: Negative sign convention for production.
     # A lower absolute bound on a rate
     # |q| > |lim| -> q < lim if both sides are negative
-    is_lower = false
+    is_lower = true
     if name == :bhp
         # Lower limit, pressure
         target_limit = BottomHolePressureTarget(val)
         # Pressures are positive, this is a true lower bound
         is_lower = true
     elseif name == :orat
-        # Lower limit, surface oil rate
+        # Upper limit, surface oil rate
         target_limit = SurfaceOilRateTarget(val)
     elseif name == :lrat
-        # Lower limit, surface liquid (water + oil) rate
+        # Upper limit, surface liquid (water + oil) rate
         target_limit = SurfaceLiquidRateTarget(val)
     elseif name == :grat
-        # Lower limit, surface gas rate
+        # Upper limit, surface gas rate
         target_limit = SurfaceGasRateTarget(val)
     elseif name == :wrat
-        # Lower limit, surface water rate
+        # Upper limit, surface water rate
         target_limit = SurfaceWaterRateTarget(val)
     elseif name == :vrat
         # Upper limit, total volumetric surface rate
         target_limit = TotalRateTarget(val)
         # This is an upper limit on production, which acts as a lower bound due to sign.
-        is_lower = true
+        is_lower = false
     else
         error("$name limit not supported for well acting as producer.")
     end
@@ -418,10 +421,10 @@ function translate_limit(control::InjectorControl, name, val)
         # Upper limit, pressure
         target_limit = BottomHolePressureTarget(val)
     elseif name == :rate
-        # Lower limit, total volumetric surface rate
+        # Upper limit, total volumetric surface rate
         target_limit = TotalRateTarget(val)
     elseif name == :vrat
-        # Upper limit, total volumetric surface rate
+        # Lower limit, total volumetric surface rate
         target_limit = TotalRateTarget(val)
         is_lower = true
     else
