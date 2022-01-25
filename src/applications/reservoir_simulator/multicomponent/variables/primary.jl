@@ -34,4 +34,4 @@ end
 
 maximum_value(::ImmiscibleSaturation) = 1.0 - MINIMUM_COMPOSITIONAL_SATURATION
 minimum_value(::ImmiscibleSaturation) = 0.0
-relative_increment_limit(s::ImmiscibleSaturation) = s.ds_max
+absolute_increment_limit(s::ImmiscibleSaturation) = s.ds_max
