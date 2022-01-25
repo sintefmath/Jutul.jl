@@ -2,26 +2,12 @@ function block_mul!(res, jac, Vt, x, α, β::T) where T
     as_svec = (x) -> reinterpret(Vt, x)
     res_v = as_svec(res)
     x_v = as_svec(x)
-    if β == zero(T)
-        mul!(res_v, jac, x_v)
-        if α != one(T)
-            lmul!(α, res_v)
-        end
-    else
-        # TODO: optimize me like the three argument version.
-        # res_v .= α.*jac*x_v + β.*res_v
-        mul!(res_v, jac, x_v, α, β)
-    end
+    mul!(res_v, jac, x_v, α, β)
 end
 
 function get_mul!(sys::LinearizedSystem{BlockMajorLayout})
     jac = sys.jac
-
     Vt = eltype(sys.r)
-    # Mt = eltype(jac)
-    # as_smat = (x) -> reinterpret(Mt, x)
-    # as_float = (x) -> reinterpret(Float64, x)
-
     return (res, x, α, β) -> block_mul!(res, jac, Vt, x, α, β)
 end
 
