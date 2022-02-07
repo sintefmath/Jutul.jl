@@ -537,7 +537,7 @@ function apply_well_reservoir_sources!(sys::CompositionalSystem, res_q, well_q, 
     perforation_sources_comp!(res_q,  perforations,     p_res,  val(p_well),     kr,  sr,         μ,      ρ,      X,      Y, val(ρ_w), val(s_w), val(μ_w), val(X_w), val(Y_w), phase_ix, sgn)
 end
 
-function perforation_sources_comp!(target, perf, p_res, p_well, kr, s_r, μ, ρ, X, Y, ρ_w, s_w, μ_w, X_w, Y_w, phase_ix, sgn)
+function perforation_sources_comp!(target, perf, p_res, p_well, kr, s_r, μ, ρ_r, X, Y, ρ_w, s_w, μ_w, X_w, Y_w, phase_ix, sgn)
     # (self -> local cells, reservoir -> reservoir cells, WI -> connection factor)
     nc = size(X, 1)
     nph = size(μ, 1)
@@ -547,72 +547,117 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, s_r, μ, ρ,
     else
         L, V = phase_ix
     end
+    function volume_flux(wi, dp, gdz, ρ_r, ρ_w, S_r, S_w)
+        ρ_avg = (S_r*ρ_r + S_w*ρ_w)/max(S_r + S_w, 1e-12)
+        return wi*(dp + ρ_avg*gdz)
+    end
 
     @inbounds for i in eachindex(perf.self)
-        si, ri, wi, gdz = unpack_perf(perf, i)
-        mob(phase) = kr[phase, ri]/μ[phase, ri]
+        wb_cell, res_cell, wi, gdz = unpack_perf(perf, i)
+        mob(phase) = kr[phase, res_cell]/μ[phase, res_cell]
+        S_l = s_w[L, wb_cell]
+        # S_l_r = s_r[L, ri]
 
-        S_l = s_w[L, si]
-        S_l_r = s_r[L, ri]
+        # ρ_l = ρ_w[L, si]
+        # ρ_l_r = ρ[L, ri]
 
-        ρ_l = ρ_w[L, si]
-        ρ_l_r = ρ[L, ri]
-
-        S_v = s_w[V, si]
-        S_v_r = s_r[V, ri]
-        ρ_v = ρ_w[V, si]
-        ρ_v_r = ρ[V, ri]
-
-        @inbounds if has_water
-            λ_a = mob(A)
-            ρ_a = ρ_w[A, si]
-            ρ_a_r = ρ[A, ri]
-            S_a = s_w[A, si]
-            S_a_r = s_r[A, ri]
-        else
-            S_a = λ_a = ρ_a = S_a_r = ρ_a_r = zero(ρ_l)
-        end
-
-        if gdz != 0
-            ρ_mix_w = ρ_l*S_l + ρ_v*S_v + S_a*ρ_a
-            ρ_mix_r = ρ_l_r*S_l_r + ρ_v_r*S_v_r + S_a_r*ρ_a_r
-            ρ_mix = 0.5*(ρ_mix_w + ρ_mix_r)
-            ρgdz = gdz*ρ_mix
-        else
-            ρgdz = 0
-        end
-        @inbounds dp = p_well[si] - p_res[ri] + ρgdz
-        Ψ = sgn*wi*dp
+        S_v = s_w[V, wb_cell]
+        # S_v_r = s_r[V, ri]
+        # ρ_v = ρ_w[V, si]
+        # ρ_v_r = ρ[V, ri]
         λ_l = mob(L)
         λ_v = mob(V)
-
-        if dp > 0
-            # Injection
-            λ_t = λ_l + λ_v + λ_a
-            volume_rate = λ_t*Ψ
-            q_l = S_l*ρ_l*volume_rate
-            q_v = S_v*ρ_v*volume_rate
-            @inbounds for c in 1:nc
-                component_mass_rate = q_l*X_w[c, si] + q_v*Y_w[c, si]
-                target[c, i] = component_mass_rate
-            end
-            if has_water
-                @inbounds target[nc+1, i] = S_a*ρ_a*volume_rate
-            end
+        @inbounds if has_water
+            S_a = s_w[A, wb_cell]
+            λ_a = mob(A)
         else
-            q_l = ρ_l_r*λ_l*Ψ
-            q_v = ρ_v_r*λ_v*Ψ
+            λ_a = S_a = zero(λ_l)
+        end
+        λ_t = λ_l + λ_v + λ_a
+        @inbounds dp = p_well[wb_cell] - p_res[res_cell]# + ρgdz
+        mass_flux(phase, λ) = compositional_well_flux(wi, dp, gdz, s_r, s_w, λ_t, λ, ρ_r, ρ_w, phase, wb_cell, res_cell, sgn)
 
-            # Production
-            @inbounds for c in 1:nc
-                target[c, i] = X[c, ri]*q_l + Y[c, ri]*q_v
-            end
-            if has_water
-                q_a = ρ_a_r*λ_a*Ψ
-                @inbounds target[nc+1, i] = q_a
+        q_l, l_inj = mass_flux(L, λ_l)
+        X_upw, l_c = pick_upwind_matrix((X_w, wb_cell), (X, res_cell), l_inj)
+
+        q_v, v_inj = mass_flux(V, λ_v)
+        Y_upw, v_c = pick_upwind_matrix((Y_w, wb_cell), (Y, res_cell), v_inj)
+
+        # error()
+        @inbounds for c in 1:nc
+            target[c, i] = q_l*X_upw[c, l_c] + q_v*Y_upw[c, v_c]
+        end
+        if has_water
+            q_a, = mass_flux(A, λ_a)
+            target[nc+1, i] = q_a
+        end
+        if false
+            if dp > 0
+                # Injection
+                λ_t = λ_l + λ_v + λ_a
+                volume_rate = λ_t*Ψ
+                q_l = S_l*ρ_l*volume_rate
+                q_v = S_v*ρ_v*volume_rate
+                @inbounds for c in 1:nc
+                    component_mass_rate = q_l*X_w[c, wb_cell] + q_v*Y_w[c, wb_cell]
+                    target[c, i] = component_mass_rate
+                end
+                if has_water
+                    @inbounds target[nc+1, i] = S_a*ρ_a*volume_rate
+                end
+            else
+                q_l = ρ_l_r*λ_l*Ψ
+                q_v = ρ_v_r*λ_v*Ψ
+
+                # Production
+                @inbounds for c in 1:nc
+                    target[c, i] = X[c, res_cell]*q_l + Y[c, res_cell]*q_v
+                end
+                if has_water
+                    q_a = ρ_a_r*λ_a*Ψ
+                    @inbounds target[nc+1, i] = q_a
+                end
             end
         end
     end
+end
+
+function pick_upwind_matrix(X_up, X_down, inj)
+    if inj
+        return X_up
+    else
+        return X_down
+    end
+end
+
+function compositional_well_flux(wi, dp, gdz, s_r, s_w, λ_t, λ, ρ_r, ρ_w, ph, wb_cell, res_cell, sgn)
+    Ψ, is_inj = compositional_phase_mass_rate(wi, dp, gdz, s_r, s_w, ρ_r, ρ_w, ph, wb_cell, res_cell)
+    if is_inj
+        S = s_w[ph, wb_cell]
+        q = λ_t*Ψ*S
+    else
+        q = λ*Ψ
+    end
+    return (sgn*q, is_inj)
+end
+
+
+function compositional_phase_mass_rate(wi, dp, gdz, S_r, S_w, ρ_r, ρ_w, ph, si, ri)
+    s_wb = S_w[ph, si]
+    s_res = S_r[ph, ri]
+
+    ρ_wb = ρ_w[ph, si]
+    ρ_res = ρ_r[ph, ri]
+
+    ρ = (ρ_res*s_res + ρ_wb*s_wb)/max(s_res + s_wb, 1e-12)
+    Ψ = wi*(dp + ρ*gdz)
+    injecting = Ψ > 0
+    if injecting
+        q = ρ_wb*Ψ
+    else
+        q = ρ_res*Ψ
+    end
+    return (q, injecting)
 end
 
 
