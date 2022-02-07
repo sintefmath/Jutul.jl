@@ -137,11 +137,11 @@ end
 
 
 function update_flash_result(S, m, buffer, eos, K, x, y, z, forces, P, T, Z)
-    @. z = value(Z)
+    @. z = max(value(Z), 1e-8)
     # Conditions
     c = (p = value(P), T = value(T), z = z)
     # Perform flash
-    vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false)
+    vapor_frac = flash_2ph!(S, K, eos, c, NaN, method = m, extra_out = false, z_min = nothing)
     force_coefficients!(forces, eos, (p = P, T = T, z = Z))
     if isnan(vapor_frac)
         # Single phase condition. Life is easy.
