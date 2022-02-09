@@ -253,9 +253,9 @@ function fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flu
     diag_entry = get_entry(acc, cell, e, centries)
     @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
         q = get_entry(cell_flux, i, e, fentries)
-        @inbounds for d = 1:np
+        @inbounds for d in eachindex(q.partials)
             fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
-            if fpos == 0
+            if d == 1 && fpos == 0
                 # Boundary face.
                 break
             end
@@ -265,7 +265,7 @@ function fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flu
     end
 
     @inbounds r[e, cell] = diag_entry.value
-    @inbounds for d = 1:np
+    @inbounds for d in eachindex(diag_entry.partials)
         apos = get_jacobian_pos(acc, cell, e, d, cp)
         @inbounds nz[apos] = diag_entry.partials[d]
     end
