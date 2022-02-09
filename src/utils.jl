@@ -431,16 +431,18 @@ export read_results
 """
 Read results from a given output_path provded to simulate or simulator_config
 """
-function read_results(pth)
+function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}}(),
+                           read_reports = true, reports = [])
     if !endswith(pth, ".jld2")
         pth = "$(pth).jld2"
     end
-    states = Vector{Dict{Symbol, Any}}()
-    reports = []
     jldopen(pth, "r") do file
-        spool_jld2_num!(states, file["states"])
-        spool_jld2_num!(reports, file["reports"])
+        if read_states
+            spool_jld2_num!(states, file["states"])
+        end
+        if read_reports
+            spool_jld2_num!(reports, file["reports"])
+        end
     end
-
     return (states, reports)
 end

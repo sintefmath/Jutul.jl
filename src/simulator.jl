@@ -149,6 +149,7 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
         @timeit "output" store_output!(states, reports, step_no, sim, config, subrep)
     end
     final_simulation_message(sim, p, reports, timesteps, config, early_termination)
+    retrieve_output!(states, config)
     return (states, reports)
 end
 
@@ -538,4 +539,13 @@ function initialize_io(path)
         JLD2.Group(file, "reports")
     end
     @assert isfile(path)
+end
+
+function retrieve_output!(states, config)
+    pth = config[:output_path]
+    if !config[:output_states] && !isnothing(pth)
+        @info "Reading states from $pth..."
+        @assert isempty(states)
+        read_results(pth, read_reports = false, states = states);
+    end
 end
