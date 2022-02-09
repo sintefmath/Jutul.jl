@@ -5,7 +5,7 @@ reservoir_model(model::MultiModel) = model.models.Reservoir
 
 
 export setup_reservoir_simulator
-function setup_reservoir_simulator(models, initializer, parameters = nothing; method = :cpr, rtol = 0.005, initial_dt = 3600.0*24.0, kwarg...)
+function setup_reservoir_simulator(models, initializer, parameters = nothing; method = :cpr, rtol = 0.005, initial_dt = 3600.0*24.0, target_its = 8, offset_its = 1, kwarg...)
     reservoir_model = models[:Reservoir]
     # Convert to multi model
     block_backend = is_cell_major(matrix_layout(reservoir_model.context))
@@ -30,7 +30,7 @@ function setup_reservoir_simulator(models, initializer, parameters = nothing; me
     lsolve = reservoir_linsolve(mmodel, method, rtol = rtol)
     # day = 3600.0*24.0
     t_base = TimestepSelector(initial_absolute = initial_dt, max = Inf)
-    t_its = IterationTimestepSelector(8)
+    t_its = IterationTimestepSelector(target_its, offset = offset_its)
     cfg = simulator_config(sim, timestep_selectors = [t_base, t_its], linear_solver = lsolve; kwarg...)
 
     return (sim, cfg)
