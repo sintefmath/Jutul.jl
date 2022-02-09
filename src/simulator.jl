@@ -360,6 +360,8 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
 end
 
 function pick_timestep(sim, config, dt_prev, dT, reports, current_reports; step_index = NaN, new_step = false)
+    # Try to do the full step, unless one of our selectors/limits tells us otherwise.
+    # No need to limit to whatever remains of the interval since that is fixed on the outside.
     dt = dT
     selectors = config[:timestep_selectors]
     is_first = new_step && step_index == 1
@@ -370,13 +372,13 @@ function pick_timestep(sim, config, dt_prev, dT, reports, current_reports; step_
         end
     else
         for sel in selectors
-            candidate = pick_next_timestep(sel, sim, config, dt, dT, reports, current_reports, step_index, new_step)
+            candidate = pick_next_timestep(sel, sim, config, dt_prev, dT, reports, current_reports, step_index, new_step)
             dt = min(dt, candidate)
         end
         # The selectors might go crazy, so we have some safety bounds
         min_allowable = config[:timestep_max_decrease]*dt_prev
         max_allowable = config[:timestep_max_increase]*dt_prev
-        dt = min(max(dt, min_allowable), max_allowable)
+        dt = clamp(dt, min_allowable, max_allowable)
     end
     # Make sure that the final timestep is still within the limits of all selectors
     for sel in selectors
