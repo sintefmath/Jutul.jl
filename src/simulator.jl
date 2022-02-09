@@ -73,7 +73,8 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:max_nonlinear_iterations] = 15
     cfg[:min_nonlinear_iterations] = 1
     cfg[:linear_solver] = nothing
-    cfg[:output_states] = true
+    cfg[:output_path] = nothing
+    cfg[:output_states] = nothing
     # Extra checks on values etc
     cfg[:safe_mode] = true
     # Define debug level. If debugging is on, this determines the amount of output.
@@ -100,6 +101,15 @@ function simulator_config!(cfg, sim; kwarg...)
     overwrite_by_kwargs(cfg; kwarg...)
     if !haskey(cfg, :end_report)
         cfg[:end_report] = cfg[:info_level] > -1
+    end
+    # Default: Do not store states in memory if output to file.
+    if isnothing(cfg[:output_states])
+        cfg[:output_states] = isnothing(cfg[:output_path])
+    end
+    # Ensure that we have JLD2 extension for the output file.
+    pth = cfg[:output_path]
+    if !isnothing(pth) && !endswith(pth, ".jld2")
+        cfg[:output_path] = "$(pth).jld2"
     end
     return cfg
 end
@@ -133,19 +143,16 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
         new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot)
         t_step = @elapsed step_done, rep = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dT, reports = reports, step_no = step_no, rec = rec)
         early_termination = !step_done
-        if config[:output_states]
-            @timeit "output" store_output!(states, sim)
-        end
         subrep = OrderedDict()
         subrep[:ministeps] = rep
         subrep[:total_time] = t_step
-        push!(reports, subrep)
+        @timeit "output" store_output!(states, reports, step_no, sim, config, subrep)
     end
     final_simulation_message(sim, p, reports, timesteps, config, early_termination)
     return (states, reports)
 end
 
-function initialize_before_first_timestep!(sim, first_dT; forces = forces, config = config)
+function initialize_before_first_timestep!(sim, first_dT; forces = forces, config = config, path = path)
     @timeit "solve" begin
         @timeit "secondary variables" update_secondary_variables!(sim.storage, sim.model)
     end
@@ -162,6 +169,7 @@ function initial_setup!(sim, config)
     # Set up storage
     reports = []
     states = Vector{Dict{Symbol, Any}}()
+    initialize_io(config[:output_path])
     return (states, reports)
 end
 
@@ -441,9 +449,24 @@ function update_after_step!(sim, dt, forces)
     update_after_step!(sim.storage, sim.model, dt, forces)
 end
 
-function store_output!(states, sim)
-    state_out = get_output_state(sim.storage, sim.model)
-    push!(states, state_out)
+function store_output!(states, reports, step, sim, config, report)
+    mem_out = config[:output_states]
+    path = config[:output_path]
+    file_out = !isnothing(path)
+    # We always keep reports in memory since they are used for timestepping logic
+    push!(reports, report)
+    if mem_out || file_out
+        state = get_output_state(sim.storage, sim.model)
+        if mem_out
+            push!(states, state)
+        end
+        if file_out
+            jldopen(path, "a") do file
+                file["states"]["$step"] = state
+                file["reports"]["$step"] = report
+            end
+        end
+    end
 end
 
 # Progress recorder stuff
@@ -504,4 +527,15 @@ function check_forces(sim, f::T, timesteps) where T<:AbstractArray
     if nf != nt
         error("Number of forces must match the number of timesteps ($nt timsteps, $nf forces)")
     end
+end
+
+initialize_io(::Nothing) = nothing
+
+function initialize_io(path)
+    @debug "Opening $path for writing."
+    jldopen(path, "w") do file
+        JLD2.Group(file, "states")
+        JLD2.Group(file, "reports")
+    end
+    @assert isfile(path)
 end

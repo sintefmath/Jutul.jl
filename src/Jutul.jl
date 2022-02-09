@@ -36,6 +36,7 @@ using ExprTools
 using LightGraphs
 using PrettyTables
 using Polynomials
+using JLD2
 # Nice progress bars
 using ProgressMeter
 # Timing

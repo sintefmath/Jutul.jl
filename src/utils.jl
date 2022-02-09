@@ -418,3 +418,29 @@ function print_timing(stats; title = "Simulator timing")
                       row_name_column_title = "Name")
 end
 
+
+function spool_jld2_num!(data, file)
+    ix = 1
+    while haskey(file, "$ix")
+        push!(data, file["$ix"])
+        ix += 1
+    end
+end
+
+export read_results
+"""
+Read results from a given output_path provded to simulate or simulator_config
+"""
+function read_results(pth)
+    if !endswith(pth, ".jld2")
+        pth = "$(pth).jld2"
+    end
+    states = Vector{Dict{Symbol, Any}}()
+    reports = []
+    jldopen(pth, "r") do file
+        spool_jld2_num!(states, file["states"])
+        spool_jld2_num!(reports, file["reports"])
+    end
+
+    return (states, reports)
+end
