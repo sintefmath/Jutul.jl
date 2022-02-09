@@ -547,31 +547,16 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, s_r, μ, ρ_
     else
         L, V = phase_ix
     end
-    function volume_flux(wi, dp, gdz, ρ_r, ρ_w, S_r, S_w)
-        ρ_avg = (S_r*ρ_r + S_w*ρ_w)/max(S_r + S_w, 1e-12)
-        return wi*(dp + ρ_avg*gdz)
-    end
 
     @inbounds for i in eachindex(perf.self)
         wb_cell, res_cell, wi, gdz = unpack_perf(perf, i)
         mob(phase) = kr[phase, res_cell]/μ[phase, res_cell]
-        S_l = s_w[L, wb_cell]
-        # S_l_r = s_r[L, ri]
-
-        # ρ_l = ρ_w[L, si]
-        # ρ_l_r = ρ[L, ri]
-
-        S_v = s_w[V, wb_cell]
-        # S_v_r = s_r[V, ri]
-        # ρ_v = ρ_w[V, si]
-        # ρ_v_r = ρ[V, ri]
         λ_l = mob(L)
         λ_v = mob(V)
         @inbounds if has_water
-            S_a = s_w[A, wb_cell]
             λ_a = mob(A)
         else
-            λ_a = S_a = zero(λ_l)
+            λ_a = zero(λ_l)
         end
         λ_t = λ_l + λ_v + λ_a
         @inbounds dp = p_well[wb_cell] - p_res[res_cell]# + ρgdz
@@ -583,41 +568,12 @@ function perforation_sources_comp!(target, perf, p_res, p_well, kr, s_r, μ, ρ_
         q_v, v_inj = mass_flux(V, λ_v)
         Y_upw, v_c = pick_upwind_matrix((Y_w, wb_cell), (Y, res_cell), v_inj)
 
-        # error()
         @inbounds for c in 1:nc
             target[c, i] = q_l*X_upw[c, l_c] + q_v*Y_upw[c, v_c]
         end
         if has_water
             q_a, = mass_flux(A, λ_a)
             target[nc+1, i] = q_a
-        end
-        if false
-            if dp > 0
-                # Injection
-                λ_t = λ_l + λ_v + λ_a
-                volume_rate = λ_t*Ψ
-                q_l = S_l*ρ_l*volume_rate
-                q_v = S_v*ρ_v*volume_rate
-                @inbounds for c in 1:nc
-                    component_mass_rate = q_l*X_w[c, wb_cell] + q_v*Y_w[c, wb_cell]
-                    target[c, i] = component_mass_rate
-                end
-                if has_water
-                    @inbounds target[nc+1, i] = S_a*ρ_a*volume_rate
-                end
-            else
-                q_l = ρ_l_r*λ_l*Ψ
-                q_v = ρ_v_r*λ_v*Ψ
-
-                # Production
-                @inbounds for c in 1:nc
-                    target[c, i] = X[c, res_cell]*q_l + Y[c, res_cell]*q_v
-                end
-                if has_water
-                    q_a = ρ_a_r*λ_a*Ψ
-                    @inbounds target[nc+1, i] = q_a
-                end
-            end
         end
     end
 end

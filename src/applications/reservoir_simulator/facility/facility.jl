@@ -175,6 +175,8 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
         if has_limits
             target = apply_well_limit!(cfg, target, source_model, well_state, well_symbol, rhoS, S, value(q_t), limits)
         end
+        # p_bar = bottom_hole_pressure(well_state)/1e5
+        # @info "$well_symbol: $p_bar bar"
         # Compute target value with AD relative to well.
         t = well_target(target, source_model, well_state, rhoS, S, is_injecting)
         t_∂w = t
@@ -376,7 +378,7 @@ function check_active_limits(control, target, limits, wmodel, wstate, well::Symb
     for (name, val) in pairs(limits)
         if isfinite(val)
             (target_limit, is_lower) = translate_limit(control, name, val)
-            is_injecting = total_mass_rate >= 0
+            is_injecting = isa(control, InjectorControl)
             ok, cval, tval = check_limit(target_limit, target, is_lower, total_mass_rate, wmodel, wstate, density_s, volume_fraction_s, is_injecting)
             if !ok
                 @info "Switching well \"$well\" from $target to $target_limit: Value of $cval hitting $name limit at $tval."
