@@ -418,30 +418,50 @@ function print_timing(stats; title = "Simulator timing")
                       row_name_column_title = "Name")
 end
 
-
-function spool_jld2_num!(data, file)
-    ix = 1
-    while haskey(file, "$ix")
-        push!(data, file["$ix"])
-        ix += 1
-    end
-end
-
 export read_results
 """
 Read results from a given output_path provded to simulate or simulator_config
 """
 function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}}(),
                            read_reports = true, reports = [])
-    if !endswith(pth, ".jld2")
-        pth = "$(pth).jld2"
-    end
-    jldopen(pth, "r") do file
-        if read_states
-            spool_jld2_num!(states, file["states"])
+    # if !endswith(pth, ".jld2")
+    #     pth = "$(pth).jld2"
+    # end
+    @assert isdir(pth)
+    files = readdir(pth)
+    indices = Vector{Int64}()
+    for f in (files)
+        if startswith(f, "jutul_")
+            _, v = split(f, "jutul_")
+            num, _ = splitext(v)
+            push!(indices, parse(Int64, num))
         end
-        if read_reports
-            spool_jld2_num!(reports, file["reports"])
+    end
+    sort!(indices)
+    if length(indices) != maximum(indices)
+        @warn "Gap in dataset. Some outputs might end up empty."
+    end
+    for i in 1:maximum(indices)
+        f = joinpath(pth, "jutul_$i.jld2")
+        if isfile(f)
+            jldopen(f, "r") do file
+                if read_states
+                    state = file["state"]
+                    push!(states, state)
+                end
+                if read_reports
+                    report = file["report"]
+                    push!(reports, report)
+                end
+                stored_i = file["step"]
+                if stored_i != i
+                    @warn "File contained step $stored_i, but was named as step $i."
+                end
+            end
+        else
+            push!(states, Dict{Symbol, Any}())
+            push!(reports, nothing)
+            @warn "Missing data for step $i..."
         end
     end
     return (states, reports)

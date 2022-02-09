@@ -108,9 +108,14 @@ function simulator_config!(cfg, sim; kwarg...)
     end
     # Ensure that we have JLD2 extension for the output file.
     pth = cfg[:output_path]
-    if !isnothing(pth) && !endswith(pth, ".jld2")
-        cfg[:output_path] = "$(pth).jld2"
+    if !isdir(pth)
+        @assert isa(pth, String)
+        @debug "Creating $pth for output."
+        mkdir(pth)
     end
+    # if !isnothing(pth) && !endswith(pth, ".jld2")
+    #     cfg[:output_path] = "$(pth).jld2"
+    # end
     return cfg
 end
 
@@ -462,9 +467,12 @@ function store_output!(states, reports, step, sim, config, report)
             push!(states, state)
         end
         if file_out
-            jldopen(path, "a") do file
-                file["states"]["$step"] = state
-                file["reports"]["$step"] = report
+            step_path = joinpath(path, "jutul_$step.jld2")
+            @debug "Writing to $step_path"
+            jldopen(step_path, "w") do file
+                file["state"] = state
+                file["report"] = report
+                file["step"] = step
             end
         end
     end
@@ -533,18 +541,15 @@ end
 initialize_io(::Nothing) = nothing
 
 function initialize_io(path)
-    @debug "Opening $path for writing."
-    jldopen(path, "w") do file
-        JLD2.Group(file, "states")
-        JLD2.Group(file, "reports")
-    end
-    @assert isfile(path)
+    @assert isdir(path) "$path must be a valid directory for output."
 end
+
+initialize_io(::Nothing) = nothing
 
 function retrieve_output!(states, config)
     pth = config[:output_path]
     if !config[:output_states] && !isnothing(pth)
-        @info "Reading states from $pth..."
+        @debug "Reading states from $pth..."
         @assert isempty(states)
         read_results(pth, read_reports = false, states = states);
     end
