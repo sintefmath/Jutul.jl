@@ -672,13 +672,13 @@ function apply_mask!(ct::InjectiveCrossTerm, pm::PerforationMask)
     apply_mask!(ct.crossterm_source, pm)
 end
 
-function apply_force_to_cross_term_target!(ct::InjectiveCrossTerm, equation::ConservationLaw, storage_t, storage_s, model_t, model_s, source, target, force::PerforationMask, dt, time)
+function apply_force_to_cross_term_target!(ct::InjectiveCrossTerm, storage_t, storage_s, model_t, model_s, source, target, force::PerforationMask, dt, time)
     if source == :Reservoir || target == :Reservoir
         apply_mask!(ct, force)
     end
 end
 
-function apply_force_to_cross_term_source!(ct::InjectiveCrossTerm, equation::ConservationLaw, storage_t, storage_s, model_t, model_s, source, target, force::PerforationMask, dt, time)
+function apply_force_to_cross_term_source!(ct::InjectiveCrossTerm, storage_t, storage_s, model_t, model_s, source, target, force::PerforationMask, dt, time)
     if source == :Reservoir || target == :Reservoir
         apply_mask!(ct, force)
     end

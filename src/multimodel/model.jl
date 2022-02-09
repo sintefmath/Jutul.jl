@@ -721,7 +721,6 @@ end
 function apply_force_to_cross_terms!(storage, model, source, target, force, dt, time; to_target = true)
     storage_t, storage_s = get_submodel_storage(storage, target, source)
     model_t, model_s = get_submodels(model, target, source)
-    eqs = storage_t.equations
     # Target matches where the force is assigned.
     if to_target
         # Equation comes from target model and we are looking at the cross term for that model.
@@ -729,18 +728,18 @@ function apply_force_to_cross_terms!(storage, model, source, target, force, dt, 
         fn = apply_force_to_cross_term_target!
     else
         # Equation comes from target, but we are looking at the cross term for the source model
-        cross_terms = cross_term_pair(storage, source, target)
+        cross_terms = cross_term_pair(storage, target, source)
         fn = apply_force_to_cross_term_source!
     end
     for (ekey, ct) in pairs(cross_terms)
         if !isnothing(ct)
-            fn(ct, eqs[ekey], storage_t, storage_s, model_t, model_s, source, target, force, dt, time)
+            fn(ct, storage_t, storage_s, model_t, model_s, source, target, force, dt, time)
         end
     end
 end
 
-apply_force_to_cross_term_target!(ct, equation, storage_t, storage_s, model_t, model_s, source, target, force, dt, time) = nothing
-apply_force_to_cross_term_source!(ct, equation, storage_t, storage_s, model_t, model_s, source, target, force, dt, time) = nothing
+apply_force_to_cross_term_target!(ct, storage_t, storage_s, model_t, model_s, source, target, force, dt, time) = nothing
+apply_force_to_cross_term_source!(ct, storage_t, storage_s, model_t, model_s, source, target, force, dt, time) = nothing
 
 function apply_boundary_conditions!(storage, model::MultiModel; targets = submodels_symbols(model))
     for key in targets
