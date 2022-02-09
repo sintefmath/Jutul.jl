@@ -101,7 +101,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
                 krylov.x = similar(r)
             end
             x = krylov.x
-            f = (op, r; kwarg...) -> solver(x, op, r; kwarg...)
+            f = (op, r; kwarg...) -> solver(x, op, r; initially_zero = false, kwarg...)
         else
             f = (op, r; kwarg...) -> solver(op, r; kwarg...)
         end
