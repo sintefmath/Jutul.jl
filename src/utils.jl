@@ -452,16 +452,18 @@ function valid_restart_indices(pth)
 end
 
 function read_restart(pth, i; read_state = true, read_report = true)
-    state = Dict{Symbol, Any}()
-    report = nothing
     f = joinpath(pth, "jutul_$i.jld2")
     if isfile(f)
-        jldopen(f, "r") do file
+        state, report = jldopen(f, "r") do file
             if read_state
                 state = file["state"]
+            else
+                state = Dict{Symbol, Any}()
             end
             if read_report
                 report = file["report"]
+            else
+                report = nothing
             end
             stored_i = file["step"]
             if stored_i != i
@@ -470,7 +472,9 @@ function read_restart(pth, i; read_state = true, read_report = true)
             return (state, report)
         end
     else
-        @warn "Missing data for step $i..."
-        return (state, report)
+        state = Dict{Symbol, Any}()
+        report = nothing    
+        @warn "Data for step $i was requested, but no such file was found."
     end
+    return (state, report)
 end
