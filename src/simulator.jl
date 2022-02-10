@@ -116,11 +116,11 @@ function simulator_config!(cfg, sim; kwarg...)
     return cfg
 end
 
-function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, initialize = true, kwarg...)
+function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, initialize = true, restart = nothing, kwarg...)
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     end
-    states, reports = initial_setup!(sim, config)
+    states, reports, first_step = initial_setup!(sim, config, restart = restart)
     # Time-step info to keep around
     no_steps = length(timesteps)
     t_tot = sum(timesteps)
@@ -131,13 +131,15 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
     # Initialize loop
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
-    dt = timesteps[1]
+    dt = timesteps[first_step]
     if initialize
         check_forces(sim, forces, timesteps)
-        forces_step = forces_for_timestep(sim, forces, timesteps, 1)
+        forces_step = forces_for_timestep(sim, forces, timesteps, first_step)
         initialize_before_first_timestep!(sim, dt, forces = forces_step, config = config)
     end
-    for (step_no, dT) in enumerate(timesteps)
+    Nt = length(timesteps)
+    for step_no = first_step:Nt
+        dT = timesteps[step_no]
         if early_termination
             break
         end
@@ -162,7 +164,7 @@ function initialize_before_first_timestep!(sim, first_dT; forces = forces, confi
     end
 end
 
-function initial_setup!(sim, config)
+function initial_setup!(sim, config; restart = nothing)
     # Timing stuff
     if config[:extra_timing]
         enable_timer!()
@@ -173,8 +175,21 @@ function initial_setup!(sim, config)
     # Set up storage
     reports = []
     states = Vector{Dict{Symbol, Any}}()
-    initialize_io(config[:output_path])
-    return (states, reports)
+    pth = config[:output_path]
+    initialize_io(pth)
+    if isnothing(restart) || restart == 0 || restart == false
+        first_step = 1
+    else
+        @assert !isnothing(pth) "output_path must be specified if restarts are enabled"
+        if isa(restart, Bool)
+            restart = maximum(valid_restart_indices(pth)) + 1
+        end
+        first_step = restart
+        state0, = read_restart(pth, restart-1, read_report = false, read_state = true)
+        reset_previous_state!(sim, state0)
+        reset_to_previous_state!(sim)
+    end
+    return (states, reports, first_step)
 end
 
 function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = nothing, step_no = NaN, 
@@ -446,6 +461,8 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
 end
 
 reset_to_previous_state!(sim) = reset_to_previous_state!(sim.storage, sim.model)
+reset_previous_state!(sim, state0) = reset_previous_state!(sim.storage, sim.model, state0)
+
 
 function update_before_step!(sim, dt, forces)
     update_before_step!(sim.storage, sim.model, dt, forces)
@@ -549,6 +566,6 @@ function retrieve_output!(states, config)
     if !config[:output_states] && !isnothing(pth)
         @debug "Reading states from $pth..."
         @assert isempty(states)
-        read_results(pth, read_reports = false, states = states);
+        read_results(pth, read_reports = true, states = states);
     end
 end

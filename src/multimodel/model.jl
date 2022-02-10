@@ -683,6 +683,12 @@ function reset_to_previous_state!(storage, model::MultiModel)
     submodels_storage_apply!(storage, model, reset_to_previous_state!)
 end
 
+function reset_previous_state!(storage, model::MultiModel, state0)
+    for key in submodels_symbols(model)
+        reset_previous_state!(storage[key], model.models[key], state0[key])
+    end
+end
+
 function update_after_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model))
     for key in targets
         update_after_step!(storage[key], model.models[key], dt, forces[key])

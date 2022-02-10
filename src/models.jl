@@ -600,3 +600,11 @@ function reset_to_previous_state!(storage, model)
         end
     end
 end
+
+function reset_previous_state!(storage, model, state0)
+    sim_state0 = storage.state0
+    for f in keys(sim_state0)
+        @assert haskey(state0, f)
+        sim_state0[f] .= state0[f]
+    end
+end
