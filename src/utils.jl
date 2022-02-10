@@ -424,9 +424,19 @@ Read results from a given output_path provded to simulate or simulator_config
 """
 function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}}(),
                            read_reports = true, reports = [])
-    # if !endswith(pth, ".jld2")
-    #     pth = "$(pth).jld2"
-    # end
+    indices = valid_restart_indices(pth)
+    if length(indices) != maximum(indices)
+        @warn "Gap in dataset. Some outputs might end up empty."
+    end
+    for i in 1:maximum(indices)
+        state, report = read_restart(pth, i; read_state = read_states, read_report = read_reports)
+        push!(states, state)
+        push!(reports, report)
+    end
+    return (states, reports)
+end
+
+function valid_restart_indices(pth)
     @assert isdir(pth)
     files = readdir(pth)
     indices = Vector{Int64}()
@@ -438,31 +448,29 @@ function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}
         end
     end
     sort!(indices)
-    if length(indices) != maximum(indices)
-        @warn "Gap in dataset. Some outputs might end up empty."
-    end
-    for i in 1:maximum(indices)
-        f = joinpath(pth, "jutul_$i.jld2")
-        if isfile(f)
-            jldopen(f, "r") do file
-                if read_states
-                    state = file["state"]
-                    push!(states, state)
-                end
-                if read_reports
-                    report = file["report"]
-                    push!(reports, report)
-                end
-                stored_i = file["step"]
-                if stored_i != i
-                    @warn "File contained step $stored_i, but was named as step $i."
-                end
+    return indices
+end
+
+function read_restart(pth, i; read_state = true, read_report = true)
+    state = Dict{Symbol, Any}()
+    report = nothing
+    f = joinpath(pth, "jutul_$i.jld2")
+    if isfile(f)
+        jldopen(f, "r") do file
+            if read_state
+                state = file["state"]
             end
-        else
-            push!(states, Dict{Symbol, Any}())
-            push!(reports, nothing)
-            @warn "Missing data for step $i..."
+            if read_report
+                report = file["report"]
+            end
+            stored_i = file["step"]
+            if stored_i != i
+                @warn "File contained step $stored_i, but was named as step $i."
+            end
+            return (state, report)
         end
+    else
+        @warn "Missing data for step $i..."
+        return (state, report)
     end
-    return (states, reports)
 end
