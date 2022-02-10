@@ -106,16 +106,13 @@ function simulator_config!(cfg, sim; kwarg...)
     if isnothing(cfg[:output_states])
         cfg[:output_states] = isnothing(cfg[:output_path])
     end
-    # Ensure that we have JLD2 extension for the output file.
+    # Ensure that the folder exists, if requested.
     pth = cfg[:output_path]
-    if !isdir(pth)
+    if !isnothing(pth) && !isdir(pth)
         @assert isa(pth, String)
         @debug "Creating $pth for output."
         mkdir(pth)
     end
-    # if !isnothing(pth) && !endswith(pth, ".jld2")
-    #     cfg[:output_path] = "$(pth).jld2"
-    # end
     return cfg
 end
 
@@ -134,10 +131,11 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
     # Initialize loop
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
+    dt = timesteps[1]
     if initialize
         check_forces(sim, forces, timesteps)
         forces_step = forces_for_timestep(sim, forces, timesteps, 1)
-        initialize_before_first_timestep!(sim, timesteps[1], forces = forces_step, config = config)
+        initialize_before_first_timestep!(sim, dt, forces = forces_step, config = config)
     end
     for (step_no, dT) in enumerate(timesteps)
         if early_termination
@@ -146,7 +144,7 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
         forces_step = forces_for_timestep(sim, forces, timesteps, step_no)
         nextstep_global!(rec, dT)
         new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot)
-        t_step = @elapsed step_done, rep = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dT, reports = reports, step_no = step_no, rec = rec)
+        t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dt, reports = reports, step_no = step_no, rec = rec)
         early_termination = !step_done
         subrep = OrderedDict()
         subrep[:ministeps] = rep
@@ -225,7 +223,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
         ctr += 1
         nextstep_local!(rec, dt, ok)
     end
-    return (done, ministep_reports)
+    return (done, ministep_reports, dt)
 end
 
 function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
@@ -545,8 +543,6 @@ initialize_io(::Nothing) = nothing
 function initialize_io(path)
     @assert isdir(path) "$path must be a valid directory for output."
 end
-
-initialize_io(::Nothing) = nothing
 
 function retrieve_output!(states, config)
     pth = config[:output_path]
