@@ -185,7 +185,9 @@ function initial_setup!(sim, config; restart = nothing)
             restart = maximum(valid_restart_indices(pth)) + 1
         end
         first_step = restart
-        state0, = read_restart(pth, restart-1, read_report = false, read_state = true)
+        prev_step = restart - 1;
+        state0, = read_restart(pth, prev_step, read_report = false, read_state = true)
+        read_results(pth, read_reports = true, read_states = config[:output_states], states = states, reports = reports, range = 1:prev_step);
         reset_previous_state!(sim, state0)
         reset_to_previous_state!(sim)
     end
