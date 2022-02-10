@@ -11,7 +11,7 @@ include("sources.jl")
 include("wells.jl")
 
 function select_primary_variables_system!(S, domain, system::CompositionalSystem, formulation)
-    S[:Pressure] = Pressure(max_rel = 0.2, minimum = 101325)
+    S[:Pressure] = Pressure(max_rel = 0.2, minimum = 1e5)
     S[:OverallMoleFractions] = OverallMoleFractions(dz_max = 0.1)
     if has_other_phase(system)
         S[:ImmiscibleSaturation] = ImmiscibleSaturation(ds_max = 0.2)
