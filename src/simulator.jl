@@ -137,8 +137,7 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
         forces_step = forces_for_timestep(sim, forces, timesteps, first_step)
         initialize_before_first_timestep!(sim, dt, forces = forces_step, config = config)
     end
-    Nt = length(timesteps)
-    for step_no = first_step:Nt
+    for step_no = first_step:no_steps
         dT = timesteps[step_no]
         if early_termination
             break
@@ -176,8 +175,12 @@ function initial_setup!(sim, config; restart = nothing)
     reports = []
     states = Vector{Dict{Symbol, Any}}()
     pth = config[:output_path]
+    do_print = config[:info_level] > 0
     initialize_io(pth)
     if isnothing(restart) || restart == 0 || restart == false
+        if do_print
+            @info "Starting from first step."
+        end
         first_step = 1
     else
         @assert !isnothing(pth) "output_path must be specified if restarts are enabled"
@@ -190,6 +193,9 @@ function initial_setup!(sim, config; restart = nothing)
         read_results(pth, read_reports = true, read_states = config[:output_states], states = states, reports = reports, range = 1:prev_step);
         reset_previous_state!(sim, state0)
         reset_to_previous_state!(sim)
+        if do_print
+            @info "Restarting from step $first_step."
+        end
     end
     return (states, reports, first_step)
 end
