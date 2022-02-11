@@ -487,7 +487,7 @@ function store_output!(states, reports, step, sim, config, report)
     # We always keep reports in memory since they are used for timestepping logic
     push!(reports, report)
     if mem_out || file_out
-        state = get_output_state(sim.storage, sim.model)
+        state = get_output_state(sim)
         if mem_out
             push!(states, state)
         end
@@ -577,3 +577,5 @@ function retrieve_output!(states, config)
         read_results(pth, read_reports = true, states = states);
     end
 end
+
+get_output_state(sim) = get_output_state(sim.storage, sim.model)
