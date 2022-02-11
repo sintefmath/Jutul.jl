@@ -26,8 +26,8 @@ function flash_wellstream_at_surface(well_model::SimulationModel{D, S}, well_sta
     buf = InPlaceFlashBuffer(nc)
 
     sc = well_model.domain.grid.surface
-    Pressure = convert(T, sc.p)
-    Temperature = convert(T, sc.T)
+    Pressure = sc.p
+    Temperature = sc.T
 
     z = SVector{nc}(well_state.OverallMoleFractions[:, 1])
     m = SSIFlash()
