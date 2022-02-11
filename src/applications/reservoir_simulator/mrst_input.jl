@@ -539,7 +539,7 @@ function model_from_mat_comp(G, mrst_data, res_context)
     # p[:Pressure] = Pressure(max_rel = 0.2)
     s = model.secondary_variables
     s[:RelativePermeabilities] = kr
-    T = vec(mrst_data["state0"]["T"])
+    T = copy(vec(mrst_data["state0"]["T"]))
     if length(unique(T)) == 1
         TV = ConstantVariables(T[1], single_entity = true)
     else
