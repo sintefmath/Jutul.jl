@@ -709,7 +709,8 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     
         return (model, init, param_res)
     end
-    
+    rhoS = mrst_data["fluid"]["rhoS"]
+
     # Set up initializers
     models = OrderedDict()
     initializer = Dict()
@@ -778,8 +779,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         # pw[:Pressure] = Pressure(max_rel = 0.2)
     
         models[sym] = wi
-    
-        ctrl = mrst_well_ctrl(model, wdata, is_comp)
+        ctrl = mrst_well_ctrl(model, wdata, is_comp, rhoS)
         if isa(ctrl, InjectorControl)
             factor = 1.01
             if is_comp
@@ -876,7 +876,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                     for (wno, wsym) in enumerate(well_symbols)
                         wdata = local_mrst_wells[wno]
                         wmodel = models[wsym]
-                        current_control[wsym] = mrst_well_ctrl(model, wdata, is_comp)
+                        current_control[wsym] = mrst_well_ctrl(model, wdata, is_comp, rhoS)
                         cstatus = vec(wdata["cstatus"])
                         lims = wdata["lims"]
                         if !isempty(lims)
@@ -934,7 +934,7 @@ function facility_subset(well_symbols, controls)
     return ctrls
 end
 
-function mrst_well_ctrl(model, wdata, is_comp)
+function mrst_well_ctrl(model, wdata, is_comp, rhoS)
     t_mrst = wdata["val"]
     is_injector = wdata["sign"] > 0
     is_shut = wdata["status"] < 1
@@ -954,8 +954,7 @@ function mrst_well_ctrl(model, wdata, is_comp)
             # Not rate controlled
             is_rate_ctrl = false
         elseif wt == "rate"
-            target_phase = phases[only(findall(comp_i .> 0))]
-            target = SinglePhaseRateTarget(t_mrst, target_phase)
+            target = TotalRateTarget(t_mrst)
         elseif wt == "wrat"
             target = SurfaceWaterRateTarget(t_mrst)
         elseif wt == "orat"
@@ -985,7 +984,13 @@ function mrst_well_ctrl(model, wdata, is_comp)
             else
                 ct = comp_i
             end
-            ctrl = InjectorControl(target, ct)
+            if haskey(wdata, "rhoS") && length(wdata["rhoS"]) > 0
+                rhoSw = vec(wdata["rhoS"])
+            else
+                rhoSw = vec(rhoS)
+            end
+            rhoS_inj = sum(comp_i.*rhoSw)
+            ctrl = InjectorControl(target, ct, density = rhoS_inj)
         else
             ctrl = ProducerControl(target)
         end

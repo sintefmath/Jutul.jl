@@ -73,29 +73,44 @@ struct DisabledTarget <: WellTarget end
 abstract type WellForce <: JutulForce end
 abstract type WellControlForce <: WellForce end
 
-struct DisabledControl <: WellControlForce
-    target::DisabledTarget
+
+struct DisabledControl{T} <: WellControlForce
+    target::T
     function DisabledControl()
         t = DisabledTarget()
-        new(t)
+        new{DisabledTarget}(t)
     end
 end
 
-struct InjectorControl <: WellControlForce
-    target::WellTarget
+function replace_target(f::DisabledControl, target)
+    target::DisabledTarget()
+    return f
+end
+
+struct InjectorControl{T} <: WellControlForce
+    target::T
     injection_mixture
-    function InjectorControl(target, mix)
+    mixture_density
+    function InjectorControl(target::T, mix; density = 1.0) where T<:WellTarget
         if isa(mix, Real)
             mix = [mix]
         end
         mix = vec(mix)
         @assert sum(mix) ≈ 1
-        new(target, mix)
+        new{T}(target, mix, density)
+    end
+end
+replace_target(f::InjectorControl, target) = InjectorControl(target, f.injection_mixture, density = f.mixture_density)
+
+struct ProducerControl{T} <: WellControlForce
+    target::T
+    function ProducerControl(target::T) where T<:WellTarget
+        new{T}(target)
     end
 end
 
-struct ProducerControl <: WellControlForce
-    target::WellTarget
+function replace_target(f::ProducerControl, target)
+    return ProducerControl(target)
 end
 
 struct WellGroupConfiguration

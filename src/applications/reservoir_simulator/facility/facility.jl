@@ -139,19 +139,16 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ControlEquationWell,
     fstate = target_storage.state
     cfg = fstate.WellGroupConfiguration
     ctrl = operating_control(cfg, well_symbol)
-    target = ctrl.target
     # q_t = facility_surface_mass_rate_for_well(target_model, well_symbol, fstate)
     well_state = source_storage.state
     param = source_storage.parameters
     rhoS = param[:reference_densities]
 
-    update_facility_control_crossterm!(ct.crossterm_source, ct.crossterm_target, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
-    # # Operation twice, to get both partials
-    # ct.crossterm_source[1] = -well_target(target, source_model, rhoS, value(q_t), well_state, x -> x)
-    # ct.crossterm_target[1] = -well_target(target, source_model, rhoS, q_t, well_state, value)
+    update_facility_control_crossterm!(ct.crossterm_source, ct.crossterm_target, well_state, rhoS, target_model, source_model, ctrl, well_symbol, fstate)
 end
 
-function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, target_model, source_model, target, well_symbol, fstate)
+function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, target_model, source_model, ctrl, well_symbol, fstate)
+    target = ctrl.target
     q_t = facility_surface_mass_rate_for_well(target_model, well_symbol, fstate)
     if isa(target, DisabledTarget)
         # Early return - no cross term needed.
@@ -175,10 +172,8 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
         if has_limits
             target = apply_well_limit!(cfg, target, source_model, well_state, well_symbol, rhoS, S, value(q_t), limits)
         end
-        # p_bar = bottom_hole_pressure(well_state)/1e5
-        # @info "$well_symbol: $p_bar bar"
         # Compute target value with AD relative to well.
-        t = well_target(target, source_model, well_state, rhoS, S, is_injecting)
+        t = well_target(ctrl, target, source_model, well_state, rhoS, S)
         t_∂w = t
         t_∂f = value(t)
 
@@ -187,7 +182,6 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
             t_∂f *= q_t
         end
         t_num = target.value
-        # @info "$well_symbol:" target t_∂w t_∂f
     end
     scale = target_scaling(target)
     s_buf[1] = (t_∂w - t_num)/scale
@@ -215,46 +209,52 @@ end
 surface_target_phases(target::TotalRateTarget, phases) = eachindex(phases)
 
 """
-Well target contribution from well itself (generic, zero value)
+Well target contribution from well itself (disabled, zero value)
 """
-well_target(target, well_model, well_state, rhoS, S, injecting) = 0.0
+function well_target(control, target::DisabledTarget, well_model, well_state, rhoS, S)
+    return 0.0
+end
 
 """
 Well target contribution from well itself (bhp)
 """
-well_target(target::BottomHolePressureTarget, well_model, well_state, rhoS, S, injecting) = bottom_hole_pressure(well_state)
+function well_target(control, target::BottomHolePressureTarget, well_model, well_state, rhoS, S)
+    return bottom_hole_pressure(well_state)
+end
 
 """
-Well target contribution from well itself (surface volume)
+Well target contribution from well itself (surface volume, injector)
 """
-function well_target(target::SurfaceVolumeTarget, well_model, well_state, surface_densities, surface_volume_fractions, injecting)
+function well_target(control::InjectorControl, target::SurfaceVolumeTarget, well_model, well_state, surface_densities, surface_volume_fractions)
+    return 1.0/control.mixture_density
+end
+
+"""
+Well target contribution from well itself (surface volume, producer)
+"""
+function well_target(control::ProducerControl, target::SurfaceVolumeTarget, well_model, well_state, surface_densities, surface_volume_fractions)
     phases = get_phases(well_model.system)
     positions = surface_target_phases(target, phases)
 
-    if injecting
-        pos = only(positions)
-        w = 1.0/surface_densities[pos]
-    else
-        @assert length(positions) > 0
-        Tw = eltype(surface_volume_fractions)
-        # Compute total density at surface conditions by weighting phase volumes at surf
-        ρ_tot = zero(Tw)
-        for (ρ, V) in zip(surface_densities, surface_volume_fractions)
-            ρ_tot += ρ*V
-        end
-        # Divide by total density to get total volume at surface, then multiply that by surface volume fraction
-        w = zero(Tw)
-        for pos in positions
-            V = surface_volume_fractions[pos]
-            w += V
-        end
-        w = w/ρ_tot
+    @assert length(positions) > 0
+    Tw = eltype(surface_volume_fractions)
+    # Compute total density at surface conditions by weighting phase volumes at surf
+    ρ_tot = zero(Tw)
+    for (ρ, V) in zip(surface_densities, surface_volume_fractions)
+        ρ_tot += ρ*V
     end
+    # Divide by total density to get total volume at surface, then multiply that by surface volume fraction
+    w = zero(Tw)
+    for pos in positions
+        V = surface_volume_fractions[pos]
+        w += V
+    end
+    w = w/ρ_tot
     return w
 end
 
-function well_target_value(target, q_t, arg...)
-    v = well_target(target, arg...)
+function well_target_value(q_t, control, target, arg...)
+    v = well_target(control, target, arg...)
     if rate_weighted(target)
         v *= value(q_t)
     end
@@ -365,23 +365,19 @@ function apply_well_limit!(cfg::WellGroupConfiguration, target, wmodel, wstate, 
         ctrl = operating_control(cfg, well)
         target, changed = check_active_limits(ctrl, target, current_lims, wmodel, wstate, well, density_s, volume_fraction_s, total_mass_rate)
         if changed
-            Ct = typeof(ctrl)
-            cfg.operating_controls[well] = Ct(target)
+            cfg.operating_controls[well] = replace_target(ctrl, target)
         end
     end
     return target
 end
 
 function check_active_limits(control, target, limits, wmodel, wstate, well::Symbol, density_s, volume_fraction_s, total_mass_rate)
-    # current_value(t) = well_target(t, wmodel, wstate, density_s, volume_fraction_s, is_injecting)
     changed = false
     for (name, val) in pairs(limits)
         if isfinite(val)
             (target_limit, is_lower) = translate_limit(control, name, val)
-            is_injecting = isa(control, InjectorControl)
-            ok, cval, tval = check_limit(target_limit, target, is_lower, total_mass_rate, wmodel, wstate, density_s, volume_fraction_s, is_injecting)
+            ok, cval, tval = check_limit(control, target_limit, target, is_lower, total_mass_rate, wmodel, wstate, density_s, volume_fraction_s)
             if !ok
-                @info "Switching well \"$well\" from $target to $target_limit: Value of $cval hitting $name limit at $tval."
                 changed = true
                 target = target_limit
                 break
@@ -442,13 +438,13 @@ function translate_limit(control::InjectorControl, name, val)
     return (target_limit, is_lower)
 end
 
-function check_limit(target_limit, target, is_lower::Bool, q_t, arg...)
+function check_limit(current_control, target_limit, target, is_lower::Bool, q_t, arg...)
     if typeof(target_limit) == typeof(target)
         # We are already operating at this target and there is no need to check.
         ok = true
         current_val = limit_val = NaN
     else
-        current_val = value(well_target_value(target_limit, q_t, arg...))
+        current_val = value(well_target_value(q_t, current_control, target_limit, arg...))
         limit_val = target_limit.value
         if is_lower
             # Limit is lower bound, check that we are above...
