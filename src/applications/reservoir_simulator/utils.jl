@@ -35,3 +35,49 @@ function setup_reservoir_simulator(models, initializer, parameters = nothing; me
 
     return (sim, cfg)
 end
+
+export well_output, well_symbols
+
+function well_output(model::MultiModel, parameters, states, well_symbol, target = BottomHolePressureTarget)
+    n = length(states)
+    d = zeros(n)
+
+    group = :Facility
+    rhoS_o = parameters[well_symbol][:reference_densities]
+
+    target_limit = target(1.0)
+
+    pos = get_well_position(model.models[group].domain, well_symbol)
+    well_model = model.models[well_symbol]
+    for (i, state) = enumerate(states)
+        well_state = state[well_symbol]
+        well_state = convert_to_immutable_storage(well_state)
+        q_t = state[group][:TotalSurfaceMassRate][pos]
+        if q_t == 0
+            current_control = DisabledControl()
+            d[i] = missing
+        else
+            if q_t < 0
+                current_control = ProducerControl(BottomHolePressureTarget(1.0))
+            else
+                current_control = InjectorControl(BottomHolePressureTarget(1.0), 1.0)
+            end
+            rhoS, S = flash_wellstream_at_surface(well_model, well_state, rhoS_o)
+            v = well_target_value(q_t, current_control, target_limit, well_model, well_state, rhoS, S)
+            d[i] = v
+        end
+    end
+    return d
+end
+
+function well_symbols(model::MultiModel)
+    models = model.models
+    symbols = Vector{Symbol}()
+    for (k, m) in pairs(models)
+        D = m.domain
+        if isa(D, DiscretizedDomain) && isa(D.grid, WellGrid)
+            push!(symbols, k)
+        end
+    end
+    return symbols
+end
