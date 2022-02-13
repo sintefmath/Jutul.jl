@@ -36,12 +36,19 @@ function setup_reservoir_simulator(models, initializer, parameters = nothing; me
     return (sim, cfg)
 end
 
-export well_output, well_symbols
+export well_output, well_symbols, wellgroup_symbols
 
 function well_output(model::MultiModel, parameters, states, well_symbol, target = BottomHolePressureTarget)
     n = length(states)
     d = zeros(n)
 
+    groups = wellgroup_symbols(model)
+    group = nothing
+    for g in groups
+        if well_symbol in model.models[g].domain.well_symbols
+            group = g
+        end
+    end
     group = :Facility
     rhoS_o = parameters[well_symbol][:reference_densities]
 
@@ -76,6 +83,18 @@ function well_symbols(model::MultiModel)
     for (k, m) in pairs(models)
         D = m.domain
         if isa(D, DiscretizedDomain) && isa(D.grid, WellGrid)
+            push!(symbols, k)
+        end
+    end
+    return symbols
+end
+
+function wellgroup_symbols(model::MultiModel)
+    models = model.models
+    symbols = Vector{Symbol}()
+    for (k, m) in pairs(models)
+        D = m.domain
+        if isa(D, WellControllerDomain)
             push!(symbols, k)
         end
     end
