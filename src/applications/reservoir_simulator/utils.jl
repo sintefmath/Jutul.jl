@@ -36,7 +36,18 @@ function setup_reservoir_simulator(models, initializer, parameters = nothing; me
     return (sim, cfg)
 end
 
-export well_output, well_symbols, wellgroup_symbols
+export full_well_outputs, well_output, well_symbols, wellgroup_symbols, available_well_targets
+
+function full_well_outputs(model, parameters, states; targets = available_well_targets(model.models.Reservoir))
+    out = Dict()
+    for w in well_symbols(model)
+        out[w] = Dict()
+        for t in targets
+            out[w][Symbol(t)] = well_output(model, parameters, states, w, t)
+        end
+    end
+    return out
+end
 
 function well_output(model::MultiModel, parameters, states, well_symbol, target = BottomHolePressureTarget)
     n = length(states)
@@ -52,7 +63,10 @@ function well_output(model::MultiModel, parameters, states, well_symbol, target 
     group = :Facility
     rhoS_o = parameters[well_symbol][:reference_densities]
 
-    target_limit = target(1.0)
+    to_target(t::DataType) = t(1.0)
+    to_target(t::Type) = t(1.0)
+
+    target_limit = to_target(target)
 
     pos = get_well_position(model.models[group].domain, well_symbol)
     well_model = model.models[well_symbol]
@@ -99,4 +113,21 @@ function wellgroup_symbols(model::MultiModel)
         end
     end
     return symbols
+end
+
+function available_well_targets(model)
+    phases = get_phases(model.system)
+    targets = [BottomHolePressureTarget, SurfaceLiquidRateTarget, TotalRateTarget]
+    if AqueousPhase() in phases
+        push!(targets, SurfaceLiquidRateTarget)
+        push!(targets, SurfaceWaterRateTarget)
+    end
+    if LiquidPhase() in phases
+        push!(targets, SurfaceLiquidRateTarget)
+        push!(targets, SurfaceOilRateTarget)
+    end
+    if VaporPhase() in phases
+        push!(targets, SurfaceGasRateTarget)
+    end
+    return unique(targets)
 end

@@ -1,4 +1,4 @@
-export plot_well!, plot_interactive
+export plot_well!, plot_interactive, plot_well_results
 using .GLMakie
 function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kwarg...)
     pts, tri, mapper = triangulate_outer_surface(grid)
@@ -170,4 +170,42 @@ function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth =
     l = pts[1, :]
     text!(w["name"], position = Tuple([l[1], l[2], -l[3]]), space = :data, color = textcolor, align = (:center, :baseline), textsize = textsize)
     lines!(ax, vec(pts[:, 1]), vec(pts[:, 2]), -vec(pts[:, 3]), linewidth = linewidth, color = color, kwarg...)
+end
+
+function plot_well_results(well_data)
+    # Figure part
+    fig = Figure()
+    ax = Axis(fig[1, 1], xlabel = "Time (days)")
+
+    # Selected well
+    wells = collect(keys(well_data))
+    wellstr = [String(x) for x in wells]
+    well_ix = Observable(1)
+    menu = Menu(fig, options = wellstr, prompt = wellstr[1])
+    on(menu.selection) do s
+        val = findfirst(isequal(s), wellstr)
+        well_ix[] = val
+        autolimits!(ax)
+    end
+
+    # Type of plot (bhp, rate...)
+    responses = collect(keys(well_data[first(wells)]))
+    respstr = [String(x) for x in responses]
+    response_ix = Observable(1)
+    menu2 = Menu(fig, options = respstr, prompt = respstr[1])
+
+    on(menu2.selection) do s
+        val = findfirst(isequal(s), respstr)
+        response_ix[] = val
+        autolimits!(ax)
+    end
+
+    # Lay out and do plotting
+    fig[2, 1] = hgrid!(
+        menu,
+        menu2)
+
+    d = @lift(well_data[wells[$well_ix]][responses[$response_ix]])
+    lines!(ax, d)
+    return fig
 end
