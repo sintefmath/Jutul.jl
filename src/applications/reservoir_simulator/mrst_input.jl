@@ -736,7 +736,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     if isa(dt, Real)
         dt = [dt]
     end
-    timesteps = vec(dt)
+    timesteps = vec(copy(dt))
     res_context = model.context
     w_context = DefaultContext()
     
