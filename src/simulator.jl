@@ -229,11 +229,14 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                 dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = false)
             end
         else
+            if info_level > 0
+                @info "🟡 Time-step $step_no of length $(get_tstr(dt)) failed to converge."
+            end
             dt = cut_timestep(sim, config, dt, dT, reports, step_index = step_no, cut_count = cut_count)
             if isnan(dt)
                 # Timestep too small, cut too many times, ...
                 if info_level > -1
-                    @warn "Unable to converge time step #$step_no. Aborting."
+                    @warn "Unable to reduce time-step to smaller value. Aborting simulation."
                 end
                 break
             else
@@ -344,7 +347,12 @@ function new_simulation_control_step_message(info_level, p, rec, step_no, no_ste
         msg = "Solving step $step_no/$no_steps ($perc% of time interval complete)"
         next!(p; showvalues = [(:Status, msg)])
     elseif info_level > 0
-        @info "Solving step $step_no/$no_steps of length $(get_tstr(dT))."
+        if info_level == 1
+            prefix = ""
+        else
+            prefix = "🟢 "
+        end
+        @info "$(prefix)Solving step $step_no/$no_steps of length $(get_tstr(dT))."
     end
 end
 
@@ -353,9 +361,9 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
     if info_level >= 0 && length(reports) > 0
         stats = report_stats(reports)
         if aborted
-            endstr = "Simulation aborted. Completed $(stats.steps-1) of $(length(timesteps)) timesteps"
+            endstr = "🔴 Simulation aborted. Completed $(stats.steps-1) of $(length(timesteps)) timesteps"
         else
-            endstr = "Simulation complete. Completed $(stats.steps) timesteps"
+            endstr = "✅ Simulation complete. Completed $(stats.steps) timesteps"
         end
         t_tot = stats.time_sum.total
         final_message = "$endstr in $(get_tstr(t_tot)) seconds with $(stats.newtons) iterations."
@@ -406,7 +414,19 @@ function pick_timestep(sim, config, dt_prev, dT, reports, current_reports; step_
         dt = valid_timestep(sel, dt)
     end
     if config[:info_level] > 1
-        @info "Selected new sub-timestep $(get_tstr(dt)) from previous $(get_tstr(dt_prev))."
+        ratio = dt/dt_prev
+        if ratio > 5
+            t_sym = "⏫"
+        elseif ratio > 1.1
+            t_sym = "🔼"
+        elseif ratio < 0.2
+            t_sym = "⏬"
+        elseif ratio < 0.9
+            t_sym = "🔽"
+        else
+            t_sym = "🔄"
+        end
+        @info "Selected new sub-timestep $(get_tstr(dt)) from previous $(get_tstr(dt_prev)) $t_sym"
     end
     return dt
 end

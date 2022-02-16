@@ -171,7 +171,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
     if print_table
         s  = ":"
     elseif count_crit == count_ok
-        s = " ✔"
+        s = " ✔️"
     else
         worst_print = @sprintf "%2.3e (ϵ = %2.3e)" worst_val*worst_tol worst_tol
         s = ". Worst value:\n\t - $worst_name at $worst_print."
@@ -431,10 +431,14 @@ function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}
     if isnothing(range)
         range = 1:maximum(indices)
     end
-    for i in range
+    @showprogress for i in range
         state, report = read_restart(pth, i; read_state = read_states, read_report = read_reports)
-        push!(states, state)
-        push!(reports, report)
+        if read_states
+            push!(states, state)
+        end
+        if read_reports
+            push!(reports, report)
+        end
     end
     return (states, reports)
 end
@@ -476,7 +480,7 @@ function read_restart(pth, i; read_state = true, read_report = true)
         end
     else
         state = Dict{Symbol, Any}()
-        report = nothing    
+        report = nothing
         @warn "Data for step $i was requested, but no such file was found."
     end
     return (state, report)
