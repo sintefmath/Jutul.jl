@@ -251,7 +251,7 @@ function subforces(forces, submodel::MultiModel)
 end
 
 subforce(::Nothing, model) = nothing
-subforce(t, model) = t # A bit dangerous.
+subforce(t, model) = copy(t) # A bit dangerous.
 
 export subparameters
 subparameters(model, param) = deepcopy(param)

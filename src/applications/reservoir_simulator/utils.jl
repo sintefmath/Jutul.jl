@@ -76,7 +76,7 @@ function well_output(model::MultiModel, parameters, states, well_symbol, target 
         q_t = state[group][:TotalSurfaceMassRate][pos]
         if q_t == 0
             current_control = DisabledControl()
-            d[i] = missing
+            d[i] = 0.0
         else
             if q_t < 0
                 current_control = ProducerControl(BottomHolePressureTarget(1.0))

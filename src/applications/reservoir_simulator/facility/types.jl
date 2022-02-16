@@ -160,3 +160,6 @@ struct PerforationMask{V} <: JutulForce where V<:AbstractVector
         return new{T}(copy(vec(v)))
     end
 end
+
+import Base.copy
+Base.copy(m::PerforationMask) = PerforationMask(copy(m.values))

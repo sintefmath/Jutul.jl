@@ -136,14 +136,11 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 0.01, extraout 
                         cells_local = rc[pos]
                     end
                     d = (z[i] .- z_local).^2
-                    # @info i d argmin(d)
-                    reservoir_cells[i] = cells_local[argmin(d)]    
+                    reservoir_cells[i] = cells_local[argmin(d)]
                 end
             end
-            # @info nm reservoir_cells z_res z
         else
             pvol, accumulator_volume, perf_cells, well_topo, z, dz, reservoir_cells = simple_ms_setup(n, volume, well_cell_volume, rc, ref_depth, z_res)
-            @info W_mrst["name"] z
         end
         W = MultiSegmentWell(pvol, rc, WI = WI, reference_depth = ref_depth, dz = dz, N = well_topo, perforation_cells = perf_cells, accumulator_volume = accumulator_volume)
         flow = TwoPointPotentialFlow(SPU(), MixedWellSegmentFlow(), TotalMassVelocityMassFractionsFlow(), W, nothing, z)
@@ -672,9 +669,9 @@ function init_from_mat(mrst_data)
         p0 = [p0]
     end
     if haskey(state0, "components")
-        z0 = state0["components"]'
+        z0 = copy(state0["components"]')
         init = Dict(:Pressure => p0, :OverallMoleFractions => z0)
-        s = state0["s"]
+        s = copy(state0["s"])
         if size(s, 2) == 3
             sw = vec(s[:, 1])
             sw = min.(sw, 1 - MINIMUM_COMPOSITIONAL_SATURATION)
@@ -683,7 +680,7 @@ function init_from_mat(mrst_data)
             @assert size(s, 2) == 2
         end
     else
-        s0 = state0["s"]'
+        s0 = copy(state0["s"]')
         init = Dict(:Pressure => p0, :Saturations => s0)
     end
     return init
