@@ -172,13 +172,18 @@ function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth =
     lines!(ax, vec(pts[:, 1]), vec(pts[:, 2]), -vec(pts[:, 3]), linewidth = linewidth, color = color, kwarg...)
 end
 
-function plot_well_results(well_data)
+function plot_well_results(well_data::Dict; name = "Data")
+    plot_well_results([well_data], names = [name])
+end
+
+function plot_well_results(well_data::Vector; names =["$i" for i in 1:length(well_data)])
     # Figure part
     fig = Figure()
     ax = Axis(fig[1, 1], xlabel = "Time (days)")
 
+    wd = first(well_data)
     # Selected well
-    wells = collect(keys(well_data))
+    wells = collect(keys(wd))
     wellstr = [String(x) for x in wells]
     well_ix = Observable(1)
     menu = Menu(fig, options = wellstr, prompt = wellstr[1])
@@ -189,7 +194,7 @@ function plot_well_results(well_data)
     end
 
     # Type of plot (bhp, rate...)
-    responses = collect(keys(well_data[first(wells)]))
+    responses = collect(keys(wd[first(wells)]))
     respstr = [String(x) for x in responses]
     response_ix = Observable(1)
     menu2 = Menu(fig, options = respstr, prompt = respstr[1])
@@ -204,8 +209,14 @@ function plot_well_results(well_data)
     fig[2, 1] = hgrid!(
         menu,
         menu2)
+    function get_data(wix, rix)
+        tmp = map(x -> x[wells[wix]][responses[rix]], well_data)
+        return hcat(tmp...)'
+    end
+    d = @lift(get_data($well_ix, $response_ix))
+    series!(ax, d, labels = names)
 
-    d = @lift(well_data[wells[$well_ix]][responses[$response_ix]])
-    lines!(ax, d)
+    fig[1, 2] = Legend(fig, ax, "Dataset")
+
     return fig
 end
