@@ -176,7 +176,7 @@ function plot_well_results(well_data::Dict; name = "Data")
     plot_well_results([well_data], names = [name])
 end
 
-function plot_well_results(well_data::Vector; names =["$i" for i in 1:length(well_data)])
+function plot_well_results(well_data::Vector; names =["$i" for i in 1:length(well_data)], kwarg...)
     # Figure part
     fig = Figure()
     ax = Axis(fig[1, 1], xlabel = "Time (days)")
@@ -213,8 +213,9 @@ function plot_well_results(well_data::Vector; names =["$i" for i in 1:length(wel
         tmp = map(x -> x[wells[wix]][responses[rix]], well_data)
         return hcat(tmp...)'
     end
+    n = length(wd[wells[1]][responses[1]])
     d = @lift(get_data($well_ix, $response_ix))
-    series!(ax, d, labels = names)
+    series!(ax, d, labels = names; kwarg...)
 
     fig[1, 2] = Legend(fig, ax, "Dataset")
 
