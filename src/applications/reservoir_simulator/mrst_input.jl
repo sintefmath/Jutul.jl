@@ -900,6 +900,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                         if !found_limits
                             limits = Dict()
                         end
+                        limits = facility_subset(wsymbols, limits)
                         new_force[fsymbol] = build_forces(WG, control = ctrls, limits = limits)
                     end
                     push!(all_controls, new_force)
