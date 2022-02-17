@@ -28,7 +28,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
 
     function get_vec(d)
         if isa(d, AbstractArray)
-            return vec(d)
+            return vec(copy(d))
         else
             return [d]
         end
@@ -45,11 +45,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     # Deal with face data
     if has_trans
         @debug "Found precomputed transmissibilities, reusing"
-        T_raw = exported["T"]
-        if isa(T_raw, AbstractFloat)
-            T_raw = [T_raw]
-        end
-        T = vec(T_raw)
+        T = get_vec(exported["T"])
     else
         @debug "Data unpack complete. Starting transmissibility calculations."
         if isnothing(perm)
@@ -87,7 +83,7 @@ function get_well_from_mrst_data(mrst_data, system, ix; volume = 0.01, extraout 
     else
         z_res = zeros(length(rc))
     end
-    res_volume = vec(mrst_data["G"]["cells"]["volumes"])
+    res_volume = vec(copy(mrst_data["G"]["cells"]["volumes"]))
 
     well_cell_volume = res_volume[rc]
     if simple
@@ -460,7 +456,7 @@ function model_from_mat_comp(G, mrst_data, res_context)
 
     mixture = mrst_data["mixture"]
     comps = mixture["components"]
-    names = vec(mixture["names"])
+    names = copy(vec(mixture["names"]))
     n = length(comps)
 
     components = map(x -> MolecularProperty(x["mw"], x["pc"], x["Tc"], x["Vc"], x["acf"]), comps)
