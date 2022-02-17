@@ -446,11 +446,12 @@ function check_limit(current_control, target_limit, target, is_lower::Bool, q_t,
     else
         current_val = value(well_target_value(q_t, current_control, target_limit, arg...))
         limit_val = target_limit.value
+        ϵ = 1e-6
         if is_lower
             # Limit is lower bound, check that we are above...
-            ok = current_val > limit_val
+            ok = current_val >= (1 + ϵ)*limit_val
         else
-            ok = current_val <= limit_val
+            ok = current_val <= (1 - ϵ)*limit_val
         end
     end
     return (ok, current_val, limit_val)
