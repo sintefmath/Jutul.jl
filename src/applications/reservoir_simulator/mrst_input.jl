@@ -894,14 +894,14 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                         end
                     end
                     # Now copy into the corresponding facilit(y/ies)
+                    if !found_limits
+                        limits = Dict()
+                    end
                     for (fsymbol, wsymbols) in zip(facility_symbols, facility_owned_wells)
                         ctrls = facility_subset(wsymbols, current_control)
                         WG = models[fsymbol]
-                        if !found_limits
-                            limits = Dict()
-                        end
-                        limits = facility_subset(wsymbols, limits)
-                        new_force[fsymbol] = build_forces(WG, control = ctrls, limits = limits)
+                        limits_local = facility_subset(wsymbols, limits)
+                        new_force[fsymbol] = build_forces(WG, control = ctrls, limits = limits_local)
                     end
                     push!(all_controls, new_force)
                 end
@@ -916,7 +916,6 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     end
     return (models, parameters, initializer, timesteps, forces, mrst_data)
 end
-
 
 function facility_subset(well_symbols, controls)
     ctrls = Dict()
@@ -972,7 +971,11 @@ function mrst_well_ctrl(model, wdata, is_comp, rhoS)
                 ct = copy(ci)
                 if nph == 3
                     # Should go at end - need better logic if this isn't either one or zero
-                    push!(ct, comp_i[1])
+                    c_water = comp_i[1]
+                    # hc_weight = 1.0 - c_water
+                    # ct = ct.*hc_weight
+                    push!(ct, c_water)
+                    # normalize!(ct, 1)
                 end
                 ct = normalize(ct, 1)
             else
