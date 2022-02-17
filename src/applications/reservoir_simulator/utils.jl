@@ -58,9 +58,9 @@ function well_output(model::MultiModel, parameters, states, well_symbol, target 
     for g in groups
         if well_symbol in model.models[g].domain.well_symbols
             group = g
+            break
         end
     end
-    group = :Facility
     rhoS_o = parameters[well_symbol][:reference_densities]
 
     to_target(t::DataType) = t(1.0)

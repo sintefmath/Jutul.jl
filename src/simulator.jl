@@ -82,7 +82,7 @@ function simulator_config!(cfg, sim; kwarg...)
     # Info level determines the runtime output to the terminal:
     # < 0 - no output.
     # 0   - gives minimal output (just a progress bar by default, and a final report)
-    # 1   - gives some more details, priting at the start of each step
+    # 1   - gives some more details, printing at the start of each step
     # 2   - as 1, but also printing the current worst residual at each iteration
     # 3   - as 1, but prints a table of all non-converged residuals at each iteration
     # 4   - as 3, but all residuals are printed (even converged values)
