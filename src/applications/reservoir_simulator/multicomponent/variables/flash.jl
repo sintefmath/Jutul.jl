@@ -12,7 +12,7 @@ struct FlashResults <: ScalarVariable
     method
     update_buffer
     use_threads::Bool
-    function FlashResults(system; method = SSIFlash(), threads = true)
+    function FlashResults(system; method = SSIFlash(), threads = Threads.nthreads() > 1)
         eos = system.equation_of_state
         nc = MultiComponentFlash.number_of_components(eos)
         if has_other_phase(system)
@@ -46,11 +46,11 @@ function initialize_variable_value!(state, model, pvar::FlashResults, symb, val:
     n = number_of_entities(model, pvar)
     v = default_value(model, pvar)
     T = typeof(v)
-    V = Vector{T}(undef, n)
+    V = Vector{T}()
+    sizehint!(V, n)
     for i in 1:n
-        V[i] = default_value(model, pvar)
+        push!(V, default_value(model, pvar))
     end
-    # V = repeat([v], n)
     initialize_variable_value!(state, model, pvar, symb, V)
 end
 
@@ -85,6 +85,8 @@ end
 function perform_flash_for_all_cells!(flash_results, storage, m, eos, buffers, P, T, z; threads = true)
     flash_cell(i, S, buf) = internal_flash!(flash_results, S, m, eos, buf, P, T, z, i)
     if threads
+        N = Threads.nthreads()
+        @assert length(storage) == N == length(buffers)
         @inbounds @batch threadlocal=thread_buffers(storage, buffers) for i in eachindex(flash_results)
             # Unpack thread specific storage
             S, thread_buffer = threadlocal
