@@ -702,7 +702,6 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     
         return (model, init, param_res)
     end
-    rhoS = mrst_data["fluid"]["rhoS"]
 
     # Set up initializers
     models = OrderedDict()
@@ -713,6 +712,23 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     model, init, param_res = setup_res(G, mrst_data; block_backend = block_backend, use_groups = true)
     is_comp = haskey(init, :OverallMoleFractions)
     nph = number_of_phases(model.system)
+    if haskey(mrst_data, "fluid")
+        rhoS = mrst_data["fluid"]["rhoS"]
+    else
+        deck = mrst_data["deck"]
+        rhoS_ecl = Float64.(deck["PROPS"]["DENSITY"])
+        rhoS = Vector{Float64}()
+        rs = deck["RUNSPEC"]
+        if haskey(rs, "WATER")
+            push!(rhoS, rhoS_ecl[2])
+        end
+        if haskey(rs, "OIL")
+            push!(rhoS, rhoS_ecl[1])
+        end
+        if haskey(rs, "GAS")
+            push!(rhoS, rhoS_ecl[3])
+        end
+    end
 
     has_schedule = haskey(mrst_data, "schedule")
     if has_schedule
