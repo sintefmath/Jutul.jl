@@ -91,7 +91,6 @@ function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kw
                 break
             end
             notify(state_index)
-            force_update!()
             previndex = newindex
             sleep(1/30)
         end
@@ -172,6 +171,7 @@ function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth =
     lines!(ax, vec(pts[:, 1]), vec(pts[:, 2]), -vec(pts[:, 3]), linewidth = linewidth, color = color, kwarg...)
 end
 
+export plot_well_results
 function plot_well_results(well_data::Dict; name = "Data")
     plot_well_results([well_data], names = [name])
 end
