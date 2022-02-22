@@ -173,21 +173,24 @@ function plot_well!(ax, g, w; color = :darkred, textcolor = nothing, linewidth =
 end
 
 export plot_well_results
-function plot_well_results(well_data::Dict; name = "Data")
-    plot_well_results([well_data], names = [name])
+function plot_well_results(well_data::Dict, arg...; name = "Data", kwarg...)
+    plot_well_results([well_data], arg...; names = [name], kwarg...)
 end
 
-function plot_well_results(well_data::Vector, time = nothing; names =["Dataset $i" for i in 1:length(well_data)], linewidth = 3, cmap = nothing, kwarg...)
+function plot_well_results(well_data::Vector, time = nothing; start_date::Union{Nothing, DateTime} = nothing, names =["Dataset $i" for i in 1:length(well_data)], linewidth = 3, cmap = nothing, kwarg...)
     # Figure part
     ndata = length(well_data)
     @assert ndata <= 5 "Maximum of five datasets plotted simultaneously."
     fig = Figure()
     if isnothing(time)
         t_l = "Time-step"
-    else
+        @assert isnothing(start_date) "start_date does not make sense in the absence of time-steps"
+    elseif isnothing(start_date)
         t_l = "Time [days]"
+    else
+        t_l = "Date"
     end
-    ax = Axis(fig[1, 1], xlabel = t_l, tellwidth = false, tellheight = false)
+    ax = Axis(fig[1, 1], xlabel = t_l)
 
     wd = first(well_data)
     # Selected well
@@ -234,16 +237,32 @@ function plot_well_results(well_data::Vector, time = nothing; names =["Dataset $
     end
 
     sample = map(x -> get_data(1, 1, x), 1:ndata)
+    nsample = map(length, sample)
     if isnothing(time)
         time = map(s -> 1:length(s), sample)
     else
-        if eltype(time)<:AbstractFloat
-            time = repeat(time, ndata)
+        if eltype(time)<:AbstractFloat || eltype(time)<:Date
+            time = repeat([time], ndata)
         end
     end
+
+    newtime = []
     for i = 1:ndata
-        @assert length(time[i]) == length(sample[i])
+        T = time[i]
+        nt = length(T)
+        ns = nsample[i]
+        @assert nt == ns "Series $i: Recieved $nt steps, but wells had $ns results."
+        if eltype(T)<:AbstractFloat
+            # Scale to days
+            if isnothing(start_date)
+                @. T /= (3600*24)
+            else
+                T = @. Microsecond(ceil(T*1e6)) + start_date
+            end
+            push!(newtime, T)
+        end
     end
+    time = newtime
 
     lighten(x) = GLMakie.ARGB(x.r, x.g, x.b, 0.2)
     toggles = [Toggle(fig, active = true, buttoncolor = cmap[i], framecolor_active = lighten(cmap[i])) for i in eachindex(wells)]

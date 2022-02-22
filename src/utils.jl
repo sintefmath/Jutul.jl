@@ -521,4 +521,4 @@ function report_timesteps(reports; ministeps = false, extra_out = false)
     end
 end
 
-report_times(reports; ministeps = false) = cumsum(report_timestesp(reports, ministeps = ministeps, extra_out = false))
+report_times(reports; ministeps = false) = cumsum(report_timesteps(reports, ministeps = ministeps, extra_out = false))
