@@ -1,5 +1,6 @@
 export plot_well!, plot_interactive, plot_well_results
 using .GLMakie
+using ColorSchemes
 function plot_interactive(grid, states; plot_type = nothing, wells = nothing, kwarg...)
     pts, tri, mapper = triangulate_outer_surface(grid)
 
@@ -176,48 +177,120 @@ function plot_well_results(well_data::Dict; name = "Data")
     plot_well_results([well_data], names = [name])
 end
 
-function plot_well_results(well_data::Vector; names =["$i" for i in 1:length(well_data)], kwarg...)
+function plot_well_results(well_data::Vector, time = nothing; names =["Dataset $i" for i in 1:length(well_data)], linewidth = 3, cmap = nothing, kwarg...)
     # Figure part
+    ndata = length(well_data)
+    @assert ndata <= 5 "Maximum of five datasets plotted simultaneously."
     fig = Figure()
-    ax = Axis(fig[1, 1], xlabel = "Time (days)")
+    if isnothing(time)
+        t_l = "Time-step"
+    else
+        t_l = "Time [days]"
+    end
+    ax = Axis(fig[1, 1], xlabel = t_l, tellwidth = false, tellheight = false)
 
     wd = first(well_data)
     # Selected well
-    wells = collect(keys(wd))
-    wellstr = [String(x) for x in wells]
-    well_ix = Observable(1)
-    menu = Menu(fig, options = wellstr, prompt = wellstr[1])
-    on(menu.selection) do s
-        val = findfirst(isequal(s), wellstr)
-        well_ix[] = val
-        autolimits!(ax)
+    wells = sort!(collect(keys(wd)))
+    nw = length(wells)
+    if isnothing(cmap)
+        cmap = cgrad(:Paired_12, nw, categorical=true)
     end
+    wellstr = [String(x) for x in wells]
 
     # Type of plot (bhp, rate...)
     responses = collect(keys(wd[first(wells)]))
     respstr = [String(x) for x in responses]
     response_ix = Observable(1)
-    menu2 = Menu(fig, options = respstr, prompt = respstr[1])
+    type_menu = Menu(fig, options = respstr, prompt = respstr[1])
 
-    on(menu2.selection) do s
+    on(type_menu.selection) do s
         val = findfirst(isequal(s), respstr)
         response_ix[] = val
         autolimits!(ax)
     end
+    fig[2, 2:3] = hgrid!(
+        type_menu)
+
+    b_xlim = Button(fig, label = "Reset x")
+    on(b_xlim.clicks) do n
+        reset_limits!(ax; xauto = true, yauto = false)
+    end
+    b_ylim = Button(fig, label = "Reset y")
+    on(b_ylim.clicks) do n
+        reset_limits!(ax; xauto = false, yauto = true)
+    end
+    buttongrid = GridLayout(tellwidth = false)
+    buttongrid[1, 1] = b_xlim
+    buttongrid[1, 2] = b_ylim
+
+
 
     # Lay out and do plotting
-    fig[2, 1] = hgrid!(
-        menu,
-        menu2)
-    function get_data(wix, rix)
-        tmp = map(x -> x[wells[wix]][responses[rix]], well_data)
-        return hcat(tmp...)'
+    fig[2, 1] = buttongrid
+    function get_data(wix, rix, dataix)
+        tmp = well_data[dataix][wells[wix]][responses[rix]]
+        return tmp
     end
-    n = length(wd[wells[1]][responses[1]])
-    d = @lift(get_data($well_ix, $response_ix))
-    series!(ax, d, labels = names; kwarg...)
 
-    fig[1, 2] = Legend(fig, ax, "Dataset")
+    sample = map(x -> get_data(1, 1, x), 1:ndata)
+    if isnothing(time)
+        time = map(s -> 1:length(s), sample)
+    else
+        if eltype(time)<:AbstractFloat
+            time = repeat(time, ndata)
+        end
+    end
+    for i = 1:ndata
+        @assert length(time[i]) == length(sample[i])
+    end
+
+    lighten(x) = GLMakie.ARGB(x.r, x.g, x.b, 0.2)
+    toggles = [Toggle(fig, active = true, buttoncolor = cmap[i], framecolor_active = lighten(cmap[i])) for i in eachindex(wells)]
+    labels = [Label(fig, w) for w in wellstr]
+
+    tmp = hcat(toggles, labels)
+    bgrid = tmp
+    N = size(bgrid, 1)
+    M = div(N, 2, RoundUp)
+    fig[1, 2] = grid!(bgrid[1:M, :], tellheight = false)
+    fig[1, 3] = grid!(bgrid[(M+1):N, :], tellheight = false)
+
+    lineh = []
+    styles = [nothing, :dash, :scatter, :dashdot, :dot, :dashdotdot]
+    for dix = 1:ndata
+        T = time[dix]
+        for i in 1:nw
+            d = @lift(get_data(i, $response_ix, dix))
+            style = styles[dix]
+            if style == :scatter
+                h = scatter!(ax, T, d, color = cmap[i], linewidth = linewidth, marker = :circle)
+            else
+                h = lines!(ax, T, d, linewidth = linewidth, linestyle = style, color = cmap[i])
+            end
+            t = toggles[i]
+            connect!(h.visible, t.active)
+            push!(lineh, h)
+        end
+    end
+    if ndata > 1
+        elems = []
+        for i = 1:ndata
+            style = styles[i]
+            if style == :scatter
+                el = MarkerElement(color = :black, linewidth = linewidth, marker = :circle)
+            else
+                el = LineElement(color = :black, linestyle = styles[i], linewidth = linewidth)
+            end
+            push!(elems, el)
+        end
+        fig[1, 1] = Legend(fig, elems, names,
+                        tellheight = false,
+                        tellwidth = false,
+                        margin = (10, 10, 10, 10),
+                        halign = :left, valign = :top, orientation = :horizontal
+        )
+    end
 
     return fig
 end

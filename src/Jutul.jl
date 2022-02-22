@@ -90,7 +90,9 @@ include("meshes/meshes.jl")
 
 # Plotting
 function __init__()
-    @require GLMakie="e9467ef8-e4e7-5192-8a1a-b1aee30e663a" include("plotting.jl")
+    @require GLMakie="e9467ef8-e4e7-5192-8a1a-b1aee30e663a" begin
+        @require ColorSchemes="35d6a980-a343-548e-a6ea-1d62b119f2f4" include("plotting.jl")
+    end
     @require GraphRecipes="bd48cda9-67a9-57be-86fa-5b3c104eda73" begin
         @require Plots="91a5bcdd-55d7-5caf-9e0b-520d859cae80" include("plot_graph.jl")
     end

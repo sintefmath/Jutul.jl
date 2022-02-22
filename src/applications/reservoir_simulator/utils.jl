@@ -43,7 +43,7 @@ function full_well_outputs(model, parameters, states; targets = available_well_t
     for w in well_symbols(model)
         out[w] = Dict()
         for t in targets
-            out[w][Symbol(t)] = well_output(model, parameters, states, w, t)
+            out[w][translate_target_to_symbol(t(1.0))] = well_output(model, parameters, states, w, t)
         end
     end
     return out
