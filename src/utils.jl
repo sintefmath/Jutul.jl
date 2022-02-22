@@ -485,3 +485,40 @@ function read_restart(pth, i; read_state = true, read_report = true)
     end
     return (state, report)
 end
+
+export report_timesteps, report_times
+function report_timesteps(reports; ministeps = false, extra_out = false)
+    if ministeps
+        dt = Vector{Float64}()
+        step_no = Vector{Int64}()
+        for (i, r) = enumerate(reports)
+            for m in r[:ministeps]
+                if m[:success]
+                    push!(dt, m[:dt])
+                    push!(step_no, i)
+                end
+            end
+        end
+    else
+        n = length(reports)
+        dt = zeros(n)
+        step_no = zeros(Int64, n)
+        for (i, r) = enumerate(reports)
+            t_loc = 0.0
+            for m in r[:ministeps]
+                if m[:success]
+                    t_loc += m[:dt]
+                end
+            end
+            dt[i] = t_loc
+            step_no[i] = i
+        end
+    end
+    if extra_out
+        return (dt = dt, step = step_no)
+    else
+        return dt
+    end
+end
+
+report_times(reports; ministeps = false) = cumsum(report_timestesp(reports, ministeps = ministeps, extra_out = false))
