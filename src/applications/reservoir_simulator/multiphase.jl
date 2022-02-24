@@ -258,8 +258,12 @@ function convergence_criterion(model::SimulationModel{D, S}, storage, eq::Conser
     ρ = v(storage.state.PhaseMassDensities)
 
     @tullio max e[j] := abs(r[j, i]) * dt / (value(ρ[j, i])*Φ[i])
+    scale = dt./(sum(Φ).*mean(value, ρ, dims = 2))
+    mb = scale.*sum(abs, r, dims = 2)
+
     names = phase_names(model.system)
-    R = Dict("CNV" => (errors = e, names = names))
+    R = Dict("CNV" => (errors = e, names = names),
+             "MB"  => (errors = mb, names = names))
     return R
 end
 
