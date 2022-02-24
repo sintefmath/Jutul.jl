@@ -62,7 +62,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     end
 end
 
-function get_well_from_mrst_data(mrst_data, system, ix; volume = 0.01, extraout = false, simple = false, W_data = mrst_data["W"], kwarg...)
+function get_well_from_mrst_data(mrst_data, system, ix; volume = 1e-2, extraout = false, simple = false, W_data = mrst_data["W"], kwarg...)
     W_mrst = W_data[ix]
     w = convert_to_immutable_storage(W_mrst)
 
@@ -766,7 +766,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         sym = well_symbols[i]
     
         wi, wdata , res_cells = get_well_from_mrst_data(mrst_data, sys, i, W_data = first_well_set,
-                extraout = true, volume = 1e-3, simple = simple_well, context = w_context)
+                extraout = true, simple = simple_well, context = w_context)
         wc = wi.domain.grid.perforations.reservoir
 
         sv = wi.secondary_variables
@@ -985,15 +985,15 @@ function mrst_well_ctrl(model, wdata, is_comp, rhoS)
                 props = model.system.equation_of_state.mixture.properties
                 ci = map((x, c) -> max(c.mw*x, 1e-10), ci, props)
                 ct = copy(ci)
+                normalize!(ct, 1)
                 if nph == 3
                     # Should go at end - need better logic if this isn't either one or zero
                     c_water = comp_i[1]
-                    # hc_weight = 1.0 - c_water
-                    # ct = ct.*hc_weight
+                    hc_weight = max(1.0 - c_water, 1e-3)
+                    ct = ct.*hc_weight
                     push!(ct, c_water)
-                    # normalize!(ct, 1)
                 end
-                ct = normalize(ct, 1)
+                normalize!(ct, 1)
             else
                 ct = comp_i
             end
