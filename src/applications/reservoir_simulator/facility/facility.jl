@@ -456,3 +456,26 @@ function check_limit(current_control, target_limit, target, is_lower::Bool, q_t,
     end
     return (ok, current_val, limit_val)
 end
+
+
+function convergence_criterion(model, storage, eq::ControlEquationWell, r; dt = 1)
+    wells = model.domain.well_symbols
+    cfg = storage.state.WellGroupConfiguration
+    e = abs.(vec(r))
+    names = map(w -> name_equation(w, cfg), wells)
+    R = Dict("Abs" => (errors = e, names = names))
+    return R
+end
+
+function name_equation(name, cfg::WellGroupConfiguration)
+    ctrl = cfg.operating_controls[name]
+    if ctrl isa InjectorControl
+        cs = "I"
+    elseif ctrl isa ProducerControl
+        cs = "P"
+    else
+        cs = "X"
+    end
+    t = translate_target_to_symbol(ctrl.target)
+    return "$name ($cs) $t"
+end
