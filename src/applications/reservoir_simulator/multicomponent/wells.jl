@@ -31,7 +31,7 @@ function flash_wellstream_at_surface(well_model::SimulationModel{D, S}, well_sta
 
     z = SVector{nc}(well_state.OverallMoleFractions[:, 1])
     m = SSIFlash()
-    fs = flash_storage(eos, method = m, inc_jac = true, diff_externals = true, npartials = n, static_size = true)
+    fstorage = flash_storage(eos, method = m, inc_jac = true, diff_externals = true, npartials = n, static_size = true)
     update_flash_buffer!(buf, eos, Pressure, Temperature, z)
 
     f = FlashedMixture2Phase(eos, T)
@@ -39,11 +39,11 @@ function flash_wellstream_at_surface(well_model::SimulationModel{D, S}, well_sta
     y = f.vapor.mole_fractions
     forces = buf.forces
 
-    fs = update_flash_result(fs, m, buf, eos, f.K, x, y, buf.z, forces, Pressure, Temperature, z)
+    result = update_flash_result(fstorage, m, buf, eos, f.K, x, y, buf.z, forces, Pressure, Temperature, z)
 
-    rho[l], rho[v] = mass_densities(eos, Pressure, Temperature, fs)
+    rho[l], rho[v] = mass_densities(eos, Pressure, Temperature, result)
     rem = one(T) - S_other
-    S_l, S_v = phase_saturations(eos, Pressure, Temperature, fs)
+    S_l, S_v = phase_saturations(eos, Pressure, Temperature, result)
 
     volfrac[l] = rem*S_l
     volfrac[v] = rem*S_v
