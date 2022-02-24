@@ -14,6 +14,10 @@ dt = timesteps
 states, reports = simulate(sim, dt, forces = forces, config = cfg);
 error("Early termination")
 ##
+ws = full_well_outputs(sim.model, parameters, states)
+t = report_times(reports)
+plot_well_results(ws, t)
+##
 res_states = map((x) -> x[:Reservoir], states)
 res_states = [Dict(:permx => mrst_data["rock"]["perm"][:, 1])]
 g = MRSTWrapMesh(mrst_data["G"])
