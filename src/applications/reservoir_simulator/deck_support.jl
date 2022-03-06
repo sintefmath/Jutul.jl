@@ -79,6 +79,30 @@ end
     # @tullio rho[ph, i] = rhos[ph]*shrinkage(pvt[ph], reg, Pressure[i], i)
 end
 
+struct DeckShrinkageFactors{T, R} <: DeckPhaseVariables
+    pvt::T
+    regions::R
+    function DeckShrinkageFactors(pvt; regions = nothing)
+        check_regions(regions, pvt)
+        pvt_t = Tuple(pvt)
+        new{typeof(pvt_t), typeof(regions)}(pvt_t, regions)
+    end
+end
+
+@terv_secondary function update_as_secondary!(b, ρ::DeckShrinkageFactors, model, param, Pressure)
+    pvt, reg = ρ.pvt, ρ.regions
+    # Note immiscible assumption
+    tb = thread_batch(model.context)
+    nph, nc = size(b)
+    for ph in 1:nph
+        pvt_ph = pvt[ph]
+        @batch minbatch = tb for i in 1:nc
+            p = Pressure[i]
+            @inbounds b[ph, i] = shrinkage(pvt_ph, reg, p, i)
+        end
+    end
+end
+
 # struct DeckRelativePermeability <: DeckPhaseVariables
 #     sat::Tuple
 #     regions
