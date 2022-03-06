@@ -23,7 +23,8 @@ max_dissolved_gas_fraction(rs, rhoOS, rhoGS) = rs*rhoGS/(rhoOS + rs*rhoGS)
     for i in eachindex(phase_state)
         p = Pressure[i]
         z_g = GasMassFraction[i]
-        if max_dissolved_gas_fraction(tab(p), rhoOS, rhoGS) > z_g
+        z_g_bub = max_dissolved_gas_fraction(tab(p), rhoOS, rhoGS)
+        if z_g_bub < z_g
             phase_state[i] = OilAndGas
         else
             phase_state[i] = OilOnly
@@ -65,7 +66,7 @@ end
         p = Pressure[i]
         rs = Rs[i]
         b[w, i] = shrinkage(bW, reg, p, i)
-        b[w, i] = shrinkage(bO, reg, p, rs, i)
+        b[o, i] = shrinkage(bO, reg, p, rs, i)
         b[g, i] = shrinkage(bG, reg, p, i)
     end
 end
@@ -86,7 +87,7 @@ end
         p = Pressure[i]
         rs = Rs[i]
         b[w, i] = viscosity(bW, reg, p, i)
-        b[w, i] = viscosity(bO, reg, p, rs, i)
+        b[o, i] = viscosity(bO, reg, p, rs, i)
         b[g, i] = viscosity(bG, reg, p, i)
     end
 end

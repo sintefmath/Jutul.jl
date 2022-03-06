@@ -6,7 +6,7 @@ ENV["JULIA_DEBUG"] = nothing
 casename = "sleipner_ecl_bo"
 # casename = "olympus_simple"
 casename = "spe1"
-models, parameters, initializer, timesteps, forces = setup_case_from_mrst(casename, block_backend = true);
+models, parameters, initializer, dt, forces = setup_case_from_mrst(casename, block_backend = false);
 ##
 sim, cfg = setup_reservoir_simulator(models, initializer, parameters)
 
