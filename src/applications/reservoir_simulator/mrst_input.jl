@@ -611,6 +611,35 @@ function deck_pvt_gas(props)
     return PVDG(props["PVDG"])
 end
 
+function deck_relperm(props; oil, water, gas)
+    if water && oil && gas
+        swof = props["SWOF"]
+        sgof = props["SGOF"]
+
+        s_water, kr_water = preprocess_relperm_table(only(swof))
+        s_gas, kr_gas = preprocess_relperm_table(only(sgof))
+
+        sw = s_water[1]
+        krw = get_1d_interpolator(s_water[1], kr_water[1])
+        krow = get_1d_interpolator(s_water[2], kr_water[2])
+
+        krg = get_1d_interpolator(s_gas[1], kr_gas[1])
+        krog = get_1d_interpolator(s_gas[2], kr_gas[2])
+
+        return ThreePhaseRelPerm(w = krw, g = krg, ow = krow, og = krog, swcon = sw[1])
+    else
+        if water && oil
+            sat_table = props["SWOF"]
+        else
+            @assert gas && oil
+            sat_table = props["SGOF"]
+        end
+        kr_from_deck = only(sat_table)
+        s, krt = preprocess_relperm_table(kr_from_deck)
+        return TabulatedRelPermSimple(s, krt)
+    end
+end
+
 
 function model_from_mat_deck(G, mrst_data, res_context)
     ## Set up reservoir part
@@ -653,6 +682,7 @@ function model_from_mat_deck(G, mrst_data, res_context)
         push!(phases, VaporPhase())
         push!(rhoS, rhoGS)
     end
+    nph = length(rhoS)
 
     if is_immiscible
         sys = ImmiscibleSystem([oil, gas])
@@ -677,11 +707,7 @@ function model_from_mat_deck(G, mrst_data, res_context)
     end
     svar[:PhaseViscosities] = DeckViscosity(pvt)
     # Rel perm
-    kr_from_deck = only(sat_table)
-    s, krt = preprocess_relperm_table(kr_from_deck)
-    kr = TabulatedRelPermSimple(s, krt)
-
-    svar[:RelativePermeabilities] = kr
+    svar[:RelativePermeabilities] = deck_relperm(props; oil = has_oil, water = has_wat, gas = has_gas)
     
     ## Model parameters
     param = setup_parameters(model)

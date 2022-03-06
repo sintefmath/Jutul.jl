@@ -38,7 +38,7 @@ interpolate(I::LinearInterpolant, x) = linear_interp(I.X, I.F, x)
 
 function get_1d_interpolator(xs, ys; method = LinearInterpolant, cap_endpoints = true)
     if cap_endpoints
-        ϵ = 100*sum(abs.(xs))
+        ϵ = 100*sum(abs, xs)
         # Add perturbed points
         xs = vcat(xs[1] - ϵ, xs)
         xs = vcat(xs, xs[end] + ϵ)

@@ -127,6 +127,48 @@ function threaded_interp!(F, context, I, x)
 end
 
 """
+Interpolated multiphase rel. perm. that is simple (single region, no magic for more than two phases)
+"""
+struct ThreePhaseRelPerm{O, OW, OG, G, R} <: RelativePermeabilities
+    krw::O
+    krow::OW
+    krog::OG
+    krg::G
+    swcon::R
+end
+
+function ThreePhaseRelPerm(; w, g, ow, og, swcon = 0.0)
+    return ThreePhaseRelPerm(w, ow, og, g, swcon)
+end
+
+@terv_secondary function update_as_secondary!(kr, relperm::ThreePhaseRelPerm, model, param, Saturations)
+    s = Saturations
+    krw = relperm.krw
+    krow = relperm.krow
+    krog = relperm.krog
+    krg = relperm.krg
+    swcon = relperm.swcon
+
+    l = 1
+    o = 2
+    g = 3
+    @inbounds for c in 1:size(kr, 2)
+        # Water
+        sw = s[l, c]
+        kr[l, c] = krw(sw)
+        # Gas
+        sg = s[g, c]
+        kr[g, c] = krg(sg)
+        # Oil is special
+        so = s[o, c]
+        swc = min(swcon, value(sw) - 1e-5)
+        d  = (sg + sw - swc)
+        ww = (sw - swcon)/d
+        kr[o, c] = (1-ww)*krow[so] + ww*krog[so]
+    end
+end
+
+"""
 Mass density of each phase
 """
 abstract type PhaseMassDensities <: PhaseVariables end
