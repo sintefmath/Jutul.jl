@@ -160,7 +160,7 @@ function simple_ms_setup(n, volume, well_cell_volume, rc, ref_depth, z_res)
     reservoir_cells = vcat(rc[1], rc)
     well_topo = nothing
     perf_cells = nothing
-    accumulator_volume = 0.001*pvol[1]
+    accumulator_volume = pvol[1]
     return (pvol, accumulator_volume, perf_cells, well_topo, z, dz, reservoir_cells)
 end
 
@@ -592,62 +592,96 @@ function model_from_mat_fluid_immiscible(G, mrst_data, res_context)
     return (model, param)
 end
 
+function deck_pvt_water(props)
+    return PVTW(props["PVTW"])
+end
+
+function deck_pvt_oil(props)
+    if haskey(props, "PVTO")
+        pvt = PVTO(props["PVTO"][1])
+    elseif haskey(props, "PVDO")
+        pvt = PVDO(props["PVDO"])
+    else
+        pvt = PVCDO(props["PVCDO"])
+    end
+    return pvt
+end
+
+function deck_pvt_gas(props)
+    return PVDG(props["PVDG"])
+end
+
+
 function model_from_mat_deck(G, mrst_data, res_context)
     ## Set up reservoir part
     deck = mrst_data["deck"]
     props = deck["PROPS"]
-    phases = mrst_data["phases"]
+    runspec = deck["RUNSPEC"]
 
-    has_wat = phases[1]
-    has_oil = phases[2]
-    has_gas = phases[3]
-    dens = vec(props["DENSITY"])
-    if has_wat && has_oil
-        @assert !has_gas
-        sat_table = props["SWOF"]
-        pvt_1 = PVTW(props["PVTW"])
-        if haskey(props, "PVDO")
-            pvt_2 = PVDO(props["PVDO"])
-        else
-            pvt_2 = PVCDO(props["PVCDO"])
-        end
+    has(name) = haskey(runspec, name) && runspec[name]
+    has_wat = has("WATER")
+    has_oil = has("OIL")
+    has_gas = has("GAS")
+    has_disgas = has("DISGAS")
+    has_vapoil = has("VAPOIL")
+    @assert !has_vapoil "Not yet supported."
 
-        water = AqueousPhase()
-        oil = LiquidPhase()
-        sys = ImmiscibleSystem([water, oil])
-        rhoS = dens[1:2]
-    elseif has_oil && has_gas
-        @assert !has_wat
-        sat_table = props["SGOF"]
-        pvt_1 = PVDO(props["PVDO"])
-        pvt_2 = PVDG(props["PVDG"])
+    is_immiscible = !has_disgas
+    pvt = []
+    phases = []
+    rhoS = Vector{Float64}()
 
-        gas = VaporPhase()
-        oil = LiquidPhase()
-        sys = ImmiscibleSystem([oil, gas])
-        rhoS = dens[2:3]
-    else
-        error("Not supported")
+    deck_density = vec(props["DENSITY"])
+    rhoOS = deck_density[1]
+    rhoWS = deck_density[2]
+    rhoGS = deck_density[3]
+
+    if has_wat
+        push!(pvt, deck_pvt_water(props))
+        push!(phases, AqueousPhase())
+        push!(rhoS, rhoWS)
     end
+
+    if has_oil
+        push!(pvt, deck_pvt_oil(props))
+        push!(phases, LiquidPhase())
+        push!(rhoS, rhoOS)
+    end
+
+    if has_gas
+        push!(pvt, deck_pvt_gas(props))
+        push!(phases, VaporPhase())
+        push!(rhoS, rhoGS)
+    end
+
+    if is_immiscible
+        sys = ImmiscibleSystem([oil, gas])
+    else
+        pvto = pvt[2]
+        sat_table = get_1d_interpolator(pvto.sat_pressure, pvto.rs)
+        sys = StandardBlackOilSystem(sat_table, water = has_wat)
+    end
+
+    model = SimulationModel(G, sys, context = res_context)
+    # Tweak primary variables
+    pvar = model.primary_variables
+    pvar[:Pressure] = Pressure(max_rel = 0.2)
+    # Modify secondary variables
+    svar = model.secondary_variables
     # PVT
-    pvt = (pvt_1, pvt_2)
-    rho = DeckDensity(pvt)
-    mu = DeckViscosity(pvt)
+    pvt = tuple(pvt...)
+    if is_immiscible
+        svar[:PhaseMassDensities] = DeckDensity(pvt)
+    else
+        svar[:ShrinkageFactors] = DeckShrinkageFactors(pvt)
+    end
+    svar[:PhaseViscosities] = DeckViscosity(pvt)
     # Rel perm
     kr_from_deck = only(sat_table)
     s, krt = preprocess_relperm_table(kr_from_deck)
     kr = TabulatedRelPermSimple(s, krt)
-    # pc = 
 
-    model = SimulationModel(G, sys, context = res_context)
-    # rho = ConstantCompressibilityDensities(sys, p, rhoS, c)
-
-    p = model.primary_variables
-    p[:Pressure] = Pressure(max_rel = 0.2)
-    s = model.secondary_variables
-    s[:PhaseMassDensities] = rho
-    s[:RelativePermeabilities] = kr
-    s[:PhaseViscosities] = mu
+    svar[:RelativePermeabilities] = kr
     
     ## Model parameters
     param = setup_parameters(model)

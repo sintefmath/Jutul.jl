@@ -81,6 +81,29 @@ function shrinkage(tbl::ConstMuBTable, p::T) where T
     return b::T
 end
 
+struct PVTO{T,V} <: AbstractTablePVT where {T<:AbstractArray, V<:AbstractArray}
+    pos::T
+    rs::V
+    pressure::V
+    sat_pressure::V
+    shrinkage::V
+    viscosity::V
+end
+
+function PVTO(d::Dict)
+    rs = vec(copy(d["key"]))
+    pos = vec(Int64.(d["pos"]))
+    data = d["data"]
+    p = vec(data[:, 1])
+    B = vec(data[:, 2])
+    b = 1.0 ./ B
+    mu = vec(data[:, 3])
+    p_sat = vec(p[pos[1:end-1]])
+    T = typeof(pos)
+    V = typeof(mu)
+    return PVTO{T, V}(pos, rs, p, p_sat, b, mu)
+end
+
 struct PVDO{T} <: AbstractTablePVT
     tab::T
 end

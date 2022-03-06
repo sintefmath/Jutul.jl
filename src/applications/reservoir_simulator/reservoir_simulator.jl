@@ -2,12 +2,16 @@ include("types.jl")
 include("deck_types.jl")
 include("porousmedia_grids.jl")
 include("utils.jl")
+include("interpolation.jl")
 include("flux.jl")
 # Definitions for multiphase flow
 include("multiphase.jl")
 include("multiphase_secondary_variables.jl")
 # Compositional flow
 include("multicomponent/multicomponent.jl")
+
+# Blackoil
+include("blackoil/blackoil.jl")
 
 # Wells etc.
 include("facility/types.jl")

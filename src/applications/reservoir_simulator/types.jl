@@ -2,6 +2,7 @@
 abstract type MultiPhaseSystem <: JutulSystem end
 abstract type MultiComponentSystem <: MultiPhaseSystem end
 abstract type CompositionalSystem <: MultiComponentSystem end
+abstract type BlackOilSystem <: MultiComponentSystem end
 
 struct MultiPhaseCompositionalSystemLV{E, T, O} <: CompositionalSystem where T<:Tuple
     phases::T
@@ -23,6 +24,13 @@ struct MultiPhaseCompositionalSystemLV{E, T, O} <: CompositionalSystem where T<:
         only(findall(isequal(LiquidPhase()), phases))
         only(findall(isequal(VaporPhase()), phases))
         new{typeof(equation_of_state), T, O}(phases, c, equation_of_state)
+    end
+end
+
+struct StandardBlackOilSystem{D, W} <: BlackOilSystem
+    saturation_table::D
+    function StandardBlackOilSystem(sat; water = true)
+        new{typeof(sat), water}(sat)
     end
 end
 
