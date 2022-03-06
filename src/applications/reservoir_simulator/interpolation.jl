@@ -5,8 +5,9 @@ function bin_interval(t, x)
     return (w, ix)
 end
 
-function interp_pvt(pvto, p, v, type = :shrinkage; cap = true)
-    v_tab = pvto.key
+function interp_pvt(pvto, p, v, type = :shrinkage; cap = false)
+    # v_tab = pvto.key
+    v_tab = second_key(pvto)
     pos = pvto.pos
     if cap
         v_max = linear_interp(pvto.sat_pressure, v_tab, p)
@@ -29,7 +30,11 @@ function interp_pvt(pvto, p, v, type = :shrinkage; cap = true)
     p_u = p + (1-w)*Δp
     p_l = p - w*Δp
 
-    F_tab = pvto[type]
+    if type == :shrinkage
+        F_tab = pvto.shrinkage
+    else
+        F_tab = pvto.viscosity
+    end
 
     F_u = view(F_tab, upper)
     F_l = view(F_tab, lower)

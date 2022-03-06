@@ -1,8 +1,41 @@
+abstract type DeckPhaseVariables <: PhaseVariables end
 abstract type AbstractReservoirDeckTable end
 
 export MuBTable, ConstMuBTable
 
 abstract type AbstractTablePVT <: AbstractReservoirDeckTable end
+
+
+struct DeckViscosity{T, R} <: DeckPhaseVariables
+    pvt::T
+    regions::R
+    function DeckViscosity(pvt; regions = nothing)
+        check_regions(regions, pvt)
+        pvt_t = Tuple(pvt)
+        new{typeof(pvt_t), typeof(regions)}(pvt_t, regions)
+    end
+end
+
+struct DeckDensity{T, R} <: DeckPhaseVariables
+    pvt::T
+    regions::R
+    function DeckDensity(pvt; regions = nothing)
+        check_regions(regions, pvt)
+        pvt_t = Tuple(pvt)
+        new{typeof(pvt_t), typeof(regions)}(pvt_t, regions)
+    end
+end
+
+struct DeckShrinkageFactors{T, R} <: DeckPhaseVariables
+    pvt::T
+    regions::R
+    function DeckShrinkageFactors(pvt; regions = nothing)
+        check_regions(regions, pvt)
+        pvt_t = Tuple(pvt)
+        new{typeof(pvt_t), typeof(regions)}(pvt_t, regions)
+    end
+end
+
 
 struct MuBTable{V, I}
     pressure::V
@@ -104,8 +137,18 @@ function PVTO(d::Dict)
     return PVTO{T, V}(pos, rs, p, p_sat, b, mu)
 end
 
+second_key(PVTO) = PVTO.rs
+
 struct PVDO{T} <: AbstractTablePVT
     tab::T
+end
+
+function shrinkage(pvt::PVTO, reg, p::T, rs, cell) where T
+    return interp_pvt(pvt, p, rs, :shrinkage)::T
+end
+
+function viscosity(pvt::PVTO, reg, p::T, rs, cell) where T
+    return interp_pvt(pvt, p, rs, :viscosity)::T
 end
 
 function PVDO(pvdo::AbstractArray)

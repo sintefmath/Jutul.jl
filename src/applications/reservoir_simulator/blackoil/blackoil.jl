@@ -15,6 +15,14 @@ function select_primary_variables_system!(S, domain, system::BlackOilSystem, for
     end
 end
 
-get_phases(sys::StandardBlackOilSystem{T, true}) where T = (LiquidPhase(), VaporPhase())
+function select_secondary_variables_system!(S, domain, system::BlackOilSystem, formulation)
+    select_default_darcy!(S, domain, system, formulation)
+    S[:Saturations] = Saturations()
+    S[:PhaseState] = BlackOilPhaseState()
+    S[:ShrinkageFactors] = ConstantVariables(1.0)
+    S[:Rs] = Rs()
+end
+
+get_phases(sys::StandardBlackOilSystem{T, false}) where T = (LiquidPhase(), VaporPhase())
 get_phases(sys::StandardBlackOilSystem) = (AqueousPhase(), LiquidPhase(), VaporPhase())
 number_of_components(sys::StandardBlackOilSystem) = length(get_phases(sys))

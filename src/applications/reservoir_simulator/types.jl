@@ -4,6 +4,9 @@ abstract type MultiComponentSystem <: MultiPhaseSystem end
 abstract type CompositionalSystem <: MultiComponentSystem end
 abstract type BlackOilSystem <: MultiComponentSystem end
 
+abstract type PhaseVariables <: GroupedVariables end
+abstract type ComponentVariable <: GroupedVariables end
+
 struct MultiPhaseCompositionalSystemLV{E, T, O} <: CompositionalSystem where T<:Tuple
     phases::T
     components

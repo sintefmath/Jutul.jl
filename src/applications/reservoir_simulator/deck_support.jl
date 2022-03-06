@@ -8,7 +8,6 @@ function check_regions(regions, t)
     end
 end
 
-abstract type DeckPhaseVariables <: PhaseVariables end
 
 region(pv::DeckPhaseVariables, cell) = region(pv.regions, cell)
 region(r::AbstractVector, cell) = @inbounds r[cell]
@@ -18,15 +17,6 @@ function tab_by_region(pvt, reg)
     return pvt.tab[reg]
 end
 
-struct DeckViscosity{T, R} <: DeckPhaseVariables
-    pvt::T
-    regions::R
-    function DeckViscosity(pvt; regions = nothing)
-        check_regions(regions, pvt)
-        pvt_t = Tuple(pvt)
-        new{typeof(pvt_t), typeof(regions)}(pvt_t, regions)
-    end
-end
 
 @terv_secondary function update_as_secondary!(mu, μ::DeckViscosity, model, param, Pressure)
     pvt, reg = μ.pvt, μ.regions
@@ -42,16 +32,6 @@ end
                 @inbounds mu[ph, i] = viscosity(pvt_ph, reg, p, i)
             end
         end
-    end
-end
-
-struct DeckDensity{T, R} <: DeckPhaseVariables
-    pvt::T
-    regions::R
-    function DeckDensity(pvt; regions = nothing)
-        check_regions(regions, pvt)
-        pvt_t = Tuple(pvt)
-        new{typeof(pvt_t), typeof(regions)}(pvt_t, regions)
     end
 end
 
@@ -79,15 +59,6 @@ end
     # @tullio rho[ph, i] = rhos[ph]*shrinkage(pvt[ph], reg, Pressure[i], i)
 end
 
-struct DeckShrinkageFactors{T, R} <: DeckPhaseVariables
-    pvt::T
-    regions::R
-    function DeckShrinkageFactors(pvt; regions = nothing)
-        check_regions(regions, pvt)
-        pvt_t = Tuple(pvt)
-        new{typeof(pvt_t), typeof(regions)}(pvt_t, regions)
-    end
-end
 
 @terv_secondary function update_as_secondary!(b, ρ::DeckShrinkageFactors, model, param, Pressure)
     pvt, reg = ρ.pvt, ρ.regions

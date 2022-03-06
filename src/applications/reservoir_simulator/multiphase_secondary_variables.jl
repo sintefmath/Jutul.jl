@@ -1,9 +1,6 @@
 export PhaseMassDensities, ConstantCompressibilityDensities
 export BrooksCoreyRelPerm, TabulatedRelPermSimple
 
-abstract type PhaseVariables <: GroupedVariables end
-abstract type ComponentVariable <: GroupedVariables end
-
 degrees_of_freedom_per_entity(model, sf::PhaseVariables) = number_of_phases(model.system)
 
 # Single-phase specialization
@@ -164,7 +161,7 @@ end
         swc = min(swcon, value(sw) - 1e-5)
         d  = (sg + sw - swc)
         ww = (sw - swcon)/d
-        kr[o, c] = (1-ww)*krow[so] + ww*krog[so]
+        kr[o, c] = (1-ww)*krow(so) + ww*krog(so)
     end
 end
 
