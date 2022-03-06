@@ -716,7 +716,7 @@ function model_from_mat_deck(G, mrst_data, res_context)
     return (model, param)
 end
 
-function init_from_mat(mrst_data)
+function init_from_mat(mrst_data, model, param)
     state0 = mrst_data["state0"]
     p0 = state0["pressure"]
     if isa(p0, AbstractArray)
@@ -724,9 +724,11 @@ function init_from_mat(mrst_data)
     else
         p0 = [p0]
     end
+    init = Dict(:Pressure => p0)
     if haskey(state0, "components")
+        # Compositional
         z0 = copy(state0["components"]')
-        init = Dict(:Pressure => p0, :OverallMoleFractions => z0)
+        init[:OverallMoleFractions] = z0
         s = copy(state0["s"])
         if size(s, 2) == 3
             sw = vec(s[:, 1])
@@ -736,8 +738,20 @@ function init_from_mat(mrst_data)
             @assert size(s, 2) == 2
         end
     else
-        s0 = copy(state0["s"]')
-        init = Dict(:Pressure => p0, :Saturations => s0)
+        # Blackoil or immiscible
+        s = copy(state0["s"]')
+        if haskey(state0, "rs") && haskey(state0, "zg")
+            # Blackoil
+            init[:GasMassFraction] = copy(vec(state0["zg"]))
+            if size(s, 1) > 2
+                sw = vec(s[1, :])
+                sw = min.(sw, 1 - MINIMUM_COMPOSITIONAL_SATURATION)
+                init[:ImmiscibleSaturation] = sw
+            end
+        else
+            # Immiscible
+            init[:Saturations] = s
+        end
     end
     return init
 end
@@ -755,7 +769,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         end
 
         model, param_res = model_from_mat(G, mrst_data, res_context)
-        init = init_from_mat(mrst_data)
+        init = init_from_mat(mrst_data, model, param_res)
 
         # param_res[:tolerances][:default] = 0.01
         # param_res[:tolerances][:mass_conservation] = 0.01
@@ -883,13 +897,15 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                 cw_0 = ci
             end
             w0[:OverallMoleFractions] = cw_0
-            if nph == 3
-                w0[:ImmiscibleSaturation] = vec(init[:ImmiscibleSaturation][res_cells])
-            end
         elseif haskey(init, :Saturations)
             w0[:Saturations] = init[:Saturations][:, res_cells]
         end
-
+        if haskey(init, :ImmiscibleSaturation)
+            w0[:ImmiscibleSaturation] = vec(init[:ImmiscibleSaturation][res_cells])
+        end
+        if haskey(init, :GasMassFraction)
+            w0[:GasMassFraction] = vec(init[:GasMassFraction][res_cells])
+        end
         parameters[sym] = param_w
         controls[sym] = ctrl
         forces[sym] = nothing
