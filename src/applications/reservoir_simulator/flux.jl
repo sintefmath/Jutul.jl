@@ -54,11 +54,12 @@ Half face Darcy flux with separate potential.
 """
 function update_half_face_flux!(law::ConservationLaw, storage, model, dt, flow_type)
     state = storage.state
+    param = storage.parameters
     flux = get_entries(law.half_face_flux_cells)
-    update_half_face_flux!(flux, state, model, dt, flow_type)
+    update_half_face_flux!(flux, state, model, param, dt, flow_type)
 end
 
-function update_half_face_flux!(flux::AbstractArray, state, model, dt, flow_disc::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
+function update_half_face_flux!(flux::AbstractArray, state, model, param, dt, flow_disc::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:DarcyMassMobilityFlow}
     rho, kr, mu, p = state.PhaseMassDensities, state.RelativePermeabilities, state.PhaseViscosities, state.Pressure
     pc, ref_index = capillary_pressure(model, state)
     conn_data = flow_disc.conn_data

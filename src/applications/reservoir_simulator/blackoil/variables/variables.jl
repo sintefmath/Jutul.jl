@@ -92,20 +92,25 @@ end
     end
 end
 
-# @terv_secondary function update_as_secondary!(rho, m::DeckDensity, model::SimulationModel{D, S}, param, Pressure, Rs) where {D, S<:BlackOilSystem}
-#     sys = model.system
-#     rhos = param[:reference_densities]
-#     pvt, reg = ρ.pvt, ρ.regions
-
-#     # eos = sys.equation_of_state
-#     n = size(rho, 2)
-#     for i = 1:n
-#         rs = Rs[i]
-#         p = Pressure[i]
-#         rho[1, i] = oil_density(opvt, p, rs)
-#         rho[2, i] = gas_density(gpvt, p)
-#     end
-# end
+@terv_secondary function update_as_secondary!(rho, m::DeckDensity, model::SimulationModel{D, S}, param, Rs, ShrinkageFactors) where {D, S<:BlackOilSystem}
+    # sys = model.system
+    b = ShrinkageFactors
+    rhoS = param[:reference_densities]
+    rhoWS = rhoS[1]
+    rhoOS = rhoS[2]
+    rhoGS = rhoS[3]
+    # pvt, reg = ρ.pvt, ρ.regions
+    # eos = sys.equation_of_state
+    w = 1
+    g = 3
+    o = 2
+    n = size(rho, 2)
+    for i = 1:n
+        rho[w, i] = b[w, i]*rhoWS
+        rho[o, i] = b[o, i]*(rhoOS + Rs[i]*rhoGS)
+        rho[g, i] = b[g, i]*rhoGS
+    end
+end
 
 # @terv_secondary function update_as_secondary!(mu, μ::DeckViscosity, model::SimulationModel{D, S}, param, Pressure, Rs) where {D, S<:BlackOilSystem}
 #     pvt, reg = μ.pvt, μ.regions

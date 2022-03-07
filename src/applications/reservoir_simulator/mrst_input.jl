@@ -700,9 +700,8 @@ function model_from_mat_deck(G, mrst_data, res_context)
     svar = model.secondary_variables
     # PVT
     pvt = tuple(pvt...)
-    if is_immiscible
-        svar[:PhaseMassDensities] = DeckDensity(pvt)
-    else
+    svar[:PhaseMassDensities] = DeckDensity(pvt)
+    if !is_immiscible
         svar[:ShrinkageFactors] = DeckShrinkageFactors(pvt)
     end
     svar[:PhaseViscosities] = DeckViscosity(pvt)
@@ -846,6 +845,9 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         sv = wi.secondary_variables
         sv_m = model.secondary_variables
         sv[:PhaseMassDensities] = sv_m[:PhaseMassDensities]
+        if haskey(sv, :ShrinkageFactors)
+            sv[:ShrinkageFactors] = sv_m[:ShrinkageFactors]
+        end
         sv[:PhaseViscosities] = sv_m[:PhaseViscosities]
         if haskey(sv, :Temperature)
             # !!!!
@@ -885,8 +887,6 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         param_w = setup_parameters(wi)
         param_w[:reference_densities] = vec(param_res[:reference_densities])
 
-        first_well_cell = wc[1]
-        # pw = factor*init[:Pressure][first_well_cell]
         pw = vec(init[:Pressure][res_cells])
         w0 = Dict{Symbol, Any}(:Pressure => pw, :TotalMassFlux => 1e-12)
         if is_comp

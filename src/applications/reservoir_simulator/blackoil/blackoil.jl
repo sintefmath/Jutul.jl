@@ -3,7 +3,7 @@
 
 include("variables/variables.jl")
 # include("utils.jl")
-# include("flux.jl")
+include("flux.jl")
 # include("sources.jl")
 # include("wells.jl")
 
