@@ -160,8 +160,9 @@ end
         so = s[o, c]
         swc = min(swcon, value(sw) - 1e-5)
         d  = (sg + sw - swc)
-        ww = (sw - swcon)/d
-        kr[o, c] = (1-ww)*krow(so) + ww*krog(so)
+        ww = (sw - swc)/d
+        kro = (1-ww)*krow(so) + ww*krog(so)
+        kr[o, c] = kro
     end
 end
 
