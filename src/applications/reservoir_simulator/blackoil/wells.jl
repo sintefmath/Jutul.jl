@@ -61,8 +61,8 @@ function perforation_sources_blackoil!(target, perf, p_res, p_well, kr, μ, ρ, 
             α_l = b[l, ri]*kr[l, ri]/μ[l, ri]
             α_v = b[v, ri]*kr[v, ri]/μ[v, ri]
 
-            target[l, i] = α_l*rhoOS
-            target[v, i] = (α_l*rs[ri] + α_v)*rhoGS
+            target[l, i] = Q*α_l*rhoOS
+            target[v, i] = Q*(α_l*rs[ri] + α_v)*rhoGS
         end
     end
 end
