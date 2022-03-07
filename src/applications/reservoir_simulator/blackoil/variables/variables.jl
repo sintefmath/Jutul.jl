@@ -21,13 +21,18 @@ max_dissolved_gas_fraction(rs, rhoOS, rhoGS) = rs*rhoGS/(rhoOS + rs*rhoGS)
     rhoOS = rhoS[2]
     rhoGS = rhoS[3]
     for i in eachindex(phase_state)
+        p0 = phase_state[i]
         p = Pressure[i]
         z_g = GasMassFraction[i]
         z_g_bub = max_dissolved_gas_fraction(tab(p), rhoOS, rhoGS)
         if z_g_bub < z_g
-            phase_state[i] = OilAndGas
+            new_state = OilAndGas
         else
-            phase_state[i] = OilOnly
+            new_state = OilOnly
+        end
+        phase_state[i] = new_state
+        if p0 != new_state
+            # @info "Switching cell $i from $p0 to $new_state"
         end
     end
 end
@@ -162,12 +167,11 @@ end
 
             zo = 1 - GasMassFraction[i]
             so = zo*rhoGS*bG/(rhoOS*bO + zo*(rhoGS*bG - rhoOS*bO - rhoGS*bO*rs))
-            sg = 1 - so
         else
-            sg = 0
+            so = 1
         end
         s[a, i] = sw
-        s[l, i] = 1 - sw - sg
-        s[v, i] = sg
+        s[l, i] = (1 - sw)*so
+        s[v, i] = (1 - sw)*(1 - so)
     end
 end

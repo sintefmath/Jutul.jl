@@ -56,8 +56,8 @@ function blackoil_flux_internal!(q, c, i, P, Rs, ρ, b, kr, μ, pc, T, gΔz, ref
     F_v, c_v = mass_flux(ψ_v, v)
 
     q[a] = F_a*rhoS[a]
-    q[l] = (F_l + F_v*Rs[c_v])*rhoS[l]
-    q[v] = F_v*rhoS[v]
+    q[l] = F_l*rhoS[l]
+    q[v] = (F_v + F_l*Rs[c_l])*rhoS[v]
 end
 
 

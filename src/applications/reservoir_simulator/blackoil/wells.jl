@@ -50,9 +50,12 @@ function perforation_sources_blackoil!(target, perf, p_res, p_well, kr, μ, ρ, 
             bG = b_w[v, si]
             rs_i = rs_w[si]
 
+            sO = s_w[l, si]
+            sG = s_w[v, si]
+
             target[a, i] = s_w[a, si]*ρ_w[a, si]*Q
-            target[l, i] = rhoOS*bO*Q
-            target[v, i] = rhoGS*(bG + rs_i*bO)*Q
+            target[l, i] = sO*rhoOS*bO*Q
+            target[v, i] = rhoGS*(sG*bG + rs_i*sO*bO)*Q
         else
             # Production
             Q = sgn*dp
