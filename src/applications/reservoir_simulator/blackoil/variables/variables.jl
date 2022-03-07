@@ -112,15 +112,62 @@ end
     end
 end
 
-# @terv_secondary function update_as_secondary!(mu, μ::DeckViscosity, model::SimulationModel{D, S}, param, Pressure, Rs) where {D, S<:BlackOilSystem}
-#     pvt, reg = μ.pvt, μ.regions
-#     tb = thread_batch(model.context)
-#     nph, nc = size(mu)
-#     for ph in 1:nph
-#         pvt_ph = pvt[ph]
-#         @batch minbatch = tb for i in 1:nc
-#             p = Pressure[i]
-#             @inbounds mu[ph, i] = viscosity(pvt_ph, reg, p, i)
-#         end
-#     end
-# end
+@terv_secondary function update_as_secondary!(totmass, tv::TotalMasses, model::SimulationModel{G,S}, param,
+                                                                                                    Rs,
+                                                                                                    ShrinkageFactors,
+                                                                                                    PhaseMassDensities,
+                                                                                                    Saturations,
+                                                                                                    FluidVolume) where {G,S<:BlackOilSystem}
+    rhoS = tuple(param[:reference_densities]...)
+    tb = thread_batch(model.context)
+    sys = model.system
+    nc = size(totmass, 2)
+    # @batch minbatch = tb for cell = 1:nc
+    for cell = 1:nc
+        @inbounds @views blackoil_mass!(totmass[:, cell], FluidVolume, PhaseMassDensities, Rs, ShrinkageFactors, Saturations, rhoS, cell, (1,2,3))
+    end
+end
+
+function blackoil_mass!(M, pv, ρ, Rs, b, S, rhoS, cell, phase_indices)
+    a, l, v = phase_indices
+    bO = b[l, cell]
+    bG = b[v, cell]
+    rs = Rs[cell]
+    sO = S[l, cell]
+    sG = S[v, cell]
+    Φ = pv[cell]
+
+    # Water is trivial
+    M[a] = Φ*ρ[a, cell]*S[a, cell]
+    # Oil is only in oil phase
+    M[l] = Φ*rhoS[l]*bO*sO
+    # Gas is in both phases
+    M[v] = Φ*rhoS[v]*(bG*sG + sO*bO*rs)
+end
+
+@terv_secondary function update_as_secondary!(s, SAT::Saturations, model::SimulationModel{D, S}, param, ImmiscibleSaturation, PhaseState, GasMassFraction, ShrinkageFactors, Rs) where {D, S<:BlackOilSystem}
+    # tb = thread_batch(model.context)
+    nph, nc = size(s)
+    a, l, v = 1, 2, 3
+    rhoS = param[:reference_densities]
+    rhoOS = rhoS[l]
+    rhoGS = rhoS[v]
+    for i = 1:nc
+        sw = ImmiscibleSaturation[i]
+        s[a, i] = sw
+        if PhaseState[i] == OilAndGas
+            rs = Rs[i]
+            bO = ShrinkageFactors[l, i]
+            bG = ShrinkageFactors[v, i]
+
+            zo = 1 - GasMassFraction[i]
+            so = zo*rhoGS*bG/(rhoOS*bO + zo*(rhoGS*bG - rhoOS*bO - rhoGS*bO*rs))
+            sg = 1 - so
+        else
+            sg = 0
+        end
+        s[a, i] = sw
+        s[l, i] = 1 - sw - sg
+        s[v, i] = sg
+    end
+end
