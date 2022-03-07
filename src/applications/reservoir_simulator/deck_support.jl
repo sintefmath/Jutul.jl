@@ -74,6 +74,18 @@ end
     end
 end
 
+@terv_secondary function update_as_secondary!(pv, Φ::LinearlyCompressiblePoreVolume, model, param, Pressure)
+    vol = Φ.volume
+    c_r = Φ.expansion
+    p_r = Φ.reference_pressure
+    for i in eachindex(pv)
+        p = Pressure[i]
+        x = c_r*(p-p_r)
+        mult = 1 + x + 0.5*(x^2)
+        pv[i] = vol[i]*mult
+    end
+end
+
 # struct DeckRelativePermeability <: DeckPhaseVariables
 #     sat::Tuple
 #     regions

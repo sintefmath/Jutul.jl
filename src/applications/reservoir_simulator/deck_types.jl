@@ -197,6 +197,18 @@ function PVCDO(pvcdo::AbstractArray)
     T = typeof(ct[1])
     PVCDO{N, T}(ct)
 end
+
+
+struct LinearlyCompressiblePoreVolume{R, V} <: ScalarVariable where {R<:Real, V<:AbstractVector}
+    reference_pressure::R
+    expansion::R
+    volume::V
+end
+
+function LinearlyCompressiblePoreVolume(volume::V; reference_pressure::T = 101325.0, expansion::T = 1e-10) where {T, V}
+    LinearlyCompressiblePoreVolume{T, V}(reference_pressure, expansion, volume)
+end
+
 # abstract type AbstractTableSaturation <: AbstractTableDeck end
 
 # struct RelativePermeabilityTable <: AbstractTableSaturation

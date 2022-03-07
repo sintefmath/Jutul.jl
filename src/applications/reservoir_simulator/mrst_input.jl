@@ -708,7 +708,13 @@ function model_from_mat_deck(G, mrst_data, res_context)
     svar[:PhaseViscosities] = DeckViscosity(pvt)
     # Rel perm
     svar[:RelativePermeabilities] = deck_relperm(props; oil = has_oil, water = has_wat, gas = has_gas)
-    
+    # Rock compressibility (if present)
+    rock = props["ROCK"]
+    if rock[2] > 0
+        V = svar[:FluidVolume].constants
+        svar[:FluidVolume] = LinearlyCompressiblePoreVolume(V, reference_pressure = rock[1], expansion = rock[2])
+    end
+
     ## Model parameters
     param = setup_parameters(model)
     param[:reference_densities] = vec(rhoS)
