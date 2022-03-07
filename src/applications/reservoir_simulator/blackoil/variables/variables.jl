@@ -147,7 +147,7 @@ function blackoil_mass!(M, pv, ρ, Rs, b, S, rhoS, cell, phase_indices)
     # Oil is only in oil phase
     M[l] = Φ*rhoS[l]*bO*sO
     # Gas is in both phases
-    M[v] = Φ*rhoS[v]*(bG*sG + sO*bO*rs)
+    M[v] = Φ*rhoS[v]*(bG*sG + bO*sO*rs)
 end
 
 @terv_secondary function update_as_secondary!(s, SAT::Saturations, model::SimulationModel{D, S}, param, ImmiscibleSaturation, PhaseState, GasMassFraction, ShrinkageFactors, Rs) where {D, S<:BlackOilSystem}
