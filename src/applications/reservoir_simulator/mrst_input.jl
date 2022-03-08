@@ -617,15 +617,15 @@ function deck_relperm(props; oil, water, gas)
         sgof = props["SGOF"]
 
         s_water, kr_water = preprocess_relperm_table(only(swof))
-        s_gas, kr_gas = preprocess_relperm_table(only(sgof))
-
         sw = s_water[1]
         swcon = sw[1]
+        s_gas, kr_gas = preprocess_relperm_table(only(sgof), swcon = swcon)
+
         krw = get_1d_interpolator(s_water[1], kr_water[1], cap_endpoints = false)
         krow = get_1d_interpolator(s_water[2], kr_water[2], cap_endpoints = false)
 
         krg = get_1d_interpolator(s_gas[1], kr_gas[1], cap_endpoints = false)
-        krog = get_1d_interpolator(s_gas[2] .- swcon, kr_gas[2], cap_endpoints = false)
+        krog = get_1d_interpolator(s_gas[2], kr_gas[2], cap_endpoints = false)
 
         return ThreePhaseRelPerm(w = krw, g = krg, ow = krow, og = krog, swcon = swcon)
     else
