@@ -62,7 +62,7 @@ function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm 
     end
 end
 
-function get_well_from_mrst_data(mrst_data, system, ix; volume = 1e-2, extraout = false, simple = false, W_data = mrst_data["W"], kwarg...)
+function get_well_from_mrst_data(mrst_data, system, ix; volume = 1e-4, extraout = false, simple = false, W_data = mrst_data["W"], kwarg...)
     W_mrst = W_data[ix]
     w = convert_to_immutable_storage(W_mrst)
 
@@ -641,6 +641,38 @@ function deck_relperm(props; oil, water, gas)
     end
 end
 
+function deck_pc(props; oil, water, gas)
+    function get_pc(T)
+        tab = T[1]
+        s = vec(tab[:, 1])
+        pc = vec(tab[:, 4])
+        found = any(x -> x != 0, pc)
+        if found
+            interp_ow = get_1d_interpolator(s, pc)
+        else
+            interp_ow = nothing
+        end
+        return (interp_ow, found)
+    end
+    pc_impl = Vector{Any}()
+    found = false
+    if water && oil
+        interp_ow, foundow = get_pc(props["SWOF"])
+        found = found || foundow
+        push!(pc_impl, interp_ow)
+    end
+
+    if oil && gas
+        interp_og, foundog = get_pc(props["SGOF"])
+        found = found || foundog
+        push!(pc_impl, interp_og)
+    end
+    if found
+        return SimpleCapillaryPressure(tuple(pc_impl)...)
+    else
+        return nothing
+    end
+end
 
 function model_from_mat_deck(G, mrst_data, res_context)
     ## Set up reservoir part
@@ -708,6 +740,11 @@ function model_from_mat_deck(G, mrst_data, res_context)
     svar[:PhaseViscosities] = DeckViscosity(pvt)
     # Rel perm
     svar[:RelativePermeabilities] = deck_relperm(props; oil = has_oil, water = has_wat, gas = has_gas)
+    # PC
+    pc = deck_pc(props; oil = has_oil, water = has_wat, gas = has_gas)
+    if !isnothing(pc)
+        svar[:CapillaryPressure] = pc
+    end
     # Rock compressibility (if present)
     rock = props["ROCK"]
     if rock[2] > 0

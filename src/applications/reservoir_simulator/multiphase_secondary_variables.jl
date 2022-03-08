@@ -166,6 +166,39 @@ end
     end
 end
 
+struct SimpleCapillaryPressure{T} <: JutulVariables
+    pc::T
+end
+
+values_per_entity(model, v::SimpleCapillaryPressure) = number_of_phases(model.system) - 1
+
+@terv_secondary function update_as_secondary!(Δp, pc::SimpleCapillaryPressure, model, param, Saturations)
+    cap = pc.pc
+    npc, nc = size(Δp)
+    if npc == 1
+        pcow = cap[1]
+        for c in 1:nc
+            sw = Saturations[1, c]
+            Δp[1, c] = pcow(sw)
+        end
+    elseif npc == 2
+        pcow, pcog = cap
+        for c in 1:nc
+            if !isnothing(pcow)
+                sw = Saturations[1, c]
+                Δp[1, c] = pcow(sw)
+            end
+            if !isnothing(pcog)
+                sg = Saturations[3, c]
+                Δp[2, c] = pcog(sg)
+            end
+        end
+    else
+        error("Only implemented for two and three-phase flow.")
+    end
+end
+
+
 """
 Mass density of each phase
 """
