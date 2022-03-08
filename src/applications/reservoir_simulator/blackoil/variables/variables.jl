@@ -76,24 +76,26 @@ end
     end
 end
 
-@terv_secondary function update_as_secondary!(b, ρ::DeckViscosity, model::SimulationModel{D, StandardBlackOilSystem{T, true}}, param, Pressure, Rs) where {D, T}
+@terv_secondary function update_as_secondary!(μ, ρ::DeckViscosity, model::SimulationModel{D, StandardBlackOilSystem{T, true}}, param, Pressure, Rs) where {D, T}
     pvt, reg = ρ.pvt, ρ.regions
     # Note immiscible assumption
     tb = thread_batch(model.context)
-    nph, nc = size(b)
+    nph, nc = size(μ)
 
     w = 1
-    g = 3
     o = 2
-    bO = pvt[o]
-    bG = pvt[g]
-    bW = pvt[w]
-    @batch minbatch = tb for i in 1:nc
+    g = 3
+    muW = pvt[w]
+    muO = pvt[o]
+    muG = pvt[g]
+
+    # @batch minbatch = tb for i in 1:nc
+    for i = 1:nc
         p = Pressure[i]
         rs = Rs[i]
-        b[w, i] = viscosity(bW, reg, p, i)
-        b[o, i] = viscosity(bO, reg, p, rs, i)
-        b[g, i] = viscosity(bG, reg, p, i)
+        μ[w, i] = viscosity(muW, reg, p, i)
+        μ[o, i] = viscosity(muO, reg, p, rs, i)
+        μ[g, i] = viscosity(muG, reg, p, i)
     end
 end
 
@@ -107,8 +109,8 @@ end
     # pvt, reg = ρ.pvt, ρ.regions
     # eos = sys.equation_of_state
     w = 1
-    g = 3
     o = 2
+    g = 3
     n = size(rho, 2)
     for i = 1:n
         rho[w, i] = b[w, i]*rhoWS

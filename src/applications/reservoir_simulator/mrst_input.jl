@@ -689,7 +689,7 @@ function model_from_mat_deck(G, mrst_data, res_context)
         sys = ImmiscibleSystem([oil, gas])
     else
         pvto = pvt[2]
-        sat_table = get_1d_interpolator(pvto.sat_pressure, pvto.rs)
+        sat_table = get_1d_interpolator(pvto.sat_pressure, pvto.rs, cap_end = false)
         sys = StandardBlackOilSystem(sat_table, water = has_wat)
     end
 

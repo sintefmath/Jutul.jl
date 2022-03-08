@@ -36,15 +36,19 @@ end
 interpolate(I::LinearInterpolant, x) = linear_interp(I.X, I.F, x)
 (I::LinearInterpolant)(x) = interpolate(I, x)
 
-function get_1d_interpolator(xs, ys; method = LinearInterpolant, cap_endpoints = true)
+function get_1d_interpolator(xs, ys; method = LinearInterpolant, cap_endpoints = true, cap_end = cap_endpoints, cap_start = cap_endpoints)
     if cap_endpoints
         ϵ = 100*sum(abs, xs)
         # Add perturbed points
-        xs = vcat(xs[1] - ϵ, xs)
-        xs = vcat(xs, xs[end] + ϵ)
         # Repeat start and end
-        ys = vcat(ys[1], ys)
-        ys = vcat(ys, ys[end])
+        if cap_start
+            xs = vcat(xs[1] - ϵ, xs)
+            ys = vcat(ys[1], ys)
+        end
+        if cap_end
+            xs = vcat(xs, xs[end] + ϵ)
+            ys = vcat(ys, ys[end])
+        end
     end
     return method(xs, ys)
 end
