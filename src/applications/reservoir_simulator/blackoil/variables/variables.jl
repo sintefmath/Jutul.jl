@@ -26,7 +26,7 @@ function update_gas_fraction!(zg, state, zgvar, model, dx)
 
     pressure = state.Pressure
     sat_chop = zgvar.sat_chop
-    for (i, cell) in enumerate(active_cells)
+    @inbounds for (i, cell) in enumerate(active_cells)
         z = value(zg[cell])::F
         dz = dx[i]
         abs_max = abs_max_base
