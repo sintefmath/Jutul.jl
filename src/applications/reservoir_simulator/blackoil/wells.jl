@@ -17,7 +17,7 @@ function apply_well_reservoir_sources!(sys::BlackOilSystem, res_q, well_q, state
 
     rhoS = tuple(param_res[:reference_densities]...)
 
-    perforation_sources_blackoil!(well_q, perforations, val(p_res),         p_well,  val(kr), val(μ), val(ρ), val(b), val(rs),    ρ_w,       b_w,     s_w, rs_w, sgn, rhoS)
+    perforation_sources_blackoil!(well_q, perforations, val(p_res),         p_well,  val(kr), val(μ), val(ρ), val(b), val(rs),    ρ_w,      b_w,      s_w,      rs_w,  sgn, rhoS)
     perforation_sources_blackoil!(res_q,  perforations,     p_res,      val(p_well),     kr,      μ,      ρ,      b,      rs, val(ρ_w), val(b_w), val(s_w), val(rs_w), sgn, rhoS)
 end
 
@@ -27,7 +27,7 @@ function perforation_sources_blackoil!(target, perf, p_res, p_well, kr, μ, ρ, 
     nph = size(μ, 1)
     a, l, v = 1, 2, 3
 
-    rhoOS = rhoS[a]
+    rhoOS = rhoS[l]
     rhoGS = rhoS[v]
     @inbounds for i in eachindex(perf.self)
         si, ri, wi, gdz = unpack_perf(perf, i)
@@ -38,12 +38,12 @@ function perforation_sources_blackoil!(target, perf, p_res, p_well, kr, μ, ρ, 
             ρgdz = 0
         end
         @inbounds dp = wi*(p_well[si] - p_res[ri] + ρgdz)
+        λ_a = kr[a, ri]/μ[a, ri]
+        λ_l = kr[l, ri]/μ[l, ri]
+        λ_v = kr[v, ri]/μ[v, ri]
         if dp > 0
             # Injection
-            λ_t = 0
-            @inbounds for ph in 1:nph
-                λ_t += kr[ph, ri]/μ[ph, ri]
-            end
+            λ_t = λ_a + λ_l + λ_v
             Q = sgn*λ_t*dp
 
             bO = b_w[l, si]
@@ -59,13 +59,19 @@ function perforation_sources_blackoil!(target, perf, p_res, p_well, kr, μ, ρ, 
         else
             # Production
             Q = sgn*dp
-            target[a, i] = Q*ρ[a, ri]*kr[a, ri]/μ[a, ri]
+            target[a, i] = Q*ρ[a, ri]*λ_a
 
-            α_l = b[l, ri]*kr[l, ri]/μ[l, ri]
-            α_v = b[v, ri]*kr[v, ri]/μ[v, ri]
+            bO = b[l, ri]
+            bG = b[v, ri]
 
-            target[l, i] = Q*α_l*rhoOS
-            target[v, i] = Q*(α_l*rs[ri] + α_v)*rhoGS
+            α_l = bO*λ_l
+            α_v = bG*λ_v
+
+            q_o = Q*bO*λ_l*rhoOS
+            q_g = Q*(bO*λ_l*rs[ri] + bG*λ_v)*rhoGS
+
+            target[l, i] = q_o
+            target[v, i] = q_g
         end
     end
 end
