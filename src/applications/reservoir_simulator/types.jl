@@ -30,10 +30,12 @@ struct MultiPhaseCompositionalSystemLV{E, T, O} <: CompositionalSystem where T<:
     end
 end
 
-struct StandardBlackOilSystem{D, W} <: BlackOilSystem
+struct StandardBlackOilSystem{D, W, R} <: BlackOilSystem where R<:Real
     saturation_table::D
-    function StandardBlackOilSystem(sat; water = true)
-        new{typeof(sat), water}(sat)
+    rhoLS::R
+    rhoVS::R
+    function StandardBlackOilSystem(sat; water = true, rhoLS = 1.0, rhoVS = 1.0)
+        new{typeof(sat), water, typeof(rhoLS)}(sat, rhoLS, rhoVS)
     end
 end
 

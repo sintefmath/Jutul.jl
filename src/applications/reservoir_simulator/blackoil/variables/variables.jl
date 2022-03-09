@@ -1,10 +1,50 @@
-Base.@kwdef struct GasMassFraction <: ScalarVariable
-    dz_max = 0.1
+Base.@kwdef struct GasMassFraction{R} <: ScalarVariable
+    dz_max::R = 0.2
+    sat_chop::Bool = true
 end
 
 maximum_value(::GasMassFraction) = 1.0
 minimum_value(::GasMassFraction) = 0.0
 absolute_increment_limit(s::GasMassFraction) = s.dz_max
+
+function update_primary_variable!(state, p::GasMassFraction, state_symbol, model, dx)
+    s = state[state_symbol]
+    update_gas_fraction!(s, state, p, model, dx)
+end
+
+function update_gas_fraction!(zg, state, zgvar, model, dx)
+    F = eltype(dx)
+    # nf, nu = value_dim(model, p)
+    abs_max_base = absolute_increment_limit(zgvar)
+    maxval, minval = maximum_value(zgvar), minimum_value(zgvar)
+    active_cells = active_entities(model.domain, Cells())
+    sys = model.system
+    F_rs = sys.saturation_table
+    rhoOS = sys.rhoLS
+    rhoGS = sys.rhoVS
+    ϵ = 1e-4
+
+    pressure = state.Pressure
+    sat_chop = zgvar.sat_chop
+    for (i, cell) in enumerate(active_cells)
+        z = value(zg[cell])::F
+        dz = dx[i]
+        abs_max = abs_max_base
+        if sat_chop
+            rs_sat = F_rs(value(pressure[cell]))
+            z_max = max_dissolved_gas_fraction(rs_sat, rhoOS, rhoGS)
+            if (dz > 0 && z < z_max) || (dz < 0 && z > z_max)
+                # We might cross the bubble point. Account for this as absolute limit
+                abs_max_sat = abs(z_max - z) + ϵ
+            else
+                abs_max_sat = Inf
+            end
+            abs_max = min(abs_max, abs_max_sat)
+        end
+        dz = choose_increment(z, dz, abs_max, nothing, minval, maxval)
+        zg[cell] += dz
+    end
+end
 
 struct BlackOilPhaseState <: ScalarVariable
 
@@ -55,7 +95,7 @@ struct Rs <: ScalarVariable end
     end
 end
 
-@terv_secondary function update_as_secondary!(b, ρ::DeckShrinkageFactors, model::SimulationModel{D, StandardBlackOilSystem{T, true}}, param, Pressure, Rs) where {D, T}
+@terv_secondary function update_as_secondary!(b, ρ::DeckShrinkageFactors, model::SimulationModel{D, StandardBlackOilSystem{T, true, R}}, param, Pressure, Rs) where {D, T, R}
     pvt, reg = ρ.pvt, ρ.regions
     # Note immiscible assumption
     tb = thread_batch(model.context)
@@ -76,7 +116,7 @@ end
     end
 end
 
-@terv_secondary function update_as_secondary!(μ, ρ::DeckViscosity, model::SimulationModel{D, StandardBlackOilSystem{T, true}}, param, Pressure, Rs) where {D, T}
+@terv_secondary function update_as_secondary!(μ, ρ::DeckViscosity, model::SimulationModel{D, StandardBlackOilSystem{T, true, R}}, param, Pressure, Rs) where {D, T, R}
     pvt, reg = ρ.pvt, ρ.regions
     # Note immiscible assumption
     tb = thread_batch(model.context)
@@ -152,6 +192,8 @@ function blackoil_mass!(M, pv, ρ, Rs, b, S, rhoS, cell, phase_indices)
     M[v] = Φ*rhoS[v]*(bG*sG + bO*sO*rs)
 end
 
+@inline oil_saturation(zo, rsSat, rhoOS, rhoGS, bO, bG) = zo*rhoGS*bG/(rhoOS*bO + zo*(rhoGS*bG - rhoOS*bO - rhoGS*bO*rsSat))
+
 @terv_secondary function update_as_secondary!(s, SAT::Saturations, model::SimulationModel{D, S}, param, ImmiscibleSaturation, PhaseState, GasMassFraction, ShrinkageFactors, Rs) where {D, S<:BlackOilSystem}
     # tb = thread_batch(model.context)
     nph, nc = size(s)
@@ -168,12 +210,13 @@ end
             bG = ShrinkageFactors[v, i]
 
             zo = 1 - GasMassFraction[i]
-            so = zo*rhoGS*bG/(rhoOS*bO + zo*(rhoGS*bG - rhoOS*bO - rhoGS*bO*rs))
+            so = oil_saturation(zo, rs, rhoOS, rhoGS, bO, bG)
         else
             so = 1
         end
+        s_og = 1 - sw
         s[a, i] = sw
-        s[l, i] = (1 - sw)*so
-        s[v, i] = (1 - sw)*(1 - so)
+        s[l, i] = s_og*so
+        s[v, i] = s_og*(1 - so)
     end
 end
