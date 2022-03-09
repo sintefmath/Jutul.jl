@@ -184,14 +184,20 @@ values_per_entity(model, v::SimpleCapillaryPressure) = number_of_phases(model.sy
     elseif npc == 2
         pcow, pcog = cap
         for c in 1:nc
-            if !isnothing(pcow)
+            if isnothing(pcow)
+                Δ = 0
+            else
                 sw = Saturations[1, c]
-                Δp[1, c] = pcow(sw)
+                Δ = -pcow(sw)
             end
-            if !isnothing(pcog)
+            Δp[1, c] = Δ
+            if isnothing(pcog)
+                Δ = 0
+            else
                 sg = Saturations[3, c]
-                Δp[2, c] = pcog(sg)
+                Δ = pcog(sg)
             end
+            Δp[2, c] = Δ
         end
     else
         error("Only implemented for two and three-phase flow.")
