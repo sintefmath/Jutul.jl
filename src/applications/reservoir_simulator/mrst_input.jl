@@ -613,13 +613,12 @@ end
 
 function deck_relperm(props; oil, water, gas)
     if water && oil && gas
-        swof = props["SWOF"]
-        sgof = props["SGOF"]
+        swof = only(props["SWOF"])
+        sgof = only(props["SGOF"])
 
-        s_water, kr_water = preprocess_relperm_table(only(swof))
-        sw = s_water[1]
-        swcon = sw[1]
-        s_gas, kr_gas = preprocess_relperm_table(only(sgof), swcon = swcon)
+        s_water, kr_water = preprocess_relperm_table(swof)
+        swcon = swof[1, 1]
+        s_gas, kr_gas = preprocess_relperm_table(sgof, swcon = swcon)
 
         krw = get_1d_interpolator(s_water[1], kr_water[1], cap_endpoints = false)
         krow = get_1d_interpolator(s_water[2], kr_water[2], cap_endpoints = false)
