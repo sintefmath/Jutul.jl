@@ -423,15 +423,19 @@ export read_results
 Read results from a given output_path provded to simulate or simulator_config
 """
 function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}}(),
-                           read_reports = true, reports = [], range = nothing)
+                           read_reports = true, reports = [], range = nothing, name = nothing)
     indices = valid_restart_indices(pth)
+    if isnothing(name)
+        subpaths = splitpath(pth)
+        name = subpaths[end]
+    end
     if length(indices) != maximum(indices)
         @warn "Gap in dataset. Some outputs might end up empty."
     end
     if isnothing(range)
         range = 1:maximum(indices)
     end
-    @showprogress for i in range
+    @showprogress 0.2 "Reading $name..." for i in range
         state, report = read_restart(pth, i; read_state = read_states, read_report = read_reports)
         if read_states
             push!(states, state)
