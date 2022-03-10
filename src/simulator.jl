@@ -120,7 +120,7 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     end
-    states, reports, first_step = initial_setup!(sim, config, restart = restart)
+    states, reports, first_step, dt = initial_setup!(sim, config, timesteps, restart = restart)
     # Time-step info to keep around
     no_steps = length(timesteps)
     t_tot = sum(timesteps)
@@ -131,7 +131,6 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
     # Initialize loop
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
-    dt = timesteps[first_step]
     if initialize
         check_forces(sim, forces, timesteps)
         forces_step = forces_for_timestep(sim, forces, timesteps, first_step)
@@ -163,7 +162,7 @@ function initialize_before_first_timestep!(sim, first_dT; forces = forces, confi
     end
 end
 
-function initial_setup!(sim, config; restart = nothing)
+function initial_setup!(sim, config, timesteps; restart = nothing)
     # Timing stuff
     if config[:extra_timing]
         enable_timer!()
@@ -182,6 +181,7 @@ function initial_setup!(sim, config; restart = nothing)
             @info "Starting from first step."
         end
         first_step = 1
+        dt = timesteps[first_step]
     else
         @assert !isnothing(pth) "output_path must be specified if restarts are enabled"
         if isa(restart, Bool)
@@ -189,15 +189,16 @@ function initial_setup!(sim, config; restart = nothing)
         end
         first_step = restart
         prev_step = restart - 1;
-        state0, = read_restart(pth, prev_step, read_report = false, read_state = true)
+        state0, report0 = read_restart(pth, prev_step)
         read_results(pth, read_reports = true, read_states = config[:output_states], states = states, reports = reports, range = 1:prev_step);
         reset_previous_state!(sim, state0)
         reset_to_previous_state!(sim)
+        dt = report0[:ministeps][end][:dt]
         if do_print
             @info "Restarting from step $first_step."
         end
     end
-    return (states, reports, first_step)
+    return (states, reports, first_step, dt)
 end
 
 function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = nothing, step_no = NaN, 
