@@ -170,7 +170,7 @@ struct SimpleCapillaryPressure{T} <: JutulVariables
     pc::T
 end
 
-values_per_entity(model, v::SimpleCapillaryPressure) = number_of_phases(model.system) - 1
+degrees_of_freedom_per_entity(model, v::SimpleCapillaryPressure) = number_of_phases(model.system) - 1
 
 @terv_secondary function update_as_secondary!(Δp, pc::SimpleCapillaryPressure, model, param, Saturations)
     cap = pc.pc

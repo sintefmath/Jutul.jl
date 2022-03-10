@@ -766,7 +766,7 @@ function init_from_mat(mrst_data, model, param)
     else
         p0 = [p0]
     end
-    init = Dict(:Pressure => p0)
+    init = Dict{Symbol, Any}(:Pressure => p0)
     if haskey(state0, "components")
         # Compositional
         z0 = copy(state0["components"]')
@@ -926,7 +926,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
             ci = nothing
             factor = 1.0
         end
-        @debug "$sym: Well $i/$num_wells" target typeof(ctrl) ci
+        @debug "$sym: Well $i/$num_wells" typeof(ctrl) ci
         param_w = setup_parameters(wi)
         param_w[:reference_densities] = vec(param_res[:reference_densities])
 
