@@ -257,7 +257,7 @@ function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
     perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config; iteration = NaN)
+function perform_step!(storage, model, dt, forces, config; iteration = NaN, update_secondary = iteration > 1)
     do_solve, e, converged = true, nothing, false
 
     report = OrderedDict()
@@ -265,7 +265,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN)
     # Update the properties and equations
     t_asm = @elapsed begin
         time =  config[:ProgressRecorder].recorder.time + dt
-        update_state_dependents!(storage, model, dt, forces; time = time, update_secondary = iteration > 1)
+        update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
     end
     if timing_out
         @debug "Assembled equations in $t_asm seconds."
