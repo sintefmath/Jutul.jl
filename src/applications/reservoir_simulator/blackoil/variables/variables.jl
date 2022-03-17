@@ -13,8 +13,6 @@ function update_primary_variable!(state, p::GasMassFraction, state_symbol, model
 end
 
 function update_gas_fraction!(zg, state, zgvar, model, dx)
-    F = eltype(dx)
-    # nf, nu = value_dim(model, p)
     abs_max_base = absolute_increment_limit(zgvar)
     maxval, minval = maximum_value(zgvar), minimum_value(zgvar)
     active_cells = active_entities(model.domain, Cells())
@@ -22,10 +20,15 @@ function update_gas_fraction!(zg, state, zgvar, model, dx)
     F_rs = sys.saturation_table
     rhoOS = sys.rhoLS
     rhoGS = sys.rhoVS
-    ϵ = 1e-4
 
     pressure = state.Pressure
     sat_chop = zgvar.sat_chop
+    update_gas_mass_fractions_inner!(zg, dx, active_cells, pressure, sat_chop, rhoOS, rhoGS, F_rs, abs_max_base, maxval, minval)
+end
+
+function update_gas_mass_fractions_inner!(zg, dx, active_cells, pressure, sat_chop, rhoOS, rhoGS, F_rs, abs_max_base, maxval, minval)
+    F = eltype(dx)
+    ϵ = 1e-4
     @inbounds for (i, cell) in enumerate(active_cells)
         z = value(zg[cell])::F
         dz = dx[i]
@@ -60,8 +63,7 @@ max_dissolved_gas_fraction(rs, rhoOS, rhoGS) = rs*rhoGS/(rhoOS + rs*rhoGS)
     rhoS = param[:reference_densities]
     rhoOS = rhoS[2]
     rhoGS = rhoS[3]
-    for i in eachindex(phase_state)
-        p0 = phase_state[i]
+    @inbounds for i in eachindex(phase_state)
         p = Pressure[i]
         z_g = GasMassFraction[i]
         z_g_bub = max_dissolved_gas_fraction(tab(p), rhoOS, rhoGS)
@@ -71,9 +73,6 @@ max_dissolved_gas_fraction(rs, rhoOS, rhoGS) = rs*rhoGS/(rhoOS + rs*rhoGS)
             new_state = OilOnly
         end
         phase_state[i] = new_state
-        if p0 != new_state
-            # @info "Switching cell $i from $p0 to $new_state"
-        end
     end
 end
 
@@ -84,7 +83,7 @@ struct Rs <: ScalarVariable end
     rhoS = param[:reference_densities]
     rhoOS = rhoS[2]
     rhoGS = rhoS[3]
-    for i in eachindex(PhaseState)
+    @inbounds for i in eachindex(PhaseState)
         p = Pressure[i]
         if PhaseState[i] == OilAndGas
             z_g = max_dissolved_gas_fraction(tab(p), rhoOS, rhoGS)
@@ -108,8 +107,8 @@ end
     bG = pvt[g]
     bW = pvt[w]
     @batch minbatch = tb for i in 1:nc
-        p = Pressure[i]
-        rs = Rs[i]
+        @inbounds p = Pressure[i]
+        @inbounds rs = Rs[i]
         b[w, i] = shrinkage(bW, reg, p, i)
         b[o, i] = shrinkage(bO, reg, p, rs, i)
         b[g, i] = shrinkage(bG, reg, p, i)
@@ -130,7 +129,7 @@ end
     muG = pvt[g]
 
     # @batch minbatch = tb for i in 1:nc
-    for i = 1:nc
+    @inbounds for i = 1:nc
         p = Pressure[i]
         rs = Rs[i]
         μ[w, i] = viscosity(muW, reg, p, i)
@@ -152,7 +151,7 @@ end
     o = 2
     g = 3
     n = size(rho, 2)
-    for i = 1:n
+    @inbounds for i = 1:n
         rho[w, i] = b[w, i]*rhoWS
         rho[o, i] = b[o, i]*(rhoOS + Rs[i]*rhoGS)
         rho[g, i] = b[g, i]*rhoGS
@@ -175,7 +174,7 @@ end
     end
 end
 
-function blackoil_mass!(M, pv, ρ, Rs, b, S, rhoS, cell, phase_indices)
+Base.@propagate_inbounds function blackoil_mass!(M, pv, ρ, Rs, b, S, rhoS, cell, phase_indices)
     a, l, v = phase_indices
     bO = b[l, cell]
     bG = b[v, cell]
@@ -201,10 +200,10 @@ end
     rhoS = param[:reference_densities]
     rhoOS = rhoS[l]
     rhoGS = rhoS[v]
-    for i = 1:nc
+    @inbounds for i = 1:nc
         sw = ImmiscibleSaturation[i]
         s[a, i] = sw
-        if PhaseState[i] == OilAndGas
+        @inbounds if PhaseState[i] == OilAndGas
             rs = Rs[i]
             bO = ShrinkageFactors[l, i]
             bG = ShrinkageFactors[v, i]
