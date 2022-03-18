@@ -45,6 +45,7 @@ function full_well_outputs(model, parameters, states; targets = available_well_t
         for t in targets
             out[w][translate_target_to_symbol(t(1.0))] = well_output(model, parameters, states, w, t)
         end
+        out[w][Symbol("Total surface mass rate")] = well_output(model, parameters, states, w, :TotalSurfaceMassRate)
     end
     return out
 end
@@ -65,6 +66,7 @@ function well_output(model::MultiModel, parameters, states, well_symbol, target 
 
     to_target(t::DataType) = t(1.0)
     to_target(t::Type) = t(1.0)
+    to_target(t::Symbol) = t
 
     target_limit = to_target(target)
 
@@ -74,18 +76,22 @@ function well_output(model::MultiModel, parameters, states, well_symbol, target 
         well_state = state[well_symbol]
         well_state = convert_to_immutable_storage(well_state)
         q_t = state[group][:TotalSurfaceMassRate][pos]
-        if q_t == 0
-            current_control = DisabledControl()
-            d[i] = 0.0
+        if target == :TotalSurfaceMassRate
+            d[i] = q_t
         else
-            if q_t < 0
-                current_control = ProducerControl(BottomHolePressureTarget(1.0))
+            if q_t == 0
+                current_control = DisabledControl()
+                d[i] = 0.0
             else
-                current_control = InjectorControl(BottomHolePressureTarget(1.0), 1.0)
+                if q_t < 0
+                    current_control = ProducerControl(BottomHolePressureTarget(1.0))
+                else
+                    current_control = InjectorControl(BottomHolePressureTarget(1.0), 1.0)
+                end
+                rhoS, S = flash_wellstream_at_surface(well_model, well_state, rhoS_o)
+                v = well_target_value(q_t, current_control, target_limit, well_model, well_state, rhoS, S)
+                d[i] = v
             end
-            rhoS, S = flash_wellstream_at_surface(well_model, well_state, rhoS_o)
-            v = well_target_value(q_t, current_control, target_limit, well_model, well_state, rhoS, S)
-            d[i] = v
         end
     end
     return d
