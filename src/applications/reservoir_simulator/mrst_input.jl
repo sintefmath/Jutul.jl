@@ -717,7 +717,7 @@ function model_from_mat_deck(G, mrst_data, res_context)
     nph = length(rhoS)
 
     if is_immiscible
-        sys = ImmiscibleSystem([oil, gas])
+        sys = ImmiscibleSystem(phases)
     else
         pvto = pvt[2]
         sat_table = get_1d_interpolator(pvto.sat_pressure, pvto.rs, cap_end = false)
