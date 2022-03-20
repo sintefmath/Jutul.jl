@@ -26,7 +26,6 @@ using Tullio
 using LoopVectorization
 using CUDA, CUDAKernels
 using KernelAbstractions
-using DataInterpolations
 using Polyester
 # Linear solvers and preconditioners
 
