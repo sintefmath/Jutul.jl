@@ -7,7 +7,7 @@ struct MRSTPlotData
     data::Vector
 end
 
-function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=true, perm = nothing, poro = nothing, volumes = nothing, extraout = false, kwarg...)
+function get_minimal_tpfa_grid_from_mrst(name::String; relative_path=!ispath(name), perm = nothing, poro = nothing, volumes = nothing, extraout = false, kwarg...)
     if relative_path
         fn = string(dirname(pathof(Jutul)), "/../data/testgrids/", name, ".mat")
     else
