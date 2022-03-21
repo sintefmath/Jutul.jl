@@ -167,6 +167,16 @@ function PVDG(pvdo::AbstractArray)
     PVDG{typeof(ct)}(ct)
 end
 
+struct PVTW_EXTENDED{T} <: AbstractTablePVT
+    tab::T
+end
+
+function PVTW_EXTENDED(pvtw_extended::AbstractArray)
+    c = map(MuBTable, pvtw_extended)
+    ct = Tuple(c)
+    PVTW_EXTENDED{typeof(ct)}(ct)
+end
+
 struct PVTW{N, T} <: AbstractTablePVT
     tab::NTuple{N, T}
 end

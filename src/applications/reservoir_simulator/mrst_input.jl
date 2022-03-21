@@ -593,7 +593,12 @@ function model_from_mat_fluid_immiscible(G, mrst_data, res_context)
 end
 
 function deck_pvt_water(props)
-    return PVTW(props["PVTW"])
+    if haskey(props, "PVTW_EXTENDED")
+        pvt = PVTW_EXTENDED(props["PVTW_EXTENDED"])
+    else
+        pvt = PVTW(props["PVTW"])
+    end
+    return pvt
 end
 
 function deck_pvt_oil(props)
