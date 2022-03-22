@@ -1134,3 +1134,27 @@ function mrst_well_ctrl(model, wdata, is_comp, rhoS)
     end
     return ctrl
 end
+
+export simulate_mrst_case
+function simulate_mrst_case(fn; extra_outputs::Vector{Symbol} = Vector{Symbol}(), write_output = true, output_path = nothing, kwarg...)
+    models, parameters, initializer, dt, forces, mrst_data = setup_case_from_mrst(fn, block_backend = true, simple_well = false);
+    out = models[:Reservoir].output_variables
+    for k in extra_outputs
+        push!(out, k)
+    end
+    if write_output
+        if isnothing(output_path)
+            # Put output under a folder with the same name as the .mat file, suffixed by _output
+            directory, filename = splitdir(fn)
+            casename, ext = splitext(filename)
+            output_path = joinpath(directory, "$(casename)_output")
+        end
+        mkpath(output_path)
+    else
+        output_path = nothing
+    end
+    @info "Writing output to $output_path"
+    sim, cfg = setup_reservoir_simulator(models, initializer, parameters, output_path = output_path; kwarg...)
+    states, reports = simulate(sim, dt, forces = forces, config = cfg);
+    return (states, reports, output_path)
+end
