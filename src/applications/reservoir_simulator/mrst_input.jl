@@ -1136,7 +1136,12 @@ function mrst_well_ctrl(model, wdata, is_comp, rhoS)
 end
 
 export simulate_mrst_case
-function simulate_mrst_case(fn; extra_outputs::Vector{Symbol} = Vector{Symbol}(), write_output = true, output_path = nothing, kwarg...)
+function simulate_mrst_case(fn; extra_outputs::Vector{Symbol} = Vector{Symbol}(),
+                                write_output = true,
+                                output_path = nothing,
+                                write_mrst = false,
+                                kwarg...)
+    fn = realpath(fn)
     models, parameters, initializer, dt, forces, mrst_data = setup_case_from_mrst(fn, block_backend = true, simple_well = false);
     out = models[:Reservoir].output_variables
     for k in extra_outputs
@@ -1153,8 +1158,62 @@ function simulate_mrst_case(fn; extra_outputs::Vector{Symbol} = Vector{Symbol}()
     else
         output_path = nothing
     end
-    @info "Writing output to $output_path"
+    # @info "Writing output to $output_path"
     sim, cfg = setup_reservoir_simulator(models, initializer, parameters, output_path = output_path; kwarg...)
     states, reports = simulate(sim, dt, forces = forces, config = cfg);
+    if write_output && write_mrst
+        mrst_output_path = "$(output_path)_mrst"
+        write_reservoir_simulator_output_to_mrst(sim.model, states, reports, mrst_output_path, parameters = parameters)
+    end
     return (states, reports, output_path)
+end
+
+function write_reservoir_simulator_output_to_mrst(model, states, reports, output_path; parameters = nothing, write_states = true, write_wells = true, convert_names = true)
+    mkpath(output_path)
+    prep_write(x) = x
+    prep_write(x::AbstractMatrix) = collect(x')
+    if write_states
+        for i in eachindex(states)
+            state = states[i]
+            if model isa MultiModel
+                res_state = state[:Reservoir]
+            else
+                res_state = state
+            end
+            state_path = joinpath(output_path, "state$i.mat")
+            # @info "Writing to $state_path"
+            D = Dict{String, Any}()
+            for k in keys(res_state)
+                mk = String(k)
+                if convert_names
+                    if k == :Pressure
+                        mk = "pressure"
+                    elseif k == :Saturations
+                        mk = "s"
+                    elseif k == :Rs
+                        mk = "rs"
+                    elseif k == :OverallMoleFractions
+                        mk = "components"
+                    end
+                end
+                D[mk] = prep_write(res_state[k])
+            end
+            matwrite(state_path, Dict("data" => D))
+        end
+        if write_wells && model isa MultiModel
+            @assert !isnothing(parameters)
+            wd = full_well_outputs(model, parameters, states, shortname = true)
+            wd_m = Dict{String, Any}()
+            for k in keys(wd)
+                tmp = Dict{String, Any}()
+                for f in keys(wd[k])
+                    tmp[String(f)] = wd[k][f]
+                end
+                wd_m[String(k)] = tmp
+            end
+            wd_m["TIME"] = report_times(reports)
+            ws_path = joinpath(output_path, "wells.mat")
+            matwrite(ws_path, wd_m)
+        end
+    end
 end

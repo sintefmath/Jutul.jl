@@ -164,11 +164,10 @@ end
 import Base.copy
 Base.copy(m::PerforationMask) = PerforationMask(copy(m.values))
 
-
-translate_target_to_symbol(t) = Symbol(t)
-translate_target_to_symbol(t::BottomHolePressureTarget) = Symbol("Bottom hole pressure")
-translate_target_to_symbol(t::TotalRateTarget) = Symbol("Surface total rate")
-translate_target_to_symbol(t::SurfaceWaterRateTarget) = Symbol("Surface water rate")
-translate_target_to_symbol(t::SurfaceLiquidRateTarget) = Symbol("Surface liquid rate (water + oil)")
-translate_target_to_symbol(t::SurfaceOilRateTarget) = Symbol("Surface oil rate")
-translate_target_to_symbol(t::SurfaceGasRateTarget) = Symbol("Surface gas rate")
+translate_target_to_symbol(t; shortname = false) = Symbol(t)
+translate_target_to_symbol(t::BottomHolePressureTarget; shortname = false) = shortname ? "BHP" : Symbol("Bottom hole pressure")
+translate_target_to_symbol(t::TotalRateTarget; shortname = false) = shortname ? "RATE" : Symbol("Surface total rate")
+translate_target_to_symbol(t::SurfaceWaterRateTarget; shortname = false) = shortname ? "WRAT" : Symbol("Surface water rate")
+translate_target_to_symbol(t::SurfaceLiquidRateTarget; shortname = false) = shortname ? "LRAT" : Symbol("Surface liquid rate (water + oil)")
+translate_target_to_symbol(t::SurfaceOilRateTarget; shortname = false) = shortname ? "ORAT" : Symbol("Surface oil rate")
+translate_target_to_symbol(t::SurfaceGasRateTarget; shortname = false) = shortname ? "GRAT" : Symbol("Surface gas rate")

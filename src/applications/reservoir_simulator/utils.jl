@@ -38,14 +38,19 @@ end
 
 export full_well_outputs, well_output, well_symbols, wellgroup_symbols, available_well_targets
 
-function full_well_outputs(model, parameters, states; targets = available_well_targets(model.models.Reservoir))
+function full_well_outputs(model, parameters, states; targets = available_well_targets(model.models.Reservoir), shortname = false)
     out = Dict()
+    if shortname
+        tm = "MASS"
+    else
+        tm = "Total surface mass rate"
+    end
     for w in well_symbols(model)
         out[w] = Dict()
         for t in targets
-            out[w][translate_target_to_symbol(t(1.0))] = well_output(model, parameters, states, w, t)
+            out[w][translate_target_to_symbol(t(1.0), shortname = shortname)] = well_output(model, parameters, states, w, t)
         end
-        out[w][Symbol("Total surface mass rate")] = well_output(model, parameters, states, w, :TotalSurfaceMassRate)
+        out[w][Symbol(tm)] = well_output(model, parameters, states, w, :TotalSurfaceMassRate)
     end
     return out
 end
