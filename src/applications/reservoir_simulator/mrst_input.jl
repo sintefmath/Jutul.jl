@@ -693,16 +693,24 @@ function model_from_mat_deck(G, mrst_data, res_context)
     @assert !has_vapoil "Not yet supported."
 
     is_immiscible = !has_disgas
+    is_compositional = haskey(mrst_data, "mixture")
+
     pvt = []
     phases = []
     rhoS = Vector{Float64}()
+    if haskey(props, "DENSITY")
+        deck_density = vec(props["DENSITY"])
+        rhoOS = deck_density[1]
+        rhoWS = deck_density[2]
+        rhoGS = deck_density[3]
+    else
+        @assert is_compositional
+        rhoOS = rhoWS = rhoGS = 1.0
+        has_oil = true
+        has_gas = true
+    end
 
-    deck_density = vec(props["DENSITY"])
-    rhoOS = deck_density[1]
-    rhoWS = deck_density[2]
-    rhoGS = deck_density[3]
-
-    if haskey(mrst_data, "mixture")
+    if is_compositional
         if has_wat
             push!(rhoS, rhoWS)
         end
@@ -914,23 +922,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
     model, init, param_res = setup_res(G, mrst_data; block_backend = block_backend, use_groups = true)
     is_comp = haskey(init, :OverallMoleFractions)
     nph = number_of_phases(model.system)
-    if haskey(mrst_data, "fluid")
-        rhoS = mrst_data["fluid"]["rhoS"]
-    else
-        deck = mrst_data["deck"]
-        rhoS_ecl = Float64.(deck["PROPS"]["DENSITY"])
-        rhoS = Vector{Float64}()
-        rs = deck["RUNSPEC"]
-        if haskey(rs, "WATER")
-            push!(rhoS, rhoS_ecl[2])
-        end
-        if haskey(rs, "OIL")
-            push!(rhoS, rhoS_ecl[1])
-        end
-        if haskey(rs, "GAS")
-            push!(rhoS, rhoS_ecl[3])
-        end
-    end
+    rhoS = param_res[:reference_densities]
 
     has_schedule = haskey(mrst_data, "schedule")
     if has_schedule
