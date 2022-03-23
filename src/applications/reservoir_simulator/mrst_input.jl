@@ -723,16 +723,18 @@ function model_from_mat_deck(G, mrst_data, res_context)
 
     if is_immiscible
         sys = ImmiscibleSystem(phases)
+        dp_max_rel = Inf
     else
         pvto = pvt[2]
         sat_table = get_1d_interpolator(pvto.sat_pressure, pvto.rs, cap_end = false)
         sys = StandardBlackOilSystem(sat_table, water = has_wat, rhoVS = rhoGS, rhoLS = rhoOS)
+        dp_max_rel = 0.2
     end
 
     model = SimulationModel(G, sys, context = res_context)
     # Tweak primary variables
     pvar = model.primary_variables
-    pvar[:Pressure] = Pressure(max_rel = 0.2)
+    pvar[:Pressure] = Pressure(max_rel = dp_max_rel)
     # Modify secondary variables
     svar = model.secondary_variables
     # PVT
