@@ -430,15 +430,15 @@ end
 function model_from_mat(G, mrst_data, res_context)
     ## Set up reservoir part
     @debug "Loading model from MRST:" keys(mrst_data)
-    if haskey(mrst_data, "mixture")
+    if haskey(mrst_data, "deck")
+        @debug "Found deck model"
+        f = model_from_mat_deck
+    elseif haskey(mrst_data, "mixture")
         @debug "Found compositional model"
         f = model_from_mat_comp
     elseif haskey(mrst_data, "fluid")
         @debug "Found immiscible model"
         f = model_from_mat_fluid_immiscible
-    elseif haskey(mrst_data, "deck")
-        @debug "Found deck model"
-        f = model_from_mat_deck
     else
         error("I don't know how this model was made: $(keys(mrst_data))")
     end
@@ -702,67 +702,146 @@ function model_from_mat_deck(G, mrst_data, res_context)
     rhoWS = deck_density[2]
     rhoGS = deck_density[3]
 
-    if has_wat
-        push!(pvt, deck_pvt_water(props))
-        push!(phases, AqueousPhase())
-        push!(rhoS, rhoWS)
-    end
-
-    if has_oil
-        push!(pvt, deck_pvt_oil(props))
-        push!(phases, LiquidPhase())
+    if haskey(mrst_data, "mixture")
+        if has_wat
+            push!(rhoS, rhoWS)
+        end
+        @assert has_oil
+        @assert has_gas
         push!(rhoS, rhoOS)
-    end
-
-    if has_gas
-        push!(pvt, deck_pvt_gas(props))
-        push!(phases, VaporPhase())
         push!(rhoS, rhoGS)
-    end
-    nph = length(rhoS)
-
-    if is_immiscible
-        sys = ImmiscibleSystem(phases)
-        dp_max_rel = Inf
+        nph = length(rhoS)
+        mixture = mrst_data["mixture"]
+        comps = mixture["components"]
+        names = copy(vec(mixture["names"]))
+    
+        components = map(x -> MolecularProperty(x["mw"], x["pc"], x["Tc"], x["Vc"], x["acf"]), comps)
+        if haskey(mrst_data, "eos")
+            eosm = mrst_data["eos"]
+            nm = eosm["name"]
+            if nm == "pr"
+                eos_t = PengRobinson()
+            elseif nm == "prcorr"
+                eos_t = PengRobinsonCorrected()
+            elseif nm == "srk"
+                eos_t = SoaveRedlichKwong()
+            elseif nm == "rk"
+                eos_t = RedlichKwong()
+            elseif nm == "zj"
+                eos_t = ZudkevitchJoffe()
+            else
+                error("$nm not supported")
+            end
+            if isempty(eosm["bic"])
+                bic = nothing
+            else
+                bic = copy(eosm["bic"])
+            end
+            if isempty(eosm["volume_shift"])
+                vs = nothing
+            else
+                vs = copy(eosm["volume_shift"])
+                vs = tuple(vs...)
+            end
+            @info "Found EoS spec in input." eos_t bic vs
+        else
+            eos_t = PengRobinson()
+            vs = nothing
+            bic = nothing
+            @info "Defaulting EoS." eos_t
+        end
+        mixture = MultiComponentMixture(components, names = names, A_ij = bic)
+        eos = GenericCubicEOS(mixture, eos_t, volume_shift = vs)
+        if nph == 2
+            phases = (LiquidPhase(), VaporPhase())
+        else
+            phases = (AqueousPhase(), LiquidPhase(), VaporPhase())
+        end
+        sys = MultiPhaseCompositionalSystemLV(eos, phases)
+        model = SimulationModel(G, sys, context = res_context)
+        # Insert pressure
+        svar = model.secondary_variables
+        T = copy(vec(mrst_data["state0"]["T"]))
+        if length(unique(T)) == 1
+            TV = ConstantVariables(T[1], single_entity = true)
+        else
+            TV = ConstantVariables(T, single_entity = false)
+        end
+        svar[:Temperature] = TV
     else
-        pvto = pvt[2]
-        sat_table = get_1d_interpolator(pvto.sat_pressure, pvto.rs, cap_end = false)
-        sys = StandardBlackOilSystem(sat_table, water = has_wat, rhoVS = rhoGS, rhoLS = rhoOS)
-        dp_max_rel = 0.2
-    end
+        if has_wat
+            push!(pvt, deck_pvt_water(props))
+            push!(phases, AqueousPhase())
+            push!(rhoS, rhoWS)
+        end
 
-    model = SimulationModel(G, sys, context = res_context)
-    # Tweak primary variables
-    pvar = model.primary_variables
-    pvar[:Pressure] = Pressure(max_rel = dp_max_rel)
-    # Modify secondary variables
-    svar = model.secondary_variables
-    # PVT
-    pvt = tuple(pvt...)
-    svar[:PhaseMassDensities] = DeckDensity(pvt)
-    if !is_immiscible
-        svar[:ShrinkageFactors] = DeckShrinkageFactors(pvt)
+        if has_oil
+            push!(pvt, deck_pvt_oil(props))
+            push!(phases, LiquidPhase())
+            push!(rhoS, rhoOS)
+        end
+
+        if has_gas
+            push!(pvt, deck_pvt_gas(props))
+            push!(phases, VaporPhase())
+            push!(rhoS, rhoGS)
+        end
+
+        if is_immiscible
+            sys = ImmiscibleSystem(phases)
+            dp_max_rel = Inf
+        else
+            pvto = pvt[2]
+            sat_table = get_1d_interpolator(pvto.sat_pressure, pvto.rs, cap_end = false)
+            sys = StandardBlackOilSystem(sat_table, water = has_wat, rhoVS = rhoGS, rhoLS = rhoOS)
+            dp_max_rel = 0.2
+        end
+
+        model = SimulationModel(G, sys, context = res_context)
+        # Tweak primary variables
+        pvar = model.primary_variables
+        pvar[:Pressure] = Pressure(max_rel = dp_max_rel)
+        # Modify secondary variables
+        svar = model.secondary_variables
+        # PVT
+        pvt = tuple(pvt...)
+        svar[:PhaseMassDensities] = DeckDensity(pvt)
+        if !is_immiscible
+            svar[:ShrinkageFactors] = DeckShrinkageFactors(pvt)
+        end
+        svar[:PhaseViscosities] = DeckViscosity(pvt)
     end
-    svar[:PhaseViscosities] = DeckViscosity(pvt)
-    # Rel perm
-    svar[:RelativePermeabilities] = deck_relperm(props; oil = has_oil, water = has_wat, gas = has_gas)
-    # PC
-    pc = deck_pc(props; oil = has_oil, water = has_wat, gas = has_gas)
-    if !isnothing(pc)
-        svar[:CapillaryPressure] = pc
-    end
-    # Rock compressibility (if present)
-    rock = props["ROCK"]
-    if rock[2] > 0
-        V = svar[:FluidVolume].constants
-        svar[:FluidVolume] = LinearlyCompressiblePoreVolume(V, reference_pressure = rock[1], expansion = rock[2])
-    end
+    set_deck_relperm!(svar, props; oil = has_oil, water = has_wat, gas = has_gas)
+    set_deck_pc!(svar, props; oil = has_oil, water = has_wat, gas = has_gas)
+    set_deck_pvmult!(svar, props)
 
     ## Model parameters
     param = setup_parameters(model)
     param[:reference_densities] = vec(rhoS)
 
     return (model, param)
+end
+
+function set_deck_pc!(vars, props; kwarg...)
+    pc = deck_pc(props; kwarg...)
+    if !isnothing(pc)
+        vars[:CapillaryPressure] = pc
+    end
+end
+
+function set_deck_relperm!(vars, props; kwarg...)
+    vars[:RelativePermeabilities] = deck_relperm(props; kwarg...)
+end
+
+function set_deck_pvmult!(vars, props)
+    # Rock compressibility (if present)
+    if haskey(props, "ROCK")
+        rock = props["ROCK"]
+        if rock[2] > 0
+            V = vars[:FluidVolume].constants
+            vars[:FluidVolume] = LinearlyCompressiblePoreVolume(V, reference_pressure = rock[1], expansion = rock[2])
+        end
+    end
 end
 
 function init_from_mat(mrst_data, model, param)
