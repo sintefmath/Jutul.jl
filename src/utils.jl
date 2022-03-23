@@ -274,7 +274,7 @@ function report_stats(reports)
             end
         end
     end
-    sum_measured = total_assembly + total_linear_update + total_linear_solve + total_update + total_convergence
+    sum_measured = total_assembly + total_linear_update + total_linear_solve + total_update + total_convergence + total_io
     other_time = total_time - sum_measured
     totals = (
                 assembly = total_assembly,
