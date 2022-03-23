@@ -507,7 +507,7 @@ function store_output!(states, reports, step, sim, config, report)
     file_out = !isnothing(path)
     # We always keep reports in memory since they are used for timestepping logic
     push!(reports, report)
-    if mem_out || file_out
+    t_out = @elapsed if mem_out || file_out
         state = get_output_state(sim)
         if mem_out
             push!(states, state)
@@ -522,6 +522,7 @@ function store_output!(states, reports, step, sim, config, report)
             end
         end
     end
+    report[:output_time] = t_out
 end
 
 # Progress recorder stuff

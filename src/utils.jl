@@ -242,11 +242,17 @@ function report_stats(reports)
     total_linear_solve = 0
     total_update = 0
     total_convergence = 0
+    total_io = 0
 
     total_steps = length(reports)
     total_ministeps = 0
     for outer_rep in reports
         total_time += outer_rep[:total_time]
+        if haskey(outer_rep, :output_time)
+            t_io = outer_rep[:output_time]
+            total_io += t_io
+            total_time += t_io
+        end
         for mini_rep in outer_rep[:ministeps]
             total_ministeps += 1
             if haskey(mini_rep, :finalize_time)
@@ -276,6 +282,7 @@ function report_stats(reports)
                 linear_solve = total_linear_solve,
                 update_time = total_update,
                 convergence = total_convergence,
+                io = total_io,
                 other = other_time,
                 total = total_time
             )
@@ -290,6 +297,7 @@ function report_stats(reports)
                 linear_solve = itscale(total_linear_solve),
                 update_time = itscale(total_update),
                 convergence = linscale(total_convergence),
+                io = total_io/total_ministeps,
                 other = itscale(other_time),
                 total = itscale(total_time)
             )
@@ -378,6 +386,7 @@ function print_iterations(stats; title = "Number of iterations")
                       row_names = flds,
                       title = title,
                       title_alignment = :c,
+                      row_name_alignment = :l,
                       formatters = (ft_printf("%3.4f", 3)),
                       row_name_column_title = "Type")
 end
@@ -406,13 +415,32 @@ function print_timing(stats; title = "Simulator timing")
 
     # hl = Highlighter((data, i, j) -> (i == length(flds)), crayon"fg:bold");
     # highlighters = hl,
+    function translate_for_table(name)
+        if name == :assembly
+            name = :Properties
+        elseif name == :linear_system
+            name = :Assembly
+        elseif name == :linear_solve
+            name = Symbol("Linear solve")
+        elseif name == :update_time
+            name = :Update
+        elseif name == :convergence
+            name = :Convergence
+        elseif name == :io
+            name = Symbol("Input/Output")
+        elseif name == :other
+            name = :Other
+        end
+        return name
+    end
 
 
     pretty_table(data; header = (["Each", "Fraction", "Total"], [s, "Percent", s_t]), 
-                      row_names = flds,
+                      row_names = map(translate_for_table, flds),
                       formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
                       title = title,
                       title_alignment = :c,
+                      row_name_alignment = :l,
                       alignment = [:r, :r, :r],
                       body_hlines = [n-1],
                       row_name_column_title = "Name")
