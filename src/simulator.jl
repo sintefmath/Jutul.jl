@@ -90,6 +90,8 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:info_level] = 0
     # Output extra, highly detailed performance report at simulation end
     cfg[:extra_timing] = false
+    # Avoid unicode (if possible)
+    cfg[:ascii_terminal] = false
     # Define a default progress ProgressRecorder
     cfg[:ProgressRecorder] = ProgressRecorder()
     cfg[:timestep_selectors] = [TimestepSelector()]
@@ -97,9 +99,10 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:timestep_max_decrease] = 0.1
     # Max residual before error is issued
     cfg[:max_residual] = 1e20
+    cfg[:end_report] = nothing
 
     overwrite_by_kwargs(cfg; kwarg...)
-    if !haskey(cfg, :end_report)
+    if isnothing(cfg[:end_report])
         cfg[:end_report] = cfg[:info_level] > -1
     end
     # Default: Do not store states in memory if output to file.
@@ -113,6 +116,12 @@ function simulator_config!(cfg, sim; kwarg...)
         @debug "Creating $pth for output."
         mkdir(pth)
     end
+    if cfg[:ascii_terminal]
+        fmt = tf_markdown
+    else
+        fmt = tf_unicode_rounded
+    end
+    cfg[:table_formatter] = fmt;
     return cfg
 end
 
@@ -359,8 +368,15 @@ end
 
 function final_simulation_message(simulator, p, reports, timesteps, config, aborted)
     info_level = config[:info_level]
-    if info_level >= 0 && length(reports) > 0
+    print_end_report = config[:end_report]
+    verbose = info_level >= 0
+    if verbose || print_end_report
         stats = report_stats(reports)
+    else
+        stats = nothing
+    end
+    # Summary message.
+    if verbose && length(reports) > 0
         if aborted
             endstr = "🔴 Simulation aborted. Completed $(stats.steps-1) of $(length(timesteps)) timesteps"
         else
@@ -377,12 +393,14 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
         else
             @info final_message
         end
-        if config[:end_report]
-            print_stats(stats)
-        end
     elseif info_level == 0
         cancel(p)
     end
+    # Optional table of performance numbers etc.
+    if print_end_report
+        print_stats(stats, table_formatter = config[:table_formatter])
+    end
+    # Detailed timing through @timeit instrumentation (can be a lot)
     if config[:extra_timing]
         @info "Detailed timing:"
         print_timer()
@@ -596,7 +614,7 @@ function retrieve_output!(states, config)
     if !config[:output_states] && !isnothing(pth)
         @debug "Reading states from $pth..."
         @assert isempty(states)
-        read_results(pth, read_reports = true, states = states);
+        read_results(pth, read_reports = true, states = states, verbose = config[:info_level] >= 0);
     end
 end
 
