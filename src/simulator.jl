@@ -237,7 +237,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
             if isnan(dt)
                 # Timestep too small, cut too many times, ...
                 if info_level > -1
-                    @warn "Unable to reduce time-step to smaller value. Aborting simulation."
+                    @error "Unable to reduce time-step to smaller value. Aborting simulation."
                 end
                 break
             else
@@ -264,7 +264,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, upda
     timing_out = config[:debug_level] > 1
     # Update the properties and equations
     t_asm = @elapsed begin
-        time =  config[:ProgressRecorder].recorder.time + dt
+        time = config[:ProgressRecorder].recorder.time + dt
         update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
     end
     if timing_out

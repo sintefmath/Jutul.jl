@@ -364,6 +364,7 @@ end
 
 function print_iterations(stats; title = "Number of iterations")
     flds = [:newtons, :linearizations]
+    names = [:Newtons, :Linearizations]
     data = Array{Any}(undef, length(flds), 5)
     nstep = stats.steps
     nmini = stats.ministeps
@@ -383,7 +384,7 @@ function print_iterations(stats; title = "Number of iterations")
 
     
     pretty_table(data; header = (["Avg/step", "Avg/ministep", "Time per", "Wasted", "Total"], ["$nstep steps", "$nmini ministeps", s, "", ""]), 
-                      row_names = flds,
+                      row_names = names,
                       title = title,
                       title_alignment = :c,
                       row_name_alignment = :l,
@@ -430,6 +431,8 @@ function print_timing(stats; title = "Simulator timing")
             name = Symbol("Input/Output")
         elseif name == :other
             name = :Other
+        elseif name == :total
+            name = :Total
         end
         return name
     end
