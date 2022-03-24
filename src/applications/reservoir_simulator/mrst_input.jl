@@ -1214,13 +1214,13 @@ function simulate_mrst_case(fn; extra_outputs::Vector{Symbol} = Vector{Symbol}()
                                 output_path = nothing,
                                 write_mrst = false,
                                 kwarg...)
-    fn = realpath(fn)
     models, parameters, initializer, dt, forces, mrst_data = setup_case_from_mrst(fn, block_backend = true, simple_well = false);
     out = models[:Reservoir].output_variables
     for k in extra_outputs
         push!(out, k)
     end
     if write_output
+        fn = realpath(fn)
         if isnothing(output_path)
             # Put output under a folder with the same name as the .mat file, suffixed by _output
             directory, filename = splitdir(fn)
