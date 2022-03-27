@@ -91,13 +91,13 @@ function get_cell_neighbors(N, nc = maximum(N), includeSelf = true)
     return cell_neigh
 end
 
-function get_facepos(N)
+function get_facepos(N, arg...)
     if length(N) == 0
         t = eltype(N)
         faces = zeros(t, 0)
         facePos = ones(t, 2)
     else
-        cell_faces = get_cell_faces(N)
+        cell_faces = get_cell_faces(N, arg...)
         counts = [length(x) for x in cell_faces]
         facePos = cumsum([1; counts])
         faces = reduce(vcat, cell_faces)

@@ -1066,6 +1066,9 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
         else
             error("Unknown grouping $facility_grouping")
         end
+        vectorize(d::T) where T<:Number = [d]
+        vectorize(d) = vec(d)
+
         if has_schedule
             control_ix = Int64.(vec(schedule["step"]["control"]))
             nctrl = maximum(control_ix)
@@ -1083,7 +1086,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                         wdata = local_mrst_wells[wno]
                         wmodel = models[wsym]
                         current_control[wsym] = mrst_well_ctrl(model, wdata, is_comp, rhoS)
-                        cstatus = vec(wdata["cstatus"])
+                        cstatus = vectorize(wdata["cstatus"])
                         lims = wdata["lims"]
                         if !isempty(lims)
                             limits[wsym] = convert_to_immutable_storage(lims)
@@ -1091,7 +1094,7 @@ function setup_case_from_mrst(casename; simple_well = false, block_backend = tru
                         end
                         Ω_w = models[wsym].domain
                         WI = Ω_w.grid.perforations.WI
-                        new_WI = vec(wdata["WI"])
+                        new_WI = vectorize(wdata["WI"])
                         if all(cstatus) && all(WI .== new_WI)
                             new_force[wsym] = nothing
                         else
@@ -1212,9 +1215,11 @@ export simulate_mrst_case
 function simulate_mrst_case(fn; extra_outputs::Vector{Symbol} = Vector{Symbol}(),
                                 write_output = true,
                                 output_path = nothing,
+                                block_backend = true,
+                                simple_well = false,
                                 write_mrst = false,
                                 kwarg...)
-    models, parameters, initializer, dt, forces, mrst_data = setup_case_from_mrst(fn, block_backend = true, simple_well = false);
+    models, parameters, initializer, dt, forces, mrst_data = setup_case_from_mrst(fn, block_backend = block_backend, simple_well = simple_well);
     out = models[:Reservoir].output_variables
     for k in extra_outputs
         push!(out, k)
