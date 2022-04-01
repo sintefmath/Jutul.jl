@@ -1,36 +1,29 @@
 using Jutul
 using Statistics, DataStructures, LinearAlgebra, Krylov, IterativeSolvers
 ENV["JULIA_DEBUG"] = Jutul
-# ENV["JULIA_DEBUG"] = nothing
+ENV["JULIA_DEBUG"] = nothing
 
 casename = "sleipner_ecl_bo"
-# casename = "olympus_simple"
-casename = "spe1"
-casename = "spe9"
-models, parameters, initializer, dt, forces, mrst_data = setup_case_from_mrst(casename, block_backend = true, simple_well = false);
+casename = "olympus_1_reduced"
+# casename = "spe1"
+# casename = "C:/Users/olavm/AppData/Local/Temp/qfs_wo.mat"
+casename = "C:/Users/olavm/AppData/Local/Temp/buckley_leverett_wo.mat"
+casename = "C:/Users/olavm/AppData/Local/Temp/spe10_layer.mat"
+casename = "C:/Users/olavm/AppData/Local/Temp/qfs_wo.mat"
+# casename = "spe1"
+# casename = "spe1_big"
+# casename = "spe9"
+models, parameters, initializer, dt, forces, mrst_data = setup_case_from_mrst(casename, 
+                                block_backend = true, simple_well = false);
 
-# initializer[:INJECTOR][:ImmiscibleSaturation] .= 0.0
-# initializer[:PRODUCER][:ImmiscibleSaturation] .= 0.0
 
-out = models[:Reservoir].output_variables
-push!(out, :Saturations)
-push!(out, :Rs)
-push!(out, :RelativePermeabilities)
-# push!(out, :PhaseViscosities)
-push!(out, :PhaseMassDensities)
-# push!(out, :CapillaryPressure)
-
-# push!(out, :FluidVolume)
-
+sim, cfg = setup_reservoir_simulator(models, initializer, parameters, info_level = 3, 
+            max_timestep_cuts = 0, extra_timing = false, method = :cpr);
 ##
-# parameters[:INJECTOR][:tolerances][:default] = Inf
-# parameters[:Reservoir][:tolerances][:default] = 0.1
-
-sim, cfg = setup_reservoir_simulator(models, initializer, parameters, info_level = 1, max_timestep_cuts = 5, extra_timing = true)
-
-update_state_dependents!(sim.storage, sim.model, 1.0, forces[1])
+# update_state_dependents!(sim.storage, sim.model, 1.0, forces)
 ##
 states, reports = simulate(sim, dt, forces = forces, config = cfg);
+##
 error()
 ## Plotting
 using GLMakie, Jutul
@@ -52,6 +45,10 @@ display(fig);
 wd = full_well_outputs(sim.model, parameters, states)
 time = report_times(reports)
 plot_well_results(wd, time)
+##
+qg = wd[:PRODUCER][Symbol("Surface gas rate")]
+qo = wd[:PRODUCER][Symbol("Surface oil rate")]
+lines(time./(365), qg./qo)
 ##
 kr = models[:Reservoir].secondary_variables[:RelativePermeabilities]
 s = 0:0.01:1;
