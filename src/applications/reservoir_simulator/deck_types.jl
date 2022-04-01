@@ -1,8 +1,41 @@
+abstract type DeckPhaseVariables <: PhaseVariables end
 abstract type AbstractReservoirDeckTable end
 
 export MuBTable, ConstMuBTable
 
 abstract type AbstractTablePVT <: AbstractReservoirDeckTable end
+
+
+struct DeckViscosity{T, R} <: DeckPhaseVariables
+    pvt::T
+    regions::R
+    function DeckViscosity(pvt; regions = nothing)
+        check_regions(regions, pvt)
+        pvt_t = Tuple(pvt)
+        new{typeof(pvt_t), typeof(regions)}(pvt_t, regions)
+    end
+end
+
+struct DeckDensity{T, R} <: DeckPhaseVariables
+    pvt::T
+    regions::R
+    function DeckDensity(pvt; regions = nothing)
+        check_regions(regions, pvt)
+        pvt_t = Tuple(pvt)
+        new{typeof(pvt_t), typeof(regions)}(pvt_t, regions)
+    end
+end
+
+struct DeckShrinkageFactors{T, R} <: DeckPhaseVariables
+    pvt::T
+    regions::R
+    function DeckShrinkageFactors(pvt; regions = nothing)
+        check_regions(regions, pvt)
+        pvt_t = Tuple(pvt)
+        new{typeof(pvt_t), typeof(regions)}(pvt_t, regions)
+    end
+end
+
 
 struct MuBTable{V, I}
     pressure::V
@@ -81,8 +114,41 @@ function shrinkage(tbl::ConstMuBTable, p::T) where T
     return b::T
 end
 
+struct PVTO{T,V} <: AbstractTablePVT where {T<:AbstractArray, V<:AbstractArray}
+    pos::T
+    rs::V
+    pressure::V
+    sat_pressure::V
+    shrinkage::V
+    viscosity::V
+end
+
+function PVTO(d::Dict)
+    rs = vec(copy(d["key"]))
+    pos = vec(Int64.(d["pos"]))
+    data = d["data"]
+    p = vec(data[:, 1])
+    B = vec(data[:, 2])
+    b = 1.0 ./ B
+    mu = vec(data[:, 3])
+    p_sat = vec(p[pos[1:end-1]])
+    T = typeof(pos)
+    V = typeof(mu)
+    return PVTO{T, V}(pos, rs, p, p_sat, b, mu)
+end
+
+second_key(PVTO) = PVTO.rs
+
 struct PVDO{T} <: AbstractTablePVT
     tab::T
+end
+
+function shrinkage(pvt::PVTO, reg, p::T, rs, cell) where T
+    return interp_pvt(pvt, p, rs, :shrinkage)::T
+end
+
+function viscosity(pvt::PVTO, reg, p::T, rs, cell) where T
+    return interp_pvt(pvt, p, rs, :viscosity)::T
 end
 
 function PVDO(pvdo::AbstractArray)
@@ -99,6 +165,16 @@ function PVDG(pvdo::AbstractArray)
     c = map(MuBTable, pvdo)
     ct = Tuple(c)
     PVDG{typeof(ct)}(ct)
+end
+
+struct PVTW_EXTENDED{T} <: AbstractTablePVT
+    tab::T
+end
+
+function PVTW_EXTENDED(pvtw_extended::AbstractArray)
+    c = map(MuBTable, pvtw_extended)
+    ct = Tuple(c)
+    PVTW_EXTENDED{typeof(ct)}(ct)
 end
 
 struct PVTW{N, T} <: AbstractTablePVT
@@ -131,6 +207,18 @@ function PVCDO(pvcdo::AbstractArray)
     T = typeof(ct[1])
     PVCDO{N, T}(ct)
 end
+
+
+struct LinearlyCompressiblePoreVolume{R, V} <: ScalarVariable where {R<:Real, V<:AbstractVector}
+    reference_pressure::R
+    expansion::R
+    volume::V
+end
+
+function LinearlyCompressiblePoreVolume(volume::V; reference_pressure::T = 101325.0, expansion::T = 1e-10) where {T, V}
+    LinearlyCompressiblePoreVolume{T, V}(reference_pressure, expansion, volume)
+end
+
 # abstract type AbstractTableSaturation <: AbstractTableDeck end
 
 # struct RelativePermeabilityTable <: AbstractTableSaturation

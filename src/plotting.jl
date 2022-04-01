@@ -177,10 +177,14 @@ function plot_well_results(well_data::Dict, arg...; name = "Data", kwarg...)
     plot_well_results([well_data], arg...; names = [name], kwarg...)
 end
 
-function plot_well_results(well_data::Vector, time = nothing; start_date::Union{Nothing, DateTime} = nothing, names =["Dataset $i" for i in 1:length(well_data)], linewidth = 3, cmap = nothing, kwarg...)
+function plot_well_results(well_data::Vector, time = nothing; start_date::Union{Nothing, DateTime} = nothing,
+                                                              names =["Dataset $i" for i in 1:length(well_data)], 
+                                                              linewidth = 3, cmap = nothing, 
+                                                              styles = [nothing, :dash, :scatter, :dashdot, :dot, :dashdotdot],
+                                                              kwarg...)
     # Figure part
     ndata = length(well_data)
-    @assert ndata <= 5 "Maximum of five datasets plotted simultaneously."
+    @assert ndata <= length(styles) "Can't plot more datasets than styles provided"
     fig = Figure()
     if isnothing(time)
         t_l = "Time-step"
@@ -276,7 +280,6 @@ function plot_well_results(well_data::Vector, time = nothing; start_date::Union{
     fig[1, 3] = grid!(bgrid[(M+1):N, :], tellheight = false)
 
     lineh = []
-    styles = [nothing, :dash, :scatter, :dashdot, :dot, :dashdotdot]
     for dix = 1:ndata
         T = time[dix]
         for i in 1:nw

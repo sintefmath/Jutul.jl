@@ -26,9 +26,6 @@ abstract type ScalarVariable <: JutulVariables end
 abstract type GroupedVariables <: JutulVariables end
 abstract type FractionVariables <: GroupedVariables end
 
-# Functions of the state
-abstract type JutulStateFunction <: JutulVariables end
-
 # Driving forces
 abstract type JutulForce end
 

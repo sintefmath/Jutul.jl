@@ -87,6 +87,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
         return
     end
     id = haskey(cfg, :id) ? "$(cfg[:id]): " : ""
+    fmt = cfg[:table_formatter]
     count_crit = 0
     count_ok = 0
     worst_val = 0.0
@@ -221,7 +222,8 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
         pretty_table(tbl, header = header,
                                 alignment = alignment, 
                                 body_hlines = body_hlines,
-                                highlighters = highlighers, 
+                                highlighters = highlighers,
+                                tf = fmt,
                                 formatters = ft_printf("%2.3e", [m_offset + 4]),
                                 crop=:none)
     end
@@ -242,11 +244,17 @@ function report_stats(reports)
     total_linear_solve = 0
     total_update = 0
     total_convergence = 0
+    total_io = 0
 
     total_steps = length(reports)
     total_ministeps = 0
     for outer_rep in reports
         total_time += outer_rep[:total_time]
+        if haskey(outer_rep, :output_time)
+            t_io = outer_rep[:output_time]
+            total_io += t_io
+            total_time += t_io
+        end
         for mini_rep in outer_rep[:ministeps]
             total_ministeps += 1
             if haskey(mini_rep, :finalize_time)
@@ -268,7 +276,7 @@ function report_stats(reports)
             end
         end
     end
-    sum_measured = total_assembly + total_linear_update + total_linear_solve + total_update + total_convergence
+    sum_measured = total_assembly + total_linear_update + total_linear_solve + total_update + total_convergence + total_io
     other_time = total_time - sum_measured
     totals = (
                 assembly = total_assembly,
@@ -276,6 +284,7 @@ function report_stats(reports)
                 linear_solve = total_linear_solve,
                 update_time = total_update,
                 convergence = total_convergence,
+                io = total_io,
                 other = other_time,
                 total = total_time
             )
@@ -290,6 +299,7 @@ function report_stats(reports)
                 linear_solve = itscale(total_linear_solve),
                 update_time = itscale(total_update),
                 convergence = linscale(total_convergence),
+                io = total_io/total_ministeps,
                 other = itscale(other_time),
                 total = itscale(total_time)
             )
@@ -344,18 +354,19 @@ function pick_time_unit(t)
     return (1, "Seconds")
 end
 
-function print_stats(reports::AbstractArray)
+function print_stats(reports::AbstractArray; kwarg...)
     stats = report_stats(reports)
-    print_stats(stats)
+    print_stats(stats; kwarg...)
 end
 
-function print_stats(stats)
-    print_iterations(stats)
-    print_timing(stats)
+function print_stats(stats; kwarg...)
+    print_iterations(stats; kwarg...)
+    print_timing(stats; kwarg...)
 end
 
-function print_iterations(stats; title = "Number of iterations")
+function print_iterations(stats; title = "Number of iterations", table_formatter = :tf_unicode)
     flds = [:newtons, :linearizations]
+    names = [:Newtons, :Linearizations]
     data = Array{Any}(undef, length(flds), 5)
     nstep = stats.steps
     nmini = stats.ministeps
@@ -375,14 +386,16 @@ function print_iterations(stats; title = "Number of iterations")
 
     
     pretty_table(data; header = (["Avg/step", "Avg/ministep", "Time per", "Wasted", "Total"], ["$nstep steps", "$nmini ministeps", s, "", ""]), 
-                      row_names = flds,
+                      row_names = names,
                       title = title,
                       title_alignment = :c,
+                      row_name_alignment = :l,
+                      tf = table_formatter,
                       formatters = (ft_printf("%3.4f", 3)),
                       row_name_column_title = "Type")
 end
 
-function print_timing(stats; title = "Simulator timing")
+function print_timing(stats; title = "Simulator timing", table_formatter = :tf_unicode)
     flds = collect(keys(stats.time_each))
     
     n = length(flds)
@@ -406,13 +419,35 @@ function print_timing(stats; title = "Simulator timing")
 
     # hl = Highlighter((data, i, j) -> (i == length(flds)), crayon"fg:bold");
     # highlighters = hl,
+    function translate_for_table(name)
+        if name == :assembly
+            name = :Properties
+        elseif name == :linear_system
+            name = :Assembly
+        elseif name == :linear_solve
+            name = Symbol("Linear solve")
+        elseif name == :update_time
+            name = :Update
+        elseif name == :convergence
+            name = :Convergence
+        elseif name == :io
+            name = Symbol("Input/Output")
+        elseif name == :other
+            name = :Other
+        elseif name == :total
+            name = :Total
+        end
+        return name
+    end
 
 
     pretty_table(data; header = (["Each", "Fraction", "Total"], [s, "Percent", s_t]), 
-                      row_names = flds,
+                      row_names = map(translate_for_table, flds),
                       formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
                       title = title,
                       title_alignment = :c,
+                      tf = table_formatter,
+                      row_name_alignment = :l,
                       alignment = [:r, :r, :r],
                       body_hlines = [n-1],
                       row_name_column_title = "Name")
@@ -423,15 +458,20 @@ export read_results
 Read results from a given output_path provded to simulate or simulator_config
 """
 function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}}(),
-                           read_reports = true, reports = [], range = nothing)
+                           read_reports = true, reports = [], range = nothing, name = nothing, verbose::Bool = true)
     indices = valid_restart_indices(pth)
+    if isnothing(name)
+        subpaths = splitpath(pth)
+        name = subpaths[end]
+    end
     if length(indices) != maximum(indices)
         @warn "Gap in dataset. Some outputs might end up empty."
     end
     if isnothing(range)
         range = 1:maximum(indices)
     end
-    @showprogress for i in range
+    p = Progress(range[end]; enabled = verbose, desc = "Reading $name...")
+    for i in range
         state, report = read_restart(pth, i; read_state = read_states, read_report = read_reports)
         if read_states
             push!(states, state)
@@ -439,6 +479,7 @@ function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}
         if read_reports
             push!(reports, report)
         end
+        next!(p)
     end
     return (states, reports)
 end

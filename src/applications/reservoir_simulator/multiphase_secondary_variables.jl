@@ -1,9 +1,6 @@
 export PhaseMassDensities, ConstantCompressibilityDensities
 export BrooksCoreyRelPerm, TabulatedRelPermSimple
 
-abstract type PhaseVariables <: GroupedVariables end
-abstract type ComponentVariable <: GroupedVariables end
-
 degrees_of_freedom_per_entity(model, sf::PhaseVariables) = number_of_phases(model.system)
 
 # Single-phase specialization
@@ -82,10 +79,11 @@ struct TabulatedRelPermSimple{V, M, I} <: RelativePermeabilities
     s::V
     kr::M
     interpolators::I
-    function TabulatedRelPermSimple(s::AbstractVector, kr::AbstractMatrix; kwarg...)
-        nph, n = size(kr)
+    function TabulatedRelPermSimple(s::AbstractVector, kr::AbstractVector; kwarg...)
+        nph = length(kr)
+        n = length(kr[1])
         @assert nph > 0
-        T = eltype(kr)
+        T = eltype(kr[1])
         if n <= 50
             V = SVector{n, T}
         else
@@ -93,12 +91,12 @@ struct TabulatedRelPermSimple{V, M, I} <: RelativePermeabilities
         end
         if eltype(s)<:AbstractVector
             # We got a set of different vectors that correspond to rows of kr
-            @assert all(map(length, s) .== n)
-            interpolators = map((ix) -> get_1d_interpolator(V(s[ix]), V(kr[ix, :]); kwarg...), 1:nph)
+            @assert all(map(length, s) .== map(length, kr))
+            interpolators = map((ix) -> get_1d_interpolator(V(s[ix]), V(kr[ix]); kwarg...), 1:nph)
         else
             # We got a single vector that is used for all rows
             @assert length(s) == n
-            interpolators = map((ix) -> get_1d_interpolator(V(s), V(kr[ix, :]); kwarg...), 1:nph)
+            interpolators = map((ix) -> get_1d_interpolator(V(s), V(kr[ix]); kwarg...), 1:nph)
         end
         i_t = Tuple(interpolators)
         new{typeof(s), typeof(kr), typeof(i_t)}(s, kr, i_t)
@@ -125,6 +123,88 @@ function threaded_interp!(F, context, I, x)
         end
     end
 end
+
+"""
+Interpolated multiphase rel. perm. that is simple (single region, no magic for more than two phases)
+"""
+struct ThreePhaseRelPerm{O, OW, OG, G, R} <: RelativePermeabilities
+    krw::O
+    krow::OW
+    krog::OG
+    krg::G
+    swcon::R
+end
+
+function ThreePhaseRelPerm(; w, g, ow, og, swcon = 0.0)
+    return ThreePhaseRelPerm(w, ow, og, g, swcon)
+end
+
+@terv_secondary function update_as_secondary!(kr, relperm::ThreePhaseRelPerm, model, param, Saturations)
+    s = Saturations
+    krw = relperm.krw
+    krow = relperm.krow
+    krog = relperm.krog
+    krg = relperm.krg
+    swcon = relperm.swcon
+
+    l = 1
+    o = 2
+    g = 3
+    @inbounds for c in 1:size(kr, 2)
+        # Water
+        sw = s[l, c]
+        kr[l, c] = krw(sw)
+        # Gas
+        sg = s[g, c]
+        kr[g, c] = krg(sg)
+        # Oil is special
+        so = s[o, c]
+        swc = min(swcon, value(sw) - 1e-5)
+        d  = (sg + sw - swc)
+        ww = (sw - swc)/d
+        kro = (1-ww)*krog(so) + ww*krow(so)
+        kr[o, c] = kro
+    end
+end
+
+struct SimpleCapillaryPressure{T} <: JutulVariables
+    pc::T
+end
+
+degrees_of_freedom_per_entity(model, v::SimpleCapillaryPressure) = number_of_phases(model.system) - 1
+
+@terv_secondary function update_as_secondary!(Δp, pc::SimpleCapillaryPressure, model, param, Saturations)
+    cap = pc.pc
+    npc, nc = size(Δp)
+    if npc == 1
+        pcow = cap[1]
+        for c in 1:nc
+            sw = Saturations[1, c]
+            Δp[1, c] = pcow(sw)
+        end
+    elseif npc == 2
+        pcow, pcog = cap
+        for c in 1:nc
+            if isnothing(pcow)
+                Δ = 0
+            else
+                sw = Saturations[1, c]
+                Δ = -pcow(sw)
+            end
+            Δp[1, c] = Δ
+            if isnothing(pcog)
+                Δ = 0
+            else
+                sg = Saturations[3, c]
+                Δ = pcog(sg)
+            end
+            Δp[2, c] = Δ
+        end
+    else
+        error("Only implemented for two and three-phase flow.")
+    end
+end
+
 
 """
 Mass density of each phase

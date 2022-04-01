@@ -1,7 +1,7 @@
 export TotalSurfaceMassRate, WellGroup, DisabledControl
 export HistoryMode, PredictionMode, Wells
 
-const MIN_ACTIVE_WELL_RATE = 1e-10
+const MIN_ACTIVE_WELL_RATE = 1e-20
 
 """
 Well variables - entities that we have exactly one of per well (and usually relates to the surface connection)
@@ -163,7 +163,7 @@ function update_facility_control_crossterm!(s_buf, t_buf, well_state, rhoS, targ
         has_limits = !isnothing(limits)
         is_bhp = isa(target, BottomHolePressureTarget)
 
-        need_rates = !is_injecting && (!is_bhp || has_limits)
+        need_rates = isa(ctrl, ProducerControl) && (!is_bhp || has_limits)
         if need_rates
             rhoS, S = flash_wellstream_at_surface(source_model, well_state, rhoS)
         else
@@ -365,6 +365,7 @@ function apply_well_limit!(cfg::WellGroupConfiguration, target, wmodel, wstate, 
         ctrl = operating_control(cfg, well)
         target, changed = check_active_limits(ctrl, target, current_lims, wmodel, wstate, well, density_s, volume_fraction_s, total_mass_rate)
         if changed
+            @debug "Switching $well" target cfg.operating_controls[well].target
             cfg.operating_controls[well] = replace_target(ctrl, target)
         end
     end

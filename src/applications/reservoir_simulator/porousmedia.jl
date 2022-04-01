@@ -106,7 +106,7 @@ function discretized_domain_tpfv_flow(geometry; porosity = 0.1,
     else
         ft = DarcyMassMobilityFlow()
     end
-    flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g)
+    flow = TwoPointPotentialFlow(SPU(), TPFA(), ft, G, T, z, g, ncells = length(pore_volume))
     disc = (mass_flow = flow,)
     return DiscretizedDomain(G, disc)
 end

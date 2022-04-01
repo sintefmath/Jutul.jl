@@ -426,7 +426,9 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     res_q = ct.crossterm_target
     well_q = ct.crossterm_source
 
-    apply_well_reservoir_sources!(target_model.system, res_q, well_q, state_res, state_well, perforations, -1)
+    param_res = target_storage.parameters
+    param_well = source_storage.parameters
+    apply_well_reservoir_sources!(target_model.system, res_q, well_q, state_res, state_well, param_res, param_well, perforations, -1)
     # @debug "($source → $target, from wellbore): $(value.(res_q)), s: $(value.(state_well.Saturations))"
 end
 
@@ -442,6 +444,9 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     state_res = source_storage.state
     state_well = target_storage.state
 
+    param_res = source_storage.parameters
+    param_well = target_storage.parameters
+
     perforations = target_model.domain.grid.perforations
 
     res_q = ct.crossterm_source
@@ -449,11 +454,11 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ConservationLaw,
     sys_t = target_model.system
     # sys_s = source_model.system
     # @assert sys_t == sys_s "Wells must have the same fluid system as the reservoir ($sys_t ≠ $sys_s)"
-    apply_well_reservoir_sources!(sys_t, res_q, well_q, state_res, state_well, perforations, 1)
+    apply_well_reservoir_sources!(sys_t, res_q, well_q, state_res, state_well, param_res, param_well, perforations, 1)
 end
 
 
-function apply_well_reservoir_sources!(sys::Union{ImmiscibleSystem, SinglePhaseSystem}, res_q, well_q, state_res, state_well, perforations, sgn)
+function apply_well_reservoir_sources!(sys::Union{ImmiscibleSystem, SinglePhaseSystem}, res_q, well_q, state_res, state_well, param_res, param_well, perforations, sgn)
     p_res = state_res.Pressure
     p_well = state_well.Pressure
 
@@ -513,7 +518,7 @@ function unpack_perf(perf, i)
     return (si, ri, wi, gdz)
 end
 
-function apply_well_reservoir_sources!(sys::CompositionalSystem, res_q, well_q, state_res, state_well, perforations, sgn)
+function apply_well_reservoir_sources!(sys::CompositionalSystem, res_q, well_q, state_res, state_well, param_res, param_well, perforations, sgn)
     p_res = state_res.Pressure
     p_well = state_well.Pressure
 

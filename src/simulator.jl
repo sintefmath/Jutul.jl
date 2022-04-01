@@ -90,6 +90,8 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:info_level] = 0
     # Output extra, highly detailed performance report at simulation end
     cfg[:extra_timing] = false
+    # Avoid unicode (if possible)
+    cfg[:ascii_terminal] = false
     # Define a default progress ProgressRecorder
     cfg[:ProgressRecorder] = ProgressRecorder()
     cfg[:timestep_selectors] = [TimestepSelector()]
@@ -97,9 +99,10 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:timestep_max_decrease] = 0.1
     # Max residual before error is issued
     cfg[:max_residual] = 1e20
+    cfg[:end_report] = nothing
 
     overwrite_by_kwargs(cfg; kwarg...)
-    if !haskey(cfg, :end_report)
+    if isnothing(cfg[:end_report])
         cfg[:end_report] = cfg[:info_level] > -1
     end
     # Default: Do not store states in memory if output to file.
@@ -113,6 +116,12 @@ function simulator_config!(cfg, sim; kwarg...)
         @debug "Creating $pth for output."
         mkdir(pth)
     end
+    if cfg[:ascii_terminal]
+        fmt = tf_markdown
+    else
+        fmt = tf_unicode_rounded
+    end
+    cfg[:table_formatter] = fmt;
     return cfg
 end
 
@@ -120,7 +129,7 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     end
-    states, reports, first_step = initial_setup!(sim, config, restart = restart)
+    states, reports, first_step, dt = initial_setup!(sim, config, timesteps, restart = restart)
     # Time-step info to keep around
     no_steps = length(timesteps)
     t_tot = sum(timesteps)
@@ -131,7 +140,6 @@ function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothi
     # Initialize loop
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
-    dt = timesteps[first_step]
     if initialize
         check_forces(sim, forces, timesteps)
         forces_step = forces_for_timestep(sim, forces, timesteps, first_step)
@@ -163,7 +171,7 @@ function initialize_before_first_timestep!(sim, first_dT; forces = forces, confi
     end
 end
 
-function initial_setup!(sim, config; restart = nothing)
+function initial_setup!(sim, config, timesteps; restart = nothing)
     # Timing stuff
     if config[:extra_timing]
         enable_timer!()
@@ -182,6 +190,7 @@ function initial_setup!(sim, config; restart = nothing)
             @info "Starting from first step."
         end
         first_step = 1
+        dt = timesteps[first_step]
     else
         @assert !isnothing(pth) "output_path must be specified if restarts are enabled"
         if isa(restart, Bool)
@@ -189,15 +198,16 @@ function initial_setup!(sim, config; restart = nothing)
         end
         first_step = restart
         prev_step = restart - 1;
-        state0, = read_restart(pth, prev_step, read_report = false, read_state = true)
+        state0, report0 = read_restart(pth, prev_step)
         read_results(pth, read_reports = true, read_states = config[:output_states], states = states, reports = reports, range = 1:prev_step);
         reset_previous_state!(sim, state0)
         reset_to_previous_state!(sim)
+        dt = report0[:ministeps][end][:dt]
         if do_print
             @info "Restarting from step $first_step."
         end
     end
-    return (states, reports, first_step)
+    return (states, reports, first_step, dt)
 end
 
 function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = nothing, step_no = NaN, 
@@ -236,7 +246,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
             if isnan(dt)
                 # Timestep too small, cut too many times, ...
                 if info_level > -1
-                    @warn "Unable to reduce time-step to smaller value. Aborting simulation."
+                    @error "Unable to reduce time-step to smaller value. Aborting simulation."
                 end
                 break
             else
@@ -256,15 +266,15 @@ function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
     perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config; iteration = NaN)
+function perform_step!(storage, model, dt, forces, config; iteration = NaN, update_secondary = iteration > 1)
     do_solve, e, converged = true, nothing, false
 
     report = OrderedDict()
     timing_out = config[:debug_level] > 1
     # Update the properties and equations
     t_asm = @elapsed begin
-        time =  config[:ProgressRecorder].recorder.time + dt
-        update_state_dependents!(storage, model, dt, forces; time = time, update_secondary = iteration > 1)
+        time = config[:ProgressRecorder].recorder.time + dt
+        update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
     end
     if timing_out
         @debug "Assembled equations in $t_asm seconds."
@@ -358,8 +368,15 @@ end
 
 function final_simulation_message(simulator, p, reports, timesteps, config, aborted)
     info_level = config[:info_level]
-    if info_level >= 0 && length(reports) > 0
+    print_end_report = config[:end_report]
+    verbose = info_level >= 0
+    if verbose || print_end_report
         stats = report_stats(reports)
+    else
+        stats = nothing
+    end
+    # Summary message.
+    if verbose && length(reports) > 0
         if aborted
             endstr = "🔴 Simulation aborted. Completed $(stats.steps-1) of $(length(timesteps)) timesteps"
         else
@@ -376,12 +393,14 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
         else
             @info final_message
         end
-        if config[:end_report]
-            print_stats(stats)
-        end
     elseif info_level == 0
         cancel(p)
     end
+    # Optional table of performance numbers etc.
+    if print_end_report
+        print_stats(stats, table_formatter = config[:table_formatter])
+    end
+    # Detailed timing through @timeit instrumentation (can be a lot)
     if config[:extra_timing]
         @info "Detailed timing:"
         print_timer()
@@ -506,7 +525,7 @@ function store_output!(states, reports, step, sim, config, report)
     file_out = !isnothing(path)
     # We always keep reports in memory since they are used for timestepping logic
     push!(reports, report)
-    if mem_out || file_out
+    t_out = @elapsed if mem_out || file_out
         state = get_output_state(sim)
         if mem_out
             push!(states, state)
@@ -521,6 +540,7 @@ function store_output!(states, reports, step, sim, config, report)
             end
         end
     end
+    report[:output_time] = t_out
 end
 
 # Progress recorder stuff
@@ -594,7 +614,7 @@ function retrieve_output!(states, config)
     if !config[:output_states] && !isnothing(pth)
         @debug "Reading states from $pth..."
         @assert isempty(states)
-        read_results(pth, read_reports = true, states = states);
+        read_results(pth, read_reports = true, states = states, verbose = config[:info_level] >= 0);
     end
 end
 

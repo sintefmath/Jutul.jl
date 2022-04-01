@@ -1,16 +1,56 @@
 export get_1d_interpolator
 
-function get_1d_interpolator(xs, ys; method = DataInterpolations.LinearInterpolation, cap_endpoints = true)
-    if cap_endpoints
-        ϵ = 100*sum(abs.(xs))
-        # Add perturbed points
-        xs = vcat(xs[1] - ϵ, xs)
-        xs = vcat(xs, xs[end] + ϵ)
-        # Repeat start and end
-        ys = vcat(ys[1], ys)
-        ys = vcat(ys, ys[end])
+first_lower(tab, x) = clamp(searchsortedfirst(tab, x) - 1, 1, length(tab) - 1)
+
+function interval_weight(t, x, ix)
+    @inbounds first = t[ix]
+    @inbounds last = t[ix+1]
+    Δx = last - first
+    w = (x - first)/Δx
+    return w
+end
+
+function linear_interp(X, F, x)
+    ix = first_lower(X, x)
+    return linear_interp_internal(F, X, ix, x)
+end
+
+function linear_interp_internal(F, X, ix, x)
+    @inbounds X_0 = X[ix]
+    @inbounds F_0 = F[ix]
+    @inbounds ∂F∂X = (F[ix+1] - F_0)/(X[ix+1] - X_0)
+    Δx = x - X_0
+    return F_0 + ∂F∂X*Δx
+end
+
+struct LinearInterpolant{V}
+    X::V
+    F::V
+    function LinearInterpolant(X::T, F::T) where T<:AbstractVector
+        @assert length(X) == length(F)
+        @assert issorted(X) "Interpolation inputs must be sorted"
+        new{T}(X, F)
     end
-    return method(ys, xs)
+end
+
+interpolate(I::LinearInterpolant, x) = linear_interp(I.X, I.F, x)
+(I::LinearInterpolant)(x) = interpolate(I, x)
+
+function get_1d_interpolator(xs, ys; method = LinearInterpolant, cap_endpoints = true, cap_end = cap_endpoints, cap_start = cap_endpoints)
+    if cap_endpoints
+        ϵ = 100*sum(abs, xs)
+        # Add perturbed points
+        # Repeat start and end
+        if cap_start
+            xs = vcat(xs[1] - ϵ, xs)
+            ys = vcat(ys[1], ys)
+        end
+        if cap_end
+            xs = vcat(xs, xs[end] + ϵ)
+            ys = vcat(ys, ys[end])
+        end
+    end
+    return method(xs, ys)
 end
 
 

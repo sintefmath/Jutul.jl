@@ -89,10 +89,10 @@ function get_neighborship(grid)
     return grid.neighborship
 end
 
-function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, gravity = gravity_constant)
+function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, gravity = gravity_constant; ncells = nothing)
     N = get_neighborship(grid)
     if size(N, 2) > 0
-        faces, face_pos = get_facepos(N)
+        faces, face_pos = get_facepos(N, ncells)
         has_grav = !isnothing(gravity) || gravity == 0
 
         nhf = length(faces)
@@ -105,7 +105,7 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
             @assert length(z) == nc
         end
         if !isnothing(T)
-            @assert length(T) == nhf ÷ 2
+            @assert length(T) == nhf ÷ 2 "Transmissibilities vector must have length of half the number of half faces ($nhf / 2 = $(nhf/2), was $(length(T)))"
         end
         get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity, include_face_sign(flow_type))
         el = get_el(1, 1) # Could be junk, we just need eltype
