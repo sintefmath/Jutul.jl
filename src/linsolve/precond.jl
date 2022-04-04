@@ -1,4 +1,4 @@
-export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, DampedJacobiPreconditioner, AMGPreconditioner
+export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, DampedJacobiPreconditioner, AMGPreconditioner, JutulPreconditioner
 
 abstract type JutulPreconditioner end
 

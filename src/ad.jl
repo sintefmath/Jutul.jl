@@ -1,4 +1,4 @@
-export CompactAutoDiffCache, as_value, JutulAutoDiffCache, number_of_entities
+export CompactAutoDiffCache, as_value, JutulAutoDiffCache, number_of_entities, get_entries, fill_equation_entries!
 
 """
 An AutoDiffCache is a type that holds both a set of AD values and a map into some

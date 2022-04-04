@@ -1,4 +1,5 @@
 export convert_to_immutable_storage, convert_to_mutable_storage, gravity_constant, report_stats, print_stats
+export get_cell_faces, get_facepos, get_cell_neighbors
 
 const gravity_constant = 9.80665
 
@@ -563,3 +564,60 @@ function report_timesteps(reports; ministeps = false, extra_out = false)
 end
 
 report_times(reports; ministeps = false) = cumsum(report_timesteps(reports, ministeps = ministeps, extra_out = false))
+
+
+function get_cell_faces(N, nc = nothing)
+    # Create array of arrays where each entry contains the faces of that cell
+    t = eltype(N)
+    if length(N) == 0
+        cell_faces = ones(t, 1)
+    else
+        if isnothing(nc)
+            nc = maximum(N)
+        end
+        cell_faces = [Vector{t}() for i = 1:nc]
+        for i in 1:size(N, 1)
+            for j = 1:size(N, 2)
+                push!(cell_faces[N[i, j]], j)
+            end
+        end
+        # Sort each of them
+        for i in cell_faces
+            sort!(i)
+        end
+    end
+    return cell_faces
+end
+
+function get_cell_neighbors(N, nc = maximum(N), includeSelf = true)
+    # Find faces in each array
+    t = typeof(N[1])
+    cell_neigh = [Vector{t}() for i = 1:nc]
+    for i in 1:size(N, 2)
+        push!(cell_neigh[N[1, i]], N[2, i])
+        push!(cell_neigh[N[2, i]], N[1, i])
+    end
+    # Sort each of them
+    for i in eachindex(cell_neigh)
+        loc = cell_neigh[i]
+        if includeSelf
+            push!(loc, i)
+        end
+        sort!(loc)
+    end
+    return cell_neigh
+end
+
+function get_facepos(N, arg...)
+    if length(N) == 0
+        t = eltype(N)
+        faces = zeros(t, 0)
+        facePos = ones(t, 2)
+    else
+        cell_faces = get_cell_faces(N, arg...)
+        counts = [length(x) for x in cell_faces]
+        facePos = cumsum([1; counts])
+        faces = reduce(vcat, cell_faces)
+    end
+    return (faces, facePos)
+end
