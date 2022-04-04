@@ -41,6 +41,7 @@ function number_of_partials_per_entity(model::SimulationModel, entity::JutulUnit
     return n
 end
 
+export setup_state, setup_state!
 """
 Set up a state. You likely want to overload setup_state! instead of this one.
 """
@@ -484,6 +485,7 @@ setup_parameters_system!(d, model, ::Any) = nothing
 setup_parameters_context!(d, model, ::Any) = nothing
 setup_parameters_formulation!(d, model, ::Any) = nothing
 
+export build_forces
 function build_forces(model::JutulModel)
     return NamedTuple()
 end

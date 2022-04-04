@@ -26,7 +26,7 @@ states, reports = simulate(sim, dt, forces = forces, config = cfg);
 ##
 error()
 ## Plotting
-using GLMakie, Jutul
+using JutulViz
 res_states = map((x) -> x[:Reservoir], states)
 g = MRSTWrapMesh(mrst_data["G"])
 
