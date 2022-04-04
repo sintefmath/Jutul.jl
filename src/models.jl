@@ -1,5 +1,7 @@
 export update_state_dependents!, check_convergence
 
+export setup_parameters_domain!, setup_parameters_system!, setup_parameters_context!, setup_parameters_formulation!
+
 function get_primary_variables(model::SimulationModel)
     return model.primary_variables
 end
@@ -338,7 +340,7 @@ end
 function allocate_array(context::JutulContext, value, n...)
     tmp = transfer(context, value)
     if !isa(tmp, AbstractArray)
-        tmp = [tmp]
+        # tmp = [tmp]
     end
     return repeat(tmp, n...)
 end

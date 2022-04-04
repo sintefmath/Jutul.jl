@@ -1,4 +1,4 @@
-export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, DampedJacobiPreconditioner, AMGPreconditioner, JutulPreconditioner
+export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, DampedJacobiPreconditioner, AMGPreconditioner, JutulPreconditioner, apply!
 
 abstract type JutulPreconditioner end
 
@@ -278,6 +278,7 @@ function update!(lup::LUPreconditioner, A, b)
     end
 end
 
+export operator_nrows
 function operator_nrows(lup::LUPreconditioner)
     f = get_factorization(lup)
     return size(f.L, 1)

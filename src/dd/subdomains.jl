@@ -113,6 +113,7 @@ end
 
 #global_map
 
+export active_entities
 # Specialize cells, leave faces be (probably already filtered)
 active_cells(model) = active_entities(model.domain, Cells())
 
