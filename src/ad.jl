@@ -356,7 +356,7 @@ function allocate_array_ad(n::R...; context::JutulContext = DefaultContext(), di
     T = float_type(context)
     z_val = zero(T)
     if npartials == 0
-        A = allocate_array(context, z_val, n...)
+        A = allocate_array(context, [z_val], n...)
     else
         if isa(diag_pos, AbstractVector)
             @assert n[1] == length(diag_pos) "diag_pos must be specified for all columns."

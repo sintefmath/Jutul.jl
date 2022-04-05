@@ -339,9 +339,6 @@ end
 
 function allocate_array(context::JutulContext, value, n...)
     tmp = transfer(context, value)
-    if !isa(tmp, AbstractArray)
-        # tmp = [tmp]
-    end
     return repeat(tmp, n...)
 end
 
