@@ -1,8 +1,8 @@
 export JutulSystem, JutulDomain, JutulVariables, JutulGrid, JutulContext
 export SimulationModel, JutulVariables, JutulFormulation, JutulEquation
 export setup_parameters, JutulForce
-export Cells, Nodes, Faces
-export ConstantVariables, ScalarVariable, GroupedVariables
+export Cells, Nodes, Faces, declare_entities
+export ConstantVariables, ScalarVariable, GroupedVariables, FractionVariables
 
 export SingleCUDAContext, SharedMemoryContext, DefaultContext
 export BlockMajorLayout, EquationMajorLayout, UnitMajorLayout
@@ -131,6 +131,7 @@ struct SharedMemoryContext <: CPUJutulContext
 
 end
 
+export thread_batch
 thread_batch(::Any) = 1000
 
 "Default context"
@@ -166,6 +167,7 @@ end
 # Domains
 abstract type JutulDomain end
 
+export DiscretizedDomain
 struct DiscretizedDomain{G} <: JutulDomain
     grid::G
     discretizations
@@ -209,6 +211,8 @@ abstract type JutulEquation end
 abstract type DiagonalEquation <: JutulEquation end
 
 # Models
+export JutulModel, FullyImplicit, SimulationModel, JutulEquation, JutulFormulation
+
 abstract type JutulModel end
 abstract type AbstractSimulationModel <: JutulModel end
 
@@ -300,7 +304,7 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
 end
 
 # Grids etc
-
+export JutulUnit, Cells, Faces, Nodes
 ## Grid
 abstract type JutulGrid end
 

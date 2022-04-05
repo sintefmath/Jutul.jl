@@ -1,5 +1,6 @@
 # Primary variables
-
+export degrees_of_freedom_per_entity, minimum_output_variables
+export absolute_increment_limit, relative_increment_limit, maximum_value, minimum_value, update_primary_variable!, default_value, initialize_variable_value!, number_of_entities
 """
 Number of entities (e.g. Cells, Faces) a variable is defined on.
 By default, each primary variable exists on all cells of a discretized domain
@@ -405,6 +406,8 @@ function transfer(context, v::ConstantVariables)
     constants = transfer(context, v.constants)
     return ConstantVariables(constants, v.entity, single_entity = v.single_entity)
 end
+
+update_secondary_variable!(x, var::ConstantVariables, model, parameters, state) = nothing
 
 function initialize_variable_value(model, var::ConstantVariables, val; perform_copy = true)
     # Ignore initializer since we already know the constants

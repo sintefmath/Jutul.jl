@@ -1,1 +1,0 @@
-run('../../../../mrst-2021a/startup.m')

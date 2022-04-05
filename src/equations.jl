@@ -1,4 +1,4 @@
-export allocate_array_ad, get_ad_entity_scalar, update_values!
+export allocate_array_ad, get_ad_entity_scalar, update_values!, update_linearized_system_equation!
 export value, find_sparse_position
 
 

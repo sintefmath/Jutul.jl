@@ -19,7 +19,9 @@ function test_io()
             @test s_mem == s_file
         end
         for (r_mem, r_file) in zip(reports, reports2)
-            @test r_mem == r_file
+            for (k, v) in r_file
+                @test v == r_mem[k]
+            end
         end
     end
 end

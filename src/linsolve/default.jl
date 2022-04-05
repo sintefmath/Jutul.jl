@@ -1,4 +1,4 @@
-export LinearizedSystem, solve!, AMGSolver, CuSparseSolver, transfer, LUSolver
+export LinearizedSystem, MultiLinearizedSystem, solve!, AMGSolver, CuSparseSolver, transfer, LUSolver
 
 using SparseArrays, LinearOperators, StaticArrays
 using IterativeSolvers, Krylov, AlgebraicMultigrid

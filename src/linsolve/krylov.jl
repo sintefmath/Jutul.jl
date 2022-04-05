@@ -61,6 +61,7 @@ function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, si
     return op
 end
 
+export update!
 function update_preconditioner!(prec, sys, model, storage, recorder)
     update!(prec, sys, model, storage, recorder)
 end

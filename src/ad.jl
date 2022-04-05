@@ -1,4 +1,4 @@
-export CompactAutoDiffCache, as_value, JutulAutoDiffCache, number_of_entities
+export CompactAutoDiffCache, as_value, JutulAutoDiffCache, number_of_entities, get_entries, fill_equation_entries!, matrix_layout
 
 """
 An AutoDiffCache is a type that holds both a set of AD values and a map into some
@@ -356,7 +356,7 @@ function allocate_array_ad(n::R...; context::JutulContext = DefaultContext(), di
     T = float_type(context)
     z_val = zero(T)
     if npartials == 0
-        A = allocate_array(context, z_val, n...)
+        A = allocate_array(context, [z_val], n...)
     else
         if isa(diag_pos, AbstractVector)
             @assert n[1] == length(diag_pos) "diag_pos must be specified for all columns."

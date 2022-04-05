@@ -1,5 +1,7 @@
 export update_state_dependents!, check_convergence
 
+export setup_parameters_domain!, setup_parameters_system!, setup_parameters_context!, setup_parameters_formulation!
+
 function get_primary_variables(model::SimulationModel)
     return model.primary_variables
 end
@@ -41,6 +43,7 @@ function number_of_partials_per_entity(model::SimulationModel, entity::JutulUnit
     return n
 end
 
+export setup_state, setup_state!
 """
 Set up a state. You likely want to overload setup_state! instead of this one.
 """
@@ -484,6 +487,7 @@ setup_parameters_system!(d, model, ::Any) = nothing
 setup_parameters_context!(d, model, ::Any) = nothing
 setup_parameters_formulation!(d, model, ::Any) = nothing
 
+export build_forces
 function build_forces(model::JutulModel)
     return NamedTuple()
 end

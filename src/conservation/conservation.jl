@@ -396,6 +396,7 @@ function update_accumulation!(law, storage, model, dt)
     return acc
 end
 
+export update_half_face_flux!, update_accumulation!, update_equation!, get_diagonal_cache, get_diagonal_entries
 
 function update_equation!(law::ConservationLaw, storage, model, dt)
     # Zero out any sparse indices
