@@ -29,7 +29,7 @@ mutable struct GenericKrylov
     x
     r_norm
     config::IterativeSolverConfig
-    function GenericKrylov(solver = IterativeSolvers.gmres!; preconditioner = nothing, provider = nothing, kwarg...)
+    function GenericKrylov(solver = Krylov.gmres; preconditioner = nothing, provider = nothing, kwarg...)
         if isnothing(provider)
             provider = Base.parentmodule(solver)
         end
