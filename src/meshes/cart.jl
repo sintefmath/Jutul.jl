@@ -1,5 +1,5 @@
 struct CartesianMesh <: AbstractJutulMesh
-    dims   # Tuple of dimensions (x, y, [z])
+    dims   # Tuple of dimensions (nx, ny, [nz])
     deltas # Either a tuple of scalars (uniform grid) or a tuple of vectors (non-uniform grid)
     origin # Coordinate of lower left corner
     function CartesianMesh(dims::Tuple, deltas_or_size::Union{Nothing, Tuple} = nothing; origin = nothing)
@@ -183,7 +183,7 @@ function get_3d_pos(g, t::Tuple)
 end
 
 function get_3d_pos(g, t::Integer)
-    error("Not implemented")
+    error("Linear index not implemented for this grid. Try a Tuple?")
 end
 
 
