@@ -1,4 +1,4 @@
-export get_3d_dims, cell_ijk, cell_index
+export cell_dims, get_3d_dims, cell_ijk, cell_index
 
 struct CartesianMesh <: AbstractJutulMesh
     dims   # Tuple of dimensions (nx, ny, [nz])
@@ -48,11 +48,13 @@ coord_offset(pos, δ::AbstractVector) = sum(δ[1:(pos-1)])
 """
 Linear index of Cartesian mesh cell
 """
-function cell_index(g, pos)
+function cell_index(g, pos::Tuple)
     nx, ny, nz = get_3d_dims(g)
     x, y, z = cell_ijk(g, pos)
     return (z-1)*nx*ny + (y-1)*nx + x
 end
+
+cell_index(g, pos::Integer) = pos
 
 function lower_corner_3d(g, index)
     pos = cell_ijk(g, index)
@@ -60,7 +62,6 @@ function lower_corner_3d(g, index)
     f = (i) -> coord_offset(pos[i], Δ[i])
     return Tuple(map(f, 1:3))
 end
-
 
 """
 Cell dimensions (as 3 tuple)
