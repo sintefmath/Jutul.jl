@@ -8,7 +8,7 @@ using Jutul
         d = length(dims)
         @testset "Basic consistency" begin
             @test number_of_cells(g) == n
-            @test get_3d_dims(g)[1:d] == dims
+            @test grid_dims_ijk(g)[1:d] == dims
         end
         nx = dims[1]
         ny = nz = 1

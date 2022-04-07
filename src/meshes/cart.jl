@@ -1,4 +1,4 @@
-export cell_dims, get_3d_dims, cell_ijk, cell_index
+export cell_dims, grid_dims_ijk, cell_ijk, cell_index
 
 struct CartesianMesh <: AbstractJutulMesh
     dims   # Tuple of dimensions (nx, ny, [nz])
@@ -35,7 +35,7 @@ end
 dim(t::CartesianMesh) = length(t.dims)
 number_of_cells(t::CartesianMesh) = prod(t.dims)
 function number_of_faces(t::CartesianMesh)
-    nx, ny, nz = get_3d_dims(t)
+    nx, ny, nz = grid_dims_ijk(t)
     return (nx-1)*ny*nz + (ny-1)*nx*nz + (nz-1)*ny*nx
 end
 
@@ -49,7 +49,7 @@ coord_offset(pos, δ::AbstractVector) = sum(δ[1:(pos-1)])
 Linear index of Cartesian mesh cell
 """
 function cell_index(g, pos::Tuple)
-    nx, ny, nz = get_3d_dims(g)
+    nx, ny, nz = grid_dims_ijk(g)
     x, y, z = cell_ijk(g, pos)
     return (z-1)*nx*ny + (y-1)*nx + x
 end
@@ -76,7 +76,7 @@ function tpfv_geometry(g::CartesianMesh)
     Δ = g.deltas
     d = dim(g)
 
-    nx, ny, nz = get_3d_dims(g)
+    nx, ny, nz = grid_dims_ijk(g)
 
     # Cell data first - volumes and centroids
     nc = nx*ny*nz
@@ -155,7 +155,7 @@ function tpfv_geometry(g::CartesianMesh)
     return TwoPointFiniteVolumeGeometry(N, face_areas, V, face_normals, cell_centroids, face_centroids)
 end
 
-function get_3d_dims(g)
+function grid_dims_ijk(g)
     d = length(g.dims)
     if d == 1
         nx = g.dims[1]
@@ -186,7 +186,7 @@ function cell_ijk(g, t::Tuple)
 end
 
 function cell_ijk(g, t::Integer)
-    nx, ny, nz = get_3d_dims(g)
+    nx, ny, nz = grid_dims_ijk(g)
     # (z-1)*nx*ny + (y-1)*nx + x
     x = mod(t - 1, nx) + 1
     y = mod((t - x) ÷ nx, ny) + 1
