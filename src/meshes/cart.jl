@@ -1,3 +1,5 @@
+export get_3d_dims, cell_ijk, cell_index
+
 struct CartesianMesh <: AbstractJutulMesh
     dims   # Tuple of dimensions (nx, ny, [nz])
     deltas # Either a tuple of scalars (uniform grid) or a tuple of vectors (non-uniform grid)
@@ -48,12 +50,12 @@ Linear index of Cartesian mesh cell
 """
 function cell_index(g, pos)
     nx, ny, nz = get_3d_dims(g)
-    x, y, z = get_3d_pos(g, pos)
+    x, y, z = cell_ijk(g, pos)
     return (z-1)*nx*ny + (y-1)*nx + x
 end
 
 function lower_corner_3d(g, index)
-    pos = get_3d_pos(g, index)
+    pos = cell_ijk(g, index)
     Δ = g.deltas
     f = (i) -> coord_offset(pos[i], Δ[i])
     return Tuple(map(f, 1:3))
@@ -64,7 +66,7 @@ end
 Cell dimensions (as 3 tuple)
 """
 function cell_dims(g, pos)
-    x, y, z = get_3d_pos(g, pos)
+    x, y, z = cell_ijk(g, pos)
     Δ = g.deltas
     return (get_delta(Δ, x, 1), get_delta(Δ, y, 2), get_delta(Δ, z, 3))
 end
@@ -167,7 +169,7 @@ function get_3d_dims(g)
     return (nx, ny, nz)
 end
 
-function get_3d_pos(g, t::Tuple)
+function cell_ijk(g, t::Tuple)
     d = length(t)
     if d == 1
         nx = t[1]
@@ -182,8 +184,14 @@ function get_3d_pos(g, t::Tuple)
     return (nx, ny, nz)
 end
 
-function get_3d_pos(g, t::Integer)
-    error("Linear index not implemented for this grid. Try a Tuple?")
+function cell_ijk(g, t::Integer)
+    nx, ny, nz = get_3d_dims(g)
+    # (z-1)*nx*ny + (y-1)*nx + x
+    x = mod(t - 1, nx) + 1
+    y = mod((t - x) ÷ nx, ny) + 1
+    leftover = (t - x - (y-1)*nx)
+    z = (leftover ÷ (nx*ny)) + 1
+    return (x, y, z)
 end
 
 
