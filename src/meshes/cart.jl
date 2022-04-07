@@ -284,7 +284,9 @@ function triangulate_outer_surface(m::CartesianMesh, is_depth = true)
                              x0      y0 + dy z]
             end
             local_tri = [1 2 3; 3 4 1]
-
+            if is_depth
+                @. local_pts[:, 3] *= -1
+            end
             return (local_pts, local_tri)
         end
         include_all = false
