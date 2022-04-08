@@ -53,6 +53,14 @@ function setup_state(model::JutulModel, arg...)
     return state
 end
 
+function setup_state(model::JutulModel; kwarg...)
+    init = Dict{Symbol, Any}()
+    for (k, v) in kwarg
+        init[k] = v
+    end
+    return setup_state(model, init)
+end
+
 """
 Initialize primary variables and other state fields, given initial values as a Dict
 """

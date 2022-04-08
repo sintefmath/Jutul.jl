@@ -616,6 +616,20 @@ function setup_state(model::MultiModel, initializers)
     return state
 end
 
+function setup_state(model::MultiModel; kwarg...)
+    init = Dict{Symbol, Any}()
+    # Set up empty initializers first
+    for k in submodels_symbols(model)
+        init[k] = nothing
+    end
+    # Then unpack kwarg as separate initializers
+    for (k, v) in kwarg
+        @assert haskey(model.models, k) "$k not found in models" keys(model.models)
+        init[key] = v
+    end
+    return setup_state(model, init)
+end
+
 function setup_parameters(model::MultiModel)
     p = Dict()
     for key in submodels_symbols(model)
