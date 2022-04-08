@@ -47,7 +47,7 @@ function update_equation!(eq::ScalarTestEquation, storage, model, dt)
     @. equation = (X - X0)/dt
 end
 
-function build_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:ScalarTestDomain, S<:ScalarTestSystem}
+function setup_forces(model::SimulationModel{G, S}; sources = nothing) where {G<:ScalarTestDomain, S<:ScalarTestSystem}
     return (sources = sources,)
 end
 

@@ -7,7 +7,7 @@ function test_single()
     model = SimulationModel(D, sys)
     
     source = ScalarTestForce(1.0)
-    forces = build_forces(model, sources = source)
+    forces = setup_forces(model, sources = source)
     state0 = setup_state(model, Dict(:XVar=>0.0))
     sim = Simulator(model, state0 = state0)
     states, = simulate(sim, [1.0], forces = forces)

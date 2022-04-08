@@ -78,7 +78,7 @@ states = simulate(sim_i, [1.0])
 ## Set up injector control
 it = SinglePhaseRateTarget(irate, phase)
 ictrl = InjectorControl(it, imix)
-# iforces = build_forces(Wi, control = ictrl)
+# iforces = setup_forces(Wi, control = ictrl)
 
 ## BHP producer
 Wp = build_well(mrst_data, 2)
@@ -89,7 +89,7 @@ states = simulate(sim_p, [1.0])
 ## Set up producer control
 pt = BottomHolePressureTarget(pRef/2)
 pctrl = ProducerControl(pt)
-# pforces = build_forces(Wp, control = pctrl)
+# pforces = setup_forces(Wp, control = pctrl)
 
 ##
 g = WellGroup([:Injector, :Producer])
@@ -99,7 +99,7 @@ F0 = Dict(:TotalSurfaceMassRate => 0.0)
 fstate = setup_state(WG, F0)
 
 controls = Dict(:Injector => ictrl, :Producer => pctrl)
-fforces = build_forces(WG, control = controls)
+fforces = setup_forces(WG, control = controls)
 ##
 mmodel = MultiModel((Reservoir = model, Injector = Wi, Producer = Wp, Facility = WG))
 # Set up joint state and simulate

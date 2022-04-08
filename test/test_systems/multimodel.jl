@@ -7,13 +7,13 @@ function test_multi(; use_groups = false, kwarg...)
     A = ScalarTestDomain()
     modelA = SimulationModel(A, sys)
     sourceA = ScalarTestForce(1.0)
-    forcesA = build_forces(modelA, sources = sourceA)
+    forcesA = setup_forces(modelA, sources = sourceA)
     state0A = setup_state(modelA, Dict(:XVar=>0.0))
     # Model B
     B = ScalarTestDomain()
     modelB = SimulationModel(B, sys)
     sourceB = ScalarTestForce(-1.0)
-    forcesB = build_forces(modelB, sources = sourceB)
+    forcesB = setup_forces(modelB, sources = sourceB)
     state0B = setup_state(modelB, Dict(:XVar=>0.0))
     
     # Make a multimodel

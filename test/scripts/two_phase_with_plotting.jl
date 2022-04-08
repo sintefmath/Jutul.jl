@@ -49,7 +49,7 @@ function perform_test(mesh_or_casename, doPlot = false, pvfrac=1, tstep = ones(2
     irate = rhoLS*pvfrac*sum(pv)/(tot_time)
     src  = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
             SourceTerm(nc, -irate, fractional_flow = [1.0, 0.0])]
-    forces = build_forces(model, sources = src)
+    forces = setup_forces(model, sources = src)
 
     # State is dict with pressure in each cell
     init = Dict(:Pressure => p0, :Saturations => [0.0, 1.0])

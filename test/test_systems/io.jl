@@ -7,7 +7,7 @@ function test_io()
     model = SimulationModel(D, sys)
     
     source = ScalarTestForce(1.0)
-    forces = build_forces(model, sources = source)
+    forces = setup_forces(model, sources = source)
     state0 = setup_state(model, Dict(:XVar=>0.0))
 
     out = tempname()
@@ -34,7 +34,7 @@ function test_restart()
     model = SimulationModel(D, sys)
     
     source = ScalarTestForce(1.0)
-    forces = build_forces(model, sources = source)
+    forces = setup_forces(model, sources = source)
     state0 = setup_state(model, Dict(:XVar=>0.0))
 
     out = tempname()

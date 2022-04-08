@@ -80,7 +80,7 @@ pv = G.grid.pore_volumes
 irate = pvfrac*sum(pv)/tot_time
 src = [SourceTerm(1, irate, fractional_flow = zi, type = StandardVolumeSource), 
        SourceTerm(nc, -irate, fractional_flow = zi, type = StandardVolumeSource)]
-forces = build_forces(model, sources = src)
+forces = setup_forces(model, sources = src)
 # forces = nothing
 sim = Simulator(model, state0 = state0, parameters = parameters)
 states, report = simulate(sim, timesteps, info_level = 1, forces = forces, max_timestep_cuts = 0, max_nonlinear_iterations = 10);

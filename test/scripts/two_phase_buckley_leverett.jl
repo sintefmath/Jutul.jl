@@ -20,7 +20,7 @@ function perform_test(;nc = 100, time = 1.0, nstep = 100)
     irate = 500*sum(G.grid.pore_volumes)/tot_time
     src  = [SourceTerm(1, irate, fractional_flow = [1.0, 0.0]), 
             SourceTerm(nc, -irate, fractional_flow = [1.0, 0.0])]
-    forces = build_forces(model, sources = src)
+    forces = setup_forces(model, sources = src)
 
     state0 = setup_state(model, Dict(:Pressure => p0, :Saturations => [0.0, 1.0]))
     # Simulate and return

@@ -495,8 +495,8 @@ setup_parameters_system!(d, model, ::Any) = nothing
 setup_parameters_context!(d, model, ::Any) = nothing
 setup_parameters_formulation!(d, model, ::Any) = nothing
 
-export build_forces
-function build_forces(model::JutulModel)
+export setup_forces
+function setup_forces(model::JutulModel)
     return NamedTuple()
 end
 
