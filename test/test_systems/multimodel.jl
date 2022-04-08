@@ -23,9 +23,10 @@ function test_multi(; use_groups = false, kwarg...)
         groups = nothing
     end
     model = MultiModel((A = modelA, B = modelB), groups = groups)
-    # Set up joint state and simulate
-    state0 = setup_state(model, Dict(:A => state0A, :B => state0B))
-    forces = Dict(:A => forcesA, :B => forcesB)
+    # Set up joint state and forces
+    state0 = setup_state(model, A = state0A, B = state0B)
+    forces = setup_forces(model, A = forcesA, B = forcesB)
+    # Set up simulator, and run simulation
     sim = Simulator(model, state0 = state0)
     states, = simulate(sim, [1.0], forces = forces; kwarg...)
 

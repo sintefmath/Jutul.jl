@@ -625,7 +625,7 @@ function setup_state(model::MultiModel; kwarg...)
     # Then unpack kwarg as separate initializers
     for (k, v) in kwarg
         @assert haskey(model.models, k) "$k not found in models" keys(model.models)
-        init[key] = v
+        init[k] = v
     end
     return setup_state(model, init)
 end
@@ -637,6 +637,19 @@ function setup_parameters(model::MultiModel)
         p[key] = setup_parameters(m)
     end
     return p
+end
+
+function setup_forces(model::MultiModel; kwarg...)
+    models = model.models
+    forces = Dict{Symbol, Any}()
+    for k in submodels_symbols(model)
+        forces[k] = setup_forces(models[k])
+    end
+    for (k, v) in kwarg
+        @assert haskey(models, k) "$k not found in models" keys(model.models)
+        forces[k] = v
+    end
+    return forces
 end
 
 function update_secondary_variables!(storage, model::MultiModel)
