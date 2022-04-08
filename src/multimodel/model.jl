@@ -42,6 +42,12 @@ function sort_secondary_variables!(model::MultiModel)
     end
 end
 
+function replace_variables!(model::MultiModel; kwarg...)
+    for m in model.models
+        replace_variables!(m, throw = false; kwarg...)
+    end
+end
+
 function cross_term(storage, target)
     return storage[:cross_terms][target]
 end

@@ -14,6 +14,51 @@ function get_variables(model::SimulationModel)
     return merge(get_primary_variables(model), get_secondary_variables(model))
 end
 
+export set_primary_variables!, set_secondary_variables!, replace_variables!
+"""
+Set a primary variable (adding if it does not exist)
+"""
+function set_primary_variables!(model; kwarg...)
+    pvar = get_secondary_variables(model)
+    for (k, v) in kwarg
+        v::JutulVariables
+        pvar[k] = v
+    end
+end
+
+"""
+Set a secondary variable (adding if it does not exist)
+"""
+function set_secondary_variables!(model; kwarg...)
+    pvar = get_primary_variables(model)
+    for (k, v) in kwarg
+        v::JutulVariables
+        pvar[k] = v
+    end
+end
+
+"""
+Replace a variable that already exists (either primary or secondary)
+"""
+function replace_variables!(model; throw = true, kwarg...)
+    pvar = get_primary_variables(model)
+    svar = get_secondary_variables(model)
+    for (k, v) in kwarg
+        done = false
+        for vars in [pvar, svar]
+            v::JutulVariables
+            if haskey(vars, k)
+                vars[k] = v
+                done = true
+                break
+            end
+        end
+        if !done && throw
+            error("Unable to replace primary variable $k, misspelled?")
+        end
+    end
+end
+
 """
 Get only the entities where primary variables are present,
 sorted by their order in the primary variables.
