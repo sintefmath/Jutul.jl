@@ -57,6 +57,7 @@ function replace_variables!(model; throw = true, kwarg...)
             error("Unable to replace primary variable $k, misspelled?")
         end
     end
+    return model
 end
 
 """
@@ -648,15 +649,15 @@ function get_output_state(storage, model)
     return D
 end
 
-function reset_to_previous_state!(storage, model)
-    primary = storage.primary_variables
-    state0 = storage.state0
-    for f in keys(primary)
-        if haskey(state0, f)
-            update_values!(primary[f], state0[f])
+function replace_values!(old, updated)
+    for f in keys(old)
+        if haskey(updated, f)
+            update_values!(old[f], updated[f])
         end
     end
 end
+
+reset_to_previous_state!(storage, model) = replace_values!(storage.primary_variables, storage.state0)
 
 function reset_previous_state!(storage, model, state0)
     sim_state0 = storage.state0

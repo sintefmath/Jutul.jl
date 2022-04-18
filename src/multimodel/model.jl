@@ -46,6 +46,7 @@ function replace_variables!(model::MultiModel; kwarg...)
     for m in model.models
         replace_variables!(m, throw = false; kwarg...)
     end
+    return model
 end
 
 function cross_term(storage, target)

@@ -1,4 +1,4 @@
-export simulate, perform_step!
+export simulate, simulate!, perform_step!
 export Simulator, JutulSimulator, ProgressRecorder
 export simulator_config
 
@@ -125,7 +125,9 @@ function simulator_config!(cfg, sim; kwarg...)
     return cfg
 end
 
-function simulate(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, initialize = true, restart = nothing, kwarg...)
+simulate(sim::JutulSimulator, timesteps::AbstractVector; kwarg...) = simulate!(sim, timesteps; kwarg...)
+
+function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, initialize = true, restart = nothing, kwarg...)
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     end
