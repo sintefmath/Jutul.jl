@@ -161,7 +161,9 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = noth
         subrep = OrderedDict()
         subrep[:ministeps] = rep
         subrep[:total_time] = t_step
-        @timeit "output" store_output!(states, reports, step_no, sim, config, subrep)
+        if step_done
+            @timeit "output" store_output!(states, reports, step_no, sim, config, subrep)
+        end
     end
     final_simulation_message(sim, p, reports, timesteps, config, early_termination)
     retrieve_output!(states, config)
@@ -381,7 +383,7 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
     # Summary message.
     if verbose && length(reports) > 0
         if aborted
-            endstr = "🔴 Simulation aborted. Completed $(stats.steps-1) of $(length(timesteps)) timesteps"
+            endstr = "🔴 Simulation aborted. Completed $(stats.steps) of $(length(timesteps)) timesteps"
         else
             endstr = "✅ Simulation complete. Completed $(stats.steps) timesteps"
         end
