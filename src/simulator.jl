@@ -72,6 +72,7 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:max_timestep_cuts] = 5
     cfg[:max_nonlinear_iterations] = 15
     cfg[:min_nonlinear_iterations] = 1
+    cfg[:error_on_incomplete] = false
     cfg[:linear_solver] = nothing
     cfg[:output_path] = nothing
     cfg[:output_states] = nothing
@@ -406,6 +407,9 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
     if config[:extra_timing]
         @info "Detailed timing:"
         print_timer()
+    end
+    if aborted && config[:error_on_incomplete]
+        error("Simulation did not complete successfully.")
     end
 end
 
