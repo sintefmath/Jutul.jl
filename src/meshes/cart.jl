@@ -74,7 +74,7 @@ coord_offset(pos, δ::AbstractVector) = sum(δ[1:(pos-1)])
 """
     cell_index(g, pos)
 
-Get linear (scalar) index of mesh cell from provided IJK tuple $pos$.
+Get linear (scalar) index of mesh cell from provided IJK tuple `pos`.
 """
 function cell_index(g, pos::Tuple)
     nx, ny, nz = grid_dims_ijk(g)
