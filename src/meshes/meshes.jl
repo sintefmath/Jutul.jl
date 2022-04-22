@@ -5,6 +5,24 @@ export triangulate_outer_surface, tpfv_geometry, discretized_domain_tpfv_flow
 
 abstract type JutulGeometry end
 
+"""
+    tpfv_geometry(g)
+
+Generate two-point finite-volume geometry for a given grid, if supported.
+
+See also [`TwoPointFiniteVolumeGeometry`](@ref).
+"""
+function tpfv_geometry end
+
+"""
+    TwoPointFiniteVolumeGeometry(neighbors, areas, volumes, normals, cell_centers, face_centers)
+
+Store two-point geometry information for a given list of `neighbors` specified as a `2` by `n` matrix
+where `n` is the number of faces such that face `i` connectes cells `N[1, i]` and `N[2, i]`.
+
+The two-point finite-volume geometry contains the minimal set of geometry information
+required to compute standard finite-volume discretizations.
+"""
 struct TwoPointFiniteVolumeGeometry <: JutulGeometry
     neighbors
     areas
@@ -34,8 +52,26 @@ end
 dim(g::TwoPointFiniteVolumeGeometry) = size(g.cell_centroids, 1)
 
 abstract type AbstractJutulMesh end
+
+"""
+    dim(g)::Integer
+
+Get the dimension of a mesh.
+"""
 dim(t::AbstractJutulMesh) = 2
+
+"""
+    number_of_cells(g)::Integer
+
+Get the number of cells in a mesh.
+"""
 number_of_cells(t::AbstractJutulMesh) = 1
+
+"""
+    number_of_faces(g)::Integer
+
+Get the number of faces in a mesh.
+"""
 number_of_faces(t::AbstractJutulMesh) = 0
 
 include("mrst.jl")

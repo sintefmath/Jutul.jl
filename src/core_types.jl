@@ -174,6 +174,9 @@ struct DiscretizedDomain{G} <: JutulDomain
     entities
     global_map
 end
+function Base.show(io::IO, d::DiscretizedDomain)
+    print(io, "DiscretizedDomain with $(d.grid) and discretizations for $(join(keys(d.discretizations), ", "))\n")
+end
 
 function DiscretizedDomain(grid, disc = nothing; global_map = TrivialGlobalMap())
     entities = declare_entities(grid)
@@ -265,40 +268,44 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
     println("SimulationModel:")
     for f in fieldnames(typeof(model))
         p = getfield(model, f)
-        print("  $f:\n")
+        print(io, "  $f:\n")
         if f == :primary_variables || f == :secondary_variables
             ctr = 1
             for (key, pvar) in p
                 nv = degrees_of_freedom_per_entity(model, pvar)
                 nu = number_of_entities(model, pvar)
                 u = associated_entity(pvar)
-                print("   $ctr) $key (")
-                if nv > 1
-                    print("$nv×")
+                if f == :secondary_variables
+                    print(io, "   $ctr $key ← $(typeof(pvar))) (")
+                else
+                    print(io, "   $ctr) $key (")
                 end
-                print("$nu")
+                if nv > 1
+                    print(io, "$nv×")
+                end
+                print(io, "$nu")
 
-                print(" ∈ $(typeof(u)))\n")
+                print(io, " ∈ $(typeof(u)))\n")
                 ctr += 1
             end
-            print("\n")
+            print(io, "\n")
         elseif f == :domain
-            if hasproperty(p, :grid)
-                g = p.grid
-                print("    grid: $(typeof(g))")
-            else
-
-            end
-            print("\n\n")
+            print(io, "    ")
+            print(io, p)
+            print(io, "\n")
         elseif f == :equations
             ctr = 1
             for (key, eq) in p
-                println("   $ctr) $key implemented as $(eq[2]) × $(eq[1])")
+                println(io, "   $ctr) $key implemented as $(eq[2]) × $(eq[1])")
                 ctr += 1
             end
-            print("\n")
+            print(io, "\n")
+        elseif f == :output_variables
+            print(io, "    $(join(p, ", "))")
         else
-            println("    $p\n")
+            print(io, "    ")
+            print(io, p)
+            print(io, "\n\n")
         end
     end
 end
