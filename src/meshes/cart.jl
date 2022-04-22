@@ -1,5 +1,30 @@
 export cell_dims, grid_dims_ijk, cell_ijk, cell_index
 
+"""
+    CartesianMesh(dims, [Δ, [origin]])
+
+Create a Cartesian mesh with dimensions specified by the `Tuple` `dims`.
+
+# Arguments
+- `dims::Tuple`: Number of grid cells in each direction. For example, `(nx, ny)` will give a 2D grids with `nx` cells in the x-direction.
+- `Δ::Tuple=ones(length(dims))`: Equal length to `dims`. First option: A `Tuple` of scalars where each entry is the length of each cell in that direction. For
+example, specifying `(Δx, Δy) for a uniform grid with each grid cell having area of `Δx*Δy`. Second option: A `Tuple` of vectors where each entry
+contains the cell sizes in the direction.
+- `origin=zeros(length(dims))`: The origin of the first corner in the grid.
+
+# Examples
+Generate a uniform 3D mesh that discretizes a domain of 2 by 3 by 5 units with 3 by 5 by 2 cells:
+```julia-repl
+julia> CartesianMesh((3, 5, 2), (2.0, 3.0, 5.0))
+CartesianMesh (3D) with 3x5x2=30 cells
+```
+
+Generate a non-uniform 2D mesh:
+```julia-repl
+julia> CartesianMesh((2, 3), ([1.0, 2.0], [0.1, 3.0, 2.5]))
+CartesianMesh (3D) with 3x5x2=30 cells
+```
+"""
 struct CartesianMesh <: AbstractJutulMesh
     dims   # Tuple of dimensions (nx, ny, [nz])
     deltas # Either a tuple of scalars (uniform grid) or a tuple of vectors (non-uniform grid)
@@ -31,6 +56,7 @@ struct CartesianMesh <: AbstractJutulMesh
         return new(dims, deltas, origin)
     end
 end
+Base.show(io::IO, g::CartesianMesh) = print(io, "CartesianMesh ($(dim(g))D) with $(join(grid_dims_ijk(g), "x"))=$(number_of_cells(g)) cells")
 
 dim(t::CartesianMesh) = length(t.dims)
 number_of_cells(t::CartesianMesh) = prod(t.dims)
@@ -46,7 +72,9 @@ coord_offset(pos, δ::AbstractFloat) = (pos-1)*δ
 coord_offset(pos, δ::AbstractVector) = sum(δ[1:(pos-1)])
 
 """
-Linear index of Cartesian mesh cell
+    cell_index(g, pos)
+
+Get linear (scalar) index of mesh cell from provided IJK tuple $pos$.
 """
 function cell_index(g, pos::Tuple)
     nx, ny, nz = grid_dims_ijk(g)
@@ -64,7 +92,9 @@ function lower_corner_3d(g, index)
 end
 
 """
-Cell dimensions (as 3 tuple)
+    cell_dims(g, pos)::Tuple
+
+Get physical cell dimensions of cell with index `pos` for grid `g`.
 """
 function cell_dims(g, pos)
     x, y, z = cell_ijk(g, pos)
