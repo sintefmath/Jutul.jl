@@ -3,15 +3,15 @@ function Base.show(io::IO, t::MIME"text/plain", m::MultiModel)
     if get(io, :compact, false)
     else
     end
-    println("MultiModel with $(length(submodels)) submodels:")
+    println(io, "MultiModel with $(length(submodels)) submodels:")
     for key in keys(submodels)
         m = submodels[key]
         s = m.system
         if hasproperty(m.domain, :grid)
             g = m.domain.grid
-            println("$key: $(typeof(s)) ∈ $(typeof(g))")
+            println(io, "  $key: $(s) ∈ $(g)")
         else
-            println("$key: $(typeof(s)) ∈ $(typeof(m.domain))")
+            println(io, "  $key: $(s) ∈ $(typeof(m.domain))")
         end
     end
 end
