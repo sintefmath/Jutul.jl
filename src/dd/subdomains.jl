@@ -118,7 +118,7 @@ export active_entities
 active_cells(model; kwarg...) = active_entities(model.domain, Cells(); kwarg...)
 
 function active_entities(d, m::FiniteVolumeGlobalMap, c::Cells; for_variables = true)
-    if for_variables && map.variables_always_active
+    if for_variables && m.variables_always_active
         return 1:count_entities(d, c)
     else
         return m.inner_to_full_cells
