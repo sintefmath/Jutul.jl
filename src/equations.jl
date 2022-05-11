@@ -142,7 +142,7 @@ end
 Get the number of entities (e.g. the number of cells) that the equation is defined on.
 """
 function number_of_entities(model, e::JutulEquation)
-    return count_active_entities(model.domain, associated_entity(e))
+    return count_active_entities(model.domain, associated_entity(e), for_variables = false)
 end
 
 """
@@ -176,7 +176,7 @@ function declare_sparsity(model, e::JutulEquation, entity, layout::EquationMajor
             error("Pattern I, J for $(typeof(e)) must have equal lengths for entity $(typeof(entity)). (|I| = $ni != $nj = |J|)")
         end
         nu = number_of_entities(model, e)
-        nentities = count_active_entities(model.domain, entity)
+        nentities = count_active_entities(model.domain, entity, for_variables = false)
         nrow_blocks = number_of_equations_per_entity(e)
         ncol_blocks = number_of_partials_per_entity(model, entity)
         if nrow_blocks > 1

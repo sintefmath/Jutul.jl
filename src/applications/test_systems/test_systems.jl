@@ -4,7 +4,7 @@ export XVar
 struct ScalarTestSystem <: JutulSystem end
 
 struct ScalarTestDomain <: JutulDomain end
-active_entities(d::ScalarTestDomain, ::Any) = [1]
+active_entities(d::ScalarTestDomain, ::Any; kwarg...) = [1]
 
 function number_of_cells(::ScalarTestDomain) 1 end
 

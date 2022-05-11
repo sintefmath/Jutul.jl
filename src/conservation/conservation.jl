@@ -16,8 +16,8 @@ function ConservationLaw(model, number_of_equations;
     D, ctx = model.domain, model.context
     cell_entity = Cells()
     face_entity = Faces()
-    nc = count_active_entities(D, cell_entity)
-    nf = count_active_entities(D, face_entity)
+    nc = count_active_entities(D, cell_entity, for_variables = false)
+    nf = count_active_entities(D, face_entity, for_variables = false)
     nhf = number_of_half_faces(flow_discretization)
     face_partials = degrees_of_freedom_per_entity(model, face_entity)
     alloc = (n, entity, n_entities_pos) -> CompactAutoDiffCache(number_of_equations, n, model,

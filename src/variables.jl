@@ -25,7 +25,7 @@ function number_of_degrees_of_freedom(model::JutulModel)
 end
 
 function number_of_degrees_of_freedom(model::JutulModel, u::JutulUnit)
-    ndof = degrees_of_freedom_per_entity(model, u)*count_active_entities(model.domain, u)
+    ndof = degrees_of_freedom_per_entity(model, u)*count_active_entities(model.domain, u, for_variables = true)
     return ndof
 end
 
@@ -41,7 +41,7 @@ end
 
 function number_of_degrees_of_freedom(model, pvars::JutulVariables)
     e = associated_entity(pvars)
-    n = count_active_entities(model.domain, e)
+    n = count_active_entities(model.domain, e, for_variables = true)
     m = degrees_of_freedom_per_entity(model, pvars)
     return n*m
 end
@@ -90,7 +90,7 @@ minimum_value(::JutulVariables) = nothing
 function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx)
     names = get_names(p)
     entity = associated_entity(p)
-    active = active_entities(model.domain, entity)
+    active = active_entities(model.domain, entity, for_variables = true)
 
     nu = length(active)
     abs_max = absolute_increment_limit(p)
@@ -293,7 +293,7 @@ function unit_sum_update!(s, p, model, dx, entity = Cells())
     nf, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
     maxval, minval = maximum_value(p), minimum_value(p)
-    active_cells = active_entities(model.domain, entity)
+    active_cells = active_entities(model.domain, entity, for_variables = true)
     if nf == 2
         unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
     else

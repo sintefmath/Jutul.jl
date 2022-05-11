@@ -115,22 +115,41 @@ end
 
 export active_entities
 # Specialize cells, leave faces be (probably already filtered)
-active_cells(model) = active_entities(model.domain, Cells())
+active_cells(model; kwarg...) = active_entities(model.domain, Cells(); kwarg...)
 
-active_entities(d, m::FiniteVolumeGlobalMap, ::Cells) = m.inner_to_full_cells
-active_entities(d, m::FiniteVolumeGlobalMap, f::Faces) = 1:count_entities(d, f)
+function active_entities(d, m::FiniteVolumeGlobalMap, c::Cells; for_variables = true)
+    if for_variables && map.variables_always_active
+        return 1:count_entities(d, c)
+    else
+        return m.inner_to_full_cells
+    end
+end
+active_entities(d, m::FiniteVolumeGlobalMap, f::Faces; for_variables = true) = 1:count_entities(d, f)
 
-active_entities(d::DiscretizedDomain, entity) = active_entities(d, d.global_map, entity)
-active_entities(d::DiscretizedDomain, ::TrivialGlobalMap, entity) = 1:count_entities(d, entity)
-active_entities(d, entity) = 1:count_entities(d, entity)
+active_entities(d::DiscretizedDomain, entity; kwarg...) = active_entities(d, d.global_map, entity; kwarg...)
+active_entities(d::DiscretizedDomain, ::TrivialGlobalMap, entity; kwarg...) = 1:count_entities(d, entity)
+active_entities(d, entity; kwarg...) = 1:count_entities(d, entity)
 
-active_view(x::AbstractVector, map::FiniteVolumeGlobalMap) = view(x, map.inner_to_full_cells)
-active_view(x::AbstractMatrix, map::FiniteVolumeGlobalMap) = view(x, :, map.inner_to_full_cells)
+function active_view(x::AbstractVector, map::FiniteVolumeGlobalMap; for_variables = true)
+    if for_variables && map.variables_always_active
+        return x
+    else
+        return view(x, map.inner_to_full_cells)
+    end
+end
+
+function active_view(x::AbstractMatrix, map::FiniteVolumeGlobalMap; for_variables = true)
+    if for_variables && map.variables_always_active
+        return x
+    else
+        return view(x, :, map.inner_to_full_cells)
+    end
+end
 
 active_view(x, map) = x
 
 # TODO: Probably a bit inefficient
-count_active_entities(d, m, e) = length(active_entities(d, m, e))
+count_active_entities(d, m, e; kwarg...) = length(active_entities(d, m, e; kwarg...))
 
 subdiscretization(disc, ::TrivialGlobalMap) = disc
 
@@ -138,14 +157,14 @@ function subgrid
 
 end
 
-function subdomain(d::DiscretizedDomain, indices; entity = Cells(), kwarg...)
+function subdomain(d::DiscretizedDomain, indices; entity = Cells(), variables_always_active = false, kwarg...)
     grid = d.grid
     disc = d.discretizations
 
     N = grid.neighborship
     t = @elapsed begin
         cells, faces, is_boundary = submap_cells(N, indices; kwarg...)
-        mapper = FiniteVolumeGlobalMap(cells, faces, is_boundary)
+        mapper = FiniteVolumeGlobalMap(cells, faces, is_boundary, variables_always_active = variables_always_active)
         sg = subgrid(grid, cells = cells, faces = faces)
         d = Dict()
         for k in keys(disc)

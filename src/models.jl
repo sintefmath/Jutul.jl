@@ -316,7 +316,7 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
                 push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
                 push!(J, S.J .+ numcols) # Column indices, offset by the partials in entities we have passed
             end
-            numcols += count_active_entities(model.domain, u)
+            numcols += count_active_entities(model.domain, u, for_variables = true)
         end
         @assert numcols == ndof "Assumed square block, was $numcols x $ndof"
         numrows += number_of_entities(model, eq)

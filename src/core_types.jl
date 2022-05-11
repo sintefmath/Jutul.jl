@@ -456,7 +456,8 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
     full_to_inner_cells::Vector{T}
     faces::Vector{T}
     cell_is_boundary::Vector{Bool}
-    function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing)
+    variables_always_active::Bool
+    function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing; variables_always_active = false)
         n = length(cells)
         if isnothing(is_boundary)
             is_boundary = repeat([false], length(cells))
@@ -475,6 +476,6 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
         for i in inner_to_full_cells
             @assert i > 0 && i <= n
         end
-        new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary)
+        new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary, variables_always_active)
     end
 end
