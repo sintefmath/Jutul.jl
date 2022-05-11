@@ -21,7 +21,7 @@ end
 # Equations
 struct ScalarTestEquation <: DiagonalEquation
     equation
-    function ScalarTestEquation(model, npartials::Integer; context = DefaultContext(), kwarg...)
+    function ScalarTestEquation(model, npartials::Integer; context = model.context, kwarg...)
         D = model.domain
         nc = number_of_cells(D)
         @assert nc == 1 # We use nc for clarity of the interface - but it should always be one!

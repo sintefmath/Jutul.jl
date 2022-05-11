@@ -8,10 +8,10 @@ abstract type JutulAutoDiffCache end
 """
 Cache that holds an AD vector/matrix together with their positions.
 """
-struct CompactAutoDiffCache{I, ∂x} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
-    entries
+struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
+    entries::E
     entity
-    jacobian_positions
+    jacobian_positions::P
     equations_per_entity::I
     number_of_entities::I
     npartials::I
@@ -40,9 +40,10 @@ struct CompactAutoDiffCache{I, ∂x} <: JutulAutoDiffCache where {I <: Integer, 
             # This can be overriden - if a custom assembly is planned.
             n_entities_pos = n_entities
         end
-        pos = zeros(I, equations_per_entity*npartials, n_entities_pos)
+        I_t = nzval_index_type(context)
+        pos = Array{I_t, 2}(undef, equations_per_entity*npartials, n_entities_pos)
         pos = transfer(context, pos)
-        new{I, D}(entries, entity, pos, equations_per_entity, n_entities, npartials)
+        new{I, D, typeof(entries), typeof(pos)}(entries, entity, pos, equations_per_entity, n_entities, npartials)
     end
 end
 
@@ -86,7 +87,7 @@ end
     value(get_entry(c, arg...))
 end
 
-@inline function get_jacobian_pos(c::CompactAutoDiffCache{I}, index, eqNo, partial_index, pos)::I where {I}
+@inline function get_jacobian_pos(c::CompactAutoDiffCache{I}, index, eqNo, partial_index, pos) where {I}
     @inbounds pos[(eqNo-1)*c.npartials + partial_index, index]
 end
 
@@ -114,7 +115,12 @@ end
 @inline function update_jacobian_entry!(nzval, c::CompactAutoDiffCache, index, eqNo, partial_index, 
                                                                         new_value,
                                                                         pos = c.jacobian_positions)
-    @inbounds nzval[get_jacobian_pos(c, index, eqNo, partial_index, pos)] = new_value
+    ix = get_jacobian_pos(c, index, eqNo, partial_index, pos)
+    update_jacobian_inner!(nzval, ix, new_value)
+end
+
+@inline function update_jacobian_inner!(nzval, pos, val)
+    @inbounds nzval[pos] = val
 end
 
 function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
@@ -127,8 +133,9 @@ function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
             a = get_entry(cache, i, e, entries)
             @inbounds r[i + nu*(e-1)] = a.value
             for d = 1:cache.npartials
-                apos = get_jacobian_pos(cache, i, e, d, jp)
-                @inbounds nz[apos] = a.partials[d]
+                # apos = get_jacobian_pos(cache, i, e, d, jp)
+                update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
+                # @inbounds nz[apos] = a.partials[d]
             end
         end
     end
@@ -144,12 +151,7 @@ function fill_equation_entries!(nz, r::Nothing, model, cache::JutulAutoDiffCache
             a = get_entry(cache, i, e, entries)
             @inbounds for d = 1:np
                 @inbounds ∂ = a.partials[d]
-                # TODO:
-                # This part is type unstable, for some reason.
-                # update_jacobian_entry!(nz, cache, i, e, d, ∂)
-                # Use more verbose/inner version instead:
-                apos = get_jacobian_pos(cache, i, e, d, jp)
-                @inbounds nz[apos] = ∂
+                update_jacobian_entry!(nz, cache, i, e, d, ∂)
             end
         end
     end

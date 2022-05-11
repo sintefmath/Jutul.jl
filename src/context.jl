@@ -69,13 +69,9 @@ function synchronize(::JutulContext)
     # Default: Do nothing
 end
 
-function float_type(context)
-    return Float64
-end
-
-function index_type(context)
-    return Int64
-end
+float_type(context) = Float64
+index_type(context) = Int64
+nzval_index_type(context) = index_type(context)
 
 function synchronize(::SingleCUDAContext)
     # Needed because of an issue with kernel abstractions.
