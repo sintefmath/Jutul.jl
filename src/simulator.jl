@@ -8,7 +8,12 @@ struct Simulator <: JutulSimulator
     storage::JutulStorage
 end
 
-function Simulator(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true, kwarg...)
+function Simulator(model; kwarg...)
+    storage = simulator_storage(model; kwarg...)
+    Simulator(model, storage)
+end
+
+function simulator_storage(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true, kwarg...)
     # We need to sort the secondary variables according to their dependency ordering before simulating.
     sort_secondary_variables!(model)
     if isnothing(state0)
@@ -23,7 +28,7 @@ function Simulator(model; state0 = nothing, parameters = setup_parameters(model)
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
     # This allows for much faster lookup in the simulation itself.
     storage = convert_to_immutable_storage(storage)
-    Simulator(model, storage)
+    return storage
 end
 
 mutable struct SolveRecorder

@@ -134,6 +134,10 @@ count_active_entities(d, m, e) = length(active_entities(d, m, e))
 
 subdiscretization(disc, ::TrivialGlobalMap) = disc
 
+function subgrid
+
+end
+
 function subdomain(d::DiscretizedDomain, indices; entity = Cells(), kwarg...)
     grid = d.grid
     disc = d.discretizations
