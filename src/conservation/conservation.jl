@@ -259,15 +259,18 @@ function fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flu
                 # Boundary face.
                 break
             end
-            @inbounds nz[fpos] = q.partials[d]
+            @inbounds ∂ = q.partials[d]
+            Jutul.update_jacobian_inner!(nz, fpos, ∂)
         end
         diag_entry -= q
     end
 
     @inbounds r[e, cell] = diag_entry.value
     @inbounds for d in eachindex(diag_entry.partials)
+        @inbounds ∂ = diag_entry.partials[d]
         apos = get_jacobian_pos(acc, cell, e, d, cp)
-        @inbounds nz[apos] = diag_entry.partials[d]
+        Jutul.update_jacobian_inner!(nz, apos, ∂)
+        # @inbounds nz[apos] = diag_entry.partials[d]
     end
 end
 
