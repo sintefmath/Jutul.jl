@@ -51,18 +51,20 @@ mutable struct ProgressRecorder
     end
 end
 
-function Base.show(io::IO, t::MIME"text/plain", sim::Simulator) 
-    println("Simulator:")
+function Base.show(io::IO, t::MIME"text/plain", sim::T) where T<:JutulSimulator
+    println(io, "$T:")
     for f in fieldnames(typeof(sim))
         p = getfield(sim, f)
-        print("  $f:\n")
+        print(io, "  $f:\n")
         if f == :storage
             for key in keys(sim.storage)
                 ss = sim.storage[key]
-                println("    $key")
+                println(io, "    $key")
             end
         else
+            print(io, "    ")
             show(io, t, p)
+            print(io, "\n\n")
         end
     end
 end
