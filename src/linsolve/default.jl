@@ -125,7 +125,7 @@ function build_jacobian(sparse_arg, context, layout)
     Ft = float_type(context)
 
     V = zeros(Jt, length(I))
-    jac = sparse(I, J, V, n, m)
+    jac = build_sparse_matrix(context, I, J, V, n, m)
     nzval = nonzeros(jac)
     if Ft == Jt
         V_buf = nzval

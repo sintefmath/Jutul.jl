@@ -1,4 +1,3 @@
-export StaticSparsityMatrixCSR, colvals, static_sparsity_sparse
 
 struct StaticSparsityMatrixCSR{Tv,Ti<:Integer} <: SparseArrays.AbstractSparseMatrix{Tv,Ti}
     At::SparseMatrixCSC{Tv, Ti}

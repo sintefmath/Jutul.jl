@@ -16,3 +16,7 @@ end
 function r_eltype(context::CPUJutulContext, layout::BlockMajorLayout, block_size)
     return SVector{block_size[1], float_type(context)}
 end
+
+function build_sparse_matrix(context, I, J, V, n, m)
+    return sparse(I, J, V, n, m)
+end

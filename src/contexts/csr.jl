@@ -24,3 +24,6 @@ function initialize_context!(context::ParallelCSRContext, domain, system, formul
     context
 end
 
+function build_sparse_matrix(context::ParallelCSRContext, I, J, V, n, m)
+    return static_sparsity_sparse(I, J, V, n, m)
+end
