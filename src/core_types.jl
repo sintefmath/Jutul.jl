@@ -102,31 +102,6 @@ end
 ijnm(p::SparsePattern) = (p.I, p.J, p.n, p.m)
 block_size(p::SparsePattern) = (p.block_n, p.block_m)
 
-# CUDA context - everything on the single CUDA device attached to machine
-struct SingleCUDAContext <: GPUJutulContext
-    float_t::Type
-    index_t::Type
-    block_size
-    device
-    matrix_layout
-    function SingleCUDAContext(float_t::Type = Float32, index_t::Type = Int64, block_size = 256, layout = EquationMajorLayout())
-        @assert CUDA.functional() "CUDA must be functional for this context."
-        return new(float_t, index_t, block_size, CUDADevice(), layout)
-    end
-end
-matrix_layout(c::SingleCUDAContext) = c.matrix_layout
-
-"Context that uses KernelAbstractions for GPU parallelization"
-struct SharedMemoryKernelContext <: CPUJutulContext
-    block_size
-    device
-    function SharedMemoryKernelContext(block_size = Threads.nthreads())
-        # Remark: No idea what block_size means here.
-        return new(block_size, CPU())
-    end
-end
-
-
 mutable struct ThreadDivision{N, T}
     partition::T
     lookup::NTuple{N, T}
@@ -148,9 +123,12 @@ mutable struct ThreadDivision{N, T}
     end
 end
 
+nthreads(td::ThreadDivision{N, T}) where {N, T} = N
+
 function initialize_thread_division!(out::ThreadDivision{N, T}, partition) where {N, T}
+    up = unique(partition)
     for i in 1:N
-        @assert i in partition
+        @assert i in up "$i must be in partition, but partition only contained $up"
     end
     @assert maximum(partition) == N
     @assert minimum(partition) == 1
@@ -159,49 +137,10 @@ function initialize_thread_division!(out::ThreadDivision{N, T}, partition) where
     return out
 end
 
-export ParallelCSRContext
-"Context that uses threads etc to accelerate loops"
-struct ParallelCSRContext <: CPUJutulContext
-    matrix_layout
-    minbatch::Integer
-    thread_division::ThreadDivision
-    function ParallelCSRContext(arg...; matrix_layout = EquationMajorLayout(), minbatch = thread_batch(nothing))
-        new(matrix_layout, minbatch, ThreadDivision(arg...))
-    end
-end
-
-export thread_batch
-thread_batch(::Any) = 1000
-
-"Default context"
-struct DefaultContext <: CPUJutulContext
-    matrix_layout
-    minbatch::Int64
-    function DefaultContext(; matrix_layout = EquationMajorLayout(), minbatch = thread_batch(nothing))
-        new(matrix_layout, minbatch)
-    end
-end
-
-thread_batch(c::DefaultContext) = c.minbatch
-
-matrix_layout(c::DefaultContext) = c.matrix_layout
-
-function jacobian_eltype(context, layout, block_size)
-    return float_type(context)
-end
-
-function r_eltype(context, layout, block_size)
-    return float_type(context)
-end
-
-function jacobian_eltype(context::CPUJutulContext, layout::BlockMajorLayout, block_size)
-    return SMatrix{block_size..., float_type(context), prod(block_size)}
-end
-
-function r_eltype(context::CPUJutulContext, layout::BlockMajorLayout, block_size)
-    return SVector{block_size[1], float_type(context)}
-end
-
+include("contexts/interface.jl")
+include("contexts/csr.jl")
+include("contexts/default.jl")
+include("contexts/cuda.jl")
 
 # Domains
 abstract type JutulDomain end
