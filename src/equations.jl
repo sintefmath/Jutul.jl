@@ -68,7 +68,11 @@ end
 
 function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMatrixLayout)
     adj = represented_as_adjoint(layout)
-    find_sparse_position(A, row, col, adj)
+    pos = find_sparse_position(A, row, col, adj)
+    if pos == 0
+        @warn "Unable to map $row, $col: Not allocated in matrix."
+    end
+    return pos
 end
 
 function find_sparse_position(A::AbstractSparseMatrix, row, col, is_adjoint)
@@ -79,7 +83,7 @@ function find_sparse_position(A::AbstractSparseMatrix, row, col, is_adjoint)
         a = col
         b = row
     end
-    find_sparse_position(A, b, a)
+    return find_sparse_position(A, b, a)
 end
 
 function find_sparse_position(A::StaticSparsityMatrixCSR, row, col)
@@ -91,9 +95,6 @@ function find_sparse_position(A::StaticSparsityMatrixCSR, row, col)
             pos = mat_pos
             break
         end
-    end
-    if pos == 0
-        @warn "Unable to map $row, $col: Not allocated in matrix."
     end
     return pos
 end
@@ -108,9 +109,6 @@ function find_sparse_position(A::SparseMatrixCSC, row, col)
             pos = mat_pos
             break
         end
-    end
-    if pos == 0
-        @warn "Unable to map $row, $col: Not allocated in matrix."
     end
     return pos
 end
