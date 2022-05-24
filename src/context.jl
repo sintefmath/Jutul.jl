@@ -60,6 +60,10 @@ function transfer(context, t::Integer)
 end
 
 """
+Initialize context when setting up a model
+"""
+initialize_context!(context, domain, system, formulation) = context
+"""
 Synchronize backend after allocations.
 
 Some backends may require notification that

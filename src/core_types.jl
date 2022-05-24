@@ -4,7 +4,7 @@ export setup_parameters, JutulForce
 export Cells, Nodes, Faces, declare_entities
 export ConstantVariables, ScalarVariable, GroupedVariables, FractionVariables
 
-export SingleCUDAContext, SharedMemoryContext, DefaultContext
+export SingleCUDAContext, DefaultContext
 export BlockMajorLayout, EquationMajorLayout, UnitMajorLayout
 
 export transfer, allocate_array
@@ -126,9 +126,48 @@ struct SharedMemoryKernelContext <: CPUJutulContext
     end
 end
 
-"Context that uses threads etc to accelerate loops"
-struct SharedMemoryContext <: CPUJutulContext
 
+mutable struct ThreadDivision{N, T}
+    partition::T
+    lookup::NTuple{N, T}
+    function ThreadDivision(nthreads = Threads.nthreads(), partition = nothing)
+        has_partition = !isnothing(partition)
+        if has_partition
+            partition::AbstractVector
+            Vt = typeof(partition)
+        else
+            Vt = Vector{Int64}
+        end
+        partition = Vt()
+        lookup = tuple(repeat([partition], nthreads)...)
+        out = new{nthreads, Vt}(partition, lookup)
+        if has_partition
+            initialize_thread_division!(out, partition)
+        end
+        return out
+    end
+end
+
+function initialize_thread_division!(out::ThreadDivision{N, T}, partition) where {N, T}
+    for i in 1:N
+        @assert i in partition
+    end
+    @assert maximum(partition) == N
+    @assert minimum(partition) == 1
+    out.lookup = tuple(map(i -> findall(isequal(i), partition), 1:N)...)
+    out.partition = partition
+    return out
+end
+
+export ParallelCSRContext
+"Context that uses threads etc to accelerate loops"
+struct ParallelCSRContext <: CPUJutulContext
+    matrix_layout
+    minbatch::Integer
+    thread_division::ThreadDivision
+    function ParallelCSRContext(arg...; matrix_layout = EquationMajorLayout(), minbatch = thread_batch(nothing))
+        new(matrix_layout, minbatch, ThreadDivision(arg...))
+    end
 end
 
 export thread_batch
@@ -138,7 +177,7 @@ thread_batch(::Any) = 1000
 struct DefaultContext <: CPUJutulContext
     matrix_layout
     minbatch::Int64
-    function DefaultContext(; matrix_layout = EquationMajorLayout(), minbatch = 1000)
+    function DefaultContext(; matrix_layout = EquationMajorLayout(), minbatch = thread_batch(nothing))
         new(matrix_layout, minbatch)
     end
 end
@@ -236,6 +275,7 @@ struct SimulationModel{O<:JutulDomain,
                                             context = DefaultContext(),
                                             output_level = :primary_variables
                                             )
+        context = initialize_context!(context, domain, system, formulation)
         domain = transfer(context, domain)
         primary = select_primary_variables(domain, system, formulation)
         primary = transfer(context, primary)

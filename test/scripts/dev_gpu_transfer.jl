@@ -40,9 +40,6 @@ if target == "cuda"
     ctx = SingleCUDAContext()
     # ctx = SingleCUDAContext(Float64, Int64)
     linsolve = CuSparseSolver("??", 1e-3)
-elseif target == "cpukernel"
-    ctx = SharedMemoryContext()
-    linsolve = AMGSolver("RugeStuben", 1e-3)
 else
     ctx = DefaultContext()
     linsolve = AMGSolver("RugeStuben", 1e-3)
