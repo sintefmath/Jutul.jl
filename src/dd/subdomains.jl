@@ -146,7 +146,7 @@ function active_view(x::AbstractMatrix, map::FiniteVolumeGlobalMap; for_variable
     end
 end
 
-active_view(x, map) = x
+active_view(x, map; kwarg...) = x
 
 # TODO: Probably a bit inefficient
 count_active_entities(d, m, e; kwarg...) = length(active_entities(d, m, e; kwarg...))
