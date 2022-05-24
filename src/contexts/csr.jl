@@ -10,7 +10,7 @@ struct ParallelCSRContext <: CPUJutulContext
 end
 
 matrix_layout(c::ParallelCSRContext) = c.matrix_layout
-function initialize_context!(context::ParallelCSRContext, domain::DiscretizedDomain, system, formulation)
+function initialize_context!(context::ParallelCSRContext, domain, system, formulation)
     tdiv = context.thread_division
     n = number_of_cells(domain)
     if length(tdiv.partition) != n

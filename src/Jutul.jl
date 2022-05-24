@@ -38,6 +38,9 @@ module Jutul
     # Timing
     using TimerOutputs
 
+    include("StaticCSR/StaticCSR.jl")
+    using .StaticCSR
+
     # Main types
     include("core_types.jl")
 
