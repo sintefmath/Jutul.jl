@@ -100,22 +100,19 @@ end
 
 
 function find_sparse_position(A::SparseMatrixCSC, row, col)
-    pos = find_sparse_position_CSC(A.rowval, A.colptr, row, col)
+    pos = 0
+    rowval = rowvals(A)
+    for mat_pos in nzrange(A, col)
+        mat_row = rowval[mat_pos]
+        if mat_row == row
+            pos = mat_pos
+            break
+        end
+    end
     if pos == 0
         @warn "Unable to map $row, $col: Not allocated in matrix."
     end
     return pos
-end
-
-@inline function find_sparse_position_CSC(rowval::T, colPtr::T, row::I, col::I) where {T<:AbstractVector{I}} where  {I<:Integer}
-    ix = 0
-    for pos = colPtr[col]:colPtr[col+1]-1
-        if rowval[pos] == row
-            ix = pos
-            break
-        end
-    end
-    return ix
 end
 
 function select_equations(domain, system, formulation)
