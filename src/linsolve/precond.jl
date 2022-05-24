@@ -8,11 +8,12 @@ end
 function update!(preconditioner, lsys, model, storage, recorder)
     J = jacobian(lsys)
     r = residual(lsys)
-    update!(preconditioner, J, r)
+    ctx = linear_system_context(model, lsys)
+    update!(preconditioner, J, r, ctx)
 end
 
-function partial_update!(p, A, b)
-    update!(p, A, b)
+function partial_update!(p, A, b, context)
+    update!(p, A, b, context)
 end
 
 function get_factorization(precond)
@@ -86,7 +87,7 @@ mutable struct AMGPreconditioner <: JutulPreconditioner
     end
 end
 
-function update!(amg::AMGPreconditioner, A, b)
+function update!(amg::AMGPreconditioner, A, b, context)
     kw = amg.method_kwarg
     @debug string("Setting up preconditioner ", amg.method)
     t_amg = @elapsed amg.hierarchy = amg.method(A; kw...)
@@ -95,7 +96,7 @@ function update!(amg::AMGPreconditioner, A, b)
     amg.factor = aspreconditioner(amg.hierarchy, amg.cycle)
 end
 
-function partial_update!(amg::AMGPreconditioner, A, b)
+function partial_update!(amg::AMGPreconditioner, A, b, context)
     amg.hierarchy = update_hierarchy!(amg.hierarchy, A)
 end
 
@@ -126,7 +127,7 @@ mutable struct DampedJacobiPreconditioner <: JutulPreconditioner
 end
 
 
-function update!(jac::DampedJacobiPreconditioner, A, b)
+function update!(jac::DampedJacobiPreconditioner, A, b, context)
     ω = jac.w
     if isnothing(jac.factor)
         D = Diagonal(A)
@@ -193,7 +194,7 @@ function set_dim!(ilu, A, b)
     ilu.dim = d .* size(A)
 end
 
-function update!(ilu::ILUZeroPreconditioner, A, b)
+function update!(ilu::ILUZeroPreconditioner, A, b, context)
     if isnothing(ilu.factor)
         ilu.factor = ilu0(A, eltype(b))
         set_dim!(ilu, A, b)
@@ -202,7 +203,16 @@ function update!(ilu::ILUZeroPreconditioner, A, b)
     end
 end
 
-function update!(ilu::ILUZeroPreconditioner, A::CuSparseMatrix, b::CuArray)
+function update!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, context::ParallelCSRContext)
+    if isnothing(ilu.factor)
+        ilu.factor = ilu0_csr(A)
+        set_dim!(ilu, A, b)
+    else
+        ilu0_csr!(ilu.factor, A)
+    end
+end
+
+function update!(ilu::ILUZeroPreconditioner, A::CuSparseMatrix, b::CuArray, context)
     if isnothing(ilu.factor)
         set_dim!(ilu, A, b)
     end
@@ -223,6 +233,20 @@ function ilu_f(type::Symbol)
     else
         f = ldiv!
     end
+end
+
+function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
+    T = eltype(f)
+    N = size(T, 1)
+    T = eltype(T)
+    Vt = SVector{N, T}
+    as_svec = (x) -> reinterpret(Vt, x)
+
+    ldiv!(as_svec(x), f, as_svec(y))
+end
+
+function ilu_apply!(x, f::AbstractILUFactorization, y, type::Symbol = :both)
+    ldiv!(x, f, y)
 end
 
 function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
@@ -270,7 +294,7 @@ mutable struct LUPreconditioner <: JutulPreconditioner
     end
 end
 
-function update!(lup::LUPreconditioner, A, b)
+function update!(lup::LUPreconditioner, A, b, context)
     if isnothing(lup.factor)
         lup.factor = lu(A)
     else

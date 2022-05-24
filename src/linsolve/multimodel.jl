@@ -220,3 +220,12 @@ function residual(sys::MultiLinearizedSystem)
     end
     return r
 end
+
+function linear_system_context(model::MultiModel, sys::MultiLinearizedSystem)
+    if do_schur(sys)
+        ctx = first(model.models).context
+    else
+        error()
+    end
+    return ctx
+end

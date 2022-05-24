@@ -162,6 +162,7 @@ end
 
 jacobian(sys) = sys.jac
 residual(sys) = sys.r
+linear_system_context(model, sys) = model.context
 
 function prepare_solve!(sys)
     # Default is to do nothing.
