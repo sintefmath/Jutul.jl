@@ -237,8 +237,7 @@ function ilu_initial_setup_par!(factors, A, active, N)
     end
 end
 
-export ilu0_csr_par, ilu0_csr_par!
-function ilu0_csr_par(A::StaticSparsityMatrixCSR, partition::V) where {V<:AbstractVector}
+function ilu0_csr(A::StaticSparsityMatrixCSR, partition::V) where {V<:AbstractVector}
     N = maximum(partition)
     @assert minimum(partition) > 0
     @assert length(partition) == size(A, 1)
@@ -248,12 +247,12 @@ function ilu0_csr_par(A::StaticSparsityMatrixCSR, partition::V) where {V<:Abstra
     return factor
 end
 
-function ilu0_csr_par(A::StaticSparsityMatrixCSR, active::NTuple)
+function ilu0_csr(A::StaticSparsityMatrixCSR, active::NTuple)
     factor = ParallelILUFactorCSR(A, active)
     return factor
 end
 
-function ilu0_csr_par!(LU::ParallelILUFactorCSR{N, T, G}, A::StaticSparsityMatrixCSR) where {N, T, G}
+function ilu0_csr!(LU::ParallelILUFactorCSR{N, T, G}, A::StaticSparsityMatrixCSR) where {N, T, G}
     @batch for i in 1:N
         F = LU.factors[i]
         ilu0_csr!(F, A)

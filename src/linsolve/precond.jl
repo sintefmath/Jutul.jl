@@ -205,7 +205,16 @@ end
 
 function update!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, context::ParallelCSRContext)
     if isnothing(ilu.factor)
-        ilu.factor = ilu0_csr(A)
+        if Threads.nthreads() == 1
+            @debug "Setting up serial ILU(0)-CSR"
+            F = ilu0_csr(A)
+        else
+            td = context.thread_division
+            @debug "Setting up parallel ILU(0)-CSR with $(nthreads(td)) threads"
+            lookup = td.lookup
+            F = ilu0_csr(A, lookup)
+        end
+        ilu.factor = F
         set_dim!(ilu, A, b)
     else
         ilu0_csr!(ilu.factor, A)
