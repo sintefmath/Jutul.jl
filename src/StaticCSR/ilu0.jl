@@ -168,6 +168,12 @@ struct ILUFactorCSR{Mat_t, Diag_t, Map_t, Act_t} <: AbstractILUFactorization
 end
 
 Base.eltype(ilu::ILUFactorCSR{M, D, U, A}) where {M, D, U, A} = eltype(M)
+function Base.show(io::IO, t::MIME"text/plain", ilu::ILUFactorCSR)
+    n, m = size(ilu.L)
+    println(io, "$ILUFactorCSR of size ($n, $m) with eltype $(eltype(ilu))")
+    println(io, "L: $(nnz(ilu.L)) nonzeros")
+    println(io, "U: $(nnz(ilu.U)) nonzeros")
+end
 
 export ilu0_csr, ilu0_csr!
 function ilu0_csr(A::StaticSparsityMatrixCSR; active = 1:size(A, 1))
@@ -210,6 +216,16 @@ struct ParallelILUFactorCSR{N, T, A} <: AbstractILUFactorization
 end
 
 Base.eltype(ilu::ParallelILUFactorCSR) = Base.eltype(first(ilu.factors))
+
+function Base.show(io::IO, t::MIME"text/plain", ilu::ParallelILUFactorCSR)
+    n = length(ilu.factors)
+    println(io, "ParallelILUFactorCSR with $n threads:")
+    for (i, f) in enumerate(ilu.factors)
+        act = ilu.active[i]
+        na = length(act)
+        println(io, "Subdomain $i: $na elements: $act")
+    end
+end
 
 function ParallelILUFactorCSR(A::StaticSparsityMatrixCSR{Tv, Ti}, active::Tuple) where {Tv, Ti}
     M = StaticSparsityMatrixCSR{Tv, Ti}
