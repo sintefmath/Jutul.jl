@@ -92,6 +92,14 @@ function update_values!(B, A, mapping)
     return B
 end
 
+function process_partial_row!(nz, pos, cols, K, k, A_ik)
+    @inbounds for l_j in pos
+        j = cols[l_j]
+        A_kj = K[k, j]
+        nz[l_j] -= A_ik*A_kj
+    end
+end
+
 function ilu0_factor!(L, U, D, A; active = 1:size(A, 1))
     n, m = size(L)
     cols_l = colvals(L)
@@ -102,27 +110,18 @@ function ilu0_factor!(L, U, D, A; active = 1:size(A, 1))
     for i in active
         l_pos = nzrange(L, i)
         u_pos = nzrange(U, i)
-        # println("\n$i\n")
         @inbounds for (l_start, l_i) in enumerate(l_pos)
             k = cols_l[l_i]
             A_kk = D[k]
-            A_ik = inv(A_kk)*nz_l[l_i]
+            A_ik = nz_l[l_i]*inv(A_kk)
             # Put it back as inverted
             nz_l[l_i] = A_ik
             # Do the remainder of the row: First the part inside L, diagonal, and then the part in U
             rem_l_pos = @view l_pos[l_start+1:end]
             K = U
-            @inbounds for l_j in rem_l_pos
-                j = cols_l[l_j]
-                A_kj = K[k, j]
-                nz_l[l_j] -= A_ik*A_kj
-            end
+            process_partial_row!(nz_l, rem_l_pos, cols_l, K, k, A_ik)
             D[i] -= A_ik*K[k, i]
-            @inbounds for u_j in u_pos
-                j = cols_u[u_j]
-                A_kj = K[k, j]
-                nz_u[u_j] -= A_ik*A_kj
-            end
+            process_partial_row!(nz_u, u_pos, cols_u, K, k, A_ik)
         end
     end
     @inbounds for i in active
