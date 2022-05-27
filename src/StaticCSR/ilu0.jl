@@ -148,8 +148,8 @@ end
 
 export ilu_solve!
 function ilu_solve!(x, L, U, D, b; active = 1:length(b))
-    x = trisolve!(x, L, b, order = active)
-    return trisolve!(x, U, x, order = reverse(active), D = D)
+    trisolve!(x, L, b, order = active)
+    return trisolve!(x, U, x, order = Iterators.reverse(active), D = D)
 end
 
 abstract type AbstractILUFactorization end
@@ -278,18 +278,19 @@ function ilu0_csr(A::StaticSparsityMatrixCSR, active::NTuple)
     return factor
 end
 
+update_factor!(LU::ParallelILUFactorCSR, A, i) = ilu0_csr!(LU.factors[i], A)
+apply_factor!(x, LU::ParallelILUFactorCSR, b, i) = ldiv!(x, LU.factors[i], b)
+
 function ilu0_csr!(LU::ParallelILUFactorCSR{N, T, G}, A::StaticSparsityMatrixCSR) where {N, T, G}
-    @batch for i in 1:N
-        F = LU.factors[i]
-        ilu0_csr!(F, A)
+    Threads.@threads for i in 1:N
+        update_factor!(LU, A, i)
     end
     return LU
 end
 
 function ldiv!(x::AbstractVector, LU::ParallelILUFactorCSR{N, T, A}, b::AbstractVector) where {N, T, A}
-    @batch for i in 1:N
-        F = LU.factors[i]
-        ldiv!(x, F, b)
+    Threads.@threads for i in 1:N
+        apply_factor!(x, LU, b, i)
     end
     return x
 end
