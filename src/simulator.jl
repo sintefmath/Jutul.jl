@@ -327,11 +327,13 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, upda
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
         rec = config[:ProgressRecorder]
-        t_solve, t_update = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec)
+        t_solve, t_update, n_iter, rep_lsolve = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec)
         if timing_out
-            @debug "Solved linear system in $t_solve seconds."
+            @debug "Solved linear system in $t_solve seconds with $n_iter iterations."
             @debug "Updated state $t_update seconds."
         end
+        report[:linear_solver] = rep_lsolve
+        report[:linear_iterations] = n_iter
         report[:linear_solve_time] = t_solve
         report[:update_time] = t_update
     end

@@ -237,15 +237,12 @@ function update_dx_from_vector!(sys, dx)
     sys.dx .= -dx
 end
 
-function block_size(lsys::LSystem) 1 end
+block_size(lsys::LSystem) = 1
 
-function solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing)
-    solve!(sys, linsolve)
-end
+linear_solve_return(ok = true, iterations = 1, stats = nothing) = (ok = ok, iterations = iterations, stats = stats)
 
-function solve!(sys::LSystem, linsolve::Nothing)
-    solve!(sys)
-end
+solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing) = solve!(sys, linsolve)
+solve!(sys::LSystem, linsolve::Nothing) = solve!(sys)
 
 function solve!(sys)
     limit = 50000
@@ -257,5 +254,6 @@ function solve!(sys)
     r = sys.r
     sys.dx .= -(J\r)
     @assert all(isfinite, sys.dx) "Linear solve resulted in non-finite values."
+    return linear_solve_return()
 end
 

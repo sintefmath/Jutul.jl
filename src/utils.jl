@@ -238,11 +238,13 @@ function report_stats(reports)
     # Same, but for wasted (iterations that were part of a cut time-step)
     wasted_its = 0
     wasted_linearizations = 0
+    wasted_linear_iterations = 0
     # Various timings
     total_finalize = 0
     total_assembly = 0
     total_linear_update = 0
     total_linear_solve = 0
+    total_linear_iterations = 0
     total_update = 0
     total_convergence = 0
     total_io = 0
@@ -267,6 +269,7 @@ function report_stats(reports)
             total_its += s.newtons
             total_linear_update += s.linear_system
             total_linear_solve += s.linear_solve
+            total_linear_iterations += s.linear_iterations
             total_update += s.update_time
             total_assembly += s.assembly
             total_convergence += s.convergence
@@ -274,6 +277,7 @@ function report_stats(reports)
             if !mini_rep[:success]
                 wasted_its += s.newtons
                 wasted_linearizations += s.linearizations
+                wasted_linear_iterations += s.linear_iterations
             end
         end
     end
@@ -292,8 +296,10 @@ function report_stats(reports)
     
     n = total_its
     m = total_linearizations
+    l = total_linear_iterations
     linscale = v -> v / max(m, 1)
     itscale = v -> v / max(n, 1)
+    linscale = v -> v / max(l, 1)
     each = (
                 assembly = linscale(total_assembly),
                 linear_system = linscale(total_linear_update),
@@ -307,7 +313,10 @@ function report_stats(reports)
     return (
             newtons = total_its,
             linearizations = total_linearizations,
-            wasted = (newtons = wasted_its, linearizations = wasted_linearizations),
+            linear_iterations = total_linear_iterations,
+            wasted = (newtons = wasted_its,
+                      linearizations = wasted_linearizations,
+                      linear_iterations = wasted_linear_iterations),
             steps = total_steps,
             ministeps = total_ministeps,
             time_sum = totals,
@@ -323,12 +332,14 @@ function stats_ministep(reports)
     local_linear_update = 0
     update = 0
     linsolve = 0
+    linear_iterations = 0
     for rep in reports
         local_linearizations += 1
         if haskey(rep, :update_time)
             local_its += 1
             update += rep[:update_time]
             linsolve += rep[:linear_solve_time]
+            linear_iterations += rep[:linear_iterations]
         end
         local_assembly += rep[:assembly_time]
         local_linear_update += rep[:linear_system_time]
@@ -339,6 +350,7 @@ function stats_ministep(reports)
             assembly = local_assembly,
             convergence = local_convergence,
             update_time = update,
+            linear_iterations = linear_iterations,
             linear_solve = linsolve,
             linear_system = local_linear_update)
 end
@@ -366,8 +378,8 @@ function print_stats(stats; kwarg...)
 end
 
 function print_iterations(stats; title = "Number of iterations", table_formatter = :tf_unicode)
-    flds = [:newtons, :linearizations]
-    names = [:Newtons, :Linearizations]
+    flds = [:newtons, :linearizations, :linear_iterations]
+    names = [:Newtons, :Linearizations, Symbol("Linear solver its.")]
     data = Array{Any}(undef, length(flds), 5)
     nstep = stats.steps
     nmini = stats.ministeps

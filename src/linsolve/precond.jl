@@ -252,6 +252,7 @@ function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::Abstrac
     as_svec = (x) -> reinterpret(Vt, x)
 
     ldiv!(as_svec(x), f, as_svec(y))
+    return x
 end
 
 function ilu_apply!(x, f::AbstractILUFactorization, y, type::Symbol = :both)
@@ -280,6 +281,7 @@ function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)
     # Solve by reinterpreting vectors to block (=SVector) vectors
     f! = ilu_f(type)
     f!(as_svec(x), ilu, as_svec(y))
+    return x
 end
 
 function operator_nrows(ilu::ILUZeroPreconditioner)

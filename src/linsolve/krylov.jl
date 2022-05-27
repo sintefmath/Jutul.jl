@@ -118,6 +118,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
         msg = history
         n = history.iters
         res = history.data[:resnorm]
+        stats = history
     elseif krylov.provider == Krylov
         @timeit "solve" (x, stats) = solver(op, r, 
                                 itmax = max_it,
@@ -148,6 +149,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     end
 
     @timeit "update dx" update_dx_from_vector!(sys, x)
+    return linear_solve_return(solved, n, stats)
 end
 
 function is_mutating(f)
