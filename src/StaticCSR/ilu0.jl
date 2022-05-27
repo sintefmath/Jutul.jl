@@ -223,7 +223,17 @@ function Base.show(io::IO, t::MIME"text/plain", ilu::ParallelILUFactorCSR)
     for (i, f) in enumerate(ilu.factors)
         act = ilu.active[i]
         na = length(act)
-        println(io, "Subdomain $i: $na elements: $act")
+        print(io, "Subdomain $i: $na elements: [")
+        lim = 25
+        for i = 1:(lim-1)
+            print(io, "$(act[i]), ")
+        end
+        print(io, act[lim])
+        if na > lim
+            println(io, ", ... ]")
+        else
+            println(io, "]")
+        end
     end
 end
 
