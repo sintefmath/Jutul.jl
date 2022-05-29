@@ -205,11 +205,11 @@ end
 
 function update!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, context::ParallelCSRContext)
     if isnothing(ilu.factor)
-        if Threads.nthreads() == 1
+        td = context.thread_division
+        if nthreads(td) == 1
             @debug "Setting up serial ILU(0)-CSR"
             F = ilu0_csr(A)
         else
-            td = context.thread_division
             @debug "Setting up parallel ILU(0)-CSR with $(nthreads(td)) threads"
             lookup = td.lookup
             F = ilu0_csr(A, lookup)
