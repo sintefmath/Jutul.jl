@@ -129,7 +129,7 @@ function ilu0_factor!(L, U, D, A; active = 1:size(A, 1))
     end
 end
 
-# Base.@propagate_inbounds diagonal_inverse(D::SparseVector, global_index, local_index) = nonzeros(D)[local_index]
+Base.@propagate_inbounds diagonal_inverse(D::SparseVector, global_index, local_index) = nonzeros(D)[local_index]
 Base.@propagate_inbounds diagonal_inverse(D, global_index, local_index) = D[global_index]
 diagonal_inverse(::Nothing, global_index, local_index) = 1.0
 
