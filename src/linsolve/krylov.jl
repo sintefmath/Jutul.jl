@@ -2,12 +2,13 @@ import LinearAlgebra.mul!
 
 export GenericKrylov
 
-struct PrecondWrapper
-    op::LinearOperator
-    x
-    function PrecondWrapper(op)
+struct PrecondWrapper{T, K}
+    op::T
+    x::K
+    function PrecondWrapper(op::T_o) where T_o<:LinearOperator
         x = zeros(eltype(op), size(op, 1))
-        new(op, x)
+        T_x = typeof(x)
+        new{T_o, T_x}(op, x)
     end
 end
 
