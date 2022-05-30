@@ -87,10 +87,13 @@ mutable struct AMGPreconditioner <: JutulPreconditioner
     end
 end
 
+matrix_for_amg(A) = A
+matrix_for_amg(A::StaticSparsityMatrixCSR) = A.At
+
 function update!(amg::AMGPreconditioner, A, b, context)
     kw = amg.method_kwarg
     @debug string("Setting up preconditioner ", amg.method)
-    t_amg = @elapsed amg.hierarchy = amg.method(A; kw...)
+    t_amg = @elapsed amg.hierarchy = amg.method(matrix_for_amg(A); kw...)
     amg.dim = size(A)
     @debug "Set up AMG in $t_amg seconds."
     amg.factor = aspreconditioner(amg.hierarchy, amg.cycle)
