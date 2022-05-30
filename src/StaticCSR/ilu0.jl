@@ -128,28 +128,42 @@ function ilu0_factor!(L, U, D, A; active = 1:size(A, 1))
         D[i] = inv(D[i])
     end
 end
-Base.@propagate_inbounds diagonal_inverse(D, i) = D[i]
-diagonal_inverse(::Nothing, i) = 1.0
 
-function trisolve!(x, M, b; order = 1:length(b), D = nothing)
-    # Note: Already inverted if provided
+# Base.@propagate_inbounds diagonal_inverse(D::SparseVector, global_index, local_index) = nonzeros(D)[local_index]
+Base.@propagate_inbounds diagonal_inverse(D, global_index, local_index) = D[global_index]
+diagonal_inverse(::Nothing, global_index, local_index) = 1.0
+
+function invert_row!(x, M, D, b, row, local_index)
     col = colvals(M)
     nz = nonzeros(M)
-    @inbounds for i in order
-        v = b[i]
-        @inbounds for j in nzrange(M, i)
-            k = col[j]
-            v -= nz[j]*x[k]
-        end
-        x[i] = diagonal_inverse(D, i)*v
+
+    @inbounds v = b[row]
+    @inbounds for j in nzrange(M, row)
+        k = col[j]
+        v -= nz[j]*x[k]
+    end
+    x[row] = diagonal_inverse(D, row, local_index)*v
+end
+
+function forward_substitute!(x, M, b; order = 1:length(b), D = nothing)
+    @inbounds for (local_index, i) in enumerate(order)
+        invert_row!(x, M, D, b, i, local_index)
+    end
+    return x
+end
+
+function backward_substitute!(x, M, b; order = 1:length(b), D = nothing)
+    n = length(order)
+    @inbounds for (i, local_index) in zip(Iterators.reverse(order), n:-1:1)
+        invert_row!(x, M, D, b, i, local_index)
     end
     return x
 end
 
 export ilu_solve!
 function ilu_solve!(x, L, U, D, b; active = 1:length(b))
-    trisolve!(x, L, b, order = active)
-    return trisolve!(x, U, x, order = Iterators.reverse(active), D = D)
+    forward_substitute!(x, L, b, order = active)
+    return backward_substitute!(x, U, x, order = active, D = D)
 end
 
 abstract type AbstractILUFactorization end
