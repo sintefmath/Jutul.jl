@@ -17,8 +17,8 @@ colvals(S::StaticSparsityMatrixCSR) = SparseArrays.rowvals(S.At)
 function LinearAlgebra.mul!(y::AbstractVector, A::StaticSparsityMatrixCSR, x::AbstractVector, α::Number, β::Number)
     At = A.At
     n = size(y, 1)
-    size(A, 1) == size(x, 1) || throw(DimensionMismatch())
-    size(A, 2) == n || throw(DimensionMismatch())
+    size(A, 2) == size(x, 1) || throw(DimensionMismatch())
+    size(A, 1) == n || throw(DimensionMismatch())
     mb = max(n ÷ A.nthreads, 1)
     @batch minbatch = mb for row in 1:n
         v = zero(eltype(y))
@@ -36,8 +36,8 @@ function static_sparsity_sparse(I, J, V, m = maximum(I), n = maximum(J); kwarg..
     return StaticSparsityMatrixCSR(A; kwarg...)
 end
 
-function StaticSparsityMatrixCSR(A::SparseMatrixCSC; nthreads = Threads.nthreads(), minbatch = 1000)
-    return StaticSparsityMatrixCSR(A, nthreads, minbatch)
+function StaticSparsityMatrixCSR(A_t::SparseMatrixCSC; nthreads = Threads.nthreads(), minbatch = 1000)
+    return StaticSparsityMatrixCSR(A_t, nthreads, minbatch)
 end
 
 function StaticSparsityMatrixCSR(m, n, rowptr, cols, nzval; kwarg...)

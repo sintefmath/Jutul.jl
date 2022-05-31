@@ -1,5 +1,7 @@
 import LinearAlgebra.ldiv!, LinearAlgebra.\, SparseArrays.nnz
 
+export ldiv!
+
 function keep(col, row, lower)
     if lower
         return col < row
