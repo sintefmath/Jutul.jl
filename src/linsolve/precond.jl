@@ -123,7 +123,10 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR)
         # Do this with the standard CSC products
         # A = to_csr(R*A.At*P)
         R = to_csr(P)
-        P = R'
+        # Convert P to a proper CSC matrix to get parallel
+        # spmv for the wrapper type, trading some memory for
+        # performance.
+        P = to_csr(SparseMatrixCSC(R))
 
         lvl = AlgebraicMultigrid.Level(A, P, R)
         push!(new_levels, lvl)
