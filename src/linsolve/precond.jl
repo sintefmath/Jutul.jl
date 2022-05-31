@@ -12,6 +12,7 @@ function update!(preconditioner, lsys, model, storage, recorder)
     update!(preconditioner, J, r, ctx)
 end
 
+export partial_update!
 function partial_update!(p, A, b, context)
     update!(p, A, b, context)
 end
