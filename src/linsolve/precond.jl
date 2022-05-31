@@ -243,12 +243,13 @@ function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P)
 end
 
 function coarse_product!(C, A, R)
+    mb = A.minbatch
     n, m = size(C)
     # R = P'
     nz_c = nonzeros(C)
     cols_c = colvals(C)
-    for i in 1:n
-        for j_p in nzrange(C, i)
+    @batch minbatch=mb for i in 1:n
+        @inbounds for j_p in nzrange(C, i)
             j = cols_c[j_p]
             nz_c[j_p] = compute_A_c_ij(A, R, i, j)
         end
@@ -264,17 +265,16 @@ function compute_A_c_ij(A, R, i, j)
     cols_a = colvals(A)
     rows_p = cols_r = colvals(R)
     v = 0.0
-    for l_p in nzrange(R, i)
+    @inbounds for l_p in nzrange(R, i)
         l = cols_r[l_p]
         # Now sum over the others two matrices
-        # @info i size(A) size(R) l
         A_rng = nzrange(A, l)
         P_rng = nzrange(R, j)
 
         # Loop over both P (=R') and A
         acc = 0.0
         A_pos = P_pos = 1
-        while A_pos <= length(A_rng) && P_pos <= length(P_rng)
+        @inbounds while A_pos <= length(A_rng) && P_pos <= length(P_rng)
             # A
             p_A = A_rng[A_pos]
             kA = cols_a[p_A]
@@ -282,7 +282,7 @@ function compute_A_c_ij(A, R, i, j)
             p_P = P_rng[P_pos]
             kP = rows_p[p_P]
             if kA == kP
-                acc += nz_a[p_A]*nz_p[p_P]
+                @inbounds acc += nz_a[p_A]*nz_p[p_P]
                 # Increment both counters
                 A_pos += 1
                 P_pos += 1
