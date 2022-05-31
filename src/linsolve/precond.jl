@@ -147,8 +147,8 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR)
         typed_smoothers[i] = smoothers[i]
     end
     sizes = tuple(sizes...)
-    final_smoothers = (n = sizes, smoothers = typed_smoothers)
-    smoother = (A, x, b) -> apply_smoother!(x, A, b, final_smoothers)
+    amg.smoothers = S = (n = sizes, smoothers = typed_smoothers)
+    smoother = (A, x, b) -> apply_smoother!(x, A, b, S)
 
     factor = lu(A)
     coarse_solver = (x, b) -> ldiv!(x, factor, b)
@@ -171,6 +171,7 @@ end
 
 function partial_update!(amg::AMGPreconditioner, A, b, context)
     amg.hierarchy = update_hierarchy!(amg.hierarchy, A)
+    amg.smoothers = update_smoothers!(amg.smoothers, A, amg.hierarchy)
 end
 
 operator_nrows(amg::AMGPreconditioner) = amg.dim[1]
@@ -182,15 +183,35 @@ function update_hierarchy!(h, A)
         l = levels[i]
         P, R = l.P, l.R
         levels[i] = AlgebraicMultigrid.Level(A, P, R)
-        A = R*A*P
+        A = update_coarse_system(R, A, P)
     end
     factor = lu(A)
     coarse_solver = (x, b) -> ldiv!(x, factor, b)
     return AlgebraicMultigrid.MultiLevel(levels, A, coarse_solver, h.presmoother, h.postsmoother, h.workspace)
 end
 
-function update_smoothers!(h, smoothers)
+function update_coarse_system(R, A, P)
+    return R*A*P
+end
 
+function update_coarse_system(R, A::StaticSparsityMatrixCSR, P)
+    At = A.At
+    Pt = R.At
+    Rt = Pt'
+    A_c = Rt*At*Pt
+    return StaticSparsityMatrixCSR(A_c)
+end
+
+function update_smoothers!(smoothers::Nothing, A, h)
+
+end
+
+function update_smoothers!(S::NamedTuple, A::StaticSparsityMatrixCSR, h)
+    n = length(h.levels)
+    for i = 1:(n-1)
+        ilu0_csr!(S.smoothers[i], A)
+        A = h.levels[i+1]
+    end
 end
 
 """
