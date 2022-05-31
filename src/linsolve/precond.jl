@@ -83,8 +83,9 @@ mutable struct AMGPreconditioner <: JutulPreconditioner
     factor
     dim
     hierarchy
+    smoothers
     function AMGPreconditioner(method = ruge_stuben; cycle = AlgebraicMultigrid.V(), kwarg...)
-        new(method, kwarg, cycle, nothing, nothing, nothing)
+        new(method, kwarg, cycle, nothing, nothing, nothing, nothing)
     end
 end
 
@@ -93,11 +94,79 @@ matrix_for_amg(A::StaticSparsityMatrixCSR) = A.At
 
 function update!(amg::AMGPreconditioner, A, b, context)
     kw = amg.method_kwarg
+    A_amg = matrix_for_amg(A)
     @debug string("Setting up preconditioner ", amg.method)
-    t_amg = @elapsed amg.hierarchy = amg.method(matrix_for_amg(A); kw...)
+    t_amg = @elapsed hierarchy = amg.method(A_amg; kw...)
+    amg = specialize_hierarchy!(amg, hierarchy, A)
     amg.dim = size(A)
     @debug "Set up AMG in $t_amg seconds."
     amg.factor = aspreconditioner(amg.hierarchy, amg.cycle)
+end
+
+function specialize_hierarchy!(amg, hierarchy, A)
+    amg.hierarchy = hierarchy
+    return amg
+end
+
+function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR)
+    nt = A.nthreads
+    mb = A.minbatch
+    to_csr(M) = StaticSparsityMatrixCSR(M, nthreads = nt, minbatch = mb)
+    levels = h.levels
+    new_levels = []
+    smoothers = []
+    sizes = Vector{Int64}()
+    n = length(levels)
+    for i = 1:n
+        l = levels[i]
+        P, R = l.P, l.R
+        # Do this with the standard CSC products
+        # A = to_csr(R*A.At*P)
+        R = to_csr(P)
+        P = R'
+
+        lvl = AlgebraicMultigrid.Level(A, P, R)
+        push!(new_levels, lvl)
+
+        ilu_factor = ilu0_csr(A)
+        push!(smoothers, ilu_factor)
+
+        push!(sizes, size(A, 1))
+        if i == n
+            A = to_csr(h.final_A)
+        else
+            A = to_csr(levels[i+1].A)
+        end
+    end
+    typed_levels = Vector{typeof(new_levels[1])}(undef, n)
+    for i = 1:n
+        typed_levels[i] = new_levels[i]
+    end
+    typed_smoothers = Vector{typeof(smoothers[1])}(undef, n)
+    for i = 1:n
+        typed_smoothers[i] = smoothers[i]
+    end
+    sizes = tuple(sizes...)
+    final_smoothers = (n = sizes, smoothers = typed_smoothers)
+    smoother = (A, x, b) -> apply_smoother!(x, A, b, final_smoothers)
+
+    factor = lu(A)
+    coarse_solver = (x, b) -> ldiv!(x, factor, b)
+
+    amg.hierarchy = AlgebraicMultigrid.MultiLevel(typed_levels, A, coarse_solver, smoother, smoother, h.workspace)
+
+    return amg
+end
+
+function apply_smoother!(x, A, b, smoothers::NamedTuple)
+    m = size(A, 1)
+    for (i, n) in enumerate(smoothers.n)
+        if m == n
+            x = ldiv!(x, smoothers.smoothers[i], b)
+            return x
+        end
+    end
+    error("Unable to match smoother to matrix.")
 end
 
 function partial_update!(amg::AMGPreconditioner, A, b, context)
@@ -115,7 +184,13 @@ function update_hierarchy!(h, A)
         levels[i] = AlgebraicMultigrid.Level(A, P, R)
         A = R*A*P
     end
-    return AlgebraicMultigrid.MultiLevel(levels, A, AlgebraicMultigrid.Pinv(A), h.presmoother, h.postsmoother, h.workspace)
+    factor = lu(A)
+    coarse_solver = (x, b) -> ldiv!(x, factor, b)
+    return AlgebraicMultigrid.MultiLevel(levels, A, coarse_solver, h.presmoother, h.postsmoother, h.workspace)
+end
+
+function update_smoothers!(h, smoothers)
+
 end
 
 """
