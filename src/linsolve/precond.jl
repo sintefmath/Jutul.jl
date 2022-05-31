@@ -127,14 +127,15 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR)
         # spmv for the wrapper type, trading some memory for
         # performance.
         P = to_csr(SparseMatrixCSC(R))
+        N = size(A, 1)
 
         lvl = AlgebraicMultigrid.Level(A, P, R)
         push!(new_levels, lvl)
 
         ilu_factor = ilu0_csr(A)
-        push!(smoothers, ilu_factor)
+        push!(smoothers, (factor = ilu_factor, x = zeros(N), b = zeros(N)))
 
-        push!(sizes, size(A, 1))
+        push!(sizes, N)
         if i == n
             A = to_csr(h.final_A)
         else
@@ -165,7 +166,15 @@ function apply_smoother!(x, A, b, smoothers::NamedTuple)
     m = size(A, 1)
     for (i, n) in enumerate(smoothers.n)
         if m == n
-            x = ldiv!(x, smoothers.smoothers[i], b)
+            smooth = smoothers.smoothers[i]
+            S = smooth.factor
+            res = smooth.x
+            B = smooth.b
+            # In-place version of B = b - A*x
+            B .= b
+            mul!(B, A, x, -1, 1)
+            ldiv!(res, S, B)
+            @. x += res
             return x
         end
     end
@@ -190,7 +199,22 @@ function update_hierarchy!(h, A)
     end
     factor = lu(A)
     coarse_solver = (x, b) -> ldiv!(x, factor, b)
+    # print_system(A)
+    # error()
+
     return AlgebraicMultigrid.MultiLevel(levels, A, coarse_solver, h.presmoother, h.postsmoother, h.workspace)
+end
+
+function print_system(A::StaticSparsityMatrixCSR)
+    print_system(SparseMatrixCSC(A.At'))
+end
+
+function print_system(A)
+    I, J, V = findnz(A)
+    @info "Coarsest system"  size(A)
+    for (i, j, v) in zip(I, J, V)
+        @info "$i $j: $v"
+    end
 end
 
 function update_coarse_system(R, A, P)
@@ -212,8 +236,8 @@ end
 function update_smoothers!(S::NamedTuple, A::StaticSparsityMatrixCSR, h)
     n = length(h.levels)
     for i = 1:(n-1)
-        ilu0_csr!(S.smoothers[i], A)
-        A = h.levels[i+1]
+        ilu0_csr!(S.smoothers[i].factor, A)
+        A = h.levels[i+1].A
     end
 end
 
