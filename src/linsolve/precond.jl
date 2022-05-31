@@ -154,7 +154,7 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR)
     amg.smoothers = S = (n = sizes, smoothers = typed_smoothers)
     smoother = (A, x, b) -> apply_smoother!(x, A, b, S)
 
-    factor = lu(A)
+    factor = lu(A.At)'
     coarse_solver = (x, b) -> ldiv!(x, factor, b)
 
     amg.hierarchy = AlgebraicMultigrid.MultiLevel(typed_levels, A, coarse_solver, smoother, smoother, h.workspace)
@@ -188,6 +188,9 @@ end
 
 operator_nrows(amg::AMGPreconditioner) = amg.dim[1]
 
+factorize_coarse(A) = lu(A)
+factorize_coarse(A::StaticSparsityMatrixCSR) = lu(A.At)'
+
 function update_hierarchy!(h, A)
     levels = h.levels
     n = length(levels)
@@ -195,9 +198,14 @@ function update_hierarchy!(h, A)
         l = levels[i]
         P, R = l.P, l.R
         levels[i] = AlgebraicMultigrid.Level(A, P, R)
-        A = update_coarse_system(R, A, P)
+        if i == n
+            A_c = h.final_A
+        else
+            A_c = levels[i+1].A
+        end
+        A = update_coarse_system!(A_c, R, A, P)
     end
-    factor = lu(A)
+    factor = factorize_coarse(A)
     coarse_solver = (x, b) -> ldiv!(x, factor, b)
     # print_system(A)
     # error()
@@ -217,16 +225,77 @@ function print_system(A)
     end
 end
 
-function update_coarse_system(R, A, P)
+function update_coarse_system!(A_c, R, A, P)
     return R*A*P
 end
 
-function update_coarse_system(R, A::StaticSparsityMatrixCSR, P)
-    At = A.At
-    Pt = R.At
-    Rt = Pt'
-    A_c = Rt*At*Pt
-    return StaticSparsityMatrixCSR(A_c)
+function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P)
+    if true
+        A_c = coarse_product!(A_c, A, R)
+    else
+        At = A.At
+        Pt = R.At
+        Rt = Pt'
+        A_c = Rt*At*Pt
+        A_c = StaticSparsityMatrixCSR(A_c)
+    end
+    return A_c
+end
+
+function coarse_product!(C, A, R)
+    n, m = size(C)
+    # R = P'
+    nz_c = nonzeros(C)
+    cols_c = colvals(C)
+    for i in 1:n
+        for j_p in nzrange(C, i)
+            j = cols_c[j_p]
+            nz_c[j_p] = compute_A_c_ij(A, R, i, j)
+        end
+    end
+    return C
+end
+
+function compute_A_c_ij(A, R, i, j)
+    # Compute A_c = R*A*P = R*A*R' in-place by
+    # (R*A*P)_ij = sum_l R_il sum_k A_lk A_kj
+    nz_a = nonzeros(A)
+    nz_r = nz_p = nonzeros(R)
+    cols_a = colvals(A)
+    rows_p = cols_r = colvals(R)
+    v = 0.0
+    for l_p in nzrange(R, i)
+        l = cols_r[l_p]
+        # Now sum over the others two matrices
+        # @info i size(A) size(R) l
+        A_rng = nzrange(A, l)
+        P_rng = nzrange(R, j)
+
+        # Loop over both P (=R') and A
+        acc = 0.0
+        A_pos = P_pos = 1
+        while A_pos <= length(A_rng) && P_pos <= length(P_rng)
+            # A
+            p_A = A_rng[A_pos]
+            kA = cols_a[p_A]
+            # P
+            p_P = P_rng[P_pos]
+            kP = rows_p[p_P]
+            if kA == kP
+                acc += nz_a[p_A]*nz_p[p_P]
+                # Increment both counters
+                A_pos += 1
+                P_pos += 1
+            elseif kA < kP
+                A_pos += 1
+            else
+                P_pos += 1
+            end
+        end
+        R_il = nz_r[l_p]
+        v += R_il*acc
+    end
+    return v
 end
 
 function update_smoothers!(smoothers::Nothing, A, h)
