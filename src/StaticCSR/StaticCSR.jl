@@ -4,7 +4,7 @@ module StaticCSR
     export StaticSparsityMatrixCSR, colvals, static_sparsity_sparse
 
     include("mat.jl")
-    export AbstractILUFactorization, ilu0_csr, ilu0_csr!
+    export AbstractILUFactorization, ilu0_csr, ilu0_csr!, coarse_product!
     include("ilu0.jl")
     include("par_ilu0.jl")
 end
