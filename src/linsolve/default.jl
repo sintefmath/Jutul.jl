@@ -192,8 +192,11 @@ function linear_operator(block::LinearizedBlock{EquationMajorLayout, EquationMaj
     function apply!(res, x, α, β::T) where T
         # Note: This is unfortunately allocating, but applying
         # with a simple view leads to degraded performance.
-        x_v = collect(block_major_to_equation_major_view(x, bz))
-        mul!(res, jac, x_v, α, β)
+        @timeit "spmv" begin
+            x_v = collect(block_major_to_equation_major_view(x, bz))
+            mul!(res, jac, x_v, α, β)
+        end
+        return res
     end
     n, m = size(jac)
     return LinearOperator(Float64, n, m, false, false, apply!)
@@ -210,20 +213,23 @@ function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorL
     function apply!(res, x, α, β::T) where T
         # mul!(C, A, B, α, β) -> C
         # A*B*α + C*β
-        tmp_cell_major = jac*x
-        if α != one(T)
-            lmul!(α, tmp_cell_major)
-        end
-        tmp_block_major = equation_major_to_block_major_view(tmp_cell_major, bz)
-
-        if β == zero(T)
-            @. res = tmp_block_major
-        else
-            if β != one(T)
-                lmul!(β, res)
+        @timeit "spmv" begin
+            tmp_cell_major = jac*x
+            if α != one(T)
+                lmul!(α, tmp_cell_major)
             end
-            @. res += tmp_block_major
+            tmp_block_major = equation_major_to_block_major_view(tmp_cell_major, bz)
+
+            if β == zero(T)
+                @. res = tmp_block_major
+            else
+                if β != one(T)
+                    lmul!(β, res)
+                end
+                @. res += tmp_block_major
+            end
         end
+        return res
     end
     n, m = size(jac)
     return LinearOperator(Float64, n, m, false, false, apply!)

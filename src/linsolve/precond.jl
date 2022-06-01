@@ -274,7 +274,9 @@ function compute_A_c_ij(A, R, i, j)
         # Loop over both P (=R') and A
         acc = 0.0
         A_pos = P_pos = 1
-        @inbounds while A_pos <= length(A_rng) && P_pos <= length(P_rng)
+        N = length(A_rng)
+        M = length(P_rng)
+        @inbounds while A_pos <= N && P_pos <= M
             # A
             p_A = A_rng[A_pos]
             kA = cols_a[p_A]

@@ -169,25 +169,28 @@ function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x
     N = length(res)
     n = N ÷ block_size
     # compute B*x
-    mul!(res_v, B, x_v, α, β)
-    for i = 1:n
-        for b = 1:block_size
-            ix = (i-1)*block_size + b
-            jx = (b-1)*n + i
-            @inbounds a_buf[jx] = x[ix]
+    @timeit "spmv (schur)" begin
+        mul!(res_v, B, x_v, α, β)
+        for i = 1:n
+            for b = 1:block_size
+                ix = (i-1)*block_size + b
+                jx = (b-1)*n + i
+                @inbounds a_buf[jx] = x[ix]
+            end
+        end
+        mul!(b_buf, D, a_buf)
+        ldiv!(E, b_buf)
+        mul!(a_buf, C, b_buf)
+        # Convert back to block major and subtract
+        @batch minbatch = 1000 for i = 1:n
+            for b = 1:block_size
+                ix = (i-1)*block_size + b
+                jx = (b-1)*n + i
+                @inbounds res[ix] -= a_buf[jx]
+            end
         end
     end
-    mul!(b_buf, D, a_buf)
-    ldiv!(E, b_buf)
-    mul!(a_buf, C, b_buf)
-    # Convert back to block major and subtract
-    @batch minbatch = 1000 for i = 1:n
-        for b = 1:block_size
-            ix = (i-1)*block_size + b
-            jx = (b-1)*n + i
-            @inbounds res[ix] -= a_buf[jx]
-        end
-    end
+    return res
     # Simple version:
     # res .= B*x - C*(E\(D*x))
 end
