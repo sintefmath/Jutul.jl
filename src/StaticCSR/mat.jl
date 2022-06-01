@@ -19,17 +19,21 @@ function LinearAlgebra.mul!(y::AbstractVector, A::StaticSparsityMatrixCSR, x::Ab
     n = size(y, 1)
     size(A, 2) == size(x, 1) || throw(DimensionMismatch())
     size(A, 1) == n || throw(DimensionMismatch())
-    mb = max(n ÷ A.nthreads, 1)
     @batch minbatch = mb for row in 1:n
         v = zero(eltype(y))
         @inbounds for nz in nzrange(A, row)
             col = At.rowval[nz]
             v += At.nzval[nz]*x[col]
+    mb = minbatch(A, n)
         end
         @inbounds y[row] = α*v + β*y[row]
     end
     return y
 end
+
+nthreads(A::StaticSparsityMatrixCSR) = A.nthreads
+minbatch(A::StaticSparsityMatrixCSR) = A.minbatch
+minbatch(A::StaticSparsityMatrixCSR, n) = max(n ÷ nthreads(A), minbatch(A))
 
 function static_sparsity_sparse(I, J, V, m = maximum(I), n = maximum(J); kwarg...)
     A = sparse(J, I, V, n, m)
