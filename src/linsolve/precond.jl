@@ -126,7 +126,9 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR)
         # Convert P to a proper CSC matrix to get parallel
         # spmv for the wrapper type, trading some memory for
         # performance.
-        P = to_csr(SparseMatrixCSC(R))
+        Ri, Rj, Rv = findnz(P)
+        Rn, Rm = size(R)
+        P = to_csr(sparse(Rj, Ri, Rv, Rn, Rm))
         N = size(A, 1)
 
         lvl = AlgebraicMultigrid.Level(A, P, R)
@@ -182,8 +184,8 @@ function apply_smoother!(x, A, b, smoothers::NamedTuple)
 end
 
 function partial_update!(amg::AMGPreconditioner, A, b, context)
-    amg.hierarchy = update_hierarchy!(amg.hierarchy, A)
-    amg.smoothers = update_smoothers!(amg.smoothers, A, amg.hierarchy)
+    @timeit "coarse update" amg.hierarchy = update_hierarchy!(amg.hierarchy, A)
+    @timeit "smoother update" amg.smoothers = update_smoothers!(amg.smoothers, A, amg.hierarchy)
 end
 
 operator_nrows(amg::AMGPreconditioner) = amg.dim[1]
@@ -230,14 +232,14 @@ function update_coarse_system!(A_c, R, A, P)
 end
 
 function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P)
-    if true
+    if false
         A_c = coarse_product!(A_c, A, R)
     else
         At = A.At
         Pt = R.At
         Rt = Pt'
         A_c = Rt*At*Pt
-        A_c = StaticSparsityMatrixCSR(A_c)
+        A_c = StaticSparsityMatrixCSR(A_c, nthreads = A.nthreads, minbatch = A.minbatch)
     end
     return A_c
 end
