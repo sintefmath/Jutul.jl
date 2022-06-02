@@ -40,6 +40,7 @@ module Jutul
 
     include("StaticCSR/StaticCSR.jl")
     using .StaticCSR
+    import .StaticCSR: nthreads, minbatch
 
     # Main types
     include("core_types.jl")

@@ -4,7 +4,7 @@ struct ParallelCSRContext <: CPUJutulContext
     matrix_layout
     minbatch::Integer
     thread_division::ThreadDivision
-    function ParallelCSRContext(arg...; matrix_layout = EquationMajorLayout(), minbatch = thread_batch(nothing))
+    function ParallelCSRContext(arg...; matrix_layout = EquationMajorLayout(), minbatch = minbatch(nothing))
         new(matrix_layout, minbatch, ThreadDivision(arg...))
     end
 end
@@ -24,6 +24,9 @@ function initialize_context!(context::ParallelCSRContext, domain, system, formul
     context
 end
 
+nthreads(ctx::ParallelCSRContext) = nthreads(ctx.thread_division)
+minbatch(ctx::ParallelCSRContext) = ctx.minbatch
+
 function build_sparse_matrix(context::ParallelCSRContext, I, J, V, n, m)
-    return static_sparsity_sparse(I, J, V, n, m)
+    return static_sparsity_sparse(I, J, V, n, m, nthreads = nthreads(context), minbatch = minbatch(context))
 end

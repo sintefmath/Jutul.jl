@@ -1,8 +1,10 @@
-
 struct StaticSparsityMatrixCSR{Tv,Ti<:Integer} <: SparseArrays.AbstractSparseMatrix{Tv,Ti}
     At::SparseMatrixCSC{Tv, Ti}
     nthreads::Int64
     minbatch::Int64
+    function StaticSparsityMatrixCSR(A_t::SparseMatrixCSC{Tv, Ti}; nthreads = Threads.nthreads(), minbatch = 1000) where {Tv, Ti}
+        return new{Tv, Ti}(A_t, nthreads, minbatch)
+    end
 end
 
 Base.size(S::StaticSparsityMatrixCSR) = reverse(size(S.At))
@@ -19,7 +21,7 @@ function LinearAlgebra.mul!(y::AbstractVector, A::StaticSparsityMatrixCSR, x::Ab
     n = size(y, 1)
     size(A, 2) == size(x, 1) || throw(DimensionMismatch())
     size(A, 1) == n || throw(DimensionMismatch())
-    mb = minbatch(A, n)
+    mb = max(n ÷ nthreads(A), minbatch(A))
     @batch minbatch = mb for row in 1:n
         v = zero(eltype(y))
         @inbounds for nz in nzrange(A, row)
@@ -33,16 +35,12 @@ end
 
 nthreads(A::StaticSparsityMatrixCSR) = A.nthreads
 minbatch(A::StaticSparsityMatrixCSR) = A.minbatch
-minbatch(A::StaticSparsityMatrixCSR, n) = max(n ÷ nthreads(A), minbatch(A))
 
 function static_sparsity_sparse(I, J, V, m = maximum(I), n = maximum(J); kwarg...)
     A = sparse(J, I, V, n, m)
     return StaticSparsityMatrixCSR(A; kwarg...)
 end
 
-function StaticSparsityMatrixCSR(A_t::SparseMatrixCSC; nthreads = Threads.nthreads(), minbatch = 1000)
-    return StaticSparsityMatrixCSR(A_t, nthreads, minbatch)
-end
 
 function StaticSparsityMatrixCSR(m, n, rowptr, cols, nzval; kwarg...)
     # @info "Setting up" m n rowptr cols nzval

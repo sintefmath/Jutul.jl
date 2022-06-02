@@ -1,5 +1,7 @@
-export thread_batch
-thread_batch(::Any) = 1000
+export minbatch
+minbatch(::Any) = 1000
+nthreads(::Any) = Threads.nthreads()
+minbatch(x, n) = max(n ÷ nthreads(x), minbatch(x))
 
 function jacobian_eltype(context, layout, block_size)
     return float_type(context)
@@ -32,3 +34,4 @@ end
 function build_sparse_matrix(context, I, J, V, n, m)
     return sparse(I, J, V, n, m)
 end
+

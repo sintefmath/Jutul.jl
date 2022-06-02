@@ -50,7 +50,7 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = 1:size(A, 1); 
             end
         end
     end
-    B = StaticSparsityMatrixCSR(n, m, rowptr, sub_cols, sub_vals)
+    B = StaticSparsityMatrixCSR(n, m, rowptr, sub_cols, sub_vals, nthreads = A.nthreads, minbatch = A.minbatch)
     return (B, map)
 end
 

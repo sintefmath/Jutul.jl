@@ -2,6 +2,7 @@ module StaticCSR
     using SparseArrays, Polyester, LinearAlgebra
 
     export StaticSparsityMatrixCSR, colvals, static_sparsity_sparse
+    export nthreads, minbatch
 
     include("mat.jl")
     export AbstractILUFactorization, ilu0_csr, ilu0_csr!, coarse_product!
