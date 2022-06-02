@@ -97,18 +97,18 @@ function update!(amg::AMGPreconditioner, A, b, context)
     A_amg = matrix_for_amg(A)
     @debug string("Setting up preconditioner ", amg.method)
     t_amg = @elapsed hierarchy = amg.method(A_amg; kw...)
-    amg = specialize_hierarchy!(amg, hierarchy, A)
+    amg = specialize_hierarchy!(amg, hierarchy, A, context)
     amg.dim = size(A)
     @debug "Set up AMG in $t_amg seconds."
     amg.factor = aspreconditioner(amg.hierarchy, amg.cycle)
 end
 
-function specialize_hierarchy!(amg, hierarchy, A)
+function specialize_hierarchy!(amg, hierarchy, A, context)
     amg.hierarchy = hierarchy
     return amg
 end
 
-function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR)
+function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
     nt = A.nthreads
     mb = A.minbatch
     to_csr(M) = StaticSparsityMatrixCSR(M, nthreads = nt, minbatch = mb)
@@ -134,7 +134,12 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR)
         lvl = AlgebraicMultigrid.Level(A, P, R)
         push!(new_levels, lvl)
 
-        ilu_factor = ilu0_csr(A)
+        if nt == 1
+            ilu_factor = ilu0_csr(A)
+        else
+            lookup = generate_lookup(context.partitioner, A, nt)
+            ilu_factor = ilu0_csr(A, lookup)
+        end
         push!(smoothers, (factor = ilu_factor, x = zeros(N), b = zeros(N)))
 
         push!(sizes, N)
@@ -347,13 +352,15 @@ end
 
 function update!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, context::ParallelCSRContext)
     if isnothing(ilu.factor)
-        td = context.thread_division
-        if nthreads(td) == 1
+        nt = nthreads(context)
+        if nt == 1
             @debug "Setting up serial ILU(0)-CSR"
             F = ilu0_csr(A)
         else
             @debug "Setting up parallel ILU(0)-CSR with $(nthreads(td)) threads"
-            lookup = td.lookup
+            # lookup = td.lookup
+            part = context.partitioner
+            lookup = generate_lookup(part, A, nt)
             F = ilu0_csr(A, lookup)
         end
         ilu.factor = F

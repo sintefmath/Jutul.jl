@@ -69,6 +69,7 @@ module Jutul
 
     include("utils.jl")
     include("interpolation.jl")
+    include("partitioning.jl")
     # 
     include("multimodel/multimodel.jl")
     include("dd/dd.jl")
