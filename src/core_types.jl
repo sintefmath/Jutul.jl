@@ -140,11 +140,6 @@ end
 
 abstract type JutulPartitioner end
 
-export LinearPartitioner
-struct LinearPartitioner <: JutulPartitioner
-
-end
-
 include("contexts/interface.jl")
 include("contexts/csr.jl")
 include("contexts/default.jl")

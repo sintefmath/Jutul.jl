@@ -5,7 +5,7 @@ struct ParallelCSRContext <: CPUJutulContext
     minbatch::Integer
     nthreads::Integer
     partitioner::JutulPartitioner
-    function ParallelCSRContext(nthreads = Threads.nthreads(); partitioner = LinearPartitioner(), matrix_layout = EquationMajorLayout(), minbatch = minbatch(nothing))
+    function ParallelCSRContext(nthreads = Threads.nthreads(); partitioner = MetisPartitioner(), matrix_layout = EquationMajorLayout(), minbatch = minbatch(nothing))
         new(matrix_layout, minbatch, nthreads, partitioner)
     end
 end
