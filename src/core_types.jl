@@ -102,42 +102,6 @@ end
 ijnm(p::SparsePattern) = (p.I, p.J, p.n, p.m)
 block_size(p::SparsePattern) = (p.block_n, p.block_m)
 
-mutable struct ThreadDivision{N, T}
-    partition::T
-    lookup::NTuple{N, T}
-    function ThreadDivision(nthreads = Threads.nthreads(), partition = nothing)
-        has_partition = !isnothing(partition)
-        if has_partition
-            partition::AbstractVector
-            Vt = typeof(partition)
-        else
-            Vt = Vector{Int64}
-        end
-        partition = Vt()
-        lookup = tuple(repeat([partition], nthreads)...)
-        out = new{nthreads, Vt}(partition, lookup)
-        if has_partition
-            initialize_thread_division!(out, partition)
-        end
-        return out
-    end
-end
-
-nthreads(td::ThreadDivision{N, T}) where {N, T} = N
-
-function initialize_thread_division!(out::ThreadDivision{N, T}, partition) where {N, T}
-    up = unique(partition)
-    for i in 1:N
-        @assert i in up "$i must be in partition, but partition only contained $up"
-    end
-    @assert maximum(partition) == N
-    @assert minimum(partition) == 1
-    out.lookup = tuple(map(i -> findall(isequal(i), partition), 1:N)...)
-    out.partition = partition
-    return out
-end
-
-
 abstract type JutulPartitioner end
 
 include("contexts/interface.jl")
