@@ -145,11 +145,7 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
         typed_levels[i] = new_levels[i]
     end
     levels = typed_levels
-    smoothers_present = false# && !isnothing(amg.smoothers)
-    if !smoothers_present
-        amg.smoothers = generate_smoothers_csr(A_f, levels, nt, context)
-    end
-    S = amg.smoothers
+    S = amg.smoothers = generate_smoothers_csr(A_f, levels, nt, context)
     smoother = (A, x, b) -> apply_smoother!(x, A, b, S)
 
     A_c = to_csr(h.final_A)
@@ -157,9 +153,6 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
     coarse_solver = (x, b) -> ldiv!(x, factor, b)
 
     amg.hierarchy = AlgebraicMultigrid.MultiLevel(typed_levels, A_c, coarse_solver, smoother, smoother, h.workspace)
-    if smoothers_present
-        update_smoothers!(amg.smoothers, A_f, amg.hierarchy)
-    end
     return amg
 end
 
@@ -188,7 +181,7 @@ function generate_smoothers_csr(A_fine, levels, nt, context)
 end
 
 function apply_smoother!(x, A, b, smoothers::NamedTuple)
-    m = size(A, 1)
+    m = length(x)
     for (i, n) in enumerate(smoothers.n)
         if m == n
             smooth = smoothers.smoothers[i]
@@ -203,7 +196,7 @@ function apply_smoother!(x, A, b, smoothers::NamedTuple)
             return x
         end
     end
-    error("Unable to match smoother to matrix.")
+    error("Unable to match smoother to matrix: Recieved $m by $m matrix, with smoother sizes $(smoothers.n)")
 end
 
 function partial_update!(amg::AMGPreconditioner, A, b, context)
