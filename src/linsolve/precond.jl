@@ -115,13 +115,12 @@ function create_transposed(x)
 end
 
 function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
+    A_f = A
     nt = A.nthreads
     mb = A.minbatch
     to_csr(M) = StaticSparsityMatrixCSR(M, nthreads = nt, minbatch = mb)
     levels = h.levels
     new_levels = []
-    smoothers = []
-    sizes = Vector{Int64}()
     n = length(levels)
     for i = 1:n
         l = levels[i]
@@ -134,46 +133,58 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
         elseif isa(R0, Adjoint)
             R0 = create_transposed(P0)
         end
+        A = to_csr(l.A)
         R = to_csr(P0)
         P = to_csr(R0)
-        N = size(A, 1)
-
         lvl = AlgebraicMultigrid.Level(A, P, R)
         push!(new_levels, lvl)
+    end
 
+    typed_levels = Vector{typeof(new_levels[1])}(undef, n)
+    for i = 1:n
+        typed_levels[i] = new_levels[i]
+    end
+    levels = typed_levels
+    smoothers_present = false# && !isnothing(amg.smoothers)
+    if !smoothers_present
+        amg.smoothers = generate_smoothers_csr(A_f, levels, nt, context)
+    end
+    S = amg.smoothers
+    smoother = (A, x, b) -> apply_smoother!(x, A, b, S)
+
+    A_c = to_csr(h.final_A)
+    factor = factorize_coarse(A_c)
+    coarse_solver = (x, b) -> ldiv!(x, factor, b)
+
+    amg.hierarchy = AlgebraicMultigrid.MultiLevel(typed_levels, A_c, coarse_solver, smoother, smoother, h.workspace)
+    if smoothers_present
+        update_smoothers!(amg.smoothers, A_f, amg.hierarchy)
+    end
+    return amg
+end
+
+function generate_smoothers_csr(A_fine, levels, nt, context)
+    sizes = Vector{Int64}()
+    smoothers = []
+    n = length(levels)
+    for i = 1:n
+        A = levels[i].A
         if nt == 1
             ilu_factor = ilu0_csr(A)
         else
             lookup = generate_lookup(context.partitioner, A, nt)
             ilu_factor = ilu0_csr(A, lookup)
         end
+        N = size(A, 1)
         push!(smoothers, (factor = ilu_factor, x = zeros(N), b = zeros(N)))
-
         push!(sizes, N)
-        if i == n
-            A = to_csr(h.final_A)
-        else
-            A = to_csr(levels[i+1].A)
-        end
-    end
-    typed_levels = Vector{typeof(new_levels[1])}(undef, n)
-    for i = 1:n
-        typed_levels[i] = new_levels[i]
     end
     typed_smoothers = Vector{typeof(smoothers[1])}(undef, n)
     for i = 1:n
         typed_smoothers[i] = smoothers[i]
     end
     sizes = tuple(sizes...)
-    amg.smoothers = S = (n = sizes, smoothers = typed_smoothers)
-    smoother = (A, x, b) -> apply_smoother!(x, A, b, S)
-
-    factor = lu(A.At)'
-    coarse_solver = (x, b) -> ldiv!(x, factor, b)
-
-    amg.hierarchy = AlgebraicMultigrid.MultiLevel(typed_levels, A, coarse_solver, smoother, smoother, h.workspace)
-
-    return amg
+    return (n = sizes, smoothers = typed_smoothers)
 end
 
 function apply_smoother!(x, A, b, smoothers::NamedTuple)
