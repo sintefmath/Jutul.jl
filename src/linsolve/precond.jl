@@ -108,6 +108,12 @@ function specialize_hierarchy!(amg, hierarchy, A, context)
     return amg
 end
 
+function create_transposed(x)
+    i, j, v = findnz(x)
+    n, m = size(x)
+    return sparse(j, i, v, m, n)
+end
+
 function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
     nt = A.nthreads
     mb = A.minbatch
@@ -119,16 +125,17 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
     n = length(levels)
     for i = 1:n
         l = levels[i]
-        P, R = l.P, l.R
-        # Do this with the standard CSC products
-        # A = to_csr(R*A.At*P)
-        R = to_csr(P)
+        P0, R0 = l.P, l.R
         # Convert P to a proper CSC matrix to get parallel
         # spmv for the wrapper type, trading some memory for
         # performance.
-        Ri, Rj, Rv = findnz(P)
-        Rn, Rm = size(R)
-        P = to_csr(sparse(Rj, Ri, Rv, Rn, Rm))
+        if isa(P0, Adjoint)
+            P0 = create_transposed(R0)
+        elseif isa(R0, Adjoint)
+            R0 = create_transposed(P0)
+        end
+        R = to_csr(P0)
+        P = to_csr(R0)
         N = size(A, 1)
 
         lvl = AlgebraicMultigrid.Level(A, P, R)
