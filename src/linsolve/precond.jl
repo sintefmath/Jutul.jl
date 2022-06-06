@@ -90,7 +90,16 @@ mutable struct AMGPreconditioner <: JutulPreconditioner
 end
 
 matrix_for_amg(A) = A
-matrix_for_amg(A::StaticSparsityMatrixCSR) = A.At
+function matrix_for_amg(A::StaticSparsityMatrixCSR)
+    if false
+        return A.At
+    else
+        At = A.At
+        i, j, v = findnz(At)
+        n, m = size(At)
+        return sparse(j, i, v, n, n)
+    end
+end
 
 function update!(amg::AMGPreconditioner, A, b, context)
     kw = amg.method_kwarg
@@ -133,9 +142,9 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
         elseif isa(R0, Adjoint)
             R0 = create_transposed(P0)
         end
-        A = to_csr(l.A)
         R = to_csr(P0)
         P = to_csr(R0)
+        A = to_csr(l.A)
         lvl = AlgebraicMultigrid.Level(A, P, R)
         push!(new_levels, lvl)
     end
@@ -150,10 +159,17 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
 
     A_c = to_csr(h.final_A)
     factor = factorize_coarse(A_c)
-    coarse_solver = (x, b) -> ldiv!(x, factor, b)
+    coarse_solver = (x, b) -> solve_coarse_internal!(x, A_c, factor, b)
 
     amg.hierarchy = AlgebraicMultigrid.MultiLevel(typed_levels, A_c, coarse_solver, smoother, smoother, h.workspace)
+    display(amg.hierarchy)
+
     return amg
+end
+
+function solve_coarse_internal!(x, A, factor, b)
+    x = ldiv!(x, factor, b)
+    return x
 end
 
 function generate_smoothers_csr(A_fine, levels, nt, context)
@@ -207,7 +223,10 @@ end
 operator_nrows(amg::AMGPreconditioner) = amg.dim[1]
 
 factorize_coarse(A) = lu(A)
-factorize_coarse(A::StaticSparsityMatrixCSR) = lu(A.At)'
+
+function factorize_coarse(A::StaticSparsityMatrixCSR)
+    return lu(A.At)'
+end
 
 function update_hierarchy!(h, A)
     levels = h.levels
@@ -215,7 +234,6 @@ function update_hierarchy!(h, A)
     for i = 1:n
         l = levels[i]
         P, R = l.P, l.R
-        levels[i] = AlgebraicMultigrid.Level(A, P, R)
         if i == n
             A_c = h.final_A
         else
@@ -224,10 +242,7 @@ function update_hierarchy!(h, A)
         A = update_coarse_system!(A_c, R, A, P)
     end
     factor = factorize_coarse(A)
-    coarse_solver = (x, b) -> ldiv!(x, factor, b)
-    # print_system(A)
-    # error()
-
+    coarse_solver = (x, b) -> solve_coarse_internal!(x, A, factor, b)
     return AlgebraicMultigrid.MultiLevel(levels, A, coarse_solver, h.presmoother, h.postsmoother, h.workspace)
 end
 
@@ -253,7 +268,7 @@ function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P)
     else
         At = A.At
         Pt = R.At
-        Rt = Pt'
+        Rt = P.At
         A_c = Rt*At*Pt
         A_c = StaticSparsityMatrixCSR(A_c, nthreads = A.nthreads, minbatch = A.minbatch)
     end
