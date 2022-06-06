@@ -266,9 +266,11 @@ end
 
 function update_smoothers!(S::NamedTuple, A::StaticSparsityMatrixCSR, h)
     n = length(h.levels)
-    for i = 1:(n-1)
+    for i = 1:n
         ilu0_csr!(S.smoothers[i].factor, A)
-        A = h.levels[i+1].A
+        if i < n
+            A = h.levels[i+1].A
+        end
     end
 end
 
