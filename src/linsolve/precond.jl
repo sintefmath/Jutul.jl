@@ -90,16 +90,7 @@ mutable struct AMGPreconditioner <: JutulPreconditioner
 end
 
 matrix_for_amg(A) = A
-function matrix_for_amg(A::StaticSparsityMatrixCSR)
-    if false
-        return A.At
-    else
-        At = A.At
-        i, j, v = findnz(At)
-        n, m = size(At)
-        return sparse(j, i, v, n, n)
-    end
-end
+matrix_for_amg(A::StaticSparsityMatrixCSR) = copy(A.At')
 
 function update!(amg::AMGPreconditioner, A, b, context)
     kw = amg.method_kwarg
@@ -117,12 +108,6 @@ function specialize_hierarchy!(amg, hierarchy, A, context)
     return amg
 end
 
-function create_transposed(x)
-    i, j, v = findnz(x)
-    n, m = size(x)
-    return sparse(j, i, v, m, n)
-end
-
 function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
     A_f = A
     nt = A.nthreads
@@ -138,9 +123,9 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
         # spmv for the wrapper type, trading some memory for
         # performance.
         if isa(P0, Adjoint)
-            P0 = create_transposed(R0)
+            P0 = copy(P0)
         elseif isa(R0, Adjoint)
-            R0 = create_transposed(P0)
+            R0 = copy(R0)
         end
         R = to_csr(P0)
         P = to_csr(R0)
@@ -162,7 +147,6 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
     coarse_solver = (x, b) -> solve_coarse_internal!(x, A_c, factor, b)
 
     amg.hierarchy = AlgebraicMultigrid.MultiLevel(typed_levels, A_c, coarse_solver, smoother, smoother, h.workspace)
-    display(amg.hierarchy)
 
     return amg
 end
