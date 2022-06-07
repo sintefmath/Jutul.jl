@@ -22,13 +22,16 @@ function LinearAlgebra.mul!(y::AbstractVector, A::StaticSparsityMatrixCSR, x::Ab
     size(A, 2) == size(x, 1) || throw(DimensionMismatch())
     size(A, 1) == n || throw(DimensionMismatch())
     mb = max(n ÷ nthreads(A), minbatch(A))
+    if β != 1
+        β != 0 ? rmul!(y, β) : fill!(y, zero(eltype(y)))
+    end
     @batch minbatch = mb for row in 1:n
         v = zero(eltype(y))
         @inbounds for nz in nzrange(A, row)
             col = At.rowval[nz]
             v += At.nzval[nz]*x[col]
         end
-        @inbounds y[row] = α*v + β*y[row]
+        @inbounds y[row] += α*v
     end
     return y
 end
