@@ -60,6 +60,10 @@ function transfer(context, t::Integer)
 end
 
 """
+Initialize context when setting up a model
+"""
+initialize_context!(context, domain, system, formulation) = context
+"""
 Synchronize backend after allocations.
 
 Some backends may require notification that
@@ -85,4 +89,32 @@ end
 
 function index_type(c::SingleCUDAContext)
     return c.index_t
+end
+
+function select_contexts(ctype = :csc;
+                    main_context = nothing,
+                    context = nothing,
+                    block_backend = true,
+                    nthreads = Threads.nthreads(),
+                    minbatch = 1000, kwarg...)
+    if block_backend
+        matrix_layout = BlockMajorLayout()
+    else
+        matrix_layout = EquationMajorLayout()
+    end
+    if isnothing(context)
+        # If context is not provided, set to default
+        context = DefaultContext(minbatch = minbatch)
+    end
+    if isnothing(main_context)
+        if ctype == :csc
+            @assert context isa DefaultContext
+            main_context = DefaultContext(matrix_layout = matrix_layout, minbatch = minbatch)
+        elseif ctype == :csr
+            main_context = ParallelCSRContext(nthreads, matrix_layout = matrix_layout, minbatch = minbatch)
+        else
+            error("Unsupported context type $ctype")
+        end
+    end
+    return (main_context, context)
 end

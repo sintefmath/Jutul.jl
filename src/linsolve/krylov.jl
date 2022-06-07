@@ -2,12 +2,13 @@ import LinearAlgebra.mul!
 
 export GenericKrylov
 
-struct PrecondWrapper
-    op::LinearOperator
-    x
-    function PrecondWrapper(op)
+struct PrecondWrapper{T, K}
+    op::T
+    x::K
+    function PrecondWrapper(op::T_o) where T_o<:LinearOperator
         x = zeros(eltype(op), size(op, 1))
-        new(op, x)
+        T_x = typeof(x)
+        new{T_o, T_x}(op, x)
     end
 end
 
@@ -118,6 +119,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
         msg = history
         n = history.iters
         res = history.data[:resnorm]
+        stats = history
     elseif krylov.provider == Krylov
         @timeit "solve" (x, stats) = solver(op, r, 
                                 itmax = max_it,
@@ -148,6 +150,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     end
 
     @timeit "update dx" update_dx_from_vector!(sys, x)
+    return linear_solve_return(solved, n, stats)
 end
 
 function is_mutating(f)

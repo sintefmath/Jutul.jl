@@ -127,7 +127,7 @@ function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
     jp = cache.jacobian_positions
-    tb = thread_batch(model.context)
+    tb = minbatch(model.context)
     @batch minbatch = tb for i in 1:nu
         for e in 1:ne
             a = get_entry(cache, i, e, entries)
@@ -145,7 +145,7 @@ function fill_equation_entries!(nz, r::Nothing, model, cache::JutulAutoDiffCache
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
     jp = cache.jacobian_positions
-    tb = thread_batch(model.context)
+    tb = minbatch(model.context)
     @batch minbatch = tb for i in 1:nu
         for e in 1:ne
             a = get_entry(cache, i, e, entries)

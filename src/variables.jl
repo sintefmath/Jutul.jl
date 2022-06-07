@@ -250,9 +250,17 @@ Initializer for the value of non-scalar primary variables
 """
 function initialize_variable_value!(state, model, pvar::GroupedVariables, symb::Symbol, val::AbstractVector)
     n = values_per_entity(model, pvar)
-    t = typeof(pvar)
-    @assert length(val) == n "Variable $t should have initializer of length $n"
-    V = repeat(val, 1, number_of_entities(model, pvar))
+    m = number_of_entities(model, pvar)
+    nv = length(val)
+    if nv == n
+        # One vector that should be repeated for all entities
+        V = repeat(val, 1, number_of_entities(model, pvar))
+    elseif nv == m
+        # Vector with one entry for each cell - convert to matrix.
+        V = repeat(val, 1, 1)
+    else
+        error("Variable $(typeof(pvar)) should have initializer of length $n or $m")
+    end
     return initialize_variable_value!(state, model, pvar, symb, V)
 end
 
@@ -396,9 +404,12 @@ function values_per_entity(model, var::ConstantVariables)
     c = var.constants
     if var.single_entity
         n = length(c)
+    elseif isa(c, AbstractVector)
+        n = 1
     else
         n = size(c, 1)
     end
+    return n
 end
 associated_entity(model, var::ConstantVariables) = var.entity
 

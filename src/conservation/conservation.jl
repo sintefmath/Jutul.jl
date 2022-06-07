@@ -241,7 +241,7 @@ end
 
 function threaded_fill_conservation_eq!(nz, r, context, centries, fentries, acc, cell_flux, cp, fp, conn_pos, dims)
     nc, ne, np = dims
-    tb = thread_batch(context)
+    tb = minbatch(context)
     @batch minbatch=tb for cell = 1:nc
         for e in 1:ne
             fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flux, cp, fp, conn_pos, np)
@@ -284,7 +284,7 @@ end
 
 function update_lsys_sources_theaded!(nz, r, acc, src, rv_src, nz_src, cp, context, dims)
     nc, _, np = dims
-    tb = thread_batch(context)
+    tb = minbatch(context)
     @batch minbatch=tb for cell = 1:nc
         @inbounds for rp in nzrange(src, cell)
             e = rv_src[rp]
@@ -311,7 +311,7 @@ end
 function update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, context, dims)
     _, ne, np = dims
     nc = length(conn_pos) - 1
-    tb = thread_batch(context)
+    tb = minbatch(context)
     @batch minbatch=tb for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             for e in 1:ne

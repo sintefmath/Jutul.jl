@@ -33,10 +33,15 @@ module Jutul
     using PrettyTables
     using Polynomials
     using JLD2
+    import Metis
     # Nice progress bars
     using ProgressMeter
     # Timing
     using TimerOutputs
+
+    include("StaticCSR/StaticCSR.jl")
+    using .StaticCSR
+    import .StaticCSR: nthreads, minbatch
 
     # Main types
     include("core_types.jl")
@@ -65,6 +70,7 @@ module Jutul
 
     include("utils.jl")
     include("interpolation.jl")
+    include("partitioning.jl")
     # 
     include("multimodel/multimodel.jl")
     include("dd/dd.jl")

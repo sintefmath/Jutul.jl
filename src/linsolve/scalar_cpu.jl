@@ -27,4 +27,5 @@ function solve!(sys, solver::LUSolver)
 
     sys.dx .= -(F\r)
     @assert all(isfinite, sys.dx) "Linear solve resulted in non-finite values."
+    return linear_solve_return()
 end

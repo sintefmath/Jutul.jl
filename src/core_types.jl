@@ -4,7 +4,7 @@ export setup_parameters, JutulForce
 export Cells, Nodes, Faces, declare_entities
 export ConstantVariables, ScalarVariable, GroupedVariables, FractionVariables
 
-export SingleCUDAContext, SharedMemoryContext, DefaultContext
+export SingleCUDAContext, DefaultContext
 export BlockMajorLayout, EquationMajorLayout, UnitMajorLayout
 
 export transfer, allocate_array
@@ -102,67 +102,12 @@ end
 ijnm(p::SparsePattern) = (p.I, p.J, p.n, p.m)
 block_size(p::SparsePattern) = (p.block_n, p.block_m)
 
-# CUDA context - everything on the single CUDA device attached to machine
-struct SingleCUDAContext <: GPUJutulContext
-    float_t::Type
-    index_t::Type
-    block_size
-    device
-    matrix_layout
-    function SingleCUDAContext(float_t::Type = Float32, index_t::Type = Int64, block_size = 256, layout = EquationMajorLayout())
-        @assert CUDA.functional() "CUDA must be functional for this context."
-        return new(float_t, index_t, block_size, CUDADevice(), layout)
-    end
-end
-matrix_layout(c::SingleCUDAContext) = c.matrix_layout
+abstract type JutulPartitioner end
 
-"Context that uses KernelAbstractions for GPU parallelization"
-struct SharedMemoryKernelContext <: CPUJutulContext
-    block_size
-    device
-    function SharedMemoryKernelContext(block_size = Threads.nthreads())
-        # Remark: No idea what block_size means here.
-        return new(block_size, CPU())
-    end
-end
-
-"Context that uses threads etc to accelerate loops"
-struct SharedMemoryContext <: CPUJutulContext
-
-end
-
-export thread_batch
-thread_batch(::Any) = 1000
-
-"Default context"
-struct DefaultContext <: CPUJutulContext
-    matrix_layout
-    minbatch::Int64
-    function DefaultContext(; matrix_layout = EquationMajorLayout(), minbatch = 1000)
-        new(matrix_layout, minbatch)
-    end
-end
-
-thread_batch(c::DefaultContext) = c.minbatch
-
-matrix_layout(c::DefaultContext) = c.matrix_layout
-
-function jacobian_eltype(context, layout, block_size)
-    return float_type(context)
-end
-
-function r_eltype(context, layout, block_size)
-    return float_type(context)
-end
-
-function jacobian_eltype(context::CPUJutulContext, layout::BlockMajorLayout, block_size)
-    return SMatrix{block_size..., float_type(context), prod(block_size)}
-end
-
-function r_eltype(context::CPUJutulContext, layout::BlockMajorLayout, block_size)
-    return SVector{block_size[1], float_type(context)}
-end
-
+include("contexts/interface.jl")
+include("contexts/csr.jl")
+include("contexts/default.jl")
+include("contexts/cuda.jl")
 
 # Domains
 abstract type JutulDomain end
@@ -236,6 +181,7 @@ struct SimulationModel{O<:JutulDomain,
                                             context = DefaultContext(),
                                             output_level = :primary_variables
                                             )
+        context = initialize_context!(context, domain, system, formulation)
         domain = transfer(context, domain)
         primary = select_primary_variables(domain, system, formulation)
         primary = transfer(context, primary)

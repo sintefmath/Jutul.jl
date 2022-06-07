@@ -66,12 +66,16 @@ function row_col_sparse(target_entity_index, source_entity_index, # Typically ro
     return (row, col)
 end
 
-function find_sparse_position(A::SparseMatrixCSC, row, col, layout::JutulMatrixLayout)
+function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMatrixLayout)
     adj = represented_as_adjoint(layout)
-    find_sparse_position(A, row, col, adj)
+    pos = find_sparse_position(A, row, col, adj)
+    if pos == 0
+        @warn "Unable to map $row, $col: Not allocated in matrix."
+    end
+    return pos
 end
 
-function find_sparse_position(A::SparseMatrixCSC, row, col, is_adjoint)
+function find_sparse_position(A::AbstractSparseMatrix, row, col, is_adjoint)
     if is_adjoint
         a = row
         b = col
@@ -79,26 +83,34 @@ function find_sparse_position(A::SparseMatrixCSC, row, col, is_adjoint)
         a = col
         b = row
     end
-    find_sparse_position(A, b, a)
+    return find_sparse_position(A, b, a)
 end
 
-function find_sparse_position(A::SparseMatrixCSC, row, col)
-    pos = find_sparse_position_CSC(A.rowval, A.colptr, row, col)
-    if pos == 0
-        @warn "Unable to map $row, $col: Not allocated in matrix."
+function find_sparse_position(A::StaticSparsityMatrixCSR, row, col)
+    pos = 0
+    colval = colvals(A)
+    for mat_pos in nzrange(A, row)
+        mat_col = colval[mat_pos]
+        if mat_col == col
+            pos = mat_pos
+            break
+        end
     end
     return pos
 end
 
-@inline function find_sparse_position_CSC(rowval::T, colPtr::T, row::I, col::I) where {T<:AbstractVector{I}} where  {I<:Integer}
-    ix = 0
-    for pos = colPtr[col]:colPtr[col+1]-1
-        if rowval[pos] == row
-            ix = pos
+
+function find_sparse_position(A::SparseMatrixCSC, row, col)
+    pos = 0
+    rowval = rowvals(A)
+    for mat_pos in nzrange(A, col)
+        mat_row = rowval[mat_pos]
+        if mat_row == row
+            pos = mat_pos
             break
         end
     end
-    return ix
+    return pos
 end
 
 function select_equations(domain, system, formulation)

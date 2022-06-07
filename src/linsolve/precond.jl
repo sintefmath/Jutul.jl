@@ -8,11 +8,13 @@ end
 function update!(preconditioner, lsys, model, storage, recorder)
     J = jacobian(lsys)
     r = residual(lsys)
-    update!(preconditioner, J, r)
+    ctx = linear_system_context(model, lsys)
+    update!(preconditioner, J, r, ctx)
 end
 
-function partial_update!(p, A, b)
-    update!(p, A, b)
+export partial_update!
+function partial_update!(p, A, b, context)
+    update!(p, A, b, context)
 end
 
 function get_factorization(precond)
@@ -81,36 +83,201 @@ mutable struct AMGPreconditioner <: JutulPreconditioner
     factor
     dim
     hierarchy
+    smoothers
     function AMGPreconditioner(method = ruge_stuben; cycle = AlgebraicMultigrid.V(), kwarg...)
-        new(method, kwarg, cycle, nothing, nothing, nothing)
+        new(method, kwarg, cycle, nothing, nothing, nothing, nothing)
     end
 end
 
-function update!(amg::AMGPreconditioner, A, b)
+matrix_for_amg(A) = A
+matrix_for_amg(A::StaticSparsityMatrixCSR) = copy(A.At')
+
+function update!(amg::AMGPreconditioner, A, b, context)
     kw = amg.method_kwarg
+    A_amg = matrix_for_amg(A)
     @debug string("Setting up preconditioner ", amg.method)
-    t_amg = @elapsed amg.hierarchy = amg.method(A; kw...)
+    t_amg = @elapsed hierarchy = amg.method(A_amg; kw...)
+    amg = specialize_hierarchy!(amg, hierarchy, A, context)
     amg.dim = size(A)
     @debug "Set up AMG in $t_amg seconds."
     amg.factor = aspreconditioner(amg.hierarchy, amg.cycle)
 end
 
-function partial_update!(amg::AMGPreconditioner, A, b)
-    amg.hierarchy = update_hierarchy!(amg.hierarchy, A)
+function specialize_hierarchy!(amg, hierarchy, A, context)
+    amg.hierarchy = hierarchy
+    return amg
+end
+
+function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
+    A_f = A
+    nt = A.nthreads
+    mb = A.minbatch
+    to_csr(M) = StaticSparsityMatrixCSR(M, nthreads = nt, minbatch = mb)
+    levels = h.levels
+    new_levels = []
+    n = length(levels)
+    for i = 1:n
+        l = levels[i]
+        P0, R0 = l.P, l.R
+        # Convert P to a proper CSC matrix to get parallel
+        # spmv for the wrapper type, trading some memory for
+        # performance.
+        if isa(P0, Adjoint)
+            P0 = copy(P0)
+        elseif isa(R0, Adjoint)
+            R0 = copy(R0)
+        end
+        R = to_csr(P0)
+        P = to_csr(R0)
+        A = to_csr(l.A)
+        lvl = AlgebraicMultigrid.Level(A, P, R)
+        push!(new_levels, lvl)
+    end
+
+    typed_levels = Vector{typeof(new_levels[1])}(undef, n)
+    for i = 1:n
+        typed_levels[i] = new_levels[i]
+    end
+    levels = typed_levels
+    S = amg.smoothers = generate_smoothers_csr(A_f, levels, nt, context)
+    smoother = (A, x, b) -> apply_smoother!(x, A, b, S)
+
+    A_c = to_csr(h.final_A)
+    factor = factorize_coarse(A_c)
+    coarse_solver = (x, b) -> solve_coarse_internal!(x, A_c, factor, b)
+
+    amg.hierarchy = AlgebraicMultigrid.MultiLevel(typed_levels, A_c, coarse_solver, smoother, smoother, h.workspace)
+
+    return amg
+end
+
+function solve_coarse_internal!(x, A, factor, b)
+    x = ldiv!(x, factor, b)
+    return x
+end
+
+function generate_smoothers_csr(A_fine, levels, nt, context)
+    sizes = Vector{Int64}()
+    smoothers = []
+    n = length(levels)
+    for i = 1:n
+        A = levels[i].A
+        if nt == 1
+            ilu_factor = ilu0_csr(A)
+        else
+            lookup = generate_lookup(context.partitioner, A, nt)
+            ilu_factor = ilu0_csr(A, lookup)
+        end
+        N = size(A, 1)
+        push!(smoothers, (factor = ilu_factor, x = zeros(N), b = zeros(N)))
+        push!(sizes, N)
+    end
+    typed_smoothers = Vector{typeof(smoothers[1])}(undef, n)
+    for i = 1:n
+        typed_smoothers[i] = smoothers[i]
+    end
+    sizes = tuple(sizes...)
+    return (n = sizes, smoothers = typed_smoothers)
+end
+
+function apply_smoother!(x, A, b, smoothers::NamedTuple)
+    m = length(x)
+    for (i, n) in enumerate(smoothers.n)
+        if m == n
+            smooth = smoothers.smoothers[i]
+            S = smooth.factor
+            res = smooth.x
+            B = smooth.b
+            # In-place version of B = b - A*x
+            B .= b
+            mul!(B, A, x, -1, 1)
+            ldiv!(res, S, B)
+            @. x += res
+            return x
+        end
+    end
+    error("Unable to match smoother to matrix: Recieved $m by $m matrix, with smoother sizes $(smoothers.n)")
+end
+
+function partial_update!(amg::AMGPreconditioner, A, b, context)
+    @timeit "coarse update" amg.hierarchy = update_hierarchy!(amg, amg.hierarchy, A)
+    @timeit "smoother update" amg.smoothers = update_smoothers!(amg.smoothers, A, amg.hierarchy)
 end
 
 operator_nrows(amg::AMGPreconditioner) = amg.dim[1]
 
-function update_hierarchy!(h, A)
+factorize_coarse(A) = lu(A)
+
+function factorize_coarse(A::StaticSparsityMatrixCSR)
+    return lu(A.At)'
+end
+
+function update_hierarchy!(amg, h, A)
     levels = h.levels
     n = length(levels)
     for i = 1:n
         l = levels[i]
         P, R = l.P, l.R
-        levels[i] = AlgebraicMultigrid.Level(A, P, R)
-        A = R*A*P
+        if i == n
+            A_c = h.final_A
+        else
+            A_c = levels[i+1].A
+        end
+        A = update_coarse_system!(A_c, R, A, P)
     end
-    return AlgebraicMultigrid.MultiLevel(levels, A, AlgebraicMultigrid.Pinv(A), h.presmoother, h.postsmoother, h.workspace)
+    factor = factorize_coarse(A)
+    coarse_solver = (x, b) -> solve_coarse_internal!(x, A, factor, b)
+    S = amg.smoothers
+    if isnothing(S)
+        pre = h.presmoother
+        post = h.postsmoother
+    else
+        pre = post = (A, x, b) -> apply_smoother!(x, A, b, S)
+    end
+    return AlgebraicMultigrid.MultiLevel(levels, A, coarse_solver, pre, post, h.workspace)
+end
+
+function print_system(A::StaticSparsityMatrixCSR)
+    print_system(SparseMatrixCSC(A.At'))
+end
+
+function print_system(A)
+    I, J, V = findnz(A)
+    @info "Coarsest system"  size(A)
+    for (i, j, v) in zip(I, J, V)
+        @info "$i $j: $v"
+    end
+end
+
+function update_coarse_system!(A_c, R, A, P)
+    return R*A*P
+end
+
+function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P)
+    if false
+        A_c = coarse_product!(A_c, A, R)
+    else
+        At = A.At
+        Pt = R.At
+        Rt = P.At
+        A_c = Rt*At*Pt
+        A_c = StaticSparsityMatrixCSR(A_c, nthreads = A.nthreads, minbatch = A.minbatch)
+    end
+    return A_c
+end
+
+function update_smoothers!(smoothers::Nothing, A, h)
+
+end
+
+function update_smoothers!(S::NamedTuple, A::StaticSparsityMatrixCSR, h)
+    n = length(h.levels)
+    for i = 1:n
+        ilu0_csr!(S.smoothers[i].factor, A)
+        if i < n
+            A = h.levels[i+1].A
+        end
+    end
 end
 
 """
@@ -126,7 +293,7 @@ mutable struct DampedJacobiPreconditioner <: JutulPreconditioner
 end
 
 
-function update!(jac::DampedJacobiPreconditioner, A, b)
+function update!(jac::DampedJacobiPreconditioner, A, b, context)
     ω = jac.w
     if isnothing(jac.factor)
         D = Diagonal(A)
@@ -193,7 +360,7 @@ function set_dim!(ilu, A, b)
     ilu.dim = d .* size(A)
 end
 
-function update!(ilu::ILUZeroPreconditioner, A, b)
+function update!(ilu::ILUZeroPreconditioner, A, b, context)
     if isnothing(ilu.factor)
         ilu.factor = ilu0(A, eltype(b))
         set_dim!(ilu, A, b)
@@ -202,7 +369,27 @@ function update!(ilu::ILUZeroPreconditioner, A, b)
     end
 end
 
-function update!(ilu::ILUZeroPreconditioner, A::CuSparseMatrix, b::CuArray)
+function update!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, context::ParallelCSRContext)
+    if isnothing(ilu.factor)
+        nt = nthreads(context)
+        if nt == 1
+            @debug "Setting up serial ILU(0)-CSR"
+            F = ilu0_csr(A)
+        else
+            @debug "Setting up parallel ILU(0)-CSR with $(nthreads(td)) threads"
+            # lookup = td.lookup
+            part = context.partitioner
+            lookup = generate_lookup(part, A, nt)
+            F = ilu0_csr(A, lookup)
+        end
+        ilu.factor = F
+        set_dim!(ilu, A, b)
+    else
+        ilu0_csr!(ilu.factor, A)
+    end
+end
+
+function update!(ilu::ILUZeroPreconditioner, A::CuSparseMatrix, b::CuArray, context)
     if isnothing(ilu.factor)
         set_dim!(ilu, A, b)
     end
@@ -223,6 +410,21 @@ function ilu_f(type::Symbol)
     else
         f = ldiv!
     end
+end
+
+function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
+    T = eltype(f)
+    N = size(T, 1)
+    T = eltype(T)
+    Vt = SVector{N, T}
+    as_svec = (x) -> reinterpret(Vt, x)
+
+    ldiv!(as_svec(x), f, as_svec(y))
+    return x
+end
+
+function ilu_apply!(x, f::AbstractILUFactorization, y, type::Symbol = :both)
+    ldiv!(x, f, y)
 end
 
 function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
@@ -247,6 +449,7 @@ function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)
     # Solve by reinterpreting vectors to block (=SVector) vectors
     f! = ilu_f(type)
     f!(as_svec(x), ilu, as_svec(y))
+    return x
 end
 
 function operator_nrows(ilu::ILUZeroPreconditioner)
@@ -270,7 +473,7 @@ mutable struct LUPreconditioner <: JutulPreconditioner
     end
 end
 
-function update!(lup::LUPreconditioner, A, b)
+function update!(lup::LUPreconditioner, A, b, context)
     if isnothing(lup.factor)
         lup.factor = lu(A)
     else
