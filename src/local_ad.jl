@@ -10,6 +10,10 @@ function LocalPerspectiveAD(a::A, index::I_t) where {A<:AbstractArray, I_t<:Inte
     LocalPerspectiveAD{eltype(a), ndims(A), A, I_t}(index, a)
 end
 
+struct LocalStateAD{T, I, E} # Data type, index, entity tag
+    data::T
+end
+
 export local_ad
 local_ad(v::AbstractArray, i::Integer) = LocalPerspectiveAD(v, i)
 local_ad(v::ConstantWrapper, i::Integer) = v
@@ -35,3 +39,21 @@ Base.parent(A::LocalPerspectiveAD) = A.data
 Base.size(A::LocalPerspectiveAD) = size(A.data)
 Base.axes(A::LocalPerspectiveAD) = axes(A.data)
 parenttype(::Type{LocalPerspectiveAD{T,N,A,I}}) where {T,N,A,I} = A
+
+function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
+    myfn(x::AbstractArray{T}, ::Type{T}, I) where T = local_ad(x, I)
+    myfn(x, t, I) = as_value(x)
+    myfn(x::ConstantWrapper, t, I) = x
+
+    inner_state = getfield(state, :data)
+    val = getproperty(inner_state, f)
+    return myfn(val, E, I)
+end
+
+function local_ad(x::T, index::Integer, ad_tag::∂T) where {T, ∂T}
+    return LocalStateAD{T, index, ad_tag}(x)
+end
+
+function Base.show(io::IO, t::MIME"text/plain", x::LocalStateAD{T, I, E}) where {T, I, E}
+    print(io, "Local state for $E -> $I with fields $(keys(getfield(x, :data)))")
+end
