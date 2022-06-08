@@ -309,6 +309,7 @@ struct ConstantWrapper{R}
         new{eltype(data)}(data, n)
     end
 end
+Base.eltype(c::ConstantWrapper{T}) where T = T
 Base.length(c::ConstantWrapper) = length(c.data)
 Base.size(c::ConstantWrapper) = (length(c.data), c.nrows)
 Base.size(c::ConstantWrapper, i) = i == 1 ? length(c.data) : c.nrows
