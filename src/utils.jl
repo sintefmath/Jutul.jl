@@ -299,7 +299,6 @@ function report_stats(reports)
     l = total_linear_iterations
     linscale = v -> v / max(m, 1)
     itscale = v -> v / max(n, 1)
-    linscale = v -> v / max(l, 1)
     each = (
                 assembly = linscale(total_assembly),
                 linear_system = linscale(total_linear_update),
