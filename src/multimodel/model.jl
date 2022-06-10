@@ -501,11 +501,9 @@ end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     for target in targets
-        for source in intersect(target_cross_term_keys(storage, target), sources)
-            @timeit "$source→$target" begin
-                cross_terms = cross_term_pair(storage, source, target)
-                update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
-            end
+        @timeit "->$target" for source in intersect(target_cross_term_keys(storage, target), sources)
+            cross_terms = cross_term_pair(storage, source, target)
+            update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
         end
     end
 end
@@ -527,11 +525,9 @@ end
 
 function apply_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     for target in targets
-        for source in intersect(target_cross_term_keys(storage, target), sources)
-            @timeit "$source→$target" begin
-                cross_terms = cross_term_pair(storage, source, target)
-                apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
-            end
+        @timeit "->$target" for source in intersect(target_cross_term_keys(storage, target), sources)
+            cross_terms = cross_term_pair(storage, source, target)
+            apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
         end
     end
 end
