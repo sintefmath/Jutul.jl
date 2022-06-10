@@ -422,7 +422,10 @@ end
 apply_boundary_conditions!(storage, parameters, model) = nothing
 
 function update_equations!(storage, model, dt = nothing)
-    equations = storage.equations
+    update_equations!(storage, storage.equations, model, dt)
+end
+
+function update_equations!(storage, equations, model, dt)
     for key in keys(equations)
         @timeit "$key" update_equation!(equations[key], storage, model, dt)
     end

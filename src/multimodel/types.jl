@@ -11,13 +11,13 @@ end
 
 
 
-struct MultiModel <: JutulModel
-    models::NamedTuple
+struct MultiModel{M, T} <: JutulModel
+    models::M
     couplings::Vector{MultiModelCoupling}
     groups::Union{Vector, Nothing}
     context::Union{JutulContext, Nothing}
-    number_of_degrees_of_freedom
-    reduction
+    number_of_degrees_of_freedom::T
+    reduction::Union{Symbol, Nothing}
     function MultiModel(models; couplings=Vector{MultiModelCoupling}(undef,0), groups = nothing, context = nothing, reduction = nothing)
         if isnothing(groups)
             num_groups = 1
@@ -47,7 +47,7 @@ struct MultiModel <: JutulModel
                 end
             end
         end
-        new(models, couplings, groups, context, ndof, reduction)
+        new{typeof(models), typeof(ndof)}(models, couplings, groups, context, ndof, reduction)
     end
 end
 
@@ -63,17 +63,17 @@ A cross model term where the dependency is injective and the term is additive:
 and is added into that position upon application)
 """
 
-struct InjectiveCrossTerm <: CrossTerm
-    impact                 # 2 by N - first row is target, second is source
-    entities               # tuple - first tuple is target, second is source
-    crossterm_target       # The cross-term, with AD values taken relative to the targe
-    crossterm_source       # Same cross-term, AD values taken relative to the source
-    crossterm_source_cache # The cache that holds crossterm_source together with the entries.
-    equations_per_entity   # Number of equations per impact
-    npartials_target       # Number of partials per equation (in target)
-    npartials_source       # (in source)
-    target_symbol          # Symbol of target model
-    source_symbol          # Symbol of source model
+struct InjectiveCrossTerm{I, E, T, S, SC} <: CrossTerm
+    impact::I                      # 2 by N - first row is target, second is source
+    entities::E                    # tuple - first tuple is target, second is source
+    crossterm_target::T            # The cross-term, with AD values taken relative to the targe
+    crossterm_source::S            # Same cross-term, AD values taken relative to the source
+    crossterm_source_cache::SC     # The cache that holds crossterm_source together with the entries.
+    equations_per_entity::Integer  # Number of equations per impact
+    npartials_target::Integer      # Number of partials per equation (in target)
+    npartials_source::Integer      # (in source)
+    target_symbol::Symbol          # Symbol of target model
+    source_symbol::Symbol          # Symbol of source model
     function InjectiveCrossTerm(target_eq, target_model, source_model, intersection = nothing; target = nothing, source = nothing)
         context = target_model.context
         target_entity = associated_entity(target_eq)
@@ -100,7 +100,7 @@ struct InjectiveCrossTerm <: CrossTerm
         # Units and overlap - target, then source
         entities = (target = target_entity, source = source_entity)
         overlap = (target = target_impact, source = source_impact)
-        new(overlap, entities, c_term_target, c_term_source, c_term_source_c, equations_per_entity, npartials_target, npartials_source, target, source)
+        new{typeof(overlap), typeof(entities), typeof(c_term_target), typeof(c_term_source), typeof(c_term_source_c)}(overlap, entities, c_term_target, c_term_source, c_term_source_c, equations_per_entity, npartials_target, npartials_source, target, source)
     end
 end
 
