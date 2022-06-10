@@ -172,10 +172,10 @@ struct SimulationModel{O<:JutulDomain,
     system::S
     context::C
     formulation::F
-    primary_variables
-    secondary_variables
-    equations
-    output_variables
+    primary_variables::OrderedDict{Symbol, JutulVariables}
+    secondary_variables::OrderedDict{Symbol, JutulVariables}
+    equations::OrderedDict{Symbol, Tuple{DataType, Int64}}
+    output_variables::Vector{Symbol}
     function SimulationModel(domain, system;
                                             formulation = FullyImplicit(),
                                             context = DefaultContext(),

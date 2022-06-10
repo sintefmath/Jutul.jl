@@ -114,7 +114,7 @@ function find_sparse_position(A::SparseMatrixCSC, row, col)
 end
 
 function select_equations(domain, system, formulation)
-    eqs = OrderedDict()
+    eqs = OrderedDict{Symbol, Tuple{DataType, Int64}}()
     select_equations_domain!(eqs, domain, system, formulation)
     select_equations_system!(eqs, domain, system, formulation)
     select_equations_formulation!(eqs, domain, system, formulation)

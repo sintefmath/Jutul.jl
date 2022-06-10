@@ -49,7 +49,7 @@ function replace_variables!(model::MultiModel; kwarg...)
     return model
 end
 
-function cross_term(storage, target)
+function cross_term(storage, target::Symbol)
     return storage[:cross_terms][target]
 end
 
