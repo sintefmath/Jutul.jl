@@ -434,7 +434,7 @@ end
 end
 
 is_cuda_eq(eq::ConservationLaw) = isa(eq.accumulation.entries, CuArray)
-use_sparse_sources(eq) = !is_cuda_eq(eq)
+use_sparse_sources(eq) = false#!is_cuda_eq(eq)
 
 
 

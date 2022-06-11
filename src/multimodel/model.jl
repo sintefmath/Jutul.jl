@@ -814,6 +814,8 @@ function get_submodel_storage(storage, arg...)
     map((x) -> storage[x], arg)
 end
 
+get_submodel_storage(storage, k) = (storage[k]::JutulStorage, )
+
 function get_submodels(model, arg...)
     map((x) -> model.models[x], arg)
 end
