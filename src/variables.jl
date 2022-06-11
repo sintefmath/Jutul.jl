@@ -88,10 +88,10 @@ Lower (inclusive) limit for variable.
 minimum_value(::JutulVariables) = nothing
 
 function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx)
-    names = get_names(p)
     entity = associated_entity(p)
     active = active_entities(model.domain, entity, for_variables = true)
 
+    n = degrees_of_freedom_per_entity(model, p)
     nu = length(active)
     abs_max = absolute_increment_limit(p)
     rel_max = relative_increment_limit(p)
@@ -99,7 +99,7 @@ function update_primary_variable!(state, p::JutulVariables, state_symbol, model,
     minval = minimum_value(p)
     scale = variable_scale(p)
 
-    for (index, nm) in enumerate(names)
+    for index in 1:n
         offset = nu*(index-1)
         v = state[state_symbol]
         @tullio v[active[i]] = update_value(v[active[i]], dx[i+offset], abs_max, rel_max, minval, maxval, scale)
@@ -115,39 +115,29 @@ end
     return dv
 end
 # Limit absolute
-limit_abs(dv, abs_change) = sign(dv)*min(abs(dv), abs_change)
-limit_abs(dv, ::Nothing) = dv
+@inline limit_abs(dv, abs_change) = sign(dv)*min(abs(dv), abs_change)
+@inline limit_abs(dv, ::Nothing) = dv
 # Limit relative 
-limit_rel(v, dv, rel_change) = limit_abs(dv, rel_change*abs(v))
-limit_rel(v, dv, ::Nothing) = dv
+@inline limit_rel(v, dv, rel_change) = limit_abs(dv, rel_change*abs(v))
+@inline limit_rel(v, dv, ::Nothing) = dv
 # Lower bounds
-function limit_upper(v, dv, maxval)
-    if dv > 0 && v + dv > maxval
-        dv = maxval - v
-    end
-    return dv
-end
-limit_upper(v, dv, maxval::Nothing) = dv
+@inline limit_upper(v, dv, maxval) = min(dv, maxval - v)
+@inline limit_upper(v, dv, maxval::Nothing) = dv
 
 # Upper bounds
-@inline function limit_lower(v, dv, minval)
-    if dv < 0 && v + dv < minval
-        dv = minval - v
-    end
-    return dv
-end
-limit_lower(v, dv, minval::Nothing) = dv
+@inline limit_lower(v, dv, minval) = max(dv, minval - v)
+@inline limit_lower(v, dv, minval::Nothing) = dv
 
 # Scaling
-scale_increment(dv, scale) = dv*scale
-scale_increment(dv, ::Nothing) = dv
+@inline scale_increment(dv, scale) = dv*scale
+@inline scale_increment(dv, ::Nothing) = dv
 
 @inline function update_value(v, dv, arg...)
     return v + choose_increment(value(v), dv, arg...)
 end
 
 function get_names(v::JutulVariables)
-    return [get_name(v)]
+    return (get_name(v))
 end
 
 function get_symbol(v::JutulVariables)
