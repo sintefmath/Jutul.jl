@@ -55,8 +55,12 @@ end
 
 function cross_term_pair(storage, source, target)
     ct = cross_term(storage, target)
-    if haskey(ct, source)
-        x = ct[source]
+    cross_terms_if_present(ct, source)
+end
+
+function cross_terms_if_present(target_ct, source)
+    if haskey(target_ct, source)
+        x = target_ct[source]
     else
         x = nothing
     end
@@ -161,7 +165,7 @@ function setup_cross_terms(storage, model::MultiModel)
     debugstr = "Determining cross-terms\n"
     sms = submodel_symbols(model)
     for target in sms
-        sources = Dict{Symbol, Any}()
+        sources = JutulStorage()
         for source in sms
             if target == source
                 continue
@@ -273,11 +277,12 @@ function align_crossterms_subgroup!(storage, models, target_keys, source_keys, n
     for target in target_keys
         target_model = models[target]
         variable_offset = base_variable_offset
+        ct_t = cross_term(storage, target)
         # Iterate over sources (= columns)
         for source in source_keys
             source_model = models[source]
             if source != target
-                ct = cross_term_pair(storage, source, target)
+                ct = cross_terms_if_present(ct_t, source)
                 eqs = storage[target][:equations]
                 align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, equation_offset = equation_offset, variable_offset = variable_offset)
                 # Same number of rows as target, same number of columns as source
@@ -501,8 +506,9 @@ end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     for target in targets
+        ct_t = cross_term(storage, target)
         @timeit "->$target" for source in intersect(target_cross_term_keys(storage, target), sources)
-            cross_terms = cross_term_pair(storage, source, target)
+            cross_terms = cross_terms_if_present(ct_t, source)
             update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
         end
     end
@@ -525,8 +531,9 @@ end
 
 function apply_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     for target in targets
+        ct_t = cross_term(storage, target)
         @timeit "->$target" for source in intersect(target_cross_term_keys(storage, target), sources)
-            cross_terms = cross_term_pair(storage, source, target)
+            cross_terms = cross_terms_if_present(ct_t, source)
             apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
         end
     end
@@ -587,8 +594,9 @@ end
 function update_offdiagonal_blocks!(storage, model, targets, sources)
     linearized_system = storage.LinearizedSystem
     for target in targets
+        ct_t = cross_term(storage, target)
         for source in intersect(target_cross_term_keys(storage, target), sources)
-            cross_terms = cross_term_pair(storage, source, target)
+            cross_terms = cross_terms_if_present(ct_t, source)
             lsys = get_linearized_system_model_pair(storage, model, source, target, linearized_system)
             update_linearized_system_crossterms!(lsys, cross_terms, storage, model, source, target)
         end
@@ -744,17 +752,18 @@ function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; ti
         if isnothing(force)
             continue
         end
+        ct_t = cross_term(storage, target)
         for source in intersect(target_cross_term_keys(storage, target), sources)
             for f in force
                 for to_target = [true, false]
-                    apply_force_to_cross_terms!(storage, model, source, target, f, dt, time; to_target = to_target)
+                    apply_force_to_cross_terms!(storage, ct_t, model, source, target, f, dt, time; to_target = to_target)
                 end
             end
         end
     end
 end
 
-function apply_force_to_cross_terms!(storage, model, source, target, force, dt, time; to_target = true)
+function apply_force_to_cross_terms!(storage, ct_t, model, source, target, force, dt, time; to_target = true)
     storage_t, storage_s = get_submodel_storage(storage, target, source)
     model_t, model_s = get_submodels(model, target, source)
     # Target matches where the force is assigned.
@@ -764,7 +773,7 @@ function apply_force_to_cross_terms!(storage, model, source, target, force, dt, 
         fn = apply_force_to_cross_term_target!
     else
         # Equation comes from target, but we are looking at the cross term for the source model
-        cross_terms = cross_term_pair(storage, target, source)
+        cross_terms = cross_terms_if_present(ct_t, source)
         fn = apply_force_to_cross_term_source!
     end
     for (ekey, ct) in pairs(cross_terms)
