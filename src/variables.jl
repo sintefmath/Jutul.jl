@@ -132,9 +132,9 @@ end
 @inline scale_increment(dv, scale) = dv*scale
 @inline scale_increment(dv, ::Nothing) = dv
 
-@inline function update_value(v, dv, arg...)
-    return v + choose_increment(value(v), dv, arg...)
-end
+@inline update_value(v, dv, arg...) = v + choose_increment(value(v), dv, arg...)
+# Julia doesn't specialize on splatting, add full version just in case
+@inline update_value(v, dv, abs, rel, minv, maxv, scale) = v + choose_increment(value(v), dv, abs, rel, minv, maxv, scale)
 
 function get_names(v::JutulVariables)
     return (get_name(v))
