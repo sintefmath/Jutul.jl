@@ -509,7 +509,9 @@ function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_
         ct_t = cross_term(storage, target)
         @timeit "->$target" for source in intersect(target_cross_term_keys(storage, target), sources)
             cross_terms = cross_terms_if_present(ct_t, source)
-            update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
+            if !isnothing(cross_terms)
+                update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
+            end
         end
     end
 end
