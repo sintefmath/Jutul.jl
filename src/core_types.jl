@@ -328,12 +328,20 @@ function Base.axes(c::ConstantWrapper, d)
 end
 
 
-struct JutulStorage
-    data::Union{Dict{Symbol, Any}, NamedTuple}
+struct JutulStorage{K}
+    data::Union{Dict{Symbol, <:Any}, NamedTuple}
     function JutulStorage(S = Dict{Symbol, Any}())
-        new(S)
+        if isa(S, Dict)
+            K = Nothing
+        else
+            @assert isa(S, NamedTuple)
+            K = keys(S)
+            K::Tuple
+        end
+        return new{K}(S)
     end
 end
+
 
 function convert_to_immutable_storage(S::JutulStorage)
     tup = convert_to_immutable_storage(data(S))
@@ -351,21 +359,29 @@ function Base.setproperty!(S::JutulStorage, name::Symbol, x)
 end
 
 function Base.setindex!(S::JutulStorage, x, name::Symbol)
-    setindex!(data(S), x, name)
+    Base.setindex!(data(S), x, name)
 end
 
 function Base.getindex(S::JutulStorage, name::Symbol)
-    getindex(data(S), name)
+    Base.getindex(data(S), name)
 end
 
-function Base.haskey(S::JutulStorage, name::Symbol)
+function Base.haskey(S::JutulStorage{Nothing}, name::Symbol)
     return Base.haskey(data(S), name)
 end
 
-function Base.keys(S::JutulStorage)
+function Base.keys(S::JutulStorage{Nothing})
     return Base.keys(data(S))
 end
 
+
+function Base.haskey(S::JutulStorage{K}, name::Symbol) where K
+    return name in K
+end
+
+function Base.keys(S::JutulStorage{K}) where K
+    return K
+end
 
 function Base.show(io::IO, t::MIME"text/plain", storage::JutulStorage)
     D = data(storage)
@@ -376,18 +392,6 @@ function Base.show(io::IO, t::MIME"text/plain", storage::JutulStorage)
     end
     for key in keys(D)
         println("  $key: $(typeof(D[key]))")
-    end
-end
-
-function Base.show(io::IO, t::JutulStorage, storage::JutulStorage)
-    data = storage.data
-    if isa(data, AbstractDict)
-        println("JutulStorage (mutable) with fields:")
-    else
-        println("JutulStorage (immutable) with fields:")
-    end
-    for key in keys(data)
-        println("  $key: $(typeof(data[key]))")
     end
 end
 
