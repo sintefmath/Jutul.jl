@@ -90,18 +90,20 @@ minimum_value(::JutulVariables) = nothing
 function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx)
     entity = associated_entity(p)
     active = active_entities(model.domain, entity, for_variables = true)
-
+    v = state[state_symbol]
     n = degrees_of_freedom_per_entity(model, p)
+    update_jutul_variable_internal!(p, active, v, n, dx)
+end
+
+function update_jutul_variable_internal!(p, active, v, n, dx)
     nu = length(active)
     abs_max = absolute_increment_limit(p)
     rel_max = relative_increment_limit(p)
     maxval = maximum_value(p)
     minval = minimum_value(p)
     scale = variable_scale(p)
-
     for index in 1:n
         offset = nu*(index-1)
-        v = state[state_symbol]
         @tullio v[active[i]] = update_value(v[active[i]], dx[i+offset], abs_max, rel_max, minval, maxval, scale)
     end
 end
