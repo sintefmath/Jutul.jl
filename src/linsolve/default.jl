@@ -22,24 +22,24 @@ end
 
 abstract type JutulLinearSystem end
 
-struct LinearizedSystem{L} <: JutulLinearSystem
-    jac
-    r
-    dx
-    jac_buffer
-    r_buffer
-    dx_buffer
+struct LinearizedSystem{L, J, V, Z, B} <: JutulLinearSystem
+    jac::J
+    r::V
+    dx::V
+    jac_buffer::Z
+    r_buffer::B
+    dx_buffer::B
     matrix_layout::L
 end
 
-struct LinearizedBlock{M, R, C} <: JutulLinearSystem
-    jac
-    jac_buffer
+struct LinearizedBlock{M, R, C, J, B} <: JutulLinearSystem
+    jac::J
+    jac_buffer::B
     matrix_layout::M
     rowcol_block_size::NTuple{2, Int}
     function LinearizedBlock(sparse_arg, context, layout, layout_row, layout_col, rowcol_dim)
         jac, jac_buf = build_jacobian(sparse_arg, context, layout)
-        new{typeof(layout), typeof(layout_row), typeof(layout_col)}(jac, jac_buf, layout, rowcol_dim)
+        new{typeof(layout), typeof(layout_row), typeof(layout_col), typeof(jac), typeof(jac_buf)}(jac, jac_buf, layout, rowcol_dim)
     end
 end
 
