@@ -28,10 +28,10 @@ function apply_cross_term!(eq, ct, model_t, model_s, arg...)
     ix = target_impact(ct)
     d = get_diagonal_entries(eq)
     # NOTE: We do not use += here due to sparse oddities with ForwardDiff.
-    increment_diagonal_ct!(d, ct, ix)
+    increment_diagonal_ct!(d, ct.crossterm_target, ix)
 end
 
-increment_diagonal_ct!(d, ct, ix) = @tullio d[i, ix[j]] = d[i, ix[j]] + ct.crossterm_target[i, j]
+increment_diagonal_ct!(d, T, ix) = @tullio d[i, ix[j]] += T[i, j]
 
 function update_linearized_system_crossterm!(nz, model_t, model_s, ct::InjectiveCrossTerm)
     fill_equation_entries!(nz, nothing, model_s, ct.crossterm_source_cache)
