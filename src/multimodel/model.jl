@@ -534,7 +534,8 @@ end
 function apply_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     for target in targets
         ct_t = cross_term(storage, target)
-        @timeit "->$target" for source in intersect(target_cross_term_keys(storage, target), sources)
+        overlap = intersect(target_cross_term_keys(storage, target), sources)
+        @timeit "->$target" for source in overlap
             cross_terms = cross_terms_if_present(ct_t, source)
             apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
         end
@@ -600,19 +601,19 @@ function update_offdiagonal_blocks!(storage, model, targets, sources)
         for source in intersect(target_cross_term_keys(storage, target), sources)
             cross_terms = cross_terms_if_present(ct_t, source)
             lsys = get_linearized_system_model_pair(storage, model, source, target, linearized_system)
-            update_linearized_system_crossterms!(lsys, cross_terms, storage, model, source, target)
+            update_linearized_system_crossterms!(lsys.jac, cross_terms, storage, model, source, target)
         end
     end
 end
 
 
-function update_linearized_system_crossterms!(lsys, cross_terms, storage, model::MultiModel, source, target)
+function update_linearized_system_crossterms!(jac, cross_terms, storage, model::MultiModel, source, target)
     # storage_t, = get_submodel_storage(storage, target)
     model_t, model_s = get_submodels(model, target, source)
+    nz = nonzeros(jac)
 
     for ekey in keys(cross_terms)
         ct = cross_terms[ekey]
-        nz = nonzeros(lsys.jac)
         if !isnothing(ct)
             update_linearized_system_crossterm!(nz, model_t, model_s, ct::CrossTerm)
         end
