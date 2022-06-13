@@ -525,12 +525,14 @@ Apply a set of forces to all equations. Equations that don't support a given for
 will just ignore them, thanks to the power of multiple dispatch.
 """
 function apply_forces!(storage, model, dt, forces; time = NaN)
-    equations = storage.equations
+    equations = model.equations
+    equations_storage = storage.equations
     for key in keys(equations)
         eq = equations[key]
+        eq_s = equations_storage[key]
         for fkey in keys(forces)
             force = forces[fkey]
-            apply_forces_to_equation!(storage, model, eq, force, time)
+            apply_forces_to_equation!(storage, model, eq, eq_s, force, time)
         end
     end
 end

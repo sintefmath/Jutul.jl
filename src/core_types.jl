@@ -242,7 +242,7 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
         elseif f == :equations
             ctr = 1
             for (key, eq) in p
-                println(io, "   $ctr) $key implemented as $(eq[2]) × $(eq[1])")
+                println(io, "   $ctr) $key")#implemented as $(eq[2]) × $(eq[1])")
                 ctr += 1
             end
             print(io, "\n")

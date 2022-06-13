@@ -74,8 +74,8 @@ function setup_forces(model::SimulationModel{G, S}; sources = nothing) where {G<
     return (sources = sources,)
 end
 
-function apply_forces_to_equation!(storage, model, eq::ScalarTestEquation, force::ScalarTestForce, time)
-    equation = get_entries(eq)
+function apply_forces_to_equation!(storage, model, eq::ScalarTestEquation, eq_s, force::ScalarTestForce, time)
+    equation = get_entries(eq_s)
     @. equation -= force.value
 end
 

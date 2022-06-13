@@ -323,7 +323,7 @@ Update an equation with the effect of a force. The default behavior
 for any force we do not know about is to assume that the force does
 not impact this particular equation.
 """
-function apply_forces_to_equation!(storage, model, eq, force, time) end
+apply_forces_to_equation!(storage, model, eq, eq_s, force, time) = nothing
 
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
     n = number_of_equations_per_entity(eq)
