@@ -3,7 +3,9 @@ export XVar
 
 struct ScalarTestSystem <: JutulSystem end
 
-struct ScalarTestDomain <: JutulDomain end
+Base.@kwdef struct ScalarTestDomain <: JutulDomain
+    use_manual::Bool = true
+end
 active_entities(d::ScalarTestDomain, ::Any; kwarg...) = [1]
 
 function number_of_cells(::ScalarTestDomain) 1 end
@@ -18,32 +20,53 @@ struct ScalarTestForce
     value
 end
 
+abstract type AbstractTestDisc <: JutulDiscretization end
+struct ManualTestDisc <: AbstractTestDisc end
+struct AutoTestDisc <: AbstractTestDisc end
+
 # Equations
-struct ScalarTestEquation <: DiagonalEquation
-    equation
-    function ScalarTestEquation(model, npartials::Integer; context = model.context, kwarg...)
-        D = model.domain
-        nc = number_of_cells(D)
-        @assert nc == 1 # We use nc for clarity of the interface - but it should always be one!
-        ne = 1 # Single, scalar equation
-        e = CompactAutoDiffCache(ne, nc, npartials, context = context; kwarg...)
-        new(e)
+struct ScalarTestEquation{D} <: DiagonalEquation
+    discretization::D
+    function ScalarTestEquation(domain, system, formulation)
+        # Ω = model.domain
+        # nc = number_of_cells(Ω)
+        if domain.use_manual
+            D = ManualTestDisc()
+        else
+            D = AutoTestDisc()
+        end
+        # @assert nc == 1 # We use nc for clarity of the interface - but it should always be one!
+        # ne = 1 # Single, scalar equation
+        # e = CompactAutoDiffCache(ne, nc, npartials, context = context; kwarg...)
+        new{typeof(D)}(D)
     end
 end
 
-function declare_sparsity(model, e::ScalarTestEquation, layout)
-    return SparsePattern(1, 1, 1, 1, layout)
+number_of_equations_per_entity(::ScalarTestEquation) = 1
+
+function setup_equation_storage(model, e::ScalarTestEquation{ManualTestDisc}; kwarg...)
+    Ω = model.domain
+    nc = number_of_cells(Ω)
+    @assert nc == 1 # We use nc for clarity of the interface - but it should always be one!
+    ne = 1 # Single, scalar equation
+    npartials = number_of_equations_per_entity(e)
+    e = CompactAutoDiffCache(ne, nc, npartials, context = model.context; kwarg...)
+    return e
 end
 
+function declare_pattern(model, e::ScalarTestEquation{ManualTestDisc}, eq_storage, unit)
+    @assert unit == Cells()
+    return ([1], [1])
+end
 
 function select_equations_system!(eqs, domain, system::ScalarTestSystem, formulation)
-    eqs[:test_equation] = (ScalarTestEquation, 1)
+    eqs[:test_equation] = ScalarTestEquation(domain, system, formulation)
 end
 
-function update_equation!(eq::ScalarTestEquation, storage, model, dt)
+function update_equation!(eq_s::CompactAutoDiffCache, eq::ScalarTestEquation, storage, model, dt)
     X = storage.state.XVar
     X0 = storage.state0.XVar
-    equation = get_entries(eq)
+    equation = get_entries(eq_s)
     @. equation = (X - X0)/dt
 end
 

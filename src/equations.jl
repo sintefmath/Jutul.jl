@@ -114,7 +114,7 @@ function find_sparse_position(A::SparseMatrixCSC, row, col)
 end
 
 function select_equations(domain, system, formulation)
-    eqs = OrderedDict{Symbol, Tuple{DataType, Int64}}()
+    eqs = OrderedDict{Symbol, JutulEquation}()
     select_equations_domain!(eqs, domain, system, formulation)
     select_equations_system!(eqs, domain, system, formulation)
     select_equations_formulation!(eqs, domain, system, formulation)
@@ -147,7 +147,8 @@ components will have two equations per grid cell (= entity)
 """
 function number_of_equations_per_entity(e::JutulEquation)
     # Default: One equation per entity (= cell,  face, ...)
-    return get_diagonal_cache(e).equations_per_entity
+    @warn "Fixme for $(typeof(e))"
+    return 1
 end
 
 """
@@ -175,8 +176,8 @@ end
 Give out I, J arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_sparsity(model, e::JutulEquation, entity, layout::EquationMajorLayout)
-    primitive = declare_pattern(model, e, entity)
+function declare_sparsity(model, e::JutulEquation, eq_storage, entity, layout::EquationMajorLayout)
+    primitive = declare_pattern(model, e, eq_storage, entity)
     if isnothing(primitive)
         out = nothing
     else
@@ -206,8 +207,8 @@ function declare_sparsity(model, e::JutulEquation, entity, layout::EquationMajor
     return out
 end
 
-function declare_sparsity(model, e::JutulEquation, entity, layout::BlockMajorLayout)
-    primitive = declare_pattern(model, e, entity)
+function declare_sparsity(model, e::JutulEquation, eq_storage, entity, layout::BlockMajorLayout)
+    primitive = declare_pattern(model, e, eq_storage, entity)
     if isnothing(primitive)
         out = nothing
     else
@@ -222,8 +223,8 @@ function declare_sparsity(model, e::JutulEquation, entity, layout::BlockMajorLay
     return out
 end
 
-function declare_sparsity(model, e::JutulEquation, entity, layout::UnitMajorLayout)
-    primitive = declare_pattern(model, e, entity)
+function declare_sparsity(model, e::JutulEquation, e_storage, entity, layout::UnitMajorLayout)
+    primitive = declare_pattern(model, e, e_storage, entity)
     if isnothing(primitive)
         out = nothing
     else
@@ -257,7 +258,7 @@ end
 Give out source, target arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_pattern(model, e, entity)
+function declare_pattern(model, e, eq_storage, entity)
     if entity == associated_entity(e)
         n = count_entities(model.domain, entity)
         I = collect(1:n)
@@ -282,21 +283,21 @@ is then that of ∂E / ∂P where P are the primary variables of A.
 Update an equation so that it knows where to store its derivatives
 in the Jacobian representation.
 """
-function align_to_jacobian!(eq::JutulEquation, jac, model; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s, eq::JutulEquation, jac, model; equation_offset = 0, variable_offset = 0)
     pentities = get_primary_variable_ordered_entities(model)
     for u in pentities
-        align_to_jacobian!(eq, jac, model, u, equation_offset = equation_offset, variable_offset = variable_offset) 
+        align_to_jacobian!(eq_s, eq, jac, model, u, equation_offset = equation_offset, variable_offset = variable_offset) 
         variable_offset += number_of_degrees_of_freedom(model, u)
     end
 end
 
 
-function align_to_jacobian!(eq, jac, model, entity; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s, eq, jac, model, entity; equation_offset = 0, variable_offset = 0)
     if entity == associated_entity(eq)
         # By default we perform a diagonal alignment if we match the associated entity.
         # A diagonal alignment means that the equation for some entity depends only on the values inside that entity.
         # For instance, an equation defined on all Cells will have each entry depend on all values in that Cell.
-        diagonal_alignment!(eq.equation, jac, entity, model.context, target_offset = equation_offset, source_offset = variable_offset)
+        diagonal_alignment!(eq_s, eq, jac, entity, model.context, target_offset = equation_offset, source_offset = variable_offset)
     end
 end
 
@@ -304,9 +305,9 @@ end
 Update a linearized system based on the values and derivatives in the equation.
 """
 
-function update_linearized_system_equation!(nz, r, model, equation::JutulEquation)
+function update_linearized_system_equation!(nz, r, model, equation::JutulEquation, diag_cache::CompactAutoDiffCache)
     # NOTE: Default only updates diagonal part
-    fill_equation_entries!(nz, r, model, get_diagonal_cache(equation))
+    fill_equation_entries!(nz, r, model, diag_cache)
 end
 
 
@@ -324,7 +325,7 @@ not impact this particular equation.
 """
 function apply_forces_to_equation!(storage, model, eq, force, time) end
 
-function convergence_criterion(model, storage, eq::JutulEquation, r; dt = 1)
+function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
     n = number_of_equations_per_entity(eq)
     e = zeros(n)
     names = Vector{String}(undef, n)

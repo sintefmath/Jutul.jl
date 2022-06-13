@@ -161,7 +161,7 @@ function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_entitie
     injective_alignment!(cache, arg...; target_index = eq_index, source_index = eq_index, kwarg...)
 end
 
-function injective_alignment!(cache::JutulAutoDiffCache, jac, entity, context;
+function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, entity, context;
                                     layout = matrix_layout(context),
                                     target_index = 1:cache.number_of_entities,
                                     source_index = 1:cache.number_of_entities,

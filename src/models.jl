@@ -192,7 +192,7 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
         storage[:primary_variables] = reference_primary_variables(storage, model) 
     end
     setup_storage_model(storage, model)
-    storage[:equations] = setup_equations(storage, model; tag = tag, kwarg...) 
+    storage[:equations] = setup_storage_equations(storage, model; tag = tag, kwarg...) 
     if setup_linearized_system
         storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
         # We have the equations and the linearized system.
@@ -229,14 +229,14 @@ function reference_primary_variables(storage, model::JutulModel; kwarg...)
     return primaries
 end
 
-function setup_equations(storage, model::JutulModel; kwarg...)
+function setup_storage_equations(storage, model::JutulModel; kwarg...)
     # We use ordered dict since equation alignment with primary variables matter.
     eqs = OrderedDict()
-    setup_equations!(eqs, storage, model; kwarg...)
+    setup_storage_equations!(eqs, storage, model; kwarg...)
     return eqs
 end
 
-function setup_equations!(eqs, storage, model::JutulModel; tag = nothing, kwarg...)
+function setup_storage_equations!(eqs, storage, model::JutulModel; tag = nothing, kwarg...)
     outstr = "Setting up $(length(model.equations)) groups of governing equations...\n"
     if !isnothing(tag)
         outstr = "$tag: "*outstr
@@ -244,20 +244,22 @@ function setup_equations!(eqs, storage, model::JutulModel; tag = nothing, kwarg.
     counter = 1
     num_equations_total = 0
     for (sym, eq) in model.equations
-        proto = eq[1]
-        num = eq[2]
-        if length(eq) > 2
-            # We recieved extra kw-pairs to pass on
-            extra = eq[3]
-        else
-            extra = []
-        end
-        e = proto(model, num; extra..., tag = tag, kwarg...)
-        ne = number_of_entities(model, e)
+        # proto = eq[1]
+        # num = eq[2]
+        # if length(eq) > 2
+        #     # We recieved extra kw-pairs to pass on
+        #     extra = eq[3]
+        # else
+        #     extra = []
+        # end
+        # e = proto(model, num; extra..., tag = tag, kwarg...)
+
+        num = number_of_equations_per_entity(eq)
+        ne = number_of_entities(model, eq)
         n = num*ne
 
-        outstr *= "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_entity(e)) for $n equations in total.\n"
-        eqs[sym] = e
+        # outstr *= "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_entity(e)) for $n equations in total.\n"
+        eqs[sym] = setup_equation_storage(model, eq; tag = tag, kwarg...)
         counter += 1
         num_equations_total += n
     end
@@ -278,10 +280,12 @@ function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout,
     J = []
     numrows = 0
     primary_entities = get_primary_variable_ordered_entities(model)
-    for eq in values(eqs)
+    for eqname in keys(model.equations)
         numcols = 0
+        eq = model.equations[eqname]
+        eq_storage = eqs[eqname]
         for u in primary_entities
-            S = declare_sparsity(model, eq, u, layout)
+            S = declare_sparsity(model, eq, eq_storage, u, layout)
             if !isnothing(S)
                 push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
                 push!(J, S.J .+ numcols) # Column indices, offset by the partials in entities we have passed
@@ -377,15 +381,17 @@ function setup_linearized_system(sparse_arg, model)
 end
 
 function align_equations_to_linearized_system!(storage, model::JutulModel; kwarg...)
-    eqs = storage[:equations]
+    eq_storage = storage[:equations]
+    eqs = model.equations
     jac = storage[:LinearizedSystem].jac
-    align_equations_to_jacobian!(eqs, jac, model; kwarg...)
+    align_equations_to_jacobian!(eq_storage, eqs, jac, model; kwarg...)
 end
 
-function align_equations_to_jacobian!(equations, jac, model; equation_offset = 0, variable_offset = 0)
+function align_equations_to_jacobian!(eq_storage, equations, jac, model; equation_offset = 0, variable_offset = 0)
     for key in keys(equations)
+        eq_s = eq_storage[key]
         eq = equations[key]
-        align_to_jacobian!(eq, jac, model, equation_offset = equation_offset, variable_offset = variable_offset)
+        align_to_jacobian!(eq_s, eq, jac, model, equation_offset = equation_offset, variable_offset = variable_offset)
         equation_offset += number_of_equations(model, eq)
     end
     equation_offset
@@ -422,33 +428,35 @@ end
 apply_boundary_conditions!(storage, parameters, model) = nothing
 
 function update_equations!(storage, model, dt = nothing)
-    update_equations!(storage, storage.equations, model, dt)
+    update_equations!(storage, storage.equations, model.equations, model, dt)
 end
 
-function update_equations!(storage, equations, model, dt)
+function update_equations!(storage, equations_storage, equations, model, dt)
     for key in keys(equations)
-        @timeit "$key" update_equation!(equations[key], storage, model, dt)
+        @timeit "$key" update_equation!(equations_storage[key], equations[key], storage, model, dt)
     end
 end
 
 function update_linearized_system!(storage, model::JutulModel; kwarg...)
-    equations = storage.equations
+    eqs = model.equations
+    eqs_storage = storage.equations
     lsys = storage.LinearizedSystem
-    update_linearized_system!(lsys, equations, model; kwarg...)
+    update_linearized_system!(lsys, eqs, eqs_storage, model; kwarg...)
 end
 
-function update_linearized_system!(lsys, equations, model::JutulModel; equation_offset = 0)
+function update_linearized_system!(lsys, equations, eqs_storage, model::JutulModel; equation_offset = 0)
     r_buf = lsys.r_buffer
     for key in keys(equations)
         @timeit "$key" begin
             eq = equations[key]
+            eqs_s = eqs_storage[key]
             nz = lsys.jac_buffer
             N = number_of_equations(model, eq)
             n = number_of_equations_per_entity(eq)
             m = N ÷ n
             r = as_cell_major_matrix(r_buf, n, m, model, equation_offset)
 
-            update_linearized_system_equation!(nz, r, model, eq)
+            update_linearized_system_equation!(nz, r, model, eq, eqs_s)
             equation_offset += number_of_equations(model, eq)
         end
     end
@@ -456,11 +464,12 @@ end
 
 function check_convergence(storage, model; kwarg...)
     lsys = storage.LinearizedSystem
-    eqs = storage.equations
-    check_convergence(lsys, eqs, storage, model; kwarg...)
+    eqs = model.equations
+    eqs_s = storage.equations
+    check_convergence(lsys, eqs, eqs_s, storage, model; kwarg...)
 end
 
-function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra_out = false, tol = nothing, offset = 0, kwarg...)
+function check_convergence(lsys, eqs, eqs_s, storage, model; iteration = nothing, extra_out = false, tol = nothing, offset = 0, kwarg...)
     converged = true
     e = 0
     eoffset = 0
@@ -472,12 +481,13 @@ function check_convergence(lsys, eqs, storage, model; iteration = nothing, extra
     output = []
     for key in keys(eqs)
         eq = eqs[key]
+        eq_s = eqs_s[key]
         N = number_of_equations(model, eq)
         n = number_of_equations_per_entity(eq)
         m = N ÷ n
         r_v = as_cell_major_matrix(r_buf, n, m, model, offset)
 
-        @timeit "$key" all_crits = convergence_criterion(model, storage, eq, r_v; kwarg...)
+        @timeit "$key" all_crits = convergence_criterion(model, storage, eq, eq_s, r_v; kwarg...)
         e_keys = keys(all_crits)
         tols = Dict()
         for e_k in e_keys

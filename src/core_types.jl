@@ -174,7 +174,7 @@ struct SimulationModel{O<:JutulDomain,
     formulation::F
     primary_variables::OrderedDict{Symbol, JutulVariables}
     secondary_variables::OrderedDict{Symbol, JutulVariables}
-    equations::OrderedDict{Symbol, Tuple{DataType, Int64}}
+    equations::OrderedDict{Symbol, JutulEquation}
     output_variables::Vector{Symbol}
     function SimulationModel(domain, system;
                                             formulation = FullyImplicit(),
