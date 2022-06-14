@@ -150,10 +150,9 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     for (e, epack) in entities
         S = determine_sparsity(F!, n, state, state0, e, entities)
         N, T = epack
-        @info e S epack
-        caches[e] = GenericAutoDiffCache(T, n, e, S)
+        caches[Symbol(e)] = GenericAutoDiffCache(T, n, e, S)
     end
-    error()
+    return convert_to_immutable_storage(caches)
 end
 
 
@@ -281,7 +280,18 @@ end
 Give out source, target arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_pattern(model, e, eq_storage, entity)
+function declare_pattern(model, e, eq_s, entity)
+    k = Symbol(entity)
+    if haskey(eq_s, k)
+        cache = eq_s[k]
+        return generic_cache_declare_pattern(cache)
+    else
+        out = nothing
+    end
+    return out
+end
+
+function declare_pattern(model, e, eq_storage::CompactAutoDiffCache, entity)
     if entity == associated_entity(e)
         n = count_entities(model.domain, entity)
         I = collect(1:n)
@@ -291,8 +301,6 @@ function declare_pattern(model, e, eq_storage, entity)
     end
     return out
 end
-
-
 """
 Give out I, J arrays of equal length for a the impact of a model A on
 a given equation E that is attached to some other model B. The sparsity
@@ -316,6 +324,17 @@ end
 
 
 function align_to_jacobian!(eq_s, eq, jac, model, entity; equation_offset = 0, variable_offset = 0)
+    # Use generic version
+    k = Symbol(entity)
+    if haskey(eq_s, k)
+        cache = eq_s[k]
+        # J = cache.variables
+        I, J = generic_cache_declare_pattern(cache)
+        injective_alignment!(cache, eq, jac, entity, model.context, target_index = I, source_index = J)
+    end
+end
+
+function align_to_jacobian!(eq_s::CompactAutoDiffCache, eq, jac, model, entity; equation_offset = 0, variable_offset = 0)
     if entity == associated_entity(eq)
         # By default we perform a diagonal alignment if we match the associated entity.
         # A diagonal alignment means that the equation for some entity depends only on the values inside that entity.

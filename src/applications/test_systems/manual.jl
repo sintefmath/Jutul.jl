@@ -9,7 +9,7 @@ function setup_equation_storage(model, e::ScalarTestEquation{ManualTestDisc}, st
     return e
 end
 
-function declare_pattern(model, e::ScalarTestEquation{ManualTestDisc}, eq_storage, unit)
+function declare_pattern(model, e::ScalarTestEquation{ManualTestDisc}, eq_storage::CompactAutoDiffCache, unit)
     @assert unit == Cells()
     return ([1], [1])
 end

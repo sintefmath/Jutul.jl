@@ -501,20 +501,3 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M} <: JutulAutoDiffCache where {I 
         return new{n, entity, T, A, P, typeof(algn)}(v, pos, variables, algn)
     end
 end
-
-
-function gradient_storage(entity, sparsity; alignment = true)
-    T = entity.T
-    # Need:
-    # CSR-like structure for AD part
-    counts = map(length, sparsity)
-    v = zeros(T, sum(counts))
-    J = vcat(sparsity...)
-    pos = cumsum(vcat(1, counts))
-    if alignment
-        algn = zeros(Int64, length(v))
-    else
-        algn = nothing
-    end
-    return (value = v, pos = pos, variables = J, alignment = algn)
-end
