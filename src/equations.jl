@@ -346,18 +346,40 @@ end
 """
 Update a linearized system based on the values and derivatives in the equation.
 """
-
 function update_linearized_system_equation!(nz, r, model, equation::JutulEquation, diag_cache::CompactAutoDiffCache)
     # NOTE: Default only updates diagonal part
     fill_equation_entries!(nz, r, model, diag_cache)
 end
 
+function update_linearized_system_equation!(nz, r, model, equation::JutulEquation, caches)
+    for k in keys(caches)
+        fill_equation_entries!(nz, r, model, caches[k])
+    end
+end
 
 """
 Update equation based on currently stored properties
 """
-function update_equation!(eq::JutulEquation, storage, model, dt)
-    error("No default implementation exists for $(typeof(eq)).")
+function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
+    state = storage.state
+    state0 = storage.state0
+    for k in keys(eq_s)
+        cache = eq_s[k]
+        update_equation_for_entity!(cache, eq, state, state0, model, dt)
+    end
+    # error("No default implementation exists for $(typeof(eq)).")
+end
+
+function update_equation_for_entity!(cache, eq, state, state0, model, dt)
+    @info "Updating for $(entity(cache))"
+    v = cache.entries
+    for i in 1:number_of_entities(cache)
+        ldisc = local_discretization(eq, i)
+        for j in vrange(cache, i)
+            v_i = @views v[:, j]
+            update_equation_in_entity!(v_i, i, state, state0, eq, model, dt, ldisc)
+        end
+    end
 end
 
 """

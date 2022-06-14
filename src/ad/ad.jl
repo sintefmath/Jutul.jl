@@ -25,6 +25,10 @@ Note: This only gets the .equation field's entries.
     return get_entries(e.equation)
 end
 
+@inline function get_entry(c::JutulAutoDiffCache, index, eqNo)
+    @inbounds get_entries(c)[eqNo, index]
+end
+
 include("compact.jl")
 include("generic.jl")
 
@@ -49,7 +53,7 @@ end
     return (number_of_entities(cache), equations_per_entity(cache), number_of_partials(cache))::NTuple
 end
 
-@inline function update_jacobian_entry!(nzval, c::CompactAutoDiffCache, index, eqNo, partial_index, 
+@inline function update_jacobian_entry!(nzval, c::JutulAutoDiffCache, index, eqNo, partial_index, 
                                                                         new_value,
                                                                         pos = c.jacobian_positions)
     ix = get_jacobian_pos(c, index, eqNo, partial_index, pos)
@@ -62,17 +66,13 @@ end
 
 function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)
-    entries = cache.entries
-    jp = cache.jacobian_positions
     tb = minbatch(model.context)
     @batch minbatch = tb for i in 1:nu
         for e in 1:ne
-            a = get_entry(cache, i, e, entries)
+            a = get_entry(cache, i, e)
             @inbounds r[i + nu*(e-1)] = a.value
-            for d = 1:cache.npartials
-                # apos = get_jacobian_pos(cache, i, e, d, jp)
+            for d = 1:np
                 update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
-                # @inbounds nz[apos] = a.partials[d]
             end
         end
     end

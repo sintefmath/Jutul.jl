@@ -5,8 +5,8 @@ Get entries of autodiff cache. Entries are AD vectors that hold values and deriv
     return c.entries
 end
 
-@inline function get_entry(c::CompactAutoDiffCache{I, D}, index, eqNo, entries)::D where {I, D}
-    @inbounds entries[eqNo, index]
+@inline function get_entry(c::CompactAutoDiffCache{I, D}, index, eqNo)::D where {I, D}
+    @inbounds get_entries(c)[eqNo, index]
 end
 
 @inline function get_value(c::CompactAutoDiffCache, arg...)
