@@ -376,7 +376,8 @@ function update_equation_for_entity!(cache, eq, state, state0, model, dt)
         ldisc = local_discretization(eq, i)
         for j in vrange(cache, i)
             v_i = @views v[:, j]
-            update_equation_in_entity!(v_i, i, state, state0, eq, model, dt, ldisc)
+            state_i = local_ad(state, i, eltype(v))
+            update_equation_in_entity!(v_i, i, state_i, state0, eq, model, dt, ldisc)
         end
     end
 end
