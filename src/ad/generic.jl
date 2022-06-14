@@ -25,3 +25,5 @@ get_entries(c::GenericAutoDiffCache) = c.entries
     np = number_of_partials(c)
     @inbounds pos[(eqNo-1)*np + partial_index, index]
 end
+
+diagonal_view(cache::GenericAutoDiffCache) = view(cache.entries, :, cache.diagonal_positions)

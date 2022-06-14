@@ -530,9 +530,10 @@ function apply_forces!(storage, model, dt, forces; time = NaN)
     for key in keys(equations)
         eq = equations[key]
         eq_s = equations_storage[key]
+        diag_part = get_diagonal_entries(eq, eq_s)
         for fkey in keys(forces)
             force = forces[fkey]
-            apply_forces_to_equation!(storage, model, eq, eq_s, force, time)
+            apply_forces_to_equation!(diag_part, storage, model, eq, eq_s, force, time)
         end
     end
 end

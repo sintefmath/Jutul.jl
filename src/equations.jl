@@ -371,7 +371,6 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
 end
 
 function update_equation_for_entity!(cache, eq, state, state0, model, dt)
-    @info "Updating for $(entity(cache))"
     v = cache.entries
     for i in 1:number_of_entities(cache)
         ldisc = local_discretization(eq, i)
@@ -387,7 +386,7 @@ Update an equation with the effect of a force. The default behavior
 for any force we do not know about is to assume that the force does
 not impact this particular equation.
 """
-apply_forces_to_equation!(storage, model, eq, eq_s, force, time) = nothing
+apply_forces_to_equation!(diag_part, storage, model, eq, eq_s, force, time) = nothing
 
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
     n = number_of_equations_per_entity(eq)
@@ -405,8 +404,13 @@ function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 
     return R
 end
 
-@inline function get_diagonal_entries(eq::JutulEquation)
-    return get_entries(get_diagonal_cache(eq))
+@inline function get_diagonal_entries(eq::JutulEquation, eq_s::CompactAutoDiffCache)
+    return get_entries(eq_s)
+end
+
+@inline function get_diagonal_entries(eq::JutulEquation, eq_s)
+    cache = eq_s[Symbol(associated_entity(eq))]
+    return diagonal_view(cache)
 end
 
 @inline function get_diagonal_cache(eq::JutulEquation)

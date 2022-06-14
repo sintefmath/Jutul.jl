@@ -20,9 +20,3 @@ function update_equation!(eq_s::CompactAutoDiffCache, eq::ScalarTestEquation{Man
     equation = get_entries(eq_s)
     @. equation = (X - X0)/dt
 end
-
-function apply_forces_to_equation!(storage, model, eq::ScalarTestEquation{ManualTestDisc}, eq_s, force::ScalarTestForce, time)
-    equation = get_entries(eq_s)
-    @. equation -= force.value
-end
-

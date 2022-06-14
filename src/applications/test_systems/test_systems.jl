@@ -65,5 +65,9 @@ function select_primary_variables!(S, domain, system::ScalarTestSystem, formulat
     S[:XVar] = XVar()
 end
 
+function apply_forces_to_equation!(diag_part, storage, model, eq::ScalarTestEquation, eq_s, force::ScalarTestForce, time)
+    @. diag_part -= force.value
+end
+
 include("manual.jl")
 include("auto.jl")

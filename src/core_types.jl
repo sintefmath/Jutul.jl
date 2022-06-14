@@ -480,24 +480,38 @@ struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Int
     end
 end
 
-struct GenericAutoDiffCache{N, E, ∂x, A, P, M} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
+struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
     # N - number of equations per entity
     entries::A
     vpos::P               # Variable positions (CSR-like, length N + 1 for N entities)
     variables::P          # Indirection-mapped variable list of same length as entries
     jacobian_positions::M
+    diagonal_positions::D
     function GenericAutoDiffCache(T, n::I, entity::JutulUnit, sparsity::Vector{Vector{I}}) where I
         counts = map(length, sparsity)
         # Create value storage with AD type
         v = zeros(T, n, sum(counts))
-        A = typeof(v)
+        A = typeof(v)        
         # Create various index mappings + alignment from sparsity
         variables = vcat(sparsity...)
         pos = cumsum(vcat(1, counts))
-        algn = zeros(eltype(variables), n, length(v))
+        algn = zeros(I, n, length(v))
+        # Create indices into the self-diagonal part
+        m = length(sparsity)
+        diag_ix = zeros(I, m)
+        for i = 1:m
+            found = false
+            for j = pos[i]:(pos[i+1]-1)
+                if variables[j] == i
+                    diag_ix[i] = j
+                    found = true
+                end
+            end
+            @assert found "Diagonal must be present in sparsity pattern."
+        end
         # These should be of the same type
         P = typeof(pos)
         variables::P
-        return new{n, entity, T, A, P, typeof(algn)}(v, pos, variables, algn)
+        return new{n, entity, T, A, P, typeof(algn), typeof(diag_ix)}(v, pos, variables, algn, diag_ix)
     end
 end
