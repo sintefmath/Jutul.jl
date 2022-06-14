@@ -1,9 +1,9 @@
 using Jutul
 using Test
 
-function test_single()
+function test_single(use_manual)
     sys = ScalarTestSystem()
-    D = ScalarTestDomain()
+    D = ScalarTestDomain(use_manual = use_manual)
     model = SimulationModel(D, sys)
     
     source = ScalarTestForce(1.0)
@@ -17,5 +17,6 @@ function test_single()
 end
 
 @testset "Scalar test system" begin
-    @test test_single()
+    @test test_single(true)
+    @test test_single(false)
 end

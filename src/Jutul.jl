@@ -42,6 +42,7 @@ module Jutul
     include("StaticCSR/StaticCSR.jl")
     using .StaticCSR
     import .StaticCSR: nthreads, minbatch
+    import SparsityTracing as ST
 
     # Main types
     include("core_types.jl")
@@ -61,7 +62,7 @@ module Jutul
 
     include("context.jl")
     include("equations.jl")
-    include("ad.jl")
+    include("ad/ad.jl")
     include("variables.jl")
 
     include("conservation/conservation.jl")

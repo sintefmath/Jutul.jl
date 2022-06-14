@@ -134,6 +134,28 @@ function select_equations_formulation!(eqs, arg...)
     # Default: No equations
 end
 
+local_discretization(eq, i) = nothing
+
+function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
+    F!(out, state, state0, i) = update_equation_in_entity!(out, i, state, state0, eq, model, 1.0)
+    # Find all entities x
+    state = storage[:state]
+    state0 = storage[:state0]
+    entities = ad_entities(state)
+    entities0 = ad_entities(state0)
+    merge!(entities, entities0)
+    caches = Dict()
+
+    n = number_of_equations_per_entity(eq)
+    for (e, tag) in entities
+        S =  determine_sparsity(F!, n, state, state0, e, entities)
+        # caches[e] = 
+    end
+    @info tag kwarg entities caches
+    error()
+end
+
+
 """
 Return the domain entity the equation is associated with
 """

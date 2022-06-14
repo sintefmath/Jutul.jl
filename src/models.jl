@@ -259,7 +259,7 @@ function setup_storage_equations!(eqs, storage, model::JutulModel; tag = nothing
         n = num*ne
 
         # outstr *= "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_entity(e)) for $n equations in total.\n"
-        eqs[sym] = setup_equation_storage(model, eq; tag = tag, kwarg...)
+        eqs[sym] = setup_equation_storage(model, eq, storage; tag = tag, kwarg...)
         counter += 1
         num_equations_total += n
     end

@@ -431,3 +431,62 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
         new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary, variables_always_active)
     end
 end
+
+
+"""
+An AutoDiffCache is a type that holds both a set of AD values and a map into some
+global Jacobian.
+"""
+abstract type JutulAutoDiffCache end
+"""
+Cache that holds an AD vector/matrix together with their positions.
+"""
+struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
+    entries::E
+    entity
+    jacobian_positions::P
+    equations_per_entity::I
+    number_of_entities::I
+    npartials::I
+    function CompactAutoDiffCache(equations_per_entity, n_entities, npartials_or_model = 1; 
+                                                        entity = Cells(),
+                                                        context = DefaultContext(),
+                                                        tag = nothing,
+                                                        n_entities_pos = nothing,
+                                                        kwarg...)
+        if isa(npartials_or_model, JutulModel)
+            model = npartials_or_model
+            npartials = degrees_of_freedom_per_entity(model, entity)
+        else
+            npartials = npartials_or_model
+        end
+        npartials::Integer
+
+        I = index_type(context)
+        # Storage for AD variables
+        t = get_entity_tag(tag, entity)
+        entries = allocate_array_ad(equations_per_entity, n_entities, context = context, npartials = npartials, tag = t; kwarg...)
+        D = eltype(entries)
+        # Position in sparse matrix - only allocated, then filled in later.
+        # Since partials are all fetched together with the value, we make partials the fastest index.
+        if isnothing(n_entities_pos)
+            # This can be overriden - if a custom assembly is planned.
+            n_entities_pos = n_entities
+        end
+        I_t = nzval_index_type(context)
+        pos = Array{I_t, 2}(undef, equations_per_entity*npartials, n_entities_pos)
+        pos = transfer(context, pos)
+        new{I, D, typeof(entries), typeof(pos)}(entries, entity, pos, equations_per_entity, n_entities, npartials)
+    end
+end
+
+struct GenericAutoDiffCache{N, A, P, ∂x, E} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
+    # N - number of equations per entity
+    entity::E
+    entries::A
+    vpos::P               # Variable positions (CSR-like, length N + 1 for N entities)
+    variables::P          # Indirection-mapped variable list of same length as entries
+    jacobian_positions::P
+    function GenericAutoDiffCache()
+    end
+end

@@ -66,3 +66,4 @@ function select_primary_variables!(S, domain, system::ScalarTestSystem, formulat
 end
 
 include("manual.jl")
+include("auto.jl")

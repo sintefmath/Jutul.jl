@@ -1,5 +1,5 @@
 # Manual sparsity version
-function setup_equation_storage(model, e::ScalarTestEquation{ManualTestDisc}; kwarg...)
+function setup_equation_storage(model, e::ScalarTestEquation{ManualTestDisc}, storage; kwarg...)
     Ω = model.domain
     nc = number_of_cells(Ω)
     @assert nc == 1 # We use nc for clarity of the interface - but it should always be one!

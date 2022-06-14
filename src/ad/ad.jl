@@ -1,50 +1,19 @@
 export CompactAutoDiffCache, as_value, JutulAutoDiffCache, number_of_entities, get_entries, fill_equation_entries!, matrix_layout
 
-"""
-An AutoDiffCache is a type that holds both a set of AD values and a map into some
-global Jacobian.
-"""
-abstract type JutulAutoDiffCache end
-"""
-Cache that holds an AD vector/matrix together with their positions.
-"""
-struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
-    entries::E
-    entity
-    jacobian_positions::P
-    equations_per_entity::I
-    number_of_entities::I
-    npartials::I
-    function CompactAutoDiffCache(equations_per_entity, n_entities, npartials_or_model = 1; 
-                                                        entity = Cells(),
-                                                        context = DefaultContext(),
-                                                        tag = nothing,
-                                                        n_entities_pos = nothing,
-                                                        kwarg...)
-        if isa(npartials_or_model, JutulModel)
-            model = npartials_or_model
-            npartials = degrees_of_freedom_per_entity(model, entity)
-        else
-            npartials = npartials_or_model
-        end
-        npartials::Integer
-
-        I = index_type(context)
-        # Storage for AD variables
-        t = get_entity_tag(tag, entity)
-        entries = allocate_array_ad(equations_per_entity, n_entities, context = context, npartials = npartials, tag = t; kwarg...)
-        D = eltype(entries)
-        # Position in sparse matrix - only allocated, then filled in later.
-        # Since partials are all fetched together with the value, we make partials the fastest index.
-        if isnothing(n_entities_pos)
-            # This can be overriden - if a custom assembly is planned.
-            n_entities_pos = n_entities
-        end
-        I_t = nzval_index_type(context)
-        pos = Array{I_t, 2}(undef, equations_per_entity*npartials, n_entities_pos)
-        pos = transfer(context, pos)
-        new{I, D, typeof(entries), typeof(pos)}(entries, entity, pos, equations_per_entity, n_entities, npartials)
+function gradient_storage(entity, sparsity; alignment = true)
+    T = entity.T
+    # Need:
+    # CSR-like structure for AD part
+    counts = map(length, sparsity)
+    v = zeros(T, sum(counts))
+    J = vcat(sparsity...)
+    pos = cumsum(vcat(1, counts))
+    if alignment
+        algn = zeros(Int64, length(v))
+    else
+        algn = nothing
     end
+    return (value = v, pos = pos, variables = J, alignment = algn)
 end
 
 """
@@ -462,12 +431,7 @@ end
 Combine a base tag (which can be nothing) with a entity to get a tag that
 captures base tag + entity tag for use with AD initialization.
 """
-function get_entity_tag(basetag, entity)
-    utag = Symbol(typeof(entity))
-    if !isnothing(basetag)
-        utag = Symbol(String(utag)*"∈"*String(basetag))
-    end
-    utag
-end
+get_entity_tag(basetag, entity) = (basetag, entity)
 
 include("local_ad.jl")
+include("sparsity.jl")
