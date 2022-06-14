@@ -10,7 +10,7 @@ function align_to_jacobian!(ct::InjectiveCrossTerm, lsys, target::JutulModel, so
     for u in pentities
         nu_s = count_active_entities(source.domain, u)
         sc = source.context
-        injective_alignment!(cs, jac, u, sc,
+        injective_alignment!(cs, nothing, jac, u, sc,
                                                 target_index = impact_target,
                                                 source_index = impact_source,
                                                 layout = lsys.matrix_layout,
@@ -24,9 +24,9 @@ end
 
 target_impact(ct) = ct.impact.target
 
-function apply_cross_term!(eq, ct, model_t, model_s, arg...)
+function apply_cross_term!(eq_s, eq, ct, model_t, model_s, arg...)
     ix = target_impact(ct)
-    d = get_diagonal_entries(eq)
+    d = get_diagonal_entries(eq, eq_s)
     # NOTE: We do not use += here due to sparse oddities with ForwardDiff.
     increment_diagonal_ct!(d, ct.crossterm_target, ix)
 end

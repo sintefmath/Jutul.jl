@@ -86,8 +86,8 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
                                             setup_linearized_system = false,
                                             tag = key)
     end
-    couplings = model.couplings;
-    setup_cross_terms(storage, model)
+    couplings = model.couplings
+    storage[:cross_terms] = setup_cross_terms(storage, model)
     # overwriting potential couplings with explicit given
     setup_cross_terms!(storage, model, couplings)
     setup_linearized_system!(storage, model)
@@ -176,8 +176,9 @@ function setup_cross_terms(storage, model::MultiModel)
             source_model = models[source]
             d = Dict{Symbol, Any}()
             found = false
-            for (key, eq) in storage[target][:equations]
-                ct = declare_cross_term(eq, target_model, source_model, target = target, source = source)
+            for (key, eq_s) in storage[target][:equations]
+                eq = target_model.equations[key]
+                ct = declare_cross_term(eq, eq_s, target_model, source_model, target = target, source = source)
                 if !isnothing(ct)
                     found = true
                     tmpstr *= String(key)*": Cross-term found.\n"
@@ -191,8 +192,8 @@ function setup_cross_terms(storage, model::MultiModel)
         end
         crossd[target] = sources
     end
-    storage[:cross_terms] = crossd
     @debug debugstr
+    return crossd
 end
 
 
@@ -202,7 +203,7 @@ function transpose_intersection(intersection)
 end
 
 
-function declare_cross_term(eq::JutulEquation, target_model, source_model; target = nothing, source = nothing)
+function declare_cross_term(eq::JutulEquation, eq_s, target_model, source_model; target = nothing, source = nothing)
     target_entity = associated_entity(eq)
     intersection = get_model_intersection(target_entity, target_model, source_model, target, source)
     if isnothing(intersection.target)
@@ -236,8 +237,9 @@ end
 function align_equations_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
     for key in model_keys
         submodel = models[key]
-        eqs = storage[key][:equations]
-        nrow_end = align_equations_to_jacobian!(eqs, J, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
+        eqs_s = storage[key][:equations]
+        eqs = submodel.equations
+        nrow_end = align_equations_to_jacobian!(eqs_s, eqs, J, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
         nrow = nrow_end - equation_offset
         ndof = ndofs[key]
         @assert nrow == ndof "Submodels must have equal number of equations and degrees of freedom. Found $nrow equations and $ndof variables for submodel $key"
@@ -283,7 +285,7 @@ function align_crossterms_subgroup!(storage, models, target_keys, source_keys, n
             source_model = models[source]
             if source != target
                 ct = cross_terms_if_present(ct_t, source)
-                eqs = storage[target][:equations]
+                eqs = target_model.equations
                 align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, equation_offset = equation_offset, variable_offset = variable_offset)
                 # Same number of rows as target, same number of columns as source
             end
@@ -325,7 +327,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         ncols = number_of_degrees_of_freedom(source_model)
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
-        equations = storage[target][:equations]
+        equations = target_model.equations
         cross_terms = cross_term_pair(storage, source, target)
         equation_offset = 0
         for (key, eq) in equations
@@ -522,7 +524,7 @@ function update_cross_terms_for_pair!(cross_terms, storage, model, source::Symbo
     storage_t, storage_s = get_submodel_storage(storage, target, source)
     model_t, model_s = get_submodels(model, target, source)
 
-    eqs = storage_t.equations
+    eqs = model_t.equations
     for (ekey, ct) in pairs(cross_terms)
         if !isnothing(ct)
             # @info "$source -> $target: $ekey"
@@ -548,10 +550,11 @@ function apply_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol
     storage_t, = get_submodel_storage(storage, target)
     model_t, model_s = get_submodels(model, target, source)
 
-    eqs = storage_t[:equations]
+    eqs = model_t.equations
+    eqs_s = storage_t[:equations]
     for (ekey, ct) in pairs(cross_terms)
         if !isnothing(ct)
-            apply_cross_term!(eqs[ekey], ct, model_t, model_s, dt)
+            apply_cross_term!(eqs_s[ekey], eqs[ekey], ct, model_t, model_s, dt)
         end
     end
 end
@@ -589,8 +592,9 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
     for (index, key) in enumerate(model_keys)
         m = model.models[key]
         s = storage[key]
-        eqs = s.equations
-        update_linearized_system!(lsys, eqs, m; equation_offset = offsets[index])
+        eqs_s = s.equations
+        eqs = m.equations
+        update_linearized_system!(lsys, eqs, eqs_s, m; equation_offset = offsets[index])
     end
 end
 
@@ -684,9 +688,10 @@ function check_convergence(storage, model::MultiModel; tol = nothing, extra_out 
         end
         s = storage[key]
         m = model.models[key]
-        eqs = s.equations
+        eqs = m.equations
+        eqs_s = s.equations
         ls = get_linearized_system_submodel(storage, model, key, lsys)
-        conv, e, errors[key], = check_convergence(ls, eqs, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
+        conv, e, errors[key], = check_convergence(ls, eqs, eqs_s, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)

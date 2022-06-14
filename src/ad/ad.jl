@@ -85,7 +85,7 @@ function fill_equation_entries!(nz, r::Nothing, model, cache::JutulAutoDiffCache
     tb = minbatch(model.context)
     @batch minbatch = tb for i in 1:nu
         for e in 1:ne
-            a = get_entry(cache, i, e, entries)
+            a = get_entry(cache, i, e)
             @inbounds for d = 1:np
                 @inbounds ∂ = a.partials[d]
                 update_jacobian_entry!(nz, cache, i, e, d, ∂)
