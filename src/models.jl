@@ -244,20 +244,9 @@ function setup_storage_equations!(eqs, storage, model::JutulModel; tag = nothing
     counter = 1
     num_equations_total = 0
     for (sym, eq) in model.equations
-        # proto = eq[1]
-        # num = eq[2]
-        # if length(eq) > 2
-        #     # We recieved extra kw-pairs to pass on
-        #     extra = eq[3]
-        # else
-        #     extra = []
-        # end
-        # e = proto(model, num; extra..., tag = tag, kwarg...)
-
         num = number_of_equations_per_entity(eq)
         ne = number_of_entities(model, eq)
         n = num*ne
-
         # outstr *= "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_entity(e)) for $n equations in total.\n"
         eqs[sym] = setup_equation_storage(model, eq, storage; tag = tag, kwarg...)
         counter += 1
@@ -275,6 +264,7 @@ end
 
 function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout, UnitMajorLayout})
     ndof = number_of_degrees_of_freedom(model)
+    @assert ndof > 0
     eqs = storage[:equations]
     I = []
     J = []

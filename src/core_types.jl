@@ -120,7 +120,12 @@ struct DiscretizedDomain{G} <: JutulDomain
     global_map
 end
 function Base.show(io::IO, d::DiscretizedDomain)
-    print(io, "DiscretizedDomain with $(d.grid) and discretizations for $(join(keys(d.discretizations), ", "))\n")
+    disc = d.discretizations
+    if isnothing(disc)
+        print(io, "DiscretizedDomain with $(d.grid)\n")
+    else
+        print(io, "DiscretizedDomain with $(d.grid) and discretizations for $(join(keys(d.discretizations), ", "))\n")
+    end
 end
 
 function DiscretizedDomain(grid, disc = nothing; global_map = TrivialGlobalMap())
@@ -237,7 +242,9 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
             print(io, "\n")
         elseif f == :domain
             print(io, "    ")
-            print(io, p)
+            if !isnothing(p)
+                print(io, p)
+            end
             print(io, "\n")
         elseif f == :equations
             ctr = 1

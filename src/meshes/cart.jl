@@ -25,10 +25,10 @@ julia> CartesianMesh((2, 3), ([1.0, 2.0], [0.1, 3.0, 2.5]))
 CartesianMesh (3D) with 3x5x2=30 cells
 ```
 """
-struct CartesianMesh <: AbstractJutulMesh
-    dims   # Tuple of dimensions (nx, ny, [nz])
-    deltas # Either a tuple of scalars (uniform grid) or a tuple of vectors (non-uniform grid)
-    origin # Coordinate of lower left corner
+struct CartesianMesh{D, Δ, O} <: AbstractJutulMesh
+    dims::D   # Tuple of dimensions (nx, ny, [nz])
+    deltas::Δ # Either a tuple of scalars (uniform grid) or a tuple of vectors (non-uniform grid)
+    origin::O # Coordinate of lower left corner
     function CartesianMesh(dims::Tuple, deltas_or_size::Union{Nothing, Tuple} = nothing; origin = nothing)
         dim = length(dims)
         if isnothing(deltas_or_size)
@@ -53,7 +53,7 @@ struct CartesianMesh <: AbstractJutulMesh
         end
         @assert length(deltas_or_size) == dim
         deltas = generate_deltas(deltas_or_size)
-        return new(dims, deltas, origin)
+        return new{typeof(dims), typeof(deltas), typeof(origin)}(dims, deltas, origin)
     end
 end
 Base.show(io::IO, g::CartesianMesh) = print(io, "CartesianMesh ($(dim(g))D) with $(join(grid_dims_ijk(g), "x"))=$(number_of_cells(g)) cells")
@@ -65,6 +65,10 @@ function number_of_faces(t::CartesianMesh)
     return (nx-1)*ny*nz + (ny-1)*nx*nz + (nz-1)*ny*nx
 end
 
+function declare_entities(G::CartesianMesh)
+    return [(entity = Cells(), count = number_of_cells(G)),
+            (entity = Faces(), count = number_of_faces(G))]
+end
 """
 Lower corner for one dimension, without any transforms applied
 """
