@@ -147,11 +147,12 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     caches = Dict()
 
     n = number_of_equations_per_entity(eq)
-    for (e, tag) in entities
-        S =  determine_sparsity(F!, n, state, state0, e, entities)
-        # caches[e] = 
+    for (e, epack) in entities
+        S = determine_sparsity(F!, n, state, state0, e, entities)
+        N, T = epack
+        @info e S epack
+        caches[e] = GenericAutoDiffCache(T, n, e, S)
     end
-    @info tag kwarg entities caches
     error()
 end
 

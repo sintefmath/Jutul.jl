@@ -480,13 +480,41 @@ struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Int
     end
 end
 
-struct GenericAutoDiffCache{N, A, P, ∂x, E} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
+struct GenericAutoDiffCache{N, E, ∂x, A, P, M} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
     # N - number of equations per entity
-    entity::E
     entries::A
     vpos::P               # Variable positions (CSR-like, length N + 1 for N entities)
     variables::P          # Indirection-mapped variable list of same length as entries
-    jacobian_positions::P
-    function GenericAutoDiffCache()
+    jacobian_positions::M
+    function GenericAutoDiffCache(T, n::I, entity::JutulUnit, sparsity::Vector{Vector{I}}) where I
+        counts = map(length, sparsity)
+        # Create value storage with AD type
+        v = zeros(T, n, sum(counts))
+        A = typeof(v)
+        # Create various index mappings + alignment from sparsity
+        variables = vcat(sparsity...)
+        pos = cumsum(vcat(1, counts))
+        algn = zeros(eltype(variables), n, length(v))
+        # These should be of the same type
+        P = typeof(pos)
+        variables::P
+        return new{n, entity, T, A, P, typeof(algn)}(v, pos, variables, algn)
     end
+end
+
+
+function gradient_storage(entity, sparsity; alignment = true)
+    T = entity.T
+    # Need:
+    # CSR-like structure for AD part
+    counts = map(length, sparsity)
+    v = zeros(T, sum(counts))
+    J = vcat(sparsity...)
+    pos = cumsum(vcat(1, counts))
+    if alignment
+        algn = zeros(Int64, length(v))
+    else
+        algn = nothing
+    end
+    return (value = v, pos = pos, variables = J, alignment = algn)
 end
