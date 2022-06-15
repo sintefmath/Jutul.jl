@@ -147,9 +147,9 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     caches = Dict()
     n = number_of_equations_per_entity(eq)
     for (e, epack) in entities
-        S = determine_sparsity(F!, n, state, state0, e, entities)
+        @timeit "sparsity detection" S = determine_sparsity(F!, n, state, state0, e, entities)
         N, T = epack
-        caches[Symbol(e)] = GenericAutoDiffCache(T, n, e, S)
+        @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, n, e, S)
     end
     return convert_to_immutable_storage(caches)
 end

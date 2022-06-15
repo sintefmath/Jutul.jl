@@ -8,23 +8,25 @@ struct Simulator <: JutulSimulator
     storage::JutulStorage
 end
 
-function Simulator(model; kwarg...)
+function Simulator(model; extra_timing = false, kwarg...)
+    set_global_timer!(extra_timing)
     storage = simulator_storage(model; kwarg...)
+    print_global_timer(extra_timing)
     Simulator(model, storage)
 end
 
 function simulator_storage(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true, kwarg...)
     # We need to sort the secondary variables according to their dependency ordering before simulating.
     sort_secondary_variables!(model)
-    if isnothing(state0)
+    @timeit "state0" if isnothing(state0)
         state0 = setup_state(model)
     elseif copy_state
         # Take a deep copy to avoid side effects.
         state0 = deepcopy(state0)
     end
-    storage = setup_storage(model, state0 = state0, parameters = parameters)
+    @timeit "storage" storage = setup_storage(model, state0 = state0, parameters = parameters)
     # Initialize for first time usage
-    initialize_storage!(storage, model; kwarg...)
+    @timeit "init_storage" initialize_storage!(storage, model; kwarg...)
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
     # This allows for much faster lookup in the simulation itself.
     storage = convert_to_immutable_storage(storage)
@@ -183,14 +185,27 @@ function initialize_before_first_timestep!(sim, first_dT; forces = forces, confi
     end
 end
 
-function initial_setup!(sim, config, timesteps; restart = nothing)
-    # Timing stuff
-    if config[:extra_timing]
+function set_global_timer!(enabled = true)
+    if enabled
         enable_timer!()
         reset_timer!()
     else
         disable_timer!()
     end
+end
+
+function print_global_timer(do_print = true; text = "Detailed timing")
+    if do_print
+        if !isnothing(text)
+            @info text
+        end
+        print_timer()
+    end
+end
+
+function initial_setup!(sim, config, timesteps; restart = nothing)
+    # Timing stuff
+    set_global_timer!(config[:extra_timing])
     # Set up storage
     reports = []
     states = Vector{Dict{Symbol, Any}}()
@@ -415,10 +430,7 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
         print_stats(stats, table_formatter = config[:table_formatter])
     end
     # Detailed timing through @timeit instrumentation (can be a lot)
-    if config[:extra_timing]
-        @info "Detailed timing:"
-        print_timer()
-    end
+    print_global_timer(config[:extra_timing])
     if aborted && config[:error_on_incomplete]
         error("Simulation did not complete successfully.")
     end

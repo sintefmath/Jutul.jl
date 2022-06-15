@@ -185,15 +185,15 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
                                                       parameters = setup_parameters(model),
                                                       tag = nothing,
                                                       kwarg...)
-    if !isnothing(state0)
+    @timeit "state" if !isnothing(state0)
         storage[:parameters] = parameters
         storage[:state0] = state0
         storage[:state] = convert_state_ad(model, state0, tag)
         storage[:primary_variables] = reference_primary_variables(storage, model) 
     end
-    setup_storage_model(storage, model)
-    storage[:equations] = setup_storage_equations(storage, model; tag = tag, kwarg...) 
-    if setup_linearized_system
+    @timeit "model" setup_storage_model(storage, model)
+    @timeit "equations" storage[:equations] = setup_storage_equations(storage, model; tag = tag, kwarg...) 
+    @timeit "linear system" if setup_linearized_system
         storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
         # We have the equations and the linearized system.
         # Give the equations a chance to figure out their place in the Jacobians.
