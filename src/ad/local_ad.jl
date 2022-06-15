@@ -11,6 +11,7 @@ function LocalPerspectiveAD(a::A, index::I_t) where {A<:AbstractArray, I_t<:Inte
 end
 
 struct LocalStateAD{T, I, E} # Data type, index, entity tag
+    index::I
     data::T
 end
 
@@ -41,17 +42,18 @@ Base.axes(A::LocalPerspectiveAD) = axes(A.data)
 parenttype(::Type{LocalPerspectiveAD{T,N,A,I}}) where {T,N,A,I} = A
 
 function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
-    myfn(x::AbstractArray{T}, ::Type{T}, I) where T = local_ad(x, I)
-    myfn(x, t, I) = as_value(x)
-    myfn(x::ConstantWrapper, t, I) = x
+    myfn(x::AbstractArray{T}, ::Type{T}, index) where T = local_ad(x, index)
+    myfn(x, t, index) = as_value(x)
+    myfn(x::ConstantWrapper, t, index) = x
 
+    index = getfield(state, :index)
     inner_state = getfield(state, :data)
     val = getproperty(inner_state, f)
-    return myfn(val, E, I)
+    return myfn(val, E, index)
 end
 
-function local_ad(x::T, index::Integer, ad_tag::∂T) where {T, ∂T}
-    return LocalStateAD{T, index, ad_tag}(x)
+function local_ad(x::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
+    return LocalStateAD{T, I, ad_tag}(index, x)
 end
 
 function Base.show(io::IO, t::MIME"text/plain", x::LocalStateAD{T, I, E}) where {T, I, E}

@@ -517,6 +517,7 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
             @assert found "Diagonal must be present in sparsity pattern."
         end
         # These should be of the same type
+        # TODO: Not really, pos should be n Vector{Int} and the other a np*ne by n Matrix{Int}
         P = typeof(pos)
         variables::P
         return new{n, entity, T, A, P, typeof(algn), typeof(diag_ix)}(v, pos, variables, algn, diag_ix)

@@ -4,7 +4,7 @@ struct SimpleHeatSystem <: JutulSystem end
 
 struct SimpleHeatEquation <: JutulEquation end
 
-function update_equation_in_entity!(v, cellno, state, state0, eq::SimpleHeatEquation, model, dt, ldisc = local_discretization(eq, cellno))
+Base.@propagate_inbounds function update_equation_in_entity!(v, cellno, state, state0, eq::SimpleHeatEquation, model, dt, ldisc = local_discretization(eq, cellno))
     g = model.domain.grid
     g::CartesianMesh # Finite difference scheme based on structured cart mesh, put a type assert
     T = state.T

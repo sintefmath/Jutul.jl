@@ -260,7 +260,6 @@ function solve!(sys)
     r = sys.r
     sys.dx .= -(J\r)
     @assert all(isfinite, sys.dx) "Linear solve resulted in non-finite values."
-    # error()
     return linear_solve_return()
 end
 

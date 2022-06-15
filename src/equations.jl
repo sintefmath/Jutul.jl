@@ -374,10 +374,10 @@ function update_equation_for_entity!(cache, eq, state, state0, model, dt)
     vars = cache.variables
     for i in 1:number_of_entities(cache)
         ldisc = local_discretization(eq, i)
-        for j in vrange(cache, i)
+        @inbounds for j in vrange(cache, i)
             v_i = @views v[:, j]
             state_i = local_ad(state, vars[j], eltype(v))
-            update_equation_in_entity!(v_i, i, state_i, state0, eq, model, dt, ldisc)
+            @inbounds update_equation_in_entity!(v_i, i, state_i, state0, eq, model, dt, ldisc)
         end
     end
 end
