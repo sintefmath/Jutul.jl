@@ -10,10 +10,10 @@ active_entities(d::ScalarTestDomain, ::Any; kwarg...) = [1]
 
 number_of_cells(::ScalarTestDomain) = 1
 
-function get_domain_intersection(u::JutulUnit, target_d::ScalarTestDomain, source_d::ScalarTestDomain, target_symbol, source_symbol)
-    # This domain always interacts with the single cell in instances of itself, and nothing else
-    (target = [1], source = [1], target_entity = Cells(), source_entity = Cells())
-end
+#function get_domain_intersection(u::JutulUnit, target_d::ScalarTestDomain, source_d::ScalarTestDomain, target_symbol, source_symbol)
+#    # This domain always interacts with the single cell in instances of itself, and nothing else
+#    (target = [1], source = [1], target_entity = Cells(), source_entity = Cells())
+#end
 
 # Driving force for the test equation
 struct ScalarTestForce
@@ -47,18 +47,6 @@ function setup_forces(model::SimulationModel{G, S}; sources = nothing) where {G<
     return (sources = sources,)
 end
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, target_storage, source_storage, target_model, source_model, target, source, dt)
-    X_T = target_storage.state.XVar
-    X_S = source_storage.state.XVar
-    function f(X_S, X_T)
-        X_T - X_S
-    end
-    # Source term with AD context from source model - will end up as off-diagonal block
-    @. ct.crossterm_source = f(X_S, value(X_T))
-    # Source term with AD context from target model - will be inserted into equation
-    @. ct.crossterm_target = f(value(X_S), X_T)
-end
-
 struct XVar <: ScalarVariable end
 
 function select_primary_variables!(S, domain, system::ScalarTestSystem, formulation)
@@ -71,3 +59,22 @@ end
 
 include("manual.jl")
 include("auto.jl")
+
+export ScalarTestCrossTerm
+struct ScalarTestCrossTerm <: AdditiveCrossTerm
+
+end
+
+symmetry(::ScalarTestCrossTerm) = CTSkewSymmetry()
+
+function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, target_storage, source_storage, target_model, source_model, target, source, dt)
+    X_T = target_storage.state.XVar
+    X_S = source_storage.state.XVar
+    function f(X_S, X_T)
+        X_T - X_S
+    end
+    # Source term with AD context from source model - will end up as off-diagonal block
+    @. ct.crossterm_source = f(X_S, value(X_T))
+    # Source term with AD context from target model - will be inserted into equation
+    @. ct.crossterm_target = f(value(X_S), X_T)
+end

@@ -28,3 +28,19 @@ end
 function submodels_symbols(model::MultiModel)
     return keys(model.models)
 end
+
+export setup_cross_term, add_cross_term!
+function setup_cross_term(target::Symbol, source::Symbol, cross_term::CrossTerm, target_eq::Symbol)
+    @assert target != source
+    return CrossTermPair(target, source, target_eq, cross_term)
+end
+
+function add_cross_term!(model::MultiModel, ctm::CrossTermPair)
+    push!(model.cross_terms, ctm)
+    return model
+end
+
+function add_cross_term!(model::MultiModel, arg...)
+    add_cross_term!(model, setup_cross_term(arg...))
+end
+

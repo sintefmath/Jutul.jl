@@ -9,16 +9,23 @@ struct MultiModelCoupling
     end   
 end
 
+abstract type CrossTerm end
 
+struct CrossTermPair
+    target_model::Symbol
+    source_model::Symbol
+    target_equation::Symbol
+    cross_term::CrossTerm
+end
 
 struct MultiModel{M, T} <: JutulModel
     models::M
-    couplings::Vector{MultiModelCoupling}
+    cross_terms::Vector{CrossTermPair}
     groups::Union{Vector, Nothing}
     context::Union{JutulContext, Nothing}
     number_of_degrees_of_freedom::T
     reduction::Union{Symbol, Nothing}
-    function MultiModel(models; couplings=Vector{MultiModelCoupling}(undef,0), groups = nothing, context = nothing, reduction = nothing)
+    function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing)
         if isnothing(groups)
             num_groups = 1
         else
@@ -47,15 +54,14 @@ struct MultiModel{M, T} <: JutulModel
                 end
             end
         end
-        new{typeof(models), typeof(ndof)}(models, couplings, groups, context, ndof, reduction)
+        new{typeof(models), typeof(ndof)}(models, cross_terms, groups, context, ndof, reduction)
     end
 end
 
 
 
 
-abstract type CrossTerm end
-
+abstract type AdditiveCrossTerm <: CrossTerm end
 
 """
 A cross model term where the dependency is injective and the term is additive:
@@ -111,3 +117,9 @@ function setup_cross_term(target_eq::JutulEquation, target_model, source_model, 
     ct = InjectiveCrossTerm(target_eq, target_model, source_model, intersection; target=target, source=source)
     return ct
 end
+
+abstract type CrossTermSymmetry end
+
+struct CTSkewSymmetry <: CrossTermSymmetry end
+
+symmetry(::CrossTerm) = nothing

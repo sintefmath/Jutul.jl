@@ -86,14 +86,32 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
                                             setup_linearized_system = false,
                                             tag = key)
     end
-    couplings = model.couplings
-    storage[:cross_terms] = setup_cross_terms(storage, model)
+    setup_cross_terms_storage!(storage, model)
+    # storage[:cross_terms] = setup_cross_terms(storage, model)
     # overwriting potential couplings with explicit given
-    setup_cross_terms!(storage, model, couplings)
+    # setup_cross_terms!(storage, model, couplings)
     setup_linearized_system!(storage, model)
     align_equations_to_linearized_system!(storage, model)
     align_cross_terms_to_linearized_system!(storage, model)
     return storage
+end
+
+function setup_cross_terms_storage!(storage, model)
+    cross_terms = model.cross_terms
+    models = model.models
+
+    storage_and_model(k) = (storage[k], models[k])
+    v = Vector()
+    for ct in cross_terms
+        m_t, s_t = storage_and_model(ct.target_model)
+        m_s, s_s = storage_and_model(ct.source_model)
+        eq = m_t[:equations][ct.target_equation]
+        term = ct.cross_term
+
+        ct_s = setup_cross_term_storage(term, eq, m_t, m_s, s_t, s_s)
+        push!(cross_terms, ct_s)
+    end
+    storage[:cross_terms] = v
 end
 
 function setup_cross_terms!(storage, model::MultiModel, couplings)#::ModelCoupling)

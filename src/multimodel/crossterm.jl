@@ -109,3 +109,22 @@ function declare_sparsity(target_model, source_model, x::CrossTerm, entity, layo
     end
     return out
 end
+
+function setup_cross_term_storage(term::CrossTerm, eq, model_t, model_s, storage_t, storage_s)
+    F!(out, state, state0, i) = update_cross_term_in_entity!(out, i, state, state0, eq, model, 1.0)
+    # Find all entities x
+    state = storage[:state]
+    state0 = storage[:state0]
+    entities = ad_entities(state)
+    entities0 = ad_entities(state0)
+    merge!(entities, entities0)
+    caches = Dict()
+    n = number_of_equations_per_entity(eq)
+    for (e, epack) in entities
+        @timeit "sparsity detection" S = determine_sparsity(F!, n, state, state0, e, entities)
+        N, T = epack
+        @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, n, e, S)
+    end
+    return convert_to_immutable_storage(caches)
+end
+
