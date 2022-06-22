@@ -78,3 +78,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, targ
     # Source term with AD context from target model - will be inserted into equation
     @. ct.crossterm_target = f(value(X_S), X_T)
 end
+
+function update_cross_term_in_entity!(out, i, state_t, state0_t, state_s, state0_s, ct::ScalarTestCrossTerm, eq::ScalarTestEquation, dt)
+    error()
+end

@@ -136,14 +136,24 @@ end
 
 local_discretization(eq, i) = nothing
 
+function all_ad_entities(state, states...)
+    entities = ad_entities(state)
+    for s in states
+        e = ad_entities(s)
+        merge!(entities, e)
+    end
+    return entities
+end
+
 function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     F!(out, state, state0, i) = update_equation_in_entity!(out, i, state, state0, eq, model, 1.0)
-    # Find all entities x
+    return create_equation_caches(model, eq, storage, F!; kwarg...)
+end
+
+function create_equation_caches(model, eq, storage, F!; kwarg...)
     state = storage[:state]
     state0 = storage[:state0]
-    entities = ad_entities(state)
-    entities0 = ad_entities(state0)
-    merge!(entities, entities0)
+    entities = all_ad_entities(state, state0)
     caches = Dict()
     n = number_of_equations_per_entity(eq)
     for (e, epack) in entities
@@ -153,7 +163,6 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     end
     return convert_to_immutable_storage(caches)
 end
-
 
 """
 Return the domain entity the equation is associated with

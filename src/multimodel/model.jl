@@ -103,9 +103,9 @@ function setup_cross_terms_storage!(storage, model)
     storage_and_model(k) = (storage[k], models[k])
     v = Vector()
     for ct in cross_terms
-        m_t, s_t = storage_and_model(ct.target_model)
-        m_s, s_s = storage_and_model(ct.source_model)
-        eq = m_t[:equations][ct.target_equation]
+        s_t, m_t = storage_and_model(ct.target_model)
+        s_s, m_s = storage_and_model(ct.source_model)
+        eq = m_t.equations[ct.target_equation]
         term = ct.cross_term
 
         ct_s = setup_cross_term_storage(term, eq, m_t, m_s, s_t, s_s)

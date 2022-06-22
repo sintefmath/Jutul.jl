@@ -15,6 +15,12 @@ struct LocalStateAD{T, I, E} # Data type, index, entity tag
     data::T
 end
 
+struct ValueStateAD{T} # Data type
+    data::T
+end
+
+as_value(x::Union{NamedTuple,AbstractDict,JutulStorage}) = ValueStateAD(x)
+
 export local_ad
 local_ad(v::AbstractArray, i::Integer) = LocalPerspectiveAD(v, i)
 local_ad(v::ConstantWrapper, i::Integer) = v
@@ -43,6 +49,16 @@ parenttype(::Type{LocalPerspectiveAD{T,N,A,I}}) where {T,N,A,I} = A
 
 function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
     myfn(x::AbstractArray{T}, ::Type{T}, index) where T = local_ad(x, index)
+    myfn(x, t, index) = as_value(x)
+    myfn(x::ConstantWrapper, t, index) = x
+
+    index = getfield(state, :index)
+    inner_state = getfield(state, :data)
+    val = getproperty(inner_state, f)
+    return myfn(val, E, index)
+end
+
+function Base.getproperty(state::ValueStateAD{T}, f::Symbol) where {T}
     myfn(x, t, index) = as_value(x)
     myfn(x::ConstantWrapper, t, index) = x
 
