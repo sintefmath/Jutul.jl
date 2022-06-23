@@ -112,18 +112,24 @@ end
 
 function setup_cross_term_storage(ct::CrossTerm, eq, model_t, model_s, storage_t, storage_s)
     # Find all entities x
-    state_t = storage_t[:state]
-    state_t0 = storage_t[:state0]
+    active = cross_term_entities(ct, eq, model_t, model_s)
+    N = length(active)
 
-    state_s = storage_s[:state]
-    state_s0 = storage_s[:state0]
+    state_t = convert_to_immutable_storage(storage_t[:state])
+    state_t0 = convert_to_immutable_storage(storage_t[:state0])
+
+    state_s = convert_to_immutable_storage(storage_s[:state])
+    state_s0 = convert_to_immutable_storage(storage_s[:state0])
 
     F_t!(out, state, state0, i) = update_cross_term_in_entity!(out, i, state, state0, as_value(state_s), as_value(state_s0), ct, eq, 1.0)
     F_s!(out, state, state0, i) = update_cross_term_in_entity!(out, i, as_value(state_t), as_value(state_t0), state, state0, ct, eq, 1.0)
 
-    caches_t = create_equation_caches(model_t, eq, storage_t, F_t!)
-    caches_s = create_equation_caches(model_s, eq, storage_s, F_s!)
+    caches_t = create_equation_caches(model_t, eq, storage_t, F_t!, N)
+    caches_s = create_equation_caches(model_s, eq, storage_s, F_s!, N)
 
-    error()
+    return (target = caches_t, source = caches_s)
 end
 
+function cross_term_entities(ct, eq, model_t, model_s)
+    return 1:count_active_entities(model_t.domain, associated_entity(eq))
+end

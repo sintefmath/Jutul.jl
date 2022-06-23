@@ -80,5 +80,7 @@ function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, targ
 end
 
 function update_cross_term_in_entity!(out, i, state_t, state0_t, state_s, state0_s, ct::ScalarTestCrossTerm, eq::ScalarTestEquation, dt)
-    error()
+    X_T = only(state_t.XVar)
+    X_S = only(state_s.XVar)
+    out[] = X_T - X_S
 end

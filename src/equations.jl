@@ -150,14 +150,14 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     return create_equation_caches(model, eq, storage, F!; kwarg...)
 end
 
-function create_equation_caches(model, eq, storage, F!; kwarg...)
+function create_equation_caches(model, eq, storage, F!, N = number_of_entities(model, eq); kwarg...)
     state = storage[:state]
     state0 = storage[:state0]
     entities = all_ad_entities(state, state0)
     caches = Dict()
     n = number_of_equations_per_entity(eq)
     for (e, epack) in entities
-        @timeit "sparsity detection" S = determine_sparsity(F!, n, state, state0, e, entities)
+        @timeit "sparsity detection" S = determine_sparsity(F!, n, state, state0, e, entities, N)
         N, T = epack
         @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, n, e, S)
     end

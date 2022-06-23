@@ -325,6 +325,7 @@ Base.@propagate_inbounds Base.getindex(c::ConstantWrapper{R}, i) where R = c.dat
 Base.setindex!(c::ConstantWrapper, arg...) = setindex!(c.data, arg...)
 Base.ndims(c::ConstantWrapper) = 2
 Base.view(c::ConstantWrapper, ::Colon, i) = c.data
+as_value(c::ConstantWrapper) = c
 
 function Base.axes(c::ConstantWrapper, d)
     if d == 1

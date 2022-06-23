@@ -59,13 +59,9 @@ function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, 
 end
 
 function Base.getproperty(state::ValueStateAD{T}, f::Symbol) where {T}
-    myfn(x, t, index) = as_value(x)
-    myfn(x::ConstantWrapper, t, index) = x
-
-    index = getfield(state, :index)
     inner_state = getfield(state, :data)
     val = getproperty(inner_state, f)
-    return myfn(val, E, index)
+    return as_value(val)
 end
 
 function local_ad(x::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}

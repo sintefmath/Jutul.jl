@@ -109,7 +109,7 @@ function setup_cross_terms_storage!(storage, model)
         term = ct.cross_term
 
         ct_s = setup_cross_term_storage(term, eq, m_t, m_s, s_t, s_s)
-        push!(cross_terms, ct_s)
+        push!(v, ct_s)
     end
     storage[:cross_terms] = v
 end

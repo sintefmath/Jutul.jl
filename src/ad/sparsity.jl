@@ -53,12 +53,11 @@ end
 # tag = :Cells
 # determine_sparsity(state, tag);
 ##
-function determine_sparsity(F!, n, state, state0, tag, entities)
+function determine_sparsity(F!, n, state, state0, tag, entities, N = entities[tag].n)
     mstate, tracer = create_mock_state(state, tag, entities)
     mstate0, = create_mock_state(state0, tag, entities)
 
     out = similar(tracer, n)
-    N = entities[tag].n
     J = [Vector{Int64}() for i in 1:N]
     # @batch threadlocal = similar(tracer, n) for i = 1:N
     #    out = threadlocal
