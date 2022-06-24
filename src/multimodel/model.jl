@@ -53,9 +53,9 @@ function cross_term(storage, target::Symbol)
     return storage[:cross_terms][target]
 end
 
-function cross_term_pair(storage, source, target)
-    ct = cross_term(storage, target)
-    cross_terms_if_present(ct, source)
+function cross_term_pair(model, storage, source, target)
+    ind = map(x -> x.target_model == target && x.source_model == source, model.cross_terms)
+    return (model.cross_terms[ind], storage[:cross_terms][ind])
 end
 
 function cross_terms_if_present(target_ct, source)
@@ -346,7 +346,46 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         equations = target_model.equations
-        cross_terms = cross_term_pair(storage, source, target)
+        # @info "" storage[:cross_terms]
+        # tmp = repeat(model.cross_terms, 1000)
+        # @time filter(x -> x.target_model == :A && x.source_model == :B, tmp)
+        # findall(x -> x.target_model == :A && x.source_model == :B, model.cross_terms)
+        entities = get_primary_variable_ordered_entities(source_model)
+        eq_counts = map(x -> number_of_equations(target_model, x), values(equations))
+        var_counts = map(x -> number_of_degrees_of_freedom(source_model, x), entities)
+
+        @info "." eq_counts var_counts
+        cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target)
+
+        function add_sparse_local!(ctp, s, target_model, source_model)
+            x = ctp.cross_term
+            eq_label = ctp.target_equation
+            eq = target_model.equations[eq_label]
+            target_e = associated_entity(eq)
+            eq_pos = findfirst(isequal(eq_label), collect(keys(equations)))
+            if eq_pos == 1
+                equation_offset = 0
+            else
+                equation_offset = sum(eq_counts[1:(eq_pos-1)])
+            end
+            variable_offset = 0
+            for (i, source_e) in enumerate(entities)
+                S = declare_sparsity(target_model, source_model, eq, x, s, target_e, source_e, layout)
+                if !isnothing(S)
+                    push!(I, S.I .+ equation_offset)
+                    push!(J, S.J .+ variable_offset)
+                end
+                variable_offset += number_of_degrees_of_freedom(source_model, source_e)
+            end
+        end
+        for (ctp, s) in zip(cross_terms, cross_term_storage)
+            add_sparse_local!(ctp, s.target, target_model, source_model)
+            if !isnothing(symmetry(ctp.cross_term))
+                add_sparse_local!(transpose(ctp), s.source, source_model, target_model)
+            end
+            error()
+        end
+
         equation_offset = 0
         for (key, eq) in equations
             if !isnothing(cross_terms) && haskey(cross_terms, key)

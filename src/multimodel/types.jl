@@ -15,8 +15,11 @@ struct CrossTermPair
     target_model::Symbol
     source_model::Symbol
     target_equation::Symbol
+    source_equation::Symbol
     cross_term::CrossTerm
 end
+
+Base.transpose(c::CrossTermPair) = CrossTermPair(c.source_model, c.target_model, c.source_equation, c.target_equation, c.cross_term)
 
 struct MultiModel{M, T} <: JutulModel
     models::M
