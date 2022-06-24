@@ -346,15 +346,9 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         equations = target_model.equations
-        # @info "" storage[:cross_terms]
-        # tmp = repeat(model.cross_terms, 1000)
-        # @time filter(x -> x.target_model == :A && x.source_model == :B, tmp)
-        # findall(x -> x.target_model == :A && x.source_model == :B, model.cross_terms)
         entities = get_primary_variable_ordered_entities(source_model)
         eq_counts = map(x -> number_of_equations(target_model, x), values(equations))
-        var_counts = map(x -> number_of_degrees_of_freedom(source_model, x), entities)
-
-        @info "." eq_counts var_counts
+        # var_counts = map(x -> number_of_degrees_of_freedom(source_model, x), entities)
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target)
 
         function add_sparse_local!(ctp, s, target_model, source_model)
@@ -383,30 +377,10 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
             if !isnothing(symmetry(ctp.cross_term))
                 add_sparse_local!(transpose(ctp), s.source, source_model, target_model)
             end
-            error()
         end
-
-        equation_offset = 0
-        for (key, eq) in equations
-            if !isnothing(cross_terms) && haskey(cross_terms, key)
-                x = cross_terms[key]
-                if !isnothing(x)
-                    variable_offset = 0
-                    for u in get_primary_variable_ordered_entities(source_model)
-                        S = declare_sparsity(target_model, source_model, x, u, layout)
-                        if !isnothing(S)
-                            push!(I, S.I .+ equation_offset)
-                            push!(J, S.J .+ variable_offset)
-                        end
-                        variable_offset += number_of_degrees_of_freedom(source_model, u)
-                    end
-                end
-            end
-            equation_offset += number_of_equations(target_model, eq)
-        end
-        I = vcat(I...)
-        J = vcat(J...)
-        sarg = SparsePattern(I, J, equation_offset, ncols, layout)
+        I = vec(vcat(I...))
+        J = vec(vcat(J...))    
+        sarg = SparsePattern(I, J, sum(eq_counts), ncols, layout)
     end
     return sarg
 end
