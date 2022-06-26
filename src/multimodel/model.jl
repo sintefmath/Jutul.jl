@@ -268,6 +268,8 @@ end
 
 function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
+    crossterms = model.cross_terms
+    cross_term_storage = storage[:cross_terms]
     ndofs = model.number_of_degrees_of_freedom
     model_keys = submodel_symbols(model)
     ndofs = model.number_of_degrees_of_freedom
@@ -283,16 +285,58 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
                 s_subs = groups .== source_g
                 source_keys = model_keys[s_subs]
                 ls = lsys[target_g, source_g]
-                align_crossterms_subgroup!(storage, models, target_keys, source_keys, ndofs, ls, equation_offset, variable_offset)
+                align_crossterms_subgroup!(storage, models, crossterms, cross_term_storage, target_keys, source_keys, ndofs, ls, equation_offset, variable_offset)
             end
         end
     else
-        align_crossterms_subgroup!(storage, models, model_keys, model_keys, ndofs, lsys, equation_offset, variable_offset)
+        align_crossterms_subgroup!(storage, models, crossterms, cross_term_storage, model_keys, model_keys, ndofs, lsys, equation_offset, variable_offset)
     end
 end
 
-function align_crossterms_subgroup!(storage, models, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset)
+function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_storage, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset)
     base_variable_offset = variable_offset
+    for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
+        target = ctp.target_model
+        source = ctp.source_model
+        ct = ctp.cross_term
+
+        # align_to_jacobian!(ct, lsys, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
+        if !isnothing(symmetry(ct))
+            
+        end
+    end
+
+    eq = equations[ekey]
+    if !isnothing(crossterms) && haskey(crossterms, ekey)
+        ct = crossterms[ekey]
+        if !isnothing(ct)
+            align_to_jacobian!(ct, lsys, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
+        end
+    end
+    equation_offset += number_of_equations(target, eq)
+
+
+        # Iterate over targets (= rows)
+    for target in target_keys
+        target_model = models[target]
+        variable_offset = base_variable_offset
+        ct_t = cross_term(storage, target)
+        # Iterate over sources (= columns)
+        for source in source_keys
+            source_model = models[source]
+            if source != target
+                ct = cross_terms_if_present(ct_t, source)
+                eqs = target_model.equations
+                align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, equation_offset = equation_offset, variable_offset = variable_offset)
+                # Same number of rows as target, same number of columns as source
+            end
+            # Increment col and row offset
+            variable_offset += ndofs[source]
+        end
+        equation_offset += ndofs[target]
+    end
+    error()
+
     # Iterate over targets (= rows)
     for target in target_keys
         target_model = models[target]
@@ -314,7 +358,7 @@ function align_crossterms_subgroup!(storage, models, target_keys, source_keys, n
     end
 end
 
-function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, target::JutulModel, source::JutulModel; equation_offset = 0, variable_offset = 0)
+function align_cross_terms_to_linearized_system_!(crossterms, equations, lsys, target::JutulModel, source::JutulModel; equation_offset = 0, variable_offset = 0)
     for ekey in keys(equations)
         eq = equations[ekey]
         if !isnothing(crossterms) && haskey(crossterms, ekey)
@@ -326,6 +370,18 @@ function align_cross_terms_to_linearized_system!(crossterms, equations, lsys, ta
         equation_offset += number_of_equations(target, eq)
     end
     return equation_offset
+end
+
+function get_equation_offset(model::SimulationModel, eq_label::Symbol)
+    offset = 0
+    for k in keys(model.equations)
+        if k == eq_label
+            return offset
+        else
+            offset += number_of_equations(model, model.equations[eq_label])
+        end
+    end
+    error("Did not find equation")
 end
 
 function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol, context)
@@ -356,12 +412,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
             eq_label = ctp.target_equation
             eq = target_model.equations[eq_label]
             target_e = associated_entity(eq)
-            eq_pos = findfirst(isequal(eq_label), collect(keys(equations)))
-            if eq_pos == 1
-                equation_offset = 0
-            else
-                equation_offset = sum(eq_counts[1:(eq_pos-1)])
-            end
+            equation_offset = get_equation_offset(target_model, eq_label)
             variable_offset = 0
             for (i, source_e) in enumerate(entities)
                 S = declare_sparsity(target_model, source_model, eq, x, s, target_e, source_e, layout)
