@@ -441,15 +441,18 @@ function update_linearized_system!(lsys, equations, eqs_storage, model::JutulMod
             eq = equations[key]
             eqs_s = eqs_storage[key]
             nz = lsys.jac_buffer
-            N = number_of_equations(model, eq)
-            n = number_of_equations_per_entity(eq)
-            m = N ÷ n
-            r = as_cell_major_matrix(r_buf, n, m, model, equation_offset)
-
+            r = local_residual_view(r_buf, model, eq, equation_offset)
             update_linearized_system_equation!(nz, r, model, eq, eqs_s)
             equation_offset += number_of_equations(model, eq)
         end
     end
+end
+
+function local_residual_view(r_buf, model, eq, equation_offset)
+    N = number_of_equations(model, eq)
+    n = number_of_equations_per_entity(eq)
+    m = N ÷ n
+    return as_cell_major_matrix(r_buf, n, m, model, equation_offset)
 end
 
 function check_convergence(storage, model; kwarg...)

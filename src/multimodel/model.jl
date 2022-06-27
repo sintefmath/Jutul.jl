@@ -53,9 +53,39 @@ function cross_term(storage, target::Symbol)
     return storage[:cross_terms][target]
 end
 
-function cross_term_pair(model, storage, source, target)
-    ind = map(x -> x.target.label == target && x.source.label == source, model.cross_terms)
+function cross_term_mapper(model, storage, f)
+    ind = map(f, model.cross_terms)
     return (model.cross_terms[ind], storage[:cross_terms][ind])
+end
+
+has_symmetry(x) = !isnothing(symmetry(x.cross_term))
+
+function cross_term_pair(model, storage, source, target, include_symmetry = false)
+    if include_symmetry
+        f = x -> (x.target.label == target && x.source.label == source) || 
+                 (has_symmetry(x.cross_term) && (x.target.label == source && x.source.label == target))
+    else
+        f = x -> x.target.label == target && x.source.label == source
+    end
+    return cross_term_mapper(model, storage, f)
+end
+
+function cross_term_target(model, storage, target, include_symmetry = false)
+    if include_symmetry
+        f = x -> x.target.label == target || (has_symmetry(x.cross_term) && x.source.label == target)
+    else
+        f = x -> x.target.label == target
+    end
+    return cross_term_mapper(model, storage, f)
+end
+
+function cross_term_source(model, storage, source, include_symmetry = false)
+    if include_symmetry
+        f = x -> x.source.label == source || (has_symmetry(x.cross_term) && x.target.label == source)
+    else
+        f = x -> x.source.label == source
+    end
+    return cross_term_mapper(model, storage, f)
 end
 
 function cross_terms_if_present(target_ct, source)
@@ -566,7 +596,7 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
     # Apply forces to cross-terms
     @timeit "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time)
     # Finally apply cross terms to the equations
-    @timeit "crossterm apply" apply_cross_terms!(storage, model, dt)
+    # @timeit "crossterm apply" apply_cross_terms!(storage, model, dt)
 end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
@@ -634,37 +664,38 @@ end
 #     end
 # end
 
-function apply_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
-    for target in targets
-        ct_t = cross_term(storage, target)
-        overlap = intersect(target_cross_term_keys(storage, target), sources)
-        @timeit "->$target" for source in overlap
-            cross_terms = cross_terms_if_present(ct_t, source)
-            apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
-        end
-    end
-end
+# function apply_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
+#     for target in targets
+#         ct_t = cross_term(storage, target)
+#         overlap = intersect(target_cross_term_keys(storage, target), sources)
+#         @timeit "->$target" for source in overlap
+#             cross_terms = cross_terms_if_present(ct_t, source)
+#             apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
+#         end
+#     end
+# end
 
-apply_cross_terms_for_pair!(cross_terms::Nothing, storage, model, source::Symbol, target::Symbol, dt) = nothing
+# apply_cross_terms_for_pair!(cross_terms::Nothing, storage, model, source::Symbol, target::Symbol, dt) = nothing
 
-function apply_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol, target::Symbol, dt)
-    storage_t, = get_submodel_storage(storage, target)
-    model_t, model_s = get_submodels(model, target, source)
+# function apply_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol, target::Symbol, dt)
+#     storage_t, = get_submodel_storage(storage, target)
+#     model_t, model_s = get_submodels(model, target, source)
 
-    eqs = model_t.equations
-    eqs_s = storage_t[:equations]
-    for (ekey, ct) in pairs(cross_terms)
-        if !isnothing(ct)
-            apply_cross_term!(eqs_s[ekey], eqs[ekey], ct, model_t, model_s, dt)
-        end
-    end
-end
+#     eqs = model_t.equations
+#     eqs_s = storage_t[:equations]
+#     for (ekey, ct) in pairs(cross_terms)
+#         if !isnothing(ct)
+#             apply_cross_term!(eqs_s[ekey], eqs[ekey], ct, model_t, model_s, dt)
+#         end
+#     end
+# end
 
 
 function update_linearized_system!(storage, model::MultiModel; equation_offset = 0, targets = submodel_symbols(model), sources = targets)
     @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
     # Update diagonal blocks (model with respect to itself)
     @timeit "models" update_diagonal_blocks!(storage, model, targets)
+    # @timeit "model cross-terms" update_diagonal_blocks_cross_terms!(storage, model, targets)
     # Then, update cross terms (models' impact on other models)
     @timeit "cross-model" update_offdiagonal_blocks!(storage, model, targets, sources)
 end
@@ -696,6 +727,61 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
         eqs_s = s.equations
         eqs = m.equations
         update_linearized_system!(lsys, eqs, eqs_s, m; equation_offset = offsets[index])
+        ct, ct_s = cross_term_target(model, storage, key, true)
+        update_linearized_system_cross_terms!(lsys, ct, ct_s, m, key; equation_offset = offsets[index])
+    end
+end
+
+function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_storage, model, label; equation_offset = 0)
+    # @assert !has_groups(model)
+    nz = lsys.jac_buffer
+    r_buf = lsys.r_buffer
+    for (ctp, ct_s) in zip(crossterms, crossterm_storage)
+        ct = ctp.cross_term
+        sgn = 1
+        if !(ctp.target.label == label)
+            ctp = transpose(ctp)
+            if symmetry(ctp) == CTSkewSymmetry()
+                sgn = -1
+            end
+            impact = ct_s.source_entities
+            caches = ct_s.target
+        else
+            impact = ct_s.target_entities
+            caches = ct_s.target
+        end
+        eq_label = ctp.target.equation
+        eq = model.equations[eq_label]
+        r = local_residual_view(r_buf, model, eq, equation_offset + get_equation_offset(model, eq_label))
+        update_linearized_system_cross_term!(nz, r, model, ct, caches, impact, sgn)
+    end
+end
+
+function update_linearized_system_cross_term!(nz, r, model, ct::AdditiveCrossTerm, caches, impact, sgn)
+    for k in keys(caches)
+        increment_equation_entries!(nz, r, model, caches[k], impact, sgn)
+    end
+end
+
+function increment_equation_entries!(nz, r, model, cache, impact, sgn)
+    nu, ne, np = ad_dims(cache)
+    entries = cache.entries
+    # tb = minbatch(model.context)
+    # @batch minbatch = tb for i in 1:nu
+    for ui in 1:nu
+        i = impact[ui]
+        for (jno, j) in enumerate(vrange(cache, i))
+            for e in 1:ne
+                a = entries[e, j]
+                if jno == 1
+                    r[i + nu*(e-1)] += a.value
+                end
+                for d = 1:np
+                    ix = get_jacobian_pos(cache, j, e, d)
+                    nz[ix] += sgn*a.partials[d]
+                end
+            end
+        end
     end
 end
 
@@ -855,6 +941,9 @@ function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targe
 end
 
 function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model), sources = targets)
+    @info forces
+    @warn "Not reimplemented yet"
+    return
     for target in targets
         # Target: Model where force has impact
         force = forces[target]
