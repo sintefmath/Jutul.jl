@@ -35,7 +35,9 @@ function setup_cross_term(target::Symbol, source::Symbol, cross_term::CrossTerm,
     if isnothing(source_eq) && !isnothing(symmetry(cross_term))
         source_eq = target_eq
     end
-    return CrossTermPair(target, source, target_eq, source_eq, cross_term)
+    t = CrossTermMeta(target, target_eq)
+    s = CrossTermMeta(source, source_eq)
+    return CrossTermPair(t, s, cross_term)
 end
 
 function add_cross_term!(model::MultiModel, ctm::CrossTermPair)

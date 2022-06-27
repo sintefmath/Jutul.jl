@@ -54,7 +54,7 @@ function cross_term(storage, target::Symbol)
 end
 
 function cross_term_pair(model, storage, source, target)
-    ind = map(x -> x.target_model == target && x.source_model == source, model.cross_terms)
+    ind = map(x -> x.target.label == target && x.source.label == source, model.cross_terms)
     return (model.cross_terms[ind], storage[:cross_terms][ind])
 end
 
@@ -100,12 +100,12 @@ function setup_cross_terms_storage!(storage, model)
     cross_terms = model.cross_terms
     models = model.models
 
-    storage_and_model(k) = (storage[k], models[k])
+    storage_and_model(ctm) = (storage[ctm.label], models[ctm.label])
     v = Vector()
     for ct in cross_terms
-        s_t, m_t = storage_and_model(ct.target_model)
-        s_s, m_s = storage_and_model(ct.source_model)
-        eq = m_t.equations[ct.target_equation]
+        s_t, m_t = storage_and_model(ct.target)
+        s_s, m_s = storage_and_model(ct.source)
+        eq = m_t.equations[ct.target.equation]
         term = ct.cross_term
 
         ct_s = setup_cross_term_storage(term, eq, m_t, m_s, s_t, s_s)
@@ -295,14 +295,14 @@ end
 
 function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_storage, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset)
     function align_cross_term_local!(ctp, ct_s)
-        target = ctp.target_model
-        source = ctp.source_model
+        target = ctp.target.label
+        source = ctp.source.label
         if target in target_keys && source in source_keys
             target_model = models[target]
             source_model = models[source]
             entities = get_primary_variable_ordered_entities(source_model)
             ct = ctp.cross_term
-            eo = get_equation_offset(target_model, ctp.target_equation) + equation_offset
+            eo = get_equation_offset(target_model, ctp.target.equation) + equation_offset
             for (i, source_e) in enumerate(entities)
                 cache = ct_s[source_e]
                 # Do alignment here against LinearizedSystem...
@@ -427,7 +427,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
 
         function add_sparse_local!(ctp, s, target_model, source_model)
             x = ctp.cross_term
-            eq_label = ctp.target_equation
+            eq_label = ctp.target.equation
             eq = target_model.equations[eq_label]
             target_e = associated_entity(eq)
             equation_offset = get_equation_offset(target_model, eq_label)

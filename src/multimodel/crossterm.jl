@@ -103,3 +103,9 @@ end
 function cross_term_entities(ct, eq, model_t, model_s)
     return 1:count_active_entities(model_t.domain, associated_entity(eq))
 end
+
+function cross_term_entities_source(ct, eq, model_t, model_s)
+    # Impact on source - if symmetry is present. Should either be no entries (for no symmetry)
+    # or equal number of entries (for symmetry)
+    return Vector{Int64}()
+end
