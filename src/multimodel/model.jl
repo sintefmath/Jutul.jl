@@ -309,7 +309,6 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
         end
         error("Should not happen")
     end
-    base_variable_offset = variable_offset
     for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
         target = ctp.target.label
         source = ctp.source.label
@@ -324,57 +323,6 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
             end
         end
     end
-    error()
-    eq = equations[ekey]
-    if !isnothing(crossterms) && haskey(crossterms, ekey)
-        ct = crossterms[ekey]
-        if !isnothing(ct)
-            align_to_jacobian!(ct, lsys, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
-        end
-    end
-    equation_offset += number_of_equations(target, eq)
-
-
-        # Iterate over targets (= rows)
-    for target in target_keys
-        target_model = models[target]
-        variable_offset = base_variable_offset
-        ct_t = cross_term(storage, target)
-        # Iterate over sources (= columns)
-        for source in source_keys
-            source_model = models[source]
-            if source != target
-                ct = cross_terms_if_present(ct_t, source)
-                eqs = target_model.equations
-                align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, equation_offset = equation_offset, variable_offset = variable_offset)
-                # Same number of rows as target, same number of columns as source
-            end
-            # Increment col and row offset
-            variable_offset += ndofs[source]
-        end
-        equation_offset += ndofs[target]
-    end
-    error()
-
-    # Iterate over targets (= rows)
-    for target in target_keys
-        target_model = models[target]
-        variable_offset = base_variable_offset
-        ct_t = cross_term(storage, target)
-        # Iterate over sources (= columns)
-        for source in source_keys
-            source_model = models[source]
-            if source != target
-                ct = cross_terms_if_present(ct_t, source)
-                eqs = target_model.equations
-                align_cross_terms_to_linearized_system!(ct, eqs, lsys, target_model, source_model, equation_offset = equation_offset, variable_offset = variable_offset)
-                # Same number of rows as target, same number of columns as source
-            end
-            # Increment col and row offset
-            variable_offset += ndofs[source]
-        end
-        equation_offset += ndofs[target]
-    end
 end
 
 function align_cross_term_local!(ctp, lsys, ct_s, models, impact, equation_offset, variable_offset)
@@ -388,7 +336,6 @@ function align_cross_term_local!(ctp, lsys, ct_s, models, impact, equation_offse
     for source_e in get_primary_variable_ordered_entities(source_model)
         align_to_jacobian!(ct_s, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset, variable_offset = variable_offset)
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
-        error()
     end
 end
 
