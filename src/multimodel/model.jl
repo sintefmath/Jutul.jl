@@ -103,12 +103,17 @@ function setup_cross_terms_storage!(storage, model)
     storage_and_model(ctm) = (storage[ctm.label], models[ctm.label])
     v = Vector()
     for ct in cross_terms
+        term = ct.cross_term
         s_t, m_t = storage_and_model(ct.target)
         s_s, m_s = storage_and_model(ct.source)
-        eq = m_t.equations[ct.target.equation]
-        term = ct.cross_term
+        eq_t = m_t.equations[ct.target.equation]
+        if isnothing(symmetry(term))
+            eq_s = nothing
+        else
+            eq_s = m_s.equations[ct.source.equation]
+        end
 
-        ct_s = setup_cross_term_storage(term, eq, m_t, m_s, s_t, s_s)
+        ct_s = setup_cross_term_storage(term, eq_t, eq_s, m_t, m_s, s_t, s_s)
         push!(v, ct_s)
     end
     storage[:cross_terms] = v
@@ -313,14 +318,13 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
             # Grab offsets relative to group ordering
             target_offset = local_group_offset(target_keys, target)
             source_offset = local_group_offset(source_keys, source)
-            align_cross_term_local!(ctp, lsys, ct_s.target, models, equation_offset + target_offset, variable_offset + source_offset)
-            # align_to_jacobian!(ct, lsys, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
+            align_cross_term_local!(ctp, lsys, ct_s.target, models, ct_s.target_entities, equation_offset + target_offset, variable_offset + source_offset)
             if !isnothing(symmetry(ct))
-                align_cross_term_local!(transpose(ctp), lsys, ct_s.source, models, equation_offset + source_offset, variable_offset + target_offset)
+                align_cross_term_local!(transpose(ctp), lsys, ct_s.source, models, ct_s.source_entities, equation_offset + source_offset, variable_offset + target_offset)
             end
         end
     end
-
+    error()
     eq = equations[ekey]
     if !isnothing(crossterms) && haskey(crossterms, ekey)
         ct = crossterms[ekey]
@@ -373,18 +377,16 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
     end
 end
 
-function align_cross_term_local!(ctp, lsys, ct_s, models, equation_offset, variable_offset)
+function align_cross_term_local!(ctp, lsys, ct_s, models, impact, equation_offset, variable_offset)
     target = ctp.target.label
     source = ctp.source.label
     target_model = models[target]
     source_model = models[source]
-    entities = get_primary_variable_ordered_entities(source_model)
     ct = ctp.cross_term
     equation_offset += get_equation_offset(target_model, ctp.target.equation)
-    for (i, source_e) in enumerate(entities)
-        cache = ct_s[Symbol(source_e)]
-        # Do alignment here against LinearizedSystem...
 
+    for source_e in get_primary_variable_ordered_entities(source_model)
+        align_to_jacobian!(ct_s, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset, variable_offset = variable_offset)
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
         error()
     end
@@ -439,7 +441,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # var_counts = map(x -> number_of_degrees_of_freedom(source_model, x), entities)
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target)
 
-        function add_sparse_local!(ctp, s, target_model, source_model)
+        function add_sparse_local!(ctp, s, target_model, source_model, ind)
             x = ctp.cross_term
             eq_label = ctp.target.equation
             eq = target_model.equations[eq_label]
@@ -447,7 +449,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
             equation_offset = get_equation_offset(target_model, eq_label)
             variable_offset = 0
             for (i, source_e) in enumerate(entities)
-                S = declare_sparsity(target_model, source_model, eq, x, s, target_e, source_e, layout)
+                S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, layout)
                 if !isnothing(S)
                     push!(I, S.I .+ equation_offset)
                     push!(J, S.J .+ variable_offset)
@@ -456,9 +458,9 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
             end
         end
         for (ctp, s) in zip(cross_terms, cross_term_storage)
-            add_sparse_local!(ctp, s.target, target_model, source_model)
+            add_sparse_local!(ctp, s.target, target_model, source_model, s.target_entities)
             if !isnothing(symmetry(ctp.cross_term))
-                add_sparse_local!(transpose(ctp), s.source, source_model, target_model)
+                add_sparse_local!(transpose(ctp), s.source, source_model, target_model, s.source_entities)
             end
         end
         I = vec(vcat(I...))

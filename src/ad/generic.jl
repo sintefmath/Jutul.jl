@@ -1,10 +1,11 @@
-function generic_cache_declare_pattern(cache::GenericAutoDiffCache)
+function generic_cache_declare_pattern(cache::GenericAutoDiffCache, entity_indices = 1:number_of_entities(cache))
     J = cache.variables
     I = similar(J)
     n = number_of_entities(cache)
     for i in 1:n
+        e_i = entity_indices[i]
         for j in vrange(cache, i)
-            I[j] = i
+            I[j] = e_i
         end
     end
     return (I, J)

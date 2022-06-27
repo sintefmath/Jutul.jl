@@ -67,17 +67,17 @@ end
 
 symmetry(::ScalarTestCrossTerm) = CTSkewSymmetry()
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, target_storage, source_storage, target_model, source_model, target, source, dt)
-    X_T = target_storage.state.XVar
-    X_S = source_storage.state.XVar
-    function f(X_S, X_T)
-        X_T - X_S
-    end
-    # Source term with AD context from source model - will end up as off-diagonal block
-    @. ct.crossterm_source = f(X_S, value(X_T))
-    # Source term with AD context from target model - will be inserted into equation
-    @. ct.crossterm_target = f(value(X_S), X_T)
-end
+# function update_cross_term!(ct::InjectiveCrossTerm, eq::ScalarTestEquation, target_storage, source_storage, target_model, source_model, target, source, dt)
+#     X_T = target_storage.state.XVar
+#     X_S = source_storage.state.XVar
+#     function f(X_S, X_T)
+#         X_T - X_S
+#     end
+#     # Source term with AD context from source model - will end up as off-diagonal block
+#     @. ct.crossterm_source = f(X_S, value(X_T))
+#     # Source term with AD context from target model - will be inserted into equation
+#     @. ct.crossterm_target = f(value(X_S), X_T)
+# end
 
 function update_cross_term_in_entity!(out, i, state_t, state0_t, state_s, state0_s, ct::ScalarTestCrossTerm, eq::ScalarTestEquation, dt)
     X_T = only(state_t.XVar)

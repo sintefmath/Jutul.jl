@@ -499,7 +499,7 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
         counts = map(length, sparsity)
         # Create value storage with AD type
         v = zeros(T, n, sum(counts))
-        A = typeof(v)        
+        A = typeof(v)
         # Create various index mappings + alignment from sparsity
         variables = vcat(sparsity...)
         pos = cumsum(vcat(1, counts))
@@ -517,8 +517,6 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
             end
             @assert found "Diagonal must be present in sparsity pattern."
         end
-        # These should be of the same type
-        # TODO: Not really, pos should be n Vector{Int} and the other a np*ne by n Matrix{Int}
         P = typeof(pos)
         variables::P
         return new{n, entity, T, A, P, typeof(algn), typeof(diag_ix)}(v, pos, variables, algn, diag_ix)

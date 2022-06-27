@@ -288,11 +288,11 @@ end
 Give out source, target arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_pattern(model, e, eq_s, entity)
+function declare_pattern(model, e, eq_s, entity, arg...)
     k = Symbol(entity)
     if haskey(eq_s, k)
         cache = eq_s[k]
-        return generic_cache_declare_pattern(cache)
+        return generic_cache_declare_pattern(cache, arg...)
     else
         out = nothing
     end
@@ -331,13 +331,13 @@ function align_to_jacobian!(eq_s, eq::JutulEquation, jac, model; equation_offset
 end
 
 
-function align_to_jacobian!(eq_s, eq, jac, model, entity; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; equation_offset = 0, variable_offset = 0)
     # Use generic version
     k = Symbol(entity)
     if haskey(eq_s, k)
         cache = eq_s[k]
         # J = cache.variables
-        I, J = generic_cache_declare_pattern(cache)
+        I, J = generic_cache_declare_pattern(cache, arg...)
         injective_alignment!(cache, eq, jac, entity, model.context, target_index = I, source_index = J)
     end
 end

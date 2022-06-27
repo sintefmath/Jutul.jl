@@ -1,24 +1,24 @@
-function align_to_jacobian!(ct::InjectiveCrossTerm, lsys, target::JutulModel, source::JutulModel; equation_offset = 0, variable_offset = 0)
-    cs = ct.crossterm_source_cache
-    jac = lsys.jac
-    impact_target = ct.impact[1]
-    impact_source = ct.impact[2]
-    pentities = get_primary_variable_ordered_entities(source)
-    nu_t = count_active_entities(target.domain, ct.entities.target)
-    for u in pentities
-        nu_s = count_active_entities(source.domain, u)
-        sc = source.context
-        injective_alignment!(cs, nothing, jac, u, sc,
-                                                target_index = impact_target,
-                                                source_index = impact_source,
-                                                layout = lsys.matrix_layout,
-                                                target_offset = equation_offset,
-                                                source_offset = variable_offset,
-                                                number_of_entities_source = nu_s,
-                                                number_of_entities_target = nu_t)
-        variable_offset += number_of_degrees_of_freedom(source, u)
-    end
-end
+# function align_to_jacobian!(ct::InjectiveCrossTerm, lsys, target::JutulModel, source::JutulModel; equation_offset = 0, variable_offset = 0)
+#     cs = ct.crossterm_source_cache
+#     jac = lsys.jac
+#     impact_target = ct.impact[1]
+#     impact_source = ct.impact[2]
+#     pentities = get_primary_variable_ordered_entities(source)
+#     nu_t = count_active_entities(target.domain, ct.entities.target)
+#     for u in pentities
+#         nu_s = count_active_entities(source.domain, u)
+#         sc = source.context
+#         injective_alignment!(cs, nothing, jac, u, sc,
+#                                                 target_index = impact_target,
+#                                                 source_index = impact_source,
+#                                                 layout = lsys.matrix_layout,
+#                                                 target_offset = equation_offset,
+#                                                 source_offset = variable_offset,
+#                                                 number_of_entities_source = nu_s,
+#                                                 number_of_entities_target = nu_t)
+#         variable_offset += number_of_degrees_of_freedom(source, u)
+#     end
+# end
 
 target_impact(ct) = ct.impact.target
 
@@ -36,8 +36,8 @@ function update_linearized_system_crossterm!(nz, model_t, model_s, ct::Injective
 end
 
 
-function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, target_entity, source_entity, layout)
-    primitive = declare_pattern(target_model, x, x_storage, source_entity)
+function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, layout)
+    primitive = declare_pattern(target_model, x, x_storage, source_entity, entity_indices)
     if isnothing(primitive)
         out = nothing
     else
@@ -80,9 +80,11 @@ function inner_sparsity_ct(target_impact, source_impact, nentities_source, nenti
     return SparsePattern(I, J, n, m, layout)
 end
 
-function setup_cross_term_storage(ct::CrossTerm, eq, model_t, model_s, storage_t, storage_s)
+function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, storage_t, storage_s)
     # Find all entities x
-    active = cross_term_entities(ct, eq, model_t, model_s)
+    active = cross_term_entities(ct, eq_t, model_t)
+    active_source = cross_term_entities_source(ct, eq_s, model_s)
+
     N = length(active)
 
     state_t = convert_to_immutable_storage(storage_t[:state])
@@ -91,21 +93,29 @@ function setup_cross_term_storage(ct::CrossTerm, eq, model_t, model_s, storage_t
     state_s = convert_to_immutable_storage(storage_s[:state])
     state_s0 = convert_to_immutable_storage(storage_s[:state0])
 
-    F_t!(out, state, state0, i) = update_cross_term_in_entity!(out, i, state, state0, as_value(state_s), as_value(state_s0), ct, eq, 1.0)
-    F_s!(out, state, state0, i) = update_cross_term_in_entity!(out, i, as_value(state_t), as_value(state_t0), state, state0, ct, eq, 1.0)
+    F_t!(out, state, state0, i) = update_cross_term_in_entity!(out, i, state, state0, as_value(state_s), as_value(state_s0), ct, eq_t, 1.0)
+    F_s!(out, state, state0, i) = update_cross_term_in_entity!(out, i, as_value(state_t), as_value(state_t0), state, state0, ct, eq_t, 1.0)
 
-    caches_t = create_equation_caches(model_t, eq, storage_t, F_t!, N)
-    caches_s = create_equation_caches(model_s, eq, storage_s, F_s!, N)
+    caches_t = create_equation_caches(model_t, eq_t, storage_t, F_t!, N)
+    if isnothing(eq_s)
+        # Note: Sending same equation
+        eq_other = eq_t
+    else
+        eq_other = eq_s
+    end
+    caches_s = create_equation_caches(model_s, eq_other, storage_s, F_s!, N) 
 
-    return (target = caches_t, source = caches_s)
+    return (target = caches_t, source = caches_s, target_entities = active, source_entities = active_source)
 end
 
-function cross_term_entities(ct, eq, model_t, model_s)
-    return 1:count_active_entities(model_t.domain, associated_entity(eq))
+function cross_term_entities(ct, eq, model)
+    return 1:count_active_entities(model.domain, associated_entity(eq))
 end
 
-function cross_term_entities_source(ct, eq, model_t, model_s)
+function cross_term_entities_source(ct, eq, model)
     # Impact on source - if symmetry is present. Should either be no entries (for no symmetry)
     # or equal number of entries (for symmetry)
-    return Vector{Int64}()
+    return cross_term_entities(ct, eq, model)
 end
+
+cross_term_entities_source(ct, eq::Nothing, model) = nothing
