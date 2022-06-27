@@ -386,7 +386,8 @@ function update_equation_for_entity!(cache, eq, state, state0, model, dt)
         @inbounds for j in vrange(cache, i)
             v_i = @views v[:, j]
             state_i = local_ad(state, vars[j], eltype(v))
-            @inbounds update_equation_in_entity!(v_i, i, state_i, state0, eq, model, dt, ldisc)
+            state0_i = local_ad(state0, vars[j], eltype(v))
+            @inbounds update_equation_in_entity!(v_i, i, state_i, state0_i, eq, model, dt, ldisc)
         end
     end
 end

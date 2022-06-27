@@ -79,7 +79,10 @@ symmetry(::ScalarTestCrossTerm) = CTSkewSymmetry()
 #     @. ct.crossterm_target = f(value(X_S), X_T)
 # end
 
-function update_cross_term_in_entity!(out, i, state_t, state0_t, state_s, state0_s, ct::ScalarTestCrossTerm, eq::ScalarTestEquation, dt)
+function update_cross_term_in_entity!(out, i, state_t, state0_t,
+                                              state_s, state0_s, 
+                                              model_t, model_s,
+                                              ct::ScalarTestCrossTerm, eq::ScalarTestEquation, dt, ldisc = local_discretization(ct, i))
     X_T = only(state_t.XVar)
     X_S = only(state_s.XVar)
     out[] = X_T - X_S

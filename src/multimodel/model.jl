@@ -570,31 +570,69 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
 end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
-    for target in targets
-        ct_t = cross_term(storage, target)
-        @timeit "->$target" for source in intersect(target_cross_term_keys(storage, target), sources)
-            cross_terms = cross_terms_if_present(ct_t, source)
-            if !isnothing(cross_terms)
-                update_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
+    models = model.models
+    for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+        target = ctp.target.label
+        source = ctp.source.label
+        if target in targets && source in sources
+            ct = ctp.cross_term
+            model_t = models[target]
+            eq = model_t.equations[ctp.target.equation]
+            update_cross_term!(ct_s, ct, eq, storage[target], storage[source], model_t, models[source], dt)
+        end
+    end
+end
+
+function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
+    state_t = storage_t.state
+    state0_t = storage_t.state0
+
+    state_s = storage_s.state
+    state0_s = storage_s.state0
+
+    for (k, cache) in pairs(ct_s.target)
+        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, true)
+    end
+
+    for (k, cache) in pairs(ct_s.source)
+        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, false)
+    end
+end
+
+function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, is_target)
+    v = cache.entries
+    vars = cache.variables
+    Tv = eltype(v)
+    for i in 1:number_of_entities(cache)
+        ldisc = local_discretization(ct, i)
+        for j in vrange(cache, i)
+            v_i = @views v[:, j]
+            var = vars[j]
+            if is_target
+                f_t = (x) -> local_ad(x, var, Tv)
+                f_s = (x) -> as_value(x)
+            else
+                f_t = (x) -> as_value(x)
+                f_s = (x) -> local_ad(x, var, Tv)
             end
+            update_cross_term_in_entity!(v_i, i, f_t(state_t), f_t(state0_t), f_s(state_s), f_s(state0_s), model_t, model_s, ct, eq, dt, ldisc)
         end
     end
 end
+# update_cross_terms_for_pair!(cross_terms::Nothing, storage, model, source::Symbol, target::Symbol, dt) = nothing
 
-update_cross_terms_for_pair!(cross_terms::Nothing, storage, model, source::Symbol, target::Symbol, dt) = nothing
+# function update_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol, target::Symbol, dt)
+#     storage_t, storage_s = get_submodel_storage(storage, target, source)
+#     model_t, model_s = get_submodels(model, target, source)
 
-function update_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol, target::Symbol, dt)
-    storage_t, storage_s = get_submodel_storage(storage, target, source)
-    model_t, model_s = get_submodels(model, target, source)
-
-    eqs = model_t.equations
-    for (ekey, ct) in pairs(cross_terms)
-        if !isnothing(ct)
-            # @info "$source -> $target: $ekey"
-            update_cross_term!(ct, eqs[ekey], storage_t, storage_s, model_t, model_s, target, source, dt)
-        end
-    end
-end
+#     eqs = model_t.equations
+#     for (ekey, ct) in pairs(cross_terms)
+#         if !isnothing(ct)
+#             # @info "$source -> $target: $ekey"
+#             update_cross_term!(ct, eqs[ekey], storage_t, storage_s, model_t, model_s, target, source, dt)
+#         end
+#     end
+# end
 
 function apply_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     for target in targets
