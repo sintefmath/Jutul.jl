@@ -733,24 +733,29 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
     end
 end
 
+function unpack_cross_term_pair(ctp, ct_s, label)
+    sgn = 1
+    if !(ctp.target.label == label)
+        ctp = transpose(ctp)
+        if symmetry(ctp.cross_term) == CTSkewSymmetry()
+            sgn = -1
+        end
+        impact = ct_s.source_entities
+        caches = ct_s.target
+    else
+        impact = ct_s.target_entities
+        caches = ct_s.target
+    end
+    return (ctp, impact, caches, sgn)
+end
+
 function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_storage, model, label; equation_offset = 0)
     # @assert !has_groups(model)
     nz = lsys.jac_buffer
     r_buf = lsys.r_buffer
     for (ctp, ct_s) in zip(crossterms, crossterm_storage)
         ct = ctp.cross_term
-        sgn = 1
-        if !(ctp.target.label == label)
-            ctp = transpose(ctp)
-            if symmetry(ct) == CTSkewSymmetry()
-                sgn = -1
-            end
-            impact = ct_s.source_entities
-            caches = ct_s.target
-        else
-            impact = ct_s.target_entities
-            caches = ct_s.target
-        end
+        ctp, impact, caches, sgn = unpack_cross_term_pair(ctp, ct_s, label)
         eq_label = ctp.target.equation
         eq = model.equations[eq_label]
         r = local_residual_view(r_buf, model, eq, equation_offset + get_equation_offset(model, eq_label))
@@ -788,12 +793,42 @@ end
 
 function update_offdiagonal_blocks!(storage, model, targets, sources)
     linearized_system = storage.LinearizedSystem
-    for target in targets
-        ct_t = cross_term(storage, target)
-        for source in intersect(target_cross_term_keys(storage, target), sources)
-            cross_terms = cross_terms_if_present(ct_t, source)
-            lsys = get_linearized_system_model_pair(storage, model, source, target, linearized_system)
-            update_linearized_system_crossterms!(lsys.jac, cross_terms, storage, model, source, target)
+    models = model.models
+    for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+        ct = ctp.cross_term
+        t = ctp.target.label
+        s = ctp.source.label
+        if t in targets && s in sources
+            lsys = get_linearized_system_model_pair(storage, model, s, t, linearized_system)
+            update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[s], ctp, ct_s, s)
+        end
+        if has_symmetry(ct) && t in sources && s in targets
+            lsys = get_linearized_system_model_pair(storage, model, t, s, linearized_system)
+            update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[t], transpose(ctp), ct_s, t)
+        end
+    end
+end
+
+function update_offdiagonal_linearized_system_cross_term!(nz, model, ctp, ct_s, label)
+    ctp, impact, caches, sgn = unpack_cross_term_pair(ctp, ct_s, label)
+    for u in keys(caches)
+        fill_crossterm_entries!(nz, model, caches[u], sgn)
+    end
+end
+
+function fill_crossterm_entries!(nz, model, cache::GenericAutoDiffCache, sgn)
+    nu, ne, np = ad_dims(cache)
+    entries = cache.entries
+    # tb = minbatch(model.context)
+    # @batch minbatch = tb for i in 1:nu
+    for i in 1:nu
+        for (jno, j) in enumerate(vrange(cache, i))
+            for e in 1:ne
+                a = sgn*entries[e, j]
+                for d = 1:np
+                    update_jacobian_entry!(nz, cache, j, e, d, a.partials[d])
+                end
+            end
         end
     end
 end
