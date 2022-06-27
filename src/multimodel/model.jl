@@ -700,7 +700,8 @@ function fill_crossterm_entries!(nz, model, cache::GenericAutoDiffCache, sgn)
             for e in 1:ne
                 a = sgn*entries[e, j]
                 for d = 1:np
-                    update_jacobian_entry!(nz, cache, j, e, d, a.partials[d])
+                    pos = get_jacobian_pos(cache, j, e, d)
+                    nz[pos] += a.partials[d]
                 end
             end
         end
