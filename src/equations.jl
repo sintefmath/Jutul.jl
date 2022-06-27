@@ -322,7 +322,7 @@ is then that of ∂E / ∂P where P are the primary variables of A.
 Update an equation so that it knows where to store its derivatives
 in the Jacobian representation.
 """
-function align_to_jacobian!(eq_s, eq::JutulEquation, jac, model; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s, eq, jac, model; equation_offset = 0, variable_offset = 0)
     pentities = get_primary_variable_ordered_entities(model)
     for u in pentities
         align_to_jacobian!(eq_s, eq, jac, model, u, equation_offset = equation_offset, variable_offset = variable_offset) 
@@ -338,7 +338,8 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; equation_offse
         cache = eq_s[k]
         # J = cache.variables
         I, J = generic_cache_declare_pattern(cache, arg...)
-        injective_alignment!(cache, eq, jac, entity, model.context, target_index = I, source_index = J)
+        injective_alignment!(cache, eq, jac, entity, model.context, target_index = I, source_index = J,
+                                                                    target_offset = equation_offset, source_offset = variable_offset)
     end
 end
 

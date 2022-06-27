@@ -150,123 +150,9 @@ function setup_cross_terms_storage!(storage, model)
     storage[:cross_terms] = v
 end
 
-function setup_cross_terms!(storage, model::MultiModel, couplings)#::ModelCoupling)
-    crossd = JutulStorage()
-    models = model.models
-    debugstr = "Determining cross-terms\n"
-    for coupling in couplings
-        sources = Dict{Symbol, Any}()
-        target = coupling.target[:model]
-        source = coupling.source[:model]
-        def_target_eq = coupling.target[:equation]
-        def_source_eq = coupling.target[:equation]
-        intersection = coupling.intersection
-        issym = coupling.issym
-        crosstype = coupling.crosstype
-        @assert !(target == source)
-        tmpstr = "$source → $target:\n"
-        target_model = models[target]
-        source_model = models[source]
-
-        target_eq = storage[target][:equations][def_target_eq]
-        ct = setup_cross_term(target_eq,
-                              target_model,
-                              source_model,
-                              target,
-                              source,
-                              intersection,
-                              crosstype;transpose = false)
-
-        @assert !isnothing(ct)
-        if !haskey(storage[:cross_terms][target],source)
-            setindex!(storage[:cross_terms][target], Dict(def_source_eq => ct), source)
-        else
-            if !haskey(storage[:cross_terms][target][source], def_source_eq)
-                setindex!(storage[:cross_terms][target][source],ct, def_source_eq)
-            else
-                storage[:cross_terms][target][source][def_target_eq] = ct 
-            end
-        end
-        
-        if(issym)
-            source_eq = storage[target][:equations][def_source_eq]
-            cs = setup_cross_term(source_eq,
-                              source_model,
-                              target_model,
-                              source,
-                              target,
-                              intersection,
-                              crosstype;
-                              transpose = true)
-            if !haskey(storage[:cross_terms][source],target)
-                setindex!(storage[:cross_terms][source], Dict(def_source_eq => cs), target)
-            else
-                if !haskey(storage[:cross_terms][source][target], def_source_eq)
-                    setindex!(storage[:cross_terms][source][target],cs, def_source_eq)
-                else
-                    storage[:cross_terms][source][target][def_source_eq] = cs 
-                end
-            end                  
-            #storage[:cross_terms][source][target][def_source_eq] = cs
-        end
-    end
-    #storage[:cross_terms] = crossd
-end
-
-function setup_cross_terms(storage, model::MultiModel)
-    crossd = JutulStorage()
-    models = model.models
-    debugstr = "Determining cross-terms\n"
-    sms = submodel_symbols(model)
-    for target in sms
-        sources = JutulStorage()
-        for source in sms
-            if target == source
-                continue
-            end
-            tmpstr = "$source → $target:\n"
-
-            target_model = models[target]
-            source_model = models[source]
-            d = Dict{Symbol, Any}()
-            found = false
-            for (key, eq_s) in storage[target][:equations]
-                eq = target_model.equations[key]
-                ct = declare_cross_term(eq, eq_s, target_model, source_model, target = target, source = source)
-                if !isnothing(ct)
-                    found = true
-                    tmpstr *= String(key)*": Cross-term found.\n"
-                    d[key] = ct
-                end
-            end
-            if found
-                sources[source] = d
-                debugstr *= tmpstr
-            end
-        end
-        crossd[target] = sources
-    end
-    @debug debugstr
-    return crossd
-end
-
-
 function transpose_intersection(intersection)
     target, source, target_entity, source_entity = intersection
     (source, target, source_entity, target_entity)
-end
-
-
-function declare_cross_term(eq::JutulEquation, eq_s, target_model, source_model; target = nothing, source = nothing)
-    target_entity = associated_entity(eq)
-    intersection = get_model_intersection(target_entity, target_model, source_model, target, source)
-    if isnothing(intersection.target)
-        # Declare nothing, so we can easily spot no overlap
-        ct = nothing
-    else
-        ct = InjectiveCrossTerm(eq, target_model, source_model, intersection; target = target, source = source)
-    end
-    return ct
 end
 
 function align_equations_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
@@ -349,7 +235,7 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
             target_offset = local_group_offset(target_keys, target)
             source_offset = local_group_offset(source_keys, source)
             align_cross_term_local!(ctp, lsys, ct_s.target, models, ct_s.target_entities, equation_offset + target_offset, variable_offset + source_offset)
-            if !isnothing(symmetry(ct))
+            if has_symmetry(ct)
                 align_cross_term_local!(transpose(ctp), lsys, ct_s.source, models, ct_s.source_entities, equation_offset + source_offset, variable_offset + target_offset)
             end
         end
@@ -368,20 +254,6 @@ function align_cross_term_local!(ctp, lsys, ct_s, models, impact, equation_offse
         align_to_jacobian!(ct_s, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset, variable_offset = variable_offset)
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
     end
-end
-
-function align_cross_terms_to_linearized_system_!(crossterms, equations, lsys, target::JutulModel, source::JutulModel; equation_offset = 0, variable_offset = 0)
-    for ekey in keys(equations)
-        eq = equations[ekey]
-        if !isnothing(crossterms) && haskey(crossterms, ekey)
-            ct = crossterms[ekey]
-            if !isnothing(ct)
-                align_to_jacobian!(ct, lsys, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
-            end
-        end
-        equation_offset += number_of_equations(target, eq)
-    end
-    return equation_offset
 end
 
 function get_equation_offset(model::SimulationModel, eq_label::Symbol)
