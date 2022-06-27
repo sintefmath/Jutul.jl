@@ -294,15 +294,33 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
 end
 
 function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_storage, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset)
-    base_variable_offset = variable_offset
-    for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
+    function align_cross_term_local!(ctp, ct_s)
         target = ctp.target_model
         source = ctp.source_model
-        ct = ctp.cross_term
+        if target in target_keys && source in source_keys
+            target_model = models[target]
+            source_model = models[source]
+            entities = get_primary_variable_ordered_entities(source_model)
+            ct = ctp.cross_term
+            eo = get_equation_offset(target_model, ctp.target_equation) + equation_offset
+            for (i, source_e) in enumerate(entities)
+                cache = ct_s[source_e]
+                # Do alignment here against LinearizedSystem...
+                error()
+            end
+        end
+    end
 
+    base_variable_offset = variable_offset
+    for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
+        # target = ctp.target_model
+        # source = ctp.source_model
+        ct = ctp.cross_term
+        # offset = get_equation_offset()
+        align_cross_term_local!(ctp, ct_s.target)
         # align_to_jacobian!(ct, lsys, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
         if !isnothing(symmetry(ct))
-            
+            align_cross_term_local!(transpose(ctp), ct_s.source)
         end
     end
 
