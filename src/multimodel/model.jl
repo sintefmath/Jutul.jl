@@ -294,33 +294,30 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
 end
 
 function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_storage, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset)
-    function align_cross_term_local!(ctp, ct_s)
+    function local_group_offset(keys, target_key)
+        offset = 0
+        for k in keys
+            if k == target_key
+                return offset
+            end
+            offset += ndofs[k]
+        end
+        error("Should not happen")
+    end
+    base_variable_offset = variable_offset
+    for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
         target = ctp.target.label
         source = ctp.source.label
         if target in target_keys && source in source_keys
-            target_model = models[target]
-            source_model = models[source]
-            entities = get_primary_variable_ordered_entities(source_model)
             ct = ctp.cross_term
-            eo = get_equation_offset(target_model, ctp.target.equation) + equation_offset
-            for (i, source_e) in enumerate(entities)
-                cache = ct_s[source_e]
-                # Do alignment here against LinearizedSystem...
-                error()
+            # Grab offsets relative to group ordering
+            target_offset = local_group_offset(target_keys, target)
+            source_offset = local_group_offset(source_keys, source)
+            align_cross_term_local!(ctp, lsys, ct_s.target, models, equation_offset + target_offset, variable_offset + source_offset)
+            # align_to_jacobian!(ct, lsys, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
+            if !isnothing(symmetry(ct))
+                align_cross_term_local!(transpose(ctp), lsys, ct_s.source, models, equation_offset + source_offset, variable_offset + target_offset)
             end
-        end
-    end
-
-    base_variable_offset = variable_offset
-    for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
-        # target = ctp.target_model
-        # source = ctp.source_model
-        ct = ctp.cross_term
-        # offset = get_equation_offset()
-        align_cross_term_local!(ctp, ct_s.target)
-        # align_to_jacobian!(ct, lsys, target, source, equation_offset = equation_offset, variable_offset = variable_offset)
-        if !isnothing(symmetry(ct))
-            align_cross_term_local!(transpose(ctp), ct_s.source)
         end
     end
 
@@ -373,6 +370,23 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
             variable_offset += ndofs[source]
         end
         equation_offset += ndofs[target]
+    end
+end
+
+function align_cross_term_local!(ctp, lsys, ct_s, models, equation_offset, variable_offset)
+    target = ctp.target.label
+    source = ctp.source.label
+    target_model = models[target]
+    source_model = models[source]
+    entities = get_primary_variable_ordered_entities(source_model)
+    ct = ctp.cross_term
+    equation_offset += get_equation_offset(target_model, ctp.target.equation)
+    for (i, source_e) in enumerate(entities)
+        cache = ct_s[Symbol(source_e)]
+        # Do alignment here against LinearizedSystem...
+
+        variable_offset += number_of_degrees_of_freedom(source_model, source_e)
+        error()
     end
 end
 
