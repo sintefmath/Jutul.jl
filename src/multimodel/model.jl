@@ -58,12 +58,13 @@ function cross_term_mapper(model, storage, f)
     return (model.cross_terms[ind], storage[:cross_terms][ind])
 end
 
-has_symmetry(x) = !isnothing(symmetry(x.cross_term))
+has_symmetry(x) = !isnothing(symmetry(x))
+has_symmetry(x::CrossTermPair) = has_symmetry(x.cross_term)
 
 function cross_term_pair(model, storage, source, target, include_symmetry = false)
     if include_symmetry
         f = x -> (x.target.label == target && x.source.label == source) || 
-                 (has_symmetry(x.cross_term) && (x.target.label == source && x.source.label == target))
+                 (has_symmetry(x) && (x.target.label == source && x.source.label == target))
     else
         f = x -> x.target.label == target && x.source.label == source
     end
@@ -741,7 +742,7 @@ function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_stora
         sgn = 1
         if !(ctp.target.label == label)
             ctp = transpose(ctp)
-            if symmetry(ctp) == CTSkewSymmetry()
+            if symmetry(ct) == CTSkewSymmetry()
                 sgn = -1
             end
             impact = ct_s.source_entities
