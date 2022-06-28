@@ -597,28 +597,29 @@ end
 
 function update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
     for (index, key) in enumerate(model_keys)
+        offset = offsets[index]
         m = model.models[key]
         s = storage[key]
         eqs_s = s.equations
         eqs = m.equations
-        update_linearized_system!(lsys, eqs, eqs_s, m; equation_offset = offsets[index])
+        update_linearized_system!(lsys, eqs, eqs_s, m; equation_offset = offset)
         ct, ct_s = cross_term_target(model, storage, key, true)
-        update_linearized_system_cross_terms!(lsys, ct, ct_s, m, key; equation_offset = offsets[index])
+        update_linearized_system_cross_terms!(lsys, ct, ct_s, m, key; equation_offset = offset)
     end
 end
 
 function unpack_cross_term_pair(ctp, ct_s, label)
     sgn = 1
-    if !(ctp.target.label == label)
+    if ctp.target.label == label
+        impact = ct_s.target_entities
+        caches = ct_s.target
+    else
         ctp = transpose(ctp)
         if symmetry(ctp.cross_term) == CTSkewSymmetry()
             sgn = -1
         end
         impact = ct_s.source_entities
-        caches = ct_s.target
-    else
-        impact = ct_s.target_entities
-        caches = ct_s.target
+        caches = ct_s.source
     end
     return (ctp, impact, caches, sgn)
 end
