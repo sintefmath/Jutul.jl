@@ -30,13 +30,13 @@ function submodels_symbols(model::MultiModel)
 end
 
 export setup_cross_term, add_cross_term!
-function setup_cross_term(target::Symbol, source::Symbol, cross_term::CrossTerm, target_eq::Symbol, source_eq = nothing)
+function setup_cross_term(cross_term::CrossTerm; target::Symbol, source::Symbol, target_equation::Symbol, source_equation = nothing)
     @assert target != source
-    if isnothing(source_eq) && !isnothing(symmetry(cross_term))
-        source_eq = target_eq
+    if isnothing(source_equation) && !isnothing(symmetry(cross_term))
+        source_equation = target_equation
     end
-    t = CrossTermMeta(target, target_eq)
-    s = CrossTermMeta(source, source_eq)
+    t = CrossTermMeta(target, target_equation)
+    s = CrossTermMeta(source, source_equation)
     return CrossTermPair(t, s, cross_term)
 end
 
@@ -45,7 +45,7 @@ function add_cross_term!(model::MultiModel, ctm::CrossTermPair)
     return model
 end
 
-function add_cross_term!(model::MultiModel, arg...)
-    add_cross_term!(model, setup_cross_term(arg...))
+function add_cross_term!(model::MultiModel, cross_term; kwarg...)
+    add_cross_term!(model, setup_cross_term(cross_term; kwarg...))
 end
 
