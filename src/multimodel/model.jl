@@ -611,15 +611,15 @@ end
 function unpack_cross_term_pair(ctp, ct_s, label)
     sgn = 1
     if ctp.target.label == label
-        impact = ct_s.target_entities
-        caches = ct_s.target
+        impact = ct_s.source_entities
+        caches = ct_s.source
     else
         ctp = transpose(ctp)
         if symmetry(ctp.cross_term) == CTSkewSymmetry()
             sgn = -1
         end
-        impact = ct_s.source_entities
-        caches = ct_s.source
+        impact = ct_s.target_entities
+        caches = ct_s.target
     end
     return (ctp, impact, caches, sgn)
 end
@@ -675,11 +675,11 @@ function update_offdiagonal_blocks!(storage, model, targets, sources)
         s = ctp.source.label
         if t in targets && s in sources
             lsys = get_linearized_system_model_pair(storage, model, s, t, linearized_system)
-            update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[s], ctp, ct_s, s)
+            update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[s], ctp, ct_s, t)
         end
         if has_symmetry(ct) && t in sources && s in targets
             lsys = get_linearized_system_model_pair(storage, model, t, s, linearized_system)
-            update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[t], transpose(ctp), ct_s, t)
+            update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[t], ctp, ct_s, t)
         end
     end
 end
@@ -702,7 +702,7 @@ function fill_crossterm_entries!(nz, model, cache::GenericAutoDiffCache, sgn)
                 a = sgn*entries[e, j]
                 for d = 1:np
                     pos = get_jacobian_pos(cache, j, e, d)
-                    nz[pos] += a.partials[d]
+                    nz[pos] = a.partials[d]
                 end
             end
         end
