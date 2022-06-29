@@ -244,7 +244,7 @@ function setup_storage_equations!(eqs, storage, model::JutulModel; tag = nothing
     counter = 1
     num_equations_total = 0
     for (sym, eq) in model.equations
-        num = number_of_equations_per_entity(eq)
+        num = number_of_equations_per_entity(model, eq)
         ne = number_of_entities(model, eq)
         n = num*ne
         # outstr *= "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_entity(e)) for $n equations in total.\n"
@@ -301,7 +301,7 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
     ndof = number_of_degrees_of_freedom(model) ÷ block_size
     for eq in values(eqs)
         numcols = 0
-        eqs_per_entity = number_of_equations_per_entity(eq)
+        eqs_per_entity = number_of_equations_per_entity(model, eq)
         for u in primary_entities
             dof_per_entity = degrees_of_freedom_per_entity(model, u)
             @assert dof_per_entity == eqs_per_entity == block_size "Block major layout only supported for square blocks."
@@ -450,7 +450,7 @@ end
 
 function local_residual_view(r_buf, model, eq, equation_offset)
     N = number_of_equations(model, eq)
-    n = number_of_equations_per_entity(eq)
+    n = number_of_equations_per_entity(model, eq)
     m = N ÷ n
     return as_cell_major_matrix(r_buf, n, m, model, equation_offset)
 end
@@ -476,7 +476,7 @@ function check_convergence(lsys, eqs, eqs_s, storage, model; iteration = nothing
         eq = eqs[key]
         eq_s = eqs_s[key]
         N = number_of_equations(model, eq)
-        n = number_of_equations_per_entity(eq)
+        n = number_of_equations_per_entity(model, eq)
         m = N ÷ n
         r_v = as_cell_major_matrix(r_buf, n, m, model, offset)
 

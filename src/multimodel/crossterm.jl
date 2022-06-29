@@ -47,7 +47,7 @@ function declare_sparsity(target_model, source_model, eq::JutulEquation, x::Cros
         nentities_target = count_active_entities(target_model.domain, target_entity)
 
         n_partials = number_of_partials_per_entity(source_model, source_entity)
-        n_eqs = number_of_equations_per_entity(eq)
+        n_eqs = number_of_equations_per_entity(model, eq)
         # n_eqs = x.equations_per_entity
         out = inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, layout)
     end

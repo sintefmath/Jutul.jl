@@ -99,7 +99,7 @@ struct InjectiveCrossTerm{I, E, T, S, SC} <: CrossTerm
         noverlap = length(target_impact)
         @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
         # Infer Unit from target_eq
-        equations_per_entity = number_of_equations_per_entity(target_eq)
+        equations_per_entity = number_of_equations_per_entity(model, target_eq)
 
         npartials_target = number_of_partials_per_entity(target_model, target_entity)
         npartials_source = number_of_partials_per_entity(source_model, source_entity)

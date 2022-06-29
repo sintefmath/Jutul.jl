@@ -4,7 +4,7 @@ function setup_equation_storage(model, e::ScalarTestEquation{ManualTestDisc}, st
     nc = number_of_cells(Ω)
     @assert nc == 1 # We use nc for clarity of the interface - but it should always be one!
     ne = 1 # Single, scalar equation
-    npartials = number_of_equations_per_entity(e)
+    npartials = number_of_equations_per_entity(model, e)
     e = CompactAutoDiffCache(ne, nc, npartials, context = model.context; kwarg...)
     return e
 end

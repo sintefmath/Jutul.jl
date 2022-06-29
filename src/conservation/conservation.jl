@@ -1,24 +1,25 @@
 export ConservationLaw
 
-struct ConservationLaw <: JutulEquation
-    accumulation::JutulAutoDiffCache
-    accumulation_symbol::Symbol
-    half_face_flux_cells::JutulAutoDiffCache
-    half_face_flux_faces::Union{JutulAutoDiffCache,Nothing}
-    sources::AbstractSparseMatrix
-    flow_discretization::FlowDiscretization
+struct ConservationLaw{T<:FlowDiscretization} <: JutulEquation
+    flow_discretization::T
 end
 
-function ConservationLaw(model, number_of_equations;
-                            flow_discretization = model.domain.discretizations.mass_flow,
-                            accumulation_symbol = :TotalMasses,
-                            kwarg...)
+struct ConservationLawTPFAStorage
+    accumulation::CompactAutoDiffCache
+    accumulation_symbol::Symbol
+    half_face_flux_cells::CompactAutoDiffCache
+    half_face_flux_faces::Union{CompactAutoDiffCache, Nothing}
+    sources::AbstractSparseMatrix
+end
+
+function ConservationLawTPFAStorage(model, eq::ConservationLaw; accumulation_symbol = :TotalMasses, kwarg...)
+    number_of_equations = number_of_equations_per_entity(model, eq)
     D, ctx = model.domain, model.context
     cell_entity = Cells()
     face_entity = Faces()
     nc = count_active_entities(D, cell_entity, for_variables = false)
     nf = count_active_entities(D, face_entity, for_variables = false)
-    nhf = number_of_half_faces(flow_discretization)
+    nhf = number_of_half_faces(eq.flow_discretization)
     face_partials = degrees_of_freedom_per_entity(model, face_entity)
     alloc = (n, entity, n_entities_pos) -> CompactAutoDiffCache(number_of_equations, n, model,
                                                                                 entity = entity, n_entities_pos = n_entities_pos, 
@@ -39,17 +40,21 @@ function ConservationLaw(model, number_of_equations;
     else
         hf_faces = nothing
     end
-    ConservationLaw(acc, accumulation_symbol, hf_cells, hf_faces, src, flow_discretization)
+    return ConservationLawTPFAStorage(acc, accumulation_symbol, hf_cells, hf_faces, src)
+end
+
+function setup_equation_storage(model, eq::ConservationLaw, storage; kwarg...)
+    return ConservationLawTPFAStorage(model, eq; kwarg...)
 end
 
 "Update positions of law's derivatives in global Jacobian"
-function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
-    fd = law.flow_discretization
+function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, eq::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
+    fd = eq.flow_discretization
     M = global_map(model.domain)
 
-    acc = law.accumulation
-    hflux_cells = law.half_face_flux_cells
-    diagonal_alignment!(acc, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
+    acc = eq_s.accumulation
+    hflux_cells = eq_s.half_face_flux_cells
+    diagonal_alignment!(acc, eq, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
     half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, M, fd, target_offset = equation_offset, source_offset = variable_offset)
 end
 
@@ -329,10 +334,10 @@ function update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fent
     end
 end
 
-function declare_pattern(model, e::ConservationLaw, entity::Cells)
-    df = e.flow_discretization
+function declare_pattern(model, eq::ConservationLaw, e_s::ConservationLawTPFAStorage, entity::Cells)
+    df = eq.flow_discretization
     hfd = Array(df.conn_data)
-    n = number_of_entities(model, e)
+    n = number_of_entities(model, eq)
     # Fluxes
     I = map(x -> x.self, hfd)
     J = map(x -> x.other, hfd)

@@ -155,7 +155,7 @@ function create_equation_caches(model, eq, storage, F!, N = number_of_entities(m
     state0 = storage[:state0]
     entities = all_ad_entities(state, state0)
     caches = Dict()
-    n = number_of_equations_per_entity(eq)
+    n = number_of_equations_per_entity(model, eq)
     for (e, epack) in entities
         @timeit "sparsity detection" S = determine_sparsity(F!, n, state, state0, e, entities, N)
         N, T = epack
@@ -171,14 +171,20 @@ function associated_entity(::JutulEquation)
     return Cells()
 end
 
+export number_of_equations_per_entity
 """
 Get the number of equations per entity. For example, mass balance of two
 components will have two equations per grid cell (= entity)
 """
-function number_of_equations_per_entity(e::JutulEquation)
+function number_of_equations_per_entity(model::JutulModel, eq::JutulEquation)
     # Default: One equation per entity (= cell,  face, ...)
-    @warn "Fixme for $(typeof(e))"
+    @warn "Fixme for $(typeof(eq))"
+    error()
     return 1
+end
+
+function number_of_equations_per_entity(model::SimulationModel, e::JutulEquation)
+    return number_of_equations_per_entity(model.system, e)
 end
 
 """
@@ -192,7 +198,7 @@ end
 Get the total number of equations on the domain of model.
 """
 function number_of_equations(model, e::JutulEquation)
-    return number_of_equations_per_entity(e)*number_of_entities(model, e)
+    return number_of_equations_per_entity(model, e)*number_of_entities(model, e)
 end
 
 """
@@ -220,7 +226,7 @@ function declare_sparsity(model, e::JutulEquation, eq_storage, entity, layout::E
         end
         nu = number_of_entities(model, e)
         nentities = count_active_entities(model.domain, entity, for_variables = false)
-        nrow_blocks = number_of_equations_per_entity(e)
+        nrow_blocks = number_of_equations_per_entity(model, e)
         ncol_blocks = number_of_partials_per_entity(model, entity)
         if nrow_blocks > 1
             I = vcat(map((x) -> (x-1)*nu .+ I, 1:nrow_blocks)...)
@@ -246,7 +252,7 @@ function declare_sparsity(model, e::JutulEquation, eq_storage, entity, layout::B
         n = number_of_equations(model, e)
         m = count_entities(model.domain, entity)
 
-        n_bz = number_of_equations_per_entity(e)
+        n_bz = number_of_equations_per_entity(model, e)
         m_bz = degrees_of_freedom_per_entity(model, entity)
         out = SparsePattern(I, J, n, m, layout, n_bz, m_bz)
     end
@@ -266,7 +272,7 @@ function declare_sparsity(model, e::JutulEquation, e_storage, entity, layout::Un
         end
         nu = number_of_entities(model, e)
         nu_other = count_entities(model.domain, entity)
-        nrow_blocks = number_of_equations_per_entity(e)
+        nrow_blocks = number_of_equations_per_entity(model, e)
         ncol_blocks = number_of_partials_per_entity(model, entity)
         nentities = count_entities(model.domain, entity)
         if nrow_blocks > 1
@@ -406,7 +412,7 @@ not impact this particular equation.
 apply_forces_to_equation!(diag_part, storage, model, eq, eq_s, force, time) = nothing
 
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
-    n = number_of_equations_per_entity(eq)
+    n = number_of_equations_per_entity(model, eq)
     e = zeros(n)
     names = Vector{String}(undef, n)
     for i = 1:n
