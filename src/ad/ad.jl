@@ -86,6 +86,7 @@ function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_entitie
 end
 
 function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, context;
+                                    pos = nothing,
                                     layout = matrix_layout(context),
                                     target_index = 1:cache.number_of_entities,
                                     source_index = 1:cache.number_of_entities,
@@ -96,6 +97,9 @@ function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, conte
     _entity::JutulUnit
     c_entity = entity(cache)
     c_entity::JutulUnit
+    if isnothing(pos)
+        pos = cache.jacobian_positions
+    end
     if _entity == c_entity
         nu_c, ne, np = ad_dims(cache)
         if isnothing(number_of_entities_source)
@@ -110,12 +114,11 @@ function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, conte
         end
         N = length(source_index)
         @assert length(target_index) == N
-        do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
+        do_injective_alignment!(pos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
     end
 end
 
-function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
-    jpos = cache.jacobian_positions
+function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
     np = number_of_partials(cache)
     for index in 1:length(source_index)
         target = target_index[index]
@@ -133,8 +136,7 @@ end
 
 
 
-function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext, layout)
-    jpos = cache.jacobian_positions
+function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext, layout)
     t = index_type(context)
 
     ns = t(length(source_index))

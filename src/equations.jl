@@ -331,14 +331,19 @@ function align_to_jacobian!(eq_s, eq, jac, model; equation_offset = 0, variable_
 end
 
 
-function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; positions = nothing, equation_offset = 0, variable_offset = 0)
     # Use generic version
     k = Symbol(entity)
     if haskey(eq_s, k)
         cache = eq_s[k]
+        if isnothing(positions)
+            pos = cache.jacobian_positions
+        else
+            pos = positions[k]
+        end
         # J = cache.variables
         I, J = generic_cache_declare_pattern(cache, arg...)
-        injective_alignment!(cache, eq, jac, entity, model.context, target_index = I, source_index = J,
+        injective_alignment!(cache, eq, jac, entity, model.context, pos = pos, target_index = I, source_index = J,
                                                                     target_offset = equation_offset, source_offset = variable_offset)
     end
 end

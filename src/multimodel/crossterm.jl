@@ -103,9 +103,24 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     else
         eq_other = eq_s
     end
-    caches_s = create_equation_caches(model_s, eq_other, storage_s, F_s!, N) 
+    caches_s = create_equation_caches(model_s, eq_other, storage_s, F_s!, N)
+    # Extra alignment - for off diagonal blocks
+    other_align_t = create_extra_alignment(caches_t)
+    other_align_s = create_extra_alignment(caches_s)
 
-    return (target = caches_t, source = caches_s, target_entities = active, source_entities = active_source)
+    return (
+            target = caches_t, source = caches_s,
+            target_entities = active, source_entities = active_source,
+            offdiagonal_alignment = (target = other_align_t, source = other_align_s)
+            )
+end
+
+function create_extra_alignment(cache)
+    out = Dict{Symbol, Any}()
+    for k in keys(cache)
+        out[k] = similar(cache[k].jacobian_positions)
+    end
+    return convert_to_immutable_storage(out)
 end
 
 function cross_term_entities(ct, eq, model)
