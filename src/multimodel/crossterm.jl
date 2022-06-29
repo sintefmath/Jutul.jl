@@ -106,12 +106,16 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     caches_s = create_equation_caches(model_s, eq_other, storage_s, F_s!, N)
     # Extra alignment - for off diagonal blocks
     other_align_t = create_extra_alignment(caches_t)
-    other_align_s = create_extra_alignment(caches_s)
+    if has_symmetry(ct)
+        other_align_s = create_extra_alignment(caches_s)
+    else
+        other_align_s = nothing
+    end
 
     return (
             target = caches_t, source = caches_s,
             target_entities = active, source_entities = active_source,
-            offdiagonal_alignment = (target = other_align_t, source = other_align_s)
+            offdiagonal_alignment = (from_target = other_align_t, from_source = other_align_s)
             )
 end
 
