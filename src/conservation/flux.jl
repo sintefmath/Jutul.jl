@@ -1,4 +1,4 @@
-export SPU, TPFA, TwoPointPotentialFlow, FlowType, TrivialFlow, get_neighborship
+export SPU, TPFA, TwoPointPotentialFlowHardCoded, FlowType, TrivialFlow, get_neighborship
 
 abstract type TwoPointDiscretization <: JutulDiscretization end
 
@@ -76,22 +76,13 @@ function remap_connection(conn::T, self::I, other::I, face::I) where {T, I<:Inte
     return convert_to_immutable_storage(D)::T
 end
 
-struct TwoPointPotentialFlow{U <: Union{UpwindDiscretization, Nothing}, K <:Union{PotentialFlowDiscretization, Nothing}, F <: FlowType} <: FlowDiscretization
-    upwind::U
-    grad::K
-    flow_type::F
+struct TwoPointPotentialFlowHardCoded{C, D} <: FlowDiscretization
     gravity::Bool
-    conn_pos
-    conn_data
+    conn_pos::C
+    conn_data::D
 end
 
-number_of_half_faces(tp::TwoPointPotentialFlow) = length(tp.conn_data)
-
-function get_neighborship(grid)
-    return grid.neighborship
-end
-
-function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, gravity = gravity_constant; ncells = nothing)
+function TwoPointPotentialFlowHardCoded(grid::JutulGrid, T = nothing, z = nothing, gravity = gravity_constant; ncells = nothing)
     N = get_neighborship(grid)
     if size(N, 2) > 0
         faces, face_pos = get_facepos(N, ncells)
@@ -109,26 +100,31 @@ function TwoPointPotentialFlow(u, k, flow_type, grid, T = nothing, z = nothing, 
         if !isnothing(T)
             @assert length(T) == nhf ÷ 2 "Transmissibilities vector must have length of half the number of half faces ($nhf / 2 = $(nhf/2), was $(length(T)))"
         end
-        get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity, include_face_sign(flow_type))
+        get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity, false)
         el = get_el(1, 1) # Could be junk, we just need eltype
-        
         conn_data = Vector{typeof(el)}(undef, nhf)
         @batch for cell = 1:nc
                 @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
                 conn_data[fpos] = get_el(faces[fpos], cell)
             end
         end
-        @assert !isa(flow_type, TrivialFlow) "TrivialFlow only valid for grids without connections."
     else
         nc = number_of_cells(grid)
         has_grav = false
         conn_data = []
         face_pos = ones(Int64, nc+1)
     end
-    TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
+    return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data)}(has_grav, face_pos, conn_data)
 end
 
-function subdiscretization(disc::TwoPointPotentialFlow, subg, mapper::FiniteVolumeGlobalMap)
+number_of_half_faces(tp::TwoPointPotentialFlowHardCoded) = length(tp.conn_data)
+
+function get_neighborship(grid)
+    return grid.neighborship
+end
+
+
+function subdiscretization(disc::TwoPointPotentialFlowHardCoded, subg, mapper::FiniteVolumeGlobalMap)
     u, k, flow_type, has_grav = disc.upwind, disc.grad, disc.flow_type, disc.gravity
 
     face_pos_global, conn_data_global = disc.conn_pos, disc.conn_data
@@ -144,7 +140,7 @@ function subdiscretization(disc::TwoPointPotentialFlow, subg, mapper::FiniteVolu
     face_pos = next_face_pos
     # face_pos = new_offsets
     # conn_data = vcat(new_conn...)
-    return TwoPointPotentialFlow{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
+    return TwoPointPotentialFlowHardCoded{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
 end
 
 function compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_global, mapper, nc)
@@ -213,24 +209,20 @@ function conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn
     return conn_data
 end
 
-function select_secondary_variables_discretization!(S, domain, system, formulation, fd::TwoPointPotentialFlow)
-    select_secondary_variables_flow_type!(S, domain, system, formulation, fd.flow_type)
-end
+# function select_secondary_variables_discretization!(S, domain, system, formulation, fd::TwoPointPotentialFlowHardCoded)
+#    select_secondary_variables_flow_type!(S, domain, system, formulation, fd.flow_type)
+#end
 
-function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlow{U, K, F}) where {U, K, F}
+function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlowHardCoded)
     tf = (x) -> transfer(context, x)
-    u = tf(fd.upwind)
-    k = tf(fd.grad)
 
     conn_pos = tf(fd.conn_pos)
     cd = map(tf, fd.conn_data)
 
     conn_data = tf(cd)
-
-    flow_type = tf(fd.flow_type)
     has_grav = tf(fd.gravity)
 
-    return TwoPointPotentialFlow{U, K, F}(u, k, flow_type, has_grav, conn_pos, conn_data)
+    return TwoPointPotentialFlowHardCoded{typeof(conn_pos), typeof(conn_data)}(has_grav, conn_pos, conn_data)
 end
 
 

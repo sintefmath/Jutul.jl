@@ -179,7 +179,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = noth
     return (states, reports)
 end
 
-function initialize_before_first_timestep!(sim, first_dT; forces = forces, config = config, path = path)
+function initialize_before_first_timestep!(sim, first_dT; kwarg...)
     @timeit "solve" begin
         @timeit "secondary variables" update_secondary_variables!(sim.storage, sim.model)
     end
