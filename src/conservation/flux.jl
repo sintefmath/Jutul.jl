@@ -16,10 +16,6 @@ function select_primary_variables_flow_type(S, domain, system, formulation, flow
 
 end
 
-function select_secondary_variables_flow_type!(S, domain, system, formulation, flow_type)
-    
-end
-
 struct TrivialFlow <: FlowType end
 
 """
@@ -208,10 +204,6 @@ function conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn
     @assert all(touched) "Only $(count(touched))/$(length(touched)) were kept? Something is wrong."
     return conn_data
 end
-
-# function select_secondary_variables_discretization!(S, domain, system, formulation, fd::TwoPointPotentialFlowHardCoded)
-#    select_secondary_variables_flow_type!(S, domain, system, formulation, fd.flow_type)
-#end
 
 function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlowHardCoded)
     tf = (x) -> transfer(context, x)
