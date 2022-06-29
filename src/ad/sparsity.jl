@@ -12,22 +12,30 @@ function create_mock_state(state, tag, entities = ad_entities(state))
         v = state[k]
         if unpack_tag(v) == tag
             # Assign mock value with tracer
-            if isa(v, AbstractVector)
-                new_v = tracer
-            else
-                new_v = repeat(tracer', size(v, 1), 1)
-            end
+            new_v = as_tracer(v, tracer)
         else
             # Assign mock value as doubles
-            new_v = ones(size(v))
+            new_v = as_value(v)
         end
         mock_state[k] = new_v
     end
     return (NamedTuple(pairs(mock_state)), tracer)
 end
 
-function ad_entities(state)
+function as_tracer(x::AbstractVector, tracer)
+    return tracer
+end
 
+function as_tracer(x::AbstractMatrix, tracer)
+    return repeat(tracer', size(x, 1), 1)
+end
+
+function as_tracer(x, tracer)
+    # A bit dangerous - should be overloaded for complicated types that can contain AD!
+    return x
+end
+
+function ad_entities(state)
     entity_count(x::AbstractVector) = length(x)
     entity_count(x::AbstractMatrix) = size(x, 2)
 

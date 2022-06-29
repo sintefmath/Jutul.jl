@@ -187,6 +187,8 @@ function number_of_equations_per_entity(model::SimulationModel, e::JutulEquation
     return number_of_equations_per_entity(model.system, e)
 end
 
+number_of_equations_per_entity(::JutulSystem, e::JutulEquation) = 1
+
 """
 Get the number of entities (e.g. the number of cells) that the equation is defined on.
 """
