@@ -1,4 +1,4 @@
-export SPU, TPFA, TwoPointPotentialFlowHardCoded, FlowType, TrivialFlow, get_neighborship
+export SPU, TPFA, TwoPointPotentialFlowHardCoded, TrivialFlow, get_neighborship
 
 abstract type TwoPointDiscretization <: JutulDiscretization end
 
@@ -8,15 +8,6 @@ abstract type PotentialFlowDiscretization <: JutulDiscretization end
 abstract type KGradDiscretization <: PotentialFlowDiscretization end
 
 abstract type UpwindDiscretization <: JutulDiscretization end
-
-abstract type FlowType <: JutulDiscretization end
-include_face_sign(::FlowType) = false
-
-function select_primary_variables_flow_type(S, domain, system, formulation, flow_type)
-
-end
-
-struct TrivialFlow <: FlowType end
 
 """
 Two-point flux approximation.
