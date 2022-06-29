@@ -12,7 +12,7 @@ module Jutul
     using SparseArrays
     using MappedArrays
     # Data structures
-    using DataStructures
+    import DataStructures: OrderedDict
     using OrderedCollections
     # Various bits and bobs from Base
     using Statistics
