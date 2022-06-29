@@ -47,10 +47,6 @@ function setup_equation_storage(model, eq::ConservationLaw, storage; kwarg...)
     return ConservationLawTPFAStorage(model, eq; kwarg...)
 end
 
-@inline function get_diagonal_entries(eq::ConservationLaw, eq_s::ConservationLawTPFAStorage)
-    return eq_s.accumulation
-end
-
 "Update positions of law's derivatives in global Jacobian"
 function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, eq::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
     fd = eq.flow_discretization
@@ -178,7 +174,7 @@ function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc;
 end
 
 function update_linearized_system_equation!(nz, r, model, law::ConservationLaw, eq_s::ConservationLawTPFAStorage)
-    acc = get_diagonal_entries(law, eq_s)
+    acc = eq_s.accumulation
     cell_flux = eq_s.half_face_flux_cells
     face_flux = eq_s.half_face_flux_faces
     src = eq_s.sources
@@ -439,11 +435,11 @@ end
 end
 
 @inline function get_diagonal_entries(eq::ConservationLaw, eq_s::ConservationLawTPFAStorage)
-    if use_sparse_sources(eq)
-        return eq.sources
+    if use_sparse_sources(eq_s)
+        return eq_s.sources
     else
         # Hack.
-        return eq.accumulation.entries
+        return eq_s.accumulation.entries
     end
 end
 
