@@ -265,7 +265,7 @@ end
 function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout, UnitMajorLayout})
     ndof = number_of_degrees_of_freedom(model)
     @assert ndof > 0
-    eqs = storage[:equations]
+    eq_storage = storage[:equations]
     I = []
     J = []
     numrows = 0
@@ -273,9 +273,9 @@ function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout,
     for eqname in keys(model.equations)
         numcols = 0
         eq = model.equations[eqname]
-        eq_storage = eqs[eqname]
+        eq_s = eq_storage[eqname]
         for u in primary_entities
-            S = declare_sparsity(model, eq, eq_storage, u, layout)
+            S = declare_sparsity(model, eq, eq_s, u, layout)
             if !isnothing(S)
                 push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
                 push!(J, S.J .+ numcols) # Column indices, offset by the partials in entities we have passed
@@ -292,20 +292,22 @@ function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout,
 end
 
 function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
-    eqs = storage[:equations]
+    eq_storage = storage[:equations]
     I = []
     J = []
     numrows = 0
     primary_entities = get_primary_variable_ordered_entities(model)
     block_size = degrees_of_freedom_per_entity(model, primary_entities[1])
     ndof = number_of_degrees_of_freedom(model) ÷ block_size
-    for eq in values(eqs)
+    for eqname in keys(model.equations)
+        eq = model.equations[eqname]
+        eq_s = eq_storage[eqname]
         numcols = 0
         eqs_per_entity = number_of_equations_per_entity(model, eq)
         for u in primary_entities
             dof_per_entity = degrees_of_freedom_per_entity(model, u)
             @assert dof_per_entity == eqs_per_entity == block_size "Block major layout only supported for square blocks."
-            S = declare_sparsity(model, eq, u, layout)
+            S = declare_sparsity(model, eq, eq_s, u, layout)
             if !isnothing(S)
                 push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
                 push!(J, S.J .+ numcols) # Column indices, offset by the partials in entities we have passed
