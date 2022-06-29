@@ -37,7 +37,7 @@ struct ScalarTestEquation{D} <: DiagonalEquation
     end
 end
 
-number_of_equations_per_entity(model, ::ScalarTestEquation) = 1
+number_of_equations_per_entity(model::SimulationModel, ::ScalarTestEquation) = 1
 
 function select_equations_system!(eqs, domain, system::ScalarTestSystem, formulation)
     eqs[:test_equation] = ScalarTestEquation(domain, system, formulation)
