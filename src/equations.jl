@@ -387,7 +387,6 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
         cache = eq_s[k]
         update_equation_for_entity!(cache, eq, state, state0, model, dt)
     end
-    # error("No default implementation exists for $(typeof(eq)).")
 end
 
 function update_equation_for_entity!(cache, eq, state, state0, model, dt)
@@ -436,6 +435,6 @@ end
     return diagonal_view(cache)
 end
 
-@inline function get_diagonal_cache(eq::JutulEquation)
-    return eq.equation
-end
+# @inline function get_diagonal_cache(eq::JutulEquation)
+#    return eq.equation
+# end
