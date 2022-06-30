@@ -74,7 +74,22 @@ end
 
 function positional_map(grid::JutulGrid, ::Cells, ::Faces)
     faces, facePos = get_facepos(grid.neighborship)
-    (indices = faces, pos = facePos)
+    return (indices = faces, pos = facePos)
 end
 
-
+function half_face_map(N, nc)
+    faces, face_pos = get_facepos(N, nc)
+    signs = similar(faces)
+    for i in 1:nc
+        for j in face_pos[i]:(face_pos[i+1]-1)
+            f = faces[j]
+            if N[1, f] == i
+                signs[j] = 1
+            else
+                @assert N[2, f] == i
+                signs[j] = -1
+            end
+        end
+    end
+    return (faces = faces, face_pos = face_pos, face_sign = signs)
+end

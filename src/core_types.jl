@@ -19,7 +19,7 @@ abstract type JutulSystem end
 # Discretization - currently unused
 abstract type JutulDiscretization end
 
-(D::JutulDiscretization)(i) = D.discretizations[i]
+(D::JutulDiscretization)(i, entity = Cells()) = D.discretizations[i]
 
 # struct DefaultDiscretization <: JutulDiscretization end
 

@@ -158,7 +158,7 @@ function create_equation_caches(model, eq, storage, F!, N = number_of_entities(m
     n = number_of_equations_per_entity(model, eq)
     for (e, epack) in entities
         @timeit "sparsity detection" S = determine_sparsity(F!, n, state, state0, e, entities, N)
-        N, T = epack
+        _, T = epack
         @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, n, e, S)
     end
     return convert_to_immutable_storage(caches)
