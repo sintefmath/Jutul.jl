@@ -505,7 +505,7 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
     variables::P          # Indirection-mapped variable list of same length as entries
     jacobian_positions::M
     diagonal_positions::D
-    function GenericAutoDiffCache(T, n::I, entity::JutulUnit, sparsity::Vector{Vector{I}}) where I
+    function GenericAutoDiffCache(T, n::I, entity::JutulUnit, sparsity::Vector{Vector{I}}; has_diagonal = true) where I
         counts = map(length, sparsity)
         # Create value storage with AD type
         v = zeros(T, n, sum(counts))
@@ -514,18 +514,22 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
         variables = vcat(sparsity...)
         pos = cumsum(vcat(1, counts))
         algn = zeros(I, n, length(v))
-        # Create indices into the self-diagonal part
-        m = length(sparsity)
-        diag_ix = zeros(I, m)
-        for i = 1:m
-            found = false
-            for j = pos[i]:(pos[i+1]-1)
-                if variables[j] == i
-                    diag_ix[i] = j
-                    found = true
+        if has_diagonal
+            # Create indices into the self-diagonal part if requested, asserting that the diagonal is present
+            m = length(sparsity)
+            diag_ix = zeros(I, m)    
+            for i = 1:m
+                found = false
+                for j = pos[i]:(pos[i+1]-1)
+                    if variables[j] == i
+                        diag_ix[i] = j
+                        found = true
+                    end
                 end
+                @assert found "Diagonal must be present in sparsity pattern. Entry $i/$m was missing the diagonal."
             end
-            @assert found "Diagonal must be present in sparsity pattern."
+        else
+            diag_ix = nothing
         end
         P = typeof(pos)
         variables::P

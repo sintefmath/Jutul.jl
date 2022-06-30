@@ -264,3 +264,23 @@ Two-point potential drop with gravity (generic)
     ρ_avg = 0.5*(ρ_self + ρ_other)
     return p_self - p_other + gΔz*ρ_avg
 end
+
+export upw_flux
+function upw_flux(v, l, r)
+    if v > 0
+        # Flow l -> r
+        out = l
+    else
+        out = r
+    end
+    return out
+end
+
+function upw_flux(v, l::T, r::T) where {T<:ST.ADval}
+    if v > 0
+        out = l + r*0
+    else
+        out = r + l*0
+    end
+    return out
+end
