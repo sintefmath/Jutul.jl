@@ -40,12 +40,17 @@ function setup_cross_term(cross_term::CrossTerm; target::Symbol, source::Symbol,
     return CrossTermPair(t, s, cross_term)
 end
 
-function add_cross_term!(model::MultiModel, ctm::CrossTermPair)
-    push!(model.cross_terms, ctm)
-    return model
+
+function add_cross_term!(v::AbstractVector, ctm::CrossTermPair)
+    push!(v, ctm)
+    return v
 end
 
-function add_cross_term!(model::MultiModel, cross_term; kwarg...)
-    add_cross_term!(model, setup_cross_term(cross_term; kwarg...))
+function add_cross_term!(model::MultiModel, ctm::CrossTermPair)
+    add_cross_term!(model.cross_terms, ctm)
+end
+
+function add_cross_term!(model, cross_term; kwarg...)
+    add_cross_term!(model.cross_terms, setup_cross_term(cross_term; kwarg...))
 end
 

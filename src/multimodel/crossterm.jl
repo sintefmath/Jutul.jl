@@ -19,6 +19,7 @@
 #         variable_offset += number_of_degrees_of_freedom(source, u)
 #     end
 # end
+local_discretization(::CrossTerm, i) = nothing
 
 target_impact(ct) = ct.impact.target
 
