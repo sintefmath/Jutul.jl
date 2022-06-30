@@ -505,15 +505,15 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
     variables::P          # Indirection-mapped variable list of same length as entries
     jacobian_positions::M
     diagonal_positions::D
-    function GenericAutoDiffCache(T, n::I, entity::JutulUnit, sparsity::Vector{Vector{I}}; has_diagonal = true) where I
+    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulUnit, sparsity::Vector{Vector{I}}; has_diagonal = true) where I
         counts = map(length, sparsity)
         # Create value storage with AD type
-        v = zeros(T, n, sum(counts))
+        v = zeros(T, nvalues_per_entity, sum(counts))
         A = typeof(v)
         # Create various index mappings + alignment from sparsity
         variables = vcat(sparsity...)
         pos = cumsum(vcat(1, counts))
-        algn = zeros(I, n, length(v))
+        algn = zeros(I, nvalues_per_entity*number_of_partials(T), length(v))
         if has_diagonal
             # Create indices into the self-diagonal part if requested, asserting that the diagonal is present
             m = length(sparsity)
@@ -533,6 +533,6 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
         end
         P = typeof(pos)
         variables::P
-        return new{n, entity, T, A, P, typeof(algn), typeof(diag_ix)}(v, pos, variables, algn, diag_ix)
+        return new{nvalues_per_entity, entity, T, A, P, typeof(algn), typeof(diag_ix)}(v, pos, variables, algn, diag_ix)
     end
 end
