@@ -19,7 +19,14 @@ abstract type JutulSystem end
 # Discretization - currently unused
 abstract type JutulDiscretization end
 
-(D::JutulDiscretization)(i, entity = Cells()) = D.discretizations[i]
+"Ask discretization for entry i for specific entity"
+(D::JutulDiscretization)(i, entity = Cells()) = D[i]
+
+discretization(eq) = eq.discretization
+
+function local_discretization(eq, i)
+    discretization(eq)(i, associated_entity(eq))
+end
 
 # struct DefaultDiscretization <: JutulDiscretization end
 

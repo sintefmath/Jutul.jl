@@ -4,6 +4,8 @@ struct ConservationLaw{T<:FlowDiscretization} <: JutulEquation
     flow_discretization::T
 end
 
+discretization(e::ConservationLaw) = e.flow_discretization
+
 struct ConservationLawTPFAStorage
     accumulation::CompactAutoDiffCache
     accumulation_symbol::Symbol

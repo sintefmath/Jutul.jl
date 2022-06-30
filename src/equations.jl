@@ -134,8 +134,6 @@ function select_equations_formulation!(eqs, arg...)
     # Default: No equations
 end
 
-local_discretization(eq, i) = nothing
-
 function all_ad_entities(state, states...)
     entities = ad_entities(state)
     for s in states
