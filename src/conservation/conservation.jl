@@ -45,7 +45,7 @@ function ConservationLawTPFAStorage(model, eq::ConservationLaw; accumulation_sym
     return ConservationLawTPFAStorage(acc, accumulation_symbol, hf_cells, hf_faces, src)
 end
 
-function setup_equation_storage(model, eq::ConservationLaw{TwoPointPotentialFlowHardCoded}, storage; kwarg...)
+function setup_equation_storage(model, eq::ConservationLaw{<:TwoPointPotentialFlowHardCoded}, storage; kwarg...)
     return ConservationLawTPFAStorage(model, eq; kwarg...)
 end
 
