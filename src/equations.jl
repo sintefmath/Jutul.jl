@@ -155,10 +155,11 @@ function create_equation_caches(model, eq, storage, F!, N = number_of_entities(m
     caches = Dict()
     n = number_of_equations_per_entity(model, eq)
     self_e = associated_entity(eq)
+    nt = count_active_entities(model.domain, self_e)
     for (e, epack) in entities
         @timeit "sparsity detection" S = determine_sparsity(F!, n, state, state0, e, entities, N)
-        _, T = epack
-        @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, n, e, S, has_diagonal = e == self_e)
+        ns, T = epack
+        @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, n, e, S, nt, ns, has_diagonal = e == self_e)
     end
     return convert_to_immutable_storage(caches)
 end
@@ -351,6 +352,8 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; positions = no
         # J = cache.variables
         I, J = generic_cache_declare_pattern(cache, arg...)
         injective_alignment!(cache, eq, jac, entity, model.context, pos = pos, target_index = I, source_index = J,
+                                                                    number_of_entities_source = cache.number_of_entities_source,
+                                                                    number_of_entities_target = cache.number_of_entities_target,
                                                                     target_offset = equation_offset, source_offset = variable_offset)
     end
 end
