@@ -236,7 +236,6 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
             source_offset = local_group_offset(source_keys, source)
             # impact = ct_s.source_entities
             impact = ct_s.target_entities
-            @info impact
             # Diagonal part: Into target equation, and with respect to target variables
             eo_diag = equation_offset + target_offset
             vo_diag = variable_offset + target_offset
@@ -314,15 +313,22 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target, true)
 
         for (ctp, s) in zip(cross_terms, cross_term_storage)
-            if ctp.target.label == target
-                add_sparse_local!(I, J, ctp, s.target, target_model, source_model, s.target_entities, layout)
-            else
+            ct = ctp.cross_term
+            transp = ctp.source.label == target
+            if transp
                 # The filter found a cross term with symmetry, that has "target" as the source. We then need to add it here,
-                # reversing most of the inputs, but keeping the entities from target since that is where we are "looking"
+                # reversing most of the inputs
                 @assert ctp.source.label == target
                 @assert has_symmetry(ctp)
-                add_sparse_local!(J, I, transpose(ctp), s.source, source_model, target_model, s.target_entities, layout)
+                eq_label = ctp.source.equation
+                ct_storage = s.source
+                entities = s.source_entities
+            else
+                eq_label = ctp.target.equation
+                ct_storage = s.target
+                entities = s.target_entities
             end
+            add_sparse_local!(I, J, ct, eq_label, ct_storage, target_model, source_model, entities, transp, layout)
         end
         I = vec(vcat(I...))
         J = vec(vcat(J...))
@@ -348,9 +354,7 @@ function number_of_rows(model, layout::BlockMajorLayout)
     return n
 end
 
-function add_sparse_local!(I, J, ctp, s, target_model, source_model, ind, layout::EquationMajorLayout)
-    x = ctp.cross_term
-    eq_label = ctp.target.equation
+function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind, transp, layout::EquationMajorLayout)
     eq = target_model.equations[eq_label]
     target_e = associated_entity(eq)
     entities = get_primary_variable_ordered_entities(source_model)
@@ -359,8 +363,15 @@ function add_sparse_local!(I, J, ctp, s, target_model, source_model, ind, layout
     for (i, source_e) in enumerate(entities)
         S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, layout)
         if !isnothing(S)
-            push!(I, S.I .+ equation_offset)
-            push!(J, S.J .+ variable_offset)
+            if transp
+                cols = S.I
+                rows = S.J
+            else
+                rows = S.I
+                cols = S.J
+            end
+            push!(I, rows .+ equation_offset)
+            push!(J, cols .+ variable_offset)
         end
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
     end
