@@ -299,8 +299,6 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         equations = target_model.equations
-        eq_counts = map(x -> number_of_equations(target_model, x), values(equations))
-        # var_counts = map(x -> number_of_degrees_of_freedom(source_model, x), entities)
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target, true)
 
         for (ctp, s) in zip(cross_terms, cross_term_storage)
@@ -313,12 +311,29 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         end
         I = vec(vcat(I...))
         J = vec(vcat(J...))
-        sarg = SparsePattern(I, J, sum(eq_counts), ncols, layout)
+        nrows = number_of_rows(target_model, layout)
+        sarg = SparsePattern(I, J, nrows, ncols, layout)
     end
     return sarg
 end
 
-function add_sparse_local!(I, J, ctp, s, target_model, source_model, ind, layout)
+function number_of_rows(model, layout::Union{EquationMajorLayout, UnitMajorLayout})
+    n = 0
+    for eq in values(model.equations)
+        n += number_of_equations(model, eq)
+    end
+    return n
+end
+
+function number_of_rows(model, layout::BlockMajorLayout)
+    n = 0
+    for eq in values(model.equations)
+        n += number_of_entities(model, eq)
+    end
+    return n
+end
+
+function add_sparse_local!(I, J, ctp, s, target_model, source_model, ind, layout::EquationMajorLayout)
     x = ctp.cross_term
     eq_label = ctp.target.equation
     eq = target_model.equations[eq_label]
