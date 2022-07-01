@@ -234,49 +234,50 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
             # Grab offsets relative to group ordering
             target_offset = local_group_offset(target_keys, target)
             source_offset = local_group_offset(source_keys, source)
+            # Models
+            target_model = models[target]
+            source_model = models[source]
             # impact = ct_s.source_entities
-            impact = ct_s.target_entities
+            impact_t = ct_s.target_entities
             # Diagonal part: Into target equation, and with respect to target variables
             eo_diag = equation_offset + target_offset
             vo_diag = variable_offset + target_offset
-            align_cross_term_diagonal_local!(ctp, lsys, ct_s.target, models, impact, eo_diag, vo_diag)
+            eq_label = ctp.target.equation
+
+            s_t = ct_s.target
+            align_cross_term_diagonal_local!(ct, target_model, eq_label, lsys, s_t, impact_t, eo_diag, vo_diag)
             # Off-diagonal part: Into target equation, but with respect to source variables
             vo_offdiag = variable_offset + source_offset
-            align_cross_term_offdiagonal_local!(ctp, lsys, ct_s.target, ct_s.offdiagonal_alignment.from_source, models, impact, eo_diag, vo_offdiag)
+            o_algn_t = ct_s.offdiagonal_alignment.from_source
+            align_cross_term_offdiagonal_local!(ct, target_model, source_model, eq_label, lsys, s_t, o_algn_t, impact_t, eo_diag, vo_offdiag)
             if has_symmetry(ct)
                 # If we have symmetry, we repeat the same process but reversing the terms
-                impact = ct_s.target_entities
-                ctp_t = transpose(ctp)
+                impact_s = ct_s.source_entities
+                s_s = ct_s.source
+                eq_label_s = ctp.source.equation
+                o_algn_s = ct_s.offdiagonal_alignment.from_target
                 eo_t_diag = equation_offset + source_offset
                 eo_t_offdiag = variable_offset + target_offset
-                align_cross_term_diagonal_local!(ctp, lsys, ct_s.source, models, impact, eo_t_diag, vo_offdiag)
-                align_cross_term_offdiagonal_local!(ctp_t, lsys, ct_s.source, ct_s.offdiagonal_alignment.from_target, models, impact, eo_t_diag, eo_t_offdiag)
+                align_cross_term_diagonal_local!(ct, source_model, eq_label_s, lsys, s_s, impact_s, eo_t_diag, vo_offdiag)
+                align_cross_term_offdiagonal_local!(ct, source_model, target_model, eq_label_s, lsys, s_s, o_algn_s, impact_s, eo_t_diag, eo_t_offdiag)
             end
         end
     end
 end
 
-function align_cross_term_offdiagonal_local!(ctp, lsys, ct_s, offdiag_alignment, models, impact, equation_offset, variable_offset)
-    target = ctp.target.label
-    source = ctp.source.label
-    target_model = models[target]
-    source_model = models[source]
-    ct = ctp.cross_term
-    equation_offset += get_equation_offset(target_model, ctp.target.equation)
-    for source_e in get_primary_variable_ordered_entities(source_model)
-        align_to_jacobian!(ct_s, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset, variable_offset = variable_offset, positions = offdiag_alignment)
-        variable_offset += number_of_degrees_of_freedom(source_model, source_e)
-    end
-end
-
-function align_cross_term_diagonal_local!(ctp, lsys, ct_s, models, impact, equation_offset, variable_offset)
-    target = ctp.target.label
-    target_model = models[target]
-    ct = ctp.cross_term
-    equation_offset += get_equation_offset(target_model, ctp.target.equation)
+function align_cross_term_diagonal_local!(ct, target_model, equation_label, lsys, ct_s, impact, equation_offset, variable_offset)
+    equation_offset += get_equation_offset(target_model, equation_label)
     for target_e in get_primary_variable_ordered_entities(target_model)
         align_to_jacobian!(ct_s, ct, lsys.jac, target_model, target_e, impact, equation_offset = equation_offset, variable_offset = variable_offset)
         variable_offset += number_of_degrees_of_freedom(target_model, target_e)
+    end
+end
+
+function align_cross_term_offdiagonal_local!(ct, target_model, source_model, equation_label, lsys, ct_s, offdiag_alignment, impact, equation_offset, variable_offset)
+    equation_offset += get_equation_offset(target_model, equation_label)
+    for source_e in get_primary_variable_ordered_entities(source_model)
+        align_to_jacobian!(ct_s, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset, variable_offset = variable_offset, positions = offdiag_alignment)
+        variable_offset += number_of_degrees_of_freedom(source_model, source_e)
     end
 end
 
