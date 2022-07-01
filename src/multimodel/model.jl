@@ -299,33 +299,16 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         equations = target_model.equations
-        entities = get_primary_variable_ordered_entities(source_model)
         eq_counts = map(x -> number_of_equations(target_model, x), values(equations))
         # var_counts = map(x -> number_of_degrees_of_freedom(source_model, x), entities)
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target, true)
 
-        function add_sparse_local!(ctp, s, target_model, source_model, ind)
-            x = ctp.cross_term
-            eq_label = ctp.target.equation
-            eq = target_model.equations[eq_label]
-            target_e = associated_entity(eq)
-            equation_offset = get_equation_offset(target_model, eq_label)
-            variable_offset = 0
-            for (i, source_e) in enumerate(entities)
-                S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, layout)
-                if !isnothing(S)
-                    push!(I, S.I .+ equation_offset)
-                    push!(J, S.J .+ variable_offset)
-                end
-                variable_offset += number_of_degrees_of_freedom(source_model, source_e)
-            end
-        end
         for (ctp, s) in zip(cross_terms, cross_term_storage)
             if ctp.target == target
-                add_sparse_local!(ctp, s.target, target_model, source_model, s.target_entities)
+                add_sparse_local!(I, J, ctp, s.target, target_model, source_model, s.target_entities, layout)
             else
                 @assert has_symmetry(ctp)
-                add_sparse_local!(transpose(ctp), s.source, source_model, target_model, s.source_entities)
+                add_sparse_local!(I, J, transpose(ctp), s.source, source_model, target_model, s.source_entities, layout)
             end
         end
         I = vec(vcat(I...))
@@ -333,6 +316,24 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         sarg = SparsePattern(I, J, sum(eq_counts), ncols, layout)
     end
     return sarg
+end
+
+function add_sparse_local!(I, J, ctp, s, target_model, source_model, ind, layout)
+    x = ctp.cross_term
+    eq_label = ctp.target.equation
+    eq = target_model.equations[eq_label]
+    target_e = associated_entity(eq)
+    entities = get_primary_variable_ordered_entities(source_model)
+    equation_offset = get_equation_offset(target_model, eq_label)
+    variable_offset = 0
+    for (i, source_e) in enumerate(entities)
+        S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, layout)
+        if !isnothing(S)
+            push!(I, S.I .+ equation_offset)
+            push!(J, S.J .+ variable_offset)
+        end
+        variable_offset += number_of_degrees_of_freedom(source_model, source_e)
+    end
 end
 
 function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, context)
