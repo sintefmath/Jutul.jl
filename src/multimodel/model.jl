@@ -248,14 +248,16 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
             align_cross_term_diagonal_local!(ct, target_model, eq_label, lsys, s_t, impact_t, eo_diag, vo_diag)
             # Off-diagonal part: Into target equation, but with respect to source variables
             vo_offdiag = variable_offset + source_offset
-            o_algn_t = ct_s.offdiagonal_alignment.from_source
+            # o_algn_t = ct_s.offdiagonal_alignment.from_source
+            o_algn_t = ct_s.offdiagonal_alignment.from_target
             align_cross_term_offdiagonal_local!(ct, target_model, source_model, eq_label, lsys, s_t, o_algn_t, impact_t, eo_diag, vo_offdiag)
             if has_symmetry(ct)
                 # If we have symmetry, we repeat the same process but reversing the terms
                 impact_s = ct_s.source_entities
                 s_s = ct_s.source
                 eq_label_s = ctp.source.equation
-                o_algn_s = ct_s.offdiagonal_alignment.from_target
+                # o_algn_s = ct_s.offdiagonal_alignment.from_target
+                o_algn_s = ct_s.offdiagonal_alignment.from_source
                 eo_t_diag = equation_offset + source_offset
                 eo_t_offdiag = variable_offset + target_offset
                 align_cross_term_diagonal_local!(ct, source_model, eq_label_s, lsys, s_s, impact_s, eo_t_diag, vo_offdiag)
@@ -671,22 +673,41 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
     end
 end
 
-function unpack_cross_term_pair(ctp, ct_s, label)
-    sgn = 1
-    if ctp.target.label == label
-        impact = ct_s.source_entities
-        caches = ct_s.source
-        pos = ct_s.offdiagonal_alignment.from_target
-    else
-        ctp = transpose(ctp)
-        if symmetry(ctp.cross_term) == CTSkewSymmetry()
-            sgn = -1
+function source_impact_for_pair(ctp, ct_s, label)
+    if true
+        sgn = 1
+        if ctp.target.label != label
+            eq_label = ctp.target.equation
+            impact = ct_s.target_entities
+            caches = ct_s.target
+            pos = ct_s.offdiagonal_alignment.from_target
+            if symmetry(ctp.cross_term) == CTSkewSymmetry()
+                sgn = -1
+            end
+        else
+            eq_label = ctp.source.equation
+            impact = ct_s.source_entities
+            caches = ct_s.source
+            pos = ct_s.offdiagonal_alignment.from_source
         end
-        impact = ct_s.target_entities
-        caches = ct_s.target
-        pos = ct_s.offdiagonal_alignment.from_source
+        return (eq_label, impact, caches, pos, sgn)
+    else
+        sgn = 1
+        if ctp.target.label == label
+            impact = ct_s.source_entities
+            caches = ct_s.source
+            pos = ct_s.offdiagonal_alignment.from_target
+        else
+            ctp = transpose(ctp)
+            if symmetry(ctp.cross_term) == CTSkewSymmetry()
+                sgn = -1
+            end
+            impact = ct_s.target_entities
+            caches = ct_s.target
+            pos = ct_s.offdiagonal_alignment.from_source
+        end
+        return (ctp.target.equation, impact, caches, pos, sgn)    
     end
-    return (ctp, impact, caches, pos, sgn)
 end
 
 function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_storage, model, label; equation_offset = 0)
@@ -695,11 +716,17 @@ function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_stora
     r_buf = lsys.r_buffer
     for (ctp, ct_s) in zip(crossterms, crossterm_storage)
         ct = ctp.cross_term
-        ctp, impact, caches, _, sgn = unpack_cross_term_pair(ctp, ct_s, label)
-        eq_label = ctp.target.equation
+        eq_label, impact, caches, _, sgn = source_impact_for_pair(ctp, ct_s, label)
         eq = model.equations[eq_label]
         r = local_residual_view(r_buf, model, eq, equation_offset + get_equation_offset(model, eq_label))
         update_linearized_system_cross_term!(nz, r, model, ct, caches, impact, sgn)
+    end
+end
+
+function update_offdiagonal_linearized_system_cross_term!(nz, model, ctp, ct_s, label)
+    _, impact, caches, pos, sgn = source_impact_for_pair(ctp, ct_s, label)
+    for u in keys(caches)
+        fill_crossterm_entries!(nz, model, caches[u], pos[u], sgn)
     end
 end
 
@@ -716,7 +743,7 @@ function increment_equation_entries!(nz, r, model, cache, impact, sgn)
     # @batch minbatch = tb for i in 1:nu
     for ui in 1:nu
         i = impact[ui]
-        for (jno, j) in enumerate(vrange(cache, i))
+        for (jno, j) in enumerate(vrange(cache, ui))
             for e in 1:ne
                 a = sgn*entries[e, j]
                 if jno == 1
@@ -746,13 +773,6 @@ function update_offdiagonal_blocks!(storage, model, targets, sources)
             lsys = get_linearized_system_model_pair(storage, model, t, s, linearized_system)
             update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[t], ctp, ct_s, s)
         end
-    end
-end
-
-function update_offdiagonal_linearized_system_cross_term!(nz, model, ctp, ct_s, label)
-    ctp, impact, caches, pos, sgn = unpack_cross_term_pair(ctp, ct_s, label)
-    for u in keys(caches)
-        fill_crossterm_entries!(nz, model, caches[u], pos[u], sgn)
     end
 end
 
