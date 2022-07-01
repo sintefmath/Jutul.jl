@@ -45,7 +45,9 @@ Base.@propagate_inbounds function update_equation_in_entity!(v, cellno, state, s
     v[] = ∂t - (∂²x + ∂²y)
 end
 
-number_of_equations_per_entity(model, ::SimpleHeatEquation) = 1
+number_of_equations_per_entity(model::SimulationModel, ::SimpleHeatEquation) = 1
+
+local_discretization(eq::SimpleHeatEquation, i) = nothing
 
 # Set up equation for system
 function select_equations_system!(eqs, domain, system::SimpleHeatSystem, formulation)
