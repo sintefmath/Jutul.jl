@@ -234,12 +234,24 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
             # Grab offsets relative to group ordering
             target_offset = local_group_offset(target_keys, target)
             source_offset = local_group_offset(source_keys, source)
-            align_cross_term_diagonal_local!(ctp, lsys, ct_s.target, models, ct_s.target_entities, equation_offset + target_offset, variable_offset + target_offset)
-            align_cross_term_offdiagonal_local!(ctp, lsys, ct_s.target, ct_s.offdiagonal_alignment.from_source, models, ct_s.target_entities, equation_offset + target_offset, variable_offset + source_offset)
+            # impact = ct_s.source_entities
+            impact = ct_s.target_entities
+            @info impact
+            # Diagonal part: Into target equation, and with respect to target variables
+            eo_diag = equation_offset + target_offset
+            vo_diag = variable_offset + target_offset
+            align_cross_term_diagonal_local!(ctp, lsys, ct_s.target, models, impact, eo_diag, vo_diag)
+            # Off-diagonal part: Into target equation, but with respect to source variables
+            vo_offdiag = variable_offset + source_offset
+            align_cross_term_offdiagonal_local!(ctp, lsys, ct_s.target, ct_s.offdiagonal_alignment.from_source, models, impact, eo_diag, vo_offdiag)
             if has_symmetry(ct)
+                # If we have symmetry, we repeat the same process but reversing the terms
+                impact = ct_s.target_entities
                 ctp_t = transpose(ctp)
-                align_cross_term_diagonal_local!(ctp, lsys, ct_s.source, models, ct_s.source_entities, equation_offset + source_offset, variable_offset + source_offset)
-                align_cross_term_offdiagonal_local!(ctp_t, lsys, ct_s.source, ct_s.offdiagonal_alignment.from_target, models, ct_s.source_entities, equation_offset + source_offset, variable_offset + target_offset)
+                eo_t_diag = equation_offset + source_offset
+                eo_t_offdiag = variable_offset + target_offset
+                align_cross_term_diagonal_local!(ctp, lsys, ct_s.source, models, impact, eo_t_diag, vo_offdiag)
+                align_cross_term_offdiagonal_local!(ctp_t, lsys, ct_s.source, ct_s.offdiagonal_alignment.from_target, models, impact, eo_t_diag, eo_t_offdiag)
             end
         end
     end
@@ -302,11 +314,14 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target, true)
 
         for (ctp, s) in zip(cross_terms, cross_term_storage)
-            if ctp.target == target
+            if ctp.target.label == target
                 add_sparse_local!(I, J, ctp, s.target, target_model, source_model, s.target_entities, layout)
             else
+                # The filter found a cross term with symmetry, that has "target" as the source. We then need to add it here,
+                # reversing most of the inputs, but keeping the entities from target since that is where we are "looking"
+                @assert ctp.source.label == target
                 @assert has_symmetry(ctp)
-                add_sparse_local!(J, I, transpose(ctp), s.source, source_model, target_model, s.source_entities, layout)
+                add_sparse_local!(J, I, transpose(ctp), s.source, source_model, target_model, s.target_entities, layout)
             end
         end
         I = vec(vcat(I...))
