@@ -275,7 +275,7 @@ function get_equation_offset(model::SimulationModel, eq_label::Symbol)
         if k == eq_label
             return offset
         else
-            offset += number_of_equations(model, model.equations[eq_label])
+            offset += number_of_equations(model, model.equations[k])
         end
     end
     error("Did not find equation")
@@ -306,7 +306,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
                 add_sparse_local!(I, J, ctp, s.target, target_model, source_model, s.target_entities, layout)
             else
                 @assert has_symmetry(ctp)
-                add_sparse_local!(I, J, transpose(ctp), s.source, source_model, target_model, s.source_entities, layout)
+                add_sparse_local!(J, I, transpose(ctp), s.source, source_model, target_model, s.source_entities, layout)
             end
         end
         I = vec(vcat(I...))
