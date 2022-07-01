@@ -145,22 +145,28 @@ end
 
 function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     F!(out, state, state0, i) = update_equation_in_entity!(out, i, state, state0, eq, model, 1.0)
-    return create_equation_caches(model, eq, storage, F!; kwarg...)
+    N = number_of_entities(model, eq)
+    n = number_of_equations_per_entity(model, eq)
+    e = associated_entity(eq)
+    return create_equation_caches(model, n, N, storage, F!, e; kwarg...)
 end
 
-function create_equation_caches(model, eq, storage, F!, N = number_of_entities(model, eq); kwarg...)
+function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, self_entity = nothing; kwarg...)
     state = storage[:state]
     state0 = storage[:state0]
     entities = all_ad_entities(state, state0)
     caches = Dict()
-    n = number_of_equations_per_entity(model, eq)
-    self_e = associated_entity(eq)
-    nt = count_active_entities(model.domain, self_e)
+    # n = number_of_equations_per_entity(model, eq)
+    if isnothing(self_entity)
+        nt = 0
+    else
+        nt = count_active_entities(model.domain, self_entity)
+    end
     for (e, epack) in entities
-        @timeit "sparsity detection" S = determine_sparsity(F!, n, state, state0, e, entities, N)
+        @timeit "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
         ns, T = epack
-        has_diagonal = e == self_e && N == nt
-        @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, n, e, S, nt, ns, has_diagonal = has_diagonal)
+        has_diagonal = e == self_entity && number_of_entities == nt
+        @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, equations_per_entity, e, S, nt, ns, has_diagonal = has_diagonal)
     end
     return convert_to_immutable_storage(caches)
 end
@@ -346,8 +352,10 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; positions = no
     if haskey(eq_s, k)
         cache = eq_s[k]
         if isnothing(positions)
+            # Use provided positions
             pos = cache.jacobian_positions
         else
+            # Align against other positions that is provided
             pos = positions[k]
         end
         # J = cache.variables
