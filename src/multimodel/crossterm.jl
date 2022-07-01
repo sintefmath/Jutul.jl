@@ -100,14 +100,12 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     F_t!(out, state, state0, i) = update_cross_term_in_entity!(out, i, state, state0, as_value(state_s), as_value(state_s0), model_t, model_s, param_t, param_s, ct, eq_t, 1.0)
     F_s!(out, state, state0, i) = update_cross_term_in_entity!(out, i, as_value(state_t), as_value(state_t0), state, state0, model_t, model_s, param_t, param_s, ct, eq_t, 1.0)
 
-    caches_t = create_equation_caches(model_t, eq_t, storage_t, F_t!, N)
-    if isnothing(eq_s)
-        # Note: Sending same equation
-        eq_other = eq_t
-    else
-        eq_other = eq_s
+    n = number_of_equations_per_entity(model_t, eq_t)
+    if !isnothing(eq_s)
+        @assert number_of_equations_per_entity(model_s, eq_s) == n
     end
-    caches_s = create_equation_caches(model_s, eq_other, storage_s, F_s!, N)
+    caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!)
+    caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!)
     # Extra alignment - for off diagonal blocks
     other_align_t = create_extra_alignment(caches_t)
     if has_symmetry(ct)
