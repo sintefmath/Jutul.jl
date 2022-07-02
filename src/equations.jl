@@ -70,7 +70,8 @@ function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMa
     adj = represented_as_adjoint(layout)
     pos = find_sparse_position(A, row, col, adj)
     if pos == 0
-        @warn "Unable to map $row, $col: Not allocated in matrix."
+        msg = "Unable to map $row, $col: Not allocated in matrix."
+        @warn msg
     end
     return pos
 end

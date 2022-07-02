@@ -63,28 +63,28 @@ has_symmetry(x::CrossTermPair) = has_symmetry(x.cross_term)
 
 function cross_term_pair(model, storage, source, target, include_symmetry = false)
     if include_symmetry
-        f = x -> (x.target.label == target && x.source.label == source) || 
-                 (has_symmetry(x) && (x.target.label == source && x.source.label == target))
+        f = x -> (x.target == target && x.source == source) || 
+                 (has_symmetry(x) && (x.target == source && x.source == target))
     else
-        f = x -> x.target.label == target && x.source.label == source
+        f = x -> x.target == target && x.source == source
     end
     return cross_term_mapper(model, storage, f)
 end
 
 function cross_term_target(model, storage, target, include_symmetry = false)
     if include_symmetry
-        f = x -> x.target.label == target || (has_symmetry(x.cross_term) && x.source.label == target)
+        f = x -> x.target == target || (has_symmetry(x.cross_term) && x.source == target)
     else
-        f = x -> x.target.label == target
+        f = x -> x.target == target
     end
     return cross_term_mapper(model, storage, f)
 end
 
 function cross_term_source(model, storage, source, include_symmetry = false)
     if include_symmetry
-        f = x -> x.source.label == source || (has_symmetry(x.cross_term) && x.target.label == source)
+        f = x -> x.source == source || (has_symmetry(x.cross_term) && x.target == source)
     else
-        f = x -> x.source.label == source
+        f = x -> x.source == source
     end
     return cross_term_mapper(model, storage, f)
 end
@@ -131,17 +131,17 @@ function setup_cross_terms_storage!(storage, model)
     cross_terms = model.cross_terms
     models = model.models
 
-    storage_and_model(ctm) = (storage[ctm.label], models[ctm.label])
+    storage_and_model(t) = (storage[t], models[t])
     v = Vector()
     for ct in cross_terms
         term = ct.cross_term
         s_t, m_t = storage_and_model(ct.target)
         s_s, m_s = storage_and_model(ct.source)
-        eq_t = m_t.equations[ct.target.equation]
+        eq_t = m_t.equations[ct.equation]
         if isnothing(symmetry(term))
             eq_s = nothing
         else
-            eq_s = m_s.equations[ct.source.equation]
+            eq_s = m_s.equations[ct.equation]
         end
 
         ct_s = setup_cross_term_storage(term, eq_t, eq_s, m_t, m_s, s_t, s_s)
@@ -227,8 +227,8 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
         error("Should not happen")
     end
     for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
-        target = ctp.target.label
-        source = ctp.source.label
+        target = ctp.target
+        source = ctp.source
         if target in target_keys && source in source_keys
             ct = ctp.cross_term
             # Grab offsets relative to group ordering
@@ -242,7 +242,7 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
             # Diagonal part: Into target equation, and with respect to target variables
             eo_diag = equation_offset + target_offset
             vo_diag = variable_offset + target_offset
-            eq_label = ctp.target.equation
+            eq_label = ctp.equation
 
             s_t = ct_s.target
             align_cross_term_diagonal_local!(ct, target_model, eq_label, lsys, s_t, impact_t, eo_diag, vo_diag)
@@ -255,7 +255,7 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
                 # If we have symmetry, we repeat the same process but reversing the terms
                 impact_s = ct_s.source_entities
                 s_s = ct_s.source
-                eq_label_s = ctp.source.equation
+                eq_label_s = ctp.equation
                 # o_algn_s = ct_s.offdiagonal_alignment.from_target
                 o_algn_s = ct_s.offdiagonal_alignment.from_source
                 eo_t_diag = equation_offset + source_offset
@@ -317,17 +317,17 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
 
         for (ctp, s) in zip(cross_terms, cross_term_storage)
             ct = ctp.cross_term
-            transp = ctp.source.label == target
+            transp = ctp.source == target
             if transp
                 # The filter found a cross term with symmetry, that has "target" as the source. We then need to add it here,
                 # reversing most of the inputs
-                @assert ctp.source.label == target
+                @assert ctp.source == target
                 @assert has_symmetry(ctp)
-                eq_label = ctp.source.equation
+                eq_label = ctp.equation
                 ct_storage = s.source
                 entities = s.source_entities
             else
-                eq_label = ctp.target.equation
+                eq_label = ctp.equation
                 ct_storage = s.target
                 entities = s.target_entities
             end
@@ -535,12 +535,12 @@ end
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     models = model.models
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
-        target = ctp.target.label
-        source = ctp.source.label
+        target = ctp.target
+        source = ctp.source
         if target in targets && source in sources
             ct = ctp.cross_term
             model_t = models[target]
-            eq = model_t.equations[ctp.target.equation]
+            eq = model_t.equations[ctp.equation]
             update_cross_term!(ct_s, ct, eq, storage[target], storage[source], model_t, models[source], dt)
         end
     end
@@ -676,8 +676,8 @@ end
 function source_impact_for_pair(ctp, ct_s, label)
     if true
         sgn = 1
-        if ctp.target.label != label
-            eq_label = ctp.target.equation
+        if ctp.target != label
+            eq_label = ctp.equation
             impact = ct_s.target_entities
             caches = ct_s.target
             pos = ct_s.offdiagonal_alignment.from_target
@@ -685,7 +685,7 @@ function source_impact_for_pair(ctp, ct_s, label)
                 sgn = -1
             end
         else
-            eq_label = ctp.source.equation
+            eq_label = ctp.equation
             impact = ct_s.source_entities
             caches = ct_s.source
             pos = ct_s.offdiagonal_alignment.from_source
@@ -693,7 +693,7 @@ function source_impact_for_pair(ctp, ct_s, label)
         return (eq_label, impact, caches, pos, sgn)
     else
         sgn = 1
-        if ctp.target.label == label
+        if ctp.target == label
             impact = ct_s.source_entities
             caches = ct_s.source
             pos = ct_s.offdiagonal_alignment.from_target
@@ -706,7 +706,7 @@ function source_impact_for_pair(ctp, ct_s, label)
             caches = ct_s.target
             pos = ct_s.offdiagonal_alignment.from_source
         end
-        return (ctp.target.equation, impact, caches, pos, sgn)    
+        return (ctp.equation, impact, caches, pos, sgn)    
     end
 end
 
@@ -763,8 +763,8 @@ function update_offdiagonal_blocks!(storage, model, targets, sources)
     models = model.models
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
         ct = ctp.cross_term
-        t = ctp.target.label
-        s = ctp.source.label
+        t = ctp.target
+        s = ctp.source
         if t in targets && s in sources
             lsys = get_linearized_system_model_pair(storage, model, s, t, linearized_system)
             update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[s], ctp, ct_s, t)

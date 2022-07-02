@@ -23,7 +23,7 @@ function test_multi(; use_groups = false, kwarg...)
         groups = nothing
     end
     model = MultiModel((A = modelA, B = modelB), groups = groups)
-    add_cross_term!(model, ScalarTestCrossTerm(), target = :A, source = :B, target_equation = :test_equation)
+    add_cross_term!(model, ScalarTestCrossTerm(), target = :A, source = :B, equation = :test_equation)
     # Set up joint state and forces
     state0 = setup_state(model, A = state0A, B = state0B)
     forces = setup_forces(model, A = forcesA, B = forcesB)

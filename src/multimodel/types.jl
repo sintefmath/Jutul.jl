@@ -9,20 +9,16 @@ struct MultiModelCoupling
     end   
 end
 
-struct CrossTermMeta
-    label::Symbol
-    equation::Union{Symbol, Nothing}
-end
-
 abstract type CrossTerm end
 
 struct CrossTermPair
-    target::CrossTermMeta
-    source::CrossTermMeta
+    target::Symbol
+    source::Symbol
+    equation::Symbol
     cross_term::CrossTerm
 end
 
-Base.transpose(c::CrossTermPair) = CrossTermPair(c.source, c.target, c.cross_term)
+Base.transpose(c::CrossTermPair) = CrossTermPair(c.source, c.target, c.equation, c.cross_term,)
 
 struct MultiModel{M, T} <: JutulModel
     models::M
