@@ -350,14 +350,18 @@ end
 function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; positions = nothing, equation_offset = 0, variable_offset = 0)
     # Use generic version
     k = Symbol(entity)
+    has_pos = !isnothing(positions)
+    if has_pos
+        @assert keys(positions) == keys(eq_s)
+    end
     if haskey(eq_s, k)
         cache = eq_s[k]
-        if isnothing(positions)
-            # Use provided positions
-            pos = cache.jacobian_positions
-        else
+        if has_pos
             # Align against other positions that is provided
             pos = positions[k]
+        else
+            # Use positions from cache
+            pos = cache.jacobian_positions
         end
         # J = cache.variables
         I, J = generic_cache_declare_pattern(cache, arg...)
