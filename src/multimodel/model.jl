@@ -1,17 +1,35 @@
-function Base.show(io::IO, t::MIME"text/plain", m::MultiModel)
-    submodels = m.models
+function Base.show(io::IO, t::MIME"text/plain", model::MultiModel)
+    submodels = model.models
+    cross_terms = model.cross_terms
+
     if get(io, :compact, false)
     else
     end
-    println(io, "MultiModel with $(length(submodels)) submodels:")
-    for key in keys(submodels)
+    println(io, "MultiModel with $(length(submodels)) models and $(length(cross_terms)) cross-terms.")
+    println(io , "\n  models:")
+    for (i, key) in enumerate(keys(submodels))
         m = submodels[key]
         s = m.system
         if hasproperty(m.domain, :grid)
             g = m.domain.grid
-            println(io, "  $key: $(s) ∈ $(g)")
         else
-            println(io, "  $key: $(s) ∈ $(typeof(m.domain))")
+            g = typeof(m.domain)
+        end
+        println(io, "    $i) $key\n       $(s) ∈ $g")
+
+    end
+    if length(cross_terms) > 0
+        println(io , "\n  cross_terms:")
+        for (i, ct_s) in enumerate(cross_terms)
+            (; cross_term, target, source) = ct_s
+            t = typeof(cross_term)
+            if has_symmetry(cross_term)
+                arrow = "<->"
+            else
+                arrow = " ->"
+            end
+            println(io, "    $i) $source $arrow $target")
+            println(io, "       $t")
         end
     end
 end
