@@ -82,6 +82,7 @@ function inner_sparsity_ct(target_impact, source_impact, nentities_source, nenti
 end
 
 function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, storage_t, storage_s)
+    is_symm = has_symmetry(ct)
     # Find all entities x
     active = cross_term_entities(ct, eq_t, model_t)
 
@@ -106,8 +107,8 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!)
     caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!)
     # Extra alignment - for off diagonal blocks
-    other_align_t = create_extra_alignment(caches_t)
-    if has_symmetry(ct)
+    other_align_t = create_extra_alignment(caches_t, allocate = is_symm)
+    if is_symm
         other_align_s = create_extra_alignment(caches_s)
         active_source = cross_term_entities_source(ct, eq_s, model_s)
         out = (
@@ -125,10 +126,16 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     return out
 end
 
-function create_extra_alignment(cache)
+function create_extra_alignment(cache; allocate = true)
     out = Dict{Symbol, Any}()
     for k in keys(cache)
-        out[k] = similar(cache[k].jacobian_positions)
+        jp = cache[k].jacobian_positions
+        if allocate
+            next = similar(jp)
+        else
+            next = jp
+        end
+        out[k] = next
     end
     return convert_to_immutable_storage(out)
 end
