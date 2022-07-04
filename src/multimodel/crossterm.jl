@@ -42,7 +42,6 @@ function declare_sparsity(target_model, source_model, eq::JutulEquation, x::Cros
     if isnothing(primitive)
         out = nothing
     else
-        @info x primitive entity_indices
         target_impact = primitive[1]
         source_impact = primitive[2]
         nentities_source = count_active_entities(source_model.domain, source_entity)
@@ -105,7 +104,6 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     if !isnothing(eq_s)
         @assert number_of_equations_per_entity(model_s, eq_s) == n
     end
-    @info "Cross term" ct
     caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!)
     caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!)
     # Extra alignment - for off diagonal blocks
