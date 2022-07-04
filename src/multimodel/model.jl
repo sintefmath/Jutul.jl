@@ -349,7 +349,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
                 ct_storage = s.source
                 entities = s.target_entities
             end
-            add_sparse_local!(I, J, ct, eq_label, ct_storage, target_model, source_model, entities, transp, layout)
+            add_sparse_local!(I, J, ct, eq_label, ct_storage, target_model, source_model, entities, layout)
         end
         I = vec(vcat(I...))
         J = vec(vcat(J...))
@@ -375,7 +375,7 @@ function number_of_rows(model, layout::BlockMajorLayout)
     return n
 end
 
-function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind, transp, layout::EquationMajorLayout)
+function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind, layout::EquationMajorLayout)
     eq = target_model.equations[eq_label]
     target_e = associated_entity(eq)
     entities = get_primary_variable_ordered_entities(source_model)
@@ -384,13 +384,8 @@ function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind
     for (i, source_e) in enumerate(entities)
         S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, layout)
         if !isnothing(S)
-            if transp
-                cols = S.I
-                rows = S.J
-            else
-                rows = S.I
-                cols = S.J
-            end
+            rows = S.I
+            cols = S.J
             push!(I, rows .+ equation_offset)
             push!(J, cols .+ variable_offset)
         end

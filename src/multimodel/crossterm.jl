@@ -37,20 +37,14 @@ function update_linearized_system_crossterm!(nz, model_t, model_s, ct::Injective
 end
 
 
-function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, transp, layout)
+function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, layout)
     primitive = declare_pattern(target_model, x, x_storage, source_entity, entity_indices)
     if isnothing(primitive)
         out = nothing
     else
         @info x primitive entity_indices
-
-        if transp && false
-            source_impact = primitive[1]
-            target_impact = primitive[2]
-        else
-            target_impact = primitive[1]
-            source_impact = primitive[2]
-        end
+        target_impact = primitive[1]
+        source_impact = primitive[2]
         nentities_source = count_active_entities(source_model.domain, source_entity)
         nentities_target = count_active_entities(target_model.domain, target_entity)
 
