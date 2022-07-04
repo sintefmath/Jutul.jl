@@ -510,12 +510,13 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
     function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulUnit, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true) where I
         counts = map(length, sparsity)
         # Create value storage with AD type
-        v = zeros(T, nvalues_per_entity, sum(counts))
+        num_entities_touched = sum(counts)
+        v = zeros(T, nvalues_per_entity, num_entities_touched)
         A = typeof(v)
         # Create various index mappings + alignment from sparsity
         variables = vcat(sparsity...)
         pos = cumsum(vcat(1, counts))
-        algn = zeros(I, nvalues_per_entity*number_of_partials(T), length(v))
+        algn = zeros(I, nvalues_per_entity*number_of_partials(T), num_entities_touched)
         if has_diagonal
             # Create indices into the self-diagonal part if requested, asserting that the diagonal is present
             m = length(sparsity)
