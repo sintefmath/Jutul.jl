@@ -248,16 +248,16 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
             align_cross_term_diagonal_local!(ct, target_model, eq_label, lsys, s_t, impact_t, eo_diag, vo_diag)
             # Off-diagonal part: Into target equation, but with respect to source variables
             vo_offdiag = variable_offset + source_offset
-            # o_algn_t = ct_s.offdiagonal_alignment.from_source
-            o_algn_t = ct_s.offdiagonal_alignment.from_target
+            o_algn_t = ct_s.offdiagonal_alignment.from_source
+            # o_algn_t = ct_s.offdiagonal_alignment.from_target
             align_cross_term_offdiagonal_local!(ct, target_model, source_model, eq_label, lsys, s_t, o_algn_t, impact_t, eo_diag, vo_offdiag)
             if has_symmetry(ct)
                 # If we have symmetry, we repeat the same process but reversing the terms
                 impact_s = ct_s.source_entities
                 s_s = ct_s.source
                 eq_label_s = ctp.equation
-                # o_algn_s = ct_s.offdiagonal_alignment.from_target
-                o_algn_s = ct_s.offdiagonal_alignment.from_source
+                o_algn_s = ct_s.offdiagonal_alignment.from_target
+                # o_algn_s = ct_s.offdiagonal_alignment.from_source
                 eo_t_diag = equation_offset + source_offset
                 eo_t_offdiag = variable_offset + target_offset
                 align_cross_term_diagonal_local!(ct, source_model, eq_label_s, lsys, s_s, impact_s, eo_t_diag, vo_offdiag)
@@ -277,6 +277,7 @@ end
 
 function align_cross_term_offdiagonal_local!(ct, target_model, source_model, equation_label, lsys, ct_s, offdiag_alignment, impact, equation_offset, variable_offset)
     equation_offset += get_equation_offset(target_model, equation_label)
+    @assert !isnothing(offdiag_alignment)
     for source_e in get_primary_variable_ordered_entities(source_model)
         align_to_jacobian!(ct_s, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset, variable_offset = variable_offset, positions = offdiag_alignment)
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
@@ -676,18 +677,21 @@ end
 function source_impact_for_pair(ctp, ct_s, label)
     if true
         sgn = 1
+        eq_label = ctp.equation
         if ctp.target != label
-            eq_label = ctp.equation
-            impact = ct_s.target_entities
+            # impact = ct_s.target_entities
+            impact = ct_s.source_entities
             caches = ct_s.target
+            # pos = ct_s.offdiagonal_alignment.from_source
             pos = ct_s.offdiagonal_alignment.from_target
             if symmetry(ctp.cross_term) == CTSkewSymmetry()
                 sgn = -1
             end
         else
-            eq_label = ctp.equation
-            impact = ct_s.source_entities
+            # impact = ct_s.source_entities
+            impact = ct_s.target_entities
             caches = ct_s.source
+            # pos = ct_s.offdiagonal_alignment.from_target
             pos = ct_s.offdiagonal_alignment.from_source
         end
         return (eq_label, impact, caches, pos, sgn)
@@ -718,13 +722,15 @@ function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_stora
         ct = ctp.cross_term
         eq_label, impact, caches, _, sgn = source_impact_for_pair(ctp, ct_s, label)
         eq = model.equations[eq_label]
+        @assert !isnothing(impact)
         r = local_residual_view(r_buf, model, eq, equation_offset + get_equation_offset(model, eq_label))
         update_linearized_system_cross_term!(nz, r, model, ct, caches, impact, sgn)
     end
 end
 
 function update_offdiagonal_linearized_system_cross_term!(nz, model, ctp, ct_s, label)
-    _, impact, caches, pos, sgn = source_impact_for_pair(ctp, ct_s, label)
+    _, _, caches, pos, sgn = source_impact_for_pair(ctp, ct_s, label)
+    @assert !isnothing(pos)
     for u in keys(caches)
         fill_crossterm_entries!(nz, model, caches[u], pos[u], sgn)
     end

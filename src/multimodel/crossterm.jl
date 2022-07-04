@@ -84,7 +84,6 @@ end
 function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, storage_t, storage_s)
     # Find all entities x
     active = cross_term_entities(ct, eq_t, model_t)
-    active_source = cross_term_entities_source(ct, eq_s, model_s)
 
     N = length(active)
 
@@ -110,15 +109,20 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     other_align_t = create_extra_alignment(caches_t)
     if has_symmetry(ct)
         other_align_s = create_extra_alignment(caches_s)
-    else
-        other_align_s = nothing
-    end
-
-    return (
+        active_source = cross_term_entities_source(ct, eq_s, model_s)
+        out = (
             target = caches_t, source = caches_s,
             target_entities = active, source_entities = active_source,
             offdiagonal_alignment = (from_target = other_align_t, from_source = other_align_s)
-            )
+        )
+    else
+        out = (
+            target = caches_t, source = caches_s,
+            target_entities = active,
+            offdiagonal_alignment = (from_source = other_align_t, )
+        )
+    end
+    return out
 end
 
 function create_extra_alignment(cache)
