@@ -37,13 +37,20 @@ function update_linearized_system_crossterm!(nz, model_t, model_s, ct::Injective
 end
 
 
-function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, layout)
+function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, transp, layout)
     primitive = declare_pattern(target_model, x, x_storage, source_entity, entity_indices)
     if isnothing(primitive)
         out = nothing
     else
-        target_impact = primitive[1]
-        source_impact = primitive[2]
+        @info x primitive entity_indices
+
+        if transp && false
+            source_impact = primitive[1]
+            target_impact = primitive[2]
+        else
+            target_impact = primitive[1]
+            source_impact = primitive[2]
+        end
         nentities_source = count_active_entities(source_model.domain, source_entity)
         nentities_target = count_active_entities(target_model.domain, target_entity)
 
@@ -104,6 +111,7 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     if !isnothing(eq_s)
         @assert number_of_equations_per_entity(model_s, eq_s) == n
     end
+    @info "Cross term" ct
     caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!)
     caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!)
     # Extra alignment - for off diagonal blocks
