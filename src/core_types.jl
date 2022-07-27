@@ -508,6 +508,8 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
     number_of_entities_target::Integer
     number_of_entities_source::Integer
     function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulUnit, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true) where I
+        @assert nt > 0
+        @assert ns > 0
         counts = map(length, sparsity)
         # Create value storage with AD type
         num_entities_touched = sum(counts)

@@ -1,36 +1,4 @@
-# function align_to_jacobian!(ct::InjectiveCrossTerm, lsys, target::JutulModel, source::JutulModel; equation_offset = 0, variable_offset = 0)
-#     cs = ct.crossterm_source_cache
-#     jac = lsys.jac
-#     impact_target = ct.impact[1]
-#     impact_source = ct.impact[2]
-#     pentities = get_primary_variable_ordered_entities(source)
-#     nu_t = count_active_entities(target.domain, ct.entities.target)
-#     for u in pentities
-#         nu_s = count_active_entities(source.domain, u)
-#         sc = source.context
-#         injective_alignment!(cs, nothing, jac, u, sc,
-#                                                 target_index = impact_target,
-#                                                 source_index = impact_source,
-#                                                 layout = lsys.matrix_layout,
-#                                                 target_offset = equation_offset,
-#                                                 source_offset = variable_offset,
-#                                                 number_of_entities_source = nu_s,
-#                                                 number_of_entities_target = nu_t)
-#         variable_offset += number_of_degrees_of_freedom(source, u)
-#     end
-# end
 local_discretization(::CrossTerm, i) = nothing
-
-target_impact(ct) = ct.impact.target
-
-function apply_cross_term!(eq_s, eq, ct, model_t, model_s, arg...)
-    ix = target_impact(ct)
-    d = get_diagonal_entries(eq, eq_s)
-    # NOTE: We do not use += here due to sparse oddities with ForwardDiff.
-    increment_diagonal_ct!(d, ct.crossterm_target, ix)
-end
-
-increment_diagonal_ct!(d, T, ix) = @tullio d[i, ix[j]] += T[i, j]
 
 function update_linearized_system_crossterm!(nz, model_t, model_s, ct::InjectiveCrossTerm)
     fill_equation_entries!(nz, nothing, model_s, ct.crossterm_source_cache)
@@ -101,11 +69,17 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     F_s!(out, state, state0, i) = update_cross_term_in_entity!(out, i, as_value(state_t), as_value(state_t0), state, state0, model_t, model_s, param_t, param_s, ct, eq_t, 1.0)
 
     n = number_of_equations_per_entity(model_t, eq_t)
+    ne_t = count_active_entities(model_t.domain, associated_entity(eq_t))
+
     if !isnothing(eq_s)
         @assert number_of_equations_per_entity(model_s, eq_s) == n
+        ne_s = count_active_entities(model_s.domain, associated_entity(eq_s))
+    else
+        ne_s = ne_t
     end
-    caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!)
-    caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!)
+
+    caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_s)
+    caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_t)
     # Extra alignment - for off diagonal blocks
     other_align_t = create_extra_alignment(caches_s, allocate = is_symm)
     if is_symm

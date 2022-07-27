@@ -70,7 +70,9 @@ function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMa
     adj = represented_as_adjoint(layout)
     pos = find_sparse_position(A, row, col, adj)
     if pos == 0
+        @info "" A
         msg = "Unable to map $row, $col: Not allocated in matrix."
+        error(msg)
         @warn msg
     end
     return pos
@@ -149,24 +151,21 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     N = number_of_entities(model, eq)
     n = number_of_equations_per_entity(model, eq)
     e = associated_entity(eq)
-    return create_equation_caches(model, n, N, storage, F!, e; kwarg...)
+    nt = count_active_entities(model.domain, e)
+    return create_equation_caches(model, n, N, storage, F!, nt; self_entity = e, kwarg...)
 end
 
-function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, self_entity = nothing; kwarg...)
+function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, nt::Integer = 0; self_entity = nothing, kwarg...)
     state = storage[:state]
     state0 = storage[:state0]
     entities = all_ad_entities(state, state0)
     caches = Dict()
     # n = number_of_equations_per_entity(model, eq)
-    if isnothing(self_entity)
-        nt = 0
-    else
-        nt = count_active_entities(model.domain, self_entity)
-    end
     for (e, epack) in entities
         @timeit "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
         ns, T = epack
-        has_diagonal = e == self_entity && number_of_entities == nt
+        has_diagonal = number_of_entities == nt && e == self_entity
+        @assert nt > 0 && ns > 0 "nt=$nt ns=$ns"
         @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, equations_per_entity, e, S, nt, ns, has_diagonal = has_diagonal)
     end
     return convert_to_immutable_storage(caches)
@@ -369,6 +368,8 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; positions = no
                                                                     number_of_entities_source = cache.number_of_entities_source,
                                                                     number_of_entities_target = cache.number_of_entities_target,
                                                                     target_offset = equation_offset, source_offset = variable_offset)
+    else
+        @warn "Did not find $k in $(keys(eq_s))"
     end
 end
 
