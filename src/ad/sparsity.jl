@@ -23,11 +23,15 @@ function create_mock_state(state, tag, entities = ad_entities(state))
 end
 
 function as_tracer(x::AbstractVector, tracer)
-    return tracer
+    out = ST.create_advec(value(x))
+    @assert eltype(out) == eltype(tracer)
+    return out
 end
 
 function as_tracer(x::AbstractMatrix, tracer)
-    return repeat(tracer', size(x, 1), 1)
+    # Repeat the process for each row - in Jutul, each row corresponds to the same entity
+    tmp = map(i -> as_tracer(vec(x[i, :]), tracer)', 1:size(x, 1))
+    return vcat(tmp...)
 end
 
 function as_tracer(x, tracer)
