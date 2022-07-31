@@ -687,43 +687,27 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
 end
 
 function source_impact_for_pair(ctp, ct_s, label)
-    if true
-        sgn = 1
-        eq_label = ctp.equation
-        if ctp.target != label
-            # impact = ct_s.target_entities
-            impact = ct_s.source_entities
-            caches = ct_s.target
-            # pos = ct_s.offdiagonal_alignment.from_source
-            pos = ct_s.offdiagonal_alignment.from_target
-            if symmetry(ctp.cross_term) == CTSkewSymmetry()
-                sgn = -1
-            end
-        else
-            # impact = ct_s.source_entities
-            impact = ct_s.target_entities
-            caches = ct_s.source
-            # pos = ct_s.offdiagonal_alignment.from_target
-            pos = ct_s.offdiagonal_alignment.from_source
+    sgn = 1
+    eq_label = ctp.equation
+    if ctp.target != label
+        # impact = ct_s.target_entities
+        impact = ct_s.source_entities
+        caches_s = ct_s.target
+        caches_t = ct_s.source
+        # pos = ct_s.offdiagonal_alignment.from_source
+        pos = ct_s.offdiagonal_alignment.from_target
+        if symmetry(ctp.cross_term) == CTSkewSymmetry()
+            sgn = -1
         end
-        return (eq_label, impact, caches, pos, sgn)
     else
-        sgn = 1
-        if ctp.target == label
-            impact = ct_s.source_entities
-            caches = ct_s.source
-            pos = ct_s.offdiagonal_alignment.from_target
-        else
-            ctp = transpose(ctp)
-            if symmetry(ctp.cross_term) == CTSkewSymmetry()
-                sgn = -1
-            end
-            impact = ct_s.target_entities
-            caches = ct_s.target
-            pos = ct_s.offdiagonal_alignment.from_source
-        end
-        return (ctp.equation, impact, caches, pos, sgn)    
+        # impact = ct_s.source_entities
+        impact = ct_s.target_entities
+        caches_s = ct_s.source
+        caches_t = ct_s.target
+        # pos = ct_s.offdiagonal_alignment.from_target
+        pos = ct_s.offdiagonal_alignment.from_source
     end
+    return (eq_label, impact, caches_s, caches_t, pos, sgn)
 end
 
 function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_storage, model, label; equation_offset = 0)
@@ -732,7 +716,7 @@ function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_stora
     r_buf = lsys.r_buffer
     for (ctp, ct_s) in zip(crossterms, crossterm_storage)
         ct = ctp.cross_term
-        eq_label, impact, caches, _, sgn = source_impact_for_pair(ctp, ct_s, label)
+        eq_label, impact, _, caches, _, sgn = source_impact_for_pair(ctp, ct_s, label)
         eq = model.equations[eq_label]
         @assert !isnothing(impact)
         r = local_residual_view(r_buf, model, eq, equation_offset + get_equation_offset(model, eq_label))
@@ -741,7 +725,7 @@ function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_stora
 end
 
 function update_offdiagonal_linearized_system_cross_term!(nz, model, ctp, ct_s, label)
-    _, _, caches, pos, sgn = source_impact_for_pair(ctp, ct_s, label)
+    _, _, caches, _, pos, sgn = source_impact_for_pair(ctp, ct_s, label)
     @assert !isnothing(pos)
     for u in keys(caches)
         fill_crossterm_entries!(nz, model, caches[u], pos[u], sgn)
