@@ -277,7 +277,7 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
                 o_algn_s = ct_s.offdiagonal_alignment.from_target
                 eo_t_diag = equation_offset + source_offset
                 eo_t_offdiag = variable_offset + target_offset
-                align_cross_term_diagonal_local!(ct, source_model, eq_label_s, lsys, s_s, impact_s, eo_t_diag, vo_offdiag)
+                align_cross_term_diagonal_local!(ct, target_model, eq_label_s, lsys, s_s, impact_s, eo_t_diag, vo_offdiag)
                 align_cross_term_offdiagonal_local!(ct, source_model, target_model, eq_label_s, lsys, s_t, o_algn_s, impact_s, eo_t_diag, eo_t_offdiag)
             end
         end
