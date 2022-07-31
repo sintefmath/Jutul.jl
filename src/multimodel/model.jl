@@ -753,7 +753,7 @@ function increment_equation_entries!(nz, r, model, cache, impact, sgn)
                 end
                 for d = 1:np
                     ix = get_jacobian_pos(cache, j, e, d)
-                    nz[ix] -= a.partials[d]
+                    nz[ix] += a.partials[d]
                 end
             end
         end
