@@ -208,13 +208,35 @@ end
 
 function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
-    crossterms = model.cross_terms
+    cross_terms = model.cross_terms
     cross_term_storage = storage[:cross_terms]
     ndofs = model.number_of_degrees_of_freedom
     model_keys = submodel_symbols(model)
     ndofs = model.number_of_degrees_of_freedom
-
     lsys = storage[:LinearizedSystem]
+
+    for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
+        ct = ctp.cross_term
+        target = ctp.target
+        source = ctp.source
+        impact_t = ct_s.target_entities
+
+        o_algn_t = ct_s.offdiagonal_alignment.from_source
+
+        @info "" target source impact_t
+        diagonal_crossterm_alignment!(ct_s.target, ct, lsys, model, target, source, ctp.equation, impact_t, equation_offset, variable_offset)
+        offdiagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, target, source, ctp.equation, impact_t, o_algn_t, equation_offset, variable_offset)
+
+        error()
+        # Align diagonal
+        # Align offdiagonal
+        # If symmetry, repeat the process with reversed terms
+        if has_symmetry(ct)
+
+        end
+    end
+
+    error()
     if has_groups(model)
         ng = number_of_groups(model)
         groups = model.groups
@@ -224,8 +246,9 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
             for source_g in 1:ng
                 s_subs = groups .== source_g
                 source_keys = model_keys[s_subs]
+                @info "!" target_g source_g target_keys source_keys
                 ls = lsys[target_g, source_g]
-                align_crossterms_subgroup!(storage, models, crossterms, cross_term_storage, target_keys, source_keys, ndofs, ls, equation_offset, variable_offset)
+                align_crossterms_subgroup!(storage, models, crossterms, cross_term_storage, target_keys, source_keys, ndofs, ls, equation_offset, variable_offset, align_diag = source_g == target_g)
             end
         end
     else
@@ -233,25 +256,75 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
     end
 end
 
-function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_storage, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset)
-    function local_group_offset(keys, target_key)
-        offset = 0
-        for k in keys
-            if k == target_key
-                return offset
-            end
-            offset += ndofs[k]
+function local_group_offset(keys, target_key, ndofs)
+    offset = 0
+    for k in keys
+        if k == target_key
+            return offset
         end
-        error("Should not happen")
+        offset += ndofs[k]
     end
+    error("Should not happen")
+end
+
+function crossterm_subsystem(model, lsys, target, source; diag = false)
+    ndofs = model.number_of_degrees_of_freedom
+    model_keys = submodel_symbols(model)
+    groups = model.groups
+
+    function get_group(s)
+        g = groups[findfirst(isequal(s), model_keys)]
+        g_k = model_keys[groups .== g]
+        return (g, g_k)
+    end
+
+    if isa(lsys, MultiLinearizedSystem)
+        source_g, source_keys = get_group(source)
+        target_g, target_keys = get_group(target)
+        if diag
+            lsys = lsys[target_g, target_g]
+        else
+            lsys = lsys[target_g, source_g]
+        end
+    else
+        source_keys = target_keys = model_keys
+    end
+    target_offset = local_group_offset(target_keys, target, ndofs)
+    source_offset = local_group_offset(source_keys, source, ndofs)    
+
+    return (lsys, target_offset, source_offset)
+end
+
+function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source, eq_label, impact_t, equation_offset, variable_offset)
+    lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = true)
+    target_model = model.models[target]
+    # Diagonal part: Into target equation, and with respect to target variables
+    eo_diag = equation_offset + target_offset
+    vo_diag = variable_offset + target_offset
+
+    align_cross_term_diagonal_local!(ct, target_model, eq_label, lsys, s_target, impact_t, eo_diag, vo_diag)
+end
+
+function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, source, eq_label, impact_t, o_algn_t, equation_offset, variable_offset)
+    lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = false)
+    eo_diag = equation_offset + target_offset
+    vo_offdiag = variable_offset + source_offset
+    target_model = model.models[target]
+    source_model = model.models[source]
+
+    align_cross_term_offdiagonal_local!(ct, source_model, target_model, eq_label, lsys, s_source, o_algn_t, impact_t, eo_diag, vo_offdiag)
+end
+
+function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_storage, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset; align_diag = true, align_offdiag = true)
     for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
         target = ctp.target
         source = ctp.source
+        ct = ctp.cross_term
+
         if target in target_keys && source in source_keys
-            ct = ctp.cross_term
             # Grab offsets relative to group ordering
-            target_offset = local_group_offset(target_keys, target)
-            source_offset = local_group_offset(source_keys, source)
+            target_offset = local_group_offset(target_keys, target, ndofs)
+            source_offset = local_group_offset(source_keys, source, ndofs)
             # Models
             target_model = models[target]
             source_model = models[source]
@@ -265,19 +338,34 @@ function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_sto
             s_t = ct_s.target
             s_s = ct_s.source
 
-            align_cross_term_diagonal_local!(ct, target_model, eq_label, lsys, s_t, impact_t, eo_diag, vo_diag)
-            # Off-diagonal part: Into target equation, but with respect to source variables
-            vo_offdiag = variable_offset + source_offset
-            o_algn_t = ct_s.offdiagonal_alignment.from_source
-            align_cross_term_offdiagonal_local!(ct, target_model, source_model, eq_label, lsys, s_s, o_algn_t, impact_t, eo_diag, vo_offdiag)
-            if has_symmetry(ct)
-                # If we have symmetry, we repeat the same process but reversing the terms
-                impact_s = ct_s.source_entities
-                eq_label_s = ctp.equation
-                o_algn_s = ct_s.offdiagonal_alignment.from_target
-                eo_t_diag = equation_offset + source_offset
-                eo_t_offdiag = variable_offset + target_offset
+            if align_diag
+                align_cross_term_diagonal_local!(ct, target_model, eq_label, lsys, s_t, impact_t, eo_diag, vo_diag)
+            end
+            if align_offdiag
+                # Off-diagonal part: Into target equation, but with respect to source variables
+                vo_offdiag = variable_offset + source_offset
+                o_algn_t = ct_s.offdiagonal_alignment.from_source
+                align_cross_term_offdiagonal_local!(ct, source_model, target_model, eq_label, lsys, s_s, o_algn_t, impact_t, eo_diag, vo_offdiag)
+            end
+        end
+
+        if has_symmetry(ct) && source in target_keys && target in source_keys
+            # Grab offsets relative to group ordering
+            target_offset = local_group_offset(target_keys, target, ndofs)
+            source_offset = local_group_offset(source_keys, source, ndofs)
+            target_model = models[target]
+            source_model = models[source]
+
+            # If we have symmetry, we repeat the same process but reversing the terms
+            impact_s = ct_s.source_entities
+            eq_label_s = ctp.equation
+            o_algn_s = ct_s.offdiagonal_alignment.from_target
+            eo_t_diag = equation_offset + source_offset
+            eo_t_offdiag = variable_offset + target_offset
+            if align_diag
                 align_cross_term_diagonal_local!(ct, target_model, eq_label_s, lsys, s_s, impact_s, eo_t_diag, vo_offdiag)
+            end
+            if align_offdiag
                 align_cross_term_offdiagonal_local!(ct, source_model, target_model, eq_label_s, lsys, s_t, o_algn_s, impact_s, eo_t_diag, eo_t_offdiag)
             end
         end
