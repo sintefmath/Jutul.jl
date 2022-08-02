@@ -220,39 +220,22 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
         target = ctp.target
         source = ctp.source
         impact_t = ct_s.target_entities
-
+        eq_label = ctp.equation
         o_algn_t = ct_s.offdiagonal_alignment.from_source
 
-        @info "" target source impact_t
-        diagonal_crossterm_alignment!(ct_s.target, ct, lsys, model, target, source, ctp.equation, impact_t, equation_offset, variable_offset)
-        offdiagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, target, source, ctp.equation, impact_t, o_algn_t, equation_offset, variable_offset)
-
-        error()
         # Align diagonal
+        diagonal_crossterm_alignment!(ct_s.target, ct, lsys, model, target, source, eq_label, impact_t, equation_offset, variable_offset)
         # Align offdiagonal
+        offdiagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, target, source, eq_label, impact_t, o_algn_t, equation_offset, variable_offset)
+
         # If symmetry, repeat the process with reversed terms
         if has_symmetry(ct)
+            impact_s = ct_s.source_entities
+            o_algn_s = ct_s.offdiagonal_alignment.from_target
+            diagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, source, target, eq_label, impact_s, equation_offset, variable_offset)
+            offdiagonal_crossterm_alignment!(ct_s.target, ct, lsys, model, source, target, eq_label, impact_s, o_algn_s, equation_offset, variable_offset)
 
         end
-    end
-
-    error()
-    if has_groups(model)
-        ng = number_of_groups(model)
-        groups = model.groups
-        for target_g in 1:ng
-            t_subs = groups .== target_g
-            target_keys = model_keys[t_subs]
-            for source_g in 1:ng
-                s_subs = groups .== source_g
-                source_keys = model_keys[s_subs]
-                @info "!" target_g source_g target_keys source_keys
-                ls = lsys[target_g, source_g]
-                align_crossterms_subgroup!(storage, models, crossterms, cross_term_storage, target_keys, source_keys, ndofs, ls, equation_offset, variable_offset, align_diag = source_g == target_g)
-            end
-        end
-    else
-        align_crossterms_subgroup!(storage, models, crossterms, cross_term_storage, model_keys, model_keys, ndofs, lsys, equation_offset, variable_offset)
     end
 end
 
@@ -312,7 +295,7 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     target_model = model.models[target]
     source_model = model.models[source]
 
-    align_cross_term_offdiagonal_local!(ct, source_model, target_model, eq_label, lsys, s_source, o_algn_t, impact_t, eo_diag, vo_offdiag)
+    align_cross_term_offdiagonal_local!(ct, target_model, source_model, eq_label, lsys, s_source, o_algn_t, impact_t, eo_diag, vo_offdiag)
 end
 
 function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_storage, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset; align_diag = true, align_offdiag = true)
