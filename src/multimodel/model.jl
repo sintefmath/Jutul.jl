@@ -285,43 +285,36 @@ function crossterm_subsystem(model, lsys, target, source; diag = false)
     return (lsys, target_offset, source_offset)
 end
 
-function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source, eq_label, impact_t, equation_offset, variable_offset)
+function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source, eq_label, impact, equation_offset, variable_offset)
     lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = true)
     target_model = model.models[target]
     # Diagonal part: Into target equation, and with respect to target variables
-    eo_diag = equation_offset + target_offset
-    vo_diag = variable_offset + target_offset
+    equation_offset += target_offset
+    variable_offset += target_offset
 
-    align_cross_term_diagonal_local!(ct, target_model, eq_label, lsys, s_target, impact_t, eo_diag, vo_diag)
-end
-
-function align_cross_term_diagonal_local!(ct, target_model, equation_label, lsys, ct_s, impact, equation_offset, variable_offset)
-    equation_offset += get_equation_offset(target_model, equation_label)
+    equation_offset += get_equation_offset(target_model, eq_label)
     for target_e in get_primary_variable_ordered_entities(target_model)
-        align_to_jacobian!(ct_s, ct, lsys.jac, target_model, target_e, impact, equation_offset = equation_offset, variable_offset = variable_offset)
+        align_to_jacobian!(s_target, ct, lsys.jac, target_model, target_e, impact, equation_offset = equation_offset, variable_offset = variable_offset)
         variable_offset += number_of_degrees_of_freedom(target_model, target_e)
     end
 end
 
-function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, source, eq_label, impact_t, o_algn_t, equation_offset, variable_offset)
+function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, source, eq_label, impact, offdiag_alignment, equation_offset, variable_offset)
     lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = false)
-    eo_diag = equation_offset + target_offset
-    vo_offdiag = variable_offset + source_offset
+    equation_offset += target_offset
+    variable_offset += source_offset
     target_model = model.models[target]
     source_model = model.models[source]
 
-    align_cross_term_offdiagonal_local!(ct, target_model, source_model, eq_label, lsys, s_source, o_algn_t, impact_t, eo_diag, vo_offdiag)
-end
-
-function align_cross_term_offdiagonal_local!(ct, target_model, source_model, equation_label, lsys, ct_s, offdiag_alignment, impact, equation_offset, variable_offset)
-    equation_offset += get_equation_offset(target_model, equation_label)
+    equation_offset += get_equation_offset(target_model, eq_label)
     @assert !isnothing(offdiag_alignment)
-    @assert keys(ct_s) == keys(offdiag_alignment)
+    @assert keys(s_source) == keys(offdiag_alignment)
     for source_e in get_primary_variable_ordered_entities(source_model)
-        align_to_jacobian!(ct_s, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset, variable_offset = variable_offset, positions = offdiag_alignment)
+        align_to_jacobian!(s_source, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset, variable_offset = variable_offset, positions = offdiag_alignment)
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
     end
 end
+
 
 function get_equation_offset(model::SimulationModel, eq_label::Symbol)
     offset = 0
