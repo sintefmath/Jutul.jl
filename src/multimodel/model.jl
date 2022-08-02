@@ -234,7 +234,6 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
             o_algn_s = ct_s.offdiagonal_alignment.from_target
             diagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, source, target, eq_label, impact_s, equation_offset, variable_offset)
             offdiagonal_crossterm_alignment!(ct_s.target, ct, lsys, model, source, target, eq_label, impact_s, o_algn_s, equation_offset, variable_offset)
-
         end
     end
 end
@@ -264,11 +263,19 @@ function crossterm_subsystem(model, lsys, target, source; diag = false)
     if isa(lsys, MultiLinearizedSystem)
         source_g, source_keys = get_group(source)
         target_g, target_keys = get_group(target)
+        I = target_g
         if diag
-            lsys = lsys[target_g, target_g]
+            J = target_g
         else
-            lsys = lsys[target_g, source_g]
+            J = source_g
         end
+        lsys = lsys[I, J]
+        if diag
+            S = "diagonal alignment $I $I"
+        else
+            S = "offdiagonal alignment $I $J"
+        end
+        @info S target source lsys.jac
     else
         source_keys = target_keys = model_keys
     end
@@ -288,6 +295,14 @@ function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source
     align_cross_term_diagonal_local!(ct, target_model, eq_label, lsys, s_target, impact_t, eo_diag, vo_diag)
 end
 
+function align_cross_term_diagonal_local!(ct, target_model, equation_label, lsys, ct_s, impact, equation_offset, variable_offset)
+    equation_offset += get_equation_offset(target_model, equation_label)
+    for target_e in get_primary_variable_ordered_entities(target_model)
+        align_to_jacobian!(ct_s, ct, lsys.jac, target_model, target_e, impact, equation_offset = equation_offset, variable_offset = variable_offset)
+        variable_offset += number_of_degrees_of_freedom(target_model, target_e)
+    end
+end
+
 function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, source, eq_label, impact_t, o_algn_t, equation_offset, variable_offset)
     lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = false)
     eo_diag = equation_offset + target_offset
@@ -296,71 +311,6 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     source_model = model.models[source]
 
     align_cross_term_offdiagonal_local!(ct, target_model, source_model, eq_label, lsys, s_source, o_algn_t, impact_t, eo_diag, vo_offdiag)
-end
-
-function align_crossterms_subgroup!(storage, models, cross_terms, cross_term_storage, target_keys, source_keys, ndofs, lsys, equation_offset, variable_offset; align_diag = true, align_offdiag = true)
-    for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
-        target = ctp.target
-        source = ctp.source
-        ct = ctp.cross_term
-
-        if target in target_keys && source in source_keys
-            # Grab offsets relative to group ordering
-            target_offset = local_group_offset(target_keys, target, ndofs)
-            source_offset = local_group_offset(source_keys, source, ndofs)
-            # Models
-            target_model = models[target]
-            source_model = models[source]
-            # impact = ct_s.source_entities
-            impact_t = ct_s.target_entities
-            # Diagonal part: Into target equation, and with respect to target variables
-            eo_diag = equation_offset + target_offset
-            vo_diag = variable_offset + target_offset
-            eq_label = ctp.equation
-
-            s_t = ct_s.target
-            s_s = ct_s.source
-
-            if align_diag
-                align_cross_term_diagonal_local!(ct, target_model, eq_label, lsys, s_t, impact_t, eo_diag, vo_diag)
-            end
-            if align_offdiag
-                # Off-diagonal part: Into target equation, but with respect to source variables
-                vo_offdiag = variable_offset + source_offset
-                o_algn_t = ct_s.offdiagonal_alignment.from_source
-                align_cross_term_offdiagonal_local!(ct, source_model, target_model, eq_label, lsys, s_s, o_algn_t, impact_t, eo_diag, vo_offdiag)
-            end
-        end
-
-        if has_symmetry(ct) && source in target_keys && target in source_keys
-            # Grab offsets relative to group ordering
-            target_offset = local_group_offset(target_keys, target, ndofs)
-            source_offset = local_group_offset(source_keys, source, ndofs)
-            target_model = models[target]
-            source_model = models[source]
-
-            # If we have symmetry, we repeat the same process but reversing the terms
-            impact_s = ct_s.source_entities
-            eq_label_s = ctp.equation
-            o_algn_s = ct_s.offdiagonal_alignment.from_target
-            eo_t_diag = equation_offset + source_offset
-            eo_t_offdiag = variable_offset + target_offset
-            if align_diag
-                align_cross_term_diagonal_local!(ct, target_model, eq_label_s, lsys, s_s, impact_s, eo_t_diag, vo_offdiag)
-            end
-            if align_offdiag
-                align_cross_term_offdiagonal_local!(ct, source_model, target_model, eq_label_s, lsys, s_t, o_algn_s, impact_s, eo_t_diag, eo_t_offdiag)
-            end
-        end
-    end
-end
-
-function align_cross_term_diagonal_local!(ct, target_model, equation_label, lsys, ct_s, impact, equation_offset, variable_offset)
-    equation_offset += get_equation_offset(target_model, equation_label)
-    for target_e in get_primary_variable_ordered_entities(target_model)
-        align_to_jacobian!(ct_s, ct, lsys.jac, target_model, target_e, impact, equation_offset = equation_offset, variable_offset = variable_offset)
-        variable_offset += number_of_degrees_of_freedom(target_model, target_e)
-    end
 end
 
 function align_cross_term_offdiagonal_local!(ct, target_model, source_model, equation_label, lsys, ct_s, offdiag_alignment, impact, equation_offset, variable_offset)
@@ -601,6 +551,8 @@ end
 
 function update_equations!(storage, model::MultiModel, dt)
     @timeit "model equations" submodels_storage_apply!(storage, model, update_equations!, dt)
+    @info "After eq" storage.Reservoir.primary_variables storage.W1.primary_variables storage.W2.primary_variables
+
 end
 
 function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN)
