@@ -275,7 +275,6 @@ function crossterm_subsystem(model, lsys, target, source; diag = false)
         else
             S = "offdiagonal alignment $I $J"
         end
-        @info S target source lsys.jac
     else
         source_keys = target_keys = model_keys
     end
@@ -311,8 +310,16 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     @assert keys(s_source) == keys(offdiag_alignment)
     nt = number_of_entities(target_model, target_model.equations[eq_label])
     for source_e in get_primary_variable_ordered_entities(source_model)
-        align_to_jacobian!(s_source, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset, variable_offset = variable_offset, positions = offdiag_alignment, number_of_entities_target = nt)
+        align_to_jacobian!(s_source, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset,
+                                                                                   variable_offset = variable_offset,
+                                                                                   positions = offdiag_alignment,
+                                                                                   number_of_entities_target = nt,
+                                                                                   context = model.context)
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
+        a = offdiag_alignment[Symbol(source_e)]
+        if length(a) > 0
+            @assert maximum(a) <= length(lsys.jac_buffer)
+        end
     end
 end
 
@@ -659,7 +666,6 @@ function update_linearized_system!(storage, model::MultiModel; equation_offset =
     @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
     # Update diagonal blocks (model with respect to itself)
     @timeit "models" update_diagonal_blocks!(storage, model, targets)
-    # @timeit "model cross-terms" update_diagonal_blocks_cross_terms!(storage, model, targets)
     # Then, update cross terms (models' impact on other models)
     @timeit "cross-model" update_offdiagonal_blocks!(storage, model, targets, sources)
 end
