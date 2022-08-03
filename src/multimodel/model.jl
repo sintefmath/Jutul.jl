@@ -734,8 +734,9 @@ function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_stora
         eq_label, impact, _, caches, _, sgn = source_impact_for_pair(ctp, ct_s, label)
         eq = model.equations[eq_label]
         @assert !isnothing(impact)
+        nu = number_of_entities(model, eq)
         r = local_residual_view(r_buf, model, eq, equation_offset + get_equation_offset(model, eq_label))
-        update_linearized_system_cross_term!(nz, r, model, ct, caches, impact, sgn)
+        update_linearized_system_cross_term!(nz, r, model, ct, caches, impact, nu, sgn)
     end
 end
 
@@ -747,18 +748,18 @@ function update_offdiagonal_linearized_system_cross_term!(nz, model, ctp, ct_s, 
     end
 end
 
-function update_linearized_system_cross_term!(nz, r, model, ct::AdditiveCrossTerm, caches, impact, sgn)
+function update_linearized_system_cross_term!(nz, r, model, ct::AdditiveCrossTerm, caches, impact, nu, sgn)
     for k in keys(caches)
-        increment_equation_entries!(nz, r, model, caches[k], impact, sgn)
+        increment_equation_entries!(nz, r, model, caches[k], impact, nu, sgn)
     end
 end
 
-function increment_equation_entries!(nz, r, model, cache, impact, sgn)
-    nu, ne, np = ad_dims(cache)
+function increment_equation_entries!(nz, r, model, cache, impact, nu, sgn)
+    nu_local, ne, np = ad_dims(cache)
     entries = cache.entries
     # tb = minbatch(model.context)
     # @batch minbatch = tb for i in 1:nu
-    for ui in 1:nu
+    for ui in 1:nu_local
         i = impact[ui]
         for (jno, j) in enumerate(vrange(cache, ui))
             for e in 1:ne
