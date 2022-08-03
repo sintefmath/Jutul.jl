@@ -67,6 +67,9 @@ end
 insert_residual_value(::Nothing, ix, v) = nothing
 Base.@propagate_inbounds insert_residual_value(r, ix, v) = r[ix] = v
 
+insert_residual_value(::Nothing, ix, e, v) = nothing
+Base.@propagate_inbounds insert_residual_value(r, ix, e, v) = r[e, ix] = v
+
 function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)
     tb = minbatch(model.context)
