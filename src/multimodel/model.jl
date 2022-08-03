@@ -309,8 +309,9 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     equation_offset += get_equation_offset(target_model, eq_label)
     @assert !isnothing(offdiag_alignment)
     @assert keys(s_source) == keys(offdiag_alignment)
+    nt = number_of_entities(target_model, target_model.equations[eq_label])
     for source_e in get_primary_variable_ordered_entities(source_model)
-        align_to_jacobian!(s_source, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset, variable_offset = variable_offset, positions = offdiag_alignment)
+        align_to_jacobian!(s_source, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset, variable_offset = variable_offset, positions = offdiag_alignment, number_of_entities_target = nt)
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
     end
 end
@@ -544,8 +545,6 @@ end
 
 function update_equations!(storage, model::MultiModel, dt)
     @timeit "model equations" submodels_storage_apply!(storage, model, update_equations!, dt)
-    @info "After eq" storage.Reservoir.primary_variables storage.W1.primary_variables storage.W2.primary_variables
-
 end
 
 function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN)

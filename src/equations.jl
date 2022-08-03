@@ -335,16 +335,16 @@ is then that of ∂E / ∂P where P are the primary variables of A.
 Update an equation so that it knows where to store its derivatives
 in the Jacobian representation.
 """
-function align_to_jacobian!(eq_s, eq, jac, model; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s, eq, jac, model; variable_offset = 0, kwarg...)
     pentities = get_primary_variable_ordered_entities(model)
     for u in pentities
-        align_to_jacobian!(eq_s, eq, jac, model, u, equation_offset = equation_offset, variable_offset = variable_offset) 
+        align_to_jacobian!(eq_s, eq, jac, model, u, variable_offset = variable_offset; kwarg...)
         variable_offset += number_of_degrees_of_freedom(model, u)
     end
 end
 
 
-function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; positions = nothing, equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; positions = nothing, equation_offset = 0, variable_offset = 0, number_of_entities_target = nothing)
     # Use generic version
     k = Symbol(entity)
     has_pos = !isnothing(positions)
@@ -361,10 +361,15 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; positions = no
             pos = cache.jacobian_positions
         end
         # J = cache.variables
+        if isnothing(number_of_entities_target)
+            nt = cache.number_of_entities_target
+        else
+            nt = number_of_entities_target
+        end
         I, J = generic_cache_declare_pattern(cache, arg...)
         injective_alignment!(cache, eq, jac, entity, model.context, pos = pos, target_index = I, source_index = J,
                                                                     number_of_entities_source = cache.number_of_entities_source,
-                                                                    number_of_entities_target = cache.number_of_entities_target,
+                                                                    number_of_entities_target = nt,
                                                                     target_offset = equation_offset, source_offset = variable_offset)
     else
         @warn "Did not find $k in $(keys(eq_s))"
