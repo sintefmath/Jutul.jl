@@ -70,10 +70,8 @@ function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMa
     adj = represented_as_adjoint(layout)
     pos = find_sparse_position(A, row, col, adj)
     if pos == 0
-        @info "" A
-        msg = "Unable to map $row, $col: Not allocated in matrix."
-        error(msg)
-        @warn msg
+        @error "Unable to map cache entry to Jacobian, not allocated in Jacobian matrix." A row col
+        error("Jacobian alignment failed. Giving up.")
     end
     return pos
 end
