@@ -20,12 +20,12 @@ abstract type JutulSystem end
 abstract type JutulDiscretization end
 
 "Ask discretization for entry i for specific entity"
-(D::JutulDiscretization)(i, entity = Cells()) = D[i]
+(D::JutulDiscretization)(i, entity = Cells()) = nothing
 
 discretization(eq) = eq.discretization
 
 function local_discretization(eq, i)
-    discretization(eq)(i, associated_entity(eq))
+    return discretization(eq)(i, associated_entity(eq))
 end
 
 # struct DefaultDiscretization <: JutulDiscretization end
