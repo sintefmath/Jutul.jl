@@ -78,8 +78,8 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
         ne_s = ne_t
     end
 
-    caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_s)
-    caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_t)
+    caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t)
+    caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s)
     # Extra alignment - for off diagonal blocks
     other_align_t = create_extra_alignment(caches_s, allocate = is_symm)
     if is_symm

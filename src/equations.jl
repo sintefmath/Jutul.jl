@@ -153,7 +153,7 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     return create_equation_caches(model, n, N, storage, F!, nt; self_entity = e, kwarg...)
 end
 
-function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, nt::Integer = 0; self_entity = nothing, kwarg...)
+function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, number_of_entities_total::Integer = 0; self_entity = nothing, kwarg...)
     state = storage[:state]
     state0 = storage[:state0]
     entities = all_ad_entities(state, state0)
@@ -161,10 +161,10 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
     # n = number_of_equations_per_entity(model, eq)
     for (e, epack) in entities
         @timeit "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
-        ns, T = epack
-        has_diagonal = number_of_entities == nt && e == self_entity
-        @assert nt > 0 && ns > 0 "nt=$nt ns=$ns"
-        @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, equations_per_entity, e, S, nt, ns, has_diagonal = has_diagonal)
+        number_of_entities_source, T = epack
+        has_diagonal = number_of_entities == number_of_entities_total && e == self_entity
+        @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source"
+        @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal)
     end
     return convert_to_immutable_storage(caches)
 end
