@@ -38,7 +38,8 @@ function fill_equation_entries!(nz, r, model, cache::GenericAutoDiffCache)
             for e in 1:ne
                 a = entries[e, j]
                 if jno == 1
-                    insert_residual_value(r, i + nu*(e-1), a.value)
+                    # insert_residual_value(r, i + nu*(e-1), a.value)
+                    insert_residual_value(r, i, e, a.value)
                 end
                 for d = 1:np
                     update_jacobian_entry!(nz, cache, j, e, d, a.partials[d])
