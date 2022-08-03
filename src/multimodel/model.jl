@@ -765,7 +765,7 @@ function increment_equation_entries!(nz, r, model, cache, impact, nu, sgn)
             for e in 1:ne
                 a = sgn*entries[e, j]
                 if jno == 1
-                    r[i + nu*(e-1)] += a.value
+                    r[e, i] += a.value
                 end
                 for d = 1:np
                     ix = get_jacobian_pos(cache, j, e, d)
