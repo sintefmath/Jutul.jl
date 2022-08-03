@@ -563,8 +563,6 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
     @timeit "forces" apply_forces!(storage, model, dt, forces; time = time)
     # Apply forces to cross-terms
     @timeit "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time)
-    # Finally apply cross terms to the equations
-    # @timeit "crossterm apply" apply_cross_terms!(storage, model, dt)
 end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
@@ -620,47 +618,6 @@ function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s
         end
     end
 end
-# update_cross_terms_for_pair!(cross_terms::Nothing, storage, model, source::Symbol, target::Symbol, dt) = nothing
-
-# function update_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol, target::Symbol, dt)
-#     storage_t, storage_s = get_submodel_storage(storage, target, source)
-#     model_t, model_s = get_submodels(model, target, source)
-
-#     eqs = model_t.equations
-#     for (ekey, ct) in pairs(cross_terms)
-#         if !isnothing(ct)
-#             # @info "$source -> $target: $ekey"
-#             update_cross_term!(ct, eqs[ekey], storage_t, storage_s, model_t, model_s, target, source, dt)
-#         end
-#     end
-# end
-
-# function apply_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
-#     for target in targets
-#         ct_t = cross_term(storage, target)
-#         overlap = intersect(target_cross_term_keys(storage, target), sources)
-#         @timeit "->$target" for source in overlap
-#             cross_terms = cross_terms_if_present(ct_t, source)
-#             apply_cross_terms_for_pair!(cross_terms, storage, model, source, target, dt)
-#         end
-#     end
-# end
-
-# apply_cross_terms_for_pair!(cross_terms::Nothing, storage, model, source::Symbol, target::Symbol, dt) = nothing
-
-# function apply_cross_terms_for_pair!(cross_terms, storage, model, source::Symbol, target::Symbol, dt)
-#     storage_t, = get_submodel_storage(storage, target)
-#     model_t, model_s = get_submodels(model, target, source)
-
-#     eqs = model_t.equations
-#     eqs_s = storage_t[:equations]
-#     for (ekey, ct) in pairs(cross_terms)
-#         if !isnothing(ct)
-#             apply_cross_term!(eqs_s[ekey], eqs[ekey], ct, model_t, model_s, dt)
-#         end
-#     end
-# end
-
 
 function update_linearized_system!(storage, model::MultiModel; equation_offset = 0, targets = submodel_symbols(model), sources = targets)
     @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
@@ -766,14 +723,14 @@ function increment_equation_entries!(nz, r, model, cache, impact, nu, sgn)
     # tb = minbatch(model.context)
     # @batch minbatch = tb for i in 1:nu
     for ui in 1:nu_local
-        i = impact[ui]
+        @inbounds i = impact[ui]
         for (jno, j) in enumerate(vrange(cache, ui))
-            for e in 1:ne
+            @inbounds for e in 1:ne
                 a = sgn*entries[e, j]
                 if jno == 1
-                    r[e, i] += a.value
+                    @inbounds r[e, i] += a.value
                 end
-                for d = 1:np
+                @inbounds for d = 1:np
                     ix = get_jacobian_pos(cache, j, e, d)
                     nz[ix] += a.partials[d]
                 end
@@ -803,13 +760,12 @@ end
 function fill_crossterm_entries!(nz, model, cache::GenericAutoDiffCache, positions, sgn)
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
-    # tb = minbatch(model.context)
-    # @batch minbatch = tb for i in 1:nu
-    for i in 1:nu
+    tb = minbatch(model.context)
+    @batch minbatch = tb for i in 1:nu
         for (jno, j) in enumerate(vrange(cache, i))
-            for e in 1:ne
+            @inbounds for e in 1:ne
                 a = sgn*entries[e, j]
-                for d = 1:np
+                @inbounds for d = 1:np
                     pos = get_jacobian_pos(cache, j, e, d, positions)
                     nz[pos] = a.partials[d]
                 end
