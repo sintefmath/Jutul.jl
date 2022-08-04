@@ -10,11 +10,6 @@ active_entities(d::ScalarTestDomain, ::Any; kwarg...) = [1]
 
 number_of_cells(::ScalarTestDomain) = 1
 
-#function get_domain_intersection(u::JutulUnit, target_d::ScalarTestDomain, source_d::ScalarTestDomain, target_symbol, source_symbol)
-#    # This domain always interacts with the single cell in instances of itself, and nothing else
-#    (target = [1], source = [1], target_entity = Cells(), source_entity = Cells())
-#end
-
 # Driving force for the test equation
 struct ScalarTestForce
     value

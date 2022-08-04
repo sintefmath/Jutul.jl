@@ -26,7 +26,11 @@ get_entries(c::GenericAutoDiffCache) = c.entries
     @inbounds pos[(eqNo-1)*np + partial_index, index]
 end
 
-diagonal_view(cache::GenericAutoDiffCache) = view(cache.entries, :, cache.diagonal_positions)
+function diagonal_view(cache::GenericAutoDiffCache)
+    dpos = cache.diagonal_positions
+    @assert !isnothing(dpos)
+    return view(cache.entries, :, dpos)
+end
 
 function fill_equation_entries!(nz, r, model, cache::GenericAutoDiffCache)
     nu, ne, np = ad_dims(cache)
