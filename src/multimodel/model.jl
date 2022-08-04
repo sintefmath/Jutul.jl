@@ -388,7 +388,8 @@ function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_
             ct = ctp.cross_term
             model_t = models[target]
             eq = model_t.equations[ctp.equation]
-            update_cross_term!(ct_s, ct, eq, storage[target], storage[source], model_t, models[source], dt)
+            ct_bare_type = Base.typename(typeof(ct)).name
+            @timeit "$ct_bare_type" update_cross_term!(ct_s, ct, eq, storage[target], storage[source], model_t, models[source], dt)
         end
     end
 end
