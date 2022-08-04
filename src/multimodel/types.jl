@@ -1,14 +1,3 @@
-struct MultiModelCoupling
-    target
-    source
-    intersection
-    issym
-    crosstype
-    function MultiModelCoupling(target, source, intersection; crosstype = InjectiveCrossTerm, issym = true)
-        new(target,source,intersection, issym, crosstype)
-    end   
-end
-
 abstract type CrossTerm end
 
 struct CrossTermPair

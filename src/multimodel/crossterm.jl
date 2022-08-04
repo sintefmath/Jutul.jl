@@ -125,3 +125,324 @@ function cross_term_entities_source(ct, eq, model)
 end
 
 cross_term_entities_source(ct, eq::Nothing, model) = nothing
+
+
+function update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
+    for (index, key) in enumerate(model_keys)
+        offset = offsets[index]
+        m = model.models[key]
+        s = storage[key]
+        eqs_s = s.equations
+        eqs = m.equations
+        update_linearized_system!(lsys, eqs, eqs_s, m; equation_offset = offset)
+    end
+    for (index, key) in enumerate(model_keys)
+        offset = offsets[index]
+        m = model.models[key]
+        ct, ct_s = cross_term_target(model, storage, key, true)
+        update_linearized_system_cross_terms!(lsys, ct, ct_s, m, key; equation_offset = offset)
+    end
+end
+
+function source_impact_for_pair(ctp, ct_s, label)
+    sgn = 1
+    eq_label = ctp.equation
+    if ctp.target != label
+        # impact = ct_s.target_entities
+        impact = ct_s.source_entities
+        caches_s = ct_s.target
+        caches_t = ct_s.source
+        # pos = ct_s.offdiagonal_alignment.from_source
+        pos = ct_s.offdiagonal_alignment.from_target
+        if symmetry(ctp.cross_term) == CTSkewSymmetry()
+            sgn = -1
+        end
+    else
+        # impact = ct_s.source_entities
+        impact = ct_s.target_entities
+        caches_s = ct_s.source
+        caches_t = ct_s.target
+        # pos = ct_s.offdiagonal_alignment.from_target
+        pos = ct_s.offdiagonal_alignment.from_source
+    end
+    return (eq_label, impact, caches_s, caches_t, pos, sgn)
+end
+
+function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_storage, model, label; equation_offset = 0)
+    # @assert !has_groups(model)
+    nz = lsys.jac_buffer
+    r_buf = lsys.r_buffer
+    for (ctp, ct_s) in zip(crossterms, crossterm_storage)
+        ct = ctp.cross_term
+        eq_label, impact, _, caches, _, sgn = source_impact_for_pair(ctp, ct_s, label)
+        eq = model.equations[eq_label]
+        @assert !isnothing(impact)
+        nu = number_of_entities(model, eq)
+        r = local_residual_view(r_buf, model, eq, equation_offset + get_equation_offset(model, eq_label))
+        update_linearized_system_cross_term!(nz, r, model, ct, caches, impact, nu, sgn)
+    end
+end
+
+function update_offdiagonal_linearized_system_cross_term!(nz, model, ctp, ct_s, label)
+    _, _, caches, _, pos, sgn = source_impact_for_pair(ctp, ct_s, label)
+    @assert !isnothing(pos)
+    for u in keys(caches)
+        fill_crossterm_entries!(nz, model, caches[u], pos[u], sgn)
+    end
+end
+
+function update_linearized_system_cross_term!(nz, r, model, ct::AdditiveCrossTerm, caches, impact, nu, sgn)
+    for k in keys(caches)
+        increment_equation_entries!(nz, r, model, caches[k], impact, nu, sgn)
+    end
+end
+
+function increment_equation_entries!(nz, r, model, cache, impact, nu, sgn)
+    nu_local, ne, np = ad_dims(cache)
+    entries = cache.entries
+    # tb = minbatch(model.context)
+    # @batch minbatch = tb for i in 1:nu
+    for ui in 1:nu_local
+        @inbounds i = impact[ui]
+        for (jno, j) in enumerate(vrange(cache, ui))
+            @inbounds for e in 1:ne
+                a = sgn*entries[e, j]
+                if jno == 1
+                    @inbounds r[e, i] += a.value
+                end
+                @inbounds for d = 1:np
+                    ix = get_jacobian_pos(cache, j, e, d)
+                    nz[ix] += a.partials[d]
+                end
+            end
+        end
+    end
+end
+
+function update_offdiagonal_blocks!(storage, model, targets, sources)
+    linearized_system = storage.LinearizedSystem
+    models = model.models
+    for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+        ct = ctp.cross_term
+        t = ctp.target
+        s = ctp.source
+        if t in targets && s in sources
+            lsys = get_linearized_system_model_pair(storage, model, s, t, linearized_system)
+            update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[s], ctp, ct_s, t)
+        end
+        if has_symmetry(ct) && t in sources && s in targets
+            lsys = get_linearized_system_model_pair(storage, model, t, s, linearized_system)
+            update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[t], ctp, ct_s, s)
+        end
+    end
+end
+
+function fill_crossterm_entries!(nz, model, cache::GenericAutoDiffCache, positions, sgn)
+    nu, ne, np = ad_dims(cache)
+    entries = cache.entries
+    tb = minbatch(model.context)
+    @batch minbatch = tb for i in 1:nu
+        for (jno, j) in enumerate(vrange(cache, i))
+            @inbounds for e in 1:ne
+                a = sgn*entries[e, j]
+                @inbounds for d = 1:np
+                    pos = get_jacobian_pos(cache, j, e, d, positions)
+                    nz[pos] = a.partials[d]
+                end
+            end
+        end
+    end
+end
+
+
+function update_linearized_system_crossterms!(jac, cross_terms, storage, model::MultiModel, source, target)
+    # storage_t, = get_submodel_storage(storage, target)
+    model_t, model_s = get_submodels(model, target, source)
+    nz = nonzeros(jac)
+
+    for ekey in keys(cross_terms)
+        ct = cross_terms[ekey]
+        if !isnothing(ct)
+            update_linearized_system_crossterm!(nz, model_t, model_s, ct::CrossTerm)
+        end
+    end
+end
+
+function crossterm_subsystem(model, lsys, target, source; diag = false)
+    ndofs = model.number_of_degrees_of_freedom
+    model_keys = submodel_symbols(model)
+    groups = model.groups
+
+    function get_group(s)
+        g = groups[findfirst(isequal(s), model_keys)]
+        g_k = model_keys[groups .== g]
+        return (g, g_k)
+    end
+
+    if isa(lsys, MultiLinearizedSystem)
+        source_g, source_keys = get_group(source)
+        target_g, target_keys = get_group(target)
+        I = target_g
+        if diag
+            J = target_g
+        else
+            J = source_g
+        end
+        lsys = lsys[I, J]
+    else
+        source_keys = target_keys = model_keys
+    end
+    target_offset = local_group_offset(target_keys, target, ndofs)
+    source_offset = local_group_offset(source_keys, source, ndofs)    
+
+    return (lsys, target_offset, source_offset)
+end
+
+function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source, eq_label, impact, equation_offset, variable_offset)
+    lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = true)
+    target_model = model.models[target]
+    # Diagonal part: Into target equation, and with respect to target variables
+    equation_offset += target_offset
+    variable_offset += target_offset
+
+    equation_offset += get_equation_offset(target_model, eq_label)
+    for target_e in get_primary_variable_ordered_entities(target_model)
+        align_to_jacobian!(s_target, ct, lsys.jac, target_model, target_e, impact, equation_offset = equation_offset, variable_offset = variable_offset)
+        variable_offset += number_of_degrees_of_freedom(target_model, target_e)
+    end
+end
+
+function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, source, eq_label, impact, offdiag_alignment, equation_offset, variable_offset)
+    lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = false)
+    equation_offset += target_offset
+    variable_offset += source_offset
+    target_model = model.models[target]
+    source_model = model.models[source]
+
+    equation_offset += get_equation_offset(target_model, eq_label)
+    @assert !isnothing(offdiag_alignment)
+    @assert keys(s_source) == keys(offdiag_alignment)
+    nt = number_of_entities(target_model, target_model.equations[eq_label])
+    for source_e in get_primary_variable_ordered_entities(source_model)
+        align_to_jacobian!(s_source, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset,
+                                                                                   variable_offset = variable_offset,
+                                                                                   positions = offdiag_alignment,
+                                                                                   number_of_entities_target = nt,
+                                                                                   context = model.context)
+        variable_offset += number_of_degrees_of_freedom(source_model, source_e)
+        a = offdiag_alignment[Symbol(source_e)]
+        if length(a) > 0
+            @assert maximum(a) <= length(lsys.jac_buffer)
+        end
+    end
+end
+
+function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
+    models = model.models
+    cross_terms = model.cross_terms
+    cross_term_storage = storage[:cross_terms]
+    ndofs = model.number_of_degrees_of_freedom
+    model_keys = submodel_symbols(model)
+    ndofs = model.number_of_degrees_of_freedom
+    lsys = storage[:LinearizedSystem]
+
+    for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
+        ct = ctp.cross_term
+        target = ctp.target
+        source = ctp.source
+        impact_t = ct_s.target_entities
+        eq_label = ctp.equation
+        o_algn_t = ct_s.offdiagonal_alignment.from_source
+
+        # Align diagonal
+        diagonal_crossterm_alignment!(ct_s.target, ct, lsys, model, target, source, eq_label, impact_t, equation_offset, variable_offset)
+        # Align offdiagonal
+        offdiagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, target, source, eq_label, impact_t, o_algn_t, equation_offset, variable_offset)
+
+        # If symmetry, repeat the process with reversed terms
+        if has_symmetry(ct)
+            impact_s = ct_s.source_entities
+            o_algn_s = ct_s.offdiagonal_alignment.from_target
+            diagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, source, target, eq_label, impact_s, equation_offset, variable_offset)
+            offdiagonal_crossterm_alignment!(ct_s.target, ct, lsys, model, source, target, eq_label, impact_s, o_algn_s, equation_offset, variable_offset)
+        end
+    end
+end
+
+
+function setup_cross_terms_storage!(storage, model)
+    cross_terms = model.cross_terms
+    models = model.models
+
+    storage_and_model(t) = (storage[t], models[t])
+    v = Vector()
+    for ct in cross_terms
+        term = ct.cross_term
+        s_t, m_t = storage_and_model(ct.target)
+        s_s, m_s = storage_and_model(ct.source)
+        eq_t = m_t.equations[ct.equation]
+        if isnothing(symmetry(term))
+            eq_s = nothing
+        else
+            eq_s = m_s.equations[ct.equation]
+        end
+
+        ct_s = setup_cross_term_storage(term, eq_t, eq_s, m_t, m_s, s_t, s_s)
+        push!(v, ct_s)
+    end
+    storage[:cross_terms] = v
+end
+
+
+function cross_term(storage, target::Symbol)
+    return storage[:cross_terms][target]
+end
+
+function cross_term_mapper(model, storage, f)
+    ind = map(f, model.cross_terms)
+    return (model.cross_terms[ind], storage[:cross_terms][ind])
+end
+
+has_symmetry(x) = !isnothing(symmetry(x))
+has_symmetry(x::CrossTermPair) = has_symmetry(x.cross_term)
+
+function cross_term_pair(model, storage, source, target, include_symmetry = false)
+    if include_symmetry
+        f = x -> (x.target == target && x.source == source) || 
+                 (has_symmetry(x) && (x.target == source && x.source == target))
+    else
+        f = x -> x.target == target && x.source == source
+    end
+    return cross_term_mapper(model, storage, f)
+end
+
+function cross_term_target(model, storage, target, include_symmetry = false)
+    if include_symmetry
+        f = x -> x.target == target || (has_symmetry(x.cross_term) && x.source == target)
+    else
+        f = x -> x.target == target
+    end
+    return cross_term_mapper(model, storage, f)
+end
+
+function cross_term_source(model, storage, source, include_symmetry = false)
+    if include_symmetry
+        f = x -> x.source == source || (has_symmetry(x.cross_term) && x.target == source)
+    else
+        f = x -> x.source == source
+    end
+    return cross_term_mapper(model, storage, f)
+end
+
+function cross_terms_if_present(target_ct, source)
+    if haskey(target_ct, source)
+        x = target_ct[source]
+    else
+        x = nothing
+    end
+    return x
+end
+
+function target_cross_term_keys(storage, target)
+    return keys(cross_term(storage, target))
+end
