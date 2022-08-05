@@ -437,15 +437,27 @@ function cross_term_source(model, storage, source, include_symmetry = false)
     return cross_term_mapper(model, storage, f)
 end
 
-function cross_terms_if_present(target_ct, source)
-    if haskey(target_ct, source)
-        x = target_ct[source]
-    else
-        x = nothing
+function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model), sources = targets)
+    for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+        (; cross_term, target, source) = ctp
+        force_t = forces[target]
+        apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, source, targets, dt, force_t, time = time)
+        if has_symmetry(cross_term)
+            force_s = forces[source]
+            apply_forces_to_cross_term!(ct_s, model, storage, cross_term, source, target, sources, dt, force_s, time = time)
+        end
     end
-    return x
 end
 
-function target_cross_term_keys(storage, target)
-    return keys(cross_term(storage, target))
+function apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, source, targets, dt, forces; kwarg...)
+    if target in targets
+        for force in values(forces)
+            if isnothing(force)
+                continue
+            end
+            apply_force_to_cross_term!(ct_s, cross_term, target, source, model, storage, dt, force; kwarg...)
+        end
+    end
 end
+
+apply_force_to_cross_term!(ct_s, cross_term, target, source, model, storage, dt, force; time = time) = nothing

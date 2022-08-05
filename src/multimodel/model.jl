@@ -596,50 +596,6 @@ function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targe
     end
 end
 
-function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model), sources = targets)
-    # @info forces
-    # @warn "Not reimplemented yet"
-    return
-    for target in targets
-        # Target: Model where force has impact
-        force = forces[target]
-        if isnothing(force)
-            continue
-        end
-        ct_t = cross_term(storage, target)
-        for source in intersect(target_cross_term_keys(storage, target), sources)
-            for f in force
-                for to_target = [true, false]
-                    apply_force_to_cross_terms!(storage, ct_t, model, source, target, f, dt, time; to_target = to_target)
-                end
-            end
-        end
-    end
-end
-
-function apply_force_to_cross_terms!(storage, ct_t, model, source, target, force, dt, time; to_target = true)
-    storage_t, storage_s = get_submodel_storage(storage, target, source)
-    model_t, model_s = get_submodels(model, target, source)
-    # Target matches where the force is assigned.
-    if to_target
-        # Equation comes from target model and we are looking at the cross term for that model.
-        cross_terms = cross_term_pair(storage, source, target)
-        fn = apply_force_to_cross_term_target!
-    else
-        # Equation comes from target, but we are looking at the cross term for the source model
-        cross_terms = cross_terms_if_present(ct_t, source)
-        fn = apply_force_to_cross_term_source!
-    end
-    for (ekey, ct) in pairs(cross_terms)
-        if !isnothing(ct)
-            fn(ct, storage_t, storage_s, model_t, model_s, source, target, force, dt, time)
-        end
-    end
-end
-
-apply_force_to_cross_term_target!(ct, storage_t, storage_s, model_t, model_s, source, target, force, dt, time) = nothing
-apply_force_to_cross_term_source!(ct, storage_t, storage_s, model_t, model_s, source, target, force, dt, time) = nothing
-
 function apply_boundary_conditions!(storage, model::MultiModel; targets = submodels_symbols(model))
     for key in targets
         apply_boundary_conditions!(storage[key], storage[key].parameters, model.models[key])
