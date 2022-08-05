@@ -1,24 +1,27 @@
 export ConservationLaw
 
-struct ConservationLaw <: JutulEquation
-    accumulation::JutulAutoDiffCache
-    accumulation_symbol::Symbol
-    half_face_flux_cells::JutulAutoDiffCache
-    half_face_flux_faces::Union{JutulAutoDiffCache,Nothing}
-    sources::AbstractSparseMatrix
-    flow_discretization::FlowDiscretization
+struct ConservationLaw{T<:FlowDiscretization} <: JutulEquation
+    flow_discretization::T
 end
 
-function ConservationLaw(model, number_of_equations;
-                            flow_discretization = model.domain.discretizations.mass_flow,
-                            accumulation_symbol = :TotalMasses,
-                            kwarg...)
+discretization(e::ConservationLaw) = e.flow_discretization
+
+struct ConservationLawTPFAStorage
+    accumulation::CompactAutoDiffCache
+    accumulation_symbol::Symbol
+    half_face_flux_cells::CompactAutoDiffCache
+    half_face_flux_faces::Union{CompactAutoDiffCache, Nothing}
+    sources::AbstractSparseMatrix
+end
+
+function ConservationLawTPFAStorage(model, eq::ConservationLaw; accumulation_symbol = :TotalMasses, kwarg...)
+    number_of_equations = number_of_equations_per_entity(model, eq)
     D, ctx = model.domain, model.context
     cell_entity = Cells()
     face_entity = Faces()
     nc = count_active_entities(D, cell_entity, for_variables = false)
     nf = count_active_entities(D, face_entity, for_variables = false)
-    nhf = number_of_half_faces(flow_discretization)
+    nhf = number_of_half_faces(eq.flow_discretization)
     face_partials = degrees_of_freedom_per_entity(model, face_entity)
     alloc = (n, entity, n_entities_pos) -> CompactAutoDiffCache(number_of_equations, n, model,
                                                                                 entity = entity, n_entities_pos = n_entities_pos, 
@@ -39,17 +42,21 @@ function ConservationLaw(model, number_of_equations;
     else
         hf_faces = nothing
     end
-    ConservationLaw(acc, accumulation_symbol, hf_cells, hf_faces, src, flow_discretization)
+    return ConservationLawTPFAStorage(acc, accumulation_symbol, hf_cells, hf_faces, src)
+end
+
+function setup_equation_storage(model, eq::ConservationLaw{<:TwoPointPotentialFlowHardCoded}, storage; kwarg...)
+    return ConservationLawTPFAStorage(model, eq; kwarg...)
 end
 
 "Update positions of law's derivatives in global Jacobian"
-function align_to_jacobian!(law::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
-    fd = law.flow_discretization
+function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, eq::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
+    fd = eq.flow_discretization
     M = global_map(model.domain)
 
-    acc = law.accumulation
-    hflux_cells = law.half_face_flux_cells
-    diagonal_alignment!(acc, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
+    acc = eq_s.accumulation
+    hflux_cells = eq_s.half_face_flux_cells
+    diagonal_alignment!(acc, eq, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
     half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, M, fd, target_offset = equation_offset, source_offset = variable_offset)
 end
 
@@ -168,11 +175,11 @@ function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc;
     end
 end
 
-function update_linearized_system_equation!(nz, r, model, law::ConservationLaw)
-    acc = get_diagonal_cache(law)
-    cell_flux = law.half_face_flux_cells
-    face_flux = law.half_face_flux_faces
-    src = law.sources
+function update_linearized_system_equation!(nz, r, model, law::ConservationLaw, eq_s::ConservationLawTPFAStorage)
+    acc = eq_s.accumulation
+    cell_flux = eq_s.half_face_flux_cells
+    face_flux = eq_s.half_face_flux_faces
+    src = eq_s.sources
     cpos = law.flow_discretization.conn_pos
     ctx = model.context
     update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos, ctx)
@@ -232,27 +239,25 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
 end
 
 function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context)
-    centries = acc.entries
-    fentries = cell_flux.entries
     cp = acc.jacobian_positions
     fp = cell_flux.jacobian_positions
-    threaded_fill_conservation_eq!(nz, r, context, centries, fentries, acc, cell_flux, cp, fp, conn_pos, ad_dims(acc))
+    threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, cp, fp, conn_pos, ad_dims(acc))
 end
 
-function threaded_fill_conservation_eq!(nz, r, context, centries, fentries, acc, cell_flux, cp, fp, conn_pos, dims)
+function threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, cp, fp, conn_pos, dims)
     nc, ne, np = dims
     tb = minbatch(context)
     @batch minbatch=tb for cell = 1:nc
         for e in 1:ne
-            fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flux, cp, fp, conn_pos, np)
+            fill_conservation_eq!(nz, r, cell, e, acc, cell_flux, cp, fp, conn_pos, np)
         end
     end
 end
 
-function fill_conservation_eq!(nz, r, cell, e, centries, fentries, acc, cell_flux, cp, fp, conn_pos, np)
-    diag_entry = get_entry(acc, cell, e, centries)
+function fill_conservation_eq!(nz, r, cell, e, acc, cell_flux, cp, fp, conn_pos, np)
+    diag_entry = get_entry(acc, cell, e)
     @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-        q = get_entry(cell_flux, i, e, fentries)
+        q = get_entry(cell_flux, i, e)
         @inbounds for d in eachindex(q.partials)
             fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
             if d == 1 && fpos == 0
@@ -329,10 +334,10 @@ function update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fent
     end
 end
 
-function declare_pattern(model, e::ConservationLaw, entity::Cells)
-    df = e.flow_discretization
+function declare_pattern(model, eq::ConservationLaw, e_s::ConservationLawTPFAStorage, entity::Cells)
+    df = eq.flow_discretization
     hfd = Array(df.conn_data)
-    n = number_of_entities(model, e)
+    n = number_of_entities(model, eq)
     # Fluxes
     I = map(x -> x.self, hfd)
     J = map(x -> x.other, hfd)
@@ -391,9 +396,9 @@ function state_pair(storage, conserved, model)
 end
 
 # Update of discretization terms
-function update_accumulation!(law, storage, model, dt)
-    conserved = law.accumulation_symbol
-    acc = get_entries(law.accumulation)
+function update_accumulation!(eq_s, law, storage, model, dt)
+    conserved = eq_s.accumulation_symbol
+    acc = get_entries(eq_s.accumulation)
     m0, m = state_pair(storage, conserved, model)
     @tullio acc[c, i] = (m[c, i] - m0[c, i])/dt
     return acc
@@ -401,44 +406,51 @@ end
 
 export update_half_face_flux!, update_accumulation!, update_equation!, get_diagonal_cache, get_diagonal_entries
 
-function update_equation!(law::ConservationLaw, storage, model, dt)
+function update_equation!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt)
     # Zero out any sparse indices
-    reset_sources!(law)
+    reset_sources!(eq_s)
     # Next, update accumulation, "intrinsic" sources and fluxes
-    @timeit "accumulation" update_accumulation!(law, storage, model, dt)
-    @timeit "fluxes" update_half_face_flux!(law, storage, model, dt)
+    @timeit "accumulation" update_accumulation!(eq_s, law, storage, model, dt)
+    @timeit "fluxes" update_half_face_flux!(eq_s, law, storage, model, dt)
 end
 
-function update_half_face_flux!(law::ConservationLaw, storage, model, dt)
+function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt)
     fd = law.flow_discretization
-    update_half_face_flux!(law, storage, model, dt, fd)
+    update_half_face_flux!(eq_s, law, storage, model, dt, fd)
 end
 
-function reset_sources!(law::ConservationLaw)
-    if use_sparse_sources(law)
-        @. law.sources = 0
+function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt, flow_type)
+    state = storage.state
+    param = storage.parameters
+    flux = get_entries(eq_s.half_face_flux_cells)
+    update_half_face_flux!(flux, state, model, param, dt, flow_type)
+end
+
+function reset_sources!(eq_s::ConservationLawTPFAStorage)
+    if use_sparse_sources(eq_s)
+        @. eq_s.sources = 0
     end
 end
 
-@inline function get_diagonal_cache(eq::ConservationLaw)
+@inline function get_diagonal_cache(eq::ConservationLaw, eq_s::ConservationLawTPFAStorage)
     return eq.accumulation
 end
 
-@inline function get_diagonal_entries(eq::ConservationLaw)
-    if use_sparse_sources(eq)
-        return eq.sources
+@inline function get_diagonal_entries(eq::ConservationLaw, eq_s::ConservationLawTPFAStorage)
+    if use_sparse_sources(eq_s)
+        return eq_s.sources
     else
         # Hack.
-        return eq.accumulation.entries
+        return eq_s.accumulation.entries
     end
 end
 
-is_cuda_eq(eq::ConservationLaw) = isa(eq.accumulation.entries, CuArray)
+is_cuda_eq(eq::ConservationLawTPFAStorage) = isa(eq.accumulation.entries, CuArray)
 use_sparse_sources(eq) = false#!is_cuda_eq(eq)
 
 
 
 # Half face flux - trivial version which should only be used when there are no faces
-function update_half_face_flux!(::ConservationLaw, storage, model, dt, flowd::TwoPointPotentialFlow{U, K, T}) where {U,K,T<:TrivialFlow}
-
-end
+# function update_half_face_flux!(::ConservationLaw, storage, model, dt, flowd::TwoPointPotentialFlowHardCoded{U, K, T}) where {U,K,T<:TrivialFlow}
+#
+# end

@@ -1,5 +1,5 @@
-export MultiModel, get_domain_intersection, update_cross_term!
-export InjectiveCrossTerm, MultiModelCoupling
+export MultiModel
+export InjectiveCrossTerm, AdditiveCrossTerm
 import Base: show
 
 include("types.jl")

@@ -18,6 +18,16 @@ abstract type JutulSystem end
 
 # Discretization - currently unused
 abstract type JutulDiscretization end
+
+"Ask discretization for entry i for specific entity"
+(D::JutulDiscretization)(i, entity = Cells()) = nothing
+
+discretization(eq) = eq.discretization
+
+function local_discretization(eq, i)
+    return discretization(eq)(i, associated_entity(eq))
+end
+
 # struct DefaultDiscretization <: JutulDiscretization end
 
 # Primary/secondary variables
@@ -120,7 +130,12 @@ struct DiscretizedDomain{G} <: JutulDomain
     global_map
 end
 function Base.show(io::IO, d::DiscretizedDomain)
-    print(io, "DiscretizedDomain with $(d.grid) and discretizations for $(join(keys(d.discretizations), ", "))\n")
+    disc = d.discretizations
+    if isnothing(disc)
+        print(io, "DiscretizedDomain with $(d.grid)\n")
+    else
+        print(io, "DiscretizedDomain with $(d.grid) and discretizations for $(join(keys(d.discretizations), ", "))\n")
+    end
 end
 
 function DiscretizedDomain(grid, disc = nothing; global_map = TrivialGlobalMap())
@@ -174,7 +189,7 @@ struct SimulationModel{O<:JutulDomain,
     formulation::F
     primary_variables::OrderedDict{Symbol, JutulVariables}
     secondary_variables::OrderedDict{Symbol, JutulVariables}
-    equations::OrderedDict{Symbol, Tuple{DataType, Int64}}
+    equations::OrderedDict{Symbol, JutulEquation}
     output_variables::Vector{Symbol}
     function SimulationModel(domain, system;
                                             formulation = FullyImplicit(),
@@ -237,12 +252,14 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
             print(io, "\n")
         elseif f == :domain
             print(io, "    ")
-            print(io, p)
+            if !isnothing(p)
+                print(io, p)
+            end
             print(io, "\n")
         elseif f == :equations
             ctr = 1
             for (key, eq) in p
-                println(io, "   $ctr) $key implemented as $(eq[2]) × $(eq[1])")
+                println(io, "   $ctr) $key")#implemented as $(eq[2]) × $(eq[1])")
                 ctr += 1
             end
             print(io, "\n")
@@ -318,6 +335,7 @@ Base.@propagate_inbounds Base.getindex(c::ConstantWrapper{R}, i) where R = c.dat
 Base.setindex!(c::ConstantWrapper, arg...) = setindex!(c.data, arg...)
 Base.ndims(c::ConstantWrapper) = 2
 Base.view(c::ConstantWrapper, ::Colon, i) = c.data
+as_value(c::ConstantWrapper) = c
 
 function Base.axes(c::ConstantWrapper, d)
     if d == 1
@@ -429,5 +447,97 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
             @assert i > 0 && i <= n
         end
         new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary, variables_always_active)
+    end
+end
+
+
+"""
+An AutoDiffCache is a type that holds both a set of AD values and a map into some
+global Jacobian.
+"""
+abstract type JutulAutoDiffCache end
+"""
+Cache that holds an AD vector/matrix together with their positions.
+"""
+struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
+    entries::E
+    entity
+    jacobian_positions::P
+    equations_per_entity::I
+    number_of_entities::I
+    npartials::I
+    function CompactAutoDiffCache(equations_per_entity, n_entities, npartials_or_model = 1; 
+                                                        entity = Cells(),
+                                                        context = DefaultContext(),
+                                                        tag = nothing,
+                                                        n_entities_pos = nothing,
+                                                        kwarg...)
+        if isa(npartials_or_model, JutulModel)
+            model = npartials_or_model
+            npartials = degrees_of_freedom_per_entity(model, entity)
+        else
+            npartials = npartials_or_model
+        end
+        npartials::Integer
+
+        I = index_type(context)
+        # Storage for AD variables
+        t = get_entity_tag(tag, entity)
+        entries = allocate_array_ad(equations_per_entity, n_entities, context = context, npartials = npartials, tag = t; kwarg...)
+        D = eltype(entries)
+        # Position in sparse matrix - only allocated, then filled in later.
+        # Since partials are all fetched together with the value, we make partials the fastest index.
+        if isnothing(n_entities_pos)
+            # This can be overriden - if a custom assembly is planned.
+            n_entities_pos = n_entities
+        end
+        I_t = nzval_index_type(context)
+        pos = Array{I_t, 2}(undef, equations_per_entity*npartials, n_entities_pos)
+        pos = transfer(context, pos)
+        new{I, D, typeof(entries), typeof(pos)}(entries, entity, pos, equations_per_entity, n_entities, npartials)
+    end
+end
+
+struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where {∂x <: Real}
+    # N - number of equations per entity
+    entries::A
+    vpos::P               # Variable positions (CSR-like, length N + 1 for N entities)
+    variables::P          # Indirection-mapped variable list of same length as entries
+    jacobian_positions::M
+    diagonal_positions::D
+    number_of_entities_target::Integer
+    number_of_entities_source::Integer
+    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulUnit, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true) where I
+        @assert nt > 0
+        @assert ns > 0
+        counts = map(length, sparsity)
+        # Create value storage with AD type
+        num_entities_touched = sum(counts)
+        v = zeros(T, nvalues_per_entity, num_entities_touched)
+        A = typeof(v)
+        # Create various index mappings + alignment from sparsity
+        variables = vcat(sparsity...)
+        pos = cumsum(vcat(1, counts))
+        algn = zeros(I, nvalues_per_entity*number_of_partials(T), num_entities_touched)
+        if has_diagonal
+            # Create indices into the self-diagonal part if requested, asserting that the diagonal is present
+            m = length(sparsity)
+            diag_ix = zeros(I, m)    
+            for i = 1:m
+                found = false
+                for j = pos[i]:(pos[i+1]-1)
+                    if variables[j] == i
+                        diag_ix[i] = j
+                        found = true
+                    end
+                end
+                @assert found "Diagonal must be present in sparsity pattern. Entry $i/$m was missing the diagonal."
+            end
+        else
+            diag_ix = nothing
+        end
+        P = typeof(pos)
+        variables::P
+        return new{nvalues_per_entity, entity, T, A, P, typeof(algn), typeof(diag_ix)}(v, pos, variables, algn, diag_ix, nt, ns)
     end
 end

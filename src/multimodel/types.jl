@@ -1,24 +1,22 @@
-struct MultiModelCoupling
-    target
-    source
-    intersection
-    issym
-    crosstype
-    function MultiModelCoupling(target, source, intersection; crosstype = InjectiveCrossTerm, issym = true)
-        new(target,source,intersection, issym, crosstype)
-    end   
+abstract type CrossTerm end
+
+struct CrossTermPair
+    target::Symbol
+    source::Symbol
+    equation::Symbol
+    cross_term::CrossTerm
 end
 
-
+Base.transpose(c::CrossTermPair) = CrossTermPair(c.source, c.target, c.equation, c.cross_term,)
 
 struct MultiModel{M, T} <: JutulModel
     models::M
-    couplings::Vector{MultiModelCoupling}
+    cross_terms::Vector{CrossTermPair}
     groups::Union{Vector, Nothing}
     context::Union{JutulContext, Nothing}
     number_of_degrees_of_freedom::T
     reduction::Union{Symbol, Nothing}
-    function MultiModel(models; couplings=Vector{MultiModelCoupling}(undef,0), groups = nothing, context = nothing, reduction = nothing)
+    function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing)
         if isnothing(groups)
             num_groups = 1
         else
@@ -47,15 +45,14 @@ struct MultiModel{M, T} <: JutulModel
                 end
             end
         end
-        new{typeof(models), typeof(ndof)}(models, couplings, groups, context, ndof, reduction)
+        new{typeof(models), typeof(ndof)}(models, cross_terms, groups, context, ndof, reduction)
     end
 end
 
 
 
 
-abstract type CrossTerm end
-
+abstract type AdditiveCrossTerm <: CrossTerm end
 
 """
 A cross model term where the dependency is injective and the term is additive:
@@ -87,7 +84,7 @@ struct InjectiveCrossTerm{I, E, T, S, SC} <: CrossTerm
         noverlap = length(target_impact)
         @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
         # Infer Unit from target_eq
-        equations_per_entity = number_of_equations_per_entity(target_eq)
+        equations_per_entity = number_of_equations_per_entity(model, target_eq)
 
         npartials_target = number_of_partials_per_entity(target_model, target_entity)
         npartials_source = number_of_partials_per_entity(source_model, source_entity)
@@ -111,3 +108,9 @@ function setup_cross_term(target_eq::JutulEquation, target_model, source_model, 
     ct = InjectiveCrossTerm(target_eq, target_model, source_model, intersection; target=target, source=source)
     return ct
 end
+
+abstract type CrossTermSymmetry end
+
+struct CTSkewSymmetry <: CrossTermSymmetry end
+
+symmetry(::CrossTerm) = nothing

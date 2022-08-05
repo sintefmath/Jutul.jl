@@ -1,22 +1,25 @@
+function update_cross_term_in_entity!
 
-function get_model_intersection(u, target_model, source_model, target, source)
-    return get_domain_intersection(u, target_model.domain, source_model.domain, target, source)
 end
 
-"""
-For a given entity in domain target_d, find any indices into that entity that is connected to
-any entities in source_d. The interface is limited to a single entity-entity impact.
-The return value is a tuple of indices and the corresponding entity
-"""
-function get_domain_intersection(u, target_d, source_d, target_symbol, source_symbol)
-    source_symbol::Union{Nothing, Symbol}
-    (target = nothing, source = nothing, target_entity = u, source_entity = Cells())
+function cross_term_entities_source
+
 end
 
-function update_cross_term!(ct::InjectiveCrossTerm, eq, target_storage, source_storage, target_model, source_model, target, source, dt)
-    error("Cross term must be specialized for your equation and models. Did not understand how to specialize $target ($(typeof(target_model))) to $source ($(typeof(source_model)))")
+function cross_term_entities
+
 end
 
-function update_cross_term!(::Nothing, arg...)
-    # Do nothing.
+function has_symmetry
+    
+end
+
+
+function prepare_cross_term_in_entity!(i,
+    state_target, state0_target,
+    state_source, state0_source,
+    target_model, source_model,
+    param_target, param_source,
+    ct::CrossTerm, eq, dt, ldisc = local_discretization(ct, i))
+    nothing
 end

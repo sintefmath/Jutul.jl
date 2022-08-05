@@ -1,53 +1,6 @@
 export CompactAutoDiffCache, as_value, JutulAutoDiffCache, number_of_entities, get_entries, fill_equation_entries!, matrix_layout
 
 """
-An AutoDiffCache is a type that holds both a set of AD values and a map into some
-global Jacobian.
-"""
-abstract type JutulAutoDiffCache end
-"""
-Cache that holds an AD vector/matrix together with their positions.
-"""
-struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
-    entries::E
-    entity
-    jacobian_positions::P
-    equations_per_entity::I
-    number_of_entities::I
-    npartials::I
-    function CompactAutoDiffCache(equations_per_entity, n_entities, npartials_or_model = 1; 
-                                                        entity = Cells(),
-                                                        context = DefaultContext(),
-                                                        tag = nothing,
-                                                        n_entities_pos = nothing,
-                                                        kwarg...)
-        if isa(npartials_or_model, JutulModel)
-            model = npartials_or_model
-            npartials = degrees_of_freedom_per_entity(model, entity)
-        else
-            npartials = npartials_or_model
-        end
-        npartials::Integer
-
-        I = index_type(context)
-        # Storage for AD variables
-        t = get_entity_tag(tag, entity)
-        entries = allocate_array_ad(equations_per_entity, n_entities, context = context, npartials = npartials, tag = t; kwarg...)
-        D = eltype(entries)
-        # Position in sparse matrix - only allocated, then filled in later.
-        # Since partials are all fetched together with the value, we make partials the fastest index.
-        if isnothing(n_entities_pos)
-            # This can be overriden - if a custom assembly is planned.
-            n_entities_pos = n_entities
-        end
-        I_t = nzval_index_type(context)
-        pos = Array{I_t, 2}(undef, equations_per_entity*npartials, n_entities_pos)
-        pos = transfer(context, pos)
-        new{I, D, typeof(entries), typeof(pos)}(entries, entity, pos, equations_per_entity, n_entities, npartials)
-    end
-end
-
-"""
 Get number of entities a cache is defined on.
 """
 @inline number_of_entities(c::JutulAutoDiffCache) = c.number_of_entities
@@ -72,32 +25,20 @@ Note: This only gets the .equation field's entries.
     return get_entries(e.equation)
 end
 
-"""
-Get entries of autodiff cache. Entries are AD vectors that hold values and derivatives.
-"""
-@inline function get_entries(c::CompactAutoDiffCache)
-    return c.entries
+@inline function get_entry(c::JutulAutoDiffCache, index, eqNo)
+    @inbounds get_entries(c)[eqNo, index]
 end
 
-@inline function get_entry(c::CompactAutoDiffCache{I, D}, index, eqNo, entries)::D where {I, D}
-    @inbounds entries[eqNo, index]
-end
+include("compact.jl")
+include("generic.jl")
 
-@inline function get_value(c::CompactAutoDiffCache, arg...)
-    value(get_entry(c, arg...))
-end
-
-@inline function get_jacobian_pos(c::CompactAutoDiffCache{I}, index, eqNo, partial_index, pos) where {I}
-    @inbounds pos[(eqNo-1)*c.npartials + partial_index, index]
+@inline function set_jacobian_pos!(c::JutulAutoDiffCache, index, eqNo, partial_index, pos)
+    set_jacobian_pos!(c.jacobian_positions, index, eqNo, partial_index, c.npartials, pos)
+    # c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
 end
 
 @inline function get_jacobian_pos(np::I, index, eqNo, partial_index, pos)::I where {I<:Integer}
     @inbounds pos[(eqNo-1)*np + partial_index, index]
-end
-
-@inline function set_jacobian_pos!(c::CompactAutoDiffCache, index, eqNo, partial_index, pos)
-    set_jacobian_pos!(c.jacobian_positions, index, eqNo, partial_index, c.npartials, pos)
-    # c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
 end
 
 @inline function set_jacobian_pos!(jpos, index, eqNo, partial_index, npartials, pos)
@@ -108,11 +49,11 @@ end
 @inline jacobian_row_ix(eqNo, partial_index, npartials) = (eqNo-1)*npartials + partial_index
 @inline jacobian_cart_ix(index, eqNo, partial_index, npartials) = CartesianIndex((eqNo-1)*npartials + partial_index, index)
 
-@inline function ad_dims(cache::CompactAutoDiffCache{I, D})::Tuple{I, I, I} where {I, D}
-    return (cache.number_of_entities, cache.equations_per_entity, cache.npartials)
+@inline function ad_dims(cache)
+    return (number_of_entities(cache), equations_per_entity(cache), number_of_partials(cache))::NTuple
 end
 
-@inline function update_jacobian_entry!(nzval, c::CompactAutoDiffCache, index, eqNo, partial_index, 
+@inline function update_jacobian_entry!(nzval, c::JutulAutoDiffCache, index, eqNo, partial_index, 
                                                                         new_value,
                                                                         pos = c.jacobian_positions)
     ix = get_jacobian_pos(c, index, eqNo, partial_index, pos)
@@ -123,35 +64,21 @@ end
     @inbounds nzval[pos] = val
 end
 
+insert_residual_value(::Nothing, ix, v) = nothing
+Base.@propagate_inbounds insert_residual_value(r, ix, v) = r[ix] = v
+
+insert_residual_value(::Nothing, ix, e, v) = nothing
+Base.@propagate_inbounds insert_residual_value(r, ix, e, v) = r[e, ix] = v
+
 function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)
-    entries = cache.entries
-    jp = cache.jacobian_positions
     tb = minbatch(model.context)
     @batch minbatch = tb for i in 1:nu
-        for e in 1:ne
-            a = get_entry(cache, i, e, entries)
-            @inbounds r[i + nu*(e-1)] = a.value
-            for d = 1:cache.npartials
-                # apos = get_jacobian_pos(cache, i, e, d, jp)
+        @inbounds for e in 1:ne
+            a = get_entry(cache, i, e)
+            insert_residual_value(r, i + nu*(e-1), a.value)
+            for d = 1:np
                 update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
-                # @inbounds nz[apos] = a.partials[d]
-            end
-        end
-    end
-end
-
-function fill_equation_entries!(nz, r::Nothing, model, cache::JutulAutoDiffCache)
-    nu, ne, np = ad_dims(cache)
-    entries = cache.entries
-    jp = cache.jacobian_positions
-    tb = minbatch(model.context)
-    @batch minbatch = tb for i in 1:nu
-        for e in 1:ne
-            a = get_entry(cache, i, e, entries)
-            @inbounds for d = 1:np
-                @inbounds ∂ = a.partials[d]
-                update_jacobian_entry!(nz, cache, i, e, d, ∂)
             end
         end
     end
@@ -161,7 +88,8 @@ function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_entitie
     injective_alignment!(cache, arg...; target_index = eq_index, source_index = eq_index, kwarg...)
 end
 
-function injective_alignment!(cache::JutulAutoDiffCache, jac, entity, context;
+function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, context;
+                                    pos = nothing,
                                     layout = matrix_layout(context),
                                     target_index = 1:cache.number_of_entities,
                                     source_index = 1:cache.number_of_entities,
@@ -169,9 +97,13 @@ function injective_alignment!(cache::JutulAutoDiffCache, jac, entity, context;
                                     number_of_entities_target = nothing,
                                     target_offset = 0,
                                     source_offset = 0)
-    entity::JutulUnit
-    cache.entity::JutulUnit
-    if entity == cache.entity
+    _entity::JutulUnit
+    c_entity = entity(cache)
+    c_entity::JutulUnit
+    if isnothing(pos)
+        pos = cache.jacobian_positions
+    end
+    if _entity == c_entity
         nu_c, ne, np = ad_dims(cache)
         if isnothing(number_of_entities_source)
             nu_s = nu_c
@@ -185,13 +117,12 @@ function injective_alignment!(cache::JutulAutoDiffCache, jac, entity, context;
         end
         N = length(source_index)
         @assert length(target_index) == N
-        do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
+        do_injective_alignment!(pos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
     end
 end
 
-function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
-    jpos = cache.jacobian_positions
-    np = cache.npartials
+function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
+    np = number_of_partials(cache)
     for index in 1:length(source_index)
         target = target_index[index]
         source = source_index[index]
@@ -208,8 +139,7 @@ end
 
 
 
-function do_injective_alignment!(cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext, layout)
-    jpos = cache.jacobian_positions
+function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext, layout)
     t = index_type(context)
 
     ns = t(length(source_index))
@@ -462,12 +392,7 @@ end
 Combine a base tag (which can be nothing) with a entity to get a tag that
 captures base tag + entity tag for use with AD initialization.
 """
-function get_entity_tag(basetag, entity)
-    utag = Symbol(typeof(entity))
-    if !isnothing(basetag)
-        utag = Symbol(String(utag)*"∈"*String(basetag))
-    end
-    utag
-end
+get_entity_tag(basetag, entity) = (basetag, entity)
 
 include("local_ad.jl")
+include("sparsity.jl")
