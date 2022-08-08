@@ -104,21 +104,19 @@ select_secondary_variables_system!(sf, domain, system, formulation) = nothing
 select_secondary_variables_formulation!(sf, domain, system, formulation) = nothing
 
 ## Definition
-function select_primary_variables(domain, system, formulation)
-    sf = OrderedDict{Symbol, JutulVariables}()
-    select_primary_variables!(sf, domain, system, formulation)
-    return sf
+# function select_primary_variables(domain, system, formulation)
+#     sf = OrderedDict{Symbol, JutulVariables}()
+#     select_primary_variables!(sf, domain, system, formulation)
+#     return sf
+# end
+
+function select_primary_variables!(vars, model::SimulationModel)
+    select_primary_variables!(vars, model.domain, model)
+    select_primary_variables!(vars, model.system, model)
+    select_primary_variables!(vars, model.formulation, model)
 end
 
-function select_primary_variables!(sf, domain, system, formulation)
-    select_primary_variables_domain!(sf, domain, system, formulation)
-    select_primary_variables_system!(sf, domain, system, formulation)
-    select_primary_variables_formulation!(sf, domain, system, formulation)
-end
-
-select_primary_variables_domain!(sf, domain, system, formulation) = nothing
-select_primary_variables_system!(sf, domain, system, formulation) = nothing
-select_primary_variables_formulation!(sf, domain, system, formulation) = nothing
+select_primary_variables!(vars, ::FullyImplicit, model) = nothing
 
 minimum_output_variables(domain, system, formulation, primary_variables, secondary_variables) = minimum_output_variables(system, primary_variables)
 

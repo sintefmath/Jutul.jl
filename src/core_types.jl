@@ -189,6 +189,7 @@ struct SimulationModel{O<:JutulDomain,
     formulation::F
     primary_variables::OrderedDict{Symbol, JutulVariables}
     secondary_variables::OrderedDict{Symbol, JutulVariables}
+    parameters::OrderedDict{Symbol, JutulVariables}
     equations::OrderedDict{Symbol, JutulEquation}
     output_variables::Vector{Symbol}
     function SimulationModel(domain, system;
@@ -198,8 +199,25 @@ struct SimulationModel{O<:JutulDomain,
                                             )
         context = initialize_context!(context, domain, system, formulation)
         domain = transfer(context, domain)
-        primary = select_primary_variables(domain, system, formulation)
-        primary = transfer(context, primary)
+
+        T = OrderedDict{Symbol, JutulVariables}
+        primary = T()
+        secondary = T()
+        parameters = T()
+        equations = OrderedDict{Symbol, JutulEquation}()
+        outputs = Vector{Symbol}()
+        D = typeof(domain)
+        S = typeof(system)
+        F = typeof(formulation)
+        C = typeof(context)
+        model = new{D, S, F, C}(domain, system, context, formulation, primary, secondary, parameters, equations, outputs)
+        select_primary_variables!(primary, model)
+        select_secondary_variables!(secondary, model)
+        select_parameters!(secondary, model)
+        select_equations!(equations, model)
+
+        # primary = select_primary_variables(domain, system, formulation)
+        # primary = transfer(context, primary)
         function check_prim(pvar)
             a = map(associated_entity, values(pvar))
             for u in unique(a)
@@ -211,17 +229,7 @@ struct SimulationModel{O<:JutulDomain,
             end
         end
         check_prim(primary)
-        secondary = select_secondary_variables(domain, system, formulation)
-        secondary = transfer(context, secondary)
-
-        equations = select_equations(domain, system, formulation)
-        outputs = select_output_variables(domain, system, formulation, primary, secondary, output_level)
-
-        D = typeof(domain)
-        S = typeof(system)
-        F = typeof(formulation)
-        C = typeof(context)
-        new{D, S, F, C}(domain, system, context, formulation, primary, secondary, equations, outputs)
+        select_output_variables!(outputs, model, output_level)
     end
 end
 

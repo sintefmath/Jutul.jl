@@ -33,17 +33,13 @@ function select_secondary_variables_discretization!(S, domain, system, formulati
 end
 
 
-function select_primary_variables_domain!(S, domain::DiscretizedDomain, system, formulation)
+function select_primary_variables!(S, domain::DiscretizedDomain, model)
     d = domain.discretizations
     if !isnothing(d)
         for k in keys(d)
-            select_primary_variables_domain!(S, domain, system, formulation, d[k])
+            select_primary_variables!(S, d[k], model)
         end
     end
-end
-
-function select_primary_variables_domain!(S, domain, system, formulation, disc)
-
 end
 
 count_entities(D::DiscretizedDomain, entity::Cells) = D.entities[entity]

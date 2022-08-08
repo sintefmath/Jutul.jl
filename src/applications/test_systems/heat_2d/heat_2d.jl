@@ -50,13 +50,13 @@ number_of_equations_per_entity(model::SimulationModel, ::SimpleHeatEquation) = 1
 local_discretization(eq::SimpleHeatEquation, i) = nothing
 
 # Set up equation for system
-function select_equations_system!(eqs, domain, system::SimpleHeatSystem, formulation)
+function select_equations!(eqs, system::SimpleHeatSystem, model)
     eqs[:heat_equation] = SimpleHeatEquation()
 end
 
 struct TVar <: ScalarVariable end
 
-function select_primary_variables!(S, domain, system::SimpleHeatSystem, formulation)
+function select_primary_variables!(S, system::SimpleHeatSystem, model)
     S[:T] = TVar()
 end
 
