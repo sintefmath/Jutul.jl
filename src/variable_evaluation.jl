@@ -99,13 +99,8 @@ function select_secondary_variables!(sf, model)
     select_secondary_variables!(sf, model.formulation, model)
 end
 
-
-## Definition
-# function select_primary_variables(domain, system, formulation)
-#     sf = OrderedDict{Symbol, JutulVariables}()
-#     select_primary_variables!(sf, domain, system, formulation)
-#     return sf
-# end
+select_secondary_variables!(S, ::JutulSystem, model) = nothing
+select_secondary_variables!(vars, ::FullyImplicit, model) = nothing
 
 function select_primary_variables!(vars, model::SimulationModel)
     select_primary_variables!(vars, model.domain, model)
@@ -114,6 +109,24 @@ function select_primary_variables!(vars, model::SimulationModel)
 end
 
 select_primary_variables!(vars, ::FullyImplicit, model) = nothing
+
+function select_parameters!(vars, model::SimulationModel)
+    select_parameters!(vars, model.domain, model)
+    select_parameters!(vars, model.system, model)
+    select_parameters!(vars, model.formulation, model)
+end
+
+select_parameters!(S, ::JutulSystem, model) = nothing
+select_parameters!(vars, ::FullyImplicit, model) = nothing
+
+function select_equations!(vars, model::SimulationModel)
+    select_equations!(vars, model.domain, model)
+    select_equations!(vars, model.system, model)
+    select_equations!(vars, model.formulation, model)
+end
+
+select_equations!(S, ::JutulSystem, model) = nothing
+select_equations!(vars, ::FullyImplicit, model) = nothing
 
 minimum_output_variables(domain, system, formulation, primary_variables, secondary_variables) = minimum_output_variables(system, primary_variables)
 

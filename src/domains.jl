@@ -18,28 +18,29 @@ function get_entities(D::DiscretizedDomain)
     return keys(D.entities)
 end
 
-
-function select_secondary_variables_domain!(S, domain::DiscretizedDomain, system, formulation)
+function select_variables_domain_helper!(S, domain::DiscretizedDomain, model, f!)
     d = domain.discretizations
     if !isnothing(d)
         for k in keys(d)
-            select_secondary_variables_discretization!(S, domain, system, formulation, d[k])
+            f!(S, d[k], model)
         end
     end
 end
-
-function select_secondary_variables_discretization!(S, domain, system, formulation, disc)
-
-end
-
 
 function select_primary_variables!(S, domain::DiscretizedDomain, model)
-    d = domain.discretizations
-    if !isnothing(d)
-        for k in keys(d)
-            select_primary_variables!(S, d[k], model)
-        end
-    end
+    select_variables_domain_helper!(S, domain, model, select_primary_variables!)
+end
+
+function select_secondary_variables!(S, domain::DiscretizedDomain, model)
+    select_variables_domain_helper!(S, domain, model, select_secondary_variables!)
+end
+
+function select_parameters!(S, domain::DiscretizedDomain, model)
+    select_variables_domain_helper!(S, domain, model, select_parameters!)
+end
+
+function select_equations!(S, domain::DiscretizedDomain, model)
+    select_variables_domain_helper!(S, domain, model, select_equations!)
 end
 
 count_entities(D::DiscretizedDomain, entity::Cells) = D.entities[entity]
