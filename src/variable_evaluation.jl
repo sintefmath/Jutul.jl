@@ -93,15 +93,12 @@ function select_secondary_variables(domain, system, formulation)
     return sf
 end
 
-function select_secondary_variables!(sf, domain, system, formulation)
-    select_secondary_variables_domain!(sf, domain, system, formulation)
-    select_secondary_variables_system!(sf, domain, system, formulation)
-    select_secondary_variables_formulation!(sf, domain, system, formulation)
+function select_secondary_variables!(sf, model)
+    select_secondary_variables!(sf, model.domain, model)
+    select_secondary_variables!(sf, model.system, model)
+    select_secondary_variables!(sf, model.formulation, model)
 end
 
-select_secondary_variables_domain!(sf, domain, system, formulation) = nothing
-select_secondary_variables_system!(sf, domain, system, formulation) = nothing
-select_secondary_variables_formulation!(sf, domain, system, formulation) = nothing
 
 ## Definition
 # function select_primary_variables(domain, system, formulation)
