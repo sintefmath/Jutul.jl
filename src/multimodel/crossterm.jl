@@ -450,12 +450,14 @@ function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; ti
 end
 
 function apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, source, targets, dt, forces; kwarg...)
-    if target in targets
-        for force in values(forces)
-            if isnothing(force)
-                continue
+    if !isnothing(forces)
+        if target in targets
+            for force in values(forces)
+                if isnothing(force)
+                    continue
+                end
+                apply_force_to_cross_term!(ct_s, cross_term, target, source, model, storage, dt, force; kwarg...)
             end
-            apply_force_to_cross_term!(ct_s, cross_term, target, source, model, storage, dt, force; kwarg...)
         end
     end
 end
