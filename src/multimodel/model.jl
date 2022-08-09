@@ -500,6 +500,14 @@ function setup_parameters(model::MultiModel)
     return p
 end
 
+function set_default_tolerances!(tol_cfg, model::MultiModel)
+    for (k, model) in pairs(model.models)
+        cfg_k = Dict{Symbol, Any}()
+        set_default_tolerances!(cfg_k, model)
+        tol_cfg[k] = cfg_k
+    end
+end
+
 function setup_forces(model::MultiModel; kwarg...)
     models = model.models
     forces = Dict{Symbol, Any}()
@@ -517,11 +525,12 @@ function update_secondary_variables!(storage, model::MultiModel)
     submodels_storage_apply!(storage, model, update_secondary_variables!)
 end
 
-function check_convergence(storage, model::MultiModel; tol = nothing, extra_out = false, kwarg...)
+function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra_out = false, kwarg...)
     converged = true
     err = 0
     offset = 0
     lsys = storage.LinearizedSystem
+    tol_cfg = cfg[:tolerances]
     errors = OrderedDict()
     for (i, key) in enumerate(submodels_symbols(model))
         if has_groups(model) && i > 1
@@ -534,7 +543,7 @@ function check_convergence(storage, model::MultiModel; tol = nothing, extra_out 
         eqs = m.equations
         eqs_s = s.equations
         ls = get_linearized_system_submodel(storage, model, key, lsys)
-        conv, e, errors[key], = check_convergence(ls, eqs, eqs_s, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
+        conv, e, errors[key], = check_convergence(ls, eqs, eqs_s, s, m, tol_cfg[key]; offset = offset, extra_out = true, tol = tol, kwarg...)
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)

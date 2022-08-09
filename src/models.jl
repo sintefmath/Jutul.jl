@@ -457,21 +457,30 @@ function local_residual_view(r_buf, model, eq, equation_offset)
     return as_cell_major_matrix(r_buf, n, m, model, equation_offset)
 end
 
-function check_convergence(storage, model; kwarg...)
+function set_default_tolerances(model)
+    tol_cfg = Dict{Symbol, Any}()
+    set_default_tolerances!(tol_cfg, model)
+    return tol_cfg
+end
+
+function set_default_tolerances!(tol_cfg, model::SimulationModel)
+    tol_cfg[:default] = 1e-3
+end
+
+function check_convergence(storage, model, config; kwarg...)
     lsys = storage.LinearizedSystem
     eqs = model.equations
     eqs_s = storage.equations
-    check_convergence(lsys, eqs, eqs_s, storage, model; kwarg...)
+    check_convergence(lsys, eqs, eqs_s, storage, model, config[:tolerances]; kwarg...)
 end
 
-function check_convergence(lsys, eqs, eqs_s, storage, model; iteration = nothing, extra_out = false, tol = nothing, offset = 0, kwarg...)
+function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration = nothing, extra_out = false, tol = nothing, offset = 0, kwarg...)
     converged = true
     e = 0
     eoffset = 0
     r_buf = lsys.r_buffer
-    prm = storage.parameters.tolerances
     if isnothing(tol)
-        tol = prm.default
+        tol = tol_cfg[:default]
     end
     output = []
     for key in keys(eqs)
@@ -486,8 +495,8 @@ function check_convergence(lsys, eqs, eqs_s, storage, model; iteration = nothing
         e_keys = keys(all_crits)
         tols = Dict()
         for e_k in e_keys
-            if haskey(prm, key)
-                v = prm[key]
+            if haskey(tol_cfg, key)
+                v = tol_cfg[key]
                 if isa(v, AbstractFloat)
                     t_e = v
                 else
@@ -539,8 +548,8 @@ end
 
 function setup_parameters(model)
     d = Dict{Symbol, Any}()
-    d[:tolerances] = Dict{Symbol, Any}()
-    d[:tolerances][:default] = 1e-3
+    # d[:tolerances] = Dict{Symbol, Any}()
+    # d[:tolerances][:default] = 1e-3
     setup_parameters_domain!(d, model, model.domain)
     setup_parameters_system!(d, model, model.system)
     setup_parameters_context!(d, model, model.context)
