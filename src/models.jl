@@ -14,6 +14,10 @@ function get_variables(model::SimulationModel)
     return merge(get_primary_variables(model), get_secondary_variables(model))
 end
 
+function get_parameters(model::SimulationModel)
+    return model.parameters
+end
+
 export set_primary_variables!, set_secondary_variables!, replace_variables!
 """
 Set a primary variable (adding if it does not exist)
@@ -110,7 +114,7 @@ end
 """
 Initialize primary variables and other state fields, given initial values as a Dict
 """
-function setup_state!(state, model::JutulModel, init_values::Dict = Dict())
+function setup_state!(state, model::JutulModel, init_values::AbstractDict = Dict())
     for (psym, pvar) in get_primary_variables(model)
         initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true)
     end
@@ -133,11 +137,25 @@ function initialize_extra_state_fields!(state, ::Any, model)
     # Do nothing
 end
 
-function setup_parameters(model)
-    d = Dict{Symbol, Any}()
-    return d
+function setup_parameters!(prm, model, init_values::AbstractDict = Dict())
+    for (psym, pvar) in get_parameters(model)
+        initialize_variable_value!(prm, model, pvar, psym, init_values, need_value = false)
+    end
+    return prm
 end
 
+function setup_parameters(model::JutulModel; kwarg...)
+    init = Dict{Symbol, Any}()
+    for (k, v) in kwarg
+        init[k] = v
+    end
+    return setup_parameters(model, init)
+end
+
+function setup_parameters(model::JutulModel, init)
+    prm = Dict{Symbol, Any}()
+    return setup_parameters!(prm, model, init)
+end
 
 """
 Allocate storage for the model. You should overload setup_storage! if you have a custom
@@ -185,6 +203,9 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
                                                       kwarg...)
     @timeit "state" if !isnothing(state0)
         storage[:parameters] = parameters
+        for k in keys(parameters)
+            state0[k] = parameters[k]
+        end
         storage[:state0] = state0
         storage[:state] = convert_state_ad(model, state0, tag)
         storage[:primary_variables] = reference_primary_variables(storage, model) 

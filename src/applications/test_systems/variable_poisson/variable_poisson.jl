@@ -42,13 +42,14 @@ function select_parameters!(S, system::VariablePoissonSystem, model)
 end
 
 function Jutul.update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::VariablePoissonEquation, model, dt, ldisc = local_discretization(eq, self_cell))
-    U_self = state.U[self_cell]
+    U = state.U
     K = state.K
     div = ldisc.div
-
+    U_self = state.U[self_cell]
     function flux(other_cell, face, sgn)
         U_other = U[other_cell]
         return K[face]*(U_self - U_other)
     end
-    eq_buf[] = div(flux)
+    # Equation is just -∇⋅K∇p = 0, or ∇⋅V where V = -K∇p
+    eq_buf[] = -div(flux)
 end

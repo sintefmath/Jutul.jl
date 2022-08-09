@@ -14,7 +14,8 @@ model = SimulationModel(D, sys)
 nc = number_of_cells(g)
 U0 = zeros(nc)
 state0 = setup_state(model, Dict(:U=>U0))
-sim = Simulator(model, state0 = state0)
+param = setup_parameters(model)
+sim = Simulator(model, state0 = state0, parameters = param)
 states, = simulate(sim, [1.0], info_level = 1)
 #     return states
 # end
