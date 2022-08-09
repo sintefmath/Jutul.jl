@@ -26,7 +26,13 @@ function select_variables_domain_helper!(S, domain::DiscretizedDomain, model, f!
         end
     end
 end
+# Basic domain - default is to do nothing
+select_primary_variables!(S, domain::JutulDomain, model) = nothing
+select_secondary_variables!(S, domain::JutulDomain, model) = nothing
+select_parameters!(S, domain::JutulDomain, model) = nothing
+select_equations!(S, domain::JutulDomain, model) = nothing
 
+# Discretized domain - dispatch further down on all present discretizations
 function select_primary_variables!(S, domain::DiscretizedDomain, model)
     select_variables_domain_helper!(S, domain, model, select_primary_variables!)
 end
