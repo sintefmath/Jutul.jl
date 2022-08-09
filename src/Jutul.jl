@@ -80,4 +80,5 @@ module Jutul
     include("applications/test_systems/test_systems.jl")
 
     include("meshes/meshes.jl")
+    include("discretization/discretization.jl")
 end # module
