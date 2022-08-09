@@ -36,6 +36,7 @@ end
 struct PoissonFaceCoefficient <: ScalarVariable end
 
 associated_entity(::PoissonFaceCoefficient) = Faces()
+default_value(model, ::PoissonFaceCoefficient) = 1.0
 
 function select_parameters!(S, system::VariablePoissonSystem, model)
     S[:K] = PoissonFaceCoefficient()
@@ -51,5 +52,12 @@ function Jutul.update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::
         return K[face]*(U_self - U_other)
     end
     # Equation is just -∇⋅K∇p = 0, or ∇⋅V where V = -K∇p
-    eq_buf[] = -div(flux)
+    eq = -div(flux)
+    if self_cell == 1
+        eq += 1
+    elseif self_cell == number_of_cells(model.domain.grid)
+        eq -= 1
+    end
+    @info self_cell eq
+    eq_buf[] = eq
 end

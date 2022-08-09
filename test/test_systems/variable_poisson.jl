@@ -12,7 +12,7 @@ D = DiscretizedDomain(g, discretization)
 model = SimulationModel(D, sys)
 # Initial condition is random values
 nc = number_of_cells(g)
-U0 = zeros(nc)
+U0 = ones(nc)
 state0 = setup_state(model, Dict(:U=>U0))
 param = setup_parameters(model)
 sim = Simulator(model, state0 = state0, parameters = param)
