@@ -12,7 +12,7 @@ function test_io()
 
     out = tempname()
     sim = Simulator(model, state0 = state0)
-    states, reports = simulate(sim, [1.0, 2.0], forces = forces, output_states = true, output_path = out)
+    states, reports = simulate(sim, [1.0, 2.0], forces = forces, output_states = true, output_path = out, info_level = -1)
     states2, reports2 = read_results(out)
     @testset "Test serialization of results" begin
         for (s_mem, s_file) in zip(states, states2)
@@ -39,9 +39,9 @@ function test_restart()
 
     out = tempname()
     sim = Simulator(model, state0 = state0)
-    states, reports = simulate(sim, [1.0, 2.0], forces = forces, output_states = true, output_path = out)
+    states, reports = simulate(sim, [1.0, 2.0], forces = forces, output_states = true, output_path = out, info_level = -1)
 
-    states2, reports2 = simulate(sim, [1.0, 2.0], forces = forces, restart = 2, output_path = out)
+    states2, reports2 = simulate(sim, [1.0, 2.0], forces = forces, restart = 2, output_path = out, info_level = -1)
 
     @testset "Test restart from stored results" begin
         for (s_mem, s_file) in zip(states, states2)

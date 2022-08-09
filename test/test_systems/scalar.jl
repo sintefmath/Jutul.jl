@@ -10,7 +10,7 @@ function test_single(use_manual)
     forces = setup_forces(model, sources = source)
     state0 = setup_state(model, Dict(:XVar=>0.0))
     sim = Simulator(model, state0 = state0)
-    states, = simulate(sim, [1.0], forces = forces)
+    states, = simulate(sim, [1.0], forces = forces, info_level = -1)
 
     X = states[end][:XVar]
     return X[] ≈ 1.0

@@ -29,7 +29,7 @@ function test_multi(; use_groups = false, kwarg...)
     forces = setup_forces(model, A = forcesA, B = forcesB)
     # Set up simulator, and run simulation
     sim = Simulator(model, state0 = state0)
-    states, = simulate(sim, [1.0], forces = forces; kwarg...)
+    states, = simulate(sim, [1.0], forces = forces, info_level = -1; kwarg...)
 
     XA = states[end][:A][:XVar]
     XB = states[end][:B][:XVar]

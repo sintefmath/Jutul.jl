@@ -13,7 +13,7 @@ function test_poisson(nx = 3, ny = nx)
     T0 = rand(nc)
     state0 = setup_state(model, Dict(:T=>T0))
     sim = Simulator(model, state0 = state0)
-    states, = simulate(sim, [1.0], info_level = 3)
+    states, = simulate(sim, [1.0], info_level = -1)
     return states
 end
 
