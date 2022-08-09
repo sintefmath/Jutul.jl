@@ -40,8 +40,6 @@ function fill_equation_entries!(nz, r, model, cache::GenericAutoDiffCache)
     is_diag_pos(i, jno, dpos) = dpos[jno] == i
     is_diag_pos(i, jno, ::Nothing) = jno == 1
 
-    get_diagonal_pos(dpos, i) = dpos[i]
-    get_diagonal_pos(dpos::Nothing, i) = i
     # @batch minbatch = tb for i in 1:nu
     if isnothing(dpos)
         # We don't have diagonals, just fill inn residual whenever
