@@ -1,8 +1,10 @@
 struct UVar <: ScalarVariable end
 
-export VariablePoissonSystem
+export VariablePoissonSystem, PoissonSource
 
 struct VariablePoissonSystem <: JutulSystem end
+const PoissonModel = SimulationModel{<:Any, <:VariablePoissonSystem, <:Any, <:Any}
+
 
 struct VariablePoissonEquation{T} <: JutulEquation
     discretization::T
@@ -42,7 +44,20 @@ function select_parameters!(S, system::VariablePoissonSystem, model)
     S[:K] = PoissonFaceCoefficient()
 end
 
-function Jutul.update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::VariablePoissonEquation, model, dt, ldisc = local_discretization(eq, self_cell))
+struct PoissonSource <: JutulForce
+    cell::Integer
+    value::Float64
+end
+
+function apply_forces_to_equation!(d, storage, model, eq::VariablePoissonEquation, eq_s, force::Vector{PoissonSource}, time)
+    for f in force
+        # @info f.cell d d[f.cell]
+        d[f.cell] -= f.value
+        # @info f.cell d d[f.cell]
+    end
+end
+
+function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::VariablePoissonEquation, model, dt, ldisc = local_discretization(eq, self_cell))
     U = state.U
     K = state.K
     div = ldisc.div
@@ -52,12 +67,9 @@ function Jutul.update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::
         return K[face]*(U_self - U_other)
     end
     # Equation is just -∇⋅K∇p = 0, or ∇⋅V where V = -K∇p
-    eq = -div(flux)
-    if self_cell == 1
-        eq += 1
-    elseif self_cell == number_of_cells(model.domain.grid)
-        eq -= 1
-    end
-    @info self_cell eq
-    eq_buf[] = eq
+    eq_buf[] = -div(flux)
+end
+
+function setup_forces(model::PoissonModel; sources = nothing)
+    return (sources = sources, )
 end

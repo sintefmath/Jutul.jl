@@ -258,6 +258,7 @@ function solve!(sys)
     end
     J = sys.jac
     r = sys.r
+
     sys.dx .= -(J\r)
     @assert all(isfinite, sys.dx) "Linear solve resulted in non-finite values."
     return linear_solve_return()
