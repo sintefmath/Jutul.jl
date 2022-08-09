@@ -50,10 +50,10 @@ struct PoissonSource <: JutulForce
 end
 
 function apply_forces_to_equation!(d, storage, model, eq::VariablePoissonEquation, eq_s, force::Vector{PoissonSource}, time)
+    U = storage.state.U
     for f in force
-        # @info f.cell d d[f.cell]
-        d[f.cell] -= f.value
-        # @info f.cell d d[f.cell]
+        c = f.cell
+        d[c] -= f.value
     end
 end
 
