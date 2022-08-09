@@ -236,24 +236,28 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
     for f in fieldnames(typeof(model))
         p = getfield(model, f)
         print(io, "  $f:\n")
-        if f == :primary_variables || f == :secondary_variables
+        if f == :primary_variables || f == :secondary_variables || f == :parameters
             ctr = 1
-            for (key, pvar) in p
-                nv = degrees_of_freedom_per_entity(model, pvar)
-                nu = number_of_entities(model, pvar)
-                u = associated_entity(pvar)
-                if f == :secondary_variables
-                    print(io, "   $ctr $key ← $(typeof(pvar))) (")
-                else
-                    print(io, "   $ctr) $key (")
-                end
-                if nv > 1
-                    print(io, "$nv×")
-                end
-                print(io, "$nu")
+            if length(keys(p)) == 0
+                print(io, "   None.\n")
+            else
+                for (key, pvar) in p
+                    nv = degrees_of_freedom_per_entity(model, pvar)
+                    nu = number_of_entities(model, pvar)
+                    u = associated_entity(pvar)
+                    if f == :secondary_variables
+                        print(io, "   $ctr $key ← $(typeof(pvar))) (")
+                    else
+                        print(io, "   $ctr) $key (")
+                    end
+                    if nv > 1
+                        print(io, "$nv×")
+                    end
+                    print(io, "$nu")
 
-                print(io, " ∈ $(typeof(u)))\n")
-                ctr += 1
+                    print(io, " ∈ $(typeof(u)))\n")
+                    ctr += 1
+                end
             end
             print(io, "\n")
         elseif f == :domain
