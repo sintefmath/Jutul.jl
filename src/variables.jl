@@ -24,12 +24,12 @@ function number_of_degrees_of_freedom(model::JutulModel)
     return ndof
 end
 
-function number_of_degrees_of_freedom(model::JutulModel, u::JutulUnit)
+function number_of_degrees_of_freedom(model::JutulModel, u::JutulEntity)
     ndof = degrees_of_freedom_per_entity(model, u)*count_active_entities(model.domain, u, for_variables = true)
     return ndof
 end
 
-function degrees_of_freedom_per_entity(model::JutulModel, u::JutulUnit)
+function degrees_of_freedom_per_entity(model::JutulModel, u::JutulEntity)
     ndof = 0
     for pvar in values(get_primary_variables(model))
         if associated_entity(pvar) == u

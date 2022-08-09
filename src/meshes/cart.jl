@@ -189,6 +189,12 @@ function tpfv_geometry(g::CartesianMesh)
     return TwoPointFiniteVolumeGeometry(N, face_areas, V, face_normals, cell_centroids, face_centroids)
 end
 
+function get_neighborship(g::CartesianMesh)
+    # Expensive but correct
+    geo = tpfv_geometry(g)
+    return geo.neighbors
+end
+
 function grid_dims_ijk(g)
     d = length(g.dims)
     if d == 1

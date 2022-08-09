@@ -51,8 +51,6 @@ end
 
 dim(g::TwoPointFiniteVolumeGeometry) = size(g.cell_centroids, 1)
 
-abstract type AbstractJutulMesh end
-
 """
     dim(g)::Integer
 

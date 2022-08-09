@@ -1,7 +1,7 @@
 export number_of_cells, number_of_faces, number_of_half_faces, count_entities, get_entities, declare_entities, get_neighborship
 
 
-function declare_entities(G::JutulGrid)
+function declare_entities(G::AbstractJutulMesh)
     return [(entity = Cells(), count = 1)]
 end
 
@@ -74,15 +74,15 @@ function number_of_half_faces(D::DiscretizedDomain)
     return 2*number_of_faces(D)
 end
 
-function positional_map(domain::JutulDomain, source_entity::JutulUnit, target_entity::JutulUnit)
+function positional_map(domain::JutulDomain, source_entity::JutulEntity, target_entity::JutulEntity)
     positional_map(domain.grid, source_entity, target_entity)
 end
 
-function positional_map(grid::JutulGrid, source_entity, target_entity)
+function positional_map(grid::AbstractJutulMesh, source_entity, target_entity)
     error("Not implemented.")
 end
 
-function positional_map(grid::JutulGrid, ::Cells, ::Faces)
+function positional_map(grid::AbstractJutulMesh, ::Cells, ::Faces)
     faces, facePos = get_facepos(grid.neighborship)
     return (indices = faces, pos = facePos)
 end
@@ -108,4 +108,12 @@ function half_face_map(N, nc)
         end
     end
     return (cells = cells, faces = faces, face_pos = face_pos, face_sign = signs)
+end
+
+function local_half_face_map(cd, cell_index)
+    loc = cd.face_pos[cell_index]:(cd.face_pos[cell_index+1]-1)
+    faces = @views cd.faces[loc]
+    signs = @views cd.face_sign[loc]
+    cells = @views cd.cells[loc]
+    return (faces = faces, signs = signs, cells = cells)
 end

@@ -79,7 +79,7 @@ function get_primary_variable_ordered_entities(model::SimulationModel)
     return out
 end
 
-function number_of_partials_per_entity(model::SimulationModel, entity::JutulUnit)
+function number_of_partials_per_entity(model::SimulationModel, entity::JutulEntity)
     n = 0
     for pvar in values(get_primary_variables(model))
         if associated_entity(pvar) == entity

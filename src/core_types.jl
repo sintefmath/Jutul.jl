@@ -1,4 +1,4 @@
-export JutulSystem, JutulDomain, JutulVariables, JutulGrid, JutulContext
+export JutulSystem, JutulDomain, JutulVariables, AbstractJutulMesh, JutulContext
 export SimulationModel, JutulVariables, JutulFormulation, JutulEquation
 export setup_parameters, JutulForce
 export Cells, Nodes, Faces, declare_entities
@@ -123,11 +123,11 @@ include("contexts/cuda.jl")
 abstract type JutulDomain end
 
 export DiscretizedDomain
-struct DiscretizedDomain{G} <: JutulDomain
+struct DiscretizedDomain{G, D, E, M} <: JutulDomain
     grid::G
-    discretizations
-    entities
-    global_map
+    discretizations::D
+    entities::E
+    global_map::M
 end
 function Base.show(io::IO, d::DiscretizedDomain)
     disc = d.discretizations
@@ -280,20 +280,20 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
 end
 
 # Grids etc
-export JutulUnit, Cells, Faces, Nodes
+export JutulEntity, Cells, Faces, Nodes
 ## Grid
-abstract type JutulGrid end
+abstract type AbstractJutulMesh end
 
 ## Discretized entities
-abstract type JutulUnit end
+abstract type JutulEntity end
 
-struct Cells <: JutulUnit end
-struct Faces <: JutulUnit end
-struct Nodes <: JutulUnit end
+struct Cells <: JutulEntity end
+struct Faces <: JutulEntity end
+struct Nodes <: JutulEntity end
 
 # Sim model
 
-function SimulationModel(g::JutulGrid, system; discretization = nothing, kwarg...)
+function SimulationModel(g::AbstractJutulMesh, system; discretization = nothing, kwarg...)
     # Simple constructor that assumes
     d = DiscretizedDomain(g, discretization)
     SimulationModel(d, system; kwarg...)
@@ -304,7 +304,7 @@ A set of constants, repeated over the entire set of Cells or some other entity
 """
 struct ConstantVariables <: GroupedVariables
     constants
-    entity::JutulUnit
+    entity::JutulEntity
     single_entity::Bool
     function ConstantVariables(constants, entity = Cells(); single_entity = nothing)
         if !isa(constants, AbstractArray)
@@ -513,7 +513,7 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
     diagonal_positions::D
     number_of_entities_target::Integer
     number_of_entities_source::Integer
-    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulUnit, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true) where I
+    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulEntity, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true) where I
         @assert nt > 0
         @assert ns > 0
         counts = map(length, sparsity)
