@@ -211,13 +211,10 @@ struct SimulationModel{O<:JutulDomain,
         F = typeof(formulation)
         C = typeof(context)
         model = new{D, S, F, C}(domain, system, context, formulation, primary, secondary, parameters, equations, outputs)
-        select_primary_variables!(primary, model)
-        select_secondary_variables!(secondary, model)
-        select_parameters!(secondary, model)
-        select_equations!(equations, model)
-
-        # primary = select_primary_variables(domain, system, formulation)
-        # primary = transfer(context, primary)
+        select_primary_variables!(model)
+        select_secondary_variables!(model)
+        select_parameters!(model)
+        select_equations!(model)
         function check_prim(pvar)
             a = map(associated_entity, values(pvar))
             for u in unique(a)
@@ -229,7 +226,8 @@ struct SimulationModel{O<:JutulDomain,
             end
         end
         check_prim(primary)
-        select_output_variables!(outputs, model, output_level)
+        select_output_variables!(model, output_level)
+        return model
     end
 end
 
