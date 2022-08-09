@@ -124,22 +124,20 @@ end
 Add variables that need to be in state, but are never AD variables (e.g. phase status flag)
 """
 function initialize_extra_state_fields!(state, model::JutulModel)
-    initialize_extra_state_fields_domain!(state, model, model.domain)
-    initialize_extra_state_fields_system!(state, model, model.system)
-    initialize_extra_state_fields_formulation!(state, model, model.formulation)
+    initialize_extra_state_fields!(state, model.domain, model)
+    initialize_extra_state_fields!(state, model.system, model)
+    initialize_extra_state_fields!(state, model.formulation, model)
 end
 
-function initialize_extra_state_fields_domain!(state, model, domain)
+function initialize_extra_state_fields!(state, ::Any, model)
     # Do nothing
 end
 
-function initialize_extra_state_fields_system!(state, model, system)
-    # Do nothing
+function setup_parameters(model)
+    d = Dict{Symbol, Any}()
+    return d
 end
 
-function initialize_extra_state_fields_formulation!(state, model, formulation)
-    # Do nothing
-end
 
 """
 Allocate storage for the model. You should overload setup_storage! if you have a custom
@@ -545,21 +543,6 @@ end
 function apply_forces!(storage, model, dt, ::Nothing; time = NaN)
 
 end
-
-function setup_parameters(model)
-    d = Dict{Symbol, Any}()
-    # d[:tolerances] = Dict{Symbol, Any}()
-    # d[:tolerances][:default] = 1e-3
-    setup_parameters_domain!(d, model, model.domain)
-    setup_parameters_system!(d, model, model.system)
-    setup_parameters_context!(d, model, model.context)
-    setup_parameters_formulation!(d, model, model.formulation)
-    return d
-end
-setup_parameters_domain!(d, model, ::Any) = nothing
-setup_parameters_system!(d, model, ::Any) = nothing
-setup_parameters_context!(d, model, ::Any) = nothing
-setup_parameters_formulation!(d, model, ::Any) = nothing
 
 export setup_forces
 function setup_forces(model::JutulModel)
