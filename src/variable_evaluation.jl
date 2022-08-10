@@ -186,12 +186,16 @@ function sort_secondary_variables!(model::JutulModel)
     # Do nothing for general case.
 end
 
-function build_variable_graph(model, primary = model.primary_variables, secondary = model.secondary_variables)
+function build_variable_graph(model, primary = model.primary_variables, secondary = model.secondary_variables, param = model.parameters)
     edges = []
     nodes = []
     for key in keys(primary)
         push!(nodes, key)
         push!(edges, []) # No dependencies for primary variables.
+    end
+    for key in keys(param)
+        push!(nodes, key)
+        push!(edges, []) # No dependencies for parameters - they are static.
     end
     for (key, var) in secondary
         dep = get_dependencies(var, model)
@@ -204,12 +208,13 @@ end
 function sort_secondary_variables!(model::SimulationModel)
     primary = model.primary_variables
     secondary = model.secondary_variables
-    nodes, edges = build_variable_graph(model, primary, secondary)
+    param = model.parameters
+    nodes, edges = build_variable_graph(model, primary, secondary, param)
     order = sort_symbols(nodes, edges)
     @debug "Variable ordering determined: $(nodes[order])"
-    np = length(primary)
+    np = length(primary) + length(param)
     for i in 1:np
-        @assert order[i] <= np "Primary variables should come in the first $np entries in ordering. Something is very wrong."
+        @assert order[i] <= np "Primary variables and parameters should come in the first $np entries in ordering. Something is very wrong."
     end
     # Skip primary variable indices - these always come first.
     order = order[order .> np]
