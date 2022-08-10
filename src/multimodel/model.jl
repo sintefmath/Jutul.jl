@@ -522,7 +522,9 @@ function setup_forces(model::MultiModel; kwarg...)
 end
 
 function update_secondary_variables!(storage, model::MultiModel)
-    submodels_storage_apply!(storage, model, update_secondary_variables!)
+    for key in submodels_symbols(model)
+        update_secondary_variables!(storage[key], model.models[key])
+    end
 end
 
 function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra_out = false, kwarg...)

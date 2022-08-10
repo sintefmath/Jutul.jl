@@ -410,7 +410,7 @@ function transfer(context, v::ConstantVariables)
     return ConstantVariables(constants, v.entity, single_entity = v.single_entity)
 end
 
-update_secondary_variable!(x, var::ConstantVariables, model, parameters, state) = nothing
+update_secondary_variable!(x, var::ConstantVariables, model, state) = nothing
 
 function initialize_variable_value(model, var::ConstantVariables, val; perform_copy = true)
     # Ignore initializer since we already know the constants

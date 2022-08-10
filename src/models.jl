@@ -175,9 +175,8 @@ function initialize_storage!(storage, model::JutulModel; initialize_state0 = tru
     if initialize_state0
         # Convert state and parameters to immutable for evaluation
         state0_eval = convert_to_immutable_storage(storage[:state0])
-        param_eval = convert_to_immutable_storage(storage[:parameters])
         # Evaluate everything (with doubles) to make sure that possible 
-        update_secondary_variables!(state0_eval, model, param_eval)
+        update_secondary_variables_state!(state0_eval, model)
         # Create a new state0 with the desired/required outputs and
         # copy over those values before returning them back
         state0 = Dict()

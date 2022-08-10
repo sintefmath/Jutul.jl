@@ -9,7 +9,7 @@ The function is then declared, in addition to helpers that allows
 checking what the dependencies are and unpacking the dependencies from state.
 
 If we define the following function annotated with the macro:
-@jutul_secondary function update_as_secondary!(target, var::MyVarType, model, param, a, b, c)
+@jutul_secondary function update_as_secondary!(target, var::MyVarType, model, a, b, c)
     @. target = a + b / c
 end
 
@@ -18,8 +18,8 @@ function get_dependencies(var::MyVarType, model)
    return [:a, :b, :c]
 end
 
-function update_secondary_variable!(array_target, var::MyVarType, model, parameters, state)
-    update_as_secondary!(array_target, var, model, parameters, state.a, state.b, state.c)
+function update_secondary_variable!(array_target, var::MyVarType, model, state)
+    update_as_secondary!(array_target, var, model, state.a, state.b, state.c)
 end
 
 Note that the names input arguments beyond the parameter dict matter, as these will be fetched from state.
@@ -35,7 +35,7 @@ macro jutul_secondary(ex)
         x.args[1]
     end
 
-    deps = map(myfilter, args[5:end])
+    deps = map(myfilter, args[4:end])
     # Pick variable + model
     variable_sym = args[2]
     model_sym = args[3]
@@ -50,37 +50,36 @@ macro jutul_secondary(ex)
     # Define update_as_secondary! function
     upd_def = deepcopy(def)
     upd_def[:name] = :update_secondary_variable!
-    upd_def[:args] = [:array_target, variable_sym, model_sym, :parameters, :state]
-    # value, var, model, parameters, arg1, arg2
+    upd_def[:args] = [:array_target, variable_sym, model_sym, :state]
+    # value, var, model, arg1, arg2
     tmp = "update_as_secondary!(array_target, "
     tmp *= String(myfilter(variable_sym))
     tmp *= ", "
     tmp *= String(myfilter(model_sym))
-    tmp *= ", parameters"
 
     for s in deps
         tmp *= ", state."*String(s)
     end
     tmp *= ")"
+    @info "!" tmp
     upd_def[:body] = Meta.parse(tmp)
     ex_upd = combinedef(upd_def)
 
-    quote 
+    quote
         $ex
         $ex_dep
         $ex_upd
     end |> esc 
 end
 
+
 function update_secondary_variables!(storage, model)
-    state = storage.state
-    parameters = storage.parameters
-    update_secondary_variables!(state, model, parameters)
+    update_secondary_variables_state!(storage.state, model)
 end
 
-function update_secondary_variables!(state, model, parameters)
+function update_secondary_variables_state!(state, model)
     for (symbol, var) in model.secondary_variables
-        @timeit "$symbol" update_secondary_variable!(state[symbol], var, model, parameters, state)
+        @timeit "$symbol" update_secondary_variable!(state[symbol], var, model, state)
     end
 end
 

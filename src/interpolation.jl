@@ -81,16 +81,16 @@ function get_dependencies(var::UnaryTabulatedVariable, model)
     return [var.x_symbol]
  end
  
- function update_secondary_variable!(array_target, var::UnaryTabulatedVariable, model, parameters, state)
-     update_as_secondary!(array_target, var, model, parameters, state[var.x_symbol])
+ function update_secondary_variable!(array_target, var::UnaryTabulatedVariable, model, state)
+    update_as_secondary!(array_target, var, model, state[var.x_symbol])
  end
 
-function update_as_secondary!(F_v, tbl::UnaryTabulatedVariable, model, param, x_v::AbstractVector)
+function update_as_secondary!(F_v, tbl::UnaryTabulatedVariable, model, x_v::AbstractVector)
     I = tbl.interpolators
     @tullio F_v[ph, i] = I[k](x_v[i])
 end
 
-function update_as_secondary!(F_v, tbl::UnaryTabulatedVariable, model, param, x_v::AbstractMatrix)
+function update_as_secondary!(F_v, tbl::UnaryTabulatedVariable, model, x_v::AbstractMatrix)
     I = tbl.interpolators
     @tullio F_v[k, i] = I[k](x_v[k, i])
 end
