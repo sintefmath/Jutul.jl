@@ -15,7 +15,7 @@ model = SimulationModel(D, sys)
 nc = number_of_cells(g)
 U0 = ones(nc)
 state0 = setup_state(model, Dict(:U=>U0))
-param = setup_parameters(model)
+param = setup_parameters(model, K = compute_face_trans(g, 1.0))
 
 nc = number_of_cells(g)
 pos_src = PoissonSource(1, 1.0)
