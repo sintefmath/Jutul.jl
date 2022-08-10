@@ -70,7 +70,7 @@ number_of_cells(t::AbstractJutulMesh) = 1
 
 Get the number of faces in a mesh.
 """
-number_of_faces(t::AbstractJutulMesh) = 0
+number_of_faces(G) = size(get_neighborship(G), 2)
 
 include("mrst.jl")
 include("cart.jl")
