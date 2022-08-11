@@ -311,6 +311,7 @@ struct ConstantVariables <: GroupedVariables
     entity::JutulEntity
     single_entity::Bool
     function ConstantVariables(constants, entity = Cells(); single_entity = nothing)
+        error("Disabled, use parameters instead")
         if !isa(constants, AbstractArray)
             @assert length(constants) == 1
             constants = [constants]

@@ -212,6 +212,8 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
 end
 
 default_value(model, variable) = 0.0
+default_values(model, var::ScalarVariable) = repeat([default_value(model, var)], number_of_entities(model, var))
+default_values(model, var::GroupedVariables) = repeat([default_value(model, var)], values_per_entity(model, var), number_of_entities(model, var))
 
 function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     state[symb] = initialize_variable_value(model, pvar, val; kwarg...)
@@ -226,7 +228,7 @@ function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict;
         error("The key $symb must be present to initialize the state. Provided symbols in initialization Dict: $k")
     else
         # We do not really need to initialize this, as it will be updated elsewhere.
-        value = default_value(model, pvar)
+        value = default_values(model, pvar)
     end
     return initialize_variable_value!(state, model, pvar, symb, value)
 end

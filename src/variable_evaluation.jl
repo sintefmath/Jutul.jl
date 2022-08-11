@@ -232,7 +232,7 @@ function sort_symbols(symbols, deps)
     for (i, dep) in enumerate(deps)
         for d in dep
             pos = findall(symbols .== d)
-            @assert length(pos) == 1 "Symbol $d must appear exactly once in secondary variables, found $(length(pos)) entries. Declared secondary variables:\n $symbols. Declared dependencies:\n $deps"
+            @assert length(pos) == 1 "Symbol $d must appear exactly once in secondary variables or parameters, found $(length(pos)) entries. Declared secondary/parameters:\n $symbols. Declared dependencies:\n $deps"
             add_edge!(graph, i, pos[])
         end
     end
