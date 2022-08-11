@@ -23,21 +23,31 @@ export set_primary_variables!, set_secondary_variables!, replace_variables!
 Set a primary variable (adding if it does not exist)
 """
 function set_primary_variables!(model; kwarg...)
-    pvar = get_secondary_variables(model)
-    for (k, v) in kwarg
-        v::JutulVariables
-        pvar[k] = v
-    end
+    pvar = get_primary_variables(model)
+    set_variable_internal!(pvar, model; kwarg...)
 end
 
 """
 Set a secondary variable (adding if it does not exist)
 """
 function set_secondary_variables!(model; kwarg...)
-    pvar = get_primary_variables(model)
+    pvar = get_secondary_variables(model)
+    set_variable_internal!(pvar, model; kwarg...)
+end
+
+"""
+Set a parameter (adding if it does not exist)
+"""
+function set_parameters!(model; kwarg...)
+    pvar = get_parameters(model)
+    set_variable_internal!(pvar, model; kwarg...)
+end
+
+function set_variable_internal!(vars, model; kwarg...)
     for (k, v) in kwarg
+        delete_variable!(model, k)
         v::JutulVariables
-        pvar[k] = v
+        vars[k] = v
     end
 end
 
@@ -62,6 +72,12 @@ function replace_variables!(model; throw = true, kwarg...)
         end
     end
     return model
+end
+
+function delete_variable!(model, var)
+    delete!(model.primary_variables, var)
+    delete!(model.secondary_variables, var)
+    delete!(model.parameters, var)
 end
 
 """
