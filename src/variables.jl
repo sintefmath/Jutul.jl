@@ -213,7 +213,7 @@ end
 
 default_value(model, variable) = 0.0
 default_values(model, var::ScalarVariable) = repeat([default_value(model, var)], number_of_entities(model, var))
-default_values(model, var::GroupedVariables) = repeat([default_value(model, var)], values_per_entity(model, var), number_of_entities(model, var))
+default_values(model, var::JutulVariables) = repeat([default_value(model, var)], values_per_entity(model, var), number_of_entities(model, var))
 
 function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     state[symb] = initialize_variable_value(model, pvar, val; kwarg...)

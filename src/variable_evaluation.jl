@@ -208,6 +208,19 @@ function sort_secondary_variables!(model::SimulationModel)
     primary = model.primary_variables
     secondary = model.secondary_variables
     param = model.parameters
+
+    isect = intersect(keys(primary), keys(secondary))
+    if length(isect) > 0
+        error("$isect found in both primary and secondary variables.")
+    end
+    isect = intersect(keys(primary), keys(param))
+    if length(isect) > 0
+        error("$isect found in both primary variables and parameters.")
+    end
+    isect = intersect(keys(param), keys(secondary))
+    if length(isect) > 0
+        error("$isect found in both parameters and secondary variables.")
+    end
     nodes, edges = build_variable_graph(model, primary, secondary, param)
     order = sort_symbols(nodes, edges)
     @debug "Variable ordering determined: $(nodes[order])"
