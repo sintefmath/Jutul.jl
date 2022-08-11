@@ -61,7 +61,6 @@ macro jutul_secondary(ex)
         tmp *= ", state."*String(s)
     end
     tmp *= ")"
-    @info "!" tmp
     upd_def[:body] = Meta.parse(tmp)
     ex_upd = combinedef(upd_def)
 

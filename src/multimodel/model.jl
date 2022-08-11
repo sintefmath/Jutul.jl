@@ -401,24 +401,21 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
     state_s = storage_s.state
     state0_s = storage_s.state0
 
-    param_t = storage_s.parameters
-    param_s = storage_s.parameters
-
     c = first(ct_s.target)
     for i in 1:number_of_entities(c)
-        prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, param_t, param_s, ct, eq, dt)
+        prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
     end
 
     for (k, cache) in pairs(ct_s.target)
-        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, param_t, param_s, dt, true)
+        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, true)
     end
 
     for (k, cache) in pairs(ct_s.source)
-        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, param_s, param_t, dt, false)
+        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, false)
     end
 end
 
-function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, param_t, param_s, dt, is_target)
+function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, is_target)
     v = cache.entries
     vars = cache.variables
     Tv = eltype(v)
@@ -434,7 +431,7 @@ function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s
                 f_t = (x) -> as_value(x)
                 f_s = (x) -> local_ad(x, var, Tv)
             end
-            update_cross_term_in_entity!(v_i, i, f_t(state_t), f_t(state0_t), f_s(state_s), f_s(state0_s), model_t, model_s, param_t, param_s, ct, eq, dt, ldisc)
+            update_cross_term_in_entity!(v_i, i, f_t(state_t), f_t(state0_t), f_s(state_s), f_s(state0_s), model_t, model_s, ct, eq, dt, ldisc)
         end
     end
 end

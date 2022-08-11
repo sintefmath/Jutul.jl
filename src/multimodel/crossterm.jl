@@ -62,11 +62,8 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     state_s = convert_to_immutable_storage(storage_s[:state])
     state_s0 = convert_to_immutable_storage(storage_s[:state0])
 
-    param_t = storage_t[:parameters]
-    param_s = storage_s[:parameters]
-
-    F_t!(out, state, state0, i) = update_cross_term_in_entity!(out, i, state, state0, as_value(state_s), as_value(state_s0), model_t, model_s, param_t, param_s, ct, eq_t, 1.0)
-    F_s!(out, state, state0, i) = update_cross_term_in_entity!(out, i, as_value(state_t), as_value(state_t0), state, state0, model_t, model_s, param_t, param_s, ct, eq_t, 1.0)
+    F_t!(out, state, state0, i) = update_cross_term_in_entity!(out, i, state, state0, as_value(state_s), as_value(state_s0), model_t, model_s, ct, eq_t, 1.0)
+    F_s!(out, state, state0, i) = update_cross_term_in_entity!(out, i, as_value(state_t), as_value(state_t0), state, state0, model_t, model_s, ct, eq_t, 1.0)
 
     n = number_of_equations_per_entity(model_t, eq_t)
     ne_t = count_active_entities(model_t.domain, associated_entity(eq_t))
@@ -78,7 +75,7 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
         ne_s = ne_t
     end
     for i in 1:N
-        prepare_cross_term_in_entity!(i, state_t, state_t0,state_s, state_s0,model_t, model_s, param_t, param_s, ct, eq_t, 1.0)
+        prepare_cross_term_in_entity!(i, state_t, state_t0,state_s, state_s0,model_t, model_s, ct, eq_t, 1.0)
     end
 
     caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t)
