@@ -22,11 +22,13 @@ function find_jac_position(A, target_entity_index, source_entity_index,
     equation_index, partial_index,
     nentities_target, nentities_source,
     eqs_per_entity, partials_per_entity, layout::JutulMatrixLayout)
-
+    # get row and column index in the specific layout we are looking at
     row, col = row_col_sparse(target_entity_index, source_entity_index,
     equation_index, partial_index,
     nentities_target, nentities_source,
     eqs_per_entity, partials_per_entity, layout)
+    # find_sparse_position then dispatches on the matrix type to find linear indices
+    # for whatever storage format A uses internally
     return find_sparse_position(A, row, col, layout)
 end
 
@@ -34,10 +36,6 @@ function find_jac_position(A, target_entity_index, source_entity_index,
     equation_index, partial_index,
     nentities_target, nentities_source,
     eqs_per_entity, partials_per_entity, layout::BlockMajorLayout)
-    row, col = row_col_sparse(target_entity_index, source_entity_index,
-    equation_index, partial_index,
-    nentities_target, nentities_source,
-    eqs_per_entity, partials_per_entity, EquationMajorLayout()) # Pass of eqn. major version since we are looking for "scalar" index
 
     row = target_entity_index
     col = source_entity_index
@@ -47,23 +45,21 @@ function find_jac_position(A, target_entity_index, source_entity_index,
 end
 
 function row_col_sparse(target_entity_index, source_entity_index, # Typically row and column - global index
-                              equation_index, partial_index,        # Index of equation and partial derivative - local index
-                              nentities_target, nentities_source,         # Row and column sizes for each sub-system
-                              eqs_per_entity, partials_per_entity,      # Sizes of the smallest inner system
-                              layout::EquationMajorLayout)
-    row = nentities_target*(equation_index-1) + target_entity_index
-    col = nentities_source*(partial_index-1) + source_entity_index
+    equation_index, partial_index,                                # Index of equation and partial derivative - local index
+    nentities_target, nentities_source,                           # Row and column sizes for each sub-system
+    eqs_per_entity, partials_per_entity,                          # Sizes of the smallest inner system
+    layout)
+    row = alignment_linear_index(target_entity_index, equation_index, nentities_target, eqs_per_entity, layout)
+    col = alignment_linear_index(source_entity_index, partial_index, nentities_source, partials_per_entity, layout)
     return (row, col)
 end
 
-function row_col_sparse(target_entity_index, source_entity_index, # Typically row and column - global index
-    equation_index, partial_index,        # Index of equation and partial derivative - local index
-    nentities_target, nentities_source,         # Row and column sizes for each sub-system
-    eqs_per_entity, partials_per_entity,      # Sizes of the smallest inner system
-    layout::UnitMajorLayout)
-    row = eqs_per_entity*(target_entity_index-1) + equation_index
-    col = partials_per_entity*(source_entity_index-1) + partial_index
-    return (row, col)
+function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::EquationMajorLayout)
+    return n_outer*(index_inner-1) + index_outer
+end
+
+function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::UnitMajorLayout)
+    return n_inner*(index_outer-1) + index_inner
 end
 
 function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMatrixLayout)
