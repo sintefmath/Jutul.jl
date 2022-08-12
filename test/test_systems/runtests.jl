@@ -1,3 +1,5 @@
 include("scalar.jl")
+include("heat_2d.jl")
+include("variable_poisson.jl")
 include("multimodel.jl")
 include("io.jl")
