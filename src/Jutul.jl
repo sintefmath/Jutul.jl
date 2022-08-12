@@ -67,7 +67,7 @@ module Jutul
 
     include("conservation/conservation.jl")
     include("timesteps.jl")
-    include("simulator.jl")
+    include("simulator/simulator.jl")
 
     include("utils.jl")
     include("interpolation.jl")
