@@ -7,8 +7,21 @@ function state_gradient(model, state, F; parameters = setup_parameters(model))
     state = convert_to_immutable_storage(state)
     n_total = number_of_degrees_of_freedom(model)
 
-    layout = matrix_layout(model.context)
     ∂F∂x = zeros(n_total)
+    state_gradient_inner!(∂F∂x, F, model, state, tag)
+    return ∂F∂x
+end
+
+function state_gradient_inner!(∂F∂x, F, model, state, tag)
+    layout = matrix_layout(model.context)
+    function diff_entity!(∂F∂x, state, i, S, ne, np, offset)
+        state_i = local_ad(state, i, S)
+        v = F(state_i)
+        for p_i in np
+            ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
+            ∂F∂x[ix] = v.partials[p_i]
+        end
+    end
     offset = 0
     for e in get_primary_variable_ordered_entities(model)
         np = number_of_partials_per_entity(model, e)
@@ -16,14 +29,8 @@ function state_gradient(model, state, F; parameters = setup_parameters(model))
         ltag = get_entity_tag(tag, e)
         S = typeof(get_ad_entity_scalar(1.0, np, tag = ltag))
         for i in 1:ne
-            state_i = local_ad(state, i, S)
-            v = F(state_i)
-            for p_i in np
-                ix = alignment_linear_index(i, p_i, ne, np, layout)
-                ∂F∂x[ix] = v.partials[p_i]
-            end
+            diff_entity!(∂F∂x, state, i, S, ne, np, offset)
         end
         offset += ne*np
     end
-    return ∂F∂x
 end
