@@ -396,3 +396,4 @@ get_entity_tag(basetag, entity) = (basetag, entity)
 
 include("local_ad.jl")
 include("sparsity.jl")
+include("gradients.jl")
