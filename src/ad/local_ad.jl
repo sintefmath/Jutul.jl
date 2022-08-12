@@ -58,6 +58,8 @@ function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, 
     return myfn(val, E, index)
 end
 
+Base.getindex(state::LocalStateAD, s::Symbol) = Base.getproperty(state, s)
+
 function Base.getproperty(state::ValueStateAD{T}, f::Symbol) where {T}
     inner_state = getfield(state, :data)
     val = getproperty(inner_state, f)
