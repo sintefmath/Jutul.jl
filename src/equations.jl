@@ -114,27 +114,6 @@ function find_sparse_position(A::SparseMatrixCSC, row, col)
     return pos
 end
 
-function select_equations(domain, system, formulation)
-    eqs = OrderedDict{Symbol, JutulEquation}()
-    select_equations_domain!(eqs, domain, system, formulation)
-    select_equations_system!(eqs, domain, system, formulation)
-    select_equations_formulation!(eqs, domain, system, formulation)
-    return eqs
-end
-
-
-function select_equations_domain!(eqs, arg...)
-    # Default: No equations
-end
-
-function select_equations_system!(eqs, arg...)
-    # Default: No equations
-end
-
-function select_equations_formulation!(eqs, arg...)
-    # Default: No equations
-end
-
 function all_ad_entities(state, states...)
     entities = ad_entities(state)
     for s in states

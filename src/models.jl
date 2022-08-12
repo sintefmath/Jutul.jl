@@ -14,26 +14,40 @@ function get_variables(model::SimulationModel)
     return merge(get_primary_variables(model), get_secondary_variables(model))
 end
 
+function get_parameters(model::SimulationModel)
+    return model.parameters
+end
+
 export set_primary_variables!, set_secondary_variables!, replace_variables!
 """
 Set a primary variable (adding if it does not exist)
 """
 function set_primary_variables!(model; kwarg...)
-    pvar = get_secondary_variables(model)
-    for (k, v) in kwarg
-        v::JutulVariables
-        pvar[k] = v
-    end
+    pvar = get_primary_variables(model)
+    set_variable_internal!(pvar, model; kwarg...)
 end
 
 """
 Set a secondary variable (adding if it does not exist)
 """
 function set_secondary_variables!(model; kwarg...)
-    pvar = get_primary_variables(model)
+    pvar = get_secondary_variables(model)
+    set_variable_internal!(pvar, model; kwarg...)
+end
+
+"""
+Set a parameter (adding if it does not exist)
+"""
+function set_parameters!(model; kwarg...)
+    pvar = get_parameters(model)
+    set_variable_internal!(pvar, model; kwarg...)
+end
+
+function set_variable_internal!(vars, model; kwarg...)
     for (k, v) in kwarg
+        delete_variable!(model, k)
         v::JutulVariables
-        pvar[k] = v
+        vars[k] = v
     end
 end
 
@@ -60,6 +74,12 @@ function replace_variables!(model; throw = true, kwarg...)
     return model
 end
 
+function delete_variable!(model, var)
+    delete!(model.primary_variables, var)
+    delete!(model.secondary_variables, var)
+    delete!(model.parameters, var)
+end
+
 """
 Get only the entities where primary variables are present,
 sorted by their order in the primary variables.
@@ -79,7 +99,7 @@ function get_primary_variable_ordered_entities(model::SimulationModel)
     return out
 end
 
-function number_of_partials_per_entity(model::SimulationModel, entity::JutulUnit)
+function number_of_partials_per_entity(model::SimulationModel, entity::JutulEntity)
     n = 0
     for pvar in values(get_primary_variables(model))
         if associated_entity(pvar) == entity
@@ -110,7 +130,7 @@ end
 """
 Initialize primary variables and other state fields, given initial values as a Dict
 """
-function setup_state!(state, model::JutulModel, init_values::Dict = Dict())
+function setup_state!(state, model::JutulModel, init_values::AbstractDict = Dict())
     for (psym, pvar) in get_primary_variables(model)
         initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true)
     end
@@ -124,21 +144,33 @@ end
 Add variables that need to be in state, but are never AD variables (e.g. phase status flag)
 """
 function initialize_extra_state_fields!(state, model::JutulModel)
-    initialize_extra_state_fields_domain!(state, model, model.domain)
-    initialize_extra_state_fields_system!(state, model, model.system)
-    initialize_extra_state_fields_formulation!(state, model, model.formulation)
+    initialize_extra_state_fields!(state, model.domain, model)
+    initialize_extra_state_fields!(state, model.system, model)
+    initialize_extra_state_fields!(state, model.formulation, model)
 end
 
-function initialize_extra_state_fields_domain!(state, model, domain)
+function initialize_extra_state_fields!(state, ::Any, model)
     # Do nothing
 end
 
-function initialize_extra_state_fields_system!(state, model, system)
-    # Do nothing
+function setup_parameters!(prm, model, init_values::AbstractDict = Dict())
+    for (psym, pvar) in get_parameters(model)
+        initialize_variable_value!(prm, model, pvar, psym, init_values, need_value = false)
+    end
+    return prm
 end
 
-function initialize_extra_state_fields_formulation!(state, model, formulation)
-    # Do nothing
+function setup_parameters(model::JutulModel; kwarg...)
+    init = Dict{Symbol, Any}()
+    for (k, v) in kwarg
+        init[k] = v
+    end
+    return setup_parameters(model, init)
+end
+
+function setup_parameters(model::JutulModel, init)
+    prm = Dict{Symbol, Any}()
+    return setup_parameters!(prm, model, init)
 end
 
 """
@@ -159,9 +191,8 @@ function initialize_storage!(storage, model::JutulModel; initialize_state0 = tru
     if initialize_state0
         # Convert state and parameters to immutable for evaluation
         state0_eval = convert_to_immutable_storage(storage[:state0])
-        param_eval = convert_to_immutable_storage(storage[:parameters])
         # Evaluate everything (with doubles) to make sure that possible 
-        update_secondary_variables!(state0_eval, model, param_eval)
+        update_secondary_variables_state!(state0_eval, model)
         # Create a new state0 with the desired/required outputs and
         # copy over those values before returning them back
         state0 = Dict()
@@ -187,6 +218,9 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
                                                       kwarg...)
     @timeit "state" if !isnothing(state0)
         storage[:parameters] = parameters
+        for k in keys(parameters)
+            state0[k] = parameters[k]
+        end
         storage[:state0] = state0
         storage[:state] = convert_state_ad(model, state0, tag)
         storage[:primary_variables] = reference_primary_variables(storage, model) 
@@ -457,21 +491,30 @@ function local_residual_view(r_buf, model, eq, equation_offset)
     return as_cell_major_matrix(r_buf, n, m, model, equation_offset)
 end
 
-function check_convergence(storage, model; kwarg...)
+function set_default_tolerances(model)
+    tol_cfg = Dict{Symbol, Any}()
+    set_default_tolerances!(tol_cfg, model)
+    return tol_cfg
+end
+
+function set_default_tolerances!(tol_cfg, model::SimulationModel)
+    tol_cfg[:default] = 1e-3
+end
+
+function check_convergence(storage, model, config; kwarg...)
     lsys = storage.LinearizedSystem
     eqs = model.equations
     eqs_s = storage.equations
-    check_convergence(lsys, eqs, eqs_s, storage, model; kwarg...)
+    check_convergence(lsys, eqs, eqs_s, storage, model, config[:tolerances]; kwarg...)
 end
 
-function check_convergence(lsys, eqs, eqs_s, storage, model; iteration = nothing, extra_out = false, tol = nothing, offset = 0, kwarg...)
+function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration = nothing, extra_out = false, tol = nothing, offset = 0, kwarg...)
     converged = true
     e = 0
     eoffset = 0
     r_buf = lsys.r_buffer
-    prm = storage.parameters.tolerances
     if isnothing(tol)
-        tol = prm.default
+        tol = tol_cfg[:default]
     end
     output = []
     for key in keys(eqs)
@@ -486,8 +529,8 @@ function check_convergence(lsys, eqs, eqs_s, storage, model; iteration = nothing
         e_keys = keys(all_crits)
         tols = Dict()
         for e_k in e_keys
-            if haskey(prm, key)
-                v = prm[key]
+            if haskey(tol_cfg, key)
+                v = tol_cfg[key]
                 if isa(v, AbstractFloat)
                     t_e = v
                 else
@@ -536,21 +579,6 @@ end
 function apply_forces!(storage, model, dt, ::Nothing; time = NaN)
 
 end
-
-function setup_parameters(model)
-    d = Dict{Symbol, Any}()
-    d[:tolerances] = Dict{Symbol, Any}()
-    d[:tolerances][:default] = 1e-3
-    setup_parameters_domain!(d, model, model.domain)
-    setup_parameters_system!(d, model, model.system)
-    setup_parameters_context!(d, model, model.context)
-    setup_parameters_formulation!(d, model, model.formulation)
-    return d
-end
-setup_parameters_domain!(d, model, ::Any) = nothing
-setup_parameters_system!(d, model, ::Any) = nothing
-setup_parameters_context!(d, model, ::Any) = nothing
-setup_parameters_formulation!(d, model, ::Any) = nothing
 
 export setup_forces
 function setup_forces(model::JutulModel)

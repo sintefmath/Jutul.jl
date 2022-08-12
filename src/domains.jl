@@ -1,7 +1,7 @@
 export number_of_cells, number_of_faces, number_of_half_faces, count_entities, get_entities, declare_entities, get_neighborship
 
 
-function declare_entities(G::JutulGrid)
+function declare_entities(G::AbstractJutulMesh)
     return [(entity = Cells(), count = 1)]
 end
 
@@ -18,32 +18,42 @@ function get_entities(D::DiscretizedDomain)
     return keys(D.entities)
 end
 
-
-function select_secondary_variables_domain!(S, domain::DiscretizedDomain, system, formulation)
+function select_variables_domain_helper!(S, domain::DiscretizedDomain, model, f!)
     d = domain.discretizations
     if !isnothing(d)
         for k in keys(d)
-            select_secondary_variables_discretization!(S, domain, system, formulation, d[k])
+            f!(S, d[k], model)
         end
     end
 end
 
-function select_secondary_variables_discretization!(S, domain, system, formulation, disc)
+# Basic domain - default is to do nothing
+select_primary_variables!(S, domain::JutulDomain, model) = nothing
+select_secondary_variables!(S, domain::JutulDomain, model) = nothing
+select_parameters!(S, domain::JutulDomain, model) = nothing
+select_equations!(S, domain::JutulDomain, model) = nothing
 
+# Discretizations - do nothing by default
+select_primary_variables!(vars, ::JutulDiscretization, model) = nothing
+select_secondary_variables!(vars, ::JutulDiscretization, model) = nothing
+select_parameters!(vars, ::JutulDiscretization, model) = nothing
+select_equations!(vars, ::JutulDiscretization, model) = nothing
+
+# Discretized domain - dispatch further down on all present discretizations
+function select_primary_variables!(S, domain::DiscretizedDomain, model)
+    select_variables_domain_helper!(S, domain, model, select_primary_variables!)
 end
 
-
-function select_primary_variables_domain!(S, domain::DiscretizedDomain, system, formulation)
-    d = domain.discretizations
-    if !isnothing(d)
-        for k in keys(d)
-            select_primary_variables_domain!(S, domain, system, formulation, d[k])
-        end
-    end
+function select_secondary_variables!(S, domain::DiscretizedDomain, model)
+    select_variables_domain_helper!(S, domain, model, select_secondary_variables!)
 end
 
-function select_primary_variables_domain!(S, domain, system, formulation, disc)
+function select_parameters!(S, domain::DiscretizedDomain, model)
+    select_variables_domain_helper!(S, domain, model, select_parameters!)
+end
 
+function select_equations!(S, domain::DiscretizedDomain, model)
+    select_variables_domain_helper!(S, domain, model, select_equations!)
 end
 
 count_entities(D::DiscretizedDomain, entity::Cells) = D.entities[entity]
@@ -64,15 +74,15 @@ function number_of_half_faces(D::DiscretizedDomain)
     return 2*number_of_faces(D)
 end
 
-function positional_map(domain::JutulDomain, source_entity::JutulUnit, target_entity::JutulUnit)
+function positional_map(domain::JutulDomain, source_entity::JutulEntity, target_entity::JutulEntity)
     positional_map(domain.grid, source_entity, target_entity)
 end
 
-function positional_map(grid::JutulGrid, source_entity, target_entity)
+function positional_map(grid::AbstractJutulMesh, source_entity, target_entity)
     error("Not implemented.")
 end
 
-function positional_map(grid::JutulGrid, ::Cells, ::Faces)
+function positional_map(grid::AbstractJutulMesh, ::Cells, ::Faces)
     faces, facePos = get_facepos(grid.neighborship)
     return (indices = faces, pos = facePos)
 end
@@ -98,4 +108,12 @@ function half_face_map(N, nc)
         end
     end
     return (cells = cells, faces = faces, face_pos = face_pos, face_sign = signs)
+end
+
+function local_half_face_map(cd, cell_index)
+    loc = cd.face_pos[cell_index]:(cd.face_pos[cell_index+1]-1)
+    faces = @views cd.faces[loc]
+    signs = @views cd.face_sign[loc]
+    cells = @views cd.cells[loc]
+    return (faces = faces, signs = signs, cells = cells)
 end

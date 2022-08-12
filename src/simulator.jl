@@ -110,6 +110,8 @@ function simulator_config!(cfg, sim; kwarg...)
     # Max residual before error is issued
     cfg[:max_residual] = 1e20
     cfg[:end_report] = nothing
+    # Tolerances
+    cfg[:tolerances] = set_default_tolerances(sim.model)
 
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])
@@ -315,7 +317,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, upda
         @debug "Updated linear system in $(report[:linear_system_time]) seconds."
     end
     t_conv = @elapsed begin
-        @timeit "convergence" converged, e, errors = check_convergence(storage, model, iteration = iteration, dt = dt, extra_out = true)
+        @timeit "convergence" converged, e, errors = check_convergence(storage, model, config, iteration = iteration, dt = dt, extra_out = true)
         il = config[:info_level]
         if il > 1
             get_convergence_table(errors, il, iteration, config)

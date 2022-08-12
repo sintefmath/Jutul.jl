@@ -97,9 +97,9 @@ function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, conte
                                     number_of_entities_target = nothing,
                                     target_offset = 0,
                                     source_offset = 0)
-    _entity::JutulUnit
+    _entity::JutulEntity
     c_entity = entity(cache)
-    c_entity::JutulUnit
+    c_entity::JutulEntity
     if isnothing(pos)
         pos = cache.jacobian_positions
     end

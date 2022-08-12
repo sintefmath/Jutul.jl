@@ -69,7 +69,7 @@ struct TwoPointPotentialFlowHardCoded{C, D} <: FlowDiscretization
     conn_data::D
 end
 
-function TwoPointPotentialFlowHardCoded(grid::JutulGrid, T = nothing, z = nothing, gravity = gravity_constant; ncells = nothing)
+function TwoPointPotentialFlowHardCoded(grid::AbstractJutulMesh, T = nothing, z = nothing, gravity = gravity_constant; ncells = nothing)
     N = get_neighborship(grid)
     if size(N, 2) > 0
         faces, face_pos = get_facepos(N, ncells)

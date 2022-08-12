@@ -1,4 +1,4 @@
-export JutulSystem, JutulDomain, JutulVariables, JutulGrid, JutulContext
+export JutulSystem, JutulDomain, JutulVariables, AbstractJutulMesh, JutulContext
 export SimulationModel, JutulVariables, JutulFormulation, JutulEquation
 export setup_parameters, JutulForce
 export Cells, Nodes, Faces, declare_entities
@@ -123,11 +123,11 @@ include("contexts/cuda.jl")
 abstract type JutulDomain end
 
 export DiscretizedDomain
-struct DiscretizedDomain{G} <: JutulDomain
+struct DiscretizedDomain{G, D, E, M} <: JutulDomain
     grid::G
-    discretizations
-    entities
-    global_map
+    discretizations::D
+    entities::E
+    global_map::M
 end
 function Base.show(io::IO, d::DiscretizedDomain)
     disc = d.discretizations
@@ -189,6 +189,7 @@ struct SimulationModel{O<:JutulDomain,
     formulation::F
     primary_variables::OrderedDict{Symbol, JutulVariables}
     secondary_variables::OrderedDict{Symbol, JutulVariables}
+    parameters::OrderedDict{Symbol, JutulVariables}
     equations::OrderedDict{Symbol, JutulEquation}
     output_variables::Vector{Symbol}
     function SimulationModel(domain, system;
@@ -198,8 +199,22 @@ struct SimulationModel{O<:JutulDomain,
                                             )
         context = initialize_context!(context, domain, system, formulation)
         domain = transfer(context, domain)
-        primary = select_primary_variables(domain, system, formulation)
-        primary = transfer(context, primary)
+
+        T = OrderedDict{Symbol, JutulVariables}
+        primary = T()
+        secondary = T()
+        parameters = T()
+        equations = OrderedDict{Symbol, JutulEquation}()
+        outputs = Vector{Symbol}()
+        D = typeof(domain)
+        S = typeof(system)
+        F = typeof(formulation)
+        C = typeof(context)
+        model = new{D, S, F, C}(domain, system, context, formulation, primary, secondary, parameters, equations, outputs)
+        select_primary_variables!(model)
+        select_secondary_variables!(model)
+        select_parameters!(model)
+        select_equations!(model)
         function check_prim(pvar)
             a = map(associated_entity, values(pvar))
             for u in unique(a)
@@ -211,17 +226,8 @@ struct SimulationModel{O<:JutulDomain,
             end
         end
         check_prim(primary)
-        secondary = select_secondary_variables(domain, system, formulation)
-        secondary = transfer(context, secondary)
-
-        equations = select_equations(domain, system, formulation)
-        outputs = select_output_variables(domain, system, formulation, primary, secondary, output_level)
-
-        D = typeof(domain)
-        S = typeof(system)
-        F = typeof(formulation)
-        C = typeof(context)
-        new{D, S, F, C}(domain, system, context, formulation, primary, secondary, equations, outputs)
+        select_output_variables!(model, output_level)
+        return model
     end
 end
 
@@ -230,24 +236,28 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
     for f in fieldnames(typeof(model))
         p = getfield(model, f)
         print(io, "  $f:\n")
-        if f == :primary_variables || f == :secondary_variables
+        if f == :primary_variables || f == :secondary_variables || f == :parameters
             ctr = 1
-            for (key, pvar) in p
-                nv = degrees_of_freedom_per_entity(model, pvar)
-                nu = number_of_entities(model, pvar)
-                u = associated_entity(pvar)
-                if f == :secondary_variables
-                    print(io, "   $ctr $key ← $(typeof(pvar))) (")
-                else
-                    print(io, "   $ctr) $key (")
-                end
-                if nv > 1
-                    print(io, "$nv×")
-                end
-                print(io, "$nu")
+            if length(keys(p)) == 0
+                print(io, "   None.\n")
+            else
+                for (key, pvar) in p
+                    nv = degrees_of_freedom_per_entity(model, pvar)
+                    nu = number_of_entities(model, pvar)
+                    u = associated_entity(pvar)
+                    if f == :secondary_variables
+                        print(io, "   $ctr $key ← $(typeof(pvar))) (")
+                    else
+                        print(io, "   $ctr) $key (")
+                    end
+                    if nv > 1
+                        print(io, "$nv×")
+                    end
+                    print(io, "$nu")
 
-                print(io, " ∈ $(typeof(u)))\n")
-                ctr += 1
+                    print(io, " ∈ $(typeof(u)))\n")
+                    ctr += 1
+                end
             end
             print(io, "\n")
         elseif f == :domain
@@ -274,20 +284,20 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
 end
 
 # Grids etc
-export JutulUnit, Cells, Faces, Nodes
+export JutulEntity, Cells, Faces, Nodes
 ## Grid
-abstract type JutulGrid end
+abstract type AbstractJutulMesh end
 
 ## Discretized entities
-abstract type JutulUnit end
+abstract type JutulEntity end
 
-struct Cells <: JutulUnit end
-struct Faces <: JutulUnit end
-struct Nodes <: JutulUnit end
+struct Cells <: JutulEntity end
+struct Faces <: JutulEntity end
+struct Nodes <: JutulEntity end
 
 # Sim model
 
-function SimulationModel(g::JutulGrid, system; discretization = nothing, kwarg...)
+function SimulationModel(g::AbstractJutulMesh, system; discretization = nothing, kwarg...)
     # Simple constructor that assumes
     d = DiscretizedDomain(g, discretization)
     SimulationModel(d, system; kwarg...)
@@ -298,9 +308,10 @@ A set of constants, repeated over the entire set of Cells or some other entity
 """
 struct ConstantVariables <: GroupedVariables
     constants
-    entity::JutulUnit
+    entity::JutulEntity
     single_entity::Bool
     function ConstantVariables(constants, entity = Cells(); single_entity = nothing)
+        error("Disabled, use parameters instead")
         if !isa(constants, AbstractArray)
             @assert length(constants) == 1
             constants = [constants]
@@ -507,7 +518,7 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
     diagonal_positions::D
     number_of_entities_target::Integer
     number_of_entities_source::Integer
-    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulUnit, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true) where I
+    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulEntity, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true) where I
         @assert nt > 0
         @assert ns > 0
         counts = map(length, sparsity)

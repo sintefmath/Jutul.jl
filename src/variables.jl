@@ -24,12 +24,12 @@ function number_of_degrees_of_freedom(model::JutulModel)
     return ndof
 end
 
-function number_of_degrees_of_freedom(model::JutulModel, u::JutulUnit)
+function number_of_degrees_of_freedom(model::JutulModel, u::JutulEntity)
     ndof = degrees_of_freedom_per_entity(model, u)*count_active_entities(model.domain, u, for_variables = true)
     return ndof
 end
 
-function degrees_of_freedom_per_entity(model::JutulModel, u::JutulUnit)
+function degrees_of_freedom_per_entity(model::JutulModel, u::JutulEntity)
     ndof = 0
     for pvar in values(get_primary_variables(model))
         if associated_entity(pvar) == u
@@ -212,6 +212,8 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
 end
 
 default_value(model, variable) = 0.0
+default_values(model, var::ScalarVariable) = repeat([default_value(model, var)], number_of_entities(model, var))
+default_values(model, var::JutulVariables) = repeat([default_value(model, var)], values_per_entity(model, var), number_of_entities(model, var))
 
 function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     state[symb] = initialize_variable_value(model, pvar, val; kwarg...)
@@ -226,7 +228,7 @@ function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict;
         error("The key $symb must be present to initialize the state. Provided symbols in initialization Dict: $k")
     else
         # We do not really need to initialize this, as it will be updated elsewhere.
-        value = default_value(model, pvar)
+        value = default_values(model, pvar)
     end
     return initialize_variable_value!(state, model, pvar, symb, value)
 end
@@ -410,7 +412,7 @@ function transfer(context, v::ConstantVariables)
     return ConstantVariables(constants, v.entity, single_entity = v.single_entity)
 end
 
-update_secondary_variable!(x, var::ConstantVariables, model, parameters, state) = nothing
+update_secondary_variable!(x, var::ConstantVariables, model, state) = nothing
 
 function initialize_variable_value(model, var::ConstantVariables, val; perform_copy = true)
     # Ignore initializer since we already know the constants

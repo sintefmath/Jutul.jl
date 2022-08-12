@@ -401,24 +401,21 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
     state_s = storage_s.state
     state0_s = storage_s.state0
 
-    param_t = storage_s.parameters
-    param_s = storage_s.parameters
-
     c = first(ct_s.target)
     for i in 1:number_of_entities(c)
-        prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, param_t, param_s, ct, eq, dt)
+        prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
     end
 
     for (k, cache) in pairs(ct_s.target)
-        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, param_t, param_s, dt, true)
+        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, true)
     end
 
     for (k, cache) in pairs(ct_s.source)
-        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, param_s, param_t, dt, false)
+        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, false)
     end
 end
 
-function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, param_t, param_s, dt, is_target)
+function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, is_target)
     v = cache.entries
     vars = cache.variables
     Tv = eltype(v)
@@ -434,7 +431,7 @@ function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s
                 f_t = (x) -> as_value(x)
                 f_s = (x) -> local_ad(x, var, Tv)
             end
-            update_cross_term_in_entity!(v_i, i, f_t(state_t), f_t(state0_t), f_s(state_s), f_s(state0_s), model_t, model_s, param_t, param_s, ct, eq, dt, ldisc)
+            update_cross_term_in_entity!(v_i, i, f_t(state_t), f_t(state0_t), f_s(state_s), f_s(state0_s), model_t, model_s, ct, eq, dt, ldisc)
         end
     end
 end
@@ -500,6 +497,14 @@ function setup_parameters(model::MultiModel)
     return p
 end
 
+function set_default_tolerances!(tol_cfg, model::MultiModel)
+    for (k, model) in pairs(model.models)
+        cfg_k = Dict{Symbol, Any}()
+        set_default_tolerances!(cfg_k, model)
+        tol_cfg[k] = cfg_k
+    end
+end
+
 function setup_forces(model::MultiModel; kwarg...)
     models = model.models
     forces = Dict{Symbol, Any}()
@@ -514,14 +519,17 @@ function setup_forces(model::MultiModel; kwarg...)
 end
 
 function update_secondary_variables!(storage, model::MultiModel)
-    submodels_storage_apply!(storage, model, update_secondary_variables!)
+    for key in submodels_symbols(model)
+        update_secondary_variables!(storage[key], model.models[key])
+    end
 end
 
-function check_convergence(storage, model::MultiModel; tol = nothing, extra_out = false, kwarg...)
+function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra_out = false, kwarg...)
     converged = true
     err = 0
     offset = 0
     lsys = storage.LinearizedSystem
+    tol_cfg = cfg[:tolerances]
     errors = OrderedDict()
     for (i, key) in enumerate(submodels_symbols(model))
         if has_groups(model) && i > 1
@@ -534,7 +542,7 @@ function check_convergence(storage, model::MultiModel; tol = nothing, extra_out 
         eqs = m.equations
         eqs_s = s.equations
         ls = get_linearized_system_submodel(storage, model, key, lsys)
-        conv, e, errors[key], = check_convergence(ls, eqs, eqs_s, s, m; offset = offset, extra_out = true, tol = tol, kwarg...)
+        conv, e, errors[key], = check_convergence(ls, eqs, eqs_s, s, m, tol_cfg[key]; offset = offset, extra_out = true, tol = tol, kwarg...)
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)
