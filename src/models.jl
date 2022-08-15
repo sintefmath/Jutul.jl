@@ -363,35 +363,6 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
     return SparsePattern(I, J, numrows, ndof, layout, block_size)
 end
 
-function get_sparse_arguments2(storage, model, layout::UnitMajorLayout)
-    ndof = number_of_degrees_of_freedom(model)
-    eqs = storage[:equations]
-    I = []
-    J = []
-    numrows = 0
-    numcols = 0
-    primary_entities = get_primary_variable_ordered_entities(model)
-
-    for (u_no, u) in enumerate(primary_entities)
-        npartials = degrees_of_freedom_per_entity(model, u)
-        nu = count_entities(model.domain, u)
-        for (eq_no, eq) in enumerate(values(eqs))
-            S = declare_sparsity(model, eq, u, layout)
-            row_ix = (S.I-1)*u_no + 1
-            col_ix = (S.J-1)*eq_no + 1
-            if !isnothing(S)
-                push!(I, row_ix .+ numrows)
-                push!(J, col_ix .+ numcols)
-            end
-        end
-        numrows += npartials*nu
-        numcols += npartials*nu
-    end
-    I = vcat(I...)
-    J = vcat(J...)
-    return SparsePattern(I, J, numrows, ndof, layout)
-end
-
 function setup_linearized_system!(storage, model::JutulModel)
     # Linearized system is going to have dimensions of
     # total number of equations x total number of primary variables
@@ -399,8 +370,11 @@ function setup_linearized_system!(storage, model::JutulModel)
         error("Unable to allocate linearized system - no equations found.")
     end
     # layout = matrix_layout(model.context)
-    sparg = get_sparse_arguments(storage, model)
-    lsys = setup_linearized_system(sparg, model)
+    sparse_pattern = get_sparse_arguments(storage, model)
+    if represented_as_adjoint(matrix_layout(model.context))
+        sparse_pattern = sparse_pattern'
+    end
+    lsys = setup_linearized_system(sparse_pattern, model)
     storage[:LinearizedSystem] = lsys
     # storage[:LinearizedSystem] = transfer(model.context, lsys)
     return lsys
@@ -574,9 +548,11 @@ function apply_forces!(storage, model, dt, forces; time = NaN)
         eq = equations[key]
         eq_s = equations_storage[key]
         diag_part = get_diagonal_entries(eq, eq_s)
-        for fkey in keys(forces)
-            force = forces[fkey]
-            apply_forces_to_equation!(diag_part, storage, model, eq, eq_s, force, time)
+        if !isnothing(diag_part)
+            for fkey in keys(forces)
+                force = forces[fkey]
+                apply_forces_to_equation!(diag_part, storage, model, eq, eq_s, force, time)
+            end
         end
     end
 end
@@ -706,11 +682,7 @@ end
 reset_to_previous_state!(storage, model) = replace_values!(storage.primary_variables, storage.state0)
 
 function reset_previous_state!(storage, model, state0)
-    sim_state0 = storage.state0
-    for f in keys(sim_state0)
-        @assert haskey(state0, f)
-        sim_state0[f] .= state0[f]
-    end
+    replace_values!(storage.state0, state0)
 end
 
 function reset_primary_variables!(storage, model, state)

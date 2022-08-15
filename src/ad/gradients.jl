@@ -69,6 +69,7 @@ function solve_adjoint(model, states, reports, G; forces = setup_forces(model), 
         else
             s0 = states[i-1]
         end
+        @info "" i N
         if i == N
             s_next = nothing
         else
@@ -98,11 +99,21 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
         forces_next = forces_for_timestep(backward_sim, all_forces, timesteps, i+1)
         adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next)
         lsys_next = backward_sim.storage.LinearizedSystem
-        @. rhs -= linear_operator(lsys_next)*λ
+        op = linear_operator(lsys_next)
+        # rhs -= op*λ
+        mul!(rhs, op, λ, 1.0, -1.0)
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
     solve!(lsys)
-    error()
+    @. λ += lsys.dx_buffer
+    # ∇ₚG = Σₙ ∂Fₙ / ∂p λₙ
+    # Increment gradient
+    adjoint_reassemble!(parameter_sim, state, state0, dt, forces)
+    lsys_next = parameter_sim.storage.LinearizedSystem
+    op_p = linear_operator(lsys_next)
+    display(op_p)
+    @info " " size(op_p) size(∇G) size(λ)
+    mul!(∇G, op_p, λ, 1.0, 1.0)
 end
 
 function adjoint_reassemble!(sim, state, state0, dt, forces)

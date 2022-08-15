@@ -100,8 +100,15 @@ function LinearizedSystem(sparse_arg, context, layout; r = nothing, dx = nothing
     if n != m
         @debug "Expected square system. Recieved $n (eqs) by $m (primary variables). Unless this is an adjoint system, something might be wrong."
     end
-    dx, dx_buf = get_jacobian_vector(n, context, layout, dx, bz[1])
-    r, r_buf = get_jacobian_vector(n, context, layout, r, bz[1])
+    if represented_as_adjoint(matrix_layout(context))
+        nrows = m
+        ncols = n
+    else
+        nrows = n
+        ncols = m
+    end
+    dx, dx_buf = get_jacobian_vector(ncols, context, layout, dx, bz[1])
+    r, r_buf = get_jacobian_vector(nrows, context, layout, r, bz[1])
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
 end
 

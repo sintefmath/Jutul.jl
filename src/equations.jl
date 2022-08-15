@@ -428,8 +428,15 @@ end
 end
 
 @inline function get_diagonal_entries(eq::JutulEquation, eq_s)
-    cache = eq_s[Symbol(associated_entity(eq))]
-    return diagonal_view(cache)
+    k = Symbol(associated_entity(eq))
+    if haskey(eq_s, k)
+        cache = eq_s[k]
+        D = diagonal_view(cache)
+    else
+        # Uh oh. Maybe adjoints?
+        D = nothing
+    end
+    return D
 end
 
 # @inline function get_diagonal_cache(eq::JutulEquation)
