@@ -117,6 +117,11 @@ struct SparsePattern{L}
     end
 end
 
+function Base.adjoint(p::SparsePattern)
+    # Note: We only permute the outer pattern, not the inner.
+    return SparsePattern(p.J, p.I, p.m, p.n, p.layout, p.block_n, p.block_m)
+end
+
 ijnm(p::SparsePattern) = (p.I, p.J, p.n, p.m)
 block_size(p::SparsePattern) = (p.block_n, p.block_m)
 
