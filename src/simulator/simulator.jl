@@ -10,7 +10,7 @@ include("recorder.jl")
 include("timesteps.jl")
 include("utils.jl")
 
-function simulator_storage(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true, kwarg...)
+function simulator_storage(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true, adjoint = false, kwarg...)
     # We need to sort the secondary variables according to their dependency ordering before simulating.
     sort_secondary_variables!(model)
     @timeit "state0" if isnothing(state0)
@@ -19,7 +19,7 @@ function simulator_storage(model; state0 = nothing, parameters = setup_parameter
         # Take a deep copy to avoid side effects.
         state0 = deepcopy(state0)
     end
-    @timeit "storage" storage = setup_storage(model, state0 = state0, parameters = parameters)
+    @timeit "storage" storage = setup_storage(model, state0 = state0, parameters = parameters, adjoint = adjoint)
     # Initialize for first time usage
     @timeit "init_storage" initialize_storage!(storage, model; kwarg...)
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
