@@ -38,7 +38,7 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg)
     end
 end
 
-function solve_adjoint(model, states, reports, G; forces = setup_forces(model), state0 = setup_state(model), parameters = setup_parameters(model))
+function solve_adjoint_sensitivities(model, states, reports, G; forces = setup_forces(model), state0 = setup_state(model), parameters = setup_parameters(model))
     # One simulator object for the equations with respect to primary (at previous time-step)
     # One simulator object for the equations with respect to parameters
     # For model equations F the gradient with respect to parameters p is
@@ -48,12 +48,12 @@ function solve_adjoint(model, states, reports, G; forces = setup_forces(model), 
     # where the last term is omitted for step n = N and G is the objective function
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
-    forward_sim = Simulator(primary_model, state0 = copy(state0), parameters = copy(parameters), adjoint = false)
+    forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), adjoint = false)
     # Same model, but adjoint for: ∂Fₙ₊₁ᵀ / ∂xₙ
-    backward_sim = Simulator(primary_model, state0 = copy(state0), parameters = copy(parameters), adjoint = true)
+    backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), adjoint = true)
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model)
-    parameter_sim = Simulator(parameter_model, state0 = copy(parameters), parameters = copy(state0), adjoint = false)
+    parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), adjoint = false)
 
     timesteps = report_timesteps(reports)
     N = length(states)
@@ -67,7 +67,7 @@ function solve_adjoint(model, states, reports, G; forces = setup_forces(model), 
 
     for i in N:-1:1
         if i == 1
-            s0 = state0
+            s0 = deepcopy(state0)
         else
             s0 = states[i-1]
         end
@@ -147,4 +147,34 @@ function adjoint_model_copy(model::SimulationModel{O, S, C, F}) where {O, S, C, 
     # Transpose the system
     new_context = adjoint(model.context)
     return SimulationModel{O, S, C, F}(model.domain, model.system, new_context, model.formulation, pvar, svar, prm, eqs, outputs)
+end
+
+function solve_numerical_sensitivities(model, states, reports, G, target; forces = setup_forces(model), state0 = setup_state(model), parameters = setup_parameters(model))
+    timesteps = report_timesteps(reports)
+    N = length(states)
+    @assert length(reports) == N == length(timesteps)
+
+    base_obj = evaluate_objective(G, model, states, timesteps, forces)
+
+    grad_num = zeros(length(parameters[target]))
+    ϵ = 1e-8
+    for i in eachindex(grad_num)
+        param_i = deepcopy(parameters)
+        param_i[target][i] += ϵ
+        sim_i = Simulator(model, state0 = copy(state0), parameters = param_i)
+        states_i, reports = simulate!(sim_i, timesteps, info_level = 1, forces = forces)
+        v = evaluate_objective(G, model, states_i, timesteps, forces)
+        grad_num[i] = (v - base_obj)/ϵ
+    end
+    return grad_num
+end
+
+function evaluate_objective(G, model, states, timesteps, all_forces)
+    obj = 0.0
+    for (step_no, state) in enumerate(states)
+        forces = forces_for_timestep(nothing, all_forces, timesteps, step_no)
+        dt = timesteps[step_no]
+        obj += G(model, state, dt, step_no, forces)
+    end
+    return obj
 end
