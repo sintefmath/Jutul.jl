@@ -712,3 +712,7 @@ function reset_previous_state!(storage, model, state0)
         sim_state0[f] .= state0[f]
     end
 end
+
+function reset_primary_variables!(storage, model, state)
+    replace_values!(storage.state, state)
+end

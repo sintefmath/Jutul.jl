@@ -58,26 +58,50 @@ function solve_adjoint(model, states, reports, G; forces = setup_forces(model), 
     n_param = number_of_degrees_of_freedom(parameter_model)
     @info "Solving adjoint for $N steps with $n_pvar primary variables and $n_param parameters."
     ∇G = zeros(n_param)
+    λ = zeros(n_pvar)
 
     for i in N:-1:1
-        update_sensitivities!(∇G, i, G, forward_sim, backward_sim, parameter_sim, states, timesteps, forces)
+        if i == 1
+            s0 = state0
+        else
+            s0 = states[i-1]
+        end
+        if i == N
+            s_next = nothing
+        else
+            s_next = states[i+1]
+        end
+        s = states[i]
+        update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parameter_sim, s0, s, s_next, timesteps, forces)
     end
     return ∇G
 end
 
-function update_sensitivities!(out, i, G, forward_sim, backward_sim, parameter_sim, states, timesteps, all_forces)
+function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parameter_sim, state0, state, state_next, timesteps, all_forces)
     N = length(timesteps)
     forces = forces_for_timestep(forward_sim, all_forces, timesteps, i)
     dt = timesteps[i]
-    state = states[i]
     dJdx = state_gradient(forward_sim.model, state, G, dt, i, forces)
 
-    if i < N
+    adjoint_reassemble!(forward_sim, state, state0, dt, forces)
+    if isnothing(state_next)
+        @assert i == N
         forces_next = forces_for_timestep(forward_sim, all_forces, timesteps, i+1)
-        state_next = states[i+1]
     end
 
     error()
+end
+
+function adjoint_reassemble!(sim, state, state0, dt, forces)
+    # Deal with state0 first
+    reset_previous_state!(sim, state0)
+    # TODO: Think this one is missing for multimodel?
+    update_secondary_variables_state!(sim.storage.state0, sim.model)
+    # Then the current primary variables
+    reset_primary_variables!(sim.storage, sim.model, state)
+    update_state_dependents!(sim.storage, sim.model, dt, forces)
+    # Finally update the system
+    update_linearized_system!(sim.storage, sim.model)
 end
 
 function adjoint_parameter_model(model)
