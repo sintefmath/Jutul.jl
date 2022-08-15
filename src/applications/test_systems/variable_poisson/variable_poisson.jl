@@ -88,15 +88,18 @@ function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::Variab
 end
 
 function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::VariablePoissonEquationTimeDependent, model, Δt, ldisc = local_discretization(eq, self_cell))
-    U = state.U
-    U0 = state.U
-    K = state.K
+    # Get implicit and explicit variables
+    (; U, K) = state
+    U0 = state0.U
+    # Discretization
     div = ldisc.div
     U_self = state.U[self_cell]
+    # Define flux
     function flux(other_cell, face, sgn)
         U_other = U[other_cell]
         return K[face]*(U_self - U_other)
     end
+    # Define equation
     ∂U∂t = (U_self - U0[self_cell])/Δt
     eq_buf[] = ∂U∂t - div(flux)
 end
