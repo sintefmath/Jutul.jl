@@ -1,13 +1,16 @@
 export state_gradient
-function state_gradient(model, state, F, extra_arg...; parameters = setup_parameters(model))
+function state_gradient(model, state, F, extra_arg...; kwarg...)
+    n_total = number_of_degrees_of_freedom(model)
+    ∂F∂x = zeros(n_total)
+    return state_gradient!(∂F∂x, model, state, F, extra_arg...; kwarg...)
+end
+
+function state_gradient!(∂F∂x, model, state, F, extra_arg...; parameters = setup_parameters(model))
     # Either with respect to all primary variables, or all parameters.
     tag = nothing
     state = merge(state, parameters)
     state = convert_state_ad(model, state, tag)
     state = convert_to_immutable_storage(state)
-    n_total = number_of_degrees_of_freedom(model)
-
-    ∂F∂x = zeros(n_total)
     state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg)
     return ∂F∂x
 end
@@ -81,14 +84,24 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
     N = length(timesteps)
     forces = forces_for_timestep(forward_sim, all_forces, timesteps, i)
     dt = timesteps[i]
-    dJdx = state_gradient(forward_sim.model, state, G, dt, i, forces)
-
+    # Assemble Jacobian w.r.t. current step
     adjoint_reassemble!(forward_sim, state, state0, dt, forces)
+    dGdx = state_gradient(forward_sim.model, state, G, dt, i, forces)
+
+    lsys = forward_sim.storage.LinearizedSystem
+    rhs = lsys.r_buffer
+    @. rhs = -dGdx
     if isnothing(state_next)
         @assert i == N
-        forces_next = forces_for_timestep(forward_sim, all_forces, timesteps, i+1)
+    else
+        dt_next = timesteps[i+1]
+        forces_next = forces_for_timestep(backward_sim, all_forces, timesteps, i+1)
+        adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next)
+        lsys_next = backward_sim.storage.LinearizedSystem
+        @. rhs -= linear_operator(lsys_next)*λ
     end
-
+    # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
+    solve!(lsys)
     error()
 end
 
