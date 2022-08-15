@@ -192,43 +192,53 @@ struct SimulationModel{O<:JutulDomain,
     parameters::OrderedDict{Symbol, JutulVariables}
     equations::OrderedDict{Symbol, JutulEquation}
     output_variables::Vector{Symbol}
-    function SimulationModel(domain, system;
-                                            formulation = FullyImplicit(),
-                                            context = DefaultContext(),
-                                            output_level = :primary_variables
-                                            )
-        context = initialize_context!(context, domain, system, formulation)
-        domain = transfer(context, domain)
+end
 
-        T = OrderedDict{Symbol, JutulVariables}
-        primary = T()
-        secondary = T()
-        parameters = T()
-        equations = OrderedDict{Symbol, JutulEquation}()
-        outputs = Vector{Symbol}()
-        D = typeof(domain)
-        S = typeof(system)
-        F = typeof(formulation)
-        C = typeof(context)
-        model = new{D, S, F, C}(domain, system, context, formulation, primary, secondary, parameters, equations, outputs)
-        select_primary_variables!(model)
-        select_secondary_variables!(model)
-        select_parameters!(model)
-        select_equations!(model)
-        function check_prim(pvar)
-            a = map(associated_entity, values(pvar))
-            for u in unique(a)
-                ut = typeof(u)
-                deltas =  diff(findall(typeof.(a) .== ut))
-                if any(deltas .!= 1)
-                    error("All primary variables of the same type must come sequentially: Error ocurred for $ut:\nPrimary: $pvar\nTypes: $a")
-                end
+function SimulationModel(domain, system;
+                            formulation=FullyImplicit(),
+                            context=DefaultContext(),
+                            output_level=:primary_variables
+                        )
+    context = initialize_context!(context, domain, system, formulation)
+    domain = transfer(context, domain)
+
+    T = OrderedDict{Symbol,JutulVariables}
+    primary = T()
+    secondary = T()
+    parameters = T()
+    equations = OrderedDict{Symbol,JutulEquation}()
+    outputs = Vector{Symbol}()
+    D = typeof(domain)
+    S = typeof(system)
+    F = typeof(formulation)
+    C = typeof(context)
+    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, primary, secondary, parameters, equations, outputs)
+    select_primary_variables!(model)
+    select_secondary_variables!(model)
+    select_parameters!(model)
+    select_equations!(model)
+    function check_prim(pvar)
+        a = map(associated_entity, values(pvar))
+        for u in unique(a)
+            ut = typeof(u)
+            deltas = diff(findall(typeof.(a) .== ut))
+            if any(deltas .!= 1)
+                error("All primary variables of the same type must come sequentially: Error ocurred for $ut:\nPrimary: $pvar\nTypes: $a")
             end
         end
-        check_prim(primary)
-        select_output_variables!(model, output_level)
-        return model
     end
+    check_prim(primary)
+    select_output_variables!(model, output_level)
+    return model
+end
+
+function Base.copy(m::SimulationModel{O, S, C, F}) where {O, S, C, F}
+    pvar = copy(m.primary_variables)
+    svar = copy(m.secondary_variables)
+    outputs = copy(m.output_variables)
+    prm = copy(m.parameters)
+    eqs = m.equations
+    return SimulationModel{O, S, C, F}(m.domain, m.system, m.context, m.formulation, pvar, svar, prm, eqs, outputs)
 end
 
 function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
