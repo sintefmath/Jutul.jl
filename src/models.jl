@@ -215,12 +215,19 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
                                                       state0 = setup_state(model),
                                                       parameters = setup_parameters(model),
                                                       tag = nothing,
+                                                      adjoint = false,
                                                       kwarg...)
     @timeit "state" if !isnothing(state0)
         storage[:parameters] = parameters
         state0 = merge(state0, parameters)
+        if adjoint
+            state = copy(state0)
+            state0 = convert_state_ad(model, state0, tag)
+        else
+            state = convert_state_ad(model, state0, tag)
+        end
         storage[:state0] = state0
-        storage[:state] = convert_state_ad(model, state0, tag)
+        storage[:state] = state
         storage[:primary_variables] = reference_primary_variables(storage, model) 
     end
     @timeit "model" setup_storage_model(storage, model)
