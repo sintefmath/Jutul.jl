@@ -2,16 +2,29 @@ struct UVar <: ScalarVariable end
 
 export VariablePoissonSystem, PoissonSource
 
-struct VariablePoissonSystem <: JutulSystem end
+Base.@kwdef struct VariablePoissonSystem <: JutulSystem
+    time_dependent::Bool = false
+end
+
 const PoissonModel = SimulationModel{<:Any, <:VariablePoissonSystem, <:Any, <:Any}
 
+abstract type AbstractPoissonEquation <: JutulEquation end
 
-struct VariablePoissonEquation{T} <: JutulEquation
+struct VariablePoissonEquation{T} <: AbstractPoissonEquation
+    discretization::T
+end
+
+struct VariablePoissonEquationTimeDependent{T} <: AbstractPoissonEquation
     discretization::T
 end
 
 function select_equations!(eqs, system::VariablePoissonSystem, model)
-    eqs[:poisson] = VariablePoissonEquation(model.domain.discretizations.poisson)
+    if system.time_dependent
+        eq = VariablePoissonEquationTimeDependent(model.domain.discretizations.poisson)
+    else
+        eq = VariablePoissonEquation(model.domain.discretizations.poisson)
+    end
+    eqs[:poisson] = eq
 end
 
 function select_primary_variables!(S, system::VariablePoissonSystem, model)
@@ -49,12 +62,16 @@ struct PoissonSource <: JutulForce
     value::Float64
 end
 
-function apply_forces_to_equation!(d, storage, model, eq::VariablePoissonEquation, eq_s, force::Vector{PoissonSource}, time)
+function apply_forces_to_equation!(d, storage, model, eq::AbstractPoissonEquation, eq_s, force::Vector{PoissonSource}, time)
     U = storage.state.U
     for f in force
         c = f.cell
         d[c] -= f.value
     end
+end
+
+function setup_forces(model::PoissonModel; sources = nothing)
+    return (sources = sources, )
 end
 
 function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::VariablePoissonEquation, model, dt, ldisc = local_discretization(eq, self_cell))
@@ -70,6 +87,16 @@ function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::Variab
     eq_buf[] = -div(flux)
 end
 
-function setup_forces(model::PoissonModel; sources = nothing)
-    return (sources = sources, )
+function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::VariablePoissonEquationTimeDependent, model, Δt, ldisc = local_discretization(eq, self_cell))
+    U = state.U
+    U0 = state.U
+    K = state.K
+    div = ldisc.div
+    U_self = state.U[self_cell]
+    function flux(other_cell, face, sgn)
+        U_other = U[other_cell]
+        return K[face]*(U_self - U_other)
+    end
+    ∂U∂t = (U_self - U0[self_cell])/Δt
+    eq_buf[] = ∂U∂t - div(flux)
 end
