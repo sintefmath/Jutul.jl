@@ -34,3 +34,13 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag)
         offset += ne*np
     end
 end
+
+function solve_adjoint(model; state0 = setup_state(model), parameters = setup_parameters(model))
+    # One simulator object for the equations with respect to primary (at previous time-step)
+    # One simulator object for the equations with respect to parameters
+    # For objective F the gradient with respect to parameters p is
+    # ∇ₚ = Σₙ ∂Fₙ / ∂p λₙ where n ∈ [1, N]
+    # Given Lagrange multipliers λₙ from the adjoint equations
+    # (∂Fₙᵀ / ∂xₙ) λₙ = - ∂Jᵀ / ∂xₙ - (∂Fₙ₊₁ᵀ / ∂xₙ) λₙ₊₁
+    # where the last term is omitted for step n = N
+end
