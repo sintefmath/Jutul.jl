@@ -97,10 +97,11 @@ LSystem = Union{LinearizedType, MultiLinearizedSystem}
 function LinearizedSystem(sparse_arg, context, layout; r = nothing, dx = nothing)
     jac, jac_buf, bz = build_jacobian(sparse_arg, context, layout)
     n, m = size(jac)
-    @assert n == m "Expected square system. Recieved $n (eqs) by $m (primary variables)."
+    if n != m
+        @debug "Expected square system. Recieved $n (eqs) by $m (primary variables). Unless this is an adjoint system, something might be wrong."
+    end
     dx, dx_buf = get_jacobian_vector(n, context, layout, dx, bz[1])
     r, r_buf = get_jacobian_vector(n, context, layout, r, bz[1])
-
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
 end
 
