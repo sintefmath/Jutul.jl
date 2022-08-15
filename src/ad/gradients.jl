@@ -38,11 +38,11 @@ end
 function solve_adjoint(model; state0 = setup_state(model), parameters = setup_parameters(model))
     # One simulator object for the equations with respect to primary (at previous time-step)
     # One simulator object for the equations with respect to parameters
-    # For objective F the gradient with respect to parameters p is
-    # ∇ₚ = Σₙ ∂Fₙ / ∂p λₙ where n ∈ [1, N]
+    # For model equations F the gradient with respect to parameters p is
+    # ∇ₚG = Σₙ ∂Fₙ / ∂p λₙ where n ∈ [1, N]
     # Given Lagrange multipliers λₙ from the adjoint equations
     # (∂Fₙᵀ / ∂xₙ) λₙ = - ∂Jᵀ / ∂xₙ - (∂Fₙ₊₁ᵀ / ∂xₙ) λₙ₊₁
-    # where the last term is omitted for step n = N
+    # where the last term is omitted for step n = N and G is the objective function
     sim_p = Simulator(model, state0 = state0, parameters = parameters, adjoint = true)
     pmodel = parameter_model(model)
 end
