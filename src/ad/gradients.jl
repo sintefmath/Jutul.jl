@@ -106,7 +106,7 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
     solve!(lsys)
-    @. λ += lsys.dx_buffer
+    @. λ -= lsys.dx_buffer
     # ∇ₚG = Σₙ ∂Fₙ / ∂p λₙ
     # Increment gradient
     adjoint_reassemble!(parameter_sim, state, state0, dt, forces)
