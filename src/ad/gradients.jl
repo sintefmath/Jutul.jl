@@ -43,15 +43,27 @@ function solve_adjoint(model; state0 = setup_state(model), parameters = setup_pa
     # Given Lagrange multipliers λₙ from the adjoint equations
     # (∂Fₙᵀ / ∂xₙ) λₙ = - ∂Jᵀ / ∂xₙ - (∂Fₙ₊₁ᵀ / ∂xₙ) λₙ₊₁
     # where the last term is omitted for step n = N and G is the objective function
-    sim_p = Simulator(model, state0 = state0, parameters = parameters, adjoint = true)
-    pmodel = parameter_model(model)
+    forward_model = adjoint_model_copy(model)
+    sim_p = Simulator(forward_model, state0 = state0, parameters = parameters, adjoint = true)
+    parameter_model = adjoint_parameter_model(model)
 end
 
-function parameter_model(model::SimulationModel)
-    pmodel = copy(model)
+function adjoint_parameter_model(model)
+    pmodel = adjoint_model_copy(model)
     # Swap parameters and primary variables
     set_parameters!(pmodel; pairs(model.primary_variables)...)
     # Original model holds the parameters, use those
     set_primary_variables!(pmodel; pairs(model.parameters)...)
     return pmodel
+end
+
+function adjoint_model_copy(model::SimulationModel{O, S, C, F}) where {O, S, C, F}
+    pvar = copy(model.primary_variables)
+    svar = copy(model.secondary_variables)
+    outputs = copy(model.output_variables)
+    prm = copy(model.parameters)
+    eqs = model.equations
+    # Transpose the system
+    new_context = adjoint(model.context)
+    return SimulationModel{O, S, C, F}(model.domain, model.system, new_context, model.formulation, pvar, svar, prm, eqs, outputs)
 end

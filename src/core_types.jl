@@ -75,6 +75,14 @@ is_cell_major(::BlockMajorLayout) = true
 matrix_layout(::Nothing) = EquationMajorLayout(false)
 represented_as_adjoint(layout) = layout.as_adjoint
 
+function Base.adjoint(ctx::T) where T<: JutulContext
+    return T(matrix_layout = adjoint(ctx.matrix_layout))
+end
+
+function Base.adjoint(layout::T) where T <: JutulMatrixLayout
+    return T(true)
+end
+
 struct SparsePattern{L}
     I
     J
