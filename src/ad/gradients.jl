@@ -92,6 +92,7 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
 
     lsys = forward_sim.storage.LinearizedSystem
     rhs = lsys.r_buffer
+    # - ∂Jᵀ / ∂xₙ
     @. rhs = -dGdx
     if isnothing(state_next)
         @assert i == N
@@ -101,11 +102,14 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
         adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next)
         lsys_next = backward_sim.storage.LinearizedSystem
         op = linear_operator(lsys_next)
+        # @info "!" lsys_next.jac λ
         # rhs -= op*λ
-        mul!(rhs, op, λ, 1.0, -1.0)
+        # - (∂Fₙ₊₁ᵀ / ∂xₙ) λₙ₊₁
+        mul!(rhs, op, λ, -1.0, 1.0)
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
     solve!(lsys)
+    # Note the sign: There is an implicit negative sign in the linear solver when solving for the Newton increment
     @. λ -= lsys.dx_buffer
     # ∇ₚG = Σₙ ∂Fₙ / ∂p λₙ
     # Increment gradient
@@ -114,7 +118,10 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
     op_p = linear_operator(lsys_next)
     # In-place version of:
     # ∇G += op_p*λ
-    mul!(∇G, op_p, λ, 1.0, 1.0)
+    @info "" λ ∇G
+    mul!(∇G, op_p, λ, 1.0, -1.0)
+    @info "" λ ∇G
+
 end
 
 function adjoint_reassemble!(sim, state, state0, dt, forces)
