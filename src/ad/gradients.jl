@@ -78,6 +78,7 @@ function solve_adjoint_sensitivities(model, states, reports, G; forces = setup_f
         end
         s = states[i]
         update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parameter_sim, s0, s, s_next, timesteps, forces)
+        @info λ ∇G
     end
     return ∇G
 end
@@ -89,11 +90,12 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
     # Assemble Jacobian w.r.t. current step
     adjoint_reassemble!(forward_sim, state, state0, dt, forces)
     dGdx = state_gradient(forward_sim.model, state, G, dt, i, forces)
-
+    # Note the sign: There is an implicit negative sign in the linear solver when solving for the Newton increment. Therefore, the terms of the
+    # right hand side are added with a positive sign instead of negative.
     lsys = forward_sim.storage.LinearizedSystem
     rhs = lsys.r_buffer
     # - ∂Jᵀ / ∂xₙ
-    @. rhs = -dGdx
+    @. rhs = dGdx
     if isnothing(state_next)
         @assert i == N
     else
@@ -102,15 +104,14 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
         adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next)
         lsys_next = backward_sim.storage.LinearizedSystem
         op = linear_operator(lsys_next)
-        # @info "!" lsys_next.jac λ
-        # rhs -= op*λ
+        # In-place version of
+        # rhs += op*λ
         # - (∂Fₙ₊₁ᵀ / ∂xₙ) λₙ₊₁
-        mul!(rhs, op, λ, -1.0, 1.0)
+        mul!(rhs, op, λ, 1.0, 1.0)
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
     solve!(lsys)
-    # Note the sign: There is an implicit negative sign in the linear solver when solving for the Newton increment
-    @. λ -= lsys.dx_buffer
+    @. λ = lsys.dx_buffer
     # ∇ₚG = Σₙ ∂Fₙ / ∂p λₙ
     # Increment gradient
     adjoint_reassemble!(parameter_sim, state, state0, dt, forces)
@@ -118,10 +119,7 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
     op_p = linear_operator(lsys_next)
     # In-place version of:
     # ∇G += op_p*λ
-    @info "" λ ∇G
-    mul!(∇G, op_p, λ, 1.0, -1.0)
-    @info "" λ ∇G
-
+    mul!(∇G, op_p, λ, 1.0, 1.0)
 end
 
 function adjoint_reassemble!(sim, state, state0, dt, forces)
@@ -169,7 +167,7 @@ function solve_numerical_sensitivities(model, states, reports, G, target; forces
         param_i = deepcopy(parameters)
         param_i[target][i] += ϵ
         sim_i = Simulator(model, state0 = copy(state0), parameters = param_i)
-        states_i, reports = simulate!(sim_i, timesteps, info_level = 1, forces = forces)
+        states_i, reports = simulate!(sim_i, timesteps, info_level = -1, forces = forces)
         v = evaluate_objective(G, model, states_i, timesteps, forces)
         grad_num[i] = (v - base_obj)/ϵ
     end
