@@ -61,7 +61,7 @@ function solve_adjoint_sensitivities(model, states, reports, G; forces = setup_f
 
     n_pvar = number_of_degrees_of_freedom(model)
     n_param = number_of_degrees_of_freedom(parameter_model)
-    @info "Solving adjoint for $N steps with $n_pvar primary variables and $n_param parameters."
+    @debug "Solving adjoint for $N steps with $n_pvar primary variables and $n_param parameters."
     ∇G = zeros(n_param)
     λ = zeros(n_pvar)
 
@@ -78,7 +78,6 @@ function solve_adjoint_sensitivities(model, states, reports, G; forces = setup_f
         end
         s = states[i]
         update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parameter_sim, s0, s, s_next, timesteps, forces)
-        @info λ ∇G
     end
     return ∇G
 end
