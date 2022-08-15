@@ -47,11 +47,13 @@ function solve_adjoint(model, states, reports, G; forces = setup_forces(model), 
     # (∂Fₙᵀ / ∂xₙ) λₙ = - ∂Jᵀ / ∂xₙ - (∂Fₙ₊₁ᵀ / ∂xₙ) λₙ₊₁
     # where the last term is omitted for step n = N and G is the objective function
     primary_model = adjoint_model_copy(model)
-    forward_sim = Simulator(primary_model, state0 = copy(state0), parameters = copy(parameters), adjoint = true)
+    # Standard model for: ∂Fₙᵀ / ∂xₙ
+    forward_sim = Simulator(primary_model, state0 = copy(state0), parameters = copy(parameters), adjoint = false)
+    # Same model, but adjoint for: ∂Fₙ₊₁ᵀ / ∂xₙ
     backward_sim = Simulator(primary_model, state0 = copy(state0), parameters = copy(parameters), adjoint = true)
-
+    # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model)
-    parameter_sim = Simulator(parameter_model, state0 = copy(parameters), parameters = copy(state0), adjoint = true)
+    parameter_sim = Simulator(parameter_model, state0 = copy(parameters), parameters = copy(state0), adjoint = false)
 
     timesteps = report_timesteps(reports)
     N = length(states)
@@ -69,7 +71,6 @@ function solve_adjoint(model, states, reports, G; forces = setup_forces(model), 
         else
             s0 = states[i-1]
         end
-        @info "" i N
         if i == N
             s_next = nothing
         else
@@ -111,8 +112,8 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
     adjoint_reassemble!(parameter_sim, state, state0, dt, forces)
     lsys_next = parameter_sim.storage.LinearizedSystem
     op_p = linear_operator(lsys_next)
-    display(op_p)
-    @info " " size(op_p) size(∇G) size(λ)
+    # In-place version of:
+    # ∇G += op_p*λ
     mul!(∇G, op_p, λ, 1.0, 1.0)
 end
 
