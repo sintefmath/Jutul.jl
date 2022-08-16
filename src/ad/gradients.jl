@@ -53,7 +53,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model), parameters = 
     return (forward = forward_sim, backward = backward_sim, parameter = parameter_sim, lagrange = λ)
 end
 
-function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), kwarg...)
+function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, kwarg...)
     # One simulator object for the equations with respect to primary (at previous time-step)
     # One simulator object for the equations with respect to parameters
     # For model equations F the gradient with respect to parameters p is
@@ -64,7 +64,8 @@ function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = f
     set_global_timer!(extra_timing)
     # Allocation part
     storage = setup_adjoint_storage(model; state0 = state0, kwarg...)
-    n_param = number_of_degrees_of_freedom(storage.parameter.model)
+    parameter_model = storage.parameter.model
+    n_param = number_of_degrees_of_freedom(parameter_model)
     ∇G = zeros(n_param)
     # Timesteps
     timesteps = report_timesteps(reports)
@@ -73,7 +74,12 @@ function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = f
     # Solve!
     solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces)
     print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
-    return ∇G
+    if raw_output
+        out = ∇G
+    else
+        out = store_sensitivities(parameter_model, ∇G)
+    end
+    return out
 end
 
 function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model))
@@ -201,4 +207,28 @@ function evaluate_objective(G, model, states, timesteps, all_forces)
         obj += G(model, state, dt, step_no, forces)
     end
     return obj
+end
+
+function store_sensitivities(model, result)
+    variables = model.primary_variables
+    layout = matrix_layout(model.context)
+    out = Dict{Symbol, Any}()
+    return store_sensitivities!(out, model, variables, result, layout)
+end
+
+function store_sensitivities!(out, model, variables, result, ::EquationMajorLayout; offset = 0)
+    for (k, var) in pairs(variables)
+        n = number_of_degrees_of_freedom(model, var)
+        m = degrees_of_freedom_per_entity(model, var)
+        
+        r = view(result, (offset+1):(offset+n))
+        if var isa ScalarVariable
+            v = r
+        else
+            v = reshape(r, m, n ÷ m)
+        end
+        out[k] = collect(v)
+        offset += n
+    end
+    return out
 end
