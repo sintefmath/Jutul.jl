@@ -294,7 +294,6 @@ end
 
 function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout, UnitMajorLayout})
     ndof = number_of_degrees_of_freedom(model)
-    @assert ndof > 0
     eq_storage = storage[:equations]
     I = []
     J = []

@@ -111,8 +111,12 @@ struct SparsePattern{L}
             I = Vector{T}()
             J = Vector{T}()
         end
-        @assert n > 0
-        @assert m > 0
+        if n == 0
+            @debug "Pattern has zero rows?" n m I J
+        end
+        if m == 0
+            @debug "Pattern has zero columns?" n m I J
+        end
         new{typeof(layout)}(I, J, n, m, block_n, block_m, layout)
     end
 end
@@ -556,7 +560,8 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
         if has_diagonal
             # Create indices into the self-diagonal part if requested, asserting that the diagonal is present
             m = length(sparsity)
-            diag_ix = zeros(I, m)    
+            diag_ix = zeros(I, m)
+            ok = true
             for i = 1:m
                 found = false
                 for j = pos[i]:(pos[i+1]-1)
@@ -565,7 +570,14 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
                         found = true
                     end
                 end
-                @assert found "Diagonal must be present in sparsity pattern. Entry $i/$m was missing the diagonal."
+                if !found
+                    ok = false
+                    @debug "Diagonal must be present in sparsity pattern. Entry $i/$m was missing the diagonal."
+                    break
+                end
+            end
+            if !ok
+                diag_ix = nothing
             end
         else
             diag_ix = nothing
