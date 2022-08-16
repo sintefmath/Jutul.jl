@@ -269,7 +269,9 @@ function update_linearized_system_crossterms!(jac, cross_terms, storage, model::
 end
 
 function crossterm_subsystem(model, lsys, target, source; diag = false)
+    neqs = model.number_of_equations
     ndofs = model.number_of_degrees_of_freedom
+
     model_keys = submodel_symbols(model)
     groups = model.groups
 
@@ -292,8 +294,8 @@ function crossterm_subsystem(model, lsys, target, source; diag = false)
     else
         source_keys = target_keys = model_keys
     end
-    target_offset = local_group_offset(target_keys, target, ndofs)
-    source_offset = local_group_offset(source_keys, source, ndofs)    
+    target_offset = local_group_offset(target_keys, target, neqs)
+    source_offset = local_group_offset(source_keys, source, ndofs)
 
     return (lsys, target_offset, source_offset)
 end
