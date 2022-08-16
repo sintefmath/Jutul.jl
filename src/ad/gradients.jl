@@ -38,16 +38,7 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg)
     end
 end
 
-function solve_adjoint_sensitivities(model, states, reports, G; forces = setup_forces(model), state0 = setup_state(model), parameters = setup_parameters(model), extra_timing = false)
-    # One simulator object for the equations with respect to primary (at previous time-step)
-    # One simulator object for the equations with respect to parameters
-    # For model equations F the gradient with respect to parameters p is
-    # ∇ₚG = Σₙ ∂Fₙ / ∂p λₙ where n ∈ [1, N]
-    # Given Lagrange multipliers λₙ from the adjoint equations
-    # (∂Fₙᵀ / ∂xₙ) λₙ = - ∂Jᵀ / ∂xₙ - (∂Fₙ₊₁ᵀ / ∂xₙ) λₙ₊₁
-    # where the last term is omitted for step n = N and G is the objective function
-    set_global_timer!(extra_timing)
-
+function setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model))
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
     forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), adjoint = false, extra_timing = nothing)
@@ -56,17 +47,38 @@ function solve_adjoint_sensitivities(model, states, reports, G; forces = setup_f
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model)
     parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), adjoint = false, extra_timing = nothing)
-    # Once setup is done, turn on timer for the rest
+
+    n_pvar = number_of_degrees_of_freedom(model)
+    λ = zeros(n_pvar)
+    return (forward = forward_sim, backward = backward_sim, parameter = parameter_sim, lagrange = λ)
+end
+
+function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), kwarg...)
+    # One simulator object for the equations with respect to primary (at previous time-step)
+    # One simulator object for the equations with respect to parameters
+    # For model equations F the gradient with respect to parameters p is
+    # ∇ₚG = Σₙ ∂Fₙ / ∂p λₙ where n ∈ [1, N]
+    # Given Lagrange multipliers λₙ from the adjoint equations
+    # (∂Fₙᵀ / ∂xₙ) λₙ = - ∂Jᵀ / ∂xₙ - (∂Fₙ₊₁ᵀ / ∂xₙ) λₙ₊₁
+    # where the last term is omitted for step n = N and G is the objective function
+    set_global_timer!(extra_timing)
+    # Allocation part
+    storage = setup_adjoint_storage(model; state0 = state0, kwarg...)
+    n_param = number_of_degrees_of_freedom(storage.parameter.model)
+    ∇G = zeros(n_param)
+    # Timesteps
     timesteps = report_timesteps(reports)
     N = length(states)
     @assert length(reports) == N == length(timesteps)
+    # Solve!
+    solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces)
+    print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
+    return ∇G
+end
 
-    n_pvar = number_of_degrees_of_freedom(model)
-    n_param = number_of_degrees_of_freedom(parameter_model)
-    # @debug "Solving adjoint for $N steps with $n_pvar primary variables and $n_param parameters."
-    ∇G = zeros(n_param)
-    λ = zeros(n_pvar)
-
+function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model))
+    N = length(timesteps)
+    @assert N == length(states)
     @timeit "sensitivities" for i in N:-1:1
         if i == 1
             s0 = deepcopy(state0)
@@ -79,13 +91,17 @@ function solve_adjoint_sensitivities(model, states, reports, G; forces = setup_f
             s_next = states[i+1]
         end
         s = states[i]
-        update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parameter_sim, s0, s, s_next, timesteps, forces)
+        update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
     end
-    print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
-    return ∇G
 end
 
-function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parameter_sim, state0, state, state_next, timesteps, all_forces)
+function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
+    # Unpack simulators
+    parameter_sim = adjoint_storage.parameter
+    backward_sim = adjoint_storage.backward
+    forward_sim = adjoint_storage.forward
+    λ = adjoint_storage.lagrange
+    # Timestep logic
     N = length(timesteps)
     forces = forces_for_timestep(forward_sim, all_forces, timesteps, i)
     dt = timesteps[i]
@@ -99,6 +115,7 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
     @timeit "objective gradient" state_gradient!(rhs, forward_sim.model, state, G, dt, i, forces)
     if isnothing(state_next)
         @assert i == N
+        @. λ = 0
     else
         dt_next = timesteps[i+1]
         forces_next = forces_for_timestep(backward_sim, all_forces, timesteps, i+1)
