@@ -36,7 +36,7 @@ function mytest(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, extra_t
                             forces = forces)
     else
         grad_adj = Jutul.solve_adjoint_sensitivities(model, states, reports, G,
-                            forces = forces, state0 = state0, parameters = param, extra_timing = extra_timing)
+                            forces = forces, state0 = state0, parameters = param, extra_timing = extra_timing, raw_output = true)
     end
     # Check against numerical gradient
     grad_num = Jutul.solve_numerical_sensitivities(model, states, reports, G, :K,
