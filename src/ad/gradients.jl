@@ -8,6 +8,7 @@ end
 function state_gradient!(∂F∂x, model, state, F, extra_arg...; parameters = setup_parameters(model))
     # Either with respect to all primary variables, or all parameters.
     tag = nothing
+    state = setup_state(model, state)
     state = merge(state, parameters)
     state = convert_state_ad(model, state, tag)
     state = convert_to_immutable_storage(state)
@@ -165,13 +166,18 @@ function adjoint_parameter_model(model)
     set_parameters!(pmodel; pairs(model.primary_variables)...)
     # Original model holds the parameters, use those
     set_primary_variables!(pmodel; pairs(model.parameters)...)
+    out = vcat(keys(model.secondary_variables)..., keys(model.primary_variables)...)
+    for k in out
+        push!(pmodel.output_variables, k)
+    end
+    unique!(pmodel.output_variables)
     return pmodel
 end
 
 function adjoint_model_copy(model::SimulationModel{O, S, C, F}) where {O, S, C, F}
     pvar = copy(model.primary_variables)
     svar = copy(model.secondary_variables)
-    outputs = copy(model.output_variables)
+    outputs = vcat(keys(pvar)..., keys(svar)...)
     prm = copy(model.parameters)
     eqs = model.equations
     # Transpose the system
@@ -220,7 +226,9 @@ function store_sensitivities!(out, model, variables, result, ::EquationMajorLayo
     for (k, var) in pairs(variables)
         n = number_of_degrees_of_freedom(model, var)
         m = degrees_of_freedom_per_entity(model, var)
-        
+        if n == 0
+            continue
+        end
         r = view(result, (offset+1):(offset+n))
         if var isa ScalarVariable
             v = r
