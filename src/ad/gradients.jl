@@ -90,13 +90,12 @@ function update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parame
     dt = timesteps[i]
     # Assemble Jacobian w.r.t. current step
     @timeit "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces)
-    @timeit "objective gradient" dGdx = state_gradient(forward_sim.model, state, G, dt, i, forces)
     # Note the sign: There is an implicit negative sign in the linear solver when solving for the Newton increment. Therefore, the terms of the
     # right hand side are added with a positive sign instead of negative.
     lsys = forward_sim.storage.LinearizedSystem
     rhs = lsys.r_buffer
-    # - ∂Jᵀ / ∂xₙ
-    @. rhs = dGdx
+    # Fill rhs with ∂Jᵀ / ∂xₙ (which will be treated with a negative sign when the result is written by the linear solver)
+    @timeit "objective gradient" state_gradient!(rhs, forward_sim.model, state, G, dt, i, forces)
     if isnothing(state_next)
         @assert i == N
     else
