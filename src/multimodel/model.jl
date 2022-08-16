@@ -99,6 +99,7 @@ function align_equations_to_linearized_system!(storage, model::MultiModel; equat
     models = model.models
     model_keys = submodel_symbols(model)
     ndofs = model.number_of_degrees_of_freedom
+    neqs = model.number_of_equations
     lsys = storage[:LinearizedSystem]
     if has_groups(model)
         ng = number_of_groups(model)
@@ -106,25 +107,23 @@ function align_equations_to_linearized_system!(storage, model::MultiModel; equat
         for g in 1:ng
             J = lsys[g, g].jac
             subs = groups .== g
-            align_equations_subgroup!(storage, models, model_keys[subs], ndofs, J, equation_offset, variable_offset)
+            align_equations_subgroup!(storage, models, model_keys[subs], (neqs, ndofs), J, equation_offset, variable_offset)
         end
     else
         J = lsys.jac
-        align_equations_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
+        align_equations_subgroup!(storage, models, model_keys, (neqs, ndofs), J, equation_offset, variable_offset)
     end
 end
 
-function align_equations_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
+function align_equations_subgroup!(storage, models, model_keys, dims, J, equation_offset, variable_offset)
+    neqs, nvars = dims
     for key in model_keys
         submodel = models[key]
         eqs_s = storage[key][:equations]
         eqs = submodel.equations
-        nrow_end = align_equations_to_jacobian!(eqs_s, eqs, J, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
-        nrow = nrow_end - equation_offset
-        ndof = ndofs[key]
-        @assert nrow == ndof "Submodels must have equal number of equations and degrees of freedom. Found $nrow equations and $ndof variables for submodel $key"
-        equation_offset += ndof
-        variable_offset += ndof # Assuming that each model by itself forms a well-posed, square Jacobian...
+        align_equations_to_jacobian!(eqs_s, eqs, J, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
+        equation_offset += neqs[key]
+        variable_offset += nvars[key]
     end
 end
 
