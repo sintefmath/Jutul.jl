@@ -73,14 +73,15 @@ function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
 end
 
-function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model))
+function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model), adjoint = false)
     storage = JutulStorage()
     for key in submodels_symbols(model)
         m = model.models[key]
-        storage[key] = setup_storage(m,  state0 = state0[key],
-                                            parameters = parameters[key],
-                                            setup_linearized_system = false,
-                                            tag = key)
+        storage[key] = setup_storage(m, state0 = state0[key],
+                                        parameters = parameters[key],
+                                        setup_linearized_system = false,
+                                        adjoint = adjoint,
+                                        tag = key)
     end
     setup_cross_terms_storage!(storage, model)
     setup_linearized_system!(storage, model)
