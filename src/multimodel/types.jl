@@ -14,6 +14,7 @@ struct MultiModel{M, T} <: JutulModel
     cross_terms::Vector{CrossTermPair}
     groups::Union{Vector, Nothing}
     context::Union{JutulContext, Nothing}
+    number_of_equations::T
     number_of_degrees_of_freedom::T
     reduction::Union{Symbol, Nothing}
     function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing)
@@ -31,6 +32,7 @@ struct MultiModel{M, T} <: JutulModel
             models = convert_to_immutable_storage(models)
         end
         ndof = map(number_of_degrees_of_freedom, models)
+        neq = map(number_of_equations, models)
         if reduction == :schur_apply
             if length(groups) > 1
                 @assert num_groups == 2
@@ -45,7 +47,7 @@ struct MultiModel{M, T} <: JutulModel
                 end
             end
         end
-        new{typeof(models), typeof(ndof)}(models, cross_terms, groups, context, ndof, reduction)
+        new{typeof(models), typeof(ndof)}(models, cross_terms, groups, context, neq, ndof, reduction)
     end
 end
 

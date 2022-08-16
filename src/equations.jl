@@ -183,6 +183,14 @@ function number_of_equations(model, e::JutulEquation)
     return number_of_equations_per_entity(model, e)*number_of_entities(model, e)
 end
 
+function number_of_equations(model)
+    n = 0
+    for eq in values(model.equations)
+        n += number_of_equations(model, eq)
+    end
+    return n
+end
+
 """
 Get the number of partials
 """
