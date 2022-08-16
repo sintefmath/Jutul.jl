@@ -7,6 +7,8 @@ function set_global_timer!(enabled = true)
     end
 end
 
+set_global_timer!(::Nothing) = nothing
+
 function print_global_timer(do_print = true; text = "Detailed timing")
     if do_print
         if !isnothing(text)
@@ -15,6 +17,8 @@ function print_global_timer(do_print = true; text = "Detailed timing")
         print_timer()
     end
 end
+
+print_global_timer(::Nothing) = nothing
 
 function start_simulation_message(info_level, timesteps)
     p = nothing
