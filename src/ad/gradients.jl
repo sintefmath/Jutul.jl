@@ -93,6 +93,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
         s = states[i]
         update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
     end
+    return ∇G
 end
 
 function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
