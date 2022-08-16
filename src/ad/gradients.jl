@@ -226,16 +226,17 @@ function store_sensitivities!(out, model, variables, result, ::EquationMajorLayo
     for (k, var) in pairs(variables)
         n = number_of_degrees_of_freedom(model, var)
         m = degrees_of_freedom_per_entity(model, var)
-        if n == 0
-            continue
-        end
-        r = view(result, (offset+1):(offset+n))
-        if var isa ScalarVariable
-            v = r
+        if n > 0
+            r = view(result, (offset+1):(offset+n))
+            if var isa ScalarVariable
+                v = r
+            else
+                v = reshape(r, m, n ÷ m)
+            end
+            out[k] = collect(v)
         else
-            v = reshape(r, m, n ÷ m)
+            out[k] = similar(result, 0)
         end
-        out[k] = collect(v)
         offset += n
     end
     return out
