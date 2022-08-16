@@ -193,16 +193,7 @@ function initialize_storage!(storage, model::JutulModel; initialize_state0 = tru
         state0_eval = convert_to_immutable_storage(storage[:state0])
         # Evaluate everything (with doubles) to make sure that possible 
         update_secondary_variables_state!(state0_eval, model)
-        # Create a new state0 with the desired/required outputs and
-        # copy over those values before returning them back
-        state0 = Dict()
-        for key in model.output_variables
-            v = state0_eval[key]
-            if !isa(v, ConstantWrapper) && eltype(v)<:Real
-                state0[key] = v
-            end
-        end
-        storage[:state0] = state0
+        storage[:state0] = state0_eval
     end
     synchronize(model.context)
 end
@@ -665,7 +656,7 @@ function get_output_state(storage, model)
     # As this point (after a converged step) state0 should be state without AD.
     s0 = storage.state0
     D = Dict{Symbol, Any}()
-    for k in keys(s0)
+    for k in model.output_variables
         D[k] = copy(s0[k])
     end
     return D
