@@ -340,9 +340,12 @@ function setup_linearized_system!(storage, model::MultiModel)
                     ctx = row_context
                 end
                 layout = matrix_layout(ctx)
-                sparse_arg = get_sparse_arguments(storage, model, t, s, ctx)
+                sparse_pattern = get_sparse_arguments(storage, model, t, s, ctx)
+                if represented_as_adjoint(layout)
+                    sparse_pattern = sparse_pattern'
+                end
                 bz_pair = (block_sizes[rowg], block_sizes[colg])
-                subsystems[rowg, colg] = LinearizedBlock(sparse_arg, ctx, layout, row_layout, col_layout, bz_pair)
+                subsystems[rowg, colg] = LinearizedBlock(sparse_pattern, ctx, layout, row_layout, col_layout, bz_pair)
             end
             base_pos += local_size
         end
@@ -353,8 +356,11 @@ function setup_linearized_system!(storage, model::MultiModel)
             context = models[1].context
         end
         layout = matrix_layout(context)
-        sparse_arg = get_sparse_arguments(storage, model, candidates, candidates, context)
-        lsys = LinearizedSystem(sparse_arg, context, layout)
+        sparse_pattern = get_sparse_arguments(storage, model, candidates, candidates, context)
+        if represented_as_adjoint(matrix_layout(model.context))
+            sparse_pattern = sparse_pattern'
+        end
+        lsys = LinearizedSystem(sparse_pattern, context, layout)
     end
     storage[:LinearizedSystem] = lsys
 end
