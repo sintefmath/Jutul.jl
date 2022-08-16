@@ -647,7 +647,7 @@ end
 function update_after_step!(storage, model, dt, forces)
     state = storage.state
     state0 = storage.state0
-    for key in keys(state0)
+    for key in model.output_variables
         @. state0[key] = value(state[key])
     end
 end
