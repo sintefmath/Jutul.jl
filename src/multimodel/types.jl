@@ -49,8 +49,7 @@ struct MultiModel{M, T} <: JutulModel
     end
 end
 
-
-
+Base.getindex(m::MultiModel, i::Symbol) = m.models[i]
 
 abstract type AdditiveCrossTerm <: CrossTerm end
 
