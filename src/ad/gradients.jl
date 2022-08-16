@@ -46,16 +46,17 @@ function solve_adjoint_sensitivities(model, states, reports, G; forces = setup_f
     # Given Lagrange multipliers λₙ from the adjoint equations
     # (∂Fₙᵀ / ∂xₙ) λₙ = - ∂Jᵀ / ∂xₙ - (∂Fₙ₊₁ᵀ / ∂xₙ) λₙ₊₁
     # where the last term is omitted for step n = N and G is the objective function
+    set_global_timer!(extra_timing)
+
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
-    forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), adjoint = false, extra_timing = extra_timing)
+    forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), adjoint = false, extra_timing = nothing)
     # Same model, but adjoint for: ∂Fₙ₊₁ᵀ / ∂xₙ
-    backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), adjoint = true, extra_timing = extra_timing)
+    backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), adjoint = true, extra_timing = nothing)
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model)
-    parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), adjoint = false, extra_timing = extra_timing)
+    parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), adjoint = false, extra_timing = nothing)
     # Once setup is done, turn on timer for the rest
-    set_global_timer!(extra_timing)
     timesteps = report_timesteps(reports)
     N = length(states)
     @assert length(reports) == N == length(timesteps)
@@ -80,7 +81,7 @@ function solve_adjoint_sensitivities(model, states, reports, G; forces = setup_f
         s = states[i]
         update_sensitivities!(λ, ∇G, i, G, forward_sim, backward_sim, parameter_sim, s0, s, s_next, timesteps, forces)
     end
-    print_global_timer(extra_timing)
+    print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
     return ∇G
 end
 
