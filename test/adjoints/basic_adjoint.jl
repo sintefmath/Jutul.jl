@@ -6,7 +6,7 @@ function poisson_test_objective(model, state)
 end
 
 
-function mytest(; nx = 3, ny = 1, dt = [1.0, 2.0, π])
+function mytest(; nx = 3, ny = 1, dt = [1.0, 2.0, π], extra_timing = false)
     sys = VariablePoissonSystem(time_dependent = true)
     # Unit square
     g = CartesianMesh((nx, ny), (1.0, 1.0))
@@ -29,7 +29,7 @@ function mytest(; nx = 3, ny = 1, dt = [1.0, 2.0, π])
     # Define objective
     G = (model, state, dt, step_no, forces) -> poisson_test_objective(model, state)
     grad_adj = Jutul.solve_adjoint_sensitivities(model, states, reports, G,
-                        forces = forces, state0 = state0, parameters = param)
+                        forces = forces, state0 = state0, parameters = param, extra_timing = extra_timing)
     # Check against numerical gradient
     grad_num = Jutul.solve_numerical_sensitivities(model, states, reports, G, :K,
                             forces = forces, state0 = state0, parameters = param)
