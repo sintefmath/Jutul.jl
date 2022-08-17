@@ -98,8 +98,8 @@ end
 function align_equations_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
     model_keys = submodel_symbols(model)
-    ndofs = model.number_of_degrees_of_freedom
-    neqs = model.number_of_equations
+    neqs = map(number_of_equations, model.models)
+    ndofs = map(number_of_degrees_of_freedom, model.models)
     lsys = storage[:LinearizedSystem]
     if has_groups(model)
         ng = number_of_groups(model)
@@ -286,7 +286,7 @@ function setup_linearized_system!(storage, model::MultiModel)
 
     candidates = [i for i in submodel_symbols(model)]
     if has_groups(model)
-        ndof = values(model.number_of_degrees_of_freedom)
+        ndof = values(map(number_of_degrees_of_freedom, models))
         n = sum(ndof)
         groups = model.groups
         ng = number_of_groups(model)

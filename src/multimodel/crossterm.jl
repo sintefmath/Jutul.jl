@@ -269,8 +269,8 @@ function update_linearized_system_crossterms!(jac, cross_terms, storage, model::
 end
 
 function crossterm_subsystem(model, lsys, target, source; diag = false)
-    neqs = model.number_of_equations
-    ndofs = model.number_of_degrees_of_freedom
+    neqs = map(number_of_equations, model.models)
+    ndofs = map(number_of_degrees_of_freedom, model.models)
 
     model_keys = submodel_symbols(model)
     groups = model.groups
@@ -340,14 +340,9 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
 end
 
 function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
-    models = model.models
     cross_terms = model.cross_terms
     cross_term_storage = storage[:cross_terms]
-    ndofs = model.number_of_degrees_of_freedom
-    model_keys = submodel_symbols(model)
-    ndofs = model.number_of_degrees_of_freedom
     lsys = storage[:LinearizedSystem]
-
     for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
         ct = ctp.cross_term
         target = ctp.target
