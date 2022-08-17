@@ -235,10 +235,15 @@ function evaluate_objective(G, model, states, timesteps, all_forces)
 end
 
 function store_sensitivities(model, result)
+    out = Dict{Symbol, Any}()
+    store_sensitivities!(out, model, result)
+    return out
+end
+
+function store_sensitivities!(out, model, result; kwarg...)
     variables = model.primary_variables
     layout = matrix_layout(model.context)
-    out = Dict{Symbol, Any}()
-    return store_sensitivities!(out, model, variables, result, layout)
+    return store_sensitivities!(out, model, variables, result, layout; kwarg...)
 end
 
 function store_sensitivities!(out, model, variables, result, ::EquationMajorLayout; offset = 0)
