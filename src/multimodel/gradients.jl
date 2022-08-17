@@ -18,9 +18,9 @@ end
 function convert_state_ad(model::MultiModel, state, tag = nothing)
     @assert isnothing(tag)
     for (k, m) in pairs(model.models)
-        @info k keys(state[k])
         state[k] = convert_state_ad(m, state[k], k)
     end
+    return state
 end
 
 function merge_state_with_parameters(model::MultiModel, state, parameters)
@@ -28,4 +28,15 @@ function merge_state_with_parameters(model::MultiModel, state, parameters)
         merge_state_with_parameters(model[k], state[k], parameters[k])
     end
     return state
+end
+
+function state_gradient_outer!(∂F∂x, F, model::MultiModel, state, extra_arg)
+    offset = 0
+    for k in submodel_symbols(model)
+        m = model[k]
+        n = number_of_degrees_of_freedom(m)
+        ∂F∂x_k = view(∂F∂x, (offset+1):(offset+n))
+        state_gradient_inner!(∂F∂x_k, F, m, state, k, extra_arg, model)
+    end
+    return ∂F∂x
 end
