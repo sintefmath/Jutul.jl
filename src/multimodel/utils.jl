@@ -1,6 +1,6 @@
 
 function get_submodel_degree_of_freedom_offsets(model::MultiModel, group = nothing)
-    dof = values(model.number_of_degrees_of_freedom)
+    dof = values(map(number_of_degrees_of_freedom, model.models))
     if !isnothing(group)
         dof = dof[model.groups .== group]
     end
