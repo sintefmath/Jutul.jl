@@ -152,7 +152,7 @@ function adjoint_reassemble!(sim, state, state0, dt, forces)
     # Deal with state0 first
     reset_previous_state!(sim, state0)
     # TODO: Think this one is missing for multimodel?
-    update_secondary_variables_state!(sim.storage.state0, sim.model)
+    update_secondary_variables!(sim.storage, sim.model, state0 = true)
     # Then the current primary variables
     reset_primary_variables!(sim.storage, sim.model, state)
     update_state_dependents!(sim.storage, sim.model, dt, forces)
