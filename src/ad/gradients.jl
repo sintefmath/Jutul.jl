@@ -110,7 +110,6 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
             s_next = fn(states[i+1])
         end
         s = fn(states[i])
-        @warn keys(s[:Reservoir])
         update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
     end
     return ∇G
