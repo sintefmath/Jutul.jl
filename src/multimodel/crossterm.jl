@@ -86,13 +86,13 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
         other_align_s = create_extra_alignment(caches_t)
         active_source = cross_term_entities_source(ct, eq_s, model_s)
         out = (
-            target = caches_t, source = caches_s,
+            N = N, target = caches_t, source = caches_s,
             target_entities = active, source_entities = active_source,
             offdiagonal_alignment = (from_target = other_align_s, from_source = other_align_t)
         )
     else
         out = (
-            target = caches_t, source = caches_s,
+            N = N, target = caches_t, source = caches_s,
             target_entities = active,
             offdiagonal_alignment = (from_source = other_align_t, )
         )

@@ -407,8 +407,7 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
     state_s = storage_s.state
     state0_s = storage_s.state0
 
-    c = first(ct_s.target)
-    for i in 1:number_of_entities(c)
+    for i in 1:ct_s.N
         prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
     end
 
