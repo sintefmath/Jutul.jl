@@ -27,14 +27,16 @@ function state_gradient_outer!(∂F∂x, F, model, state, extra_arg)
     state_gradient_inner!(∂F∂x, F, model, state, nothing, extra_arg)
 end
 
-function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg)
+function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_model = model)
     layout = matrix_layout(model.context)
+    get_partial(x::AbstractFloat, i) = 0.0
+    get_partial(x::ForwardDiff.Dual, i) = x.partials[i]
     function diff_entity!(∂F∂x, state, i, S, ne, np, offset)
         state_i = local_ad(state, i, S)
-        v = F(model, state_i, extra_arg...)
+        v = F(eval_model, state_i, extra_arg...)
         for p_i in np
             ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
-            ∂F∂x[ix] = v.partials[p_i]
+            ∂F∂x[ix] = get_partial(v, p_i)
         end
     end
     offset = 0
