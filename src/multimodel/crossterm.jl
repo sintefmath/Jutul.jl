@@ -294,18 +294,20 @@ function crossterm_subsystem(model, lsys, target, source; diag = false)
     else
         source_keys = target_keys = model_keys
     end
-    target_offset = local_group_offset(target_keys, target, neqs)
-    source_offset = local_group_offset(source_keys, source, ndofs)
+    row_offset = s -> local_group_offset(target_keys, s, neqs)
+    col_offset = s -> local_group_offset(source_keys, s, ndofs)
 
-    return (lsys, target_offset, source_offset)
+    target_offsets = (row_offset(target), col_offset(target))
+    source_offsets = (row_offset(source), col_offset(source))
+    return (lsys, target_offsets, source_offsets)
 end
 
 function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source, eq_label, impact, equation_offset, variable_offset)
     lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = true)
     target_model = model.models[target]
     # Diagonal part: Into target equation, and with respect to target variables
-    equation_offset += target_offset
-    variable_offset += target_offset
+    equation_offset += target_offset[1]
+    variable_offset += target_offset[2]
 
     equation_offset += get_equation_offset(target_model, eq_label)
     for target_e in get_primary_variable_ordered_entities(target_model)
@@ -316,8 +318,8 @@ end
 
 function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, source, eq_label, impact, offdiag_alignment, equation_offset, variable_offset)
     lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = false)
-    equation_offset += target_offset
-    variable_offset += source_offset
+    equation_offset += target_offset[1]
+    variable_offset += source_offset[2]
     target_model = model.models[target]
     source_model = model.models[source]
 
