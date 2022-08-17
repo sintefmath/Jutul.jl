@@ -48,9 +48,14 @@ Base.axes(A::LocalPerspectiveAD) = axes(A.data)
 parenttype(::Type{LocalPerspectiveAD{T,N,A,I}}) where {T,N,A,I} = A
 
 function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
+    # Match in type - pass index on
     myfn(x::AbstractArray{T}, ::Type{T}, index) where T = local_ad(x, index)
+    # Mismatch in AD type - take value
     myfn(x, t, index) = as_value(x)
+    # Constants
     myfn(x::ConstantWrapper, t, index) = x
+    # Nested states
+    myfn(x::NamedTuple, t, index) = local_ad(x, index, E)
 
     index = getfield(state, :index)
     inner_state = getfield(state, :data)
