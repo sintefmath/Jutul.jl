@@ -460,11 +460,11 @@ function update_diagonal_blocks!(storage, model::MultiModel, targets)
             subs = groups .== g
             group_targets = model_keys[subs]
             group_keys = intersect(group_targets, targets)
-            offsets = get_submodel_degree_of_freedom_offsets(model, g)
+            offsets = get_submodel_offsets(model, g)
             update_main_linearized_system_subgroup!(storage, model, group_keys, offsets, lsys_g)
         end
     else
-        offsets = get_submodel_degree_of_freedom_offsets(model)
+        offsets = get_submodel_offsets(model)
         update_main_linearized_system_subgroup!(storage, model, targets, offsets, lsys)
     end
 end
