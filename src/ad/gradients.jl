@@ -11,8 +11,8 @@ function state_gradient!(∂F∂x, model, state, F, extra_arg...; parameters = s
     state = merge_state_with_parameters(model, state, parameters)
     state = convert_state_ad(model, state)
     state = convert_to_immutable_storage(state)
+    state_gradient_outer!(∂F∂x, F, model, state, extra_arg)
     tag = nothing
-    state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg)
     return ∂F∂x
 end
 
@@ -21,6 +21,10 @@ function merge_state_with_parameters(model, state, parameters)
         state[k] = v
     end
     return state
+end
+
+function state_gradient_outer!(∂F∂x, F, model, state, extra_arg)
+    state_gradient_inner!(∂F∂x, F, model, state, nothing, extra_arg)
 end
 
 function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg)
@@ -113,8 +117,6 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
 end
 
 function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
-    @info i keys(state[:Reservoir])
-
     # Unpack simulators
     parameter_sim = adjoint_storage.parameter
     backward_sim = adjoint_storage.backward
@@ -130,7 +132,6 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     # right hand side are added with a positive sign instead of negative.
     lsys = forward_sim.storage.LinearizedSystem
     rhs = lsys.r_buffer
-    @info i keys(state[:Reservoir])
     # Fill rhs with ∂Jᵀ / ∂xₙ (which will be treated with a negative sign when the result is written by the linear solver)
     @timeit "objective gradient" state_gradient!(rhs, forward_sim.model, state, G, dt, i, forces)
     if isnothing(state_next)
