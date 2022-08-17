@@ -645,3 +645,7 @@ end
 function get_convergence_table(model::MultiModel, errors)
     get_convergence_table(submodels_symbols(model), errors)
 end
+
+function number_of_degrees_of_freedom(model::MultiModel)
+    return sum(number_of_degrees_of_freedom, model.models)
+end
