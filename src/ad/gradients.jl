@@ -163,15 +163,18 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
 end
 
 function adjoint_reassemble!(sim, state, state0, dt, forces)
+    s = sim.storage
+    model = sim.model
     # Deal with state0 first
     reset_previous_state!(sim, state0)
-    # TODO: Think this one is missing for multimodel?
-    update_secondary_variables!(sim.storage, sim.model, state0 = true)
+    update_secondary_variables!(s, model, state0 = true)
+    # Apply logic as if timestep is starting
+    update_before_step!(s, model, dt, forces)
     # Then the current primary variables
-    reset_primary_variables!(sim.storage, sim.model, state)
-    update_state_dependents!(sim.storage, sim.model, dt, forces)
+    reset_primary_variables!(s, model, state)
+    update_state_dependents!(s, model, dt, forces)
     # Finally update the system
-    update_linearized_system!(sim.storage, sim.model)
+    update_linearized_system!(s, model)
 end
 
 function swap_primary_with_parameters!(pmodel, model)
