@@ -273,7 +273,8 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
                     nu = number_of_entities(model, pvar)
                     u = associated_entity(pvar)
                     if f == :secondary_variables
-                        print(io, "   $ctr $key ← $(typeof(pvar))) (")
+                        print_t = Base.typename(typeof(pvar)).wrapper
+                        print(io, "   $ctr) $key as $print_t (")
                     else
                         print(io, "   $ctr) $key (")
                     end
