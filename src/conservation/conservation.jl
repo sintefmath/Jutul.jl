@@ -145,11 +145,11 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::Si
 end
 
 
-function align_to_jacobian!(law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
     neighborship = model.domain.grid.neighborship
 
-    hflux_faces = law.half_face_flux_faces
+    hflux_faces = eq_s.half_face_flux_faces
     if !isnothing(hflux_faces)
         half_face_flux_faces_alignment!(hflux_faces, jac, model.context, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
     end
@@ -323,7 +323,7 @@ function update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fent
                 c = conn_data[i]
                 face = c.face
                 sgn = c.face_sign
-                f = sgn*get_entry(face_flux, face, e, fentries)
+                f = sgn*get_entry(face_flux, face, e)
                 for d = 1:np
                     df_di = f.partials[d]
                     fpos = get_jacobian_pos(face_flux, i, e, d, fp)
@@ -352,7 +352,7 @@ function declare_pattern(model, eq::ConservationLaw, e_s::ConservationLawTPFASto
     return (I, J)
 end
 
-function declare_pattern(model, e::ConservationLaw, entity::Faces)
+function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawTPFAStorage, entity::Faces)
     df = e.flow_discretization
     cd = df.conn_data
     I = map(x -> x.self, cd)

@@ -87,7 +87,7 @@ function TwoPointPotentialFlowHardCoded(grid::AbstractJutulMesh, T = nothing, z 
         if !isnothing(T)
             @assert length(T) == nhf ÷ 2 "Transmissibilities vector must have length of half the number of half faces ($nhf / 2 = $(nhf/2), was $(length(T)))"
         end
-        get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity, false)
+        get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity, true)
         el = get_el(1, 1) # Could be junk, we just need eltype
         conn_data = Vector{typeof(el)}(undef, nhf)
         @batch for cell = 1:nc
