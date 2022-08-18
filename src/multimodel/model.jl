@@ -5,30 +5,35 @@ function Base.show(io::IO, t::MIME"text/plain", model::MultiModel)
     if get(io, :compact, false)
     else
     end
-    println(io, "MultiModel with $(length(submodels)) models and $(length(cross_terms)) cross-terms.")
+    ndof = number_of_degrees_of_freedom(model)
+    neq = number_of_equations(model)
+    println(io, "MultiModel with $(length(submodels)) models and $(length(cross_terms)) cross-terms. $neq equations and $ndof degrees of freedom.")
     println(io , "\n  models:")
     for (i, key) in enumerate(keys(submodels))
         m = submodels[key]
         s = m.system
+        ndofi = number_of_degrees_of_freedom(m)
+        neqi = number_of_equations(m)
+    
         if hasproperty(m.domain, :grid)
             g = m.domain.grid
         else
             g = typeof(m.domain)
         end
-        println(io, "    $i) $key\n       $(s) ∈ $g")
+        println(io, "    $i) $key ($(neqi)x$ndofi)\n       $(s)\n       ∈ $g")
 
     end
     if length(cross_terms) > 0
         println(io , "\n  cross_terms:")
         for (i, ct_s) in enumerate(cross_terms)
-            (; cross_term, target, source) = ct_s
+            (; cross_term, target, source, equation) = ct_s
             t = typeof(cross_term)
             if has_symmetry(cross_term)
                 arrow = "<->"
             else
                 arrow = " ->"
             end
-            println(io, "    $i) $source $arrow $target")
+            println(io, "    $i) $source $arrow $target (Eq: $equation)")
             println(io, "       $t")
         end
     end
@@ -655,6 +660,10 @@ end
 
 function number_of_degrees_of_freedom(model::MultiModel)
     return sum(number_of_degrees_of_freedom, model.models)
+end
+
+function number_of_equations(model::MultiModel)
+    return sum(number_of_equations, model.models)
 end
 
 function reset_primary_variables!(storage, model::MultiModel, state)
