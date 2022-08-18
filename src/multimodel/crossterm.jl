@@ -103,6 +103,9 @@ end
 function create_extra_alignment(cache; allocate = true)
     out = Dict{Symbol, Any}()
     for k in keys(cache)
+        if k == :numeric
+            continue
+        end
         jp = cache[k].jacobian_positions
         if allocate
             next = similar(jp)
@@ -187,12 +190,18 @@ function update_offdiagonal_linearized_system_cross_term!(nz, model, ctp, ct_s, 
     _, _, caches, _, pos, sgn = source_impact_for_pair(ctp, ct_s, label)
     @assert !isnothing(pos)
     for u in keys(caches)
+        if u == :numeric
+            continue
+        end
         fill_crossterm_entries!(nz, model, caches[u], pos[u], sgn)
     end
 end
 
 function update_linearized_system_cross_term!(nz, r, model, ct::AdditiveCrossTerm, caches, impact, nu, sgn)
     for k in keys(caches)
+        if k == :numeric
+            continue
+        end
         increment_equation_entries!(nz, r, model, caches[k], impact, nu, sgn)
     end
 end
@@ -325,7 +334,7 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
 
     equation_offset += get_equation_offset(target_model, eq_label)
     @assert !isnothing(offdiag_alignment)
-    @assert keys(s_source) == keys(offdiag_alignment)
+    # @assert keys(s_source), :numeric == keys(offdiag_alignment)
     nt = number_of_entities(target_model, target_model.equations[eq_label])
     for source_e in get_primary_variable_ordered_entities(source_model)
         align_to_jacobian!(s_source, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset,

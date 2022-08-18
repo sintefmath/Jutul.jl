@@ -133,13 +133,19 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
     state0 = storage[:state0]
     entities = all_ad_entities(state, state0)
     caches = Dict()
+    self_entity_found = false
     # n = number_of_equations_per_entity(model, eq)
     for (e, epack) in entities
+        is_self = e == self_entity
+        self_entity_found = self_entity_found || is_self
         @timeit "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
         number_of_entities_source, T = epack
-        has_diagonal = number_of_entities == number_of_entities_total && e == self_entity
+        has_diagonal = number_of_entities == number_of_entities_total && is_self
         @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source"
         @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal)
+    end
+    if !self_entity_found
+        caches[:numeric] = zeros(equations_per_entity, number_of_entities)
     end
     return convert_to_immutable_storage(caches)
 end
@@ -332,7 +338,7 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; context = mode
     k = Symbol(entity)
     has_pos = !isnothing(positions)
     if has_pos
-        @assert keys(positions) == keys(eq_s)
+        # @assert keys(positions) == keys(eq_s)
     end
     if haskey(eq_s, k)
         cache = eq_s[k]
@@ -378,6 +384,9 @@ end
 
 function update_linearized_system_equation!(nz, r, model, equation::JutulEquation, caches)
     for k in keys(caches)
+        if k == :numeric
+            continue
+        end
         fill_equation_entries!(nz, r, model, caches[k])
     end
 end
@@ -389,6 +398,9 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
     state = storage.state
     state0 = storage.state0
     for k in keys(eq_s)
+        if k == :numeric
+            continue
+        end
         cache = eq_s[k]
         update_equation_for_entity!(cache, eq, state, state0, model, dt)
     end
@@ -440,6 +452,8 @@ end
     if haskey(eq_s, k)
         cache = eq_s[k]
         D = diagonal_view(cache)
+    elseif haskey(eq_s, :numeric)
+        D = eq_s[:numeric]
     else
         # Uh oh. Maybe adjoints?
         D = nothing

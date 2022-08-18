@@ -412,10 +412,16 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
     end
 
     for (k, cache) in pairs(ct_s.target)
+        if k == :numeric
+            continue
+        end
         update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, true)
     end
 
     for (k, cache) in pairs(ct_s.source)
+        if k == :numeric
+            continue
+        end
         update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, false)
     end
 end
