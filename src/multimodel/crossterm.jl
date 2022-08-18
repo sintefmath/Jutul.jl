@@ -313,7 +313,7 @@ end
 
 function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source, eq_label, impact, equation_offset, variable_offset)
     lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = true)
-    target_model = model.models[target]
+    target_model = model[target]
     # Diagonal part: Into target equation, and with respect to target variables
     equation_offset += target_offset[1]
     variable_offset += target_offset[2]
@@ -329,8 +329,8 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = false)
     equation_offset += target_offset[1]
     variable_offset += source_offset[2]
-    target_model = model.models[target]
-    source_model = model.models[source]
+    target_model = model[target]
+    source_model = model[source]
 
     equation_offset += get_equation_offset(target_model, eq_label)
     @assert !isnothing(offdiag_alignment)
