@@ -66,7 +66,7 @@ function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMa
     adj = represented_as_adjoint(layout)
     pos = find_sparse_position(A, row, col, adj)
     if pos == 0
-        @error "Unable to map cache entry to Jacobian, not allocated in Jacobian matrix." A row col
+        @error "Unable to map cache entry to Jacobian, ($row,$col) not allocated in Jacobian matrix." A row col represented_as_adjoint(layout)
         error("Jacobian alignment failed. Giving up.")
     end
     return pos
@@ -128,7 +128,7 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     return create_equation_caches(model, n, N, storage, F!, nt; self_entity = e, kwarg...)
 end
 
-function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, number_of_entities_total::Integer = 0; self_entity = nothing, kwarg...)
+function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, number_of_entities_total::Integer = 0; self_entity = nothing, extra_sparsity = nothing, kwarg...)
     state = storage[:state]
     state0 = storage[:state0]
     entities = all_ad_entities(state, state0)
@@ -139,9 +139,20 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
         is_self = e == self_entity
         self_entity_found = self_entity_found || is_self
         @timeit "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
+        if !isnothing(extra_sparsity)
+            # We have some extra sparsity, need to merge that in
+            S_e = extra_sparsity[Symbol(e)]
+            @assert length(S_e) == length(S)
+            for (i, s_extra) in enumerate(S_e)
+                for extra_ind in s_extra
+                    push!(S[i], extra_ind)
+                end
+                unique!(S[i])
+            end
+        end
         number_of_entities_source, T = epack
         has_diagonal = number_of_entities == number_of_entities_total && is_self
-        @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source"
+        @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source for $T"
         @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal)
     end
     if !self_entity_found

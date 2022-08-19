@@ -203,11 +203,12 @@ Allocate storage for a given model. The storage consists of all dynamic quantiti
 the simulation. The default implementation allocates properties, equations and linearized system.
 """
 function setup_storage!(storage, model::JutulModel; setup_linearized_system = true,
-                                                      state0 = setup_state(model),
-                                                      parameters = setup_parameters(model),
-                                                      tag = nothing,
-                                                      adjoint = false,
-                                                      kwarg...)
+                                                    setup_equations = true,
+                                                    state0 = setup_state(model),
+                                                    parameters = setup_parameters(model),
+                                                    tag = nothing,
+                                                    adjoint = false,
+                                                    kwarg...)
     @timeit "state" if !isnothing(state0)
         storage[:parameters] = parameters
         state0 = merge(state0, parameters)
@@ -222,7 +223,9 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
         storage[:primary_variables] = reference_primary_variables(storage, model) 
     end
     @timeit "model" setup_storage_model(storage, model)
-    @timeit "equations" storage[:equations] = setup_storage_equations(storage, model; tag = tag, kwarg...) 
+    @timeit "equations" if setup_equations
+        storage[:equations] = setup_storage_equations(storage, model; tag = tag, kwarg...) 
+    end
     @timeit "linear system" if setup_linearized_system
         storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
         # We have the equations and the linearized system.
@@ -266,7 +269,7 @@ function setup_storage_equations(storage, model::JutulModel; kwarg...)
     return eqs
 end
 
-function setup_storage_equations!(eqs, storage, model::JutulModel; tag = nothing, kwarg...)
+function setup_storage_equations!(eqs, storage, model::JutulModel; extra_sparsity = nothing, tag = nothing, kwarg...)
     outstr = "Setting up $(length(model.equations)) groups of governing equations...\n"
     if !isnothing(tag)
         outstr = "$tag: "*outstr
@@ -277,8 +280,13 @@ function setup_storage_equations!(eqs, storage, model::JutulModel; tag = nothing
         num = number_of_equations_per_entity(model, eq)
         ne = number_of_entities(model, eq)
         n = num*ne
-        # outstr *= "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_entity(e)) for $n equations in total.\n"
-        eqs[sym] = setup_equation_storage(model, eq, storage; tag = tag, kwarg...)
+        # If we were provided with extra sparsity for this equation, pass that on.
+        if !isnothing(extra_sparsity) && haskey(extra_sparsity, sym)
+            extra = extra_sparsity[sym]
+        else
+            extra = nothing
+        end
+        eqs[sym] = setup_equation_storage(model, eq, storage; tag = tag, extra_sparsity = extra, kwarg...)
         counter += 1
         num_equations_total += n
     end

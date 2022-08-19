@@ -442,6 +442,61 @@ function cross_term_source(model, storage, source, include_symmetry = false)
     return cross_term_mapper(model, storage, f)
 end
 
+function extra_cross_term_sparsity(model, storage, target, include_symmetry = true)
+    # Get sparsity of cross terms so that they can be included in any generic equations
+    function collect_indices(c::GenericAutoDiffCache, impact, N)
+        entities = [Vector{Int64}() for i in 1:N]
+        n = length(c.vpos)-1
+        for i = 1:n
+            I = impact[i]
+            entities[I] = c.variables[vrange(c, i)]
+        end
+        return entities
+    end
+    ct_pairs, ct_storage = cross_term_target(model, storage, target, include_symmetry)
+    sparsity = Dict{Symbol, Any}()
+    for (ct_p, ct_s) in zip(ct_pairs, ct_storage)
+        # Loop over all cross terms that impact target and grab the global sparsity
+        # so that this can be added when doing sparsity detection for the model itself.
+        is_target = ct_p.target == target
+        if is_target
+            caches = ct_s.target
+            impact = ct_s.target_entities
+        else
+            caches = ct_s.source
+            impact = ct_s.source_entities
+            @assert has_symmetry(ct_p.cross_term)
+        end
+        eq = ct_p.equation
+        if !haskey(sparsity, eq)
+            sparsity[eq] = Dict{Symbol, Any}()
+        end
+        eq_d = sparsity[eq]
+        model_t = model[target]
+        equation_t = model_t.equations[eq]
+        N = number_of_entities(model_t, equation_t)
+        for (k, v) in pairs(caches)
+            if k == :numeric
+                continue
+            end
+            ind_for_k = collect_indices(v, impact, N)
+            # Merge with existing if found, otherwise just set it
+            if haskey(eq_d, k)
+                old = eq_d[k]
+                for i in 1:N
+                    for l in ind_for_k[i]
+                        push!(old[i], l)
+                    end
+                    unique!(old[i])
+                end
+            else
+                eq_d[k] = ind_for_k
+            end
+        end
+    end
+    return sparsity
+end
+
 function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model), sources = targets)
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
         (; cross_term, target, source) = ctp

@@ -81,14 +81,20 @@ end
 function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model), adjoint = false)
     storage = JutulStorage()
     for key in submodels_symbols(model)
-        m = model.models[key]
+        m = model[key]
         storage[key] = setup_storage(m, state0 = state0[key],
                                         parameters = parameters[key],
                                         setup_linearized_system = false,
+                                        setup_equations = false,
                                         adjoint = adjoint,
                                         tag = key)
     end
     setup_cross_terms_storage!(storage, model)
+    for key in submodels_symbols(model)
+        m = model[key]
+        ct_i = extra_cross_term_sparsity(model, storage, key, true)
+        storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = key)
+    end
     setup_linearized_system!(storage, model)
     align_equations_to_linearized_system!(storage, model)
     align_cross_terms_to_linearized_system!(storage, model)
