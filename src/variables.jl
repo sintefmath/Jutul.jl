@@ -188,11 +188,12 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
         if isa(val, Real)
             val = repeat([val], nv, nu)
         end
+        err_str = "Passed value for $(typeof(pvar))"
         nm = length(val)
-        @assert nm == nv*nu "Passed value had $nm entries, expected $(nu*nv)"
+        @assert nm == nv*nu "err_str had $nm entries, expected $(nu*nv)"
         n, m, = size(val)
-        @assert n == nv "Passed value had $n rows, expected $nv"
-        @assert m == nu "Passed value had $m rows, expected $nu"
+        @assert n == nv "err_str had $n rows, expected $nv"
+        @assert m == nu "err_str had $m rows, expected $nu"
     end
     if perform_copy
         val = deepcopy(val)
@@ -323,7 +324,7 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
     w = 1.0
     # First pass: Find the relaxation factors that keep all fractions in [0, 1]
     # and obeying the maximum change targets
-    dlast0 = 0
+    dlast0 = 0.0
     @inbounds for i = 1:(nf-1)
         v = value(s[i, full_cell])
         dv0 = dx[active_ix + (i-1)*nu]
