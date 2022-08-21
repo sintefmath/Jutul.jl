@@ -47,6 +47,8 @@ Base.size(A::LocalPerspectiveAD) = size(A.data)
 Base.axes(A::LocalPerspectiveAD) = axes(A.data)
 parenttype(::Type{LocalPerspectiveAD{T,N,A,I}}) where {T,N,A,I} = A
 
+Base.haskey(state::LocalStateAD, f::Symbol) = haskey(getfield(state, :data), f)
+
 function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
     # Match in type - pass index on
     myfn(x::AbstractArray{T}, ::Type{T}, index) where T = local_ad(x, index)
@@ -71,10 +73,15 @@ function Base.getproperty(state::ValueStateAD{T}, f::Symbol) where {T}
     return as_value(val)
 end
 
-function local_ad(x::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
-    return LocalStateAD{T, I, ad_tag}(index, x)
+"""
+    local_ad(state::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
+
+Create local_ad for state for index I of AD tag of type ad_tag
+"""
+function local_ad(state::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
+    return LocalStateAD{T, I, ad_tag}(index, state)
 end
 
 function Base.show(io::IO, t::MIME"text/plain", x::LocalStateAD{T, I, E}) where {T, I, E}
-    print(io, "Local state for $E -> $I with fields $(keys(getfield(x, :data)))")
+    print(io, "Local state for $(unpack_tag(E)) -> $(getfield(x, :index)) with fields $(keys(getfield(x, :data)))")
 end
