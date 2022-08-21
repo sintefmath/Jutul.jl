@@ -417,14 +417,42 @@ end
 
 function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt)
     fd = law.flow_discretization
-    update_half_face_flux!(eq_s, law, storage, model, dt, fd)
+    state = storage.state
+    update_half_face_flux!(eq_s, law, state, model, dt, fd)
 end
 
-function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt, flow_type)
-    state = storage.state
-    param = storage.parameters
-    flux = get_entries(eq_s.half_face_flux_cells)
-    update_half_face_flux!(flux, state, model, param, dt, flow_type)
+function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, state, model, dt, flow_disc)
+    flux_c = get_entries(eq_s.half_face_flux_cells)
+
+    N = size(flux_c, 1)
+    flux_static = reinterpret(SVector{N, eltype(flux_c)}, flux_c)
+    update_half_face_flux_tpfa!(flux_static, law, state, model, dt, flow_disc, Cells())
+
+    hf_face = eq_s.half_face_flux_faces
+    if !isnothing(hf_face)
+        flux_v = get_entries(hf_face)
+        error("Not implemented")
+    end
+end
+
+function update_half_face_flux_tpfa!(hf_cells::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Cells) where {T, N}
+    nc = number_of_cells(model.domain)
+    conn_data = flow_disc.conn_data
+    conn_pos = flow_disc.conn_pos
+    nf = length(conn_data)
+    @assert nf == length(hf_cells)
+    for c in 1:nc
+        state_c = local_ad(state, c, T)
+        for i in conn_pos[c]:(conn_pos[c+1]-1)
+            cd = conn_data[i]
+            v = compute_tpfa_flux(c, eq, state_c, model, dt, cd, flow_disc, T)
+            hf_cells[i] = -v
+        end
+    end
+end
+
+function compute_tpfa_flux
+
 end
 
 function reset_sources!(eq_s::ConservationLawTPFAStorage)

@@ -12,12 +12,18 @@ abstract type UpwindDiscretization <: JutulDiscretization end
 """
 Two-point flux approximation.
 """
-struct TPFA <: KGradDiscretization end
+struct TPFA{T} <: KGradDiscretization
+    left::T
+    right::T
+end
 
 """
 Single-point upwinding.
 """
-struct SPU <: UpwindDiscretization end
+struct SPU{T} <: UpwindDiscretization
+    left::T
+    right::T
+end
 
 "Discretization of kgradp + upwind"
 abstract type FlowDiscretization <: JutulDiscretization end
