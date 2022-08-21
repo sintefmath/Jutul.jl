@@ -431,7 +431,8 @@ function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::Conservat
     hf_face = eq_s.half_face_flux_faces
     if !isnothing(hf_face)
         flux_v = get_entries(hf_face)
-        error("Not implemented")
+        face_flux_static = reinterpret(SVector{N, eltype(flux_v)}, flux_v)
+        update_half_face_flux_tpfa!(face_flux_static, law, state, model, dt, flow_disc, Faces())
     end
 end
 
@@ -445,11 +446,24 @@ function update_half_face_flux_tpfa!(hf_cells::AbstractArray{SVector{N, T}}, eq,
         state_c = local_ad(state, c, T)
         for i in conn_pos[c]:(conn_pos[c+1]-1)
             cd = conn_data[i]
-            v = compute_tpfa_flux(c, eq, state_c, model, dt, cd, flow_disc, T)
-            hf_cells[i] = -v
+            (; other, face) = cd
+            v = compute_tpfa_flux(c, other, face, eq, state_c, model, dt, flow_disc, T)
+            hf_cells[i] = v
         end
     end
 end
+
+function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Faces) where {T, N}
+    nf = number_of_faces(model.domain)
+    neighbors = get_neighborship(model.domain.grid)
+    for f in 1:nf
+        state_f = local_ad(state, f, T)
+        left = neighbors[1, f]
+        right = neighbors[2, f]
+        hf_faces[f] = compute_tpfa_flux(left, right, f, eq, state_f, model, dt, flow_disc, T)
+    end
+end
+
 
 function compute_tpfa_flux
 
