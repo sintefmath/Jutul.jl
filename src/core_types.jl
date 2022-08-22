@@ -349,9 +349,9 @@ struct ConstantVariables <: GroupedVariables
             # by a single representative entity
             single_entity = isa(constants, AbstractVector)
         end
-        if isa(constants, CuArray) && single_entity
-            @warn "Single entity constants have led to crashes on CUDA/Tullio kernels!" maxlog = 5
-        end
+        # if isa(constants, CuArray) && single_entity
+        #    @warn "Single entity constants have led to crashes on CUDA/Tullio kernels!" maxlog = 5
+        # end
         new(constants, entity, single_entity)
     end
 end

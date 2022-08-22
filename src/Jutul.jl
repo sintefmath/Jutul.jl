@@ -22,7 +22,7 @@ module Jutul
     # Gotta go fast
     using Tullio
     using LoopVectorization
-    using CUDA, CUDAKernels
+    # using CUDA, CUDAKernels
     using KernelAbstractions
     using Polyester
     # Linear solvers and preconditioners

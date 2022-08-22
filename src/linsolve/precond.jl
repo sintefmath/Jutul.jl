@@ -389,12 +389,12 @@ function update!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, cont
     end
 end
 
-function update!(ilu::ILUZeroPreconditioner, A::CuSparseMatrix, b::CuArray, context)
-    if isnothing(ilu.factor)
-        set_dim!(ilu, A, b)
-    end
-    ilu.factor = ilu02(A, 'O')
-end
+# function update!(ilu::ILUZeroPreconditioner, A::CuSparseMatrix, b::CuArray, context)
+#     if isnothing(ilu.factor)
+#         set_dim!(ilu, A, b)
+#     end
+#     ilu.factor = ilu02(A, 'O')
+# end
 
 function apply!(x, ilu::ILUZeroPreconditioner, y, arg...)
     factor = get_factorization(ilu)
@@ -432,12 +432,12 @@ function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}, 
     f!(x, f, y)
 end
 
-function ilu_apply!(x::AbstractArray{F}, f::CuSparseMatrix{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
-    x .= y
-    ix = 'O'
-    sv2!('N', 'L', 'N', 1.0, f, x, ix)
-    sv2!('N', 'U', 'U', 1.0, f, x, ix)
-end
+# function ilu_apply!(x::AbstractArray{F}, f::CuSparseMatrix{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
+#     x .= y
+#     ix = 'O'
+#     sv2!('N', 'L', 'N', 1.0, f, x, ix)
+#     sv2!('N', 'U', 'U', 1.0, f, x, ix)
+# end
 
 function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)
     T = eltype(ilu.l_nzval)

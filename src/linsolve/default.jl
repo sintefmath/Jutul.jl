@@ -2,7 +2,7 @@ export LinearizedSystem, MultiLinearizedSystem, solve!, AMGSolver, CuSparseSolve
 
 using SparseArrays, LinearOperators, StaticArrays
 using IterativeSolvers, Krylov, AlgebraicMultigrid
-using CUDA, CUDA.CUSPARSE
+# using CUDA, CUDA.CUSPARSE
 
 mutable struct FactorStore
     factor

@@ -20,21 +20,21 @@ function transfer(context::JutulContext, v::AbstractArray)
     return Array(v)
 end
 
-function transfer(context::SingleCUDAContext, v::AbstractArray)
-    return CuArray(v)
-end
+# function transfer(context::SingleCUDAContext, v::AbstractArray)
+#     return CuArray(v)
+# end
 
-function transfer(context::SingleCUDAContext, v::AbstractArray{I}) where {I<:Integer}
-    return CuArray{context.index_t}(v)
-end
+# function transfer(context::SingleCUDAContext, v::AbstractArray{I}) where {I<:Integer}
+#     return CuArray{context.index_t}(v)
+# end
 
-function transfer(context::SingleCUDAContext, v::AbstractArray{F}) where {F<:AbstractFloat}
-    return CuArray{context.float_t}(v)
-end
+# function transfer(context::SingleCUDAContext, v::AbstractArray{F}) where {F<:AbstractFloat}
+#     return CuArray{context.float_t}(v)
+# end
 
-function transfer(context::SingleCUDAContext, v::SparseMatrixCSC)
-    return CUDA.CUSPARSE.CuSparseMatrixCSC(v)
-end
+# function transfer(context::SingleCUDAContext, v::SparseMatrixCSC)
+#     return CUDA.CUSPARSE.CuSparseMatrixCSC(v)
+# end
 
 function transfer(context, t::NamedTuple)
     k = keys(t)

@@ -488,5 +488,5 @@ end
     end
 end
 
-is_cuda_eq(eq::ConservationLawTPFAStorage) = isa(eq.accumulation.entries, CuArray)
+# is_cuda_eq(eq::ConservationLawTPFAStorage) = isa(eq.accumulation.entries, CuArray)
 use_sparse_sources(eq) = false#!is_cuda_eq(eq)
