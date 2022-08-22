@@ -441,15 +441,18 @@ function update_half_face_flux_tpfa!(hf_cells::AbstractArray{SVector{N, T}}, eq,
     conn_data = flow_disc.conn_data
     conn_pos = flow_disc.conn_pos
     nf = length(conn_data)
-    @assert nf == length(hf_cells)
-    for c in 1:nc
+    # @assert nf == length(hf_cells)
+    function update_cell!(c)
         state_c = local_ad(state, c, T)
-        for i in conn_pos[c]:(conn_pos[c+1]-1)
-            cd = conn_data[i]
+        @inbounds for i in conn_pos[c]:(conn_pos[c+1]-1)
+            @inbounds cd = conn_data[i]
             (; other, face) = cd
             v = compute_tpfa_flux(c, other, face, eq, state_c, model, dt, flow_disc, T)
-            hf_cells[i] = v
+            @inbounds hf_cells[i] = v
         end
+    end
+    for c in 1:nc
+        update_cell!(c)
     end
 end
 
@@ -458,9 +461,9 @@ function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq,
     neighbors = get_neighborship(model.domain.grid)
     for f in 1:nf
         state_f = local_ad(state, f, T)
-        left = neighbors[1, f]
-        right = neighbors[2, f]
-        hf_faces[f] = compute_tpfa_flux(left, right, f, eq, state_f, model, dt, flow_disc, T)
+        @inbounds left = neighbors[1, f]
+        @inbounds right = neighbors[2, f]
+        @inbounds hf_faces[f] = compute_tpfa_flux(left, right, f, eq, state_f, model, dt, flow_disc, T)
     end
 end
 
