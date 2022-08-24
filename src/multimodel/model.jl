@@ -375,6 +375,8 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
     @timeit "crossterm update" update_cross_terms!(storage, model, dt)
     # Apply forces
     @timeit "forces" apply_forces!(storage, model, dt, forces; time = time)
+    # Boundary conditions
+    @timeit "boundary conditions" apply_boundary_conditions!(storage, model)
     # Apply forces to cross-terms
     @timeit "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time)
 end
