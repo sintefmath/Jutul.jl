@@ -62,7 +62,7 @@ end
 # Constants
 @inline next_level_local_ad(x::ConstantWrapper, t, index) = x
 # Nested states
-@inline next_level_local_ad(x::NamedTuple, t, index) = local_ad(x, index, E)
+@inline next_level_local_ad(x::NamedTuple, E, index) = local_ad(x, index, E)
 
 @inline function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
     index = getfield(state, :index)
