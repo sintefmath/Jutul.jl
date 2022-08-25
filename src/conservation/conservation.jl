@@ -428,6 +428,8 @@ function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::Conservat
     flux_static = reinterpret(SVector{N, eltype(flux_c)}, flux_c)
     update_half_face_flux_tpfa!(flux_static, law, state, model, dt, flow_disc, Cells())
 
+    # @info "Done" flux_c'
+    # error()
     hf_face = eq_s.half_face_flux_faces
     if !isnothing(hf_face)
         flux_v = get_entries(hf_face)
@@ -446,8 +448,8 @@ function update_half_face_flux_tpfa!(hf_cells::AbstractArray{SVector{N, T}}, eq,
         state_c = local_ad(state, c, T)
         @inbounds for i in conn_pos[c]:(conn_pos[c+1]-1)
             @inbounds cd = conn_data[i]
-            (; other, face) = cd
-            @inbounds hf_cells[i] = compute_tpfa_flux!(hf_cells[i], c, other, face, eq, state_c, model, dt, flow_disc)
+            (; other, face, face_sign) = cd
+            @inbounds hf_cells[i] = compute_tpfa_flux!(hf_cells[i], c, other, face, face_sign, eq, state_c, model, dt, flow_disc)
         end
     end
     for c in 1:nc

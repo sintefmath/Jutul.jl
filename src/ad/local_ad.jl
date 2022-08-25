@@ -31,43 +31,49 @@ local_ad(v, i) = v
 @inline local_entity(a::LocalPerspectiveAD) = a.index
 
 @inline function value_or_ad(A::LocalPerspectiveAD{T}, v::T, entity) where T
-    if entity == local_entity(A)
+    if entity === local_entity(A)
         return v
     else
         return T(value(v))
     end
 end
 
-@propagate_inbounds Base.getindex(A::LocalPerspectiveAD{T}, i::Int) where T = value_or_ad(A, A.data[i], i)
-@propagate_inbounds Base.getindex(A::LocalPerspectiveAD{T}, i::Int, j::Int) where T = value_or_ad(A, A.data[i, j], j)
+@inline @propagate_inbounds function Base.getindex(A::LocalPerspectiveAD{T}, i::Int) where T
+    d = A.data[i]
+    return value_or_ad(A, d, i)
+end
+
+@inline @propagate_inbounds function Base.getindex(A::LocalPerspectiveAD{T}, i::Int, j::Int) where T
+    d = A.data[i, j]
+    return value_or_ad(A, d, j)
+end
+
+@inline Base.parent(A::LocalPerspectiveAD) = A.data
+@inline Base.size(A::LocalPerspectiveAD) = size(A.data)
+@inline Base.axes(A::LocalPerspectiveAD) = axes(A.data)
+@inline parenttype(::Type{LocalPerspectiveAD{T,N,A,I}}) where {T,N,A,I} = A
+@inline Base.haskey(state::LocalStateAD, f::Symbol) = haskey(getfield(state, :data), f)
 
 
-Base.parent(A::LocalPerspectiveAD) = A.data
-Base.size(A::LocalPerspectiveAD) = size(A.data)
-Base.axes(A::LocalPerspectiveAD) = axes(A.data)
-parenttype(::Type{LocalPerspectiveAD{T,N,A,I}}) where {T,N,A,I} = A
+# Match in type - pass index on
+@inline next_level_local_ad(x::AbstractArray{T}, ::Type{T}, index) where T = local_ad(x, index)
+# Mismatch in AD type - take value
+@inline next_level_local_ad(x, t, index) = as_value(x)
+# Constants
+@inline next_level_local_ad(x::ConstantWrapper, t, index) = x
+# Nested states
+@inline next_level_local_ad(x::NamedTuple, t, index) = local_ad(x, index, E)
 
-Base.haskey(state::LocalStateAD, f::Symbol) = haskey(getfield(state, :data), f)
-
-function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
-    # Match in type - pass index on
-    myfn(x::AbstractArray{T}, ::Type{T}, index) where T = local_ad(x, index)
-    # Mismatch in AD type - take value
-    myfn(x, t, index) = as_value(x)
-    # Constants
-    myfn(x::ConstantWrapper, t, index) = x
-    # Nested states
-    myfn(x::NamedTuple, t, index) = local_ad(x, index, E)
-
+@inline function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
     index = getfield(state, :index)
     inner_state = getfield(state, :data)
     val = getproperty(inner_state, f)
-    return myfn(val, E, index)
+    return next_level_local_ad(val, E, index)
 end
 
-Base.getindex(state::LocalStateAD, s::Symbol) = Base.getproperty(state, s)
+@inline Base.getindex(state::LocalStateAD, s::Symbol) = Base.getproperty(state, s)
 
-function Base.getproperty(state::ValueStateAD{T}, f::Symbol) where {T}
+@inline function Base.getproperty(state::ValueStateAD{T}, f::Symbol) where {T}
     inner_state = getfield(state, :data)
     val = getproperty(inner_state, f)
     return as_value(val)
@@ -78,7 +84,7 @@ end
 
 Create local_ad for state for index I of AD tag of type ad_tag
 """
-function local_ad(state::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
+@inline function local_ad(state::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
     return LocalStateAD{T, I, ad_tag}(index, state)
 end
 

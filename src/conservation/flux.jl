@@ -15,6 +15,7 @@ Two-point flux approximation.
 struct TPFA{T} <: KGradDiscretization
     left::T
     right::T
+    face_sign::T
 end
 
 """
