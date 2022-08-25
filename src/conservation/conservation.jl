@@ -190,51 +190,51 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw, 
     end
 end
 
-function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context::SingleCUDAContext)
-    nc, ne, np = ad_dims(acc)
-    dims = (nc, ne, np)
-    CUDA.synchronize()
-    # kdims = dims .+ (0, 0, 1)
+# function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context::SingleCUDAContext)
+#     nc, ne, np = ad_dims(acc)
+#     dims = (nc, ne, np)
+#     CUDA.synchronize()
+#     # kdims = dims .+ (0, 0, 1)
 
-    centries = acc.entries
-    fentries = cell_flux.entries
-    cp = acc.jacobian_positions
-    fp = cell_flux.jacobian_positions
+#     centries = acc.entries
+#     fentries = cell_flux.entries
+#     cp = acc.jacobian_positions
+#     fp = cell_flux.jacobian_positions
 
-    @kernel function cu_fill(nz, @Const(r), @Const(conn_pos), @Const(centries), @Const(fentries), cp, fp, np)
-        cell, e, d = @index(Global, NTuple)
-        # diag_entry = get_entry(acc, cell, e, centries)
-        diag_entry = centries[e, cell].partials[d]
-        @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-            # q = get_entry(cell_flux, i, e, fentries)
-            @inbounds q = fentries[e, i].partials[d]
-            fpos = get_jacobian_pos(np, i, e, d, fp)
-            @inbounds nz[fpos] = q
-            diag_entry -= q
-        end
+#     @kernel function cu_fill(nz, @Const(r), @Const(conn_pos), @Const(centries), @Const(fentries), cp, fp, np)
+#         cell, e, d = @index(Global, NTuple)
+#         # diag_entry = get_entry(acc, cell, e, centries)
+#         diag_entry = centries[e, cell].partials[d]
+#         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+#             # q = get_entry(cell_flux, i, e, fentries)
+#             @inbounds q = fentries[e, i].partials[d]
+#             fpos = get_jacobian_pos(np, i, e, d, fp)
+#             @inbounds nz[fpos] = q
+#             diag_entry -= q
+#         end
     
-        apos = get_jacobian_pos(np, cell, e, d, cp)
-        @inbounds nz[apos] = diag_entry
-    end
-    kernel = cu_fill(context.device, context.block_size)
-    event_jac = kernel(nz, r, conn_pos, centries, fentries, cp, fp, np, ndrange = dims)
+#         apos = get_jacobian_pos(np, cell, e, d, cp)
+#         @inbounds nz[apos] = diag_entry
+#     end
+#     kernel = cu_fill(context.device, context.block_size)
+#     event_jac = kernel(nz, r, conn_pos, centries, fentries, cp, fp, np, ndrange = dims)
 
-    @kernel function cu_fill_r(r, @Const(conn_pos), @Const(centries), @Const(fentries))
-        cell, e = @index(Global, NTuple)
+#     @kernel function cu_fill_r(r, @Const(conn_pos), @Const(centries), @Const(fentries))
+#         cell, e = @index(Global, NTuple)
 
-        @inbounds diag_entry = centries[e, cell].value
-        @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-            @inbounds diag_entry -= fentries[e, i].value
-        end
-        @inbounds r[e, cell] = diag_entry
-    end
-    rdims = (nc, ne)
-    kernel_r = cu_fill_r(context.device, context.block_size)
-    event_r = kernel_r(r, conn_pos, centries, fentries, ndrange = rdims)
-    wait(event_r)
-    wait(event_jac)
-    CUDA.synchronize()
-end
+#         @inbounds diag_entry = centries[e, cell].value
+#         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+#             @inbounds diag_entry -= fentries[e, i].value
+#         end
+#         @inbounds r[e, cell] = diag_entry
+#     end
+#     rdims = (nc, ne)
+#     kernel_r = cu_fill_r(context.device, context.block_size)
+#     event_r = kernel_r(r, conn_pos, centries, fentries, ndrange = rdims)
+#     wait(event_r)
+#     wait(event_jac)
+#     CUDA.synchronize()
+# end
 
 function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context)
     cp = acc.jacobian_positions
@@ -317,15 +317,15 @@ function update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fent
     tb = minbatch(context)
     @batch minbatch=tb for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-            for e in 1:ne
+            @inbounds for e in 1:ne
                 c = conn_data[i]
                 face = c.face
                 sgn = c.face_sign
                 f = sgn*get_entry(face_flux, face, e)
-                for d = 1:np
+                @inbounds for d = 1:np
                     df_di = f.partials[d]
                     fpos = get_jacobian_pos(face_flux, i, e, d, fp)
-                    @inbounds Jz[fpos] = df_di
+                    @inbounds Jz[fpos] = -df_di
                 end
             end
         end
