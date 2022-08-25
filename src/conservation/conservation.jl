@@ -443,13 +443,17 @@ function update_half_face_flux_tpfa!(hf_cells::AbstractArray{SVector{N, T}}, eq,
     tb = minbatch(model.context)
     @timeit "flux (cells)" @batch minbatch = tb for c in 1:nc
         state_c = local_ad(state, c, T)
-        @inbounds for i in conn_pos[c]:(conn_pos[c+1]-1)
-            @inbounds cd = conn_data[i]
-            other = cd.other
-            face = cd.face
-            face_sign = cd.face_sign
-            @inbounds hf_cells[i] = compute_tpfa_flux!(hf_cells[i], c, other, face, face_sign, eq, state_c, model, dt, flow_disc)
-        end
+        update_half_face_flux_tpfa_internal!(hf_cells, eq, state_c, model, dt, T, flow_disc, conn_pos, conn_data, c)
+    end
+end
+
+function update_half_face_flux_tpfa_internal!(hf_cells, eq, state, model, dt, T, flow_disc, conn_pos, conn_data, c)
+    @inbounds for i in conn_pos[c]:(conn_pos[c+1]-1)
+        @inbounds cd = conn_data[i]
+        other = cd.other
+        face = cd.face
+        face_sign = cd.face_sign
+        @inbounds hf_cells[i] = compute_tpfa_flux!(hf_cells[i], c, other, face, face_sign, eq, state, model, dt, flow_disc)
     end
 end
 
