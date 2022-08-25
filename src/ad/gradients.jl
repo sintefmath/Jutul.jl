@@ -207,24 +207,52 @@ function adjoint_model_copy(model::SimulationModel{O, S, C, F}) where {O, S, C, 
     return SimulationModel{O, S, C, F}(model.domain, model.system, new_context, model.formulation, pvar, svar, prm, eqs, outputs)
 end
 
-function solve_numerical_sensitivities(model, states, reports, G, target; forces = setup_forces(model), state0 = setup_state(model), parameters = setup_parameters(model))
+function solve_numerical_sensitivities(model, states, reports, G, target;
+                                                forces = setup_forces(model),
+                                                state0 = setup_state(model),
+                                                parameters = setup_parameters(model),
+                                                epsilon = 1e-8)
     timesteps = report_timesteps(reports)
     N = length(states)
     @assert length(reports) == N == length(timesteps)
-
+    # Base objective
     base_obj = evaluate_objective(G, model, states, timesteps, forces)
-
-    grad_num = zeros(length(parameters[target]))
-    ϵ = 1e-8
+    # Define perturbation
+    param_var, param_num = get_parameter_pair(model, parameters, target)
+    grad_num = zeros(length(param_num))
+    scale = variable_scale(param_var)
+    if isnothing(scale)
+        ϵ = epsilon
+    else
+        ϵ = scale*epsilon
+    end
     for i in eachindex(grad_num)
         param_i = deepcopy(parameters)
-        param_i[target][i] += ϵ
+        perturb_parameter!(model, param_i, target, i, ϵ)
         sim_i = Simulator(model, state0 = copy(state0), parameters = param_i)
         states_i, reports = simulate!(sim_i, timesteps, info_level = -1, forces = forces)
         v = evaluate_objective(G, model, states_i, timesteps, forces)
         grad_num[i] = (v - base_obj)/ϵ
     end
     return grad_num
+end
+
+function get_parameter_pair(model::SimulationModel, parameters, target)
+    return (model.parameters[target], parameters[target])
+end
+
+function get_parameter_pair(model::MultiModel, parameters, target)
+    t_outer, t_inner = target
+    return get_parameter_pair(model[t_outer], parameters[t_outer], t_inner)
+end
+
+function perturb_parameter!(model, param_i, target, i, ϵ)
+    param_i[target][i] += ϵ
+end
+
+function perturb_parameter!(model::MultiModel, param_i, target, i, ϵ)
+    t_outer, t_inner = target
+    perturb_parameter!(model[t_outer], param_i[t_outer], t_inner, i, ϵ)
 end
 
 function evaluate_objective(G, model, states, timesteps, all_forces)
@@ -260,7 +288,13 @@ function store_sensitivities!(out, model, variables, result, ::EquationMajorLayo
             else
                 v = reshape(r, m, n ÷ m)
             end
-            out[k] = collect(v)
+            v = collect(v)
+            scale = variable_scale(var)
+            # Variable was scaled - account for this before returning
+            if !isnothing(scale)
+                v ./= scale
+            end
+            out[k] = v
         else
             out[k] = similar(result, 0)
         end
