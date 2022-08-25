@@ -22,11 +22,13 @@ function find_jac_position(A, target_entity_index, source_entity_index,
     equation_index, partial_index,
     nentities_target, nentities_source,
     eqs_per_entity, partials_per_entity, layout::JutulMatrixLayout)
-
+    # get row and column index in the specific layout we are looking at
     row, col = row_col_sparse(target_entity_index, source_entity_index,
     equation_index, partial_index,
     nentities_target, nentities_source,
     eqs_per_entity, partials_per_entity, layout)
+    # find_sparse_position then dispatches on the matrix type to find linear indices
+    # for whatever storage format A uses internally
     return find_sparse_position(A, row, col, layout)
 end
 
@@ -34,10 +36,6 @@ function find_jac_position(A, target_entity_index, source_entity_index,
     equation_index, partial_index,
     nentities_target, nentities_source,
     eqs_per_entity, partials_per_entity, layout::BlockMajorLayout)
-    row, col = row_col_sparse(target_entity_index, source_entity_index,
-    equation_index, partial_index,
-    nentities_target, nentities_source,
-    eqs_per_entity, partials_per_entity, EquationMajorLayout()) # Pass of eqn. major version since we are looking for "scalar" index
 
     row = target_entity_index
     col = source_entity_index
@@ -47,30 +45,28 @@ function find_jac_position(A, target_entity_index, source_entity_index,
 end
 
 function row_col_sparse(target_entity_index, source_entity_index, # Typically row and column - global index
-                              equation_index, partial_index,        # Index of equation and partial derivative - local index
-                              nentities_target, nentities_source,         # Row and column sizes for each sub-system
-                              eqs_per_entity, partials_per_entity,      # Sizes of the smallest inner system
-                              layout::EquationMajorLayout)
-    row = nentities_target*(equation_index-1) + target_entity_index
-    col = nentities_source*(partial_index-1) + source_entity_index
+    equation_index, partial_index,                                # Index of equation and partial derivative - local index
+    nentities_target, nentities_source,                           # Row and column sizes for each sub-system
+    eqs_per_entity, partials_per_entity,                          # Sizes of the smallest inner system
+    layout)
+    row = alignment_linear_index(target_entity_index, equation_index, nentities_target, eqs_per_entity, layout)
+    col = alignment_linear_index(source_entity_index, partial_index, nentities_source, partials_per_entity, layout)
     return (row, col)
 end
 
-function row_col_sparse(target_entity_index, source_entity_index, # Typically row and column - global index
-    equation_index, partial_index,        # Index of equation and partial derivative - local index
-    nentities_target, nentities_source,         # Row and column sizes for each sub-system
-    eqs_per_entity, partials_per_entity,      # Sizes of the smallest inner system
-    layout::UnitMajorLayout)
-    row = eqs_per_entity*(target_entity_index-1) + equation_index
-    col = partials_per_entity*(source_entity_index-1) + partial_index
-    return (row, col)
+function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::EquationMajorLayout)
+    return n_outer*(index_inner-1) + index_outer
+end
+
+function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::UnitMajorLayout)
+    return n_inner*(index_outer-1) + index_inner
 end
 
 function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMatrixLayout)
     adj = represented_as_adjoint(layout)
     pos = find_sparse_position(A, row, col, adj)
     if pos == 0
-        @error "Unable to map cache entry to Jacobian, not allocated in Jacobian matrix." A row col
+        @error "Unable to map cache entry to Jacobian, ($row,$col) not allocated in Jacobian matrix." A row col represented_as_adjoint(layout)
         error("Jacobian alignment failed. Giving up.")
     end
     return pos
@@ -132,18 +128,35 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     return create_equation_caches(model, n, N, storage, F!, nt; self_entity = e, kwarg...)
 end
 
-function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, number_of_entities_total::Integer = 0; self_entity = nothing, kwarg...)
+function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, number_of_entities_total::Integer = 0; self_entity = nothing, extra_sparsity = nothing, kwarg...)
     state = storage[:state]
     state0 = storage[:state0]
     entities = all_ad_entities(state, state0)
     caches = Dict()
+    self_entity_found = false
     # n = number_of_equations_per_entity(model, eq)
     for (e, epack) in entities
+        is_self = e == self_entity
+        self_entity_found = self_entity_found || is_self
         @timeit "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
+        if !isnothing(extra_sparsity)
+            # We have some extra sparsity, need to merge that in
+            S_e = extra_sparsity[Symbol(e)]
+            @assert length(S_e) == length(S)
+            for (i, s_extra) in enumerate(S_e)
+                for extra_ind in s_extra
+                    push!(S[i], extra_ind)
+                end
+                unique!(S[i])
+            end
+        end
         number_of_entities_source, T = epack
-        has_diagonal = number_of_entities == number_of_entities_total && e == self_entity
-        @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source"
+        has_diagonal = number_of_entities == number_of_entities_total && is_self
+        @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source for $T"
         @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal)
+    end
+    if !self_entity_found
+        caches[:numeric] = zeros(equations_per_entity, number_of_entities)
     end
     return convert_to_immutable_storage(caches)
 end
@@ -185,6 +198,14 @@ Get the total number of equations on the domain of model.
 """
 function number_of_equations(model, e::JutulEquation)
     return number_of_equations_per_entity(model, e)*number_of_entities(model, e)
+end
+
+function number_of_equations(model)
+    n = 0
+    for eq in values(model.equations)
+        n += number_of_equations(model, eq)
+    end
+    return n
 end
 
 """
@@ -328,7 +349,7 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; context = mode
     k = Symbol(entity)
     has_pos = !isnothing(positions)
     if has_pos
-        @assert keys(positions) == keys(eq_s)
+        # @assert keys(positions) == keys(eq_s)
     end
     if haskey(eq_s, k)
         cache = eq_s[k]
@@ -374,6 +395,9 @@ end
 
 function update_linearized_system_equation!(nz, r, model, equation::JutulEquation, caches)
     for k in keys(caches)
+        if k == :numeric
+            continue
+        end
         fill_equation_entries!(nz, r, model, caches[k])
     end
 end
@@ -385,6 +409,9 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
     state = storage.state
     state0 = storage.state0
     for k in keys(eq_s)
+        if k == :numeric
+            continue
+        end
         cache = eq_s[k]
         update_equation_for_entity!(cache, eq, state, state0, model, dt)
     end
@@ -432,8 +459,17 @@ end
 end
 
 @inline function get_diagonal_entries(eq::JutulEquation, eq_s)
-    cache = eq_s[Symbol(associated_entity(eq))]
-    return diagonal_view(cache)
+    k = Symbol(associated_entity(eq))
+    if haskey(eq_s, k)
+        cache = eq_s[k]
+        D = diagonal_view(cache)
+    elseif haskey(eq_s, :numeric)
+        D = eq_s[:numeric]
+    else
+        # Uh oh. Maybe adjoints?
+        D = nothing
+    end
+    return D
 end
 
 # @inline function get_diagonal_cache(eq::JutulEquation)

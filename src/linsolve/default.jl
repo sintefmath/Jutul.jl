@@ -2,7 +2,7 @@ export LinearizedSystem, MultiLinearizedSystem, solve!, AMGSolver, CuSparseSolve
 
 using SparseArrays, LinearOperators, StaticArrays
 using IterativeSolvers, Krylov, AlgebraicMultigrid
-using CUDA, CUDA.CUSPARSE
+# using CUDA, CUDA.CUSPARSE
 
 mutable struct FactorStore
     factor
@@ -97,10 +97,18 @@ LSystem = Union{LinearizedType, MultiLinearizedSystem}
 function LinearizedSystem(sparse_arg, context, layout; r = nothing, dx = nothing)
     jac, jac_buf, bz = build_jacobian(sparse_arg, context, layout)
     n, m = size(jac)
-    @assert n == m "Expected square system. Recieved $n (eqs) by $m (primary variables)."
-    dx, dx_buf = get_jacobian_vector(n, context, layout, dx, bz[1])
-    r, r_buf = get_jacobian_vector(n, context, layout, r, bz[1])
-
+    if n != m
+        @debug "Expected square system. Recieved $n (eqs) by $m (primary variables). Unless this is an adjoint system, something might be wrong."
+    end
+    if represented_as_adjoint(matrix_layout(context))
+        nrows = m
+        ncols = n
+    else
+        nrows = n
+        ncols = m
+    end
+    dx, dx_buf = get_jacobian_vector(ncols, context, layout, dx, bz[1])
+    r, r_buf = get_jacobian_vector(nrows, context, layout, r, bz[1])
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
 end
 

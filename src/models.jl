@@ -193,16 +193,7 @@ function initialize_storage!(storage, model::JutulModel; initialize_state0 = tru
         state0_eval = convert_to_immutable_storage(storage[:state0])
         # Evaluate everything (with doubles) to make sure that possible 
         update_secondary_variables_state!(state0_eval, model)
-        # Create a new state0 with the desired/required outputs and
-        # copy over those values before returning them back
-        state0 = Dict()
-        for key in model.output_variables
-            v = state0_eval[key]
-            if !isa(v, ConstantWrapper) && eltype(v)<:Real
-                state0[key] = v
-            end
-        end
-        storage[:state0] = state0
+        storage[:state0] = state0_eval
     end
     synchronize(model.context)
 end
@@ -212,21 +203,29 @@ Allocate storage for a given model. The storage consists of all dynamic quantiti
 the simulation. The default implementation allocates properties, equations and linearized system.
 """
 function setup_storage!(storage, model::JutulModel; setup_linearized_system = true,
-                                                      state0 = setup_state(model),
-                                                      parameters = setup_parameters(model),
-                                                      tag = nothing,
-                                                      kwarg...)
+                                                    setup_equations = true,
+                                                    state0 = setup_state(model),
+                                                    parameters = setup_parameters(model),
+                                                    tag = nothing,
+                                                    adjoint = false,
+                                                    kwarg...)
     @timeit "state" if !isnothing(state0)
         storage[:parameters] = parameters
-        for k in keys(parameters)
-            state0[k] = parameters[k]
+        state0 = merge(state0, parameters)
+        if adjoint
+            state = copy(state0)
+            state0 = convert_state_ad(model, state0, tag)
+        else
+            state = convert_state_ad(model, state0, tag)
         end
         storage[:state0] = state0
-        storage[:state] = convert_state_ad(model, state0, tag)
+        storage[:state] = state
         storage[:primary_variables] = reference_primary_variables(storage, model) 
     end
     @timeit "model" setup_storage_model(storage, model)
-    @timeit "equations" storage[:equations] = setup_storage_equations(storage, model; tag = tag, kwarg...) 
+    @timeit "equations" if setup_equations
+        storage[:equations] = setup_storage_equations(storage, model; tag = tag, kwarg...) 
+    end
     @timeit "linear system" if setup_linearized_system
         storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
         # We have the equations and the linearized system.
@@ -270,7 +269,7 @@ function setup_storage_equations(storage, model::JutulModel; kwarg...)
     return eqs
 end
 
-function setup_storage_equations!(eqs, storage, model::JutulModel; tag = nothing, kwarg...)
+function setup_storage_equations!(eqs, storage, model::JutulModel; extra_sparsity = nothing, tag = nothing, kwarg...)
     outstr = "Setting up $(length(model.equations)) groups of governing equations...\n"
     if !isnothing(tag)
         outstr = "$tag: "*outstr
@@ -281,8 +280,13 @@ function setup_storage_equations!(eqs, storage, model::JutulModel; tag = nothing
         num = number_of_equations_per_entity(model, eq)
         ne = number_of_entities(model, eq)
         n = num*ne
-        # outstr *= "Group $counter/$(length(model.equations)) $(String(sym)) as $proto:\n\t → $num equations on each of $ne $(associated_entity(e)) for $n equations in total.\n"
-        eqs[sym] = setup_equation_storage(model, eq, storage; tag = tag, kwarg...)
+        # If we were provided with extra sparsity for this equation, pass that on.
+        if !isnothing(extra_sparsity) && haskey(extra_sparsity, sym)
+            extra = extra_sparsity[sym]
+        else
+            extra = nothing
+        end
+        eqs[sym] = setup_equation_storage(model, eq, storage; tag = tag, extra_sparsity = extra, kwarg...)
         counter += 1
         num_equations_total += n
     end
@@ -298,7 +302,6 @@ end
 
 function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout, UnitMajorLayout})
     ndof = number_of_degrees_of_freedom(model)
-    @assert ndof > 0
     eq_storage = storage[:equations]
     I = []
     J = []
@@ -358,35 +361,6 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
     return SparsePattern(I, J, numrows, ndof, layout, block_size)
 end
 
-function get_sparse_arguments2(storage, model, layout::UnitMajorLayout)
-    ndof = number_of_degrees_of_freedom(model)
-    eqs = storage[:equations]
-    I = []
-    J = []
-    numrows = 0
-    numcols = 0
-    primary_entities = get_primary_variable_ordered_entities(model)
-
-    for (u_no, u) in enumerate(primary_entities)
-        npartials = degrees_of_freedom_per_entity(model, u)
-        nu = count_entities(model.domain, u)
-        for (eq_no, eq) in enumerate(values(eqs))
-            S = declare_sparsity(model, eq, u, layout)
-            row_ix = (S.I-1)*u_no + 1
-            col_ix = (S.J-1)*eq_no + 1
-            if !isnothing(S)
-                push!(I, row_ix .+ numrows)
-                push!(J, col_ix .+ numcols)
-            end
-        end
-        numrows += npartials*nu
-        numcols += npartials*nu
-    end
-    I = vcat(I...)
-    J = vcat(J...)
-    return SparsePattern(I, J, numrows, ndof, layout)
-end
-
 function setup_linearized_system!(storage, model::JutulModel)
     # Linearized system is going to have dimensions of
     # total number of equations x total number of primary variables
@@ -394,8 +368,11 @@ function setup_linearized_system!(storage, model::JutulModel)
         error("Unable to allocate linearized system - no equations found.")
     end
     # layout = matrix_layout(model.context)
-    sparg = get_sparse_arguments(storage, model)
-    lsys = setup_linearized_system(sparg, model)
+    sparse_pattern = get_sparse_arguments(storage, model)
+    if represented_as_adjoint(matrix_layout(model.context))
+        sparse_pattern = sparse_pattern'
+    end
+    lsys = setup_linearized_system(sparse_pattern, model)
     storage[:LinearizedSystem] = lsys
     # storage[:LinearizedSystem] = transfer(model.context, lsys)
     return lsys
@@ -675,8 +652,11 @@ end
 function update_after_step!(storage, model, dt, forces)
     state = storage.state
     state0 = storage.state0
-    for key in keys(state0)
-        @. state0[key] = value(state[key])
+    for key in model.output_variables
+        v = state[key]
+        if v isa AbstractArray && eltype(v)<:Real
+            @. state0[key] = value(state[key])
+        end
     end
 end
 
@@ -684,7 +664,7 @@ function get_output_state(storage, model)
     # As this point (after a converged step) state0 should be state without AD.
     s0 = storage.state0
     D = Dict{Symbol, Any}()
-    for k in keys(s0)
+    for k in model.output_variables
         D[k] = copy(s0[k])
     end
     return D
@@ -701,9 +681,9 @@ end
 reset_to_previous_state!(storage, model) = replace_values!(storage.primary_variables, storage.state0)
 
 function reset_previous_state!(storage, model, state0)
-    sim_state0 = storage.state0
-    for f in keys(sim_state0)
-        @assert haskey(state0, f)
-        sim_state0[f] .= state0[f]
-    end
+    replace_values!(storage.state0, state0)
+end
+
+function reset_primary_variables!(storage, model, state)
+    replace_values!(storage.state, state)
 end

@@ -28,8 +28,12 @@ end
 
 function diagonal_view(cache::GenericAutoDiffCache)
     dpos = cache.diagonal_positions
-    @assert !isnothing(dpos)
-    return view(cache.entries, :, dpos)
+    if isnothing(dpos)
+        v = nothing
+    else
+        v = view(cache.entries, :, dpos)
+    end
+    return v
 end
 
 function fill_equation_entries!(nz, r, model, cache::GenericAutoDiffCache)

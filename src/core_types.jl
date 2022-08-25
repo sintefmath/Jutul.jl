@@ -75,6 +75,14 @@ is_cell_major(::BlockMajorLayout) = true
 matrix_layout(::Nothing) = EquationMajorLayout(false)
 represented_as_adjoint(layout) = layout.as_adjoint
 
+function Base.adjoint(ctx::T) where T<: JutulContext
+    return T(matrix_layout = adjoint(ctx.matrix_layout))
+end
+
+function Base.adjoint(layout::T) where T <: JutulMatrixLayout
+    return T(true)
+end
+
 struct SparsePattern{L}
     I
     J
@@ -103,10 +111,19 @@ struct SparsePattern{L}
             I = Vector{T}()
             J = Vector{T}()
         end
-        @assert n > 0
-        @assert m > 0
+        if n == 0
+            @debug "Pattern has zero rows?" n m I J
+        end
+        if m == 0
+            @debug "Pattern has zero columns?" n m I J
+        end
         new{typeof(layout)}(I, J, n, m, block_n, block_m, layout)
     end
+end
+
+function Base.adjoint(p::SparsePattern)
+    # Note: We only permute the outer pattern, not the inner.
+    return SparsePattern(p.J, p.I, p.m, p.n, p.layout, p.block_n, p.block_m)
 end
 
 ijnm(p::SparsePattern) = (p.I, p.J, p.n, p.m)
@@ -192,43 +209,53 @@ struct SimulationModel{O<:JutulDomain,
     parameters::OrderedDict{Symbol, JutulVariables}
     equations::OrderedDict{Symbol, JutulEquation}
     output_variables::Vector{Symbol}
-    function SimulationModel(domain, system;
-                                            formulation = FullyImplicit(),
-                                            context = DefaultContext(),
-                                            output_level = :primary_variables
-                                            )
-        context = initialize_context!(context, domain, system, formulation)
-        domain = transfer(context, domain)
+end
 
-        T = OrderedDict{Symbol, JutulVariables}
-        primary = T()
-        secondary = T()
-        parameters = T()
-        equations = OrderedDict{Symbol, JutulEquation}()
-        outputs = Vector{Symbol}()
-        D = typeof(domain)
-        S = typeof(system)
-        F = typeof(formulation)
-        C = typeof(context)
-        model = new{D, S, F, C}(domain, system, context, formulation, primary, secondary, parameters, equations, outputs)
-        select_primary_variables!(model)
-        select_secondary_variables!(model)
-        select_parameters!(model)
-        select_equations!(model)
-        function check_prim(pvar)
-            a = map(associated_entity, values(pvar))
-            for u in unique(a)
-                ut = typeof(u)
-                deltas =  diff(findall(typeof.(a) .== ut))
-                if any(deltas .!= 1)
-                    error("All primary variables of the same type must come sequentially: Error ocurred for $ut:\nPrimary: $pvar\nTypes: $a")
-                end
+function SimulationModel(domain, system;
+                            formulation=FullyImplicit(),
+                            context=DefaultContext(),
+                            output_level=:primary_variables
+                        )
+    context = initialize_context!(context, domain, system, formulation)
+    domain = transfer(context, domain)
+
+    T = OrderedDict{Symbol,JutulVariables}
+    primary = T()
+    secondary = T()
+    parameters = T()
+    equations = OrderedDict{Symbol,JutulEquation}()
+    outputs = Vector{Symbol}()
+    D = typeof(domain)
+    S = typeof(system)
+    F = typeof(formulation)
+    C = typeof(context)
+    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, primary, secondary, parameters, equations, outputs)
+    select_primary_variables!(model)
+    select_secondary_variables!(model)
+    select_parameters!(model)
+    select_equations!(model)
+    function check_prim(pvar)
+        a = map(associated_entity, values(pvar))
+        for u in unique(a)
+            ut = typeof(u)
+            deltas = diff(findall(typeof.(a) .== ut))
+            if any(deltas .!= 1)
+                error("All primary variables of the same type must come sequentially: Error ocurred for $ut:\nPrimary: $pvar\nTypes: $a")
             end
         end
-        check_prim(primary)
-        select_output_variables!(model, output_level)
-        return model
     end
+    check_prim(primary)
+    select_output_variables!(model, output_level)
+    return model
+end
+
+function Base.copy(m::SimulationModel{O, S, C, F}) where {O, S, C, F}
+    pvar = copy(m.primary_variables)
+    svar = copy(m.secondary_variables)
+    outputs = copy(m.output_variables)
+    prm = copy(m.parameters)
+    eqs = m.equations
+    return SimulationModel{O, S, C, F}(m.domain, m.system, m.context, m.formulation, pvar, svar, prm, eqs, outputs)
 end
 
 function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
@@ -246,7 +273,8 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
                     nu = number_of_entities(model, pvar)
                     u = associated_entity(pvar)
                     if f == :secondary_variables
-                        print(io, "   $ctr $key ← $(typeof(pvar))) (")
+                        print_t = Base.typename(typeof(pvar)).wrapper
+                        print(io, "   $ctr) $key as $print_t (")
                     else
                         print(io, "   $ctr) $key (")
                     end
@@ -321,9 +349,9 @@ struct ConstantVariables <: GroupedVariables
             # by a single representative entity
             single_entity = isa(constants, AbstractVector)
         end
-        if isa(constants, CuArray) && single_entity
-            @warn "Single entity constants have led to crashes on CUDA/Tullio kernels!" maxlog = 5
-        end
+        # if isa(constants, CuArray) && single_entity
+        #    @warn "Single entity constants have led to crashes on CUDA/Tullio kernels!" maxlog = 5
+        # end
         new(constants, entity, single_entity)
     end
 end
@@ -533,7 +561,8 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
         if has_diagonal
             # Create indices into the self-diagonal part if requested, asserting that the diagonal is present
             m = length(sparsity)
-            diag_ix = zeros(I, m)    
+            diag_ix = zeros(I, m)
+            ok = true
             for i = 1:m
                 found = false
                 for j = pos[i]:(pos[i+1]-1)
@@ -542,7 +571,14 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
                         found = true
                     end
                 end
-                @assert found "Diagonal must be present in sparsity pattern. Entry $i/$m was missing the diagonal."
+                if !found
+                    ok = false
+                    @debug "Diagonal must be present in sparsity pattern. Entry $i/$m was missing the diagonal."
+                    break
+                end
+            end
+            if !ok
+                diag_ix = nothing
             end
         else
             diag_ix = nothing

@@ -22,7 +22,7 @@ module Jutul
     # Gotta go fast
     using Tullio
     using LoopVectorization
-    using CUDA, CUDAKernels
+    # using CUDA, CUDAKernels
     using KernelAbstractions
     using Polyester
     # Linear solvers and preconditioners
@@ -33,6 +33,7 @@ module Jutul
     using PrettyTables
     using Polynomials
     using JLD2
+
     import Metis
     # Nice progress bars
     using ProgressMeter
@@ -67,7 +68,7 @@ module Jutul
 
     include("conservation/conservation.jl")
     include("timesteps.jl")
-    include("simulator.jl")
+    include("simulator/simulator.jl")
 
     include("utils.jl")
     include("interpolation.jl")

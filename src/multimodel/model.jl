@@ -5,30 +5,35 @@ function Base.show(io::IO, t::MIME"text/plain", model::MultiModel)
     if get(io, :compact, false)
     else
     end
-    println(io, "MultiModel with $(length(submodels)) models and $(length(cross_terms)) cross-terms.")
+    ndof = number_of_degrees_of_freedom(model)
+    neq = number_of_equations(model)
+    println(io, "MultiModel with $(length(submodels)) models and $(length(cross_terms)) cross-terms. $neq equations and $ndof degrees of freedom.")
     println(io , "\n  models:")
     for (i, key) in enumerate(keys(submodels))
         m = submodels[key]
         s = m.system
+        ndofi = number_of_degrees_of_freedom(m)
+        neqi = number_of_equations(m)
+    
         if hasproperty(m.domain, :grid)
             g = m.domain.grid
         else
             g = typeof(m.domain)
         end
-        println(io, "    $i) $key\n       $(s) ∈ $g")
+        println(io, "    $i) $key ($(neqi)x$ndofi)\n       $(s)\n       ∈ $g")
 
     end
     if length(cross_terms) > 0
         println(io , "\n  cross_terms:")
         for (i, ct_s) in enumerate(cross_terms)
-            (; cross_term, target, source) = ct_s
+            (; cross_term, target, source, equation) = ct_s
             t = typeof(cross_term)
             if has_symmetry(cross_term)
                 arrow = "<->"
             else
                 arrow = " ->"
             end
-            println(io, "    $i) $source $arrow $target")
+            println(io, "    $i) $source $arrow $target (Eq: $equation)")
             println(io, "       $t")
         end
     end
@@ -73,16 +78,23 @@ function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
 end
 
-function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model))
+function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model), adjoint = false)
     storage = JutulStorage()
     for key in submodels_symbols(model)
-        m = model.models[key]
-        storage[key] = setup_storage(m,  state0 = state0[key],
-                                            parameters = parameters[key],
-                                            setup_linearized_system = false,
-                                            tag = key)
+        m = model[key]
+        storage[key] = setup_storage(m, state0 = state0[key],
+                                        parameters = parameters[key],
+                                        setup_linearized_system = false,
+                                        setup_equations = false,
+                                        adjoint = adjoint,
+                                        tag = key)
     end
     setup_cross_terms_storage!(storage, model)
+    for key in submodels_symbols(model)
+        m = model[key]
+        ct_i = extra_cross_term_sparsity(model, storage, key, true)
+        storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = key)
+    end
     setup_linearized_system!(storage, model)
     align_equations_to_linearized_system!(storage, model)
     align_cross_terms_to_linearized_system!(storage, model)
@@ -97,7 +109,8 @@ end
 function align_equations_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
     model_keys = submodel_symbols(model)
-    ndofs = model.number_of_degrees_of_freedom
+    neqs = map(number_of_equations, model.models)
+    ndofs = map(number_of_degrees_of_freedom, model.models)
     lsys = storage[:LinearizedSystem]
     if has_groups(model)
         ng = number_of_groups(model)
@@ -105,25 +118,23 @@ function align_equations_to_linearized_system!(storage, model::MultiModel; equat
         for g in 1:ng
             J = lsys[g, g].jac
             subs = groups .== g
-            align_equations_subgroup!(storage, models, model_keys[subs], ndofs, J, equation_offset, variable_offset)
+            align_equations_subgroup!(storage, models, model_keys[subs], (neqs, ndofs), J, equation_offset, variable_offset)
         end
     else
         J = lsys.jac
-        align_equations_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
+        align_equations_subgroup!(storage, models, model_keys, (neqs, ndofs), J, equation_offset, variable_offset)
     end
 end
 
-function align_equations_subgroup!(storage, models, model_keys, ndofs, J, equation_offset, variable_offset)
+function align_equations_subgroup!(storage, models, model_keys, dims, J, equation_offset, variable_offset)
+    neqs, nvars = dims
     for key in model_keys
         submodel = models[key]
         eqs_s = storage[key][:equations]
         eqs = submodel.equations
-        nrow_end = align_equations_to_jacobian!(eqs_s, eqs, J, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
-        nrow = nrow_end - equation_offset
-        ndof = ndofs[key]
-        @assert nrow == ndof "Submodels must have equal number of equations and degrees of freedom. Found $nrow equations and $ndof variables for submodel $key"
-        equation_offset += ndof
-        variable_offset += ndof # Assuming that each model by itself forms a well-posed, square Jacobian...
+        align_equations_to_jacobian!(eqs_s, eqs, J, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
+        equation_offset += neqs[key]
+        variable_offset += nvars[key]
     end
 end
 
@@ -286,7 +297,7 @@ function setup_linearized_system!(storage, model::MultiModel)
 
     candidates = [i for i in submodel_symbols(model)]
     if has_groups(model)
-        ndof = values(model.number_of_degrees_of_freedom)
+        ndof = values(map(number_of_degrees_of_freedom, models))
         n = sum(ndof)
         groups = model.groups
         ng = number_of_groups(model)
@@ -339,9 +350,12 @@ function setup_linearized_system!(storage, model::MultiModel)
                     ctx = row_context
                 end
                 layout = matrix_layout(ctx)
-                sparse_arg = get_sparse_arguments(storage, model, t, s, ctx)
+                sparse_pattern = get_sparse_arguments(storage, model, t, s, ctx)
+                if represented_as_adjoint(layout)
+                    sparse_pattern = sparse_pattern'
+                end
                 bz_pair = (block_sizes[rowg], block_sizes[colg])
-                subsystems[rowg, colg] = LinearizedBlock(sparse_arg, ctx, layout, row_layout, col_layout, bz_pair)
+                subsystems[rowg, colg] = LinearizedBlock(sparse_pattern, ctx, layout, row_layout, col_layout, bz_pair)
             end
             base_pos += local_size
         end
@@ -352,8 +366,11 @@ function setup_linearized_system!(storage, model::MultiModel)
             context = models[1].context
         end
         layout = matrix_layout(context)
-        sparse_arg = get_sparse_arguments(storage, model, candidates, candidates, context)
-        lsys = LinearizedSystem(sparse_arg, context, layout)
+        sparse_pattern = get_sparse_arguments(storage, model, candidates, candidates, context)
+        if represented_as_adjoint(matrix_layout(model.context))
+            sparse_pattern = sparse_pattern'
+        end
+        lsys = LinearizedSystem(sparse_pattern, context, layout)
     end
     storage[:LinearizedSystem] = lsys
 end
@@ -403,16 +420,21 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
     state_s = storage_s.state
     state0_s = storage_s.state0
 
-    c = first(ct_s.target)
-    for i in 1:number_of_entities(c)
+    for i in 1:ct_s.N
         prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
     end
 
     for (k, cache) in pairs(ct_s.target)
+        if k == :numeric
+            continue
+        end
         update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, true)
     end
 
     for (k, cache) in pairs(ct_s.source)
+        if k == :numeric
+            continue
+        end
         update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, false)
     end
 end
@@ -457,11 +479,11 @@ function update_diagonal_blocks!(storage, model::MultiModel, targets)
             subs = groups .== g
             group_targets = model_keys[subs]
             group_keys = intersect(group_targets, targets)
-            offsets = get_submodel_degree_of_freedom_offsets(model, g)
+            offsets = get_submodel_offsets(model, g)
             update_main_linearized_system_subgroup!(storage, model, group_keys, offsets, lsys_g)
         end
     else
-        offsets = get_submodel_degree_of_freedom_offsets(model)
+        offsets = get_submodel_offsets(model)
         update_main_linearized_system_subgroup!(storage, model, targets, offsets, lsys)
     end
 end
@@ -520,9 +542,9 @@ function setup_forces(model::MultiModel; kwarg...)
     return forces
 end
 
-function update_secondary_variables!(storage, model::MultiModel)
+function update_secondary_variables!(storage, model::MultiModel; kwarg...)
     for key in submodels_symbols(model)
-        update_secondary_variables!(storage[key], model.models[key])
+        update_secondary_variables!(storage[key], model.models[key]; kwarg...)
     end
 end
 
@@ -640,4 +662,18 @@ end
 
 function get_convergence_table(model::MultiModel, errors)
     get_convergence_table(submodels_symbols(model), errors)
+end
+
+function number_of_degrees_of_freedom(model::MultiModel)
+    return sum(number_of_degrees_of_freedom, model.models)
+end
+
+function number_of_equations(model::MultiModel)
+    return sum(number_of_equations, model.models)
+end
+
+function reset_primary_variables!(storage, model::MultiModel, state)
+    for (k, m) in pairs(model.models)
+        reset_primary_variables!(storage[k], m, state[k])
+    end
 end

@@ -45,7 +45,8 @@ function ConservationLawTPFAStorage(model, eq::ConservationLaw; accumulation_sym
     return ConservationLawTPFAStorage(acc, accumulation_symbol, hf_cells, hf_faces, src)
 end
 
-function setup_equation_storage(model, eq::ConservationLaw{<:TwoPointPotentialFlowHardCoded}, storage; kwarg...)
+function setup_equation_storage(model, eq::ConservationLaw{<:TwoPointPotentialFlowHardCoded}, storage; extra_sparsity = nothing, kwarg...)
+    # Maybe check that the sparsity matches the default?
     return ConservationLawTPFAStorage(model, eq; kwarg...)
 end
 
@@ -145,11 +146,11 @@ function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context::Si
 end
 
 
-function align_to_jacobian!(law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
     neighborship = model.domain.grid.neighborship
 
-    hflux_faces = law.half_face_flux_faces
+    hflux_faces = eq_s.half_face_flux_faces
     if !isnothing(hflux_faces)
         half_face_flux_faces_alignment!(hflux_faces, jac, model.context, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
     end
@@ -323,7 +324,7 @@ function update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fent
                 c = conn_data[i]
                 face = c.face
                 sgn = c.face_sign
-                f = sgn*get_entry(face_flux, face, e, fentries)
+                f = sgn*get_entry(face_flux, face, e)
                 for d = 1:np
                     df_di = f.partials[d]
                     fpos = get_jacobian_pos(face_flux, i, e, d, fp)
@@ -352,7 +353,7 @@ function declare_pattern(model, eq::ConservationLaw, e_s::ConservationLawTPFASto
     return (I, J)
 end
 
-function declare_pattern(model, e::ConservationLaw, entity::Faces)
+function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawTPFAStorage, entity::Faces)
     df = e.flow_discretization
     cd = df.conn_data
     I = map(x -> x.self, cd)
@@ -416,14 +417,58 @@ end
 
 function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt)
     fd = law.flow_discretization
-    update_half_face_flux!(eq_s, law, storage, model, dt, fd)
+    state = storage.state
+    update_half_face_flux!(eq_s, law, state, model, dt, fd)
 end
 
-function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt, flow_type)
-    state = storage.state
-    param = storage.parameters
-    flux = get_entries(eq_s.half_face_flux_cells)
-    update_half_face_flux!(flux, state, model, param, dt, flow_type)
+function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, state, model, dt, flow_disc)
+    flux_c = get_entries(eq_s.half_face_flux_cells)
+
+    N = size(flux_c, 1)
+    flux_static = reinterpret(SVector{N, eltype(flux_c)}, flux_c)
+    update_half_face_flux_tpfa!(flux_static, law, state, model, dt, flow_disc, Cells())
+
+    hf_face = eq_s.half_face_flux_faces
+    if !isnothing(hf_face)
+        flux_v = get_entries(hf_face)
+        face_flux_static = reinterpret(SVector{N, eltype(flux_v)}, flux_v)
+        update_half_face_flux_tpfa!(face_flux_static, law, state, model, dt, flow_disc, Faces())
+    end
+end
+
+function update_half_face_flux_tpfa!(hf_cells::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Cells) where {T, N}
+    nc = number_of_cells(model.domain)
+    conn_data = flow_disc.conn_data
+    conn_pos = flow_disc.conn_pos
+    tb = minbatch(model.context)
+    @timeit "flux (cells)" @batch minbatch = tb for c in 1:nc
+        state_c = local_ad(state, c, T)
+        update_half_face_flux_tpfa_internal!(hf_cells, eq, state_c, model, dt, flow_disc, conn_pos, conn_data, c)
+    end
+end
+
+function update_half_face_flux_tpfa_internal!(hf_cells::AbstractArray{T}, eq, state, model, dt, flow_disc, conn_pos, conn_data, c) where T
+    @inbounds for i in conn_pos[c]:(conn_pos[c+1]-1)
+        (; other, face, face_sign) = @inbounds conn_data[i]
+        @inbounds hf_cells[i] = compute_tpfa_flux!(zero(T), c, other, face, face_sign, eq, state, model, dt, flow_disc)
+    end
+end
+
+function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Faces) where {T, N}
+    nf = number_of_faces(model.domain)
+    neighbors = get_neighborship(model.domain.grid)
+    tb = minbatch(model.context)
+    @timeit "flux (faces)" @batch minbatch = tb for f in 1:nf
+        state_f = local_ad(state, f, T)
+        @inbounds left = neighbors[1, f]
+        @inbounds right = neighbors[2, f]
+        @inbounds hf_faces[f] = compute_tpfa_flux!(hf_faces[f], left, right, f, 1, eq, state_f, model, dt, flow_disc)
+    end
+end
+
+
+function compute_tpfa_flux!
+
 end
 
 function reset_sources!(eq_s::ConservationLawTPFAStorage)
@@ -445,5 +490,5 @@ end
     end
 end
 
-is_cuda_eq(eq::ConservationLawTPFAStorage) = isa(eq.accumulation.entries, CuArray)
+# is_cuda_eq(eq::ConservationLawTPFAStorage) = isa(eq.accumulation.entries, CuArray)
 use_sparse_sources(eq) = false#!is_cuda_eq(eq)

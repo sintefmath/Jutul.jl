@@ -1,6 +1,11 @@
 
-function get_submodel_degree_of_freedom_offsets(model::MultiModel, group = nothing)
-    dof = values(model.number_of_degrees_of_freedom)
+function get_submodel_offsets(model::MultiModel, group = nothing; is_equation = true)
+    if is_equation
+        f = number_of_equations
+    else
+        f = number_of_degrees_of_freedom
+    end
+    dof = values(map(f, model.models))
     if !isnothing(group)
         dof = dof[model.groups .== group]
     end

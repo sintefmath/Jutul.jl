@@ -86,13 +86,13 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
         other_align_s = create_extra_alignment(caches_t)
         active_source = cross_term_entities_source(ct, eq_s, model_s)
         out = (
-            target = caches_t, source = caches_s,
+            N = N, target = caches_t, source = caches_s,
             target_entities = active, source_entities = active_source,
             offdiagonal_alignment = (from_target = other_align_s, from_source = other_align_t)
         )
     else
         out = (
-            target = caches_t, source = caches_s,
+            N = N, target = caches_t, source = caches_s,
             target_entities = active,
             offdiagonal_alignment = (from_source = other_align_t, )
         )
@@ -103,6 +103,9 @@ end
 function create_extra_alignment(cache; allocate = true)
     out = Dict{Symbol, Any}()
     for k in keys(cache)
+        if k == :numeric
+            continue
+        end
         jp = cache[k].jacobian_positions
         if allocate
             next = similar(jp)
@@ -187,12 +190,18 @@ function update_offdiagonal_linearized_system_cross_term!(nz, model, ctp, ct_s, 
     _, _, caches, _, pos, sgn = source_impact_for_pair(ctp, ct_s, label)
     @assert !isnothing(pos)
     for u in keys(caches)
+        if u == :numeric
+            continue
+        end
         fill_crossterm_entries!(nz, model, caches[u], pos[u], sgn)
     end
 end
 
 function update_linearized_system_cross_term!(nz, r, model, ct::AdditiveCrossTerm, caches, impact, nu, sgn)
     for k in keys(caches)
+        if k == :numeric
+            continue
+        end
         increment_equation_entries!(nz, r, model, caches[k], impact, nu, sgn)
     end
 end
@@ -268,8 +277,13 @@ function update_linearized_system_crossterms!(jac, cross_terms, storage, model::
     end
 end
 
+sub_number_of_equations(model::MultiModel) = map(number_of_equations, model.models)
+sub_number_of_degrees_of_freedom(model::MultiModel) = map(number_of_degrees_of_freedom, model.models)
+
 function crossterm_subsystem(model, lsys, target, source; diag = false)
-    ndofs = model.number_of_degrees_of_freedom
+    # neqs = map(number_of_equations, model.models)
+    # ndofs = map(number_of_degrees_of_freedom, model.models)
+
     model_keys = submodel_symbols(model)
     groups = model.groups
 
@@ -292,18 +306,17 @@ function crossterm_subsystem(model, lsys, target, source; diag = false)
     else
         source_keys = target_keys = model_keys
     end
-    target_offset = local_group_offset(target_keys, target, ndofs)
-    source_offset = local_group_offset(source_keys, source, ndofs)    
-
-    return (lsys, target_offset, source_offset)
+    return (lsys, target_keys, source_keys)
 end
 
 function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source, eq_label, impact, equation_offset, variable_offset)
-    lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = true)
-    target_model = model.models[target]
+    lsys, target_keys, source_keys = crossterm_subsystem(model, lsys, target, source, diag = true)
+    target_model = model[target]
+    ndofs = sub_number_of_degrees_of_freedom(model)
+    neqs = sub_number_of_equations(model)
     # Diagonal part: Into target equation, and with respect to target variables
-    equation_offset += target_offset
-    variable_offset += target_offset
+    equation_offset += local_group_offset(target_keys, target, neqs)
+    variable_offset += local_group_offset(target_keys, target, ndofs)
 
     equation_offset += get_equation_offset(target_model, eq_label)
     for target_e in get_primary_variable_ordered_entities(target_model)
@@ -313,15 +326,19 @@ function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source
 end
 
 function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, source, eq_label, impact, offdiag_alignment, equation_offset, variable_offset)
-    lsys, target_offset, source_offset = crossterm_subsystem(model, lsys, target, source, diag = false)
-    equation_offset += target_offset
-    variable_offset += source_offset
-    target_model = model.models[target]
-    source_model = model.models[source]
+    lsys, target_keys, source_keys = crossterm_subsystem(model, lsys, target, source, diag = false)
+    ndofs = sub_number_of_degrees_of_freedom(model)
+    neqs = sub_number_of_equations(model)
+    # Diagonal part: Into target equation, and with respect to target variables
+    equation_offset += local_group_offset(target_keys, target, neqs)
+    variable_offset += local_group_offset(source_keys, source, ndofs)
+
+    target_model = model[target]
+    source_model = model[source]
 
     equation_offset += get_equation_offset(target_model, eq_label)
     @assert !isnothing(offdiag_alignment)
-    @assert keys(s_source) == keys(offdiag_alignment)
+    # @assert keys(s_source), :numeric == keys(offdiag_alignment)
     nt = number_of_entities(target_model, target_model.equations[eq_label])
     for source_e in get_primary_variable_ordered_entities(source_model)
         align_to_jacobian!(s_source, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset,
@@ -338,14 +355,9 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
 end
 
 function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
-    models = model.models
     cross_terms = model.cross_terms
     cross_term_storage = storage[:cross_terms]
-    ndofs = model.number_of_degrees_of_freedom
-    model_keys = submodel_symbols(model)
-    ndofs = model.number_of_degrees_of_freedom
     lsys = storage[:LinearizedSystem]
-
     for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
         ct = ctp.cross_term
         target = ctp.target
@@ -432,6 +444,61 @@ function cross_term_source(model, storage, source, include_symmetry = false)
         f = x -> x.source == source
     end
     return cross_term_mapper(model, storage, f)
+end
+
+function extra_cross_term_sparsity(model, storage, target, include_symmetry = true)
+    # Get sparsity of cross terms so that they can be included in any generic equations
+    function collect_indices(c::GenericAutoDiffCache, impact, N)
+        entities = [Vector{Int64}() for i in 1:N]
+        n = length(c.vpos)-1
+        for i = 1:n
+            I = impact[i]
+            entities[I] = c.variables[vrange(c, i)]
+        end
+        return entities
+    end
+    ct_pairs, ct_storage = cross_term_target(model, storage, target, include_symmetry)
+    sparsity = Dict{Symbol, Any}()
+    for (ct_p, ct_s) in zip(ct_pairs, ct_storage)
+        # Loop over all cross terms that impact target and grab the global sparsity
+        # so that this can be added when doing sparsity detection for the model itself.
+        is_target = ct_p.target == target
+        if is_target
+            caches = ct_s.target
+            impact = ct_s.target_entities
+        else
+            caches = ct_s.source
+            impact = ct_s.source_entities
+            @assert has_symmetry(ct_p.cross_term)
+        end
+        eq = ct_p.equation
+        if !haskey(sparsity, eq)
+            sparsity[eq] = Dict{Symbol, Any}()
+        end
+        eq_d = sparsity[eq]
+        model_t = model[target]
+        equation_t = model_t.equations[eq]
+        N = number_of_entities(model_t, equation_t)
+        for (k, v) in pairs(caches)
+            if k == :numeric
+                continue
+            end
+            ind_for_k = collect_indices(v, impact, N)
+            # Merge with existing if found, otherwise just set it
+            if haskey(eq_d, k)
+                old = eq_d[k]
+                for i in 1:N
+                    for l in ind_for_k[i]
+                        push!(old[i], l)
+                    end
+                    unique!(old[i])
+                end
+            else
+                eq_d[k] = ind_for_k
+            end
+        end
+    end
+    return sparsity
 end
 
 function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model), sources = targets)
