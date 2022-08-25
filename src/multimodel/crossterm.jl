@@ -501,14 +501,18 @@ function extra_cross_term_sparsity(model, storage, target, include_symmetry = tr
     return sparsity
 end
 
+can_impact_cross_term(force_t, cross_term) = false
+
 function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model), sources = targets)
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
         (; cross_term, target, source) = ctp
         force_t = forces[target]
-        apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, source, targets, dt, force_t, time = time)
-        if has_symmetry(cross_term)
-            force_s = forces[source]
-            apply_forces_to_cross_term!(ct_s, model, storage, cross_term, source, target, sources, dt, force_s, time = time)
+        if can_impact_cross_term(force_t, cross_term)
+            apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, source, targets, dt, force_t, time = time)
+            if has_symmetry(cross_term)
+                force_s = forces[source]
+                apply_forces_to_cross_term!(ct_s, model, storage, cross_term, source, target, sources, dt, force_s, time = time)
+            end
         end
     end
 end
