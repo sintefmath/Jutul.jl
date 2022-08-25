@@ -428,8 +428,6 @@ function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::Conservat
     flux_static = reinterpret(SVector{N, eltype(flux_c)}, flux_c)
     update_half_face_flux_tpfa!(flux_static, law, state, model, dt, flow_disc, Cells())
 
-    # @info "Done" flux_c'
-    # error()
     hf_face = eq_s.half_face_flux_faces
     if !isnothing(hf_face)
         flux_v = get_entries(hf_face)
@@ -442,8 +440,6 @@ function update_half_face_flux_tpfa!(hf_cells::AbstractArray{SVector{N, T}}, eq,
     nc = number_of_cells(model.domain)
     conn_data = flow_disc.conn_data
     conn_pos = flow_disc.conn_pos
-    nf = length(conn_data)
-    # @assert nf == length(hf_cells)
     function update_cell!(c)
         state_c = local_ad(state, c, T)
         @inbounds for i in conn_pos[c]:(conn_pos[c+1]-1)
@@ -452,7 +448,8 @@ function update_half_face_flux_tpfa!(hf_cells::AbstractArray{SVector{N, T}}, eq,
             @inbounds hf_cells[i] = compute_tpfa_flux!(hf_cells[i], c, other, face, face_sign, eq, state_c, model, dt, flow_disc)
         end
     end
-    for c in 1:nc
+    tb = minbatch(model.context)
+    @timeit "flux (cells)" @batch minbatch = tb for c in 1:nc
         update_cell!(c)
     end
 end
@@ -460,11 +457,12 @@ end
 function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Faces) where {T, N}
     nf = number_of_faces(model.domain)
     neighbors = get_neighborship(model.domain.grid)
-    for f in 1:nf
+    tb = minbatch(model.context)
+    @timeit "flux (faces)" @batch minbatch = tb for f in 1:nf
         state_f = local_ad(state, f, T)
         @inbounds left = neighbors[1, f]
         @inbounds right = neighbors[2, f]
-        @inbounds hf_faces[f] = compute_tpfa_flux!(hf_faces[f], left, right, f, eq, state_f, model, dt, flow_disc)
+        @inbounds hf_faces[f] = compute_tpfa_flux!(hf_faces[f], left, right, f, 1, eq, state_f, model, dt, flow_disc)
     end
 end
 
