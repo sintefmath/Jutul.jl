@@ -22,10 +22,10 @@ end
 as_value(x::Union{NamedTuple,AbstractDict,JutulStorage}) = ValueStateAD(x)
 
 export local_ad
-local_ad(v::AbstractArray, i::Integer) = LocalPerspectiveAD(v, i)
-local_ad(v::ConstantWrapper, i::Integer) = v
-local_ad(v, ::Nothing) = as_value(v)
-local_ad(v, i) = v
+@inline local_ad(v::AbstractArray, i::Integer) = LocalPerspectiveAD(v, i)
+@inline local_ad(v::ConstantWrapper, i::Integer) = v
+@inline local_ad(v, ::Nothing) = as_value(v)
+@inline local_ad(v, i) = v
 
 
 @inline local_entity(a::LocalPerspectiveAD) = a.index
