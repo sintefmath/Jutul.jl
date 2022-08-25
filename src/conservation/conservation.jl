@@ -447,8 +447,7 @@ function update_half_face_flux_tpfa!(hf_cells::AbstractArray{SVector{N, T}}, eq,
         @inbounds for i in conn_pos[c]:(conn_pos[c+1]-1)
             @inbounds cd = conn_data[i]
             (; other, face) = cd
-            v = compute_tpfa_flux(c, other, face, eq, state_c, model, dt, flow_disc, T)
-            @inbounds hf_cells[i] = v
+            @inbounds hf_cells[i] = compute_tpfa_flux!(hf_cells[i], c, other, face, eq, state_c, model, dt, flow_disc)
         end
     end
     for c in 1:nc
@@ -463,12 +462,12 @@ function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq,
         state_f = local_ad(state, f, T)
         @inbounds left = neighbors[1, f]
         @inbounds right = neighbors[2, f]
-        @inbounds hf_faces[f] = compute_tpfa_flux(left, right, f, eq, state_f, model, dt, flow_disc, T)
+        @inbounds hf_faces[f] = compute_tpfa_flux!(hf_faces[f], left, right, f, eq, state_f, model, dt, flow_disc)
     end
 end
 
 
-function compute_tpfa_flux
+function compute_tpfa_flux!
 
 end
 

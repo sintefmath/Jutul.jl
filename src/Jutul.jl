@@ -33,6 +33,8 @@ module Jutul
     using PrettyTables
     using Polynomials
     using JLD2
+    using Setfield
+
     import Metis
     # Nice progress bars
     using ProgressMeter
