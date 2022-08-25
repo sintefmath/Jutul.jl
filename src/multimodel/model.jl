@@ -445,7 +445,7 @@ function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s
     Tv = eltype(v)
     for i in 1:number_of_entities(cache)
         ldisc = local_discretization(ct, i)
-        for j in vrange(cache, i)
+        @inbounds for j in vrange(cache, i)
             v_i = @views v[:, j]
             var = vars[j]
             if is_target

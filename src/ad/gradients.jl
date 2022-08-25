@@ -237,22 +237,12 @@ function solve_numerical_sensitivities(model, states, reports, G, target;
     return grad_num
 end
 
-function get_parameter_pair(model::SimulationModel, parameters, target)
+function get_parameter_pair(model, parameters, target)
     return (model.parameters[target], parameters[target])
-end
-
-function get_parameter_pair(model::MultiModel, parameters, target)
-    t_outer, t_inner = target
-    return get_parameter_pair(model[t_outer], parameters[t_outer], t_inner)
 end
 
 function perturb_parameter!(model, param_i, target, i, ϵ)
     param_i[target][i] += ϵ
-end
-
-function perturb_parameter!(model::MultiModel, param_i, target, i, ϵ)
-    t_outer, t_inner = target
-    perturb_parameter!(model[t_outer], param_i[t_outer], t_inner, i, ϵ)
 end
 
 function evaluate_objective(G, model, states, timesteps, all_forces)

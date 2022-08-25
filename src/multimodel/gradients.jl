@@ -53,3 +53,13 @@ function store_sensitivities(model::MultiModel, result; offset = 0)
     end
     return out
 end
+
+function get_parameter_pair(model::MultiModel, parameters, target)
+    t_outer, t_inner = target
+    return get_parameter_pair(model[t_outer], parameters[t_outer], t_inner)
+end
+
+function perturb_parameter!(model::MultiModel, param_i, target, i, ϵ)
+    t_outer, t_inner = target
+    perturb_parameter!(model[t_outer], param_i[t_outer], t_inner, i, ϵ)
+end
