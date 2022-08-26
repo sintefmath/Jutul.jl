@@ -280,7 +280,7 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
                     pad = repeat(" ", maxv - N)
                     print(io, "   $ctr) $key$pad ")
                     # if !isa(pvar, ScalarVariable)#nval > 1 || (nval != nv && f == :primary_variables)
-                    print(io, "∈ $nu $(typeof(u)), ")
+                    print(io, "∈ $nu $(typeof(u)): ")
                     if f == :primary_variables
                         ndof = degrees_of_freedom_per_entity(model, pvar)
                         if ndof != nval
@@ -290,14 +290,15 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
                         end
                     else
                         if isa(pvar, ScalarVariable)
-                            print(io, "scalar")
+                            print(io, "Scalar")
                         else
                             print(io, "$nval values each")
                         end
                     end
                     if f == :secondary_variables
+                        print(io, "\n")
                         print_t = Base.typename(typeof(pvar)).wrapper
-                        print(io, " as $print_t ")
+                        print(io, "      -> $print_t as evaluator")
                     end
                     print(io, "\n")
                     #end
