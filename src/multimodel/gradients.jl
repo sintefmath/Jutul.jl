@@ -11,7 +11,11 @@ function adjoint_model_copy(model::MultiModel)
     g = model.groups
     r = model.reduction
     ctp = copy(model.cross_terms)
-    new_context = adjoint(model.context)
+    if isnothing(model.context)
+        new_context = adjoint(DefaultContext())
+    else
+        new_context = adjoint(model.context)
+    end
     return MultiModel(new_models, context = new_context, groups = g, cross_terms = ctp, reduction = r)
 end
 
