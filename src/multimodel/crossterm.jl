@@ -507,23 +507,21 @@ function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; ti
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
         (; cross_term, target, source) = ctp
         force_t = forces[target]
-        if can_impact_cross_term(force_t, cross_term)
-            apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, source, targets, dt, force_t, time = time)
-            if has_symmetry(cross_term)
-                force_s = forces[source]
-                apply_forces_to_cross_term!(ct_s, model, storage, cross_term, source, target, sources, dt, force_s, time = time)
-            end
+        apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, source, targets, dt, force_t, time = time)
+        if has_symmetry(cross_term)
+            force_s = forces[source]
+            apply_forces_to_cross_term!(ct_s, model, storage, cross_term, source, target, sources, dt, force_s, time = time)
         end
     end
 end
 
 function apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, source, targets, dt, forces; kwarg...)
     if !isnothing(forces)
-        if target in targets
-            for force in values(forces)
-                if isnothing(force)
-                    continue
-                end
+        for force in values(forces)
+            if isnothing(force) || !can_impact_cross_term(force, cross_term)
+                continue
+            end
+            if target in targets
                 apply_force_to_cross_term!(ct_s, cross_term, target, source, model, storage, dt, force; kwarg...)
             end
         end
