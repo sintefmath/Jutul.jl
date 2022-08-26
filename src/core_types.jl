@@ -268,22 +268,41 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
             if length(keys(p)) == 0
                 print(io, "   None.\n")
             else
+                maxv = 0
                 for (key, pvar) in p
-                    nv = degrees_of_freedom_per_entity(model, pvar)
+                    maxv = max(length(String(key)), maxv)
+                end
+                for (key, pvar) in p
+                    nval = values_per_entity(model, pvar)
                     nu = number_of_entities(model, pvar)
                     u = associated_entity(pvar)
+                    N = length(String(key))
+                    pad = repeat(" ", maxv - N)
+                    print(io, "   $ctr) $key$pad ")
+                    # if !isa(pvar, ScalarVariable)#nval > 1 || (nval != nv && f == :primary_variables)
+                    print(io, "∈ $nu $(typeof(u)), ")
+                    if f == :primary_variables
+                        ndof = degrees_of_freedom_per_entity(model, pvar)
+                        if ndof != nval
+                            print(io, "$ndof dof, $nval values each")
+                        else
+                            print(io, "$ndof dof each")
+                        end
+                    else
+                        if isa(pvar, ScalarVariable)
+                            print(io, "scalar")
+                        else
+                            print(io, "$nval values each")
+                        end
+                    end
                     if f == :secondary_variables
                         print_t = Base.typename(typeof(pvar)).wrapper
-                        print(io, "   $ctr) $key as $print_t (")
-                    else
-                        print(io, "   $ctr) $key (")
+                        print(io, " as $print_t ")
                     end
-                    if nv > 1
-                        print(io, "$nv×")
-                    end
-                    print(io, "$nu")
+                    print(io, "\n")
+                    #end
+                    # print(io, "$nu")
 
-                    print(io, " ∈ $(typeof(u)))\n")
                     ctr += 1
                 end
             end
