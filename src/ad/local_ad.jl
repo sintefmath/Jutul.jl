@@ -28,6 +28,15 @@ export local_ad
 @inline local_ad(v, i) = v
 
 
+@inline function new_entity_index(state::LocalStateAD{T, I, E}, index::I) where {T, I, E}
+    return LocalStateAD{T, I, E}(index, getfield(state, :data))
+end
+
+@inline function new_entity_index(x, index)
+    return x
+end
+
+
 @inline local_entity(a::LocalPerspectiveAD) = a.index
 
 @inline function value_or_ad(A::LocalPerspectiveAD{T}, v::T, entity) where T

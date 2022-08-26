@@ -428,34 +428,38 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
         if k == :numeric
             continue
         end
-        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, true)
+        Tv = eltype(cache.entries)
+        state_t_local = local_ad(state_t, 1, Tv)
+        state0_t_local = local_ad(state0_t, 1, Tv)
+        # new_entity_index
+        update_cross_term_for_entity!(cache, ct, eq, state_t_local, state0_t_local, as_value(state_s), as_value(state0_s), model_t, model_s, dt, true)
     end
 
     for (k, cache) in pairs(ct_s.source)
         if k == :numeric
             continue
         end
-        update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, false)
+        Tv = eltype(cache.entries)
+        state_s_local = local_ad(state_s, 1, Tv)
+        state0_s_local = local_ad(state0_s, 1, Tv)
+        update_cross_term_for_entity!(cache, ct, eq, as_value(state_t), as_value(state0_t), state_s_local, state0_s_local, model_t, model_s, dt, false)
     end
 end
 
 function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, is_target)
     v = cache.entries
     vars = cache.variables
-    Tv = eltype(v)
     for i in 1:number_of_entities(cache)
         ldisc = local_discretization(ct, i)
         @inbounds for j in vrange(cache, i)
             v_i = @views v[:, j]
             var = vars[j]
-            if is_target
-                f_t = (x) -> local_ad(x, var, Tv)
-                f_s = (x) -> as_value(x)
-            else
-                f_t = (x) -> as_value(x)
-                f_s = (x) -> local_ad(x, var, Tv)
-            end
-            update_cross_term_in_entity!(v_i, i, f_t(state_t), f_t(state0_t), f_s(state_s), f_s(state0_s), model_t, model_s, ct, eq, dt, ldisc)
+            state_t = new_entity_index(state_t, var)
+            state0_t = new_entity_index(state0_t, var)
+            state_s = new_entity_index(state_s, var)
+            state0_s = new_entity_index(state0_s, var)
+    
+            update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
         end
     end
 end
