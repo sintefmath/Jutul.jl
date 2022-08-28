@@ -41,6 +41,7 @@ function state_gradient_outer!(∂F∂x, F, model::MultiModel, state, extra_arg)
         n = number_of_degrees_of_freedom(m)
         ∂F∂x_k = view(∂F∂x, (offset+1):(offset+n))
         state_gradient_inner!(∂F∂x_k, F, m, state, k, extra_arg, model)
+        offset += n
     end
     return ∂F∂x
 end
