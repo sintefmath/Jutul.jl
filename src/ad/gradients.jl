@@ -1,4 +1,87 @@
-export state_gradient
+export state_gradient, solve_adjoint_sensitivities, solve_adjoint_sensitivities!, setup_adjoint_storage
+
+"""
+    solve_adjoint_sensitivities(model, states, reports, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, kwarg...)
+
+Compute sensitivities of `model` parameter with name `target` for objective function `G`.
+
+Solves the adjoint equations: For model equations F the gradient with respect to parameters p is
+    ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ where n ∈ [1, N].
+Given Lagrange multipliers λₙ from the adjoint equations
+    (∂Fₙ / ∂xₙ)ᵀ λₙ = - (∂J / ∂xₙ)ᵀ - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
+where the last term is omitted for step n = N and G is the objective function.
+"""
+function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, kwarg...)
+    # One simulator object for the equations with respect to primary (at previous time-step)
+    # One simulator object for the equations with respect to parameters
+    set_global_timer!(extra_timing)
+    # Allocation part
+    storage = setup_adjoint_storage(model; state0 = state0, kwarg...)
+    parameter_model = storage.parameter.model
+    n_param = number_of_degrees_of_freedom(parameter_model)
+    ∇G = zeros(n_param)
+    # Timesteps
+    timesteps = report_timesteps(reports)
+    N = length(states)
+    @assert length(reports) == N == length(timesteps)
+    # Solve!
+    solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces)
+    print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
+    if raw_output
+        out = ∇G
+    else
+        out = store_sensitivities(parameter_model, ∇G)
+    end
+    return out
+end
+
+"""
+    setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model))
+
+Set up storage for use with `solve_adjoint_sensitivities!`.
+"""
+function setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model))
+    primary_model = adjoint_model_copy(model)
+    # Standard model for: ∂Fₙᵀ / ∂xₙ
+    forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
+    # Same model, but adjoint for: ∂Fₙ₊₁ᵀ / ∂xₙ
+    backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :reverse, extra_timing = nothing)
+    # Create parameter model for ∂Fₙ / ∂p
+    parameter_model = adjoint_parameter_model(model)
+    parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), mode = :sensitivities, extra_timing = nothing)
+
+    n_pvar = number_of_degrees_of_freedom(model)
+    λ = zeros(n_pvar)
+    return (forward = forward_sim, backward = backward_sim, parameter = parameter_sim, lagrange = λ)
+end
+
+"""
+    solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model))
+
+Non-allocating version of `solve_adjoint_sensitivities`.
+"""
+function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model))
+    N = length(timesteps)
+    @assert N == length(states)
+    @timeit "sensitivities" for i in N:-1:1
+        fn = deepcopy
+        if i == 1
+            s0 = fn(state0)
+        else
+            s0 = fn(states[i-1])
+        end
+        if i == N
+            s_next = nothing
+        else
+            s_next = fn(states[i+1])
+        end
+        s = fn(states[i])
+        update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
+    end
+    return ∇G
+end
+
+
 function state_gradient(model, state, F, extra_arg...; kwarg...)
     n_total = number_of_degrees_of_freedom(model)
     ∂F∂x = zeros(n_total)
@@ -11,7 +94,7 @@ function state_gradient!(∂F∂x, model, state, F, extra_arg...; parameters = s
     state = merge_state_with_parameters(model, state, parameters)
     state = convert_state_ad(model, state)
     state = convert_to_immutable_storage(state)
-    # TODO: Evaluate props here.
+    update_secondary_variables_state!(state, model)
     state_gradient_outer!(∂F∂x, F, model, state, extra_arg)
     return ∂F∂x
 end
@@ -50,71 +133,6 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
         end
         offset += ne*np
     end
-end
-
-function setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model))
-    primary_model = adjoint_model_copy(model)
-    # Standard model for: ∂Fₙᵀ / ∂xₙ
-    forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
-    # Same model, but adjoint for: ∂Fₙ₊₁ᵀ / ∂xₙ
-    backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :reverse, extra_timing = nothing)
-    # Create parameter model for ∂Fₙ / ∂p
-    parameter_model = adjoint_parameter_model(model)
-    parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), mode = :sensitivities, extra_timing = nothing)
-
-    n_pvar = number_of_degrees_of_freedom(model)
-    λ = zeros(n_pvar)
-    return (forward = forward_sim, backward = backward_sim, parameter = parameter_sim, lagrange = λ)
-end
-
-function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, kwarg...)
-    # One simulator object for the equations with respect to primary (at previous time-step)
-    # One simulator object for the equations with respect to parameters
-    # For model equations F the gradient with respect to parameters p is
-    # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ where n ∈ [1, N]
-    # Given Lagrange multipliers λₙ from the adjoint equations
-    # (∂Fₙ / ∂xₙ)ᵀ λₙ = - (∂J / ∂xₙ)ᵀ - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
-    # where the last term is omitted for step n = N and G is the objective function
-    set_global_timer!(extra_timing)
-    # Allocation part
-    storage = setup_adjoint_storage(model; state0 = state0, kwarg...)
-    parameter_model = storage.parameter.model
-    n_param = number_of_degrees_of_freedom(parameter_model)
-    ∇G = zeros(n_param)
-    # Timesteps
-    timesteps = report_timesteps(reports)
-    N = length(states)
-    @assert length(reports) == N == length(timesteps)
-    # Solve!
-    solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces)
-    print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
-    if raw_output
-        out = ∇G
-    else
-        out = store_sensitivities(parameter_model, ∇G)
-    end
-    return out
-end
-
-function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model))
-    N = length(timesteps)
-    @assert N == length(states)
-    @timeit "sensitivities" for i in N:-1:1
-        fn = deepcopy
-        if i == 1
-            s0 = fn(state0)
-        else
-            s0 = fn(states[i-1])
-        end
-        if i == N
-            s_next = nothing
-        else
-            s_next = fn(states[i+1])
-        end
-        s = fn(states[i])
-        update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
-    end
-    return ∇G
 end
 
 function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
@@ -207,6 +225,17 @@ function adjoint_model_copy(model::SimulationModel{O, S, C, F}) where {O, S, C, 
     return SimulationModel{O, S, C, F}(model.domain, model.system, new_context, model.formulation, pvar, svar, prm, eqs, outputs)
 end
 
+"""
+    solve_numerical_sensitivities(model, states, reports, G, target;
+                                                forces = setup_forces(model),
+                                                state0 = setup_state(model),
+                                                parameters = setup_parameters(model),
+                                                epsilon = 1e-8)
+
+Compute sensitivities of `model` parameter with name `target` for objective function `G`.
+
+This method uses numerical perturbation and is primarily intended for testing of `solve_adjoint_sensitivities`.
+"""
 function solve_numerical_sensitivities(model, states, reports, G, target;
                                                 forces = setup_forces(model),
                                                 state0 = setup_state(model),
@@ -219,7 +248,11 @@ function solve_numerical_sensitivities(model, states, reports, G, target;
     base_obj = evaluate_objective(G, model, states, timesteps, forces)
     # Define perturbation
     param_var, param_num = get_parameter_pair(model, parameters, target)
-    grad_num = zeros(length(param_num))
+    sz = size(param_num)
+    grad_num = zeros(sz)
+    if grad_num isa AbstractVector
+        grad_num = grad_num'
+    end
     scale = variable_scale(param_var)
     if isnothing(scale)
         ϵ = epsilon
@@ -234,7 +267,7 @@ function solve_numerical_sensitivities(model, states, reports, G, target;
         v = evaluate_objective(G, model, states_i, timesteps, forces)
         grad_num[i] = (v - base_obj)/ϵ
     end
-    return grad_num
+    return reshape(grad_num, sz)
 end
 
 function get_parameter_pair(model, parameters, target)
