@@ -11,7 +11,7 @@ Given Lagrange multipliers λₙ from the adjoint equations
     (∂Fₙ / ∂xₙ)ᵀ λₙ = - (∂J / ∂xₙ)ᵀ - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
 where the last term is omitted for step n = N and G is the objective function.
 """
-function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, kwarg...)
+function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, extra_output = false, kwarg...)
     # One simulator object for the equations with respect to primary (at previous time-step)
     # One simulator object for the equations with respect to parameters
     set_global_timer!(extra_timing)
@@ -32,7 +32,11 @@ function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = f
     else
         out = store_sensitivities(parameter_model, ∇G)
     end
-    return out
+    if extra_output
+        return (out, storage)
+    else
+        return out
+    end
 end
 
 """
