@@ -54,7 +54,7 @@ function store_sensitivities(model::MultiModel, result; offset = 0)
         result_k = view(result, (offset+1):(offset+n))
         out[k] = Dict{Symbol, Any}()
         store_sensitivities!(out[k], m, result_k)
-        offset += 1
+        offset += n
     end
     return out
 end
