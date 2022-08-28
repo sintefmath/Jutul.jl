@@ -13,7 +13,6 @@ function state_gradient!(∂F∂x, model, state, F, extra_arg...; parameters = s
     state = convert_to_immutable_storage(state)
     # TODO: Evaluate props here.
     state_gradient_outer!(∂F∂x, F, model, state, extra_arg)
-    tag = nothing
     return ∂F∂x
 end
 
@@ -56,12 +55,12 @@ end
 function setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model))
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
-    forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), adjoint = false, extra_timing = nothing)
+    forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
     # Same model, but adjoint for: ∂Fₙ₊₁ᵀ / ∂xₙ
-    backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), adjoint = true, extra_timing = nothing)
+    backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :reverse, extra_timing = nothing)
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model)
-    parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), adjoint = false, extra_timing = nothing)
+    parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), mode = :sensitivities, extra_timing = nothing)
 
     n_pvar = number_of_degrees_of_freedom(model)
     λ = zeros(n_pvar)
@@ -72,9 +71,9 @@ function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = f
     # One simulator object for the equations with respect to primary (at previous time-step)
     # One simulator object for the equations with respect to parameters
     # For model equations F the gradient with respect to parameters p is
-    # ∇ₚG = Σₙ ∂Fₙ / ∂p λₙ where n ∈ [1, N]
+    # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ where n ∈ [1, N]
     # Given Lagrange multipliers λₙ from the adjoint equations
-    # (∂Fₙᵀ / ∂xₙ) λₙ = - ∂Jᵀ / ∂xₙ - (∂Fₙ₊₁ᵀ / ∂xₙ) λₙ₊₁
+    # (∂Fₙ / ∂xₙ)ᵀ λₙ = - (∂J / ∂xₙ)ᵀ - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
     # where the last term is omitted for step n = N and G is the objective function
     set_global_timer!(extra_timing)
     # Allocation part
@@ -134,8 +133,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     # right hand side are added with a positive sign instead of negative.
     lsys = forward_sim.storage.LinearizedSystem
     rhs = lsys.r_buffer
-    # Fill rhs with ∂Jᵀ / ∂xₙ (which will be treated with a negative sign when the result is written by the linear solver)
-    # state_gradient_outer!(∂F∂x, F, model, state, extra_arg)
+    # Fill rhs with (∂J / ∂x)ᵀₙ (which will be treated with a negative sign when the result is written by the linear solver)
     @timeit "objective gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, i, forces))
     if isnothing(state_next)
         @assert i == N
@@ -148,13 +146,13 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         op = linear_operator(lsys_next)
         # In-place version of
         # rhs += op*λ
-        # - (∂Fₙ₊₁ᵀ / ∂xₙ) λₙ₊₁
+        # - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
         mul!(rhs, op, λ, 1.0, 1.0)
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
     @timeit "linear solve" solve!(lsys)
     @. λ = lsys.dx_buffer
-    # ∇ₚG = Σₙ ∂Fₙ / ∂p λₙ
+    # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
     @timeit "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces)
     lsys_next = parameter_sim.storage.LinearizedSystem

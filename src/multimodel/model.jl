@@ -78,18 +78,18 @@ function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
 end
 
-function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model), adjoint = false)
+function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model), kwarg...)
     storage = JutulStorage()
     state0_ref = Dict{Symbol, Any}()
     state_ref = Dict{Symbol, Any}()
     for key in submodels_symbols(model)
         m = model[key]
-        storage[key] = setup_storage(m, state0 = state0[key],
+        storage[key] = setup_storage(m; state0 = state0[key],
                                         parameters = parameters[key],
                                         setup_linearized_system = false,
                                         setup_equations = false,
-                                        adjoint = adjoint,
-                                        tag = key)
+                                        tag = key,
+                                        kwarg...)
         # Add outer references to state that matches the nested structure
         state_ref[key] = storage[key][:state]
         state0_ref[key] = storage[key][:state0]
