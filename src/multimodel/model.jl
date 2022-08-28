@@ -559,6 +559,12 @@ function update_secondary_variables!(storage, model::MultiModel; kwarg...)
     end
 end
 
+function update_secondary_variables_state!(state, model::MultiModel)
+    for key in submodels_symbols(model)
+        update_secondary_variables_state!(state[key], model[key])
+    end
+end
+
 function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra_out = false, kwarg...)
     converged = true
     err = 0
