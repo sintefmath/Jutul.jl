@@ -35,7 +35,7 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
     function diff_entity!(∂F∂x, state, i, S, ne, np, offset)
         state_i = local_ad(state, i, S)
         v = F(eval_model, state_i, extra_arg...)
-        for p_i in np
+        for p_i in 1:np
             ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
             ∂F∂x[ix] = get_partial(v, p_i)
         end
