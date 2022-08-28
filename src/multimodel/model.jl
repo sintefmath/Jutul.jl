@@ -80,6 +80,8 @@ end
 
 function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model), adjoint = false)
     storage = JutulStorage()
+    state0_ref = Dict{Symbol, Any}()
+    state_ref = Dict{Symbol, Any}()
     for key in submodels_symbols(model)
         m = model[key]
         storage[key] = setup_storage(m, state0 = state0[key],
@@ -88,7 +90,12 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
                                         setup_equations = false,
                                         adjoint = adjoint,
                                         tag = key)
+        # Add outer references to state that matches the nested structure
+        state_ref[key] = storage[key][:state]
+        state0_ref[key] = storage[key][:state0]
     end
+    storage[:state] = state_ref
+    storage[:state0] = state0_ref
     setup_cross_terms_storage!(storage, model)
     for key in submodels_symbols(model)
         m = model[key]
