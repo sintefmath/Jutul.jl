@@ -11,6 +11,7 @@ function state_gradient!(∂F∂x, model, state, F, extra_arg...; parameters = s
     state = merge_state_with_parameters(model, state, parameters)
     state = convert_state_ad(model, state)
     state = convert_to_immutable_storage(state)
+    # TODO: Evaluate props here.
     state_gradient_outer!(∂F∂x, F, model, state, extra_arg)
     tag = nothing
     return ∂F∂x
@@ -134,7 +135,8 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     lsys = forward_sim.storage.LinearizedSystem
     rhs = lsys.r_buffer
     # Fill rhs with ∂Jᵀ / ∂xₙ (which will be treated with a negative sign when the result is written by the linear solver)
-    @timeit "objective gradient" state_gradient!(rhs, forward_sim.model, state, G, dt, i, forces)
+    # state_gradient_outer!(∂F∂x, F, model, state, extra_arg)
+    @timeit "objective gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, i, forces))
     if isnothing(state_next)
         @assert i == N
         @. λ = 0
