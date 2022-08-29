@@ -27,14 +27,14 @@ function Base.show(io::IO, t::MIME"text/plain", model::MultiModel)
         println(io , "\n  cross_terms:")
         for (i, ct_s) in enumerate(cross_terms)
             (; cross_term, target, source, equation) = ct_s
-            t = typeof(cross_term)
+            print_t = Base.typename(typeof(cross_term)).wrapper
             if has_symmetry(cross_term)
                 arrow = "<->"
             else
                 arrow = " ->"
             end
             println(io, "    $i) $source $arrow $target (Eq: $equation)")
-            println(io, "       $t")
+            println(io, "       $print_t")
         end
     end
 end
