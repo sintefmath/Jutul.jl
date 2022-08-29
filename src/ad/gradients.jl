@@ -11,7 +11,7 @@ Given Lagrange multipliers λₙ from the adjoint equations
     (∂Fₙ / ∂xₙ)ᵀ λₙ = - (∂J / ∂xₙ)ᵀ - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
 where the last term is omitted for step n = N and G is the objective function.
 """
-function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, extra_output = false, kwarg...)
+function solve_adjoint_sensitivities(model, states, reports, G; n_objective = nothing, extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, extra_output = false, kwarg...)
     # One simulator object for the equations with respect to primary (at previous time-step)
     # One simulator object for the equations with respect to parameters
     set_global_timer!(extra_timing)
@@ -19,7 +19,11 @@ function solve_adjoint_sensitivities(model, states, reports, G; extra_timing = f
     storage = setup_adjoint_storage(model; state0 = state0, kwarg...)
     parameter_model = storage.parameter.model
     n_param = number_of_degrees_of_freedom(parameter_model)
-    ∇G = zeros(n_param)
+    if isnothing(n_objective)
+        ∇G = zeros(n_param)
+    else
+        ∇G = zeros(n_objective, n_param)
+    end
     # Timesteps
     timesteps = report_timesteps(reports)
     N = length(states)
@@ -283,12 +287,8 @@ function perturb_parameter!(model, param_i, target, i, ϵ)
 end
 
 function evaluate_objective(G, model, states, timesteps, all_forces)
-    obj = 0.0
-    for (step_no, state) in enumerate(states)
-        forces = forces_for_timestep(nothing, all_forces, timesteps, step_no)
-        dt = timesteps[step_no]
-        obj += G(model, state, dt, step_no, forces)
-    end
+    F = i -> G(model, states[i], timesteps[i], i, forces_for_timestep(nothing, all_forces, timesteps, i))
+    obj = sum(F, eachindex(states))
     return obj
 end
 
