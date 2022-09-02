@@ -440,17 +440,13 @@ apply_forces_to_equation!(diag_part, storage, model, eq, eq_s, force, time) = no
 
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
     n = number_of_equations_per_entity(model, eq)
-    e = zeros(n)
-    names = Vector{String}(undef, n)
-    for i = 1:n
-        @views ri = r[i, :]
-        e[i] = norm(ri, Inf)
-        names[i] = "R_$i"
-    end
+    @tullio max e[i] := abs(r[i, j])
     if n == 1
         names = "R"
+    else
+        names = map(i -> "R_$i", 1:n)
     end
-    R = Dict("AbsMax" => (errors = e, names = names))
+    R = (AbsMax = (errors = e, names = names), )
     return R
 end
 
