@@ -431,27 +431,37 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
         prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
     end
 
-    for (k, cache) in pairs(ct_s.target)
-        if k == :numeric
-            continue
-        end
-        cache::GenericAutoDiffCache
-        Tv = eltype(cache.entries)
-        state_t_local = local_ad(state_t, 1, Tv)
-        state0_t_local = local_ad(state0_t, 1, Tv)
-        update_cross_term_for_entity!(cache, ct, eq, state_t_local, state0_t_local, as_value(state_s), as_value(state0_s), model_t, model_s, dt)
+    state_s_v = as_value(state_s)
+    state0_s_v = as_value(state0_s)
+    for cache in values(ct_s.target)
+        update_cross_term_inner_target!(cache, ct, eq, state_s_v, state0_s_v, state_t, state0_t, model_t, model_s, dt)
     end
 
-    for (k, cache) in pairs(ct_s.source)
-        if k == :numeric
-            continue
-        end
-        cache::GenericAutoDiffCache
-        Tv = eltype(cache.entries)
-        state_s_local = local_ad(state_s, 1, Tv)
-        state0_s_local = local_ad(state0_s, 1, Tv)
-        update_cross_term_for_entity!(cache, ct, eq, as_value(state_t), as_value(state0_t), state_s_local, state0_s_local, model_t, model_s, dt)
+    state_t_v = as_value(state_t)
+    state0_t_v = as_value(state0_t)
+    for cache in values(ct_s.source)
+        update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
     end
+end
+
+function update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
+    nothing
+end
+
+function update_cross_term_inner_source!(cache::GenericAutoDiffCache{<:Any, <:Any, ∂x, <:Any, <:Any, <:Any, <:Any}, ct, eq, state_s, state0_s, state_t, state0_t, model_t, model_s, dt) where ∂x
+    state_s_local = local_ad(state_s, 1, ∂x)
+    state0_s_local = local_ad(state0_s, 1, ∂x)
+    update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s_local, state0_s_local, model_t, model_s, dt)
+end
+
+function update_cross_term_inner_target!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
+    nothing
+end
+
+function update_cross_term_inner_target!(cache::GenericAutoDiffCache{<:Any, <:Any, ∂x, <:Any, <:Any, <:Any, <:Any}, ct, eq, state_s, state0_s, state_t, state0_t, model_t, model_s, dt) where ∂x
+    state_t_local = local_ad(state_t, 1, ∂x)
+    state0_t_local = local_ad(state0_t, 1, ∂x)
+    update_cross_term_for_entity!(cache, ct, eq, state_t_local, state0_t_local, state_s, state0_s, model_t, model_s, dt)
 end
 
 function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
@@ -466,7 +476,6 @@ function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s
             state0_t = new_entity_index(state0_t, var)
             state_s = new_entity_index(state_s, var)
             state0_s = new_entity_index(state0_s, var)
-    
             update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
         end
     end
