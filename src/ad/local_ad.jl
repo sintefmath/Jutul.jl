@@ -93,7 +93,9 @@ end
 
 Create local_ad for state for index I of AD tag of type ad_tag
 """
-@inline function local_ad(state::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
+@inline local_ad(state, index, ad_tag) = local_state_ad(state, index, ad_tag)
+
+@inline function local_state_ad(state::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
     return LocalStateAD{T, I, ad_tag}(index, state)
 end
 

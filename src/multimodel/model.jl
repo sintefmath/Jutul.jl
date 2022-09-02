@@ -435,25 +435,26 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
         if k == :numeric
             continue
         end
+        cache::GenericAutoDiffCache
         Tv = eltype(cache.entries)
         state_t_local = local_ad(state_t, 1, Tv)
         state0_t_local = local_ad(state0_t, 1, Tv)
-        # new_entity_index
-        update_cross_term_for_entity!(cache, ct, eq, state_t_local, state0_t_local, as_value(state_s), as_value(state0_s), model_t, model_s, dt, true)
+        update_cross_term_for_entity!(cache, ct, eq, state_t_local, state0_t_local, as_value(state_s), as_value(state0_s), model_t, model_s, dt)
     end
 
     for (k, cache) in pairs(ct_s.source)
         if k == :numeric
             continue
         end
+        cache::GenericAutoDiffCache
         Tv = eltype(cache.entries)
         state_s_local = local_ad(state_s, 1, Tv)
         state0_s_local = local_ad(state0_s, 1, Tv)
-        update_cross_term_for_entity!(cache, ct, eq, as_value(state_t), as_value(state0_t), state_s_local, state0_s_local, model_t, model_s, dt, false)
+        update_cross_term_for_entity!(cache, ct, eq, as_value(state_t), as_value(state0_t), state_s_local, state0_s_local, model_t, model_s, dt)
     end
 end
 
-function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt, is_target)
+function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
     v = cache.entries
     vars = cache.variables
     for i in 1:number_of_entities(cache)
