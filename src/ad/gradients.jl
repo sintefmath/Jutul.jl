@@ -16,14 +16,10 @@ function solve_adjoint_sensitivities(model, states, reports, G; n_objective = no
     # One simulator object for the equations with respect to parameters
     set_global_timer!(extra_timing)
     # Allocation part
-    storage = setup_adjoint_storage(model; state0 = state0, kwarg...)
+    storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, kwarg...)
     parameter_model = storage.parameter.model
     n_param = number_of_degrees_of_freedom(parameter_model)
-    if isnothing(n_objective)
-        ∇G = zeros(n_param)
-    else
-        ∇G = zeros(n_objective, n_param)
-    end
+    ∇G = gradient_vec_or_mat(n_param, n_objective)
     # Timesteps
     timesteps = report_timesteps(reports)
     N = length(states)
@@ -48,7 +44,7 @@ end
 
 Set up storage for use with `solve_adjoint_sensitivities!`.
 """
-function setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model))
+function setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model), n_objective = nothing)
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
     forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
@@ -59,8 +55,18 @@ function setup_adjoint_storage(model; state0 = setup_state(model), parameters = 
     parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), mode = :sensitivities, extra_timing = nothing)
 
     n_pvar = number_of_degrees_of_freedom(model)
-    λ = zeros(n_pvar)
-    return (forward = forward_sim, backward = backward_sim, parameter = parameter_sim, lagrange = λ)
+    λ = gradient_vec_or_mat(n_pvar, n_objective)
+    fsim_s = forward_sim.storage
+    rhs = fsim_s.LinearizedSystem.r_buffer
+    dx = fsim_s.LinearizedSystem.dx_buffer
+
+    if !isnothing(n_objective)
+        # Need bigger buffers for multiple rhs
+        n = length(rhs)
+        rhs = gradient_vec_or_mat(n, n_objective)
+        dx = gradient_vec_or_mat(n, n_objective)
+    end
+    return (forward = forward_sim, backward = backward_sim, parameter = parameter_sim, lagrange = λ, dx = dx, rhs = rhs)
 end
 
 """
@@ -122,14 +128,29 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
     layout = matrix_layout(model.context)
     get_partial(x::AbstractFloat, i) = 0.0
     get_partial(x::ForwardDiff.Dual, i) = x.partials[i]
-    function diff_entity!(∂F∂x, state, i, S, ne, np, offset)
-        state_i = local_ad(state, i, S)
-        v = F(eval_model, state_i, extra_arg...)
+
+    function store_partials!(∂F∂x::AbstractVector, v, i, ne, np, offset)
         for p_i in 1:np
             ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
             ∂F∂x[ix] = get_partial(v, p_i)
         end
     end
+
+    function store_partials!(∂F∂x::AbstractMatrix, v, i, ne, np, offset)
+        for j in 1:size(∂F∂x, 2)
+            for p_i in 1:np
+                ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
+                ∂F∂x[ix, j] = get_partial(v[j], p_i)
+            end
+        end
+    end
+
+    function diff_entity!(∂F∂x, state, i, S, ne, np, offset)
+        state_i = local_ad(state, i, S)
+        v = F(eval_model, state_i, extra_arg...)
+        store_partials!(∂F∂x, v, i, ne, np, offset)
+    end
+
     offset = 0
     for e in get_primary_variable_ordered_entities(model)
         np = number_of_partials_per_entity(model, e)
@@ -158,7 +179,8 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     # Note the sign: There is an implicit negative sign in the linear solver when solving for the Newton increment. Therefore, the terms of the
     # right hand side are added with a positive sign instead of negative.
     lsys = forward_sim.storage.LinearizedSystem
-    rhs = lsys.r_buffer
+    rhs = adjoint_storage.rhs
+    dx = adjoint_storage.dx
     # Fill rhs with (∂J / ∂x)ᵀₙ (which will be treated with a negative sign when the result is written by the linear solver)
     @timeit "objective gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, i, forces))
     if isnothing(state_next)
@@ -173,19 +195,29 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         # In-place version of
         # rhs += op*λ
         # - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
-        mul!(rhs, op, λ, 1.0, 1.0)
+        sens_add_mult!(rhs, op, λ)
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
-    @timeit "linear solve" solve!(lsys)
-    @. λ = lsys.dx_buffer
+    @timeit "linear solve" solve!(lsys, dx = dx, r = rhs)
+    @. λ = dx
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
     @timeit "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces)
     lsys_next = parameter_sim.storage.LinearizedSystem
     op_p = linear_operator(lsys_next)
-    # In-place version of:
-    # ∇G += op_p*λ
-    mul!(∇G, op_p, λ, 1.0, 1.0)
+    sens_add_mult!(∇G, op_p, λ)
+end
+
+function sens_add_mult!(x::AbstractVector, op::LinearOperator, y::AbstractVector)
+    mul!(x, op, y, 1.0, 1.0)
+end
+
+function sens_add_mult!(x::AbstractMatrix, op::LinearOperator, y::AbstractMatrix)
+    for i in axes(x, 2)
+        x_i = vec(view(x, :, i))
+        y_i = vec(view(y, :, i))
+        sens_add_mult!(x_i, op, y_i)
+    end
 end
 
 function adjoint_reassemble!(sim, state, state0, dt, forces)
@@ -329,3 +361,6 @@ function store_sensitivities!(out, model, variables, result, ::EquationMajorLayo
     end
     return out
 end
+
+gradient_vec_or_mat(n, ::Nothing) = zeros(n)
+gradient_vec_or_mat(n, m) = zeros(n, m)

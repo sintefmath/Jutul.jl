@@ -258,17 +258,14 @@ linear_solve_return(ok = true, iterations = 1, stats = nothing) = (ok = ok, iter
 solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing) = solve!(sys, linsolve)
 solve!(sys::LSystem, linsolve::Nothing) = solve!(sys)
 
-function solve!(sys)
+function solve!(sys; dx = sys.dx, r = sys.r, J = sys.jac)
     limit = 50000
     n = length(sys.dx)
     if n > limit
         error("System too big for default direct solver. (Limit is $limit, system was $n by $n.")
     end
-    J = sys.jac
-    r = sys.r
-
-    sys.dx .= -(J\r)
-    @assert all(isfinite, sys.dx) "Linear solve resulted in non-finite values."
+    dx .= -(J\r)
+    @assert all(isfinite, dx) "Linear solve resulted in non-finite values."
     return linear_solve_return()
 end
 
