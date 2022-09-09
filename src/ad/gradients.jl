@@ -343,17 +343,18 @@ function store_sensitivities!(out, model, variables, result, ::EquationMajorLayo
     else
         N = size(result, 2)
     end
-
     for (k, var) in pairs(variables)
         n = number_of_degrees_of_freedom(model, var)
         m = degrees_of_freedom_per_entity(model, var)
         if n > 0
+            rng = (offset+1):(offset+n)
             if scalar_valued_objective
-                v = extract_sensitivity_subset(result, var, n, m, offset)
+                result_k = view(result, rng)
+                v = extract_sensitivity_subset(result_k, var, n, m, offset)
             else
                 # Grab each of the sensitivities and put them in an array for simplicity
                 v = map(
-                    i -> extract_sensitivity_subset(result, var, n, m, offset + n*(i-1)),
+                    i -> extract_sensitivity_subset(view(result, rng, i), var, n, m, offset + n*(i-1)),
                     1:N
                 )
             end
@@ -361,13 +362,12 @@ function store_sensitivities!(out, model, variables, result, ::EquationMajorLayo
         else
             out[k] = similar(result, 0)
         end
-        offset += n*N
+        offset += n
     end
     return out
 end
 
-function extract_sensitivity_subset(result, var, n, m, offset)
-    r = view(result, (offset+1):(offset+n))
+function extract_sensitivity_subset(r, var, n, m, offset)
     if var isa ScalarVariable
         v = r
     else
