@@ -337,29 +337,49 @@ function store_sensitivities!(out, model, result; kwarg...)
 end
 
 function store_sensitivities!(out, model, variables, result, ::EquationMajorLayout; offset = 0)
+    scalar_valued_objective = result isa AbstractVector
+    if scalar_valued_objective
+        N = 1
+    else
+        N = size(result, 2)
+    end
+
     for (k, var) in pairs(variables)
         n = number_of_degrees_of_freedom(model, var)
         m = degrees_of_freedom_per_entity(model, var)
         if n > 0
-            r = view(result, (offset+1):(offset+n))
-            if var isa ScalarVariable
-                v = r
+            if scalar_valued_objective
+                v = extract_sensitivity_subset(result, var, n, m, offset)
             else
-                v = reshape(r, m, n ÷ m)
-            end
-            v = collect(v)
-            scale = variable_scale(var)
-            # Variable was scaled - account for this before returning
-            if !isnothing(scale)
-                v ./= scale
+                # Grab each of the sensitivities and put them in an array for simplicity
+                v = map(
+                    i -> extract_sensitivity_subset(result, var, n, m, offset + n*(i-1)),
+                    1:N
+                )
             end
             out[k] = v
         else
             out[k] = similar(result, 0)
         end
-        offset += n
+        offset += n*N
     end
     return out
+end
+
+function extract_sensitivity_subset(result, var, n, m, offset)
+    r = view(result, (offset+1):(offset+n))
+    if var isa ScalarVariable
+        v = r
+    else
+        v = reshape(r, m, n ÷ m)
+    end
+    v = collect(v)
+    scale = variable_scale(var)
+    # Variable was scaled - account for this before returning
+    if !isnothing(scale)
+        v ./= scale
+    end
+    return v
 end
 
 gradient_vec_or_mat(n, ::Nothing) = zeros(n)
