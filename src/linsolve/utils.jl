@@ -19,6 +19,8 @@ mutable struct IterativeSolverConfig
     end
 end
 
+to_sparse_pattern(x::SparsePattern) = x
+
 function to_sparse_pattern(A::SparseMatrixCSC{Tv, Ti}) where {Tv, Ti}
     I, J, _ = findnz(A)
     n, m = size(A)

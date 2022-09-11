@@ -32,25 +32,23 @@ struct LinearizedSystem{L, J, V, Z, B} <: JutulLinearSystem
     matrix_layout::L
 end
 
-struct LinearizedBlock{M, R, C, J, B} <: JutulLinearSystem
+struct LinearizedBlock{R, C, J, B} <: JutulLinearSystem
     jac::J
     jac_buffer::B
-    matrix_layout::M
     rowcol_block_size::NTuple{2, Int}
-    function LinearizedBlock(sparse_arg, context, layout, layout_row, layout_col, rowcol_dim)
+    function LinearizedBlock(sparse_arg, context, layout_row, layout_col, rowcol_dim)
         jac, jac_buf = build_jacobian(sparse_arg, context, layout_row, layout_col)
-        new{typeof(layout), typeof(layout_row), typeof(layout_col), typeof(jac), typeof(jac_buf)}(jac, jac_buf, layout, rowcol_dim)
+        new{typeof(layout_row), typeof(layout_col), typeof(jac), typeof(jac_buf)}(jac, jac_buf, rowcol_dim)
     end
 end
 
 function LinearizedBlock(A, bz::Tuple, row_layout, col_layout)
     pattern = to_sparse_pattern(A)
-    layout = matrix_layout(A)
-    context = DefaultContext(matrix_layout = layout)
-    sys = LinearizedBlock(pattern, context, layout, row_layout, col_layout, bz)
+    context = DefaultContext(matrix_layout = row_layout)
+    sys = LinearizedBlock(pattern, context, row_layout, col_layout, bz)
     J = sys.jac
-    for (i, j, entry) in zip(findnz(A)...)
-        J[i, j] = entry
+    for (i, j) in zip(pattern.I, pattern.J)
+        J[i, j] = 0.0
     end
     return sys
 end
@@ -188,61 +186,58 @@ function linear_operator(sys::LinearizedSystem; skip_red = false)
     return op
 end
 
-function linear_operator(block::LinearizedBlock{T, T, T}; skip_red = false) where T
+function linear_operator(block::LinearizedBlock; skip_red = false)
     return LinearOperator(block.jac)
 end
 
-function linear_operator(block::LinearizedBlock{EquationMajorLayout, EquationMajorLayout, BlockMajorLayout}; skip_red = false)
-    # Matrix is equation major.
-    # Row (and output) is equation major.
-    # Column (and vector we multiply with) is block major
-    bz = col_block_size(block)
-    jac = block.jac
-    function apply!(res, x, α, β::T) where T
-        # Note: This is unfortunately allocating, but applying
-        # with a simple view leads to degraded performance.
-        @timeit "spmv" begin
-            x_v = collect(block_major_to_equation_major_view(x, bz))
-            mul!(res, jac, x_v, α, β)
-        end
-        return res
-    end
-    n, m = size(jac)
-    return LinearOperator(Float64, n, m, false, false, apply!)
-end
+# function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorLayout}; skip_red = false)
+#     # Matrix is equation major.
+#     # Row (and output) is equation major.
+#     # Column (and vector we multiply with) is block major
+#     jac = block.jac
+#     function apply!(res, x, α, β::T) where T
+#         @timeit "spmv" begin
+#             mul!(res, jac, x, α, β)
+#         end
+#         return res
+#     end
+#     n, m = size(jac)
+#     return LinearOperator(Float64, n, m, false, false, apply!)
+# end
 
-function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorLayout, EquationMajorLayout}; skip_red = false)
-    # Handle this case specifically:
-    # Matrix is equation major.
-    # Row (and output) is block major.
-    # Column (and vector we multiply with) is equation major.
-    bz = row_block_size(block)
-    jac = block.jac
+# function linear_operator(block::LinearizedBlock{BlockMajorLayout, EquationMajorLayout}; skip_red = false)
+#     # Handle this case specifically:
+#     # Matrix is equation major.
+#     # Row (and output) is block major.
+#     # Column (and vector we multiply with) is equation major.
+#     bz = row_block_size(block)
+#     jac = block.jac
 
-    function apply!(res, x, α, β::T) where T
-        # mul!(C, A, B, α, β) -> C
-        # A*B*α + C*β
-        @timeit "spmv" begin
-            tmp_cell_major = jac*x
-            if α != one(T)
-                lmul!(α, tmp_cell_major)
-            end
-            tmp_block_major = equation_major_to_block_major_view(tmp_cell_major, bz)
+#     function apply!(res, x, α, β::T) where T
+#         # mul!(C, A, B, α, β) -> C
+#         # A*B*α + C*β
+#         error()
+#         @timeit "spmv" begin
+#             tmp_cell_major = jac*x
+#             if α != one(T)
+#                 lmul!(α, tmp_cell_major)
+#             end
+#             tmp_block_major = equation_major_to_block_major_view(tmp_cell_major, bz)
 
-            if β == zero(T)
-                @. res = tmp_block_major
-            else
-                if β != one(T)
-                    lmul!(β, res)
-                end
-                @. res += tmp_block_major
-            end
-        end
-        return res
-    end
-    n, m = size(jac)
-    return LinearOperator(Float64, n, m, false, false, apply!)
-end
+#             if β == zero(T)
+#                 @. res = tmp_block_major
+#             else
+#                 if β != one(T)
+#                     lmul!(β, res)
+#                 end
+#                 @. res += tmp_block_major
+#             end
+#         end
+#         return res
+#     end
+#     n, m = size(jac)
+#     return LinearOperator(Float64, n, m, false, false, apply!)
+# end
 
 function vector_residual(sys)
     return sys.r

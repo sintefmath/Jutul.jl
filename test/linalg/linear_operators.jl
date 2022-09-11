@@ -135,21 +135,21 @@ function test_system(system)
 end
 
 
-@testset "Mixed block-scalar system" begin
-    @testset "Test system 1" begin
-        sys = system_1()
-        test_system(sys)
-    end
-    block_sizes = 2:10
-    matrix_sizes = 1:10
-    for bz in block_sizes
-        for ns in matrix_sizes
-            for nb in matrix_sizes
-                @testset "Rand" begin
-                    sys = system_rand(bz = bz, ns = ns, nb = nb)
-                    test_system(sys)
-                end
-            end
-        end
-    end
-end
+# @testset "Mixed block-scalar system" begin
+#     @testset "Test system 1" begin
+#         sys = system_1()
+#         test_system(sys)
+#     end
+#     block_sizes = 2:10
+#     matrix_sizes = 1:10
+#     @testset "Rand" begin
+#         for bz in block_sizes
+#             for ns in matrix_sizes
+#                 for nb in matrix_sizes
+#                     sys = system_rand(bz = bz, ns = ns, nb = nb)
+#                     test_system(sys)
+#                 end
+#             end
+#         end
+#     end
+# end

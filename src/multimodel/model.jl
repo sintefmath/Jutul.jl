@@ -168,24 +168,28 @@ function get_equation_offset(model::SimulationModel, eq_label::Symbol)
     error("Did not find equation")
 end
 
-function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol, context)
+function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol, row_context, col_context)
     models = model.models
     target_model = models[target]
     source_model = models[source]
-    layout = matrix_layout(context)
 
     if target == source
         # These are the main diagonal blocks each model knows how to produce themselves
         sarg = get_sparse_arguments(storage[target], target_model)
     else
+        row_layout = matrix_layout(row_context)
+        col_layout = matrix_layout(col_context)
+
+        row_layout = scalarize_layout(row_layout, col_layout)
+        col_layout = scalarize_layout(col_layout, row_layout)
+
         # Source differs from target. We need to get sparsity from cross model terms.
-        T = index_type(context)
+        T = index_type(row_context)
         I = Vector{Vector{T}}()
         J = Vector{Vector{T}}()
         ncols = number_of_degrees_of_freedom(source_model)
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
-        equations = target_model.equations
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target, true)
 
         for (ctp, s) in zip(cross_terms, cross_term_storage)
@@ -203,12 +207,13 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
                 ct_storage = s.source
                 entities = s.target_entities
             end
-            add_sparse_local!(I, J, ct, eq_label, ct_storage, target_model, source_model, entities, layout)
+            add_sparse_local!(I, J, ct, eq_label, ct_storage, target_model, source_model, entities, row_layout, col_layout)
         end
         I = vec(vcat(I...))
         J = vec(vcat(J...))
-        nrows = number_of_rows(target_model, layout)
-        sarg = SparsePattern(I, J, nrows, ncols, layout)
+        nrows = number_of_rows(target_model, row_layout)
+    
+        sarg = SparsePattern(I, J, nrows, ncols, row_layout, col_layout)
     end
     return sarg
 end
@@ -229,14 +234,14 @@ function number_of_rows(model, layout::BlockMajorLayout)
     return n
 end
 
-function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind, layout::EquationMajorLayout)
+function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind, row_layout::ScalarLayout, col_layout::ScalarLayout)
     eq = target_model.equations[eq_label]
     target_e = associated_entity(eq)
     entities = get_primary_variable_ordered_entities(source_model)
     equation_offset = get_equation_offset(target_model, eq_label)
     variable_offset = 0
     for (i, source_e) in enumerate(entities)
-        S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, layout)
+        S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, row_layout, col_layout)
         if !isnothing(S)
             rows = S.I
             cols = S.J
@@ -247,7 +252,7 @@ function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind
     end
 end
 
-function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, context)
+function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, row_context, col_context)
     I = []
     J = []
     outstr = "Determining sparse pattern of $(length(targets))×$(length(sources)) models:\n"
@@ -271,7 +276,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         variable_offset = 0
         n = 0
         for source in sources
-            sarg = get_sparse_arguments(storage, model, target, source, context)
+            sarg = get_sparse_arguments(storage, model, target, source, row_context, col_context)
             i, j, n, m = ijnm(sarg)
             bz_n = treat_block_size(bz_n, sarg.block_n)
             bz_m = treat_block_size(bz_m, sarg.block_m)
@@ -295,7 +300,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     J = vec(vcat(J...))
     bz_n = finalize_block_size(bz_n)
     bz_m = finalize_block_size(bz_m)
-    return SparsePattern(I, J, equation_offset, variable_offset, matrix_layout(context), bz_n, bz_m)
+    return SparsePattern(I, J, equation_offset, variable_offset, matrix_layout(row_context), matrix_layout(col_context), bz_n, bz_m)
 end
 
 function setup_linearized_system!(storage, model::MultiModel)
@@ -326,7 +331,7 @@ function setup_linearized_system!(storage, model::MultiModel)
             t = candidates[local_models]
             ctx = models[t[1]].context
             layout = matrix_layout(ctx)
-            sparse_arg = get_sparse_arguments(storage, model, t, t, ctx)
+            sparse_arg = get_sparse_arguments(storage, model, t, t, ctx, ctx)
 
             block_sizes[dpos] = sparse_arg.block_n
             global_subs = (base_pos+1):(base_pos+local_size)
@@ -356,13 +361,12 @@ function setup_linearized_system!(storage, model::MultiModel)
                 else
                     ctx = row_context
                 end
-                layout = matrix_layout(ctx)
-                sparse_pattern = get_sparse_arguments(storage, model, t, s, ctx)
-                if represented_as_adjoint(layout)
+                sparse_pattern = get_sparse_arguments(storage, model, t, s, row_context, col_context)
+                if represented_as_adjoint(row_layout)
                     sparse_pattern = sparse_pattern'
                 end
                 bz_pair = (block_sizes[rowg], block_sizes[colg])
-                subsystems[rowg, colg] = LinearizedBlock(sparse_pattern, ctx, layout, row_layout, col_layout, bz_pair)
+                subsystems[rowg, colg] = LinearizedBlock(sparse_pattern, bz_pair, row_layout, col_layout)
             end
             base_pos += local_size
         end
@@ -373,7 +377,7 @@ function setup_linearized_system!(storage, model::MultiModel)
             context = models[1].context
         end
         layout = matrix_layout(context)
-        sparse_pattern = get_sparse_arguments(storage, model, candidates, candidates, context)
+        sparse_pattern = get_sparse_arguments(storage, model, candidates, candidates, context, context)
         if represented_as_adjoint(matrix_layout(model.context))
             sparse_pattern = sparse_pattern'
         end

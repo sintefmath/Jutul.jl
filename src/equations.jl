@@ -273,7 +273,7 @@ function declare_sparsity(model, e::JutulEquation, eq_storage, entity, row_layou
 
         n_bz = number_of_equations_per_entity(model, e)
         m_bz = degrees_of_freedom_per_entity(model, entity)
-        out = SparsePattern(I, J, n, m, layout, n_bz, m_bz)
+        out = SparsePattern(I, J, n, m, row_layout, col_layout, n_bz, m_bz)
     end
     return out
 end

@@ -5,7 +5,7 @@ function update_linearized_system_crossterm!(nz, model_t, model_s, ct::Injective
 end
 
 
-function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, layout)
+function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, row_layout, col_layout)
     primitive = declare_pattern(target_model, x, x_storage, source_entity, entity_indices)
     if isnothing(primitive)
         out = nothing
@@ -17,36 +17,29 @@ function declare_sparsity(target_model, source_model, eq::JutulEquation, x::Cros
 
         n_partials = number_of_partials_per_entity(source_model, source_entity)
         n_eqs = number_of_equations_per_entity(target_model, eq)
-        # n_eqs = x.equations_per_entity
-        out = inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, layout)
+        out = inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, row_layout, col_layout)
     end
     return out
 end
 
-function inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, layout::EquationMajorLayout)
+function inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, row_layout::ScalarLayout, col_layout::ScalarLayout)
     F = eltype(target_impact)
-    I = Vector{Vector{F}}()
-    J = Vector{Vector{F}}()
-    for eqno in 1:n_eqs
-        for derno in 1:n_partials
-            push!(I, target_impact .+ (eqno-1)*nentities_target)
-            push!(J, source_impact .+ (derno-1)*nentities_source)
-        end
-    end
-    I = vcat(I...)
-    J = vcat(J...)
+    I = target_impact
+    J = source_impact
+    I, J = expand_block_indices(I, J, nentities_target, n_eqs, row_layout)
+    J, I = expand_block_indices(J, I, nentities_source, n_partials, col_layout)
 
     n = n_eqs*nentities_target
     m = n_partials*nentities_source
-    return SparsePattern(I, J, n, m, layout)
+    return SparsePattern(I, J, n, m, row_layout, col_layout)
 end
 
-function inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, layout::BlockMajorLayout)
+function inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, row_layout::T, col_layout::T) where T<:BlockMajorLayout
     I = target_impact
     J = source_impact
     n = nentities_target
     m = nentities_source
-    return SparsePattern(I, J, n, m, layout)
+    return SparsePattern(I, J, n, m, row_layout, col_layout)
 end
 
 function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, storage_t, storage_s)
