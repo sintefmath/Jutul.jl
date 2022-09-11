@@ -15,12 +15,14 @@ number_of_subsystems(ls::MultiLinearizedSystem) = size(ls.subsystems, 1)
 do_schur(sys) = sys.reduction == :schur_apply
 
 function equation_major_to_block_major_view(a, block_size)
-    @views x = reshape(reshape(vec(a), :, block_size)', :)
+    # @views x = reshape(reshape(vec(a), :, block_size)', :)
+    x = a
     return x
 end
 
 function block_major_to_equation_major_view(a, block_size)
-    @views x = reshape(reshape(vec(a), block_size, :)', :)
+    # @views x = reshape(reshape(vec(a), block_size, :)', :)
+    x = a
     return x
 end
 
@@ -117,7 +119,7 @@ end
 function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
     if do_schur(sys)
         bz = block_size(sys[1, 1])
-        if bz == 1
+        if bz == 1 || true
             Δx = dx
         else
             Δx = block_major_to_equation_major_view(dx, bz)
@@ -169,26 +171,32 @@ function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x
     N = length(res)
     n = N ÷ block_size
     # compute B*x
-    @timeit "spmv (schur)" begin
+    if false
+        @timeit "spmv (schur)" begin
+            mul!(res_v, B, x_v, α, β)
+            for i = 1:n
+                for b = 1:block_size
+                    ix = (i-1)*block_size + b
+                    jx = (b-1)*n + i
+                    @inbounds a_buf[jx] = x[ix]
+                end
+            end
+            mul!(b_buf, D, a_buf)
+            ldiv!(E, b_buf)
+            mul!(a_buf, C, b_buf)
+            # Convert back to block major and subtract
+            @batch minbatch = 1000 for i = 1:n
+                for b = 1:block_size
+                    ix = (i-1)*block_size + b
+                    jx = (b-1)*n + i
+                    @inbounds res[ix] -= a_buf[jx]
+                end
+            end
+        end
+    else
         mul!(res_v, B, x_v, α, β)
-        for i = 1:n
-            for b = 1:block_size
-                ix = (i-1)*block_size + b
-                jx = (b-1)*n + i
-                @inbounds a_buf[jx] = x[ix]
-            end
-        end
-        mul!(b_buf, D, a_buf)
-        ldiv!(E, b_buf)
-        mul!(a_buf, C, b_buf)
-        # Convert back to block major and subtract
-        @batch minbatch = 1000 for i = 1:n
-            for b = 1:block_size
-                ix = (i-1)*block_size + b
-                jx = (b-1)*n + i
-                @inbounds res[ix] -= a_buf[jx]
-            end
-        end
+        tmp = C*(E\(D*x))
+        @. res  -= tmp
     end
     return res
     # Simple version:
