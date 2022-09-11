@@ -37,21 +37,11 @@ end
 
 function prepare_solve!(sys::MultiLinearizedSystem)
     if do_schur(sys)
-        B, C, D, E, a, b = get_schur_blocks!(sys, true, update = true)
-        e = eltype(B)
-        is_float = e <: Real
-
-        a_buf = sys.schur_buffer[1]
+        _, C, _, E, a, b = get_schur_blocks!(sys, true, update = true)
         b_buf = sys.schur_buffer[2]
-        # The following is the in-place version of Δa = C*(E\b)
+        # The following is the in-place version of a -= C*(E\b)
         ldiv!(b_buf, E, b)
-        mul!(a_buf, C, b_buf)
-        Δa = a_buf
-        if !is_float
-            bz = size(e, 1)
-            Δa = equation_major_to_block_major_view(Δa, bz)
-        end
-        @. a -= Δa
+        mul!(a, C, b_buf, -1.0, 1.0)
     end
 end
 
@@ -118,12 +108,7 @@ end
 
 function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
     if do_schur(sys)
-        bz = block_size(sys[1, 1])
-        if bz == 1 || true
-            Δx = dx
-        else
-            Δx = block_major_to_equation_major_view(dx, bz)
-        end
+        Δx = dx
         buf_a = sys.schur_buffer[1]
         buf_b = sys.schur_buffer[2]
         _, C, D, E, a, b = get_schur_blocks!(sys)
