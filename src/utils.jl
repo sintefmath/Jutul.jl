@@ -119,7 +119,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                 local_names = C.names
                 tol = tolerances[crit]
                 touched = false
-                for (i, e) in enumerate(Array(local_errors))
+                for (i, e) in enumerate(local_errors)
                     touch = print_converged || e > tol
                     if touch && !touched
                         nm = eq.name
