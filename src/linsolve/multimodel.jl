@@ -120,7 +120,8 @@ function schur_mul_internal!(res, res_v, b_buf, B, C, D, E, x, x_v, α, β::T) w
         mul!(res_v, B, x_v, α, β)
         mul!(b_buf, D, x)
         ldiv!(E, b_buf)
-        mul!(res, C, b_buf, -1.0, 1.0)
+        mul!(res, C, b_buf, -α, 1.0)
+        # β*res .= α*(B*x - C*(E\(D*x)))
     end
     return res
     # Simple version:
