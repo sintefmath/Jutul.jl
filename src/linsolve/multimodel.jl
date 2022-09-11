@@ -14,27 +14,6 @@ number_of_subsystems(ls::MultiLinearizedSystem) = size(ls.subsystems, 1)
 
 do_schur(sys) = sys.reduction == :schur_apply
 
-function equation_major_to_block_major_view(a, block_size)
-    # @views x = reshape(reshape(vec(a), :, block_size)', :)
-    x = a
-    return x
-end
-
-function block_major_to_equation_major_view(a, block_size)
-    # @views x = reshape(reshape(vec(a), block_size, :)', :)
-    x = a
-    return x
-end
-
-@inline major_to_minor(n::I, m::I, i::I) where I = (n*((i - 1) % m) + 1 + ((i - 1) ÷ m))::I
-@inline from_block_index(bz, nc, i) = major_to_minor(bz, nc, i)
-@inline from_entity_index(bz, nc, i) = major_to_minor(nc, bz, i)
-
-
-@inline from_block_urange(bz, n, b) = (b-1)*n+1:b*n
-@inline from_entity_urange(bz, n, b) = b:bz:((n-1)*bz+b)
-
-
 function prepare_solve!(sys::MultiLinearizedSystem)
     if do_schur(sys)
         _, C, _, E, a, b = get_schur_blocks!(sys, true, update = true)
