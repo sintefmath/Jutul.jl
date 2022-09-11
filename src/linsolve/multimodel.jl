@@ -68,7 +68,7 @@ function linear_operator(sys::MultiLinearizedSystem; skip_red = false)
         T = eltype(sys[1, 1].r)
         a_buf = sys.schur_buffer[1]
         b_buf = sys.schur_buffer[2]
-        apply! = (res, x, α, β) -> schur_mul!(res, a_buf, b_buf, T, B, C, D, E, x, α, β)
+        apply! = (res, x, α, β) -> schur_mul!(res, b_buf, T, B, C, D, E, x, α, β)
         op = LinearOperator(Float64, n, n, false, false, apply!)
     else
         S = sys.subsystems
@@ -104,7 +104,6 @@ function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
 end
 
 function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_a, buf_b)
-
     @tullio A[i] = -dx[i]
     # We want to do (in-place):
     # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
@@ -119,18 +118,7 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_a, buf_b)
     ldiv!(B, E, buf_b)
 end
 
-function schur_mul_float!(res, B, C, D, E, x, α, β::T) where T
-    @assert β == zero(T) "Only β == 0 implemented."
-    # compute B*x
-    mul!(res, B, x)
-    drs = C*(E\(D*x))
-    @tullio res[i] = res[i] - drs[i]
-    if α != one(T)
-        lmul!(α, res)
-    end
-end
-
-function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x_v, α, β::T) where T
+function schur_mul_internal!(res, res_v, b_buf, B, C, D, E, x, x_v, α, β::T) where T
     @timeit "spmv (schur)" begin
         mul!(res_v, B, x_v, α, β)
         mul!(b_buf, D, x)
@@ -142,15 +130,15 @@ function schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x
     # res .= B*x - C*(E\(D*x))
 end
 
-function schur_mul!(res, a_buf, b_buf, r_type, B, C, D, E, x, α, β)
+function schur_mul!(res, b_buf, r_type, B, C, D, E, x, α, β)
     if r_type == eltype(res)
-        schur_mul_float!(res, B, C, D, E, x, α, β)
+        res_v = res
+        x_v = x
     else
         res_v = reinterpret(r_type, res)
         x_v = reinterpret(r_type, x)
-        block_size = length(r_type)
-        schur_mul_block!(res, res_v, a_buf, b_buf, block_size, B, C, D, E, x, x_v, α, β)
     end
+    schur_mul_internal!(res, res_v, b_buf, B, C, D, E, x, x_v, α, β)
 end
 
 function jacobian(sys::MultiLinearizedSystem)
