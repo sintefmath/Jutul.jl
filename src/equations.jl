@@ -58,7 +58,7 @@ function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::Eq
     return n_outer*(index_inner-1) + index_outer
 end
 
-function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::UnitMajorLayout)
+function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::EntityMajorLayout)
     return n_inner*(index_outer-1) + index_inner
 end
 
@@ -219,7 +219,7 @@ end
 Give out I, J arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_sparsity(model, e::JutulEquation, eq_storage, entity, layout::EquationMajorLayout)
+function declare_sparsity(model, e::JutulEquation, eq_storage, entity, row_layout, col_layout = row_layout)
     primitive = declare_pattern(model, e, eq_storage, entity)
     if isnothing(primitive)
         out = nothing
@@ -234,23 +234,35 @@ function declare_sparsity(model, e::JutulEquation, eq_storage, entity, layout::E
         nu = number_of_entities(model, e)
         nentities = count_active_entities(model.domain, entity, for_variables = false)
         nrow_blocks = number_of_equations_per_entity(model, e)
+        # Rows
+        I, J = expand_block_indices(I, J, nu, nrow_blocks, row_layout)
         ncol_blocks = number_of_partials_per_entity(model, entity)
-        if nrow_blocks > 1
-            I = vcat(map((x) -> (x-1)*nu .+ I, 1:nrow_blocks)...)
-            J = repeat(J, nrow_blocks)
-        end
-        if ncol_blocks > 1
-            I = repeat(I, ncol_blocks)
-            J = vcat(map((x) -> (x-1)*nentities .+ J, 1:ncol_blocks)...)
-        end
+        # Columns (switched order)
+        J, I = expand_block_indices(J, I, nentities, ncol_blocks, col_layout)
         n = number_of_equations(model, e)
         m = nentities*ncol_blocks
-        out = SparsePattern(I, J, n, m, layout)
+        out = SparsePattern(I, J, n, m, row_layout, col_layout)
     end
     return out
 end
 
-function declare_sparsity(model, e::JutulEquation, eq_storage, entity, layout::BlockMajorLayout)
+function expand_block_indices(I, J, ntotal, nblocks, layout::EquationMajorLayout)
+    if nblocks > 1
+        I = vcat(map((x) -> (x-1)*ntotal .+ I, 1:nblocks)...)
+        J = repeat(J, nblocks)
+    end
+    return (I, J)
+end
+
+function expand_block_indices(I, J, ntotal, nblocks, layout::EntityMajorLayout)
+    if nblocks > 1
+        I = vcat(map((x) -> nblocks*(I .- 1) .+ x, 1:nblocks)...)
+        J = repeat(J, nblocks)
+    end
+    return (I, J)
+end
+
+function declare_sparsity(model, e::JutulEquation, eq_storage, entity, row_layout::T, col_layout::T = row_layout) where T<:BlockMajorLayout
     primitive = declare_pattern(model, e, eq_storage, entity)
     if isnothing(primitive)
         out = nothing
@@ -262,37 +274,6 @@ function declare_sparsity(model, e::JutulEquation, eq_storage, entity, layout::B
         n_bz = number_of_equations_per_entity(model, e)
         m_bz = degrees_of_freedom_per_entity(model, entity)
         out = SparsePattern(I, J, n, m, layout, n_bz, m_bz)
-    end
-    return out
-end
-
-function declare_sparsity(model, e::JutulEquation, e_storage, entity, layout::UnitMajorLayout)
-    primitive = declare_pattern(model, e, e_storage, entity)
-    if isnothing(primitive)
-        out = nothing
-    else
-        I, J = primitive
-        ni = length(I)
-        nj = length(J)
-        if length(I) != length(J)
-            error("Pattern I, J for $(typeof(e)) must have equal lengths for entity $(typeof(entity)). (|I| = $ni != $nj = |J|)")
-        end
-        nu = number_of_entities(model, e)
-        nu_other = count_entities(model.domain, entity)
-        nrow_blocks = number_of_equations_per_entity(model, e)
-        ncol_blocks = number_of_partials_per_entity(model, entity)
-        nentities = count_entities(model.domain, entity)
-        if nrow_blocks > 1
-            I = vcat(map((x) -> nrow_blocks*(I .- 1) .+ x, 1:nrow_blocks)...)
-            J = repeat(J, nrow_blocks)
-        end
-        if ncol_blocks > 1
-            I = repeat(I, ncol_blocks)
-            J = vcat(map((x) -> (J .- 1)*ncol_blocks .+ x, 1:ncol_blocks)...)
-        end
-        n = number_of_equations(model, e)
-        m = nentities*ncol_blocks
-        out = SparsePattern(I, J, n, m, layout)
     end
     return out
 end

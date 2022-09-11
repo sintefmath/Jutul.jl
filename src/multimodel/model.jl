@@ -213,7 +213,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
     return sarg
 end
 
-function number_of_rows(model, layout::Union{EquationMajorLayout, UnitMajorLayout})
+function number_of_rows(model, layout::Union{EquationMajorLayout, EntityMajorLayout})
     n = 0
     for eq in values(model.equations)
         n += number_of_equations(model, eq)

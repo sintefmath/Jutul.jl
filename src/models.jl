@@ -299,10 +299,10 @@ end
 
 function get_sparse_arguments(storage, model)
     layout = matrix_layout(model.context)
-    return get_sparse_arguments(storage, model, layout)
+    return get_sparse_arguments(storage, model, layout, layout)
 end
 
-function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout, UnitMajorLayout})
+function get_sparse_arguments(storage, model, row_layout::ScalarLayout, col_layout::ScalarLayout)
     ndof = number_of_degrees_of_freedom(model)
     eq_storage = storage[:equations]
     I = []
@@ -314,7 +314,7 @@ function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout,
         eq = model.equations[eqname]
         eq_s = eq_storage[eqname]
         for u in primary_entities
-            S = declare_sparsity(model, eq, eq_s, u, layout)
+            S = declare_sparsity(model, eq, eq_s, u, row_layout, col_layout)
             if !isnothing(S)
                 push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
                 push!(J, S.J .+ numcols) # Column indices, offset by the partials in entities we have passed
@@ -327,10 +327,10 @@ function get_sparse_arguments(storage, model, layout::Union{EquationMajorLayout,
     end
     I = vcat(I...)
     J = vcat(J...)
-    return SparsePattern(I, J, numrows, ndof, layout)
+    return SparsePattern(I, J, numrows, ndof, row_layout, col_layout)
 end
 
-function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
+function get_sparse_arguments(storage, model, row_layout::T, col_layout::T) where T<:BlockMajorLayout
     eq_storage = storage[:equations]
     I = []
     J = []
@@ -346,7 +346,7 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
         for u in primary_entities
             dof_per_entity = degrees_of_freedom_per_entity(model, u)
             @assert dof_per_entity == eqs_per_entity == block_size "Block major layout only supported for square blocks."
-            S = declare_sparsity(model, eq, eq_s, u, layout)
+            S = declare_sparsity(model, eq, eq_s, u, row_layout, col_layout)
             if !isnothing(S)
                 push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
                 push!(J, S.J .+ numcols) # Column indices, offset by the partials in entities we have passed
@@ -360,7 +360,7 @@ function get_sparse_arguments(storage, model, layout::BlockMajorLayout)
 
     I = Vector{it}(vcat(I...))
     J = Vector{it}(vcat(J...))
-    return SparsePattern(I, J, numrows, ndof, layout, block_size)
+    return SparsePattern(I, J, numrows, ndof, row_layout, col_layout, block_size)
 end
 
 function setup_linearized_system!(storage, model::JutulModel)

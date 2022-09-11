@@ -38,7 +38,7 @@ struct LinearizedBlock{M, R, C, J, B} <: JutulLinearSystem
     matrix_layout::M
     rowcol_block_size::NTuple{2, Int}
     function LinearizedBlock(sparse_arg, context, layout, layout_row, layout_col, rowcol_dim)
-        jac, jac_buf = build_jacobian(sparse_arg, context, layout)
+        jac, jac_buf = build_jacobian(sparse_arg, context, layout_row, layout_col)
         new{typeof(layout), typeof(layout_row), typeof(layout_col), typeof(jac), typeof(jac_buf)}(jac, jac_buf, layout, rowcol_dim)
     end
 end
@@ -125,11 +125,12 @@ function LinearizedSystem(A, r = nothing)
 end
 
 
-function build_jacobian(sparse_arg, context, layout)
-    @assert sparse_arg.layout == layout
+function build_jacobian(sparse_arg, context, layout_row, layout_col = layout_row)
+    # @assert sparse_arg.layout == layout
     I, J, n, m = ijnm(sparse_arg)
     bz = block_size(sparse_arg)
-    Jt = jacobian_eltype(context, layout, bz)
+    Jt = jacobian_eltype(context, layout_row, bz)
+    @assert Jt == jacobian_eltype(context, layout_col, bz)
     Ft = float_type(context)
 
     V = zeros(Jt, length(I))

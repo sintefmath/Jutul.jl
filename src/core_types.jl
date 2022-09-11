@@ -5,7 +5,7 @@ export Cells, Nodes, Faces, declare_entities
 export ConstantVariables, ScalarVariable, GroupedVariables, FractionVariables
 
 export SingleCUDAContext, DefaultContext
-export BlockMajorLayout, EquationMajorLayout, UnitMajorLayout
+export BlockMajorLayout, EquationMajorLayout, EntityMajorLayout
 
 export transfer, allocate_array
 
@@ -57,14 +57,16 @@ is_cell_major(::EquationMajorLayout) = false
 """
 Domain entities sequentially in rows:
 """
-struct UnitMajorLayout <: JutulMatrixLayout
+struct EntityMajorLayout <: JutulMatrixLayout
     as_adjoint::Bool
 end
-UnitMajorLayout() = UnitMajorLayout(false)
-is_cell_major(::UnitMajorLayout) = true
+EntityMajorLayout() = EntityMajorLayout(false)
+is_cell_major(::EntityMajorLayout) = true
+
+const ScalarLayout = Union{EquationMajorLayout, EntityMajorLayout}
 
 """
-Same as UnitMajorLayout, but the nzval is a matrix
+Same as EntityMajorLayout, but the nzval is a matrix
 """
 struct BlockMajorLayout <: JutulMatrixLayout
     as_adjoint::Bool
@@ -83,15 +85,16 @@ function Base.adjoint(layout::T) where T <: JutulMatrixLayout
     return T(true)
 end
 
-struct SparsePattern{L}
+struct SparsePattern{L_r, L_c}
     I
     J
     n
     m
     block_n
     block_m
-    layout::L
-    function SparsePattern(I, J, n::T, m::T, layout, block_n::T = 1, block_m::T = block_n) where {T <: Integer}
+    layout_row::L_r
+    layout_col::L_c
+    function SparsePattern(I, J, n::T, m::T, layout_row::LR, layout_col::LC, block_n::T = 1, block_m::T = block_n) where {T <: Integer, LR, LC}
         if isa(I, Integer)
             @assert isa(J, Integer)
             I = vec(I)
@@ -117,7 +120,7 @@ struct SparsePattern{L}
         if m == 0
             @debug "Pattern has zero columns?" n m I J
         end
-        new{typeof(layout)}(I, J, n, m, block_n, block_m, layout)
+        new{LR, LC}(I, J, n, m, block_n, block_m, layout_row, layout_col)
     end
 end
 
