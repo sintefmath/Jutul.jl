@@ -338,6 +338,8 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
                                                                                    variable_offset = variable_offset,
                                                                                    positions = offdiag_alignment,
                                                                                    number_of_entities_target = nt,
+                                                                                   row_layout = matrix_layout(target_model.context),
+                                                                                   col_layout = matrix_layout(source_model.context),
                                                                                    context = model.context)
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
         a = offdiag_alignment[Symbol(source_e)]

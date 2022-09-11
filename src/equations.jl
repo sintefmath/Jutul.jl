@@ -23,6 +23,9 @@ function find_jac_position(A, target_entity_index, source_entity_index,
     nentities_target, nentities_source,
     eqs_per_entity, partials_per_entity, row_layout, col_layout)
     # get row and column index in the specific layout we are looking at
+    row_layout = scalarize_layout(row_layout, col_layout)
+    col_layout = scalarize_layout(col_layout, row_layout)
+
     row, col = row_col_sparse(target_entity_index, source_entity_index,
     equation_index, partial_index,
     nentities_target, nentities_source,
@@ -40,7 +43,7 @@ function find_jac_position(A, target_entity_index, source_entity_index,
     row = target_entity_index
     col = source_entity_index
 
-    pos = find_sparse_position(A, row, col, row_layout)
+    pos = find_sparse_position(A, row, col, EntityMajorLayout())
     return (pos-1)*eqs_per_entity*partials_per_entity + eqs_per_entity*(partial_index-1) + equation_index
 end
 
@@ -325,13 +328,10 @@ function align_to_jacobian!(eq_s, eq, jac, model; variable_offset = 0, kwarg...)
 end
 
 
-function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; context = model.context, positions = nothing, equation_offset = 0, variable_offset = 0, number_of_entities_target = nothing)
+function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; context = model.context, positions = nothing, equation_offset = 0, variable_offset = 0, number_of_entities_target = nothing, kwarg...)
     # Use generic version
     k = Symbol(entity)
     has_pos = !isnothing(positions)
-    if has_pos
-        # @assert keys(positions) == keys(eq_s)
-    end
     if haskey(eq_s, k)
         cache = eq_s[k]
         if has_pos
@@ -351,7 +351,8 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; context = mode
         injective_alignment!(cache, eq, jac, entity, context, pos = pos, target_index = I, source_index = J,
                                                                     number_of_entities_source = cache.number_of_entities_source,
                                                                     number_of_entities_target = nt,
-                                                                    target_offset = equation_offset, source_offset = variable_offset)
+                                                                    target_offset = equation_offset, source_offset = variable_offset
+                                                                    ; kwarg...)
     else
         @warn "Did not find $k in $(keys(eq_s))"
     end
