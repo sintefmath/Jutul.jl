@@ -14,33 +14,33 @@ function find_jac_position(A, target_entity_index, source_entity_index, # Typica
         equation_index, partial_index,
         nentities_target, nentities_source, 
         eqs_per_entity, partials_per_entity, 
-        layout
+        layout, layout
         )
 end
 
 function find_jac_position(A, target_entity_index, source_entity_index,
     equation_index, partial_index,
     nentities_target, nentities_source,
-    eqs_per_entity, partials_per_entity, layout::JutulMatrixLayout)
+    eqs_per_entity, partials_per_entity, row_layout, col_layout)
     # get row and column index in the specific layout we are looking at
     row, col = row_col_sparse(target_entity_index, source_entity_index,
     equation_index, partial_index,
     nentities_target, nentities_source,
-    eqs_per_entity, partials_per_entity, layout)
+    eqs_per_entity, partials_per_entity, row_layout, col_layout)
     # find_sparse_position then dispatches on the matrix type to find linear indices
     # for whatever storage format A uses internally
-    return find_sparse_position(A, row, col, layout)
+    return find_sparse_position(A, row, col, row_layout)
 end
 
 function find_jac_position(A, target_entity_index, source_entity_index,
     equation_index, partial_index,
     nentities_target, nentities_source,
-    eqs_per_entity, partials_per_entity, layout::BlockMajorLayout)
+    eqs_per_entity, partials_per_entity, row_layout::T, col_layout::T) where T<:BlockMajorLayout
 
     row = target_entity_index
     col = source_entity_index
 
-    pos = find_sparse_position(A, row, col, layout)
+    pos = find_sparse_position(A, row, col, row_layout)
     return (pos-1)*eqs_per_entity*partials_per_entity + eqs_per_entity*(partial_index-1) + equation_index
 end
 
@@ -48,9 +48,9 @@ function row_col_sparse(target_entity_index, source_entity_index, # Typically ro
     equation_index, partial_index,                                # Index of equation and partial derivative - local index
     nentities_target, nentities_source,                           # Row and column sizes for each sub-system
     eqs_per_entity, partials_per_entity,                          # Sizes of the smallest inner system
-    layout)
-    row = alignment_linear_index(target_entity_index, equation_index, nentities_target, eqs_per_entity, layout)
-    col = alignment_linear_index(source_entity_index, partial_index, nentities_source, partials_per_entity, layout)
+    row_layout, col_layout)
+    row = alignment_linear_index(target_entity_index, equation_index, nentities_target, eqs_per_entity, row_layout)
+    col = alignment_linear_index(source_entity_index, partial_index, nentities_source, partials_per_entity, col_layout)
     return (row, col)
 end
 

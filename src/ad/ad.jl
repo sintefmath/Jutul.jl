@@ -90,7 +90,8 @@ end
 
 function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, context;
                                     pos = nothing,
-                                    layout = matrix_layout(context),
+                                    row_layout = matrix_layout(context),
+                                    col_layout = row_layout,
                                     target_index = 1:cache.number_of_entities,
                                     source_index = 1:cache.number_of_entities,
                                     number_of_entities_source = nothing,
@@ -117,11 +118,11 @@ function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, conte
         end
         N = length(source_index)
         @assert length(target_index) == N
-        do_injective_alignment!(pos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
+        do_injective_alignment!(pos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, row_layout, col_layout)
     end
 end
 
-function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, layout)
+function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, row_layout, col_layout)
     np = number_of_partials(cache)
     for index in 1:length(source_index)
         target = target_index[index]
@@ -131,7 +132,7 @@ function do_injective_alignment!(jpos, cache, jac, target_index, source_index, n
                 jpos[jacobian_cart_ix(index, e, d, np)] = find_jac_position(jac, target + target_offset, source + source_offset, e, d, 
                 nu_t, nu_s,
                 ne, np,
-                layout)
+                row_layout, col_layout)
             end
         end
     end
@@ -139,49 +140,49 @@ end
 
 
 
-function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext, layout)
-    t = index_type(context)
+# function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext, layout)
+#     t = index_type(context)
 
-    ns = t(length(source_index))
-    nu_t = t(nu_t)
-    dims = (ns, ne, np)
-    target_index = UnitRange{t}(target_index)
-    source_index = UnitRange{t}(source_index)
-    @kernel function cu_injective_align(jpos, 
-                                    @Const(rows), @Const(cols),
-                                    @Const(target_index), @Const(source_index),
-                                    nu_t, nu_s, ne, np, 
-                                    target_offset, source_offset,
-                                    layout)
-        index, e, d = @index(Global, NTuple)
-        target = target_index[index]
-        source = source_index[index]
+#     ns = t(length(source_index))
+#     nu_t = t(nu_t)
+#     dims = (ns, ne, np)
+#     target_index = UnitRange{t}(target_index)
+#     source_index = UnitRange{t}(source_index)
+#     @kernel function cu_injective_align(jpos, 
+#                                     @Const(rows), @Const(cols),
+#                                     @Const(target_index), @Const(source_index),
+#                                     nu_t, nu_s, ne, np, 
+#                                     target_offset, source_offset,
+#                                     layout)
+#         index, e, d = @index(Global, NTuple)
+#         target = target_index[index]
+#         source = source_index[index]
 
-        row, col = row_col_sparse(target + target_offset, source + source_offset, e, d, 
-        nu_t, nu_s,
-        ne, np,
-        layout)
+#         row, col = row_col_sparse(target + target_offset, source + source_offset, e, d, 
+#         nu_t, nu_s,
+#         ne, np,
+#         layout)
         
-        # ix = find_sparse_position_CSC(rows, cols, row, col)
+#         # ix = find_sparse_position_CSC(rows, cols, row, col)
 
-        T = eltype(cols)
-        ix = 0
-        for pos = cols[col]:cols[col+1]-1
-            if rows[pos] == row
-                ix = pos
-                break
-            end
-        end
-        j_ix = jacobian_row_ix(e, d, np)
-        jpos[j_ix, index] = ix
-    end
-    kernel = cu_injective_align(context.device, context.block_size)
+#         T = eltype(cols)
+#         ix = 0
+#         for pos = cols[col]:cols[col+1]-1
+#             if rows[pos] == row
+#                 ix = pos
+#                 break
+#             end
+#         end
+#         j_ix = jacobian_row_ix(e, d, np)
+#         jpos[j_ix, index] = ix
+#     end
+#     kernel = cu_injective_align(context.device, context.block_size)
     
-    rows = jac.rowVal
-    cols = jac.colPtr
-    event_jac = kernel(jpos, rows, cols, target_index, source_index, nu_t, nu_s, ne, np, t(target_offset), t(source_offset), layout, ndrange = dims)
-    wait(event_jac)
-end
+#     rows = jac.rowVal
+#     cols = jac.colPtr
+#     event_jac = kernel(jpos, rows, cols, target_index, source_index, nu_t, nu_s, ne, np, t(target_offset), t(source_offset), layout, ndrange = dims)
+#     wait(event_jac)
+# end
 
 """
 Convert a state containing variables as arrays of doubles
