@@ -107,10 +107,7 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_a, buf_b)
     @tullio A[i] = -dx[i]
     # We want to do (in-place):
     # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
-    @inbounds for i in eachindex(Δx)
-        buf_a[i] = Δx[i]
-    end
-    mul!(buf_b, D, buf_a)
+    mul!(buf_b, D, Δx)
     # now buf_b = D*Δx
     @inbounds for i in eachindex(b)
         buf_b[i] -= b[i]
