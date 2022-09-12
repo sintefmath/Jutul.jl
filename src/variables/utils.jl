@@ -21,6 +21,18 @@ function number_of_degrees_of_freedom(model::JutulModel)
     return ndof
 end
 
+export number_of_values
+"""
+Total number of values for a model, for a given type of variables over all entities
+"""
+function number_of_values(model, type = :primary)
+    ndof = 0
+    for (pkey, pvar) in pairs(get_variables_by_type(model, type))
+        ndof += number_of_values(model, pvar)
+    end
+    return ndof
+end
+
 function number_of_degrees_of_freedom(model::JutulModel, u::JutulEntity)
     ndof = degrees_of_freedom_per_entity(model, u)*count_active_entities(model.domain, u, for_variables = true)
     return ndof
@@ -42,6 +54,8 @@ function number_of_degrees_of_freedom(model, pvars::JutulVariables)
     m = degrees_of_freedom_per_entity(model, pvars)
     return n*m
 end
+
+number_of_values(model, pvars::JutulVariables) = prod(value_dim(model, pvars))
 
 function value_dim(model, pvars::JutulVariables)
     return (values_per_entity(model, pvars), number_of_entities(model, pvars))

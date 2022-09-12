@@ -2,12 +2,7 @@ export vectorize_variables, vectorize_variables!, devectorize_variables!
 
 
 function vectorize_variables(model, state_or_prm, type = :primary)
-    vars = get_variables_by_type(model, type)
-    n = 0
-    for (k, v) in pairs(vars)
-        @info k
-        n += values_per_entity(model, v)*number_of_entities(model, v)
-    end
+    n = number_of_values(model, type)
     V = zeros(n)
     return vectorize_variables!(V, model, state_or_prm, type)
 end
