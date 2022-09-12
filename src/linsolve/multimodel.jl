@@ -67,7 +67,7 @@ function linear_operator(sys::MultiLinearizedSystem; skip_red = false)
         n = size(C, 1)
         T = eltype(sys[1, 1].r)
         b_buf = sys.schur_buffer[2]
-        apply! = (res, x, α, β) -> schur_mul!(res, b_buf, T, B, C, D, E, x, α, β)
+        apply! = (res, x, α, β) -> schur_mul!(res, b_buf, Val(T), B, C, D, E, x, α, β)
         op = LinearOperator(Float64, n, n, false, false, apply!)
     else
         S = sys.subsystems
@@ -115,25 +115,19 @@ end
 
 function schur_mul_internal!(res, res_v, b_buf, B, C, D, E, x, x_v, α, β::T) where T
     @timeit "spmv (schur)" begin
+        # This function does:
+        # β*res .= α*(B*x - C*(E\(D*x)))
         mul!(res_v, B, x_v, α, β)
         mul!(b_buf, D, x)
         ldiv!(E, b_buf)
         mul!(res, C, b_buf, -α, 1.0)
-        # β*res .= α*(B*x - C*(E\(D*x)))
     end
     return res
-    # Simple version:
-    # res .= B*x - C*(E\(D*x))
 end
 
-function schur_mul!(res, b_buf, r_type, B, C, D, E, x, α, β)
-    if r_type == eltype(res)
-        res_v = res
-        x_v = x
-    else
-        res_v = reinterpret(r_type, res)
-        x_v = reinterpret(r_type, x)
-    end
+function schur_mul!(res, b_buf, ::Val{r_type}, B, C, D, E, x, α, β) where r_type
+    res_v = reinterpret(r_type, res)
+    x_v = reinterpret(r_type, x)
     schur_mul_internal!(res, res_v, b_buf, B, C, D, E, x, x_v, α, β)
 end
 
