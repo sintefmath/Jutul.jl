@@ -18,7 +18,7 @@ function vectorize_variables!(V, model, state_or_prm, type = :primary, offset = 
     return V
 end
 
-function devectorize_variables!(state_or_prm, model, V, type = :primary)
+function devectorize_variables!(state_or_prm, model, V, type = :primary, offset = 0)
     vars = get_variables_by_type(model, type)
     for k in keys(vars)
         state_val = state_or_prm[k]
