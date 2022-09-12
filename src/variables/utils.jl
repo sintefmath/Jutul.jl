@@ -1,6 +1,3 @@
-# Primary variables
-export degrees_of_freedom_per_entity, minimum_output_variables
-export absolute_increment_limit, relative_increment_limit, maximum_value, minimum_value, update_primary_variable!, default_value, initialize_variable_value!, number_of_entities
 """
 Number of entities (e.g. Cells, Faces) a variable is defined on.
 By default, each primary variable exists on all cells of a discretized domain

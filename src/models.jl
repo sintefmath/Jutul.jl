@@ -18,6 +18,18 @@ function get_parameters(model::SimulationModel)
     return model.parameters
 end
 
+function get_variables_by_type(model, type)
+    if type == :primary
+        return get_primary_variables(model)
+    elseif type == :secondary
+        return get_secondary_variables(model)
+    elseif type == :parameters
+        return get_parameters(model)
+    else
+        error("type $type was not :primary, :secondary or :parameters.")
+    end
+end
+
 export set_primary_variables!, set_secondary_variables!, replace_variables!
 """
 Set a primary variable (adding if it does not exist)

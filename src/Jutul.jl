@@ -64,7 +64,7 @@ module Jutul
     include("context.jl")
     include("equations.jl")
     include("ad/ad.jl")
-    include("variables.jl")
+    include("variables/variables.jl")
 
     include("conservation/conservation.jl")
     include("timesteps.jl")
