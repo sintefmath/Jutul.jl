@@ -66,7 +66,6 @@ function linear_operator(sys::MultiLinearizedSystem; skip_red = false)
         # A = B - CE\D
         n = size(C, 1)
         T = eltype(sys[1, 1].r)
-        a_buf = sys.schur_buffer[1]
         b_buf = sys.schur_buffer[2]
         apply! = (res, x, α, β) -> schur_mul!(res, b_buf, T, B, C, D, E, x, α, β)
         op = LinearOperator(Float64, n, n, false, false, apply!)
@@ -88,7 +87,6 @@ end
 function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
     if do_schur(sys)
         Δx = dx
-        buf_a = sys.schur_buffer[1]
         buf_b = sys.schur_buffer[2]
         _, C, D, E, a, b = get_schur_blocks!(sys)
         n = length(dx)
@@ -97,19 +95,19 @@ function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
         A = view(sys.dx, 1:n)
         B = view(sys.dx, (n+1):m)
 
-        schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_a, buf_b)
+        schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_b)
     else
         @tullio sys.dx[i] = -dx[i]
     end
 end
 
-function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_a, buf_b)
+function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_b)
     @tullio A[i] = -dx[i]
     # We want to do (in-place):
     # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
     mul!(buf_b, D, Δx)
     # now buf_b = D*Δx
-    @inbounds for i in eachindex(b)
+    @inbounds @batch minbatch=1000 for i in eachindex(b)
         buf_b[i] -= b[i]
     end
     ldiv!(B, E, buf_b)
