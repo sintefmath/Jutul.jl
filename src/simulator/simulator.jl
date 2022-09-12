@@ -9,6 +9,7 @@ include("print.jl")
 include("recorder.jl")
 include("timesteps.jl")
 include("utils.jl")
+include("optimization.jl")
 
 function simulator_storage(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true, mode = :forward, kwarg...)
     if mode == :forward
