@@ -711,8 +711,8 @@ function number_of_equations(model::MultiModel)
     return sum(number_of_equations, model.models)
 end
 
-function reset_primary_variables!(storage, model::MultiModel, state)
+function reset_variables!(storage, model::MultiModel, state)
     for (k, m) in pairs(model.models)
-        reset_primary_variables!(storage[k], m, state[k])
+        reset_variables!(storage[k], m, state[k])
     end
 end

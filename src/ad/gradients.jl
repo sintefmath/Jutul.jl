@@ -229,7 +229,7 @@ function adjoint_reassemble!(sim, state, state0, dt, forces)
     # Apply logic as if timestep is starting
     update_before_step!(s, model, dt, forces)
     # Then the current primary variables
-    reset_primary_variables!(s, model, state)
+    reset_variables!(s, model, state)
     update_state_dependents!(s, model, dt, forces)
     # Finally update the system
     update_linearized_system!(s, model)

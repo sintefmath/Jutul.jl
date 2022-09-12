@@ -698,6 +698,6 @@ function reset_previous_state!(storage, model, state0)
     replace_values!(storage.state0, state0)
 end
 
-function reset_primary_variables!(storage, model, state)
+function reset_variables!(storage, model, state)
     replace_values!(storage.state, state)
 end

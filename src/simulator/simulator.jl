@@ -39,13 +39,23 @@ function simulator_storage(model; state0 = nothing, parameters = setup_parameter
     return storage
 end
 
+function simulate(state0, sim::JutulSimulator, timesteps::AbstractVector; parameters = nothing, kwarg...)
+    return simulate!(sim, timesteps; state0 = state0, parameters = parameters, kwarg...)
+end
+
 simulate(sim::JutulSimulator, timesteps::AbstractVector; kwarg...) = simulate!(sim, timesteps; kwarg...)
 
-function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing, config = nothing, initialize = true, restart = nothing, kwarg...)
+function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing,
+                                                                   config = nothing,
+                                                                   initialize = true,
+                                                                   restart = nothing,
+                                                                   state0 = nothing,
+                                                                   parameters = nothing,
+                                                                   kwarg...)
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     end
-    states, reports, first_step, dt = initial_setup!(sim, config, timesteps, restart = restart)
+    states, reports, first_step, dt = initial_setup!(sim, config, timesteps, restart = restart, state0 = state0, parameters = parameters)
     # Time-step info to keep around
     no_steps = length(timesteps)
     t_tot = sum(timesteps)
@@ -253,7 +263,7 @@ function initialize_before_first_timestep!(sim, first_dT; kwarg...)
     end
 end
 
-function initial_setup!(sim, config, timesteps; restart = nothing)
+function initial_setup!(sim, config, timesteps; restart = nothing, parameters = nothing, state0 = nothing)
     # Timing stuff
     set_global_timer!(config[:extra_timing])
     # Set up storage
@@ -261,8 +271,18 @@ function initial_setup!(sim, config, timesteps; restart = nothing)
     states = Vector{Dict{Symbol, Any}}()
     pth = config[:output_path]
     do_print = config[:info_level] > 0
+    has_state0 = !isnothing(state0)
     initialize_io(pth)
-    if isnothing(restart) || restart == 0 || restart == false
+    state0_has_changed = false
+    has_restart = !(isnothing(restart) || restart == 0 || restart == false)
+    if has_state0 || !has_restart
+        if has_state0
+            # Reset previous state
+            reset_previous_state!(sim, state0)
+            # Update current variables
+            reset_variables!(sim, state0)
+            state0_has_changed = true
+        end
         if do_print
             @info "Starting from first step."
         end
@@ -278,15 +298,25 @@ function initial_setup!(sim, config, timesteps; restart = nothing)
         state0, report0 = read_restart(pth, prev_step)
         read_results(pth, read_reports = true, read_states = config[:output_states], states = states, reports = reports, range = 1:prev_step);
         reset_previous_state!(sim, state0)
-        reset_to_previous_state!(sim)
+        reset_variables!(sim, state0)
+        state0_has_changed = true
         dt = report0[:ministeps][end][:dt]
         if do_print
             @info "Restarting from step $first_step."
         end
     end
+    if !isnothing(parameters)
+        # Parameters are aliased into state, so this is fine
+        reset_variables!(sim, parameters)
+        state0_has_changed = true
+    end
+    if state0_has_changed
+        update_secondary_variables!(sim.storage, sim.model, state0 = true)
+    end
     return (states, reports, first_step, dt)
 end
 
+reset_variables!(sim, vars) = reset_variables!(sim.storage, sim.model, vars)
 reset_to_previous_state!(sim) = reset_to_previous_state!(sim.storage, sim.model)
 reset_previous_state!(sim, state0) = reset_previous_state!(sim.storage, sim.model, state0)
 
