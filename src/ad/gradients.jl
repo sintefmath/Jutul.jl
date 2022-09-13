@@ -52,6 +52,8 @@ function setup_adjoint_storage(model; state0 = setup_state(model), parameters = 
     backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :reverse, extra_timing = nothing)
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model, targets)
+    # Note that primary is here because the target parameters are now the primaries for the parameter_model
+    parameter_pos, = variable_mapper(parameter_model, :primary, targets = targets)
     parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), mode = :sensitivities, extra_timing = nothing)
 
     n_pvar = number_of_degrees_of_freedom(model)
@@ -66,7 +68,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model), parameters = 
         rhs = gradient_vec_or_mat(n, n_objective)
         dx = gradient_vec_or_mat(n, n_objective)
     end
-    return (forward = forward_sim, backward = backward_sim, parameter = parameter_sim, lagrange = λ, dx = dx, rhs = rhs)
+    return (forward = forward_sim, backward = backward_sim, parameter = parameter_sim, parameter_pos = parameter_pos, lagrange = λ, dx = dx, rhs = rhs)
 end
 
 """
@@ -390,3 +392,18 @@ end
 
 gradient_vec_or_mat(n, ::Nothing) = zeros(n)
 gradient_vec_or_mat(n, m) = zeros(n, m)
+
+function variable_mapper(model::SimulationModel, type = :primary; targets = nothing, offset = 0)
+    vars = get_variables_by_type(model, type)
+    if isnothing(targets)
+        targets = keys(vars)
+    end
+    out = Dict{Symbol, Any}()
+    for t in targets
+        var = vars[t]
+        n = number_of_degrees_of_freedom(model, var)
+        out[t] = (n = n, offset = offset, scale = variable_scale(var))
+        offset += n
+    end
+    return (out, offset)
+end

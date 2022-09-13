@@ -85,3 +85,17 @@ function parameter_targets(model::MultiModel)
     end
     return targets
 end
+
+function variable_mapper(model::MultiModel, arg...; targets = nothing, offset = 0)
+    out = Dict{Symbol, Any}()
+    for k in submodel_symbols(model)
+        if isnothing(targets)
+            t = nothing
+        else
+            t = targets[k]
+        end
+        out[k], n = variable_mapper(model[k], arg..., targets = t, offset = offset)
+        offset += n
+    end
+    return (out, offset)
+end
