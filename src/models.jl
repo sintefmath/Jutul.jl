@@ -698,6 +698,6 @@ function reset_previous_state!(storage, model, state0)
     replace_values!(storage.state0, state0)
 end
 
-function reset_variables!(storage, model, state)
-    replace_values!(storage.state, state)
+function reset_variables!(storage, model, new_vars; type = :state)
+    replace_values!(storage[type], new_vars)
 end

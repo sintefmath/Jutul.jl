@@ -286,10 +286,13 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     if config[:info_level] > 0
         @info msg
     end
+    recompute_state0_secondary = state0_has_changed
     if !isnothing(parameters)
-        # Parameters are aliased into state, so this is fine
-        reset_variables!(sim, parameters)
-        state0_has_changed = true
+        # Parameters are aliased into state and might have AD there
+        for k in [:state, :state0, :parameters]
+            reset_variables!(sim, parameters, type = k)
+        end
+        recompute_state0_secondary = true
     end
     if state0_has_changed
         # state0 does not match sim, update it.
@@ -297,6 +300,8 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
         reset_previous_state!(sim, state0)
         # Update current variables
         reset_variables!(sim, state0)
+    end
+    if recompute_state0_secondary
         update_secondary_variables!(sim.storage, sim.model, state0 = true)
     end
     return (states, reports, first_step, dt)
@@ -315,7 +320,7 @@ function deserialize_restart(pth, restart, states, reports, config)
     return (state0, dt, first_step)
 end
 
-reset_variables!(sim, vars) = reset_variables!(sim.storage, sim.model, vars)
+reset_variables!(sim, vars; kwarg...) = reset_variables!(sim.storage, sim.model, vars; kwarg...)
 reset_to_previous_state!(sim) = reset_to_previous_state!(sim.storage, sim.model)
 reset_previous_state!(sim, state0) = reset_previous_state!(sim.storage, sim.model, state0)
 
