@@ -328,8 +328,14 @@ function perturb_parameter!(model, param_i, target, i, ϵ)
 end
 
 function evaluate_objective(G, model, states, timesteps, all_forces)
-    F = i -> G(model, states[i], timesteps[i], i, forces_for_timestep(nothing, all_forces, timesteps, i))
-    obj = sum(F, eachindex(states))
+    if length(states) < length(timesteps)
+        # Failure: Put to a big value.
+        @warn "Partial data passed, objective set to large value."
+        obj = 1e20
+    else
+        F = i -> G(model, states[i], timesteps[i], i, forces_for_timestep(nothing, all_forces, timesteps, i))
+        obj = sum(F, eachindex(states))
+    end
     return obj
 end
 
