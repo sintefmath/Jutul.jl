@@ -1,31 +1,39 @@
 export vectorize_variables, vectorize_variables!, devectorize_variables!
 
 
-function vectorize_variables(model, state_or_prm, type = :primary)
-    n = number_of_values(model, type)
+function vectorize_variables(model, state_or_prm, type_or_map = :primary)
+    mapper = get_mapper_internal(model, type_or_map)
+    n = sum(x -> x.n, values(mapper), init = 0)
     V = zeros(n)
-    return vectorize_variables!(V, model, state_or_prm, type)
+    return vectorize_variables!(V, model, state_or_prm, mapper)
 end
 
-function vectorize_variables!(V, model, state_or_prm, type = :primary, offset = 0)
-    vars = get_variables_by_type(model, type)
-    for k in keys(vars)
-        for v_i in state_or_prm[k]
-            V[offset+1] = v_i
-            offset += 1
+function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary)
+    mapper = get_mapper_internal(model, type_or_map)
+    for (k, v) in mapper
+        (; n, offset) = v
+        state_val = state_or_prm[k]
+        @assert length(state_val) == n
+        @info k offset length(V) n
+        for i in 1:n
+            V[offset+i] = state_val[i]
         end
     end
     return V
 end
 
-function devectorize_variables!(state_or_prm, model, V, type = :primary, offset = 0)
-    vars = get_variables_by_type(model, type)
-    for k in keys(vars)
+function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary)
+    mapper = get_mapper_internal(model, type_or_map)
+    for (k, v) in mapper
         state_val = state_or_prm[k]
-        for i in eachindex(state_val)
-            state_val[i] = V[offset+1]
-            offset += 1
+        (; n, offset) = v
+        @assert length(state_val) == n
+        for i in 1:n
+            state_val[i] = V[offset+i]
         end
     end
     return state_or_prm
 end
+
+get_mapper_internal(model, type_or_map::Symbol) = first(variable_mapper(model, type_or_map))
+get_mapper_internal(model, type_or_map) = type_or_map
