@@ -17,6 +17,8 @@ end
 function setup_parameter_optimization(model, state0, param, dt, forces, G; grad_type = :adjoint, config = nothing, kwarg...)
     x0 = vectorize_variables(model, param, :parameters)
     data = Dict()
+    data[:n_objective] = 1
+    data[:n_gradient] = 1
 
     sim = Simulator(model, state0 = state0, parameters = param)
     if isnothing(config)
@@ -28,7 +30,9 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G; grad_
         states, = simulate(state0, sim, dt, parameters = param, forces = forces, config = config)
         data[:states] = states
         obj = evaluate_objective(G, sim.model, states, dt, forces)
-        println("Current objective: $obj")
+        data[:n_objective] += 1
+        n = data[:n_objective]
+        println("#$n: $obj")
         return obj
     end
     @assert grad_type == :adjoint
@@ -39,7 +43,9 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G; grad_
         devectorize_variables!(param, model, x, :parameters)
         storage = setup_adjoint_storage(model, state0 = state0, parameters = param)
         grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
+        data[:n_gradient] += 1
         dFdx .= grad_adj
+        return dFdx
     end
     return (F, dF, x0, data)
 end
