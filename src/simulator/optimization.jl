@@ -34,11 +34,12 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G; grad_
     @assert grad_type == :adjoint
     grad_adj = similar(x0)
     data[:grad_adj] = grad_adj
-    function dF(x)
+    function dF(dFdx, x)
         # TODO: Avoid re-allocating storage.
         devectorize_variables!(param, model, x, :parameters)
         storage = setup_adjoint_storage(model, state0 = state0, parameters = param)
-        return solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
+        grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
+        dFdx .= grad_adj
     end
     return (F, dF, x0, data)
 end
