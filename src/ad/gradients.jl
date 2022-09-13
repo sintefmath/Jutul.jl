@@ -406,7 +406,7 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
     out = Dict{Symbol, Any}()
     for (i, t) in enumerate(targets)
         var = vars[t]
-        n = number_of_degrees_of_freedom(model, var)
+        n = number_of_values(model, var)
         out[t] = (n = n, offset = offset, scale = variable_scale(var))
         if i < N
             offset += n
