@@ -31,11 +31,11 @@ function mytest(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, extra_t
     G = (model, state, dt, step_no, forces) -> poisson_test_objective(model, state)
     if in_place
         grad_adj = zeros(length(K))
-        storage = Jutul.setup_adjoint_storage(model; state0 = state0, parameters = param)
-        grad_adj = Jutul.solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt, G,
+        storage = setup_adjoint_storage(model; state0 = state0, parameters = param)
+        grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt, G,
                             forces = forces)
     else
-        grad_adj = Jutul.solve_adjoint_sensitivities(model, states, reports, G,
+        grad_adj = solve_adjoint_sensitivities(model, states, reports, G,
                             forces = forces, state0 = state0, parameters = param, extra_timing = extra_timing, raw_output = true)
     end
     # Check against numerical gradient
