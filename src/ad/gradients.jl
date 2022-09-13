@@ -27,10 +27,11 @@ function solve_adjoint_sensitivities(model, states, reports, G; n_objective = no
     # Solve!
     solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces)
     print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
+    prm_map = storage.parameter_map
     if raw_output
         out = ∇G
     else
-        out = store_sensitivities(parameter_model, ∇G)
+        out = store_sensitivities(parameter_model, ∇G, prm_map)
     end
     if extra_output
         return (out, storage)
@@ -53,7 +54,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model), parameters = 
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model, targets)
     # Note that primary is here because the target parameters are now the primaries for the parameter_model
-    parameter_pos, = variable_mapper(parameter_model, :primary, targets = targets)
+    parameter_map, = variable_mapper(parameter_model, :primary, targets = targets)
     parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), mode = :sensitivities, extra_timing = nothing)
 
     n_pvar = number_of_degrees_of_freedom(model)
@@ -68,7 +69,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model), parameters = 
         rhs = gradient_vec_or_mat(n, n_objective)
         dx = gradient_vec_or_mat(n, n_objective)
     end
-    return (forward = forward_sim, backward = backward_sim, parameter = parameter_sim, parameter_pos = parameter_pos, lagrange = λ, dx = dx, rhs = rhs)
+    return (forward = forward_sim, backward = backward_sim, parameter = parameter_sim, parameter_map = parameter_map, lagrange = λ, dx = dx, rhs = rhs)
 end
 
 """
@@ -332,19 +333,19 @@ function evaluate_objective(G, model, states, timesteps, all_forces)
     return obj
 end
 
-function store_sensitivities(model, result)
+function store_sensitivities(model, result, prm_map)
     out = Dict{Symbol, Any}()
-    store_sensitivities!(out, model, result)
+    store_sensitivities!(out, model, result, prm_map)
     return out
 end
 
-function store_sensitivities!(out, model, result; kwarg...)
+function store_sensitivities!(out, model, result, prm_map; kwarg...)
     variables = model.primary_variables
     layout = matrix_layout(model.context)
-    return store_sensitivities!(out, model, variables, result, layout; kwarg...)
+    return store_sensitivities!(out, model, variables, result, prm_map, layout; kwarg...)
 end
 
-function store_sensitivities!(out, model, variables, result, ::EquationMajorLayout; offset = 0)
+function store_sensitivities!(out, model, variables, result, prm_map, ::EquationMajorLayout)
     scalar_valued_objective = result isa AbstractVector
     if scalar_valued_objective
         N = 1
@@ -352,7 +353,10 @@ function store_sensitivities!(out, model, variables, result, ::EquationMajorLayo
         N = size(result, 2)
     end
     for (k, var) in pairs(variables)
-        n = number_of_degrees_of_freedom(model, var)
+        if !haskey(prm_map, k)
+            continue
+        end
+        (; n, offset) = prm_map[k]
         m = degrees_of_freedom_per_entity(model, var)
         if n > 0
             rng = (offset+1):(offset+n)
@@ -370,7 +374,6 @@ function store_sensitivities!(out, model, variables, result, ::EquationMajorLayo
         else
             out[k] = similar(result, 0)
         end
-        offset += n
     end
     return out
 end

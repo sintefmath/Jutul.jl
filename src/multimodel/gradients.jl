@@ -50,20 +50,12 @@ function state_gradient_outer!(∂F∂x, F, model::MultiModel, state, extra_arg)
     return ∂F∂x
 end
 
-function store_sensitivities(model::MultiModel, result; offset = 0)
-    scalar_objective = result isa AbstractVector
+function store_sensitivities(model::MultiModel, result, prm_map)
     out = Dict{Symbol, Any}()
     for k in submodel_symbols(model)
         m = model[k]
-        n = number_of_degrees_of_freedom(m)
-        if scalar_objective
-            result_k = view(result, (offset+1):(offset+n))
-        else
-            result_k = view(result, (offset+1):(offset+n), :)
-        end
         out[k] = Dict{Symbol, Any}()
-        store_sensitivities!(out[k], m, result_k)
-        offset += n
+        store_sensitivities!(out[k], m, result, prm_map[k])
     end
     return out
 end
