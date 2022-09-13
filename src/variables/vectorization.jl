@@ -13,7 +13,7 @@ function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary)
     for (k, v) in mapper
         (; n, offset) = v
         state_val = state_or_prm[k]
-        @assert length(state_val) == n
+        @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
         for i in 1:n
             V[offset+i] = state_val[i]
         end
