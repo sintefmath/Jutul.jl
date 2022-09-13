@@ -1,7 +1,7 @@
 
-function swap_primary_with_parameters!(pmodel::MultiModel, model::MultiModel)
+function swap_primary_with_parameters!(pmodel::MultiModel, model::MultiModel, targets = parameter_targets(model))
     for k in submodel_symbols(pmodel)
-        swap_primary_with_parameters!(pmodel.models[k], model.models[k])
+        swap_primary_with_parameters!(pmodel.models[k], model.models[k], targets[k])
     end
     return pmodel
 end
@@ -76,4 +76,12 @@ end
 function perturb_parameter!(model::MultiModel, param_i, target, i, ϵ)
     t_outer, t_inner = target
     perturb_parameter!(model[t_outer], param_i[t_outer], t_inner, i, ϵ)
+end
+
+function parameter_targets(model::MultiModel)
+    targets = Dict{Symbol, Any}()
+    for k in submodel_symbols(model)
+        targets[k] = parameter_targets(model[k])
+    end
+    return targets
 end

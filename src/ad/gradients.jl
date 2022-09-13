@@ -44,14 +44,14 @@ end
 
 Set up storage for use with `solve_adjoint_sensitivities!`.
 """
-function setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model), n_objective = nothing)
+function setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model), n_objective = nothing, targets = parameter_targets(model))
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
     forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
     # Same model, but adjoint for: ∂Fₙ₊₁ᵀ / ∂xₙ
     backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :reverse, extra_timing = nothing)
     # Create parameter model for ∂Fₙ / ∂p
-    parameter_model = adjoint_parameter_model(model)
+    parameter_model = adjoint_parameter_model(model, targets)
     parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), mode = :sensitivities, extra_timing = nothing)
 
     n_pvar = number_of_degrees_of_freedom(model)
@@ -235,10 +235,14 @@ function adjoint_reassemble!(sim, state, state0, dt, forces)
     update_linearized_system!(s, model)
 end
 
-function swap_primary_with_parameters!(pmodel, model)
+function swap_primary_with_parameters!(pmodel, model, targets = parameter_targets(model))
     set_parameters!(pmodel; pairs(model.primary_variables)...)
     # Original model holds the parameters, use those
-    set_primary_variables!(pmodel; pairs(model.parameters)...)
+    for (k, v) in pairs(model.parameters)
+        if k in targets
+            set_primary_variables!(pmodel; k => v)
+        end
+    end
     out = vcat(keys(model.secondary_variables)..., keys(model.primary_variables)...)
     for k in out
         push!(pmodel.output_variables, k)
@@ -247,10 +251,12 @@ function swap_primary_with_parameters!(pmodel, model)
     return pmodel
 end
 
-function adjoint_parameter_model(model)
+parameter_targets(model::SimulationModel) = keys(get_parameters(model))
+
+function adjoint_parameter_model(model, arg...)
     pmodel = adjoint_model_copy(model)
     # Swap parameters and primary variables
-    swap_primary_with_parameters!(pmodel, model)
+    swap_primary_with_parameters!(pmodel, model, arg...)
     return pmodel
 end
 
