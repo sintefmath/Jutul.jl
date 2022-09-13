@@ -271,40 +271,20 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     reports = []
     states = Vector{Dict{Symbol, Any}}()
     pth = config[:output_path]
-    do_print = config[:info_level] > 0
-    has_state0 = !isnothing(state0)
     initialize_io(pth)
-    state0_has_changed = false
     has_restart = !(isnothing(restart) || restart == 0 || restart == false)
-    if has_state0 || !has_restart
-        if has_state0
-            # Reset previous state
-            reset_previous_state!(sim, state0)
-            # Update current variables
-            reset_variables!(sim, state0)
-            state0_has_changed = true
-        end
-        if do_print
-            @info "Starting from first step."
-        end
+    if has_restart
+        state0, dt, first_step = deserialize_restart(pth, restart, states, reports, config)
+        msg = "Restarting from step $first_step."
+        state0_has_changed = true
+    else
+        state0_has_changed = !isnothing(state0)
+        msg = "Starting from first step."
         first_step = 1
         dt = timesteps[first_step]
-    else
-        @assert !isnothing(pth) "output_path must be specified if restarts are enabled"
-        if isa(restart, Bool)
-            restart = maximum(valid_restart_indices(pth)) + 1
-        end
-        first_step = restart
-        prev_step = restart - 1;
-        state0, report0 = read_restart(pth, prev_step)
-        read_results(pth, read_reports = true, read_states = config[:output_states], states = states, reports = reports, range = 1:prev_step);
-        reset_previous_state!(sim, state0)
-        reset_variables!(sim, state0)
-        state0_has_changed = true
-        dt = report0[:ministeps][end][:dt]
-        if do_print
-            @info "Restarting from step $first_step."
-        end
+    end
+    if config[:info_level] > 0
+        @info msg
     end
     if !isnothing(parameters)
         # Parameters are aliased into state, so this is fine
@@ -312,9 +292,27 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
         state0_has_changed = true
     end
     if state0_has_changed
+        # state0 does not match sim, update it.
+        # First, reset previous state
+        reset_previous_state!(sim, state0)
+        # Update current variables
+        reset_variables!(sim, state0)
         update_secondary_variables!(sim.storage, sim.model, state0 = true)
     end
     return (states, reports, first_step, dt)
+end
+
+function deserialize_restart(pth, restart, states, reports, config)
+    @assert !isnothing(pth) "output_path must be specified if restarts are enabled"
+    if isa(restart, Bool)
+        restart = maximum(valid_restart_indices(pth)) + 1
+    end
+    first_step = restart
+    prev_step = restart - 1;
+    state0, report0 = read_restart(pth, prev_step)
+    read_results(pth, read_reports = true, read_states = config[:output_states], states = states, reports = reports, range = 1:prev_step);
+    dt = report0[:ministeps][end][:dt]
+    return (state0, dt, first_step)
 end
 
 reset_variables!(sim, vars) = reset_variables!(sim.storage, sim.model, vars)
