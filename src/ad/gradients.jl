@@ -27,11 +27,10 @@ function solve_adjoint_sensitivities(model, states, reports, G; n_objective = no
     # Solve!
     solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces)
     print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
-    prm_map = storage.parameter_map
     if raw_output
         out = ∇G
     else
-        out = store_sensitivities(parameter_model, ∇G, prm_map)
+        out = store_sensitivities(parameter_model, ∇G, storage.parameter_map)
     end
     if extra_output
         return (out, storage)
@@ -95,6 +94,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
         s = fn(states[i])
         update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
     end
+    rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
     return ∇G
 end
 
@@ -379,11 +379,6 @@ function store_sensitivities!(out, model, variables, result, prm_map, ::Equation
 end
 
 function extract_sensitivity_subset(r, var, n, m, offset)
-    scale = variable_scale(var)
-    # Variable was scaled - account for this before returning
-    if !isnothing(scale)
-        @. r /= scale
-    end
     if var isa ScalarVariable
         v = r
     else
@@ -409,4 +404,19 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
         offset += n
     end
     return (out, offset)
+end
+
+function rescale_sensitivities!(dG, model, parameter_map)
+    for (k, v) in parameter_map
+        (; n, offset, scale) = v
+        if !isnothing(scale)
+            interval = (offset+1):(offset+n)
+            if dG isa AbstractVector
+                dG_k = view(dG, interval)
+            else
+                dG_k = view(dG, interval, :)
+            end
+            @. dG_k /= scale
+        end
+    end
 end
