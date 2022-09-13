@@ -4,7 +4,6 @@ function vectorize_variables(model::MultiModel, state_or_prm, type_or_map = :pri
     for (k, v) in mapper
         n += sum(x -> x.n, values(v), init = 0)
     end
-    @info n mapper
     V = zeros(n)
     vectorize_variables!(V, model, state_or_prm, mapper)
 end

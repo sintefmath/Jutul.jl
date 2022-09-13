@@ -14,7 +14,6 @@ function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary)
         (; n, offset) = v
         state_val = state_or_prm[k]
         @assert length(state_val) == n
-        @info k offset length(V) n
         for i in 1:n
             V[offset+i] = state_val[i]
         end
