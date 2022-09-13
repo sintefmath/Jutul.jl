@@ -368,17 +368,17 @@ function store_sensitivities!(out, model, variables, result, ::EquationMajorLayo
 end
 
 function extract_sensitivity_subset(r, var, n, m, offset)
+    scale = variable_scale(var)
+    # Variable was scaled - account for this before returning
+    if !isnothing(scale)
+        @. r /= scale
+    end
     if var isa ScalarVariable
         v = r
     else
         v = reshape(r, m, n ÷ m)
     end
     v = collect(v)
-    scale = variable_scale(var)
-    # Variable was scaled - account for this before returning
-    if !isnothing(scale)
-        v ./= scale
-    end
     return v
 end
 
