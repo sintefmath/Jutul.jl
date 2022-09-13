@@ -80,18 +80,13 @@ end
 
 function variable_mapper(model::MultiModel, arg...; targets = nothing, offset = 0)
     out = Dict{Symbol, Any}()
-    ssym = submodel_symbols(model)
-    N = length(ssym)
-    for (i, k) in enumerate(ssym)
+    for k in submodel_symbols(model)
         if isnothing(targets)
             t = nothing
         else
             t = targets[k]
         end
-        out[k], n = variable_mapper(model[k], arg..., targets = t, offset = offset)
-        if i < N
-            offset += n
-        end
+        out[k], offset = variable_mapper(model[k], arg..., targets = t, offset = offset)
     end
     return (out, offset)
 end
