@@ -43,7 +43,6 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G; grad_
         devectorize_variables!(param, model, x, :parameters)
         storage = setup_adjoint_storage(model, state0 = state0, parameters = param)
         grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
-        tmp = store_sensitivities(storage.parameter.model, grad_adj)
         data[:n_gradient] += 1
         dFdx .= grad_adj
         return dFdx
