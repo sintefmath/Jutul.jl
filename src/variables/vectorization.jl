@@ -26,7 +26,7 @@ function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary)
     for (k, v) in mapper
         state_val = state_or_prm[k]
         (; n, offset) = v
-        @assert length(state_val) == n
+        @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
         for i in 1:n
             state_val[i] = V[offset+i]
         end
