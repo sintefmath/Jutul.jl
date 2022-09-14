@@ -14,8 +14,12 @@ function update_objective_new_parameters!(param_serialized, sim, state0, param, 
     return (obj, states)
 end
 
-function setup_parameter_optimization(model, state0, param, dt, forces, G; grad_type = :adjoint, config = nothing, kwarg...)
-    x0 = vectorize_variables(model, param, :parameters)
+function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model);
+                                                            grad_type = :adjoint, config = nothing, kwarg...)
+    # Pick active set of targets from the optimization config and construct a mapper
+    targets = optimization_targets(opt_cfg, model)
+    mapper, = variable_mapper(model, :parameters, targets = targets)
+    x0 = vectorize_variables(model, param, mapper)
     data = Dict()
     data[:n_objective] = 1
     data[:n_gradient] = 1
@@ -26,7 +30,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G; grad_
     end
 
     function F(x)
-        devectorize_variables!(param, sim.model, x, :parameters)
+        devectorize_variables!(param, sim.model, x, mapper)
         states, = simulate(state0, sim, dt, parameters = param, forces = forces, config = config)
         data[:states] = states
         obj = evaluate_objective(G, sim.model, states, dt, forces)
@@ -40,7 +44,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G; grad_
     data[:grad_adj] = grad_adj
     function dF(dFdx, x)
         # TODO: Avoid re-allocating storage.
-        devectorize_variables!(param, model, x, :parameters)
+        devectorize_variables!(param, model, x, mapper)
         storage = setup_adjoint_storage(model, state0 = state0, parameters = param)
         grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
         data[:n_gradient] += 1
@@ -61,6 +65,16 @@ function optimization_config(model, active = keys(model.parameters))
                       :max_abs => maximum_value(var),
                       :transform => x -> x,
                       :transform_inv => x -> x)
+    end
+    return out
+end
+
+function optimization_targets(config::Dict, model)
+    out = Vector{Symbol}()
+    for (k, v) in pairs(config)
+        if v[:active]
+            push!(out, k)
+        end
     end
     return out
 end

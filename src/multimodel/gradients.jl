@@ -110,3 +110,11 @@ function optimization_config(model::MultiModel, active = nothing)
     end
     return out
 end
+
+function optimization_targets(config::Dict, model::MultiModel)
+    out = Dict{Symbol, Any}()
+    for k in submodel_symbols(model)
+        out[k] = optimization_targets(config[k], model[k])
+    end
+    return out
+end
