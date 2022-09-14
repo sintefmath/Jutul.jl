@@ -1,5 +1,5 @@
 
-export update_objective_new_parameters!, setup_parameter_optimization
+export update_objective_new_parameters!, setup_parameter_optimization, optimization_config
 
 function update_objective_new_parameters!(param_serialized, sim, state0, param, forces, dt, G; log_obj = false, config = nothing, kwarg...)
     if isnothing(config)
@@ -48,4 +48,19 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G; grad_
         return dFdx
     end
     return (F, dF, x0, data)
+end
+
+function optimization_config(model, active = keys(model.parameters))
+    out = Dict{Symbol, Any}()
+    for k in active
+        var = model.parameters[k]
+        out[k] = Dict(:active => true,
+                      :min_rel => nothing,
+                      :max_rel => nothing,
+                      :min_abs => minimum_value(var),
+                      :max_abs => maximum_value(var),
+                      :transform => x -> x,
+                      :transform_inv => x -> x)
+    end
+    return out
 end
