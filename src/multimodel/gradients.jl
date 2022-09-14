@@ -125,3 +125,10 @@ function optimization_limits!(lims, config, mapper, x0, param, model::MultiModel
     end
     return lims
 end
+
+function transfer_gradient!(dFdy, dFdx, x, mapper, config, model::MultiModel)
+    for k in submodel_symbols(model)
+        transfer_gradient!(dFdy, dFdx, x, mapper[k], config[k], model[k])
+    end
+    return dFdy
+end
