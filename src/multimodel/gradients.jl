@@ -97,14 +97,14 @@ function rescale_sensitivities!(dG, model::MultiModel, parameter_map)
     end
 end
 
-function optimization_config(model::MultiModel, active = nothing)
+function optimization_config(model::MultiModel, param, active = nothing)
     out = Dict{Symbol, Any}()
     for k in submodel_symbols(model)
         m = model[k]
         if isnothing(active)
-            v = optimization_config(m)
+            v = optimization_config(m, param[k])
         else
-            v = optimization_config(m, active[k])
+            v = optimization_config(m, param[k], active[k])
         end
         out[k] = v
     end
@@ -117,4 +117,11 @@ function optimization_targets(config::Dict, model::MultiModel)
         out[k] = optimization_targets(config[k], model[k])
     end
     return out
+end
+
+function optimization_limits!(lims, config, mapper, x0, param, model::MultiModel)
+    for k in submodel_symbols(model)
+        optimization_limits!(lims, config[k], mapper[k], x0, param[k], model[k])
+    end
+    return lims
 end

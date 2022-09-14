@@ -14,7 +14,7 @@ function update_objective_new_parameters!(param_serialized, sim, state0, param, 
     return (obj, states)
 end
 
-function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model);
+function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model, param);
                                                             grad_type = :adjoint, config = nothing, kwarg...)
     # Pick active set of targets from the optimization config and construct a mapper
     targets = optimization_targets(opt_cfg, model)
@@ -48,19 +48,42 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
         storage = setup_adjoint_storage(model, state0 = state0, parameters = param)
         grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
         data[:n_gradient] += 1
+        # TODO: Perform scaling of gradients here.
         dFdx .= grad_adj
         return dFdx
     end
-    return (F, dF, x0, data)
+    lims = optimization_limits(opt_cfg, mapper, x0, param, model)
+    return (F, dF, x0, lims, data)
 end
 
-function optimization_config(model, active = keys(model.parameters))
+function optimization_config(model, param, active = keys(model.parameters); rel_min = nothing, rel_max = nothing)
     out = Dict{Symbol, Any}()
+    ϵ = 1e-8
     for k in active
         var = model.parameters[k]
+        vals = param[k]
+        scale = variable_scale(var)
+        if isnothing(scale)
+            scale = 1.0
+        end
+        # Low/high is not bounds, but typical scaling values
+        low = minimum(vec(vals)) - ϵ*scale
+        hi = maximum(vec(vals)) + ϵ*scale
+        abs_min = minimum_value(var)
+        if isnothing(abs_min)
+            abs_min = -Inf
+        end
+        abs_max = maximum_value(var)
+        if isnothing(abs_max)
+            abs_max = Inf
+        end
         out[k] = Dict(:active => true,
-                      :min => minimum_value(var),
-                      :max => maximum_value(var),
+                      :abs_min => abs_min,
+                      :abs_max => abs_max,
+                      :rel_min => rel_min,
+                      :rel_max => rel_max,
+                      :low => low,
+                      :high => hi,
                       :transform => x -> x,
                       :transform_inv => x -> x)
     end
@@ -81,8 +104,8 @@ opt_scaler_function(config::Nothing, key; inv = false) = x -> x
 
 function opt_scaler_function(config, key; inv = false)
     cfg = config[key]
-    x_min = cfg[:min]
-    x_max = cfg[:max]
+    x_min = cfg[:low]
+    x_max = cfg[:high]
     if isnothing(x_min)
         x_min = 0.0
     end
@@ -99,4 +122,50 @@ function opt_scaler_function(config, key; inv = false)
         F = cfg[:transform]
         return x -> F((x - x_min)/Δ)
     end
+end
+
+function optimization_limits(config, mapper, x0, param, model)
+    x_min = similar(x0)
+    x_max = similar(x0)
+    lims = (min = x_min, max = x_max)
+    lims = optimization_limits!(lims, config, mapper, x0, param, model)
+    return lims
+end
+
+function optimization_limits!(lims, config, mapper, x0, param, model)
+    x_min, x_max = lims
+    for (k, v) in mapper
+        (; offset, n) = v
+        cfg = config[k]
+        vals = param[k]
+        F = opt_scaler_function(config, k, inv = false)
+        F_inv = opt_scaler_function(config, k, inv = true)
+
+        rel_max = cfg[:rel_max]
+        rel_min = cfg[:rel_min]
+        abs_max = cfg[:abs_max]
+        abs_min = cfg[:abs_min]
+        for i in 1:n
+            k = i + offset
+            val = vals[i]
+            if isnothing(rel_min)
+                low = abs_min
+            else
+                low = max(abs_min, rel_min*val)
+            end
+            if isnothing(rel_max)
+                hi = abs_max
+            else
+                hi  = min(abs_max, rel_max*val)
+            end
+            # We have found limits in terms of unscaled variable, scale on the way out
+            low = F(low)
+            hi = F(hi)
+            @assert low <= x0[k]
+            @assert hi >= x0[k]
+            x_min[k] = low
+            x_max[k] = hi
+        end
+    end
+    return lims
 end
