@@ -70,8 +70,9 @@ function optimization_config(model, param, active = keys(model.parameters); rel_
             scale = 1.0
         end
         # Low/high is not bounds, but typical scaling values
-        low = 0.1*minimum(vec(vals)) - ϵ*scale
-        hi = sum(vec(vals)) + ϵ*scale
+        K = 10
+        low = minimum(vec(vals))/K - ϵ*scale
+        hi = maximum(vec(vals))*K + ϵ*scale
         abs_min = minimum_value(var)
         if isnothing(abs_min)
             abs_min = -Inf
