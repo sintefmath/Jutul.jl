@@ -67,8 +67,8 @@ function optimization_config(model, param, active = keys(model.parameters); rel_
             scale = 1.0
         end
         # Low/high is not bounds, but typical scaling values
-        low = minimum(vec(vals)) - ϵ*scale
-        hi = maximum(vec(vals)) + ϵ*scale
+        low = 0.1*minimum(vec(vals)) - ϵ*scale
+        hi = sum(vec(vals)) + ϵ*scale
         abs_min = minimum_value(var)
         if isnothing(abs_min)
             abs_min = -Inf
@@ -139,7 +139,7 @@ function optimization_limits!(lims, config, mapper, x0, param, model)
         cfg = config[k]
         vals = param[k]
         F = opt_scaler_function(config, k, inv = false)
-        F_inv = opt_scaler_function(config, k, inv = true)
+        # F_inv = opt_scaler_function(config, k, inv = true)
 
         rel_max = cfg[:rel_max]
         rel_min = cfg[:rel_min]
