@@ -87,8 +87,8 @@ function optimization_config(model, param, active = keys(model.parameters); rel_
                       :rel_max => rel_max,
                       :low => low,
                       :high => hi,
-                      :transform => x -> x,
-                      :transform_inv => x -> x)
+                      :transform => identity,
+                      :transform_inv => identity)
     end
     return out
 end
@@ -159,7 +159,7 @@ function optimization_limits!(lims, config, mapper, x0, param, model)
             if isnothing(rel_max)
                 hi = abs_max
             else
-                hi  = min(abs_max, rel_max*val)
+                hi = min(abs_max, rel_max*val)
             end
             # We have found limits in terms of unscaled variable, scale on the way out
             low = F(low)
