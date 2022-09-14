@@ -59,7 +59,10 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     return (F, dF, x0, lims, data)
 end
 
-function optimization_config(model, param, active = keys(model.parameters); rel_min = nothing, rel_max = nothing)
+function optimization_config(model, param, active = keys(model.parameters);
+                                                        rel_min = nothing,
+                                                        rel_max = nothing,
+                                                        use_scaling = true)
     out = Dict{Symbol, Any}()
     ϵ = 1e-8
     for k in active
@@ -81,15 +84,18 @@ function optimization_config(model, param, active = keys(model.parameters); rel_
         if isnothing(abs_max)
             abs_max = Inf
         end
-        out[k] = Dict(:active => true,
-                      :abs_min => abs_min,
-                      :abs_max => abs_max,
-                      :rel_min => rel_min,
-                      :rel_max => rel_max,
-                      :low => low,
-                      :high => hi,
-                      :transform => identity,
-                      :transform_inv => identity)
+        out[k] = OrderedDict(
+                            :active => true,
+                            :use_scaling => use_scaling,
+                            :abs_min => abs_min,
+                            :abs_max => abs_max,
+                            :rel_min => rel_min,
+                            :rel_max => rel_max,
+                            :low => low,
+                            :high => hi,
+                            :transform => identity,
+                            :transform_inv => identity
+            )
     end
     return out
 end
@@ -108,24 +114,29 @@ opt_scaler_function(config::Nothing, key; inv = false) = x -> x
 
 function opt_scaler_function(config, key; inv = false)
     cfg = config[key]
-    x_min = cfg[:low]
-    x_max = cfg[:high]
-    if isnothing(x_min)
-        x_min = 0.0
-    end
-    if isnothing(x_max)
-        # Divide by 1.0 if no max value
-        Δ = 1.0
+    if cfg[:use_scaling]
+        x_min = cfg[:low]
+        x_max = cfg[:high]
+        if isnothing(x_min)
+            x_min = 0.0
+        end
+        if isnothing(x_max)
+            # Divide by 1.0 if no max value
+            Δ = 1.0
+        else
+            Δ = x_max - x_min
+        end
+        if inv
+            F_inv = cfg[:transform_inv]
+            scaler = x -> F_inv(x*Δ + x_min)
+        else
+            F = cfg[:transform]
+            scaler = x -> F((x - x_min)/Δ)
+        end
     else
-        Δ = x_max - x_min
+        scaler = identity
     end
-    if inv
-        F_inv = cfg[:transform_inv]
-        return x -> F_inv(x*Δ + x_min)
-    else
-        F = cfg[:transform]
-        return x -> F((x - x_min)/Δ)
-    end
+    return scaler
 end
 
 function optimization_limits(config, mapper, x0, param, model)
