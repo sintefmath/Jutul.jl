@@ -49,6 +49,8 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
         grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
         data[:n_gradient] += 1
         transfer_gradient!(dFdx, grad_adj, x, mapper, opt_cfg, model)
+        # @info "grad" dFdx grad_adj
+        @assert all(isfinite, dFdx) "Non-finite gradients detected."
         return dFdx
     end
     lims = optimization_limits(opt_cfg, mapper, x0, param, model)
@@ -171,17 +173,25 @@ function optimization_limits!(lims, config, mapper, x0, param, model)
     return lims
 end
 
-function transfer_gradient!(dFdy, dFdx, y, mapper, config, model)
+function transfer_gradient!(dGdy, dGdx, y, mapper, config, model)
     for (k, v) in mapper
         (; offset, n) = v
-        F = opt_scaler_function(config, k, inv = false)
-        F_inv = opt_scaler_function(config, k, inv = true)
+        x_to_y = opt_scaler_function(config, k, inv = false)
+        y_to_x = opt_scaler_function(config, k, inv = true)
         for i in 1:n
             k = offset + i
-            x = F_inv(y[k])
-            dxdy = only(F(ForwardDiff.Dual(x, 1.0)).partials)
-            dFdy[k] = dFdx[k]*dxdy
+            dGdy[k] = objective_gradient_chain_rule(x_to_y, y_to_x, y[k], dGdx[k])
         end
     end
-    return dFdy
+    return dGdy
+end
+
+function objective_gradient_chain_rule(x_to_y, y_to_x, y, dGdx)
+    x = y_to_x(y)
+    x_ad = ForwardDiff.Dual(x, 1.0)
+    y_ad = x_to_y(x_ad)
+    dydx = only(y_ad.partials)
+    # dG(y(x))/dx = dG/dx * dy/dx
+    dGdy = dGdx*dydx
+    return dGdy
 end
