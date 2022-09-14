@@ -48,9 +48,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
         storage = setup_adjoint_storage(model, state0 = state0, parameters = param)
         grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
         data[:n_gradient] += 1
-        # TODO: Perform scaling of gradients here.
         transfer_gradient!(dFdx, grad_adj, x, mapper, opt_cfg, model)
-        # dFdx .= grad_adj
         return dFdx
     end
     lims = optimization_limits(opt_cfg, mapper, x0, param, model)
@@ -173,13 +171,15 @@ function optimization_limits!(lims, config, mapper, x0, param, model)
     return lims
 end
 
-function transfer_gradient!(dFdy, dFdx, x, mapper, config, model)
+function transfer_gradient!(dFdy, dFdx, y, mapper, config, model)
     for (k, v) in mapper
         (; offset, n) = v
+        F = opt_scaler_function(config, k, inv = false)
         F_inv = opt_scaler_function(config, k, inv = true)
         for i in 1:n
             k = offset + i
-            dxdy = F_inv(ForwardDiff.Dual(x[k], 1.0)).partials[1]
+            x = F_inv(y[k])
+            dxdy = only(F(ForwardDiff.Dual(x, 1.0)).partials)
             dFdy[k] = dFdx[k]*dxdy
         end
     end

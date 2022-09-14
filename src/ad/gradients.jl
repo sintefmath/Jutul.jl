@@ -95,6 +95,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
         update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
     end
     rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
+    @assert all(isfinite, ∇G)
     return ∇G
 end
 
