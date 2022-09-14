@@ -147,11 +147,12 @@ function optimization_limits!(lims, config, mapper, x0, param, model)
 
         rel_max = cfg[:rel_max]
         rel_min = cfg[:rel_min]
-        abs_max = cfg[:abs_max]
-        abs_min = cfg[:abs_min]
+        # We have found limits in terms of unscaled variable, scale first
+        abs_max = F(cfg[:abs_max])
+        abs_min = F(cfg[:abs_min])
         for i in 1:n
             k = i + offset
-            val = vals[i]
+            val = F(vals[i])
             if isnothing(rel_min)
                 low = abs_min
             else
@@ -162,9 +163,6 @@ function optimization_limits!(lims, config, mapper, x0, param, model)
             else
                 hi = min(abs_max, rel_max*val)
             end
-            # We have found limits in terms of unscaled variable, scale on the way out
-            low = F(low)
-            hi = F(hi)
             @assert low <= x0[k]
             @assert hi >= x0[k]
             x_min[k] = low
