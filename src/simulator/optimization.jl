@@ -19,7 +19,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     # Pick active set of targets from the optimization config and construct a mapper
     targets = optimization_targets(opt_cfg, model)
     mapper, = variable_mapper(model, :parameters, targets = targets)
-    x0 = vectorize_variables(model, param, mapper)
+    x0 = vectorize_variables(model, param, mapper, config = opt_cfg)
     data = Dict()
     data[:n_objective] = 1
     data[:n_gradient] = 1
@@ -30,7 +30,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     end
 
     function F(x)
-        devectorize_variables!(param, sim.model, x, mapper)
+        devectorize_variables!(param, sim.model, x, mapper, config = opt_cfg)
         states, = simulate(state0, sim, dt, parameters = param, forces = forces, config = config)
         data[:states] = states
         obj = evaluate_objective(G, sim.model, states, dt, forces)
@@ -44,7 +44,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     data[:grad_adj] = grad_adj
     function dF(dFdx, x)
         # TODO: Avoid re-allocating storage.
-        devectorize_variables!(param, model, x, mapper)
+        devectorize_variables!(param, model, x, mapper, config = opt_cfg)
         storage = setup_adjoint_storage(model, state0 = state0, parameters = param)
         grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
         data[:n_gradient] += 1
@@ -59,10 +59,8 @@ function optimization_config(model, active = keys(model.parameters))
     for k in active
         var = model.parameters[k]
         out[k] = Dict(:active => true,
-                      :min_rel => nothing,
-                      :max_rel => nothing,
-                      :min_abs => minimum_value(var),
-                      :max_abs => maximum_value(var),
+                      :min => minimum_value(var),
+                      :max => maximum_value(var),
                       :transform => x -> x,
                       :transform_inv => x -> x)
     end
@@ -77,4 +75,28 @@ function optimization_targets(config::Dict, model)
         end
     end
     return out
+end
+
+opt_scaler_function(config::Nothing, key; inv = false) = x -> x
+
+function opt_scaler_function(config, key; inv = false)
+    cfg = config[key]
+    x_min = cfg[:min]
+    x_max = cfg[:max]
+    if isnothing(x_min)
+        x_min = 0.0
+    end
+    if isnothing(x_max)
+        # Divide by 1.0 if no max value
+        Δ = 1.0
+    else
+        Δ = x_max - x_min
+    end
+    if inv
+        F_inv = cfg[:transform_inv]
+        return x -> F_inv(x*Δ + x_min)
+    else
+        F = cfg[:transform]
+        return x -> F((x - x_min)/Δ)
+    end
 end
