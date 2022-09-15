@@ -45,7 +45,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     function dF(dFdx, x)
         # TODO: Avoid re-allocating storage.
         devectorize_variables!(param, model, x, mapper, config = opt_cfg)
-        storage = setup_adjoint_storage(model, state0 = state0, parameters = param)
+        storage = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets)
         grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
         data[:n_gradient] += 1
         transfer_gradient!(dFdx, grad_adj, x, mapper, opt_cfg, model)
