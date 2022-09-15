@@ -44,10 +44,6 @@ function number_of_models(model::MultiModel)
     return length(model.models)
 end
 
-function number_of_degrees_of_freedom(model::MultiModel)
-    return sum(number_of_degrees_of_freedom, values(model.models))
-end
-
 function number_of_values(model::MultiModel)
     return sum(number_of_values, values(model.models))
 end
