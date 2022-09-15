@@ -15,8 +15,15 @@ function update_objective_new_parameters!(param_serialized, sim, state0, param, 
 end
 
 function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model, param);
-                                                            grad_type = :adjoint, config = nothing, kwarg...)
+                                                            grad_type = :adjoint,
+                                                            config = nothing,
+                                                            print_obj = true,
+                                                            copy_parameters = true,
+                                                            kwarg...)
     # Pick active set of targets from the optimization config and construct a mapper
+    if copy_parameters
+        param = deepcopy(param)
+    end
     targets = optimization_targets(opt_cfg, model)
     mapper, = variable_mapper(model, :parameters, targets = targets)
     x0 = vectorize_variables(model, param, mapper, config = opt_cfg)
@@ -36,7 +43,9 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
         obj = evaluate_objective(G, sim.model, states, dt, forces)
         data[:n_objective] += 1
         n = data[:n_objective]
-        println("#$n: $obj")
+        if print_obj
+            println("#$n: $obj")
+        end
         return obj
     end
     @assert grad_type == :adjoint
