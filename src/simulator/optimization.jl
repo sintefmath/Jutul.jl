@@ -25,6 +25,12 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
         param = deepcopy(param)
     end
     targets = optimization_targets(opt_cfg, model)
+    if grad_type == :numeric
+        @assert length(targets) == 1
+        @assert model isa SimulationModel
+    else
+        @assert grad_type == :adjoint
+    end
     mapper, = variable_mapper(model, :parameters, targets = targets)
     x0 = vectorize_variables(model, param, mapper, config = opt_cfg)
     data = Dict()
@@ -38,8 +44,9 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
 
     function F(x)
         devectorize_variables!(param, sim.model, x, mapper, config = opt_cfg)
-        states, = simulate(state0, sim, dt, parameters = param, forces = forces, config = config)
+        states, reports = simulate(state0, sim, dt, parameters = param, forces = forces, config = config)
         data[:states] = states
+        data[:reports] = reports
         obj = evaluate_objective(G, sim.model, states, dt, forces)
         data[:n_objective] += 1
         n = data[:n_objective]
@@ -48,15 +55,19 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
         end
         return obj
     end
-    @assert grad_type == :adjoint
     grad_adj = similar(x0)
     data[:grad_adj] = grad_adj
     function dF(dFdx, x)
         # TODO: Avoid re-allocating storage.
-        devectorize_variables!(param, model, x, mapper, config = opt_cfg)
-        storage = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets)
-        grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
         data[:n_gradient] += 1
+        devectorize_variables!(param, model, x, mapper, config = opt_cfg)
+        if grad_type == :adjoint
+            storage = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets)
+            grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
+        elseif grad_type == :numeric
+            grad_adj = Jutul.solve_numerical_sensitivities(model, data[:states], data[:reports], G, only(targets),
+                                                                        state0 = state0, forces = forces, parameters = param)
+        end
         transfer_gradient!(dFdx, grad_adj, x, mapper, opt_cfg, model)
         # @info "grad" dFdx grad_adj
         @assert all(isfinite, dFdx) "Non-finite gradients detected."
