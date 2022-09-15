@@ -19,6 +19,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
                                                             config = nothing,
                                                             print_obj = true,
                                                             copy_parameters = true,
+                                                            param_obj = false,
                                                             kwarg...)
     # Pick active set of targets from the optimization config and construct a mapper
     if copy_parameters
@@ -60,9 +61,9 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     function dF(dFdx, x)
         # TODO: Avoid re-allocating storage.
         data[:n_gradient] += 1
-        devectorize_variables!(param, model, x, mapper, config = opt_cfg)
+        # devectorize_variables!(param, model, x, mapper, config = opt_cfg)
         if grad_type == :adjoint
-            storage = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets)
+            storage = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets, param_obj = param_obj)
             grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
         elseif grad_type == :numeric
             grad_adj = Jutul.solve_numerical_sensitivities(model, data[:states], data[:reports], G, only(targets),
