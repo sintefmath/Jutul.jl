@@ -40,6 +40,11 @@ function simulator_storage(model; state0 = nothing, parameters = setup_parameter
     return storage
 end
 
+function simulate(state0, model::JutulModel, timesteps::AbstractVector; parameters = setup_parameters(model), kwarg...)
+    sim = Simulator(model, state0 = state0, parameters = parameters)
+    return simulate!(sim, timesteps; kwarg...)
+end
+
 function simulate(state0, sim::JutulSimulator, timesteps::AbstractVector; parameters = nothing, kwarg...)
     return simulate!(sim, timesteps; state0 = state0, parameters = parameters, kwarg...)
 end
