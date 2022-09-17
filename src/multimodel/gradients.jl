@@ -132,3 +132,11 @@ function transfer_gradient!(dFdy, dFdx, x, mapper, config, model::MultiModel)
     end
     return dFdy
 end
+
+function swap_variables(state, parameters, model::MultiModel; kwarg...)
+    out = Dict{Symbol, Any}()
+    for k in submodel_symbols(model)
+        out[k] = swap_variables(state[k], parameters[k], model[k]; kwarg...)
+    end
+    return out
+end

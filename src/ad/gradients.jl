@@ -64,7 +64,10 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
     parameter_model = adjoint_parameter_model(model, targets)
     # Note that primary is here because the target parameters are now the primaries for the parameter_model
     parameter_map, = variable_mapper(parameter_model, :primary, targets = targets)
-    parameter_sim = Simulator(parameter_model, state0 = deepcopy(parameters), parameters = deepcopy(state0), mode = :sensitivities, extra_timing = nothing)
+    # Transfer over parameters and state0 variables since many parameters are now variables
+    state0_p = swap_variables(state0, parameters, parameter_model, variables = true)
+    parameters_p = swap_variables(state0, parameters, parameter_model, variables = false)
+    parameter_sim = Simulator(parameter_model, state0 = deepcopy(state0_p), parameters = deepcopy(parameters_p), mode = :sensitivities, extra_timing = nothing)
 
     n_pvar = number_of_degrees_of_freedom(model)
     λ = gradient_vec_or_mat(n_pvar, n_objective)
@@ -463,6 +466,33 @@ function rescale_sensitivities!(dG, model, parameter_map)
                 dG_k = view(dG, interval, :)
             end
             @. dG_k /= scale
+        end
+    end
+end
+
+function swap_variables(state, parameters, model; variables = true)
+    p_keys = keys(get_parameters(model))
+    v_keys = keys(get_variables(model))
+
+    out = Dict{Symbol, Any}()
+    # If variables: state should contain all fields, except those that are now in parameters
+    if variables
+        internal_swapper!(out, state, parameters, v_keys, p_keys)
+    else
+        internal_swapper!(out, parameters, state, p_keys, v_keys)
+    end
+    return out
+end
+
+function internal_swapper!(out, A, B, keep, skip)
+    for (k, v) in A
+        if !(k in skip)
+            out[k] = v
+        end
+    end
+    for (k, v) in B
+        if k in keep
+            out[k] = v
         end
     end
 end
