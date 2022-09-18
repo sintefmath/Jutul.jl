@@ -58,12 +58,18 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     end
     grad_adj = similar(x0)
     data[:grad_adj] = grad_adj
+    data[:adjoint_storage] = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets, param_obj = param_obj)
     function dF(dFdx, x)
         # TODO: Avoid re-allocating storage.
         data[:n_gradient] += 1
         # devectorize_variables!(param, model, x, mapper, config = opt_cfg)
         if grad_type == :adjoint
-            storage = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets, param_obj = param_obj)
+            storage = data[:adjoint_storage]
+            for sim in [storage.forward, storage.backward, storage.parameter]
+                for k in [:state, :state0, :parameters]
+                    reset_variables!(sim, param, type = k)
+                end
+            end
             grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
         elseif grad_type == :numeric
             grad_adj = Jutul.solve_numerical_sensitivities(model, data[:states], data[:reports], G, only(targets),
