@@ -46,7 +46,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
         config = simulator_config(sim; info_level = -1, kwarg...)
     end
     data[:sim] = sim
-    data[:config] = config
+    data[:sim_config] = config
 
     grad_adj = similar(x0)
     data[:grad_adj] = grad_adj
@@ -61,7 +61,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     data[:G] = G
     data[:targets] = targets
     data[:mapper] = mapper
-    data[:opt_cfg] = opt_cfg
+    data[:config] = opt_cfg
     data[:state0] = state0
     F = x -> objective_opt!(x, data, print_obj)
     dF = (dFdx, x) -> gradient_opt!(dFdx, x, data)
@@ -77,7 +77,7 @@ function gradient_opt!(dFdx, x, data)
     G = data[:G]
     targets = data[:targets]
     mapper = data[:mapper]
-    opt_cfg = data[:opt_cfg]
+    opt_cfg = data[:config]
     model = data[:sim].model
 
     data[:n_gradient] += 1
@@ -106,11 +106,11 @@ function objective_opt!(x, data, print_obj = false)
     forces = data[:forces]
     G = data[:G]
     mapper = data[:mapper]
-    opt_cfg = data[:opt_cfg]
+    opt_cfg = data[:config]
     sim = data[:sim]
     model = sim.model
     devectorize_variables!(param, model, x, mapper, config = opt_cfg)
-    config = data[:config]
+    config = data[:sim_config]
     states, reports = simulate(state0, sim, dt, parameters = param, forces = forces, config = config)
     data[:states] = states
     data[:reports] = reports
