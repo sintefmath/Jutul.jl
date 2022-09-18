@@ -26,6 +26,9 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
         param = deepcopy(param)
     end
     targets = optimization_targets(opt_cfg, model)
+    if print_obj
+        print_parameter_optimization_config(targets, opt_cfg, model)
+    end
     if grad_type == :numeric
         @assert length(targets) == 1
         @assert model isa SimulationModel
@@ -95,7 +98,6 @@ function gradient_opt!(dFdx, x, data)
     return dFdx
 end
 
-
 function objective_opt!(x, data, print_obj = false)
     state0 = data[:state0]
     param = data[:parameters]
@@ -119,7 +121,6 @@ function objective_opt!(x, data, print_obj = false)
     end
     return obj
 end
-
 
 function optimization_config(model, param, active = keys(model.parameters);
                                                         rel_min = nothing,
@@ -281,4 +282,31 @@ function objective_gradient_chain_rule(x_to_y, y_to_x, y, dGdx)
     # dG(y(x))/dx = dG/dx * dy/dx
     dGdy = dGdx*dydx
     return dGdy
+end
+
+function print_parameter_optimization_config(targets, config, model; title = :model)
+    nt = length(targets)
+    if nt > 0
+        data = Matrix{Any}(undef, nt, 6)
+        for (i, target) in enumerate(targets)
+            prm = model.parameters[target]
+            e = associated_entity(prm)
+            n = count_active_entities(model.domain, e)
+            m = degrees_of_freedom_per_entity(model, prm)
+            v = config[target]
+            data[i, 1] = target
+            data[i, 2] = e
+            if m == 1
+                s = "$n"
+            else
+                s = "$n×$m=$(n*m)"
+            end
+            data[i, 3] = s
+            data[i, 4] = v[:scaler]
+            data[i, 5] = (v[:abs_min], v[:abs_max])
+            data[i, 6] = (v[:rel_min], v[:rel_max])
+        end
+        h = ["Name", "Entity", "Size", "Scale", "Abs. limits", "Rel. limits"]
+        pretty_table(data, header = h, title = "Parameters for $title")
+    end
 end

@@ -140,3 +140,9 @@ function swap_variables(state, parameters, model::MultiModel; kwarg...)
     end
     return out
 end
+
+function print_parameter_optimization_config(targets, config, model::MultiModel)
+    for (k, v) in targets
+        print_parameter_optimization_config(v, config[k], model[k], title = k)
+    end
+end
