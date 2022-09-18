@@ -58,33 +58,39 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     end
     grad_adj = similar(x0)
     data[:grad_adj] = grad_adj
-    data[:adjoint_storage] = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets, param_obj = param_obj)
-    function dF(dFdx, x)
-        # TODO: Avoid re-allocating storage.
-        data[:n_gradient] += 1
-        # devectorize_variables!(param, model, x, mapper, config = opt_cfg)
-        if grad_type == :adjoint
-            storage = data[:adjoint_storage]
-            for sim in [storage.forward, storage.backward, storage.parameter]
-                for k in [:state, :state0, :parameters]
-                    reset_variables!(sim, param, type = k)
-                end
-            end
-            grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
-        elseif grad_type == :numeric
-            grad_adj = Jutul.solve_numerical_sensitivities(model, data[:states], data[:reports], G, only(targets),
-                                                                        state0 = state0, forces = forces, parameters = param)
-        end
-        transfer_gradient!(dFdx, grad_adj, x, mapper, opt_cfg, model)
-        # @info "grad" dFdx grad_adj
-        @assert all(isfinite, dFdx) "Non-finite gradients detected."
-        return dFdx
+    if grad_type == :adjoint
+        data[:adjoint_storage] = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets, param_obj = param_obj)
+    else
+        @assert grad_type == :numeric
     end
     lims = optimization_limits(opt_cfg, mapper, x0, param, model)
     data[:mapper] = mapper
     data[:config] = opt_cfg
+    dF = (dFdx, x) -> dFdx!(dFdx, x, data, model, state0, param, dt, forces, G, targets, mapper, opt_cfg)
     return (F, dF, x0, lims, data)
 end
+
+function dFdx!(dFdx, x, data, model, state0, param, dt, forces, G, targets, mapper, opt_cfg)
+    data[:n_gradient] += 1
+    grad_adj = data[:grad_adj]
+    if haskey(data, :adjoint_storage)
+        storage = data[:adjoint_storage]
+        for sim in [storage.forward, storage.backward, storage.parameter]
+            for k in [:state, :state0, :parameters]
+                reset_variables!(sim, param, type = k)
+            end
+        end
+        grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
+    else
+        grad_adj = Jutul.solve_numerical_sensitivities(model, data[:states], data[:reports], G, only(targets),
+                                                                    state0 = state0, forces = forces, parameters = param)
+    end
+    transfer_gradient!(dFdx, grad_adj, x, mapper, opt_cfg, model)
+    @assert all(isfinite, dFdx) "Non-finite gradients detected."
+    return dFdx
+end
+
+
 
 function optimization_config(model, param, active = keys(model.parameters);
                                                         rel_min = nothing,
