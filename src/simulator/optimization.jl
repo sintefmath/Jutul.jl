@@ -42,35 +42,40 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     if isnothing(config)
         config = simulator_config(sim; info_level = -1, kwarg...)
     end
+    data[:sim] = sim
+    data[:config] = config
 
-    function F(x)
-        devectorize_variables!(param, sim.model, x, mapper, config = opt_cfg)
-        states, reports = simulate(state0, sim, dt, parameters = param, forces = forces, config = config)
-        data[:states] = states
-        data[:reports] = reports
-        obj = evaluate_objective(G, sim.model, states, dt, forces)
-        data[:n_objective] += 1
-        n = data[:n_objective]
-        if print_obj
-            println("#$n: $obj")
-        end
-        return obj
-    end
     grad_adj = similar(x0)
     data[:grad_adj] = grad_adj
     if grad_type == :adjoint
         data[:adjoint_storage] = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets, param_obj = param_obj)
-    else
-        @assert grad_type == :numeric
     end
     lims = optimization_limits(opt_cfg, mapper, x0, param, model)
     data[:mapper] = mapper
-    data[:config] = opt_cfg
-    dF = (dFdx, x) -> dFdx!(dFdx, x, data, model, state0, param, dt, forces, G, targets, mapper, opt_cfg)
+    data[:dt] = dt
+    data[:forces] = forces
+    data[:parameters] = param
+    data[:G] = G
+    data[:targets] = targets
+    data[:mapper] = mapper
+    data[:opt_cfg] = opt_cfg
+    data[:state0] = state0
+    F = x -> objective_opt!(x, data, print_obj)
+    dF = (dFdx, x) -> gradient_opt!(dFdx, x, data)
     return (F, dF, x0, lims, data)
 end
 
-function dFdx!(dFdx, x, data, model, state0, param, dt, forces, G, targets, mapper, opt_cfg)
+function gradient_opt!(dFdx, x, data)
+    state0 = data[:state0]
+    param = data[:parameters]
+    dt = data[:dt]
+    forces = data[:forces]
+    G = data[:G]
+    targets = data[:targets]
+    mapper = data[:mapper]
+    opt_cfg = data[:opt_cfg]
+    model = data[:sim].model
+
     data[:n_gradient] += 1
     grad_adj = data[:grad_adj]
     if haskey(data, :adjoint_storage)
@@ -90,6 +95,30 @@ function dFdx!(dFdx, x, data, model, state0, param, dt, forces, G, targets, mapp
     return dFdx
 end
 
+
+function objective_opt!(x, data, print_obj = false)
+    state0 = data[:state0]
+    param = data[:parameters]
+    dt = data[:dt]
+    forces = data[:forces]
+    G = data[:G]
+    mapper = data[:mapper]
+    opt_cfg = data[:opt_cfg]
+    sim = data[:sim]
+    model = sim.model
+    devectorize_variables!(param, model, x, mapper, config = opt_cfg)
+    config = data[:config]
+    states, reports = simulate(state0, sim, dt, parameters = param, forces = forces, config = config)
+    data[:states] = states
+    data[:reports] = reports
+    obj = evaluate_objective(G, sim.model, states, dt, forces)
+    data[:n_objective] += 1
+    n = data[:n_objective]
+    if print_obj
+        println("#$n: $obj")
+    end
+    return obj
+end
 
 
 function optimization_config(model, param, active = keys(model.parameters);
