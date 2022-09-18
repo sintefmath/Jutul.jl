@@ -65,7 +65,8 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     data[:state0] = state0
     F = x -> objective_opt!(x, data, print_obj)
     dF = (dFdx, x) -> gradient_opt!(dFdx, x, data)
-    return (F, dF, x0, lims, data)
+    F_and_dF = (F, dFdx, x) -> objective_and_gradient_opt!(F, dFdx, x, data, print_obj)
+    return (F! = F, dF! = dF, F_and_dF! = F_and_dF, x0 = x0, limits = lims, data = data)
 end
 
 function gradient_opt!(dFdx, x, data)
@@ -118,6 +119,14 @@ function objective_opt!(x, data, print_obj = false)
     n = data[:n_objective]
     if print_obj
         println("#$n: $obj")
+    end
+    return obj
+end
+
+function objective_and_gradient_opt!(F, dFdx, x, data, arg...)
+    obj = objective_opt!(x, data, arg...)
+    if !isnothing(dFdx)
+        gradient_opt!(dFdx, x, data)
     end
     return obj
 end
