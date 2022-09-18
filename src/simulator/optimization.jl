@@ -108,15 +108,14 @@ function optimization_config(model, param, active = keys(model.parameters);
         out[k] = OrderedDict(
                             :active => true,
                             :use_scaling => use_scaling,
+                            :scaler => :default,
                             :abs_min => abs_min,
                             :abs_max => abs_max,
                             :rel_min => rel_min,
                             :rel_max => rel_max,
                             :base_scale => scale,
                             :low => low,
-                            :high => hi,
-                            :transform => identity,
-                            :transform_inv => identity
+                            :high => hi
             )
     end
     return out
@@ -137,23 +136,28 @@ opt_scaler_function(config::Nothing, key; inv = false) = x -> x
 function opt_scaler_function(config, key; inv = false)
     cfg = config[key]
     if cfg[:use_scaling]
-        x_min = cfg[:low]
-        x_max = cfg[:high]
-        if isnothing(x_min)
-            x_min = 0.0
-        end
-        if isnothing(x_max)
-            # Divide by 1.0 if no max value
-            Δ = cfg[:base_scale]
+        scale_type = cfg[:scaler]
+        if scale_type == :default
+            x_min = cfg[:low]
+            x_max = cfg[:high]
+            if isnothing(x_min)
+                x_min = 0.0
+            end
+            if isnothing(x_max)
+                # Divide by 1.0 if no max value
+                Δ = cfg[:base_scale]
+            else
+                Δ = x_max - x_min
+            end
+            if inv
+                scaler = x -> x*Δ + x_min
+            else
+                scaler = x -> (x - x_min)/Δ
+            end
+        elseif scale_type == :log
+            scaler = inv ? exp : log
         else
-            Δ = x_max - x_min
-        end
-        if inv
-            F_inv = cfg[:transform_inv]
-            scaler = x -> F_inv(x*Δ + x_min)
-        else
-            F = cfg[:transform]
-            scaler = x -> F((x - x_min)/Δ)
+            error("Unknown scaler $scale_type")
         end
     else
         scaler = identity
@@ -196,8 +200,8 @@ function optimization_limits!(lims, config, mapper, x0, param, model)
             else
                 hi = min(abs_max, rel_max*val)
             end
-            @assert low <= x0[k]
-            @assert hi >= x0[k]
+            @assert low <= x0[k] "Computed lower limit $low for parameter #$k was larger than provided x0[k]=$(x0[k])"
+            @assert hi >= x0[k] "Computer upper limit $hi for parameter #$k was smaller than provided x0[k]=$(x0[k])"
             x_min[k] = low
             x_max[k] = hi
         end
