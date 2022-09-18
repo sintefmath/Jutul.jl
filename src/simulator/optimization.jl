@@ -112,6 +112,7 @@ function optimization_config(model, param, active = keys(model.parameters);
                             :abs_max => abs_max,
                             :rel_min => rel_min,
                             :rel_max => rel_max,
+                            :base_scale => scale,
                             :low => low,
                             :high => hi,
                             :transform => identity,
@@ -143,7 +144,7 @@ function opt_scaler_function(config, key; inv = false)
         end
         if isnothing(x_max)
             # Divide by 1.0 if no max value
-            Δ = 1.0
+            Δ = cfg[:base_scale]
         else
             Δ = x_max - x_min
         end
