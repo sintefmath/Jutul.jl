@@ -193,12 +193,22 @@ function optimization_limits!(lims, config, mapper, x0, param, model)
             if isnothing(rel_min)
                 low = abs_min
             else
-                low = max(abs_min, rel_min*val)
+                if val < 0
+                    rel_min_actual = val/rel_min
+                else
+                    rel_min_actual = val*rel_min
+                end
+                low = max(abs_min, rel_min_actual)
             end
             if isnothing(rel_max)
                 hi = abs_max
             else
-                hi = min(abs_max, rel_max*val)
+                if val < 0
+                    rel_max_actual = val/rel_max
+                else
+                    rel_max_actual = val*rel_max
+                end
+                hi = min(abs_max, rel_max_actual)
             end
             @assert low <= x0[k] "Computed lower limit $low for parameter #$k was larger than provided x0[k]=$(x0[k])"
             @assert hi >= x0[k] "Computer upper limit $hi for parameter #$k was smaller than provided x0[k]=$(x0[k])"
