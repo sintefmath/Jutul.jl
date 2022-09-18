@@ -442,11 +442,11 @@ gradient_vec_or_mat(n, m) = zeros(n, m)
 
 function variable_mapper(model::SimulationModel, type = :primary; targets = nothing, offset = 0)
     vars = get_variables_by_type(model, type)
-    if isnothing(targets)
-        targets = keys(vars)
-    end
     out = Dict{Symbol, Any}()
-    for t in targets
+    for (t, var) in vars
+        if !isnothing(targets) && !(t in targets)
+            continue
+        end
         var = vars[t]
         n = number_of_values(model, var)
         out[t] = (n = n, offset = offset, scale = variable_scale(var))
