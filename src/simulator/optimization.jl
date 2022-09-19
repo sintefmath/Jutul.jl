@@ -201,13 +201,16 @@ function opt_scaler_function(config, key; inv = false)
         end
         F = F_inv = identity
 
-        if scale_type == :log
+        if scale_type == :log || scale_type == :exp
             ϵ = cfg[:base_scale]
             base = 1/ϵ
             myexp = x -> (base^x - 1)/(base - 1)
             mylog = x -> log((base-1)*x + 1)/log(base)
-            F_inv = myexp
-            F = mylog
+            if scale_type == :exp
+                F_inv, F = myexp, mylog
+            else
+                F, F_inv = myexp, mylog
+            end
         else
             @assert scale_type == :default "Unknown scaler $scale_type"
         end
@@ -220,6 +223,8 @@ function opt_scaler_function(config, key; inv = false)
         if scale_type == :default
             scaler = identity
         elseif scale_type == :log
+            scaler = inv ? log : exp
+        elseif scale_type == :exp
             scaler = inv ? exp : log
         else
             error("Unknown scaler $scale_type")
