@@ -1,11 +1,9 @@
-function vectorize_variables(model::MultiModel, state_or_prm, type_or_map = :primary; config = nothing)
-    mapper = get_mapper_internal(model, type_or_map)
+function vectorized_length(::MultiModel, mapper)
     n = 0
-    for (k, v) in mapper
+    for v in values(mapper)
         n += sum(x -> x.n, values(v), init = 0)
     end
-    V = zeros(n)
-    vectorize_variables!(V, model, state_or_prm, mapper, config = config)
+    return n
 end
 
 function vectorize_variables!(V, model::MultiModel, state_or_prm, type_or_map = :primary; config = nothing)

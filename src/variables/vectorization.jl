@@ -3,10 +3,12 @@ export vectorize_variables, vectorize_variables!, devectorize_variables!
 
 function vectorize_variables(model, state_or_prm, type_or_map = :primary; config = nothing)
     mapper = get_mapper_internal(model, type_or_map)
-    n = sum(x -> x.n, values(mapper), init = 0)
+    n = vectorized_length(model, mapper)
     V = zeros(n)
     return vectorize_variables!(V, model, state_or_prm, mapper, config = config)
 end
+
+vectorized_length(model, mapper) = sum(x -> x.n, values(mapper), init = 0)
 
 function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary; config = nothing)
     mapper = get_mapper_internal(model, type_or_map)

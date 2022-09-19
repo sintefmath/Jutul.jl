@@ -36,7 +36,14 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
         @assert grad_type == :adjoint
     end
     mapper, = variable_mapper(model, :parameters, targets = targets)
+    lims = optimization_limits(opt_cfg, mapper, param, model)
     x0 = vectorize_variables(model, param, mapper, config = opt_cfg)
+    for k in eachindex(x0)
+        low = lims[1][k]
+        high = lims[2][k]
+        @assert low <= x0[k] "Computed lower limit $low for parameter #$k was larger than provided x0[k]=$(x0[k])"
+        @assert high >= x0[k] "Computer upper limit $hi for parameter #$k was smaller than provided x0[k]=$(x0[k])"
+    end
     data = Dict()
     data[:n_objective] = 1
     data[:n_gradient] = 1
@@ -53,7 +60,6 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     if grad_type == :adjoint
         data[:adjoint_storage] = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets, param_obj = param_obj)
     end
-    lims = optimization_limits(opt_cfg, mapper, x0, param, model)
     data[:mapper] = mapper
     data[:dt] = dt
     data[:forces] = forces
@@ -136,18 +142,18 @@ function optimization_config(model, param, active = keys(model.parameters);
                                                         rel_max = nothing,
                                                         use_scaling = true)
     out = Dict{Symbol, Any}()
-    ϵ = 1e-8
+    # ϵ = 1e-8
     for k in active
         var = model.parameters[k]
-        vals = param[k]
+        # vals = param[k]
         scale = variable_scale(var)
         if isnothing(scale)
             scale = 1.0
         end
         # Low/high is not bounds, but typical scaling values
-        K = 10
-        low = minimum(vec(vals))/K - ϵ*scale
-        hi = maximum(vec(vals))*K + ϵ*scale
+        # K = 10
+        # low = minimum(vec(vals))/K - ϵ*scale
+        # hi = maximum(vec(vals))*K + ϵ*scale
         abs_min = minimum_value(var)
         if isnothing(abs_min)
             abs_min = -Inf
@@ -165,8 +171,8 @@ function optimization_config(model, param, active = keys(model.parameters);
                             :rel_min => rel_min,
                             :rel_max => rel_max,
                             :base_scale => scale,
-                            :low => low,
-                            :high => hi
+                            :low => nothing,
+                            :high => nothing
             )
     end
     return out
@@ -186,61 +192,72 @@ opt_scaler_function(config::Nothing, key; inv = false) = x -> x
 
 function opt_scaler_function(config, key; inv = false)
     cfg = config[key]
+    scale_type = cfg[:scaler]
     if cfg[:use_scaling]
-        scale_type = cfg[:scaler]
+        x_min = cfg[:low]
+        x_max = cfg[:high]
+        if isnothing(x_min)
+            x_min = 0.0
+        end
+        if isnothing(x_max)
+            # Divide by 1.0 if no max value
+            Δ = cfg[:base_scale]
+        else
+            Δ = x_max - x_min
+        end
+        F = F_inv = identity
+
+        if scale_type == :log
+            base = 1/cfg[:base_scale]
+            base = 1e5
+            F_inv = x -> (base^x - 1)/(base - 1)
+            F = x -> log((base-1)*x + 1)/log(base)
+        else
+            @assert scale_type == :default "Unknown scaler $scale_type"
+        end
+        if inv
+            scaler = x -> F_inv(x*Δ + x_min)
+        else
+            scaler = x -> F((x - x_min)/Δ)
+        end
+    else
         if scale_type == :default
-            x_min = cfg[:low]
-            x_max = cfg[:high]
-            if isnothing(x_min)
-                x_min = 0.0
-            end
-            if isnothing(x_max)
-                # Divide by 1.0 if no max value
-                Δ = cfg[:base_scale]
-            else
-                Δ = x_max - x_min
-            end
-            if inv
-                scaler = x -> x*Δ + x_min
-            else
-                scaler = x -> (x - x_min)/Δ
-            end
+            scaler = identity
         elseif scale_type == :log
             scaler = inv ? exp : log
         else
             error("Unknown scaler $scale_type")
         end
-    else
-        scaler = identity
     end
     return scaler
 end
 
-function optimization_limits(config, mapper, x0, param, model)
-    x_min = similar(x0)
-    x_max = similar(x0)
+function optimization_limits(config, mapper, param, model)
+    n = vectorized_length(model, mapper)
+    x_min = zeros(n)
+    x_max = zeros(n)
     lims = (min = x_min, max = x_max)
-    lims = optimization_limits!(lims, config, mapper, x0, param, model)
+    lims = optimization_limits!(lims, config, mapper, param, model)
     return lims
 end
 
-function optimization_limits!(lims, config, mapper, x0, param, model)
+function optimization_limits!(lims, config, mapper, param, model)
     x_min, x_max = lims
-    for (k, v) in mapper
+    for (param_k, v) in mapper
         (; offset, n) = v
-        cfg = config[k]
-        vals = param[k]
-        F = opt_scaler_function(config, k, inv = false)
-        # F_inv = opt_scaler_function(config, k, inv = true)
+        cfg = config[param_k]
+        vals = param[param_k]
 
         rel_max = cfg[:rel_max]
         rel_min = cfg[:rel_min]
         # We have found limits in terms of unscaled variable, scale first
-        abs_max = F(cfg[:abs_max])
-        abs_min = F(cfg[:abs_min])
+        abs_max = cfg[:abs_max]
+        abs_min = cfg[:abs_min]
+        low_group = Inf
+        high_group = -Inf
         for i in 1:n
             k = i + offset
-            val = F(vals[i])
+            val = vals[i]
             if isnothing(rel_min)
                 low = abs_min
             else
@@ -261,10 +278,26 @@ function optimization_limits!(lims, config, mapper, x0, param, model)
                 end
                 hi = min(abs_max, rel_max_actual)
             end
-            @assert low <= x0[k] "Computed lower limit $low for parameter #$k was larger than provided x0[k]=$(x0[k])"
-            @assert hi >= x0[k] "Computer upper limit $hi for parameter #$k was smaller than provided x0[k]=$(x0[k])"
             x_min[k] = low
             x_max[k] = hi
+
+            low_group = min(low_group, low)
+            high_group = max(high_group, hi)
+        end
+        cfg[:low] = low_group
+        cfg[:high] = high_group
+
+        F = opt_scaler_function(config, param_k, inv = false)
+        # F_inv = opt_scaler_function(config, k, inv = true)
+        for i in 1:n
+            k = i + offset
+            low = F(x_min[k])
+            x_min[k] = low
+            # @assert low <= x0[k] "Computed lower limit $low for parameter #$k was larger than provided x0[k]=$(x0[k])"
+
+            high = F(x_max[k])
+            x_max[k] = high
+            # @assert hi >= x0[k] "Computer upper limit $hi for parameter #$k was smaller than provided x0[k]=$(x0[k])"
         end
     end
     return lims
