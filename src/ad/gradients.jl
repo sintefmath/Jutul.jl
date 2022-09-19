@@ -107,6 +107,8 @@ Non-allocating version of `solve_adjoint_sensitivities`.
 function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model))
     N = length(timesteps)
     @assert N == length(states)
+    # Set gradient to zero before solve starts
+    @. ∇G = 0
     @timeit "sensitivities" for i in N:-1:1
         fn = deepcopy
         if i == 1
