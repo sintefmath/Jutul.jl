@@ -142,18 +142,12 @@ function optimization_config(model, param, active = keys(model.parameters);
                                                         rel_max = nothing,
                                                         use_scaling = true)
     out = Dict{Symbol, Any}()
-    # ϵ = 1e-8
     for k in active
         var = model.parameters[k]
-        # vals = param[k]
         scale = variable_scale(var)
         if isnothing(scale)
             scale = 1.0
         end
-        # Low/high is not bounds, but typical scaling values
-        # K = 10
-        # low = minimum(vec(vals))/K - ϵ*scale
-        # hi = maximum(vec(vals))*K + ϵ*scale
         abs_min = minimum_value(var)
         if isnothing(abs_min)
             abs_min = -Inf
@@ -208,15 +202,17 @@ function opt_scaler_function(config, key; inv = false)
         F = F_inv = identity
 
         if scale_type == :log
-            base = 1/cfg[:base_scale]
-            base = 1e5
-            F_inv = x -> (base^x - 1)/(base - 1)
-            F = x -> log((base-1)*x + 1)/log(base)
+            ϵ = cfg[:base_scale]
+            base = 1/ϵ
+            myexp = x -> (base^x - 1)/(base - 1)
+            mylog = x -> log((base-1)*x + 1)/log(base)
+            F_inv = myexp
+            F = mylog
         else
             @assert scale_type == :default "Unknown scaler $scale_type"
         end
         if inv
-            scaler = x -> F_inv(x*Δ + x_min)
+            scaler = x -> F_inv(x)*Δ + x_min
         else
             scaler = x -> F((x - x_min)/Δ)
         end
@@ -291,13 +287,8 @@ function optimization_limits!(lims, config, mapper, param, model)
         # F_inv = opt_scaler_function(config, k, inv = true)
         for i in 1:n
             k = i + offset
-            low = F(x_min[k])
-            x_min[k] = low
-            # @assert low <= x0[k] "Computed lower limit $low for parameter #$k was larger than provided x0[k]=$(x0[k])"
-
-            high = F(x_max[k])
-            x_max[k] = high
-            # @assert hi >= x0[k] "Computer upper limit $hi for parameter #$k was smaller than provided x0[k]=$(x0[k])"
+            x_min[k] = F(x_min[k])
+            x_max[k] = F(x_max[k])
         end
     end
     return lims
