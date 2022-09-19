@@ -119,9 +119,9 @@ function optimization_targets(config::Dict, model::MultiModel)
     return out
 end
 
-function optimization_limits!(lims, config, mapper, x0, param, model::MultiModel)
+function optimization_limits!(lims, config, mapper, param, model::MultiModel)
     for k in submodel_symbols(model)
-        optimization_limits!(lims, config[k], mapper[k], x0, param[k], model[k])
+        optimization_limits!(lims, config[k], mapper[k], param[k], model[k])
     end
     return lims
 end
