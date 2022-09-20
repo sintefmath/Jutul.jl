@@ -146,3 +146,34 @@ function print_parameter_optimization_config(targets, config, model::MultiModel)
         print_parameter_optimization_config(v, config[k], model[k], title = k)
     end
 end
+
+function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing)
+    @assert isnothing(state0) "Not implemented."
+    outer_sparsity = Dict()
+    for mod_k in submodel_symbols(model)
+        sparsity = Dict()
+        substate = state[mod_k]
+        entities = ad_entities(substate)
+        for (k, v) in entities
+            # Create a outer state where everything is value except current focus
+            outer_state = Dict{Symbol, Any}()
+            for (statek, statev) in pairs(state)
+                outer_state[statek] = as_value(statev)
+            end
+            outer_state[mod_k], = create_mock_state(state[mod_k], k, entities)
+            # Apply the function
+            f_ad = F(outer_state)
+
+            V = sum(f_ad)
+            if V isa AbstractFloat
+                S = zeros(Int64, 0)
+            else
+                D = ST.deriv(V)
+                S = D.nzind
+            end
+            sparsity[k] = S
+        end
+        outer_sparsity[mod_k] = sparsity
+    end
+    return outer_sparsity
+end

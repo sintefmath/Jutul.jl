@@ -88,6 +88,8 @@ end
     return as_value(val)
 end
 
+@inline Base.getindex(state::ValueStateAD, f::Symbol) = Base.getproperty(state, f)
+
 """
     local_ad(state::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
 

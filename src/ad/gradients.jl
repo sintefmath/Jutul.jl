@@ -153,7 +153,7 @@ function update_objective_sparsity!(storage, G, states, timesteps, forces, k = :
         sparsity = obj_sparsity[k]
         if isnothing(sparsity)
             sim = storage[k]
-            obj_sparsity[k] = determine_objective_sparsity(sim, G, states, timesteps, forces)
+            obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, states, timesteps, forces)
         end
     end
 end
@@ -168,8 +168,7 @@ function get_objective_sparsity(storage, k)
     return S
 end
 
-function determine_objective_sparsity(sim, G, states, timesteps, forces)
-    model = sim.model
+function determine_objective_sparsity(sim, model, G, states, timesteps, forces)
     state = sim.storage.state
     # m, state, dt, step_no, forces
     F_outer = (state, i) -> G(model, state, timesteps[i], i, forces_for_timestep(sim, forces, timesteps, i))
