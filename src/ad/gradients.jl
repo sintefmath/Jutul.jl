@@ -54,6 +54,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
                                       parameters = setup_parameters(model),
                                       n_objective = nothing,
                                       targets = parameter_targets(model),
+                                      use_sparsity = true,
                                       param_obj = false)
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
@@ -69,6 +70,13 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
     parameters_p = swap_variables(state0, parameters, parameter_model, variables = false)
     parameter_sim = Simulator(parameter_model, state0 = deepcopy(state0_p), parameters = deepcopy(parameters_p), mode = :sensitivities, extra_timing = nothing)
 
+    if use_sparsity
+        # We will update these later on
+        sparsity_obj = Dict{Any, Any}(:parameter => nothing, 
+                                      :forward => nothing)
+    else
+        sparsity_obj = nothing
+    end
     n_pvar = number_of_degrees_of_freedom(model)
     λ = gradient_vec_or_mat(n_pvar, n_objective)
     fsim_s = forward_sim.storage
@@ -92,6 +100,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
             backward = backward_sim,
             parameter = parameter_sim,
             parameter_map = parameter_map,
+            objective_sparsity = sparsity_obj,
             lagrange = λ,
             dparam = dobj_dparam,
             param_buf = param_buf,
@@ -107,6 +116,9 @@ Non-allocating version of `solve_adjoint_sensitivities`.
 function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model))
     N = length(timesteps)
     @assert N == length(states)
+    # Do sparsity detection if not already done.
+    update_objective_sparsity!(storage, G, states, timesteps, forces, :forward)
+    update_objective_sparsity!(storage, G, states, timesteps, forces, :parameter)
     # Set gradient to zero before solve starts
     @. ∇G = 0
     @timeit "sensitivities" for i in N:-1:1
@@ -133,6 +145,43 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     return ∇G
 end
 
+function update_objective_sparsity!(storage, G, states, timesteps, forces, k = :forward)
+    obj_sparsity = storage.objective_sparsity
+    if isnothing(obj_sparsity) || (k == :parameter && isnothing(storage.dparam))
+        return
+    else
+        sparsity = obj_sparsity[k]
+        if isnothing(sparsity)
+            sim = storage[k]
+            obj_sparsity[k] = determine_objective_sparsity(sim, G, states, timesteps, forces)
+        end
+    end
+end
+
+function get_objective_sparsity(storage, k)
+    obj_sparsity = storage.objective_sparsity
+    if isnothing(obj_sparsity)
+        S = nothing
+    else
+        S = obj_sparsity[k]
+    end
+    return S
+end
+
+function determine_objective_sparsity(sim, G, states, timesteps, forces)
+    model = sim.model
+    state = sim.storage.state
+    # m, state, dt, step_no, forces
+    F_outer = (state, i) -> G(model, state, timesteps[i], i, forces_for_timestep(sim, forces, timesteps, i))
+    sparsity = determine_sparsity_simple(s -> F_outer(s, 1), model, state)
+    for i in 2:length(states)
+        s_new = determine_sparsity_simple(s -> F_outer(s, i), model, state)
+        for (k, v) in s_new
+            merge!(sparsity[k], v)
+        end
+    end
+    return sparsity
+end
 
 function state_gradient(model, state, F, extra_arg...; kwarg...)
     n_total = number_of_degrees_of_freedom(model)
@@ -158,11 +207,14 @@ function merge_state_with_parameters(model, state, parameters)
     return state
 end
 
-function state_gradient_outer!(∂F∂x, F, model, state, extra_arg)
-    state_gradient_inner!(∂F∂x, F, model, state, nothing, extra_arg)
+function state_gradient_outer!(∂F∂x, F, model, state, extra_arg; sparsity = nothing)
+    if !isnothing(sparsity)
+        @. ∂F∂x = 0
+    end
+    state_gradient_inner!(∂F∂x, F, model, state, nothing, extra_arg; sparsity = sparsity)
 end
 
-function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_model = model)
+function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_model = model; sparsity = nothing)
     layout = matrix_layout(model.context)
     get_partial(x::AbstractFloat, i) = 0.0
     get_partial(x::ForwardDiff.Dual, i) = x.partials[i]
@@ -195,7 +247,12 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
         ne = count_active_entities(model.domain, e)
         ltag = get_entity_tag(tag, e)
         S = typeof(get_ad_entity_scalar(1.0, np, tag = ltag))
-        for i in 1:ne
+        if isnothing(sparsity)
+            it_rng = 1:ne
+        else
+            it_rng = sparsity[e]
+        end
+        for i in it_rng
             diff_entity!(∂F∂x, state, i, S, ne, np, offset)
         end
         offset += ne*np
@@ -221,7 +278,8 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     rhs = adjoint_storage.rhs
     dx = adjoint_storage.dx
     # Fill rhs with (∂J / ∂x)ᵀₙ (which will be treated with a negative sign when the result is written by the linear solver)
-    @timeit "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, i, forces))
+    S_p = get_objective_sparsity(adjoint_storage, :forward)
+    @timeit "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, i, forces), sparsity = S_p)
     if isnothing(state_next)
         @assert i == N
         @. λ = 0

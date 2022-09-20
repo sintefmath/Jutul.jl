@@ -58,7 +58,10 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     grad_adj = similar(x0)
     data[:grad_adj] = grad_adj
     if grad_type == :adjoint
-        data[:adjoint_storage] = setup_adjoint_storage(model, state0 = state0, parameters = param, targets = targets, param_obj = param_obj)
+        data[:adjoint_storage] = setup_adjoint_storage(model, state0 = state0,
+                                                              parameters = param,
+                                                              targets = targets,
+                                                              param_obj = param_obj)
     end
     data[:mapper] = mapper
     data[:dt] = dt
