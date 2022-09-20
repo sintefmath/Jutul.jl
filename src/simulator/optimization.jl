@@ -47,6 +47,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     data = Dict()
     data[:n_objective] = 1
     data[:n_gradient] = 1
+    data[:obj_hist] = zeros(0)
 
     sim = Simulator(model, state0 = state0, parameters = param)
     if isnothing(config)
@@ -98,7 +99,10 @@ function gradient_opt!(dFdx, x, data)
                 reset_variables!(sim, param, type = k)
             end
         end
+        debug_time = false
+        set_global_timer!(debug_time)
         grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
+        print_global_timer(debug_time; text = "Adjoint solve detailed timing")
     else
         grad_adj = Jutul.solve_numerical_sensitivities(model, data[:states], data[:reports], G, only(targets),
                                                                     state0 = state0, forces = forces, parameters = param)
@@ -126,6 +130,7 @@ function objective_opt!(x, data, print_obj = false)
     obj = evaluate_objective(G, sim.model, states, dt, forces)
     data[:n_objective] += 1
     n = data[:n_objective]
+    push!(data[:obj_hist], obj)
     if print_obj
         println("#$n: $obj")
     end
