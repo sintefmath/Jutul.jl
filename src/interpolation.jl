@@ -55,6 +55,9 @@ Get a 1D interpolator `F(x) ≈ y` for a table `xs, ys` that by default does con
 x = collect(0:0.1:4)
 I = get_1d_interpolator(x, sin.(x))
 isapprox(I(π/2), 1.0, atol = 1e-2)
+
+# output
+
 true
 ```
 """
