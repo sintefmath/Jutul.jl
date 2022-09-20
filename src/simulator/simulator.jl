@@ -40,17 +40,64 @@ function simulator_storage(model; state0 = nothing, parameters = setup_parameter
     return storage
 end
 
+"""
+    simulate(state0, model, timesteps, parameters = setup_parameters(model))
+    simulate(state0, model, timesteps, info_level = 3)
+    simulate(state0, model, timesteps; <keyword arguments>)
+
+
+Simulate a set of `timesteps` with `model` for the given initial `state0` and optionally specific parameters.
+Additional keyword arguments are passed onto [`simulator_config`](@ref) and [`simulate!`](@ref). This interface is
+primarily for convenience, as all storage for the simulator is allocated upon use and discared upon return. If you
+want to perform multiple simulations with the same model it is advised to instead instantiate [`Simulator`](@ref) 
+and combine it with [`simulate!`](@ref).
+
+# Arguments
+- `state0::Dict`: initial state, typically created using [`setup_state`](@ref) for the `model` in use.
+- `model::JutulModel`: model that describes the discretized system to solve, for example [`SimulationModel`](@ref) or [`MultiModel`](@ref).
+- `timesteps::AbstractVector`: Vector of desired report steps. The simulator will perform time integration until `sum(timesteps)`
+   is reached, providing outputs at the end of each report step.
+- `parameters=setup_parameters(model)`: Optional overrides the default parameters for the model.
+- `forces=nothing`: Either `nothing` (for no forces), a single set of forces from `setup_forces(model)` or a `Vector` of such forces with equal length to `timesteps`.
+- `restart=nothing`: If an integer is provided, the simulation will attempt to restart from that step. Requires that `output_path` is provided here or in the `config`.
+- `config=simulator_config(model)`: Configuration `Dict` that holds many fine grained settings for output, linear solver, time-steps, outputs etc.
+
+Additional arguments are passed onto [`simulator_config`](@ref).
+
+See also [`simulate!`](@ref), [`Simulator`](@ref), [`SimulationModel`](@ref), [`simulator_config`](@ref).
+"""
 function simulate(state0, model::JutulModel, timesteps::AbstractVector; parameters = setup_parameters(model), kwarg...)
     sim = Simulator(model, state0 = state0, parameters = parameters)
     return simulate!(sim, timesteps; kwarg...)
 end
 
+"""
+    simulate(state0, sim::JutulSimulator, timesteps::AbstractVector; parameters = nothing, kwarg...)
+
+Simulate a set of `timesteps` with `simulator` for the given initial `state0` and optionally specific parameters.
+"""
 function simulate(state0, sim::JutulSimulator, timesteps::AbstractVector; parameters = nothing, kwarg...)
     return simulate!(sim, timesteps; state0 = state0, parameters = parameters, kwarg...)
 end
 
 simulate(sim::JutulSimulator, timesteps::AbstractVector; kwarg...) = simulate!(sim, timesteps; kwarg...)
 
+"""
+    simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing,
+                                                                   config = nothing,
+                                                                   initialize = true,
+                                                                   restart = nothing,
+                                                                   state0 = nothing,
+                                                                   parameters = nothing,
+                                                                   kwarg...)
+
+Non-allocating (or perhaps less allocating) version of [`simulate!`](@ref).
+
+# Arguments
+- `initialize=true`: Perform internal updates as if this is the first time 
+
+See also [`simulate`](@ref) for additional supported input arguments.
+"""
 function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing,
                                                                    config = nothing,
                                                                    initialize = true,
@@ -100,6 +147,21 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = noth
 end
 
 
+"""
+    solve_timestep!(sim, dT, forces, max_its, config; <keyword arguments>)
+
+Internal function for solving a single time-step with fixed driving forces.
+
+# Arguments
+- `sim`: `Simulator` instance.
+- `dT`: time-step to be solved
+- `forces`: Driving forces for the time-step
+- `max_its`: Maximum number of steps/Newton iterations.
+- `config`: Configuration for solver (typically output from `simulator_config`).
+
+Note: This function is exported for fine-grained simulation workflows. The general [`simulate`](@ref) interface is
+both easier to use and performs additional validation.
+"""
 function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = nothing, step_no = NaN, 
                                                         info_level = config[:info_level],
                                                         rec = config[:ProgressRecorder], kwarg...)
