@@ -84,3 +84,21 @@ function determine_sparsity(F!, n, state, state0, tag, entities, N = entities[ta
     end
     return J
 end
+
+function determine_sparsity_simple(F, model, state, state0 = nothing)
+    entities = Jutul.ad_entities(state)
+    sparsity = Dict()
+    for (k, v) in entities
+        mstate, = Jutul.create_mock_state(state, k, entities)
+        if isnothing(state0)
+            f_ad = F(mstate)
+        else
+            mstate0, = create_mock_state(state0, k, entities)
+            f_ad = F(mstate, mstate0)
+        end
+        V = sum(f_ad)
+        D = ST.deriv(V)
+        sparsity[k] = D.nzind
+    end
+    return sparsity
+end
