@@ -2,18 +2,51 @@ export update_state_dependents!, check_convergence
 
 export setup_parameters_domain!, setup_parameters_system!, setup_parameters_context!, setup_parameters_formulation!
 
+"""
+    get_primary_variables(model::SimulationModel)
+
+Get the primary variable definitions (as `OrderedDict`) for a given `model`.
+
+Primary variables are sometimes referred to as solution variables or
+primary unknowns. The set of primary variables completely determines the state
+of the system together with the `parameters`.
+"""
 function get_primary_variables(model::SimulationModel)
     return model.primary_variables
 end
 
+"""
+    get_secondary_variables(model::SimulationModel)
+
+Get the secondary variable definitions (as `OrderedDict`) for a given `model`.
+
+Secondary variables are variables that can be computed from the primary variables
+together with the parameters.
+"""
 function get_secondary_variables(model::SimulationModel)
     return model.secondary_variables
 end
 
+
+"""
+    get_variables(model::SimulationModel)
+
+Get all variable definitions (as `OrderedDict`) for a given `model`.
+
+This is the union of [`get_secondary_variables`](@ref) and [`get_primary_variables`](@ref).
+"""
 function get_variables(model::SimulationModel)
     return merge(get_primary_variables(model), get_secondary_variables(model))
 end
 
+"""
+    get_parameters(model::SimulationModel)
+
+Get the parameter definitions (as `OrderedDict`) for a given `model`.
+
+Parameters are defined as static values in a forward simulation that combine
+with the primary variables to compute secondary variables and model equations.
+"""
 function get_parameters(model::SimulationModel)
     return model.parameters
 end
@@ -32,7 +65,10 @@ end
 
 export set_primary_variables!, set_secondary_variables!, replace_variables!
 """
-Set a primary variable (adding if it does not exist)
+    set_primary_variables!(model, varname = vardef)
+    set_primary_variables!(model, varname1 = vardef1, varname2 = vardef2)
+
+Set a primary variable with name `varname` to the definition `vardef` (adding if it does not exist)
 """
 function set_primary_variables!(model; kwarg...)
     pvar = get_primary_variables(model)
@@ -40,7 +76,11 @@ function set_primary_variables!(model; kwarg...)
 end
 
 """
-Set a secondary variable (adding if it does not exist)
+    set_secondary_variables!(model, varname = vardef)
+    set_secondary_variables!(model, varname1 = vardef1, varname2 = vardef2)
+
+
+Set a secondary variable with name `varname` to the definition `vardef` (adding if it does not exist)
 """
 function set_secondary_variables!(model; kwarg...)
     pvar = get_secondary_variables(model)
@@ -48,7 +88,9 @@ function set_secondary_variables!(model; kwarg...)
 end
 
 """
-Set a parameter (adding if it does not exist)
+    set_parameters!(model, parname = pardef)
+
+Set a parameter with name `varname` to the definition `vardef` (adding if it does not exist)
 """
 function set_parameters!(model; kwarg...)
     pvar = get_parameters(model)
@@ -64,7 +106,14 @@ function set_variable_internal!(vars, model; kwarg...)
 end
 
 """
-Replace a variable that already exists (either primary or secondary)
+    replace_variables!(model, throw = true, varname = vardef, varname2 = vardef2)
+
+Replace one or more variables that already exists (either primary or secondary).
+
+# Arguments
+-`model`: instance where variables is to be replaced
+-`varname=vardef::JutulVariables`: replace variable with `varname` by `vardef`
+-`throw=true`: throw an error if the named variable definition is not found in primary or secondary, otherwise silently return
 """
 function replace_variables!(model; throw = true, kwarg...)
     pvar = get_primary_variables(model)
@@ -80,7 +129,7 @@ function replace_variables!(model; throw = true, kwarg...)
             end
         end
         if !done && throw
-            error("Unable to replace primary variable $k, misspelled?")
+            error("Unable to replace variable $k, misspelled?")
         end
     end
     return model
@@ -93,8 +142,9 @@ function delete_variable!(model, var)
 end
 
 """
-Get only the entities where primary variables are present,
-sorted by their order in the primary variables.
+    get_primary_variable_ordered_entities(model::SimulationModel)
+
+Get only the entities where primary variables are present, sorted by their order in the primary variables.
 """
 function get_primary_variable_ordered_entities(model::SimulationModel)
     out = []
@@ -111,6 +161,12 @@ function get_primary_variable_ordered_entities(model::SimulationModel)
     return out
 end
 
+"""
+    number_of_partials_per_entity(model::SimulationModel, entity::JutulEntity)
+
+Get the number of local partial derivatives per entity in a `model` for a given [`JutulEntity`]@ref.
+This is the sum of [`degrees_of_freedom_per_entity`](@ref) for all primary variables defined on `entity`.
+"""
 function number_of_partials_per_entity(model::SimulationModel, entity::JutulEntity)
     n = 0
     for pvar in values(get_primary_variables(model))
@@ -123,7 +179,18 @@ end
 
 export setup_state, setup_state!
 """
-Set up a state. You likely want to overload setup_state! instead of this one.
+    setup_state(model::JutulModel, name1 = value1, name2 = value2)
+
+Set up a state for a given model with values for the primary variables defined in the model.
+Normally all primary variables must be initialized in this way.
+
+# Arguments
+-`name=value`: The name of the primary variable together with the value(s) used to initialize the primary variable.
+A scalar (or short vector of the right size for [`GroupedVariables`](@ref)) will be repeated over the entire domain,
+while a vector (or matrix for [`GroupedVariables`](@ref)) with length (number of columns for [`GroupedVariables`](@ref))
+equal to the entity count (for example, number of cells for a cell variable) will be used directly.
+
+Note: You likely want to overload [`setup_state!`]@ref for a custom model instead of `setup_state`
 """
 function setup_state(model::JutulModel, arg...)
     state = Dict{Symbol, Any}()
@@ -140,6 +207,8 @@ function setup_state(model::JutulModel; kwarg...)
 end
 
 """
+    setup_state!(state, model::JutulModel, init_values::AbstractDict = Dict())
+
 Initialize primary variables and other state fields, given initial values as a Dict
 """
 function setup_state!(state, model::JutulModel, init_values::AbstractDict = Dict())
@@ -153,7 +222,10 @@ function setup_state!(state, model::JutulModel, init_values::AbstractDict = Dict
 end
 
 """
-Add variables that need to be in state, but are never AD variables (e.g. phase status flag)
+    initialize_extra_state_fields!(state, model::JutulModel)
+
+
+Add model-dependent changing variables that need to be in state, but are never AD variables themselves (for example status flags).
 """
 function initialize_extra_state_fields!(state, model::JutulModel)
     initialize_extra_state_fields!(state, model.domain, model)
@@ -172,6 +244,17 @@ function setup_parameters!(prm, model, init_values::AbstractDict = Dict())
     return prm
 end
 
+"""
+    setup_parameters(model::JutulModel; name = value)
+
+Set up a parameter storage for a given model with values for the parameter defined in the model.
+
+# Arguments
+-`name=value`: The name of the parameter together with the value(s) of the parameter.
+A scalar (or short vector of the right size for [`GroupedVariables`](@ref)) will be repeated over the entire domain,
+while a vector (or matrix for [`GroupedVariables`](@ref)) with length (number of columns for [`GroupedVariables`](@ref))
+equal to the entity count (for example, number of cells for a cell variable) will be used directly.
+"""
 function setup_parameters(model::JutulModel; kwarg...)
     init = Dict{Symbol, Any}()
     for (k, v) in kwarg
@@ -186,6 +269,8 @@ function setup_parameters(model::JutulModel, init)
 end
 
 """
+    setup_storage(model::JutulModel; kwarg...)
+
 Allocate storage for the model. You should overload setup_storage! if you have a custom
 definition.
 """
@@ -196,6 +281,8 @@ function setup_storage(model::JutulModel; kwarg...)
 end
 
 """
+    initialize_storage!(storage, model::JutulModel; initialize_state0 = true)
+
 Initialize the already allocated storage at the beginning of a simulation.
 Use this to e.g. set up extra stuff in state0 needed for initializing the simulation loop.
 """
@@ -211,6 +298,15 @@ function initialize_storage!(storage, model::JutulModel; initialize_state0 = tru
 end
 
 """
+    setup_storage!(storage, model::JutulModel; setup_linearized_system = true,
+                                                    setup_equations = true,
+                                                    state0 = setup_state(model),
+                                                    parameters = setup_parameters(model),
+                                                    tag = nothing,
+                                                    state0_ad = false,
+                                                    state_ad = true,
+                                                    kwarg...)
+
 Allocate storage for a given model. The storage consists of all dynamic quantities used in
 the simulation. The default implementation allocates properties, equations and linearized system.
 """
@@ -309,6 +405,11 @@ function setup_storage_equations!(eqs, storage, model::JutulModel; extra_sparsit
 end
 
 
+"""
+    get_sparse_arguments(storage, model)
+
+Get the [`SparsePattern`]@ref for the Jacobian matrix of a given simulator storage and corresponding model.
+"""
 function get_sparse_arguments(storage, model)
     layout = matrix_layout(model.context)
     return get_sparse_arguments(storage, model, layout, layout)
@@ -420,9 +521,11 @@ function allocate_array(context::JutulContext, value, n...)
 end
 
 """
-Perform updates of everything that depends on the state.
+    update_state_dependents!(storage, model, dt, forces; time = NaN, update_secondary = true)
 
-This includes properties, governing equations and the linearized system
+Perform updates of everything that depends on the state: A full linearization for the current primary variables.
+
+This includes properties, governing equations and the linearized system itself.
 """
 function update_state_dependents!(storage, model::JutulModel, dt, forces; time = NaN, update_secondary = true)
     if update_secondary
@@ -431,6 +534,11 @@ function update_state_dependents!(storage, model::JutulModel, dt, forces; time =
     update_equations_and_apply_forces!(storage, model, dt, forces; time = time)
 end
 
+"""
+    update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN)
+
+Update the model equations and apply boundary conditions and forces. Does not fill linearized system.
+"""
 function update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN)
     @timeit "equations" update_equations!(storage, model, dt)
     @timeit "forces" apply_forces!(storage, model, dt, forces; time = time)
@@ -444,6 +552,11 @@ end
 
 apply_boundary_conditions!(storage, parameters, model) = nothing
 
+"""
+    update_equations!(storage, model, dt = nothing)
+
+Update the governing equations using the current set of primary variables, parameters and secondary variables. Does not fill linearized system.
+"""
 function update_equations!(storage, model, dt = nothing)
     update_equations!(storage, storage.equations, model.equations, model, dt)
 end
@@ -454,6 +567,11 @@ function update_equations!(storage, equations_storage, equations, model, dt)
     end
 end
 
+"""
+    update_linearized_system!(storage, model::JutulModel; <keyword arguments>)
+
+Update the linearized system with the current set of equations.
+"""
 function update_linearized_system!(storage, model::JutulModel; kwarg...)
     eqs = model.equations
     eqs_storage = storage.equations
@@ -475,6 +593,13 @@ function update_linearized_system!(lsys, equations, eqs_storage, model::JutulMod
     end
 end
 
+"""
+    local_residual_view(r_buf, model, eq, equation_offset)
+
+Get a matrix view of the residual so that, independent of ordering,
+the column index corresponds to the entity index for the given equation `eq`
+starting at `equation_offset` in the global residual buffer `r_buf`.
+"""
 function local_residual_view(r_buf, model, eq, equation_offset)
     N = number_of_equations(model, eq)
     n = number_of_equations_per_entity(model, eq)
@@ -482,6 +607,11 @@ function local_residual_view(r_buf, model, eq, equation_offset)
     return as_cell_major_matrix(r_buf, n, m, model, equation_offset)
 end
 
+"""
+    set_default_tolerances(model)
+
+Set default tolerances for the nonlinear convergence check of the governing equations.
+"""
 function set_default_tolerances(model)
     tol_cfg = Dict{Symbol, Any}()
     set_default_tolerances!(tol_cfg, model)

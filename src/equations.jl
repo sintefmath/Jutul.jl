@@ -414,12 +414,28 @@ function update_equation_for_entity!(cache, eq, state, state0, model, dt)
 end
 
 """
+    apply_forces_to_equation!(diag_part, storage, model, eq, eq_s, force, time)
+
 Update an equation with the effect of a force. The default behavior
 for any force we do not know about is to assume that the force does
 not impact this particular equation.
 """
-apply_forces_to_equation!(diag_part, storage, model, eq, eq_s, force, time) = nothing
+function apply_forces_to_equation!(diag_part, storage, model, eq, eq_s, force, time)
+    nothing
+end
 
+"""
+    convergence_criterion(model, storage, eq, eq_s, r; dt = 1)
+
+Get the convergence criterion values for a given equation. Can be checked against the corresponding tolerances.
+
+# Arguments
+-`model`: model that generated the current equation.
+-`storage`: global simulator storage.
+-`eq::JutulEquation`: equation implementation currently being checked
+-`eq_s`: storage for `eq` where values are contained.
+-`r`: the local residual part corresponding to this model, as a matrix with column index equaling entity index
+"""
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
     n = number_of_equations_per_entity(model, eq)
     @tullio max e[i] := abs(r[i, j])
@@ -436,6 +452,14 @@ end
     return get_entries(eq_s)
 end
 
+"""
+    get_diagonal_entries(eq::JutulEquation, eq_s)
+
+Get the diagonal entries of a cache, i.e. the entries where entity type and index equals that of the governing equation.
+
+Note: Be very careful about modifications to this array, as this is a view into the internal AD buffers and it is very easy
+to create inconsistent Jacobians.
+"""
 @inline function get_diagonal_entries(eq::JutulEquation, eq_s)
     k = Symbol(associated_entity(eq))
     if haskey(eq_s, k)
@@ -449,7 +473,3 @@ end
     end
     return D
 end
-
-# @inline function get_diagonal_cache(eq::JutulEquation)
-#    return eq.equation
-# end
