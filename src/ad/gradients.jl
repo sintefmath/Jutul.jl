@@ -254,15 +254,17 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
     for e in get_primary_variable_ordered_entities(model)
         np = number_of_partials_per_entity(model, e)
         ne = count_active_entities(model.domain, e)
-        ltag = get_entity_tag(tag, e)
-        S = typeof(get_ad_entity_scalar(1.0, np, tag = ltag))
         if isnothing(sparsity)
             it_rng = 1:ne
         else
             it_rng = sparsity[e]
         end
-        for i in it_rng
-            diff_entity!(∂F∂x, state, i, S, ne, np, offset)
+        if length(it_rng) > 0
+            ltag = get_entity_tag(tag, e)
+            S = typeof(get_ad_entity_scalar(1.0, np, tag = ltag))
+            for i in it_rng
+                diff_entity!(∂F∂x, state, i, S, ne, np, offset)
+            end
         end
         offset += ne*np
     end
