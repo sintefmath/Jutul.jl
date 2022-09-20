@@ -34,9 +34,12 @@ function merge_state_with_parameters(model::MultiModel, state, parameters)
     return state
 end
 
-function state_gradient_outer!(∂F∂x, F, model::MultiModel, state, extra_arg)
+function state_gradient_outer!(∂F∂x, F, model::MultiModel, state, extra_arg; sparsity = nothing)
     offset = 0
-
+    has_sparsity = !isnothing(sparsity)
+    if has_sparsity
+        @. ∂F∂x = 0
+    end
     local_view(F::AbstractVector, offset, n) = view(F, (offset+1):(offset+n))
     local_view(F::AbstractMatrix, offset, n) = view(F, :, (offset+1):(offset+n))
 
@@ -44,7 +47,12 @@ function state_gradient_outer!(∂F∂x, F, model::MultiModel, state, extra_arg)
         m = model[k]
         n = number_of_degrees_of_freedom(m)
         ∂F∂x_k = local_view(∂F∂x, offset, n)
-        state_gradient_inner!(∂F∂x_k, F, m, state, k, extra_arg, model)
+        if has_sparsity
+            S = sparsity[k]
+        else
+            S = nothing
+        end
+        state_gradient_inner!(∂F∂x_k, F, m, state, k, extra_arg, model, sparsity = S)
         offset += n
     end
     return ∂F∂x
