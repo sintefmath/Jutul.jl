@@ -42,14 +42,13 @@ interpolate(I::LinearInterpolant, x) = linear_interp(I.X, I.F, x)
 Get a 1D interpolator `F(x) ≈ y` for a table `xs, ys` that by default does constant extrapolation
 
 # Arguments
--`xs`: sorted list of parameter points.
--`ys`: list of function values with equal length to `xs`
--`method=LinearInterpolant`: constructor for the interpolation. Defaults to `LinearInterpolant` which does simple linear interpolation.
--`cap_endpoints = true`: Add values so that the endpoints are capped (constant extrapolation). Otherwise, the extrapolation will match the method.
--`cap_start = cap_endpoints`: Fine-grained version of cap_endpoints for the start of the interval only (extrapolation for `x < xs[1]`)
--`cap_end = cap_endpoints`:Fine-grained version of cap_endpoints for the end of the interval only (extrapolation for `x > xs[end]`)
 
-    method = LinearInterpolant, cap_endpoints = true, cap_end = cap_endpoints, cap_start = cap_endpoints
+- `xs`: sorted list of parameter points.
+- `ys`: list of function values with equal length to `xs`
+- `method=LinearInterpolant`: constructor for the interpolation. Defaults to `LinearInterpolant` which does simple linear interpolation.
+- `cap_endpoints = true`: Add values so that the endpoints are capped (constant extrapolation). Otherwise, the extrapolation will match the method.
+- `cap_start = cap_endpoints`: Fine-grained version of cap_endpoints for the start of the interval only (extrapolation for `x < xs[1]`)
+- `cap_end = cap_endpoints`:Fine-grained version of cap_endpoints for the end of the interval only (extrapolation for `x > xs[end]`)
 
 # Examples
 ```jldoctest
@@ -57,6 +56,7 @@ x = collect(0:0.1:4)
 I = get_1d_interpolator(x, sin.(x))
 isapprox(I(π/2), 1.0, atol = 1e-2)
 true
+```
 """
 function get_1d_interpolator(xs, ys; method = LinearInterpolant, cap_endpoints = true, cap_end = cap_endpoints, cap_start = cap_endpoints)
     if cap_endpoints

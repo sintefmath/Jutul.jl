@@ -111,9 +111,9 @@ end
 Replace one or more variables that already exists (either primary or secondary).
 
 # Arguments
--`model`: instance where variables is to be replaced
--`varname=vardef::JutulVariables`: replace variable with `varname` by `vardef`
--`throw=true`: throw an error if the named variable definition is not found in primary or secondary, otherwise silently return
+- `model`: instance where variables is to be replaced
+- `varname=vardef::JutulVariables`: replace variable with `varname` by `vardef`
+- `throw=true`: throw an error if the named variable definition is not found in primary or secondary, otherwise silently return
 """
 function replace_variables!(model; throw = true, kwarg...)
     pvar = get_primary_variables(model)
@@ -185,7 +185,7 @@ Set up a state for a given model with values for the primary variables defined i
 Normally all primary variables must be initialized in this way.
 
 # Arguments
--`name=value`: The name of the primary variable together with the value(s) used to initialize the primary variable.
+- `name=value`: The name of the primary variable together with the value(s) used to initialize the primary variable.
 A scalar (or short vector of the right size for [`GroupedVariables`](@ref)) will be repeated over the entire domain,
 while a vector (or matrix for [`GroupedVariables`](@ref)) with length (number of columns for [`GroupedVariables`](@ref))
 equal to the entity count (for example, number of cells for a cell variable) will be used directly.
@@ -250,7 +250,7 @@ end
 Set up a parameter storage for a given model with values for the parameter defined in the model.
 
 # Arguments
--`name=value`: The name of the parameter together with the value(s) of the parameter.
+- `name=value`: The name of the parameter together with the value(s) of the parameter.
 A scalar (or short vector of the right size for [`GroupedVariables`](@ref)) will be repeated over the entire domain,
 while a vector (or matrix for [`GroupedVariables`](@ref)) with length (number of columns for [`GroupedVariables`](@ref))
 equal to the entity count (for example, number of cells for a cell variable) will be used directly.

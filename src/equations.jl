@@ -430,11 +430,11 @@ end
 Get the convergence criterion values for a given equation. Can be checked against the corresponding tolerances.
 
 # Arguments
--`model`: model that generated the current equation.
--`storage`: global simulator storage.
--`eq::JutulEquation`: equation implementation currently being checked
--`eq_s`: storage for `eq` where values are contained.
--`r`: the local residual part corresponding to this model, as a matrix with column index equaling entity index
+- `model`: model that generated the current equation.
+- `storage`: global simulator storage.
+- `eq::JutulEquation`: equation implementation currently being checked
+- `eq_s`: storage for `eq` where values are contained.
+- `r`: the local residual part corresponding to this model, as a matrix with column index equaling entity index
 """
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
     n = number_of_equations_per_entity(model, eq)
