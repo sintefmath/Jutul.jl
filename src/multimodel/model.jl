@@ -645,15 +645,15 @@ function reset_previous_state!(storage, model::MultiModel, state0)
     end
 end
 
-function update_after_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model))
+function update_after_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
     for key in targets
-        update_after_step!(storage[key], model.models[key], dt, forces[key])
+        update_after_step!(storage[key], model.models[key], dt, forces[key]; kwarg...)
     end
 end
 
-function update_before_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model))
+function update_before_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
     for key in targets
-        update_before_step!(storage[key], model.models[key], dt, forces[key])
+        update_before_step!(storage[key], model.models[key], dt, forces[key]; kwarg...)
     end
 end
 

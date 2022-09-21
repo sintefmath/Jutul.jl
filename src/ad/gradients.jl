@@ -282,7 +282,8 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     forces = forces_for_timestep(forward_sim, all_forces, timesteps, i)
     dt = timesteps[i]
     # Assemble Jacobian w.r.t. current step
-    @timeit "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces)
+    t = sum(timesteps[1:i-1])
+    @timeit "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces, t)
     # Note the sign: There is an implicit negative sign in the linear solver when solving for the Newton increment. Therefore, the terms of the
     # right hand side are added with a positive sign instead of negative.
     lsys = forward_sim.storage.LinearizedSystem
@@ -297,7 +298,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     else
         dt_next = timesteps[i+1]
         forces_next = forces_for_timestep(backward_sim, all_forces, timesteps, i+1)
-        @timeit "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next)
+        @timeit "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next, t + dt_next)
         lsys_next = backward_sim.storage.LinearizedSystem
         op = linear_operator(lsys_next)
         # In-place version of
@@ -310,7 +311,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     @. λ = dx
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
-    @timeit "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces)
+    @timeit "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, t)
     lsys_param = parameter_sim.storage.LinearizedSystem
     op_p = linear_operator(lsys_param)
     sens_add_mult!(∇G, op_p, λ)
@@ -337,14 +338,14 @@ function sens_add_mult!(x::AbstractMatrix, op::LinearOperator, y::AbstractMatrix
     end
 end
 
-function adjoint_reassemble!(sim, state, state0, dt, forces)
+function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     s = sim.storage
     model = sim.model
     # Deal with state0 first
     reset_previous_state!(sim, state0)
     update_secondary_variables!(s, model, state0 = true)
     # Apply logic as if timestep is starting
-    update_before_step!(s, model, dt, forces)
+    update_before_step!(s, model, dt, forces, time = time)
     # Then the current primary variables
     reset_variables!(s, model, state)
     update_state_dependents!(s, model, dt, forces)

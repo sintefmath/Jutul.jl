@@ -286,7 +286,8 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
     report = OrderedDict()
     report[:dt] = dt
     step_reports = []
-    update_before_step!(sim, dt, forces)
+    cur_time = current_time(rec)
+    update_before_step!(sim, dt, forces, time = cur_time)
     for it = 1:max_iter
         next_iteration!(rec)
         e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it)
@@ -314,7 +315,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
     if skip_finalize
         report[:finalize_time] = 0.0
     elseif done
-        t_finalize = @elapsed update_after_step!(sim, dt, forces)
+        t_finalize = @elapsed update_after_step!(sim, dt, forces; time = cur_time + dt)
         if cfg[:debug_level] > 1
             @debug "Finalized in $t_finalize seconds."
         end
@@ -392,12 +393,12 @@ reset_to_previous_state!(sim) = reset_to_previous_state!(sim.storage, sim.model)
 reset_previous_state!(sim, state0) = reset_previous_state!(sim.storage, sim.model, state0)
 
 
-function update_before_step!(sim, dt, forces)
-    update_before_step!(sim.storage, sim.model, dt, forces)
+function update_before_step!(sim, dt, forces; kwarg...)
+    update_before_step!(sim.storage, sim.model, dt, forces; kwarg...)
 end
 
-function update_after_step!(sim, dt, forces)
-    update_after_step!(sim.storage, sim.model, dt, forces)
+function update_after_step!(sim, dt, forces; kwarg...)
+    update_after_step!(sim.storage, sim.model, dt, forces; kwarg...)
 end
 
 # Forces - one for the entire sim

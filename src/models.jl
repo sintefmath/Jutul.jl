@@ -775,17 +775,17 @@ end
 """
 
 """
-function update_before_step!(storage, model, dt, forces)
-    update_before_step!(storage, model.domain, model, dt, forces)
-    update_before_step!(storage, model.system, model, dt, forces)
-    update_before_step!(storage, model.formulation, model, dt, forces)
+function update_before_step!(storage, model, dt, forces; kwarg...)
+    update_before_step!(storage, model.domain, model, dt, forces; kwarg...)
+    update_before_step!(storage, model.system, model, dt, forces; kwarg...)
+    update_before_step!(storage, model.formulation, model, dt, forces; kwarg...)
 end
 
-function update_before_step!(state, ::Any, model, dt, forces)
+function update_before_step!(state, ::Any, model, dt, forces; time = NaN)
     # Do nothing
 end
 
-function update_after_step!(storage, model, dt, forces)
+function update_after_step!(storage, model, dt, forces; time = NaN)
     state = storage.state
     state0 = storage.state0
     for key in model.output_variables

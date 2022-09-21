@@ -43,3 +43,8 @@ function reset!(r::SolveRecorder, dt = NaN)
     r.iteration = 0
     r.dt = dt
 end
+
+function current_time(r::ProgressRecorder)
+    return r.recorder.time + r.subrecorder.time
+end
+
