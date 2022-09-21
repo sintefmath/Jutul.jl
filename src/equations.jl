@@ -390,6 +390,9 @@ Update equation based on currently stored properties
 function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
     state = storage.state
     state0 = storage.state0
+    for i in 1:number_of_entities(model, eq)
+        prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt)
+    end
     for k in keys(eq_s)
         if k == :numeric
             continue
@@ -398,6 +401,8 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
         update_equation_for_entity!(cache, eq, state, state0, model, dt)
     end
 end
+
+@inline prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt) = nothing
 
 function update_equation_for_entity!(cache, eq, state, state0, model, dt)
     v = cache.entries
