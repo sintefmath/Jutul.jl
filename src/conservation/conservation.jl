@@ -1,8 +1,13 @@
 export ConservationLaw
 
-struct ConservationLaw{T<:FlowDiscretization} <: JutulEquation
+struct ConservationLaw{C, T<:FlowDiscretization} <: JutulEquation
     flow_discretization::T
+    function ConservationLaw(disc::T, conserved::Symbol = :TotalMasses) where T
+        return new{conserved, T}(disc)
+    end
 end
+
+conserved_symbol(::ConservationLaw{C, <:Any}) where C = C
 
 discretization(e::ConservationLaw) = e.flow_discretization
 
@@ -14,7 +19,7 @@ struct ConservationLawTPFAStorage
     sources::AbstractSparseMatrix
 end
 
-function ConservationLawTPFAStorage(model, eq::ConservationLaw; accumulation_symbol = :TotalMasses, kwarg...)
+function ConservationLawTPFAStorage(model, eq::ConservationLaw; kwarg...)
     number_of_equations = number_of_equations_per_entity(model, eq)
     D, ctx = model.domain, model.context
     cell_entity = Cells()
@@ -39,10 +44,10 @@ function ConservationLawTPFAStorage(model, eq::ConservationLaw; accumulation_sym
     else
         hf_faces = nothing
     end
-    return ConservationLawTPFAStorage(acc, accumulation_symbol, hf_cells, hf_faces, src)
+    return ConservationLawTPFAStorage(acc, conserved_symbol(eq), hf_cells, hf_faces, src)
 end
 
-function setup_equation_storage(model, eq::ConservationLaw{<:TwoPointPotentialFlowHardCoded}, storage; extra_sparsity = nothing, kwarg...)
+function setup_equation_storage(model, eq::ConservationLaw{<:Any, <:TwoPointPotentialFlowHardCoded}, storage; extra_sparsity = nothing, kwarg...)
     # Maybe check that the sparsity matches the default?
     return ConservationLawTPFAStorage(model, eq; kwarg...)
 end
