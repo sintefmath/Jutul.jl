@@ -776,20 +776,12 @@ end
 
 """
 function update_before_step!(storage, model, dt, forces)
-    update_before_step_domain!(storage, model, model.domain, dt, forces)
-    update_before_step_system!(storage, model, model.system, dt, forces)
-    update_before_step_formulation!(storage, model, model.formulation, dt, forces)
+    update_before_step!(storage, model.domain, model, dt, forces)
+    update_before_step!(storage, model.system, model, dt, forces)
+    update_before_step!(storage, model.formulation, model, dt, forces)
 end
 
-function update_before_step_domain!(state, model, domain, dt, forces)
-    # Do nothing
-end
-
-function update_before_step_system!(state, model, system, dt, forces)
-    # Do nothing
-end
-
-function update_before_step_formulation!(state, model, formulation, dt, forces)
+function update_before_step!(state, ::Any, model, dt, forces)
     # Do nothing
 end
 
