@@ -9,7 +9,14 @@ function get_submodel_offsets(model::MultiModel, group = nothing; is_equation = 
     if !isnothing(group)
         dof = dof[model.groups .== group]
     end
-    return cumsum(vcat([0], [i for i in dof]))
+    n = length(dof)
+    out = zeros(Int64, n)
+    tot = 0
+    for i in 1:n
+        out[i] = tot
+        tot += dof[i]
+    end
+    return out
 end
 
 function get_linearized_system_submodel(storage, model, symbol, lsys = storage.LinearizedSystem)
