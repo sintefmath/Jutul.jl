@@ -88,6 +88,10 @@ end
     return as_value(val)
 end
 
+@inline function Base.getindex(state::ValueStateAD, f::Symbol)
+    return getproperty(state, f)
+end
+
 @inline Base.getindex(state::ValueStateAD, f::Symbol) = Base.getproperty(state, f)
 
 """
