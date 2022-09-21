@@ -1,4 +1,4 @@
-export ConservationLaw
+export ConservationLaw, ConservationLawTPFAStorage, conserved_symbol
 
 struct ConservationLaw{C, T<:FlowDiscretization} <: JutulEquation
     flow_discretization::T
@@ -403,7 +403,11 @@ function update_accumulation!(eq_s, law, storage, model, dt)
     conserved = eq_s.accumulation_symbol
     acc = get_entries(eq_s.accumulation)
     m0, m = state_pair(storage, conserved, model)
-    @tullio acc[c, i] = (m[c, i] - m0[c, i])/dt
+    if m isa AbstractVector
+        @tullio acc[i] = (m[i] - m0[i])/dt
+    else
+        @tullio acc[c, i] = (m[c, i] - m0[c, i])/dt
+    end
     return acc
 end
 
@@ -438,7 +442,7 @@ function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::Conservat
     end
 end
 
-function update_half_face_flux_tpfa!(hf_cells::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Cells) where {T, N}
+function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}}, AbstractVector{T}}, eq, state, model, dt, flow_disc, ::Cells) where {T, N}
     nc = number_of_cells(model.domain)
     conn_data = flow_disc.conn_data
     conn_pos = flow_disc.conn_pos
