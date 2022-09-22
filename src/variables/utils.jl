@@ -203,8 +203,8 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
         nm = length(val)
         @assert nm == nv*nu "err_str had $nm entries, expected $(nu*nv)"
         n, m, = size(val)
-        @assert n == nv "err_str had $n rows, expected $nv"
-        @assert m == nu "err_str had $m rows, expected $nu"
+        @assert n == nv "$err_str had $n rows, expected $nv"
+        @assert m == nu "$err_str had $m rows, expected $nu"
     end
     if perform_copy
         val = deepcopy(val)
@@ -406,40 +406,6 @@ function pick_relaxation(w, dv, dv0)
     return w
 end
 
-function values_per_entity(model, var::ConstantVariables)
-    c = var.constants
-    if var.single_entity
-        n = length(c)
-    elseif isa(c, AbstractVector)
-        n = 1
-    else
-        n = size(c, 1)
-    end
-    return n
-end
-associated_entity(model, var::ConstantVariables) = var.entity
-
-function transfer(context, v::ConstantVariables)
-    constants = transfer(context, v.constants)
-    return ConstantVariables(constants, v.entity, single_entity = v.single_entity)
-end
-
-update_secondary_variable!(x, var::ConstantVariables, model, state) = nothing
-
-function initialize_variable_value(model, var::ConstantVariables, val; perform_copy = true)
-    # Ignore initializer since we already know the constants
-    nu = number_of_entities(model, var)
-    if var.single_entity
-        # it = index_type(model.context)
-        # use instance as view to avoid allocating lots of copies
-        var_val = ConstantWrapper(var.constants, nu)# view(var.constants, :, ones(it, nu))
-    else
-        # We have all the values we need ready.
-        var_val = var.constants
-    end
-    return var_val
-end
-
 function initialize_secondary_variable_ad!(state, model, var::ConstantVariables, arg...; kwarg...)
     # Do nothing. There is no need to add AD.
     return state
@@ -447,26 +413,4 @@ end
 
 function initialize_primary_variable_ad!(state, model, var::ConstantVariables, sym, arg...; kwarg...)
     error("$sym is declared to be constants - cannot be primary variables.")
-end
-
-default_value(model, variable::ConstantVariables) = nothing
-
-subvariable(var::ConstantVariables, map::TrivialGlobalMap) = var
-
-function subvariable(var::ConstantVariables, map::FiniteVolumeGlobalMap)
-    if var.entity == Cells()
-        if !var.single_entity
-            c = copy(var.constants)
-            p_i = map.cells
-            if isa(c, AbstractVector)
-                c = c[p_i]
-            else
-                c = c[:, p_i]
-            end
-            var = ConstantVariables(c, var.entity, single_entity = false)
-        end
-    else
-        error("Mappings other than cells not implemented")
-    end
-    return var
 end

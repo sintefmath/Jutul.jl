@@ -25,7 +25,13 @@ function select_variables_domain_helper!(S, domain::DiscretizedDomain, model, f!
             f!(S, d[k], model)
         end
     end
+    f!(S, domain.grid, model)
 end
+
+select_primary_variables!(S, domain::AbstractJutulMesh, model) = nothing
+select_secondary_variables!(S, domain::AbstractJutulMesh, model) = nothing
+select_parameters!(S, domain::AbstractJutulMesh, model) = nothing
+select_equations!(S, domain::AbstractJutulMesh, model)  = nothing
 
 # Basic domain - default is to do nothing
 select_primary_variables!(S, domain::JutulDomain, model) = nothing
