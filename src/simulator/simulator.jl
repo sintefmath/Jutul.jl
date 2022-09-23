@@ -11,7 +11,12 @@ include("timesteps.jl")
 include("utils.jl")
 include("optimization.jl")
 
-function simulator_storage(model; state0 = nothing, parameters = setup_parameters(model), copy_state = true, mode = :forward, kwarg...)
+function simulator_storage(model; state0 = nothing,
+                                parameters = setup_parameters(model),
+                                copy_state = true,
+                                mode = :forward,
+                                specialize = false,
+                                kwarg...)
     if mode == :forward
         state_ad = true
         state0_ad = false
@@ -36,10 +41,20 @@ function simulator_storage(model; state0 = nothing, parameters = setup_parameter
     @timeit "init_storage" initialize_storage!(storage, model; kwarg...)
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
     # This allows for much faster lookup in the simulation itself.
-    storage = convert_to_immutable_storage(storage)
-    return storage
+    return specialize_simulator_storage(storage, model, specialize)
 end
 
+function specialize_simulator_storage(storage::JutulStorage, model, specialize)
+    if specialize
+        out = convert_to_immutable_storage(storage)
+    else
+        for (k, v) in data(storage)
+            storage[k] = convert_to_immutable_storage(v)
+        end
+        out = storage
+    end
+    return out
+end
 """
     simulate(state0, model, timesteps, parameters = setup_parameters(model))
     simulate(state0, model, timesteps, info_level = 3)

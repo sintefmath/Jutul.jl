@@ -9,13 +9,13 @@ end
 
 Base.transpose(c::CrossTermPair) = CrossTermPair(c.source, c.target, c.equation, c.cross_term,)
 
-struct MultiModel{M} <: JutulModel
-    models::M
+struct MultiModel{T} <: JutulModel
+    models::NamedTuple
     cross_terms::Vector{CrossTermPair}
     groups::Union{Vector, Nothing}
     context::Union{JutulContext, Nothing}
     reduction::Union{Symbol, Nothing}
-    function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing)
+    function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing, specialize = false)
         if isnothing(groups)
             num_groups = 1
         else
@@ -43,11 +43,19 @@ struct MultiModel{M} <: JutulModel
                 end
             end
         end
-        new{typeof(models),}(models, cross_terms, groups, context, reduction)
+        if specialize
+            T = typeof(models)
+        else
+            T = nothing
+        end
+        new{T}(models, cross_terms, groups, context, reduction)
     end
 end
 
-Base.getindex(m::MultiModel, i::Symbol) = m.models[i]
+submodels(m::MultiModel{nothing}) = m.models
+submodels(m::MultiModel{T}) where T = m.models::T
+
+Base.getindex(m::MultiModel, i::Symbol) = submodels(m)[i]
 
 abstract type AdditiveCrossTerm <: CrossTerm end
 

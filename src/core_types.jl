@@ -431,6 +431,10 @@ function convert_to_immutable_storage(S::JutulStorage)
     return JutulStorage(tup)
 end
 
+function Base.getproperty(S::JutulStorage{Nothing}, name::Symbol)
+    Base.getindex(data(S), name)
+end
+
 function Base.getproperty(S::JutulStorage, name::Symbol)
     Base.getproperty(data(S), name)
 end

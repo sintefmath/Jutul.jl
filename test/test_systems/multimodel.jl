@@ -1,7 +1,7 @@
 using Jutul
 using Test
 
-function test_multi(; use_groups = false, kwarg...)
+function test_multi(; use_groups = false, specialize_model = false, specialize_storage = false, kwarg...)
     sys = ScalarTestSystem()
     # Model A
     A = ScalarTestDomain()
@@ -22,13 +22,13 @@ function test_multi(; use_groups = false, kwarg...)
     else
         groups = nothing
     end
-    model = MultiModel((A = modelA, B = modelB), groups = groups)
+    model = MultiModel((A = modelA, B = modelB), groups = groups, specialize = specialize_model)
     add_cross_term!(model, ScalarTestCrossTerm(), target = :A, source = :B, equation = :test_equation)
     # Set up joint state and forces
     state0 = setup_state(model, A = state0A, B = state0B)
     forces = setup_forces(model, A = forcesA, B = forcesB)
     # Set up simulator, and run simulation
-    sim = Simulator(model, state0 = state0)
+    sim = Simulator(model, state0 = state0, specialize = specialize_storage)
     states, = simulate(sim, [1.0], forces = forces, info_level = -1; kwarg...)
 
     XA = states[end][:A][:XVar]
@@ -42,9 +42,13 @@ group_precond = GroupWisePreconditioner([TrivialPreconditioner(), TrivialPrecond
 @testset "Multi-model: Scalar test system" begin
     @testset "Single sparse matrix" begin
         @test test_multi(use_groups = false)
+        @test test_multi(use_groups = false, specialize_storage = true, specialize_model = false)
+        @test test_multi(use_groups = false, specialize_storage = true, specialize_model = true)
+        @test test_multi(use_groups = false, specialize_storage = false, specialize_model = false)
     end
     @testset "Multiple sparse matrices" begin
         @test test_multi(use_groups = true, linear_solver = GenericKrylov())
         # @test test_multi(use_groups = true, linear_solver = GenericKrylov(preconditioner = group_precond))
     end
 end
+

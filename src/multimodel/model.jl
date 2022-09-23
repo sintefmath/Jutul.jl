@@ -112,6 +112,22 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
     return storage
 end
 
+function specialize_simulator_storage(storage::JutulStorage, model::MultiModel{nothing}, specialize)
+    sym = submodel_symbols(model)
+    for (k, v) in data(storage)
+        if k in sym
+            storage[k] = specialize_simulator_storage(v, model[k], specialize)
+        else
+            storage[k] = convert_to_immutable_storage(v)
+        end
+    end
+    return storage
+end
+
+function specialize_simulator_storage(storage::JutulStorage, model::MultiModel, specialize)
+    return convert_to_immutable_storage(storage)
+end
+
 function transpose_intersection(intersection)
     target, source, target_entity, source_entity = intersection
     (source, target, source_entity, target_entity)
