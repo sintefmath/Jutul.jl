@@ -310,8 +310,8 @@ end
 function transfer_gradient!(dGdy, dGdx, y, mapper, config, model)
     for (k, v) in mapper
         (; offset, n) = v
-        x_to_y = opt_scaler_function(config, k, inv = true)
-        y_to_x = opt_scaler_function(config, k, inv = false)
+        x_to_y = opt_scaler_function(config, k, inv = false)
+        y_to_x = opt_scaler_function(config, k, inv = true)
         for i in 1:n
             k = offset + i
             dGdy[k] = objective_gradient_chain_rule(x_to_y, y_to_x, y[k], dGdx[k])
