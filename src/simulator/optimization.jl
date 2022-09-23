@@ -100,16 +100,21 @@ function gradient_opt!(dFdx, x, data)
     data[:n_gradient] += 1
     grad_adj = data[:grad_adj]
     if haskey(data, :adjoint_storage)
-        storage = data[:adjoint_storage]
-        for sim in [storage.forward, storage.backward, storage.parameter]
-            for k in [:state, :state0, :parameters]
-                reset_variables!(sim, param, type = k)
+        states = data[:states]
+        if length(states) == length(dt)
+            storage = data[:adjoint_storage]
+            for sim in [storage.forward, storage.backward, storage.parameter]
+                for k in [:state, :state0, :parameters]
+                    reset_variables!(sim, param, type = k)
+                end
             end
+            debug_time = false
+            set_global_timer!(debug_time)
+            grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt, G, forces = forces)
+            print_global_timer(debug_time; text = "Adjoint solve detailed timing")
+        else
+            @. grad_adj = 1e10
         end
-        debug_time = false
-        set_global_timer!(debug_time)
-        grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, data[:states], state0, dt, G, forces = forces)
-        print_global_timer(debug_time; text = "Adjoint solve detailed timing")
     else
         grad_adj = Jutul.solve_numerical_sensitivities(model, data[:states], data[:reports], G, only(targets),
                                                                     state0 = state0, forces = forces, parameters = param)
