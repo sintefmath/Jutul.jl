@@ -26,9 +26,6 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
         param = deepcopy(param)
     end
     targets = optimization_targets(opt_cfg, model)
-    if print_obj
-        print_parameter_optimization_config(targets, opt_cfg, model)
-    end
     if grad_type == :numeric
         @assert length(targets) == 1
         @assert model isa SimulationModel
@@ -37,6 +34,9 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     end
     mapper, = variable_mapper(model, :parameters, targets = targets)
     lims = optimization_limits(opt_cfg, mapper, param, model)
+    if print_obj
+        print_parameter_optimization_config(targets, opt_cfg, model)
+    end
     x0 = vectorize_variables(model, param, mapper, config = opt_cfg)
     for k in eachindex(x0)
         low = lims[1][k]
