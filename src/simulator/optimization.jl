@@ -17,11 +17,18 @@ end
 function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model, param);
                                                             grad_type = :adjoint,
                                                             config = nothing,
-                                                            print_obj = true,
+                                                            print = 1,
                                                             copy_parameters = true,
                                                             param_obj = false,
                                                             kwarg...)
     # Pick active set of targets from the optimization config and construct a mapper
+    if print isa Bool
+        if print
+            print = 1
+        else
+            print = Inf
+        end
+    end
     if copy_parameters
         param = deepcopy(param)
     end
@@ -34,7 +41,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     end
     mapper, = variable_mapper(model, :parameters, targets = targets)
     lims = optimization_limits(opt_cfg, mapper, param, model)
-    if print_obj
+    if print > 0
         print_parameter_optimization_config(targets, opt_cfg, model)
     end
     x0 = vectorize_variables(model, param, mapper, config = opt_cfg)
@@ -73,9 +80,9 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     data[:mapper] = mapper
     data[:config] = opt_cfg
     data[:state0] = state0
-    F = x -> objective_opt!(x, data, print_obj)
+    F = x -> objective_opt!(x, data, print)
     dF = (dFdx, x) -> gradient_opt!(dFdx, x, data)
-    F_and_dF = (F, dFdx, x) -> objective_and_gradient_opt!(F, dFdx, x, data, print_obj)
+    F_and_dF = (F, dFdx, x) -> objective_and_gradient_opt!(F, dFdx, x, data, print)
     return (F! = F, dF! = dF, F_and_dF! = F_and_dF, x0 = x0, limits = lims, data = data)
 end
 
@@ -112,7 +119,7 @@ function gradient_opt!(dFdx, x, data)
     return dFdx
 end
 
-function objective_opt!(x, data, print_obj = false)
+function objective_opt!(x, data, print_frequency = 1)
     state0 = data[:state0]
     param = data[:parameters]
     dt = data[:dt]
@@ -131,7 +138,7 @@ function objective_opt!(x, data, print_obj = false)
     data[:n_objective] += 1
     n = data[:n_objective]
     push!(data[:obj_hist], obj)
-    if print_obj
+    if mod(n, print_frequency) == 0
         println("#$n: $obj")
     end
     return obj
@@ -332,7 +339,7 @@ end
 function print_parameter_optimization_config(targets, config, model; title = :model)
     nt = length(targets)
     if nt > 0
-        data = Matrix{Any}(undef, nt, 6)
+        data = Matrix{Any}(undef, nt, 7)
         for (i, target) in enumerate(targets)
             prm = model.parameters[target]
             e = associated_entity(prm)
@@ -340,7 +347,7 @@ function print_parameter_optimization_config(targets, config, model; title = :mo
             m = degrees_of_freedom_per_entity(model, prm)
             v = config[target]
             data[i, 1] = target
-            data[i, 2] = e
+            data[i, 2] = "$e"[1:end-2]
             if m == 1
                 s = "$n"
             else
@@ -350,8 +357,9 @@ function print_parameter_optimization_config(targets, config, model; title = :mo
             data[i, 4] = v[:scaler]
             data[i, 5] = (v[:abs_min], v[:abs_max])
             data[i, 6] = (v[:rel_min], v[:rel_max])
+            data[i, 7] = (v[:low], v[:high])
         end
-        h = ["Name", "Entity", "Size", "Scale", "Abs. limits", "Rel. limits"]
+        h = ["Name", "Entity", "N", "Scale", "Abs. limits", "Rel. limits", "Limits"]
         pretty_table(data, header = h, title = "Parameters for $title")
     end
 end
