@@ -80,6 +80,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     data[:mapper] = mapper
     data[:config] = opt_cfg
     data[:state0] = state0
+    data[:last_obj] = Inf
     F = x -> objective_opt!(x, data, print)
     dF = (dFdx, x) -> gradient_opt!(dFdx, x, data)
     F_and_dF = (F, dFdx, x) -> objective_and_gradient_opt!(F, dFdx, x, data, print)
@@ -139,12 +140,16 @@ function objective_opt!(x, data, print_frequency = 1)
     states, reports = simulate(state0, sim, dt, parameters = param, forces = forces, config = config)
     data[:states] = states
     data[:reports] = reports
-    obj = evaluate_objective(G, sim.model, states, dt, forces)
+    bad_obj = 10*data[:last_obj]
+    obj = evaluate_objective(G, sim.model, states, dt, forces, large_value = bad_obj)
     data[:n_objective] += 1
     n = data[:n_objective]
     push!(data[:obj_hist], obj)
     if mod(n, print_frequency) == 0
         println("#$n: $obj")
+    end
+    if obj != bad_obj
+        data[:last_obj] = obj
     end
     return obj
 end
@@ -160,7 +165,7 @@ end
 function optimization_config(model, param, active = keys(model.parameters);
                                                         rel_min = nothing,
                                                         rel_max = nothing,
-                                                        use_scaling = true)
+                                                        use_scaling = false)
     out = Dict{Symbol, Any}()
     for k in active
         var = model.parameters[k]
