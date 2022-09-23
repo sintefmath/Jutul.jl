@@ -44,7 +44,7 @@ function simulator_storage(model; state0 = nothing,
     return specialize_simulator_storage(storage, model, specialize)
 end
 
-function specialize_simulator_storage(storage::JutulStorage, model, specialize)
+function specialize_simulator_storage(storage::JutulStorage, model_or_nothing, specialize)
     if specialize
         out = convert_to_immutable_storage(storage)
     else

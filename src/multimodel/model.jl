@@ -84,8 +84,8 @@ end
 
 function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model), kwarg...)
     storage = JutulStorage()
-    state0_ref = Dict{Symbol, Any}()
-    state_ref = Dict{Symbol, Any}()
+    state0_ref = JutulStorage()
+    state_ref = JutulStorage()
     for key in submodels_symbols(model)
         m = model[key]
         storage[key] = setup_storage(m; state0 = state0[key],
@@ -117,6 +117,8 @@ function specialize_simulator_storage(storage::JutulStorage, model::MultiModel{n
     for (k, v) in data(storage)
         if k in sym
             storage[k] = specialize_simulator_storage(v, model[k], specialize)
+        elseif v isa JutulStorage
+            storage[k] = specialize_simulator_storage(v, nothing, specialize)
         else
             storage[k] = convert_to_immutable_storage(v)
         end
