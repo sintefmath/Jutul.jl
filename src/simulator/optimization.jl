@@ -202,7 +202,7 @@ function opt_scaler_function(config, key; inv = false)
             x_min = 0.0
         end
         if isnothing(x_max)
-            # Divide by 1.0 if no max value
+            # Divide by base scaling if no max value
             Δ = cfg[:base_scale]
         else
             Δ = x_max - x_min
@@ -210,8 +210,7 @@ function opt_scaler_function(config, key; inv = false)
         F = F_inv = identity
 
         if scale_type == :log || scale_type == :exp
-            ϵ = cfg[:base_scale]
-            base = 1/ϵ
+            base = 10000.0
             myexp = x -> (base^x - 1)/(base - 1)
             mylog = x -> log((base-1)*x + 1)/log(base)
             if scale_type == :exp
