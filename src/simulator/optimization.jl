@@ -299,6 +299,7 @@ function optimization_limits!(lims, config, mapper, param, model)
             low_group = min(low_group, low)
             high_group = max(high_group, hi)
         end
+        high_group = max(high_group, low_group + 1e-8*(low_group + high_group))
         cfg[:low] = low_group
         cfg[:high] = high_group
 
