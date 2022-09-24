@@ -425,11 +425,13 @@ struct JutulStorage{K}
     end
 end
 
-
 function convert_to_immutable_storage(S::JutulStorage)
     tup = convert_to_immutable_storage(data(S))
     return JutulStorage(tup)
 end
+
+Base.iterate(S::JutulStorage) = Base.iterate(data(S))
+Base.pairs(S::JutulStorage) = Base.pairs(data(S))
 
 function Base.getproperty(S::JutulStorage{Nothing}, name::Symbol)
     Base.getindex(data(S), name)
