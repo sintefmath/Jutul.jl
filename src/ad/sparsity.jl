@@ -5,7 +5,7 @@ unpack_tag(A::AbstractArray) = unpack_tag(eltype(A))
 unpack_tag(::Any) = nothing
 
 function create_mock_state(state, tag, entities = ad_entities(state))
-    mock_state = Dict()
+    mock_state = JutulStorage()
     n = entities[tag].n
     tracer = ST.create_advec(ones(n));
     for k in keys(state)
@@ -19,7 +19,7 @@ function create_mock_state(state, tag, entities = ad_entities(state))
         end
         mock_state[k] = new_v
     end
-    return (NamedTuple(pairs(mock_state)), tracer)
+    return (mock_state, tracer)
 end
 
 function as_tracer(x::AbstractVector, tracer)
