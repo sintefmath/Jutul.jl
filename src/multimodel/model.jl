@@ -125,6 +125,11 @@ function specialize_simulator_storage(storage::JutulStorage, model::MultiModel{n
             storage[k] = convert_to_immutable_storage(v)
         end
     end
+    ct = storage[:cross_terms]
+    for i in eachindex(ct)
+        ct[i] = specialize_simulator_storage(ct[i], nothing, specialize)
+    end
+
     return storage
 end
 
