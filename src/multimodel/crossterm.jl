@@ -1,10 +1,5 @@
 local_discretization(::CrossTerm, i) = nothing
 
-function update_linearized_system_crossterm!(nz, model_t, model_s, ct::InjectiveCrossTerm)
-    fill_equation_entries!(nz, nothing, model_s, ct.crossterm_source_cache)
-end
-
-
 function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, row_layout, col_layout)
     primitive = declare_pattern(target_model, x, x_storage, source_entity, entity_indices)
     if isnothing(primitive)
@@ -75,21 +70,20 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s)
     # Extra alignment - for off diagonal blocks
     other_align_t = create_extra_alignment(caches_s, allocate = is_symm)
+    out = JutulStorage()
     if is_symm
         other_align_s = create_extra_alignment(caches_t)
         active_source = cross_term_entities_source(ct, eq_s, model_s)
-        out = (
-            N = N, target = caches_t, source = caches_s,
-            target_entities = active, source_entities = active_source,
-            offdiagonal_alignment = (from_target = other_align_s, from_source = other_align_t)
-        )
+        out[:source_entities] = active_source
+        offdiagonal_alignment = (from_target = other_align_s, from_source = other_align_t)
     else
-        out = (
-            N = N, target = caches_t, source = caches_s,
-            target_entities = active,
-            offdiagonal_alignment = (from_source = other_align_t, )
-        )
+        offdiagonal_alignment = (from_source = other_align_t, )
     end
+    out[:N] = N
+    out[:target] = caches_t
+    out[:source] = caches_s
+    out[:target_entities] = active
+    out[:offdiagonal_alignment] = offdiagonal_alignment
     return out
 end
 

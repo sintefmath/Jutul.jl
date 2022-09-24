@@ -106,9 +106,11 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
         ct_i = extra_cross_term_sparsity(model, storage, key, true)
         storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = key)
     end
-    setup_linearized_system!(storage, model)
-    align_equations_to_linearized_system!(storage, model)
-    align_cross_terms_to_linearized_system!(storage, model)
+    @timeit "linear system" begin
+        setup_linearized_system!(storage, model)
+        @timeit "alignment" align_equations_to_linearized_system!(storage, model)
+        @timeit "alignment_ct" align_cross_terms_to_linearized_system!(storage, model)
+    end
     return storage
 end
 

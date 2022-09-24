@@ -1,5 +1,5 @@
 export MultiModel
-export InjectiveCrossTerm, AdditiveCrossTerm
+export AdditiveCrossTerm
 import Base: show
 
 include("types.jl")

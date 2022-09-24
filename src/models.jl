@@ -337,10 +337,10 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
         storage[:equations] = setup_storage_equations(storage, model; tag = tag, kwarg...) 
     end
     @timeit "linear system" if setup_linearized_system
-        storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
+        @timeit "setup" storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
         # We have the equations and the linearized system.
         # Give the equations a chance to figure out their place in the Jacobians.
-        align_equations_to_linearized_system!(storage, model)
+        @timeit "alignment" align_equations_to_linearized_system!(storage, model)
     end
 end
 

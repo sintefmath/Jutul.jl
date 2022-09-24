@@ -59,61 +59,6 @@ Base.getindex(m::MultiModel, i::Symbol) = submodels(m)[i]
 
 abstract type AdditiveCrossTerm <: CrossTerm end
 
-"""
-A cross model term where the dependency is injective and the term is additive:
-(each addition to a entity in the target only depends one entity from the source,
-and is added into that position upon application)
-"""
-
-struct InjectiveCrossTerm{I, E, T, S, SC} <: CrossTerm
-    impact::I                      # 2 by N - first row is target, second is source
-    entities::E                    # tuple - first tuple is target, second is source
-    crossterm_target::T            # The cross-term, with AD values taken relative to the targe
-    crossterm_source::S            # Same cross-term, AD values taken relative to the source
-    crossterm_source_cache::SC     # The cache that holds crossterm_source together with the entries.
-    equations_per_entity::Integer  # Number of equations per impact
-    npartials_target::Integer      # Number of partials per equation (in target)
-    npartials_source::Integer      # (in source)
-    target_symbol::Symbol          # Symbol of target model
-    source_symbol::Symbol          # Symbol of source model
-    function InjectiveCrossTerm(target_eq, target_model, source_model, intersection = nothing; target = nothing, source = nothing)
-        context = target_model.context
-        target_entity = associated_entity(target_eq)
-        if isnothing(intersection)
-            intersection = get_model_intersection(target_entity, target_model, source_model, target, source)
-        end
-        target_impact, source_impact, target_entity, source_entity = intersection
-        @assert !isnothing(target_impact) "Cannot declare cross term when there is no overlap between domains."
-        target_impact::AbstractVector
-        source_impact::AbstractVector
-        noverlap = length(target_impact)
-        @assert noverlap == length(source_impact) "Injective source must have one to one mapping between impact and source."
-        # Infer Unit from target_eq
-        equations_per_entity = number_of_equations_per_entity(model, target_eq)
-
-        npartials_target = number_of_partials_per_entity(target_model, target_entity)
-        npartials_source = number_of_partials_per_entity(source_model, source_entity)
-
-        target_tag = get_entity_tag(target, target_entity)
-        c_term_target = allocate_array_ad(equations_per_entity, noverlap, context = context, npartials = npartials_target, tag = target_tag)
-        c_term_source_c = CompactAutoDiffCache(equations_per_entity, noverlap, npartials_source, context = context, tag = source, entity = source_entity)
-        c_term_source = c_term_source_c.entries
-
-        # Units and overlap - target, then source
-        entities = (target = target_entity, source = source_entity)
-        overlap = (target = target_impact, source = source_impact)
-        new{typeof(overlap), typeof(entities), typeof(c_term_target), typeof(c_term_source), typeof(c_term_source_c)}(overlap, entities, c_term_target, c_term_source, c_term_source_c, equations_per_entity, npartials_target, npartials_source, target, source)
-    end
-end
-
-function setup_cross_term(target_eq::JutulEquation, target_model, source_model, target, source, intersection, type::Type{InjectiveCrossTerm}; transpose = false)
-    if(transpose)
-        intersection = transpose_intersection(intersection)
-    end
-    ct = InjectiveCrossTerm(target_eq, target_model, source_model, intersection; target=target, source=source)
-    return ct
-end
-
 abstract type CrossTermSymmetry end
 
 struct CTSkewSymmetry <: CrossTermSymmetry end
