@@ -98,30 +98,34 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
     else
         local_tag = (tag) -> nothing
     end
-    for key in submodels_symbols(model)
+    @timeit "model" for key in submodels_symbols(model)
         m = model[key]
-        storage[key] = setup_storage(m; state0 = state0[key],
+        @timeit "$key" begin
+            storage[key] = setup_storage(m; state0 = state0[key],
                                         parameters = parameters[key],
                                         setup_linearized_system = false,
                                         setup_equations = false,
                                         tag = local_tag(key),
                                         kwarg...)
+        end
         # Add outer references to state that matches the nested structure
         state_ref[key] = storage[key][:state]
         state0_ref[key] = storage[key][:state0]
     end
     storage[:state] = state_ref
     storage[:state0] = state0_ref
-    setup_cross_terms_storage!(storage, model)
-    for key in submodels_symbols(model)
+    @timeit "cross terms" setup_cross_terms_storage!(storage, model)
+    @timeit "equations" for key in submodels_symbols(model)
         m = model[key]
-        ct_i = extra_cross_term_sparsity(model, storage, key, true)
-        storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = local_tag(key))
+        @timeit "$key" begin
+            ct_i = extra_cross_term_sparsity(model, storage, key, true)
+            storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = local_tag(key))
+        end
     end
     @timeit "linear system" begin
-        setup_linearized_system!(storage, model)
+        @timeit "setup" setup_linearized_system!(storage, model)
         @timeit "alignment" align_equations_to_linearized_system!(storage, model)
-        @timeit "alignment_ct" align_cross_terms_to_linearized_system!(storage, model)
+        @timeit "alignment cross terms" align_cross_terms_to_linearized_system!(storage, model)
     end
     return storage
 end
