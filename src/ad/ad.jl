@@ -390,6 +390,8 @@ end
 @inline as_value(x) = x
 
 """
+    get_entity_tag(basetag, entity)
+
 Combine a base tag (which can be nothing) with a entity to get a tag that
 captures base tag + entity tag for use with AD initialization.
 """

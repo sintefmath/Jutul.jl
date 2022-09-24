@@ -92,13 +92,19 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
     storage = JutulStorage()
     state0_ref = JutulStorage()
     state_ref = JutulStorage()
+    is_specialized = multi_model_is_specialized(model)
+    if is_specialized
+        local_tag = (tag) -> tag
+    else
+        local_tag = (tag) -> nothing
+    end
     for key in submodels_symbols(model)
         m = model[key]
         storage[key] = setup_storage(m; state0 = state0[key],
                                         parameters = parameters[key],
                                         setup_linearized_system = false,
                                         setup_equations = false,
-                                        tag = key,
+                                        tag = local_tag(key),
                                         kwarg...)
         # Add outer references to state that matches the nested structure
         state_ref[key] = storage[key][:state]
@@ -110,7 +116,7 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
     for key in submodels_symbols(model)
         m = model[key]
         ct_i = extra_cross_term_sparsity(model, storage, key, true)
-        storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = key)
+        storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = local_tag(key))
     end
     @timeit "linear system" begin
         setup_linearized_system!(storage, model)
