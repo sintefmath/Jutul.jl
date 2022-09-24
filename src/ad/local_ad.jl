@@ -19,7 +19,9 @@ struct ValueStateAD{T} # Data type
     data::T
 end
 
-as_value(x::Union{NamedTuple,AbstractDict,JutulStorage}) = ValueStateAD(x)
+const StateType = Union{NamedTuple,AbstractDict,JutulStorage}
+
+as_value(x::StateType) = ValueStateAD(x)
 
 export local_ad
 @inline local_ad(v::AbstractArray, i::Integer) = LocalPerspectiveAD(v, i)
@@ -71,7 +73,7 @@ end
 # Constants
 @inline next_level_local_ad(x::ConstantWrapper, t, index) = x
 # Nested states
-@inline next_level_local_ad(x::NamedTuple, E, index) = local_ad(x, index, E)
+@inline next_level_local_ad(x::StateType, E, index) = local_ad(x, index, E)
 
 @inline function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
     index = getfield(state, :index)

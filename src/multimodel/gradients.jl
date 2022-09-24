@@ -52,7 +52,12 @@ function state_gradient_outer!(∂F∂x, F, model::MultiModel, state, extra_arg;
         else
             S = nothing
         end
-        state_gradient_inner!(∂F∂x_k, F, m, state, k, extra_arg, model, sparsity = S)
+        if multi_model_is_specialized(model)
+            localtag = k
+        else
+            localtag = nothing
+        end
+        state_gradient_inner!(∂F∂x_k, F, m, state, localtag, extra_arg, model, sparsity = S)
         offset += n
     end
     return ∂F∂x
