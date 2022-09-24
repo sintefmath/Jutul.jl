@@ -25,16 +25,12 @@ end
 
 mutable struct GenericKrylov
     solver
-    provider
     preconditioner
     x
     r_norm
     config::IterativeSolverConfig
-    function GenericKrylov(solver = Krylov.gmres; preconditioner = nothing, provider = nothing, kwarg...)
-        if isnothing(provider)
-            provider = Base.parentmodule(solver)
-        end
-        new(solver, provider, preconditioner, nothing, nothing, IterativeSolverConfig(;kwarg...))
+    function GenericKrylov(solver = :gmres; preconditioner = nothing, kwarg...)
+        new(solver, preconditioner, nothing, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
 
@@ -96,45 +92,22 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
             rt = max(min(maybe_rtol, rtol_relaxed), rt)
         end
     end
-    if krylov.provider == IterativeSolvers
-        is_bicgstabl = solver == IterativeSolvers.bicgstabl || solver == IterativeSolvers.bicgstabl!
-        if is_mutating(solver)
-            if isnothing(krylov.x)
-                krylov.x = similar(r)
-            end
-            x = krylov.x
-            f = (op, r; kwarg...) -> solver(x, op, r; initially_zero = false, kwarg...)
-        else
-            f = (op, r; kwarg...) -> solver(op, r; kwarg...)
-        end
-        if is_bicgstabl
-            sym = :max_mv_products
-            target_it = 4*max_it
-        else
-            sym = :maxiter
-            target_it = max_it
-        end
-        @timeit "solve" (x, history) = f(op, r; sym => target_it, abstol = at, reltol = rt, log = true, verbose = v > 0, Pl = L)
-        solved = history.isconverged
-        msg = history
-        n = history.iters
-        res = history.data[:resnorm]
-        stats = history
-    elseif krylov.provider == Krylov
-        @timeit "solve" (x, stats) = solver(op, r, 
-                                itmax = max_it,
-                                verbose = v,
-                                rtol = rt,
-                                history = true,
-                                atol = at,
-                                M = L)
-        res = stats.residuals
-        n = length(res) - 1
-        solved = stats.solved
-        msg = stats.status
+    if solver == :gmres
+        solve_f = (arg...; kwarg...) -> Krylov.gmres(arg...; reorthogonalization = true, kwarg...)
     else
-        error("Unknown provider $(krylov.provider)")
+        solve_f = eval(:(Krylov.$solver))
     end
+    @timeit "solve" (x, stats) = solve_f(op, r, 
+                            itmax = max_it,
+                            verbose = v,
+                            rtol = rt,
+                            history = true,
+                            atol = at,
+                            M = L; cfg.arguments...)
+    res = stats.residuals
+    n = length(res) - 1
+    solved = stats.solved
+    msg = stats.status
     if n > 1
         initial_res = res[1]
         final_res = res[end]
