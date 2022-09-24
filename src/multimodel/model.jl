@@ -37,6 +37,12 @@ function Base.show(io::IO, t::MIME"text/plain", model::MultiModel)
             println(io, "       $print_t")
         end
     end
+    if multi_model_is_specialized(model)
+        opt = "runtime"
+    else
+        opt = "compilation"
+    end
+    println(io, "\nModel storage will be optimized for $opt performance.")
 end
 
 
@@ -114,7 +120,9 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
     return storage
 end
 
-function specialize_simulator_storage(storage::JutulStorage, model::MultiModel{nothing}, specialize)
+function specialize_simulator_storage(storage::JutulStorage, model::MultiModel, specialize)
+    specialize_outer = multi_model_is_specialized(model)
+    specialize = specialize || specialize_outer
     sym = submodel_symbols(model)
     for (k, v) in data(storage)
         if k in sym
@@ -129,12 +137,10 @@ function specialize_simulator_storage(storage::JutulStorage, model::MultiModel{n
     for i in eachindex(ct)
         ct[i] = specialize_simulator_storage(ct[i], nothing, specialize)
     end
-
+    if specialize_outer
+        storage = convert_to_immutable_storage(storage)
+    end
     return storage
-end
-
-function specialize_simulator_storage(storage::JutulStorage, model::MultiModel, specialize)
-    return convert_to_immutable_storage(storage)
 end
 
 function transpose_intersection(intersection)

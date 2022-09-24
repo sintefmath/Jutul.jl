@@ -51,6 +51,8 @@ struct MultiModel{T} <: JutulModel
         new{T}(models, cross_terms, groups, context, reduction)
     end
 end
+multi_model_is_specialized(m::MultiModel) = true
+multi_model_is_specialized(m::MultiModel{nothing}) = false
 
 submodels(m::MultiModel{nothing}) = m.models
 submodels(m::MultiModel{T}) where T = m.models::T
