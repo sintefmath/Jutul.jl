@@ -26,11 +26,12 @@ end
 mutable struct GenericKrylov
     solver
     preconditioner
+    storage
     x
     r_norm
     config::IterativeSolverConfig
     function GenericKrylov(solver = :gmres; preconditioner = nothing, kwarg...)
-        new(solver, preconditioner, nothing, nothing, IterativeSolverConfig(;kwarg...))
+        new(solver, preconditioner, nothing, nothing, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
 
@@ -93,17 +94,35 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
         end
     end
     if solver == :gmres
-        solve_f = (arg...; kwarg...) -> Krylov.gmres(arg...; reorthogonalization = true, kwarg...)
+        if isnothing(krylov.storage)
+            krylov.storage = GmresSolver(op, r, 20)
+        end
+        F = krylov.storage
+        solve_f = (arg...; kwarg...) -> Krylov.gmres!(F, arg...; reorthogonalization = true, kwarg...)
+        in_place = true
+    elseif solver == :bicgstab
+        if isnothing(krylov.storage)
+            krylov.storage = BicgstabSolver(op, r)
+        end
+        F = krylov.storage
+        solve_f = (arg...; kwarg...) -> Krylov.bicgstab!(F, arg...; kwarg...)
+        in_place = true
     else
         solve_f = eval(:(Krylov.$solver))
+        in_place = false
     end
-    @timeit "solve" (x, stats) = solve_f(op, r, 
+    @timeit "solve" ret = solve_f(op, r, 
                             itmax = max_it,
                             verbose = v,
                             rtol = rt,
                             history = true,
                             atol = at,
                             M = L; cfg.arguments...)
+    if in_place
+        x, stats = (krylov.storage.x, krylov.storage.stats)
+    else
+        x, stats = ret
+    end
     res = stats.residuals
     n = length(res) - 1
     solved = stats.solved
