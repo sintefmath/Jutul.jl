@@ -789,10 +789,7 @@ function update_after_step!(storage, model, dt, forces; time = NaN)
     state = storage.state
     state0 = storage.state0
     for key in model.output_variables
-        v = state[key]
-        if v isa AbstractArray && eltype(v)<:Real
-            @. state0[key] = value(state[key])
-        end
+        update_values!(state0[key], state[key])
     end
 end
 
