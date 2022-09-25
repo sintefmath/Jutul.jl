@@ -1,8 +1,15 @@
-function unpack_tag(v::Type{ForwardDiff.Dual{T, F, N}}) where {T, F, N}
-    return T[2]
+function unpack_tag(v::Type{ForwardDiff.Dual{T, F, N}}, t::Symbol = :entity) where {T, F, N}
+    if t == :entity
+        out = T[2]
+    elseif t == :model
+        out = T[1]
+    else
+        out = T
+    end
+    return out
 end
-unpack_tag(A::AbstractArray) = unpack_tag(eltype(A))
-unpack_tag(::Any) = nothing
+unpack_tag(A::AbstractArray, arg...) = unpack_tag(eltype(A), arg...)
+unpack_tag(::Any, arg...) = nothing
 
 function create_mock_state(state, tag, entities = ad_entities(state))
     mock_state = JutulStorage()
