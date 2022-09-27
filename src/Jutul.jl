@@ -29,7 +29,7 @@ module Jutul
 
     # Misc. utils
     using ExprTools
-    using LightGraphs
+    using Graphs
     using PrettyTables
     using Polynomials
     using JLD2
