@@ -431,24 +431,28 @@ function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::Conservat
     flux_c = get_entries(eq_s.half_face_flux_cells)
 
     N = size(flux_c, 1)
-    flux_static = reinterpret(SVector{N, eltype(flux_c)}, flux_c)
-    update_half_face_flux_tpfa!(flux_static, law, state, model, dt, flow_disc, Cells())
+    T = eltype(flux_c)
+    flux_static = reinterpret(SVector{N, T}, flux_c)
+    state_c = local_ad(state, 1, T)
+    update_half_face_flux_tpfa!(flux_static, law, state_c, model, dt, flow_disc, Cells())
 
     hf_face = eq_s.half_face_flux_faces
     if !isnothing(hf_face)
         flux_v = get_entries(hf_face)
-        face_flux_static = reinterpret(SVector{N, eltype(flux_v)}, flux_v)
-        update_half_face_flux_tpfa!(face_flux_static, law, state, model, dt, flow_disc, Faces())
+        F = eltype(flux_v)
+        face_flux_static = reinterpret(SVector{N, F}, flux_v)
+        state_f = local_ad(state, 1, F)
+        update_half_face_flux_tpfa!(face_flux_static, law, state_f, model, dt, flow_disc, Faces())
     end
 end
 
-function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}}, AbstractVector{T}}, eq, state, model, dt, flow_disc, ::Cells) where {T, N}
+function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}}, AbstractVector{T}}, eq, state::S, model, dt, flow_disc, ::Cells) where {T, N, S<:LocalStateAD}
     nc = number_of_cells(model.domain)
     conn_data = flow_disc.conn_data
     conn_pos = flow_disc.conn_pos
     tb = minbatch(model.context)
-    @timeit "flux (cells)" @batch minbatch = tb for c in 1:nc
-        state_c = local_ad(state, c, T)
+    @timeit "flux (cells)" @batch minbatch=tb for c in 1:nc
+        state_c = new_entity_index(state, c)
         update_half_face_flux_tpfa_internal!(hf_cells, eq, state_c, model, dt, flow_disc, conn_pos, conn_data, c)
     end
 end
@@ -465,7 +469,7 @@ function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq,
     neighbors = get_neighborship(model.domain.grid)
     tb = minbatch(model.context)
     @timeit "flux (faces)" @batch minbatch = tb for f in 1:nf
-        state_f = local_ad(state, f, T)
+        state_f = new_entity_index(state, f)
         @inbounds left = neighbors[1, f]
         @inbounds right = neighbors[2, f]
         @inbounds hf_faces[f] = compute_tpfa_flux!(hf_faces[f], left, right, f, 1, eq, state_f, model, dt, flow_disc)
