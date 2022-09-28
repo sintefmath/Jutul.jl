@@ -72,7 +72,7 @@ Base.@propagate_inbounds insert_residual_value(r, ix, e, v) = r[e, ix] = v
 
 function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)
-    tb = minbatch(model.context)
+    tb = minbatch(model.context, nu)
     @batch minbatch = tb for i in 1:nu
         @inbounds for e in 1:ne
             a = get_entry(cache, i, e)

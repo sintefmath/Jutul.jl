@@ -236,7 +236,7 @@ end
 function fill_crossterm_entries!(nz, model, cache::GenericAutoDiffCache, positions, sgn)
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
-    tb = minbatch(model.context)
+    tb = minbatch(model.context, nu)
     @batch minbatch = tb for i in 1:nu
         for (jno, j) in enumerate(vrange(cache, i))
             @inbounds for e in 1:ne

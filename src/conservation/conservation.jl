@@ -249,7 +249,7 @@ end
 
 function threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, cp, fp, conn_pos, dims)
     nc, ne, np = dims
-    tb = minbatch(context)
+    tb = minbatch(context, nc)
     @batch minbatch=tb for cell = 1:nc
         for e in 1:ne
             fill_conservation_eq!(nz, r, cell, e, acc, cell_flux, cp, fp, conn_pos, np)
@@ -292,7 +292,7 @@ end
 
 function update_lsys_sources_theaded!(nz, r, acc, src, rv_src, nz_src, cp, context, dims)
     nc, _, np = dims
-    tb = minbatch(context)
+    tb = minbatch(context, nc)
     @batch minbatch=tb for cell = 1:nc
         @inbounds for rp in nzrange(src, cell)
             e = rv_src[rp]
@@ -319,7 +319,7 @@ end
 function update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, context, dims)
     _, ne, np = dims
     nc = length(conn_pos) - 1
-    tb = minbatch(context)
+    tb = minbatch(context, nc)
     @batch minbatch=tb for cell = 1:nc
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             @inbounds for e in 1:ne
@@ -450,7 +450,7 @@ function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}
     nc = number_of_cells(model.domain)
     conn_data = flow_disc.conn_data
     conn_pos = flow_disc.conn_pos
-    tb = minbatch(model.context)
+    tb = minbatch(model.context, nc)
     @timeit "flux (cells)" @batch minbatch=tb for c in 1:nc
         state_c = new_entity_index(state, c)
         update_half_face_flux_tpfa_internal!(hf_cells, eq, state_c, model, dt, flow_disc, conn_pos, conn_data, c)
@@ -467,7 +467,7 @@ end
 function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Faces) where {T, N}
     nf = number_of_faces(model.domain)
     neighbors = get_neighborship(model.domain.grid)
-    tb = minbatch(model.context)
+    tb = minbatch(model.context, nf)
     @timeit "flux (faces)" @batch minbatch = tb for f in 1:nf
         state_f = new_entity_index(state, f)
         @inbounds left = neighbors[1, f]
