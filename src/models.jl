@@ -164,7 +164,7 @@ end
 """
     number_of_partials_per_entity(model::SimulationModel, entity::JutulEntity)
 
-Get the number of local partial derivatives per entity in a `model` for a given [`JutulEntity`]@ref.
+Get the number of local partial derivatives per entity in a `model` for a given [`JutulEntity`](@ref).
 This is the sum of [`degrees_of_freedom_per_entity`](@ref) for all primary variables defined on `entity`.
 """
 function number_of_partials_per_entity(model::SimulationModel, entity::JutulEntity)
