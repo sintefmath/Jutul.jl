@@ -20,6 +20,17 @@ function update!(f::FactorStore, g, g!, A)
     return f.factor
 end
 
+function update!(f::FactorStore, g, g!, A::AbstractArray)
+    if isnothing(f.factor)
+        f.factor = map(g, A)
+    else
+        for (F, A_i) in zip(f.factor, A)
+            g!(F, A_i)
+        end
+    end
+    return f.factor
+end
+
 abstract type JutulLinearSystem end
 
 struct LinearizedSystem{L, J, V, Z, B} <: JutulLinearSystem
@@ -245,6 +256,10 @@ end
 #     n, m = size(jac)
 #     return LinearOperator(Float64, n, m, false, false, apply!)
 # end
+
+function vector_residual(sys::Vector)
+    return map(x -> x.r, sys)
+end
 
 function vector_residual(sys)
     return sys.r

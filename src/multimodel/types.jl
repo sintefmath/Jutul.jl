@@ -31,7 +31,7 @@ struct MultiModel{T} <: JutulModel
         end
         if reduction == :schur_apply
             if length(groups) > 1
-                @assert num_groups == 2
+                # @assert num_groups == 2
             else
                 reduction = nothing
             end
