@@ -25,6 +25,19 @@ struct MultiModel{T} <: JutulModel
             @assert minimum(groups) > 0
             @assert length(groups) == nm
             @assert maximum(groups) == num_groups
+            if !issorted(groups)
+                # If the groups aren't grouped sequentially, re-sort them so they are
+                # since parts of the multimodel code depends on this ordering
+                ix = sortperm(groups)
+                new_models = OrderedDict{Symbol, Any}()
+                old_keys = keys(models)
+                for i in ix
+                    k = old_keys[i]
+                    new_models[k] = models[k]
+                end
+                models = new_models
+                groups = groups[ix]
+            end
         end
         if isa(models, AbstractDict)
             models = convert_to_immutable_storage(models)
