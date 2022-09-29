@@ -1,5 +1,5 @@
 
-function get_submodel_offsets(model::MultiModel, group = nothing; is_equation = true)
+function get_submodel_offsets(model::MultiModel, group::Union{Nothing,Integer} = nothing; is_equation = true)
     if is_equation
         f = number_of_equations
     else
@@ -17,6 +17,14 @@ function get_submodel_offsets(model::MultiModel, group = nothing; is_equation = 
         tot += dof[i]
     end
     return out
+end
+
+function get_submodel_offsets(storage::StateType, g::Integer)
+    return storage.multi_model_maps.offset_map[g]
+end
+
+function get_submodel_offsets(storage::StateType)
+    return storage.multi_model_maps.offset_map
 end
 
 function get_linearized_system_submodel(storage, model, symbol, lsys = storage.LinearizedSystem)

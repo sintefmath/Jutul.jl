@@ -127,7 +127,18 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
         @timeit "alignment" align_equations_to_linearized_system!(storage, model)
         @timeit "alignment cross terms" align_cross_terms_to_linearized_system!(storage, model)
     end
+    setup_multimodel_maps!(storage, model)
     return storage
+end
+
+function setup_multimodel_maps!(storage, model)
+    groups = model.groups
+    if isnothing(groups)
+        offset_map = get_submodel_offsets(model, nothing)
+    else
+        offset_map = map(g -> get_submodel_offsets(model, g), unique(groups))
+    end
+    storage[:multi_model_maps] = (offset_map = offset_map, );
 end
 
 function specialize_simulator_storage(storage::JutulStorage, model::MultiModel, specialize)
@@ -438,7 +449,9 @@ function initialize_storage!(storage, model::MultiModel; kwarg...)
 end
 
 function update_equations!(storage, model::MultiModel, dt)
-    @timeit "model equations" submodels_storage_apply!(storage, model, update_equations!, dt)
+    @timeit "model equations" for k in submodel_symbols(model)
+        update_equations!(storage[k], model[k], dt)
+    end
 end
 
 function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN)
@@ -549,11 +562,11 @@ function update_diagonal_blocks!(storage, model::MultiModel, targets)
             subs = groups .== g
             group_targets = model_keys[subs]
             group_keys = intersect(group_targets, targets)
-            offsets = get_submodel_offsets(model, g)
+            offsets = get_submodel_offsets(storage, g)
             update_main_linearized_system_subgroup!(storage, model, group_keys, offsets, lsys_g)
         end
     else
-        offsets = get_submodel_offsets(model)
+        offsets = get_submodel_offsets(storage)
         update_main_linearized_system_subgroup!(storage, model, targets, offsets, lsys)
     end
 end
