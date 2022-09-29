@@ -81,9 +81,16 @@ struct MultiLinearizedSystem{L} <: JutulLinearSystem
             else
                 bz = size(e, 1)
             end
-            push!(schur_buffer, zeros(ni*bz))
+            if i == 1
+                push!(schur_buffer, zeros(ni*bz))
+            else
+                # Need two buffers of same size for Schur complement
+                b = (zeros(ni*bz), zeros(ni*bz))
+                push!(schur_buffer, b)
+            end
             n += ni
         end
+        schur_buffer = Tuple(schur_buffer)
         dx, dx_buf = get_jacobian_vector(n, context, layout, dx)
         r, r_buf = get_jacobian_vector(n, context, layout, r)
         new{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, FactorStore(), layout, schur_buffer)

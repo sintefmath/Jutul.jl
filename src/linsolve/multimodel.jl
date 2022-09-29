@@ -17,7 +17,7 @@ do_schur(sys) = sys.reduction == :schur_apply
 function prepare_solve!(sys::MultiLinearizedSystem)
     if do_schur(sys)
         _, C, _, E, a, b = get_schur_blocks!(sys, true, update = true)
-        b_buf = sys.schur_buffer[2]
+        b_buf, = sys.schur_buffer[2]
         # The following is the in-place version of a -= C*(E\b)
         ldiv!(b_buf, E, b)
         mul!(a, C, b_buf, -1.0, 1.0)
@@ -66,8 +66,8 @@ function linear_operator(sys::MultiLinearizedSystem; skip_red = false)
         # A = B - CE\D
         n = size(C, 1)
         T = eltype(sys[1, 1].r)
-        b_buf = sys.schur_buffer[2]
-        apply! = (res, x, α, β) -> schur_mul!(res, b_buf, Val(T), B, C, D, E, x, α, β)
+        b_buf, b_buf2 = sys.schur_buffer[2]
+        apply! = get_schur_apply(b_buf, b_buf2, Val(T), B, C, D, E)
         op = LinearOperator(Float64, n, n, false, false, apply!)
     else
         S = sys.subsystems
@@ -84,10 +84,14 @@ function linear_operator(sys::MultiLinearizedSystem; skip_red = false)
     return op
 end
 
+function get_schur_apply(b_buf, b_buf2, Tv, B, C, D, E)
+    return (res, x, α, β) -> schur_mul!(res, b_buf, b_buf2, Tv, B, C, D, E, x, α, β)
+end
+
 function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
     if do_schur(sys)
         Δx = dx
-        buf_b = sys.schur_buffer[2]
+        buf_b, = sys.schur_buffer[2]
         _, C, D, E, a, b = get_schur_blocks!(sys)
         n = length(dx)
         m = length(sys.dx)
@@ -113,22 +117,22 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buf_b)
     ldiv!(B, E, buf_b)
 end
 
-function schur_mul_internal!(res, res_v, b_buf, B, C, D, E, x, x_v, α, β::T) where T
+@inline function schur_mul_internal!(res, res_v, b_buf, b_buf2, B, C, D, E, x, x_v, α, β::T) where T
     @timeit "spmv (schur)" begin
         # This function does:
         # β*res .= α*(B*x - C*(E\(D*x)))
         mul!(res_v, B, x_v, α, β)
-        mul!(b_buf, D, x)
-        ldiv!(E, b_buf)
+        mul!(b_buf2, D, x)
+        ldiv!(b_buf, E, b_buf2)
         mul!(res, C, b_buf, -α, 1.0)
     end
     return res
 end
 
-function schur_mul!(res, b_buf, ::Val{r_type}, B, C, D, E, x, α, β) where r_type
+@inline function schur_mul!(res, b_buf, b_buf2, ::Val{r_type}, B, C, D, E, x, α, β) where r_type
     res_v = reinterpret(r_type, res)
     x_v = reinterpret(r_type, x)
-    schur_mul_internal!(res, res_v, b_buf, B, C, D, E, x, x_v, α, β)
+    schur_mul_internal!(res, res_v, b_buf, b_buf2, B, C, D, E, x, x_v, α, β)
 end
 
 function jacobian(sys::MultiLinearizedSystem)
