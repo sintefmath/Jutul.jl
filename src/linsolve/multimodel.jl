@@ -26,7 +26,7 @@ function prepare_solve!(sys::MultiLinearizedSystem)
         end
         for i in 1:n
             b_buf, = sys.schur_buffer[i+1]
-            mul!(a, C[i], b_buf, -1.0, 1.0)    
+            mul!(a, C[i], b_buf, -1.0, 1.0)
         end
     end
 end
@@ -114,7 +114,6 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buffers)
     @tullio A[i] = -dx[i]
     # We want to do (in-place):
     # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
-    @assert length(D) == 1 "Offset bug not yet fixed"
     offsets = cumsum(length(x) for x in b)
     for i in eachindex(D)
         if i == 1
@@ -122,11 +121,11 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buffers)
         else
             offset = offsets[i-1]
         end
+        b_i = b[i]
+        n = length(b_i)
         buf_b, = buffers[i+1]
         mul!(buf_b, D[i], Δx)
         # now buf_b = D*Δx
-        b_i = b[i]
-        n = length(b_i)
         @inbounds @batch minbatch=1000 for j in 1:n
             buf_b[j] -= b_i[j]
         end
@@ -138,13 +137,14 @@ end
 @inline function schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, β::T) where T
     @timeit "spmv (schur)" begin
         # This function does:
-        # β*res .= α*(B*x - C*(E\(D*x)))
-        for i in eachindex(D)
+        # res ← β*res + α*(B*x - C*(E\(D*x)))
+        n = length(D)
+        mul!(res_v, B, x_v, α, β)
+        for i = 1:n
             b_buf_1, b_buf_2 = schur_buffers[i+1]
-            mul!(res_v, B, x_v, α, β)
             mul!(b_buf_2, D[i], x)
             ldiv!(b_buf_1, E[i], b_buf_2)
-            mul!(res, C[i], b_buf_1, -α, 1.0)
+            mul!(res, C[i], b_buf_1, -α, true)
         end
     end
     return res
