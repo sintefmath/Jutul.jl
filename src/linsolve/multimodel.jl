@@ -115,15 +115,23 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buffers)
     # We want to do (in-place):
     # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
     @assert length(D) == 1 "Offset bug not yet fixed"
+    offsets = cumsum(length(x) for x in b)
     for i in eachindex(D)
+        if i == 1
+            offset = 0
+        else
+            offset = offsets[i-1]
+        end
         buf_b, = buffers[i+1]
         mul!(buf_b, D[i], Δx)
         # now buf_b = D*Δx
         b_i = b[i]
-        @inbounds @batch minbatch=1000 for j in eachindex(b_i)
+        n = length(b_i)
+        @inbounds @batch minbatch=1000 for j in 1:n
             buf_b[j] -= b_i[j]
         end
-        ldiv!(B, E[i], buf_b)
+        B_i = view(B, (offset+1):(offset+n))
+        ldiv!(B_i, E[i], buf_b)
     end
 end
 
