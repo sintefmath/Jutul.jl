@@ -15,7 +15,8 @@ struct MultiModel{T} <: JutulModel
     groups::Union{Vector, Nothing}
     context::Union{JutulContext, Nothing}
     reduction::Union{Symbol, Nothing}
-    function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing, specialize = false)
+    specialize_ad::Bool
+    function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing, specialize = false, specialize_ad = false)
         if isnothing(groups)
             num_groups = 1
         else
@@ -61,11 +62,20 @@ struct MultiModel{T} <: JutulModel
         else
             T = nothing
         end
-        new{T}(models, cross_terms, groups, context, reduction)
+        new{T}(models, cross_terms, groups, context, reduction, specialize_ad)
     end
 end
 multi_model_is_specialized(m::MultiModel) = true
 multi_model_is_specialized(m::MultiModel{nothing}) = false
+
+function submodel_ad_tag(m::MultiModel, tag)
+    if m.specialize_ad
+        out = tag
+    else
+        out = nothing
+    end
+    return out
+end
 
 submodels(m::MultiModel{nothing}) = m.models
 submodels(m::MultiModel{T}) where T = m.models::T
