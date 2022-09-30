@@ -123,7 +123,7 @@ end
 
 
 function subdiscretization(disc::TwoPointPotentialFlowHardCoded, subg, mapper::FiniteVolumeGlobalMap)
-    u, k, flow_type, has_grav = disc.upwind, disc.grad, disc.flow_type, disc.gravity
+    has_grav = disc.gravity
 
     face_pos_global, conn_data_global = disc.conn_pos, disc.conn_data
     N = get_neighborship(subg)
@@ -138,7 +138,7 @@ function subdiscretization(disc::TwoPointPotentialFlowHardCoded, subg, mapper::F
     face_pos = next_face_pos
     # face_pos = new_offsets
     # conn_data = vcat(new_conn...)
-    return TwoPointPotentialFlowHardCoded{typeof(u), typeof(k), typeof(flow_type)}(u, k, flow_type, has_grav, face_pos, conn_data)
+    return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data)}(has_grav, face_pos, conn_data)
 end
 
 function compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_global, mapper, nc)

@@ -10,7 +10,7 @@ function submodel(model::SimulationModel, p_i::AbstractVector; context = model.c
     f = model.formulation
     if !isnothing(minbatch)
         @assert isa(context, DefaultContext)
-        context = DefaultContext(matrix_layout = c.matrix_layout, minbatch = minbatch)
+        context = DefaultContext(matrix_layout = context.matrix_layout, minbatch = minbatch)
     end
     d_l = subdomain(domain, p_i, entity = Cells(); kwarg...)
     new_model = SimulationModel(d_l, sys, context = context, formulation = f)
@@ -49,10 +49,10 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
             # TODO: Renumber
             m = deepcopy(submodels[k])
             d = m.domain
-            if isa(d, WellControllerDomain)
+            if hasproperty(d, :well_symbols)
                 # Need to control a single well for this to work
                 @assert length(d.well_symbols) == 1
-            elseif isa(m.domain.grid, WellGrid)
+            elseif hasproperty(d, :grid) && hasproperty(d.grid, :perforations)
                 perf = m.domain.grid.perforations.reservoir
                 for i in eachindex(perf)
                     c_l = local_cell(perf[i], M)
