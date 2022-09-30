@@ -186,26 +186,20 @@ end
 function initialize_variable_value(model, pvar, val; perform_copy = true)
     nu = number_of_entities(model, pvar)
     nv = values_per_entity(model, pvar)
-    
-    if isa(pvar, ScalarVariable)
-        if val isa AbstractVector
-            @assert length(val) == nu "Expected $nu entries, but got $(length(val)) for $(typeof(pvar))"
-        else
-            val = repeat([val], nu)
-        end
-        # Type-assert that this should be scalar, with a vector input
-        val::AbstractVector
-    else
-        if isa(val, Real)
-            val = repeat([val], nv, nu)
-        end
-        err_str = "Passed value for $(typeof(pvar))"
-        nm = length(val)
-        @assert nm == nv*nu "err_str had $nm entries, expected $(nu*nv)"
-        n, m, = size(val)
-        @assert n == nv "$err_str had $n rows, expected $nv"
-        @assert m == nu "$err_str had $m rows, expected $nu"
+
+    if isa(val, Real)
+        val = repeat([val], nv, nu)
+    elseif isa(val, AbstractVector)
+        @assert nv == 1
+        # Convert to a matrix
+        val = repeat(val, 1, 1)
     end
+    err_str = "Passed value for $(typeof(pvar))"
+    nm = length(val)
+    @assert nm == nv*nu "err_str had $nm entries, expected $(nu*nv)"
+    n, m, = size(val)
+    @assert n == nv "$err_str had $n rows, expected $nv"
+    @assert m == nu "$err_str had $m rows, expected $nu"
     if perform_copy
         val = deepcopy(val)
     end
@@ -224,7 +218,6 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
 end
 
 default_value(model, variable) = 0.0
-default_values(model, var::ScalarVariable) = repeat([default_value(model, var)], number_of_entities(model, var))
 default_values(model, var::JutulVariables) = repeat([default_value(model, var)], values_per_entity(model, var), number_of_entities(model, var))
 
 function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
@@ -247,7 +240,7 @@ end
 
 # Scalar primary variables
 function initialize_variable_value!(state, model, pvar::ScalarVariable, symb::Symbol, val::Number)
-    V = repeat([val], number_of_entities(model, pvar))
+    V = repeat([val], 1, number_of_entities(model, pvar))
     return initialize_variable_value!(state, model, pvar, symb, V)
 end
 
