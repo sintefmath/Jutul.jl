@@ -139,7 +139,7 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
         typed_levels[i] = new_levels[i]
     end
     levels = typed_levels
-    S = amg.smoothers = generate_smoothers_csr(A_f, levels, nt, context)
+    S = amg.smoothers = generate_smoothers_csr(A_f, levels, nt, mb, context)
     smoother = (A, x, b) -> apply_smoother!(x, A, b, S)
 
     A_c = to_csr(h.final_A)
@@ -156,12 +156,14 @@ function solve_coarse_internal!(x, A, factor, b)
     return x
 end
 
-function generate_smoothers_csr(A_fine, levels, nt, context)
+function generate_smoothers_csr(A_fine, levels, nthreads, min_batch, context)
     sizes = Vector{Int64}()
     smoothers = []
     n = length(levels)
     for i = 1:n
         A = levels[i].A
+        max_t = max(size(A, 1) ÷ min_batch, 1)
+        nt = min(nthreads, max_t)
         if nt == 1
             ilu_factor = ilu0_csr(A)
         else
@@ -172,10 +174,7 @@ function generate_smoothers_csr(A_fine, levels, nt, context)
         push!(smoothers, (factor = ilu_factor, x = zeros(N), b = zeros(N)))
         push!(sizes, N)
     end
-    typed_smoothers = Vector{typeof(smoothers[1])}(undef, n)
-    for i = 1:n
-        typed_smoothers[i] = smoothers[i]
-    end
+    typed_smoothers = Tuple(smoothers)
     sizes = tuple(sizes...)
     return (n = sizes, smoothers = typed_smoothers)
 end
