@@ -20,7 +20,7 @@ function prepare_solve!(sys::MultiLinearizedSystem)
         b_buf, = sys.schur_buffer[2]
         # The following is the in-place version of a -= C*(E\b)
         n = length(E)
-        for i in 1:n
+        @batch for i in 1:n
             b_buf, = sys.schur_buffer[i+1]
             ldiv!(b_buf, E[i], b[i])
         end
@@ -115,7 +115,8 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buffers)
     # We want to do (in-place):
     # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
     offsets = cumsum(length(x) for x in b)
-    for i in eachindex(D)
+    n = length(D)
+    for i in 1:n
         if i == 1
             offset = 0
         else
@@ -140,7 +141,7 @@ end
         # res ← β*res + α*(B*x - C*(E\(D*x)))
         n = length(D)
         mul!(res_v, B, x_v, α, β)
-        for i = 1:n
+        @batch for i = 1:n
             b_buf_1, b_buf_2 = schur_buffers[i+1]
             mul!(b_buf_2, D[i], x)
             ldiv!(b_buf_1, E[i], b_buf_2)
