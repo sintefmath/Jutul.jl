@@ -6,6 +6,10 @@ end
 function partition(::LinearPartitioner, A, m)
     n, l = size(A)
     @assert n == l
+    return partition_linear(m, n)
+end
+
+function partition_linear(m, n)
     partition = zeros(Int64, n);
     for i in eachindex(partition)
         partition[i] = ceil(i / (n/m))
