@@ -27,19 +27,18 @@ end
 function vectorize_variable!(V, state, k, info, F; config = nothing)
     (; n, offset) = info
     state_val = state[k]
-    has_lumping = !isnothing(config) && !isnothing(config[:lumping])
-    if has_lumping
-        lumping = config[:lumping]
+    lumping = get_lumping(config)
+    if isnothing(lumping)
+        @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
+        for i in 1:n
+            V[offset+i] = F(state_val[i])
+        end
+    else
         @assert length(state_val) == length(lumping)
         for i in 1:maximum(lumping)
             # Take the first lumped value as they must be equal by assumption
             ix = findfirst(isequal(i), lumping)
             V[offset+i] = state_val[ix]
-        end
-    else
-        @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
-        for i in 1:n
-            V[offset+i] = F(state_val[i])
         end
     end
 end
@@ -61,18 +60,25 @@ end
 function devectorize_variable!(state, V, k, info, F_inv; config = c)
     (; n, offset) = info
     state_val = state[k]
-    has_lumping = !isnothing(config) && !isnothing(config[:lumping])
-    if has_lumping
-        lumping = config[:lumping]
-        for (i, lump) in enumerate(lumping)
-            state_val[i] = F_inv(V[offset+lump])
-        end
-    else
+    lumping = get_lumping(config)
+    if isnothing(lumping)
         @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
         for i in 1:n
             state_val[i] = F_inv(V[offset+i])
         end
+    else
+        for (i, lump) in enumerate(lumping)
+            state_val[i] = F_inv(V[offset+lump])
+        end
     end
+end
+
+function get_lumping(config::Nothing)
+    return nothing
+end
+
+function get_lumping(config::AbstractDict)
+    return config[:lumping]
 end
 
 get_mapper_internal(model, type_or_map::Symbol) = first(variable_mapper(model, type_or_map))
