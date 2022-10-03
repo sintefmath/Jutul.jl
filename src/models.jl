@@ -781,16 +781,23 @@ function update_before_step!(storage, model, dt, forces; kwarg...)
     update_before_step!(storage, model.formulation, model, dt, forces; kwarg...)
 end
 
-function update_before_step!(state, ::Any, model, dt, forces; time = NaN)
+function update_before_step!(storage, ::Any, model, dt, forces; time = NaN)
     # Do nothing
 end
 
-function update_after_step!(storage, model, dt, forces; time = NaN)
+function update_after_step!(storage, model, dt, forces; kwarg...)
     state = storage.state
     state0 = storage.state0
     for key in model.output_variables
         update_values!(state0[key], state[key])
     end
+    update_after_step!(storage, model.domain, model, dt, forces; kwarg...)
+    update_after_step!(storage, model.system, model, dt, forces; kwarg...)
+    update_after_step!(storage, model.formulation, model, dt, forces; kwarg...)
+end
+
+function update_after_step!(storage, ::Any, model, dt, forces; time = NaN)
+    # Do nothing
 end
 
 function get_output_state(storage, model)
