@@ -326,6 +326,20 @@ function optimization_limits!(lims, config, mapper, param, model)
             x_min[k] = F(x_min[k])
             x_max[k] = F(x_max[k])
         end
+        lumping = get_lumping(cfg)
+        if !isnothing(lumping)
+            for lno in 1:maximum(lumping)
+                pos = findfirst(isequal(lno), lumping)
+                ref_val = vals[pos + offset]
+                for (i, l) in enumerate(lumping)
+                    if l == lno
+                        if vals[i + offset] != ref_val
+                            error("Initial values for $param_k differed for lumping group $lno at position $i")
+                        end
+                    end
+                end
+            end
+        end
     end
     return lims
 end
