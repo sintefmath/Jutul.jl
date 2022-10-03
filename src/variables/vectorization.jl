@@ -14,35 +14,64 @@ function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary; co
     mapper = get_mapper_internal(model, type_or_map)
     for (k, v) in mapper
         F = opt_scaler_function(config, k, inv = false)
-        vectorize_variable!(V, state_or_prm, k, v, F)
+        if isnothing(config)
+            c = nothing
+        else
+            c = config[k]
+        end
+        vectorize_variable!(V, state_or_prm, k, v, F, config = c)
     end
     return V
 end
 
-function vectorize_variable!(V, state, k, info, F)
+function vectorize_variable!(V, state, k, info, F; config = nothing)
     (; n, offset) = info
     state_val = state[k]
-    @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
-    for i in 1:n
-        V[offset+i] = F(state_val[i])
+    has_lumping = !isnothing(config) && !isnothing(config[:lumping])
+    if has_lumping
+        lumping = config[:lumping]
+        @assert length(state_val) == length(lumping)
+        for i in 1:maximum(lumping)
+            # Take the first lumped value as they must be equal by assumption
+            ix = findfirst(isequal(i), lumping)
+            V[offset+i] = state_val[ix]
+        end
+    else
+        @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
+        for i in 1:n
+            V[offset+i] = F(state_val[i])
+        end
     end
 end
 
 function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary; config = nothing)
     mapper = get_mapper_internal(model, type_or_map)
     for (k, v) in mapper
+        if isnothing(config)
+            c = nothing
+        else
+            c = config[k]
+        end
         F = opt_scaler_function(config, k, inv = true)
-        devectorize_variable!(state_or_prm, V, k, v, F)
+        devectorize_variable!(state_or_prm, V, k, v, F, config = c)
     end
     return state_or_prm
 end
 
-function devectorize_variable!(state, V, k, info, F_inv)
+function devectorize_variable!(state, V, k, info, F_inv; config = c)
     (; n, offset) = info
     state_val = state[k]
-    @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
-    for i in 1:n
-        state_val[i] = F_inv(V[offset+i])
+    has_lumping = !isnothing(config) && !isnothing(config[:lumping])
+    if has_lumping
+        lumping = config[:lumping]
+        for (i, lump) in enumerate(lumping)
+            state_val[i] = F_inv(V[offset+lump])
+        end
+    else
+        @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
+        for i in 1:n
+            state_val[i] = F_inv(V[offset+i])
+        end
     end
 end
 

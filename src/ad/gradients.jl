@@ -55,7 +55,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
                                       n_objective = nothing,
                                       targets = parameter_targets(model),
                                       use_sparsity = true,
-                                      param_obj = false)
+                                      param_obj = false, kwarg...)
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
     forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
@@ -64,7 +64,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model, targets)
     # Note that primary is here because the target parameters are now the primaries for the parameter_model
-    parameter_map, = variable_mapper(parameter_model, :primary, targets = targets)
+    parameter_map, = variable_mapper(parameter_model, :primary, targets = targets; kwarg...)
     # Transfer over parameters and state0 variables since many parameters are now variables
     state0_p = swap_variables(state0, parameters, parameter_model, variables = true)
     parameters_p = swap_variables(state0, parameters, parameter_model, variables = false)
@@ -105,7 +105,9 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
             dparam = dobj_dparam,
             param_buf = param_buf,
             dx = dx,
-            rhs = rhs)
+            rhs = rhs,
+            n = number_of_degrees_of_freedom(parameter_model)
+            )
 end
 
 """
@@ -512,7 +514,7 @@ end
 gradient_vec_or_mat(n, ::Nothing) = zeros(n)
 gradient_vec_or_mat(n, m) = zeros(n, m)
 
-function variable_mapper(model::SimulationModel, type = :primary; targets = nothing, offset = 0)
+function variable_mapper(model::SimulationModel, type = :primary; targets = nothing, config = nothing, offset = 0)
     vars = get_variables_by_type(model, type)
     out = Dict{Symbol, Any}()
     for (t, var) in vars
@@ -521,6 +523,15 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
         end
         var = vars[t]
         n = number_of_values(model, var)
+        if !isnothing(config)
+            lumping = config[t][:lumping]
+            if !isnothing(lumping)
+                N = maximum(lumping)
+                @assert unique(lumping) == 1:N "Lumping for $t must include all values from 1 to $N"
+                @assert length(lumping) == n "Lumping for $t must have one entry for each value if present"
+                n = N
+            end
+        end
         out[t] = (n = n, offset = offset, scale = variable_scale(var))
         offset += n
     end

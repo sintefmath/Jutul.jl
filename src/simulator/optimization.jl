@@ -39,7 +39,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     else
         @assert grad_type == :adjoint
     end
-    mapper, = variable_mapper(model, :parameters, targets = targets)
+    mapper, = variable_mapper(model, :parameters, targets = targets, config = opt_cfg)
     lims = optimization_limits(opt_cfg, mapper, param, model)
     if print > 0
         print_parameter_optimization_config(targets, opt_cfg, model)
@@ -63,14 +63,19 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     data[:sim] = sim
     data[:sim_config] = config
 
-    grad_adj = similar(x0)
-    data[:grad_adj] = grad_adj
+    # grad_adj = similar(x0)
+    # error()
     if grad_type == :adjoint
-        data[:adjoint_storage] = setup_adjoint_storage(model, state0 = state0,
-                                                              parameters = param,
-                                                              targets = targets,
-                                                              param_obj = param_obj)
+        adj_storage = setup_adjoint_storage(model, state0 = state0,
+                                                   parameters = param,
+                                                   targets = targets,
+                                                   param_obj = param_obj)
+        data[:adjoint_storage] = adj_storage
+        grad_adj = zeros(adj_storage.n)
+    else
+        grad_adj = similar(x0)
     end
+    data[:grad_adj] = grad_adj
     data[:mapper] = mapper
     data[:dt] = dt
     data[:forces] = forces
@@ -190,6 +195,7 @@ function optimization_config(model, param, active = keys(model.parameters);
                             :rel_min => rel_min,
                             :rel_max => rel_max,
                             :base_scale => scale,
+                            :lumping => nothing,
                             :low => nothing,
                             :high => nothing
             )
