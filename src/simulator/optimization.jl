@@ -370,7 +370,7 @@ end
 function print_parameter_optimization_config(targets, config, model; title = :model)
     nt = length(targets)
     if nt > 0
-        data = Matrix{Any}(undef, nt, 7)
+        data = Matrix{Any}(undef, nt, 8)
         for (i, target) in enumerate(targets)
             prm = model.parameters[target]
             e = associated_entity(prm)
@@ -384,13 +384,26 @@ function print_parameter_optimization_config(targets, config, model; title = :mo
             else
                 s = "$n×$m=$(n*m)"
             end
+            lumping = get_lumping(v)
+            if isnothing(lumping)
+                lstr = "-"
+            else
+                n = length(unique(lumping))
+                if n == 1
+                    lstr = "1 group"
+                else
+                    lstr = "$n groups"
+                end
+            end
+            fmt_lim(l, u) = @sprintf "[%1.3g, %1.3g]" l u
             data[i, 3] = s
             data[i, 4] = v[:scaler]
-            data[i, 5] = (v[:abs_min], v[:abs_max])
-            data[i, 6] = (v[:rel_min], v[:rel_max])
-            data[i, 7] = (v[:low], v[:high])
+            data[i, 5] = fmt_lim(v[:abs_min], v[:abs_max])
+            data[i, 6] = fmt_lim(v[:rel_min], v[:rel_max])
+            data[i, 7] = fmt_lim(v[:low], v[:high])
+            data[i, 8] = lstr
         end
-        h = ["Name", "Entity", "N", "Scale", "Abs. limits", "Rel. limits", "Limits"]
+        h = ["Name", "Entity", "N", "Scale", "Abs. limits", "Rel. limits", "Limits", "Lumping"]
         pretty_table(data, header = h, title = "Parameters for $title")
     end
 end
