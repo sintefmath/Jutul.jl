@@ -122,6 +122,15 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = noth
                                                                    kwarg...)
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
+    else
+        # Reset recorder just in case since we are starting a new simulation
+        config[:ProgressRecorder] = ProgressRecorder()
+        for (k, v) in kwarg
+            if !haskey(config, k)
+                @warn "Keyword argument $k not found in initial config."
+            end
+            config[k] = v
+        end
     end
     states, reports, first_step, dt = initial_setup!(sim, config, timesteps, restart = restart, state0 = state0, parameters = parameters)
     # Time-step info to keep around
