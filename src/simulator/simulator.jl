@@ -324,7 +324,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
         failure = non_finite || too_large
         if failure
             if too_large
-                reason = "Simulator produced very large residuals: $e larger than :max_residual $(cfg[:max_residual])."
+                reason = "Simulator produced very large residuals: $e larger than :max_residual=$(cfg[:max_residual])."
             else
                 reason = "Simulator produced non-finite residuals: $e."
             end
