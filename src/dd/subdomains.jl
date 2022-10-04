@@ -3,17 +3,18 @@ export SimplePartition, SimpleMultiModelPartition, number_of_subdomains, entity_
 
 abstract type AbstractDomainPartition end
 
-struct SimplePartition <: AbstractDomainPartition
-    partition
-    entity
-    function SimplePartition(p; entity = Cells())
+struct SimplePartition{E, P} <: AbstractDomainPartition
+    partition::P
+    entity::E
+    function SimplePartition(p::T; entity = Cells()) where T
         for i in 1:maximum(p)
             @assert any(x -> x == i, p)
         end
         @assert minimum(p) == 1
-        new(p, entity)
+        new{typeof(entity), T}(p, entity)
     end
 end
+
 number_of_subdomains(sp::SimplePartition) = maximum(sp.partition)
 entity_subset(sp, index, entity = Cells()) = entity_subset(sp, index, entity)
 entity_subset(sp::SimplePartition, index, e::Cells) = findall(sp.partition .== index)
@@ -49,6 +50,9 @@ interior_cell(c, ::TrivialGlobalMap) = c
 "Inner cell to local cell (full set)"
 full_cell(c, ::TrivialGlobalMap) = c
 full_cell(c, m::FiniteVolumeGlobalMap) = m.inner_to_full_cells[c]
+
+entity_partition(m::FiniteVolumeGlobalMap, ::Cells) = m.cells
+entity_partition(m::FiniteVolumeGlobalMap, ::Faces) = m.faces
 
 global_cell_inside_domain(c, m) = true
 global_cell_inside_domain(c, m::FiniteVolumeGlobalMap) = any(isequal(c), m.cells)
@@ -152,6 +156,8 @@ active_view(x, map; kwarg...) = x
 count_active_entities(d, m, e; kwarg...) = length(active_entities(d, m, e; kwarg...))
 
 subdiscretization(disc, ::TrivialGlobalMap) = disc
+
+entity_partition(m::TrivialGlobalMap, e) = Colon()
 
 function subgrid
 
@@ -277,18 +283,18 @@ end
 subforce(::Nothing, model) = nothing
 subforce(t, model) = copy(t) # A bit dangerous.
 
-export subparameters
-subparameters(model, param) = deepcopy(param)
+# export subparameters
+# subparameters(model, param) = deepcopy(param)
 
-function subparameters(model::MultiModel, param)
-    D = typeof(param)()
-    for (k, v) in param
-        if haskey(model.models, k)
-            D[k] = deepcopy(v)
-        end
-    end
-    return D
-end
+# function subparameters(model::MultiModel, param)
+#     D = typeof(param)()
+#     for (k, v) in param
+#         if haskey(model.models, k)
+#             D[k] = deepcopy(v)
+#         end
+#     end
+#     return D
+# end
 
 function coarse_neighborhood(p, submodel)
     M = global_map(submodel.domain)

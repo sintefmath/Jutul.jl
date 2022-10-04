@@ -16,12 +16,16 @@ function submodel(model::SimulationModel, p_i::AbstractVector; context = model.c
     new_model = SimulationModel(d_l, sys, context = context, formulation = f)
     M = global_map(new_model.domain)
     function transfer_vars!(new, old)
+        for k in keys(new)
+            delete!(new, k)
+        end
         for k in keys(old)
             new[k] = subvariable(old[k], M)
         end
     end
     transfer_vars!(new_model.primary_variables, model.primary_variables)
     transfer_vars!(new_model.secondary_variables, model.secondary_variables)
+    transfer_vars!(new_model.parameters, model.parameters)
     return new_model
 end
 
@@ -86,4 +90,13 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     return MultiModel(sm, groups = groups, reduction = reduction, context = ctx)
 end
 
+"""
+    subvariable(var, map)
+
+Get subvariable of Jutul variable
+"""
 subvariable(var, map) = var
+
+partition_variable_slice(v::AbstractVector, partition) = v[partition]
+partition_variable_slice(v::AbstractMatrix, partition) = v[:, partition]
+partition_variable_slice(v, partition) = v
