@@ -14,12 +14,14 @@ function substate(state0_global, m::SimulationModel, submod::SimulationModel, ty
         out = deepcopy(state0_global)
     else
         if type == :primary
-            vars = m.primary_variables
+            vars = get_primary_variables(m)
         elseif type == :secondary
-            vars = m.secondary_variables
+            vars = get_secondary_variables(m)
+        elseif type == :variables
+            vars = get_variables(m)
         else
             @assert type == :parameters
-            vars = m.parameters
+            vars = get_parameters(m)
         end
         out = Dict{Symbol, Any}()
         for k in keys(state0_global)
