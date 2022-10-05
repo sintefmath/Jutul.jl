@@ -230,7 +230,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
     end
 end
 
-function report_stats(reports)
+function initialize_report_stats(reports)
     stats = Dict{Symbol, Union{Int64, Float64}}(:wasted_iterations => 0,
                                                  :iterations => 0,
                                                  :steps => length(reports),
@@ -248,36 +248,49 @@ function report_stats(reports)
                                                  :io => 0.0,
                                                  :time => 0.0,
                                                  )
+    return stats
+end
+
+function outer_step_report_stats!(stats, outer_rep)
+    stats[:time] += outer_rep[:total_time]
+    if haskey(outer_rep, :output_time)
+        t_io = outer_rep[:output_time]
+        stats[:io] += t_io
+        stats[:time] += t_io
+    end
+    for mini_rep in outer_rep[:ministeps]
+        ministep_report_stats!(stats, mini_rep)
+    end
+end
+
+function ministep_report_stats!(stats, mini_rep)
+    stats[:ministeps] += 1
+    if haskey(mini_rep, :finalize_time)
+        stats[:finalize] += mini_rep[:finalize_time]
+    end
+
+    s = stats_ministep(mini_rep[:steps])
+    stats[:linearizations] += s.linearizations
+    stats[:iterations] += s.newtons
+    stats[:linear_update] += s.linear_system
+    stats[:linear_solve] += s.linear_solve
+    stats[:linear_iterations] += s.linear_iterations
+    stats[:update] += s.update_time
+    stats[:assembly] += s.assembly
+    stats[:convergence] += s.convergence
+
+    if !mini_rep[:success]
+        stats[:wasted_iterations] += s.newtons
+        stats[:wasted_linearizations] += s.linearizations
+        stats[:wasted_linear_iterations] += s.linear_iterations
+    end
+end
+
+function report_stats(reports)
+    stats = initialize_report_stats(reports)
 
     for outer_rep in reports
-        stats[:time] += outer_rep[:total_time]
-        if haskey(outer_rep, :output_time)
-            t_io = outer_rep[:output_time]
-            stats[:io] += t_io
-            stats[:time] += t_io
-        end
-        for mini_rep in outer_rep[:ministeps]
-            stats[:ministeps] += 1
-            if haskey(mini_rep, :finalize_time)
-                stats[:finalize] += mini_rep[:finalize_time]
-            end
-
-            s = stats_ministep(mini_rep[:steps])
-            stats[:linearizations] += s.linearizations
-            stats[:iterations] += s.newtons
-            stats[:linear_update] += s.linear_system
-            stats[:linear_solve] += s.linear_solve
-            stats[:linear_iterations] += s.linear_iterations
-            stats[:update] += s.update_time
-            stats[:assembly] += s.assembly
-            stats[:convergence] += s.convergence
-
-            if !mini_rep[:success]
-                stats[:wasted_iterations] += s.newtons
-                stats[:wasted_linearizations] += s.linearizations
-                stats[:wasted_linear_iterations] += s.linear_iterations
-            end
-        end
+        outer_step_report_stats!(stats, outer_rep)
     end
     sum_measured = 0.0
     for k in [:assembly, :linear_update, :linear_solve, :update, :convergence, :io]
