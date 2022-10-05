@@ -41,7 +41,6 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     is_symm = has_symmetry(ct)
     # Find all entities x
     active = cross_term_entities(ct, eq_t, model_t)
-
     N = length(active)
 
     state_t = convert_to_immutable_storage(storage_t[:state])
@@ -57,18 +56,18 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     e_t = associated_entity(eq_t)
     ne_t = count_active_entities(model_t.domain, e_t)
 
-    if !isnothing(eq_s)
+    if isnothing(eq_s)
+        ne_s = ne_t
+        e_s = e_t
+    else
         @assert number_of_equations_per_entity(model_s, eq_s) == n
         e_s = associated_entity(eq_s)
         ne_s = count_active_entities(model_s.domain, e_s)
-    else
-        ne_s = ne_t
-        e_s = e_t
     end
     for i in 1:N
         prepare_cross_term_in_entity!(i, state_t, state_t0,state_s, state_s0,model_t, model_s, ct, eq_t, 1.0)
     end
-
+    @info "Sending in" ne_t ne_s
     caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t, self_entity = e_t)
     caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s, self_entity = e_s)
     # Extra alignment - for off diagonal blocks
@@ -82,10 +81,19 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     else
         offdiagonal_alignment = (from_source = other_align_t, )
     end
+    gmap = global_map(model_t.domain)
+    if gmap isa TrivialGlobalMap
+        active_mapped = active
+    else
+        active_mapped = similar(active)
+        for (i, v) in enumerate(active)
+            active_mapped[i] = index_map(v, gmap, VariableSet(), EquationSet(), e_t)
+        end
+    end
     out[:N] = N
     out[:target] = caches_t
     out[:source] = caches_s
-    out[:target_entities] = active
+    out[:target_entities] = active_mapped
     out[:offdiagonal_alignment] = offdiagonal_alignment
     return out
 end
