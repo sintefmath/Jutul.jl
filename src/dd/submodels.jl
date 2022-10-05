@@ -86,8 +86,19 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
         ctx = model.context
     end
     # TODO: Renumber groups in case only one group persists.
+    # Cross terms...
+    mk = keys(new_submodels)
     sm = convert_to_immutable_storage(new_submodels)
-    return MultiModel(sm, groups = groups, reduction = reduction, context = ctx)
+    new_model = MultiModel(sm, groups = groups, reduction = reduction, context = ctx)
+
+    cross_terms = new_model.cross_terms
+    for ctp in model.cross_terms
+        (; target, source) = ctp
+        if target in mk && source in mk
+            push!(cross_terms, subcrossterm_pair(ctp, new_model, mp))
+        end
+    end
+    return new_model
 end
 
 """

@@ -518,3 +518,12 @@ function apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, s
 end
 
 apply_force_to_cross_term!(ct_s, cross_term, target, source, model, storage, dt, force; time = time) = nothing
+
+export subcrossterm_pair
+function subcrossterm_pair(ctp::CrossTermPair, new_model::MultiModel, partition)
+    (; target, source, equation, cross_term) = ctp
+    m_t = new_model[target]
+    m_s = new_model[source]
+    new_cross_term = subcrossterm(cross_term, ctp, m_t, m_s, global_map(m_t.domain), global_map(m_s.domain), partition)
+    return CrossTermPair(target, source, equation, new_cross_term)
+end

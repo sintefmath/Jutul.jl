@@ -22,3 +22,10 @@ function prepare_cross_term_in_entity!(i,
     ct::CrossTerm, eq, dt, ldisc = local_discretization(ct, i))
     nothing
 end
+
+export subcrossterm
+
+function subcrossterm(ct, ctp, m_t, m_s, ::TrivialGlobalMap, ::TrivialGlobalMap, partition)
+    # All maps are trivial, reuse cross term directly
+    return ct
+end
