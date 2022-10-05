@@ -29,7 +29,7 @@ cell_is_boundary(c, map) = is_local_boundary(c, map, Cells())
 "Global face -> local face (full set)"
 local_face(f, m) = index_map(f, m, GlobalSet(), VariableSet(), Faces())
 "Local cell in full set -> inner cell (or zero)"
-interior_cell(c, m) = index_map(c, m, GlobalSet(), EquationSet(), Cells())
+interior_cell(c, m) = index_map(c, m, VariableSet(), EquationSet(), Cells())
 
 "Inner cell to local cell (full set)"
 @inline full_cell(c, m) = index_map(c, m, EquationSet(), VariableSet(), Cells())

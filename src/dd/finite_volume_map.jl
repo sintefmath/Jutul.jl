@@ -19,6 +19,12 @@ function index_map(c_global, m::FiniteVolumeGlobalMap{R}, from_set::GlobalSet, t
     return only(findfirst(isequal(c_global), m.cells))::R
 end
 
+function index_map(c, m::FiniteVolumeGlobalMap{R}, from_set::VariableSet, to_set::EquationSet, ce::Cells) where R
+    # Previously interior_cell
+    c_i = m.full_to_inner_cells[c]
+    return c_i == 0 ? nothing : c_i
+end
+
 # Specialization for Faces()
 
 function index_map(f_global, m::FiniteVolumeGlobalMap, from_set::GlobalSet, to_set::VariableSet, ce::Faces)
@@ -35,11 +41,6 @@ end
 
 global_cell_inside_domain(c, m::FiniteVolumeGlobalMap) = any(isequal(c), m.cells)
 Base.@propagate_inbounds cell_is_boundary(c, m::FiniteVolumeGlobalMap) = m.cell_is_boundary[c]::Bool
-
-function interior_cell(c, m::FiniteVolumeGlobalMap)
-    c_i = m.full_to_inner_cells[c]
-    return c_i == 0 ? nothing : c_i
-end
 
 active_entities(d, m::FiniteVolumeGlobalMap, f::Faces; for_variables = true) = 1:count_entities(d, f)
 

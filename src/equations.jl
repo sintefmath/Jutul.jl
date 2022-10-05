@@ -153,6 +153,7 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
                 unique!(S[i])
             end
         end
+        S = remap_sparsity!(S, self_entity, e, model)
         number_of_entities_source, T = epack
         has_diagonal = number_of_entities == number_of_entities_total && is_self
         @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source for $T"
@@ -162,6 +163,32 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
         caches[:numeric] = zeros(equations_per_entity, number_of_entities)
     end
     return convert_to_immutable_storage(caches)
+end
+
+function remap_sparsity!(S, eq_entity, var_entity, eq_model)
+    # Filter away inactive entities in sparsity
+    d_e = eq_model.domain
+    map_e = global_map(d_e)
+    if map_e isa TrivialGlobalMap
+        S_filtered = S
+    else
+        map_e = global_map(d_e)
+        active_eqs = active_entities(d_e, map_e, eq_entity, for_variables = false)
+        n = length(S)
+        keep = BitVector(undef, n)
+        for i in 1:n
+            in_set = i in active_eqs
+            keep[i] = in_set
+            s = S[i]
+            if in_set
+                for j in eachindex(s)
+                    s[j] = index_map(s[j], map_e, VariableSet(), EquationSet(), var_entity)
+                end
+            end
+        end
+        S_filtered = S[keep]
+    end
+    return S_filtered
 end
 
 """

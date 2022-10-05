@@ -54,20 +54,23 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     F_s!(out, state, state0, i) = update_cross_term_in_entity!(out, i, as_value(state_t), as_value(state_t0), state, state0, model_t, model_s, ct, eq_t, 1.0)
 
     n = number_of_equations_per_entity(model_t, eq_t)
-    ne_t = count_active_entities(model_t.domain, associated_entity(eq_t))
+    e_t = associated_entity(eq_t)
+    ne_t = count_active_entities(model_t.domain, e_t)
 
     if !isnothing(eq_s)
         @assert number_of_equations_per_entity(model_s, eq_s) == n
-        ne_s = count_active_entities(model_s.domain, associated_entity(eq_s))
+        e_s = associated_entity(eq_s)
+        ne_s = count_active_entities(model_s.domain, e_s)
     else
         ne_s = ne_t
+        e_s = e_t
     end
     for i in 1:N
         prepare_cross_term_in_entity!(i, state_t, state_t0,state_s, state_s0,model_t, model_s, ct, eq_t, 1.0)
     end
 
-    caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t)
-    caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s)
+    caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t, self_entity = e_t)
+    caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s, self_entity = e_s)
     # Extra alignment - for off diagonal blocks
     other_align_t = create_extra_alignment(caches_s, allocate = is_symm)
     out = JutulStorage()
@@ -437,11 +440,11 @@ end
 
 function extra_cross_term_sparsity(model, storage, target, include_symmetry = true)
     # Get sparsity of cross terms so that they can be included in any generic equations
-    function collect_indices(c::GenericAutoDiffCache, impact, N)
+    function collect_indices(c::GenericAutoDiffCache, impact, N, M, e)
         entities = [Vector{Int64}() for i in 1:N]
         n = length(c.vpos)-1
         for i = 1:n
-            I = impact[i]
+            I = index_map(impact[i], M, VariableSet(), EquationSet(), e)
             entities[I] = c.variables[vrange(c, i)]
         end
         return entities
@@ -466,13 +469,15 @@ function extra_cross_term_sparsity(model, storage, target, include_symmetry = tr
         end
         eq_d = sparsity[eq]
         model_t = model[target]
+        gmap = global_map(model_t.domain)
         equation_t = model_t.equations[eq]
+        e = associated_entity(equation_t)
         N = number_of_entities(model_t, equation_t)
         for (k, v) in pairs(caches)
             if k == :numeric
                 continue
             end
-            ind_for_k = collect_indices(v, impact, N)
+            ind_for_k = collect_indices(v, impact, N, gmap, e)
             # Merge with existing if found, otherwise just set it
             if haskey(eq_d, k)
                 old = eq_d[k]
