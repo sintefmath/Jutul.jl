@@ -448,15 +448,6 @@ end
 
 function extra_cross_term_sparsity(model, storage, target, include_symmetry = true)
     # Get sparsity of cross terms so that they can be included in any generic equations
-    function collect_indices(c::GenericAutoDiffCache, impact, N, M, e)
-        entities = [Vector{Int64}() for i in 1:N]
-        n = length(c.vpos)-1
-        for i = 1:n
-            I = index_map(impact[i], M, VariableSet(), EquationSet(), e)
-            entities[I] = c.variables[vrange(c, i)]
-        end
-        return entities
-    end
     ct_pairs, ct_storage = cross_term_target(model, storage, target, include_symmetry)
     sparsity = Dict{Symbol, Any}()
     for (ct_p, ct_s) in zip(ct_pairs, ct_storage)
@@ -501,6 +492,17 @@ function extra_cross_term_sparsity(model, storage, target, include_symmetry = tr
         end
     end
     return sparsity
+end
+
+function collect_indices(c::GenericAutoDiffCache, impact, N, M, e)
+    entities = [Vector{Int64}() for i in 1:N]
+    n = length(c.vpos)-1
+    for i = 1:n
+        # I = index_map(impact[i], M, VariableSet(), EquationSet(), e)
+        I = impact[i]
+        entities[I] = c.variables[vrange(c, i)]
+    end
+    return entities
 end
 
 can_impact_cross_term(force_t, cross_term) = false
