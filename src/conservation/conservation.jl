@@ -449,18 +449,20 @@ end
 function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}}, AbstractVector{T}}, eq, state::S, model, dt, flow_disc, ::Cells) where {T, N, S<:LocalStateAD}
     conn_data = flow_disc.conn_data
     conn_pos = flow_disc.conn_pos
+    M = global_map(model.domain)
     nc = length(conn_pos)-1
     tb = minbatch(model.context, nc)
     @timeit "flux (cells)" @batch minbatch=tb for c in 1:nc
-        state_c = new_entity_index(state, c)
+        self = full_cell(c, M)
+        state_c = new_entity_index(state, self)
         update_half_face_flux_tpfa_internal!(hf_cells, eq, state_c, model, dt, flow_disc, conn_pos, conn_data, c)
     end
 end
 
 function update_half_face_flux_tpfa_internal!(hf_cells::AbstractArray{T}, eq, state, model, dt, flow_disc, conn_pos, conn_data, c) where T
     @inbounds for i in conn_pos[c]:(conn_pos[c+1]-1)
-        (; other, face, face_sign) = @inbounds conn_data[i]
-        @inbounds hf_cells[i] = compute_tpfa_flux!(zero(T), c, other, face, face_sign, eq, state, model, dt, flow_disc)
+        (; self, other, face, face_sign) = @inbounds conn_data[i]
+        @inbounds hf_cells[i] = compute_tpfa_flux!(zero(T), self, other, face, face_sign, eq, state, model, dt, flow_disc)
     end
 end
 

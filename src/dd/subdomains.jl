@@ -48,8 +48,8 @@ local_face(f, ::TrivialGlobalMap) = f
 interior_cell(c, ::TrivialGlobalMap) = c
 
 "Inner cell to local cell (full set)"
-full_cell(c, ::TrivialGlobalMap) = c
-full_cell(c, m::FiniteVolumeGlobalMap) = m.inner_to_full_cells[c]
+@inline full_cell(c, ::TrivialGlobalMap) = c
+@inline full_cell(c, m::FiniteVolumeGlobalMap) = m.inner_to_full_cells[c]
 
 entity_partition(m::FiniteVolumeGlobalMap, ::Cells) = m.cells
 entity_partition(m::FiniteVolumeGlobalMap, ::Faces) = m.faces
