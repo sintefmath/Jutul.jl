@@ -397,7 +397,7 @@ function print_stats(stats; kwarg...)
     print_timing(stats; kwarg...)
 end
 
-function print_iterations(stats; title = "Number of iterations", table_formatter = :tf_unicode)
+function print_iterations(stats; title = "Number of iterations", table_formatter = tf_unicode_rounded)
     flds = [:newtons, :linearizations, :linear_iterations]
     names = [:Newtons, :Linearizations, Symbol("Linear solver its.")]
     data = Array{Any}(undef, length(flds), 5)
@@ -417,7 +417,6 @@ function print_iterations(stats; title = "Number of iterations", table_formatter
         data[i, 5] = raw               # Total
     end
 
-    
     pretty_table(data; header = (["Avg/step", "Avg/ministep", "Time per", "Wasted", "Total"], ["$nstep steps", "$nmini ministeps", s, "", ""]), 
                       row_names = names,
                       title = title,
@@ -428,7 +427,7 @@ function print_iterations(stats; title = "Number of iterations", table_formatter
                       row_name_column_title = "Type")
 end
 
-function print_timing(stats; title = "Simulator timing", table_formatter = :tf_unicode)
+function print_timing(stats; title = "Simulator timing", table_formatter = tf_unicode_rounded)
     flds = collect(keys(stats.time_each))
     
     n = length(flds)
