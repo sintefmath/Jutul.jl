@@ -1,3 +1,5 @@
 include("subdomains.jl")
 include("submodels.jl")
 include("substate.jl")
+include("trivial_map.jl")
+include("finite_volume_map.jl")

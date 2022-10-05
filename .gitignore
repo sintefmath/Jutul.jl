@@ -35,3 +35,4 @@ data/
 *.so
 
 Tests/
+*.dat
