@@ -5,13 +5,13 @@ function index_map(index, ::TrivialGlobalMap, from_set::AbstractVariableSet, to_
     return index
 end
 
-function entity_status(index, ::TrivialGlobalMap, ::JutulEntity)
+function entity_status(index, ::TrivialGlobalMap, var_type::AbstractVariableSet, ::JutulEntity)
     # Trivial map means nothing is on the boundary or missing
     return Inner
 end
 
-function is_local_boundary(index, m, e::JutulEntity)
-    return entity_status(index, m, e) == Boundary
+function is_local_boundary(index, m, var_type, e::JutulEntity)
+    return entity_status(index, m, var_type, e) == Boundary
 end
 
 global_map(domain::DiscretizedDomain) = domain.global_map

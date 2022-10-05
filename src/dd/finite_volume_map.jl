@@ -1,17 +1,39 @@
-function index_map(index, m::FiniteVolumeGlobalMap, from_set::EquationSet, to_set::GlobalSet, ce::Cells)
+
+# Specialization for Cells()
+
+function index_map(index, m::FiniteVolumeGlobalMap, from_set::EquationSet, to_set::VariableSet, ce::Cells)
     # Previously full_cell
+    # @inline full_cell(c, m::FiniteVolumeGlobalMap) = m.inner_to_full_cells[c]
     return m.inner_to_full_cells[index]
 end
 
-@inline full_cell(c, m::FiniteVolumeGlobalMap) = m.inner_to_full_cells[c]
+Base.@propagate_inbounds function index_map(c, m::FiniteVolumeGlobalMap{R}, from_set::VariableSet, to_set::GlobalSet, ce::Cells) where R
+    # Previously global_cell
+    # Base.@propagate_inbounds global_cell(c, m::FiniteVolumeGlobalMap{R}) where R = m.cells[c]::R
+    return m.cells[c]::R
+end
+
+function index_map(c_global, m::FiniteVolumeGlobalMap{R}, from_set::GlobalSet, to_set::VariableSet, ce::Cells) where R
+    # Previously local_cell
+    # local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(findfirst(isequal(c_global), m.cells))::R
+    return only(findfirst(isequal(c_global), m.cells))::R
+end
+
+# Specialization for Faces()
+
+function index_map(f_global, m::FiniteVolumeGlobalMap, from_set::GlobalSet, to_set::VariableSet, ce::Faces)
+    # Previously local_face
+    # local_face(f_global, m::FiniteVolumeGlobalMap) = only(indexin(f_global, m.faces))
+    return only(indexin(f_global, m.faces))
+end
+
+function index_map(f, m::FiniteVolumeGlobalMap, from_set::VariableSet, to_set::GlobalSet, ce::Faces)
+    # Previously global_face
+    # global_face(f, m::FiniteVolumeGlobalMap) = m.faces[f]
+    return m.faces[f]
+end
+
 global_cell_inside_domain(c, m::FiniteVolumeGlobalMap) = any(isequal(c), m.cells)
-
-global_face(f, m::FiniteVolumeGlobalMap) = m.faces[f]
-Base.@propagate_inbounds global_cell(c, m::FiniteVolumeGlobalMap{R}) where R = m.cells[c]::R
-# local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(indexin(c_global, m.cells))::R
-local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(findfirst(isequal(c_global), m.cells))::R
-local_face(f_global, m::FiniteVolumeGlobalMap) = only(indexin(f_global, m.faces))
-
 Base.@propagate_inbounds cell_is_boundary(c, m::FiniteVolumeGlobalMap) = m.cell_is_boundary[c]::Bool
 
 function interior_cell(c, m::FiniteVolumeGlobalMap)
