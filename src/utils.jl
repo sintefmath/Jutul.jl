@@ -286,54 +286,62 @@ function ministep_report_stats!(stats, mini_rep)
     end
 end
 
-function report_stats(reports)
-    stats = initialize_report_stats(reports)
-
-    for outer_rep in reports
-        outer_step_report_stats!(stats, outer_rep)
+function summarize_report_stats(stats, per = false)
+    if per
+        linscale = v -> v / max(stats[:linearizations], 1)
+        itscale = v -> v / max(stats[:iterations], 1)
+        miniscale = v -> v / max(stats[:ministeps], 1)
+    else
+        linscale = itscale = miniscale = identity
     end
+    summary = (
+                assembly = linscale(stats[:assembly]),
+                linear_system = linscale(stats[:linear_update]),
+                linear_solve = itscale(stats[:linear_solve]),
+                update_time = itscale(stats[:update]),
+                convergence = linscale(stats[:convergence]),
+                io = miniscale(stats[:io]),
+                other = itscale(stats[:other_time]),
+                total = itscale(stats[:time])
+            )
+    return summary
+end
+
+function update_other_time_report_stats!(stats)
     sum_measured = 0.0
     for k in [:assembly, :linear_update, :linear_solve, :update, :convergence, :io]
         sum_measured += stats[k]
     end
     stats[:other_time] = stats[:time] - sum_measured
-    totals = (
-                assembly = stats[:assembly],
-                linear_system = stats[:linear_update],
-                linear_solve = stats[:linear_solve],
-                update_time = stats[:update],
-                convergence = stats[:convergence],
-                io = stats[:io],
-                other = stats[:other_time],
-                total = stats[:time]
-            )
-    
-    n = stats[:iterations]
-    m = stats[:linearizations]
-    linscale = v -> v / max(m, 1)
-    itscale = v -> v / max(n, 1)
-    each = (
-                assembly = linscale(totals.assembly),
-                linear_system = linscale(totals.linear_system),
-                linear_solve = itscale(totals.linear_solve),
-                update_time = itscale(totals.update_time),
-                convergence = linscale(totals.convergence),
-                io = totals.io/stats[:ministeps],
-                other = itscale(totals.other),
-                total = itscale(totals.total)
-            )
-    return (
-            newtons = stats[:iterations],
-            linearizations = stats[:linearizations],
-            linear_iterations = stats[:linear_iterations],
-            wasted = (newtons = stats[:wasted_iterations],
-                      linearizations = stats[:wasted_linearizations],
-                      linear_iterations = stats[:wasted_linear_iterations]),
-            steps = stats[:steps],
-            ministeps = stats[:ministeps],
-            time_sum = totals,
-            time_each = each
-           )
+    return stats
+end
+
+function output_report_stats(stats)
+    totals = summarize_report_stats(stats, false)
+    each = summarize_report_stats(stats, true)
+
+    out = (
+        newtons = stats[:iterations],
+        linearizations = stats[:linearizations],
+        linear_iterations = stats[:linear_iterations],
+        wasted = (newtons = stats[:wasted_iterations],
+                  linearizations = stats[:wasted_linearizations],
+                  linear_iterations = stats[:wasted_linear_iterations]),
+        steps = stats[:steps],
+        ministeps = stats[:ministeps],
+        time_sum = totals,
+        time_each = each
+       )
+    return out
+end
+
+function report_stats(reports)
+    stats = initialize_report_stats(reports)
+    for outer_rep in reports
+        outer_step_report_stats!(stats, outer_rep)
+    end
+    update_other_time_report_stats!(stats)
+    return output_report_stats(stats)
 end
 
 function stats_ministep(reports)
