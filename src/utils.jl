@@ -231,48 +231,48 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
 end
 
 function report_stats(reports)
-    total_time = 0
+    time = 0
     # Counts
-    total_its = 0
-    total_linearizations = 0
+    its = 0
+    linearizations = 0
     # Same, but for wasted (iterations that were part of a cut time-step)
     wasted_its = 0
     wasted_linearizations = 0
     wasted_linear_iterations = 0
     # Various timings
-    total_finalize = 0
-    total_assembly = 0
-    total_linear_update = 0
-    total_linear_solve = 0
-    total_linear_iterations = 0
-    total_update = 0
-    total_convergence = 0
-    total_io = 0
+    finalize = 0
+    assembly = 0
+    linear_update = 0
+    linear_solve = 0
+    linear_iterations = 0
+    update = 0
+    convergence = 0
+    io = 0
 
-    total_steps = length(reports)
-    total_ministeps = 0
+    steps = length(reports)
+    ministeps = 0
     for outer_rep in reports
-        total_time += outer_rep[:total_time]
+        time += outer_rep[:total_time]
         if haskey(outer_rep, :output_time)
             t_io = outer_rep[:output_time]
-            total_io += t_io
-            total_time += t_io
+            io += t_io
+            time += t_io
         end
         for mini_rep in outer_rep[:ministeps]
-            total_ministeps += 1
+            ministeps += 1
             if haskey(mini_rep, :finalize_time)
-                total_finalize += mini_rep[:finalize_time]
+                finalize += mini_rep[:finalize_time]
             end
 
             s = stats_ministep(mini_rep[:steps])
-            total_linearizations += s.linearizations
-            total_its += s.newtons
-            total_linear_update += s.linear_system
-            total_linear_solve += s.linear_solve
-            total_linear_iterations += s.linear_iterations
-            total_update += s.update_time
-            total_assembly += s.assembly
-            total_convergence += s.convergence
+            linearizations += s.linearizations
+            its += s.newtons
+            linear_update += s.linear_system
+            linear_solve += s.linear_solve
+            linear_iterations += s.linear_iterations
+            update += s.update_time
+            assembly += s.assembly
+            convergence += s.convergence
 
             if !mini_rep[:success]
                 wasted_its += s.newtons
@@ -281,43 +281,42 @@ function report_stats(reports)
             end
         end
     end
-    sum_measured = total_assembly + total_linear_update + total_linear_solve + total_update + total_convergence + total_io
-    other_time = total_time - sum_measured
+    sum_measured = assembly + linear_update + linear_solve + update + convergence + io
+    other_time = time - sum_measured
     totals = (
-                assembly = total_assembly,
-                linear_system = total_linear_update,
-                linear_solve = total_linear_solve,
-                update_time = total_update,
-                convergence = total_convergence,
-                io = total_io,
+                assembly = assembly,
+                linear_system = linear_update,
+                linear_solve = linear_solve,
+                update_time = update,
+                convergence = convergence,
+                io = io,
                 other = other_time,
-                total = total_time
+                total = time
             )
     
-    n = total_its
-    m = total_linearizations
-    l = total_linear_iterations
+    n = its
+    m = linearizations
     linscale = v -> v / max(m, 1)
     itscale = v -> v / max(n, 1)
     each = (
-                assembly = linscale(total_assembly),
-                linear_system = linscale(total_linear_update),
-                linear_solve = itscale(total_linear_solve),
-                update_time = itscale(total_update),
-                convergence = linscale(total_convergence),
-                io = total_io/total_ministeps,
+                assembly = linscale(assembly),
+                linear_system = linscale(linear_update),
+                linear_solve = itscale(linear_solve),
+                update_time = itscale(update),
+                convergence = linscale(convergence),
+                io = io/ministeps,
                 other = itscale(other_time),
-                total = itscale(total_time)
+                total = itscale(time)
             )
     return (
-            newtons = total_its,
-            linearizations = total_linearizations,
-            linear_iterations = total_linear_iterations,
+            newtons = its,
+            linearizations = linearizations,
+            linear_iterations = linear_iterations,
             wasted = (newtons = wasted_its,
                       linearizations = wasted_linearizations,
                       linear_iterations = wasted_linear_iterations),
-            steps = total_steps,
-            ministeps = total_ministeps,
+            steps = steps,
+            ministeps = ministeps,
             time_sum = totals,
             time_each = each
            )
