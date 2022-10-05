@@ -447,9 +447,9 @@ function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::Conservat
 end
 
 function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}}, AbstractVector{T}}, eq, state::S, model, dt, flow_disc, ::Cells) where {T, N, S<:LocalStateAD}
-    nc = number_of_cells(model.domain)
     conn_data = flow_disc.conn_data
     conn_pos = flow_disc.conn_pos
+    nc = length(conn_pos)-1
     tb = minbatch(model.context, nc)
     @timeit "flux (cells)" @batch minbatch=tb for c in 1:nc
         state_c = new_entity_index(state, c)
