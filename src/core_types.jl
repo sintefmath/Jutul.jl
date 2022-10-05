@@ -323,7 +323,11 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
         elseif f == :equations
             ctr = 1
             for (key, eq) in p
-                println(io, "   $ctr) $key")#implemented as $(eq[2]) × $(eq[1])")
+
+                n = number_of_equations_per_entity(model, eq)
+                m = number_of_entities(model, eq)
+                e = associated_entity(eq)
+                println(io, "   $ctr) $key ∈ $m $(typeof(e)): $n values each\n      -> $(typeof(eq))")
                 ctr += 1
             end
             print(io, "\n")
