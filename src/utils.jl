@@ -231,92 +231,93 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
 end
 
 function report_stats(reports)
-    time = 0
-    # Counts
-    its = 0
-    linearizations = 0
-    # Same, but for wasted (iterations that were part of a cut time-step)
-    wasted_its = 0
-    wasted_linearizations = 0
-    wasted_linear_iterations = 0
-    # Various timings
-    finalize = 0
-    assembly = 0
-    linear_update = 0
-    linear_solve = 0
-    linear_iterations = 0
-    update = 0
-    convergence = 0
-    io = 0
+    stats = Dict{Symbol, Union{Int64, Float64}}(:wasted_iterations => 0,
+                                                 :iterations => 0,
+                                                 :steps => length(reports),
+                                                 :ministeps => 0,
+                                                 :wasted_linearizations => 0,
+                                                 :wasted_linear_iterations => 0,
+                                                 :linear_update => 0,
+                                                 :linear_solve => 0,
+                                                 :linear_iterations => 0,
+                                                 :linearizations => 0,
+                                                 :finalize => 0.0,
+                                                 :assembly => 0.0,
+                                                 :update => 0.0,
+                                                 :convergence => 0.0,
+                                                 :io => 0.0,
+                                                 :time => 0.0,
+                                                 )
 
-    steps = length(reports)
-    ministeps = 0
     for outer_rep in reports
-        time += outer_rep[:total_time]
+        stats[:time] += outer_rep[:total_time]
         if haskey(outer_rep, :output_time)
             t_io = outer_rep[:output_time]
-            io += t_io
-            time += t_io
+            stats[:io] += t_io
+            stats[:time] += t_io
         end
         for mini_rep in outer_rep[:ministeps]
-            ministeps += 1
+            stats[:ministeps] += 1
             if haskey(mini_rep, :finalize_time)
-                finalize += mini_rep[:finalize_time]
+                stats[:finalize] += mini_rep[:finalize_time]
             end
 
             s = stats_ministep(mini_rep[:steps])
-            linearizations += s.linearizations
-            its += s.newtons
-            linear_update += s.linear_system
-            linear_solve += s.linear_solve
-            linear_iterations += s.linear_iterations
-            update += s.update_time
-            assembly += s.assembly
-            convergence += s.convergence
+            stats[:linearizations] += s.linearizations
+            stats[:iterations] += s.newtons
+            stats[:linear_update] += s.linear_system
+            stats[:linear_solve] += s.linear_solve
+            stats[:linear_iterations] += s.linear_iterations
+            stats[:update] += s.update_time
+            stats[:assembly] += s.assembly
+            stats[:convergence] += s.convergence
 
             if !mini_rep[:success]
-                wasted_its += s.newtons
-                wasted_linearizations += s.linearizations
-                wasted_linear_iterations += s.linear_iterations
+                stats[:wasted_iterations] += s.newtons
+                stats[:wasted_linearizations] += s.linearizations
+                stats[:wasted_linear_iterations] += s.linear_iterations
             end
         end
     end
-    sum_measured = assembly + linear_update + linear_solve + update + convergence + io
-    other_time = time - sum_measured
+    sum_measured = 0.0
+    for k in [:assembly, :linear_update, :linear_solve, :update, :convergence, :io]
+        sum_measured += stats[k]
+    end
+    stats[:other_time] = stats[:time] - sum_measured
     totals = (
-                assembly = assembly,
-                linear_system = linear_update,
-                linear_solve = linear_solve,
-                update_time = update,
-                convergence = convergence,
-                io = io,
-                other = other_time,
-                total = time
+                assembly = stats[:assembly],
+                linear_system = stats[:linear_update],
+                linear_solve = stats[:linear_solve],
+                update_time = stats[:update],
+                convergence = stats[:convergence],
+                io = stats[:io],
+                other = stats[:other_time],
+                total = stats[:time]
             )
     
-    n = its
-    m = linearizations
+    n = stats[:iterations]
+    m = stats[:linearizations]
     linscale = v -> v / max(m, 1)
     itscale = v -> v / max(n, 1)
     each = (
-                assembly = linscale(assembly),
-                linear_system = linscale(linear_update),
-                linear_solve = itscale(linear_solve),
-                update_time = itscale(update),
-                convergence = linscale(convergence),
-                io = io/ministeps,
-                other = itscale(other_time),
-                total = itscale(time)
+                assembly = linscale(totals.assembly),
+                linear_system = linscale(totals.linear_system),
+                linear_solve = itscale(totals.linear_solve),
+                update_time = itscale(totals.update_time),
+                convergence = linscale(totals.convergence),
+                io = totals.io/stats[:ministeps],
+                other = itscale(totals.other),
+                total = itscale(totals.total)
             )
     return (
-            newtons = its,
-            linearizations = linearizations,
-            linear_iterations = linear_iterations,
-            wasted = (newtons = wasted_its,
-                      linearizations = wasted_linearizations,
-                      linear_iterations = wasted_linear_iterations),
-            steps = steps,
-            ministeps = ministeps,
+            newtons = stats[:iterations],
+            linearizations = stats[:linearizations],
+            linear_iterations = stats[:linear_iterations],
+            wasted = (newtons = stats[:wasted_iterations],
+                      linearizations = stats[:wasted_linearizations],
+                      linear_iterations = stats[:wasted_linear_iterations]),
+            steps = stats[:steps],
+            ministeps = stats[:ministeps],
             time_sum = totals,
             time_each = each
            )
