@@ -1,7 +1,42 @@
+function index_map(index, m::FiniteVolumeGlobalMap, from_set::EquationSet, to_set::GlobalSet, ce::Cells)
+    # Previously full_cell
+    return m.inner_to_full_cells[index]
+end
+
 @inline full_cell(c, m::FiniteVolumeGlobalMap) = m.inner_to_full_cells[c]
-entity_partition(m::FiniteVolumeGlobalMap, ::Cells) = m.cells
-entity_partition(m::FiniteVolumeGlobalMap, ::Faces) = m.faces
 global_cell_inside_domain(c, m::FiniteVolumeGlobalMap) = any(isequal(c), m.cells)
+
+global_face(f, m::FiniteVolumeGlobalMap) = m.faces[f]
+Base.@propagate_inbounds global_cell(c, m::FiniteVolumeGlobalMap{R}) where R = m.cells[c]::R
+# local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(indexin(c_global, m.cells))::R
+local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(findfirst(isequal(c_global), m.cells))::R
+local_face(f_global, m::FiniteVolumeGlobalMap) = only(indexin(f_global, m.faces))
+
+Base.@propagate_inbounds cell_is_boundary(c, m::FiniteVolumeGlobalMap) = m.cell_is_boundary[c]::Bool
+
+function interior_cell(c, m::FiniteVolumeGlobalMap)
+    c_i = m.full_to_inner_cells[c]
+    return c_i == 0 ? nothing : c_i
+end
+
+active_entities(d, m::FiniteVolumeGlobalMap, f::Faces; for_variables = true) = 1:count_entities(d, f)
+
+function active_view(x::AbstractVector, map::FiniteVolumeGlobalMap; for_variables = true)
+    if for_variables && map.variables_always_active
+        return x
+    else
+        return view(x, map.inner_to_full_cells)
+    end
+end
+
+function active_view(x::AbstractMatrix, map::FiniteVolumeGlobalMap; for_variables = true)
+    if for_variables && map.variables_always_active
+        return x
+    else
+        return view(x, :, map.inner_to_full_cells)
+    end
+end
+
 
 function map_to_active(V, domain, m::FiniteVolumeGlobalMap, ::Cells)
     W = similar(V, 0)
@@ -34,33 +69,5 @@ function map_ij_to_active(I, J, domain, m::FiniteVolumeGlobalMap, ::Cells)
     return (In[active], Jn[active])
 end
 
-global_face(f, m::FiniteVolumeGlobalMap) = m.faces[f]
-Base.@propagate_inbounds global_cell(c, m::FiniteVolumeGlobalMap{R}) where R = m.cells[c]::R
-# local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(indexin(c_global, m.cells))::R
-local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(findfirst(isequal(c_global), m.cells))::R
-local_face(f_global, m::FiniteVolumeGlobalMap) = only(indexin(f_global, m.faces))
-
-Base.@propagate_inbounds cell_is_boundary(c, m::FiniteVolumeGlobalMap) = m.cell_is_boundary[c]::Bool
-
-function interior_cell(c, m::FiniteVolumeGlobalMap)
-    c_i = m.full_to_inner_cells[c]
-    return c_i == 0 ? nothing : c_i
-end
-
-active_entities(d, m::FiniteVolumeGlobalMap, f::Faces; for_variables = true) = 1:count_entities(d, f)
-
-function active_view(x::AbstractVector, map::FiniteVolumeGlobalMap; for_variables = true)
-    if for_variables && map.variables_always_active
-        return x
-    else
-        return view(x, map.inner_to_full_cells)
-    end
-end
-
-function active_view(x::AbstractMatrix, map::FiniteVolumeGlobalMap; for_variables = true)
-    if for_variables && map.variables_always_active
-        return x
-    else
-        return view(x, :, map.inner_to_full_cells)
-    end
-end
+entity_partition(m::FiniteVolumeGlobalMap, ::Cells) = m.cells
+entity_partition(m::FiniteVolumeGlobalMap, ::Faces) = m.faces

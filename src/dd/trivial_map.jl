@@ -1,21 +1,38 @@
+@enum EntityStatus Inner Boundary NotPresent
+
+function index_map(index, ::TrivialGlobalMap, from_set::AbstractVariableSet, to_set::AbstractVariableSet, c::JutulEntity)
+    # The trivial map always gives the same index
+    return index
+end
+
+function entity_status(index, ::TrivialGlobalMap, ::JutulEntity)
+    # Trivial map means nothing is on the boundary or missing
+    return Inner
+end
+
+function is_local_boundary(index, m, e::JutulEntity)
+    return entity_status(index, m, e) == Boundary
+end
+
 global_map(domain::DiscretizedDomain) = domain.global_map
 global_map(domain) = TrivialGlobalMap()
+
 "Local face -> global face (full set)"
-global_face(f, ::TrivialGlobalMap) = f
+global_face(f, m) = index_map(f, m, VariableSet(), GlobalSet(), Faces())
 "Local cell -> global cell (full set)"
-global_cell(c, ::TrivialGlobalMap) = c
+global_cell(c, m) = index_map(c, m, VariableSet(), GlobalSet(), Cells())
 
 "Global cell -> local cell (full set)"
-local_cell(c, ::TrivialGlobalMap) = c
-cell_is_boundary(c, ::TrivialGlobalMap) = false
+local_cell(c, m) = index_map(c, m, GlobalSet(), VariableSet(), Cells())
+cell_is_boundary(c, map) = is_local_boundary(c, map, Cells())
 
 "Global face -> local face (full set)"
-local_face(f, ::TrivialGlobalMap) = f
+local_face(f, m) = index_map(f, m, GlobalSet(), VariableSet(), Faces())
 "Local cell in full set -> inner cell (or zero)"
-interior_cell(c, ::TrivialGlobalMap) = c
+interior_cell(c, m) = index_map(c, m, GlobalSet(), EquationSet(), Cells())
 
 "Inner cell to local cell (full set)"
-@inline full_cell(c, ::TrivialGlobalMap) = c
+@inline full_cell(c, m) = index_map(c, m, EquationSet(), VariableSet(), Cells())
 
 global_cell_inside_domain(c, m) = true
 
@@ -47,3 +64,4 @@ active_view(x, map; kwarg...) = x
 
 # TODO: Probably a bit inefficient
 count_active_entities(d, m, e; kwarg...) = length(active_entities(d, m, e; kwarg...))
+entity_partition(m::TrivialGlobalMap, e) = Colon()

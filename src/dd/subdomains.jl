@@ -32,8 +32,6 @@ number_of_subdomains(mp::SimpleMultiModelPartition) = number_of_subdomains(main_
 
 subdiscretization(disc, ::TrivialGlobalMap) = disc
 
-entity_partition(m::TrivialGlobalMap, e) = Colon()
-
 function subgrid
 
 end
