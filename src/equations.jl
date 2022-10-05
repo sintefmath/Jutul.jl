@@ -153,8 +153,8 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
                 unique!(S[i])
             end
         end
-        S = remap_sparsity!(S, self_entity, e, model)
         number_of_entities_source, T = epack
+        S, number_of_entities_source = remap_sparsity!(S, self_entity, e, model, number_of_entities_source)
         has_diagonal = number_of_entities == number_of_entities_total && is_self
         @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source for $T"
         @timeit "cache alloc" caches[Symbol(e)] = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal)
@@ -165,7 +165,7 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
     return convert_to_immutable_storage(caches)
 end
 
-function remap_sparsity!(S, eq_entity, var_entity, eq_model)
+function remap_sparsity!(S, eq_entity, var_entity, eq_model, ns)
     # Filter away inactive entities in sparsity
     d_e = eq_model.domain
     map_e = global_map(d_e)
@@ -174,6 +174,7 @@ function remap_sparsity!(S, eq_entity, var_entity, eq_model)
     else
         map_e = global_map(d_e)
         active_eqs = active_entities(d_e, map_e, eq_entity, for_variables = false)
+        ns = count_active_entities(d_e, var_entity)
         n = length(S)
         keep = BitVector(undef, n)
         for i in 1:n
@@ -188,7 +189,7 @@ function remap_sparsity!(S, eq_entity, var_entity, eq_model)
         end
         S_filtered = S[keep]
     end
-    return S_filtered
+    return (S_filtered, ns)
 end
 
 """
