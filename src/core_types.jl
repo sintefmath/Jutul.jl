@@ -593,6 +593,8 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
         # Create various index mappings + alignment from sparsity
         variables = vcat(sparsity...)
         pos = cumsum(vcat(1, counts))
+        P = typeof(pos)
+        variables = convert(P, variables)
         algn = zeros(I, nvalues_per_entity*number_of_partials(T), num_entities_touched)
         if has_diagonal
             # Create indices into the self-diagonal part if requested, asserting that the diagonal is present
@@ -619,7 +621,6 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
         else
             diag_ix = nothing
         end
-        P = typeof(pos)
         variables::P
         return new{nvalues_per_entity, entity, T, A, P, typeof(algn), typeof(diag_ix)}(v, pos, variables, algn, diag_ix, nt, ns)
     end
