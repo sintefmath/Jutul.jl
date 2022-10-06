@@ -1,5 +1,6 @@
-function generic_cache_declare_pattern(cache::GenericAutoDiffCache, entity_indices = 1:number_of_entities(cache))
-    J = cache.variables
+function generic_cache_declare_pattern(cache::GenericAutoDiffCache, g_map, entity_indices = 1:number_of_entities(cache))
+    E = entity(cache)
+    J = copy(cache.variables)
     I = similar(J)
     n = number_of_entities(cache)
     ne = length(entity_indices)
@@ -9,6 +10,15 @@ function generic_cache_declare_pattern(cache::GenericAutoDiffCache, entity_indic
         for j in vrange(cache, i)
             I[j] = e_i
         end
+    end
+    # Remap the sparsity to the (maybe smaller) active equation set
+    for k in eachindex(J)
+        mapped_val = index_map(J[k], g_map, VariableSet(), EquationSet(), E)
+        if isnothing(mapped_val)
+            # @info "!" mapped_val J[k] g_map g_map.full_to_inner_cells J
+            error("Should not happen?")
+        end
+        J[k] = mapped_val
     end
     return (I, J)
 end

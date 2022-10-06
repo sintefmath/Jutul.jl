@@ -14,8 +14,9 @@ function is_local_boundary(index, m, var_type, e::JutulEntity)
     return entity_status(index, m, var_type, e) == Boundary
 end
 
+global_map(model::SimulationModel) = global_map(model.domain)
 global_map(domain::DiscretizedDomain) = domain.global_map
-global_map(domain) = TrivialGlobalMap()
+global_map(domain_or_model) = TrivialGlobalMap()
 
 "Local face -> global face (full set)"
 global_face(f, m) = index_map(f, m, VariableSet(), GlobalSet(), Faces())

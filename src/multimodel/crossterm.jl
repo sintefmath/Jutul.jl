@@ -299,6 +299,7 @@ end
 function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source, eq_label, impact, equation_offset, variable_offset)
     lsys, target_keys, source_keys = crossterm_subsystem(model, lsys, target, source, diag = true)
     target_model = model[target]
+    source_model = model[source]
     ndofs = sub_number_of_degrees_of_freedom(model)
     neqs = sub_number_of_equations(model)
     # Diagonal part: Into target equation, and with respect to target variables
@@ -308,6 +309,7 @@ function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source
     equation_offset += get_equation_offset(target_model, eq_label)
     for target_e in get_primary_variable_ordered_entities(target_model)
         align_to_jacobian!(s_target, ct, lsys.jac, target_model, target_e, impact,
+                                                        global_map = global_map(source_model),
                                                         equation_offset = equation_offset,
                                                         variable_offset = variable_offset)
         variable_offset += number_of_degrees_of_freedom(target_model, target_e)
@@ -332,6 +334,7 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     for source_e in get_primary_variable_ordered_entities(source_model)
         align_to_jacobian!(s_source, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset,
                                                                                    variable_offset = variable_offset,
+                                                                                   global_map = global_map(target_model),
                                                                                    positions = offdiag_alignment,
                                                                                    number_of_entities_target = nt,
                                                                                    row_layout = matrix_layout(target_model.context),

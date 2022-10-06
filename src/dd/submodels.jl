@@ -91,11 +91,11 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     sm = convert_to_immutable_storage(new_submodels)
     new_model = MultiModel(sm, groups = groups, reduction = reduction, context = ctx)
 
-    cross_terms = new_model.cross_terms
     for ctp in model.cross_terms
         (; target, source) = ctp
         if target in mk && source in mk
-            push!(cross_terms, subcrossterm_pair(ctp, new_model, mp))
+            sub_ctp = subcrossterm_pair(ctp, new_model, mp)
+            add_cross_term!(new_model, sub_ctp)
         end
     end
     return new_model
