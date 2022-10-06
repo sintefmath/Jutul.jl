@@ -2,6 +2,8 @@ function generic_cache_declare_pattern(cache::GenericAutoDiffCache, entity_indic
     J = cache.variables
     I = similar(J)
     n = number_of_entities(cache)
+    ne = length(entity_indices)
+    @assert n == ne "Mismatch in number of entities and provided indices: Cache had $n entities and was provided $ne indices."
     for i in 1:n
         e_i = entity_indices[i]
         for j in vrange(cache, i)
