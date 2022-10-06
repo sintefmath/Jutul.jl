@@ -375,16 +375,35 @@ function stats_ministep(reports)
             linear_system = local_linear_update)
 end
 
-function pick_time_unit(t)
+function pick_time_unit(t, wide = is_wide_term())
     m = maximum(t)
-    units = [(24*3600, "Days"), (3600, "Hours"), (60, "Minutes"), (1, "Seconds"), (1e-3, "Milliseconds"), (1e-6, "Microseconds"), (1e-9, "Nanoseconds")]
+    if wide
+        day = "Days"
+        hours = "Hours"
+        min = "Minutes"
+        sec = "Seconds"
+        millisec = "Milliseconds"
+        microsec = "Microseconds"
+        nanosec = "Nanoseconds"
+        picosec = "Picoseconds"
+    else
+        day = "day"
+        hours = "h"
+        min = "min"
+        sec = "s"
+        millisec = "ms"
+        microsec = "μs"
+        nanosec = "ns"
+        picosec = "ps"
+    end
+    units = [(24*3600, day), (3600, hours), (60, min), (1, sec), (1e-3, millisec), (1e-6, microsec), (1e-9, nanosec), (1e-12, picosec)]
     for u in units
         if m > u[1]
             return u
         end
     end
     # Fallback
-    return (1, "Seconds")
+    return (1, sec)
 end
 
 function print_stats(reports::AbstractArray; kwarg...)
@@ -395,6 +414,11 @@ end
 function print_stats(stats; kwarg...)
     print_iterations(stats; kwarg...)
     print_timing(stats; kwarg...)
+end
+
+function is_wide_term()
+    _, dim = displaysize(stdout)
+    return dim > 90
 end
 
 function print_iterations(stats; title = "Number of iterations", table_formatter = tf_unicode_rounded)
