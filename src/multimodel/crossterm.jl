@@ -67,7 +67,6 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     for i in 1:N
         prepare_cross_term_in_entity!(i, state_t, state_t0,state_s, state_s0,model_t, model_s, ct, eq_t, 1.0)
     end
-    @info "Sending in" ne_t ne_s
     caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t, self_entity = e_t)
     caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s, self_entity = e_s)
     # Extra alignment - for off diagonal blocks
@@ -76,26 +75,30 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     if is_symm
         other_align_s = create_extra_alignment(caches_t)
         active_source = cross_term_entities_source(ct, eq_s, model_s)
-        out[:source_entities] = active_source
+        out[:source_entities] = remap_impact(active_source, model_s, e_s)# active_source
         offdiagonal_alignment = (from_target = other_align_s, from_source = other_align_t)
     else
         offdiagonal_alignment = (from_source = other_align_t, )
     end
-    gmap = global_map(model_t.domain)
+    out[:N] = N
+    out[:target] = caches_t
+    out[:source] = caches_s
+    out[:target_entities] = remap_impact(active, model_t, e_t)
+    out[:offdiagonal_alignment] = offdiagonal_alignment
+    return out
+end
+
+function remap_impact(active, model, entity)
+    gmap = global_map(model.domain)
     if gmap isa TrivialGlobalMap
         active_mapped = active
     else
         active_mapped = similar(active)
         for (i, v) in enumerate(active)
-            active_mapped[i] = index_map(v, gmap, VariableSet(), EquationSet(), e_t)
+            active_mapped[i] = index_map(v, gmap, VariableSet(), EquationSet(), entity)
         end
     end
-    out[:N] = N
-    out[:target] = caches_t
-    out[:source] = caches_s
-    out[:target_entities] = active_mapped
-    out[:offdiagonal_alignment] = offdiagonal_alignment
-    return out
+    return active_mapped
 end
 
 function create_extra_alignment(cache; allocate = true)
