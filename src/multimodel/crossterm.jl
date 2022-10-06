@@ -65,7 +65,7 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
         ne_s = count_active_entities(model_s.domain, e_s)
     end
     for i in 1:N
-        prepare_cross_term_in_entity!(i, state_t, state_t0,state_s, state_s0,model_t, model_s, ct, eq_t, 1.0)
+        prepare_cross_term_in_entity!(i, state_t, state_t0,state_s, state_s0, model_t, model_s, ct, eq_t, 1.0)
     end
     caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t, self_entity = e_t)
     caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s, self_entity = e_s)
@@ -264,20 +264,6 @@ function fill_crossterm_entries!(nz, model, cache::GenericAutoDiffCache, positio
     end
 end
 
-
-function update_linearized_system_crossterms!(jac, cross_terms, storage, model::MultiModel, source, target)
-    # storage_t, = get_submodel_storage(storage, target)
-    model_t, model_s = get_submodels(model, target, source)
-    nz = nonzeros(jac)
-
-    for ekey in keys(cross_terms)
-        ct = cross_terms[ekey]
-        if !isnothing(ct)
-            update_linearized_system_crossterm!(nz, model_t, model_s, ct::CrossTerm)
-        end
-    end
-end
-
 sub_number_of_equations(model::MultiModel) = map(number_of_equations, model.models)
 sub_number_of_degrees_of_freedom(model::MultiModel) = map(number_of_degrees_of_freedom, model.models)
 
@@ -321,7 +307,9 @@ function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source
 
     equation_offset += get_equation_offset(target_model, eq_label)
     for target_e in get_primary_variable_ordered_entities(target_model)
-        align_to_jacobian!(s_target, ct, lsys.jac, target_model, target_e, impact, equation_offset = equation_offset, variable_offset = variable_offset)
+        align_to_jacobian!(s_target, ct, lsys.jac, target_model, target_e, impact,
+                                                        equation_offset = equation_offset,
+                                                        variable_offset = variable_offset)
         variable_offset += number_of_degrees_of_freedom(target_model, target_e)
     end
 end
@@ -401,7 +389,6 @@ function setup_cross_terms_storage!(storage, model)
         else
             eq_s = m_s.equations[ct.equation]
         end
-
         ct_s = setup_cross_term_storage(term, eq_t, eq_s, m_t, m_s, s_t, s_s)
         push!(v, ct_s)
     end
