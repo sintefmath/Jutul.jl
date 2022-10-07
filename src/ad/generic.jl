@@ -1,4 +1,4 @@
-function generic_cache_declare_pattern(cache::GenericAutoDiffCache, g_map, entity_indices = 1:number_of_entities(cache))
+function generic_cache_declare_pattern(cache::GenericAutoDiffCache, entity_indices = 1:number_of_entities(cache))
     E = entity(cache)
     J = copy(cache.variables)
     I = similar(J)
@@ -12,6 +12,7 @@ function generic_cache_declare_pattern(cache::GenericAutoDiffCache, g_map, entit
         end
     end
     # Remap the sparsity to the (maybe smaller) active equation set
+    g_map = cache.variable_map
     for k in eachindex(J)
         mapped_val = index_map(J[k], g_map, VariableSet(), EquationSet(), E)
         if isnothing(mapped_val)

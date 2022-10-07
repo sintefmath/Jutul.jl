@@ -573,7 +573,7 @@ struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Int
     end
 end
 
-struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where {∂x <: Real}
+struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM} <: JutulAutoDiffCache where {∂x <: Real}
     # N - number of equations per entity
     entries::A
     vpos::P               # Variable positions (CSR-like, length N + 1 for N entities)
@@ -582,7 +582,8 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
     diagonal_positions::D
     number_of_entities_target::Integer
     number_of_entities_source::Integer
-    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulEntity, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true) where I
+    variable_map::VM
+    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulEntity, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true, global_map = TrivialGlobalMap()) where I
         @assert nt > 0
         @assert ns > 0
         counts = map(length, sparsity)
@@ -622,6 +623,7 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D} <: JutulAutoDiffCache where 
             diag_ix = nothing
         end
         variables::P
-        return new{nvalues_per_entity, entity, T, A, P, typeof(algn), typeof(diag_ix)}(v, pos, variables, algn, diag_ix, nt, ns)
+        M_t = typeof(global_map)
+        return new{nvalues_per_entity, entity, T, A, P, typeof(algn), typeof(diag_ix), M_t}(v, pos, variables, algn, diag_ix, nt, ns, global_map)
     end
 end

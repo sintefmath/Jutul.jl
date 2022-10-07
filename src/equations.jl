@@ -131,7 +131,7 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     return create_equation_caches(model, n, N, storage, F!, nt; self_entity = e, kwarg...)
 end
 
-function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, number_of_entities_total::Integer = 0; self_entity = nothing, extra_sparsity = nothing, kwarg...)
+function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, number_of_entities_total::Integer = 0; global_map = global_map(model), self_entity = nothing, extra_sparsity = nothing, kwarg...)
     state = storage[:state]
     state0 = storage[:state0]
     entities = all_ad_entities(state, state0)
@@ -157,7 +157,7 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
         S, number_of_entities_source = remap_sparsity!(S, e, model)
         has_diagonal = number_of_entities == number_of_entities_total && is_self
         @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source for $T"
-        @timeit "cache alloc" cache = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal)
+        @timeit "cache alloc" cache = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal, global_map = global_map)
         caches[Symbol(e)] = cache
     end
     if !self_entity_found
@@ -312,7 +312,7 @@ function declare_pattern(model, e, eq_s, entity, arg...)
     k = Symbol(entity)
     if haskey(eq_s, k)
         cache = eq_s[k]
-        return generic_cache_declare_pattern(cache, global_map(model), arg...)
+        return generic_cache_declare_pattern(cache, arg...)
     else
         out = nothing
     end
@@ -356,7 +356,6 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; context = mode
                                                                    equation_offset = 0,
                                                                    variable_offset = 0,
                                                                    number_of_entities_target = nothing,
-                                                                   global_map = global_map(model),
                                                                    kwarg...)
     # Use generic version
     k = Symbol(entity)
@@ -376,7 +375,7 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; context = mode
         else
             nt = number_of_entities_target
         end
-        I, J = generic_cache_declare_pattern(cache, global_map, arg...)
+        I, J = generic_cache_declare_pattern(cache, arg...)
         injective_alignment!(cache, eq, jac, entity, context, pos = pos, target_index = I, source_index = J,
                                                                     number_of_entities_source = cache.number_of_entities_source,
                                                                     number_of_entities_target = nt,
