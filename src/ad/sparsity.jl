@@ -1,8 +1,12 @@
 function unpack_tag(v::Type{ForwardDiff.Dual{T, F, N}}, t::Symbol = :entity) where {T, F, N}
-    if t == :entity
-        out = T[2]
-    elseif t == :model
-        out = T[1]
+    if t isa Tuple
+        if t == :entity
+            out = T[2]
+        elseif t == :model
+            out = T[1]
+        else
+            out = T
+        end
     else
         out = T
     end

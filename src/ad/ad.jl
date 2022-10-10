@@ -396,6 +396,7 @@ Combine a base tag (which can be nothing) with a entity to get a tag that
 captures base tag + entity tag for use with AD initialization.
 """
 get_entity_tag(basetag, entity) = (basetag, entity)
+get_entity_tag(::Nothing, entity) = entity
 
 include("local_ad.jl")
 include("sparsity.jl")
