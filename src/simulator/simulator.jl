@@ -346,7 +346,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
         end
         report[:finalize_time] = t_finalize
     else
-        reset_to_previous_state!(sim)
+        reset_state_to_previous_state!(sim)
     end
     return (done, report)
 end
@@ -414,7 +414,7 @@ function deserialize_restart(pth, restart, states, reports, config)
 end
 
 reset_variables!(sim, vars; kwarg...) = reset_variables!(sim.storage, sim.model, vars; kwarg...)
-reset_to_previous_state!(sim) = reset_to_previous_state!(sim.storage, sim.model)
+reset_state_to_previous_state!(sim) = reset_state_to_previous_state!(sim.storage, sim.model)
 reset_previous_state!(sim, state0) = reset_previous_state!(sim.storage, sim.model, state0)
 
 

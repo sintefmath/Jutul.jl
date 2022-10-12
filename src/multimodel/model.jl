@@ -683,8 +683,8 @@ function update_primary_variables!(storage, model::MultiModel; kwarg...)
     end
 end
 
-function reset_to_previous_state!(storage, model::MultiModel)
-    submodels_storage_apply!(storage, model, reset_to_previous_state!)
+function reset_state_to_previous_state!(storage, model::MultiModel)
+    submodels_storage_apply!(storage, model, reset_state_to_previous_state!)
 end
 
 function reset_previous_state!(storage, model::MultiModel, state0)

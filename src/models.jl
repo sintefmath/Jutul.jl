@@ -818,7 +818,12 @@ function replace_values!(old, updated)
     end
 end
 
-reset_to_previous_state!(storage, model) = replace_values!(storage.primary_variables, storage.state0)
+function reset_state_to_previous_state!(storage, model)
+    # Replace primary variable values with those from previous state
+    replace_values!(storage.primary_variables, storage.state0)
+    # Update secondary variables to be in sync with current primary values
+    update_secondary_variables!(storage, model)
+end
 
 function reset_previous_state!(storage, model, state0)
     replace_values!(storage.state0, state0)
