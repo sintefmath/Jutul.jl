@@ -244,25 +244,18 @@ function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
 end
 
 function perform_step!(storage, model, dt, forces, config; iteration = NaN, update_secondary = iteration > 1)
-    do_solve, e, converged = true, nothing, false
+    e, converged = nothing, false
 
     report = OrderedDict()
-    timing_out = config[:debug_level] > 1
     # Update the properties and equations
     t_asm = @elapsed begin
         time = config[:ProgressRecorder].recorder.time + dt
         update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
     end
-    if timing_out
-        @debug "Assembled equations in $t_asm seconds."
-    end
     report[:assembly_time] = t_asm
     # Update the linearized system
     report[:linear_system_time] = @elapsed begin
         @timeit "linear system" update_linearized_system!(storage, model)
-    end
-    if timing_out
-        @debug "Updated linear system in $(report[:linear_system_time]) seconds."
     end
     t_conv = @elapsed begin
         @timeit "convergence" converged, e, errors = check_convergence(storage, model, config, iteration = iteration, dt = dt, extra_out = true)
@@ -270,33 +263,17 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, upda
         if il > 1
             get_convergence_table(errors, il, iteration, config)
         end
-        if converged
-            if iteration <= config[:min_nonlinear_iterations]
-                # Should always do at least 
-                do_solve = true
-                # Ensures secondary variables are updated, and correct error
-                converged = false
-            else
-                do_solve = false
-                @debug "Step converged."
-            end
-        else
-            do_solve = true
-        end
+        converged = converged && iteration > config[:min_nonlinear_iterations]
         report[:converged] = converged
         report[:errors] = errors
     end
     report[:convergence_time] = t_conv
 
-    if do_solve
+    if !converged
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
         rec = config[:ProgressRecorder]
         t_solve, t_update, n_iter, rep_lsolve = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec)
-        if timing_out
-            @debug "Solved linear system in $t_solve seconds with $n_iter iterations."
-            @debug "Updated state $t_update seconds."
-        end
         report[:linear_solver] = rep_lsolve
         report[:linear_iterations] = n_iter
         report[:linear_solve_time] = t_solve
@@ -320,15 +297,18 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
         if done
             break
         end
-        too_large = e > cfg[:max_residual]
-        non_finite = !isfinite(e)
-        failure = non_finite || too_large
+        failure = false
+        max_res = cfg[:max_residual]
+        if !isfinite(e)
+            reason = "Simulator produced non-finite residuals: $e."
+            failure = true
+        elseif e > max_res
+            reason = "Simulator produced very large residuals: $e larger than :max_residual=$max_res."
+            failure = true
+        else
+            reason = ""
+        end
         if failure
-            if too_large
-                reason = "Simulator produced very large residuals: $e larger than :max_residual=$(cfg[:max_residual])."
-            else
-                reason = "Simulator produced non-finite residuals: $e."
-            end
             report[:failure_message] = reason
             @warn reason
             break
@@ -337,17 +317,16 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
     end
     report[:steps] = step_reports
     report[:success] = done
-    if skip_finalize
-        report[:finalize_time] = 0.0
-    elseif done
-        t_finalize = @elapsed update_after_step!(sim, dt, forces; time = cur_time + dt)
-        if cfg[:debug_level] > 1
-            @debug "Finalized in $t_finalize seconds."
+    t_finalize = 0.0
+    if !skip_finalize
+        if done
+            t_finalize = @elapsed update_after_step!(sim, dt, forces; time = cur_time + dt)
+        else
+            reset_state_to_previous_state!(sim)
         end
-        report[:finalize_time] = t_finalize
-    else
-        reset_state_to_previous_state!(sim)
     end
+    report[:finalize_time] = t_finalize
+
     return (done, report)
 end
 
