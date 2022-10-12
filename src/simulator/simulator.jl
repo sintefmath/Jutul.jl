@@ -243,7 +243,7 @@ function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
     perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config; iteration = NaN, update_secondary = iteration > 1)
+function perform_step!(storage, model, dt, forces, config; iteration = NaN, update_secondary = iteration > 1 || config[:always_update_secondary])
     e, converged = nothing, false
 
     report = OrderedDict()

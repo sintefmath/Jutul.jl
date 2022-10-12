@@ -1,10 +1,19 @@
 function simulator_config!(cfg, sim; kwarg...)
+    # Maximum number of cuts before a time-step is terminated
     cfg[:max_timestep_cuts] = 5
+    # Maximum number of nonlinear iterations before a time-step is cut
     cfg[:max_nonlinear_iterations] = 15
+    # Minimum number of nonlinear solves performed, even when equations are converged
     cfg[:min_nonlinear_iterations] = 1
+    # Always update secondary variables - only useful for nested solvers
+    cfg[:always_update_secondary] = false
+    # Throw an error if the solve
     cfg[:error_on_incomplete] = false
+    # The linear solver used to solve linearized systems
     cfg[:linear_solver] = nothing
+    # Path for output
     cfg[:output_path] = nothing
+    # Produce states for output (keeping them in memory)
     cfg[:output_states] = nothing
     # Extra checks on values etc
     cfg[:safe_mode] = true
