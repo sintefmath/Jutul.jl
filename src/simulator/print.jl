@@ -23,9 +23,9 @@ print_global_timer(::Nothing) = nothing
 function start_simulation_message(info_level, timesteps)
     p = nothing
     n = length(timesteps)
-    msg = "Simulating $n steps... "
+    msg = "Simulating $(get_tstr(sum(timesteps))) as $n report steps"
     if info_level > 0
-        @info msg
+        jutul_message("Jutul", msg, color = :light_green)
     end
     if info_level == 0
         p = Progress(n, dt = 0.5, desc = msg)
@@ -41,12 +41,11 @@ function new_simulation_control_step_message(info_level, p, rec, step_no, no_ste
         msg = "Solving step $step_no/$no_steps ($perc% of time interval complete)"
         next!(p; showvalues = [(:Status, msg)])
     elseif info_level > 0
-        if info_level == 1
-            prefix = ""
-        else
-            prefix = "🟢 "
-        end
-        @info "$(prefix)Solving step $step_no/$no_steps of length $(get_tstr(dT))."
+        count_str = "$no_steps"
+        ndig = length(count_str)
+        fstr = lpad("$step_no", ndig)
+        jutul_message("Step $fstr/$count_str", "Solving report step with length $(get_tstr(dT)).", color = :blue)
+        # @info "$(prefix)Solving step $step_no/$no_steps of length $(get_tstr(dT))."
     end
 end
 
@@ -62,20 +61,24 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
     # Summary message.
     if verbose && length(reports) > 0
         if aborted
-            endstr = "🔴 Simulation aborted. Completed $(stats.steps) of $(length(timesteps)) timesteps"
+            start_str = "Simulation aborted"
+            endstr = "$(stats.steps) of $(length(timesteps))"
+            str_c = :red
         else
-            endstr = "✅ Simulation complete. Completed $(stats.steps) timesteps"
+            start_str = "Simulation complete"
+            endstr = "$(stats.steps)"
+            str_c = :light_green
         end
         t_tot = stats.time_sum.total
-        final_message = "$endstr in $(get_tstr(t_tot)) seconds with $(stats.newtons) iterations."
+        final_message = "Completed $endstr timesteps in $(get_tstr(t_tot)) and $(stats.newtons) iterations."
         if info_level == 0
             if aborted
-                cancel(p, final_message)
+                cancel(p, "$start_str $final_message")
             else
                 finish!(p)
             end
         else
-            @info final_message
+            jutul_message(start_str, final_message, color = str_c, underline = true)
         end
     elseif info_level == 0
         cancel(p)
@@ -91,4 +94,15 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
     end
 end
 
-
+export jutul_message
+function jutul_message(prestr, substr = nothing; color = :light_blue, kwarg...)
+    if isnothing(substr)
+        fmt = "$prestr"
+        substr = ""
+    else
+        fmt = "$prestr:"
+        substr = " $substr"
+    end
+    print(Crayon(foreground = color, bold = true; kwarg...), fmt)
+    println(Crayon(reset = true), substr)
+end

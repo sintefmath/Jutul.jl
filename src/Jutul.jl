@@ -37,6 +37,9 @@ module Jutul
     import Metis
     # Nice progress bars
     using ProgressMeter
+    using Crayons
+    using Crayons.Box
+
     # Timing
     using TimerOutputs
 

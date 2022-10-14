@@ -156,11 +156,12 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                         worst_val = e_scale
                         worst_tol = tol
                         if has_models
-                            mstr = "from model "*String(model)
+                            mstr = "from model $(UNDERLINE(String(model)))"
                         else
                             mstr = ""
                         end
-                        worst_name = "$(eq.name) ($(local_names[i])) $mstr"
+                        pref = "$(eq.name) ($(local_names[i]))"
+                        worst_name = "$(UNDERLINE("$pref")) $mstr"
                     end
                 end
                 push!(body_hlines, pos-1)
@@ -171,15 +172,19 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
     print_table = size(tbl, 1) > 0 && info_level > 2
     max_its = cfg[:max_nonlinear_iterations]
     if print_table
-        s  = ":"
+        if info_level == 3
+            s  = ". Non-converged:"
+        else
+            s  = ". All criteria:"
+        end
     elseif count_crit == count_ok
         s = " ✔️"
     else
-        worst_print = @sprintf "%2.3e (ϵ = %2.3e)" worst_val*worst_tol worst_tol
+        worst_print = @sprintf "%2.3e (ϵ = %g)" worst_val*worst_tol worst_tol
         s = ". Worst value:\n\t - $worst_name at $worst_print."
     end
-    @info "$(id)It. $iteration/$max_its: $count_ok/$count_crit criteria converged$s"
-
+    # @info "$(id)It. $iteration/$max_its: $count_ok/$count_crit criteria converged$s"
+    jutul_message("It. $iteration/$max_its", "$count_ok/$count_crit criteria converged$s", color = :cyan)
     if print_table
         m_offset = Int64(has_models)
         rpos = (4 + m_offset)
