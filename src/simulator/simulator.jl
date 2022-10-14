@@ -216,7 +216,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
             end
         else
             if info_level > 0
-                @info "🟡 Time-step $step_no of length $(get_tstr(dt)) failed to converge."
+                jutul_message("Convergence", "Time-step $step_no of length $(get_tstr(dt)) failed to converge.", color = :yellow)
             end
             dt = cut_timestep(sim, config, dt, dT, reports, step_index = step_no, cut_count = cut_count)
             if isnan(dt)
@@ -355,8 +355,8 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
         first_step = 1
         dt = timesteps[first_step]
     end
-    if config[:info_level] > 0
-        @info msg
+    if config[:info_level] > 1
+        jutul_message("Jutul", msg, color = :light_green)
     end
     recompute_state0_secondary = state0_has_changed
     if !isnothing(parameters)
