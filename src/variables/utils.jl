@@ -323,7 +323,7 @@ end
 
 function unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
     nactive = length(active_cells)
-    @batch minbatch = 1000 for active_ix in eachindex(active_cells)
+    for active_ix in eachindex(active_cells)
         full_cell = active_cells[active_ix]
         unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nactive, minval, maxval, abs_max)
     end
@@ -367,7 +367,7 @@ function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
 end
 
 function unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
-    @batch minbatch = 1000 for cell in active_cells
+    for cell in active_cells
         unit_update_magnitude_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
     end
 end
