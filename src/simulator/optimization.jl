@@ -362,7 +362,7 @@ function objective_gradient_chain_rule(x_to_y, y_to_x, y, dGdx)
     x_ad = ForwardDiff.Dual(x, 1.0)
     y_ad = x_to_y(x_ad)
     dydx = only(y_ad.partials)
-    # dG(y(x))/dx = dG/dx * dy/dx
+    # dG(y(x))/dx = dG/dy * dy/dx
     # -> dG/dy = dG/dx / dy/dx
     # The following is fine as dydx should never be zero
     dGdy = dGdx/dydx
