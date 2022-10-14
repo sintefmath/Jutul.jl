@@ -236,7 +236,7 @@ function opt_scaler_function(config, key; inv = false)
             base = 10000.0
             myexp = x -> (base^x - 1)/(base - 1)
             mylog = x -> log((base-1)*x + 1)/log(base)
-            if scale_type == :exp
+            if scale_type == :log
                 F_inv, F = myexp, mylog
             else
                 F, F_inv = myexp, mylog
@@ -252,9 +252,9 @@ function opt_scaler_function(config, key; inv = false)
     else
         if scale_type == :default
             scaler = identity
-        elseif scale_type == :log
-            scaler = inv ? log : exp
         elseif scale_type == :exp
+            scaler = inv ? log : exp
+        elseif scale_type == :log
             scaler = inv ? exp : log
         else
             error("Unknown scaler $scale_type")
