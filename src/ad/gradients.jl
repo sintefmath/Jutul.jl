@@ -171,6 +171,7 @@ function get_objective_sparsity(storage, k)
 end
 
 function determine_objective_sparsity(sim, model, G, states, timesteps, forces)
+    update_secondary_variables!(sim.storage, sim.model)
     state = sim.storage.state
     # m, state, dt, step_no, forces
     F_outer = (state, i) -> G(model, state, timesteps[i], i, forces_for_timestep(sim, forces, timesteps, i))
