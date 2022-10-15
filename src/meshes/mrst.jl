@@ -80,10 +80,10 @@ function triangulate_mesh(m::MRSTWrapMesh, is_depth = true; outer = false)
 
         return hcat(l, c, r)
     end
-    pts = []
-    tri = []
-    cell_index = []
-    face_index = []
+    pts = Vector{Matrix{Float64}}()
+    tri = Vector{Matrix{Int64}}()
+    cell_index = Vector{Int64}()
+    face_index = similar(cell_index)
     offset = 0
     nc = Int64(G.cells.num)
     if d == 2
@@ -115,10 +115,11 @@ function triangulate_mesh(m::MRSTWrapMesh, is_depth = true; outer = false)
             push!(tri, local_tri .+ offset)
 
             new_vert_count = n + 1
-            push!(cell_index, repeat([cell], new_vert_count))
+            for _ in 1:new_vert_count
+                push!(cell_index, cell)
+            end
             offset = offset + new_vert_count
         end
-
     else
         @assert d == 3
         # Find boundary faces
@@ -132,13 +133,9 @@ function triangulate_mesh(m::MRSTWrapMesh, is_depth = true; outer = false)
             active = 1:nc
         end
         fcent = G.faces.centroids
-
         for i in active
             cell = cells[i]
-            for f in cell_faces(cell)
-                local_tri = []
-                local_pts = []
-        
+            for f in cell_faces(cell)        
                 center = fcent[f, :]
                 # Grab local nodes
                 local_nodes = face_nodes(f)
@@ -156,18 +153,16 @@ function triangulate_mesh(m::MRSTWrapMesh, is_depth = true; outer = false)
                 push!(tri, local_tri .+ offset)
 
                 new_vert_count = n + 1
-                push!(cell_index, repeat([cell], new_vert_count))
-                push!(face_index, repeat([f], new_vert_count))
-
+                for _ in 1:new_vert_count
+                    push!(cell_index, cell)
+                    push!(face_index, f)
+                end
                 offset = offset + new_vert_count
             end
         end
     end
     pts = vcat(pts...)
     tri = vcat(tri...)
-
-    cell_index = vcat(cell_index...)
-    face_index = vcat(face_index...)
 
     mapper = (
                 Cells = (cell_data) -> cell_data[cell_index],
