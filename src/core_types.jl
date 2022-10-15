@@ -205,11 +205,13 @@ abstract type AbstractSimulationModel <: JutulModel end
 struct SimulationModel{O<:JutulDomain,
                        S<:JutulSystem,
                        F<:JutulFormulation,
-                       C<:JutulContext} <: AbstractSimulationModel
+                       C<:JutulContext
+                       } <: AbstractSimulationModel
     domain::O
     system::S
     context::C
     formulation::F
+    plot_mesh
     primary_variables::OrderedDict{Symbol, JutulVariables}
     secondary_variables::OrderedDict{Symbol, JutulVariables}
     parameters::OrderedDict{Symbol, JutulVariables}
@@ -220,6 +222,7 @@ end
 function SimulationModel(domain, system;
                             formulation=FullyImplicit(),
                             context=DefaultContext(),
+                            plot_mesh = nothing,
                             output_level=:primary_variables
                         )
     context = initialize_context!(context, domain, system, formulation)
@@ -235,7 +238,7 @@ function SimulationModel(domain, system;
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, primary, secondary, parameters, equations, outputs)
+    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, plot_mesh, primary, secondary, parameters, equations, outputs)
     select_primary_variables!(model)
     select_secondary_variables!(model)
     select_parameters!(model)
@@ -261,7 +264,7 @@ function Base.copy(m::SimulationModel{O, S, C, F}) where {O, S, C, F}
     outputs = copy(m.output_variables)
     prm = copy(m.parameters)
     eqs = m.equations
-    return SimulationModel{O, S, C, F}(m.domain, m.system, m.context, m.formulation, pvar, svar, prm, eqs, outputs)
+    return SimulationModel{O, S, C, F}(m.domain, m.system, m.context, m.formulation, m.plot_mesh, pvar, svar, prm, eqs, outputs)
 end
 
 function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)

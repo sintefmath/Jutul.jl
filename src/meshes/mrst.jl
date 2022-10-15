@@ -46,12 +46,12 @@ number_of_cells(t::MRSTWrapMesh) = Int64(t.data.cells.num)
 number_of_faces(t::MRSTWrapMesh) = Int64(t.data.faces.num)
 neighbor(t::MRSTWrapMesh, f, i) = Int64(t.data.faces.neighbors[f, i])
 
-function triangulate_outer_surface(m::Dict)
+function triangulate_mesh(m::Dict)
     mm = MRSTWrapMesh(m)
-    return triangulate_outer_surface(mm)
+    return triangulate_mesh(mm)
 end
 
-function triangulate_outer_surface(m::MRSTWrapMesh, is_depth = true)
+function triangulate_mesh(m::MRSTWrapMesh, is_depth = true; outer = false)
     G = m.data
     d = dim(m)
 
@@ -85,10 +85,10 @@ function triangulate_outer_surface(m::MRSTWrapMesh, is_depth = true)
     cell_index = []
     face_index = []
     offset = 0
+    nc = Int64(G.cells.num)
     if d == 2
         # For each cell, rotate around and add all nodes and triangles that include the center cell
         # error("Not implemented.")
-        nc = Int64(G.cells.num)
         ccent = G.cells.centroids
         for cell = 1:nc
             center = ccent[cell, :]
@@ -123,11 +123,17 @@ function triangulate_outer_surface(m::MRSTWrapMesh, is_depth = true)
         @assert d == 3
         # Find boundary faces
         N = Int64.(G.faces.neighbors)
-        exterior = findall(vec(any(N .== 0, dims = 2)))
-        cells = sum(N[exterior, :], dims = 2)
+        if outer
+            exterior = findall(vec(any(N .== 0, dims = 2)))
+            cells = sum(N[exterior, :], dims = 2)
+            active = exterior
+        else
+            cells = 1:nc
+            active = 1:nc
+        end
         fcent = G.faces.centroids
 
-        for i in 1:length(exterior)
+        for i in active
             cell = cells[i]
             for f in cell_faces(cell)
                 local_tri = []

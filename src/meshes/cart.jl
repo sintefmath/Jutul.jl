@@ -251,7 +251,7 @@ function get_delta(Δ, index, d)
 end
 
 
-function triangulate_outer_surface(m::CartesianMesh, is_depth = true)
+function triangulate_mesh(m::CartesianMesh, is_depth = true; outer = false)
     pts = []
     tri = []
     cell_ix = []

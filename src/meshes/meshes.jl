@@ -1,7 +1,7 @@
 # using Meshes, MeshViz
 
 export MRSTWrapMesh, CartesianMesh, TwoPointFiniteVolumeGeometry, dim
-export triangulate_outer_surface, tpfv_geometry, discretized_domain_tpfv_flow
+export triangulate_mesh, tpfv_geometry, discretized_domain_tpfv_flow
 
 abstract type JutulGeometry end
 
