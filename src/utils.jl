@@ -426,9 +426,9 @@ function is_wide_term()
     return dim > 90
 end
 
-function print_iterations(stats; title = "Number of iterations", table_formatter = tf_unicode_rounded)
+function print_iterations(stats; title = "", table_formatter = tf_unicode_rounded)
     flds = [:newtons, :linearizations, :linear_iterations]
-    names = [:Newtons, :Linearizations, Symbol("Linear solver its.")]
+    names = [:Newton, :Linearization, Symbol("Linear solver")]
     data = Array{Any}(undef, length(flds), 5)
     nstep = stats.steps
     nmini = stats.ministeps
@@ -453,10 +453,10 @@ function print_iterations(stats; title = "Number of iterations", table_formatter
                       row_name_alignment = :l,
                       tf = table_formatter,
                       formatters = (ft_printf("%3.4f", 3)),
-                      row_name_column_title = "Type")
+                      row_name_column_title = "Iteration type")
 end
 
-function print_timing(stats; title = "Simulator timing", table_formatter = tf_unicode_rounded)
+function print_timing(stats; title = "", table_formatter = tf_unicode_rounded)
     flds = collect(keys(stats.time_each))
     
     n = length(flds)
@@ -502,7 +502,7 @@ function print_timing(stats; title = "Simulator timing", table_formatter = tf_un
     end
 
 
-    pretty_table(data; header = (["Each", "Fraction", "Total"], [s, "Percent", s_t]), 
+    pretty_table(data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]), 
                       row_names = map(translate_for_table, flds),
                       formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
                       title = title,
@@ -511,7 +511,7 @@ function print_timing(stats; title = "Simulator timing", table_formatter = tf_un
                       row_name_alignment = :l,
                       alignment = [:r, :r, :r],
                       body_hlines = [n-1],
-                      row_name_column_title = "Name")
+                      row_name_column_title = "Timing type")
 end
 
 export read_results
