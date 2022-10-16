@@ -85,16 +85,16 @@ function rowcol_prod(A::StaticSparsityMatrixCSR, B::SparseMatrixCSC, row, col)
     nz_A = nonzeros(A)
     n_col = length(A_range)
     columns = colvals(A)
-    new_column(pos) = @inbounds columns[A_range[pos]]
-    column_value(pos) = @inbounds nz_A[A_range[pos]]
+    new_column(pos) = @inbounds sparse_indirection(columns, A_range, pos)
+    column_value(pos) = @inbounds sparse_indirection(nz_A, A_range, pos)
 
     # Second matrix, iterate over row
     B_range = nzrange(B, col)
     nz_B = nonzeros(B)
     n_row = length(B_range)
     rows = rowvals(B)
-    new_row(pos) = @inbounds rows[B_range[pos]]
-    row_value(pos) = @inbounds nz_B[B_range[pos]]
+    new_row(pos) = @inbounds sparse_indirection(rows, B_range, pos)
+    row_value(pos) = @inbounds sparse_indirection(nz_B, B_range, pos)
     # Initialize
     pos_A = pos_B = 1
     current_col = new_column(pos_A)
@@ -125,6 +125,11 @@ function rowcol_prod(A::StaticSparsityMatrixCSR, B::SparseMatrixCSC, row, col)
         end
     end
     return v
+end
+
+@inline function sparse_indirection(val, rng, pos)
+    ix = @inbounds rng[pos]
+    return @inbounds val[ix]
 end
 
 function rowcol_prod(A::SparseMatrixCSC, B::StaticSparsityMatrixCSR, row, col)
