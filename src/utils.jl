@@ -429,7 +429,7 @@ end
 function print_iterations(stats; title = "", table_formatter = tf_unicode_rounded)
     flds = [:newtons, :linearizations, :linear_iterations]
     names = [:Newton, :Linearization, Symbol("Linear solver")]
-    data = Array{Any}(undef, length(flds), 5)
+    data = Array{Any}(undef, length(flds), 4)
     nstep = stats.steps
     nmini = stats.ministeps
 
@@ -438,15 +438,16 @@ function print_iterations(stats; title = "", table_formatter = tf_unicode_rounde
     u, s = pick_time_unit(time)
 
     for (i, f) in enumerate(flds)
+        waste = stats[:wasted][f]
         raw = stats[f]
         data[i, 1] = raw/nstep         # Avg per step
         data[i, 2] = raw/nmini         # Avg per mini
         data[i, 3] = time[i]/u         # Time each
-        data[i, 4] = stats[:wasted][f] # Wasted total
-        data[i, 5] = raw               # Total
+        data[i, 4] = "$raw ($waste)"    # Total
     end
 
-    pretty_table(data; header = (["Avg/step", "Avg/ministep", "Time per", "Wasted", "Total"], ["$nstep steps", "$nmini ministeps", s, "", ""]), 
+    pretty_table(data; header = (["Avg/step", "Avg/ministep", "Time per", "Total"],
+                                ["$nstep steps", "$nmini ministeps", s, "(wasted)"]), 
                       row_names = names,
                       title = title,
                       title_alignment = :c,
