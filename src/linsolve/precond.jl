@@ -229,7 +229,12 @@ function update_hierarchy!(amg, hierarchy, A)
         else
             A_c = levels[i+1].A
         end
-        A = update_coarse_system!(A_c, R, A, P)
+        if isnothing(buffers)
+            buf = nothing
+        else
+            buf = buffers[i]
+        end
+        A = update_coarse_system!(A_c, R, A, P, buf)
     end
     factor = factorize_coarse(A)
     coarse_solver = (x, b) -> solve_coarse_internal!(x, A, factor, b)
@@ -256,13 +261,28 @@ function print_system(A)
     end
 end
 
-function update_coarse_system!(A_c, R, A, P)
+function update_coarse_system!(A_c, R, A, P, buffer)
     return R*A*P
 end
 
-function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P)
+function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M)
     if false
         A_c = coarse_product!(A_c, A, R)
+    elseif false
+        At = A.At
+        Pt = R.At
+        Rt = P.At
+        # CSC <- CSR * CSC
+        # in_place_mat_mat_mul!(M, A, Rt)
+        # M = A*P -> M' = (AP)' = P'A' = RA'
+        in_place_mat_mat_mul!(StaticSparsityMatrixCSR(M), R, A.At)
+
+        tmp = At*Pt
+        @info "" tmp M nonzeros(tmp) nonzeros(M)
+        @assert M == tmp
+        # error()
+        # CSR <- CSR * CSC
+        in_place_mat_mat_mul!(A_c, R, M)
     else
         At = A.At
         Pt = R.At

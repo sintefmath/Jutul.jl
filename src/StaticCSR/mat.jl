@@ -51,6 +51,83 @@ function StaticSparsityMatrixCSR(m, n, rowptr, cols, nzval; kwarg...)
     return StaticSparsityMatrixCSR(At; kwarg...)
 end
 
+
+function in_place_mat_mat_mul!(M::CSR, A::CSR, B::CSC) where {CSR<:StaticSparsityMatrixCSR, CSC<:SparseMatrixCSC}
+    columns = colvals(M)
+    nz = nonzeros(M)
+    for row in axes(M, 1)
+        for pos in nzrange(M, row)
+            col = columns[pos]
+            nz[pos] = rowcol_prod(A, B, row, col)
+        end
+    end
+end
+
+function in_place_mat_mat_mul!(M::CSC, A::CSR, B::CSC) where {CSR<:StaticSparsityMatrixCSR, CSC<:SparseMatrixCSC}
+    rows = rowvals(M)
+    nz = nonzeros(M)
+    for col in axes(M, 2)
+        for pos in nzrange(M, col)
+            row = rows[pos]
+            nz[pos] = rowcol_prod(A, B, row, col)
+        end
+    end
+end
+
+function rowcol_prod(A::StaticSparsityMatrixCSR, B::SparseMatrixCSC, row, col)
+    # We know both that this product is nonzero
+    # First matrix, iterate over columns
+    A_range = nzrange(A, row)
+    nz_A = nonzeros(A)
+    n_col = length(A_range)
+    columns = colvals(A)
+    new_column(pos) = columns[A_range[pos]]
+
+    # Second matrix, iterate over row
+    B_range = nzrange(B, col)
+    nz_B = nonzeros(B)
+    n_row = length(B_range)
+    rows = rowvals(B)
+    new_row(pos) = rows[B_range[pos]]
+
+    # Initialize
+    pos_A = pos_B = 1
+    current_col = new_column(pos_A)
+    current_row = new_row(pos_B)
+    v = zero(eltype(A))
+    while true# it < 100
+        if current_row == current_col
+            v += nz_A[pos_A]*nz_B[pos_B]
+            increment_col = increment_row = true
+        else
+            increment_col = current_col < current_row
+            increment_row = !increment_col
+        end
+
+        if increment_row
+            pos_B += 1
+            if pos_B > n_row
+                break
+            end
+            current_row = new_row(pos_B)
+        end
+        if increment_col
+            pos_A += 1
+            if pos_A > n_col
+                break
+            end
+            current_col = new_column(pos_A)
+        end
+    end
+    return v
+end
+
+function rowcol_prod(A::SparseMatrixCSC, B::StaticSparsityMatrixCSR, row, col)
+    v = zero(eltype(A))
+    error()
+end
+
+
 function coarse_product!(C::T, A::T, R::T) where T<:StaticSparsityMatrixCSR
     n, m = size(C)
     # R = P'

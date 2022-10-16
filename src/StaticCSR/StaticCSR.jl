@@ -5,7 +5,7 @@ module StaticCSR
     export nthreads, minbatch
 
     include("mat.jl")
-    export AbstractILUFactorization, ilu0_csr, ilu0_csr!, coarse_product!
+    export AbstractILUFactorization, ilu0_csr, ilu0_csr!, in_place_mat_mat_mul!
     include("ilu0.jl")
     include("par_ilu0.jl")
 end
