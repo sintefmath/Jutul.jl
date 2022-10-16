@@ -116,9 +116,13 @@ function specialize_multilevel!(amg, h, A::StaticSparsityMatrixCSR, context)
     levels = h.levels
     new_levels = []
     n = length(levels)
+    buffers = Vector{typeof(A.At)}()
+    sizehint!(buffers, n)
     for i = 1:n
         l = levels[i]
         P0, R0 = l.P, l.R
+        # Add first part of R*A*P to buffer as CSC
+        push!(buffers, l.A*P0)
         # Convert P to a proper CSC matrix to get parallel
         # spmv for the wrapper type, trading some memory for
         # performance.
@@ -147,7 +151,7 @@ function specialize_multilevel!(amg, h, A::StaticSparsityMatrixCSR, context)
     coarse_solver = (x, b) -> solve_coarse_internal!(x, A_c, factor, b)
 
     levels = AlgebraicMultigrid.MultiLevel(typed_levels, A_c, coarse_solver, smoother, smoother, h.workspace)
-    amg.hierarchy = (levels = levels, buffers = buffers)
+    amg.hierarchy = (multilevel = levels, buffers = buffers)
 
     return amg
 end
