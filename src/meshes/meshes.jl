@@ -78,15 +78,23 @@ function plot_primitives(mesh, plot_type; kwarg...)
     return nothing
 end
 
-function meshscatter_primitives(g; kwarg...)
+function meshscatter_primitives(g; line = false, kwarg...)
     tp = tpfv_geometry(g)
     pts = collect(tp.cell_centroids')
+    for i in axes(pts, 1)
+        pts[i, 3] *= -1
+    end
     mapper = (Cells = identity, )
     @assert size(pts, 2) == 3 "Only supported for 3D meshes"
-    dim = size(pts, 2)
-
-    urng = maximum(pts, dims = 1) - minimum(pts, dims = 1)
     vol = tp.volumes
+    sizes = meshscatter_primitives_inner(pts, vol)
+    return (points = pts, mapper = mapper, sizes = sizes, line = line)
+end
+
+function meshscatter_primitives_inner(pts, vol)
+    dim = size(pts, 2)
+    urng = maximum(pts, dims = 1) - minimum(pts, dims = 1)
+    @. urng[urng == 0] = 1.0
     sizes = similar(pts)
     for i in axes(sizes, 1)
         v = vol[i]
@@ -96,9 +104,8 @@ function meshscatter_primitives(g; kwarg...)
         for d in 1:dim
             sizes[i, d] = gamma*urng[d]/2
         end
-        pts[i, 3] *= -1
     end
-    return (points = pts, mapper = mapper, sizes = sizes)
+    return sizes
 end
 
 include("mrst.jl")
