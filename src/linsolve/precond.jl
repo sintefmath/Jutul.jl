@@ -273,7 +273,8 @@ function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M)
         # CSC <- CSR * CSC
         # in_place_mat_mat_mul!(M, A, Rt)
         # M = A*P -> M' = (AP)' = P'A' = RA'
-        in_place_mat_mat_mul!(StaticSparsityMatrixCSR(M), R, A.At)
+        M_csr_transpose = StaticSparsityMatrixCSR(M, nthreads = nthreads(A), minbatch = minbatch(A))
+        in_place_mat_mat_mul!(M_csr_transpose, R, A.At)
         # CSR <- CSR * CSC
         in_place_mat_mat_mul!(A_c, R, M)
     else
