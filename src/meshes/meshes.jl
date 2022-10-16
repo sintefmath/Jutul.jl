@@ -78,6 +78,29 @@ function plot_primitives(mesh, plot_type; kwarg...)
     return nothing
 end
 
+function meshscatter_primitives(g; kwarg...)
+    tp = tpfv_geometry(g)
+    pts = collect(tp.cell_centroids')
+    mapper = (Cells = identity, )
+    @assert size(pts, 2) == 3 "Only supported for 3D meshes"
+    dim = size(pts, 2)
+
+    urng = maximum(pts, dims = 1) - minimum(pts, dims = 1)
+    vol = tp.volumes
+    sizes = similar(pts)
+    for i in axes(sizes, 1)
+        v = vol[i]
+        # Assume that the grid scaling holds for each cell and solve for the diameter 
+        # in each direction
+        gamma = (v/prod(urng))^(1.0/dim)
+        for d in 1:dim
+            sizes[i, d] = gamma*urng[d]/2
+        end
+        pts[i, 3] *= -1
+    end
+    return (points = pts, mapper = mapper, sizes = sizes)
+end
+
 include("mrst.jl")
 include("cart.jl")
 

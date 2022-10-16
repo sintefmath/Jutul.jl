@@ -51,6 +51,8 @@ function plot_primitives(mesh::MRSTWrapMesh, plot_type; kwarg...)
     # By default, no plotting is supported
     if plot_type == :mesh
         out = triangulate_mesh(mesh; kwarg...)
+    elseif plot_type == :meshscatter
+        out = meshscatter_primitives(mesh; kwarg...)
     else
         out = nothing
     end
