@@ -266,7 +266,7 @@ function update_coarse_system!(A_c, R, A, P, buffer)
 end
 
 function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M)
-    if true
+    if false
         At = A.At
         Pt = R.At
         Rt = P.At
