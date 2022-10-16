@@ -266,9 +266,7 @@ function update_coarse_system!(A_c, R, A, P, buffer)
 end
 
 function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M)
-    if false
-        A_c = coarse_product!(A_c, A, R)
-    elseif false
+    if true
         At = A.At
         Pt = R.At
         Rt = P.At
@@ -276,11 +274,6 @@ function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M)
         # in_place_mat_mat_mul!(M, A, Rt)
         # M = A*P -> M' = (AP)' = P'A' = RA'
         in_place_mat_mat_mul!(StaticSparsityMatrixCSR(M), R, A.At)
-
-        tmp = At*Pt
-        @info "" tmp M nonzeros(tmp) nonzeros(M)
-        @assert M == tmp
-        # error()
         # CSR <- CSR * CSC
         in_place_mat_mat_mul!(A_c, R, M)
     else

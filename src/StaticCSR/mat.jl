@@ -82,6 +82,7 @@ function rowcol_prod(A::StaticSparsityMatrixCSR, B::SparseMatrixCSC, row, col)
     n_col = length(A_range)
     columns = colvals(A)
     new_column(pos) = columns[A_range[pos]]
+    column_value(pos) = nz_A[A_range[pos]]
 
     # Second matrix, iterate over row
     B_range = nzrange(B, col)
@@ -89,7 +90,7 @@ function rowcol_prod(A::StaticSparsityMatrixCSR, B::SparseMatrixCSC, row, col)
     n_row = length(B_range)
     rows = rowvals(B)
     new_row(pos) = rows[B_range[pos]]
-
+    row_value(pos) = nz_B[B_range[pos]]
     # Initialize
     pos_A = pos_B = 1
     current_col = new_column(pos_A)
@@ -97,7 +98,7 @@ function rowcol_prod(A::StaticSparsityMatrixCSR, B::SparseMatrixCSC, row, col)
     v = zero(eltype(A))
     while true# it < 100
         if current_row == current_col
-            v += nz_A[pos_A]*nz_B[pos_B]
+            v += row_value(pos_B)*column_value(pos_A)
             increment_col = increment_row = true
         else
             increment_col = current_col < current_row
