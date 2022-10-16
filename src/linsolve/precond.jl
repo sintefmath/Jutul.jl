@@ -96,19 +96,19 @@ function update!(amg::AMGPreconditioner, A, b, context)
     kw = amg.method_kwarg
     A_amg = matrix_for_amg(A)
     @debug string("Setting up preconditioner ", amg.method)
-    t_amg = @elapsed hierarchy = amg.method(A_amg; kw...)
-    amg = specialize_hierarchy!(amg, hierarchy, A, context)
+    t_amg = @elapsed multilevel = amg.method(A_amg; kw...)
+    amg = specialize_multilevel!(amg, multilevel, A, context)
     amg.dim = size(A)
     @debug "Set up AMG in $t_amg seconds."
-    amg.factor = aspreconditioner(amg.hierarchy, amg.cycle)
+    amg.factor = aspreconditioner(amg.hierarchy.multilevel, amg.cycle)
 end
 
-function specialize_hierarchy!(amg, hierarchy, A, context)
-    amg.hierarchy = hierarchy
+function specialize_multilevel!(amg, multilevel, A, context)
+    amg.hierarchy = (multilevel = multilevel, buffers = nothing)
     return amg
 end
 
-function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
+function specialize_multilevel!(amg, h, A::StaticSparsityMatrixCSR, context)
     A_f = A
     nt = A.nthreads
     mb = A.minbatch
@@ -146,7 +146,8 @@ function specialize_hierarchy!(amg, h, A::StaticSparsityMatrixCSR, context)
     factor = factorize_coarse(A_c)
     coarse_solver = (x, b) -> solve_coarse_internal!(x, A_c, factor, b)
 
-    amg.hierarchy = AlgebraicMultigrid.MultiLevel(typed_levels, A_c, coarse_solver, smoother, smoother, h.workspace)
+    levels = AlgebraicMultigrid.MultiLevel(typed_levels, A_c, coarse_solver, smoother, smoother, h.workspace)
+    amg.hierarchy = (levels = levels, buffers = buffers)
 
     return amg
 end
@@ -200,7 +201,7 @@ end
 
 function partial_update!(amg::AMGPreconditioner, A, b, context)
     @timeit "coarse update" amg.hierarchy = update_hierarchy!(amg, amg.hierarchy, A)
-    @timeit "smoother update" amg.smoothers = update_smoothers!(amg.smoothers, A, amg.hierarchy)
+    @timeit "smoother update" amg.smoothers = update_smoothers!(amg.smoothers, A, amg.hierarchy.multilevel)
 end
 
 operator_nrows(amg::AMGPreconditioner) = amg.dim[1]
@@ -211,7 +212,9 @@ function factorize_coarse(A::StaticSparsityMatrixCSR)
     return lu(A.At)'
 end
 
-function update_hierarchy!(amg, h, A)
+function update_hierarchy!(amg, hierarchy, A)
+    h = hierarchy.multilevel
+    buffers = hierarchy.buffers
     levels = h.levels
     n = length(levels)
     for i = 1:n
@@ -233,7 +236,8 @@ function update_hierarchy!(amg, h, A)
     else
         pre = post = (A, x, b) -> apply_smoother!(x, A, b, S)
     end
-    return AlgebraicMultigrid.MultiLevel(levels, A, coarse_solver, pre, post, h.workspace)
+    multilevel = AlgebraicMultigrid.MultiLevel(levels, A, coarse_solver, pre, post, h.workspace)
+    return (multilevel = multilevel, buffers = buffers)
 end
 
 function print_system(A::StaticSparsityMatrixCSR)
