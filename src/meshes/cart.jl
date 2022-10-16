@@ -250,8 +250,16 @@ function get_delta(Δ, index, d)
     return v
 end
 
+function plot_primitives(mesh::CartesianMesh, plot_type; kwarg...)
+    if plot_type == :mesh
+        out = triangulate_mesh(mesh; kwarg...)
+    else
+        out = nothing
+    end
+    return out
+end
 
-function triangulate_mesh(m::CartesianMesh, is_depth = true; outer = false)
+function triangulate_mesh(m::CartesianMesh; is_depth = true, outer = false)
     pts = []
     tri = []
     cell_ix = []
@@ -361,5 +369,5 @@ function triangulate_mesh(m::CartesianMesh, is_depth = true; outer = false)
                 Faces = (face_data) -> face_data[face_index],
                 indices = (Cells = cell_ix, Faces = face_index)
               )
-    return (pts, tri, mapper)
+    return (points = pts, triangulation = tri, mapper = mapper)
 end

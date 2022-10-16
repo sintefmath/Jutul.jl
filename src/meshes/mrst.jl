@@ -46,12 +46,23 @@ number_of_cells(t::MRSTWrapMesh) = Int64(t.data.cells.num)
 number_of_faces(t::MRSTWrapMesh) = Int64(t.data.faces.num)
 neighbor(t::MRSTWrapMesh, f, i) = Int64(t.data.faces.neighbors[f, i])
 
+
+function plot_primitives(mesh::MRSTWrapMesh, plot_type; kwarg...)
+    # By default, no plotting is supported
+    if plot_type == :mesh
+        out = triangulate_mesh(mesh; kwarg...)
+    else
+        out = nothing
+    end
+    return out
+end
+
 function triangulate_mesh(m::Dict)
     mm = MRSTWrapMesh(m)
     return triangulate_mesh(mm)
 end
 
-function triangulate_mesh(m::MRSTWrapMesh, is_depth = true; outer = false)
+function triangulate_mesh(m::MRSTWrapMesh; is_depth = true, outer = false)
     G = m.data
     d = dim(m)
 
@@ -169,5 +180,5 @@ function triangulate_mesh(m::MRSTWrapMesh, is_depth = true; outer = false)
                 Faces = (face_data) -> face_data[face_index],
                 indices = (Cells = cell_index, Faces = face_index)
               )
-    return (pts, tri, mapper)
+    return (points = pts, triangulation = tri, mapper = mapper)
 end

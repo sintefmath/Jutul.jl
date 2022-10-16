@@ -72,6 +72,12 @@ Get the number of faces in a mesh.
 """
 number_of_faces(G) = size(get_neighborship(G), 2)
 
+export plot_primitives
+function plot_primitives(mesh, plot_type; kwarg...)
+    # By default, no plotting is supported
+    return nothing
+end
+
 include("mrst.jl")
 include("cart.jl")
 
