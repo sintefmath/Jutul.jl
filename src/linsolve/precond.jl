@@ -127,8 +127,10 @@ function specialize_multilevel!(amg, h, A::StaticSparsityMatrixCSR, context)
         # spmv for the wrapper type, trading some memory for
         # performance.
         if isa(P0, Adjoint)
+            @assert R0 === P0'
             P0 = copy(P0)
         elseif isa(R0, Adjoint)
+            @assert R0' === P0
             R0 = copy(R0)
         end
         R = to_csr(P0)
@@ -229,11 +231,7 @@ function update_hierarchy!(amg, hierarchy, A)
         else
             A_c = levels[i+1].A
         end
-        if isnothing(buffers)
-            buf = nothing
-        else
-            buf = buffers[i]
-        end
+        buf = isnothing(buffers) ? nothing : buffers[i]
         A = update_coarse_system!(A_c, R, A, P, buf)
     end
     factor = factorize_coarse(A)
@@ -262,7 +260,9 @@ function print_system(A)
 end
 
 function update_coarse_system!(A_c, R, A, P, buffer)
-    return R*A*P
+    # In place modification
+    nonzeros(A_c) .= nonzeros(R*A*P)
+    return A_c
 end
 
 function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M)
