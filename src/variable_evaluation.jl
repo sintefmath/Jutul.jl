@@ -190,9 +190,9 @@ function sort_secondary_variables!(model::JutulModel)
     # Do nothing for general case.
 end
 
-function build_variable_graph(model, primary = model.primary_variables, secondary = model.secondary_variables, param = model.parameters)
+function build_variable_graph(model, primary = model.primary_variables, secondary = model.secondary_variables, param = model.parameters; to_graph = false)
     edges = []
-    nodes = []
+    nodes = Vector{Symbol}()
     for key in keys(primary)
         push!(nodes, key)
         push!(edges, []) # No dependencies for primary variables.
@@ -206,7 +206,20 @@ function build_variable_graph(model, primary = model.primary_variables, secondar
         push!(nodes, key)
         push!(edges, dep)
     end
-    return (nodes, edges)
+    if to_graph
+        n = length(nodes)
+        graph = SimpleDiGraph(n)
+        for (i, edge) in enumerate(edges)
+            for d in edge
+                pos = findall(nodes .== d)
+                @assert length(pos) == 1 "Symbol $d must appear exactly once in secondary variables or parameters, found $(length(pos)) entries. Declared secondary/parameters:\n $symbols. Declared dependencies:\n $deps"
+                add_edge!(graph, i, pos[])
+            end
+        end
+        return (graph = reverse(graph), nodes = nodes, edges = edges)
+    else
+        return (nodes, edges)
+    end
 end
 
 function sort_secondary_variables!(model::SimulationModel)
