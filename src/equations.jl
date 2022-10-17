@@ -433,14 +433,25 @@ end
 @inline prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt) = nothing
 
 function update_equation_for_entity!(cache, eq, state, state0, model, dt)
+    T = eltype(cache.entries)
+    local_state = local_ad(state, 1, T)
+    local_state0 = local_ad(state0, 1, T)
+    inner_update_equation_for_entity(cache, eq, local_state, local_state0, model, dt)
+end
+
+function inner_update_equation_for_entity(cache, eq, state, state0, model, dt)
     v = cache.entries
     vars = cache.variables
-    for i in 1:number_of_entities(cache)
+
+    ne = number_of_entities(cache)
+    tb = minbatch(model.context, ne)
+    @batch minbatch=tb for i in 1:ne
         ldisc = local_discretization(eq, i)
         @inbounds for j in vrange(cache, i)
             v_i = @views v[:, j]
-            state_i = local_ad(state, vars[j], eltype(v))
-            state0_i = local_ad(state0, vars[j], eltype(v))
+            var = vars[j]
+            state_i = new_entity_index(state, var)
+            state0_i = new_entity_index(state0, var)
             @inbounds update_equation_in_entity!(v_i, i, state_i, state0_i, eq, model, dt, ldisc)
         end
     end
