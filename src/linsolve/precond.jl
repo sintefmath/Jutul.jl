@@ -154,7 +154,6 @@ function specialize_multilevel!(amg, h, A::StaticSparsityMatrixCSR, context)
 
     levels = AlgebraicMultigrid.MultiLevel(typed_levels, A_c, coarse_solver, smoother, smoother, h.workspace)
     amg.hierarchy = (multilevel = levels, buffers = buffers)
-
     return amg
 end
 
@@ -281,8 +280,8 @@ function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M)
         At = A.At
         Pt = R.At
         Rt = P.At
-        A_c = Rt*At*Pt
-        A_c = StaticSparsityMatrixCSR(A_c, nthreads = A.nthreads, minbatch = A.minbatch)
+        A_c_t = Rt*At*Pt
+        nonzeros(A_c.At) .= nonzeros(A_c_t)
     end
     return A_c
 end
@@ -299,6 +298,7 @@ function update_smoothers!(S::NamedTuple, A::StaticSparsityMatrixCSR, h)
             A = h.levels[i+1].A
         end
     end
+    return S
 end
 
 """
