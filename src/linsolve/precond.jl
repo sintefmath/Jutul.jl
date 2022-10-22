@@ -121,8 +121,6 @@ function specialize_multilevel!(amg, h, A::StaticSparsityMatrixCSR, context)
     for i = 1:n
         l = levels[i]
         P0, R0 = l.P, l.R
-        # Add first part of R*A*P to buffer as CSC
-        push!(buffers, l.A*P0)
         # Convert P to a proper CSC matrix to get parallel
         # spmv for the wrapper type, trading some memory for
         # performance.
@@ -135,7 +133,11 @@ function specialize_multilevel!(amg, h, A::StaticSparsityMatrixCSR, context)
         end
         R = to_csr(P0)
         P = to_csr(R0)
-        A = to_csr(l.A)
+        if i > 1
+            A = to_csr(copy(l.A'))
+        end
+        # Add first part of R*A*P to buffer as CSC
+        push!(buffers, (A.At')*P0)
         lvl = AlgebraicMultigrid.Level(A, P, R)
         push!(new_levels, lvl)
     end
