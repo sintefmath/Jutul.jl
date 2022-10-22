@@ -85,51 +85,54 @@ function rowcol_prod(A::StaticSparsityMatrixCSR, B::SparseMatrixCSC, row, col)
     nz_A = nonzeros(A)
     n_col = length(A_range)
     columns = colvals(A)
-    new_column(pos) = @inbounds sparse_indirection(columns, A_range, pos)
-    column_value(pos) = @inbounds sparse_indirection(nz_A, A_range, pos)
+    new_column(pos) = sparse_indirection(columns, A_range, pos)
+    column_value(pos) = sparse_indirection(nz_A, A_range, pos)
 
     # Second matrix, iterate over row
     B_range = nzrange(B, col)
     nz_B = nonzeros(B)
     n_row = length(B_range)
     rows = rowvals(B)
-    new_row(pos) = @inbounds sparse_indirection(rows, B_range, pos)
-    row_value(pos) = @inbounds sparse_indirection(nz_B, B_range, pos)
+    new_row(pos) = sparse_indirection(rows, B_range, pos)
+    row_value(pos) = sparse_indirection(nz_B, B_range, pos)
     # Initialize
     pos_A = pos_B = 1
     current_col = new_column(pos_A)
     current_row = new_row(pos_B)
     v = zero(eltype(A))
-    while true
+    entries_remain = true
+    while entries_remain
         if current_row == current_col
             v += row_value(pos_B)*column_value(pos_A)
             increment_col = increment_row = true
+            entries_remain = pos_A < n_col && pos_B < n_row
+            if entries_remain
+                pos_A += 1
+                current_col = new_column(pos_A)
+                pos_B += 1
+                current_row = new_row(pos_B)
+            end
+        elseif current_col < current_row
+            entries_remain = pos_A < n_col
+            if entries_remain
+                pos_A += 1
+                current_col = new_column(pos_A)
+            end
         else
-            increment_col = current_col < current_row
-            increment_row = !increment_col
-        end
-
-        if increment_row
-            pos_B += 1
-            if pos_B > n_row
-                break
+            entries_remain = pos_B < n_row
+            if entries_remain
+                pos_B += 1
+                current_row = new_row(pos_B)
             end
-            current_row = new_row(pos_B)
-        end
-        if increment_col
-            pos_A += 1
-            if pos_A > n_col
-                break
-            end
-            current_col = new_column(pos_A)
         end
     end
     return v
 end
 
 @inline function sparse_indirection(val, rng, pos)
-    ix = @inbounds rng[pos]
-    return @inbounds val[ix]
+    @inbounds ix = rng[pos]
+    @inbounds v = val[ix]
+    return v
 end
 
 function rowcol_prod(A::SparseMatrixCSC, B::StaticSparsityMatrixCSR, row, col)
