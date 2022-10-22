@@ -102,8 +102,7 @@ function process_partial_row!(nz, pos, cols, K, k, A_ik)
     end
 end
 
-function ilu0_factor!(L, U, D, A; active = 1:size(A, 1))
-    n, m = size(L)
+function ilu0_factor!(L, U, D, A, active = 1:size(A, 1))
     cols_l = colvals(L)
     nz_l = nonzeros(L)
 
@@ -112,7 +111,8 @@ function ilu0_factor!(L, U, D, A; active = 1:size(A, 1))
     for i in active
         l_pos = nzrange(L, i)
         u_pos = nzrange(U, i)
-        @inbounds for (l_start, l_i) in enumerate(l_pos)
+        l_start = 1
+        @inbounds for l_i in l_pos
             k = cols_l[l_i]
             A_kk = D[k]
             A_ik = nz_l[l_i]*inv(A_kk)
@@ -124,10 +124,11 @@ function ilu0_factor!(L, U, D, A; active = 1:size(A, 1))
             process_partial_row!(nz_l, rem_l_pos, cols_l, K, k, A_ik)
             D[i] -= A_ik*K[k, i]
             process_partial_row!(nz_u, u_pos, cols_u, K, k, A_ik)
+            l_start += 1
         end
     end
-    @inbounds for i in active
-        D[i] = inv(D[i])
+    for i in active
+        @inbounds D[i] = inv(D[i])
     end
 end
 
@@ -144,17 +145,17 @@ function invert_row!(x, M, D, b, row, local_index)
         k = col[j]
         v -= nz[j]*x[k]
     end
-    x[row] = diagonal_inverse(D, row, local_index)*v
+    @inbounds x[row] = diagonal_inverse(D, row, local_index)*v
 end
 
-function forward_substitute!(x, M, b; order = 1:length(b), D = nothing)
+function forward_substitute!(x, M, b, order = 1:length(b), D = nothing)
     @inbounds for (local_index, i) in enumerate(order)
         invert_row!(x, M, D, b, i, local_index)
     end
     return x
 end
 
-function backward_substitute!(x, M, b; order = 1:length(b), D = nothing)
+function backward_substitute!(x, M, b, order = 1:length(b), D = nothing)
     n = length(order)
     @inbounds for (i, local_index) in zip(Iterators.reverse(order), n:-1:1)
         invert_row!(x, M, D, b, i, local_index)
@@ -163,9 +164,9 @@ function backward_substitute!(x, M, b; order = 1:length(b), D = nothing)
 end
 
 export ilu_solve!
-function ilu_solve!(x, L, U, D, b; active = 1:length(b))
-    forward_substitute!(x, L, b, order = active)
-    return backward_substitute!(x, U, x, order = active, D = D)
+function ilu_solve!(x, L, U, D, b, active = 1:length(b))
+    forward_substitute!(x, L, b, active)
+    return backward_substitute!(x, U, x, active, D)
 end
 
 abstract type AbstractILUFactorization end
@@ -198,7 +199,7 @@ function ilu0_csr(A::StaticSparsityMatrixCSR; active = 1:size(A, 1))
     L, ml = fixed_block(A, active, lower = true)
     U, mu = fixed_block(A, active, lower = false)
     D, md = diagonal_block(A, active)
-    ilu0_factor!(L, U, D, A, active = active)
+    ilu0_factor!(L, U, D, A, active)
     return ILUFactorCSR(L, U, D, ml, mu, md, active = active)
 end
 
@@ -207,13 +208,13 @@ function ilu0_csr!(LU::ILUFactorCSR, A::StaticSparsityMatrixCSR)
     update_values!(L, A, LU.L_map)
     update_values!(U, A, LU.U_map)
     update_values!(D, A, LU.D_map)
-    ilu0_factor!(L, U, D, A, active = LU.active)
+    ilu0_factor!(L, U, D, A, LU.active)
     return LU
 end
 
 
 function ldiv!(x::AbstractVector, LU::ILUFactorCSR, b::AbstractVector)
-    x = ilu_solve!(x, LU.L, LU.U, LU.D, b, active = LU.active)
+    x = ilu_solve!(x, LU.L, LU.U, LU.D, b, LU.active)
     return x
 end
 
