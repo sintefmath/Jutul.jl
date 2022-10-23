@@ -95,6 +95,7 @@ function update_values!(B, A, mapping)
 end
 
 function process_partial_row!(nz, pos, cols, K, k, A_ik)
+    # @info pos
     @inbounds for l_j in pos
         j = cols[l_j]
         A_kj = K[k, j]
@@ -118,12 +119,20 @@ function ilu0_factor!(L, U, D, A, active = 1:size(A, 1))
             A_ik = nz_l[l_i]*inv(A_kk)
             # Put it back as inverted
             nz_l[l_i] = A_ik
-            # Do the remainder of the row: First the part inside L, diagonal, and then the part in U
-            rem_l_pos = @view l_pos[l_start+1:end]
-            K = U
-            process_partial_row!(nz_l, rem_l_pos, cols_l, K, k, A_ik)
-            D[i] -= A_ik*K[k, i]
-            process_partial_row!(nz_u, u_pos, cols_u, K, k, A_ik)
+            if A_ik != zero(eltype(D))
+                # Do the remainder of the row: First the part inside L, diagonal, and then the part in U
+                rem_l_pos = @view l_pos[l_start+1:end]
+                # In the following:
+                # k = 1:(i-1)
+                # and we loop over
+                # j = (k+1):n
+                # This implies that j > k. Accesses to A[k, j] are
+                # then only applied to the upper part of the original
+                # matrix.
+                process_partial_row!(nz_l, rem_l_pos, cols_l, U, k, A_ik)
+                D[i] -= A_ik*U[k, i]
+                process_partial_row!(nz_u, u_pos, cols_u, U, k, A_ik)
+            end
             l_start += 1
         end
     end
