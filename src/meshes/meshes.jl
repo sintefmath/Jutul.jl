@@ -35,7 +35,7 @@ struct TwoPointFiniteVolumeGeometry <: JutulGeometry
         dim, nc = size(C_c)
 
         # Sanity check
-        @assert dim == 2 || dim == 3
+        @assert dim == 2 || dim == 3 || dim == 1
         # Check cell centroids
         @assert size(C_c) == (dim, nc)
         # Check face centroids
@@ -81,11 +81,12 @@ end
 function meshscatter_primitives(g; line = false, kwarg...)
     tp = tpfv_geometry(g)
     pts = collect(tp.cell_centroids')
-    for i in axes(pts, 1)
-        pts[i, 3] *= -1
+    if size(pts, 2) == 3
+        for i in axes(pts, 1)
+            pts[i, 3] *= -1
+        end
     end
     mapper = (Cells = identity, )
-    @assert size(pts, 2) == 3 "Only supported for 3D meshes"
     vol = tp.volumes
     sizes = meshscatter_primitives_inner(pts, vol)
     return (points = pts, mapper = mapper, sizes = sizes, line = line)
