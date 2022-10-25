@@ -99,9 +99,25 @@ function triangulate_mesh(m::MRSTWrapMesh; is_depth = true, outer = false)
     face_index = similar(cell_index)
     offset = 0
     nc = Int64(G.cells.num)
-    if d == 2
+    if d == 1
+        nodes = G.nodes.coords
+        nn = size(nodes, 1)
+        @assert nn == nc + 1
+        offset = 0
+        for cell = 1:nc
+            x0 = nodes[cell]
+            x1 = nodes[cell+1]
+
+            push!(tri, [1 2 4; 1 4 3] .+ offset)
+            push!(pts, [x0 0.0; x1 0.0; x0 1.0; x1 1.0])
+            N = 4
+            for i in 1:N
+                push!(cell_index, cell) 
+            end
+            offset += N
+        end
+    elseif d == 2
         # For each cell, rotate around and add all nodes and triangles that include the center cell
-        # error("Not implemented.")
         ccent = G.cells.centroids
         for cell = 1:nc
             center = ccent[cell, :]
