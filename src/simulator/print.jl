@@ -44,7 +44,7 @@ function new_simulation_control_step_message(info_level, p, rec, step_no, no_ste
         count_str = "$no_steps"
         ndig = length(count_str)
         fstr = lpad("$step_no", ndig)
-        jutul_message("Step $fstr/$count_str", "Solving report step with length $(get_tstr(dT)).", color = :blue)
+        jutul_message("Step $fstr/$count_str", "Solving report step of $(get_tstr(dT)).", color = :blue)
         # @info "$(prefix)Solving step $step_no/$no_steps of length $(get_tstr(dT))."
     end
 end
