@@ -11,6 +11,12 @@ struct MRSTWrapMesh <: AbstractJutulMesh
     end
 end
 
+function Base.show(io::IO, m::MRSTWrapMesh)
+    nc = number_of_cells(m)
+    nf = number_of_faces(m)
+    print(io, "MRSTWrapMesh with $nc cells and $nf faces.")
+end
+
 function tpfv_geometry(g::MRSTWrapMesh; N = nothing)
     exported = g.data
     faces = exported.faces
