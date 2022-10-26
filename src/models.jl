@@ -63,6 +63,29 @@ function get_variables_by_type(model, type)
     end
 end
 
+export get_variable
+"""
+    get_variable(model::SimulationModel, name::Symbol)
+
+Get implementation of variable or parameter with name `name` for the model.
+"""
+function get_variable(model::SimulationModel, name::Symbol)
+    pvar = model.primary_variables
+    svar = model.secondary_variables
+    prm = model.parameters
+    if haskey(pvar, name)
+        var = pvar[name]
+    elseif haskey(pvar, name)
+        var = svar[name]
+    elseif haskey(prm, name)
+        var = prm[name]
+    else
+        error("Variable $name not found in primary/secondary variables or parameters.")
+    end
+    return var
+end
+
+
 export set_primary_variables!, set_secondary_variables!, replace_variables!
 """
     set_primary_variables!(model, varname = vardef)
