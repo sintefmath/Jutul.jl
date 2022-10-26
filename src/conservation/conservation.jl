@@ -158,6 +158,9 @@ function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, law::ConservationL
     end
 end
 
+function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, jac, model, entity::Any; kwarg...)
+    # Assume that this is ok. Warning already issued.
+end
 
 function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc; target_offset = 0, source_offset = 0)
     nf, ne, np = ad_dims(face_cache)
@@ -362,6 +365,13 @@ function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawTPFAStor
     J = map(x -> x.face, cd)
     I, J = map_ij_to_active(I, J, model.domain, entity)
 
+    return (I, J)
+end
+
+function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawTPFAStorage, entity)
+    @warn "Using hard-coded conservation law for entity $entity may give incorrect Jacobian. Assuming no dependence upon this entity for conservation law."
+    I = Vector{Int64}()
+    J = Vector{Int64}()
     return (I, J)
 end
 
