@@ -309,22 +309,31 @@ function optimization_limits!(lims, config, mapper, param, model)
                 end
                 hi = min(abs_max, rel_max_actual)
             end
+            @assert !isnan(low)
+            @assert !isnan(hi)
             x_min[k] = low
             x_max[k] = hi
 
             low_group = min(low_group, low)
             high_group = max(high_group, hi)
         end
-        high_group = max(high_group, low_group + 1e-8*(low_group + high_group))
+        high_group = max(high_group, low_group + 1e-8*(low_group + high_group) + 1e-18)
+        @assert !isnan(low_group)
+        @assert !isnan(high_group)
         cfg[:low] = low_group
         cfg[:high] = high_group
+        cscale = (low_group, high_group)
 
         F = opt_scaler_function(config, param_k, inv = false)
         # F_inv = opt_scaler_function(config, k, inv = true)
         for i in 1:n
             k = i + offset
-            x_min[k] = F(x_min[k])
-            x_max[k] = F(x_max[k])
+            low = F(x_min[k])
+            hi = F(x_max[k])
+            @assert !isnan(low) "Scaled limit for F($(x_min[k])) was NaN (urange $cscale)"
+            @assert !isnan(hi) "Scaled limit for F($(x_max[k])) was NaN (urange $cscale)"
+            x_min[k] = low
+            x_max[k] = hi
         end
         lumping = get_lumping(cfg)
         if !isnothing(lumping)
