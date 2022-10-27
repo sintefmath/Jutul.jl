@@ -94,11 +94,10 @@ function update_values!(B, A, mapping)
     return B
 end
 
-function process_partial_row!(nz, pos, cols, K, k, A_ik)
-    # @info pos
+function process_partial_row!(nz, pos, cols, A, k, A_ik)
     @inbounds for l_j in pos
         j = cols[l_j]
-        A_kj = K[k, j]
+        A_kj = A[k, j]
         nz[l_j] -= A_ik*A_kj
     end
 end

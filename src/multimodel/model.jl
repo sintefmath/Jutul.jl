@@ -489,13 +489,13 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
 
     state_s_v = as_value(state_s)
     state0_s_v = as_value(state0_s)
-    for cache in values(ct_s.target)
+    for (_, cache) in pairs(ct_s.target)
         update_cross_term_inner_target!(cache, ct, eq, state_s_v, state0_s_v, state_t, state0_t, model_t, model_s, dt)
     end
 
     state_t_v = as_value(state_t)
     state0_t_v = as_value(state0_t)
-    for cache in values(ct_s.source)
+    for (_, cache) in pairs(ct_s.source)
         update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
     end
 end
