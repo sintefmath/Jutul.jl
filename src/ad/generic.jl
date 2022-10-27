@@ -25,6 +25,7 @@ function generic_cache_declare_pattern(cache::GenericAutoDiffCache, entity_indic
 end
 
 number_of_partials(::Type{ForwardDiff.Dual{T, V, N}}) where {T,V,N} = N
+number_of_partials(::Type{<:Real}) = 0
 
 entity(::GenericAutoDiffCache{<:Any, E}) where E = E
 equations_per_entity(::GenericAutoDiffCache{N}) where N = N
