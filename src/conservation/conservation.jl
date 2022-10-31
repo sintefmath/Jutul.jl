@@ -472,7 +472,7 @@ end
 function update_half_face_flux_tpfa_internal!(hf_cells::AbstractArray{T}, eq, state, model, dt, flow_disc, conn_pos, conn_data, c) where T
     @inbounds for i in conn_pos[c]:(conn_pos[c+1]-1)
         (; self, other, face, face_sign) = @inbounds conn_data[i]
-        @inbounds hf_cells[i] = compute_tpfa_flux!(zero(T), self, other, face, face_sign, eq, state, model, dt, flow_disc)
+        @inbounds hf_cells[i] = face_flux!(zero(T), self, other, face, face_sign, eq, state, model, dt, flow_disc)
     end
 end
 
@@ -484,13 +484,13 @@ function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq,
         state_f = new_entity_index(state, f)
         @inbounds left = neighbors[1, f]
         @inbounds right = neighbors[2, f]
-        @inbounds hf_faces[f] = compute_tpfa_flux!(hf_faces[f], left, right, f, 1, eq, state_f, model, dt, flow_disc)
+        @inbounds hf_faces[f] = face_flux!(hf_faces[f], left, right, f, 1, eq, state_f, model, dt, flow_disc)
     end
 end
 
 
-function compute_tpfa_flux!(entry, l, r, f, face_sign, eq, state, model, dt, tpfa_disc)
-    error("Not specialized")
+function face_flux!(entry, l, r, f, face_sign, eq, state, model, dt, tpfa_disc)
+    error("Not specialized for $eq")
 end
 
 function reset_sources!(eq_s::ConservationLawTPFAStorage)
