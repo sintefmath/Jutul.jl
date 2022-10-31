@@ -489,8 +489,8 @@ function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq,
 end
 
 
-function compute_tpfa_flux!
-
+function compute_tpfa_flux!(entry, l, r, f, face_sign, eq, state, model, dt, tpfa_disc)
+    error("Not specialized")
 end
 
 function reset_sources!(eq_s::ConservationLawTPFAStorage)
