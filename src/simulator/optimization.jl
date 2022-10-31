@@ -41,7 +41,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     end
     mapper, = variable_mapper(model, :parameters, targets = targets, config = opt_cfg)
     lims = optimization_limits(opt_cfg, mapper, param, model)
-    if print > 0
+    if print > 0 && isfinite(print)
         print_parameter_optimization_config(targets, opt_cfg, model)
     end
     x0 = vectorize_variables(model, param, mapper, config = opt_cfg)

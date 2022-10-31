@@ -32,7 +32,7 @@ function solve_adjoint_forward_test_system(dim, dt)
     return (model, state0, states, reports, param, forces)
 end
 
-function mytest(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, extra_timing = false, scalar_obj = true)
+function test_basic_adjoint(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, scalar_obj = true)
     model, state0, states, reports, param, forces = solve_adjoint_forward_test_system((nx, ny), dt)
     K = param[:K]
     n_grad = length(K)
@@ -66,6 +66,51 @@ function mytest(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, extra_t
     end
 end
 
+function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_scaling = true, use_log = false)
+    model, state0, states, reports, param, forces = solve_adjoint_forward_test_system((nx, ny), dt)
+    
+    K = param[:K]
+    n_grad = length(K)
+    G = (model, state, dt, step_no, forces) -> poisson_test_objective(model, state)
+
+    cfg = optimization_config(model, param, use_scaling = use_scaling, rel_min = 0.1, rel_max = 10)
+    if use_log
+        cfg[:K][:scaler] = :log
+    end
+    tmp = setup_parameter_optimization(model, state0, param, dt, forces, G, cfg, param_obj = true, print = false);
+    F_o, dF_o, F_and_dF, x0, lims, data = tmp
+    # Evaluate gradient first to initialize
+    F0 = F_o(x0)
+    # This interface is only safe if F0 was called with x0 first.
+    dF_initial = dF_o(similar(x0), x0)
+
+    ϵ = 1e-6
+    dF_num = similar(dF_initial)
+    num_grad!(dF_num, x0, ϵ, F_o)
+
+    # Check around initial point
+    @test isapprox(dF_num, dF_initial, rtol = 1e-3)
+    # Perturb the data in a few different directions and verify
+    # the gradients there too. Use the F_and_dF interface, that
+    # computes gradients together with the objective
+    for delta in [1.05, 0.85, 0.325, 1.55]
+        x_mod = delta.*x0
+        dF_mod = similar(dF_initial)
+        F_and_dF(NaN, dF_mod, x_mod)
+        num_grad!(dF_num, x_mod, ϵ, F_o)
+        @test isapprox(dF_num, dF_mod, rtol = 1e-3)
+    end
+end
+
+function num_grad!(dF_num, x0, ϵ, F_o)
+    F_initial = F_o(x0)
+    for i in eachindex(dF_num)
+        x = copy(x0)
+        x[i] += ϵ
+        F_perturbed = F_o(x)
+        dF_num[i] = (F_perturbed - F_initial)/ϵ
+    end
+end
 
 function solve_in_place!(grad_adj, model, state0, states, param, dt, G, forces; kwarg...)
     storage = setup_adjoint_storage(model; state0 = state0, parameters = param, kwarg...)
@@ -79,12 +124,22 @@ function solve_out_of_place(model, state0, states, param, reports, G, forces; kw
 end
 
 @testset "simple adjoint sensitivities" begin
-    for scalar_obj in [true, false]
-        for in_place in [false, true]
-            # Test single step since it hits less of the code
-            mytest(dt = [1.0], in_place = in_place, scalar_obj = scalar_obj)
-            # Test with multiple time-steps
-            mytest(in_place = in_place, scalar_obj = scalar_obj)
+    @testset "adjoint" begin
+        for scalar_obj in [true, false]
+            for in_place in [false, true]
+                # Test single step since it hits less of the code
+                test_basic_adjoint(dt = [1.0], in_place = in_place, scalar_obj = scalar_obj)
+                # Test with multiple time-steps
+                test_basic_adjoint(in_place = in_place, scalar_obj = scalar_obj)
+            end
         end
     end
+    @testset "optimization interface" begin
+        for use_log in [true, false]
+            for use_scaling in [true, false]
+                test_optimization_gradient(use_scaling = use_scaling, use_log = use_log)
+            end
+        end
+    end    
 end
+
