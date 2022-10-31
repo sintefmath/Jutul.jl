@@ -118,35 +118,40 @@ function specialize_multilevel!(amg, h, A::StaticSparsityMatrixCSR, context)
     n = length(levels)
     buffers = Vector{typeof(A.At)}()
     sizehint!(buffers, n)
-    for i = 1:n
-        l = levels[i]
-        P0, R0 = l.P, l.R
-        # Convert P to a proper CSC matrix to get parallel
-        # spmv for the wrapper type, trading some memory for
-        # performance.
-        if isa(P0, Adjoint)
-            @assert R0 === P0'
-            P0 = copy(P0)
-        elseif isa(R0, Adjoint)
-            @assert R0' === P0
-            R0 = copy(R0)
+    if n > 0
+        for i = 1:n
+            l = levels[i]
+            P0, R0 = l.P, l.R
+            # Convert P to a proper CSC matrix to get parallel
+            # spmv for the wrapper type, trading some memory for
+            # performance.
+            if isa(P0, Adjoint)
+                @assert R0 === P0'
+                P0 = copy(P0)
+            elseif isa(R0, Adjoint)
+                @assert R0' === P0
+                R0 = copy(R0)
+            end
+            R = to_csr(P0)
+            P = to_csr(R0)
+            if i > 1
+                A = to_csr(copy(l.A'))
+            end
+            # Add first part of R*A*P to buffer as CSC
+            push!(buffers, (A.At')*P0)
+            lvl = AlgebraicMultigrid.Level(A, P, R)
+            push!(new_levels, lvl)
         end
-        R = to_csr(P0)
-        P = to_csr(R0)
-        if i > 1
-            A = to_csr(copy(l.A'))
+        typed_levels = Vector{typeof(new_levels[1])}(undef, n)
+        for i = 1:n
+            typed_levels[i] = new_levels[i]
         end
-        # Add first part of R*A*P to buffer as CSC
-        push!(buffers, (A.At')*P0)
-        lvl = AlgebraicMultigrid.Level(A, P, R)
-        push!(new_levels, lvl)
+        levels = typed_levels
+    else
+        # There are no levels (case is tiny)
+        T = typeof(A_f)
+        levels = Vector{AlgebraicMultigrid.Level{T, T, T}}()
     end
-
-    typed_levels = Vector{typeof(new_levels[1])}(undef, n)
-    for i = 1:n
-        typed_levels[i] = new_levels[i]
-    end
-    levels = typed_levels
     S = amg.smoothers = generate_smoothers_csr(A_f, levels, nt, mb, context)
     smoother = (A, x, b) -> apply_smoother!(x, A, b, S)
 
@@ -154,7 +159,7 @@ function specialize_multilevel!(amg, h, A::StaticSparsityMatrixCSR, context)
     factor = factorize_coarse(A_c)
     coarse_solver = (x, b) -> solve_coarse_internal!(x, A_c, factor, b)
 
-    levels = AlgebraicMultigrid.MultiLevel(typed_levels, A_c, coarse_solver, smoother, smoother, h.workspace)
+    levels = AlgebraicMultigrid.MultiLevel(levels, A_c, coarse_solver, smoother, smoother, h.workspace)
     amg.hierarchy = (multilevel = levels, buffers = buffers)
     return amg
 end
@@ -394,7 +399,9 @@ end
 
 function update!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, context::ParallelCSRContext)
     if isnothing(ilu.factor)
-        nt = nthreads(context)
+        mb = A.minbatch
+        max_t = max(size(A, 1) ÷ mb, 1)
+        nt = min(nthreads(context), max_t)
         if nt == 1
             @debug "Setting up serial ILU(0)-CSR"
             F = ilu0_csr(A)
