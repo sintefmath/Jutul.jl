@@ -9,10 +9,10 @@ function poisson_test_objective_vec(model, state)
     return [poisson_test_objective(model, state), poisson_test_objective(model, state)]
 end
 
-function mytest(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, extra_timing = false, scalar_obj = true)
+function solve_adjoint_forward_test_system(dim, dt)
     sys = VariablePoissonSystem(time_dependent = true)
     # Unit square
-    g = CartesianMesh((nx, ny), (1.0, 1.0))
+    g = CartesianMesh(dim, (1.0, 1.0))
     # Set up a model with the grid and system
     discretization = (poisson = Jutul.PoissonDiscretization(g), )
     D = DiscretizedDomain(g, discretization)
@@ -29,7 +29,12 @@ function mytest(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, extra_t
 
     sim = Simulator(model, state0 = state0, parameters = param)
     states, reports = simulate(sim, dt, info_level = -1, forces = forces);
+    return (model, state0, states, reports, param, forces)
+end
 
+function mytest(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, extra_timing = false, scalar_obj = true)
+    model, state0, states, reports, param, forces = solve_adjoint_forward_test_system((nx, ny), dt)
+    K = param[:K]
     n_grad = length(K)
     if scalar_obj
         # Scalar mode - we test the gradient of the scalar objective against the numerical version
