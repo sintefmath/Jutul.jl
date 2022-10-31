@@ -115,7 +115,7 @@ function optimization_config(model::MultiModel, param, active = nothing; kwarg..
     out = Dict{Symbol, Any}()
     for k in submodel_symbols(model)
         m = model[k]
-        if isnothing(active)
+        if isnothing(active) || !haskey(active, k)
             v = optimization_config(m, param[k]; kwarg...)
         else
             v = optimization_config(m, param[k], active[k]; kwarg...)
