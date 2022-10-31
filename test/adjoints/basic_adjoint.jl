@@ -68,9 +68,10 @@ end
 
 function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_scaling = true, use_log = false)
     model, state0, states, reports, param, forces = solve_adjoint_forward_test_system((nx, ny), dt)
-    
+    ϵ = 1e-6
+    num_tol = 1e-4
+
     K = param[:K]
-    n_grad = length(K)
     G = (model, state, dt, step_no, forces) -> poisson_test_objective(model, state)
 
     cfg = optimization_config(model, param, use_scaling = use_scaling, rel_min = 0.1, rel_max = 10)
@@ -84,12 +85,11 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
     # This interface is only safe if F0 was called with x0 first.
     dF_initial = dF_o(similar(x0), x0)
 
-    ϵ = 1e-6
     dF_num = similar(dF_initial)
     num_grad!(dF_num, x0, ϵ, F_o)
 
     # Check around initial point
-    @test isapprox(dF_num, dF_initial, rtol = 1e-3)
+    @test isapprox(dF_num, dF_initial, rtol = num_tol)
     # Perturb the data in a few different directions and verify
     # the gradients there too. Use the F_and_dF interface, that
     # computes gradients together with the objective
@@ -98,7 +98,7 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
         dF_mod = similar(dF_initial)
         F_and_dF(NaN, dF_mod, x_mod)
         num_grad!(dF_num, x_mod, ϵ, F_o)
-        @test isapprox(dF_num, dF_mod, rtol = 1e-3)
+        @test isapprox(dF_num, dF_mod, rtol = num_tol)
     end
 end
 
