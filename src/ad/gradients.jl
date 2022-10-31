@@ -437,6 +437,13 @@ function solve_numerical_sensitivities(model, states, reports, G, target;
     return reshape(grad_num, sz)
 end
 
+function solve_numerical_sensitivities(model, states, reports, G; kwarg...)
+    out = Dict()
+    for k in keys(model.parameters)
+        out[k] = solve_numerical_sensitivities(model, states, reports, G, k; kwarg...)
+    end
+end
+
 function get_parameter_pair(model, parameters, target)
     return (model.parameters[target], parameters[target])
 end

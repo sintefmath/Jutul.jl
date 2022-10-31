@@ -191,3 +191,15 @@ function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing
     end
     return outer_sparsity
 end
+
+function solve_numerical_sensitivities(model::MultiModel, states, reports, G; kwarg...)
+    out = Dict()
+    for mk in submodel_symbols(model)
+        inner = Dict()
+        for k in keys(model[mk].parameters)
+            inner[k] = solve_numerical_sensitivities(model, states, reports, G, (mk, k); kwarg...)
+        end
+        out[mk] = inner
+    end
+    return out
+end
