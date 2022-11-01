@@ -99,3 +99,28 @@ function compute_face_trans(geometry::JutulGeometry, permeability)
     T_hf = compute_half_face_trans(geometry, permeability)
     return compute_face_trans(T_hf, geometry.neighbors)
 end
+
+export compute_face_gdz
+
+function compute_face_gdz(g::AbstractJutulMesh; kwarg...)
+    geo = tpfv_geometry(g)
+    N = geo.neighbors
+    nf = size(N, 2)
+    if dim(geo) == 3
+        z = vec(geo.cell_centroids[3, :])
+    else
+        z = zeros(nf)
+    end
+    return compute_face_gdz(N, z; kwarg...)
+end
+
+function compute_face_gdz(N, z; g = gravity_constant)
+    nf = size(N, 2)
+    gdz = similar(z, nf)
+    for i in 1:nf
+        l = N[1, i]
+        r = N[2, i]
+        gdz[i] = -g*(z[l] - z[r])
+    end
+    return gdz
+end
