@@ -26,9 +26,6 @@ struct SPU{T} <: UpwindDiscretization
     right::T
 end
 
-"Discretization of kgradp + upwind"
-abstract type FlowDiscretization <: JutulDiscretization end
-
 export PotentialFlow
 struct PotentialFlow{K, U, HF} <: FlowDiscretization
     kgrad::K

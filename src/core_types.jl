@@ -630,3 +630,13 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM} <: JutulAutoDiffCache wh
         return new{nvalues_per_entity, entity, T, A, P, typeof(algn), typeof(diag_ix), M_t}(v, pos, variables, algn, diag_ix, nt, ns, global_map)
     end
 end
+
+"Discretization of kgradp + upwind"
+abstract type FlowDiscretization <: JutulDiscretization end
+
+struct ConservationLaw{C, T<:FlowDiscretization, N} <: JutulEquation
+    flow_discretization::T
+    function ConservationLaw(disc::T, conserved::Symbol = :TotalMasses, N::Integer = 1) where T
+        return new{conserved, T, N}(disc)
+    end
+end

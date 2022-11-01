@@ -1,12 +1,5 @@
 export ConservationLaw, ConservationLawTPFAStorage, conserved_symbol
 
-struct ConservationLaw{C, T<:FlowDiscretization, N} <: JutulEquation
-    flow_discretization::T
-    function ConservationLaw(disc::T, conserved::Symbol = :TotalMasses, N::Integer = 1) where T
-        return new{conserved, T, N}(disc)
-    end
-end
-
 number_of_equations_per_entity(model::SimulationModel, ::ConservationLaw{<:Any, <:Any, N}) where N = N
 
 flux_vector_type(::ConservationLaw{<:Any, <:Any, N}, T = Float64) where N = SVector{N, T}
