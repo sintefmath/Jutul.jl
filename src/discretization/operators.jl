@@ -12,7 +12,9 @@ function divergence(F, local_half_face_map)
 
     @inbounds v = signs[1]*F(faces[1])
     @inbounds for i in 2:length(faces)
-        v += signs[i]*F(faces[i])
+        f = faces[i]
+        s = signs[i]
+        v += s*F(f)
     end
     return v
 end
