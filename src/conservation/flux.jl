@@ -120,24 +120,12 @@ struct TwoPointPotentialFlowHardCoded{C, D} <: FlowDiscretization
     conn_data::D
 end
 
-function TwoPointPotentialFlowHardCoded(grid::AbstractJutulMesh, T = nothing, z = nothing, gravity = gravity_constant; ncells = nothing)
+function TwoPointPotentialFlowHardCoded(grid::AbstractJutulMesh; ncells = nothing)
     N = get_neighborship(grid)
     if size(N, 2) > 0
         faces, face_pos = get_facepos(N, ncells)
-        has_grav = !isnothing(gravity) || gravity == 0
-
         nhf = length(faces)
         nc = length(face_pos) - 1
-        if isnothing(z)
-            # if has_grav
-            #     @warn "No depths (z) provided, but gravity is enabled."
-            # end
-        else
-            @assert length(z) == nc
-        end
-        if !isnothing(T)
-            @assert length(T) == nhf ÷ 2 "Transmissibilities vector must have length of half the number of half faces ($nhf / 2 = $(nhf/2), was $(length(T)))"
-        end
         get_el = (face, cell) -> get_connection(face, cell, N, true)
         el = get_el(1, 1) # Could be junk, we just need eltype
         conn_data = Vector{typeof(el)}(undef, nhf)
@@ -148,11 +136,10 @@ function TwoPointPotentialFlowHardCoded(grid::AbstractJutulMesh, T = nothing, z 
         end
     else
         nc = number_of_cells(grid)
-        has_grav = false
         conn_data = []
         face_pos = ones(Int64, nc+1)
     end
-    return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data)}(has_grav, face_pos, conn_data)
+    return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data)}(true, face_pos, conn_data)
 end
 
 number_of_half_faces(tp::TwoPointPotentialFlowHardCoded) = length(tp.conn_data)
