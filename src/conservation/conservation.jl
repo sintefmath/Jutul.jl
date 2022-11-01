@@ -20,16 +20,16 @@ function update_equation_in_entity!(eq_buf::AbstractVector{T_e}, self_cell, stat
     div_v = ldisc.div(flux)
     for i in eachindex(div_v)
         ∂M∂t = accumulation_term(M, M₀, Δt, i, self_cell)
-        eq_buf[i] = ∂M∂t - div_v[i]
+        @inbounds eq_buf[i] = ∂M∂t - div_v[i]
     end
 end
 
 @inline function accumulation_term(M, M₀, dt, i, e)
-    return (M[i, e] - M₀[i, e])/dt
+    return @inbounds (M[i, e] - M₀[i, e])/dt
 end
 
 @inline function accumulation_term(M::AbstractVector, M₀, dt, i, e)
-    return (M[e] - M₀[e])/dt
+    return @inbounds (M[e] - M₀[e])/dt
 end
 
 struct ConservationLawTPFAStorage
