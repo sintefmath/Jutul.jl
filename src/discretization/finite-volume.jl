@@ -105,11 +105,10 @@ export compute_face_gdz
 function compute_face_gdz(g::AbstractJutulMesh; kwarg...)
     geo = tpfv_geometry(g)
     N = geo.neighbors
-    nf = size(N, 2)
     if dim(geo) == 3
         z = vec(geo.cell_centroids[3, :])
     else
-        z = zeros(nf)
+        z = zeros(size(geo.cell_centroids, 2))
     end
     return compute_face_gdz(N, z; kwarg...)
 end

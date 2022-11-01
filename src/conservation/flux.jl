@@ -138,9 +138,9 @@ function TwoPointPotentialFlowHardCoded(grid::AbstractJutulMesh, T = nothing, z 
         nhf = length(faces)
         nc = length(face_pos) - 1
         if isnothing(z)
-            if has_grav
-                @warn "No depths (z) provided, but gravity is enabled."
-            end
+            # if has_grav
+            #     @warn "No depths (z) provided, but gravity is enabled."
+            # end
         else
             @assert length(z) == nc
         end
