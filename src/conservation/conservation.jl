@@ -523,7 +523,7 @@ function face_flux!(entry, face, eq, state, model, dt, disc, local_disc)
     error("Not specialized for $eq")
 end
 
-function face_flux(face, eq::ConservationLaw{<:Any, <:Any, N}, state, model, dt, disc, ldisc, T = Float64) where N
+@inline function face_flux(face, eq::ConservationLaw{<:Any, <:Any, N}, state, model, dt, disc, ldisc, T = Float64) where N
     V_t = flux_vector_type(eq, T)
     out = zero(V_t)
     return face_flux!(out, face, eq, state, model, dt, disc, ldisc)::V_t
