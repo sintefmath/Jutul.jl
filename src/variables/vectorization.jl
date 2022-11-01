@@ -30,8 +30,19 @@ function vectorize_variable!(V, state, k, info, F; config = nothing)
     lumping = get_lumping(config)
     if isnothing(lumping)
         @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
-        for i in 1:n
-            V[offset+i] = F(state_val[i])
+        if state_val isa AbstractVector
+            for i in 1:n
+                V[offset+i] = F(state_val[i])
+            end
+        else
+            l, m = size(state_val)
+            ctr = 1
+            for i in 1:l
+                for j in 1:m
+                    V[offset+ctr] = F(state_val[i, j])
+                    ctr += 1
+                end
+            end
         end
     else
         @assert length(state_val) == length(lumping)
@@ -63,8 +74,19 @@ function devectorize_variable!(state, V, k, info, F_inv; config = c)
     lumping = get_lumping(config)
     if isnothing(lumping)
         @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
-        for i in 1:n
-            state_val[i] = F_inv(V[offset+i])
+        if state_val isa AbstractVector
+            for i in 1:n
+                state_val[i] = F_inv(V[offset+i])
+            end
+        else
+            l, m = size(state_val)
+            ctr = 1
+            for i in 1:l
+                for j in 1:m
+                    state_val[i, j] = F_inv(V[offset+ctr])
+                    ctr += 1
+                end
+            end
         end
     else
         for (i, lump) in enumerate(lumping)
