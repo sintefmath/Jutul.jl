@@ -2,7 +2,7 @@ export JutulSystem, JutulDomain, JutulVariables, AbstractJutulMesh, JutulContext
 export SimulationModel, JutulVariables, JutulFormulation, JutulEquation
 export setup_parameters, JutulForce
 export Cells, Nodes, Faces, declare_entities
-export ConstantVariables, ScalarVariable, GroupedVariables, FractionVariables
+export ConstantVariables, ScalarVariable, VectorVariables, FractionVariables
 
 export SingleCUDAContext, DefaultContext
 export BlockMajorLayout, EquationMajorLayout, EntityMajorLayout
@@ -33,8 +33,8 @@ end
 # Primary/secondary variables
 abstract type JutulVariables end
 abstract type ScalarVariable <: JutulVariables end
-abstract type GroupedVariables <: JutulVariables end
-abstract type FractionVariables <: GroupedVariables end
+abstract type VectorVariables <: JutulVariables end
+abstract type FractionVariables <: VectorVariables end
 
 # Driving forces
 abstract type JutulForce end
@@ -367,7 +367,7 @@ end
 """
 A set of constants, repeated over the entire set of Cells or some other entity
 """
-struct ConstantVariables <: GroupedVariables
+struct ConstantVariables <: VectorVariables
     constants
     entity::JutulEntity
     single_entity::Bool

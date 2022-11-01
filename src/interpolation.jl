@@ -79,7 +79,7 @@ function get_1d_interpolator(xs, ys; method = LinearInterpolant, cap_endpoints =
 end
 
 
-struct UnaryTabulatedVariable <: GroupedVariables
+struct UnaryTabulatedVariable <: VectorVariables
     x
     F
     interpolators

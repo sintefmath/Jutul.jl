@@ -166,16 +166,27 @@ replace_value(v, new_v) = v - value(v) + new_v
 variable_scale(::JutulVariables) = nothing
 
 ## Initialization
-function initialize_primary_variable_ad!(state, model, pvar, arg...; offset = 0, kwarg...)
+function initialize_primary_variable_ad!(state, model, pvar::ScalarVariable, state_symbol, npartials; offset = 0, kwarg...)
     diag_value = variable_scale(pvar)
     if isnothing(diag_value)
         diag_value = 1.0
     end
-    initialize_variable_ad(state, model, pvar, arg..., offset + 1; diag_value = diag_value, kwarg...)
+    initialize_variable_ad(state, model, pvar, state_symbol, npartials, offset + 1; diag_value = diag_value, kwarg...)
 end
 
-function initialize_secondary_variable_ad!(state, model, pvar, arg...; kwarg...)
-    initialize_variable_ad(state, model, pvar, arg..., NaN; kwarg...)
+function initialize_primary_variable_ad!(state, model, pvar, state_symbol, npartials; offset = 0, kwarg...)
+    diag_value = variable_scale(pvar)
+    if isnothing(diag_value)
+        diag_value = 1.0
+    end
+    N = values_per_entity(model, pvar)
+    dp = (offset+1):(offset+N)
+    initialize_variable_ad(state, model, pvar, state_symbol, npartials, offset + 1; diag_pos = dp, diag_value = diag_value, kwarg...)
+end
+
+function initialize_secondary_variable_ad!(state, model, pvar, state_symbol, npartials; kwarg...)
+    diag_pos = NaN
+    initialize_variable_ad(state, model, pvar, state_symbol, npartials, diag_pos; kwarg...)
 end
 
 function initialize_variable_ad(state, model, pvar, symb, npartials, diag_pos; kwarg...)
@@ -254,7 +265,7 @@ end
 """
 Initializer for the value of non-scalar primary variables
 """
-function initialize_variable_value!(state, model, pvar::GroupedVariables, symb::Symbol, val::AbstractVector)
+function initialize_variable_value!(state, model, pvar::VectorVariables, symb::Symbol, val::AbstractVector)
     n = values_per_entity(model, pvar)
     m = number_of_entities(model, pvar)
     nv = length(val)
@@ -270,7 +281,7 @@ function initialize_variable_value!(state, model, pvar::GroupedVariables, symb::
     return initialize_variable_value!(state, model, pvar, symb, V)
 end
 
-function initialize_variable_value!(state, model, pvar::GroupedVariables, symb::Symbol, val::Number)
+function initialize_variable_value!(state, model, pvar::VectorVariables, symb::Symbol, val::Number)
     n = values_per_entity(model, pvar)
     return initialize_variable_value!(state, model, pvar, symb, repeat([val], n))
 end
