@@ -78,7 +78,7 @@ function local_discretization(eq::ConservationLaw{S, D, N}, i) where {S, D<:Pote
     return (div! = div, div = div, face_disc)
 end
 
-function get_connection(face, cell, faces, N, T, z, g, inc_face_sign)
+function get_connection(face, cell, N, inc_face_sign)
     D = Dict()
     if N[1, face] == cell
         s = 1
@@ -93,15 +93,6 @@ function get_connection(face, cell, faces, N, T, z, g, inc_face_sign)
     if inc_face_sign
         D[:face_sign] = s
     end
-    if !isnothing(T)
-        D[:T] = T[face]
-    end
-    if isnothing(z)
-        gdz = 0.0
-    else
-        gdz = -g*(z[cell] - z[other])
-    end
-    D[:gdz] = gdz
 
     return convert_to_immutable_storage(D)
 end
@@ -147,7 +138,7 @@ function TwoPointPotentialFlowHardCoded(grid::AbstractJutulMesh, T = nothing, z 
         if !isnothing(T)
             @assert length(T) == nhf ÷ 2 "Transmissibilities vector must have length of half the number of half faces ($nhf / 2 = $(nhf/2), was $(length(T)))"
         end
-        get_el = (face, cell) -> get_connection(face, cell, faces, N, T, z, gravity, true)
+        get_el = (face, cell) -> get_connection(face, cell, N, true)
         el = get_el(1, 1) # Could be junk, we just need eltype
         conn_data = Vector{typeof(el)}(undef, nhf)
         @batch for cell = 1:nc
