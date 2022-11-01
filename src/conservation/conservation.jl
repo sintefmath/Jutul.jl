@@ -16,12 +16,11 @@ conserved_symbol(::ConservationLaw{C, <:Any}) where C = C
 discretization(e::ConservationLaw) = e.flow_discretization
 
 
-function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::ConservationLaw, model, Δt, ldisc = local_discretization(eq, self_cell))
+function update_equation_in_entity!(eq_buf::AbstractVector{T_e}, self_cell, state, state0, eq::ConservationLaw, model, Δt, ldisc = local_discretization(eq, self_cell)) where T_e
     # Compute accumulation term
     conserved = conserved_symbol(eq)
     M₀ = state0[conserved]
     M = state[conserved]
-    T_e = eltype(eq_buf)
     # Compute ∇⋅V
     disc = eq.flow_discretization
     flux(face) = face_flux(face, eq, state, model, Δt, disc, ldisc, T_e)
@@ -524,8 +523,9 @@ function face_flux!(entry, face, eq, state, model, dt, disc, local_disc)
 end
 
 function face_flux(face, eq::ConservationLaw{<:Any, <:Any, N}, state, model, dt, disc, ldisc, T = Float64) where N
-    out = zero(flux_vector_type(eq, T))
-    return face_flux!(out, face, eq, state, model, dt, disc, ldisc)
+    V_t = flux_vector_type(eq, T)
+    out = zero(V_t)
+    return face_flux!(out, face, eq, state, model, dt, disc, ldisc)::V_t
 end
 
 function reset_sources!(eq_s::ConservationLawTPFAStorage)
