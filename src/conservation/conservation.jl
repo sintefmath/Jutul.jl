@@ -2,7 +2,7 @@ export ConservationLaw, ConservationLawTPFAStorage, conserved_symbol
 
 number_of_equations_per_entity(model::SimulationModel, ::ConservationLaw{<:Any, <:Any, N}) where N = N
 
-flux_vector_type(::ConservationLaw{<:Any, <:Any, N}, T = Float64) where N = SVector{N, T}
+flux_vector_type(::ConservationLaw{<:Any, <:Any, N}, ::Val{T}) where {N, T} = SVector{N, T}
 
 conserved_symbol(::ConservationLaw{C, <:Any}) where C = C
 
@@ -16,7 +16,7 @@ function update_equation_in_entity!(eq_buf::AbstractVector{T_e}, self_cell, stat
     M = state[conserved]
     # Compute ∇⋅V
     disc = eq.flow_discretization
-    flux(face) = face_flux(face, eq, state, model, Δt, disc, ldisc, T_e)
+    flux(face) = face_flux(face, eq, state, model, Δt, disc, ldisc, Val(T_e))
     div_v = ldisc.div(flux)
     for i in eachindex(div_v)
         ∂M∂t = accumulation_term(M, M₀, Δt, i, self_cell)
@@ -514,7 +514,7 @@ function face_flux!(entry, l, r, f, face_sign, eq, state, model, dt, disc)
     error("Not specialized for $eq")
 end
 
-function face_flux(l, r, f, face_sign, eq::ConservationLaw{<:Any, <:Any, N}, state, model, dt, disc, T = Float64) where N
+function face_flux(l, r, f, face_sign, eq::ConservationLaw{<:Any, <:Any, N}, state, model, dt, disc, T = Val(Float64)) where N
     out = zero(flux_vector_type(eq, T))
     return face_flux!(out, l, r, f, face_sign, eq, state, model, dt, disc)
 end
