@@ -29,6 +29,55 @@ end
 "Discretization of kgradp + upwind"
 abstract type FlowDiscretization <: JutulDiscretization end
 
+export PotentialFlow
+struct PotentialFlow{K, U, HF} <: FlowDiscretization
+    kgrad::K
+    upwind::U
+    half_face_map::HF
+    function PotentialFlow(kgrad::K, upwind::U, hf::HF) where {K, U, HF}
+        return new{K, U, HF}(kgrad, upwind, hf)
+    end
+end
+
+function PotentialFlow(g::AbstractJutulMesh; kwarg...)
+    N = get_neighborship(g)
+    nc = number_of_cells(g)
+    PotentialFlow(N, nc; kwarg...)
+end
+
+function PotentialFlow(N::AbstractMatrix, nc = maximum(N); kgrad = nothing, upwind = nothing)
+    nf = size(N, 2)
+    hf = half_face_map(N, nc)
+    T = eltype(N)
+    if isnothing(kgrad)
+        kgrad = Vector{TPFA{T}}(undef, nf)
+        for i in 1:nf
+            left = N[1, i]
+            right = N[2, i]
+            face_sign = 1
+            kgrad[i] = TPFA(left, right, face_sign)
+        end
+    end
+    if isnothing(upwind)
+        upwind = Vector{SPU{T}}(undef, nf)
+        for i in 1:nf
+            left = N[1, i]
+            right = N[2, i]
+            upwind[i] = SPU(left, right)
+        end
+    end
+    return PotentialFlow(kgrad, upwind, hf)
+end
+
+function local_discretization(eq::ConservationLaw{S, D, N}, i) where {S, D<:PotentialFlow, N}
+    disc = eq.flow_discretization
+    face_map = local_half_face_map(disc.half_face_map, i)
+    T = flux_vector_type(eq)
+    div = (x, F) -> local_divergence!(x, F, face_map)
+    div = F -> local_divergence(T, F, local_half_face_map)
+    return (div! = div, div = div)
+end
+
 function get_connection(face, cell, faces, N, T, z, g, inc_face_sign)
     D = Dict()
     if N[1, face] == cell

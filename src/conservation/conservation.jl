@@ -1,15 +1,52 @@
 export ConservationLaw, ConservationLawTPFAStorage, conserved_symbol
 
-struct ConservationLaw{C, T<:FlowDiscretization} <: JutulEquation
+struct ConservationLaw{C, T<:FlowDiscretization, N} <: JutulEquation
     flow_discretization::T
-    function ConservationLaw(disc::T, conserved::Symbol = :TotalMasses) where T
-        return new{conserved, T}(disc)
+    function ConservationLaw(disc::T, conserved::Symbol = :TotalMasses, N::Integer = 1) where T
+        return new{conserved, T, N}(disc)
     end
 end
+
+number_of_equations_per_entity(model::SimulationModel, ::ConservationLaw{<:Any, <:Any, N}) where N = N
+
+flux_vector_type(::ConservationLaw{<:Any, <:Any, N}) where N = SVector{N, Float64}
 
 conserved_symbol(::ConservationLaw{C, <:Any}) where C = C
 
 discretization(e::ConservationLaw) = e.flow_discretization
+
+
+function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::ConservationLaw, model, Δt, ldisc = local_discretization(eq, self_cell))
+    # Get implicit and explicit variables
+    conserved = conserved_symbol(eq)
+    M₀ = state0[conserved]
+    M = state[conserved]
+    ∂M∂t = (M - M₀)/Δt
+
+
+    # function flux(other_cell, face, sgn)
+    #     return 
+    # end
+
+
+    div_v = ldisc.div(flux)
+
+
+    # tmp = ldisc.div!(∂M∂t, )
+    @info ldisc
+
+
+    error()
+    (; U, K) = state
+    U0 = state0.U
+    # Discretization
+    div = ldisc.div
+    U_self = state.U[self_cell]
+    # Define flux
+
+    # Define equation
+    eq_buf[] = ∂U∂t - div(flux)
+end
 
 struct ConservationLawTPFAStorage
     accumulation::CompactAutoDiffCache
@@ -47,7 +84,7 @@ function ConservationLawTPFAStorage(model, eq::ConservationLaw; kwarg...)
     return ConservationLawTPFAStorage(acc, conserved_symbol(eq), hf_cells, hf_faces, src)
 end
 
-function setup_equation_storage(model, eq::ConservationLaw{<:Any, <:TwoPointPotentialFlowHardCoded}, storage; extra_sparsity = nothing, kwarg...)
+function setup_equation_storage(model, eq::ConservationLaw{<:Any, <:TwoPointPotentialFlowHardCoded, <:Any}, storage; extra_sparsity = nothing, kwarg...)
     # Maybe check that the sparsity matches the default?
     return ConservationLawTPFAStorage(model, eq; kwarg...)
 end
