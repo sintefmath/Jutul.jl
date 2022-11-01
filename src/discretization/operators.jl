@@ -7,17 +7,16 @@ function local_divergence(F, local_half_face_map)
     return v
 end
 
-function local_divergence(T, F, local_half_face_map)
-    (; cells, faces, signs) = local_half_face_map
-    v = zero(T)
-    for i = 1:length(cells)
-        v += F(T, cells[i], faces[i], signs[i])
+function divergence(F, local_half_face_map)
+    (; faces, signs) = local_half_face_map
+    v = signs[1]*F(faces[1])
+    for i in 2:length(faces)
+        v += signs[i]*F(faces[i])
     end
     return v
 end
 
-
-function local_divergence!(x, F, local_half_face_map)
+function divergence!(x, F, local_half_face_map)
     (; cells, faces, signs) = local_half_face_map
     for i in eachindex(cells)
         x += F(cells[i], faces[i], signs[i])

@@ -72,10 +72,10 @@ end
 function local_discretization(eq::ConservationLaw{S, D, N}, i) where {S, D<:PotentialFlow, N}
     disc = eq.flow_discretization
     face_map = local_half_face_map(disc.half_face_map, i)
-    T = flux_vector_type(eq)
-    div = (x, F) -> local_divergence!(x, F, face_map)
-    div = F -> local_divergence(T, F, local_half_face_map)
-    return (div! = div, div = div)
+    div = (x, F) -> divergence!(x, F, face_map)
+    div = F -> divergence(F, face_map)
+    face_disc = (face) -> (kgrad = disc.kgrad[face], upwind = disc.upwind[face])
+    return (div! = div, div = div, face_disc)
 end
 
 function get_connection(face, cell, faces, N, T, z, g, inc_face_sign)

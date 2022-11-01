@@ -9,7 +9,7 @@ end
 
 number_of_equations_per_entity(model::SimulationModel, ::ConservationLaw{<:Any, <:Any, N}) where N = N
 
-flux_vector_type(::ConservationLaw{<:Any, <:Any, N}) where N = SVector{N, Float64}
+flux_vector_type(::ConservationLaw{<:Any, <:Any, N}, T = Float64) where N = SVector{N, T}
 
 conserved_symbol(::ConservationLaw{C, <:Any}) where C = C
 
@@ -17,35 +17,19 @@ discretization(e::ConservationLaw) = e.flow_discretization
 
 
 function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::ConservationLaw, model, Δt, ldisc = local_discretization(eq, self_cell))
-    # Get implicit and explicit variables
+    # Compute accumulation term
     conserved = conserved_symbol(eq)
     M₀ = state0[conserved]
     M = state[conserved]
-    ∂M∂t = (M - M₀)/Δt
-
-
-    # function flux(other_cell, face, sgn)
-    #     return 
-    # end
-
-
+    T_e = eltype(eq_buf)
+    # Compute ∇⋅V
+    disc = eq.flow_discretization
+    flux(face) = face_flux(face, eq, state, model, Δt, disc, ldisc, T_e)
     div_v = ldisc.div(flux)
-
-
-    # tmp = ldisc.div!(∂M∂t, )
-    @info ldisc
-
-
-    error()
-    (; U, K) = state
-    U0 = state0.U
-    # Discretization
-    div = ldisc.div
-    U_self = state.U[self_cell]
-    # Define flux
-
-    # Define equation
-    eq_buf[] = ∂U∂t - div(flux)
+    for i in eachindex(div_v)
+        ∂M∂t = (M[i, self_cell] - M₀[i, self_cell])/Δt
+        eq_buf[i] = ∂M∂t - div_v[i]
+    end
 end
 
 struct ConservationLawTPFAStorage
@@ -526,8 +510,22 @@ function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq,
 end
 
 
-function face_flux!(entry, l, r, f, face_sign, eq, state, model, dt, tpfa_disc)
+function face_flux!(entry, l, r, f, face_sign, eq, state, model, dt, disc)
     error("Not specialized for $eq")
+end
+
+function face_flux(l, r, f, face_sign, eq::ConservationLaw{<:Any, <:Any, N}, state, model, dt, disc, T = Float64) where N
+    out = zero(flux_vector_type(eq, T))
+    return face_flux!(out, l, r, f, face_sign, eq, state, model, dt, disc)
+end
+
+function face_flux!(entry, face, eq, state, model, dt, disc, local_disc)
+    error("Not specialized for $eq")
+end
+
+function face_flux(face, eq::ConservationLaw{<:Any, <:Any, N}, state, model, dt, disc, ldisc, T = Float64) where N
+    out = zero(flux_vector_type(eq, T))
+    return face_flux!(out, face, eq, state, model, dt, disc, ldisc)
 end
 
 function reset_sources!(eq_s::ConservationLawTPFAStorage)
