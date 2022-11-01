@@ -74,9 +74,9 @@ function get_parameter_pair(model::MultiModel, parameters, target)
     return get_parameter_pair(model[t_outer], parameters[t_outer], t_inner)
 end
 
-function perturb_parameter!(model::MultiModel, param_i, target, i, ϵ)
+function perturb_parameter!(model::MultiModel, param_i, target, i, j, sz, ϵ)
     t_outer, t_inner = target
-    perturb_parameter!(model[t_outer], param_i[t_outer], t_inner, i, ϵ)
+    perturb_parameter!(model[t_outer], param_i[t_outer], t_inner, i, j, sz, ϵ)
 end
 
 function parameter_targets(model::MultiModel)

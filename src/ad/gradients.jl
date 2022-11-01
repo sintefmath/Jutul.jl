@@ -419,6 +419,7 @@ function solve_numerical_sensitivities(model, states, reports, G, target;
     grad_num = zeros(sz)
     if grad_num isa AbstractVector
         grad_num = grad_num'
+        sz = (1, only(sz))
     end
     scale = variable_scale(param_var)
     if isnothing(scale)
@@ -426,15 +427,18 @@ function solve_numerical_sensitivities(model, states, reports, G, target;
     else
         ϵ = scale*epsilon
     end
-    for i in eachindex(grad_num)
-        param_i = deepcopy(parameters)
-        perturb_parameter!(model, param_i, target, i, ϵ)
-        sim_i = Simulator(model, state0 = copy(state0), parameters = param_i)
-        states_i, reports = simulate!(sim_i, timesteps, info_level = -1, forces = forces)
-        v = evaluate_objective(G, model, states_i, timesteps, forces)
-        grad_num[i] = (v - base_obj)/ϵ
+    n, m = sz
+    for i in 1:n
+        for j in 1:m
+            param_i = deepcopy(parameters)
+            perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
+            sim_i = Simulator(model, state0 = copy(state0), parameters = param_i)
+            states_i, reports = simulate!(sim_i, timesteps, info_level = -1, forces = forces)
+            v = evaluate_objective(G, model, states_i, timesteps, forces)
+            grad_num[i, j] = (v - base_obj)/ϵ
+        end
     end
-    return reshape(grad_num, sz)
+    return grad_num# reshape(grad_num, reverse(sz))
 end
 
 function solve_numerical_sensitivities(model, states, reports, G; kwarg...)
@@ -448,8 +452,8 @@ function get_parameter_pair(model, parameters, target)
     return (model.parameters[target], parameters[target])
 end
 
-function perturb_parameter!(model, param_i, target, i, ϵ)
-    param_i[target][i] += ϵ
+function perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
+    param_i[target][i + j*(sz[1]-1)] += ϵ
 end
 
 function evaluate_objective(G, model, states, timesteps, all_forces; large_value = 1e20)
@@ -513,7 +517,7 @@ function extract_sensitivity_subset(r, var, n, m, offset)
     if var isa ScalarVariable
         v = r
     else
-        v = reshape(r, m, n ÷ m)
+        v = reshape(r, n ÷ m, m)'
     end
     v = collect(v)
     return v
