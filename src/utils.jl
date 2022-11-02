@@ -682,3 +682,39 @@ function get_facepos(N, arg...)
     end
     return (faces, facePos)
 end
+
+export timing_breakdown
+function timing_breakdown(report)
+    tot = report[:total_time]
+    t_asm = 0.0
+    t_solve = 0.0
+    t_local = 0.0
+    its = 0
+    asm = 0
+    for ministep in report[:ministeps]
+        for step in ministep[:steps]
+            asm += 1
+            t_asm += step[:assembly_time] + step[:linear_system_time]
+            if haskey(step, :linear_solve_time)
+                its += 1
+                t_solve += step[:linear_solve_time]
+            end
+            if haskey(step, :time_subdomains)
+                t_local += step[:time_subdomains]
+            end
+        end
+    end
+    return (assembly = t_asm, solve = t_solve, subdomains = t_local, total = tot, its = its, no_asm = asm)
+end
+
+function timing_breakdown(reports::Vector; reduce = true)
+    avg = map(timing_breakdown, reports)
+    if reduce
+        next = Dict()
+        for k in keys(avg[1])
+            next[k] = sum(x -> x[k], avg)
+        end
+        avg = convert_to_immutable_storage(next)
+    end
+    return avg
+end
