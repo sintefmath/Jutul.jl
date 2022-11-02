@@ -417,9 +417,10 @@ function solve_numerical_sensitivities(model, states, reports, G, target;
     param_var, param_num = get_parameter_pair(model, parameters, target)
     sz = size(param_num)
     grad_num = zeros(sz)
-    if grad_num isa AbstractVector
+    grad_is_vector = grad_num isa AbstractVector
+    if grad_is_vector
         grad_num = grad_num'
-        sz = (1, only(sz))
+        sz = size(grad_num)
     end
     scale = variable_scale(param_var)
     if isnothing(scale)
@@ -438,7 +439,10 @@ function solve_numerical_sensitivities(model, states, reports, G, target;
             grad_num[i, j] = (v - base_obj)/ϵ
         end
     end
-    return grad_num# reshape(grad_num, reverse(sz))
+    if grad_is_vector
+        grad_num = grad_num'
+    end
+    return grad_num
 end
 
 function solve_numerical_sensitivities(model, states, reports, G; kwarg...)
@@ -453,7 +457,7 @@ function get_parameter_pair(model, parameters, target)
 end
 
 function perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
-    param_i[target][i + j*(sz[1]-1)] += ϵ
+    param_i[target][j + i*(sz[1]-1)] += ϵ
 end
 
 function evaluate_objective(G, model, states, timesteps, all_forces; large_value = 1e20)
