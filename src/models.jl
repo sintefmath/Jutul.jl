@@ -75,7 +75,7 @@ function get_variable(model::SimulationModel, name::Symbol)
     prm = model.parameters
     if haskey(pvar, name)
         var = pvar[name]
-    elseif haskey(pvar, name)
+    elseif haskey(svar, name)
         var = svar[name]
     elseif haskey(prm, name)
         var = prm[name]
