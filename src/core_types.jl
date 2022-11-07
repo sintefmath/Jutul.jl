@@ -78,7 +78,14 @@ matrix_layout(::Nothing) = EquationMajorLayout(false)
 represented_as_adjoint(layout) = layout.as_adjoint
 
 scalarize_layout(layout, other_layout) = layout
-scalarize_layout(layout::BlockMajorLayout, other_layout::ScalarLayout) = EntityMajorLayout()
+function scalarize_layout(layout::BlockMajorLayout, other_layout::ScalarLayout)
+    slayout = EntityMajorLayout()
+    if represented_as_adjoint(other_layout)
+        @assert represented_as_adjoint(layout)
+        slayout = adjoint(slayout)
+    end
+    return slayout
+end
 
 function Base.adjoint(ctx::T) where T<: JutulContext
     return T(matrix_layout = adjoint(ctx.matrix_layout))
