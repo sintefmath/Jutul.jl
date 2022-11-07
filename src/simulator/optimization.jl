@@ -29,6 +29,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
             print = Inf
         end
     end
+    verbose = print > 0 && isfinite(print)
     if copy_parameters
         param = deepcopy(param)
     end
@@ -41,7 +42,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     end
     mapper, = variable_mapper(model, :parameters, targets = targets, config = opt_cfg)
     lims = optimization_limits(opt_cfg, mapper, param, model)
-    if print > 0 && isfinite(print)
+    if verbose
         print_parameter_optimization_config(targets, opt_cfg, model)
     end
     x0 = vectorize_variables(model, param, mapper, config = opt_cfg)
@@ -59,6 +60,9 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     sim = Simulator(model, state0 = state0, parameters = param)
     if isnothing(config)
         config = simulator_config(sim; info_level = -1, kwarg...)
+    elseif !verbose
+        config[:info_level] = -1
+        config[:final_simulation_message] = false
     end
     data[:sim] = sim
     data[:sim_config] = config
@@ -149,12 +153,12 @@ function objective_opt!(x, data, print_frequency = 1)
     bad_obj = 10*data[:last_obj]
     obj = evaluate_objective(G, sim.model, states, dt, forces, large_value = bad_obj)
     data[:x_hash] = hash(x)
-    data[:n_objective] += 1
     n = data[:n_objective]
     push!(data[:obj_hist], obj)
     if mod(n, print_frequency) == 0
         println("#$n: $obj")
     end
+    data[:n_objective] += 1
     if obj != bad_obj
         data[:last_obj] = obj
     end
