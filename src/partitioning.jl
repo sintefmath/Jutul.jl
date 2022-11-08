@@ -31,11 +31,16 @@ struct MetisPartitioner <: JutulPartitioner
     MetisPartitioner(m = :KWAY) = new(m)
 end
 
-function partition(mp::MetisPartitioner, A, m)
-    return Metis.partition(generate_graph(A), m, alg = mp.algorithm)
+function partition(mp::MetisPartitioner, A::AbstractSparseMatrix, m; kwarg...)
+    return partition(mp, generate_metis_graph(A), m; kwarg...)
+end
+
+function partition(mp::MetisPartitioner, g, m; alg = mp.algorithm, kwarg...)
+    return Metis.partition(g, m; alg = alg, kwarg...)
 end
 
 metis_strength(F) = F
+
 function metis_strength(F::AbstractMatrix)
     s = zero(eltype(F))
     n, m = size(F)
@@ -45,7 +50,7 @@ function metis_strength(F::AbstractMatrix)
     return s
 end
 
-function generate_graph(A::SparseMatrixCSC)
+function generate_metis_graph(A::SparseMatrixCSC)
     n, m = size(A)
     @assert n == m
     i, j, v = findnz(A)
@@ -53,8 +58,10 @@ function generate_graph(A::SparseMatrixCSC)
     I = vcat(i, j)
     J = vcat(j, i)
     V = vcat(V, V)
+    mv = minimum(V);
+    @. V = Int64(ceil(V / mv))
     M = sparse(I, J, V, n, n)
-    return Metis.graph(M, check_hermitian = false)
+    return Metis.graph(M, check_hermitian = false, weights = true)
 end
 
-generate_graph(A::StaticSparsityMatrixCSR) = generate_graph(A.At)
+generate_metis_graph(A::StaticSparsityMatrixCSR) = generate_metis_graph(A.At)
