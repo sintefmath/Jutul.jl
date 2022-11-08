@@ -84,6 +84,11 @@ function compress_partition(p::AbstractVector)
     return p_renum
 end
 
+"""
+    partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); partitioner = MetisPartitioner(), groups = nothing, n = maximum(N))
+
+Partition based on neighborship (with optional groups kept contigious after partitioning)
+"""
 function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); partitioner = MetisPartitioner(), groups = nothing, n = maximum(N))
     @assert size(N, 1) == 2
     @assert size(N, 2) == length(weights)
@@ -91,13 +96,34 @@ function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); pa
     weights = metis_integer_weights(weights)
     num_coarse::Integer
 
+    has_groups = !isnothing(groups)
+    if has_groups
+        # Some entries are clustered together and should not be divided. We
+        # create a subgraph using a partition, and extend back afterwards.
+        part = collect(1:n)
+        for (i, group) in enumerate(groups)
+            for g in group
+                part[g] = n + i
+            end
+        end
+        part = compress_partition(part)
+        N = part[N]
+        n_inner = maximum(part)
+    else
+        n_inner = n
+    end
+    @assert num_coarse <= n_inner
     i = vec(N[1, :])
     j = vec(N[2, :])
     I = vcat(i, j)
     J = vcat(j, i)
     V = vcat(weights, weights)
-    M = sparse(I, J, V, n, n)
+    M = sparse(I, J, V, n_inner, n_inner)
 
     g = generate_metis_graph(M)
-    return partition(partitioner, g, num_coarse)
+    p = partition(partitioner, g, num_coarse)
+    if has_groups
+        p = p[part]
+    end
+    return Int64.(p)
 end
