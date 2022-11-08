@@ -55,13 +55,49 @@ function generate_metis_graph(A::SparseMatrixCSC)
     @assert n == m
     i, j, v = findnz(A)
     V = map(metis_strength, v)
+    V = metis_integer_weights(V)
     I = vcat(i, j)
     J = vcat(j, i)
     V = vcat(V, V)
-    mv = minimum(V);
-    @. V = Int64(ceil(V / mv))
     M = sparse(I, J, V, n, n)
     return Metis.graph(M, check_hermitian = false, weights = true)
 end
 
+function metis_integer_weights(x::AbstractVector{<:Integer})
+    return x
+end
+
+function metis_integer_weights(x::AbstractVector{<:AbstractFloat})
+    mv = minimum(x);
+    @. x = Int64(ceil(x / mv))
+    return x
+end
+
 generate_metis_graph(A::StaticSparsityMatrixCSR) = generate_metis_graph(A.At)
+
+function compress_partition(p::AbstractVector)
+    up = sort!(unique(p))
+    p_renum = copy(p)
+    for i in eachindex(p)
+        p_renum[i] = searchsortedfirst(up, p[i])
+    end
+    return p_renum
+end
+
+function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); partitioner = MetisPartitioner(), groups = nothing, n = maximum(N))
+    @assert size(N, 1) == 2
+    @assert size(N, 2) == length(weights)
+    weights::AbstractVector
+    weights = metis_integer_weights(weights)
+    num_coarse::Integer
+
+    i = vec(N[1, :])
+    j = vec(N[2, :])
+    I = vcat(i, j)
+    J = vcat(j, i)
+    V = vcat(weights, weights)
+    M = sparse(I, J, V, n, n)
+
+    g = generate_metis_graph(M)
+    return partition(partitioner, g, num_coarse)
+end
