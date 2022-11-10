@@ -166,7 +166,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = noth
         end
     end
     final_simulation_message(sim, p, reports, timesteps, config, early_termination)
-    retrieve_output!(states, config)
+    retrieve_output!(states, config, no_steps)
     return (states, reports)
 end
 
