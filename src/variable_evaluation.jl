@@ -263,7 +263,15 @@ function sort_symbols(symbols, deps)
     for (i, dep) in enumerate(deps)
         for d in dep
             pos = findall(symbols .== d)
-            @assert length(pos) == 1 "Symbol $d must appear exactly once in secondary variables or parameters, found $(length(pos)) entries. Declared secondary/parameters:\n $symbols. Declared dependencies:\n $deps"
+            if length(pos) != 1
+                println("Symbol $d must appear exactly once in secondary variables or parameters, found $(length(pos)) entries. Dependencies on $d:")
+                for (si, di) in zip(symbols, deps)
+                    if d in di
+                        println("$si depends on $di")
+                    end
+                end
+                error("Unable to continue.")
+            end
             add_edge!(graph, i, pos[])
         end
     end
