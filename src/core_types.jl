@@ -455,6 +455,8 @@ function Base.getproperty(S::JutulStorage, name::Symbol)
     Base.getproperty(data(S), name)
 end
 
+Base.propertynames(S::JutulStorage) = keys(getfield(S, :data))
+
 data(S::JutulStorage{Nothing}) = getfield(S, :data)
 data(S::JutulStorage) = getfield(S, :data)::NamedTuple
 
