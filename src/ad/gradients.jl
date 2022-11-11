@@ -346,7 +346,7 @@ function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     model = sim.model
     # Deal with state0 first
     reset_previous_state!(sim, state0)
-    update_secondary_variables!(s, model, state0 = true)
+    update_secondary_variables!(s, model, false)
     # Apply logic as if timestep is starting
     update_before_step!(s, model, dt, forces, time = time)
     # Then the current primary variables

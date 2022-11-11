@@ -619,9 +619,15 @@ function setup_forces(model::MultiModel; kwarg...)
     return forces
 end
 
-function update_secondary_variables!(storage, model::MultiModel; kwarg...)
+function update_secondary_variables!(storage, model::MultiModel, is_state0::Bool)
     for key in submodels_symbols(model)
-        update_secondary_variables!(storage[key], model.models[key]; kwarg...)
+        update_secondary_variables!(storage[key], model.models[key], is_state0)
+    end
+end
+
+function update_secondary_variables!(storage, model::MultiModel)
+    for key in submodels_symbols(model)
+        update_secondary_variables!(storage[key], model.models[key])
     end
 end
 

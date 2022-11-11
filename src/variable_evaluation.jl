@@ -75,8 +75,8 @@ function update_secondary_variables!(storage, model)
     update_secondary_variables_state!(storage.state, model)
 end
 
-function update_secondary_variables!(storage, model; state0 = false)
-    if state0
+function update_secondary_variables!(storage, model, is_state0::Bool)
+    if is_state0
         s = storage.state0
     else
         s = storage.state
