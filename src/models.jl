@@ -684,8 +684,7 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
                 t_e = tol
             end
             errors = all_crits[e_k].errors
-            ok = errors .< t_e
-            converged = converged && all(ok)
+            converged = converged && all(e -> e < t_e, errors)
             e = max(e, maximum(errors)/t_e)
             tols[e_k] = t_e
         end

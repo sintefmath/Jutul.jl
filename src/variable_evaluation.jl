@@ -71,6 +71,9 @@ macro jutul_secondary(ex)
     end |> esc 
 end
 
+function update_secondary_variables!(storage, model)
+    update_secondary_variables_state!(storage.state, model)
+end
 
 function update_secondary_variables!(storage, model; state0 = false)
     if state0
