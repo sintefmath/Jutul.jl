@@ -56,6 +56,9 @@ function generate_metis_graph(A::SparseMatrixCSC)
     i, j, v = findnz(A)
     V = map(metis_strength, v)
     V = metis_integer_weights(V)
+    for i in eachindex(V)
+        V[i] = clamp(V[i], 1, typemax(Int32))
+    end
     I = vcat(i, j)
     J = vcat(j, i)
     V = vcat(V, V)
@@ -68,7 +71,7 @@ function metis_integer_weights(x::AbstractVector{<:Integer})
 end
 
 function metis_integer_weights(x::AbstractVector{<:AbstractFloat})
-    mv = minimum(x);
+    mv = mean(x)*0.1;
     @. x = Int64(ceil(x / mv))
     return x
 end
