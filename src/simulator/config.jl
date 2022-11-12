@@ -56,7 +56,7 @@ function simulator_config!(cfg, sim; kwarg...)
     if !isnothing(pth) && !isdir(pth)
         @assert isa(pth, String)
         @debug "Creating $pth for output."
-        mkdir(pth)
+        mkpath(pth)
     end
     if cfg[:ascii_terminal]
         fmt = tf_markdown
