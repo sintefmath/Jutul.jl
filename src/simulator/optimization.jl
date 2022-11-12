@@ -14,6 +14,24 @@ function update_objective_new_parameters!(param_serialized, sim, state0, param, 
     return (obj, states)
 end
 
+"""
+    setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model, param);
+                                                            grad_type = :adjoint,
+                                                            config = nothing,
+                                                            print = 1,
+                                                            copy_parameters = true,
+                                                            param_obj = false,
+                                                            kwarg...)
+
+Set up function handles for optimizing the case defined by the inputs to
+`simulate` together with a per-timestep objective function `G`.
+
+Generally calling either of the functions will mutate the data Dict. The options are:
+F_o(x) -> evaluate objective
+dF_o(dFdx, x) -> evaluate gradient of objective, mutating dFdx (may trigger evaluation of F_o)
+F_and_dF(F, dFdx, x) -> evaluate F and/or dF. Value of nothing will mean that the corresponding entry is skipped.
+
+"""
 function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model, param);
                                                             grad_type = :adjoint,
                                                             config = nothing,
