@@ -374,7 +374,7 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
         reset_variables!(sim, state0)
     end
     if recompute_state0_secondary
-        update_secondary_variables!(sim.storage, sim.model, false)
+        update_secondary_variables!(sim.storage, sim.model, true)
     end
     return (states, reports, first_step, dt)
 end
