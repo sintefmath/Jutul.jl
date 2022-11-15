@@ -232,6 +232,8 @@ function update_hierarchy!(amg, hierarchy, A)
     for i = 1:n
         l = levels[i]
         P, R = l.P, l.R
+        # Remake level in case A has been reallocated
+        levels[i] = AlgebraicMultigrid.Level(A, P, R)
         if i == n
             A_c = h.final_A
         else
@@ -267,7 +269,16 @@ end
 
 function update_coarse_system!(A_c, R, A, P, buffer)
     # In place modification
-    nonzeros(A_c) .= nonzeros(R*A*P)
+    nz = nonzeros(A_c)
+    A_c_next = R*A*P
+    nz_next = nonzeros(A_c)
+    if length(nz_next) == length(nz)
+        nz .= nz_next
+    else
+        # Sparsity pattern has changed. Hope that the caller doesn't rely on
+        # in-place updates.
+        A_c = A_c_next
+    end
     return A_c
 end
 
