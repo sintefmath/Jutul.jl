@@ -42,6 +42,8 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:end_report] = nothing
     # Tolerances
     cfg[:tolerances] = set_default_tolerances(sim.model)
+    # Final tolerance checks before cutting time-steps can be relaxed by increasing this number
+    cfg[:tol_factor_final_iteration] = 1.0
 
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])

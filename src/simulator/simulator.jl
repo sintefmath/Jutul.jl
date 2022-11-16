@@ -258,7 +258,12 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, upda
         @timeit "linear system" update_linearized_system!(storage, model)
     end
     t_conv = @elapsed begin
-        @timeit "convergence" converged, e, errors = check_convergence(storage, model, config, iteration = iteration, dt = dt, extra_out = true)
+        if iteration == config[:max_nonlinear_iterations]
+            tf = config[:tol_factor_final_iteration]
+        else
+            tf = 1
+        end
+        @timeit "convergence" converged, e, errors = check_convergence(storage, model, config, iteration = iteration, dt = dt, tol_factor = tf, extra_out = true)
         il = config[:info_level]
         if il > 1
             get_convergence_table(errors, il, iteration, config)

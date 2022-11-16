@@ -652,7 +652,7 @@ function check_convergence(storage, model, config; kwarg...)
     check_convergence(lsys, eqs, eqs_s, storage, model, config[:tolerances]; kwarg...)
 end
 
-function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration = nothing, extra_out = false, tol = nothing, offset = 0, kwarg...)
+function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration = nothing, extra_out = false, tol = nothing, tol_factor = 1.0, offset = 0, kwarg...)
     converged = true
     e = 0
     eoffset = 0
@@ -684,9 +684,10 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
                 t_e = tol
             end
             errors = all_crits[e_k].errors
-            converged = converged && all(e -> e < t_e, errors)
             e = max(e, maximum(errors)/t_e)
-            tols[e_k] = t_e
+            t_actual = t_e*tol_factor
+            converged = converged && all(e -> e < t_actual, errors)
+            tols[e_k] = t_actual
         end
         offset += N
         eoffset += n
