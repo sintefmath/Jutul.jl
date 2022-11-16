@@ -85,6 +85,11 @@ mutable struct AMGPreconditioner <: JutulPreconditioner
     hierarchy
     smoothers
     function AMGPreconditioner(method = ruge_stuben; cycle = AlgebraicMultigrid.V(), kwarg...)
+        if method == :ruge_stuben
+            method = ruge_stuben
+        elseif method == :smoothed_aggregation
+            method = smoothed_aggregation
+        end
         new(method, kwarg, cycle, nothing, nothing, nothing, nothing)
     end
 end
