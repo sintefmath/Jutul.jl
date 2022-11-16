@@ -75,3 +75,5 @@ function add_cross_term!(model, cross_term; kwarg...)
     add_cross_term!(model.cross_terms, setup_cross_term(cross_term; kwarg...))
 end
 
+select_linear_solver(model::MultiModel; kwarg...) = select_linear_solver_multimodel(model, first(model.models); kwarg...)
+select_linear_solver_multimodel(model::MultiModel, first_model; kwarg...) = select_linear_solver(first_model; kwarg...)

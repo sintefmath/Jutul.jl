@@ -10,7 +10,7 @@ function simulator_config!(cfg, sim; kwarg...)
     # Throw an error if the solve
     cfg[:error_on_incomplete] = false
     # The linear solver used to solve linearized systems
-    cfg[:linear_solver] = nothing
+    cfg[:linear_solver] = select_linear_solver(sim)
     # Path for output
     cfg[:output_path] = nothing
     # Produce states for output (keeping them in memory)
@@ -72,3 +72,9 @@ function simulator_config(sim; kwarg...)
     simulator_config!(cfg, sim; kwarg...)
     return cfg
 end
+
+function select_linear_solver(sim::Simulator; kwarg...)
+    return select_linear_solver(sim.model; kwarg...)
+end
+
+select_linear_solver(model::JutulModel; kwarg...) = LUSolver(; kwarg...)
