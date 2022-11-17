@@ -685,26 +685,18 @@ end
 
 export timing_breakdown
 function timing_breakdown(report)
-    tot = report[:total_time]
-    t_asm = 0.0
-    t_solve = 0.0
-    t_local = 0.0
-    its = 0
-    asm = 0
+    D = Dict{Symbol, Any}(:total => report[:total_time])
     for ministep in report[:ministeps]
-        for step in ministep[:steps]
-            asm += 1
-            t_asm += step[:assembly_time] + step[:linear_system_time]
-            if haskey(step, :linear_solve_time)
-                its += 1
-                t_solve += step[:linear_solve_time]
-            end
-            if haskey(step, :time_subdomains)
-                t_local += step[:time_subdomains]
+        mini_rep = timing_breakdown_ministep(ministep)
+        for (k, v) in pairs(mini_rep)
+            if haskey(D, k)
+                D[k] += v
+            else
+                D[k] = v
             end
         end
     end
-    return (assembly = t_asm, solve = t_solve, subdomains = t_local, total = tot, its = its, no_asm = asm)
+    return NamedTuple(pairs(D))
 end
 
 function timing_breakdown(reports::Vector; reduce = true)
@@ -717,4 +709,24 @@ function timing_breakdown(reports::Vector; reduce = true)
         avg = convert_to_immutable_storage(next)
     end
     return avg
+end
+
+function timing_breakdown_ministep(ministep)
+    t_asm = 0.0
+    t_solve = 0.0
+    t_local = 0.0
+    its = 0
+    asm = 0
+    for step in ministep[:steps]
+        asm += 1
+        t_asm += step[:assembly_time] + step[:linear_system_time]
+        if haskey(step, :linear_solve_time)
+            its += 1
+            t_solve += step[:linear_solve_time]
+        end
+        if haskey(step, :time_subdomains)
+            t_local += step[:time_subdomains]
+        end
+    end
+    return (assembly = t_asm, solve = t_solve, subdomains = t_local, its = its, no_asm = asm)
 end
