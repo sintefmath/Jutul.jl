@@ -79,4 +79,4 @@ function select_linear_solver(sim::Simulator; kwarg...)
     return select_linear_solver(sim.model; kwarg...)
 end
 
-select_linear_solver(model::JutulModel; kwarg...) = LUSolver(; kwarg...)
+select_linear_solver(model::JutulModel; kwarg...) = nothing # LUSolver(; kwarg...)
