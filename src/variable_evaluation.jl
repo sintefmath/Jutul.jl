@@ -85,11 +85,23 @@ function update_secondary_variables!(storage, model, is_state0::Bool)
 end
 
 function update_secondary_variables_state!(state, model)
-    for (symbol, var) in model.secondary_variables
-        @timeit "$symbol" begin
-            v = state[symbol]
-            ix = entity_eachindex(v)
-            update_secondary_variable!(v, var, model, state, ix)
+    ctx = model.context
+    N = nthreads(ctx)
+    if N == 1
+        for (symbol, var) in model.secondary_variables
+            @timeit "$symbol" begin
+                v = state[symbol]
+                ix = entity_eachindex(v)
+                update_secondary_variable!(v, var, model, state, ix)
+            end
+        end
+    else
+        Threads.@threads for i in 1:N
+            for (symbol, var) in model.secondary_variables
+                v = state[symbol]
+                ix = entity_eachindex(v, i, N)
+                update_secondary_variable!(v, var, model, state, ix)
+            end
         end
     end
 end

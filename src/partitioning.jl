@@ -155,5 +155,7 @@ end
 Create UnitRange for block b ∈ [1, m] for interval of total length n
 """
 function load_balanced_interval(b, n, m)
-    load_balanced_interval(b-1, n, m):load_balanced_interval(b, n, m)
+    start = load_balanced_endpoint(b-1, n, m) + 1
+    stop = load_balanced_endpoint(b, n, m)
+    return start:stop
 end
