@@ -9,17 +9,17 @@ The function is then declared, in addition to helpers that allows
 checking what the dependencies are and unpacking the dependencies from state.
 
 If we define the following function annotated with the macro:
-@jutul_secondary function update_as_secondary!(target, var::MyVarType, model, a, b, c)
+@jutul_secondary function some_fn!(target, var::MyVarType, model, a, b, c)
     @. target = a + b / c
 end
 
 The macro also defines: 
 function get_dependencies(var::MyVarType, model)
-   return [:a, :b, :c]
+   return (:a, :b, :c)
 end
 
 function update_secondary_variable!(array_target, var::MyVarType, model, state)
-    update_as_secondary!(array_target, var, model, state.a, state.b, state.c)
+    some_fn!(array_target, var, model, state.a, state.b, state.c)
 end
 
 Note that the names input arguments beyond the parameter dict matter, as these will be fetched from state.
@@ -35,7 +35,7 @@ macro jutul_secondary(ex)
         x.args[1]
     end
 
-    deps = map(myfilter, args[4:end])
+    deps = tuple(map(myfilter, args[4:end])...)
     # Pick variable + model
     variable_sym = args[2]
     model_sym = args[3]
@@ -52,7 +52,7 @@ macro jutul_secondary(ex)
     upd_def[:name] = :update_secondary_variable!
     upd_def[:args] = [:array_target, variable_sym, model_sym, :state]
     # value, var, model, arg1, arg2
-    tmp = "update_as_secondary!(array_target, "
+    tmp = "$(def[:name])(array_target, "
     tmp *= String(myfilter(variable_sym))
     tmp *= ", "
     tmp *= String(myfilter(model_sym))
