@@ -18,11 +18,11 @@ function get_dependencies(var::MyVarType, model)
    return (:a, :b, :c)
 end
 
-function update_secondary_variable!(array_target, var::MyVarType, model, state)
-    some_fn!(array_target, var, model, state.a, state.b, state.c)
+function update_secondary_variable!(array_target, var::MyVarType, model, state, ix)
+    some_fn!(array_target, var, model, state.a, state.b, state.c, ix)
 end
 
-Note that the names input arguments beyond the parameter dict matter, as these will be fetched from state.
+Note that the names input of some arguments matter, as these will be fetched from state.
 """
 macro jutul_secondary(ex)
     def = splitdef(ex)
@@ -49,9 +49,8 @@ macro jutul_secondary(ex)
     ex_dep = combinedef(dep_def)
     # Define update_as_secondary! function
     upd_def = deepcopy(def)
-    last_input = Symbol("ix = entity_eachindex(array_target)")
     upd_def[:name] = :update_secondary_variable!
-    upd_def[:args] = [:array_target, variable_sym, model_sym, :state, last_input]
+    upd_def[:args] = [:array_target, variable_sym, model_sym, :state, :ix]
     # value, var, model, arg1, arg2
     tmp = "$(def[:name])(array_target, "
     tmp *= String(myfilter(variable_sym))
@@ -87,7 +86,11 @@ end
 
 function update_secondary_variables_state!(state, model)
     for (symbol, var) in model.secondary_variables
-        @timeit "$symbol" update_secondary_variable!(state[symbol], var, model, state)
+        @timeit "$symbol" begin
+            v = state[symbol]
+            ix = entity_eachindex(v)
+            update_secondary_variable!(v, var, model, state, ix)
+        end
     end
 end
 
