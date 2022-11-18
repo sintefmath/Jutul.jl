@@ -123,3 +123,17 @@ function local_half_face_map(cd, cell_index)
     cells = @views cd.cells[loc]
     return (faces = faces, signs = signs, cells = cells)
 end
+
+export entity_eachindex
+@inline function entity_eachindex(s::AbstractMatrix)
+    return axes(s, 2)
+end
+
+@inline function entity_eachindex(s::AbstractVector)
+    return eachindex(s)
+end
+
+@inline function entity_eachindex(s, i, N)
+    n = length(entity_eachindex(s))
+    return load_balanced_interval(i, n, N)
+end

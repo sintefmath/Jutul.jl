@@ -130,3 +130,30 @@ function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); pa
     end
     return Int64.(p)
 end
+
+
+"""
+    load_balanced_endpoint(block_index, nvals, nblocks)
+
+Endpoint for interval `block_index` that subdivides `nvals` into `nblocks` in a
+load balanced manner. This is done by adding one element to the first set of
+blocks whenever possible.
+"""
+function load_balanced_endpoint(block_index, nvals, nblocks)
+    # @assert nblocks <= nvals
+    width = div(nvals, nblocks)
+    # Gets added to the nblocks first elements
+    remainder = mod(nvals, nblocks)
+    # Count number of passed blocks that have an extra element
+    passed_wide_blocks = min(block_index, remainder)
+    return min(passed_wide_blocks + width*block_index, nvals)
+end
+
+"""
+    load_balanced_interval(b, n, m)
+
+Create UnitRange for block b ∈ [1, m] for interval of total length n
+"""
+function load_balanced_interval(b, n, m)
+    load_balanced_interval(b-1, n, m):load_balanced_interval(b, n, m)
+end
