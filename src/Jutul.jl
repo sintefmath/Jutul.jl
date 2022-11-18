@@ -1,12 +1,5 @@
 module Jutul
     using ForwardDiff
-    # Some light type piracy to fix:
-    # https://github.com/JuliaDiff/ForwardDiff.jl/issues/542
-    export iszero
-    import ForwardDiff.Dual
-    import Base.iszero
-    Base.iszero(d::ForwardDiff.Dual) = false# iszero(d.value) && iszero(d.partials)
-
     # Arrays etc
     using LinearAlgebra
     using SparseArrays
