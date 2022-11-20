@@ -213,7 +213,7 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
         end
         err_str = "Passed value for $(typeof(pvar))"
         nm = length(val)
-        @assert nm == nv*nu "err_str had $nm entries, expected $(nu*nv)"
+        @assert nm == nv*nu "$err_str had $nm entries, expected $(nu*nv)"
         n, m, = size(val)
         @assert n == nv "$err_str had $n rows, expected $nv"
         @assert m == nu "$err_str had $m rows, expected $nu"
@@ -258,15 +258,15 @@ function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict;
 end
 
 # Scalar primary variables
-function initialize_variable_value!(state, model, pvar::ScalarVariable, symb::Symbol, val::Number)
+function initialize_variable_value(model, pvar::ScalarVariable, val::Number)
     V = repeat([val], number_of_entities(model, pvar))
-    return initialize_variable_value!(state, model, pvar, symb, V)
+    return initialize_variable_value(model, pvar, V)
 end
 
 """
 Initializer for the value of non-scalar primary variables
 """
-function initialize_variable_value!(state, model, pvar::VectorVariables, symb::Symbol, val::AbstractVector)
+function initialize_variable_value(model, pvar::VectorVariables, val::AbstractVector)
     n = values_per_entity(model, pvar)
     m = number_of_entities(model, pvar)
     nv = length(val)
@@ -279,12 +279,12 @@ function initialize_variable_value!(state, model, pvar::VectorVariables, symb::S
     else
         error("Variable $(typeof(pvar)) should have initializer of length $n or $m")
     end
-    return initialize_variable_value!(state, model, pvar, symb, V)
+    return initialize_variable_value(model, pvar, V)
 end
 
-function initialize_variable_value!(state, model, pvar::VectorVariables, symb::Symbol, val::Number)
+function initialize_variable_value(model, pvar::VectorVariables, symb::Symbol, val::Number)
     n = values_per_entity(model, pvar)
-    return initialize_variable_value!(state, model, pvar, symb, repeat([val], n))
+    return initialize_variable_value(model, pvar, symb, repeat([val], n))
 end
 
 # Specific variable implementations that are generic for many types of system follow

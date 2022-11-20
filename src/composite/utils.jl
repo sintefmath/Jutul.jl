@@ -3,8 +3,9 @@ function default_values(model::CompositeModel, u::Tuple{Symbol, V}) where V<:Jut
     default_values(generate_submodel(model, u[1]), u[2])
 end
 
-function initialize_variable_value(model::CompositeModel, pvar::Tuple{Symbol, V}, arg...; kwarg...) where V<:JutulVariables
-    initialize_variable_value(generate_submodel(model, pvar[1]), pvar[2], arg...; kwarg...)
+function initialize_variable_value(model::CompositeModel, pvar::Tuple{Symbol, V}, val; kwarg...) where V<:JutulVariables
+    m = generate_submodel(model, pvar[1])
+    initialize_variable_value(m, pvar[2], val; kwarg...)
 end
 
 
