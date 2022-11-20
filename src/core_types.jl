@@ -219,10 +219,10 @@ struct SimulationModel{O<:JutulDomain,
     context::C
     formulation::F
     plot_mesh
-    primary_variables::OrderedDict{Symbol, JutulVariables}
-    secondary_variables::OrderedDict{Symbol, JutulVariables}
-    parameters::OrderedDict{Symbol, JutulVariables}
-    equations::OrderedDict{Symbol, JutulEquation}
+    primary_variables::OrderedDict{Symbol, Any}
+    secondary_variables::OrderedDict{Symbol, Any}
+    parameters::OrderedDict{Symbol, Any}
+    equations::OrderedDict{Symbol, Any}
     output_variables::Vector{Symbol}
 end
 

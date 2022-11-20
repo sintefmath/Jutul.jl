@@ -131,7 +131,7 @@ end
 """
     replace_variables!(model, throw = true, varname = vardef, varname2 = vardef2)
 
-Replace one or more variables that already exists (either primary or secondary).
+Replace one or more variables that already exists (primary, secondary or parameters).
 
 # Arguments
 - `model`: instance where variables is to be replaced
@@ -141,10 +141,11 @@ Replace one or more variables that already exists (either primary or secondary).
 function replace_variables!(model; throw = true, kwarg...)
     pvar = get_primary_variables(model)
     svar = get_secondary_variables(model)
+    prm = get_parameters(model)
     for (k, v) in kwarg
         done = false
-        for vars in [pvar, svar]
-            v::JutulVariables
+        for vars in [pvar, svar, prm]
+            # v::JutulVariables
             if haskey(vars, k)
                 vars[k] = v
                 done = true
