@@ -8,6 +8,10 @@ function initialize_variable_value(model::CompositeModel, pvar::Tuple{Symbol, V}
     initialize_variable_value(m, pvar[2], val; kwarg...)
 end
 
+function initialize_variable_ad!(state, model::CompositeModel, pvar::Tuple{Symbol, V}, symb, npartials, diag_pos; kwarg...) where V<:JutulVariables
+    state[symb] = allocate_array_ad(state[symb], diag_pos = diag_pos, context = model.context, npartials = npartials; kwarg...)
+    return state
+end
 
 function number_of_entities(model::CompositeModel, u::Tuple{Symbol, V}) where V<:JutulVariables
     number_of_entities(generate_submodel(model, u[1]), u[2])

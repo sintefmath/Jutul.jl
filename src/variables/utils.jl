@@ -172,7 +172,7 @@ function initialize_primary_variable_ad!(state, model, pvar::ScalarVariable, sta
     if isnothing(diag_value)
         diag_value = 1.0
     end
-    initialize_variable_ad(state, model, pvar, state_symbol, npartials, offset + 1; diag_value = diag_value, kwarg...)
+    initialize_variable_ad!(state, model, pvar, state_symbol, npartials, offset + 1; diag_value = diag_value, kwarg...)
 end
 
 function initialize_primary_variable_ad!(state, model, pvar, state_symbol, npartials; offset = 0, kwarg...)
@@ -182,15 +182,15 @@ function initialize_primary_variable_ad!(state, model, pvar, state_symbol, npart
     end
     N = values_per_entity(model, pvar)
     dp = (offset+1):(offset+N)
-    initialize_variable_ad(state, model, pvar, state_symbol, npartials, offset + 1; diag_pos = dp, diag_value = diag_value, kwarg...)
+    initialize_variable_ad!(state, model, pvar, state_symbol, npartials, offset + 1; diag_pos = dp, diag_value = diag_value, kwarg...)
 end
 
 function initialize_secondary_variable_ad!(state, model, pvar, state_symbol, npartials; kwarg...)
     diag_pos = NaN
-    initialize_variable_ad(state, model, pvar, state_symbol, npartials, diag_pos; kwarg...)
+    initialize_variable_ad!(state, model, pvar, state_symbol, npartials, diag_pos; kwarg...)
 end
 
-function initialize_variable_ad(state, model, pvar, symb, npartials, diag_pos; kwarg...)
+function initialize_variable_ad!(state, model, pvar, symb, npartials, diag_pos; kwarg...)
     state[symb] = allocate_array_ad(state[symb], diag_pos = diag_pos, context = model.context, npartials = npartials; kwarg...)
     return state
 end
