@@ -649,3 +649,14 @@ struct ConservationLaw{C, T<:FlowDiscretization, N} <: JutulEquation
         return new{conserved, T, N}(disc)
     end
 end
+
+export CompositeSystem
+struct CompositeSystem{T} <: JutulSystem
+    systems::T
+end
+
+function CompositeSystem(; kwarg...)
+    return CompositeSystem(NamedTuple(pairs(kwarg)))
+end
+
+const CompositeModel = SimulationModel{<:Any, <:CompositeSystem, <:Any, <:Any}
