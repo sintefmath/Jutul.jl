@@ -5,17 +5,10 @@ By default, each primary variable exists on all cells of a discretized domain
 """
 number_of_entities(model, pv::JutulVariables) = count_entities(model.domain, associated_entity(pv))
 
-function number_of_entities(model, u::Tuple{Symbol, V}) where V<:JutulVariables
-    number_of_entities(generate_submodel(model, u[1]), u[2])
-end
-
 """
 The entity a variable is associated with, and can hold partial derivatives with respect to.
 """
 associated_entity(::JutulVariables) = Cells()
-function associated_entity(u::Tuple{Symbol, V}) where V<:JutulVariables
-    associated_entity(u[2])
-end
 
 """
 Total number of degrees of freedom for a model, over all primary variables and all entities.
@@ -55,10 +48,6 @@ function degrees_of_freedom_per_entity(model::JutulModel, u::JutulEntity)
     return ndof
 end
 
-function degrees_of_freedom_per_entity(model, u::Tuple{Symbol, V}) where V<:JutulVariables
-    degrees_of_freedom_per_entity(generate_submodel(model, u[1]), u[2])
-end
-
 function number_of_degrees_of_freedom(model, pvars::JutulVariables)
     e = associated_entity(pvars)
     n = count_active_entities(model.domain, e, for_variables = true)
@@ -86,7 +75,6 @@ Number of values held by a primary variable. Normally this is equal to the numbe
 but some special primary variables are most conveniently defined by having N values and N-1 independent variables.
 """
 values_per_entity(model, u::JutulVariables) = degrees_of_freedom_per_entity(model, u)
-values_per_entity(model, u::Tuple{Symbol, V}) where V<:JutulVariables = degrees_of_freedom_per_entity(generate_submodel(model, u[1]), u[2])
 
 ## Update functions
 """
