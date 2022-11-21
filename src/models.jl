@@ -315,7 +315,7 @@ function initialize_storage!(storage, model::JutulModel; initialize_state0 = tru
         # Convert state and parameters to immutable for evaluation
         state0_eval = convert_to_immutable_storage(storage[:state0])
         # Evaluate everything (with doubles) to make sure that possible 
-        update_secondary_variables_state!(state0_eval, model)
+        update_secondary_variables_state!(state0_eval, model, storage)
         storage[:state0] = state0_eval
     end
     synchronize(model.context)
