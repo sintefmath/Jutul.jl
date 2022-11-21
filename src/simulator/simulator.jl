@@ -419,6 +419,6 @@ function check_forces(sim, f::T, timesteps) where T<:AbstractArray
     nf = length(f)
     nt = length(timesteps)
     if nf != nt
-        error("Number of forces must match the number of timesteps ($nt timsteps, $nf forces)")
+        error("Number of forces must match the number of timesteps ($nt timesteps, $nf forces)")
     end
 end
