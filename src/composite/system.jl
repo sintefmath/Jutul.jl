@@ -1,7 +1,20 @@
 Base.getindex(s::CompositeSystem, i::Symbol) = s.systems[i]
 
 function setup_storage_equations!(eqs, storage, model::CompositeModel; kwarg...)
-    error()
+    subsys_keys = keys(model.system.systems)
+    models = JutulStorage()
+    for k in subsys_keys
+        m = generate_submodel(model, k)
+        tmp = OrderedDict()
+        setup_storage_equations!(tmp, storage, m; kwarg...)
+        for (eq_k, eq_v) in tmp
+            @assert !haskey(eqs, eq_k)
+            eqs[eq_k] = eq_v
+        end
+        models[k] = (equations = keys(tmp), model = m)
+    end
+    storage[:models] = models
+    return eqs
 end
 
 function select_primary_variables!(S, system::CompositeSystem{T}, model) where T
@@ -38,7 +51,7 @@ end
 function internal_select_composite!(S, system, model, F!)
     for (name, sys) in pairs(system.systems)
         submodel = generate_submodel(model, name)
-        tmp = Dict{Symbol, Any}()
+        tmp = OrderedDict{Symbol, Any}()
         F!(tmp, sys, submodel)
         for (k, v) in tmp
             S[k] = (name, v)

@@ -417,12 +417,3 @@ function pick_relaxation(w, dv, dv0)
     end
     return w
 end
-
-function initialize_secondary_variable_ad!(state, model, var::ConstantVariables, arg...; kwarg...)
-    # Do nothing. There is no need to add AD.
-    return state
-end
-
-function initialize_primary_variable_ad!(state, model, var::ConstantVariables, sym, arg...; kwarg...)
-    error("$sym is declared to be constants - cannot be primary variables.")
-end
