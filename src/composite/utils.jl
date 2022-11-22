@@ -1,9 +1,21 @@
-function select_extra_model_fields!(model::CompositeModel)
+function select_extra_model_fields_pre!(model::CompositeModel)
     models = Dict{Symbol, JutulModel}()
     for k in keys(model.system.systems)
         models[k] = generate_submodel(model, k)
     end
     model.extra[:models] = models
+    return model
+end
+
+function select_extra_model_fields_post!(model::CompositeModel)
+    pvars = get_primary_variables(model)
+    for (k, m) in model.extra[:models]
+        pvars_k = m.primary_variables
+        empty!(pvars_k)
+        for (pkey, pvar) in pvars
+            pvars_k[pkey] = pvar[2]
+        end
+    end
     return model
 end
 
@@ -38,7 +50,7 @@ function variable_scale(u::Tuple{Symbol, V}) where V<:JutulVariables
 end
 
 function values_per_entity(model::CompositeModel, u::Tuple{Symbol, V}) where V<:JutulVariables
-    degrees_of_freedom_per_entity(submodel(model, u[1]), u[2])
+    values_per_entity(submodel(model, u[1]), u[2])
 end
 
 function degrees_of_freedom_per_entity(model::CompositeModel, u::Tuple{Symbol, V}) where V<:JutulVariables

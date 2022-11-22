@@ -248,7 +248,7 @@ function SimulationModel(domain, system;
     F = typeof(formulation)
     C = typeof(context)
     model = SimulationModel{D,S,F,C}(domain, system, context, formulation, plot_mesh, primary, secondary, parameters, equations, outputs, extra)
-    select_extra_model_fields!(model)
+    select_extra_model_fields_pre!(model)
     select_primary_variables!(model)
     select_secondary_variables!(model)
     select_parameters!(model)
@@ -265,10 +265,15 @@ function SimulationModel(domain, system;
     end
     check_prim(primary)
     select_output_variables!(model, output_level)
+    select_extra_model_fields_post!(model)
     return model
 end
 
-function select_extra_model_fields!(model)
+function select_extra_model_fields_pre!(model)
+    return model
+end
+
+function select_extra_model_fields_post!(model)
     return model
 end
 

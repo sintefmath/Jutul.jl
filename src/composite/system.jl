@@ -53,27 +53,20 @@ function generate_submodel(m::CompositeModel, label::Symbol)
     model = SimulationModel(m.domain, subsys, formulation = m.formulation,
                                                context = m.context,
                                                plot_mesh = m.context)
-    vars = merge(m.primary_variables, m.secondary_variables, m.parameters)
-    for (k, v) in vars
-        name, var = v
-        if name == label
-            replace_variables!(model; k => var)
-        end
-    end
     return model
 end
 
 function setup_forces(model::CompositeModel; kwarg...)
     @warn "Not properly implemented"
-    model = generate_submodel(model, first(keys(model.system.systems)))
+    model = submodel(model, first(keys(model.system.systems)))
     forces = setup_forces(model; kwarg...)
     return forces
 end
 
-function setup_parameters!(model::JutulModel, init)
+function setup_parameters!(model::CompositeModel, init)
     prm = Dict{Symbol, Any}()
     for (name, sys) in pairs(system.systems)
-        submodel = generate_submodel(model, name)
+        submodel = submodel(model, name)
         setup_parameters!(prm, submodel, init)
     end
     return prm
