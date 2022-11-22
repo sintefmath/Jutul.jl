@@ -99,16 +99,16 @@ end
 function apply_forces!(storage, model::CompositeModel, dt, forces; time = NaN)
     equations = model.equations
     equations_storage = storage.equations
-    @info forces keys(equations)
     for key in keys(equations)
-        @info key
         eqn = equations[key]
         eq_s = equations_storage[key]
         name, eq = eqn
-        diag_part = get_diagonal_entries(eq, eq_s)
         k_forces = forces[name]
+        if isnothing(k_forces)
+            continue
+        end
+        diag_part = get_diagonal_entries(eq, eq_s)
         for fkey in keys(k_forces)
-            @info "applying $fkey to $name" diag_part
             force = k_forces[fkey]
             apply_forces_to_equation!(diag_part, storage, submodel(model, name), eq, eq_s, force, time)
         end

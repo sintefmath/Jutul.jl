@@ -108,3 +108,13 @@ function setup_equation_storage(model::CompositeModel, eqn::Tuple{Symbol, V}, st
     k, eq = eqn
     return setup_equation_storage(submodel(model, k), eq, storage; kwarg...)
 end
+
+function update_linearized_system_equation!(nz, r, model::CompositeModel, eqn::Tuple{Symbol, V}, storage) where V<:JutulEquation
+    k, eq = eqn
+    return update_linearized_system_equation!(nz, r, submodel(model, k), eq, storage)
+end
+
+function convergence_criterion(model::CompositeModel, storage, eqn::Tuple{Symbol, V}, eq_s, r; kwarg...) where V<:JutulEquation
+    k, eq = eqn
+    return convergence_criterion(submodel(model, k), storage, eq, eq_s, r; kwarg...)
+end
