@@ -224,13 +224,15 @@ struct SimulationModel{O<:JutulDomain,
     parameters::OrderedDict{Symbol, Any}
     equations::OrderedDict{Symbol, Any}
     output_variables::Vector{Symbol}
+    extra::OrderedDict{Symbol, Any}
 end
 
 function SimulationModel(domain, system;
                             formulation=FullyImplicit(),
                             context=DefaultContext(),
                             plot_mesh = nothing,
-                            output_level=:primary_variables
+                            output_level=:primary_variables,
+                            extra = OrderedDict{Symbol, Any}()
                         )
     context = initialize_context!(context, domain, system, formulation)
     domain = transfer(context, domain)
@@ -245,7 +247,7 @@ function SimulationModel(domain, system;
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, plot_mesh, primary, secondary, parameters, equations, outputs)
+    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, plot_mesh, primary, secondary, parameters, equations, outputs, extra)
     select_primary_variables!(model)
     select_secondary_variables!(model)
     select_parameters!(model)
@@ -262,6 +264,11 @@ function SimulationModel(domain, system;
     end
     check_prim(primary)
     select_output_variables!(model, output_level)
+    select_extra_model_fields!(model)
+    return model
+end
+
+function select_extra_model_fields!(model)
     return model
 end
 
