@@ -98,14 +98,3 @@ function setup_parameters!(model::JutulModel, init)
     end
     return prm
 end
-
-function update_secondary_variables_state!(state, model::CompositeModel, storage)
-    models = storage.models
-    for (s, name_and_var) in model.secondary_variables
-        name, var = name_and_var
-        v = state[s]
-        ix = entity_eachindex(v)
-        m = models[name].model
-        update_secondary_variable!(v, var, m, state, ix)
-    end
-end

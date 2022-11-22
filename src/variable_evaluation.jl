@@ -72,7 +72,7 @@ macro jutul_secondary(ex)
 end
 
 function update_secondary_variables!(storage, model)
-    update_secondary_variables_state!(storage.state, model, storage)
+    update_secondary_variables_state!(storage.state, model)
 end
 
 function update_secondary_variables!(storage, model, is_state0::Bool)
@@ -81,10 +81,10 @@ function update_secondary_variables!(storage, model, is_state0::Bool)
     else
         s = storage.state
     end
-    update_secondary_variables_state!(s, model, storage)
+    update_secondary_variables_state!(s, model)
 end
 
-function update_secondary_variables_state!(state, model, storage = nothing)
+function update_secondary_variables_state!(state, model)
     ctx = model.context
     N = nthreads(ctx)
     if N == 1

@@ -631,14 +631,9 @@ function update_secondary_variables!(storage, model::MultiModel)
     end
 end
 
-function update_secondary_variables_state!(state, model::MultiModel, storage = nothing)
+function update_secondary_variables_state!(state, model::MultiModel)
     for key in submodels_symbols(model)
-        if isnothing(storage)
-            s = nothing
-        else
-            s = storage[key]
-        end
-        update_secondary_variables_state!(state[key], model[key], s)
+        update_secondary_variables_state!(state[key], model[key])
     end
 end
 
