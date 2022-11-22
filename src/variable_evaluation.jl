@@ -114,8 +114,6 @@ function select_secondary_variables!(model)
     select_secondary_variables!(svars, model.formulation, model)
 end
 
-select_secondary_variables!(svars, ::JutulSystem, model) = nothing
-select_secondary_variables!(svars, ::JutulFormulation, model) = nothing
 
 function select_primary_variables!(model::SimulationModel)
     pvars = model.primary_variables
@@ -124,17 +122,12 @@ function select_primary_variables!(model::SimulationModel)
     select_primary_variables!(pvars, model.formulation, model)
 end
 
-select_primary_variables!(vars, ::JutulFormulation, model) = nothing
-
 function select_parameters!(model::SimulationModel)
     prm = model.parameters
     select_parameters!(prm, model.domain, model)
     select_parameters!(prm, model.system, model)
     select_parameters!(prm, model.formulation, model)
 end
-
-select_parameters!(prm, ::JutulSystem, model) = nothing
-select_parameters!(prm, ::JutulFormulation, model) = nothing
 
 function select_equations!(model::SimulationModel)
     eqs = model.equations
@@ -143,8 +136,8 @@ function select_equations!(model::SimulationModel)
     select_equations!(eqs, model.formulation, model)
 end
 
-select_equations!(eqs, ::JutulSystem, model) = nothing
-select_equations!(eqs, ::JutulFormulation, model) = nothing
+select_equations!(eqs, ::JutulSystem, model::SimulationModel) = nothing
+select_equations!(eqs, ::JutulFormulation, model::SimulationModel) = nothing
 
 function select_minimum_output_variables!(model)
     # Minimum is always all primary variables (for restarting) plus anything added

@@ -1,14 +1,14 @@
 Base.getindex(s::CompositeSystem, i::Symbol) = s.systems[i]
 
-function select_primary_variables!(S, system::CompositeSystem{T}, model::CompositeModel) where T
-    internal_select_composite!(S, system, model, select_primary_variables!)
+function select_primary_variables!(S, v, model::CompositeModel)
+    internal_select_composite!(S, v, model, select_primary_variables!)
     return S
 end
 
-function select_secondary_variables!(S, system::CompositeSystem{T}, model::CompositeModel) where T
+function select_secondary_variables!(S, v, model::CompositeModel)
     primary = model.primary_variables
     tmp = OrderedDict()
-    internal_select_composite!(tmp, system, model, select_secondary_variables!)
+    internal_select_composite!(tmp, v, model, select_secondary_variables!)
     for (k, v) in tmp
         if !haskey(primary, k)
             S[k] = v
@@ -17,12 +17,12 @@ function select_secondary_variables!(S, system::CompositeSystem{T}, model::Compo
     return S
 end
 
-function select_parameters!(S, system::CompositeSystem, model::CompositeModel)
+function select_parameters!(S, v, model::CompositeModel)
     primary = model.primary_variables
     secondary = model.secondary_variables
     vars = merge(primary, secondary)
     tmp = OrderedDict()
-    internal_select_composite!(tmp, system, model, select_parameters!)
+    internal_select_composite!(tmp, v, model, select_parameters!)
     for (k, v) in tmp
         if !haskey(vars, k)
             S[k] = v
@@ -32,15 +32,26 @@ function select_parameters!(S, system::CompositeSystem, model::CompositeModel)
 end
 
 
-function select_equations!(S, system::CompositeSystem{T}, model::CompositeModel) where T
-    internal_select_composite!(S, system, model, select_equations!)
+function select_equations!(S, v, model::CompositeModel)
+    internal_select_composite!(S, v, model, select_equations!)
     return S
 end
 
-function internal_select_composite!(S, system, model, F!)
+function internal_select_composite!(S, system::CompositeSystem, model, F!)
     for (name, sys) in pairs(system.systems)
         tmp = OrderedDict{Symbol, Any}()
         F!(tmp, sys, submodel(model, name))
+        for (k, v) in tmp
+            S[k] = (name, v)
+        end
+    end
+    return S
+end
+
+function internal_select_composite!(S, something, model, F!)
+    for name in keys(model.system.systems)
+        tmp = OrderedDict{Symbol, Any}()
+        F!(tmp, something, submodel(model, name))
         for (k, v) in tmp
             S[k] = (name, v)
         end
