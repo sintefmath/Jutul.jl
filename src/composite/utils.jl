@@ -91,3 +91,8 @@ function update_equation_in_entity!(eq_buf, c, state, state0, eqn::Tuple{Symbol,
     end
     return update_equation_in_entity!(eq_buf, c, state, state0, eq, submodel(model, k), dt, ldisc)
 end
+
+function setup_equation_storage(model::CompositeModel, eqn::Tuple{Symbol, V}, storage; kwarg...) where V<:JutulEquation
+    k, eq = eqn
+    return setup_equation_storage(submodel(model, k), eq, storage; kwarg...)
+end
