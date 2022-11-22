@@ -54,6 +54,22 @@ function initialize_primary_variable_ad!(stateAD, model, pvar::Tuple{Symbol, V},
     return initialize_primary_variable_ad!(stateAD, m, pvar[2], pkey, n_partials; kwarg...)
 end
 
-# function update_primary_variable!(state, p::Tuple{Symbol, V}, state_symbol, model::CompositeModel, dx) where V<:JutulVariables
+function declare_sparsity(model::CompositeModel, eq::Tuple{Symbol, V}, eq_s, u, row_layout, col_layout) where V<:JutulEquation
+    k, eq = eq
+    return declare_sparsity(submodel(model, k), eq, eq_s, u, row_layout, col_layout)
+end
 
-# end
+function number_of_equations(model::CompositeModel, eq::Tuple{Symbol, V}) where V<:JutulEquation
+    k, eq = eq
+    return number_of_equations(submodel(model, k), eq)
+end
+
+function align_to_jacobian!(eq_s, eqn::Tuple{Symbol, V}, jac, model::CompositeModel, u; kwarg...) where V<:JutulEquation
+    k, eq = eqn
+    return align_to_jacobian!(eq_s, eq, jac, submodel(model, k), u; kwarg...)
+end
+
+function update_equation!(eq_s, eqn::Tuple{Symbol, V}, storage, model::CompositeModel, dt) where V<:JutulEquation
+    k, eq = eqn
+    return update_equation!(eq_s, eq, storage, submodel(model, k), dt)
+end

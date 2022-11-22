@@ -45,6 +45,12 @@ function select_parameters!(S, system::CompositeSystem, model::CompositeModel)
     return S
 end
 
+
+function select_equations!(S, system::CompositeSystem{T}, model::CompositeModel) where T
+    internal_select_composite!(S, system, model, select_equations!)
+    return S
+end
+
 function internal_select_composite!(S, system, model, F!)
     for (name, sys) in pairs(system.systems)
         tmp = OrderedDict{Symbol, Any}()
