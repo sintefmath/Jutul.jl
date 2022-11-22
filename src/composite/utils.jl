@@ -29,7 +29,7 @@ function number_of_entities(model::CompositeModel, u::Tuple{Symbol, V}) where V<
     number_of_entities(submodel(model, u[1]), u[2])
 end
 
-function associated_entity(u::Tuple{Symbol, V}) where V<:JutulVariables
+function associated_entity(u::Tuple{Symbol, <:Any})
     associated_entity(u[2])
 end
 
@@ -64,6 +64,16 @@ function number_of_equations(model::CompositeModel, eq::Tuple{Symbol, V}) where 
     return number_of_equations(submodel(model, k), eq)
 end
 
+function number_of_equations_per_entity(model::CompositeModel, eq::Tuple{Symbol, V}) where V<:JutulEquation
+    k, eq = eq
+    return number_of_equations_per_entity(submodel(model, k), eq)
+end
+
+function number_of_entities(model::CompositeModel, eq::Tuple{Symbol, V}) where V<:JutulEquation
+    k, eq = eq
+    return number_of_entities(submodel(model, k), eq)
+end
+
 function align_to_jacobian!(eq_s, eqn::Tuple{Symbol, V}, jac, model::CompositeModel, u; kwarg...) where V<:JutulEquation
     k, eq = eqn
     return align_to_jacobian!(eq_s, eq, jac, submodel(model, k), u; kwarg...)
@@ -72,4 +82,12 @@ end
 function update_equation!(eq_s, eqn::Tuple{Symbol, V}, storage, model::CompositeModel, dt) where V<:JutulEquation
     k, eq = eqn
     return update_equation!(eq_s, eq, storage, submodel(model, k), dt)
+end
+
+function update_equation_in_entity!(eq_buf, c, state, state0, eqn::Tuple{Symbol, V}, model::CompositeModel, dt, ldisc = nothing) where V<:JutulEquation
+    k, eq = eqn
+    if isnothing(ldisc)
+        ldisc = local_discretization(eq, c)
+    end
+    return update_equation_in_entity!(eq_buf, c, state, state0, eq, submodel(model, k), dt, ldisc)
 end

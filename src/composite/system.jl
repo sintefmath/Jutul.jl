@@ -1,19 +1,5 @@
 Base.getindex(s::CompositeSystem, i::Symbol) = s.systems[i]
 
-function setup_storage_equations!(eqs, storage, model::CompositeModel; kwarg...)
-    subsys_keys = keys(model.system.systems)
-    for k in subsys_keys
-        m = submodel(model, k)
-        tmp = OrderedDict()
-        setup_storage_equations!(tmp, storage, m; kwarg...)
-        for (eq_k, eq_v) in tmp
-            @assert !haskey(eqs, eq_k)
-            eqs[eq_k] = eq_v
-        end
-    end
-    return eqs
-end
-
 function select_primary_variables!(S, system::CompositeSystem{T}, model::CompositeModel) where T
     internal_select_composite!(S, system, model, select_primary_variables!)
     return S
@@ -81,14 +67,6 @@ function setup_forces(model::CompositeModel; kwarg...)
     @warn "Not properly implemented"
     model = generate_submodel(model, first(keys(model.system.systems)))
     forces = setup_forces(model; kwarg...)
-    # forces = Dict{Symbol, Any}()
-    # for (name, sys) in pairs(system.systems)
-    #     submodel = generate_submodel(model, name)
-    #     f = setup_forces(submodel)
-    #     for (k, v) in pairs(f)
-    #         forces[k] = v
-    #     end
-    # end
     return forces
 end
 
