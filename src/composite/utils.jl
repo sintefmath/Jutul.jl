@@ -1,4 +1,4 @@
-function select_extra_model_fields_pre!(model::CompositeModel)
+function update_model_pre_selection!(model::CompositeModel)
     models = Dict{Symbol, JutulModel}()
     for k in keys(model.system.systems)
         models[k] = generate_submodel(model, k)
@@ -7,7 +7,7 @@ function select_extra_model_fields_pre!(model::CompositeModel)
     return model
 end
 
-function select_extra_model_fields_post!(model::CompositeModel)
+function update_model_post_selection!(model::CompositeModel)
     pvars = get_primary_variables(model)
     for (k, m) in model.extra[:models]
         pvars_k = m.primary_variables

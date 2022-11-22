@@ -248,7 +248,7 @@ function SimulationModel(domain, system;
     F = typeof(formulation)
     C = typeof(context)
     model = SimulationModel{D,S,F,C}(domain, system, context, formulation, plot_mesh, primary, secondary, parameters, equations, outputs, extra)
-    select_extra_model_fields_pre!(model)
+    update_model_pre_selection!(model)
     select_primary_variables!(model)
     select_secondary_variables!(model)
     select_parameters!(model)
@@ -265,15 +265,15 @@ function SimulationModel(domain, system;
     end
     check_prim(primary)
     select_output_variables!(model, output_level)
-    select_extra_model_fields_post!(model)
+    update_model_post_selection!(model)
     return model
 end
 
-function select_extra_model_fields_pre!(model)
+function update_model_pre_selection!(model)
     return model
 end
 
-function select_extra_model_fields_post!(model)
+function update_model_post_selection!(model)
     return model
 end
 
@@ -671,4 +671,4 @@ function CompositeSystem(; kwarg...)
     return CompositeSystem(NamedTuple(pairs(kwarg)))
 end
 
-const CompositeModel = SimulationModel{<:Any, <:CompositeSystem, <:Any, <:Any}
+const CompositeModel = SimulationModel{<:JutulDomain, <:CompositeSystem, <:JutulFormulation, <:JutulContext}

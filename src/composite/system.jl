@@ -5,7 +5,12 @@ function select_primary_variables!(S, v, model::CompositeModel)
     return S
 end
 
-function select_secondary_variables!(S, v, model::CompositeModel)
+function select_primary_variables!(S, v::DiscretizedDomain, model::CompositeModel)
+    internal_select_composite!(S, v, model, select_primary_variables!)
+    return S
+end
+
+function composite_select_secondary_variables!(S, v, model::CompositeModel)
     primary = model.primary_variables
     tmp = OrderedDict()
     internal_select_composite!(tmp, v, model, select_secondary_variables!)
@@ -17,7 +22,10 @@ function select_secondary_variables!(S, v, model::CompositeModel)
     return S
 end
 
-function select_parameters!(S, v, model::CompositeModel)
+select_secondary_variables!(S, v, model::CompositeModel) = composite_select_secondary_variables!(S, v, model)
+select_secondary_variables!(S, v::DiscretizedDomain, model::CompositeModel) = composite_select_secondary_variables!(S, v, model)
+
+function composite_select_parameters!(S, v, model::CompositeModel)
     primary = model.primary_variables
     secondary = model.secondary_variables
     vars = merge(primary, secondary)
@@ -31,9 +39,16 @@ function select_parameters!(S, v, model::CompositeModel)
     return S
 end
 
+select_parameters!(S, v, model::CompositeModel) = composite_select_parameters!(S, v, model)
+select_parameters!(S, v::DiscretizedDomain, model::CompositeModel) = composite_select_parameters!(S, v, model)
 
-function select_equations!(S, v, model::CompositeModel)
+function select_equations!(S, v::DiscretizedDomain, model::CompositeModel)
     internal_select_composite!(S, v, model, select_equations!)
+    return S
+end
+
+function select_equations!(S, sys::CompositeSystem, model::CompositeModel)
+    internal_select_composite!(S, sys, model, select_equations!)
     return S
 end
 
@@ -68,10 +83,36 @@ function generate_submodel(m::CompositeModel, label::Symbol)
 end
 
 function setup_forces(model::CompositeModel; kwarg...)
-    @warn "Not properly implemented"
-    model = submodel(model, first(keys(model.system.systems)))
-    forces = setup_forces(model; kwarg...)
-    return forces
+    force = Dict{Symbol, Any}()
+    for k in keys(model.system.systems)
+        force[k] = nothing
+    end
+    for (k, f) in kwarg
+        # This should throw if the forces don't match the labels
+        submodel(model, k)
+        force[k] = f
+    end
+    return NamedTuple(pairs(force))
+end
+
+
+function apply_forces!(storage, model::CompositeModel, dt, forces; time = NaN)
+    equations = model.equations
+    equations_storage = storage.equations
+    @info forces keys(equations)
+    for key in keys(equations)
+        @info key
+        eqn = equations[key]
+        eq_s = equations_storage[key]
+        name, eq = eqn
+        diag_part = get_diagonal_entries(eq, eq_s)
+        k_forces = forces[name]
+        for fkey in keys(k_forces)
+            @info "applying $fkey to $name" diag_part
+            force = k_forces[fkey]
+            apply_forces_to_equation!(diag_part, storage, submodel(model, name), eq, eq_s, force, time)
+        end
+    end
 end
 
 function setup_parameters!(model::CompositeModel, init)
