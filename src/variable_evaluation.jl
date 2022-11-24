@@ -5,24 +5,29 @@ export jutul_secondary
 """
 Designate the function as updating a secondary variable.
 
-The function is then declared, in addition to helpers that allows
-checking what the dependencies are and unpacking the dependencies from state.
+The function is then declared, in addition to helpers that allows checking what
+the dependencies are and unpacking the dependencies from state.
 
 If we define the following function annotated with the macro:
-@jutul_secondary function some_fn!(target, var::MyVarType, model, a, b, c)
-    @. target = a + b / c
-end
 
-The macro also defines: 
+
+The purpose of the macro is to translate this into two functions. The first
+defines for the dependencies of the function with respect to the fields of the
+state (primary variables, secondary variables and parameters):
+```julia
 function get_dependencies(var::MyVarType, model)
    return (:a, :b, :c)
 end
-
+```
+The second function defines a generic version that takes in state, and
+automatically expands the set of dependencies into `getfield` calls.
+```julia
 function update_secondary_variable!(array_target, var::MyVarType, model, state, ix)
     some_fn!(array_target, var, model, state.a, state.b, state.c, ix)
 end
-
-Note that the names input of some arguments matter, as these will be fetched from state.
+```
+Note that the input names of arguments 4 to end-1 matter, as these will be
+fetched from state, exactly as written.
 """
 macro jutul_secondary(ex)
     def = splitdef(ex)
