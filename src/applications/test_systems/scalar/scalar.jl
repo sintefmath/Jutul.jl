@@ -34,7 +34,7 @@ end
 
 number_of_equations_per_entity(model::SimulationModel, ::ScalarTestEquation) = 1
 
-function select_equations!(eqs, system::ScalarTestSystem, model)
+function select_equations!(eqs, system::ScalarTestSystem, model::SimulationModel)
     eqs[:test_equation] = ScalarTestEquation(model)
 end
 
@@ -44,7 +44,7 @@ end
 
 struct XVar <: ScalarVariable end
 
-function select_primary_variables!(S, system::ScalarTestSystem, model)
+function select_primary_variables!(S, system::ScalarTestSystem, model::SimulationModel)
     S[:XVar] = XVar()
 end
 
