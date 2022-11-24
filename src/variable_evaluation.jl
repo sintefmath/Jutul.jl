@@ -1,15 +1,21 @@
 export sort_secondary_variables!, build_variable_graph
 export @jutul_secondary
-export jutul_secondary
 
 """
 Designate the function as updating a secondary variable.
 
-The function is then declared, in addition to helpers that allows checking what
-the dependencies are and unpacking the dependencies from state.
-
-If we define the following function annotated with the macro:
-
+A generic evaluator is then defined, together with a function for getting the
+dependencies of that function upon the state. This is most easily documented
+with an example. If we define the following function annotated with the macro
+when updating the array containing the values of `MyVarType` realized for some
+model:
+```julia
+@jutul_secondary function some_fn!(target, var::MyVarType, model, a, b, c, ix)
+    for i in ix
+        target[i] = a[i] + b[i] / c[i]
+    end
+end
+```
 
 The purpose of the macro is to translate this into two functions. The first
 defines for the dependencies of the function with respect to the fields of the
