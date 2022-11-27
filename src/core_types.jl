@@ -682,6 +682,11 @@ struct JutulLinePlotData
     ylabel
 end
 
+export line_plot_data
+function line_plot_data(model::SimulationModel, ::Any)
+    return nothing
+end
+
 function JutulLinePlotData(x, y; labels = nothing, title = "", xlabel = "", ylabel = "")
     if eltype(x)<:AbstractFloat
         x = [x]
@@ -700,9 +705,6 @@ function JutulLinePlotData(x, y; labels = nothing, title = "", xlabel = "", ylab
     return JutulLinePlotData(x, y, labels, title, xlabel, ylabel)
 end
 
-function JutulLinePlotData(::Any)
-    return nothing
-end
 
 export JutulLinePlotData
 
