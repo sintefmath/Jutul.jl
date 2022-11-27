@@ -11,6 +11,10 @@ function Simulator(model; extra_timing = false, kwarg...)
     Simulator(model, storage)
 end
 
+function Simulator(case::JutulCase; kwarg...)
+    Simulator(case.model; state0 = deepcopy(case.state0), parameters = deepcopy(case.parameters), kwarg...)
+end
+
 mutable struct SolveRecorder
     step       # Step index in context
     iterations # Total iterations in context

@@ -576,6 +576,29 @@ function setup_state(model::MultiModel, initializers)
 end
 
 function setup_state(model::MultiModel; kwarg...)
+    return internal_multimodel_setup_state(setup_state, model; kwarg...)
+end
+
+function setup_parameters(model::MultiModel; kwarg...)
+    return internal_multimodel_setup_state(setup_parameters, model; kwarg...)
+end
+
+function setup_parameters(model::MultiModel, init)
+    p = Dict{Symbol, Any}()
+    for key in submodels_symbols(model)
+        m = model.models[key]
+        if haskey(init, key)
+            prm = setup_parameters(m, init[key])
+        else
+            prm = setup_parameters(m)
+        end
+        p[key] = prm
+    end
+    return p
+end
+
+
+function internal_multimodel_setup_state(F, model::MultiModel; kwarg...)
     init = Dict{Symbol, Any}()
     # Set up empty initializers first
     for k in submodels_symbols(model)
@@ -586,16 +609,22 @@ function setup_state(model::MultiModel; kwarg...)
         @assert haskey(model.models, k) "$k not found in models" keys(model.models)
         init[k] = v
     end
-    return setup_state(model, init)
+    return F(model, init)
 end
 
-function setup_parameters(model::MultiModel)
-    p = Dict()
-    for key in submodels_symbols(model)
-        m = model.models[key]
-        p[key] = setup_parameters(m)
+export setup_state_and_parameters
+
+function setup_state_and_parameters(model::MultiModel, init)
+    state_init = Dict{Symbol, Any}()
+    prm_init = Dict{Symbol, Any}()
+    for (k, v) in init
+        if haskey(model.models, k)
+            state_init[k], prm_init[k] = setup_state_and_parameters(model[k], v)
+        end
     end
-    return p
+    state = setup_state(model, state_init)
+    parameters = setup_parameters(model, prm_init)
+    return (state, parameters)
 end
 
 function set_default_tolerances!(tol_cfg, model::MultiModel)

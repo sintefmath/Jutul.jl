@@ -292,6 +292,28 @@ function setup_parameters(model::JutulModel, init)
     return setup_parameters!(prm, model, init)
 end
 
+function setup_state_and_parameters(model, init)
+    init = copy(init)
+    prm = Dict{Symbol, Any}()
+    for (k, v) in init
+        if k in keys(model.parameters)
+            prm[k] = v
+            delete!(init, k)
+        end
+    end
+    state = setup_state(model, init)
+    parameters = setup_parameters(model, prm)
+    return (state, parameters)
+end
+
+function setup_state_and_parameters(model; kwarg...)
+    init = Dict{Symbol, Any}()
+    for (k, v) in kwarg
+        init[k] = v
+    end
+    return setup_state_and_parameters(model, init)
+end
+
 """
     setup_storage(model::JutulModel; kwarg...)
 

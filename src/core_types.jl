@@ -672,3 +672,22 @@ function CompositeSystem(; kwarg...)
 end
 
 const CompositeModel = SimulationModel{<:JutulDomain, <:CompositeSystem, <:JutulFormulation, <:JutulContext}
+export JutulCase
+struct JutulCase
+    model::JutulModel
+    dt::AbstractVector{<:AbstractFloat}
+    forces
+    state0
+    parameters
+end
+
+function JutulCase(model, dt, forces = setup_forces(model); state0 = nothing, parameters = nothing, kwarg...)
+    if isnothing(state0) && isnothing(parameters)
+        state0, parameters = setup_state_and_parameters(model, kwarg...)
+    elseif isnothing(state0)
+        state0 = setup_state(model, kwarg...)
+    elseif isnothing(parameters)
+        parameters = setup_parameters(model, kwarg...)
+    end
+    return JutulCase(model, dt, forces, state0, parameters)
+end

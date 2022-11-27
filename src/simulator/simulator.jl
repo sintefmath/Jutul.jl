@@ -86,6 +86,11 @@ function simulate(state0, model::JutulModel, timesteps::AbstractVector; paramete
     return simulate!(sim, timesteps; kwarg...)
 end
 
+function simulate(case::JutulCase; kwarg...)
+    sim = Simulator(case)
+    return simulate!(sim, case.dt; forces = case.forces, kwarg...)
+end
+
 """
     simulate(state0, sim::JutulSimulator, timesteps::AbstractVector; parameters = nothing, kwarg...)
 
