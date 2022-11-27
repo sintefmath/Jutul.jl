@@ -689,5 +689,20 @@ function JutulCase(model, dt, forces = setup_forces(model); state0 = nothing, pa
     elseif isnothing(parameters)
         parameters = setup_parameters(model, kwarg...)
     end
+    if forces isa AbstractVector
+        @assert length(forces) == length(dt)
+    end
+    @assert all(dt .> 0)
     return JutulCase(model, dt, forces, state0, parameters)
+end
+
+function Base.show(io::IO, t::MIME"text/plain", case::JutulCase)
+    if case.forces isa AbstractVector
+        ctrl_type = "forces for each step"
+    else
+        ctrl_type = "constant forces for all steps"
+    end
+    nstep = length(case.dt)
+    println(io, "Jutul case with $nstep time-steps ($(get_tstr(sum(case.dt)))) and $ctrl_type.\n\nModel:\n")
+    Base.show(io, t, case.model)
 end
