@@ -287,7 +287,7 @@ function Base.copy(m::SimulationModel{O, S, C, F}) where {O, S, C, F}
 end
 
 function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
-    println("SimulationModel:")
+    println(io, "SimulationModel:")
     for f in fieldnames(typeof(model))
         p = getfield(model, f)
         print(io, "  $f:\n")
@@ -672,6 +672,40 @@ function CompositeSystem(; kwarg...)
 end
 
 const CompositeModel = SimulationModel{<:JutulDomain, <:CompositeSystem, <:JutulFormulation, <:JutulContext}
+
+struct JutulLinePlotData
+    xdata
+    ydata
+    datalabels
+    title
+    xlabel
+    ylabel
+end
+
+function JutulLinePlotData(x, y; labels = nothing, title = "", xlabel = "", ylabel = "")
+    if eltype(x)<:AbstractFloat
+        x = [x]
+    end
+    if eltype(y)<:AbstractFloat
+        y = [y]
+    end
+    if eltype(labels)<:AbstractString
+        labels = [labels]
+    end
+    if isnothing(labels)
+        labels = ["" for i in eachindex(x)]
+    end
+    @assert length(x) == length(y) == length(labels)
+
+    return JutulLinePlotData(x, y, labels, title, xlabel, ylabel)
+end
+
+function JutulLinePlotData(::Any)
+    return nothing
+end
+
+export JutulLinePlotData
+
 export JutulCase
 struct JutulCase
     model::JutulModel
@@ -681,7 +715,7 @@ struct JutulCase
     parameters
 end
 
-function JutulCase(model, dt, forces = setup_forces(model); state0 = nothing, parameters = nothing, kwarg...)
+function JutulCase(model, dt = [1.0], forces = setup_forces(model); state0 = nothing, parameters = nothing, kwarg...)
     if isnothing(state0) && isnothing(parameters)
         state0, parameters = setup_state_and_parameters(model, kwarg...)
     elseif isnothing(state0)

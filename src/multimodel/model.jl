@@ -587,7 +587,7 @@ function setup_parameters(model::MultiModel, init)
     p = Dict{Symbol, Any}()
     for key in submodels_symbols(model)
         m = model.models[key]
-        if haskey(init, key)
+        if haskey(init, key) && !isnothing(init[key])
             prm = setup_parameters(m, init[key])
         else
             prm = setup_parameters(m)
