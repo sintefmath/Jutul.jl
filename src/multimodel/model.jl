@@ -704,6 +704,7 @@ function update_primary_variables!(storage, model::MultiModel; kwarg...)
 
     offset = 0
     model_keys = submodel_symbols(model)
+    report = Dict{Symbol, AbstractDict}()
     for (i, key) in enumerate(model_keys)
         m = models[key]
         s = storage[key]
@@ -713,9 +714,10 @@ function update_primary_variables!(storage, model::MultiModel; kwarg...)
             bz = block_size(lsys[i, i])
             dx_v = reshape(dx_v, bz, :)
         end
-        update_primary_variables!(s.state, dx_v, m; kwarg...)
+        report[key] = update_primary_variables!(s.state, dx_v, m; kwarg...)
         offset += ndof
     end
+    return report
 end
 
 function reset_state_to_previous_state!(storage, model::MultiModel)

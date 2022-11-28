@@ -757,8 +757,8 @@ function solve_and_update!(storage, model::JutulModel, dt = nothing; linear_solv
     t_solve = @elapsed begin
         @timeit "linear solve" (ok, n, history) = solve!(lsys, linear_solver, model, storage, dt, recorder)
     end
-    t_update = @elapsed @timeit "primary variables" update_primary_variables!(storage, model; kwarg...)
-    return (t_solve, t_update, n, history)
+    t_update = @elapsed @timeit "primary variables" update = update_primary_variables!(storage, model; kwarg...)
+    return (t_solve, t_update, n, history, update)
 end
 
 function update_primary_variables!(storage, model::JutulModel; kwarg...)
@@ -772,6 +772,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; check
     offset = 0
     primary = get_primary_variables(model)
     ok = true
+    report = Dict{Symbol, Any}()
     if cell_major
         offset = 0 # Offset into global r array
         for u in get_primary_variable_ordered_entities(model)
@@ -797,6 +798,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; check
                 end
                 @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi)
                 local_offset += ni
+                report[pkey] = maximum(abs, dxi)
             end
             offset += nu*np
         end
@@ -811,11 +813,13 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; check
             end
             @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi)
             offset += n
+            report[pkey] = maximum(abs, dxi)
         end
     end
     if !ok
         error("Primary variables recieved invalid updates.")
     end
+    return report
 end
 
 """
