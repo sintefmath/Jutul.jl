@@ -118,7 +118,7 @@ Non-allocating (or perhaps less allocating) version of [`simulate!`](@ref).
 
 See also [`simulate`](@ref) for additional supported input arguments.
 """
-function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing,
+function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setup_forces(sim.model),
                                                                    config = nothing,
                                                                    initialize = true,
                                                                    restart = nothing,
