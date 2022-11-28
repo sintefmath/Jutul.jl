@@ -726,7 +726,9 @@ function JutulCase(model, dt = [1.0], forces = setup_forces(model); state0 = not
         parameters = setup_parameters(model, kwarg...)
     end
     if forces isa AbstractVector
-        @assert length(forces) == length(dt)
+        nf = length(forces)
+        nt = length(dt)
+        @assert nt == nf "If forces is a vector, the length (=$nf) must match the number of time steps (=$nt)."
     end
     @assert all(dt .> 0)
     return JutulCase(model, dt, forces, state0, parameters)
