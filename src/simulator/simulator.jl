@@ -220,21 +220,29 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                 dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = false)
             end
         else
-            if info_level > 0
-                jutul_message("Convergence", "Time-step $step_no of length $(get_tstr(dt)) failed to converge.", color = :yellow)
-            end
+            dt_old = dt
             dt = cut_timestep(sim, config, dt, dT, reports, step_index = step_no, cut_count = cut_count)
+            if info_level > 0
+                if isnan(dt)
+                    inner_msg = " Aborting."
+                    c = :red
+                else
+                    inner_msg = " Reducing mini-step."
+                    c = :yellow
+                end
+                jutul_message("Convergence", "Time-step $step_no with mini-step length $(get_tstr(dt_old)) failed to converge.$inner_msg", color = c)
+            end
             if isnan(dt)
                 # Timestep too small, cut too many times, ...
-                if info_level > -1
+                if info_level == 0 || info_level > 1
                     @error "Unable to reduce time-step to smaller value. Aborting simulation."
                 end
                 break
             else
                 cut_count += 1
-                if info_level > 0
+                if info_level > 1
                     t_format = t -> @sprintf "%1.2f" 100*t/dT
-                    @warn "Cutting timestep. Step $(t_format(t_local)) % complete.\nΔt reduced to $(get_tstr(dt)) ($(t_format(dt))% of full step).\nThis is cut #$cut_count for step $step_no."
+                    @warn "Cutting mini-step. Step $(t_format(t_local)) % complete.\nΔt reduced to $(get_tstr(dt)) ($(t_format(dt))% of full time-step).\nThis is cut #$cut_count for time-step #$step_no."
                 end
             end
         end
