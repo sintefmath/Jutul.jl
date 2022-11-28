@@ -766,7 +766,7 @@ function update_primary_variables!(storage, model::JutulModel; kwarg...)
     update_primary_variables!(storage.primary_variables, dx, model; kwarg...)
 end
 
-function update_primary_variables!(primary_storage, dx, model::JutulModel; check = false)
+function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1, check = false)
     layout = matrix_layout(model.context)
     cell_major = is_cell_major(layout)
     offset = 0
@@ -796,7 +796,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; check
                     ok_i = check_increment(dxi, p, pkey)
                     ok = ok && ok_i
                 end
-                @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi)
+                @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
                 local_offset += ni
                 report[pkey] = maximum(abs, dxi)
             end
@@ -811,7 +811,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; check
                 ok_i = check_increment(dxi, p, pkey)
                 ok = ok && ok_i
             end
-            @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi)
+            @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
             offset += n
             report[pkey] = maximum(abs, dxi)
         end

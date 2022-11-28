@@ -99,15 +99,15 @@ Lower (inclusive) limit for variable.
 """
 minimum_value(::JutulVariables) = nothing
 
-function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx)
+function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx, w)
     entity = associated_entity(p)
     active = active_entities(model.domain, entity, for_variables = true)
     v = state[state_symbol]
     n = degrees_of_freedom_per_entity(model, p)
-    update_jutul_variable_internal!(p, active, v, n, dx)
+    update_jutul_variable_internal!(p, active, v, n, dx, w)
 end
 
-function update_jutul_variable_internal!(p, active, v, n, dx)
+function update_jutul_variable_internal!(p, active, v, n, dx, w)
     nu = length(active)
     abs_max = absolute_increment_limit(p)
     rel_max = relative_increment_limit(p)
@@ -116,7 +116,7 @@ function update_jutul_variable_internal!(p, active, v, n, dx)
     scale = variable_scale(p)
     for index in 1:n
         offset = nu*(index-1)
-        @tullio v[active[i]] = update_value(v[active[i]], dx[i+offset], abs_max, rel_max, minval, maxval, scale)
+        @tullio v[active[i]] = update_value(v[active[i]], w*dx[i+offset], abs_max, rel_max, minval, maxval, scale)
     end
 end
 
@@ -310,7 +310,7 @@ function unit_sum_init(v, model, npartials, N; offset = 0, kwarg...)
     return v
 end
 
-function update_primary_variable!(state, p::FractionVariables, state_symbol, model, dx)
+function update_primary_variable!(state, p::FractionVariables, state_symbol, model, dx, w)
     s = state[state_symbol]
     unit_sum_update!(s, p, model, dx)
 end
@@ -321,11 +321,11 @@ function unit_sum_update!(s, p, model, dx, entity = Cells())
     maxval, minval = maximum_value(p), minimum_value(p)
     active_cells = active_entities(model.domain, entity, for_variables = true)
     if nf == 2
-        unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
+        unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)
     else
         if true
             # Preserve direction
-            unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
+            unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, w)
         else
             # Preserve update magnitude
             unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
@@ -333,15 +333,15 @@ function unit_sum_update!(s, p, model, dx, entity = Cells())
     end
 end
 
-function unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
+function unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, w)
     nactive = length(active_cells)
     for active_ix in eachindex(active_cells)
         full_cell = active_cells[active_ix]
-        unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nactive, minval, maxval, abs_max)
+        unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nactive, minval, maxval, abs_max, w)
     end
 end
 
-function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minval, maxval, abs_max)
+function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minval, maxval, abs_max, w0)
     # active_ix: Index into active cells (used to access dx)
     # full_cell: Index into full set of cells (used to access s)
     w = 1.0
@@ -357,7 +357,7 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
     end
     # Do the same thing for the implicit update of the last value
     dlast = choose_increment(value(s[nf, full_cell]), dlast0, abs_max, nothing, minval, maxval)
-    w = pick_relaxation(w, dlast, dlast0)
+    w = w0*pick_relaxation(w, dlast, dlast0)
 
     @inbounds for i = 1:(nf-1)
         s[i, full_cell] += w*dx[active_ix + (i-1)*nu]
@@ -372,7 +372,7 @@ function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
     @inbounds for (i, cell) in enumerate(active_cells)
         v = value(s[1, cell])::F
         dv = dx[i]
-        dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
+        dv = w*choose_increment(v, dv, abs_max, nothing, minval, maxval)
         s[1, cell] += dv
         s[2, cell] -= dv
     end

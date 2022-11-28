@@ -9,8 +9,8 @@ function update_secondary_variables_state!(state, model::CompositeModel)
     end
 end
 
-function update_primary_variable!(state, p::Tuple{Symbol, V}, state_symbol, model::CompositeModel, dx) where V<:JutulVariables
+function update_primary_variable!(state, p::Tuple{Symbol, V}, state_symbol, model::CompositeModel, dx, w) where V<:JutulVariables
     label, var = p
     m = submodel(model, label)
-    update_primary_variable!(state, var, state_symbol, m, dx)
+    update_primary_variable!(state, var, state_symbol, m, dx, w)
 end

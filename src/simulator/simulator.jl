@@ -10,6 +10,7 @@ include("recorder.jl")
 include("timesteps.jl")
 include("utils.jl")
 include("optimization.jl")
+include("relaxation.jl")
 
 function simulator_storage(model; state0 = nothing,
                                 parameters = setup_parameters(model),
@@ -256,7 +257,7 @@ function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
     perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config; iteration = NaN, update_secondary = iteration > 1 || config[:always_update_secondary])
+function perform_step!(storage, model, dt, forces, config; iteration = NaN, relaxation = 1, update_secondary = iteration > 1 || config[:always_update_secondary])
     e, converged = nothing, false
 
     report = OrderedDict()
@@ -291,7 +292,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, upda
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
         rec = config[:ProgressRecorder]
-        t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec)
+        t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec, relaxation = relaxation)
         report[:update] = rep_update
         report[:linear_solver] = rep_lsolve
         report[:linear_iterations] = n_iter
@@ -301,7 +302,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, upda
     return (e, converged, report)
 end
 
-function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
+function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false, relaxation = 1.0)
     done = false
     rec = cfg[:ProgressRecorder]
     report = OrderedDict()
@@ -311,11 +312,12 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
     update_before_step!(sim, dt, forces, time = cur_time)
     for it = 1:max_iter
         next_iteration!(rec)
-        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it)
+        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation)
         push!(step_reports, r)
         if done
             break
         end
+        relaxation = select_nonlinear_relaxation(sim.model, cfg[:relaxation], step_reports, relaxation)
         failure = false
         max_res = cfg[:max_residual]
         if !isfinite(e)

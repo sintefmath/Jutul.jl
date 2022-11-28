@@ -35,6 +35,9 @@ function simulator_config!(cfg, sim; kwarg...)
     # Define a default progress ProgressRecorder
     cfg[:ProgressRecorder] = ProgressRecorder()
     cfg[:timestep_selectors] = [TimestepSelector()]
+    # Relaxation
+    cfg[:relaxation] = NoRelaxation()
+    # Timestep
     cfg[:timestep_max_increase] = 10.0
     cfg[:timestep_max_decrease] = 0.1
     # Max residual before error is issued
