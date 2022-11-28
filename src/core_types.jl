@@ -744,19 +744,26 @@ function Base.show(io::IO, t::MIME"text/plain", case::JutulCase)
     println(io, "Jutul case with $nstep time-steps ($(get_tstr(sum(case.dt)))) and $ctrl_type.\n\nModel:\n")
     Base.show(io, t, case.model)
 end
-export NoRelaxation, StagnationRelaxation
+export NoRelaxation, SimpleRelaxation
 
 abstract type NonLinearRelaxation end
 
 struct NoRelaxation <: NonLinearRelaxation end
 
-struct StagnationRelaxation <: NonLinearRelaxation
+struct SimpleRelaxation <: NonLinearRelaxation
     tol::Float64
     w_min::Float64
     w_max::Float64
-    dw::Float64
+    dw_decrease::Float64
+    dw_increase::Float64
 end
 
-function StagnationRelaxation(; tol = 0.01, w_min = 0.25, dw = 0.2, w_max = 1.0)
-    return StagnationRelaxation(tol, w_min, w_max, dw)
+function SimpleRelaxation(; tol = 0.01, w_min = 0.25, dw = 0.2, dw_increase = nothing, dw_decrease = nothing, w_max = 1.0)
+    if isnothing(dw_increase)
+        dw_increase = dw/2
+    end
+    if isnothing(dw_decrease)
+        dw_decrease = dw
+    end
+    return SimpleRelaxation(tol, w_min, w_max, dw_decrease, dw_increase)
 end

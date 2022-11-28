@@ -317,7 +317,11 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false, r
         if done
             break
         end
+        w0 = relaxation
         relaxation = select_nonlinear_relaxation(sim.model, cfg[:relaxation], step_reports, relaxation)
+        if cfg[:info_level] > 1 && relaxation != w0
+            jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :yellow)
+        end
         failure = false
         max_res = cfg[:max_residual]
         if !isfinite(e)

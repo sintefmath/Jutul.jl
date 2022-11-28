@@ -2,15 +2,15 @@ function select_nonlinear_relaxation(model, rel_type, reports, relaxation)
     return relaxation
 end
 
-function select_nonlinear_relaxation(model, rel_type::StagnationRelaxation, reports, ω)
+function select_nonlinear_relaxation(model, rel_type::SimpleRelaxation, reports, ω)
     if length(reports) > 1
-        (; tol, dw, w_max, w_min) = rel_type
+        (; tol, dw_decrease, dw_increase, w_max, w_min) = rel_type
         e_old = error_sum_scaled(model, reports[end-1][:errors])
         e_new = error_sum_scaled(model, reports[end][:errors])
         if (e_old - e_new)/max(e_old, 1e-20) < tol
-            ω = ω - dw
+            ω = ω - dw_decrease
         else
-            ω = ω + dw
+            ω = ω + dw_increase
         end
         ω = clamp(ω, w_min, w_max)
 
