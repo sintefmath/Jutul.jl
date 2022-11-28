@@ -107,6 +107,13 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
         F = krylov.storage
         solve_f = (arg...; kwarg...) -> Krylov.bicgstab!(F, arg...; kwarg...)
         in_place = true
+    elseif solver == :fgmres
+        if isnothing(krylov.storage)
+            krylov.storage = FgmresSolver(op, r, 20)
+        end
+        F = krylov.storage
+        solve_f = (arg...; kwarg...) -> Krylov.fgmres!(F, arg...; kwarg...)
+        in_place = true
     else
         solve_f = eval(:(Krylov.$solver))
         in_place = false
