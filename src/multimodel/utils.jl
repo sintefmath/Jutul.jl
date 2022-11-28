@@ -77,3 +77,11 @@ end
 
 select_linear_solver(model::MultiModel; kwarg...) = select_linear_solver_multimodel(model, first(model.models); kwarg...)
 select_linear_solver_multimodel(model::MultiModel, first_model; kwarg...) = select_linear_solver(first_model; kwarg...)
+
+function error_sum_scaled(model::MultiModel, rep)
+    err_sum = 0.0
+    for (k, v) in rep
+        err_sum += error_sum_scaled(model[k], v)
+    end
+    return err_sum
+end
