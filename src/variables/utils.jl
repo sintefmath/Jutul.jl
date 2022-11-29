@@ -312,10 +312,10 @@ end
 
 function update_primary_variable!(state, p::FractionVariables, state_symbol, model, dx, w)
     s = state[state_symbol]
-    unit_sum_update!(s, p, model, dx)
+    unit_sum_update!(s, p, model, dx, w)
 end
 
-function unit_sum_update!(s, p, model, dx, entity = Cells())
+function unit_sum_update!(s, p, model, dx, w, entity = Cells())
     nf, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
     maxval, minval = maximum_value(p), minimum_value(p)
@@ -365,7 +365,7 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
     @inbounds s[nf, full_cell] += w*dlast0
 end
 
-function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
+function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)
     F = eltype(dx)
     maxval = min(1 - minval, maxval)
     minval = max(minval, maxval - 1)
