@@ -1,12 +1,12 @@
 function select_nonlinear_relaxation(sim::Simulator, rel_type, reports, relaxation)
-    return select_nonlinear_relaxation(sim.model, rel_type, reports, relaxation)
+    return select_nonlinear_relaxation_model(sim.model, rel_type, reports, relaxation)
 end
 
-function select_nonlinear_relaxation(model, rel_type, reports, relaxation)
+function select_nonlinear_relaxation_model(model, rel_type, reports, relaxation)
     return relaxation
 end
 
-function select_nonlinear_relaxation(model, rel_type::SimpleRelaxation, reports, ω)
+function select_nonlinear_relaxation_model(model, rel_type::SimpleRelaxation, reports, ω)
     if length(reports) > 1
         (; tol, dw_decrease, dw_increase, w_max, w_min) = rel_type
         e_old = error_sum_scaled(model, reports[end-1][:errors])
