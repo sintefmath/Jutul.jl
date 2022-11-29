@@ -1,3 +1,7 @@
+function select_nonlinear_relaxation(sim::Simulator, rel_type, reports, relaxation)
+    return select_nonlinear_relaxation(sim.model, rel_type, reports, relaxation)
+end
+
 function select_nonlinear_relaxation(model, rel_type, reports, relaxation)
     return relaxation
 end
