@@ -694,7 +694,7 @@ function JutulLinePlotData(x, y; labels = nothing, title = "", xlabel = "", ylab
     if eltype(y)<:AbstractFloat
         y = [y]
     end
-    if eltype(labels)<:AbstractString
+    if labels isa String
         labels = [labels]
     end
     if isnothing(labels)
