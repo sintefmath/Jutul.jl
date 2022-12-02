@@ -257,7 +257,10 @@ function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
     perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config; iteration = NaN, relaxation = 1, update_secondary = iteration > 1 || config[:always_update_secondary])
+function perform_step!(storage, model, dt, forces, config; iteration = NaN, relaxation = 1, update_secondary = nothing, solve = true)
+    if isnothing(update_secondary)
+        update_secondary = iteration > 1 || config[:always_update_secondary]
+    end
     e, converged = nothing, false
 
     report = OrderedDict()
@@ -288,7 +291,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
     end
     report[:convergence_time] = t_conv
 
-    if !converged
+    if !converged && solve
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
         rec = config[:ProgressRecorder]
@@ -312,7 +315,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false, r
     update_before_step!(sim, dt, forces, time = cur_time)
     for it = 1:max_iter
         next_iteration!(rec)
-        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation)
+        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation, solve = it < max_iter)
         push!(step_reports, r)
         if done
             break
