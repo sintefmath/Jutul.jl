@@ -313,9 +313,10 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false, r
     step_reports = []
     cur_time = current_time(rec)
     update_before_step!(sim, dt, forces, time = cur_time)
-    for it = 1:max_iter
+    for it = 1:(max_iter+1)
         next_iteration!(rec)
-        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation, solve = it < max_iter)
+        do_solve = it <= max_iter
+        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation, solve = do_solve)
         push!(step_reports, r)
         if done
             break
