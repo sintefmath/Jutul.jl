@@ -487,7 +487,7 @@ Get the convergence criterion values for a given equation. Can be checked agains
 """
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
     n = number_of_equations_per_entity(model, eq)
-    @tullio max e[i] := abs(r[i, j])
+    @timeit "default" @tullio max e[i] := abs(r[i, j])
     if n == 1
         names = "R"
     else
