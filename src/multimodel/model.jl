@@ -738,8 +738,16 @@ end
 
 function update_before_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
     for key in targets
-        update_before_step!(storage[key], model.models[key], dt, forces[key]; kwarg...)
+        s = storage[key]
+        m = model.models[key]
+        f = forces[key]
+        update_before_step_multimodel!(storage, model, m, dt, f, key)
+        update_before_step!(s, m, dt, f; kwarg...)
     end
+end
+
+function update_before_step_multimodel!(storage, model, submodel, dt, subforces, label)
+
 end
 
 function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model))
