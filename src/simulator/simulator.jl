@@ -237,10 +237,6 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                 jutul_message("Convergence", "Time-step $step_no with mini-step length $(get_tstr(dt_old)) failed to converge.$inner_msg", color = c)
             end
             if isnan(dt)
-                # Timestep too small, cut too many times, ...
-                if info_level == 0 || info_level > 1
-                    @error "Unable to reduce time-step to smaller value. Aborting simulation."
-                end
                 break
             else
                 cut_count += 1
