@@ -169,6 +169,9 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
         subrep[:total_time] = t_step
         if step_done
             @timeit "output" store_output!(states, reports, step_no, sim, config, subrep)
+        else
+            subrep[:output_time] = 0.0
+            push!(reports, subrep)
         end
     end
     final_simulation_message(sim, p, reports, timesteps, config, early_termination)
