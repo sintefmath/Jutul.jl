@@ -535,6 +535,9 @@ function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}
     p = Progress(range[end]; enabled = verbose, desc = "Reading $name...")
     for i in range
         state, report = read_restart(pth, i; read_state = read_states, read_report = read_reports)
+        if isnothing(report)
+            break
+        end
         if read_states
             push!(states, state)
         end
