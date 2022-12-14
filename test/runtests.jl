@@ -3,3 +3,4 @@ using Jutul
 include("test_systems/runtests.jl")
 include("mesh.jl")
 include("adjoints/basic_adjoint.jl")
+include("utils.jl")

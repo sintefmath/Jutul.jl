@@ -42,8 +42,13 @@ function find_jac_position(A, target_entity_index, source_entity_index,
 
     row = target_entity_index
     col = source_entity_index
+    inner_layout = EntityMajorLayout()
+    if represented_as_adjoint(row_layout)
+        @assert represented_as_adjoint(col_layout)
+        inner_layout = adjoint(inner_layout)
+    end
 
-    pos = find_sparse_position(A, row, col, EntityMajorLayout())
+    pos = find_sparse_position(A, row, col, inner_layout)
     return (pos-1)*eqs_per_entity*partials_per_entity + eqs_per_entity*(partial_index-1) + equation_index
 end
 
@@ -482,7 +487,7 @@ Get the convergence criterion values for a given equation. Can be checked agains
 """
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
     n = number_of_equations_per_entity(model, eq)
-    @tullio max e[i] := abs(r[i, j])
+    @timeit "default" @tullio max e[i] := abs(r[i, j])
     if n == 1
         names = "R"
     else

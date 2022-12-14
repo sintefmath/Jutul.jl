@@ -75,6 +75,7 @@ Number of values held by a primary variable. Normally this is equal to the numbe
 but some special primary variables are most conveniently defined by having N values and N-1 independent variables.
 """
 values_per_entity(model, u::JutulVariables) = degrees_of_freedom_per_entity(model, u)
+
 ## Update functions
 """
 Absolute allowable change for variable during a nonlinear update.
@@ -98,15 +99,15 @@ Lower (inclusive) limit for variable.
 """
 minimum_value(::JutulVariables) = nothing
 
-function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx)
+function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx, w)
     entity = associated_entity(p)
     active = active_entities(model.domain, entity, for_variables = true)
     v = state[state_symbol]
     n = degrees_of_freedom_per_entity(model, p)
-    update_jutul_variable_internal!(p, active, v, n, dx)
+    update_jutul_variable_internal!(p, active, v, n, dx, w)
 end
 
-function update_jutul_variable_internal!(p, active, v, n, dx)
+function update_jutul_variable_internal!(p, active, v, n, dx, w)
     nu = length(active)
     abs_max = absolute_increment_limit(p)
     rel_max = relative_increment_limit(p)
@@ -115,7 +116,7 @@ function update_jutul_variable_internal!(p, active, v, n, dx)
     scale = variable_scale(p)
     for index in 1:n
         offset = nu*(index-1)
-        @tullio v[active[i]] = update_value(v[active[i]], dx[i+offset], abs_max, rel_max, minval, maxval, scale)
+        @tullio v[active[i]] = update_value(v[active[i]], w*dx[i+offset], abs_max, rel_max, minval, maxval, scale)
     end
 end
 
@@ -171,7 +172,7 @@ function initialize_primary_variable_ad!(state, model, pvar::ScalarVariable, sta
     if isnothing(diag_value)
         diag_value = 1.0
     end
-    initialize_variable_ad(state, model, pvar, state_symbol, npartials, offset + 1; diag_value = diag_value, kwarg...)
+    initialize_variable_ad!(state, model, pvar, state_symbol, npartials, offset + 1; diag_value = diag_value, kwarg...)
 end
 
 function initialize_primary_variable_ad!(state, model, pvar, state_symbol, npartials; offset = 0, kwarg...)
@@ -181,15 +182,15 @@ function initialize_primary_variable_ad!(state, model, pvar, state_symbol, npart
     end
     N = values_per_entity(model, pvar)
     dp = (offset+1):(offset+N)
-    initialize_variable_ad(state, model, pvar, state_symbol, npartials, offset + 1; diag_pos = dp, diag_value = diag_value, kwarg...)
+    initialize_variable_ad!(state, model, pvar, state_symbol, npartials, offset + 1; diag_pos = dp, diag_value = diag_value, kwarg...)
 end
 
 function initialize_secondary_variable_ad!(state, model, pvar, state_symbol, npartials; kwarg...)
     diag_pos = NaN
-    initialize_variable_ad(state, model, pvar, state_symbol, npartials, diag_pos; kwarg...)
+    initialize_variable_ad!(state, model, pvar, state_symbol, npartials, diag_pos; kwarg...)
 end
 
-function initialize_variable_ad(state, model, pvar, symb, npartials, diag_pos; kwarg...)
+function initialize_variable_ad!(state, model, pvar, symb, npartials, diag_pos; kwarg...)
     state[symb] = allocate_array_ad(state[symb], diag_pos = diag_pos, context = model.context, npartials = npartials; kwarg...)
     return state
 end
@@ -212,7 +213,7 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
         end
         err_str = "Passed value for $(typeof(pvar))"
         nm = length(val)
-        @assert nm == nv*nu "err_str had $nm entries, expected $(nu*nv)"
+        @assert nm == nv*nu "$err_str had $nm entries, expected $(nu*nv)"
         n, m, = size(val)
         @assert n == nv "$err_str had $n rows, expected $nv"
         @assert m == nu "$err_str had $m rows, expected $nu"
@@ -257,15 +258,15 @@ function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict;
 end
 
 # Scalar primary variables
-function initialize_variable_value!(state, model, pvar::ScalarVariable, symb::Symbol, val::Number)
+function initialize_variable_value(model, pvar::ScalarVariable, val::Number)
     V = repeat([val], number_of_entities(model, pvar))
-    return initialize_variable_value!(state, model, pvar, symb, V)
+    return initialize_variable_value(model, pvar, V)
 end
 
 """
 Initializer for the value of non-scalar primary variables
 """
-function initialize_variable_value!(state, model, pvar::VectorVariables, symb::Symbol, val::AbstractVector)
+function initialize_variable_value(model, pvar::VectorVariables, val::AbstractVector)
     n = values_per_entity(model, pvar)
     m = number_of_entities(model, pvar)
     nv = length(val)
@@ -278,12 +279,12 @@ function initialize_variable_value!(state, model, pvar::VectorVariables, symb::S
     else
         error("Variable $(typeof(pvar)) should have initializer of length $n or $m")
     end
-    return initialize_variable_value!(state, model, pvar, symb, V)
+    return initialize_variable_value(model, pvar, V)
 end
 
-function initialize_variable_value!(state, model, pvar::VectorVariables, symb::Symbol, val::Number)
+function initialize_variable_value(model, pvar::VectorVariables, symb::Symbol, val::Number)
     n = values_per_entity(model, pvar)
-    return initialize_variable_value!(state, model, pvar, symb, repeat([val], n))
+    return initialize_variable_value(model, pvar, symb, repeat([val], n))
 end
 
 # Specific variable implementations that are generic for many types of system follow
@@ -309,22 +310,22 @@ function unit_sum_init(v, model, npartials, N; offset = 0, kwarg...)
     return v
 end
 
-function update_primary_variable!(state, p::FractionVariables, state_symbol, model, dx)
+function update_primary_variable!(state, p::FractionVariables, state_symbol, model, dx, w)
     s = state[state_symbol]
-    unit_sum_update!(s, p, model, dx)
+    unit_sum_update!(s, p, model, dx, w)
 end
 
-function unit_sum_update!(s, p, model, dx, entity = Cells())
+function unit_sum_update!(s, p, model, dx, w, entity = Cells())
     nf, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
     maxval, minval = maximum_value(p), minimum_value(p)
     active_cells = active_entities(model.domain, entity, for_variables = true)
     if nf == 2
-        unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
+        unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)
     else
         if true
             # Preserve direction
-            unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
+            unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, w)
         else
             # Preserve update magnitude
             unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
@@ -332,15 +333,15 @@ function unit_sum_update!(s, p, model, dx, entity = Cells())
     end
 end
 
-function unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
+function unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, w)
     nactive = length(active_cells)
     for active_ix in eachindex(active_cells)
         full_cell = active_cells[active_ix]
-        unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nactive, minval, maxval, abs_max)
+        unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nactive, minval, maxval, abs_max, w)
     end
 end
 
-function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minval, maxval, abs_max)
+function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minval, maxval, abs_max, w0)
     # active_ix: Index into active cells (used to access dx)
     # full_cell: Index into full set of cells (used to access s)
     w = 1.0
@@ -356,7 +357,7 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
     end
     # Do the same thing for the implicit update of the last value
     dlast = choose_increment(value(s[nf, full_cell]), dlast0, abs_max, nothing, minval, maxval)
-    w = pick_relaxation(w, dlast, dlast0)
+    w = w0*pick_relaxation(w, dlast, dlast0)
 
     @inbounds for i = 1:(nf-1)
         s[i, full_cell] += w*dx[active_ix + (i-1)*nu]
@@ -364,14 +365,14 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
     @inbounds s[nf, full_cell] += w*dlast0
 end
 
-function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max)
+function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)
     F = eltype(dx)
     maxval = min(1 - minval, maxval)
     minval = max(minval, maxval - 1)
     @inbounds for (i, cell) in enumerate(active_cells)
         v = value(s[1, cell])::F
         dv = dx[i]
-        dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
+        dv = w*choose_increment(v, dv, abs_max, nothing, minval, maxval)
         s[1, cell] += dv
         s[2, cell] -= dv
     end
@@ -415,13 +416,4 @@ function pick_relaxation(w, dv, dv0)
         w = min(w, r)
     end
     return w
-end
-
-function initialize_secondary_variable_ad!(state, model, var::ConstantVariables, arg...; kwarg...)
-    # Do nothing. There is no need to add AD.
-    return state
-end
-
-function initialize_primary_variable_ad!(state, model, var::ConstantVariables, sym, arg...; kwarg...)
-    error("$sym is declared to be constants - cannot be primary variables.")
 end

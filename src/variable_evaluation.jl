@@ -1,28 +1,39 @@
 export sort_secondary_variables!, build_variable_graph
 export @jutul_secondary
-export jutul_secondary
 
 """
 Designate the function as updating a secondary variable.
 
-The function is then declared, in addition to helpers that allows
-checking what the dependencies are and unpacking the dependencies from state.
-
-If we define the following function annotated with the macro:
-@jutul_secondary function update_as_secondary!(target, var::MyVarType, model, a, b, c)
-    @. target = a + b / c
+A generic evaluator is then defined, together with a function for getting the
+dependencies of that function upon the state. This is most easily documented
+with an example. If we define the following function annotated with the macro
+when updating the array containing the values of `MyVarType` realized for some
+model:
+```julia
+@jutul_secondary function some_fn!(target, var::MyVarType, model, a, b, c, ix)
+    for i in ix
+        target[i] = a[i] + b[i] / c[i]
+    end
 end
+```
 
-The macro also defines: 
+The purpose of the macro is to translate this into two functions. The first
+defines for the dependencies of the function with respect to the fields of the
+state (primary variables, secondary variables and parameters):
+```julia
 function get_dependencies(var::MyVarType, model)
-   return [:a, :b, :c]
+   return (:a, :b, :c)
 end
-
-function update_secondary_variable!(array_target, var::MyVarType, model, state)
-    update_as_secondary!(array_target, var, model, state.a, state.b, state.c)
+```
+The second function defines a generic version that takes in state, and
+automatically expands the set of dependencies into `getfield` calls.
+```julia
+function update_secondary_variable!(array_target, var::MyVarType, model, state, ix)
+    some_fn!(array_target, var, model, state.a, state.b, state.c, ix)
 end
-
-Note that the names input arguments beyond the parameter dict matter, as these will be fetched from state.
+```
+Note that the input names of arguments 4 to end-1 matter, as these will be
+fetched from state, exactly as written.
 """
 macro jutul_secondary(ex)
     def = splitdef(ex)
@@ -35,7 +46,7 @@ macro jutul_secondary(ex)
         x.args[1]
     end
 
-    deps = map(myfilter, args[4:end])
+    deps = tuple(map(myfilter, args[4:end-1])...)
     # Pick variable + model
     variable_sym = args[2]
     model_sym = args[3]
@@ -50,9 +61,9 @@ macro jutul_secondary(ex)
     # Define update_as_secondary! function
     upd_def = deepcopy(def)
     upd_def[:name] = :update_secondary_variable!
-    upd_def[:args] = [:array_target, variable_sym, model_sym, :state]
+    upd_def[:args] = [:array_target, variable_sym, model_sym, :state, :ix]
     # value, var, model, arg1, arg2
-    tmp = "update_as_secondary!(array_target, "
+    tmp = "$(def[:name])(array_target, "
     tmp *= String(myfilter(variable_sym))
     tmp *= ", "
     tmp *= String(myfilter(model_sym))
@@ -60,7 +71,7 @@ macro jutul_secondary(ex)
     for s in deps
         tmp *= ", state."*String(s)
     end
-    tmp *= ")"
+    tmp *= ", ix)"
     upd_def[:body] = Meta.parse(tmp)
     ex_upd = combinedef(upd_def)
 
@@ -71,9 +82,12 @@ macro jutul_secondary(ex)
     end |> esc 
 end
 
+function update_secondary_variables!(storage, model)
+    update_secondary_variables_state!(storage.state, model)
+end
 
-function update_secondary_variables!(storage, model; state0 = false)
-    if state0
+function update_secondary_variables!(storage, model, is_state0::Bool)
+    if is_state0
         s = storage.state0
     else
         s = storage.state
@@ -82,8 +96,24 @@ function update_secondary_variables!(storage, model; state0 = false)
 end
 
 function update_secondary_variables_state!(state, model)
-    for (symbol, var) in model.secondary_variables
-        @timeit "$symbol" update_secondary_variable!(state[symbol], var, model, state)
+    ctx = model.context
+    N = nthreads(ctx)
+    if N == 1
+        for (symbol, var) in model.secondary_variables
+            @timeit "$symbol" begin
+                v = state[symbol]
+                ix = entity_eachindex(v)
+                update_secondary_variable!(v, var, model, state, ix)
+            end
+        end
+    else
+        Threads.@threads for i in 1:N
+            for (symbol, var) in model.secondary_variables
+                v = state[symbol]
+                ix = entity_eachindex(v, i, N)
+                update_secondary_variable!(v, var, model, state, ix)
+            end
+        end
     end
 end
 
@@ -95,8 +125,6 @@ function select_secondary_variables!(model)
     select_secondary_variables!(svars, model.formulation, model)
 end
 
-select_secondary_variables!(svars, ::JutulSystem, model) = nothing
-select_secondary_variables!(svars, ::JutulFormulation, model) = nothing
 
 function select_primary_variables!(model::SimulationModel)
     pvars = model.primary_variables
@@ -105,17 +133,12 @@ function select_primary_variables!(model::SimulationModel)
     select_primary_variables!(pvars, model.formulation, model)
 end
 
-select_primary_variables!(vars, ::JutulFormulation, model) = nothing
-
 function select_parameters!(model::SimulationModel)
     prm = model.parameters
     select_parameters!(prm, model.domain, model)
     select_parameters!(prm, model.system, model)
     select_parameters!(prm, model.formulation, model)
 end
-
-select_parameters!(prm, ::JutulSystem, model) = nothing
-select_parameters!(prm, ::JutulFormulation, model) = nothing
 
 function select_equations!(model::SimulationModel)
     eqs = model.equations
@@ -124,8 +147,8 @@ function select_equations!(model::SimulationModel)
     select_equations!(eqs, model.formulation, model)
 end
 
-select_equations!(eqs, ::JutulSystem, model) = nothing
-select_equations!(eqs, ::JutulFormulation, model) = nothing
+select_equations!(eqs, ::JutulSystem, model::SimulationModel) = nothing
+select_equations!(eqs, ::JutulFormulation, model::SimulationModel) = nothing
 
 function select_minimum_output_variables!(model)
     # Minimum is always all primary variables (for restarting) plus anything added
@@ -151,7 +174,7 @@ export update_secondary_variable!
 """
 Update a secondary variable. Normally autogenerated with @jutul_secondary
 """
-function update_secondary_variable!(x, var, model, parameters, state)
+function update_secondary_variable!(x, var, model, parameters, state, arg...)
     error("update_secondary_variable! not implemented for $(typeof(var)).")
 end
 
@@ -263,7 +286,15 @@ function sort_symbols(symbols, deps)
     for (i, dep) in enumerate(deps)
         for d in dep
             pos = findall(symbols .== d)
-            @assert length(pos) == 1 "Symbol $d must appear exactly once in secondary variables or parameters, found $(length(pos)) entries. Declared secondary/parameters:\n $symbols. Declared dependencies:\n $deps"
+            if length(pos) != 1
+                println("Symbol $d must appear exactly once in secondary variables or parameters, found $(length(pos)) entries. Dependencies on $d:")
+                for (si, di) in zip(symbols, deps)
+                    if d in di
+                        println("$si depends on $di")
+                    end
+                end
+                error("Unable to continue.")
+            end
             add_edge!(graph, i, pos[])
         end
     end

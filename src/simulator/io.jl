@@ -4,12 +4,12 @@ function initialize_io(path)
     @assert isdir(path) "$path must be a valid directory for output."
 end
 
-function retrieve_output!(states, config)
+function retrieve_output!(states, config, n)
     pth = config[:output_path]
     if !config[:output_states] && !isnothing(pth)
         @debug "Reading states from $pth..."
         @assert isempty(states)
-        read_results(pth, read_reports = true, states = states, verbose = config[:info_level] >= 0);
+        read_results(pth, read_reports = true, states = states, verbose = config[:info_level] >= 0, range = 1:n);
     end
 end
 

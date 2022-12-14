@@ -78,7 +78,14 @@ matrix_layout(::Nothing) = EquationMajorLayout(false)
 represented_as_adjoint(layout) = layout.as_adjoint
 
 scalarize_layout(layout, other_layout) = layout
-scalarize_layout(layout::BlockMajorLayout, other_layout::ScalarLayout) = EntityMajorLayout()
+function scalarize_layout(layout::BlockMajorLayout, other_layout::ScalarLayout)
+    slayout = EntityMajorLayout()
+    if represented_as_adjoint(other_layout)
+        @assert represented_as_adjoint(layout)
+        slayout = adjoint(slayout)
+    end
+    return slayout
+end
 
 function Base.adjoint(ctx::T) where T<: JutulContext
     return T(matrix_layout = adjoint(ctx.matrix_layout))
@@ -212,18 +219,20 @@ struct SimulationModel{O<:JutulDomain,
     context::C
     formulation::F
     plot_mesh
-    primary_variables::OrderedDict{Symbol, JutulVariables}
-    secondary_variables::OrderedDict{Symbol, JutulVariables}
-    parameters::OrderedDict{Symbol, JutulVariables}
-    equations::OrderedDict{Symbol, JutulEquation}
+    primary_variables::OrderedDict{Symbol, Any}
+    secondary_variables::OrderedDict{Symbol, Any}
+    parameters::OrderedDict{Symbol, Any}
+    equations::OrderedDict{Symbol, Any}
     output_variables::Vector{Symbol}
+    extra::OrderedDict{Symbol, Any}
 end
 
 function SimulationModel(domain, system;
                             formulation=FullyImplicit(),
                             context=DefaultContext(),
                             plot_mesh = nothing,
-                            output_level=:primary_variables
+                            output_level=:primary_variables,
+                            extra = OrderedDict{Symbol, Any}()
                         )
     context = initialize_context!(context, domain, system, formulation)
     domain = transfer(context, domain)
@@ -238,7 +247,8 @@ function SimulationModel(domain, system;
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, plot_mesh, primary, secondary, parameters, equations, outputs)
+    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, plot_mesh, primary, secondary, parameters, equations, outputs, extra)
+    update_model_pre_selection!(model)
     select_primary_variables!(model)
     select_secondary_variables!(model)
     select_parameters!(model)
@@ -255,6 +265,15 @@ function SimulationModel(domain, system;
     end
     check_prim(primary)
     select_output_variables!(model, output_level)
+    update_model_post_selection!(model)
+    return model
+end
+
+function update_model_pre_selection!(model)
+    return model
+end
+
+function update_model_post_selection!(model)
     return model
 end
 
@@ -268,7 +287,7 @@ function Base.copy(m::SimulationModel{O, S, C, F}) where {O, S, C, F}
 end
 
 function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
-    println("SimulationModel:")
+    println(io, "SimulationModel:")
     for f in fieldnames(typeof(model))
         p = getfield(model, f)
         print(io, "  $f:\n")
@@ -447,6 +466,8 @@ end
 function Base.getproperty(S::JutulStorage, name::Symbol)
     Base.getproperty(data(S), name)
 end
+
+Base.propertynames(S::JutulStorage) = keys(getfield(S, :data))
 
 data(S::JutulStorage{Nothing}) = getfield(S, :data)
 data(S::JutulStorage) = getfield(S, :data)::NamedTuple
@@ -639,4 +660,110 @@ struct ConservationLaw{C, T<:FlowDiscretization, N} <: JutulEquation
     function ConservationLaw(disc::T, conserved::Symbol = :TotalMasses, N::Integer = 1) where T
         return new{conserved, T, N}(disc)
     end
+end
+
+export CompositeSystem
+struct CompositeSystem{T} <: JutulSystem
+    systems::T
+end
+
+function CompositeSystem(; kwarg...)
+    return CompositeSystem(NamedTuple(pairs(kwarg)))
+end
+
+const CompositeModel = SimulationModel{<:JutulDomain, <:CompositeSystem, <:JutulFormulation, <:JutulContext}
+
+struct JutulLinePlotData
+    xdata
+    ydata
+    datalabels
+    title
+    xlabel
+    ylabel
+end
+
+export line_plot_data
+function line_plot_data(model::SimulationModel, ::Any)
+    return nothing
+end
+
+function JutulLinePlotData(x, y; labels = nothing, title = "", xlabel = "", ylabel = "")
+    if eltype(x)<:AbstractFloat
+        x = [x]
+    end
+    if eltype(y)<:AbstractFloat
+        y = [y]
+    end
+    if labels isa String
+        labels = [labels]
+    end
+    if isnothing(labels)
+        labels = ["" for i in eachindex(x)]
+    end
+    @assert length(x) == length(y) == length(labels)
+
+    return JutulLinePlotData(x, y, labels, title, xlabel, ylabel)
+end
+
+
+export JutulLinePlotData
+
+export JutulCase
+struct JutulCase
+    model::JutulModel
+    dt::AbstractVector{<:AbstractFloat}
+    forces
+    state0
+    parameters
+end
+
+function JutulCase(model, dt = [1.0], forces = setup_forces(model); state0 = nothing, parameters = nothing, kwarg...)
+    if isnothing(state0) && isnothing(parameters)
+        state0, parameters = setup_state_and_parameters(model, kwarg...)
+    elseif isnothing(state0)
+        state0 = setup_state(model, kwarg...)
+    elseif isnothing(parameters)
+        parameters = setup_parameters(model, kwarg...)
+    end
+    if forces isa AbstractVector
+        nf = length(forces)
+        nt = length(dt)
+        @assert nt == nf "If forces is a vector, the length (=$nf) must match the number of time steps (=$nt)."
+    end
+    @assert all(dt .> 0)
+    return JutulCase(model, dt, forces, state0, parameters)
+end
+
+function Base.show(io::IO, t::MIME"text/plain", case::JutulCase)
+    if case.forces isa AbstractVector
+        ctrl_type = "forces for each step"
+    else
+        ctrl_type = "constant forces for all steps"
+    end
+    nstep = length(case.dt)
+    println(io, "Jutul case with $nstep time-steps ($(get_tstr(sum(case.dt)))) and $ctrl_type.\n\nModel:\n")
+    Base.show(io, t, case.model)
+end
+export NoRelaxation, SimpleRelaxation
+
+abstract type NonLinearRelaxation end
+
+struct NoRelaxation <: NonLinearRelaxation end
+
+struct SimpleRelaxation <: NonLinearRelaxation
+    tol::Float64
+    w_min::Float64
+    w_max::Float64
+    dw_decrease::Float64
+    dw_increase::Float64
+end
+
+function SimpleRelaxation(; tol = 0.01, w_min = 0.25, dw = 0.2, dw_increase = nothing, dw_decrease = nothing, w_max = 1.0)
+    if isnothing(dw_increase)
+        dw_increase = dw/2
+    end
+    if isnothing(dw_decrease)
+        dw_decrease = dw
+    end
+    return SimpleRelaxation(tol, w_min, w_max, dw_decrease, dw_increase)
 end

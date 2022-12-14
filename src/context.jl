@@ -109,7 +109,7 @@ function select_contexts(ctype = :csc;
     if isnothing(main_context)
         if ctype == :csc
             @assert context isa DefaultContext
-            main_context = DefaultContext(matrix_layout = matrix_layout, minbatch = minbatch)
+            main_context = DefaultContext(matrix_layout = matrix_layout, minbatch = minbatch, nthreads = nthreads)
         elseif ctype == :csr
             main_context = ParallelCSRContext(nthreads, matrix_layout = matrix_layout, minbatch = minbatch)
         else

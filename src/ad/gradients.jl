@@ -346,7 +346,7 @@ function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     model = sim.model
     # Deal with state0 first
     reset_previous_state!(sim, state0)
-    update_secondary_variables!(s, model, state0 = true)
+    update_secondary_variables!(s, model, true)
     # Apply logic as if timestep is starting
     update_before_step!(s, model, dt, forces, time = time)
     # Then the current primary variables
@@ -386,10 +386,11 @@ function adjoint_model_copy(model::SimulationModel{O, S, C, F}) where {O, S, C, 
     svar = copy(model.secondary_variables)
     outputs = vcat(keys(pvar)..., keys(svar)...)
     prm = copy(model.parameters)
+    extra = deepcopy(model.extra)
     eqs = model.equations
     # Transpose the system
     new_context = adjoint(model.context)
-    return SimulationModel{O, S, C, F}(model.domain, model.system, new_context, model.formulation, model.plot_mesh, pvar, svar, prm, eqs, outputs)
+    return SimulationModel{O, S, C, F}(model.domain, model.system, new_context, model.formulation, model.plot_mesh, pvar, svar, prm, eqs, outputs, extra)
 end
 
 """

@@ -14,6 +14,24 @@ function update_objective_new_parameters!(param_serialized, sim, state0, param, 
     return (obj, states)
 end
 
+"""
+    setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model, param);
+                                                            grad_type = :adjoint,
+                                                            config = nothing,
+                                                            print = 1,
+                                                            copy_parameters = true,
+                                                            param_obj = false,
+                                                            kwarg...)
+
+Set up function handles for optimizing the case defined by the inputs to
+`simulate` together with a per-timestep objective function `G`.
+
+Generally calling either of the functions will mutate the data Dict. The options are:
+F_o(x) -> evaluate objective
+dF_o(dFdx, x) -> evaluate gradient of objective, mutating dFdx (may trigger evaluation of F_o)
+F_and_dF(F, dFdx, x) -> evaluate F and/or dF. Value of nothing will mean that the corresponding entry is skipped.
+
+"""
 function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model, param);
                                                             grad_type = :adjoint,
                                                             config = nothing,
@@ -29,6 +47,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
             print = Inf
         end
     end
+    verbose = print > 0 && isfinite(print)
     if copy_parameters
         param = deepcopy(param)
     end
@@ -41,7 +60,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     end
     mapper, = variable_mapper(model, :parameters, targets = targets, config = opt_cfg)
     lims = optimization_limits(opt_cfg, mapper, param, model)
-    if print > 0 && isfinite(print)
+    if verbose
         print_parameter_optimization_config(targets, opt_cfg, model)
     end
     x0 = vectorize_variables(model, param, mapper, config = opt_cfg)
@@ -59,6 +78,9 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     sim = Simulator(model, state0 = state0, parameters = param)
     if isnothing(config)
         config = simulator_config(sim; info_level = -1, kwarg...)
+    elseif !verbose
+        config[:info_level] = -1
+        config[:final_simulation_message] = false
     end
     data[:sim] = sim
     data[:sim_config] = config
@@ -86,6 +108,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_c
     data[:config] = opt_cfg
     data[:state0] = state0
     data[:last_obj] = Inf
+    data[:x_hash] = hash(Inf)
     F = x -> objective_opt!(x, data, print)
     dF = (dFdx, x) -> gradient_opt!(dFdx, x, data)
     F_and_dF = (F, dFdx, x) -> objective_and_gradient_opt!(F, dFdx, x, data, print)
@@ -147,12 +170,13 @@ function objective_opt!(x, data, print_frequency = 1)
     data[:reports] = reports
     bad_obj = 10*data[:last_obj]
     obj = evaluate_objective(G, sim.model, states, dt, forces, large_value = bad_obj)
-    data[:n_objective] += 1
+    data[:x_hash] = hash(x)
     n = data[:n_objective]
     push!(data[:obj_hist], obj)
     if mod(n, print_frequency) == 0
         println("#$n: $obj")
     end
+    data[:n_objective] += 1
     if obj != bad_obj
         data[:last_obj] = obj
     end
@@ -160,8 +184,23 @@ function objective_opt!(x, data, print_frequency = 1)
 end
 
 function objective_and_gradient_opt!(F, dFdx, x, data, arg...)
-    obj = objective_opt!(x, data, arg...)
-    if !isnothing(dFdx)
+    last_obj = data[:last_obj]
+    # Might ask for one or the other
+    want_grad = !isnothing(dFdx)
+    want_obj = !isnothing(F)
+    hash_mismatch = data[:x_hash] != hash(x)
+    need_recompute_obj = hash_mismatch || !isfinite(last_obj)
+    if need_recompute_obj
+        # Adjoint only valid if objective has been computed for current x
+        objective_opt!(x, data, arg...)
+    end
+    if want_obj
+        # Might be updated or might be last_obj, get it anyway.
+        obj = data[:last_obj]
+    else
+        obj = nothing
+    end
+    if want_grad
         gradient_opt!(dFdx, x, data)
     end
     return obj

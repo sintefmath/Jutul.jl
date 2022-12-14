@@ -28,37 +28,25 @@ function select_variables_domain_helper!(S, domain::DiscretizedDomain, model, f!
     f!(S, domain.grid, model)
 end
 
-select_primary_variables!(S, domain::AbstractJutulMesh, model) = nothing
-select_secondary_variables!(S, domain::AbstractJutulMesh, model) = nothing
-select_parameters!(S, domain::AbstractJutulMesh, model) = nothing
-select_equations!(S, domain::AbstractJutulMesh, model)  = nothing
-
-# Basic domain - default is to do nothing
-select_primary_variables!(S, domain::JutulDomain, model) = nothing
-select_secondary_variables!(S, domain::JutulDomain, model) = nothing
-select_parameters!(S, domain::JutulDomain, model) = nothing
-select_equations!(S, domain::JutulDomain, model) = nothing
-
-# Discretizations - do nothing by default
-select_primary_variables!(vars, ::JutulDiscretization, model) = nothing
-select_secondary_variables!(vars, ::JutulDiscretization, model) = nothing
-select_parameters!(vars, ::JutulDiscretization, model) = nothing
-select_equations!(vars, ::JutulDiscretization, model) = nothing
+select_primary_variables!(S, something, model) = nothing
+select_secondary_variables!(S, something, model) = nothing
+select_parameters!(S, something, model) = nothing
+select_equations!(S, something, model)  = nothing
 
 # Discretized domain - dispatch further down on all present discretizations
-function select_primary_variables!(S, domain::DiscretizedDomain, model)
+function select_primary_variables!(S, domain::DiscretizedDomain, model::SimulationModel)
     select_variables_domain_helper!(S, domain, model, select_primary_variables!)
 end
 
-function select_secondary_variables!(S, domain::DiscretizedDomain, model)
+function select_secondary_variables!(S, domain::DiscretizedDomain, model::SimulationModel)
     select_variables_domain_helper!(S, domain, model, select_secondary_variables!)
 end
 
-function select_parameters!(S, domain::DiscretizedDomain, model)
+function select_parameters!(S, domain::DiscretizedDomain, model::SimulationModel)
     select_variables_domain_helper!(S, domain, model, select_parameters!)
 end
 
-function select_equations!(S, domain::DiscretizedDomain, model)
+function select_equations!(S, domain::DiscretizedDomain, model::SimulationModel)
     select_variables_domain_helper!(S, domain, model, select_equations!)
 end
 
@@ -122,4 +110,18 @@ function local_half_face_map(cd, cell_index)
     signs = @views cd.face_sign[loc]
     cells = @views cd.cells[loc]
     return (faces = faces, signs = signs, cells = cells)
+end
+
+export entity_eachindex
+@inline function entity_eachindex(s::AbstractMatrix)
+    return axes(s, 2)
+end
+
+@inline function entity_eachindex(s::AbstractVector)
+    return eachindex(s)
+end
+
+@inline function entity_eachindex(s, i, N)
+    n = length(entity_eachindex(s))
+    return load_balanced_interval(i, n, N)
 end

@@ -10,7 +10,7 @@ function simulator_config!(cfg, sim; kwarg...)
     # Throw an error if the solve
     cfg[:error_on_incomplete] = false
     # The linear solver used to solve linearized systems
-    cfg[:linear_solver] = nothing
+    cfg[:linear_solver] = select_linear_solver(sim)
     # Path for output
     cfg[:output_path] = nothing
     # Produce states for output (keeping them in memory)
@@ -35,6 +35,9 @@ function simulator_config!(cfg, sim; kwarg...)
     # Define a default progress ProgressRecorder
     cfg[:ProgressRecorder] = ProgressRecorder()
     cfg[:timestep_selectors] = [TimestepSelector()]
+    # Relaxation
+    cfg[:relaxation] = NoRelaxation()
+    # Timestep
     cfg[:timestep_max_increase] = 10.0
     cfg[:timestep_max_decrease] = 0.1
     # Max residual before error is issued
@@ -42,6 +45,8 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:end_report] = nothing
     # Tolerances
     cfg[:tolerances] = set_default_tolerances(sim.model)
+    # Final tolerance checks before cutting time-steps can be relaxed by increasing this number
+    cfg[:tol_factor_final_iteration] = 1.0
 
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])
@@ -56,7 +61,7 @@ function simulator_config!(cfg, sim; kwarg...)
     if !isnothing(pth) && !isdir(pth)
         @assert isa(pth, String)
         @debug "Creating $pth for output."
-        mkdir(pth)
+        mkpath(pth)
     end
     if cfg[:ascii_terminal]
         fmt = tf_markdown
@@ -72,3 +77,9 @@ function simulator_config(sim; kwarg...)
     simulator_config!(cfg, sim; kwarg...)
     return cfg
 end
+
+function select_linear_solver(sim::Simulator; kwarg...)
+    return select_linear_solver(sim.model; kwarg...)
+end
+
+select_linear_solver(model::JutulModel; kwarg...) = nothing # LUSolver(; kwarg...)

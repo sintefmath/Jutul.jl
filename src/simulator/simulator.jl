@@ -10,6 +10,7 @@ include("recorder.jl")
 include("timesteps.jl")
 include("utils.jl")
 include("optimization.jl")
+include("relaxation.jl")
 
 function simulator_storage(model; state0 = nothing,
                                 parameters = setup_parameters(model),
@@ -86,6 +87,11 @@ function simulate(state0, model::JutulModel, timesteps::AbstractVector; paramete
     return simulate!(sim, timesteps; kwarg...)
 end
 
+function simulate(case::JutulCase; kwarg...)
+    sim = Simulator(case)
+    return simulate!(sim, case.dt; forces = case.forces, kwarg...)
+end
+
 """
     simulate(state0, sim::JutulSimulator, timesteps::AbstractVector; parameters = nothing, kwarg...)
 
@@ -113,7 +119,7 @@ Non-allocating (or perhaps less allocating) version of [`simulate!`](@ref).
 
 See also [`simulate`](@ref) for additional supported input arguments.
 """
-function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing,
+function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setup_forces(sim.model),
                                                                    config = nothing,
                                                                    initialize = true,
                                                                    restart = nothing,
@@ -163,10 +169,13 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = noth
         subrep[:total_time] = t_step
         if step_done
             @timeit "output" store_output!(states, reports, step_no, sim, config, subrep)
+        else
+            subrep[:output_time] = 0.0
+            push!(reports, subrep)
         end
     end
     final_simulation_message(sim, p, reports, timesteps, config, early_termination)
-    retrieve_output!(states, config)
+    retrieve_output!(states, config, no_steps)
     return (states, reports)
 end
 
@@ -215,21 +224,25 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                 dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = false)
             end
         else
-            if info_level > 0
-                jutul_message("Convergence", "Time-step $step_no of length $(get_tstr(dt)) failed to converge.", color = :yellow)
-            end
+            dt_old = dt
             dt = cut_timestep(sim, config, dt, dT, reports, step_index = step_no, cut_count = cut_count)
-            if isnan(dt)
-                # Timestep too small, cut too many times, ...
-                if info_level > -1
-                    @error "Unable to reduce time-step to smaller value. Aborting simulation."
+            if info_level > 0
+                if isnan(dt)
+                    inner_msg = " Aborting."
+                    c = :red
+                else
+                    inner_msg = " Reducing mini-step."
+                    c = :yellow
                 end
+                jutul_message("Convergence", "Time-step $step_no with mini-step length $(get_tstr(dt_old)) failed to converge.$inner_msg", color = c)
+            end
+            if isnan(dt)
                 break
             else
                 cut_count += 1
-                if info_level > 0
+                if info_level > 1
                     t_format = t -> @sprintf "%1.2f" 100*t/dT
-                    @warn "Cutting timestep. Step $(t_format(t_local)) % complete.\nΔt reduced to $(get_tstr(dt)) ($(t_format(dt))% of full step).\nThis is cut #$cut_count for step $step_no."
+                    @warn "Cutting mini-step. Step $(t_format(t_local)) % complete.\nΔt reduced to $(get_tstr(dt)) ($(t_format(dt))% of full time-step).\nThis is cut #$cut_count for time-step #$step_no."
                 end
             end
         end
@@ -243,7 +256,10 @@ function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
     perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config; iteration = NaN, update_secondary = iteration > 1 || config[:always_update_secondary])
+function perform_step!(storage, model, dt, forces, config; iteration = NaN, relaxation = 1, update_secondary = nothing, solve = true)
+    if isnothing(update_secondary)
+        update_secondary = iteration > 1 || config[:always_update_secondary]
+    end
     e, converged = nothing, false
 
     report = OrderedDict()
@@ -258,7 +274,12 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, upda
         @timeit "linear system" update_linearized_system!(storage, model)
     end
     t_conv = @elapsed begin
-        @timeit "convergence" converged, e, errors = check_convergence(storage, model, config, iteration = iteration, dt = dt, extra_out = true)
+        if iteration == config[:max_nonlinear_iterations]
+            tf = config[:tol_factor_final_iteration]
+        else
+            tf = 1
+        end
+        @timeit "convergence" converged, e, errors = check_convergence(storage, model, config, iteration = iteration, dt = dt, tol_factor = tf, extra_out = true)
         il = config[:info_level]
         if il > 1
             get_convergence_table(errors, il, iteration, config)
@@ -269,11 +290,12 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, upda
     end
     report[:convergence_time] = t_conv
 
-    if !converged
+    if !converged && solve
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
         rec = config[:ProgressRecorder]
-        t_solve, t_update, n_iter, rep_lsolve = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec)
+        t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec, relaxation = relaxation)
+        report[:update] = rep_update
         report[:linear_solver] = rep_lsolve
         report[:linear_iterations] = n_iter
         report[:linear_solve_time] = t_solve
@@ -282,7 +304,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, upda
     return (e, converged, report)
 end
 
-function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
+function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false, relaxation = 1.0)
     done = false
     rec = cfg[:ProgressRecorder]
     report = OrderedDict()
@@ -290,12 +312,18 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false)
     step_reports = []
     cur_time = current_time(rec)
     update_before_step!(sim, dt, forces, time = cur_time)
-    for it = 1:max_iter
+    for it = 1:(max_iter+1)
         next_iteration!(rec)
-        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it)
+        do_solve = it <= max_iter
+        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation, solve = do_solve)
         push!(step_reports, r)
         if done
             break
+        end
+        w0 = relaxation
+        relaxation = select_nonlinear_relaxation(sim, cfg[:relaxation], step_reports, relaxation)
+        if cfg[:info_level] > 1 && relaxation != w0
+            jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :yellow)
         end
         failure = false
         max_res = cfg[:max_residual]
@@ -374,7 +402,7 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
         reset_variables!(sim, state0)
     end
     if recompute_state0_secondary
-        update_secondary_variables!(sim.storage, sim.model, state0 = true)
+        update_secondary_variables!(sim.storage, sim.model, true)
     end
     return (states, reports, first_step, dt)
 end
@@ -414,6 +442,6 @@ function check_forces(sim, f::T, timesteps) where T<:AbstractArray
     nf = length(f)
     nt = length(timesteps)
     if nf != nt
-        error("Number of forces must match the number of timesteps ($nt timsteps, $nf forces)")
+        error("Number of forces must match the number of timesteps ($nt timesteps, $nf forces)")
     end
 end

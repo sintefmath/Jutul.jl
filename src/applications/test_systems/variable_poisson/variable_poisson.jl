@@ -18,7 +18,7 @@ struct VariablePoissonEquationTimeDependent{T} <: AbstractPoissonEquation
     discretization::T
 end
 
-function select_equations!(eqs, system::VariablePoissonSystem, model)
+function select_equations!(eqs, system::VariablePoissonSystem, model::SimulationModel)
     if system.time_dependent
         eq = VariablePoissonEquationTimeDependent(model.domain.discretizations.poisson)
     else
@@ -27,7 +27,7 @@ function select_equations!(eqs, system::VariablePoissonSystem, model)
     eqs[:poisson] = eq
 end
 
-function select_primary_variables!(S, system::VariablePoissonSystem, model)
+function select_primary_variables!(S, system::VariablePoissonSystem, model::SimulationModel)
     S[:U] = UVar()
 end
 

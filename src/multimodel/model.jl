@@ -576,6 +576,29 @@ function setup_state(model::MultiModel, initializers)
 end
 
 function setup_state(model::MultiModel; kwarg...)
+    return internal_multimodel_setup_state(setup_state, model; kwarg...)
+end
+
+function setup_parameters(model::MultiModel; kwarg...)
+    return internal_multimodel_setup_state(setup_parameters, model; kwarg...)
+end
+
+function setup_parameters(model::MultiModel, init)
+    p = Dict{Symbol, Any}()
+    for key in submodels_symbols(model)
+        m = model.models[key]
+        if haskey(init, key) && !isnothing(init[key])
+            prm = setup_parameters(m, init[key])
+        else
+            prm = setup_parameters(m)
+        end
+        p[key] = prm
+    end
+    return p
+end
+
+
+function internal_multimodel_setup_state(F, model::MultiModel; kwarg...)
     init = Dict{Symbol, Any}()
     # Set up empty initializers first
     for k in submodels_symbols(model)
@@ -586,16 +609,22 @@ function setup_state(model::MultiModel; kwarg...)
         @assert haskey(model.models, k) "$k not found in models" keys(model.models)
         init[k] = v
     end
-    return setup_state(model, init)
+    return F(model, init)
 end
 
-function setup_parameters(model::MultiModel)
-    p = Dict()
-    for key in submodels_symbols(model)
-        m = model.models[key]
-        p[key] = setup_parameters(m)
+export setup_state_and_parameters
+
+function setup_state_and_parameters(model::MultiModel, init)
+    state_init = Dict{Symbol, Any}()
+    prm_init = Dict{Symbol, Any}()
+    for (k, v) in init
+        if haskey(model.models, k)
+            state_init[k], prm_init[k] = setup_state_and_parameters(model[k], v)
+        end
     end
-    return p
+    state = setup_state(model, state_init)
+    parameters = setup_parameters(model, prm_init)
+    return (state, parameters)
 end
 
 function set_default_tolerances!(tol_cfg, model::MultiModel)
@@ -619,9 +648,15 @@ function setup_forces(model::MultiModel; kwarg...)
     return forces
 end
 
-function update_secondary_variables!(storage, model::MultiModel; kwarg...)
+function update_secondary_variables!(storage, model::MultiModel, is_state0::Bool)
     for key in submodels_symbols(model)
-        update_secondary_variables!(storage[key], model.models[key]; kwarg...)
+        update_secondary_variables!(storage[key], model.models[key], is_state0)
+    end
+end
+
+function update_secondary_variables!(storage, model::MultiModel)
+    for key in submodels_symbols(model)
+        update_secondary_variables!(storage[key], model.models[key])
     end
 end
 
@@ -669,6 +704,7 @@ function update_primary_variables!(storage, model::MultiModel; kwarg...)
 
     offset = 0
     model_keys = submodel_symbols(model)
+    report = Dict{Symbol, AbstractDict}()
     for (i, key) in enumerate(model_keys)
         m = models[key]
         s = storage[key]
@@ -678,9 +714,10 @@ function update_primary_variables!(storage, model::MultiModel; kwarg...)
             bz = block_size(lsys[i, i])
             dx_v = reshape(dx_v, bz, :)
         end
-        update_primary_variables!(s.state, dx_v, m; kwarg...)
+        report[key] = update_primary_variables!(s.state, dx_v, m; kwarg...)
         offset += ndof
     end
+    return report
 end
 
 function reset_state_to_previous_state!(storage, model::MultiModel)
@@ -701,8 +738,16 @@ end
 
 function update_before_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
     for key in targets
-        update_before_step!(storage[key], model.models[key], dt, forces[key]; kwarg...)
+        s = storage[key]
+        m = model.models[key]
+        f = forces[key]
+        update_before_step_multimodel!(storage, model, m, dt, f, key)
+        update_before_step!(s, m, dt, f; kwarg...)
     end
+end
+
+function update_before_step_multimodel!(storage, model, submodel, dt, subforces, label)
+
 end
 
 function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model))

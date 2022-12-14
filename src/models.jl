@@ -75,7 +75,7 @@ function get_variable(model::SimulationModel, name::Symbol)
     prm = model.parameters
     if haskey(pvar, name)
         var = pvar[name]
-    elseif haskey(pvar, name)
+    elseif haskey(svar, name)
         var = svar[name]
     elseif haskey(prm, name)
         var = prm[name]
@@ -131,7 +131,7 @@ end
 """
     replace_variables!(model, throw = true, varname = vardef, varname2 = vardef2)
 
-Replace one or more variables that already exists (either primary or secondary).
+Replace one or more variables that already exists (primary, secondary or parameters).
 
 # Arguments
 - `model`: instance where variables is to be replaced
@@ -141,10 +141,11 @@ Replace one or more variables that already exists (either primary or secondary).
 function replace_variables!(model; throw = true, kwarg...)
     pvar = get_primary_variables(model)
     svar = get_secondary_variables(model)
+    prm = get_parameters(model)
     for (k, v) in kwarg
         done = false
-        for vars in [pvar, svar]
-            v::JutulVariables
+        for vars in [pvar, svar, prm]
+            # v::JutulVariables
             if haskey(vars, k)
                 vars[k] = v
                 done = true
@@ -289,6 +290,28 @@ end
 function setup_parameters(model::JutulModel, init)
     prm = Dict{Symbol, Any}()
     return setup_parameters!(prm, model, init)
+end
+
+function setup_state_and_parameters(model, init)
+    init = copy(init)
+    prm = Dict{Symbol, Any}()
+    for (k, v) in init
+        if k in keys(model.parameters)
+            prm[k] = v
+            delete!(init, k)
+        end
+    end
+    state = setup_state(model, init)
+    parameters = setup_parameters(model, prm)
+    return (state, parameters)
+end
+
+function setup_state_and_parameters(model; kwarg...)
+    init = Dict{Symbol, Any}()
+    for (k, v) in kwarg
+        init[k] = v
+    end
+    return setup_state_and_parameters(model, init)
 end
 
 """
@@ -652,7 +675,7 @@ function check_convergence(storage, model, config; kwarg...)
     check_convergence(lsys, eqs, eqs_s, storage, model, config[:tolerances]; kwarg...)
 end
 
-function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration = nothing, extra_out = false, tol = nothing, offset = 0, kwarg...)
+function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration = nothing, extra_out = false, tol = nothing, tol_factor = 1.0, offset = 0, kwarg...)
     converged = true
     e = 0
     eoffset = 0
@@ -684,10 +707,10 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
                 t_e = tol
             end
             errors = all_crits[e_k].errors
-            ok = errors .< t_e
-            converged = converged && all(ok)
             e = max(e, maximum(errors)/t_e)
-            tols[e_k] = t_e
+            t_actual = t_e*tol_factor
+            converged = converged && all(e -> e < t_actual, errors)
+            tols[e_k] = t_actual
         end
         offset += N
         eoffset += n
@@ -734,8 +757,8 @@ function solve_and_update!(storage, model::JutulModel, dt = nothing; linear_solv
     t_solve = @elapsed begin
         @timeit "linear solve" (ok, n, history) = solve!(lsys, linear_solver, model, storage, dt, recorder)
     end
-    t_update = @elapsed @timeit "primary variables" update_primary_variables!(storage, model; kwarg...)
-    return (t_solve, t_update, n, history)
+    t_update = @elapsed @timeit "primary variables" update = update_primary_variables!(storage, model; kwarg...)
+    return (t_solve, t_update, n, history, update)
 end
 
 function update_primary_variables!(storage, model::JutulModel; kwarg...)
@@ -743,12 +766,13 @@ function update_primary_variables!(storage, model::JutulModel; kwarg...)
     update_primary_variables!(storage.primary_variables, dx, model; kwarg...)
 end
 
-function update_primary_variables!(primary_storage, dx, model::JutulModel; check = false)
+function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1, check = false)
     layout = matrix_layout(model.context)
     cell_major = is_cell_major(layout)
     offset = 0
     primary = get_primary_variables(model)
     ok = true
+    report = Dict{Symbol, Any}()
     if cell_major
         offset = 0 # Offset into global r array
         for u in get_primary_variable_ordered_entities(model)
@@ -772,8 +796,9 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; check
                     ok_i = check_increment(dxi, p, pkey)
                     ok = ok && ok_i
                 end
-                @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi)
+                @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
                 local_offset += ni
+                report[pkey] = maximum(abs, dxi)
             end
             offset += nu*np
         end
@@ -786,13 +811,15 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; check
                 ok_i = check_increment(dxi, p, pkey)
                 ok = ok && ok_i
             end
-            @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi)
+            @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
             offset += n
+            report[pkey] = maximum(abs, dxi)
         end
     end
     if !ok
         error("Primary variables recieved invalid updates.")
     end
+    return report
 end
 
 """
