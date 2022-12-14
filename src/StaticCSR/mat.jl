@@ -78,15 +78,14 @@ function in_place_mat_mat_mul!(M::CSC, A::CSR, B::CSC) where {CSR<:StaticSparsit
     end
 end
 
-function rowcol_prod(A::StaticSparsityMatrixCSR, B::SparseMatrixCSC, row, col)
+@inline function rowcol_prod(A::StaticSparsityMatrixCSR, B::SparseMatrixCSC, row, col)
     # We know both that this product is nonzero
     # First matrix, iterate over columns
     A_range = nzrange(A, row)
     nz_A = nonzeros(A)
     n_col = length(A_range)
     columns = colvals(A)
-    new_column(pos) = sparse_indirection(columns, A_range, pos)
-    column_value(pos) = sparse_indirection(nz_A, A_range, pos)
+    @inline new_column(pos) = sparse_indirection(columns, A_range, pos)
 
     # Second matrix, iterate over row
     B_range = nzrange(B, col)
@@ -94,35 +93,36 @@ function rowcol_prod(A::StaticSparsityMatrixCSR, B::SparseMatrixCSC, row, col)
     n_row = length(B_range)
     rows = rowvals(B)
     new_row(pos) = sparse_indirection(rows, B_range, pos)
-    row_value(pos) = sparse_indirection(nz_B, B_range, pos)
     # Initialize
     pos_A = pos_B = 1
-    current_col = new_column(pos_A)
-    current_row = new_row(pos_B)
+    current_col, A_idx = new_column(pos_A)
+    current_row, B_idx = new_row(pos_B)
     v = zero(eltype(A))
     entries_remain = true
     while entries_remain
-        if current_row == current_col
-            v += row_value(pos_B)*column_value(pos_A)
-            increment_col = increment_row = true
+        delta = current_row - current_col
+        if delta == 0
+            @inbounds rv = nz_A[A_idx]
+            @inbounds cv = nz_B[B_idx]
+            v += rv*cv
             entries_remain = pos_A < n_col && pos_B < n_row
             if entries_remain
                 pos_A += 1
-                current_col = new_column(pos_A)
+                current_col, A_idx = new_column(pos_A)
                 pos_B += 1
-                current_row = new_row(pos_B)
+                current_row, B_idx = new_row(pos_B)
             end
-        elseif current_col < current_row
+        elseif delta > 0
             entries_remain = pos_A < n_col
             if entries_remain
                 pos_A += 1
-                current_col = new_column(pos_A)
+                current_col, A_idx = new_column(pos_A)
             end
         else
             entries_remain = pos_B < n_row
             if entries_remain
                 pos_B += 1
-                current_row = new_row(pos_B)
+                current_row, B_idx = new_row(pos_B)
             end
         end
     end
@@ -132,7 +132,7 @@ end
 @inline function sparse_indirection(val, rng, pos)
     @inbounds ix = rng[pos]
     @inbounds v = val[ix]
-    return v
+    return (v, ix)
 end
 
 function rowcol_prod(A::SparseMatrixCSC, B::StaticSparsityMatrixCSR, row, col)
