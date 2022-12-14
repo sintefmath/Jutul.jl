@@ -491,7 +491,9 @@ function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}
 end
 
 function update_half_face_flux_tpfa_internal!(hf_cells::AbstractArray{T}, eq, state, model, dt, flow_disc, conn_pos, conn_data, c) where T
-    @inbounds for i in conn_pos[c]:(conn_pos[c+1]-1)
+    start = @inbounds conn_pos[c]
+    stop = @inbounds conn_pos[c+1]-1
+    for i in start:stop
         (; self, other, face, face_sign) = @inbounds conn_data[i]
         @inbounds hf_cells[i] = face_flux!(zero(T), self, other, face, face_sign, eq, state, model, dt, flow_disc)
     end

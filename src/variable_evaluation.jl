@@ -107,7 +107,7 @@ function update_secondary_variables_state!(state, model)
             end
         end
     else
-        Threads.@threads for i in 1:N
+        @batch for i in 1:N
             for (symbol, var) in model.secondary_variables
                 v = state[symbol]
                 ix = entity_eachindex(v, i, N)
