@@ -106,16 +106,11 @@ function generate_smoothers_csr(A_fine, levels, nthreads, min_batch, context)
     n = length(levels)
     for i = 1:n
         A = levels[i].A
-        max_t = max(size(A, 1) ÷ min_batch, 1)
-        nt = min(nthreads, max_t)
-        if nt == 1
-            ilu_factor = ilu0_csr(A)
-        else
-            lookup = generate_lookup(context.partitioner, A, nt)
-            ilu_factor = ilu0_csr(A, lookup)
-        end
         N = size(A, 1)
-        push!(smoothers, (factor = ilu_factor, x = zeros(N), b = zeros(N)))
+        b = zeros(N)
+        prec = ILUZeroPreconditioner()
+        update!(prec, A, b, context)
+        push!(smoothers, (precond = prec, x = zeros(N), b = b, context = context))
         push!(sizes, N)
     end
     typed_smoothers = Tuple(smoothers)
@@ -128,7 +123,7 @@ function apply_smoother!(x, A, b, smoothers::NamedTuple)
     for (i, n) in enumerate(smoothers.n)
         if m == n
             smooth = smoothers.smoothers[i]
-            S = smooth.factor
+            S = get_factorization(smooth.precond)
             res = smooth.x
             B = smooth.b
             # In-place version of B = b - A*x
@@ -242,7 +237,8 @@ end
 function update_smoothers!(S::NamedTuple, A::StaticSparsityMatrixCSR, h)
     n = length(h.levels)
     for i = 1:n
-        ilu0_csr!(S.smoothers[i].factor, A)
+        S_i = S.smoothers[i]
+        update!(S_i.precond, A, S_i.b, S_i.context)
         if i < n
             A = h.levels[i+1].A
         end
