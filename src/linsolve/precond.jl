@@ -1,6 +1,7 @@
-export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, DampedJacobiPreconditioner, AMGPreconditioner, JutulPreconditioner, apply!
+export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, JacobiPreconditioner, AMGPreconditioner, JutulPreconditioner, apply!
 
 abstract type JutulPreconditioner end
+abstract type DiagonalPreconditioner <: JutulPreconditioner end
 
 function update!(preconditioner::Nothing, arg...)
     # Do nothing.
@@ -324,57 +325,60 @@ function update_smoothers!(S::NamedTuple, A::StaticSparsityMatrixCSR, h)
     return S
 end
 
-"""
-Damped Jacobi preconditioner on CPU
-"""
-mutable struct DampedJacobiPreconditioner <: JutulPreconditioner
-    factor
-    dim
-    w
-    function DampedJacobiPreconditioner(; w = 1)
-        new(nothing, nothing, w)
-    end
-end
-
-
-function update!(jac::DampedJacobiPreconditioner, A, b, context)
-    ω = jac.w
+function update!(jac::DiagonalPreconditioner, A, b, context)
     if isnothing(jac.factor)
-        D = Diagonal(A)
-        for i in 1:size(D, 1)
-            D.diag[i] = ω*inv(D.diag[i])
-        end
+        D = diag(A)
         jac.factor = D
         d = length(b[1])
-        jac.dim = d .* size(A)
-    else
-        D = jac.factor
-        for i in 1:size(D, 1)
-            D.diag[i] = ω*inv(A[i, i])
-        end
+        jac.dim = d .* size(A, 1)
+    end
+    D = jac.factor
+    mb = minbatch(A)
+    jac.minbatch = mb
+    @batch minbatch = mb for i in eachindex(D)
+        @inbounds D[i] = diagonal_precond(A, i, jac)
     end
 end
 
-function apply!(x, jac::DampedJacobiPreconditioner, y, arg...)
-    # Very hacky.
+function apply!(x, jac::DiagonalPreconditioner, y, arg...)
     D = jac.factor
 
-    s = D.diag[1]
+    s = D[1]
     N = size(s, 1)
     T = eltype(s)
     Vt = SVector{N, T}
     as_svec = (x) -> reinterpret(Vt, x)
 
     # Solve by reinterpreting vectors to block (=SVector) vectors
-    tmp = D*as_svec(y)
-    xv = as_svec(x)
-    xv .= tmp
-    # f! = ilu_f(type)
-    # f!(as_svec(x), ilu, as_svec(y))
+    diag_parmul!(as_svec(x), D, as_svec(y), minbatch(jac))
 end
 
-function operator_nrows(ilu::DampedJacobiPreconditioner)
-    return ilu.dim[1]
+function operator_nrows(jac::DiagonalPreconditioner)
+    return jac.dim
+end
+
+function diag_parmul!(x, D, y, mb)
+    @batch minbatch = mb for i in eachindex(x, y, D)
+        @inbounds x[i] = D[i]*x[i]
+    end
+end
+
+"""
+Damped Jacobi preconditioner on CPU
+"""
+mutable struct JacobiPreconditioner <: DiagonalPreconditioner
+    factor
+    dim::Int64
+    w::Float64
+    minbatch::Int64
+    function JacobiPreconditioner(; w = 2.0/3.0, minbatch = 1000)
+        new(nothing, 1, w, minbatch)
+    end
+end
+
+function diagonal_precond(A, i, jac::JacobiPreconditioner)
+    @inbounds A_ii = A[i, i]
+    return jac.w*inv(A_ii)
 end
 
 """
@@ -434,13 +438,6 @@ function update!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, cont
         ilu0_csr!(ilu.factor, A)
     end
 end
-
-# function update!(ilu::ILUZeroPreconditioner, A::CuSparseMatrix, b::CuArray, context)
-#     if isnothing(ilu.factor)
-#         set_dim!(ilu, A, b)
-#     end
-#     ilu.factor = ilu02(A, 'O')
-# end
 
 function apply!(x, ilu::ILUZeroPreconditioner, y, arg...)
     factor = get_factorization(ilu)
