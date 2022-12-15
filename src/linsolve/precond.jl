@@ -1,4 +1,4 @@
-export ILUZeroPreconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, JacobiPreconditioner, AMGPreconditioner, JutulPreconditioner, apply!
+export ILUZeroPreconditioner, SPAI0Preconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, JacobiPreconditioner, AMGPreconditioner, JutulPreconditioner, apply!
 
 abstract type JutulPreconditioner end
 abstract type DiagonalPreconditioner <: JutulPreconditioner end
@@ -327,7 +327,11 @@ end
 
 function update!(jac::DiagonalPreconditioner, A, b, context)
     if isnothing(jac.factor)
-        D = diag(A)
+        n = size(A, 1)
+        D = Vector{eltype(A)}(undef, n)
+        for i in 1:n
+            D[i] = A[i, i]
+        end
         jac.factor = D
         d = length(b[1])
         jac.dim = d .* size(A, 1)
@@ -335,6 +339,11 @@ function update!(jac::DiagonalPreconditioner, A, b, context)
     D = jac.factor
     mb = minbatch(A)
     jac.minbatch = mb
+    diagonal_precond!(D, A, jac)
+end
+
+function diagonal_precond!(D, A, jac)
+    mb = minbatch(A)
     @batch minbatch = mb for i in eachindex(D)
         @inbounds D[i] = diagonal_precond(A, i, jac)
     end
@@ -381,6 +390,40 @@ function diagonal_precond(A, i, jac::JacobiPreconditioner)
     return jac.w*inv(A_ii)
 end
 
+
+mutable struct SPAI0Preconditioner <: DiagonalPreconditioner
+    factor
+    dim::Int64
+    minbatch::Int64
+    function SPAI0Preconditioner(; minbatch = 1000)
+        new(nothing, 1, minbatch)
+    end
+end
+
+
+function diagonal_precond!(D, A::SparseMatrixCSC, jac::SPAI0Preconditioner)
+    for i in eachindex(D)
+        D[i] = zero(eltype(D))
+    end
+    buf = zeros(length(D))
+    rows = rowvals(A)
+    vals = nonzeros(A)
+    for col in axes(A, 2)
+        for p in nzrange(A, col)
+            row = rows[p]
+            val = vals[p]
+            nv = zero(eltype(val))
+            for v in val
+                nv += v^2
+            end
+            buf[row] += nv
+        end
+    end
+
+    for i in eachindex(D)
+        D[i] = inv(buf[i])*A[i, i]
+    end
+end
 """
 ILU(0) preconditioner on CPU
 """
