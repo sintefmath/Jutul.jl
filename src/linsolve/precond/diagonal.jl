@@ -1,22 +1,27 @@
+struct DiagonalPrecondFactorization{V}
+    D::V
+    minbatch::Int64
+end
 
 function update!(jac::DiagonalPreconditioner, A, b, context)
+    mb = minbatch(A)
     if isnothing(jac.factor)
         n = size(A, 1)
         D = Vector{eltype(A)}(undef, n)
         @inbounds for i in 1:n
             D[i] = A[i, i]
         end
-        jac.factor = D
+        jac.factor = DiagonalPrecondFactorization(D, mb)
         d = length(b[1])
         jac.dim = d .* size(A)
     end
     D = jac.factor
-    mb = minbatch(A)
     jac.minbatch = mb
     diagonal_precond!(D, A, jac)
 end
 
-function diagonal_precond!(D, A, jac)
+function diagonal_precond!(Diag, A, jac)
+    D = Diag.D
     mb = minbatch(A)
     @batch minbatch = mb for i in eachindex(D)
         @inbounds D[i] = diagonal_precond(A, i, jac)
@@ -24,7 +29,7 @@ function diagonal_precond!(D, A, jac)
 end
 
 function apply!(x, jac::DiagonalPreconditioner, y, arg...)
-    D = jac.factor
+    D = jac.factor.D
 
     s = D[1]
     N = size(s, 1)
@@ -41,6 +46,14 @@ function operator_nrows(jac::DiagonalPreconditioner)
 end
 
 function diag_parmul!(x, D, y, mb)
+    @batch minbatch = mb for i in eachindex(x, y, D)
+        @inbounds x[i] = D[i]*y[i]
+    end
+end
+
+function ldiv!(x, Diag::DiagonalPrecondFactorization, y)
+    mb = Diag.minbatch
+    D = Diag.D
     @batch minbatch = mb for i in eachindex(x, y, D)
         @inbounds x[i] = D[i]*y[i]
     end

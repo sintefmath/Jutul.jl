@@ -10,13 +10,14 @@ mutable struct AMGPreconditioner <: JutulPreconditioner
     dim
     hierarchy
     smoothers
-    function AMGPreconditioner(method = ruge_stuben; cycle = AlgebraicMultigrid.V(), kwarg...)
+    smoother_type::Symbol
+    function AMGPreconditioner(method = ruge_stuben; smoother_type = :default, cycle = AlgebraicMultigrid.V(), kwarg...)
         if method == :ruge_stuben
             method = ruge_stuben
         elseif method == :smoothed_aggregation
             method = smoothed_aggregation
         end
-        new(method, kwarg, cycle, nothing, nothing, nothing, nothing)
+        new(method, kwarg, cycle, nothing, nothing, nothing, nothing, smoother_type)
     end
 end
 
@@ -83,7 +84,7 @@ function specialize_multilevel!(amg, h, A::StaticSparsityMatrixCSR, context)
         T = typeof(A_f)
         levels = Vector{AlgebraicMultigrid.Level{T, T, T}}()
     end
-    S = amg.smoothers = generate_smoothers_csr(A_f, levels, nt, mb, context)
+    S = amg.smoothers = generate_amg_smoothers(amg.smoother_type, A_f, levels, context)
     smoother = (A, x, b) -> apply_smoother!(x, A, b, S)
 
     A_c = to_csr(h.final_A)
@@ -100,7 +101,7 @@ function solve_coarse_internal!(x, A, factor, b)
     return x
 end
 
-function generate_smoothers_csr(A_fine, levels, nthreads, min_batch, context)
+function generate_amg_smoothers(t, A_fine, levels, context)
     sizes = Vector{Int64}()
     smoothers = []
     n = length(levels)
@@ -108,7 +109,15 @@ function generate_smoothers_csr(A_fine, levels, nthreads, min_batch, context)
         A = levels[i].A
         N = size(A, 1)
         b = zeros(N)
-        prec = ILUZeroPreconditioner()
+        if t == :default || t == :spai0
+            prec = SPAI0Preconditioner()
+        elseif t == :ilu0
+            prec = ILUZeroPreconditioner()
+        elseif t == :jacobi
+            prec = JacobiPreconditioner()
+        else
+            error("Smoother :$t is not supported.")
+        end
         update!(prec, A, b, context)
         push!(smoothers, (precond = prec, x = zeros(N), b = b, context = context))
         push!(sizes, N)

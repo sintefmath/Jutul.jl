@@ -8,7 +8,8 @@ mutable struct SPAI0Preconditioner <: DiagonalPreconditioner
     end
 end
 
-function diagonal_precond!(D, A::SparseMatrixCSC, spai::SPAI0Preconditioner)
+function diagonal_precond!(Diag, A::SparseMatrixCSC, spai::SPAI0Preconditioner)
+    D = Diag.D
     if isnothing(spai.buffer)
         spai.buffer = zeros(length(D))
     end
@@ -35,7 +36,8 @@ function diagonal_precond!(D, A::SparseMatrixCSC, spai::SPAI0Preconditioner)
     end
 end
 
-function diagonal_precond!(D, A::StaticSparsityMatrixCSR, spai::SPAI0Preconditioner)
+function diagonal_precond!(Diag, A::StaticSparsityMatrixCSR, spai::SPAI0Preconditioner)
+    D = Diag.D
     cols = colvals(A)
     vals = nonzeros(A)
     T = eltype(vals)
