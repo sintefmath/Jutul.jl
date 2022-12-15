@@ -329,12 +329,12 @@ function update!(jac::DiagonalPreconditioner, A, b, context)
     if isnothing(jac.factor)
         n = size(A, 1)
         D = Vector{eltype(A)}(undef, n)
-        for i in 1:n
+        @inbounds for i in 1:n
             D[i] = A[i, i]
         end
         jac.factor = D
         d = length(b[1])
-        jac.dim = d .* size(A, 1)
+        jac.dim = d .* size(A)
     end
     D = jac.factor
     mb = minbatch(A)
@@ -363,12 +363,12 @@ function apply!(x, jac::DiagonalPreconditioner, y, arg...)
 end
 
 function operator_nrows(jac::DiagonalPreconditioner)
-    return jac.dim
+    return jac.dim[1]
 end
 
 function diag_parmul!(x, D, y, mb)
     @batch minbatch = mb for i in eachindex(x, y, D)
-        @inbounds x[i] = D[i]*x[i]
+        @inbounds x[i] = D[i]*y[i]
     end
 end
 
@@ -377,11 +377,11 @@ Damped Jacobi preconditioner on CPU
 """
 mutable struct JacobiPreconditioner <: DiagonalPreconditioner
     factor
-    dim::Int64
+    dim::Tuple{Int64, Int64}
     w::Float64
     minbatch::Int64
     function JacobiPreconditioner(; w = 2.0/3.0, minbatch = 1000)
-        new(nothing, 1, w, minbatch)
+        new(nothing, (1, 1), w, minbatch)
     end
 end
 
@@ -393,10 +393,11 @@ end
 
 mutable struct SPAI0Preconditioner <: DiagonalPreconditioner
     factor
-    dim::Int64
+    buffer
+    dim::Tuple{Int64, Int64}
     minbatch::Int64
     function SPAI0Preconditioner(; minbatch = 1000)
-        new(nothing, 1, minbatch)
+        new(nothing, nothing, (1, 1), minbatch)
     end
 end
 
@@ -470,7 +471,6 @@ function update!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, cont
             F = ilu0_csr(A)
         else
             @debug "Setting up parallel ILU(0)-CSR with $(nthreads(td)) threads"
-            # lookup = td.lookup
             part = context.partitioner
             lookup = generate_lookup(part, A, nt)
             F = ilu0_csr(A, lookup)
