@@ -401,30 +401,54 @@ mutable struct SPAI0Preconditioner <: DiagonalPreconditioner
     end
 end
 
-
-function diagonal_precond!(D, A::SparseMatrixCSC, jac::SPAI0Preconditioner)
-    for i in eachindex(D)
+function diagonal_precond!(D, A::SparseMatrixCSC, spai::SPAI0Preconditioner)
+    if isnothing(spai.buffer)
+        spai.buffer = zeros(length(D))
+    end
+    buf = spai.buffer
+    @inbounds for i in eachindex(D)
         D[i] = zero(eltype(D))
     end
-    buf = zeros(length(D))
     rows = rowvals(A)
     vals = nonzeros(A)
     for col in axes(A, 2)
-        for p in nzrange(A, col)
+        @inbounds for p in nzrange(A, col)
             row = rows[p]
             val = vals[p]
             nv = zero(eltype(val))
             for v in val
-                nv += v^2
+                nv += v*adjoint(v)
             end
             buf[row] += nv
         end
     end
 
-    for i in eachindex(D)
+    @inbounds for i in eachindex(D)
         D[i] = inv(buf[i])*A[i, i]
     end
 end
+
+function diagonal_precond!(D, A::StaticSparsityMatrixCSR, spai::SPAI0Preconditioner)
+    cols = colvals(A)
+    vals = nonzeros(A)
+    T = eltype(vals)
+    for row in axes(A, 1)
+        norm_sum = zero(eltype(T))
+        A_ii = zero(T)
+        @inbounds for p in nzrange(A, row)
+            col = cols[p]
+            val = vals[p]
+            for v in val
+                norm_sum += v*adjoint(v)
+            end
+            if col == row
+                A_ii = val
+            end
+        end
+        @inbounds D[row] = inv(norm_sum)*A_ii
+    end
+end
+
 """
 ILU(0) preconditioner on CPU
 """
