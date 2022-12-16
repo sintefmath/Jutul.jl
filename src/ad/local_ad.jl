@@ -1,5 +1,4 @@
 import Base: getindex, @propagate_inbounds, parent, size, axes
-using ForwardDiff
 
 struct LocalPerspectiveAD{T, N, A<:AbstractArray{T,N}, I} <: AbstractArray{T,N}
     index::I

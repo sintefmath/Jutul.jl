@@ -367,6 +367,10 @@ end
 function initial_setup!(sim, config, timesteps; restart = nothing, parameters = nothing, state0 = nothing)
     # Timing stuff
     set_global_timer!(config[:extra_timing])
+    # Threading
+    if Threads.nthreads() > 1
+        PolyesterWeave.reset_workers!()
+    end
     # Set up storage
     reports = []
     states = Vector{Dict{Symbol, Any}}()

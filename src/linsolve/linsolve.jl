@@ -1,5 +1,4 @@
-# Local version of ILUZero module. Can be deleted once changes are upstreamed.
-include("ilu/ilu.jl")
+import LinearAlgebra.ldiv!
 
 include("default.jl")
 include("utils.jl")

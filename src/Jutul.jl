@@ -4,6 +4,7 @@ module Jutul
     using LinearAlgebra
     using SparseArrays
     using MappedArrays
+    using StaticArrays
     # Data structures
     import DataStructures: OrderedDict
     using OrderedCollections
@@ -15,11 +16,14 @@ module Jutul
     # Gotta go fast
     using Tullio
     using LoopVectorization
-    # using CUDA, CUDAKernels
-    using KernelAbstractions
     using Polyester
+    using PolyesterWeave
     # Linear solvers and preconditioners
-
+    using ILUZero
+    using LinearOperators
+    using Krylov
+    using AlgebraicMultigrid
+    
     # Misc. utils
     using ExprTools
     using Graphs

@@ -401,7 +401,14 @@ function pick_time_unit(t, wide = is_wide_term())
         nanosec = "ns"
         picosec = "ps"
     end
-    units = [(24*3600, day), (3600, hours), (60, min), (1, sec), (1e-3, millisec), (1e-6, microsec), (1e-9, nanosec), (1e-12, picosec)]
+    units = [(24*3600, day),
+             (3600, hours),
+             # (60, min),
+             (1, sec),
+             (1e-3, millisec),
+             (1e-6, microsec),
+             (1e-9, nanosec),
+             (1e-12, picosec)]
     for u in units
         if m > u[1]
             return u
