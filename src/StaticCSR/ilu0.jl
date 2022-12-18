@@ -37,7 +37,6 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = 1:size(A, 1); 
     map = zeros(Ti, offset-1)
     index = 1
      for row in 1:n
-        ctr = 0
         if insorted(row, active)
             @inbounds for i in nzrange(A, row)
                 col = cols[i]
@@ -88,13 +87,17 @@ function update_values!(B, A, mapping)
     else
         bvals = B
     end
-    @inbounds for (i, m) in enumerate(mapping)
-         bvals[i] = vals[m]
-    end
+    inner_update!(bvals, vals, mapping)
     return B
 end
 
-function process_partial_row!(nz, pos, cols, A, k, A_ik)
+@inline function inner_update!(bvals, vals, mapping)
+    @inbounds for (i, m) in enumerate(mapping)
+        bvals[i] = vals[m]
+    end
+end
+
+@inline function process_partial_row!(nz, pos, cols, A, k, A_ik)
     @inbounds for l_j in pos
         j = cols[l_j]
         A_kj = A[k, j]
@@ -140,11 +143,11 @@ function ilu0_factor!(L, U, D, A, active = 1:size(A, 1))
     end
 end
 
-Base.@propagate_inbounds diagonal_inverse(D::SparseVector, global_index, local_index) = nonzeros(D)[local_index]
-Base.@propagate_inbounds diagonal_inverse(D, global_index, local_index) = D[global_index]
-diagonal_inverse(::Nothing, global_index, local_index) = 1.0
+@inline Base.@propagate_inbounds diagonal_inverse(D::SparseVector, global_index, local_index) = nonzeros(D)[local_index]
+@inline Base.@propagate_inbounds diagonal_inverse(D, global_index, local_index) = D[global_index]
+@inline diagonal_inverse(::Nothing, global_index, local_index) = 1.0
 
-function invert_row!(x, M, D, b, row, local_index)
+@inline function invert_row!(x, M, D, b, row, local_index)
     col = colvals(M)
     nz = nonzeros(M)
 

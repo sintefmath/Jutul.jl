@@ -12,7 +12,7 @@ mutable struct JacobiPreconditioner <: DiagonalPreconditioner
     end
 end
 
-function diagonal_precond(A, i, jac::JacobiPreconditioner)
+@inline function diagonal_precond(A, i, jac::JacobiPreconditioner)
     @inbounds A_ii = A[i, i]
     return jac.w*inv(A_ii)
 end

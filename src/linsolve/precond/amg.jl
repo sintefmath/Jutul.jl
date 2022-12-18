@@ -136,10 +136,16 @@ function apply_smoother!(x, A, b, smoothers::NamedTuple)
             res = smooth.x
             B = smooth.b
             # In-place version of B = b - A*x
+            nsmooth = 5
             B .= b
-            mul!(B, A, x, -1, 1)
-            ldiv!(res, S, B)
-            @. x += res
+            mul!(B, A, x, -1, true)
+            for it = 1:nsmooth
+                ldiv!(res, S, B)
+                @. x += res
+                if it < nsmooth
+                    mul!(B, A, res, -1, true)
+                end
+            end
             return x
         end
     end
