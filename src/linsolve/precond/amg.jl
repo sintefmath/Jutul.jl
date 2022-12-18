@@ -2,8 +2,7 @@
 """
 AMG on CPU (Julia native)
 """
-mutable struct AMGPreconditioner <: JutulPreconditioner
-    method
+mutable struct AMGPreconditioner{T} <: JutulPreconditioner
     method_kwarg
     cycle
     factor
@@ -11,24 +10,25 @@ mutable struct AMGPreconditioner <: JutulPreconditioner
     hierarchy
     smoothers
     smoother_type::Symbol
-    function AMGPreconditioner(method = ruge_stuben; smoother_type = :default, cycle = AlgebraicMultigrid.V(), kwarg...)
-        if method == :ruge_stuben
-            method = ruge_stuben
-        elseif method == :smoothed_aggregation
-            method = smoothed_aggregation
-        end
-        new(method, kwarg, cycle, nothing, nothing, nothing, nothing, smoother_type)
+    function AMGPreconditioner(method::Symbol; smoother_type = :default, cycle = AlgebraicMultigrid.V(), kwarg...)
+        @assert method == :smoothed_aggregation || method == :ruge_stuben || method == :aggregation
+        new{method}(kwarg, cycle, nothing, nothing, nothing, nothing, smoother_type)
     end
 end
 
 matrix_for_amg(A) = A
 matrix_for_amg(A::StaticSparsityMatrixCSR) = copy(A.At')
 
-function update!(amg::AMGPreconditioner, A, b, context)
+function update!(amg::AMGPreconditioner{flavor}, A, b, context) where flavor
     kw = amg.method_kwarg
     A_amg = matrix_for_amg(A)
-    @debug string("Setting up preconditioner ", amg.method)
-    t_amg = @elapsed multilevel = amg.method(A_amg; kw...)
+    @debug string("Setting up preconditioner ", flavor)
+    if flavor == :smoothed_aggregation
+        gen = (A) -> smoothed_aggregation(A; kw...)
+    elseif flavor == :ruge_stuben
+        gen = (A) -> ruge_stuben(A; kw...)
+    end
+    t_amg = @elapsed multilevel = gen(A_amg)
     amg = specialize_multilevel!(amg, multilevel, A, context)
     amg.dim = size(A)
     @debug "Set up AMG in $t_amg seconds."
