@@ -27,6 +27,8 @@ function update!(amg::AMGPreconditioner{flavor}, A, b, context) where flavor
         gen = (A) -> smoothed_aggregation(A; kw...)
     elseif flavor == :ruge_stuben
         gen = (A) -> ruge_stuben(A; kw...)
+    elseif flavor == :aggregation
+        gen = (A) -> smoothed_aggregation(A; smooth = ConstantProlongation(), kw...)
     end
     t_amg = @elapsed multilevel = gen(A_amg)
     amg = specialize_multilevel!(amg, multilevel, A, context)
@@ -260,4 +262,13 @@ function update_smoothers!(S::NamedTuple, A::StaticSparsityMatrixCSR, h)
         end
     end
     return S
+end
+
+
+struct ConstantProlongation
+end
+
+
+function (j::ConstantProlongation)(A, T, S, B, arg...)
+    return T
 end
