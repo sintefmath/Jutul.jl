@@ -28,7 +28,7 @@ function update!(amg::AMGPreconditioner{flavor}, A, b, context) where flavor
     elseif flavor == :ruge_stuben
         gen = (A) -> ruge_stuben(A; kw...)
     elseif flavor == :aggregation
-        gen = (A) -> smoothed_aggregation(A; smooth = ConstantProlongation(), kw...)
+        gen = (A) -> plain_aggregation(A; kw...)
     end
     t_amg = @elapsed multilevel = gen(A_amg)
     amg = specialize_multilevel!(amg, multilevel, A, context)
@@ -264,11 +264,62 @@ function update_smoothers!(S::NamedTuple, A::StaticSparsityMatrixCSR, h)
     return S
 end
 
+function plain_aggregation(A::TA, 
+                        ::Type{Val{bs}}=Val{1};
+                        symmetry = HermitianSymmetry(),
+                        strength = SymmetricStrength(),
+                        aggregate = StandardAggregation(),
+                        presmoother = GaussSeidel(),
+                        postsmoother = GaussSeidel(),
+                        max_levels = 10,
+                        max_coarse = 10,
+                        diagonal_dominance = false,
+                        keep = false,
+                        coarse_solver = AlgebraicMultigrid.Pinv, kwargs...) where {T,V,bs,TA<:SparseMatrixCSC{T,V}}
 
-struct ConstantProlongation
+    n = size(A, 1)
+    B = ones(T,n)
+
+    levels = Vector{AlgebraicMultigrid.Level{TA, TA, Adjoint{T, TA}}}()
+    bsr_flag = false
+    w = AlgebraicMultigrid.MultiLevelWorkspace(Val{bs}, eltype(A))
+    AlgebraicMultigrid.residual!(w, size(A, 1))
+
+    while length(levels) + 1 < max_levels && size(A, 1) > max_coarse
+        A, B, bsr_flag = extend_hierarchy!(levels, strength, aggregate,
+                                            diagonal_dominance, keep, A, B, symmetry, bsr_flag)
+                                            AlgebraicMultigrid.coarse_x!(w, size(A, 1))
+        AlgebraicMultigrid.coarse_b!(w, size(A, 1))
+        AlgebraicMultigrid.residual!(w, size(A, 1))
+    end
+    AlgebraicMultigrid.MultiLevel(levels, A, coarse_solver(A), presmoother, postsmoother, w)
 end
 
-
-function (j::ConstantProlongation)(A, T, S, B, arg...)
-    return T
+struct HermitianSymmetry
 end
+
+function extend_hierarchy!(levels, strength, aggregate, diagonal_dominance, keep,
+                            A, B,
+                            symmetry, bsr_flag)
+
+    # Calculate strength of connection matrix
+    if symmetry isa HermitianSymmetry
+        S, _T = strength(A, bsr_flag)
+    else
+        S, _T = strength(adjoint(A), bsr_flag)
+    end
+
+    # Aggregation operator
+    P = copy(aggregate(S)')
+    R = construct_R(symmetry, P)
+    push!(levels, AlgebraicMultigrid.Level(A, P, R))
+
+    A = R * A * P
+
+    dropzeros!(A)
+
+    bsr_flag = true
+
+    A, B, bsr_flag
+end
+construct_R(::HermitianSymmetry, P) = P'
