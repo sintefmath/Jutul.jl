@@ -258,7 +258,7 @@ function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M, amg)
 end
 
 function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M, amg::AMGPreconditioner{:aggregation})
-    if false
+    if true
         cols = colvals(A_c)
         nz = nonzeros(A_c)
         mb = minbatch(A_c)
@@ -309,25 +309,22 @@ function aggregation_coarse_ij_row(A, start_A, stop_A, val_A, ix_A, start_R, sto
     @inbounds i_A = ix_A[pos_A]
     @inbounds i_R = ix_R[pos_R]
     @inbounds while true
+        delta = i_A - i_R
         if i_A == i_R
             v += val_A[pos_A]
-            inc_R = inc_A = true
-        else
-            inc_R = i_R < i_A
-            inc_A = !inc_R
         end
-        if inc_R
+        if delta >= 0
             if pos_R < stop_R
                 pos_R += 1
-                i_R = ix_R[pos_R]
+                @inbounds i_R = ix_R[pos_R]
             else
                 break
             end
         end
-        if inc_A
+        if delta <= 0
             if pos_A < stop_A
                 pos_A += 1
-                i_A = ix_A[pos_A]
+                @inbounds i_A = ix_A[pos_A]
             else
                 break
             end
