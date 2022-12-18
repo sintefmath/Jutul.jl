@@ -10,9 +10,11 @@ mutable struct AMGPreconditioner{T} <: JutulPreconditioner
     hierarchy
     smoothers
     smoother_type::Symbol
-    function AMGPreconditioner(method::Symbol; smoother_type = :default, cycle = AlgebraicMultigrid.V(), kwarg...)
+    npre::Integer
+    npost::Integer
+    function AMGPreconditioner(method::Symbol; smoother_type = :default, cycle = AlgebraicMultigrid.V(), npre = 1, npost = npre, kwarg...)
         @assert method == :smoothed_aggregation || method == :ruge_stuben || method == :aggregation
-        new{method}(kwarg, cycle, nothing, nothing, nothing, nothing, smoother_type)
+        new{method}(kwarg, cycle, nothing, nothing, nothing, nothing, smoother_type, npre, npost)
     end
 end
 
@@ -23,12 +25,15 @@ function update!(amg::AMGPreconditioner{flavor}, A, b, context) where flavor
     kw = amg.method_kwarg
     A_amg = matrix_for_amg(A)
     @debug string("Setting up preconditioner ", flavor)
+    pre = GaussSeidel(iter = amg.npre)
+    post = GaussSeidel(iter = amg.npost)
+    sarg = (presmoother = pre, postsmoother = post)
     if flavor == :smoothed_aggregation
-        gen = (A) -> smoothed_aggregation(A; kw...)
+        gen = (A) -> smoothed_aggregation(A; sarg..., kw...)
     elseif flavor == :ruge_stuben
-        gen = (A) -> ruge_stuben(A; kw...)
+        gen = (A) -> ruge_stuben(A; sarg..., kw...)
     elseif flavor == :aggregation
-        gen = (A) -> plain_aggregation(A; kw...)
+        gen = (A) -> plain_aggregation(A; sarg..., kw...)
     end
     t_amg = @elapsed multilevel = gen(A_amg)
     amg = specialize_multilevel!(amg, multilevel, A, context)
@@ -87,13 +92,14 @@ function specialize_multilevel!(amg, h, A::StaticSparsityMatrixCSR, context)
         levels = Vector{AlgebraicMultigrid.Level{T, T, T}}()
     end
     S = amg.smoothers = generate_amg_smoothers(amg.smoother_type, A_f, levels, context)
-    smoother = (A, x, b) -> apply_smoother!(x, A, b, S)
+    pre = (A, x, b) -> apply_smoother!(x, A, b, S, amg.npre)
+    post = (A, x, b) -> apply_smoother!(x, A, b, S, amg.npost)
 
     A_c = to_csr(h.final_A)
     factor = factorize_coarse(A_c)
     coarse_solver = (x, b) -> solve_coarse_internal!(x, A_c, factor, b)
 
-    levels = AlgebraicMultigrid.MultiLevel(levels, A_c, coarse_solver, smoother, smoother, h.workspace)
+    levels = AlgebraicMultigrid.MultiLevel(levels, A_c, coarse_solver, pre, post, h.workspace)
     amg.hierarchy = (multilevel = levels, buffers = buffers)
     return amg
 end
@@ -129,7 +135,10 @@ function generate_amg_smoothers(t, A_fine, levels, context)
     return (n = sizes, smoothers = typed_smoothers)
 end
 
-function apply_smoother!(x, A, b, smoothers::NamedTuple)
+function apply_smoother!(x, A, b, smoothers::NamedTuple, nsmooth)
+    if nsmooth == 0
+        return x
+    end
     m = length(x)
     for (i, n) in enumerate(smoothers.n)
         if m == n
@@ -138,7 +147,6 @@ function apply_smoother!(x, A, b, smoothers::NamedTuple)
             res = smooth.x
             B = smooth.b
             # In-place version of B = b - A*x
-            nsmooth = 5
             B .= b
             mul!(B, A, x, -1, true)
             for it = 1:nsmooth
@@ -193,7 +201,8 @@ function update_hierarchy!(amg, hierarchy, A)
         pre = h.presmoother
         post = h.postsmoother
     else
-        pre = post = (A, x, b) -> apply_smoother!(x, A, b, S)
+        pre = (A, x, b) -> apply_smoother!(x, A, b, S, amg.npre)
+        post = (A, x, b) -> apply_smoother!(x, A, b, S, amg.npost)
     end
     multilevel = AlgebraicMultigrid.MultiLevel(levels, A, coarse_solver, pre, post, h.workspace)
     return (multilevel = multilevel, buffers = buffers)
