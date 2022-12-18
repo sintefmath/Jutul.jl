@@ -192,7 +192,7 @@ function update_hierarchy!(amg, hierarchy, A)
             A_c = levels[i+1].A
         end
         buf = isnothing(buffers) ? nothing : buffers[i]
-        A = update_coarse_system!(A_c, R, A, P, buf)
+        A = update_coarse_system!(A_c, R, A, P, buf, amg)
     end
     factor = factorize_coarse(A)
     coarse_solver = (x, b) -> solve_coarse_internal!(x, A, factor, b)
@@ -220,7 +220,7 @@ function print_system(A)
     end
 end
 
-function update_coarse_system!(A_c, R, A, P, buffer)
+function update_coarse_system!(A_c, R, A, P, buffer, amg)
     # In place modification
     nz = nonzeros(A_c)
     A_c_next = R*A*P
@@ -235,7 +235,7 @@ function update_coarse_system!(A_c, R, A, P, buffer)
     return A_c
 end
 
-function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M)
+function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M, amg)
     if false
         At = A.At
         Pt = R.At
@@ -255,6 +255,85 @@ function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M)
         nonzeros(A_c.At) .= nonzeros(A_c_t)
     end
     return A_c
+end
+
+function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M, amg::AMGPreconditioner{:aggregation})
+    if false
+        cols = colvals(A_c)
+        nz = nonzeros(A_c)
+        mb = minbatch(A_c)
+        @batch minbatch = mb for row in axes(A_c, 1)
+            @inbounds for ptr in nzrange(A_c, row)
+                col = cols[ptr]
+                nz[ptr] = aggregation_coarse_ij(A, R, row, col)
+            end
+        end
+    else
+        At = A.At
+        Pt = R.At
+        Rt = P.At
+        A_c_t = Rt*At*Pt
+        nonzeros(A_c.At) .= nonzeros(A_c_t)
+    end
+    return A_c
+end
+
+function aggregation_coarse_ij(A, R, row, col)
+    A_rowptr = SparseArrays.getcolptr(A.At)
+    R_rowptr = SparseArrays.getcolptr(R.At)
+
+    @inbounds start_col = R_rowptr[col]
+    @inbounds stop_col  = R_rowptr[col+1]-1
+    R_cols = colvals(R)
+
+    @inbounds start_R = R_rowptr[row]
+    @inbounds stop_R = R_rowptr[row+1]-1
+    # sum A_ij for i in I and j in J
+    v = zero(eltype(A))
+    @inbounds for pos in start_col:stop_col
+        inner_row = R_cols[pos]
+
+        start_A = A_rowptr[inner_row]
+        stop_A = A_rowptr[inner_row+1]-1
+
+        v += aggregation_coarse_ij_row(A, start_A, stop_A, nonzeros(A), colvals(A), start_R, stop_R, R_cols)
+    end
+    return v
+end
+
+function aggregation_coarse_ij_row(A, start_A, stop_A, val_A, ix_A, start_R, stop_R, ix_R)
+    v = zero(eltype(A))
+    pos_A = start_A
+    pos_R = start_R
+
+    @inbounds i_A = ix_A[pos_A]
+    @inbounds i_R = ix_R[pos_R]
+    @inbounds while true
+        if i_A == i_R
+            v += val_A[pos_A]
+            inc_R = inc_A = true
+        else
+            inc_R = i_R < i_A
+            inc_A = !inc_R
+        end
+        if inc_R
+            if pos_R < stop_R
+                pos_R += 1
+                i_R = ix_R[pos_R]
+            else
+                break
+            end
+        end
+        if inc_A
+            if pos_A < stop_A
+                pos_A += 1
+                i_A = ix_A[pos_A]
+            else
+                break
+            end
+        end
+    end
+    return v
 end
 
 function update_smoothers!(smoothers::Nothing, A, h)
