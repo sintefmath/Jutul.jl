@@ -116,7 +116,7 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buffers)
     # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
     offsets = cumsum(length(x) for x in b)
     n = length(D)
-    for i in 1:n
+    @inbounds for i in 1:n
         if i == 1
             offset = 0
         else
@@ -127,8 +127,8 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buffers)
         buf_b, = buffers[i+1]
         mul!(buf_b, D[i], Δx)
         # now buf_b = D*Δx
-        @inbounds @batch minbatch=1000 for j in 1:n
-            buf_b[j] -= b_i[j]
+        @batch minbatch=1000 for j in 1:n
+            @inbounds buf_b[j] -= b_i[j]
         end
         B_i = view(B, (offset+1):(offset+n))
         ldiv!(B_i, E[i], buf_b)
@@ -142,10 +142,13 @@ end
         n = length(D)
         mul!(res_v, B, x_v, α, β)
         @batch for i = 1:n
-            b_buf_1, b_buf_2 = schur_buffers[i+1]
-            mul!(b_buf_2, D[i], x)
-            ldiv!(b_buf_1, E[i], b_buf_2)
-            mul!(res, C[i], b_buf_1, -α, true)
+            @inbounds b_buf_1, b_buf_2 = schur_buffers[i+1]
+            @inbounds D_i = D[i]
+            @inbounds E_i = E[i]
+            @inbounds C_i = C[i]
+            mul!(b_buf_2, D_i, x)
+            ldiv!(b_buf_1, E_i, b_buf_2)
+            mul!(res, C_i, b_buf_1, -α, true)
         end
     end
     return res
