@@ -115,11 +115,9 @@ function apply_forces!(storage, model::CompositeModel, dt, forces; time = NaN)
     end
 end
 
-function setup_parameters!(prm, model::CompositeModel, init)
-    # prm = Dict{Symbol, Any}()
-    for (name, sys) in pairs(system.systems)
-        submodel = submodel(model, name)
-        setup_parameters!(prm, submodel, init)
+function setup_parameters!(prm, model::CompositeModel, init::AbstractDict)
+    for name in keys(model.system.systems)
+        setup_parameters!(prm, submodel(model, name), init)
     end
     return prm
 end
