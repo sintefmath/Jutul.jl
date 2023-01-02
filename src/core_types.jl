@@ -354,7 +354,7 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
             end
             print(io, "\n")
         elseif f == :output_variables
-            print(io, "    $(join(p, ", "))")
+            print(io, "    $(join(p, ", "))\n\n")
         else
             print(io, "    ")
             print(io, p)
@@ -667,6 +667,12 @@ struct CompositeSystem{T} <: JutulSystem
     systems::T
 end
 
+function Base.show(io::IO, t::CompositeSystem)
+    print(io, "CompositeSystem:\n")
+    for (name, sys) in pairs(t.systems)
+        print(io, "($name => $sys)\n")
+    end
+end
 function CompositeSystem(; kwarg...)
     return CompositeSystem(NamedTuple(pairs(kwarg)))
 end
