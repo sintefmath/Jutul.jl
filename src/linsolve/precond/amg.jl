@@ -258,7 +258,7 @@ function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M, amg)
 end
 
 function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M, amg::AMGPreconditioner{:aggregation})
-    if true
+    if false
         cols = colvals(A_c)
         nz = nonzeros(A_c)
         mb = minbatch(A_c)
@@ -268,6 +268,17 @@ function update_coarse_system!(A_c, R, A::StaticSparsityMatrixCSR, P, M, amg::AM
                 nz[ptr] = aggregation_coarse_ij(A, R, row, col)
             end
         end
+    elseif false
+        At = A.At
+        Pt = R.At
+        Rt = P.At
+        # CSC <- CSR * CSC
+        # in_place_mat_mat_mul!(M, A, Rt)
+        # M = A*P -> M' = (AP)' = P'A' = RA'
+        M_csr_transpose = StaticSparsityMatrixCSR(M, nthreads = nthreads(A), minbatch = minbatch(A))
+        agg_in_place_mat_mat_mul!(M_csr_transpose, R, A.At)
+        # CSR <- CSR * CSC
+        agg_in_place_mat_mat_mul!(A_c, R, M)
     else
         At = A.At
         Pt = R.At
@@ -408,3 +419,92 @@ function extend_hierarchy!(levels, strength, aggregate, diagonal_dominance, keep
     A, B, bsr_flag
 end
 construct_R(::HermitianSymmetry, P) = P'
+
+
+function agg_in_place_mat_mat_mul!(M::CSR, A::CSR, B::CSC) where {CSR<:StaticSparsityMatrixCSR, CSC<:SparseMatrixCSC}
+    columns = colvals(M)
+    nz = nonzeros(M)
+    n = size(M, 1)
+    mb = max(n ÷ nthreads(A), minbatch(A))
+    @batch minbatch = mb for row in 1:n
+        for pos in nzrange(M, row)
+            @inbounds col = columns[pos]
+            @inbounds nz[pos] = rowcol_prod(A, B, row, col)
+        end
+    end
+end
+
+function agg_in_place_mat_mat_mul!(M::CSC, A::CSR, B::CSC) where {CSR<:StaticSparsityMatrixCSR, CSC<:SparseMatrixCSC}
+    rows = rowvals(M)
+    nz = nonzeros(M)
+    n = size(M, 2)
+    mb = max(n ÷ nthreads(A), minbatch(A))
+    @batch minbatch = mb for col in 1:n
+        for pos in nzrange(M, col)
+            @inbounds row = rows[pos]
+            @inbounds nz[pos] = rowcol_prod(A, B, row, col)
+        end
+    end
+end
+
+@inline function rowcol_prod(A::StaticSparsityMatrixCSR, B::SparseMatrixCSC, row, col)
+    # We know both that this product is nonzero
+    # First matrix, iterate over columns
+    A_range = nzrange(A, row)
+    nz_A = nonzeros(A)
+    n_col = length(A_range)
+    columns = colvals(A)
+    @inline new_column(pos) = sparse_indirection(columns, A_range, pos)
+
+    # Second matrix, iterate over row
+    B_range = nzrange(B, col)
+    nz_B = nonzeros(B)
+    n_row = length(B_range)
+    rows = rowvals(B)
+    new_row(pos) = sparse_indirection(rows, B_range, pos)
+    # Initialize
+    pos_A = pos_B = 1
+    current_col, A_idx = new_column(pos_A)
+    current_row, B_idx = new_row(pos_B)
+    v = zero(eltype(A))
+    entries_remain = true
+    while entries_remain
+        delta = current_row - current_col
+        if delta == 0
+            @inbounds rv = nz_A[A_idx]
+            @inbounds cv = nz_B[B_idx]
+            v += rv*cv
+            entries_remain = pos_A < n_col && pos_B < n_row
+            if entries_remain
+                pos_A += 1
+                current_col, A_idx = new_column(pos_A)
+                pos_B += 1
+                current_row, B_idx = new_row(pos_B)
+            end
+        elseif delta > 0
+            entries_remain = pos_A < n_col
+            if entries_remain
+                pos_A += 1
+                current_col, A_idx = new_column(pos_A)
+            end
+        else
+            entries_remain = pos_B < n_row
+            if entries_remain
+                pos_B += 1
+                current_row, B_idx = new_row(pos_B)
+            end
+        end
+    end
+    return v
+end
+
+@inline function sparse_indirection(val, rng, pos)
+    @inbounds ix = rng[pos]
+    @inbounds v = val[ix]
+    return (v, ix)
+end
+
+function rowcol_prod(A::SparseMatrixCSC, B::StaticSparsityMatrixCSR, row, col)
+    v = zero(eltype(A))
+    error()
+end
