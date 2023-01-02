@@ -57,7 +57,7 @@ function internal_select_composite!(S, system::CompositeSystem, model, F!)
         tmp = OrderedDict{Symbol, Any}()
         F!(tmp, sys, submodel(model, name))
         for (k, v) in tmp
-            S[k] = (name, v)
+            S[k] = Pair(name, v)
         end
     end
     return S
@@ -68,7 +68,7 @@ function internal_select_composite!(S, something, model, F!)
         tmp = OrderedDict{Symbol, Any}()
         F!(tmp, something, submodel(model, name))
         for (k, v) in tmp
-            S[k] = (name, v)
+            S[k] = Pair(name, v)
         end
     end
     return S

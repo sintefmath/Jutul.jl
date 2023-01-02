@@ -50,7 +50,7 @@ function submodels_symbols(model::MultiModel)
 end
 
 export setup_cross_term, add_cross_term!
-function setup_cross_term(cross_term::CrossTerm; target::Symbol, source::Symbol, equation::Symbol)
+function setup_cross_term(cross_term::CrossTerm; target::Symbol, source::Symbol, equation)
     @assert target != source
     return CrossTermPair(target, source, equation, cross_term)
 end

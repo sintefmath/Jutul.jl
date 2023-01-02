@@ -3,7 +3,7 @@ abstract type CrossTerm end
 struct CrossTermPair
     target::Symbol
     source::Symbol
-    equation::Symbol
+    equation::Union{Symbol, Pair{Symbol, Symbol}}
     cross_term::CrossTerm
 end
 
