@@ -184,7 +184,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
         s = ". Worst value:\n\t - $worst_name at $worst_print."
     end
     # @info "$(id)It. $iteration/$max_its: $count_ok/$count_crit criteria converged$s"
-    jutul_message("It. $iteration/$max_its", "$count_ok/$count_crit criteria converged$s", color = :cyan)
+    jutul_message("It. $(iteration-1)/$max_its", "$count_ok/$count_crit criteria converged$s", color = :cyan)
     if print_table
         m_offset = Int64(has_models)
         rpos = (4 + m_offset)

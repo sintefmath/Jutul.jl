@@ -62,7 +62,7 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
     if verbose && length(reports) > 0
         if aborted
             start_str = "Simulation aborted"
-            endstr = "$(stats.steps) of $(length(timesteps))"
+            endstr = "$(stats.steps-1) of $(length(timesteps))"
             str_c = :red
         else
             start_str = "Simulation complete"
