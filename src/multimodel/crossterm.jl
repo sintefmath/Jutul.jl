@@ -328,7 +328,7 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     equation_offset += get_equation_offset(target_model, eq_label)
     @assert !isnothing(offdiag_alignment)
     # @assert keys(s_source), :numeric == keys(offdiag_alignment)
-    nt = number_of_entities(target_model, target_model.equations[eq_label])
+    nt = number_of_entities(target_model, ct_equation(target_model, eq_label))
     for source_e in get_primary_variable_ordered_entities(source_model)
         align_to_jacobian!(s_source, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset,
                                                                                    variable_offset = variable_offset,

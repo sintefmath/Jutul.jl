@@ -206,6 +206,10 @@ function local_group_offset(keys, target_key, ndofs)
     error("Should not happen")
 end
 
+function get_equation_offset(model::SimulationModel, eq_label::Pair)
+    return get_equation_offset(model, last(eq_label))
+end
+
 function get_equation_offset(model::SimulationModel, eq_label::Symbol)
     offset = 0
     for k in keys(model.equations)
@@ -215,7 +219,7 @@ function get_equation_offset(model::SimulationModel, eq_label::Symbol)
             offset += number_of_equations(model, model.equations[k])
         end
     end
-    error("Did not find equation")
+    error("Did not find equation $eq_label in $(keys(model.equations))")
 end
 
 function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source::Symbol, row_context, col_context)
@@ -285,7 +289,7 @@ function number_of_rows(model, layout::BlockMajorLayout)
 end
 
 function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind, row_layout::ScalarLayout, col_layout::ScalarLayout)
-    eq = target_model.equations[eq_label]
+    eq = ct_equation(target_model, eq_label)
     target_e = associated_entity(eq)
     entities = get_primary_variable_ordered_entities(source_model)
     equation_offset = get_equation_offset(target_model, eq_label)
@@ -469,7 +473,7 @@ function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_
         if target in targets && source in sources
             ct = ctp.cross_term
             model_t = models[target]
-            eq = model_t.equations[ctp.equation]
+            eq = ct_equation(model_t, ctp.equation)
             ct_bare_type = Base.typename(typeof(ct)).name
             @timeit "$ct_bare_type" update_cross_term!(ct_s, ct, eq, storage[target], storage[source], model_t, models[source], dt)
         end
