@@ -179,7 +179,7 @@ function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_stora
     for (ctp, ct_s) in zip(crossterms, crossterm_storage)
         ct = ctp.cross_term
         eq_label, impact, _, caches, _, sgn = source_impact_for_pair(ctp, ct_s, label)
-        eq = model.equations[eq_label]
+        eq = ct_equation(model, eq_label)
         @assert !isnothing(impact)
         nu = number_of_entities(model, eq)
         r = local_residual_view(r_buf, model, eq, equation_offset + get_equation_offset(model, eq_label))
