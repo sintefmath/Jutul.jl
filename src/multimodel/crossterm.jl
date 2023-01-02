@@ -383,11 +383,11 @@ function setup_cross_terms_storage!(storage, model)
         term = ct.cross_term
         s_t, m_t = storage_and_model(ct.target)
         s_s, m_s = storage_and_model(ct.source)
-        eq_t = m_t.equations[ct.equation]
+        eq_t = ct_equation(m_t, ct.equation)
         if isnothing(symmetry(term))
             eq_s = nothing
         else
-            eq_s = m_s.equations[ct.equation]
+            eq_s = ct_equation(m_s, ct.equation)
         end
         ct_s = setup_cross_term_storage(term, eq_t, eq_s, m_t, m_s, s_t, s_s)
         push!(v, ct_s)
@@ -395,6 +395,13 @@ function setup_cross_terms_storage!(storage, model)
     storage[:cross_terms] = v
 end
 
+function ct_equation(model, eq::Symbol)
+    return model.equations[eq]
+end
+
+function ct_equation(model, eq::Pair)
+    return last(model.equations[last(eq)])
+end
 
 function cross_term(storage, target::Symbol)
     return storage[:cross_terms][target]
@@ -439,7 +446,7 @@ end
 function extra_cross_term_sparsity(model, storage, target, include_symmetry = true)
     # Get sparsity of cross terms so that they can be included in any generic equations
     ct_pairs, ct_storage = cross_term_target(model, storage, target, include_symmetry)
-    sparsity = Dict{Symbol, Any}()
+    sparsity = Dict{Union{Symbol, Pair}, Any}()
     for (ct_p, ct_s) in zip(ct_pairs, ct_storage)
         # Loop over all cross terms that impact target and grab the global sparsity
         # so that this can be added when doing sparsity detection for the model itself.
@@ -459,7 +466,7 @@ function extra_cross_term_sparsity(model, storage, target, include_symmetry = tr
         eq_d = sparsity[eq]
         model_t = model[target]
         gmap = global_map(model_t.domain)
-        equation_t = model_t.equations[eq]
+        equation_t = ct_equation(model_t, eq)
         e = associated_entity(equation_t)
         N = number_of_entities(model_t, equation_t)
         for (k, v) in pairs(caches)
