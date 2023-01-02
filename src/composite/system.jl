@@ -114,3 +114,9 @@ function apply_forces!(storage, model::CompositeModel, dt, forces; time = NaN)
         end
     end
 end
+
+function select_minimum_output_variables!(outputs, system::CompositeSystem, model::CompositeModel)
+    for (name, sys) in pairs(system.systems)
+        select_minimum_output_variables!(outputs, sys, model)
+    end
+end
