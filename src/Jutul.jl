@@ -39,6 +39,8 @@ module Jutul
 
     # Timing
     using TimerOutputs
+    # Shorted alias for @timeit_debug
+    const var"@tic" = var"@timeit_debug"
 
     include("StaticCSR/StaticCSR.jl")
     using .StaticCSR

@@ -212,7 +212,7 @@ end
 #     # Column (and vector we multiply with) is block major
 #     jac = block.jac
 #     function apply!(res, x, α, β::T) where T
-#         @timeit "spmv" begin
+#         @tic "spmv" begin
 #             mul!(res, jac, x, α, β)
 #         end
 #         return res
@@ -233,7 +233,7 @@ end
 #         # mul!(C, A, B, α, β) -> C
 #         # A*B*α + C*β
 #         error()
-#         @timeit "spmv" begin
+#         @tic "spmv" begin
 #             tmp_cell_major = jac*x
 #             if α != one(T)
 #                 lmul!(α, tmp_cell_major)

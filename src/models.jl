@@ -364,7 +364,7 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
                                                     state0_ad = false,
                                                     state_ad = true,
                                                     kwarg...)
-    @timeit "state" if !isnothing(state0)
+    @tic "state" if !isnothing(state0)
         storage[:parameters] = parameters
         state0 = merge(state0, parameters)
         if state0_ad
@@ -378,15 +378,15 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
         storage[:state] = state
         storage[:primary_variables] = reference_primary_variables(storage, model) 
     end
-    @timeit "model" setup_storage_model(storage, model)
-    @timeit "equations" if setup_equations
+    @tic "model" setup_storage_model(storage, model)
+    @tic "equations" if setup_equations
         storage[:equations] = setup_storage_equations(storage, model; tag = tag, kwarg...) 
     end
-    @timeit "linear system" if setup_linearized_system
-        @timeit "setup" storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
+    @tic "linear system" if setup_linearized_system
+        @tic "setup" storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
         # We have the equations and the linearized system.
         # Give the equations a chance to figure out their place in the Jacobians.
-        @timeit "alignment" align_equations_to_linearized_system!(storage, model)
+        @tic "alignment" align_equations_to_linearized_system!(storage, model)
     end
 end
 
@@ -575,7 +575,7 @@ This includes properties, governing equations and the linearized system itself.
 """
 function update_state_dependents!(storage, model::JutulModel, dt, forces; time = NaN, update_secondary = true)
     if update_secondary
-        @timeit "secondary variables" update_secondary_variables!(storage, model)
+        @tic "secondary variables" update_secondary_variables!(storage, model)
     end
     update_equations_and_apply_forces!(storage, model, dt, forces; time = time)
 end
@@ -586,9 +586,9 @@ end
 Update the model equations and apply boundary conditions and forces. Does not fill linearized system.
 """
 function update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN)
-    @timeit "equations" update_equations!(storage, model, dt)
-    @timeit "forces" apply_forces!(storage, model, dt, forces; time = time)
-    @timeit "boundary conditions" apply_boundary_conditions!(storage, model)
+    @tic "equations" update_equations!(storage, model, dt)
+    @tic "forces" apply_forces!(storage, model, dt, forces; time = time)
+    @tic "boundary conditions" apply_boundary_conditions!(storage, model)
 end
 
 function apply_boundary_conditions!(storage, model::JutulModel)
@@ -609,7 +609,7 @@ end
 
 function update_equations!(storage, equations_storage, equations, model, dt)
     for key in keys(equations)
-        @timeit "$key" update_equation!(equations_storage[key], equations[key], storage, model, dt)
+        @tic "$key" update_equation!(equations_storage[key], equations[key], storage, model, dt)
     end
 end
 
@@ -628,7 +628,7 @@ end
 function update_linearized_system!(lsys, equations, eqs_storage, model::JutulModel; equation_offset = 0)
     r_buf = lsys.r_buffer
     for key in keys(equations)
-        @timeit "$key" begin
+        @tic "$key" begin
             eq = equations[key]
             eqs_s = eqs_storage[key]
             nz = lsys.jac_buffer
@@ -692,7 +692,7 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
         m = N ÷ n
         r_v = as_cell_major_matrix(r_buf, n, m, model, offset)
 
-        @timeit "$key" all_crits = convergence_criterion(model, storage, eq, eq_s, r_v; kwarg...)
+        @tic "$key" all_crits = convergence_criterion(model, storage, eq, eq_s, r_v; kwarg...)
         e_keys = keys(all_crits)
         tols = Dict()
         for e_k in e_keys
@@ -755,9 +755,9 @@ end
 function solve_and_update!(storage, model::JutulModel, dt = nothing; linear_solver = nothing, recorder = nothing, kwarg...)
     lsys = storage.LinearizedSystem
     t_solve = @elapsed begin
-        @timeit "linear solve" (ok, n, history) = solve!(lsys, linear_solver, model, storage, dt, recorder)
+        @tic "linear solve" (ok, n, history) = solve!(lsys, linear_solver, model, storage, dt, recorder)
     end
-    t_update = @elapsed @timeit "primary variables" update = update_primary_variables!(storage, model; kwarg...)
+    t_update = @elapsed @tic "primary variables" update = update_primary_variables!(storage, model; kwarg...)
     return (t_solve, t_update, n, history, update)
 end
 
@@ -796,7 +796,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
                     ok_i = check_increment(dxi, p, pkey)
                     ok = ok && ok_i
                 end
-                @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
+                @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
                 local_offset += ni
                 report[pkey] = maximum(abs, dxi)
             end
@@ -811,7 +811,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
                 ok_i = check_increment(dxi, p, pkey)
                 ok = ok && ok_i
             end
-            @timeit "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
+            @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
             offset += n
             report[pkey] = maximum(abs, dxi)
         end

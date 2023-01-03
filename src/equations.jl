@@ -146,7 +146,7 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
     for (e, epack) in entities
         is_self = e == self_entity
         self_entity_found = self_entity_found || is_self
-        @timeit "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
+        @tic "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
         if !isnothing(extra_sparsity)
             # We have some extra sparsity, need to merge that in
             S_e = extra_sparsity[Symbol(e)]
@@ -162,7 +162,7 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
         S, number_of_entities_source = remap_sparsity!(S, e, model)
         has_diagonal = number_of_entities == number_of_entities_total && is_self
         @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source for $T"
-        @timeit "cache alloc" cache = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal, global_map = global_map)
+        @tic "cache alloc" cache = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal, global_map = global_map)
         caches[Symbol(e)] = cache
     end
     if !self_entity_found
@@ -487,7 +487,7 @@ Get the convergence criterion values for a given equation. Can be checked agains
 """
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
     n = number_of_equations_per_entity(model, eq)
-    @timeit "default" @tullio max e[i] := abs(r[i, j])
+    @tic "default" @tullio max e[i] := abs(r[i, j])
     if n == 1
         names = "R"
     else

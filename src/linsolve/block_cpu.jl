@@ -1,5 +1,5 @@
 function block_mul!(res, jac, Vt, x, α, β::T) where T
-    @timeit "spmv (block)" begin
+    @tic "spmv (block)" begin
         as_svec = (x) -> reinterpret(Vt, x)
         res_v = as_svec(res)
         x_v = as_svec(x)

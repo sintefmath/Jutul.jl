@@ -163,8 +163,8 @@ function apply_smoother!(x, A, b, smoothers::NamedTuple, nsmooth)
 end
 
 function partial_update!(amg::AMGPreconditioner, A, b, context)
-    @timeit "coarse update" amg.hierarchy = update_hierarchy!(amg, amg.hierarchy, A)
-    @timeit "smoother update" amg.smoothers = update_smoothers!(amg.smoothers, A, amg.hierarchy.multilevel)
+    @tic "coarse update" amg.hierarchy = update_hierarchy!(amg, amg.hierarchy, A)
+    @tic "smoother update" amg.smoothers = update_smoothers!(amg.smoothers, A, amg.hierarchy.multilevel)
     amg.factor = aspreconditioner(amg.hierarchy.multilevel, amg.cycle)
 end
 

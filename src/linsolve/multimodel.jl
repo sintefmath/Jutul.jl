@@ -136,7 +136,7 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buffers)
 end
 
 @inline function schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, β::T) where T
-    @timeit "spmv (schur)" begin
+    @tic "spmv (schur)" begin
         # This function does:
         # res ← β*res + α*(B*x - C*(E\(D*x)))
         n = length(D)

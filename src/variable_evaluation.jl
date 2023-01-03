@@ -100,7 +100,7 @@ function update_secondary_variables_state!(state, model)
     N = nthreads(ctx)
     if N == 1
         for (symbol, var) in model.secondary_variables
-            @timeit "$symbol" begin
+            @tic "$symbol" begin
                 v = state[symbol]
                 ix = entity_eachindex(v)
                 update_secondary_variable!(v, var, model, state, ix)

@@ -123,7 +123,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     update_objective_sparsity!(storage, G, states, timesteps, forces, :parameter)
     # Set gradient to zero before solve starts
     @. ∇G = 0
-    @timeit "sensitivities" for i in N:-1:1
+    @tic "sensitivities" for i in N:-1:1
         fn = deepcopy
         if i == 1
             s0 = fn(state0)
@@ -286,7 +286,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     dt = timesteps[i]
     # Assemble Jacobian w.r.t. current step
     t = sum(timesteps[1:i-1])
-    @timeit "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces, t)
+    @tic "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces, t)
     # Note the sign: There is an implicit negative sign in the linear solver when solving for the Newton increment. Therefore, the terms of the
     # right hand side are added with a positive sign instead of negative.
     lsys = forward_sim.storage.LinearizedSystem
@@ -294,14 +294,14 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     dx = adjoint_storage.dx
     # Fill rhs with (∂J / ∂x)ᵀₙ (which will be treated with a negative sign when the result is written by the linear solver)
     S_p = get_objective_sparsity(adjoint_storage, :forward)
-    @timeit "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, i, forces), sparsity = S_p)
+    @tic "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, i, forces), sparsity = S_p)
     if isnothing(state_next)
         @assert i == N
         @. λ = 0
     else
         dt_next = timesteps[i+1]
         forces_next = forces_for_timestep(backward_sim, all_forces, timesteps, i+1)
-        @timeit "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next, t + dt_next)
+        @tic "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next, t + dt_next)
         lsys_next = backward_sim.storage.LinearizedSystem
         op = linear_operator(lsys_next)
         # In-place version of
@@ -310,16 +310,16 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         sens_add_mult!(rhs, op, λ)
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
-    @timeit "linear solve" solve!(lsys, dx = dx, r = rhs)
+    @tic "linear solve" solve!(lsys, dx = dx, r = rhs)
     @. λ = dx
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
-    @timeit "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, t)
+    @tic "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, t)
     lsys_param = parameter_sim.storage.LinearizedSystem
     op_p = linear_operator(lsys_param)
     sens_add_mult!(∇G, op_p, λ)
 
-    @timeit "objective parameter gradient" if !isnothing(dparam)
+    @tic "objective parameter gradient" if !isnothing(dparam)
         if i == N
             @. dparam = 0
         end

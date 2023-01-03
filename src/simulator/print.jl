@@ -1,5 +1,8 @@
 function set_global_timer!(enabled = true)
     if enabled
+        if !isdefined(Jutul, :timeit_debug_enabled)
+            TimerOutputs.enable_debug_timings(Jutul)
+        end
         enable_timer!()
         reset_timer!()
     else
@@ -87,7 +90,7 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
     if print_end_report
         print_stats(stats, table_formatter = config[:table_formatter])
     end
-    # Detailed timing through @timeit instrumentation (can be a lot)
+    # Detailed timing through @tic instrumentation (can be a lot)
     print_global_timer(config[:extra_timing])
     if aborted && config[:error_on_incomplete]
         error("Simulation did not complete successfully.")

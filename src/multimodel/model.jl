@@ -92,9 +92,9 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
     storage = JutulStorage()
     state0_ref = JutulStorage()
     state_ref = JutulStorage()
-    @timeit "model" for key in submodels_symbols(model)
+    @tic "model" for key in submodels_symbols(model)
         m = model[key]
-        @timeit "$key" begin
+        @tic "$key" begin
             storage[key] = setup_storage(m; state0 = state0[key],
                                         parameters = parameters[key],
                                         setup_linearized_system = false,
@@ -108,18 +108,18 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
     end
     storage[:state] = state_ref
     storage[:state0] = state0_ref
-    @timeit "cross terms" setup_cross_terms_storage!(storage, model)
-    @timeit "equations" for key in submodels_symbols(model)
+    @tic "cross terms" setup_cross_terms_storage!(storage, model)
+    @tic "equations" for key in submodels_symbols(model)
         m = model[key]
-        @timeit "$key" begin
+        @tic "$key" begin
             ct_i = extra_cross_term_sparsity(model, storage, key, true)
             storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = submodel_ad_tag(model, key))
         end
     end
-    @timeit "linear system" begin
-        @timeit "setup" setup_linearized_system!(storage, model)
-        @timeit "alignment" align_equations_to_linearized_system!(storage, model)
-        @timeit "alignment cross terms" align_cross_terms_to_linearized_system!(storage, model)
+    @tic "linear system" begin
+        @tic "setup" setup_linearized_system!(storage, model)
+        @tic "alignment" align_equations_to_linearized_system!(storage, model)
+        @tic "alignment cross terms" align_cross_terms_to_linearized_system!(storage, model)
     end
     setup_multimodel_maps!(storage, model)
     return storage
@@ -447,22 +447,22 @@ function initialize_storage!(storage, model::MultiModel; kwarg...)
 end
 
 function update_equations!(storage, model::MultiModel, dt)
-    @timeit "model equations" for k in submodel_symbols(model)
+    @tic "model equations" for k in submodel_symbols(model)
         update_equations!(storage[k], model[k], dt)
     end
 end
 
 function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN)
     # First update all equations
-    @timeit "equations" update_equations!(storage, model, dt)
+    @tic "equations" update_equations!(storage, model, dt)
     # Then update the cross terms
-    @timeit "crossterm update" update_cross_terms!(storage, model, dt)
+    @tic "crossterm update" update_cross_terms!(storage, model, dt)
     # Apply forces
-    @timeit "forces" apply_forces!(storage, model, dt, forces; time = time)
+    @tic "forces" apply_forces!(storage, model, dt, forces; time = time)
     # Boundary conditions
-    @timeit "boundary conditions" apply_boundary_conditions!(storage, model)
+    @tic "boundary conditions" apply_boundary_conditions!(storage, model)
     # Apply forces to cross-terms
-    @timeit "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time)
+    @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time)
 end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
@@ -475,7 +475,7 @@ function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_
             model_t = models[target]
             eq = ct_equation(model_t, ctp.equation)
             ct_bare_type = Base.typename(typeof(ct)).name
-            @timeit "$ct_bare_type" update_cross_term!(ct_s, ct, eq, storage[target], storage[source], model_t, models[source], dt)
+            @tic "$ct_bare_type" update_cross_term!(ct_s, ct, eq, storage[target], storage[source], model_t, models[source], dt)
         end
     end
 end
@@ -544,9 +544,9 @@ end
 function update_linearized_system!(storage, model::MultiModel; equation_offset = 0, targets = submodel_symbols(model), sources = targets)
     @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
     # Update diagonal blocks (model with respect to itself)
-    @timeit "models" update_diagonal_blocks!(storage, model, targets)
+    @tic "models" update_diagonal_blocks!(storage, model, targets)
     # Then, update cross terms (models' impact on other models)
-    @timeit "cross-model" update_offdiagonal_blocks!(storage, model, targets, sources)
+    @tic "cross-model" update_offdiagonal_blocks!(storage, model, targets, sources)
 end
 
 function update_diagonal_blocks!(storage, model::MultiModel, targets)

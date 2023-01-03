@@ -448,8 +448,8 @@ function update_equation!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw
     # Zero out any sparse indices
     reset_sources!(eq_s)
     # Next, update accumulation, "intrinsic" sources and fluxes
-    @timeit "accumulation" update_accumulation!(eq_s, law, storage, model, dt)
-    @timeit "fluxes" update_half_face_flux!(eq_s, law, storage, model, dt)
+    @tic "accumulation" update_accumulation!(eq_s, law, storage, model, dt)
+    @tic "fluxes" update_half_face_flux!(eq_s, law, storage, model, dt)
 end
 
 function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt)
@@ -483,7 +483,7 @@ function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}
     M = global_map(model.domain)
     nc = length(conn_pos)-1
     tb = minbatch(model.context, nc)
-    @timeit "flux (cells)" @batch minbatch=tb for c in 1:nc
+    @tic "flux (cells)" @batch minbatch=tb for c in 1:nc
         self = full_cell(c, M)
         state_c = new_entity_index(state, self)
         update_half_face_flux_tpfa_internal!(hf_cells, eq, state_c, model, dt, flow_disc, conn_pos, conn_data, c)
@@ -503,7 +503,7 @@ function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq,
     nf = number_of_faces(model.domain)
     neighbors = get_neighborship(model.domain.grid)
     tb = minbatch(model.context, nf)
-    @timeit "flux (faces)" @batch minbatch = tb for f in 1:nf
+    @tic "flux (faces)" @batch minbatch = tb for f in 1:nf
         state_f = new_entity_index(state, f)
         @inbounds left = neighbors[1, f]
         @inbounds right = neighbors[2, f]

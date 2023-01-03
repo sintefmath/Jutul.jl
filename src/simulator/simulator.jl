@@ -31,15 +31,15 @@ function simulator_storage(model; state0 = nothing,
     end
     # We need to sort the secondary variables according to their dependency ordering before simulating.
     sort_secondary_variables!(model)
-    @timeit "state0" if isnothing(state0)
+    @tic "state0" if isnothing(state0)
         state0 = setup_state(model)
     elseif copy_state
         # Take a deep copy to avoid side effects.
         state0 = deepcopy(state0)
     end
-    @timeit "storage" storage = setup_storage(model, state0 = state0, parameters = parameters, state0_ad = state0_ad, state_ad = state_ad)
+    @tic "storage" storage = setup_storage(model, state0 = state0, parameters = parameters, state0_ad = state0_ad, state_ad = state_ad)
     # Initialize for first time usage
-    @timeit "init_storage" initialize_storage!(storage, model; kwarg...)
+    @tic "init_storage" initialize_storage!(storage, model; kwarg...)
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
     # This allows for much faster lookup in the simulation itself.
     return specialize_simulator_storage(storage, model, specialize)
@@ -168,7 +168,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
         subrep[:ministeps] = rep
         subrep[:total_time] = t_step
         if step_done
-            @timeit "output" store_output!(states, reports, step_no, sim, config, subrep)
+            @tic "output" store_output!(states, reports, step_no, sim, config, subrep)
         else
             subrep[:output_time] = 0.0
             push!(reports, subrep)
@@ -210,7 +210,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
         # Make sure that we hit the endpoint in case timestep selection is too optimistic.
         dt = min(dt, dT - t_local)
         # Attempt to solve current step
-        @timeit "solve" ok, s = solve_ministep(sim, dt, forces, max_its, config; kwarg...)
+        @tic "solve" ok, s = solve_ministep(sim, dt, forces, max_its, config; kwarg...)
         # We store the report even if it is a failure.
         push!(ministep_reports, s)
         if ok
@@ -271,7 +271,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
     report[:assembly_time] = t_asm
     # Update the linearized system
     report[:linear_system_time] = @elapsed begin
-        @timeit "linear system" update_linearized_system!(storage, model)
+        @tic "linear system" update_linearized_system!(storage, model)
     end
     t_conv = @elapsed begin
         if iteration == config[:max_nonlinear_iterations]
@@ -279,7 +279,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
         else
             tf = 1
         end
-        @timeit "convergence" converged, e, errors = check_convergence(storage, model, config, iteration = iteration, dt = dt, tol_factor = tf, extra_out = true)
+        @tic "convergence" converged, e, errors = check_convergence(storage, model, config, iteration = iteration, dt = dt, tol_factor = tf, extra_out = true)
         il = config[:info_level]
         if il > 1
             get_convergence_table(errors, il, iteration, config)
@@ -359,8 +359,8 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false, r
 end
 
 function initialize_before_first_timestep!(sim, first_dT; kwarg...)
-    @timeit "solve" begin
-        @timeit "secondary variables" update_secondary_variables!(sim.storage, sim.model)
+    @tic "solve" begin
+        @tic "secondary variables" update_secondary_variables!(sim.storage, sim.model)
     end
 end
 
