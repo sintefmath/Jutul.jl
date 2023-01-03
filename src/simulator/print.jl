@@ -1,8 +1,9 @@
 function set_global_timer!(enabled = true)
     if enabled
         if !isdefined(Jutul, :timeit_debug_enabled)
-            TimerOutputs.enable_debug_timings(Jutul)
+            @tic "tmp" sleep(0.001)
         end
+        TimerOutputs.enable_debug_timings(Jutul)
         enable_timer!()
         reset_timer!()
     else
