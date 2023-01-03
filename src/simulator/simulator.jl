@@ -304,14 +304,16 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
     return (e, converged, report)
 end
 
-function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false, relaxation = 1.0)
+function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare = true, relaxation = 1.0)
     done = false
     rec = cfg[:ProgressRecorder]
     report = OrderedDict()
     report[:dt] = dt
     step_reports = []
     cur_time = current_time(rec)
-    update_before_step!(sim, dt, forces, time = cur_time)
+    t_prepare = @elapsed if prepare
+        update_before_step!(sim, dt, forces, time = cur_time)
+    end
     for it = 1:(max_iter+1)
         next_iteration!(rec)
         do_solve = it <= max_iter
@@ -345,15 +347,15 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; skip_finalize = false, r
     end
     report[:steps] = step_reports
     report[:success] = done
-    t_finalize = 0.0
-    if !skip_finalize
+    t_finalize = @elapsed if finalize
         if done
-            t_finalize = @elapsed update_after_step!(sim, dt, forces; time = cur_time + dt)
+            update_after_step!(sim, dt, forces; time = cur_time + dt)
         else
             reset_state_to_previous_state!(sim)
         end
     end
     report[:finalize_time] = t_finalize
+    report[:prepare_time] = t_prepare
 
     return (done, report)
 end
