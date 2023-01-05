@@ -92,14 +92,15 @@ function update_secondary_variables!(storage, model, is_state0::Bool)
     else
         s = storage.state
     end
-    update_secondary_variables_state!(s, model)
+    vars = storage.variable_definitions.secondary_variables
+    update_secondary_variables_state!(s, model, vars)
 end
 
-function update_secondary_variables_state!(state, model)
+function update_secondary_variables_state!(state, model, vars = pairs(model.secondary_variables))
     ctx = model.context
     N = nthreads(ctx)
     if N == 1
-        for (symbol, var) in model.secondary_variables
+        for (symbol, var) in vars
             @tic "$symbol" begin
                 v = state[symbol]
                 ix = entity_eachindex(v)
@@ -108,7 +109,7 @@ function update_secondary_variables_state!(state, model)
         end
     else
         @batch for i in 1:N
-            for (symbol, var) in model.secondary_variables
+            for (symbol, var) in vars
                 v = state[symbol]
                 ix = entity_eachindex(v, i, N)
                 update_secondary_variable!(v, var, model, state, ix)

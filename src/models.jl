@@ -391,6 +391,14 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
 end
 
 function setup_storage_model(storage, model)
+    # Reference the variable definitions used for the model.
+    # These are immutable, unlike the model definitions.
+    vars = JutulStorage()
+    vars[:primary_variables] = NamedTuple(pairs(model.primary_variables))
+    vars[:secondary_variables] = NamedTuple(pairs(model.secondary_variables))
+    vars[:parameters] = NamedTuple(pairs(model.parameters))
+    storage[:variable_definitions] = vars
+    # Allow for dispatch specific to model's constitutive parts.
     setup_storage_domain!(storage, model, model.domain)
     setup_storage_system!(storage, model, model.system)
     setup_storage_formulation!(storage,  model, model.formulation)
