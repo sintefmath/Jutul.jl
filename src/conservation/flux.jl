@@ -243,55 +243,6 @@ function transfer(context::SingleCUDAContext, fd::TwoPointPotentialFlowHardCoded
     return TwoPointPotentialFlowHardCoded{typeof(conn_pos), typeof(conn_data)}(has_grav, conn_pos, conn_data)
 end
 
-
-"""
-Perform single-point upwinding based on signed potential.
-"""
-@inline function spu_upwind(c_self::I, c_other::I, θ::R, λ::AbstractArray{R}) where {R<:Real, I<:Integer}
-    if θ < 0
-        # Flux is leaving the cell
-        @inbounds λᶠ = λ[c_self]
-    else
-        # Flux is entering the cell
-        @inbounds λᶠ = value(λ[c_other])
-    end
-    return λᶠ
-end
-
-"""
-Perform single-point upwinding based on signed potential, then multiply the result with that potential
-"""
-@inline function spu_upwind_mult(c_self, c_other, θ, λ)
-    λᶠ = spu_upwind(c_self, c_other, θ, λ)
-    return θ*λᶠ
-end
-
-@inline function spu_upwind_index(c_self::I, c_other::I, index::I, θ::R, λ::AbstractArray{R}) where {R<:Real, I<:Integer}
-    if θ < 0
-        # Flux is leaving the cell
-        @inbounds λᶠ = λ[index, c_self]
-    else
-        # Flux is entering the cell
-        @inbounds λᶠ = value(λ[index, c_other])
-    end
-    return λᶠ
-end
-
-"""
-Perform single-point upwinding based on signed potential, then multiply the result with that potential
-"""
-@inline function spu_upwind_mult_index(c, index, θ, λ)
-    λᶠ = spu_upwind_index(c.self, c.other, index, θ, λ)
-    return θ*λᶠ
-end
-
-"""
-Two-point potential drop (with derivatives only respect to "c_self")
-"""
-@inline function two_point_potential_drop_half_face(c_self, c_other, p::AbstractVector, gΔz, ρ)
-    return two_point_potential_drop(p[c_self], value(p[c_other]), gΔz, ρ[c_self], value(ρ[c_other]))
-end
-
 """
 Two-point potential drop with gravity (generic)
 """
