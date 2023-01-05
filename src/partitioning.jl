@@ -36,7 +36,11 @@ function partition(mp::MetisPartitioner, A::AbstractSparseMatrix, m; kwarg...)
 end
 
 function partition(mp::MetisPartitioner, g, m; alg = mp.algorithm, kwarg...)
-    return Metis.partition(g, m; alg = alg, kwarg...)
+    if m == 1
+        return ones(Int, g.nvtxs)
+    else
+        return Metis.partition(g, m; alg = alg, kwarg...)
+    end
 end
 
 metis_strength(F) = F
