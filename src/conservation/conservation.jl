@@ -32,12 +32,12 @@ end
     return @inbounds (M[e] - M₀[e])/dt
 end
 
-struct ConservationLawTPFAStorage
-    accumulation::CompactAutoDiffCache
+struct ConservationLawTPFAStorage{A, HC, HF, S}
+    accumulation::A
     accumulation_symbol::Symbol
-    half_face_flux_cells::CompactAutoDiffCache
-    half_face_flux_faces::Union{CompactAutoDiffCache, Nothing}
-    sources::AbstractSparseMatrix
+    half_face_flux_cells::HC
+    half_face_flux_faces::HF
+    sources::S
 end
 
 function ConservationLawTPFAStorage(model, eq::ConservationLaw; kwarg...)
