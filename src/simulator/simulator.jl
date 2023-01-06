@@ -421,7 +421,7 @@ function deserialize_restart(pth, restart, states, reports, config)
     first_step = restart
     prev_step = restart - 1;
     state0, report0 = read_restart(pth, prev_step)
-    read_results(pth, read_reports = true, read_states = config[:output_states], states = states, reports = reports, range = 1:prev_step);
+    read_results(pth, read_reports = true, read_states = false, states = states, reports = reports, range = 1:prev_step);
     dt = report0[:ministeps][end][:dt]
     return (state0, dt, first_step)
 end

@@ -13,8 +13,8 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:linear_solver] = select_linear_solver(sim)
     # Path for output
     cfg[:output_path] = nothing
-    # Produce states for output (keeping them in memory)
-    cfg[:output_states] = nothing
+    # Produce states for output
+    cfg[:output_states] = true
     # Extra checks on values etc
     cfg[:safe_mode] = true
     # Define debug level. If debugging is on, this determines the amount of output.
@@ -51,10 +51,6 @@ function simulator_config!(cfg, sim; kwarg...)
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])
         cfg[:end_report] = cfg[:info_level] > -1
-    end
-    # Default: Do not store states in memory if output to file.
-    if isnothing(cfg[:output_states])
-        cfg[:output_states] = isnothing(cfg[:output_path])
     end
     # Ensure that the folder exists, if requested.
     pth = cfg[:output_path]

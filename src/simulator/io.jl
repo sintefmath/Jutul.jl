@@ -6,7 +6,7 @@ end
 
 function retrieve_output!(states, config, n)
     pth = config[:output_path]
-    if !config[:output_states] && !isnothing(pth)
+    if config[:output_states] && !isnothing(pth)
         @debug "Reading states from $pth..."
         @assert isempty(states)
         read_results(pth, read_reports = true, states = states, verbose = config[:info_level] >= 0, range = 1:n);
@@ -24,9 +24,6 @@ function store_output!(states, reports, step, sim, config, report)
     push!(reports, report)
     t_out = @elapsed if mem_out || file_out
         state = get_output_state(sim)
-        if mem_out
-            push!(states, state)
-        end
         if file_out
             step_path = joinpath(path, "jutul_$step.jld2")
             @debug "Writing to $step_path"
@@ -35,6 +32,8 @@ function store_output!(states, reports, step, sim, config, report)
                 file["report"] = report
                 file["step"] = step
             end
+        elseif mem_out
+            push!(states, state)
         end
     end
     report[:output_time] = t_out
