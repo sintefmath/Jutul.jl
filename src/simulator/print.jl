@@ -93,8 +93,13 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
     end
     # Detailed timing through @tic instrumentation (can be a lot)
     print_global_timer(config[:extra_timing])
-    if aborted && config[:error_on_incomplete]
-        error("Simulation did not complete successfully.")
+    if aborted
+        msg = "Simulation did not complete successfully."
+        if config[:error_on_incomplete]
+            error(msg)
+        elseif verbose
+            @error(msg)
+        end
     end
 end
 
