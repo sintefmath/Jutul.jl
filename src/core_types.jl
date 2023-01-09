@@ -412,7 +412,7 @@ import Base: getindex, @propagate_inbounds, parent, size, axes
 
 struct ConstantWrapper{R}
     data::Vector{R}
-    nrows::Integer
+    nrows::Int
     function ConstantWrapper(data, n)
         new{eltype(data)}(data, n)
     end
@@ -604,8 +604,8 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM} <: JutulAutoDiffCache wh
     variables::P          # Indirection-mapped variable list of same length as entries
     jacobian_positions::M
     diagonal_positions::D
-    number_of_entities_target::Integer
-    number_of_entities_source::Integer
+    number_of_entities_target::Int
+    number_of_entities_source::Int
     variable_map::VM
     function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulEntity, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true, global_map = TrivialGlobalMap()) where I
         @assert nt > 0

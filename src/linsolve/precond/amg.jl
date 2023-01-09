@@ -10,8 +10,8 @@ mutable struct AMGPreconditioner{T} <: JutulPreconditioner
     hierarchy
     smoothers
     smoother_type::Symbol
-    npre::Integer
-    npost::Integer
+    npre::Int
+    npost::Int
     function AMGPreconditioner(method::Symbol; smoother_type = :default, cycle = AlgebraicMultigrid.V(), npre = 1, npost = npre, kwarg...)
         @assert method == :smoothed_aggregation || method == :ruge_stuben || method == :aggregation
         new{method}(kwarg, cycle, nothing, nothing, nothing, nothing, smoother_type, npre, npost)

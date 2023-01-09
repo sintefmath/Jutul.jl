@@ -23,8 +23,8 @@ const StateType = Union{NamedTuple,AbstractDict,JutulStorage}
 as_value(x::StateType) = ValueStateAD(x)
 
 export local_ad
-@inline local_ad(v::AbstractArray, i::Integer) = LocalPerspectiveAD(v, i)
-@inline local_ad(v::ConstantWrapper, i::Integer) = v
+@inline local_ad(v::AbstractArray, i::Int) = LocalPerspectiveAD(v, i)
+@inline local_ad(v::ConstantWrapper, i::Int) = v
 @inline local_ad(v, ::Nothing) = as_value(v)
 @inline local_ad(v, i) = v
 
