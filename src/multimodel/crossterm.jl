@@ -233,17 +233,21 @@ function update_offdiagonal_blocks!(storage, model, targets, sources)
     linearized_system = storage.LinearizedSystem
     models = model.models
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
-        ct = ctp.cross_term
-        t = ctp.target
-        s = ctp.source
-        if t in targets && s in sources
-            lsys = get_linearized_system_model_pair(storage, model, s, t, linearized_system)
-            update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[s], ctp, ct_s, t)
-        end
-        if has_symmetry(ct) && t in sources && s in targets
-            lsys = get_linearized_system_model_pair(storage, model, t, s, linearized_system)
-            update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[t], ctp, ct_s, s)
-        end
+        update_offdiagonal_block_pair!(linearized_system, ctp, ct_s, storage, model, models, targets, sources)
+    end
+end
+
+function update_offdiagonal_block_pair!(linearized_system, ctp, ct_s, storage, model, models, targets, sources)
+    ct = ctp.cross_term
+    t = ctp.target
+    s = ctp.source
+    if t in targets && s in sources
+        lsys = get_linearized_system_model_pair(storage, model, s, t, linearized_system)
+        update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[s], ctp, ct_s, t)
+    end
+    if has_symmetry(ct) && t in sources && s in targets
+        lsys = get_linearized_system_model_pair(storage, model, t, s, linearized_system)
+        update_offdiagonal_linearized_system_cross_term!(lsys.jac_buffer, models[t], ctp, ct_s, s)
     end
 end
 
