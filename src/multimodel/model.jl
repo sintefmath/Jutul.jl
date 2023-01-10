@@ -468,8 +468,8 @@ end
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     models = model.models
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
-        target = ctp.target
-        source = ctp.source
+        target = ctp.target::Symbol
+        source = ctp.source::Symbol
         if target in targets && source in sources
             ct = ctp.cross_term
             model_t = models[target]
