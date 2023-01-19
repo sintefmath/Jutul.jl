@@ -533,7 +533,10 @@ function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}
         subpaths = splitpath(pth)
         name = subpaths[end]
     end
-    if length(indices) != maximum(indices)
+    if length(indices) == 0
+        @error "Attempted to read simulated data, but no data was found."
+        return (states, reports)
+    elseif length(indices) != maximum(indices)
         @warn "Gap in dataset. Some outputs might end up empty."
     end
     if isnothing(range)
