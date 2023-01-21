@@ -19,7 +19,7 @@ end
                                                             grad_type = :adjoint,
                                                             config = nothing,
                                                             print = 1,
-                                                            copy_parameters = true,
+                                                            copy_case = true,
                                                             param_obj = false,
                                                             kwarg...)
 
@@ -32,99 +32,23 @@ dF_o(dFdx, x) -> evaluate gradient of objective, mutating dFdx (may trigger eval
 F_and_dF(F, dFdx, x) -> evaluate F and/or dF. Value of nothing will mean that the corresponding entry is skipped.
 
 """
-function setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model, param);
-                                                            grad_type = :adjoint,
-                                                            config = nothing,
-                                                            print = 1,
-                                                            copy_parameters = true,
-                                                            param_obj = false,
-                                                            kwarg...)
-    # Pick active set of targets from the optimization config and construct a mapper
-    if print isa Bool
-        if print
-            print = 1
-        else
-            print = Inf
-        end
-    end
-    verbose = print > 0 && isfinite(print)
-    if copy_parameters
-        param = deepcopy(param)
-    end
-    targets = optimization_targets(opt_cfg, model)
-    if grad_type == :numeric
-        @assert length(targets) == 1
-        @assert model isa SimulationModel
-    else
-        @assert grad_type == :adjoint
-    end
-    mapper, = variable_mapper(model, :parameters, targets = targets, config = opt_cfg)
-    lims = optimization_limits(opt_cfg, mapper, param, model)
-    if verbose
-        print_parameter_optimization_config(targets, opt_cfg, model)
-    end
-    x0 = vectorize_variables(model, param, mapper, config = opt_cfg)
-    for k in eachindex(x0)
-        low = lims[1][k]
-        high = lims[2][k]
-        @assert low <= x0[k] "Computed lower limit $low for parameter #$k was larger than provided x0[k]=$(x0[k])"
-        @assert high >= x0[k] "Computer upper limit $hi for parameter #$k was smaller than provided x0[k]=$(x0[k])"
-    end
-    data = Dict()
-    data[:n_objective] = 1
-    data[:n_gradient] = 1
-    data[:obj_hist] = zeros(0)
-
-    sim = Simulator(model, state0 = state0, parameters = param)
-    if isnothing(config)
-        config = simulator_config(sim; info_level = -1, kwarg...)
-    elseif !verbose
-        config[:info_level] = -1
-        config[:final_simulation_message] = false
-    end
-    data[:sim] = sim
-    data[:sim_config] = config
-
-    # grad_adj = similar(x0)
-    # error()
-    if grad_type == :adjoint
-        adj_storage = setup_adjoint_storage(model, state0 = state0,
-                                                   parameters = param,
-                                                   targets = targets,
-                                                   param_obj = param_obj)
-        data[:adjoint_storage] = adj_storage
-        grad_adj = zeros(adj_storage.n)
-    else
-        grad_adj = similar(x0)
-    end
-    data[:case] = JutulCase(model, dt, forces, state0 = state0, parameters = param)
-    data[:grad_adj] = grad_adj
-    data[:mapper] = mapper
-    # data[:dt] = dt
-    # data[:forces] = forces
-    # data[:parameters] = param
-    # data[:state0] = state0
-
-    data[:G] = G
-    data[:targets] = targets
-    data[:mapper] = mapper
-    data[:config] = opt_cfg
-    data[:last_obj] = Inf
-    data[:x_hash] = hash(Inf)
-    F = x -> objective_opt!(x, data, print)
-    dF = (dFdx, x) -> gradient_opt!(dFdx, x, data)
-    F_and_dF = (F, dFdx, x) -> objective_and_gradient_opt!(F, dFdx, x, data, print)
-    return (F! = F, dF! = dF, F_and_dF! = F_and_dF, x0 = x0, limits = lims, data = data)
+function setup_parameter_optimization(model, state0, param, dt, forces, G, arg...; kwarg...)
+    case = JutulCase(model, dt, forces, state0 = state0, parameters = param)
+    return setup_parameter_optimization(case, G, arg...; kwarg...)
 end
 
-function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization_config(model, parameters);
+function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization_config(model, case.parameters);
                                                             grad_type = :adjoint,
                                                             config = nothing,
                                                             print = 1,
-                                                            copy_parameters = true,
+                                                            copy_case = true,
                                                             param_obj = false,
                                                             kwarg...)
+    if copy_case
+        case = duplicate(case)
+    end
     # Pick active set of targets from the optimization config and construct a mapper
+    (; model, state0, parameters) = case
     if print isa Bool
         if print
             print = 1
@@ -133,9 +57,6 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         end
     end
     verbose = print > 0 && isfinite(print)
-    if copy_parameters
-        param = deepcopy(parameters)
-    end
     targets = optimization_targets(opt_cfg, model)
     if grad_type == :numeric
         @assert length(targets) == 1
@@ -144,11 +65,11 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         @assert grad_type == :adjoint
     end
     mapper, = variable_mapper(model, :parameters, targets = targets, config = opt_cfg)
-    lims = optimization_limits(opt_cfg, mapper, param, model)
+    lims = optimization_limits(opt_cfg, mapper, parameters, model)
     if verbose
         print_parameter_optimization_config(targets, opt_cfg, model)
     end
-    x0 = vectorize_variables(model, param, mapper, config = opt_cfg)
+    x0 = vectorize_variables(model, parameters, mapper, config = opt_cfg)
     for k in eachindex(x0)
         low = lims[1][k]
         high = lims[2][k]
@@ -160,7 +81,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     data[:n_gradient] = 1
     data[:obj_hist] = zeros(0)
 
-    sim = Simulator(model, state0 = state0, parameters = param)
+    sim = Simulator(case)
     if isnothing(config)
         config = simulator_config(sim; info_level = -1, kwarg...)
     elseif !verbose
@@ -170,8 +91,6 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     data[:sim] = sim
     data[:sim_config] = config
 
-    # grad_adj = similar(x0)
-    # error()
     if grad_type == :adjoint
         adj_storage = setup_adjoint_storage(model, state0 = state0,
                                                    parameters = parameters,
@@ -182,14 +101,9 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     else
         grad_adj = similar(x0)
     end
-    data[:case] = case# JutulCase(model, dt, forces, state0 = state0, parameters = param)
+    data[:case] = case
     data[:grad_adj] = grad_adj
     data[:mapper] = mapper
-    # data[:dt] = dt
-    # data[:forces] = forces
-    # data[:parameters] = param
-    # data[:state0] = state0
-
     data[:G] = G
     data[:targets] = targets
     data[:mapper] = mapper
@@ -205,10 +119,6 @@ end
 
 function gradient_opt!(dFdx, x, data)
     (; state0, parameters, forces, dt) = data[:case]
-    # state0 = data[:state0]
-    # parameters = data[:parameters]
-    # forces = data[:forces]
-    # dt = data[:dt]
     G = data[:G]
     targets = data[:targets]
     mapper = data[:mapper]

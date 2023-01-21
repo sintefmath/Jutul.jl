@@ -750,6 +750,16 @@ function Base.show(io::IO, t::MIME"text/plain", case::JutulCase)
     println(io, "Jutul case with $nstep time-steps ($(get_tstr(sum(case.dt)))) and $ctrl_type.\n\nModel:\n")
     Base.show(io, t, case.model)
 end
+
+function duplicate(case::JutulCase; copy_model = false)
+    # Make copies of everything but the model
+    (; model, dt, forces, state0, parameters) = case
+    if copy_model
+        model = deepcopy(model)
+    end
+    return JutulCase(model, deepcopy(dt), deepcopy(forces), deepcopy(state0), deepcopy(parameters))
+end
+
 export NoRelaxation, SimpleRelaxation
 
 abstract type NonLinearRelaxation end
