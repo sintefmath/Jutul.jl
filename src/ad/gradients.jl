@@ -374,14 +374,16 @@ end
 
 parameter_targets(model::SimulationModel) = keys(get_parameters(model))
 
-function adjoint_parameter_model(model, arg...)
-    pmodel = adjoint_model_copy(model)
+function adjoint_parameter_model(model, arg...; context = DefaultContext())
+    # By default the adjoint model uses the default context since no linear solver
+    # is needed.
+    pmodel = adjoint_model_copy(model; context = context)
     # Swap parameters and primary variables
     swap_primary_with_parameters!(pmodel, model, arg...)
     return pmodel
 end
 
-function adjoint_model_copy(model::SimulationModel{O, S, C, F}) where {O, S, C, F}
+function adjoint_model_copy(model::SimulationModel{O, S, C, F}; context = model.context) where {O, S, C, F}
     pvar = copy(model.primary_variables)
     svar = copy(model.secondary_variables)
     outputs = vcat(keys(pvar)..., keys(svar)...)
@@ -389,7 +391,7 @@ function adjoint_model_copy(model::SimulationModel{O, S, C, F}) where {O, S, C, 
     extra = deepcopy(model.extra)
     eqs = model.equations
     # Transpose the system
-    new_context = adjoint(model.context)
+    new_context = adjoint(context)
     return SimulationModel{O, S, C, F}(model.domain, model.system, new_context, model.formulation, model.plot_mesh, pvar, svar, prm, eqs, outputs, extra)
 end
 

@@ -6,15 +6,20 @@ function swap_primary_with_parameters!(pmodel::MultiModel, model::MultiModel, ta
     return pmodel
 end
 
-function adjoint_model_copy(model::MultiModel)
-    new_models = map(adjoint_model_copy, model.models)
+function adjoint_model_copy(model::MultiModel; context = nothing)
+    if isnothing(context)
+        F = m -> adjoint_model_copy(m)
+    else
+        F = m -> adjoint_model_copy(m, context = context)
+    end
+    new_models = map(F, model.models)
     g = model.groups
     r = model.reduction
     ctp = copy(model.cross_terms)
-    if isnothing(model.context)
+    if isnothing(context)
         new_context = adjoint(DefaultContext())
     else
-        new_context = adjoint(model.context)
+        new_context = adjoint(context)
     end
     return MultiModel(new_models, context = new_context, groups = g, cross_terms = ctp, reduction = r)
 end
