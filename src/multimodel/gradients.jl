@@ -9,12 +9,14 @@ end
 function adjoint_model_copy(model::MultiModel; context = nothing)
     if isnothing(context)
         F = m -> adjoint_model_copy(m)
+        g = model.groups
+        r = model.reduction    
     else
         F = m -> adjoint_model_copy(m, context = context)
+        g = nothing
+        r = nothing
     end
     new_models = map(F, model.models)
-    g = model.groups
-    r = model.reduction
     ctp = copy(model.cross_terms)
     if isnothing(context)
         new_context = adjoint(DefaultContext())
