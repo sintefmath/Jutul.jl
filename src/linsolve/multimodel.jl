@@ -94,19 +94,19 @@ function get_schur_apply(schur_buffers, Tv, B, C, D, E)
     return (res, x, α, β) -> schur_mul!(res, schur_buffers, Tv, B, C, D, E, x, α, β)
 end
 
-function update_dx_from_vector!(sys::MultiLinearizedSystem, dx)
+function update_dx_from_vector!(sys::MultiLinearizedSystem, dx_from_solver; dx = sys.dx)
     if do_schur(sys)
-        Δx = dx
+        Δx = dx_from_solver
         _, C, D, E, a, b = get_schur_blocks!(sys)
-        n = length(dx)
-        m = length(sys.dx)
+        n = length(dx_from_solver)
+        m = length(dx)
 
-        A = view(sys.dx, 1:n)
-        B = view(sys.dx, (n+1):m)
+        A = view(dx, 1:n)
+        B = view(dx, (n+1):m)
 
-        schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, sys.schur_buffer)
+        schur_dx_update!(A, B, C, D, E, a, b, sys, dx_from_solver, Δx, sys.schur_buffer)
     else
-        @tullio sys.dx[i] = -dx[i]
+        @tullio dx[i] = -dx_from_solver[i]
     end
 end
 

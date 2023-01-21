@@ -19,8 +19,8 @@ function vector_residual(sys::LinearizedSystem{BlockMajorLayout})
     return reshape(sys.r_buffer, n)
 end
 
-function update_dx_from_vector!(sys::LinearizedSystem{BlockMajorLayout}, dx)
-    sys.dx_buffer .= -reshape(dx, size(sys.dx_buffer))
+function update_dx_from_vector!(sys::LinearizedSystem{BlockMajorLayout}, dx_from_solver; dx = sys.dx_buffer)
+    dx .= -reshape(dx_from_solver, size(dx))
 end
 
 function block_size(lsys::LinearizedSystem{S}) where {S <: BlockMajorLayout}

@@ -55,6 +55,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
                                       n_objective = nothing,
                                       targets = parameter_targets(model),
                                       use_sparsity = true,
+                                      linear_solver = select_linear_solver(model),
                                       param_obj = false, kwarg...)
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
@@ -69,7 +70,6 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
     state0_p = swap_variables(state0, parameters, parameter_model, variables = true)
     parameters_p = swap_variables(state0, parameters, parameter_model, variables = false)
     parameter_sim = Simulator(parameter_model, state0 = deepcopy(state0_p), parameters = deepcopy(parameters_p), mode = :sensitivities, extra_timing = nothing)
-
     if use_sparsity
         # We will update these later on
         sparsity_obj = Dict{Any, Any}(:parameter => nothing, 
@@ -106,6 +106,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
             param_buf = param_buf,
             dx = dx,
             rhs = rhs,
+            linear_solver = linear_solver,
             n = number_of_degrees_of_freedom(parameter_model)
             )
 end
@@ -310,7 +311,8 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         sens_add_mult!(rhs, op, λ)
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
-    @tic "linear solve" solve!(lsys, dx = dx, r = rhs)
+    lsolve = adjoint_storage.linear_solver
+    @tic "linear solve" solve!(lsys, lsolve, forward_sim.model, forward_sim.storage, dx = dx, r = rhs)
     @. λ = dx
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient

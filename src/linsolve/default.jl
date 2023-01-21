@@ -263,24 +263,24 @@ function vector_residual(sys)
     return sys.r
 end
 
-function update_dx_from_vector!(sys, dx)
-    sys.dx .= -dx
+function update_dx_from_vector!(sys, dx_from_solver; dx = sys.dx)
+    dx .= -dx_from_solver
 end
 
 block_size(lsys::LSystem) = 1
 
 linear_solve_return(ok = true, iterations = 1, stats = nothing) = (ok = ok, iterations = iterations, stats = stats)
 
-solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing) = solve!(sys, linsolve)
-solve!(sys::LSystem, linsolve::Nothing) = solve!(sys)
+solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing; kwarg...) = solve!(sys, linsolve; kwarg...)
+solve!(sys::LSystem, linsolve::Nothing; kwarg...) = solve!(sys; kwarg...)
 
-function solve!(sys; dx = sys.dx, r = sys.r, J = sys.jac)
+function solve!(sys; dx = sys.dx, r = sys.r)
     limit = 50000
     n = length(sys.dx)
     if n > limit
         error("System too big for default direct solver. (Limit is $limit, system was $n by $n.")
     end
-    dx .= -(J\r)
+    dx .= -(sys.jac\r)
     @assert all(isfinite, dx) "Linear solve resulted in non-finite values."
     return linear_solve_return()
 end

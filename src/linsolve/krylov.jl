@@ -64,13 +64,13 @@ function update_preconditioner!(prec, sys, model, storage, recorder)
     update!(prec, sys, model, storage, recorder)
 end
 
-function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, dt = nothing, recorder = nothing)
+function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, dt = nothing, recorder = ProgressRecorder(); 
+                                                                            dx = sys.dx_buffer, r = vector_residual(sys))
     solver = krylov.solver
     cfg = krylov.config
     prec = krylov.preconditioner
     Ft = float_type(model.context)
     @tic "prepare" prepare_solve!(sys)
-    r = vector_residual(sys)
     op = linear_operator(sys)
     @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder)
     L = preconditioner(krylov, sys, model, storage, recorder, :left, Ft)
@@ -148,7 +148,7 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end
 
-    @tic "update dx" update_dx_from_vector!(sys, x)
+    @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
     return linear_solve_return(solved, n, stats)
 end
 
