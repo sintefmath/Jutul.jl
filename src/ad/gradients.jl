@@ -80,7 +80,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
     n_pvar = number_of_degrees_of_freedom(model)
     λ = gradient_vec_or_mat(n_pvar, n_objective)
     fsim_s = forward_sim.storage
-    rhs = fsim_s.LinearizedSystem.r_buffer
+    rhs = vector_residual(fsim_s.LinearizedSystem)
     dx = fsim_s.LinearizedSystem.dx_buffer
     if param_obj
         n_param = number_of_degrees_of_freedom(parameter_model)
@@ -92,9 +92,8 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
     end
     if !isnothing(n_objective)
         # Need bigger buffers for multiple rhs
-        n = length(rhs)
-        rhs = gradient_vec_or_mat(n, n_objective)
-        dx = gradient_vec_or_mat(n, n_objective)
+        rhs = gradient_vec_or_mat(length(rhs), n_objective)
+        dx = gradient_vec_or_mat(length(dx), n_objective)
     end
     return (forward = forward_sim,
             backward = backward_sim,
