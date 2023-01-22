@@ -308,7 +308,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         forces_next = forces_for_timestep(backward_sim, all_forces, timesteps, i+1)
         @tic "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next, t + dt_next)
         lsys_next = backward_sim.storage.LinearizedSystem
-        op = linear_operator(lsys_next)
+        op = linear_operator(lsys_next, skip_red = true)
         # In-place version of
         # rhs += op*λ
         # - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
