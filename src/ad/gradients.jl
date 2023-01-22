@@ -325,10 +325,9 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     if adjoint_storage.rhs_transfer_needed
         @warn "Not finished"
     end
-    @info i
     lsys = forward_sim.storage.LinearizedSystem
     @tic "linear solve" solve!(lsys, lsolve, forward_sim.model, forward_sim.storage; lsolve_arg...)
-    @. λ = dx
+    adjoint_transfer_to_canonical_order!(λ, dx, forward_sim.model)
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
     @tic "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, t)
@@ -612,6 +611,42 @@ function internal_swapper!(out, A, B, keep, skip)
     for (k, v) in B
         if k in keep
             out[k] = v
+        end
+    end
+end
+
+function adjoint_transfer_to_canonical_order!(λ, dx, model::MultiModel)
+    offset = 0
+    for (k, m) in pairs(model.models)
+        ndof = number_of_degrees_of_freedom(m)
+        ix = (offset+1):(offset+ndof)
+        λ_i = view(λ, ix)
+        dx_i = view(dx, ix)
+        adjoint_transfer_to_canonical_order_inner!(λ_i, dx_i, m, matrix_layout(m.context))
+        offset += ndof
+    end
+end
+
+function adjoint_transfer_to_canonical_order!(λ, dx, model)
+    adjoint_transfer_to_canonical_order_inner!(λ, dx, model, matrix_layout(model.context))
+end
+
+function adjoint_transfer_to_canonical_order_inner!(λ, dx, model, ::EquationMajorLayout)
+    @. λ = dx
+end
+
+function adjoint_transfer_to_canonical_order_inner!(λ, dx, model, ::BlockMajorLayout)
+    bz = 0
+    for e in get_primary_variable_ordered_entities(model)
+        if bz > 0
+            error("Assumed that block major has a single entity group")
+        end
+        bz = degrees_of_freedom_per_entity(model, e)
+    end
+    n = length(dx) ÷ bz
+    for b in 1:bz
+        for i in 1:n
+            λ[(b-1)*n + i] = dx[(i-1)*bz + b]
         end
     end
 end
