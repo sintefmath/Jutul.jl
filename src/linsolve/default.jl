@@ -77,33 +77,39 @@ struct MultiLinearizedSystem{L} <: JutulLinearSystem
     factor
     matrix_layout::L
     schur_buffer
-    function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = nothing, reduction = nothing)
-        n = 0
-        schur_buffer = []
-        for i = 1:size(subsystems, 1)
-            J = subsystems[i, i].jac
-            ni, mi = size(J)
-            @assert ni == mi
-            e = eltype(J)
-            if e <: Real
-                bz = 1
-            else
-                bz = size(e, 1)
-            end
-            if i == 1
-                push!(schur_buffer, zeros(ni*bz))
-            else
-                # Need two buffers of same size for Schur complement
-                b = (zeros(ni*bz), zeros(ni*bz))
-                push!(schur_buffer, b)
-            end
-            n += ni
+end
+
+function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = nothing, reduction = nothing)
+    n = 0
+    schur_buffer = []
+    #if represented_as_adjoint(layout)
+    #    urng = 1:size(subsystems, 2)
+    #else
+        urng = 1:size(subsystems, 1)
+    #end
+    for i in urng
+        J = subsystems[i, i].jac
+        ni, mi = size(J)
+        @assert ni == mi
+        e = eltype(J)
+        if e <: Real
+            bz = 1
+        else
+            bz = size(e, 1)
         end
-        schur_buffer = Tuple(schur_buffer)
-        dx, dx_buf = get_jacobian_vector(n, context, layout, dx)
-        r, r_buf = get_jacobian_vector(n, context, layout, r)
-        new{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, FactorStore(), layout, schur_buffer)
+        if i == 1
+            push!(schur_buffer, zeros(ni*bz))
+        else
+            # Need two buffers of same size for Schur complement
+            b = (zeros(ni*bz), zeros(ni*bz))
+            push!(schur_buffer, b)
+        end
+        n += ni
     end
+    schur_buffer = Tuple(schur_buffer)
+    dx, dx_buf = get_jacobian_vector(n, context, layout, dx)
+    r, r_buf = get_jacobian_vector(n, context, layout, r)
+    MultiLinearizedSystem{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, FactorStore(), layout, schur_buffer)
 end
 
 LSystem = Union{LinearizedType, MultiLinearizedSystem}

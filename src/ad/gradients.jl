@@ -82,6 +82,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
     fsim_s = forward_sim.storage
     rhs = vector_residual(fsim_s.LinearizedSystem)
     dx = fsim_s.LinearizedSystem.dx_buffer
+    n_var = length(dx)
     if param_obj
         n_param = number_of_degrees_of_freedom(parameter_model)
         dobj_dparam = gradient_vec_or_mat(n_param, n_objective)
@@ -90,10 +91,14 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
         dobj_dparam = nothing
         param_buf = nothing
     end
-    if !isnothing(n_objective)
+    rhs_transfer_needed = length(rhs) != n_var
+    multiple_rhs = !isnothing(n_objective)
+    if multiple_rhs
         # Need bigger buffers for multiple rhs
-        rhs = gradient_vec_or_mat(length(rhs), n_objective)
-        dx = gradient_vec_or_mat(length(dx), n_objective)
+        rhs = gradient_vec_or_mat(n_var, n_objective)
+        dx = gradient_vec_or_mat(n_var, n_objective)
+    elseif rhs_transfer_needed
+        rhs = zeros(n_var)
     end
     return (forward = forward_sim,
             backward = backward_sim,
@@ -106,6 +111,8 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
             dx = dx,
             rhs = rhs,
             linear_solver = linear_solver,
+            multiple_rhs = multiple_rhs,
+            rhs_transfer_needed = rhs_transfer_needed,
             n = number_of_degrees_of_freedom(parameter_model)
             )
 end
@@ -289,9 +296,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     @tic "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces, t)
     # Note the sign: There is an implicit negative sign in the linear solver when solving for the Newton increment. Therefore, the terms of the
     # right hand side are added with a positive sign instead of negative.
-    lsys = forward_sim.storage.LinearizedSystem
     rhs = adjoint_storage.rhs
-    dx = adjoint_storage.dx
     # Fill rhs with (∂J / ∂x)ᵀₙ (which will be treated with a negative sign when the result is written by the linear solver)
     S_p = get_objective_sparsity(adjoint_storage, :forward)
     @tic "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, i, forces), sparsity = S_p)
@@ -311,7 +316,18 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
     lsolve = adjoint_storage.linear_solver
-    @tic "linear solve" solve!(lsys, lsolve, forward_sim.model, forward_sim.storage, dx = dx, r = rhs)
+    dx = adjoint_storage.dx
+    if adjoint_storage.multiple_rhs
+        lsolve_arg = (dx = dx, r = rhs)
+    else
+        lsolve_arg = NamedTuple()
+    end
+    if adjoint_storage.rhs_transfer_needed
+        @warn "Not finished"
+    end
+    @info i
+    lsys = forward_sim.storage.LinearizedSystem
+    @tic "linear solve" solve!(lsys, lsolve, forward_sim.model, forward_sim.storage; lsolve_arg...)
     @. λ = dx
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient

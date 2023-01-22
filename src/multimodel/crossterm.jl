@@ -293,6 +293,9 @@ function crossterm_subsystem(model, lsys, target, source; diag = false)
         else
             J = source_g
         end
+        if !isnothing(model.context) && represented_as_adjoint(matrix_layout(model.context))
+            J, I = I, J
+        end
         lsys = lsys[I, J]
     else
         source_keys = target_keys = model_keys

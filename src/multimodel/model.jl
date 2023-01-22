@@ -395,10 +395,9 @@ function setup_linearized_system!(storage, model::MultiModel)
             base_pos += local_size
         end
         # Off diagonal groups (cross-group connections)
-        base_pos = 0
+        is_trans = has_context && represented_as_adjoint(matrix_layout(context))
         for rowg in 1:ng
             local_models = groups .== rowg
-            local_size = sum(ndof[local_models])
             t = candidates[local_models]
             row_context = models[first(t)].context
             row_layout = matrix_layout(row_context)
@@ -420,9 +419,13 @@ function setup_linearized_system!(storage, model::MultiModel)
                     sparse_pattern = sparse_pattern'
                 end
                 bz_pair = (block_sizes[rowg], block_sizes[colg])
-                subsystems[rowg, colg] = LinearizedBlock(sparse_pattern, bz_pair, row_layout, col_layout)
+                this_block = LinearizedBlock(sparse_pattern, bz_pair, row_layout, col_layout)
+                if is_trans
+                    subsystems[colg, rowg] = this_block
+                else
+                    subsystems[rowg, colg] = this_block
+                end
             end
-            base_pos += local_size
         end
         lsys = MultiLinearizedSystem(subsystems, context, matrix_layout(context), r = r, dx = dx, reduction = model.reduction)
     else
