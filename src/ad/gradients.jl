@@ -106,6 +106,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
             parameter_map = parameter_map,
             objective_sparsity = sparsity_obj,
             lagrange = λ,
+            lagrange_buffer = similar(λ),
             dparam = dobj_dparam,
             param_buf = param_buf,
             dx = dx,
@@ -286,6 +287,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     backward_sim = adjoint_storage.backward
     forward_sim = adjoint_storage.forward
     λ = adjoint_storage.lagrange
+    λ_b = adjoint_storage.lagrange_buffer
     dparam = adjoint_storage.dparam
     # Timestep logic
     N = length(timesteps)
@@ -312,22 +314,28 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         # In-place version of
         # rhs += op*λ
         # - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
-        sens_add_mult!(rhs, op, λ)
+        adjoint_transfer_canonical_order!(λ_b, λ, forward_sim.model, to_canonical = false)
+        sens_add_mult!(rhs, op, λ_b)
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
     lsolve = adjoint_storage.linear_solver
+    if !isnothing(lsolve) && hasproperty(lsolve, :config)
+        lsolve.config.relative_tolerance = 1e-12
+        lsolve.config.absolute_tolerance = 1e-12
+        lsolve.preconditioner = ILUZeroPreconditioner()
+    end
     dx = adjoint_storage.dx
     if adjoint_storage.multiple_rhs
         lsolve_arg = (dx = dx, r = rhs)
     else
         lsolve_arg = NamedTuple()
     end
-    if adjoint_storage.rhs_transfer_needed
-        @warn "Not finished"
-    end
     lsys = forward_sim.storage.LinearizedSystem
-    @tic "linear solve" solve!(lsys, lsolve, forward_sim.model, forward_sim.storage; lsolve_arg...)
-    adjoint_transfer_to_canonical_order!(λ, dx, forward_sim.model)
+    if adjoint_storage.rhs_transfer_needed
+        lsys.r_buffer .= rhs
+    end
+    @tic "linear solve" lstats = solve!(lsys, lsolve, forward_sim.model, forward_sim.storage; lsolve_arg...)
+    adjoint_transfer_canonical_order!(λ, dx, forward_sim.model, to_canonical = true)
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
     @tic "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, t)
@@ -615,27 +623,27 @@ function internal_swapper!(out, A, B, keep, skip)
     end
 end
 
-function adjoint_transfer_to_canonical_order!(λ, dx, model::MultiModel)
+function adjoint_transfer_canonical_order!(λ, dx, model::MultiModel; to_canonical = true)
     offset = 0
     for (k, m) in pairs(model.models)
         ndof = number_of_degrees_of_freedom(m)
         ix = (offset+1):(offset+ndof)
         λ_i = view(λ, ix)
         dx_i = view(dx, ix)
-        adjoint_transfer_to_canonical_order_inner!(λ_i, dx_i, m, matrix_layout(m.context))
+        adjoint_transfer_canonical_order_inner!(λ_i, dx_i, m, matrix_layout(m.context), to_canonical)
         offset += ndof
     end
 end
 
-function adjoint_transfer_to_canonical_order!(λ, dx, model)
-    adjoint_transfer_to_canonical_order_inner!(λ, dx, model, matrix_layout(model.context))
+function adjoint_transfer_canonical_order!(λ, dx, model; to_canonical = true)
+    adjoint_transfer_canonical_order_inner!(λ, dx, model, matrix_layout(model.context), to_canonical)
 end
 
-function adjoint_transfer_to_canonical_order_inner!(λ, dx, model, ::EquationMajorLayout)
+function adjoint_transfer_canonical_order_inner!(λ, dx, model, ::EquationMajorLayout, to_canonical)
     @. λ = dx
 end
 
-function adjoint_transfer_to_canonical_order_inner!(λ, dx, model, ::BlockMajorLayout)
+function adjoint_transfer_canonical_order_inner!(λ, dx, model, ::BlockMajorLayout, to_canonical)
     bz = 0
     for e in get_primary_variable_ordered_entities(model)
         if bz > 0
@@ -644,9 +652,17 @@ function adjoint_transfer_to_canonical_order_inner!(λ, dx, model, ::BlockMajorL
         bz = degrees_of_freedom_per_entity(model, e)
     end
     n = length(dx) ÷ bz
-    for b in 1:bz
-        for i in 1:n
-            λ[(b-1)*n + i] = dx[(i-1)*bz + b]
+    if to_canonical
+        for b in 1:bz
+            for i in 1:n
+                λ[(b-1)*n + i] = dx[(i-1)*bz + b]
+            end
+        end
+    else
+        for b in 1:bz
+            for i in 1:n
+                λ[(i-1)*bz + b] = dx[(b-1)*n + i]
+            end
         end
     end
 end

@@ -35,6 +35,9 @@ function get_linearized_system_model_pair(storage, model, source, target, lsys =
     if has_groups(model)
         i = group_index(model, target)
         j = group_index(model, source)
+        if !isnothing(model.context) && represented_as_adjoint(matrix_layout(model.context))
+            j, i = i, j
+        end
         lsys = lsys[i, j]
     end
     return lsys
