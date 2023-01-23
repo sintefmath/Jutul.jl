@@ -97,21 +97,21 @@ end
 function update_dx_from_vector!(sys::MultiLinearizedSystem, dx_from_solver; dx = sys.dx)
     if do_schur(sys)
         Δx = dx_from_solver
-        _, C, D, E, a, b = get_schur_blocks!(sys)
+        _, C, D, E, _, b = get_schur_blocks!(sys)
         n = length(dx_from_solver)
         m = length(dx)
 
-        A = view(dx, 1:n)
-        B = view(dx, (n+1):m)
+        x = view(dx, 1:n)
+        y = view(dx, (n+1):m)
 
-        schur_dx_update!(A, B, C, D, E, a, b, sys, dx_from_solver, Δx, sys.schur_buffer)
+        schur_dx_update!(x, y, C, D, E, b, sys, dx_from_solver, Δx, sys.schur_buffer)
     else
         @tullio dx[i] = -dx_from_solver[i]
     end
 end
 
-function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buffers)
-    @tullio A[i] = -dx[i]
+function schur_dx_update!(x, y, C, D, E, b, sys, dx, Δx, buffers)
+    @tullio x[i] = -dx[i]
     # We want to do (in-place):
     # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
     offsets = cumsum(length(x) for x in b)
@@ -130,8 +130,8 @@ function schur_dx_update!(A, B, C, D, E, a, b, sys, dx, Δx, buffers)
         @batch minbatch=1000 for j in 1:n
             @inbounds buf_b[j] -= b_i[j]
         end
-        B_i = view(B, (offset+1):(offset+n))
-        ldiv!(B_i, E[i], buf_b)
+        y_i = view(y, (offset+1):(offset+n))
+        ldiv!(y_i, E[i], buf_b)
     end
 end
 
