@@ -66,7 +66,7 @@ function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::Eq
     return n_outer*(index_inner-1) + index_outer
 end
 
-function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::EntityMajorLayout)
+function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::Union{EntityMajorLayout, BlockMajorLayout})
     return n_inner*(index_outer-1) + index_inner
 end
 
