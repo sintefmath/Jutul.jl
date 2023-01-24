@@ -378,7 +378,7 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     states = Vector{Dict{Symbol, Any}}()
     pth = config[:output_path]
     initialize_io(pth)
-    has_restart = !(isnothing(restart) || restart == 0 || restart == false)
+    has_restart = !(isnothing(restart) || restart === 0 || restart === 1 || restart == false)
     if has_restart
         state0, dt, first_step = deserialize_restart(pth, restart, states, reports, config)
         msg = "Restarting from step $first_step."
