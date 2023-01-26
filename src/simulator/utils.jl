@@ -1,5 +1,9 @@
 function get_tstr(dT)
-    Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
+    if dT == 0
+        return "start"
+    else
+        return Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
+    end
 end
 
 function Base.show(io::IO, t::MIME"text/plain", sim::T) where T<:JutulSimulator
