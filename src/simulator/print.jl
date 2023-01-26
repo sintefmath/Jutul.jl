@@ -39,23 +39,31 @@ end
 
 function new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot, start_date)
     r = rec.recorder
+    t_format = raw"u. dd Y"
     if info_level == 0
         frac = (r.time + dT)/t_tot
         perc = @sprintf("%2.2f", 100*frac)
-        msg = "Solving step $step_no/$no_steps ($perc% of time interval complete)"
+        if isnothing(start_date)
+            e = ""
+        else
+            e = ", at $(Dates.format(start_date + Second(r.time), t_format))"
+        end
+        msg = "Solving step $step_no/$no_steps ($perc% of time interval complete$e)"
         next!(p; showvalues = [(:Status, msg)])
     elseif info_level > 0
         count_str = "$no_steps"
         ndig = length(count_str)
         fstr = lpad("$step_no", ndig)
+        t = r.time
+        t_now = t + dT
         if isnothing(start_date)
-            start_time = get_tstr(r.time)
-            end_time = get_tstr(r.time+dT)
+            fmt = get_tstr
         else
-            fmt = x -> Dates.format(x, "u. dd Y")
-            start_time = fmt(start_date)
-            end_time = fmt(start_date + Second(r.time+dT))
+            fmt = x -> Dates.format(start_date + Second(x), t_format)
         end
+        start_time = fmt(t)
+        end_time = fmt(t_now)
+
         jutul_message("Step $fstr/$count_str", "Solving $start_time to $end_time, Δt = $(get_tstr(dT)) ", color = :blue)
         # @info "$(prefix)Solving step $step_no/$no_steps of length $(get_tstr(dT))."
     end
