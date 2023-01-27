@@ -2,7 +2,17 @@ export get_1d_interpolator
 
 first_lower(tab, x) = clamp(searchsortedfirst(tab, x) - 1, 1, length(tab) - 1)
 
-function interval_weight(t, x, ix)
+function first_lower_linear(tab, x)
+    for i in eachindex(tab)
+        X = @inbounds tab[i]
+        if X >= x
+            return i-1
+        end
+    end
+    return length(tab)
+end
+
+@inline function interval_weight(t, x, ix)
     @inbounds first = t[ix]
     @inbounds last = t[ix+1]
     Δx = last - first
@@ -10,12 +20,12 @@ function interval_weight(t, x, ix)
     return w
 end
 
-function linear_interp(X, F, x)
+@inline function linear_interp(X, F, x)
     ix = first_lower(X, value(x))
     return linear_interp_internal(F, X, ix, x)
 end
 
-function linear_interp_internal(F, X, ix, x)
+@inline function linear_interp_internal(F, X, ix, x)
     @inbounds X_0 = X[ix]
     @inbounds F_0 = F[ix]
     @inbounds ∂F∂X = (F[ix+1] - F_0)/(X[ix+1] - X_0)
@@ -26,9 +36,15 @@ end
 struct LinearInterpolant{V}
     X::V
     F::V
-    function LinearInterpolant(X::T, F::T) where T<:AbstractVector
+    function LinearInterpolant(X::T, F::T; static = false) where T<:AbstractVector
         @assert length(X) == length(F)
         @assert issorted(X) "Interpolation inputs must be sorted"
+        if static
+            n = length(X)
+            T_el = eltype(X)
+            X = SVector{n, T_el}(X)
+            F = SVector{n, T_el}(F)
+        end
         new{T}(X, F)
     end
 end
