@@ -182,8 +182,22 @@ function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
             # Vector (of floats) was given. Use as buffer, reinterpret.
             v::AbstractVector{<:Ft}
             @assert length(v) == n*bz "Expected buffer size $n*$bz, was $(length(v))."
-            v_buf = reshape(v, bz, :)
-            v = reinterpret(reshape, Vt, v_buf)
+            unsafe = true
+            if unsafe
+                # This is a bit dangerous but there are issues with performance
+                # for reinterpreted arrays. We cast our local part into two "views"
+                # by way of pointer trickery:
+                # - One is a bz by n array of scalar type
+                # - Another is a n array of the vector type
+                ptr = Base.unsafe_convert(Ptr{Ft}, v)
+                v_buf = Base.unsafe_wrap(Array, ptr, (bz, n))
+
+                ptr = Base.unsafe_convert(Ptr{Vt}, v)
+                v = Base.unsafe_wrap(Array, ptr, n)
+            else
+                v_buf = reshape(v, bz, :)
+                v = reinterpret(reshape, Vt, v_buf)
+            end
         end
     end
     return (v, v_buf)
