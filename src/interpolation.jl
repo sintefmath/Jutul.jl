@@ -11,7 +11,7 @@ function interval_weight(t, x, ix)
 end
 
 function linear_interp(X, F, x)
-    ix = first_lower(X, x)
+    ix = first_lower(X, value(x))
     return linear_interp_internal(F, X, ix, x)
 end
 
