@@ -247,7 +247,8 @@ function initialize_report_stats(reports)
                                                  :linear_iterations => 0,
                                                  :linearizations => 0,
                                                  :finalize => 0.0,
-                                                 :assembly => 0.0,
+                                                 :secondary => 0.0,
+                                                 :equations => 0.0,
                                                  :update => 0.0,
                                                  :convergence => 0.0,
                                                  :io => 0.0,
@@ -280,8 +281,9 @@ function ministep_report_stats!(stats, mini_rep)
     stats[:linear_update] += s.linear_system
     stats[:linear_solve] += s.linear_solve
     stats[:linear_iterations] += s.linear_iterations
-    stats[:update] += s.update_time
-    stats[:assembly] += s.assembly
+    stats[:update] += s.update
+    stats[:equations] += s.equations
+    stats[:secondary] += s.secondary
     stats[:convergence] += s.convergence
 
     if !mini_rep[:success]
@@ -300,10 +302,11 @@ function summarize_report_stats(stats, per = false)
         linscale = itscale = miniscale = identity
     end
     summary = (
-                assembly = linscale(stats[:assembly]),
+                secondary = itscale(stats[:secondary]), # Not always updated, itscale
+                equations = linscale(stats[:equations]),
                 linear_system = linscale(stats[:linear_update]),
                 linear_solve = itscale(stats[:linear_solve]),
-                update_time = itscale(stats[:update]),
+                update = itscale(stats[:update]),
                 convergence = linscale(stats[:convergence]),
                 io = miniscale(stats[:io]),
                 other = itscale(stats[:other_time]),
@@ -314,7 +317,7 @@ end
 
 function update_other_time_report_stats!(stats)
     sum_measured = 0.0
-    for k in [:assembly, :linear_update, :linear_solve, :update, :convergence, :io]
+    for k in [:equations, :secondary, :linear_update, :linear_solve, :update, :convergence, :io]
         sum_measured += stats[k]
     end
     stats[:other_time] = stats[:time] - sum_measured
@@ -350,34 +353,37 @@ function report_stats(reports)
 end
 
 function stats_ministep(reports)
-    local_linearizations = 0
-    local_its = 0
-    local_assembly = 0
-    local_convergence = 0
-    local_linear_update = 0
+    linearizations = 0
+    its = 0
+    secondary = 0
+    equations = 0
+    convergence = 0
+    linear_system = 0
     update = 0
     linsolve = 0
     linear_iterations = 0
     for rep in reports
-        local_linearizations += 1
+        linearizations += 1
         if haskey(rep, :update_time)
-            local_its += 1
+            its += 1
             update += rep[:update_time]
             linsolve += rep[:linear_solve_time]
             linear_iterations += rep[:linear_iterations]
         end
-        local_assembly += rep[:assembly_time]
-        local_linear_update += rep[:linear_system_time]
-        local_convergence += rep[:convergence_time]
+        secondary += rep[:secondary_time]
+        equations += rep[:equations_time]
+        linear_system += rep[:linear_system_time]
+        convergence += rep[:convergence_time]
     end
-    return (linearizations = local_linearizations,
-            newtons = local_its, 
-            assembly = local_assembly,
-            convergence = local_convergence,
-            update_time = update,
+    return (linearizations = linearizations,
+            newtons = its, 
+            equations = equations,
+            secondary = secondary,
+            convergence = convergence,
+            update = update,
             linear_iterations = linear_iterations,
             linear_solve = linsolve,
-            linear_system = local_linear_update)
+            linear_system = linear_system)
 end
 
 function pick_time_unit(t, wide = is_wide_term())
@@ -466,10 +472,8 @@ end
 
 function print_timing(stats; title = "", table_formatter = tf_unicode_rounded)
     flds = collect(keys(stats.time_each))
-    
     n = length(flds)
-    hl_last = Highlighter(f = (data, i, j) -> i == n, crayon = Crayon(background = :light_blue))
-    
+
     data = Array{Any}(undef, n, 3)
     tot = stats.time_sum.total
     for (i, f) in enumerate(flds)
@@ -486,16 +490,16 @@ function print_timing(stats; title = "", table_formatter = tf_unicode_rounded)
     @. data[:, 1] /= u
     @. data[:, 3] /= u_t
 
-    # hl = Highlighter((data, i, j) -> (i == length(flds)), crayon"fg:bold");
-    # highlighters = hl,
     function translate_for_table(name)
-        if name == :assembly
+        if name == :equations
+            name = :Equations
+        elseif name == :secondary
             name = :Properties
         elseif name == :linear_system
             name = :Assembly
         elseif name == :linear_solve
             name = Symbol("Linear solve")
-        elseif name == :update_time
+        elseif name == :update
             name = :Update
         elseif name == :convergence
             name = :Convergence
@@ -732,7 +736,7 @@ function timing_breakdown_ministep(ministep)
     asm = 0
     for step in ministep[:steps]
         asm += 1
-        t_asm += step[:assembly_time] + step[:linear_system_time]
+        t_asm += step[:secondary_time] + step[:equation_time] + step[:linear_system_time]
         if haskey(step, :linear_solve_time)
             its += 1
             t_solve += step[:linear_solve_time]

@@ -582,10 +582,11 @@ Perform updates of everything that depends on the state: A full linearization fo
 This includes properties, governing equations and the linearized system itself.
 """
 function update_state_dependents!(storage, model::JutulModel, dt, forces; time = NaN, update_secondary = true)
-    if update_secondary
+    t_s = @elapsed if update_secondary
         @tic "secondary variables" update_secondary_variables!(storage, model)
     end
-    update_equations_and_apply_forces!(storage, model, dt, forces; time = time)
+    t_eq = @elapsed update_equations_and_apply_forces!(storage, model, dt, forces; time = time)
+    return (secondary = t_s, equations = t_eq)
 end
 
 """

@@ -265,13 +265,10 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
 
     report = OrderedDict()
     # Update the properties and equations
-    t_asm = @elapsed begin
-        time = config[:ProgressRecorder].recorder.time + dt
-        update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
-    end
-    report[:assembly_time] = t_asm
+    time = config[:ProgressRecorder].recorder.time + dt
+    t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
     # Update the linearized system
-    report[:linear_system_time] = @elapsed begin
+    t_lsys = @elapsed begin
         @tic "linear system" update_linearized_system!(storage, model)
     end
     t_conv = @elapsed begin
@@ -289,6 +286,9 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
         report[:converged] = converged
         report[:errors] = errors
     end
+    report[:secondary_time] = t_secondary
+    report[:equations_time] = t_eqs
+    report[:linear_system_time] = t_lsys
     report[:convergence_time] = t_conv
 
     if !converged && solve
