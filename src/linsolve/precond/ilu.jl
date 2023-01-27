@@ -77,7 +77,7 @@ function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::Abstrac
     N = size(T, 1)
     T = eltype(T)
     Vt = SVector{N, T}
-    as_svec = (x) -> reinterpret(Vt, x)
+    as_svec = (x) -> unsafe_reinterpret(Vt, x, length(x) ÷ N)
 
     ldiv!(as_svec(x), f, as_svec(y))
     return x
@@ -104,7 +104,7 @@ function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)
     N = size(T, 1)
     T = eltype(T)
     Vt = SVector{N, T}
-    as_svec = (x) -> reinterpret(Vt, x)
+    as_svec = (x) -> unsafe_reinterpret(Vt, x, length(x) ÷ N)
 
     # Solve by reinterpreting vectors to block (=SVector) vectors
     f! = ilu_f(type)

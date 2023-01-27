@@ -461,9 +461,10 @@ end
 function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, state, model, dt, flow_disc)
     flux_c = get_entries(eq_s.half_face_flux_cells)
 
-    N = size(flux_c, 1)
+    N, M = size(flux_c)
     T = eltype(flux_c)
-    flux_static = reinterpret(SVector{N, T}, flux_c)
+    # flux_static = reinterpret(SVector{N, T}, flux_c)
+    flux_static = unsafe_reinterpret(SVector{N, T}, flux_c, M)
     state_c = local_ad(state, 1, T)
     update_half_face_flux_tpfa!(flux_static, law, state_c, model, dt, flow_disc, Cells())
 

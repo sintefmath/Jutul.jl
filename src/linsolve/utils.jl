@@ -52,3 +52,12 @@ end
 block_dims(A::AbstractVector) = 1
 block_dims(A::AbstractVector{T}) where T<:StaticVector = length(T)
 
+"""
+    unsafe_reinterpret(Vt, v, n)
+
+Unsafely reinterpret v as a n length vector of value type Vt
+"""
+function unsafe_reinterpret(Vt, v, n)
+    ptr = Base.unsafe_convert(Ptr{Vt}, v)
+    return Base.unsafe_wrap(Array, ptr, n)
+end

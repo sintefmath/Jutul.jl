@@ -1,6 +1,6 @@
-function block_mul!(res, jac, Vt, x, α, β::T) where T
+function block_mul!(res, jac, Vt, N, x, α, β::T) where T
     @tic "spmv (block)" begin
-        as_svec = (x) -> reinterpret(Vt, x)
+        as_svec = (x) -> unsafe_reinterpret(Vt, x, length(x) ÷ N)
         res_v = as_svec(res)
         x_v = as_svec(x)
         mul!(res_v, jac, x_v, α, β)
@@ -11,7 +11,8 @@ end
 function get_mul!(sys::LinearizedSystem{BlockMajorLayout})
     jac = sys.jac
     Vt = eltype(sys.r)
-    return (res, x, α, β) -> block_mul!(res, jac, Vt, x, α, β)
+    N = size(Vt, 1)
+    return (res, x, α, β) -> block_mul!(res, jac, Vt, N, x, α, β)
 end
 
 function vector_residual(sys::LinearizedSystem{BlockMajorLayout})

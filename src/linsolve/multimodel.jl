@@ -155,8 +155,9 @@ end
 end
 
 @inline function schur_mul!(res, schur_buffers, ::Val{r_type}, B, C, D, E, x, α, β) where r_type
-    res_v = reinterpret(r_type, res)
-    x_v = reinterpret(r_type, x)
+    n = size(B, 2)
+    res_v = unsafe_reinterpret(r_type, res, n)
+    x_v = unsafe_reinterpret(r_type, x, n)
     schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, β)
 end
 
