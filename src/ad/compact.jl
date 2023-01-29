@@ -17,6 +17,10 @@ end
     @inbounds pos[(eqNo-1)*c.npartials + partial_index, index]
 end
 
+@inline function get_jacobian_pos(c::CompactAutoDiffCache{I}, index, eqNo, partial_index) where {I}
+    @inbounds c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index]
+end
+
 entity(c::CompactAutoDiffCache) = c.entity
 
 # entity(::GenericAutoDiffCache{<:Any, E}) where E = E
