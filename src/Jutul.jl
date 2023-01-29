@@ -32,6 +32,7 @@ module Jutul
     using JLD2
 
     import Metis
+    import Meshes
     # Nice progress bars
     using ProgressMeter
     using Crayons
@@ -41,11 +42,15 @@ module Jutul
     using TimerOutputs
     # Shorted alias for @timeit_debug
     const var"@tic" = var"@timeit_debug"
-
+    # Separate module for CSR backend
     include("StaticCSR/StaticCSR.jl")
     using .StaticCSR
     import .StaticCSR: nthreads, minbatch
     import SparsityTracing as ST
+    # Module for supporting Meshes.jl
+    include("MeshesSupport/MeshesSupport.jl")
+    using .MeshesSupport
+    import .MeshesSupport: meshes_fv_geometry_3d
 
     # Main types
     include("core_types.jl")
