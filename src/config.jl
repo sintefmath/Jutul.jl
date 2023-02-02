@@ -1,11 +1,11 @@
 export add_option!
 
-function add_option!(opts::JutulConfig, name::Symbol, default_value, short_description = "", value = missing; description = missing, valid_types = Any, valid_values = missing, replace = false)
+function add_option!(opts::JutulConfig, name::Symbol, default_value, short_description = "", value = missing; description = missing, types = Any, values = missing, replace = false)
     # Set up option and make sure default is actually valid, otherwise this will throw
-    option = JutulOption(default_value, short_description, description, valid_types, valid_values)
+    option = JutulOption(default_value, short_description, description, types, values)
     @assert !haskey(opts.options, name) || replace "Option :$name is already defined: $(opts.options[name]), cannot replace"
     opts.options[name] = option
-    opts.values[name] = checked_value(default_value, valid_types, valid_values, name)
+    opts.values[name] = checked_value(default_value, types, values, name)
     # Might not be default
     if !ismissing(value)
         opts[name] = value

@@ -40,7 +40,7 @@ mutable struct JutulOption
     default_value
     short_description::String
     long_description::Union{String, Missing}
-    valid_types::DataType
+    valid_types
     valid_values
 end
 

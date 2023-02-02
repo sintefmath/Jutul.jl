@@ -1,50 +1,40 @@
 function simulator_config!(cfg, sim; kwarg...)
-    # Maximum number of cuts before a time-step is terminated
-    cfg[:max_timestep_cuts] = 5
-    # Maximum number of nonlinear iterations before a time-step is cut
-    cfg[:max_nonlinear_iterations] = 15
-    # Minimum number of nonlinear solves performed, even when equations are converged
-    cfg[:min_nonlinear_iterations] = 1
-    # Always update secondary variables - only useful for nested solvers
-    cfg[:always_update_secondary] = false
-    # Throw an error if the solve
-    cfg[:error_on_incomplete] = false
-    # The linear solver used to solve linearized systems
-    cfg[:linear_solver] = select_linear_solver(sim)
-    # Path for output
-    cfg[:output_path] = nothing
-    # Produce states for output
-    cfg[:output_states] = true
-    # Extra checks on values etc
-    cfg[:safe_mode] = true
-    # Define debug level. If debugging is on, this determines the amount of output.
-    cfg[:debug_level] = 1
-    # Info level determines the runtime output to the terminal:
-    # < 0 - no output.
-    # 0   - gives minimal output (just a progress bar by default, and a final report)
-    # 1   - gives some more details, printing at the start of each step
-    # 2   - as 1, but also printing the current worst residual at each iteration
-    # 3   - as 1, but prints a table of all non-converged residuals at each iteration
-    # 4   - as 3, but all residuals are printed (even converged values)
-    # The interpretation of this number is subject to change
-    cfg[:info_level] = 0
-    # Output extra, highly detailed performance report at simulation end
-    cfg[:extra_timing] = false
-    # Avoid unicode (if possible)
-    cfg[:ascii_terminal] = false
-    cfg[:timestep_selectors] = [TimestepSelector()]
-    # Relaxation
-    cfg[:relaxation] = NoRelaxation()
-    # Timestep
-    cfg[:timestep_max_increase] = 10.0
-    cfg[:timestep_max_decrease] = 0.1
-    # Max residual before error is issued
-    cfg[:max_residual] = 1e20
-    cfg[:end_report] = nothing
+    # Printing, etc
+    add_option!(cfg, :info_level, 0, "Info level determines the amount of runtime output to the terminal during simulation.", types = Int,
+    description = "< 0 - no output.\n0   - gives minimal output (just a progress bar by default, and a final report)
+    \n1   - gives some more details, printing at the start of each step
+    \n2   - as 1, but also printing the current worst residual at each iteration
+    \n3   - as 1, but prints a table of all non-converged residuals at each iteration
+    \n4   - as 3, but all residuals are printed (even converged values)
+    \nThe interpretation of this number is subject to change")
+    add_option!(cfg, :debug_level, 1, "Define the amount of debug output [placeholder].", types = Int)
+    add_option!(cfg, :end_report, nothing, "Output a final report that includes timings etc. If nothing, depends on info_level instead.", types = Union{Bool, Nothing})
+    # Convergence tests
+    add_option!(cfg, :max_timestep_cuts, 5, "Max time step cuts in a single mini step before termination of simulation.", types = Int, values = 0:10000)
+    add_option!(cfg, :max_nonlinear_iterations, 15, "Max number of nonlinear iterations in a Newton solve before time-step is cut.", types = Int, values = 0:10000)
+    add_option!(cfg, :min_nonlinear_iterations, 1, "Minimum number of nonlinear iterations in Newton solver.", description = "This number of Newtion iterations is always performed, even if all equations are converged.", types = Int, values = 0:10000)
+    # Boolean options
+    add_option!(cfg, :always_update_secondary, false, "Always update secondary variables (even when they can be reused from end of previous step). Only useful for nested solvers", types = Bool)
+    add_option!(cfg, :error_on_incomplete, false, "Throw an error if the simulation could not complete. If `false` emit a message and return.", types = Bool)
+    add_option!(cfg, :output_states, true, "Return states in-memory as output.",
+    description = "For larger models with many time-steps, using `output_path` might be better to avoid filling up your memory.", types = Bool)
+    add_option!(cfg, :safe_mode, true, "Add extra checks in simulator that have a small extra cost.", types = Bool)
+    add_option!(cfg, :extra_timing, false, "Output extra, highly detailed performance report at simulation end.", 
+    description = " This uses TimerOutputs.jl's @timeit_debug macro. You may have to call the function twice with this option the first time you use it.", types = Bool)
+    add_option!(cfg, :ascii_terminal, false, "Avoid unicode (if possible) in terminal output.", types = Bool)
+    # Linear, nonlinear solver
+    add_option!(cfg, :linear_solver, select_linear_solver(sim), "The linear solver used to solve linearized systems.")
+    add_option!(cfg, :timestep_selectors, [TimestepSelector()], "Time-step selectors that pick mini steps.")
+    add_option!(cfg, :timestep_max_increase, 10.0, "Max allowable factor to increase time-step by. Overrides step selectors.", types = Float64)
+    add_option!(cfg, :timestep_max_decrease, 0.1, "Max allowable factor to decrease time-step by. Overrides step selectors.", types = Float64)
+    add_option!(cfg, :max_residual, 1e20, "Maximum value allowed for a residual before simulation is terminated.", types = Float64)
+    add_option!(cfg, :relaxation, NoRelaxation(), "Non-Linear relaxation used. Currently supports `NoRelaxation` and `SimpleRelaxation`.", types = NonLinearRelaxation)
+
     # Tolerances
-    cfg[:tolerances] = set_default_tolerances(sim.model)
-    # Final tolerance checks before cutting time-steps can be relaxed by increasing this number
-    cfg[:tol_factor_final_iteration] = 1.0
+    add_option!(cfg, :tolerances, set_default_tolerances(sim.model), "Tolerances used for convergence criterions.")
+    add_option!(cfg, :tol_factor_final_iteration, 1.0, "Value that multiplies all tolerances for the final convergence check before a time-step is cut.")
+
+    add_option!(cfg, :output_path, nothing, "Path to write output. If nothing, output is not written to disk.", Union{String, Nothing})
 
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])
@@ -62,12 +52,12 @@ function simulator_config!(cfg, sim; kwarg...)
     else
         fmt = tf_unicode_rounded
     end
-    cfg[:table_formatter] = fmt;
+    add_option!(cfg, :table_formatter, fmt, "Formatter for tables.")
     return cfg
 end
 
 function simulator_config(sim; kwarg...)
-    cfg = Dict()
+    cfg = JutulConfig("Simulator config")
     simulator_config!(cfg, sim; kwarg...)
     return cfg
 end
