@@ -38,6 +38,8 @@ function simulator_storage(model; state0 = nothing,
         state0 = deepcopy(state0)
     end
     @tic "storage" storage = setup_storage(model, state0 = state0, parameters = parameters, state0_ad = state0_ad, state_ad = state_ad)
+    # Add internal book keeping of time steps
+    storage[:recorder] = ProgressRecorder()
     # Initialize for first time usage
     @tic "init_storage" initialize_storage!(storage, model; kwarg...)
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
@@ -127,11 +129,12 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
                                                                    parameters = nothing,
                                                                    start_date = nothing,
                                                                    kwarg...)
+    rec = progress_recorder(sim)
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     else
         # Reset recorder just in case since we are starting a new simulation
-        config[:ProgressRecorder] = ProgressRecorder()
+        reset!(rec)
         for (k, v) in kwarg
             if !haskey(config, k)
                 @warn "Keyword argument $k not found in initial config."
@@ -145,7 +148,6 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
     t_tot = sum(timesteps)
     # Config options
     max_its = config[:max_nonlinear_iterations]
-    rec = config[:ProgressRecorder]
     info_level = config[:info_level]
     # Initialize loop
     p = start_simulation_message(info_level, timesteps)
@@ -198,7 +200,7 @@ both easier to use and performs additional validation.
 """
 function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = nothing, step_no = NaN, 
                                                         info_level = config[:info_level],
-                                                        rec = config[:ProgressRecorder], kwarg...)
+                                                        rec = progress_recorder(sim), kwarg...)
     ministep_reports = []
     # Initialize time-stepping
     dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = true)
@@ -265,7 +267,8 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
 
     report = OrderedDict()
     # Update the properties and equations
-    time = config[:ProgressRecorder].recorder.time + dt
+    rec = storage.recorder
+    time = rec.recorder.time + dt
     t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
     # Update the linearized system
     t_lsys = @elapsed begin
@@ -294,7 +297,6 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
     if !converged && solve
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
-        rec = config[:ProgressRecorder]
         t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec, relaxation = relaxation)
         report[:update] = rep_update
         report[:linear_solver] = rep_lsolve
@@ -307,7 +309,7 @@ end
 
 function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare = true, relaxation = 1.0)
     done = false
-    rec = cfg[:ProgressRecorder]
+    rec = progress_recorder(sim)
     report = OrderedDict()
     report[:dt] = dt
     step_reports = []
@@ -451,4 +453,8 @@ function check_forces(sim, f::T, timesteps) where T<:AbstractArray
     if nf != nt
         error("Number of forces must match the number of timesteps ($nt timesteps, $nf forces)")
     end
+end
+
+function progress_recorder(sim)
+    return sim.storage.recorder
 end

@@ -32,8 +32,6 @@ function simulator_config!(cfg, sim; kwarg...)
     cfg[:extra_timing] = false
     # Avoid unicode (if possible)
     cfg[:ascii_terminal] = false
-    # Define a default progress ProgressRecorder
-    cfg[:ProgressRecorder] = ProgressRecorder()
     cfg[:timestep_selectors] = [TimestepSelector()]
     # Relaxation
     cfg[:relaxation] = NoRelaxation()
