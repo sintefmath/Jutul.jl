@@ -353,7 +353,10 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
         dv0 = dx[active_ix + (i-1)*nu]
         dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
         dlast0 -= dv0
-        w = pick_relaxation(w, dv, dv0)
+        if abs(dv0) > 1e-10
+            # Skip tiny values
+            w = pick_relaxation(w, dv, dv0)
+        end
     end
     # Do the same thing for the implicit update of the last value
     dlast = choose_increment(value(s[nf, full_cell]), dlast0, abs_max, nothing, minval, maxval)
