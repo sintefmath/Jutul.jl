@@ -34,3 +34,33 @@ mutable struct ProgressRecorder
         new(SolveRecorder(), SolveRecorder())
     end
 end
+
+export JutulConfig
+mutable struct JutulOption
+    default_value
+    short_description::String
+    long_description::Union{String, Missing}
+    valid_types::DataType
+    valid_values
+end
+
+struct JutulConfig <: AbstractDict{Symbol, Any}
+    name::Union{Nothing, Symbol}
+    values::OrderedDict{Symbol, Any}
+    options::OrderedDict{Symbol, JutulOption}
+end
+
+"""
+JutulConfig(name = nothing)
+
+A configuration object that acts like a `Dict{Symbol,Any}` but contains
+additional data to limit the valid keys and values to those added by `add_option!`
+"""
+function JutulConfig(name = nothing)
+    if !isnothing(name)
+        name = Symbol(name)
+    end
+    data = OrderedDict{Symbol, Any}()
+    options = OrderedDict{Symbol, JutulOption}()
+    return JutulConfig(name, data, options)
+end

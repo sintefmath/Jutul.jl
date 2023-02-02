@@ -28,3 +28,41 @@ end
         end
     end
 end
+##
+@testset "jutul_config" begin
+    cfg = JutulConfig("Test configuration")
+    add_option!(cfg, :abc, 3.0, "My test number")
+    add_option!(cfg, :option_2, NaN, "A second option", description = "This option has a very long description to expand on what exactly it entails to be the second option")
+    add_option!(cfg, :limited_value, 3, "Limited value", valid_values = [1, 5, 3])
+    add_option!(cfg, :limited_type, 3, "Limited type", valid_types = Float64)
+
+    # Test that options cannot be overriden
+    @test_throws "cannot replace" add_option!(cfg, :abc, 5)
+    # Unless explicitly allowed
+    add_option!(cfg, :abc, 7.0, replace = true)
+    # Test retrieval
+    @test cfg[:abc] == 7.0
+    @test cfg[:limited_value] == 3
+    # Test setting
+    cfg[:limited_value] = 5
+    @test cfg[:limited_value] == 5
+    # Test asserts
+    @test_throws "limited_value must be one of " cfg[:limited_value] = 4
+    @test cfg[:limited_value] == 5
+
+    for (inner, outer) in zip(pairs(cfg), pairs(cfg.values))
+        k_i, v_i = inner
+        k_o, v_o = outer
+        @test k_i === k_o
+        @test v_i === v_o
+    end
+    for (k_i, k_o) in zip(keys(cfg), keys(cfg.values))
+        @test k_i == k_o
+    end
+    for (v_i, v_o) in zip(values(cfg), values(cfg.values))
+        # === due to NaN
+        @test v_i === v_o
+    end
+    @test haskey(cfg, :abc)
+    @test !haskey(cfg, :abcd)
+end

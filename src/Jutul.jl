@@ -78,6 +78,7 @@ module Jutul
     include("simulator/simulator.jl")
 
     include("utils.jl")
+    include("config.jl")
     include("interpolation.jl")
     include("partitioning.jl")
 
