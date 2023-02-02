@@ -286,6 +286,10 @@ function Base.copy(m::SimulationModel{O, S, C, F}) where {O, S, C, F}
     return SimulationModel{O, S, C, F}(m.domain, m.system, m.context, m.formulation, m.plot_mesh, pvar, svar, prm, eqs, outputs)
 end
 
+function Base.getindex(model::SimulationModel, s::Symbol)
+    return get_variables(model)[s]
+end
+
 function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
     println(io, "SimulationModel:")
     for f in fieldnames(typeof(model))
