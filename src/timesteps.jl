@@ -41,7 +41,7 @@ minimum_timestep(sel::TimestepSelector) = sel.min
 function pick_cut_timestep(sel::TimestepSelector, sim, config, dt, dT, reports, cut_count)
     df = decrease_factor(sel)
     max_cuts = config[:max_timestep_cuts]
-    if cut_count + 1 > max_cuts && dt < dT/(df^max_cuts)
+    if cut_count + 1 > max_cuts && dt <= dT/(df^max_cuts)
         dt = NaN
     else
         dt = dt/df
