@@ -1,14 +1,15 @@
 function simulator_config!(cfg, sim; kwarg...)
     # Printing, etc
     add_option!(cfg, :info_level, 0, "Info level determines the amount of runtime output to the terminal during simulation.", types = Int,
-    description = "< 0 - no output.\n0   - gives minimal output (just a progress bar by default, and a final report)
-    \n1   - gives some more details, printing at the start of each step
-    \n2   - as 1, but also printing the current worst residual at each iteration
-    \n3   - as 1, but prints a table of all non-converged residuals at each iteration
-    \n4   - as 3, but all residuals are printed (even converged values)
-    \nThe interpretation of this number is subject to change")
+    description = "
+0 - gives minimal output (just a progress bar by default, and a final report)
+1 - gives some more details, printing at the start of each step
+2 - as 1, but also printing the current worst residual at each iteration
+3 - as 1, but prints a table of all non-converged residuals at each iteration
+4 - as 3, but all residuals are printed (even converged values)
+Negative values disable output. The interpretation of this number is subject to change.")
     add_option!(cfg, :debug_level, 1, "Define the amount of debug output [placeholder].", types = Int)
-    add_option!(cfg, :end_report, nothing, "Output a final report that includes timings etc. If nothing, depends on info_level instead.")
+    add_option!(cfg, :end_report, nothing, "Output a final report that includes timings etc. If nothing, depends on info_level instead.", types = Union{Bool, Nothing})
     # Convergence tests
     add_option!(cfg, :max_timestep_cuts, 5, "Max time step cuts in a single mini step before termination of simulation.", types = Int, values = 0:10000)
     add_option!(cfg, :max_nonlinear_iterations, 15, "Max number of nonlinear iterations in a Newton solve before time-step is cut.", types = Int, values = 0:10000)
@@ -34,7 +35,7 @@ function simulator_config!(cfg, sim; kwarg...)
     add_option!(cfg, :tolerances, set_default_tolerances(sim.model), "Tolerances used for convergence criterions.")
     add_option!(cfg, :tol_factor_final_iteration, 1.0, "Value that multiplies all tolerances for the final convergence check before a time-step is cut.")
 
-    add_option!(cfg, :output_path, nothing, "Path to write output. If nothing, output is not written to disk.", Union{String, Nothing})
+    add_option!(cfg, :output_path, nothing, "Path to write output. If nothing, output is not written to disk.", types = Union{String, Nothing})
 
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])
