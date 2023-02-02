@@ -37,7 +37,13 @@ function Base.setindex!(opts::JutulConfig, x, name::Symbol)
 end
 
 function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
-    header = ["Option", "Value", "Default", "Description", "Types", "Values"]
+    _, sz = displaysize(io)
+    olim = 25
+    Vlim = 8
+    remainder = max(sz - olim - Vlim - 15, 1)
+    vlim = Int(floor(remainder/3))
+    dlim = remainder - vlim
+    header = ["Option", "Value", "Description", "Values"]
     vals = options.values
     opts = options.options
     vkeys = keys(options)
@@ -48,9 +54,14 @@ function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
         opt = opts[k]
         v = vals[k]
         # Name in header
-        out[i, 1] = k
-        out[i, 2] = v
-        out[i, 3] = v === opt.default_value
+        out[i, 1] = "$k\n[$(opt.valid_types)]"
+        vstr = String("$v")
+        if length(vstr) > vlim-1
+            ix = prevind(vstr, vlim)
+            vstr = "$(vstr[1:ix])⋯"
+        end
+        out[i, 2] = vstr
+        # out[i, 3] = v === opt.default_value
         descr = opt.short_description
         long_descr = opt.long_description
         if !ismissing(long_descr)
@@ -59,16 +70,19 @@ function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
         if descr === ""
             descr = "<missing>"
         end
-        out[i, 4] = descr
-        out[i, 5] = opt.valid_types
+        out[i, 3] = descr
+        # out[i, 4] = opt.valid_types
         possible_vals = opt.valid_values
         if ismissing(possible_vals)
             possible_vals = "Any"
         end
-        out[i, 6] = possible_vals
+        out[i, 4] = possible_vals
     end
     cw = zeros(Int, m)
-    cw[4] = 60
+    cw[1] = olim
+    cw[2] = vlim
+    cw[3] = dlim
+    cw[4] = Vlim
     pretty_table(io,
         out,
         title = "$(options.name)",
@@ -77,7 +91,8 @@ function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
         autowrap = true,
         alignment = :l,
         body_hlines = collect(1:n),
-        columns_width = cw
+        columns_width = cw,
+        crop = :none
         )
 end
 

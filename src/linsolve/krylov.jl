@@ -35,6 +35,11 @@ mutable struct GenericKrylov
     end
 end
 
+function Base.show(io::IO, krylov::GenericKrylov)
+    cfg = krylov.config
+    print(io, "Generic Krylov $(krylov.solver) (ϵ=$(rtol(cfg))) with $(typeof(krylov.preconditioner))")
+end
+
 function atol(cfg, T = Float64)
     tol = cfg.absolute_tolerance
     return T(isnothing(tol) ? 0.0 : tol)
