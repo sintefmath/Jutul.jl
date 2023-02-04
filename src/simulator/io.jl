@@ -23,8 +23,8 @@ function store_output!(states, reports, step, sim, config, report)
     # We always keep reports in memory since they are used for timestepping logic
     push!(reports, report)
     t_out = @elapsed if mem_out || file_out
-        state = get_output_state(sim)
-        if file_out
+        @tic "output state" state = get_output_state(sim)
+        @tic "write" if file_out
             step_path = joinpath(path, "jutul_$step.jld2")
             @debug "Writing to $step_path"
             jldopen(step_path, "w") do file
