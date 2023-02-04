@@ -4,6 +4,13 @@ struct Simulator <: JutulSimulator
     storage::JutulStorage
 end
 
+"""
+    Simulator(model; <kwarg>)
+
+Set up a simulator object for a `model` that can be used by [`simulate!`](@ref).
+To avoid manually instantiating the simulator, the non-mutating
+[`simulate`](@ref) interface can be used instead.
+"""
 function Simulator(model; extra_timing = false, kwarg...)
     set_global_timer!(extra_timing)
     storage = simulator_storage(model; kwarg...)
@@ -54,7 +61,7 @@ end
 JutulConfig(name = nothing)
 
 A configuration object that acts like a `Dict{Symbol,Any}` but contains
-additional data to limit the valid keys and values to those added by `add_option!`
+additional data to limit the valid keys and values to those added by [`add_option!`](@ref)
 """
 function JutulConfig(name = nothing)
     if !isnothing(name)

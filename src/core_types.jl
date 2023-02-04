@@ -13,14 +13,25 @@ export JutulStorage
 
 import Base: show, size, setindex!, getindex, ndims
 
-# Physical system
+"""
+Abstract type for the physical system to be solved.
+"""
 abstract type JutulSystem end
 
-# Discretization - currently unused
+"""
+Abstract type for a Jutul discretization
+"""
 abstract type JutulDiscretization end
 
-"Ask discretization for entry i for specific entity"
-(D::JutulDiscretization)(i, entity = Cells()) = nothing
+"""
+    d = disc(i, Cells())
+
+Ask discretization for entry `i` when discretizing some equation on the 
+chosen entity (e.g. [`Cells`](@ref))
+"""
+function (D::JutulDiscretization)(i, entity = Cells())
+    return nothing
+end
 
 discretization(eq) = eq.discretization
 
@@ -31,12 +42,42 @@ end
 # struct DefaultDiscretization <: JutulDiscretization end
 
 # Primary/secondary variables
+"""
+Abstract type for all variables in Jutul.
+
+A variable is associated with a [`JutulEntity`](@ref) through the
+[`associated_entity`](@ref) function. A variable is local to that entity, and
+cannot depend on other entities. Variables are used by models to define:
+- primary variables: Sometimes referred to as degrees of freedom, primary
+  unknowns or solution variables
+- parameters: Static quantities that impact the solution
+- secondary variables: Can be computed from a combination of other primary and
+  secondary variables and parameters.
+"""
 abstract type JutulVariables end
+
+"""
+Abstract type for scalar variables (one entry per entity, e.g. pressure or
+temperature in each cell of a model)
+"""
 abstract type ScalarVariable <: JutulVariables end
+"""
+Abstract type for vector variables (more than one entry per entity, for example
+saturations or displacements)
+"""
 abstract type VectorVariables <: JutulVariables end
+"""
+Abstract type for fraction variables (vector variables that sum up to unity over
+each entity).
+
+By default, these are limited to the [0, 1] range through
+[`maximum_value`](@ref) and [`minimum_value`](@ref) default implementations.
+"""
 abstract type FractionVariables <: VectorVariables end
 
-# Driving forces
+"""
+Abstract type for driving forces
+"""
 abstract type JutulForce end
 
 # Context
@@ -45,17 +86,37 @@ abstract type GPUJutulContext <: JutulContext end
 abstract type CPUJutulContext <: JutulContext end
 
 # Traits etc for matrix ordering
+"""
+Abstract type for matrix layouts. A layout determines how primary variables and
+equations are ordered in a sparse matrix representation. Note that this is
+different from the matrix format itself as it concerns the ordering itself: For
+example, if all equations for a single cell come in sequence, or if a single
+equation is given for all entities before the next equation is written.
+
+Different layouts does not change the solution of the system, but different
+linear solvers support different layouts.
+"""
 abstract type JutulMatrixLayout end
 """
 Equations are stored sequentially in rows, derivatives of same type in columns:
+
+For a test system with primary variables P, S and equations E1, E2 and two cells
+this will give the following ordering on the diagonal:
+(∂E1/∂p)₁, (∂E1/∂p)₂, (∂E2/∂S)₁, (∂E2/∂S)₂
 """
 struct EquationMajorLayout <: JutulMatrixLayout
     as_adjoint::Bool
 end
 EquationMajorLayout() = EquationMajorLayout(false)
 is_cell_major(::EquationMajorLayout) = false
+
 """
-Domain entities sequentially in rows:
+Equations are grouped by entity, listing all equations and derivatives for
+entity 1 before proceeding to entity 2 etc.
+
+For a test system with primary variables P, S and equations E1, E2 and two cells
+this will give the following ordering on the diagonal:
+(∂E1/∂p)₁, (∂E2/∂S)₁, (∂E1/∂p)₂, (∂E2/∂S)₂
 """
 struct EntityMajorLayout <: JutulMatrixLayout
     as_adjoint::Bool
@@ -66,7 +127,13 @@ is_cell_major(::EntityMajorLayout) = true
 const ScalarLayout = Union{EquationMajorLayout, EntityMajorLayout}
 
 """
-Same as EntityMajorLayout, but the nzval is a matrix
+Same as [`EntityMajorLayout`](@ref), but the system is a sparse matrix where
+each entry is a small dense matrix.
+
+For a test system with primary variables P, S and equations E1, E2 and two cells
+this will give a diagonal of length 2:
+[(∂E1/∂p)₁ (∂E1/∂S)₁ ; (∂E2/∂p)₁ (∂E2/∂S)₁]
+[(∂E1/∂p)₂ (∂E1/∂S)₂ ; (∂E2/∂p)₂ (∂E2/∂S)₂]
 """
 struct BlockMajorLayout <: JutulMatrixLayout
     as_adjoint::Bool
@@ -370,17 +437,43 @@ end
 # Grids etc
 export JutulEntity, Cells, Faces, Nodes
 ## Grid
+"""
+Abstract type for all Meshes in Jutul.
+"""
 abstract type AbstractJutulMesh end
 
 ## Discretized entities
+"""
+Super-type for all entities where [`JutulVariables`](@ref) can be defined.
+"""
 abstract type JutulEntity end
 
+"""
+Entity for Cells (closed volumes with averaged properties for a finite-volume solver)
+"""
 struct Cells <: JutulEntity end
+
+"""
+Entity for Faces (intersection between pairs of [`Cells`](@ref))
+"""
 struct Faces <: JutulEntity end
+
+"""
+Entity for Nodes (intersection between multiple [`Faces`](@ref))
+"""
 struct Nodes <: JutulEntity end
 
 # Sim model
 
+"""
+    SimulationModel(g::AbstractJutulMesh, system; discretization = nothing, kwarg...)
+
+Type that defines a simulation model - everything needed to solve the discrete
+equations.
+
+The minimal setup requires a [`AbstractJutulMesh`](@ref) that defines topology
+together with a [`JutulSystem`](@ref) that imposes physical laws.
+"""
 function SimulationModel(g::AbstractJutulMesh, system; discretization = nothing, kwarg...)
     # Simple constructor that assumes
     d = DiscretizedDomain(g, discretization)
@@ -804,6 +897,14 @@ end
 
 Base.transpose(c::CrossTermPair) = CrossTermPair(c.source, c.target, c.equation, c.cross_term,)
 
+
+"""
+    MultiModel(models)
+
+A model variant that is made up of many named submodels, each a fully realized [`SimulationModel`](@ref).
+
+`models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`.
+"""
 struct MultiModel{T} <: JutulModel
     models::NamedTuple
     cross_terms::Vector{CrossTermPair}
@@ -811,7 +912,7 @@ struct MultiModel{T} <: JutulModel
     context::Union{JutulContext, Nothing}
     reduction::Union{Symbol, Nothing}
     specialize_ad::Bool
-    function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing, specialize = false, specialize_ad = false)
+function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing, specialize = false, specialize_ad = false)
         if isnothing(groups)
             num_groups = 1
         else

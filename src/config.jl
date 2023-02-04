@@ -1,5 +1,11 @@
 export add_option!
 
+"""
+    add_option!(opts::JutulConfig, :my_cool_option, 3, "My option has this brief description")
+
+Add an option to existing [`JutulConfig`](@ref) structure. Additional currently
+undocumented keyword arguments can be used to restrict valid types and values.
+"""
 function add_option!(opts::JutulConfig, name::Symbol, default_value, short_description = "", value = missing; description = missing, types = Any, values = missing, replace = false)
     # Set up option and make sure default is actually valid, otherwise this will throw
     option = JutulOption(default_value, short_description, description, types, values)
