@@ -376,7 +376,11 @@ function adjoint_reassemble!(sim, state, state0, dt, forces, time)
 end
 
 function swap_primary_with_parameters!(pmodel, model, targets = parameter_targets(model))
-    set_parameters!(pmodel; pairs(model.primary_variables)...)
+    for (k, v) in pairs(model.primary_variables)
+        if !(k in targets)
+            set_parameters!(pmodel; k => v)
+        end
+    end
     # Original model holds the parameters, use those
     for (k, v) in pairs(model.parameters)
         if k in targets
