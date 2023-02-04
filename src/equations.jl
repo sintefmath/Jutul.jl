@@ -43,13 +43,20 @@ function find_jac_position(A, target_entity_index, source_entity_index,
     row = target_entity_index
     col = source_entity_index
     inner_layout = EntityMajorLayout()
-    if represented_as_adjoint(row_layout)
+    adjoint_layout = represented_as_adjoint(row_layout)
+    if adjoint_layout
         @assert represented_as_adjoint(col_layout)
         inner_layout = adjoint(inner_layout)
     end
 
     pos = find_sparse_position(A, row, col, inner_layout)
-    return (pos-1)*eqs_per_entity*partials_per_entity + eqs_per_entity*(partial_index-1) + equation_index
+    base_ix = (pos-1)*eqs_per_entity*partials_per_entity
+    if adjoint_layout
+        ix = base_ix + partials_per_entity*(equation_index-1) + partial_index
+    else
+        ix = base_ix + eqs_per_entity*(partial_index-1) + equation_index
+    end
+    return ix
 end
 
 function row_col_sparse(target_entity_index, source_entity_index, # Typically row and column - global index
