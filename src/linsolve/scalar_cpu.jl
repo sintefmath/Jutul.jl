@@ -1,9 +1,16 @@
+
+"""
+    LUSolver(; reuse_memory = true, check = true, max_size = 50000)
+
+Direct solver that calls `lu` directly. Direct solvers are highly accurate, but
+are costly in terms of memory usage and execution speed for larger systems.
+"""
 mutable struct LUSolver
     F
     reuse_memory::Bool
     check::Bool
     max_size
-    function LUSolver(; reuse_memory = true, check = true, max_size = 50000)
+function LUSolver(; reuse_memory = true, check = true, max_size = 50000)
         new(nothing, reuse_memory, check, max_size)
     end
 end

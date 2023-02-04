@@ -80,7 +80,9 @@ Abstract type for driving forces
 """
 abstract type JutulForce end
 
-# Context
+"""
+Abstract type for the context Jutul should execute in (matrix formats, memory allocation, etc.)
+"""
 abstract type JutulContext end
 abstract type GPUJutulContext <: JutulContext end
 abstract type CPUJutulContext <: JutulContext end
@@ -217,6 +219,9 @@ include("contexts/default.jl")
 include("contexts/cuda.jl")
 
 # Domains
+"""
+Abstract type for domains where equations can be defined
+"""
 abstract type JutulDomain end
 
 export DiscretizedDomain
@@ -235,6 +240,12 @@ function Base.show(io::IO, d::DiscretizedDomain)
     end
 end
 
+"""
+    DiscretizedDomain(grid, disc = nothing)
+
+A type for a discretized domain on some grid. May contain one or more
+discretizations as-needed to write equations.
+"""
 function DiscretizedDomain(grid, disc = nothing; global_map = TrivialGlobalMap())
     entities = declare_entities(grid)
     u = Dict{Any, Int64}() # Is this a good definition?
@@ -297,6 +308,11 @@ struct SimulationModel{O<:JutulDomain,
     extra::OrderedDict{Symbol, Any}
 end
 
+"""
+    SimulationModel(domain, system; <kwarg>)
+
+Instantiate a model for a given `system` discretized on the `domain`.
+"""
 function SimulationModel(domain, system;
                             formulation=FullyImplicit(),
                             context=DefaultContext(),

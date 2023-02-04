@@ -23,6 +23,11 @@ function LinearAlgebra.ldiv!(p::PrecondWrapper, x)
     mul!(x, p.op, y) 
 end
 
+"""
+GenericKrylov(solver = :gmres; preconditioner = nothing; <kwarg>)
+
+Solver that wraps `Krylov.jl` with support for preconditioning.
+"""
 mutable struct GenericKrylov
     solver
     preconditioner
@@ -30,7 +35,7 @@ mutable struct GenericKrylov
     x
     r_norm
     config::IterativeSolverConfig
-    function GenericKrylov(solver = :gmres; preconditioner = nothing, kwarg...)
+function GenericKrylov(solver = :gmres; preconditioner = nothing, kwarg...)
         new(solver, preconditioner, nothing, nothing, nothing, IterativeSolverConfig(;kwarg...))
     end
 end

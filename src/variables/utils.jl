@@ -160,6 +160,9 @@ end
 
 replace_value(v, new_v) = v - value(v) + new_v
 
+"""
+Define a "typical" numerical value for a variable to scale the linear system entries.
+"""
 variable_scale(::JutulVariables) = nothing
 
 ## Initialization

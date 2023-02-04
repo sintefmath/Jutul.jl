@@ -292,6 +292,12 @@ function setup_parameters(model::JutulModel, init)
     return setup_parameters!(prm, model, init)
 end
 
+"""
+    state, prm = setup_state_and_parameters(model, init)
+
+Simultaneously set up state and parameters from a single `init` file (typically
+a `Dict` containing values that might either be initial values or parameters)
+"""
 function setup_state_and_parameters(model, init)
     init = copy(init)
     prm = Dict{Symbol, Any}()
@@ -757,6 +763,12 @@ function apply_forces!(storage, model, dt, ::Nothing; time = NaN)
 end
 
 export setup_forces
+"""
+    setup_forces(model::JutulModel; force_name = force_value)
+
+Set up forces for a given model. Keyword arguments varies depending on what the
+model supports.
+"""
 function setup_forces(model::JutulModel)
     return NamedTuple()
 end

@@ -2,6 +2,6 @@
 ```@index
 ```
 
-```@autodocs
-Modules = [Jutul]
-```
+<!-- ```@autodocs
+ Modules = [Jutul]
+``` -->
