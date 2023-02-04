@@ -55,7 +55,7 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
                                       n_objective = nothing,
                                       targets = parameter_targets(model),
                                       use_sparsity = true,
-                                      linear_solver = select_linear_solver(model),
+                                      linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-8),
                                       param_obj = false, kwarg...)
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
@@ -319,11 +319,6 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
     lsolve = adjoint_storage.linear_solver
-    if !isnothing(lsolve) && hasproperty(lsolve, :config)
-        lsolve.config.relative_tolerance = 1e-12
-        lsolve.config.absolute_tolerance = 1e-12
-        lsolve.preconditioner = ILUZeroPreconditioner()
-    end
     dx = adjoint_storage.dx
     if adjoint_storage.multiple_rhs
         lsolve_arg = (dx = dx, r = rhs)
