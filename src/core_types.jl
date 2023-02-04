@@ -2,7 +2,7 @@ export JutulSystem, JutulDomain, JutulVariables, AbstractJutulMesh, JutulContext
 export SimulationModel, JutulVariables, JutulFormulation, JutulEquation
 export setup_parameters, JutulForce
 export Cells, Nodes, Faces, declare_entities
-export ConstantVariables, ScalarVariable, VectorVariables, FractionVariables
+export ScalarVariable, VectorVariables, FractionVariables
 
 export SingleCUDAContext, DefaultContext
 export BlockMajorLayout, EquationMajorLayout, EntityMajorLayout
@@ -267,6 +267,9 @@ abstract type JutulFormulation end
 struct FullyImplicit <: JutulFormulation end
 
 # Equations
+"""
+Abstract type for all residual equations
+"""
 abstract type JutulEquation end
 abstract type DiagonalEquation <: JutulEquation end
 
@@ -480,30 +483,6 @@ function SimulationModel(g::AbstractJutulMesh, system; discretization = nothing,
     SimulationModel(d, system; kwarg...)
 end
 
-"""
-A set of constants, repeated over the entire set of Cells or some other entity
-"""
-struct ConstantVariables <: VectorVariables
-    constants
-    entity::JutulEntity
-    single_entity::Bool
-    function ConstantVariables(constants, entity = Cells(); single_entity = nothing)
-        error("Disabled, use parameters instead")
-        if !isa(constants, AbstractArray)
-            @assert length(constants) == 1
-            constants = [constants]
-        end
-        if isnothing(single_entity)
-            # Single entity means that we have one (or more) values that are given for all entities
-            # by a single representative entity
-            single_entity = isa(constants, AbstractVector)
-        end
-        # if isa(constants, CuArray) && single_entity
-        #    @warn "Single entity constants have led to crashes on CUDA/Tullio kernels!" maxlog = 5
-        # end
-        new(constants, entity, single_entity)
-    end
-end
 
 import Base: getindex, @propagate_inbounds, parent, size, axes
 

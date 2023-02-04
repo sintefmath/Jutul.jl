@@ -1,3 +1,6 @@
+"""
+Sparse Approximate Inverse preconditioner of lowest order -- SPAI(0)
+"""
 mutable struct SPAI0Preconditioner <: DiagonalPreconditioner
     factor
     buffer

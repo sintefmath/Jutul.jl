@@ -65,10 +65,6 @@ end
 Number of independent primary variables / degrees of freedom per computational entity.
 """
 degrees_of_freedom_per_entity(model, ::ScalarVariable) = 1
-"""
-Constant variables hold no degrees of freedom.
-"""
-degrees_of_freedom_per_entity(model, ::ConstantVariables) = 0
 
 """
 Number of values held by a primary variable. Normally this is equal to the number of degrees of freedom,
