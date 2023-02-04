@@ -159,8 +159,8 @@ function build_jacobian(sparse_arg, context, layout_row, layout_col = layout_row
     if Ft == Jt
         V_buf = nzval
     else
-        N = size(Jt, 1)
-        V_buf = unsafe_reinterpret(Ft, nzval, length(nzval) ÷ N)
+        N = size(Jt, 1)^2
+        V_buf = unsafe_reinterpret(Ft, nzval, length(nzval)*N)
     end
     return (jac, V_buf, bz)
 end
