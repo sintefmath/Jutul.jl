@@ -37,7 +37,7 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, arg..
     return setup_parameter_optimization(case, G, arg...; kwarg...)
 end
 
-function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization_config(model, case.parameters);
+function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization_config(case.model, case.parameters);
                                                             grad_type = :adjoint,
                                                             config = nothing,
                                                             print = 1,
@@ -86,7 +86,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         config = simulator_config(sim; info_level = -1, kwarg...)
     elseif !verbose
         config[:info_level] = -1
-        config[:final_simulation_message] = false
+        config[:end_report] = false
     end
     data[:sim] = sim
     data[:sim_config] = config
@@ -173,7 +173,7 @@ function objective_opt!(x, data, print_frequency = 1)
     data[:x_hash] = hash(x)
     n = data[:n_objective]
     push!(data[:obj_hist], obj)
-    if mod(n, print_frequency) == 0
+    if print_frequency > 0 && mod(n, print_frequency) == 0
         println("#$n: $obj")
     end
     data[:n_objective] += 1
