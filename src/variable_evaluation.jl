@@ -54,13 +54,15 @@ macro jutul_secondary(ex)
 
     # Define get_dependencies function
     dep_def = deepcopy(def)
-    dep_def[:name] = :get_dependencies
+    # We use the fully qualified name of Jutul here and in update_secondary_variable
+    # Note that this will not work if the user imports Jutul with an alias (import x as y)
+    dep_def[:name] = :(Jutul.get_dependencies)
     dep_def[:args] = [variable_sym, model_sym]
     dep_def[:body] = deps
     ex_dep = combinedef(dep_def)
     # Define update_as_secondary! function
     upd_def = deepcopy(def)
-    upd_def[:name] = :update_secondary_variable!
+    upd_def[:name] = :(Jutul.update_secondary_variable!)
     upd_def[:args] = [:array_target, variable_sym, model_sym, :state, :ix]
     # value, var, model, arg1, arg2
     tmp = "$(def[:name])(array_target, "
