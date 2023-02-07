@@ -337,22 +337,39 @@ function triangulate_mesh(m::CartesianMesh; is_depth = true, outer = false)
             end
             return (local_pts, local_tri)
         end
-        include_all = false
-        for y in 1:ny
-            for x in 1:nx
-                for z in 1:nz
-                    t = (x, y, z)
-                    if x == 1 || x == nx || include_all
-                        v = get_surface(t, 1, x == nx)
-                        offset += append_face!(pts, tri, cell_ix, t, v, offset)
+        if outer
+            for y in 1:ny
+                for x in 1:nx
+                    for z in 1:nz
+                        t = (x, y, z)
+                        if x == 1 || x == nx || include_all
+                            v = get_surface(t, 1, x == nx)
+                            offset += append_face!(pts, tri, cell_ix, t, v, offset)
+                        end
+                        if y == 1 || y == ny || include_all
+                            v = get_surface(t, 2, y == ny)
+                            offset += append_face!(pts, tri, cell_ix, t, v, offset)    
+                        end
+                        if z == 1 || z == nz || include_all
+                            v = get_surface(t, 3, z == nz)
+                            offset += append_face!(pts, tri, cell_ix, t, v, offset)    
+                        end
                     end
-                    if y == 1 || y == ny || include_all
-                        v = get_surface(t, 2, y == ny)
-                        offset += append_face!(pts, tri, cell_ix, t, v, offset)    
-                    end
-                    if z == 1 || z == nz || include_all
-                        v = get_surface(t, 3, z == nz)
-                        offset += append_face!(pts, tri, cell_ix, t, v, offset)    
+                end
+            end
+        else
+            for y in 1:ny
+                for x in 1:nx
+                    for z in 1:nz
+                        t = (x, y, z)
+                        for st in [true, false]
+                            v = get_surface(t, 1, st)
+                            offset += append_face!(pts, tri, cell_ix, t, v, offset)
+                            v = get_surface(t, 2, st)
+                            offset += append_face!(pts, tri, cell_ix, t, v, offset)
+                            v = get_surface(t, 3, st)
+                            offset += append_face!(pts, tri, cell_ix, t, v, offset)
+                        end
                     end
                 end
             end
