@@ -794,6 +794,18 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
     primary = get_primary_variables(model)
     ok = true
     report = Dict{Symbol, Any}()
+
+    function increment_norm(X::AbstractArray{T}) where T
+        max_v = typemax(T)
+        sum_v = zero(T)
+        for x in X
+            x_abs = abs(x)
+            max_v = max(max_v, x_abs)
+            sum_v += x_abs
+        end
+        return (sum = sum_v, max = max_v)
+    end
+
     if cell_major
         offset = 0 # Offset into global r array
         for u in get_primary_variable_ordered_entities(model)
@@ -819,7 +831,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
                 end
                 @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
                 local_offset += ni
-                report[pkey] = maximum(abs, dxi)
+                report[pkey] = increment_norm(dxi)
             end
             offset += nu*np
         end
@@ -834,7 +846,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
             end
             @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
             offset += n
-            report[pkey] = maximum(abs, dxi)
+            report[pkey] = increment_norm(dxi)
         end
     end
     if !ok
