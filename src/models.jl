@@ -795,16 +795,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
     ok = true
     report = Dict{Symbol, Any}()
 
-    function increment_norm(X::AbstractArray{T}) where T
-        max_v = typemax(T)
-        sum_v = zero(T)
-        for x in X
-            x_abs = abs(x)
-            max_v = max(max_v, x_abs)
-            sum_v += x_abs
-        end
-        return (sum = sum_v, max = max_v)
-    end
+
 
     if cell_major
         offset = 0 # Offset into global r array
@@ -831,7 +822,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
                 end
                 @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
                 local_offset += ni
-                report[pkey] = increment_norm(dxi)
+                report[pkey] = increment_norm(dxi, primary_storage[pkey], p)
             end
             offset += nu*np
         end
@@ -846,13 +837,25 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
             end
             @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
             offset += n
-            report[pkey] = increment_norm(dxi)
+            report[pkey] = increment_norm(dxi, primary_storage[pkey], p)
         end
     end
     if !ok
         error("Primary variables recieved invalid updates.")
     end
     return report
+end
+
+function increment_norm(dX, X, pvar)
+    T = eltype(dX)
+    scale = @something variable_scale(pvar) one(T)
+    max_v = sum_v = zero(T)
+    for dx in dX
+        dx_abs = abs(dx)
+        max_v = max(max_v, dx_abs)
+        sum_v += dx_abs
+    end
+    return (sum = scale*sum_v, max = scale*max_v)
 end
 
 """
