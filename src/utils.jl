@@ -736,7 +736,7 @@ function timing_breakdown_ministep(ministep)
     asm = 0
     for step in ministep[:steps]
         asm += 1
-        t_asm += step[:secondary_time] + step[:equation_time] + step[:linear_system_time]
+        t_asm += step[:secondary_time] + step[:equations_time] + step[:linear_system_time]
         if haskey(step, :linear_solve_time)
             its += 1
             t_solve += step[:linear_solve_time]
