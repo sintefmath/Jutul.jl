@@ -813,6 +813,7 @@ struct JutulCase
     forces
     state0
     parameters
+    input_data
 end
 
 """
@@ -820,7 +821,7 @@ end
 
 Set up a structure that holds the complete specification of a simulation case.
 """
-function JutulCase(model, dt = [1.0], forces = setup_forces(model); state0 = nothing, parameters = nothing, kwarg...)
+function JutulCase(model, dt = [1.0], forces = setup_forces(model); state0 = nothing, parameters = nothing, input_data = nothing, kwarg...)
     if isnothing(state0) && isnothing(parameters)
         state0, parameters = setup_state_and_parameters(model, kwarg...)
     elseif isnothing(state0)
@@ -834,7 +835,7 @@ function JutulCase(model, dt = [1.0], forces = setup_forces(model); state0 = not
         @assert nt == nf "If forces is a vector, the length (=$nf) must match the number of time steps (=$nt)."
     end
     @assert all(dt .> 0)
-    return JutulCase(model, dt, forces, state0, parameters)
+    return JutulCase(model, dt, forces, state0, parameters, input_data)
 end
 
 function Base.show(io::IO, t::MIME"text/plain", case::JutulCase)
@@ -850,11 +851,11 @@ end
 
 function duplicate(case::JutulCase; copy_model = false)
     # Make copies of everything but the model
-    (; model, dt, forces, state0, parameters) = case
+    (; model, dt, forces, state0, parameters, input_data) = case
     if copy_model
         model = deepcopy(model)
     end
-    return JutulCase(model, deepcopy(dt), deepcopy(forces), deepcopy(state0), deepcopy(parameters))
+    return JutulCase(model, deepcopy(dt), deepcopy(forces), deepcopy(state0), deepcopy(parameters), deepcopy(input_data))
 end
 
 export NoRelaxation, SimpleRelaxation
