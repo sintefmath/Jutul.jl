@@ -130,6 +130,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
                                                                    start_date = nothing,
                                                                    kwarg...)
     rec = progress_recorder(sim)
+    start_timestamp = now()
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     else
@@ -179,7 +180,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
     end
     final_simulation_message(sim, p, reports, timesteps, config, early_termination)
     retrieve_output!(states, config, no_steps)
-    return (states, reports)
+    return SimResult(states, reports, start_timestamp)
 end
 
 

@@ -31,3 +31,60 @@ function overwrite_by_kwargs(cfg; kwarg...)
     end
 end
 
+function Base.iterate(t::SimResult)
+    return (t.states, :states)
+end
+
+function Base.iterate(t::SimResult, state)
+    @assert state == :states
+    return (t.reports, nothing)
+end
+
+function Base.getindex(t::SimResult, i::Int)
+    return (state = t.states[i], report = t.reports[i])
+end
+
+function Base.show(io::IO, ::MIME"text/plain", sr::SimResult)
+    function print_keys(prefix, el)
+        for k in keys(el)
+            v = el[k]
+            if v isa AbstractDict
+                print(io, "$prefix:$k\n")
+                print_keys("  $prefix", v)
+            else
+                if v isa AbstractVecOrMat
+                    s = " of size $(size(v))"
+                else
+                    s = ""
+                end
+                print(io, "$prefix:$k => $(typeof(v))$s\n")
+            end
+        end
+    end
+    fmt = raw"u. dd Y H:mm"
+
+    states = sr.states
+    n = length(states)
+    print(io, sr)
+    print(io, ":\n\n")
+    if n > 1
+        el = first(states)
+        print(io, "  states (model variables)\n")
+        print_keys("    ", el)
+        print(io, "\n  reports (timing/debug information)\n")
+        print_keys("    ", first(sr.reports))
+    end
+    t = sum(x -> x[:total_time], sr.reports)
+    print(io, "\n  Completed at $(Dates.format(sr.start_timestamp, fmt)) after $(get_tstr(t)).")
+end
+
+function Base.show(io::IO, sr::SimResult)
+    n = length(sr.states)
+    if n == 1
+        s = "entry"
+    else
+        s = "entries"
+    end
+    print(io, "SimResult with $n $s")
+end
+

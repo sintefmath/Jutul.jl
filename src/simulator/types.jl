@@ -22,6 +22,17 @@ function Simulator(case::JutulCase; kwarg...)
     Simulator(case.model; state0 = deepcopy(case.state0), parameters = deepcopy(case.parameters), kwarg...)
 end
 
+struct SimResult
+    states::AbstractVector
+    reports::AbstractVector
+    start_timestamp::DateTime
+    end_timestamp::DateTime
+    function SimResult(states, reports, start_time)
+        @assert length(states) == length(reports)
+        return new(states, reports, start_time, now())
+    end
+end
+
 mutable struct SolveRecorder
     step       # Step index in context
     iterations # Total iterations in context
