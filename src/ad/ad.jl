@@ -29,6 +29,15 @@ end
     @inbounds get_entries(c)[eqNo, index]
 end
 
+@inline function get_entry(c::JutulAutoDiffCache, index, eqNo, derNo)
+    @inbounds get_entries(c)[eqNo, index].partials[derNo]
+end
+
+@inline function get_entry_val(c::JutulAutoDiffCache, index, eqNo)
+    @inbounds get_entries(c)[eqNo, index].value
+end
+
+
 include("compact.jl")
 include("generic.jl")
 
