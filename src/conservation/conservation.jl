@@ -297,18 +297,19 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np},
     stop = @inbounds conn_pos[cell + 1] - 1
     for i = start:stop
         fpos_outer = get_jacobian_pos(cell_flux, i, 1, 1)
-        if fpos_outer > 0
-            for e in 1:Ne
-                v = acc_r[e] - get_entry_val(cell_flux, i, e)
-                acc_r = setindex(acc_r, v, e)
-            end
-            @simd for p in 1:Np
-                @inbounds for e in 1:Ne
+        is_boundary = fpos_outer > 0
+        for e in 1:Ne
+            v = acc_r[e] - get_entry_val(cell_flux, i, e)
+            acc_r = setindex(acc_r, v, e)
+        end
+        @simd for p in 1:Np
+            @inbounds for e in 1:Ne
+                ∂ = get_entry(cell_flux, i, e, p)
+                f_v = acc_partials[e, p] - ∂
+                acc_partials = setindex(acc_partials, f_v, e, p)
+                if is_boundary
                     fpos = get_jacobian_pos(cell_flux, i, e, p)
-                    ∂ = get_entry(cell_flux, i, e, p)
                     update_jacobian_inner!(nz, fpos, ∂)
-                    f_v = acc_partials[e, p] - ∂
-                    acc_partials = setindex(acc_partials, f_v, e, p)
                 end
             end
         end
