@@ -65,12 +65,18 @@ function pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev
         R = current_reports
     end
     r = R[end]
-    # Previous number of iterations
-    its_p = length(r[:steps]) - 1
     # Target
     its_t, ϵ = sel.target, sel.offset
-    # Assume relationship between its and dt is linear (lol)
-    return dt_prev*(its_t + ϵ)/(its_p + ϵ)
+    # Previous number of iterations
+    its_p = length(r[:steps]) - 1 + ϵ
+    if length(R) > 1
+        r0 = R[end-1]
+        its_p0 = length(r0[:steps])-1 + ϵ
+        dt0 = r0[:dt]
+    else
+        its_p0, dt0 = its_p, dt_prev
+    end
+    return linear_timestep_selection(its_t, its_p0, its_p, dt0, dt_prev)
 end
 
 struct VariableChangeTimestepSelector <: AbstractTimestepSelector
