@@ -266,92 +266,61 @@ end
 # end
 
 function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context)
-    cp = acc.jacobian_positions
-    fp = cell_flux.jacobian_positions
-    threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, cp, fp, conn_pos, ad_dims(acc))
+    nc, ne, np = ad_dims(acc)
+    threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, conn_pos, nc, Val(ne), Val(np))
 end
 
-function threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, cp, fp, conn_pos, dims)
-    nc, ne, np = dims
+function threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, conn_pos, nc, ne, np)
     tb = minbatch(context, nc)
     @batch minbatch=tb for cell = 1:nc
-        # for e in 1:ne
-            fill_conservation_eq!(nz, r, cell, acc, cell_flux, cp, fp, conn_pos, Val(np), Val(ne))
-        # end
+        fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, np, ne)
     end
 end
 
-function fill_conservation_eq!(nz, r, cell, acc, cell_flux, cp, fp, conn_pos, ::Val{Np}, ::Val{Ne}) where {Np, Ne}
-    if false
-        # Old version.
-        for e in 1:Ne
-            diag_entry = get_entry(acc, cell, e)
-            @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-                q = get_entry(cell_flux, i, e)
-                @inbounds for d in 1:Np
-                    fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
-                    if d == 1 && fpos == 0
-                        # Boundary face.
-                        break
-                    end
-                    @inbounds ∂ = q.partials[d]
-                    Jutul.update_jacobian_inner!(nz, fpos, ∂)
-                end
-                diag_entry -= q
-            end
-
-            @inbounds r[e, cell] = diag_entry.value
-            @inbounds for d in 1:Np
-                @inbounds ∂ = diag_entry.partials[d]
-                apos = get_jacobian_pos(acc, cell, e, d, cp)
-                Jutul.update_jacobian_inner!(nz, apos, ∂)
-            end
+function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np}, ::Val{Ne}) where {Np, Ne}
+    # These should be elided by the compiler
+    acc_partials = zeros(SMatrix{Ne, Np})
+    acc_r = zeros(SVector{Ne})
+    # Accumulation
+    for e in 1:Ne
+        v = get_entry_val(acc, cell, e)
+        acc_r = setindex(acc_r, v, e)
+    end
+    @simd for e in 1:Ne
+        for p in 1:Np
+            dv = get_entry(acc, cell, e, p)
+            acc_partials = setindex(acc_partials, dv, e, p)
         end
-    else
-        # These should be elided by the compiler
-        acc_partials = zeros(SMatrix{Ne, Np})
-        acc_r = zeros(SVector{Ne})
-        # Accumulation
-        for e in 1:Ne
-            v = get_entry_val(acc, cell, e)
-            acc_r = setindex(acc_r, v, e)
-        end
-        @simd for e in 1:Ne
-            for p in 1:Np
-                dv = get_entry(acc, cell, e, p)
-                acc_partials = setindex(acc_partials, dv, e, p)
-            end
-        end
-        # Fluxes
-        start = @inbounds conn_pos[cell]
-        stop = @inbounds conn_pos[cell + 1] - 1
-        for i = start:stop
-            fpos_outer = get_jacobian_pos(cell_flux, i, 1, 1)
-            if fpos_outer > 0
-                for e in 1:Ne
-                    v = acc_r[e] - get_entry_val(cell_flux, i, e)
-                    acc_r = setindex(acc_r, v, e)
-                end
-                @simd for p in 1:Np
-                    @inbounds for e in 1:Ne
-                        fpos = get_jacobian_pos(cell_flux, i, e, p)
-                        ∂ = get_entry(cell_flux, i, e, p)
-                        update_jacobian_inner!(nz, fpos, ∂)
-                        f_v = acc_partials[e, p] - ∂
-                        acc_partials = setindex(acc_partials, f_v, e, p)
-                    end
-                end
-            end
-        end
-        @inbounds for e in 1:Ne
-            r[e, cell] = acc_r[e]
-        end
-        @simd for p in 1:Np
+    end
+    # Fluxes
+    start = @inbounds conn_pos[cell]
+    stop = @inbounds conn_pos[cell + 1] - 1
+    for i = start:stop
+        fpos_outer = get_jacobian_pos(cell_flux, i, 1, 1)
+        if fpos_outer > 0
             for e in 1:Ne
-                @inbounds ∂ = acc_partials[e, p]
-                apos = get_jacobian_pos(acc, cell, e, p, cp)
-                Jutul.update_jacobian_inner!(nz, apos, ∂)
+                v = acc_r[e] - get_entry_val(cell_flux, i, e)
+                acc_r = setindex(acc_r, v, e)
             end
+            @simd for p in 1:Np
+                @inbounds for e in 1:Ne
+                    fpos = get_jacobian_pos(cell_flux, i, e, p)
+                    ∂ = get_entry(cell_flux, i, e, p)
+                    update_jacobian_inner!(nz, fpos, ∂)
+                    f_v = acc_partials[e, p] - ∂
+                    acc_partials = setindex(acc_partials, f_v, e, p)
+                end
+            end
+        end
+    end
+    @inbounds for e in 1:Ne
+        r[e, cell] = acc_r[e]
+    end
+    @simd for p in 1:Np
+        for e in 1:Ne
+            @inbounds ∂ = acc_partials[e, p]
+            apos = get_jacobian_pos(acc, cell, e, p)
+            Jutul.update_jacobian_inner!(nz, apos, ∂)
         end
     end
 end
