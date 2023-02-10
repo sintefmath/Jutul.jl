@@ -353,7 +353,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
     report[:success] = done
     t_finalize = @elapsed if finalize
         if done
-            update_after_step!(sim, dt, forces; time = cur_time + dt)
+            report[:post_update] = update_after_step!(sim, dt, forces; time = cur_time + dt)
         else
             reset_state_to_previous_state!(sim)
         end

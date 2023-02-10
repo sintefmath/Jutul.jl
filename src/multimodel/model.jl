@@ -738,9 +738,11 @@ function reset_previous_state!(storage, model::MultiModel, state0)
 end
 
 function update_after_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
+    report = OrderedDict{Symbol, Any}()
     for key in targets
-        update_after_step!(storage[key], model.models[key], dt, forces[key]; kwarg...)
+        report[key] = update_after_step!(storage[key], model.models[key], dt, forces[key]; kwarg...)
     end
+    return report
 end
 
 function update_before_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)

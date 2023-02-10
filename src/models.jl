@@ -874,12 +874,34 @@ end
 function update_after_step!(storage, model, dt, forces; kwarg...)
     state = storage.state
     state0 = storage.state0
+    report = OrderedDict{Symbol, Any}()
+    for (k, var) in get_primary_variables(model)
+        report[k] = variable_change_report(state[k], state0[k], var)
+    end
+    for (k, var) in get_secondary_variables(model)
+        report[k] = variable_change_report(state[k], state0[k], var)
+    end
     for key in model.output_variables
         update_values!(state0[key], state[key])
     end
     update_after_step!(storage, model.domain, model, dt, forces; kwarg...)
     update_after_step!(storage, model.system, model, dt, forces; kwarg...)
     update_after_step!(storage, model.formulation, model, dt, forces; kwarg...)
+end
+
+function variable_change_report(X::AbstractArray, X0::AbstractArray{T}, pvar) where T<:Real
+    max_v = sum_v = zero(T)
+    @inbounds @simd for i in eachindex(X)
+        dx = value(X[i]) - value(X0[i])
+        dx_abs = abs(dx)
+        max_v = max(max_v, dx_abs)
+        sum_v += dx_abs
+    end
+    return (sum = sum_v, max = max_v)
+end
+
+function variable_change_report(X, X0, pvar)
+    return nothing
 end
 
 function update_after_step!(storage, ::Any, model, dt, forces; time = NaN)
