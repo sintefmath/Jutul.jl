@@ -282,10 +282,8 @@ function threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, cp, fp, 
 end
 
 function fill_conservation_eq!(nz, r, cell, acc, cell_flux, cp, fp, conn_pos, ::Val{Np}, ::Val{Ne}) where {Np, Ne}
-    # tmp = zeros(SVector{Ne})
-    # @info "" typeof(r) typeof(nz)
-    # error()
     if false
+        # Old version.
         for e in 1:Ne
             diag_entry = get_entry(acc, cell, e)
             @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
@@ -307,10 +305,10 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, cp, fp, conn_pos, ::
                 @inbounds ∂ = diag_entry.partials[d]
                 apos = get_jacobian_pos(acc, cell, e, d, cp)
                 Jutul.update_jacobian_inner!(nz, apos, ∂)
-                # @inbounds nz[apos] = diag_entry.partials[d]
             end
         end
     else
+        # These should be elided by the compiler
         acc_partials = zeros(SMatrix{Ne, Np})
         acc_r = zeros(SVector{Ne})
         # Accumulation
@@ -318,22 +316,24 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, cp, fp, conn_pos, ::
             v = get_entry_val(acc, cell, e)
             acc_r = setindex(acc_r, v, e)
         end
-        for e in 1:Ne
+        @simd for e in 1:Ne
             for p in 1:Np
                 dv = get_entry(acc, cell, e, p)
                 acc_partials = setindex(acc_partials, dv, e, p)
             end
         end
         # Fluxes
-        for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-            fpos = get_jacobian_pos(cell_flux, i, 1, 1)
-            if fpos > 0
+        start = @inbounds conn_pos[cell]
+        stop = @inbounds conn_pos[cell + 1] - 1
+        for i = start:stop
+            fpos_outer = get_jacobian_pos(cell_flux, i, 1, 1)
+            if fpos_outer > 0
                 for e in 1:Ne
                     v = acc_r[e] - get_entry_val(cell_flux, i, e)
                     acc_r = setindex(acc_r, v, e)
                 end
-                for p in 1:Np
-                    for e in 1:Ne
+                @simd for p in 1:Np
+                    @inbounds for e in 1:Ne
                         fpos = get_jacobian_pos(cell_flux, i, e, p)
                         ∂ = get_entry(cell_flux, i, e, p)
                         update_jacobian_inner!(nz, fpos, ∂)
@@ -343,12 +343,12 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, cp, fp, conn_pos, ::
                 end
             end
         end
-        for e in 1:Ne
+        @inbounds for e in 1:Ne
             r[e, cell] = acc_r[e]
         end
-        for p in 1:Np
+        @simd for p in 1:Np
             for e in 1:Ne
-                ∂ = acc_partials[e, p]
+                @inbounds ∂ = acc_partials[e, p]
                 apos = get_jacobian_pos(acc, cell, e, p, cp)
                 Jutul.update_jacobian_inner!(nz, apos, ∂)
             end
