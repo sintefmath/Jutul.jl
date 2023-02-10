@@ -887,17 +887,24 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     update_after_step!(storage, model.domain, model, dt, forces; kwarg...)
     update_after_step!(storage, model.system, model, dt, forces; kwarg...)
     update_after_step!(storage, model.formulation, model, dt, forces; kwarg...)
+    return report
 end
 
 function variable_change_report(X::AbstractArray, X0::AbstractArray{T}, pvar) where T<:Real
-    max_v = sum_v = zero(T)
+    max_dv = max_v = sum_dv = sum_v = zero(T)
     @inbounds @simd for i in eachindex(X)
-        dx = value(X[i]) - value(X0[i])
+        x = value(X[i])
+        dx = x - value(X0[i])
+
         dx_abs = abs(dx)
-        max_v = max(max_v, dx_abs)
-        sum_v += dx_abs
+        max_dv = max(max_dv, dx_abs)
+        sum_dv += dx_abs
+
+        x_abs = abs(x)
+        max_v = max(max_v, x_abs)
+        sum_v += x_abs
     end
-    return (sum = sum_v, max = max_v)
+    return (dx = (sum = sum_dv, max = max_dv), x = (sum = sum_v, max = max_v), n = length(X))
 end
 
 function variable_change_report(X, X0, pvar)
