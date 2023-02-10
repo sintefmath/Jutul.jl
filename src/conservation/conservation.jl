@@ -275,34 +275,36 @@ function threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, cp, fp, 
     nc, ne, np = dims
     tb = minbatch(context, nc)
     @batch minbatch=tb for cell = 1:nc
-        for e in 1:ne
-            fill_conservation_eq!(nz, r, cell, e, acc, cell_flux, cp, fp, conn_pos, np)
-        end
+        # for e in 1:ne
+            fill_conservation_eq!(nz, r, cell, acc, cell_flux, cp, fp, conn_pos, Val(np), Val(ne))
+        # end
     end
 end
 
-function fill_conservation_eq!(nz, r, cell, e, acc, cell_flux, cp, fp, conn_pos, np)
-    diag_entry = get_entry(acc, cell, e)
-    @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-        q = get_entry(cell_flux, i, e)
-        @inbounds for d in eachindex(q.partials)
-            fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
-            if d == 1 && fpos == 0
-                # Boundary face.
-                break
+function fill_conservation_eq!(nz, r, cell, acc, cell_flux, cp, fp, conn_pos, ::Val{Np}, ::Val{Ne}) where {Np, Ne}
+    for e in 1:Ne
+        diag_entry = get_entry(acc, cell, e)
+        @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
+            q = get_entry(cell_flux, i, e)
+            @inbounds for d in 1:Np
+                fpos = get_jacobian_pos(cell_flux, i, e, d, fp)
+                if d == 1 && fpos == 0
+                    # Boundary face.
+                    break
+                end
+                @inbounds ∂ = q.partials[d]
+                Jutul.update_jacobian_inner!(nz, fpos, ∂)
             end
-            @inbounds ∂ = q.partials[d]
-            Jutul.update_jacobian_inner!(nz, fpos, ∂)
+            diag_entry -= q
         end
-        diag_entry -= q
-    end
 
-    @inbounds r[e, cell] = diag_entry.value
-    @inbounds for d in eachindex(diag_entry.partials)
-        @inbounds ∂ = diag_entry.partials[d]
-        apos = get_jacobian_pos(acc, cell, e, d, cp)
-        Jutul.update_jacobian_inner!(nz, apos, ∂)
-        # @inbounds nz[apos] = diag_entry.partials[d]
+        @inbounds r[e, cell] = diag_entry.value
+        @inbounds for d in 1:Np
+            @inbounds ∂ = diag_entry.partials[d]
+            apos = get_jacobian_pos(acc, cell, e, d, cp)
+            Jutul.update_jacobian_inner!(nz, apos, ∂)
+            # @inbounds nz[apos] = diag_entry.partials[d]
+        end
     end
 end
 
