@@ -59,10 +59,9 @@ struct IterationTimestepSelector <: AbstractTimestepSelector
 end
 
 function pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev, dT, reports, current_reports, step_index, new_step)
-    if new_step
-        R = reports[step_index-1][:ministeps]
-    else
-        R = current_reports
+    R = successful_reports(reports, current_reports, step_index, 2)
+    if length(R) == 0
+        return dT
     end
     r = R[end]
     # Target
@@ -92,10 +91,9 @@ struct VariableChangeTimestepSelector <: AbstractTimestepSelector
 end
 
 function pick_next_timestep(sel::VariableChangeTimestepSelector, sim, config, dt_prev, dT, reports, current_reports, step_index, new_step)
-    if new_step
-        R = reports[step_index-1][:ministeps]
-    else
-        R = current_reports
+    R = successful_reports(reports, current_reports, step_index, 2)
+    if length(R) == 0
+        return dT
     end
     m = sel.model_key
     k = sel.key
@@ -135,13 +133,48 @@ function pick_next_timestep(sel::VariableChangeTimestepSelector, sim, config, dt
     return linear_timestep_selection(x, x0, x1, dt0, dt1)
 end
 
-function linear_timestep_selection(x, x0, x1, dt0, dt1)
-    if x1 != x0
-        # Linear approximation
-        dt_next = dt0 + (x - x0)*(dt1 - dt0)/(x1 - x0)
-    else
+"""
+    successful_reports(old_reports, current_reports, step_index, n = 1)
+
+Get the `n` last successful solve reports from all previous reports
+(old_reports) and the current ministep set.
+"""
+function successful_reports(old_reports, current_reports, step_index, n = 1)
+    out = similar(current_reports, 0)
+    sizehint!(out, n)
+    for step in step_index:-1:1
+        if step == step_index
+            reports = current_reports
+        else
+            reports = old_reports[step][:ministeps]
+        end
+
+        for r in Iterators.reverse(reports)
+            if r[:success]
+                push!(out, r)
+                if length(out) >= n
+                    return out
+                end
+            end
+        end
+    end
+    return out
+end
+
+"""
+    linear_timestep_selection(x, x0, x1, dt0, dt1)
+
+Produce linear estimate of timestep `dt` for some value `x` from observed
+observations. If the observations have the same `x` or `dt` values, a simple
+scaling based on the `x1` value is used.
+"""
+function linear_timestep_selection(x, x0, x1, dt0, dt1, rtol = 1e-3)
+    if isapprox(x1, x0, rtol = rtol) || isapprox(dt1, dt0, rtol = rtol)
         # Fallback for missing / degenerate data
         dt_next = x*dt1/x1
+    else
+        # Linear approximation
+        dt_next = dt0 + (x - x0)*(dt1 - dt0)/(x1 - x0)
     end
     return dt_next
 end
