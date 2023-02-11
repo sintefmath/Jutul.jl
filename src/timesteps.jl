@@ -169,7 +169,9 @@ observations. If the observations have the same `x` or `dt` values, a simple
 scaling based on the `x1` value is used.
 """
 function linear_timestep_selection(x, x0, x1, dt0, dt1, rtol = 1e-3)
-    if isapprox(x1, x0, rtol = rtol) || isapprox(dt1, dt0, rtol = rtol)
+    obj_equal = isapprox(x1, x0, rtol = rtol) || isapprox(dt1, dt0, rtol = rtol)
+    obj_bad = (dt1 <= dt0 && x1 > x0) || (dt0 <= dt1 && x0 > x1) 
+    if obj_equal || obj_bad
         # Fallback for missing / degenerate data
         dt_next = x*dt1/x1
     else

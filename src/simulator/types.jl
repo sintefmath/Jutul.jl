@@ -28,7 +28,9 @@ struct SimResult
     start_timestamp::DateTime
     end_timestamp::DateTime
     function SimResult(states, reports, start_time)
-        @assert length(states) == length(reports)
+        nr = length(reports)
+        ns = length(states)
+        @assert ns == nr || ns == nr-1 "Recieved $ns or $ns - 1 states different from $nr reports"
         return new(states, reports, start_time, now())
     end
 end

@@ -41,7 +41,12 @@ function Base.iterate(t::SimResult, state)
 end
 
 function Base.getindex(t::SimResult, i::Int)
-    return (state = t.states[i], report = t.reports[i])
+    if length(t.states) < i
+        state = nothing
+    else
+        state = t.states[i]
+    end
+    return (state = state, report = t.reports[i])
 end
 
 function Base.show(io::IO, ::MIME"text/plain", sr::SimResult)
