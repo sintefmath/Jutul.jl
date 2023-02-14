@@ -406,7 +406,7 @@ function adjoint_parameter_model(model, arg...; context = DefaultContext())
     return pmodel
 end
 
-function adjoint_model_copy(model::SimulationModel{O, S, C, F}; context = model.context) where {O, S, C, F}
+function adjoint_model_copy(model::SimulationModel{O, S, F, C}; context = model.context) where {O, S, C, F}
     pvar = copy(model.primary_variables)
     svar = copy(model.secondary_variables)
     outputs = vcat(keys(pvar)..., keys(svar)...)
@@ -416,7 +416,7 @@ function adjoint_model_copy(model::SimulationModel{O, S, C, F}; context = model.
     # Transpose the system
     new_context = adjoint(context)
     N = typeof(new_context)
-    return SimulationModel{O, S, N, F}(model.domain, model.system, new_context, model.formulation, model.plot_mesh, pvar, svar, prm, eqs, outputs, extra)
+    return SimulationModel{O, S, F, N}(model.domain, model.system, new_context, model.formulation, model.plot_mesh, pvar, svar, prm, eqs, outputs, extra)
 end
 
 """
