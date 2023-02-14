@@ -238,6 +238,8 @@ default_value(model, variable) = 0.0
 default_values(model, var::ScalarVariable) = repeat([default_value(model, var)], number_of_entities(model, var))
 default_values(model, var::JutulVariables) = repeat([default_value(model, var)], values_per_entity(model, var), number_of_entities(model, var))
 
+need_default_primary(model, var) = true
+
 function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     state[symb] = initialize_variable_value(model, pvar, val; kwarg...)
     return state
@@ -246,7 +248,7 @@ end
 function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict; need_value = true)
     if haskey(val, symb)
         value = val[symb]
-    elseif need_value
+    elseif need_value && need_default_primary(model, pvar)
         k = keys(val)
         error("The key $symb must be present to initialize the state. Provided symbols in initialization Dict: $k")
     else
@@ -352,19 +354,35 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
         dv0 = dx[active_ix + (i-1)*nu]
         dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
         dlast0 -= dv0
-        if abs(dv0) > 1e-10
-            # Skip tiny values
-            w = pick_relaxation(w, dv, dv0)
-        end
+        # Skip tiny values
+        w = pick_relaxation(w, dv, dv0)
     end
     # Do the same thing for the implicit update of the last value
     dlast = choose_increment(value(s[nf, full_cell]), dlast0, abs_max, nothing, minval, maxval)
     w = w0*pick_relaxation(w, dlast, dlast0)
 
-    @inbounds for i = 1:(nf-1)
+    bad_update = w < 1e-6
+    if bad_update
+        w = w0
+    end
+    @inbounds for i in 1:(nf-1)
         s[i, full_cell] += w*dx[active_ix + (i-1)*nu]
     end
     @inbounds s[nf, full_cell] += w*dlast0
+    if bad_update
+        # Dampening is tiny, update and renormalize instead
+        tot = 0.0
+        @inbounds for i in 1:nf
+            s_i = s[i, full_cell]
+            sat = clamp(value(s_i), minval, maxval)
+            tot += sat
+            s_i = replace_value(s_i, sat)
+            s[i, full_cell] = s_i
+        end
+        @inbounds for i = 1:nf
+            s[i, full_cell] /= tot
+        end
+    end
 end
 
 function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)
