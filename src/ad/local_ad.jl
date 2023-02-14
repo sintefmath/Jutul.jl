@@ -62,6 +62,7 @@ end
 @inline Base.axes(A::LocalPerspectiveAD) = axes(A.data)
 @inline parenttype(::Type{LocalPerspectiveAD{T,N,A,I}}) where {T,N,A,I} = A
 @inline Base.haskey(state::LocalStateAD, f::Symbol) = haskey(getfield(state, :data), f)
+@inline Base.haskey(state::ValueStateAD, f::Symbol) = haskey(getfield(state, :data), f)
 
 
 # Match in type - pass index on
