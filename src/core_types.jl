@@ -502,33 +502,6 @@ end
 
 import Base: getindex, @propagate_inbounds, parent, size, axes
 
-struct ConstantWrapper{R}
-    data::Vector{R}
-    nrows::Int
-    function ConstantWrapper(data, n)
-        new{eltype(data)}(data, n)
-    end
-end
-Base.eltype(c::ConstantWrapper{T}) where T = T
-Base.length(c::ConstantWrapper) = length(c.data)
-Base.size(c::ConstantWrapper) = (length(c.data), c.nrows)
-Base.size(c::ConstantWrapper, i) = i == 1 ? length(c.data) : c.nrows
-Base.@propagate_inbounds Base.getindex(c::ConstantWrapper{R}, i, j) where R = c.data[i]::R
-Base.@propagate_inbounds Base.getindex(c::ConstantWrapper{R}, i) where R = c.data[1]::R
-Base.setindex!(c::ConstantWrapper, arg...) = setindex!(c.data, arg...)
-Base.ndims(c::ConstantWrapper) = 2
-Base.view(c::ConstantWrapper, ::Colon, i) = c.data
-as_value(c::ConstantWrapper) = c
-
-function Base.axes(c::ConstantWrapper, d)
-    if d == 1
-        return Base.OneTo(length(c.data))
-    else
-        return Base.OneTo(c.nrows)
-    end
-end
-
-
 struct JutulStorage{K}
     data::Union{Dict{Symbol, <:Any}, NamedTuple}
     function JutulStorage(S = Dict{Symbol, Any}())

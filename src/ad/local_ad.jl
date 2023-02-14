@@ -24,7 +24,6 @@ as_value(x::StateType) = ValueStateAD(x)
 
 export local_ad
 @inline local_ad(v::AbstractArray, i::Int) = LocalPerspectiveAD(v, i)
-@inline local_ad(v::ConstantWrapper, i::Int) = v
 @inline local_ad(v, ::Nothing) = as_value(v)
 @inline local_ad(v, i) = v
 
@@ -69,8 +68,6 @@ end
 @inline next_level_local_ad(x::AbstractArray{T}, ::Type{T}, index) where T = local_ad(x, index)
 # Mismatch in AD type - take value
 @inline next_level_local_ad(x, t, index) = as_value(x)
-# Constants
-@inline next_level_local_ad(x::ConstantWrapper, t, index) = x
 # Nested states
 @inline next_level_local_ad(x::StateType, E, index) = local_ad(x, index, E)
 
