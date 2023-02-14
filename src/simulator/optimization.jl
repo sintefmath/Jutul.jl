@@ -43,6 +43,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
                                                             print = 1,
                                                             copy_case = true,
                                                             param_obj = false,
+                                                            use_sparsity = true,
                                                             kwarg...)
     if copy_case
         case = duplicate(case)
@@ -95,6 +96,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         adj_storage = setup_adjoint_storage(model, state0 = state0,
                                                    parameters = parameters,
                                                    targets = targets,
+                                                   use_sparsity = use_sparsity,
                                                    param_obj = param_obj)
         data[:adjoint_storage] = adj_storage
         grad_adj = zeros(adj_storage.n)

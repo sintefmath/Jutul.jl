@@ -70,12 +70,17 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
     state0_p = swap_variables(state0, parameters, parameter_model, variables = true)
     parameters_p = swap_variables(state0, parameters, parameter_model, variables = false)
     parameter_sim = Simulator(parameter_model, state0 = deepcopy(state0_p), parameters = deepcopy(parameters_p), mode = :sensitivities, extra_timing = nothing)
-    if use_sparsity
-        # We will update these later on
-        sparsity_obj = Dict{Any, Any}(:parameter => nothing, 
-                                      :forward => nothing)
+    if use_sparsity isa Bool
+        if use_sparsity
+            # We will update these later on
+            sparsity_obj = Dict{Any, Any}(:parameter => nothing, 
+                                        :forward => nothing)
+        else
+            sparsity_obj = nothing
+        end
     else
-        sparsity_obj = nothing
+        # Assume it was manually set up
+        sparsity_obj = use_sparsity
     end
     n_pvar = number_of_degrees_of_freedom(model)
     λ = gradient_vec_or_mat(n_pvar, n_objective)
