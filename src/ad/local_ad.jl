@@ -47,9 +47,18 @@ end
     end
 end
 
-@inline @propagate_inbounds function Base.getindex(A::LocalPerspectiveAD{T}, i::Int) where T
+@inline @propagate_inbounds function Base.getindex(A::LocalPerspectiveAD{T, N, V, I}, i::Int) where  {T, N, V<:AbstractVector, I}
     d = A.data[i]
     return value_or_ad(A, d, i)
+end
+
+@inline @propagate_inbounds function Base.getindex(A::LocalPerspectiveAD{T, N, V, I}, linear_ix::Int) where {T, N, V<:AbstractMatrix, I}
+    # Linear indexing into matrix
+    data = A.data
+    n = size(data, 1)
+    i = ((linear_ix - 1) % n) + 1
+    j = div(linear_ix-1, n) + 1
+    return A[i, j]
 end
 
 @inline @propagate_inbounds function Base.getindex(A::LocalPerspectiveAD{T}, i::Int, j::Int) where T
