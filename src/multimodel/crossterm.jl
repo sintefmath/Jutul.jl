@@ -270,6 +270,19 @@ end
 
 sub_number_of_equations(model::MultiModel) = map(number_of_equations, model.models)
 sub_number_of_degrees_of_freedom(model::MultiModel) = map(number_of_degrees_of_freedom, model.models)
+sub_block_sizes(model::MultiModel) = map(model_block_size, model.models)
+
+function model_block_size(model)
+    layout = matrix_layout(model.context)
+    if layout isa ScalarLayout
+        bz = 1
+    else
+        u = only(get_primary_variable_ordered_entities(model))
+        bz = degrees_of_freedom_per_entity(model, u)
+    end
+    return bz
+end
+
 
 function crossterm_subsystem(model, lsys, target, source; diag = false)
     # neqs = map(number_of_equations, model.models)
@@ -308,11 +321,12 @@ function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source
     target_model = model[target]
     ndofs = sub_number_of_degrees_of_freedom(model)
     neqs = sub_number_of_equations(model)
+    bz = sub_block_sizes(model)
     # Diagonal part: Into target equation, and with respect to target variables
-    equation_offset += local_group_offset(target_keys, target, neqs)
-    variable_offset += local_group_offset(target_keys, target, ndofs)
+    equation_offset += local_group_offset(target_keys, target, neqs, bz)
+    variable_offset += local_group_offset(target_keys, target, ndofs, bz)
 
-    equation_offset += get_equation_offset(target_model, eq_label)
+    equation_offset += get_equation_offset(target_model, eq_label, bz[target])
     for target_e in get_primary_variable_ordered_entities(target_model)
         align_to_jacobian!(s_target, ct, lsys.jac, target_model, target_e, impact,
                                                         equation_offset = equation_offset,
@@ -323,21 +337,23 @@ end
 
 function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, source, eq_label, impact, offdiag_alignment, equation_offset, variable_offset)
     lsys, target_keys, source_keys = crossterm_subsystem(model, lsys, target, source, diag = false)
+    J = lsys.jac
     ndofs = sub_number_of_degrees_of_freedom(model)
     neqs = sub_number_of_equations(model)
+    bz = sub_block_sizes(model)
     # Diagonal part: Into target equation, and with respect to target variables
-    equation_offset += local_group_offset(target_keys, target, neqs)
-    variable_offset += local_group_offset(source_keys, source, ndofs)
+    equation_offset += local_group_offset(target_keys, target, neqs, bz)
+    variable_offset += local_group_offset(source_keys, source, ndofs, bz)
 
     target_model = model[target]
     source_model = model[source]
 
-    equation_offset += get_equation_offset(target_model, eq_label)
+    equation_offset += get_equation_offset(target_model, eq_label, bz[target])
     @assert !isnothing(offdiag_alignment)
     # @assert keys(s_source), :numeric == keys(offdiag_alignment)
     nt = number_of_entities(target_model, ct_equation(target_model, eq_label))
     for source_e in get_primary_variable_ordered_entities(source_model)
-        align_to_jacobian!(s_source, ct, lsys.jac, source_model, source_e, impact, equation_offset = equation_offset,
+        align_to_jacobian!(s_source, ct, J, source_model, source_e, impact, equation_offset = equation_offset,
                                                                                    variable_offset = variable_offset,
                                                                                    positions = offdiag_alignment,
                                                                                    number_of_entities_target = nt,

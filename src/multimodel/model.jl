@@ -166,8 +166,11 @@ end
 function align_equations_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
     model_keys = submodel_symbols(model)
-    neqs = map(number_of_equations, model.models)
-    ndofs = map(number_of_degrees_of_freedom, model.models)
+    neqs = sub_number_of_equations(model)
+    ndofs = sub_number_of_degrees_of_freedom(model)
+    bz = sub_block_sizes(model)
+
+    dims = (neqs, ndofs, bz)
     lsys = storage[:LinearizedSystem]
     if has_groups(model)
         ng = number_of_groups(model)
@@ -175,45 +178,52 @@ function align_equations_to_linearized_system!(storage, model::MultiModel; equat
         for g in 1:ng
             J = lsys[g, g].jac
             subs = groups .== g
-            align_equations_subgroup!(storage, models, model_keys[subs], (neqs, ndofs), J, equation_offset, variable_offset)
+            align_equations_subgroup!(storage, models, model_keys[subs], dims, J, equation_offset, variable_offset)
         end
     else
         J = lsys.jac
-        align_equations_subgroup!(storage, models, model_keys, (neqs, ndofs), J, equation_offset, variable_offset)
+        align_equations_subgroup!(storage, models, model_keys, dims, J, equation_offset, variable_offset)
     end
 end
 
 function align_equations_subgroup!(storage, models, model_keys, dims, J, equation_offset, variable_offset)
-    neqs, nvars = dims
+    neqs, nvars, bz = dims
     for key in model_keys
         submodel = models[key]
         eqs_s = storage[key][:equations]
         eqs = submodel.equations
         align_equations_to_jacobian!(eqs_s, eqs, J, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
-        equation_offset += neqs[key]
-        variable_offset += nvars[key]
+        equation_offset += neqs[key]÷bz[key]
+        variable_offset += nvars[key]÷bz[key]
     end
 end
 
-function local_group_offset(keys, target_key, ndofs)
+function local_group_offset(keys, target_key, ndofs, bz = nothing)
     offset = 0
     for k in keys
         if k == target_key
             return offset
         end
-        offset += ndofs[k]
+        ndof = ndofs[k]
+        if !isnothing(bz)
+            ndof = Int(ndof/bz[k])
+        end
+        offset += ndof
     end
     error("Should not happen")
 end
 
-function get_equation_offset(model::SimulationModel, eq_label::Pair)
-    return get_equation_offset(model, last(eq_label))
+function get_equation_offset(model::SimulationModel, eq_label::Pair, arg...)
+    return get_equation_offset(model, last(eq_label), arg...)
 end
 
-function get_equation_offset(model::SimulationModel, eq_label::Symbol)
+function get_equation_offset(model::SimulationModel, eq_label::Symbol, bz = nothing)
     offset = 0
     for k in keys(model.equations)
         if k == eq_label
+            if !isnothing(bz)
+                offset = Int(offset/bz)
+            end
             return offset
         else
             offset += number_of_equations(model, model.equations[k])
@@ -236,12 +246,21 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
 
         row_layout = scalarize_layout(row_layout, col_layout)
         col_layout = scalarize_layout(col_layout, row_layout)
+        has_blocks = col_layout == BlockMajorLayout()
+        bz = 1
+        if has_blocks
+            @assert row_layout == col_layout
+            # Assume that block layout uses a single entity, grab the only one with primaries
+            prim_e = get_primary_variable_ordered_entities(target_model)
+            some_entity = only(prim_e)
+            bz = degrees_of_freedom_per_entity(target_model, some_entity)
+        end
 
         # Source differs from target. We need to get sparsity from cross model terms.
         T = index_type(row_context)
         I = Vector{Vector{T}}()
         J = Vector{Vector{T}}()
-        ncols = number_of_degrees_of_freedom(source_model)
+        ncols = Int(number_of_degrees_of_freedom(source_model)/bz)
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target, true)
@@ -266,8 +285,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         I = vec(vcat(I...))
         J = vec(vcat(J...))
         nrows = number_of_rows(target_model, row_layout)
-    
-        sarg = SparsePattern(I, J, nrows, ncols, row_layout, col_layout)
+        sarg = SparsePattern(I, J, nrows, ncols, row_layout, col_layout, bz, bz)
     end
     return sarg
 end
@@ -306,6 +324,25 @@ function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind
     end
 end
 
+function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind, row_layout::BlockMajorLayout, col_layout::BlockMajorLayout)
+    eq = ct_equation(target_model, eq_label)
+    target_e = associated_entity(eq)
+    entities = get_primary_variable_ordered_entities(source_model)
+    bz = degrees_of_freedom_per_entity(target_model, only(entities))
+    equation_offset = get_equation_offset(target_model, eq_label)
+    variable_offset = 0
+    for (i, source_e) in enumerate(entities)
+        S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, row_layout, col_layout)
+        if !isnothing(S)
+            rows = S.I
+            cols = S.J
+            push!(I, rows .+ equation_offset)
+            push!(J, cols .+ variable_offset)
+        end
+        variable_offset += count_active_entities(source_model.domain, source_e)
+    end
+end
+
 function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, row_context, col_context)
     I = []
     J = []
@@ -314,7 +351,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     variable_offset = 0
     function treat_block_size(bz, bz_new)
         if !isnothing(bz)
-            @assert bz == bz_new
+            @assert bz == bz_new "Block sizes must match $bz != $bz_new"
         end
         return bz_new
     end
