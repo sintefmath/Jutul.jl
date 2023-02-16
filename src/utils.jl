@@ -29,8 +29,12 @@ function convert_to_mutable_storage(v::Any)
 end
 
 function as_cell_major_matrix(v, n, m, model::SimulationModel, offset = 0)
-    transp = !is_cell_major(matrix_layout(model.context))
-    get_matrix_view(v, n, m, transp, offset)
+    if is_cell_major(matrix_layout(model.context))
+        return view(v, :, (offset+1):(offset+n-1))
+    else
+        r = view(v, (offset+1):(offset + n*m))
+        return reshape(r, m, n)'
+    end
 end
 
 function get_matrix_view(v0, n, m, transp = false, offset = 0)

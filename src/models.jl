@@ -642,9 +642,9 @@ end
 
 function update_linearized_system!(lsys, equations, eqs_storage, model::JutulModel; equation_offset = 0)
     r_buf = lsys.r_buffer
+    bz = model_block_size(model)
     for key in keys(equations)
         @tic "$key" begin
-            bz = model_block_size(model)
             eq = equations[key]
             eqs_s = eqs_storage[key]
             nz = lsys.jac_buffer
@@ -695,12 +695,12 @@ end
 function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration = nothing, extra_out = false, tol = nothing, tol_factor = 1.0, offset = 0, kwarg...)
     converged = true
     e = 0
-    eoffset = 0
     r_buf = lsys.r_buffer
     if isnothing(tol)
         tol = tol_cfg[:default]
     end
     output = []
+    bz = model_block_size(model)
     for key in keys(eqs)
         eq = eqs[key]
         eq_s = eqs_s[key]
@@ -729,8 +729,7 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
             converged = converged && all(e -> e < t_actual, errors)
             tols[e_k] = t_actual
         end
-        offset += N
-        eoffset += n
+        offset += N÷bz
         if extra_out
             push!(output, (name = key, criterions = all_crits, tolerances = tols))
         end

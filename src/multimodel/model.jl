@@ -732,7 +732,7 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)
-        offset += number_of_degrees_of_freedom(m)
+        offset += number_of_degrees_of_freedom(m) ÷ model_block_size(m)
     end
     if extra_out
         return (converged, err, errors)
