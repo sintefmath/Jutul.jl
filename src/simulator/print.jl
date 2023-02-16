@@ -59,7 +59,7 @@ function new_simulation_control_step_message(info_level, p, rec, step_no, no_ste
         if isnothing(start_date)
             fmt = get_tstr
         else
-            fmt = x -> Dates.format(start_date + Second(x), t_format)
+            fmt = x -> Dates.format(start_date + Microsecond(ceil(x*1e6)), t_format)
         end
         start_time = fmt(t)
         end_time = fmt(t_now)
