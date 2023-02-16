@@ -6,15 +6,18 @@ function get_submodel_offsets(model::MultiModel, group::Union{Nothing,Integer} =
         f = number_of_degrees_of_freedom
     end
     dof = values(map(f, model.models))
+    bz = values(sub_block_sizes(model))
     if !isnothing(group)
-        dof = dof[model.groups .== group]
+        active = model.groups .== group
+        dof = dof[active]
+        bz = bz[active]
     end
     n = length(dof)
     out = zeros(Int64, n)
     tot = 0
     for i in 1:n
         out[i] = tot
-        tot += dof[i]
+        tot += dof[i]÷bz[i]
     end
     return out
 end

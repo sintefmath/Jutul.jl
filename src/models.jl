@@ -644,12 +644,14 @@ function update_linearized_system!(lsys, equations, eqs_storage, model::JutulMod
     r_buf = lsys.r_buffer
     for key in keys(equations)
         @tic "$key" begin
+            bz = model_block_size(model)
             eq = equations[key]
             eqs_s = eqs_storage[key]
             nz = lsys.jac_buffer
             r = local_residual_view(r_buf, model, eq, equation_offset)
             update_linearized_system_equation!(nz, r, model, eq, eqs_s)
-            equation_offset += number_of_equations(model, eq)
+            neq = number_of_equations(model, eq)
+            equation_offset += neq÷bz
         end
     end
 end
