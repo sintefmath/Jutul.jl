@@ -1,3 +1,4 @@
+const MINIMUM_SAT_RELAX = 1e-6
 """
 Number of entities (e.g. Cells, Faces) a variable is defined on.
 By default, each primary variable exists on all cells of a discretized domain
@@ -354,14 +355,13 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
         dv0 = dx[active_ix + (i-1)*nu]
         dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
         dlast0 -= dv0
-        # Skip tiny values
         w = pick_relaxation(w, dv, dv0)
     end
     # Do the same thing for the implicit update of the last value
     dlast = choose_increment(value(s[nf, full_cell]), dlast0, abs_max, nothing, minval, maxval)
     w = w0*pick_relaxation(w, dlast, dlast0)
 
-    bad_update = w < 1e-6
+    bad_update = w <= MINIMUM_SAT_RELAX
     if bad_update
         w = w0
     end
@@ -435,5 +435,5 @@ function pick_relaxation(w, dv, dv0)
     if dv0 != 0
         w = min(w, r)
     end
-    return w
+    return min(w, MINIMUM_SAT_RELAX)
 end
