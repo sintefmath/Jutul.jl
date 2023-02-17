@@ -650,8 +650,11 @@ function get_cell_faces(N, nc = nothing)
     if length(N) == 0
         cell_faces = ones(t, 1)
     else
+        max_n = maximum(N)
         if isnothing(nc)
-            nc = maximum(N)
+            nc = max_n
+        else
+            @assert max_n <= nc "Neighborship had maximum value of $max_n but number of cells provided was $nc: N = $N"
         end
         cell_faces = [Vector{t}() for i = 1:nc]
         for i in 1:size(N, 1)
