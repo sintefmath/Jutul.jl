@@ -46,7 +46,7 @@ function new_simulation_control_step_message(info_level, p, rec, step_no, no_ste
         if isnothing(start_date)
             e = ""
         else
-            e = ", at $(Dates.format(start_date + Second(r.time), t_format))"
+            e = ", at $(Dates.format(start_date + Microsecond(ceil(r.time*1e6)), t_format))"
         end
         msg = "Solving step $step_no/$no_steps ($perc% of time interval complete$e)"
         next!(p; showvalues = [(:Status, msg)])
