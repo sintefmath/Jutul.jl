@@ -53,7 +53,7 @@ module Jutul
     import .MeshesSupport: meshes_fv_geometry_3d
 
     # Main types
-    include("core_types.jl")
+    include("core_types/core_types.jl")
 
     # Models 
     include("models.jl")

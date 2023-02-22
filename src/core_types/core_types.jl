@@ -219,77 +219,7 @@ include("contexts/default.jl")
 include("contexts/cuda.jl")
 
 # Domains
-"""
-Abstract type for domains where equations can be defined
-"""
-abstract type JutulDomain end
-
-export physical_representation
-"""
-    physical_representation(x)
-
-Get the physical representation of an object. The physical representation is
-usually some kind of mesh or domain that represents a physical domain.
-"""
-physical_representation(x) = x
-
-export DiscretizedDomain
-struct DiscretizedDomain{G, D, E, M} <: JutulDomain
-    representation::G
-    discretizations::D
-    entities::E
-    global_map::M
-end
-
-"""
-    physical_representation(x::DiscretizedDomain)
-
-Get the underlying physical representation (domain or mesh) that was discretized.
-"""
-physical_representation(x::DiscretizedDomain) = x.representation
-
-function Base.show(io::IO, d::DiscretizedDomain)
-    disc = d.discretizations
-    p = physical_representation(d)
-    if isnothing(disc)
-        print(io, "DiscretizedDomain with $p\n")
-    else
-        print(io, "DiscretizedDomain with $p and discretizations for $(join(keys(d.discretizations), ", "))\n")
-    end
-end
-
-"""
-    DiscretizedDomain(domain, disc = nothing)
-
-A type for a discretized domain of some other domain or mesh. May contain one or
-more discretizations as-needed to write equations.
-"""
-function DiscretizedDomain(domain::JutulDomain, disc = nothing; global_map = TrivialGlobalMap())
-    entities = declare_entities(domain)
-    u = Dict{Any, Int64}() # Is this a good definition?
-    for entity in entities
-        num = entity.count
-        @assert num >= 0 "Units must have non-negative counts."
-        u[entity.entity] = num
-    end
-    return DiscretizedDomain(domain, disc, u, global_map)
-end
-
-# function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
-#     F = context.float_t
-#     I = context.index_t
-#     t = (x) -> transfer(context, x)
-
-#     g = t(physical_representation(domain))
-#     d_cpu = domain.discretizations
-
-#     k = keys(d_cpu)
-#     val = map(t, values(d_cpu))
-#     d = (;zip(k, val)...)
-#     u = domain.entities
-#     return DiscretizedDomain(g, d, u, domain.global_map)
-# end
-
+include("domains.jl")
 
 # Formulation
 abstract type JutulFormulation end
@@ -479,7 +409,7 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
 end
 
 # Grids etc
-export JutulEntity, Cells, Faces, Nodes
+export JutulEntity, Cells, Faces, Nodes, NoEntity
 ## Grid
 """
 A mesh is a type of domain that has been discretized. Abstract subtype.
@@ -506,6 +436,11 @@ struct Faces <: JutulEntity end
 Entity for Nodes (intersection between multiple [`Faces`](@ref))
 """
 struct Nodes <: JutulEntity end
+
+"""
+An entity for something that isn't associated with an entity
+"""
+struct NoEntity <: JutulEntity end
 
 # Sim model
 

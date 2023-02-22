@@ -14,7 +14,7 @@ function count_entities(D::JutulDomain, ::Cells)
     1
 end
 
-function get_entities(D::DiscretizedDomain)
+function get_entities(D::Union{DiscretizedDomain, DataDomain})
     return keys(D.entities)
 end
 
@@ -50,21 +50,21 @@ function select_equations!(S, domain::DiscretizedDomain, model::SimulationModel)
     select_variables_domain_helper!(S, domain, model, select_equations!)
 end
 
-count_entities(D::DiscretizedDomain, entity::Cells) = D.entities[entity]
-count_entities(D::DiscretizedDomain, entity) = D.entities[entity]
+count_entities(D::Union{DataDomain, DiscretizedDomain}, entity::Cells) = D.entities[entity]
+count_entities(D::Union{DataDomain, DiscretizedDomain}, entity) = D.entities[entity]
 
 count_active_entities(D, entity; kwarg...) = count_entities(D, entity)
 count_active_entities(D::DiscretizedDomain, entity; kwarg...) = count_active_entities(D, D.global_map, entity; kwarg...)
 
-function number_of_cells(D::DiscretizedDomain)
+function number_of_cells(D::Union{DataDomain, DiscretizedDomain})
     return count_entities(D, Cells())
 end
 
-function number_of_faces(D::DiscretizedDomain)
+function number_of_faces(D::Union{DataDomain, DiscretizedDomain})
     return count_entities(D, Faces())
 end
 
-function number_of_half_faces(D::DiscretizedDomain)
+function number_of_half_faces(D::Union{DataDomain, DiscretizedDomain})
     return 2*number_of_faces(D)
 end
 
