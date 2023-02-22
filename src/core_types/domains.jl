@@ -78,11 +78,25 @@ function Base.show(io::IO, t::MIME"text/plain", d::DataDomain)
         print(io, " with no additional data.\n")
     else
         print(io, " with $n data fields added:\n")
+        unique_entities = unique(map(last, values(data)))
+        for u in unique_entities
+            if u == NoEntity()
+                s = "(no associated entity)"
+            else
+                ne = count_entities(d, u)
+                s = "$ne $(typeof(u))"
+            end
+            print(io, "  $s\n")
+            for (k, v) in data
+                vals, e = v
+                if e == u
+                    sz = join(map(x -> "$x", size(vals)), "×")
+                    print(io, "    :$k => $sz $(typeof(vals))\n")
+                end
+            end
+        end
     end
-    for (k, v) in data
-        e, vals = v
-        print(io, "$k: $e")
-    end
+
 end
 
 """
@@ -166,3 +180,6 @@ end
 function Base.haskey(domain::DataDomain, name::Symbol)
     return haskey(domain.data, name)
 end
+
+Base.iterate(domain::DataDomain) = Base.iterate(domain.data)
+Base.pairs(domain::DataDomain) = Base.pairs(domain.data)
