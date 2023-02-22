@@ -15,11 +15,7 @@ function Base.show(io::IO, t::MIME"text/plain", model::MultiModel)
         ndofi = number_of_degrees_of_freedom(m)
         neqi = number_of_equations(m)
     
-        if hasproperty(m.domain, :grid)
-            g = m.domain.grid
-        else
-            g = typeof(m.domain)
-        end
+        g = physical_representation(m.domain)
         println(io, "    $i) $key ($(neqi)x$ndofi)\n       $(s)\n       ∈ $g")
 
     end

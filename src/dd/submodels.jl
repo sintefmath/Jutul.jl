@@ -53,11 +53,13 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
             # TODO: Renumber
             m = deepcopy(submodels[k])
             d = m.domain
+            pr = physical_representation(m.domain)
             if hasproperty(d, :well_symbols)
                 # Need to control a single well for this to work
                 @assert length(d.well_symbols) == 1
-            elseif hasproperty(d, :grid) && hasproperty(d.grid, :perforations)
-                perf = m.domain.grid.perforations.reservoir
+            elseif hasproperty(pr, :perforations)
+                # Really hacky, this should live in JutulDarcy.
+                perf = physical_representation(m.domain).perforations.reservoir
                 for i in eachindex(perf)
                     c_l = local_cell(perf[i], M)
                     @assert !isnothing(c_l)

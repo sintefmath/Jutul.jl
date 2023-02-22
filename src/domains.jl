@@ -25,7 +25,7 @@ function select_variables_domain_helper!(S, domain::DiscretizedDomain, model, f!
             f!(S, d[k], model)
         end
     end
-    f!(S, domain.grid, model)
+    f!(S, physical_representation(domain), model)
 end
 
 select_primary_variables!(S, something, model) = nothing
@@ -69,7 +69,8 @@ function number_of_half_faces(D::DiscretizedDomain)
 end
 
 function positional_map(domain::JutulDomain, source_entity::JutulEntity, target_entity::JutulEntity)
-    positional_map(domain.grid, source_entity, target_entity)
+    g = physical_representation(domain)
+    positional_map(g, source_entity, target_entity)
 end
 
 function positional_map(grid::AbstractJutulMesh, source_entity, target_entity)

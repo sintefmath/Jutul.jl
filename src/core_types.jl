@@ -224,6 +224,15 @@ Abstract type for domains where equations can be defined
 """
 abstract type JutulDomain end
 
+export physical_representation
+"""
+    physical_representation(x)
+
+Get the physical representation of an object. The physical representation is
+usually some kind of mesh or domain that represents a physical domain.
+"""
+physical_representation(x) = x
+
 export DiscretizedDomain
 struct DiscretizedDomain{G, D, E, M} <: JutulDomain
     grid::G
@@ -231,12 +240,21 @@ struct DiscretizedDomain{G, D, E, M} <: JutulDomain
     entities::E
     global_map::M
 end
+
+"""
+    physical_representation(x::DiscretizedDomain)
+
+Get the underlying physical representation (domain or mesh) that was discretized.
+"""
+physical_representation(x::DiscretizedDomain) = x.grid
+
 function Base.show(io::IO, d::DiscretizedDomain)
     disc = d.discretizations
+    p = physical_representation(d)
     if isnothing(disc)
-        print(io, "DiscretizedDomain with $(d.grid)\n")
+        print(io, "DiscretizedDomain with $p\n")
     else
-        print(io, "DiscretizedDomain with $(d.grid) and discretizations for $(join(keys(d.discretizations), ", "))\n")
+        print(io, "DiscretizedDomain with $p and discretizations for $(join(keys(d.discretizations), ", "))\n")
     end
 end
 
@@ -257,20 +275,20 @@ function DiscretizedDomain(grid, disc = nothing; global_map = TrivialGlobalMap()
     DiscretizedDomain(grid, disc, u, global_map)
 end
 
-function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
-    F = context.float_t
-    I = context.index_t
-    t = (x) -> transfer(context, x)
+# function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
+#     F = context.float_t
+#     I = context.index_t
+#     t = (x) -> transfer(context, x)
 
-    g = t(domain.grid)
-    d_cpu = domain.discretizations
+#     g = t(physical_representation(domain))
+#     d_cpu = domain.discretizations
 
-    k = keys(d_cpu)
-    val = map(t, values(d_cpu))
-    d = (;zip(k, val)...)
-    u = domain.entities
-    return DiscretizedDomain(g, d, u, domain.global_map)
-end
+#     k = keys(d_cpu)
+#     val = map(t, values(d_cpu))
+#     d = (;zip(k, val)...)
+#     u = domain.entities
+#     return DiscretizedDomain(g, d, u, domain.global_map)
+# end
 
 
 # Formulation
@@ -354,6 +372,13 @@ function SimulationModel(domain, system;
     update_model_post_selection!(model)
     return model
 end
+
+"""
+    physical_representation(m::SimulationModel)
+
+Get the underlying physical representation for the model (domain or mesh)
+"""
+physical_representation(m::SimulationModel) = physical_representation(m.domain)
 
 function update_model_pre_selection!(model)
     return model

@@ -171,7 +171,8 @@ end
 
 function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
-    neighborship = model.domain.grid.neighborship
+    pr = physical_representation(model.domain)
+    neighborship = get_neighborship(pr)
 
     hflux_faces = eq_s.half_face_flux_faces
     if !isnothing(hflux_faces)
@@ -522,7 +523,8 @@ end
 
 function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Faces) where {T, N}
     nf = number_of_faces(model.domain)
-    neighbors = get_neighborship(model.domain.grid)
+    pr = physical_representation(model.domain)
+    neighbors = get_neighborship(pr)
     tb = minbatch(model.context, nf)
     @tic "flux (faces)" @batch minbatch = tb for f in 1:nf
         state_f = new_entity_index(state, f)
