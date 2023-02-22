@@ -36,7 +36,7 @@ struct PotentialFlow{K, U, HF} <: FlowDiscretization
     end
 end
 
-function PotentialFlow(g::AbstractJutulMesh; kwarg...)
+function PotentialFlow(g::JutulMesh; kwarg...)
     N = get_neighborship(g)
     nc = number_of_cells(g)
     PotentialFlow(N, nc; kwarg...)
@@ -117,7 +117,7 @@ struct TwoPointPotentialFlowHardCoded{C, D} <: FlowDiscretization
     conn_data::D
 end
 
-function TwoPointPotentialFlowHardCoded(grid::AbstractJutulMesh; ncells = nothing)
+function TwoPointPotentialFlowHardCoded(grid::JutulMesh; ncells = nothing)
     N = get_neighborship(grid)
     if size(N, 2) > 0
         faces, face_pos = get_facepos(N, ncells)

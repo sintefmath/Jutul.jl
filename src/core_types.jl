@@ -1,4 +1,4 @@
-export JutulSystem, JutulDomain, JutulVariables, AbstractJutulMesh, JutulContext
+export JutulSystem, JutulDomain, JutulVariables, JutulMesh, JutulContext
 export SimulationModel, JutulVariables, JutulFormulation, JutulEquation
 export setup_parameters, JutulForce
 export Cells, Nodes, Faces, declare_entities
@@ -235,7 +235,7 @@ physical_representation(x) = x
 
 export DiscretizedDomain
 struct DiscretizedDomain{G, D, E, M} <: JutulDomain
-    grid::G
+    representation::G
     discretizations::D
     entities::E
     global_map::M
@@ -246,7 +246,7 @@ end
 
 Get the underlying physical representation (domain or mesh) that was discretized.
 """
-physical_representation(x::DiscretizedDomain) = x.grid
+physical_representation(x::DiscretizedDomain) = x.representation
 
 function Base.show(io::IO, d::DiscretizedDomain)
     disc = d.discretizations
@@ -259,20 +259,20 @@ function Base.show(io::IO, d::DiscretizedDomain)
 end
 
 """
-    DiscretizedDomain(grid, disc = nothing)
+    DiscretizedDomain(domain, disc = nothing)
 
-A type for a discretized domain on some grid. May contain one or more
-discretizations as-needed to write equations.
+A type for a discretized domain of some other domain or mesh. May contain one or
+more discretizations as-needed to write equations.
 """
-function DiscretizedDomain(grid, disc = nothing; global_map = TrivialGlobalMap())
-    entities = declare_entities(grid)
+function DiscretizedDomain(domain::JutulDomain, disc = nothing; global_map = TrivialGlobalMap())
+    entities = declare_entities(domain)
     u = Dict{Any, Int64}() # Is this a good definition?
     for entity in entities
         num = entity.count
         @assert num >= 0 "Units must have non-negative counts."
         u[entity.entity] = num
     end
-    DiscretizedDomain(grid, disc, u, global_map)
+    return DiscretizedDomain(domain, disc, u, global_map)
 end
 
 # function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
@@ -482,9 +482,9 @@ end
 export JutulEntity, Cells, Faces, Nodes
 ## Grid
 """
-Abstract type for all Meshes in Jutul.
+A mesh is a type of domain that has been discretized. Abstract subtype.
 """
-abstract type AbstractJutulMesh end
+abstract type JutulMesh <: JutulDomain end
 
 ## Discretized entities
 """
@@ -510,15 +510,15 @@ struct Nodes <: JutulEntity end
 # Sim model
 
 """
-    SimulationModel(g::AbstractJutulMesh, system; discretization = nothing, kwarg...)
+    SimulationModel(g::JutulMesh, system; discretization = nothing, kwarg...)
 
 Type that defines a simulation model - everything needed to solve the discrete
 equations.
 
-The minimal setup requires a [`AbstractJutulMesh`](@ref) that defines topology
+The minimal setup requires a [`JutulMesh`](@ref) that defines topology
 together with a [`JutulSystem`](@ref) that imposes physical laws.
 """
-function SimulationModel(g::AbstractJutulMesh, system; discretization = nothing, kwarg...)
+function SimulationModel(g::JutulMesh, system; discretization = nothing, kwarg...)
     # Simple constructor that assumes
     d = DiscretizedDomain(g, discretization)
     SimulationModel(d, system; kwarg...)

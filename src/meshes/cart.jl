@@ -25,7 +25,7 @@ julia> CartesianMesh((2, 3), ([1.0, 2.0], [0.1, 3.0, 2.5]))
 CartesianMesh (3D) with 3x5x2=30 cells
 ```
 """
-struct CartesianMesh{D, Δ, O} <: AbstractJutulMesh
+struct CartesianMesh{D, Δ, O} <: JutulMesh
     dims::D   # Tuple of dimensions (nx, ny, [nz])
     deltas::Δ # Either a tuple of scalars (uniform grid) or a tuple of vectors (non-uniform grid)
     origin::O # Coordinate of lower left corner

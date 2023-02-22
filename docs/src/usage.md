@@ -39,7 +39,7 @@ Jutul.JutulDiscretization
 
 ## Grids/meshes and geometry
 ```@docs
-AbstractJutulMesh
+JutulMesh
 Jutul.CartesianMesh
 TwoPointFiniteVolumeGeometry
 Jutul.tpfv_geometry

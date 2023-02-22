@@ -56,14 +56,14 @@ dim(g::TwoPointFiniteVolumeGeometry) = size(g.cell_centroids, 1)
 
 Get the dimension of a mesh.
 """
-dim(t::AbstractJutulMesh) = 2
+dim(t::JutulMesh) = 2
 
 """
     number_of_cells(g)::Integer
 
 Get the number of cells in a mesh.
 """
-number_of_cells(t::AbstractJutulMesh) = 1
+number_of_cells(t::JutulMesh) = 1
 
 """
     number_of_faces(g)::Integer

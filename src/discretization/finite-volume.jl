@@ -89,7 +89,7 @@ function compute_face_trans(T_hf, N)
     return T
 end
 
-function compute_face_trans(g::AbstractJutulMesh, perm)
+function compute_face_trans(g::JutulMesh, perm)
     geo = tpfv_geometry(g)
     return compute_face_trans(geo, perm)
 end
@@ -102,7 +102,7 @@ end
 
 export compute_face_gdz
 
-function compute_face_gdz(g::AbstractJutulMesh; kwarg...)
+function compute_face_gdz(g::JutulMesh; kwarg...)
     geo = tpfv_geometry(g)
     N = geo.neighbors
     if dim(geo) == 3

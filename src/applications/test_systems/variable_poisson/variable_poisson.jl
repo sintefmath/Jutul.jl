@@ -33,7 +33,7 @@ end
 
 struct PoissonDiscretization{T} <: JutulDiscretization
     half_face_map::T
-    function PoissonDiscretization(g::AbstractJutulMesh)
+    function PoissonDiscretization(g::JutulMesh)
         N = get_neighborship(g)
         nc = number_of_cells(g)
         hf = half_face_map(N, nc)

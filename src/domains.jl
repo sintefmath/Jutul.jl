@@ -1,7 +1,7 @@
 export number_of_cells, number_of_faces, number_of_half_faces, count_entities, get_entities, declare_entities, get_neighborship
 
 
-function declare_entities(G::AbstractJutulMesh)
+function declare_entities(G::JutulMesh)
     return [(entity = Cells(), count = 1)]
 end
 
@@ -73,11 +73,11 @@ function positional_map(domain::JutulDomain, source_entity::JutulEntity, target_
     positional_map(g, source_entity, target_entity)
 end
 
-function positional_map(grid::AbstractJutulMesh, source_entity, target_entity)
+function positional_map(grid::JutulMesh, source_entity, target_entity)
     error("Not implemented.")
 end
 
-function positional_map(grid::AbstractJutulMesh, ::Cells, ::Faces)
+function positional_map(grid::JutulMesh, ::Cells, ::Faces)
     faces, facePos = get_facepos(grid.neighborship)
     return (indices = faces, pos = facePos)
 end
