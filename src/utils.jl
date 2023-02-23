@@ -655,7 +655,12 @@ function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where T
         else
             @assert max_n <= nc "Neighborship had maximum value of $max_n but number of cells provided was $nc: N = $N"
         end
-        cell_faces = [Vector{T}() for i = 1:nc]
+        cell_faces = Vector{Vector{T}}(undef, nc)
+        for i in 1:nc
+            V = Vector{T}()
+            sizehint!(V, 6)
+            cell_faces[i] = V
+        end
         for i in 1:size(N, 1)
             for j = 1:size(N, 2)
                 push!(cell_faces[N[i, j]], j)
