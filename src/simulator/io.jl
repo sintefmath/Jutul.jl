@@ -6,14 +6,19 @@ end
 
 function retrieve_output!(states, reports, config, n)
     pth = config[:output_path]
-    if config[:output_states] && !isnothing(pth)
+    if !isnothing(pth)
         @debug "Reading states from $pth..."
         @assert isempty(states)
-        out = read_results(pth, read_reports = true, states = states, verbose = config[:info_level] >= 0, range = 1:n);
-    else
-        out = (states, reports)
+        states, reports = read_results(
+            pth,
+            read_reports = true,
+            read_states = config[:output_states],
+            states = states,
+            verbose = config[:info_level] >= 0,
+            range = 1:n
+            )
     end
-    return out
+    return (states, reports)
 end
 
 get_output_state(sim) = get_output_state(sim.storage, sim.model)

@@ -30,7 +30,7 @@ struct SimResult
     function SimResult(states, reports, start_time)
         nr = length(reports)
         ns = length(states)
-        @assert ns == nr || ns == nr-1 "Recieved $ns or $ns - 1 states different from $nr reports"
+        @assert ns == nr || ns == nr-1 || ns == 0 "Recieved $ns or $ns - 1 states different from $nr reports"
         return new(states, reports, start_time, now())
     end
 end
