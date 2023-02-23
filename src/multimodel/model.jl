@@ -503,7 +503,10 @@ end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
     models = model.models
-    for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+
+    for i in eachindex(model.cross_terms)
+        ctp = model.cross_terms[i]
+        ct_s = storage.cross_terms[i]
         target = ctp.target::Symbol
         source = ctp.source::Symbol
         if target in targets && source in sources
@@ -523,22 +526,27 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
     state_s = storage_s.state
     state0_s = storage_s.state0
 
+    update_cross_term_by_states!(ct_s, ct::CrossTerm, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
+end
+
+function update_cross_term_by_states!(ct_s, ct::CrossTerm, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
     for i in 1:ct_s.N
         prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
     end
 
     state_s_v = as_value(state_s)
     state0_s_v = as_value(state0_s)
-    for (_, cache) in pairs(ct_s.target)
+    for cache in values(ct_s.target)
         update_cross_term_inner_target!(cache, ct, eq, state_s_v, state0_s_v, state_t, state0_t, model_t, model_s, dt)
     end
 
     state_t_v = as_value(state_t)
     state0_t_v = as_value(state0_t)
-    for (_, cache) in pairs(ct_s.source)
+    for cache in values(ct_s.source)
         update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
     end
 end
+
 
 function update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
     nothing
