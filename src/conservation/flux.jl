@@ -95,9 +95,19 @@ function get_connection(face, cell, N, inc_face_sign)
 end
 
 function remap_connection(conn::T, self::I, other::I, face::I) where {T, I<:Integer}
-    conn = setindex(conn, other, :other)
-    conn = setindex(conn, self, :self)
-    conn = setindex(conn, face, :face)
+    vals = values(conn)
+    i = 1
+    for k in keys(conn)
+        if k == :self
+            vals = setindex(vals, self, i)
+        elseif k == :other
+            vals = setindex(vals, other, i)
+        elseif k == :face
+            vals = setindex(vals, face, i)
+        end
+        i += 1
+    end
+    conn = (; zip(keys(conn), vals)...)::T
     return conn
 end
 
@@ -207,7 +217,7 @@ function conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn
                     @assert conn.self == c_g
                     counter += 1
                     other = local_cell(conn.other, mapper) # bad performance??
-                    conn_data[hf_offset + counter] = remap_connection(conn, c, other, f)
+                    conn_data[hf_offset + counter] = remap_connection(conn, c, other, f)::T
                     touched[hf_offset + counter] = true
                     done = true
                     # @info conn_data[hf_offset + counter]

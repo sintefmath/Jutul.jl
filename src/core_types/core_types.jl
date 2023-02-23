@@ -553,6 +553,7 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
     variables_always_active::Bool
     function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing; variables_always_active = false)
         n = length(cells)
+        @assert issorted(cells)
         if isnothing(is_boundary)
             is_boundary = repeat([false], length(cells))
         end
