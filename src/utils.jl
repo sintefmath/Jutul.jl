@@ -644,11 +644,10 @@ end
 report_times(reports; ministeps = false) = cumsum(report_timesteps(reports, ministeps = ministeps, extra_out = false))
 
 
-function get_cell_faces(N, nc = nothing)
+function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where T
     # Create array of arrays where each entry contains the faces of that cell
-    t = eltype(N)
     if length(N) == 0
-        cell_faces = ones(t, 1)
+        cell_faces = ones(T, 1)
     else
         max_n = maximum(N)
         if isnothing(nc)
@@ -656,7 +655,7 @@ function get_cell_faces(N, nc = nothing)
         else
             @assert max_n <= nc "Neighborship had maximum value of $max_n but number of cells provided was $nc: N = $N"
         end
-        cell_faces = [Vector{t}() for i = 1:nc]
+        cell_faces = [Vector{T}() for i = 1:nc]
         for i in 1:size(N, 1)
             for j = 1:size(N, 2)
                 push!(cell_faces[N[i, j]], j)

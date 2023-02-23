@@ -95,20 +95,10 @@ function get_connection(face, cell, N, inc_face_sign)
 end
 
 function remap_connection(conn::T, self::I, other::I, face::I) where {T, I<:Integer}
-    D = Dict()
-    for k in keys(conn)
-        if k == :self
-            newval = self
-        elseif k == :other
-            newval = other
-        elseif k == :face
-            newval = face
-        else
-            newval = conn[k]
-        end
-        D[k] = newval
-    end
-    return convert_to_immutable_storage(D)::T
+    conn = setindex(conn, other, :other)
+    conn = setindex(conn, self, :self)
+    conn = setindex(conn, face, :face)
+    return conn
 end
 
 struct TwoPointPotentialFlowHardCoded{C, D} <: FlowDiscretization

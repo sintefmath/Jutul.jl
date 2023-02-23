@@ -876,11 +876,14 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     state = storage.state
     state0 = storage.state0
     report = OrderedDict{Symbol, Any}()
-    for (k, var) in get_primary_variables(model)
-        report[k] = variable_change_report(state[k], state0[k], var)
+    defs = storage.variable_definitions
+    pvar = defs.primary_variables
+    for k in keys(pvar)
+        report[k] = variable_change_report(state[k], state0[k], pvar[k])
     end
-    for (k, var) in get_secondary_variables(model)
-        report[k] = variable_change_report(state[k], state0[k], var)
+    svar = defs.secondary_variables
+    for k in keys(svar)
+        report[k] = variable_change_report(state[k], state0[k], svar[k])
     end
     for key in model.output_variables
         update_values!(state0[key], state[key])

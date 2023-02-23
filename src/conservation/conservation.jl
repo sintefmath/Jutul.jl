@@ -358,10 +358,10 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
     dims = ad_dims(face_flux)
     fentries = face_flux.entries
     fp = face_flux.jacobian_positions
-    update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, model.context, dims)
+    update_lsys_face_flux_threaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, model.context, dims)
 end
 
-function update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, context, dims)
+function update_lsys_face_flux_threaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, context, dims)
     _, ne, np = dims
     nc = length(conn_pos) - 1
     tb = minbatch(context, nc)
