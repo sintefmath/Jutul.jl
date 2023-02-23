@@ -36,6 +36,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :tol_factor_final_iteration, 1.0, "Value that multiplies all tolerances for the final convergence check before a time-step is cut.")
 
     add_option!(cfg, :output_path, nothing, "Path to write output. If nothing, output is not written to disk.", types = Union{String, Nothing})
+    add_option!(cfg, :in_memory_reports, 5, "Limit for number of reports kept in memory if output_path is provided.", types = Int)
 
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])

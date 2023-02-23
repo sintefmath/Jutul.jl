@@ -290,7 +290,7 @@ end
 
 block_size(lsys::LSystem) = 1
 
-linear_solve_return(ok = true, iterations = 1, stats = nothing) = (ok = ok, iterations = iterations, stats = stats)
+linear_solve_return(ok = true, iterations = 1, stats = nothing) = (ok = ok, iterations = iterations, stats = deepcopy(stats))
 
 solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing; kwarg...) = solve!(sys, linsolve; kwarg...)
 solve!(sys::LSystem, linsolve::Nothing; kwarg...) = solve!(sys; kwarg...)

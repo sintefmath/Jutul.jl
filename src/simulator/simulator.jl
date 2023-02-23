@@ -180,8 +180,8 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
             break
         end
     end
+    states, reports = retrieve_output!(states, reports, config, n_solved)
     final_simulation_message(sim, p, reports, timesteps, config, early_termination)
-    retrieve_output!(states, config, n_solved)
     return SimResult(states, reports, start_timestamp)
 end
 
