@@ -560,7 +560,7 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
         inner_to_full_cells = findall(is_boundary .== false)
         full_to_inner_cells = Vector{Integer}(undef, n)
         for i = 1:n
-            v = only(indexin(i, inner_to_full_cells))
+            v = findfirst(isequal(i), inner_to_full_cells)
             if isnothing(v)
                 v = 0
             end
