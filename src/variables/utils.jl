@@ -380,7 +380,9 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
             s[i, full_cell] = s_i
         end
         @inbounds for i = 1:nf
-            s[i, full_cell] /= tot
+            s_i = s[i, full_cell]
+            s_i = replace_value(s_i, value(s_i)/tot)
+            s[i, full_cell] = s_i
         end
     end
 end
