@@ -47,12 +47,12 @@ end
 
 function atol(cfg, T = Float64)
     tol = cfg.absolute_tolerance
-    return T(isnothing(tol) ? 0.0 : tol)
+    return T(isnothing(tol) ? 1e-12 : tol)
 end
 
 function rtol(cfg, T = Float64)
     tol = cfg.relative_tolerance
-    return T(isnothing(tol) ? 0.0 : tol)
+    return T(isnothing(tol) ? 1e-12 : tol)
 end
 
 function verbose(cfg)
