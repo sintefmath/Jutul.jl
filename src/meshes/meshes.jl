@@ -117,3 +117,13 @@ function tpfv_geometry(g::T) where T<:Meshes.Mesh{3, <:Any}
     geo = TwoPointFiniteVolumeGeometry(N, A, V, Nv, Cc, Fc)
     return geo
 end
+
+function add_default_domain_data!(Ω::DataDomain, m::Union{CartesianMesh, MRSTWrapMesh, Meshes.Mesh})
+    fv = tpfv_geometry(m)
+    for fname in [:neighbors, :areas, :normals, :face_centroids]
+        Ω[fname, Faces()] = getproperty(fv, fname)
+    end
+    for cname in [:cell_centroids, :volumes]
+        Ω[cname, Cells()] = getproperty(fv, cname)
+    end
+end

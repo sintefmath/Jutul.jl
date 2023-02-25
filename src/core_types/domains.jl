@@ -136,8 +136,11 @@ function DataDomain(domain::JutulDomain; kwarg...)
             Ω[k] = v
         end
     end
+    add_default_domain_data!(Ω, domain)
     return Ω
 end
+
+add_default_domain_data!(Ω::DataDomain, domain) = nothing
 
 function Base.setindex!(domain::DataDomain, val, key::Symbol, entity = Cells())
     if ismissing(entity) || isnothing(entity)
