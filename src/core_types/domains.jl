@@ -119,7 +119,7 @@ d[:cell_vec, Cells()] = rand(10, 3, 6) #ok
 d[:not_on_face_or_cell, nothing] = rand(3) # also ok
 ```
 """
-function DataDomain(domain::JutulDomain, disc = nothing; global_map = TrivialGlobalMap())
+function DataDomain(domain::JutulDomain; kwarg...)
     entities = declare_entities(domain)
     u = Dict{JutulEntity, Int}()
     for (entity, num) in entities
@@ -128,7 +128,15 @@ function DataDomain(domain::JutulDomain, disc = nothing; global_map = TrivialGlo
     end
     u[NoEntity()] = 1
     data = OrderedDict{Symbol, Any}()
-    return DataDomain(domain, u, data)
+    Ω = DataDomain(domain, u, data)
+    for (k, v) in kwarg
+        if v isa Tuple{Any, JutulEntity}
+            Ω[k, last(v)] = first(v)
+        else
+            Ω[k] = v
+        end
+    end
+    return Ω
 end
 
 function Base.setindex!(domain::DataDomain, val, key::Symbol, entity = Cells())
@@ -139,17 +147,17 @@ function Base.setindex!(domain::DataDomain, val, key::Symbol, entity = Cells())
 
     function validate(val::AbstractVector)
         d = length(val)
-        @assert d == n "Number of values for Vector defined on $entity should be $n, was $d"
+        @assert d == n "Number of values for Vector $key defined on $entity should be $n, was $d"
         return val
     end
     function validate(val::AbstractMatrix)
         d = size(val, 2)
-        @assert d == n "Number of columns for Matrix defined on $entity should be $n, was $d"
+        @assert d == n "Number of columns for Matrix $key defined on $entity should be $n, was $d"
         return val
     end
     function validate(val::AbstractArray)
         d = last(size(val))
-        @assert d == n "Last index of multidimensional array defined on $entity should have size $n, was $d"
+        @assert d == n "Last index of multidimensional array $key defined on $entity should have size $n, was $d"
         return val
     end
     function validate(val)
