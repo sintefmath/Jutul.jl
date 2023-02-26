@@ -192,5 +192,13 @@ function Base.haskey(domain::DataDomain, name::Symbol)
     return haskey(domain.data, name)
 end
 
+
+function Base.haskey(domain::DataDomain, name::Symbol, entity::JutulEntity)
+    if ismissing(entity) || isnothing(entity)
+        entity = NoEntity()
+    end
+    return haskey(domain.data, name) && last(domain.data[name]) == entity
+end
+
 Base.iterate(domain::DataDomain) = Base.iterate(domain.data)
 Base.pairs(domain::DataDomain) = Base.pairs(domain.data)

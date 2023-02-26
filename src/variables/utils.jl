@@ -265,6 +265,19 @@ function initialize_variable_value(model, pvar::ScalarVariable, val::Number)
     return initialize_variable_value(model, pvar, V)
 end
 
+function initialize_parameter_value!(parameters, data_domain, model, param, symb, initializer::AbstractDict)
+    if haskey(initializer, symb)
+        vals = initializer[symb]
+    else
+        vals = default_parameter_values(data_domain, model, param, symb)
+    end
+    return initialize_variable_value!(parameters, model, param, symb, vals)
+end
+
+function default_parameter_values(data_domain, model, param, symb)
+    return default_values(model, pvar)
+end
+
 """
 Initializer for the value of non-scalar primary variables
 """

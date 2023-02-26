@@ -14,6 +14,9 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         perm = repeat([perm], 1, nc)
     else
         perm::AbstractVecOrMat
+        if perm isa AbstractVector
+            perm = reshape(perm, 1, :)
+        end
     end
 
     # Sanity check

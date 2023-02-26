@@ -261,9 +261,9 @@ function initialize_extra_state_fields!(state, ::Any, model)
     # Do nothing
 end
 
-function setup_parameters!(prm, data_domain, model, init_values::AbstractDict = Dict())
+function setup_parameters!(prm, data_domain, model, initializer::AbstractDict = Dict())
     for (psym, pvar) in get_parameters(model)
-        initialize_variable_value!(prm, model, pvar, psym, init_values, need_value = false)
+        initialize_parameter_value!(prm, data_domain, model, pvar, psym, initializer)
     end
     return prm
 end
@@ -303,7 +303,7 @@ end
 Simultaneously set up state and parameters from a single `init` file (typically
 a `Dict` containing values that might either be initial values or parameters)
 """
-function setup_state_and_parameters(model, init)
+function setup_state_and_parameters(data_domain::DataDomain, model::JutulModel, init::AbstractDict)
     init = copy(init)
     prm = Dict{Symbol, Any}()
     for (k, v) in init
@@ -313,8 +313,13 @@ function setup_state_and_parameters(model, init)
         end
     end
     state = setup_state(model, init)
-    parameters = setup_parameters(model, prm)
+    parameters = setup_parameters(data_domain, model, prm)
     return (state, parameters)
+end
+
+function setup_state_and_parameters(model::JutulModel, arg...; kwarg...)
+    data_domain = DataDomain(physical_representation(model))
+    return setup_state_and_parameters(data_domain, model, arg...; kwarg...)
 end
 
 function setup_state_and_parameters(model; kwarg...)

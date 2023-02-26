@@ -7,17 +7,14 @@ function basic_poisson_test()
     sys = VariablePoissonSystem()
     # Unit square
     g = CartesianMesh((nx, ny), (1.0, 1.0))
+    # Create domain with coefficient
+    domain = DataDomain(g, poisson_coefficient = 1.0)
     # Set up a model with the grid and system
-    domain = DataDomain(g, coefficient = 1.0)
-
-    # discretization = (poisson = Jutul.PoissonDiscretization(g), )
-    # D = DiscretizedDomain(g, discretization)
-    # model = SimulationModel(D, sys)
     model = SimulationModel(domain, sys)
     # Initial condition doesn't matter
     state0 = setup_state(model, Dict(:U=>1.0))
+    # Set up parameters from domain data and model
     param = setup_parameters(domain, model)
-    # param = setup_parameters(model, K = compute_face_trans(g, 1.0))
 
     nc = number_of_cells(g)
     pos_src = PoissonSource(1, 1.0)
