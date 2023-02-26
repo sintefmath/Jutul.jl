@@ -110,6 +110,6 @@ end
     d3d = rand(10, 20, n)
     d[:data_3d] = d3d
     @test d[:data_3d] == d3d
-    @test_throws "AssertionError: Number of columns for Matrix defined on Cells() should be 6, was 2" d[:scalar] = rand(93, 2)
-    @test tuple(keys(d)...) == (:cell_vector, :face_vector, :scalar, :data_2d, :data_3d)
+    @test_throws "AssertionError: Number of columns for Matrix scalar defined on Cells() should be 6, was 2" d[:scalar] = rand(93, 2)
+    @test tuple(keys(d)...) == (:neighbors, :areas, :normals, :face_centroids, :cell_centroids, :volumes, :cell_vector, :face_vector, :scalar, :data_2d, :data_3d)
 end
