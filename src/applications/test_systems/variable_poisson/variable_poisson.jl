@@ -50,6 +50,12 @@ end
 
 struct PoissonFaceCoefficient <: ScalarVariable end
 
+function discretize_domain(d::DataDomain, system::VariablePoissonSystem, ::Val{:default}; kwarg...)
+    g = physical_representation(d)
+    discretization = (poisson = Jutul.PoissonDiscretization(g), )
+    return DiscretizedDomain(g, discretization; kwarg...)
+end
+
 associated_entity(::PoissonFaceCoefficient) = Faces()
 default_value(model, ::PoissonFaceCoefficient) = 1.0
 

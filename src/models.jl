@@ -261,7 +261,7 @@ function initialize_extra_state_fields!(state, ::Any, model)
     # Do nothing
 end
 
-function setup_parameters!(prm, model, init_values::AbstractDict = Dict())
+function setup_parameters!(prm, data_domain, model, init_values::AbstractDict = Dict())
     for (psym, pvar) in get_parameters(model)
         initialize_variable_value!(prm, model, pvar, psym, init_values, need_value = false)
     end
@@ -279,17 +279,22 @@ A scalar (or short vector of the right size for [`VectorVariables`](@ref)) will 
 while a vector (or matrix for [`VectorVariables`](@ref)) with length (number of columns for [`VectorVariables`](@ref))
 equal to the entity count (for example, number of cells for a cell variable) will be used directly.
 """
-function setup_parameters(model::JutulModel; kwarg...)
+function setup_parameters(d::DataDomain, model::JutulModel; kwarg...)
     init = Dict{Symbol, Any}()
     for (k, v) in kwarg
         init[k] = v
     end
-    return setup_parameters(model, init)
+    return setup_parameters(d, model, init)
 end
 
-function setup_parameters(model::JutulModel, init)
+function setup_parameters(model::JutulModel, arg...; kwarg...)
+    data_domain = DataDomain(physical_representation(model))
+    return setup_parameters(data_domain, model, arg...; kwarg...)
+end
+
+function setup_parameters(data_domain::DataDomain, model::JutulModel, init::AbstractDict)
     prm = Dict{Symbol, Any}()
-    return setup_parameters!(prm, model, init)
+    return setup_parameters!(prm, data_domain, model, init)
 end
 
 """

@@ -8,12 +8,16 @@ function basic_poisson_test()
     # Unit square
     g = CartesianMesh((nx, ny), (1.0, 1.0))
     # Set up a model with the grid and system
-    discretization = (poisson = Jutul.PoissonDiscretization(g), )
-    D = DiscretizedDomain(g, discretization)
-    model = SimulationModel(D, sys)
+    domain = DataDomain(g, coefficient = 1.0)
+
+    # discretization = (poisson = Jutul.PoissonDiscretization(g), )
+    # D = DiscretizedDomain(g, discretization)
+    # model = SimulationModel(D, sys)
+    model = SimulationModel(domain, sys)
     # Initial condition doesn't matter
     state0 = setup_state(model, Dict(:U=>1.0))
-    param = setup_parameters(model, K = compute_face_trans(g, 1.0))
+    param = setup_parameters(domain, model)
+    # param = setup_parameters(model, K = compute_face_trans(g, 1.0))
 
     nc = number_of_cells(g)
     pos_src = PoissonSource(1, 1.0)

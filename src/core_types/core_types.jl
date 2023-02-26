@@ -266,9 +266,11 @@ function SimulationModel(domain, system;
                             context=DefaultContext(),
                             plot_mesh = nothing,
                             output_level=:primary_variables,
-                            extra = OrderedDict{Symbol, Any}()
+                            extra = OrderedDict{Symbol, Any}(),
+                            kwarg...
                         )
     context = initialize_context!(context, domain, system, formulation)
+    domain = discretize_domain(domain, system; kwarg...)
     domain = transfer(context, domain)
 
     T = OrderedDict{Symbol,JutulVariables}
@@ -309,6 +311,7 @@ end
 Get the underlying physical representation for the model (domain or mesh)
 """
 physical_representation(m::SimulationModel) = physical_representation(m.domain)
+physical_representation(m::JutulModel) = missing
 
 function update_model_pre_selection!(model)
     return model
