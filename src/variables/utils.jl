@@ -275,7 +275,7 @@ function initialize_parameter_value!(parameters, data_domain, model, param, symb
 end
 
 function default_parameter_values(data_domain, model, param, symb)
-    return default_values(model, pvar)
+    return default_values(model, param)
 end
 
 """

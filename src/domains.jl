@@ -1,7 +1,7 @@
 export number_of_cells, number_of_faces, number_of_half_faces, count_entities, get_entities, declare_entities, get_neighborship
 
 
-function declare_entities(G::JutulMesh)
+function declare_entities(G::JutulDomain)
     return [(entity = Cells(), count = 1)]
 end
 
