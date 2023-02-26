@@ -8,6 +8,10 @@ Base.@kwdef struct ScalarTestDomain <: JutulDomain
 end
 active_entities(d::ScalarTestDomain, ::Any; kwarg...) = [1]
 
+function declare_entities(G::ScalarTestDomain)
+    return [(entity = Cells(), count = 1)]
+end
+
 number_of_cells(::ScalarTestDomain) = 1
 
 # Driving force for the test equation
