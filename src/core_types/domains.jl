@@ -193,7 +193,7 @@ function Base.haskey(domain::DataDomain, name::Symbol)
 end
 
 
-function Base.haskey(domain::DataDomain, name::Symbol, entity::JutulEntity)
+function Base.haskey(domain::DataDomain, name::Symbol, entity)
     if ismissing(entity) || isnothing(entity)
         entity = NoEntity()
     end
