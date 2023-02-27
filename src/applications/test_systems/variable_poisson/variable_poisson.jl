@@ -100,7 +100,7 @@ function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::Variab
         return K[face]*(U_self - U_other)
     end
     # Equation is just -∇⋅K∇p = 0, or ∇⋅V where V = -K∇p
-    eq_buf[] = -div(flux)
+    eq_buf[] = div(flux)
 end
 
 function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::VariablePoissonEquationTimeDependent, model, Δt, ldisc = local_discretization(eq, self_cell))
@@ -117,5 +117,5 @@ function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::Variab
     end
     # Define equation
     ∂U∂t = (U_self - U0[self_cell])/Δt
-    eq_buf[] = ∂U∂t - div(flux)
+    eq_buf[] = ∂U∂t + div(flux)
 end

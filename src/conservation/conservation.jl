@@ -20,7 +20,7 @@ function update_equation_in_entity!(eq_buf::AbstractVector{T_e}, self_cell, stat
     div_v = ldisc.div(flux)
     for i in eachindex(div_v)
         ∂M∂t = accumulation_term(M, M₀, Δt, i, self_cell)
-        @inbounds eq_buf[i] = ∂M∂t - div_v[i]
+        @inbounds eq_buf[i] = ∂M∂t + div_v[i]
     end
 end
 
