@@ -100,20 +100,36 @@ function update_primary_variable!(state, p::JutulVariables, state_symbol, model,
     entity = associated_entity(p)
     active = active_entities(model.domain, entity, for_variables = true)
     v = state[state_symbol]
-    n = degrees_of_freedom_per_entity(model, p)
-    update_jutul_variable_internal!(p, active, v, n, dx, w)
+    update_jutul_variable_internal!(v, active, p, dx, w)
 end
 
-function update_jutul_variable_internal!(p, active, v, n, dx, w)
+function update_jutul_variable_internal!(v::AbstractVector, active, p, dx, w)
     nu = length(active)
     abs_max = absolute_increment_limit(p)
     rel_max = relative_increment_limit(p)
     maxval = maximum_value(p)
     minval = minimum_value(p)
     scale = variable_scale(p)
-    for index in 1:n
-        offset = nu*(index-1)
-        @tullio v[active[i]] = update_value(v[active[i]], w*dx[i+offset], abs_max, rel_max, minval, maxval, scale)
+    @inbounds for i in 1:nu
+        a_i = active[i]
+        v[a_i] = update_value(v[a_i], w*dx[i], abs_max, rel_max, minval, maxval, scale)
+    end
+end
+
+function update_jutul_variable_internal!(v::AbstractMatrix, active, p, dx, w)
+    nu = length(active)
+    n = size(v, 1)
+    abs_max = absolute_increment_limit(p)
+    rel_max = relative_increment_limit(p)
+    maxval = maximum_value(p)
+    minval = minimum_value(p)
+    scale = variable_scale(p)
+    @inbounds for i in 1:nu
+        a_i = active[i]
+        offset_dx = (i-1)*n
+        for j in 1:n
+            v[j, a_i] = update_value(v[j, a_i], w*dx[offset_dx + j], abs_max, rel_max, minval, maxval, scale)
+        end
     end
 end
 
