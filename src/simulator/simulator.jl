@@ -328,28 +328,10 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
         if done
             break
         end
-        w0 = relaxation
-        relaxation = select_nonlinear_relaxation(sim, cfg[:relaxation], step_reports, relaxation)
-        if cfg[:info_level] > 1 && relaxation != w0
-            jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :yellow)
-        end
-        failure = false
-        max_res = cfg[:max_residual]
-        if !isfinite(e)
-            reason = "Simulator produced non-finite residuals: $e."
-            failure = true
-        elseif e > max_res
-            reason = "Simulator produced very large residuals: $e larger than :max_residual=$max_res."
-            failure = true
-        else
-            reason = ""
-        end
-        if failure
-            report[:failure_message] = reason
-            @warn reason
+        relaxation, early_stop = apply_nonlinear_strategy!(sim, dt, forces, max_iter, cfg, e, step_reports, relaxation)
+        if early_stop
             break
         end
-        report[:failure] = failure
     end
     report[:steps] = step_reports
     report[:success] = done
@@ -460,4 +442,31 @@ end
 
 function progress_recorder(sim)
     return sim.storage.recorder
+end
+
+function apply_nonlinear_strategy!(sim, dt, forces, max_iter, cfg, e, step_reports, relaxation)
+    report = step_reports[end]
+    w0 = relaxation
+    relaxation = select_nonlinear_relaxation(sim, cfg[:relaxation], step_reports, relaxation)
+    if cfg[:info_level] > 1 && relaxation != w0
+        jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :yellow)
+    end
+    failure = false
+    max_res = cfg[:max_residual]
+    if !isfinite(e)
+        reason = "Simulator produced non-finite residuals: $e."
+        failure = true
+    elseif e > max_res
+        reason = "Simulator produced very large residuals: $e larger than :max_residual=$max_res."
+        failure = true
+    else
+        reason = ""
+    end
+    if failure
+        report[:failure_message] = reason
+        @warn reason
+    end
+    report[:failure] = failure
+    do_stop = failure
+    return (relaxation, do_stop)
 end
