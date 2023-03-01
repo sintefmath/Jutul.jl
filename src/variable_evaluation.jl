@@ -101,21 +101,32 @@ end
 
 function update_secondary_variables_state!(state, model, vars = model.secondary_variables)
     ctx = model.context
-    N = nthreads(ctx)
-    if N == 1
-        for (symbol, var) in pairs(vars)
-            @tic "$symbol" begin
-                v = state[symbol]
-                ix = entity_eachindex(v)
-                update_secondary_variable!(v, var, model, state, ix)
+    var_pairs = pairs(vars)
+    M = length(var_pairs)
+    if M > 0
+        # Determine batch size from the first variable only
+        _, first_var = first(var_pairs)
+        K = number_of_entities(model, first_var)
+        mb = minbatch(ctx)
+        N = nthreads(ctx)
+        N_batches = clamp(K ÷ mb, 1, N)
+        # We can either skip threads and use @tic or we can use threads and skip
+        # detailed timing.
+        if N_batches == 1
+            for (symbol, var) in var_pairs
+                @tic "$symbol" begin
+                    v = state[symbol]
+                    ix = entity_eachindex(v)
+                    update_secondary_variable!(v, var, model, state, ix)
+                end
             end
-        end
-    else
-        @batch for i in 1:N
-            for (symbol, var) in pairs(vars)
-                v = state[symbol]
-                ix = entity_eachindex(v, i, N)
-                update_secondary_variable!(v, var, model, state, ix)
+        else
+            @batch for i in 1:N_batches
+                for (symbol, var) in var_pairs
+                    v = state[symbol]
+                    ix = entity_eachindex(v, i, N_batches)
+                    update_secondary_variable!(v, var, model, state, ix)
+                end
             end
         end
     end
