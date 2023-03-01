@@ -30,6 +30,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :timestep_max_decrease, 0.1, "Max allowable factor to decrease time-step by. Overrides step selectors.", types = Float64)
     add_option!(cfg, :max_residual, 1e20, "Maximum value allowed for a residual before simulation is terminated.", types = Float64)
     add_option!(cfg, :relaxation, NoRelaxation(), "Non-Linear relaxation used. Currently supports `NoRelaxation` and `SimpleRelaxation`.", types = NonLinearRelaxation)
+    add_option!(cfg, :cutting_criterion, nothing, "Criterion to use for early cutting of time-steps. Default value of nothing means cutting when max_nonlinear_iterations is reached.")
 
     # Tolerances
     add_option!(cfg, :tolerances, set_default_tolerances(sim.model, tol = nonlinear_tolerance), "Tolerances used for convergence criterions.")

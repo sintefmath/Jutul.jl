@@ -328,7 +328,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
         if done
             break
         end
-        relaxation, early_stop = apply_nonlinear_strategy!(sim, dt, forces, max_iter, cfg, e, step_reports, relaxation)
+        relaxation, early_stop = apply_nonlinear_strategy!(sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
         if early_stop
             break
         end
@@ -444,7 +444,7 @@ function progress_recorder(sim)
     return sim.storage.recorder
 end
 
-function apply_nonlinear_strategy!(sim, dt, forces, max_iter, cfg, e, step_reports, relaxation)
+function apply_nonlinear_strategy!(sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
     report = step_reports[end]
     w0 = relaxation
     relaxation = select_nonlinear_relaxation(sim, cfg[:relaxation], step_reports, relaxation)
@@ -467,6 +467,12 @@ function apply_nonlinear_strategy!(sim, dt, forces, max_iter, cfg, e, step_repor
         @warn reason
     end
     report[:failure] = failure
-    do_stop = failure
+    cut_crit = cfg[:cutting_criterion]
+    relaxation, early_stop = cutting_criterion(cut_crit, sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
+    do_stop = failure || early_stop
     return (relaxation, do_stop)
+end
+
+function cutting_criterion(::Nothing, sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
+    return (relaxation, false)
 end
