@@ -685,14 +685,14 @@ end
 
 Set default tolerances for the nonlinear convergence check of the governing equations.
 """
-function set_default_tolerances(model)
+function set_default_tolerances(model; kwarg...)
     tol_cfg = Dict{Symbol, Any}()
-    set_default_tolerances!(tol_cfg, model)
+    set_default_tolerances!(tol_cfg, model; kwarg...)
     return tol_cfg
 end
 
-function set_default_tolerances!(tol_cfg, model::SimulationModel)
-    tol_cfg[:default] = 1e-3
+function set_default_tolerances!(tol_cfg, model::SimulationModel; tol = 1e-3)
+    tol_cfg[:default] = tol
 end
 
 function check_convergence(storage, model, config; kwarg...)

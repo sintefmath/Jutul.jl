@@ -675,10 +675,10 @@ function setup_state_and_parameters(model::MultiModel, init)
     return (state, parameters)
 end
 
-function set_default_tolerances!(tol_cfg, model::MultiModel)
+function set_default_tolerances!(tol_cfg, model::MultiModel; kwarg...)
     for (k, model) in pairs(model.models)
         cfg_k = Dict{Symbol, Any}()
-        set_default_tolerances!(cfg_k, model)
+        set_default_tolerances!(cfg_k, model; kwarg...)
         tol_cfg[k] = cfg_k
     end
 end

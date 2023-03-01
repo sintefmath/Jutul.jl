@@ -1,4 +1,4 @@
-function simulator_config!(cfg, sim; kwarg...)
+function simulator_config!(cfg, sim; nonlinear_tolerance = 1e-3, kwarg...)
     # Printing, etc
     add_option!(cfg, :info_level, 0, "Info level determines the amount of runtime output to the terminal during simulation.", types = Int,
     description = "
@@ -32,7 +32,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :relaxation, NoRelaxation(), "Non-Linear relaxation used. Currently supports `NoRelaxation` and `SimpleRelaxation`.", types = NonLinearRelaxation)
 
     # Tolerances
-    add_option!(cfg, :tolerances, set_default_tolerances(sim.model), "Tolerances used for convergence criterions.")
+    add_option!(cfg, :tolerances, set_default_tolerances(sim.model, tol = nonlinear_tolerance), "Tolerances used for convergence criterions.")
     add_option!(cfg, :tol_factor_final_iteration, 1.0, "Value that multiplies all tolerances for the final convergence check before a time-step is cut.")
 
     add_option!(cfg, :output_path, nothing, "Path to write output. If nothing, output is not written to disk.", types = Union{String, Nothing})
