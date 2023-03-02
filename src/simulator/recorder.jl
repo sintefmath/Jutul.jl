@@ -18,8 +18,10 @@ function nextstep_local!(r::ProgressRecorder, dT, prev_success = !isnan(r.local_
     nextstep!(r.subrecorder, dT, prev_success)
 end
 
-function next_iteration!(rec)
-    rec.subrecorder.iteration += 1
+function next_iteration!(rec, report)
+    if haskey(report, :update_time)
+        rec.subrecorder.iteration += 1
+    end
 end
 
 function nextstep!(l::SolveRecorder, dT, success)

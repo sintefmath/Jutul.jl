@@ -213,7 +213,6 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
     t_local = 0
     cut_count = 0
     ctr = 1
-    nextstep_local!(rec, dt, false)
     while !done
         # Make sure that we hit the endpoint in case timestep selection is too optimistic.
         dt = min(dt, dT - t_local)
@@ -221,6 +220,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
         @tic "solve" ok, s = solve_ministep(sim, dt, forces, max_its, config; kwarg...)
         # We store the report even if it is a failure.
         push!(ministep_reports, s)
+        nextstep_local!(rec, dt, ok)
         if ok
             t_local += dt
             if t_local >= dT
@@ -255,7 +255,6 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
             end
         end
         ctr += 1
-        nextstep_local!(rec, dt, ok)
     end
     return (done, ministep_reports, dt)
 end
@@ -323,9 +322,9 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
         update_before_step!(sim, dt, forces, time = cur_time)
     end
     for it = 1:(max_iter+1)
-        next_iteration!(rec)
         do_solve = it <= max_iter
         e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation, solve = do_solve)
+        next_iteration!(rec, r)
         push!(step_reports, r)
         if done
             break

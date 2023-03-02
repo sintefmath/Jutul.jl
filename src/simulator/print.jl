@@ -66,7 +66,7 @@ function progress_showvalues(rec, elapsed, step_no, no_steps, dT, t_tot, start_d
     r = rec.recorder
     frac = (r.time + dT)/t_tot
     perc = @sprintf("%2.2f", 100*frac)
-    its = rec.recorder.iterations
+    its = rec.recorder.iterations + rec.subrecorder.iterations
     elapsed_each = elapsed/its
     done = step_no == no_steps + 1
     if done
@@ -74,12 +74,12 @@ function progress_showvalues(rec, elapsed, step_no, no_steps, dT, t_tot, start_d
     else
         msg_status = "Solving step $step_no/$no_steps ($perc% of time interval complete)"
     end
-    # msg_timing = "$its iterations in $(autoformat_time(elapsed)) ($(autoformat_time(elapsed_each)) each)"
-    msg_timing = "$(autoformat_time(elapsed)) elapsed ($(autoformat_time(elapsed/(step_no-1))))"
+    msg_timing = "$its iterations in $(autoformat_time(elapsed)) ($(autoformat_time(elapsed_each)) each)"
+    # msg_timing = "$(autoformat_time(elapsed)) elapsed ($(autoformat_time(elapsed/(step_no-1))))"
 
     msgvals = [
-        (:Status, msg_status),
-        # (:Timing, msg_timing)
+        (:Progress, msg_status),
+        (:Stats, msg_timing)
         ]
 
     if !isnothing(start_date)
