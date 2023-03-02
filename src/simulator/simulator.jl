@@ -159,11 +159,12 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
         initialize_before_first_timestep!(sim, dt, forces = forces_step, config = config)
     end
     n_solved = no_steps
+    t_elapsed = 0.0
     for step_no = first_step:no_steps
         dT = timesteps[step_no]
         forces_step = forces_for_timestep(sim, forces, timesteps, step_no)
         nextstep_global!(rec, dT)
-        new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot, start_date)
+        new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
         t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dt, reports = reports, step_no = step_no, rec = rec)
         early_termination = !step_done
         subrep = OrderedDict()
@@ -175,13 +176,14 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
             subrep[:output_time] = 0.0
             push!(reports, subrep)
         end
+        t_elapsed += t_step + subrep[:output_time]
         if early_termination
             n_solved = step_no
             break
         end
     end
     states, reports = retrieve_output!(states, reports, config, n_solved)
-    final_simulation_message(sim, p, reports, timesteps, config, early_termination)
+    final_simulation_message(sim, p, rec, t_elapsed, reports, timesteps, config, start_date, early_termination)
     return SimResult(states, reports, start_timestamp)
 end
 

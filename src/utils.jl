@@ -386,6 +386,23 @@ function stats_ministep(reports)
             linear_system = linear_system)
 end
 
+function report_iterations(reports::AbstractVector)
+    return sum(report_iterations, reports)
+end
+
+function report_iterations(report)
+    its = 0
+    if haskey(report, :ministeps)
+        for rep in report[:ministeps]
+            if haskey(rep, :update_time)
+                its += 1
+            end
+        end
+    end
+    return its
+end
+
+
 function pick_time_unit(t, wide = is_wide_term())
     m = maximum(t)
     if wide
@@ -422,6 +439,12 @@ function pick_time_unit(t, wide = is_wide_term())
     end
     # Fallback
     return (1, sec)
+end
+
+function autoformat_time(t::Float64; compact = true)
+    u, s = pick_time_unit(t, !compact)
+    t_fmt = @sprintf("%.2f", t/u)
+    return "$t_fmt $s"
 end
 
 function print_stats(reports::AbstractArray; kwarg...)
