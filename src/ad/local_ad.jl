@@ -75,6 +75,9 @@ end
 @inline Base.axes(A::LocalPerspectiveAD) = axes(A.data)
 @inline parenttype(::Type{LocalPerspectiveAD{T,N,A,I}}) where {T,N,A,I} = A
 @inline Base.haskey(state::LocalStateAD, f::Symbol) = haskey(getfield(state, :data), f)
+@inline function Base.haskey(state::LocalStateAD{NamedTuple{keys, vals}, I, E}, f::Symbol) where {keys, vals, I, E}
+    return f in keys
+end
 @inline Base.haskey(state::ValueStateAD, f::Symbol) = haskey(getfield(state, :data), f)
 
 
