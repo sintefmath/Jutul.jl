@@ -14,15 +14,21 @@ function basic_poisson_test()
     # Initial condition doesn't matter
     state0 = setup_state(model, Dict(:U=>1.0))
     # Set up parameters from domain data and model
-    param = setup_parameters(domain, model)
+    param = setup_parameters(model)
 
     nc = number_of_cells(g)
     pos_src = PoissonSource(1, 1.0)
     neg_src = PoissonSource(nc, -1.0)
     forces = setup_forces(model, sources = [pos_src, neg_src])
 
-    sim = Simulator(model, state0 = state0, parameters = param)
-    states, = simulate(sim, [1.0], info_level = -1, forces = forces)
+    dt = [1.0]
+    states, = simulate(
+        state0,
+        model,
+        dt,
+        parameters = param,
+        info_level = -1,
+        forces = forces)
     U = states[end][:U]
     # Singular problem, normalize against first element
     U = U .- U[1]
