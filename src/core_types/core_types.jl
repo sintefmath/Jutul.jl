@@ -265,12 +265,19 @@ function SimulationModel(domain, system;
                             formulation=FullyImplicit(),
                             context=DefaultContext(),
                             output_level=:primary_variables,
-                            data_domain = DataDomain(physical_representation(domain)),
+                            data_domain = missing,
                             extra = OrderedDict{Symbol, Any}(),
                             plot_mesh = missing,
                             kwarg...
                         )
     context = initialize_context!(context, domain, system, formulation)
+    if ismissing(data_domain)
+        if domain isa DataDomain
+            data_domain = domain
+        else
+            data_domain = DataDomain(physical_representation(domain))
+        end
+    end
     domain = discretize_domain(domain, system; kwarg...)
     domain = transfer(context, domain)
     if !ismissing(plot_mesh)
