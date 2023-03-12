@@ -267,11 +267,15 @@ function SimulationModel(domain, system;
                             output_level=:primary_variables,
                             data_domain = DataDomain(physical_representation(domain)),
                             extra = OrderedDict{Symbol, Any}(),
+                            plot_mesh = missing,
                             kwarg...
                         )
     context = initialize_context!(context, domain, system, formulation)
     domain = discretize_domain(domain, system; kwarg...)
     domain = transfer(context, domain)
+    if !ismissing(plot_mesh)
+        error("plot_mesh argument is deprecated.")
+    end
 
     T = OrderedDict{Symbol,JutulVariables}
     primary = T()
