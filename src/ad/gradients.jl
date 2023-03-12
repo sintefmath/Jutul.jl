@@ -421,7 +421,19 @@ function adjoint_model_copy(model::SimulationModel{O, S, F, C}; context = model.
     # Transpose the system
     new_context = adjoint(context)
     N = typeof(new_context)
-    return SimulationModel{O, S, F, N}(model.domain, model.system, new_context, model.formulation, model.plot_mesh, pvar, svar, prm, eqs, outputs, extra)
+    return SimulationModel{O, S, F, N}(
+        model.domain,
+        model.system,
+        new_context,
+        model.formulation,
+        model.data_domain,
+        pvar,
+        svar,
+        prm,
+        eqs,
+        outputs,
+        extra
+    )
 end
 
 """
