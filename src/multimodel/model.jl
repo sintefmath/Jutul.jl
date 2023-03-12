@@ -619,18 +619,20 @@ function setup_state(model::MultiModel; kwarg...)
     return internal_multimodel_setup_state(setup_state, model; kwarg...)
 end
 
-function setup_parameters(model::MultiModel; kwarg...)
-    return internal_multimodel_setup_state(setup_parameters, model; kwarg...)
+function setup_parameters(data_domains::AbstractDict, model::MultiModel; kwarg...)
+    F = (model, init) -> setup_parameters(data_domains, model, init)
+    return internal_multimodel_setup_state(F, model; kwarg...)
 end
 
-function setup_parameters(model::MultiModel, init)
+function setup_parameters(data_domains::AbstractDict, model::MultiModel, init)
     p = Dict{Symbol, Any}()
     for key in submodels_symbols(model)
         m = model.models[key]
+        d = data_domains[key]
         if haskey(init, key) && !isnothing(init[key])
-            prm = setup_parameters(m, init[key])
+            prm = setup_parameters(d, m, init[key])
         else
-            prm = setup_parameters(m)
+            prm = setup_parameters(d, m)
         end
         p[key] = prm
     end
