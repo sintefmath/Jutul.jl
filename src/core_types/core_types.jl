@@ -247,7 +247,7 @@ struct SimulationModel{O<:JutulDomain,
     system::S
     context::C
     formulation::F
-    plot_mesh
+    data_domain
     primary_variables::OrderedDict{Symbol, Any}
     secondary_variables::OrderedDict{Symbol, Any}
     parameters::OrderedDict{Symbol, Any}
@@ -264,8 +264,8 @@ Instantiate a model for a given `system` discretized on the `domain`.
 function SimulationModel(domain, system;
                             formulation=FullyImplicit(),
                             context=DefaultContext(),
-                            plot_mesh = nothing,
                             output_level=:primary_variables,
+                            data_domain = DataDomain(physical_representation(domain)),
                             extra = OrderedDict{Symbol, Any}(),
                             kwarg...
                         )
@@ -283,7 +283,7 @@ function SimulationModel(domain, system;
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, plot_mesh, primary, secondary, parameters, equations, outputs, extra)
+    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, data_domain, primary, secondary, parameters, equations, outputs, extra)
     update_model_pre_selection!(model)
     select_primary_variables!(model)
     select_secondary_variables!(model)

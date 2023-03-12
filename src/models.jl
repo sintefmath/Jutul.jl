@@ -292,6 +292,11 @@ function setup_parameters(model::JutulModel, arg...; kwarg...)
     return setup_parameters(data_domain, model, arg...; kwarg...)
 end
 
+function setup_parameters(model::SimulationModel, arg...; kwarg...)
+    data_domain = model.data_domain
+    return setup_parameters(data_domain, model, arg...; kwarg...)
+end
+
 function setup_parameters(data_domain::DataDomain, model::JutulModel, init::AbstractDict)
     prm = Dict{Symbol, Any}()
     return setup_parameters!(prm, data_domain, model, init)
