@@ -619,12 +619,12 @@ function setup_state(model::MultiModel; kwarg...)
     return internal_multimodel_setup_state(setup_state, model; kwarg...)
 end
 
-function setup_parameters(model::MultiModel; kwarg...)
+function setup_parameters(model::MultiModel, arg...; kwarg...)
     data_domains = Dict{Symbol, DataDomain}()
     for k in submodel_symbols(model)
         data_domains[k] = model[k].data_domain
     end
-    return setup_parameters(data_domains, model; kwarg...)
+    return setup_parameters(data_domains, model, arg...; kwarg...)
 end
 
 function setup_parameters(data_domains::AbstractDict, model::MultiModel; kwarg...)
