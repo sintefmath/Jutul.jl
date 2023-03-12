@@ -117,12 +117,16 @@ struct TwoPointPotentialFlowHardCoded{C, D} <: FlowDiscretization
     conn_data::D
 end
 
-function TwoPointPotentialFlowHardCoded(grid::JutulMesh; ncells = nothing)
+function TwoPointPotentialFlowHardCoded(grid::JutulMesh)
     N = get_neighborship(grid)
+    return TwoPointPotentialFlowHardCoded(N, number_of_cells(grid))
+end
+
+function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N))
     if size(N, 2) > 0
-        faces, face_pos = get_facepos(N, ncells)
+        faces, face_pos = get_facepos(N, nc)
         nhf = length(faces)
-        nc = length(face_pos) - 1
+        @assert length(face_pos) - 1 == nc
         get_el = (face, cell) -> get_connection(face, cell, N, true)
         el = get_el(1, 1) # Could be junk, we just need eltype
         conn_data = Vector{typeof(el)}(undef, nhf)
