@@ -12,7 +12,7 @@ function basic_poisson_test()
     # Set up a model with the grid and system
     model = SimulationModel(domain, sys)
     # Initial condition doesn't matter
-    state0 = setup_state(model, Dict(:U=>1.0))
+    state0 = setup_state(model, U = 1.0)
     # Set up parameters from domain data and model
     param = setup_parameters(model)
 
