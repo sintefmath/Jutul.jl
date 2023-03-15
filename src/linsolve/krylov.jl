@@ -157,7 +157,6 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
     elseif v > 0 
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end
-    # @info "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
     return linear_solve_return(solved, n, stats)
 end

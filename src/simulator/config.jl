@@ -8,7 +8,7 @@ function simulator_config!(cfg, sim; nonlinear_tolerance = 1e-3, kwarg...)
 3 - as 1, but prints a table of all non-converged residuals at each iteration
 4 - as 3, but all residuals are printed (even converged values)
 Negative values disable output. The interpretation of this number is subject to change.")
-    add_option!(cfg, :debug_level, 1, "Define the amount of debug output [placeholder].", types = Int)
+    add_option!(cfg, :debug_level, 0, "Define the amount of debug output in the reports. Higher values means more output.", types = Int)
     add_option!(cfg, :end_report, nothing, "Output a final report that includes timings etc. If nothing, depends on info_level instead.", types = Union{Bool, Nothing})
     # Convergence tests
     add_option!(cfg, :max_timestep_cuts, 5, "Max time step cuts in a single mini step before termination of simulation.", types = Int, values = 0:10000)

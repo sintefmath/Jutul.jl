@@ -308,6 +308,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
         report[:linear_solve_time] = t_solve
         report[:update_time] = t_update
     end
+    extra_debug_output!(report, storage, model, config, iteration, dt)
     return (e, converged, report)
 end
 
@@ -476,4 +477,33 @@ end
 
 function cutting_criterion(::Nothing, sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
     return (relaxation, false)
+end
+
+"""
+    extra_debug_output!(report, storage, model, config, iteration, dt)
+
+Add extra debug output to report during a nonlinear iteration.
+"""
+function extra_debug_output!(report, storage, model, config, iteration, dt)
+    level = config[:debug_level]
+    if level > 0
+        debug_report = Dict{Symbol, Any}()
+        report[:debug] = debug_report
+        for i = 1:level
+            extra_debug_output!(debug_report, report, storage, model, config, iteration, dt, Val(i))
+        end
+    end
+
+end
+
+function extra_debug_output!(debug_report, report, storage, model, config, iteration, dt, level::Val)
+    # Default: Do nothing
+end
+
+function extra_debug_output!(debug_report, report, storage, model::Union{SimulationModel, MultiModel}, config, iteration, dt, level::Val{10})
+    if haskey(storage, :LinearizedSystem)
+        lsys = storage.LinearizedSystem
+        r = vector_residual(lsys)
+        debug_report[:linearized_system_norm] = (L1 = norm(r, 1), L2 = norm(r, 2), LInf = norm(r, Inf))
+    end
 end
