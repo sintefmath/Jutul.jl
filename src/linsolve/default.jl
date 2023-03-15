@@ -296,7 +296,7 @@ solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder 
 solve!(sys::LSystem, linsolve::Nothing; kwarg...) = solve!(sys; kwarg...)
 
 function solve!(sys; dx = sys.dx, r = sys.r)
-    limit = 50000
+    limit = 100_000
     n = length(sys.dx)
     if n > limit
         error("System too big for default direct solver. (Limit is $limit, system was $n by $n.")
