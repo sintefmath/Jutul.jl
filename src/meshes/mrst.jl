@@ -47,8 +47,13 @@ function tpfv_geometry(g::MRSTWrapMesh)
     internal_faces = (vec(N_raw[:, 2]) .> 0) .& (vec(N_raw[:, 1]) .> 0)
     # Neighborship might mismatch the actual grid neighborships if the MRST grid
     # comes from any number of routines that try to create both a geometrically
-    # valid grid and the TPFA neighborship defined somewhere else.
-    self_consistent = all(N_raw[internal_faces, :]' == g.N)
+    # valid grid and the TPFA neighborship defined somewhere else. We do some
+    # checks on that plus the geometry fields, otherwise we insert NaN and
+    # assume that the result is still somewhat useful.
+    nf = size(N, 2)
+    check_face(k) = haskey(faces, k) && size(faces[k], 1) == nf
+    N_ok = all(N_raw[internal_faces, :]' == g.N)
+    self_consistent = N_ok && check_face(:areas) && check_face(:normals) && check_face(:centroids)
     if self_consistent
         face_centroids = copy((faces.centroids[internal_faces, :])')
         face_areas = vec(faces.areas[internal_faces])
@@ -57,7 +62,6 @@ function tpfv_geometry(g::MRSTWrapMesh)
     else
         @assert eltype(N)<:Integer
         @assert size(N, 1) == 2
-        nf = size(N, 2)
         dim = size(cell_centroids, 1)
         fake_vec() = repeat([NaN], dim, nf)
         fake_scalar() = repeat([NaN], nf)
