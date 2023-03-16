@@ -19,6 +19,18 @@ mutable struct IterativeSolverConfig
     end
 end
 
+function linear_solver_tolerance(cfg::IterativeSolverConfig, variant = :relative, T = Float64)
+    if variant == :relative
+        tol = cfg.relative_tolerance
+    elseif variant == :absolute
+        tol = cfg.absolute_tolerance
+    else
+        @assert variant == :relaxed_relative
+        tol = cfg.nonlinear_relative_tolerance
+    end
+    return T(isnothing(tol) ? 1e-12 : tol)
+end
+
 to_sparse_pattern(x::SparsePattern) = x
 
 function to_sparse_pattern(A::SparseMatrixCSC{Tv, Ti}) where {Tv, Ti}
