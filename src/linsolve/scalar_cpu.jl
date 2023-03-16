@@ -15,7 +15,7 @@ function LUSolver(; reuse_memory = true, check = true, max_size = 50000)
     end
 end
 
-function solve!(sys, solver::LUSolver)
+function linear_solve!(sys, solver::LUSolver; kwarg...)
     if length(sys.dx) > solver.max_size
         error("System too big for LU solver. You can increase max_size at your own peril.")
     end

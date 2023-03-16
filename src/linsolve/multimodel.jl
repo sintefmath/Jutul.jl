@@ -14,7 +14,7 @@ number_of_subsystems(ls::MultiLinearizedSystem) = size(ls.subsystems, 1)
 
 do_schur(sys) = sys.reduction == :schur_apply
 
-function prepare_solve!(sys::MultiLinearizedSystem)
+function prepare_linear_solve!(sys::MultiLinearizedSystem)
     if do_schur(sys)
         _, C, _, E, a, b = get_schur_blocks!(sys, true, update = true)
         b_buf, = sys.schur_buffer[2]

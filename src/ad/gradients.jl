@@ -334,7 +334,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     if adjoint_storage.rhs_transfer_needed
         lsys.r_buffer .= rhs
     end
-    @tic "linear solve" lstats = solve!(lsys, lsolve, forward_sim.model, forward_sim.storage; lsolve_arg...)
+    @tic "linear solve" lstats = linear_solve!(lsys, lsolve, forward_sim.model, forward_sim.storage; lsolve_arg...)
     adjoint_transfer_canonical_order!(λ, dx, forward_sim.model, to_canonical = true)
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient

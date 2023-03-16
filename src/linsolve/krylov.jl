@@ -65,7 +65,7 @@ function update_preconditioner!(prec, sys, model, storage, recorder)
     update!(prec, sys, model, storage, recorder)
 end
 
-function solve!(sys::LSystem,
+function linear_solve!(sys::LSystem,
                 krylov::GenericKrylov,
                 model,
                 storage = nothing,
@@ -79,7 +79,7 @@ function solve!(sys::LSystem,
     cfg = krylov.config
     prec = krylov.preconditioner
     Ft = float_type(model.context)
-    @tic "prepare" prepare_solve!(sys)
+    @tic "prepare" prepare_linear_solve!(sys)
     op = linear_operator(sys)
     @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder)
     L = preconditioner(krylov, sys, model, storage, recorder, :left, Ft)
