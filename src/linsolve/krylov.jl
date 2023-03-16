@@ -74,7 +74,9 @@ function linear_solve!(sys::LSystem,
                 dx = sys.dx_buffer,
                 r = vector_residual(sys),
                 atol = linear_solver_tolerance(krylov, :absolute),
-                rtol = linear_solver_tolerance(krylov, :relative)
+                rtol = linear_solver_tolerance(krylov, :relative),
+                rtol_nl = linear_solver_tolerance(krylov, :nonlinear_relative),
+                rtol_relaxed = linear_solver_tolerance(krylov, :relaxed_relative)
                 )
     cfg = krylov.config
     prec = krylov.preconditioner
@@ -86,29 +88,25 @@ function linear_solve!(sys::LSystem,
     # R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
     v = Int64(cfg.verbose)
     max_it = cfg.max_iterations
-    rt = rtol
-    at = atol
 
-    rtol_nl = cfg.nonlinear_relative_tolerance    
     if !isnothing(recorder) && !isnothing(rtol_nl)
         it = subiteration(recorder)
-        rtol_relaxed = cfg.relaxed_relative_tolerance
         r_k = norm(r)
         r_0 = krylov.r_norm
         if it == 1
             krylov.r_norm = r_k
         elseif !isnothing(rtol_nl) && !isnothing(r_0)
             maybe_rtol = r_0*rtol_nl/r_k
-            rt = max(min(maybe_rtol, rtol_relaxed), rt)
+            rtol = max(min(maybe_rtol, rtol_relaxed), rtol)
         end
     end
     solve_f, in_place = krylov_jl_solve_function(krylov, op, r)
     @tic "solve" ret = solve_f(op, r, 
                             itmax = max_it,
                             verbose = v,
-                            rtol = rt,
+                            rtol = rtol,
                             history = true,
-                            atol = at,
+                            atol = atol,
                             M = L; cfg.arguments...)
     if in_place
         x, stats = (krylov.storage.x, krylov.storage.stats)
@@ -128,7 +126,7 @@ function linear_solve!(sys::LSystem,
     end
 
     if !solved && v >= 0
-        @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rt, atol = $at, max_it = $max_it, solver = $solver"
+        @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rt, atol = $atol, max_it = $max_it, solver = $solver"
     elseif v > 0 
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end

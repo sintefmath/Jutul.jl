@@ -20,15 +20,22 @@ mutable struct IterativeSolverConfig
 end
 
 function linear_solver_tolerance(cfg::IterativeSolverConfig, variant = :relative, T = Float64)
-    if variant == :relative
-        tol = cfg.relative_tolerance
-    elseif variant == :absolute
-        tol = cfg.absolute_tolerance
-    else
-        @assert variant == :relaxed_relative
+    if variant == :nonlinear_relative
         tol = cfg.nonlinear_relative_tolerance
+    else
+        if variant == :relative
+            tol = cfg.relative_tolerance
+        elseif variant == :relaxed_relative
+            tol = cfg.relaxed_relative_tolerance
+        else
+            @assert variant == :absolute
+            tol = cfg.absolute_tolerance
+        end
+        default_num_tol = sqrt(eps(T))
+        default_num_tol = 1e-12
+        tol = T(isnothing(tol) ? default_num_tol : tol)
     end
-    return T(isnothing(tol) ? 1e-12 : tol)
+    return tol
 end
 
 to_sparse_pattern(x::SparsePattern) = x
