@@ -89,8 +89,9 @@ function linear_solve!(sys::LSystem,
     v = Int64(cfg.verbose)
     max_it = cfg.max_iterations
     use_relaxed_tol = !isnothing(recorder) && !isnothing(rtol_nl)
-    use_true_rel_norm = true
+    use_true_rel_norm = cfg.true_residual
 
+    solve_f, in_place = krylov_jl_solve_function(krylov, op, r)
     if use_relaxed_tol || use_true_rel_norm
         r_k = norm(r, 2)
         if use_true_rel_norm
@@ -110,7 +111,6 @@ function linear_solve!(sys::LSystem,
             end
         end
     end
-    solve_f, in_place = krylov_jl_solve_function(krylov, op, r)
     solve_kwarg = (; itmax = max_it, verbose = v, rtol = rtol, history = true, atol = atol, M = L, cfg.arguments...)
     @tic "solve" if in_place
         solve_f(op, r; solve_kwarg...)
@@ -126,7 +126,7 @@ function linear_solve!(sys::LSystem,
         initial_res = res[1]
         final_res = res[end]
     else
-        initial_res = r_k
+        initial_res = norm(r, 2)
         final_res = norm(op*x - r, 2)
     end
 

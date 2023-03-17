@@ -1,22 +1,36 @@
 export IterativeSolverConfig, reservoir_linsolve
 
 mutable struct IterativeSolverConfig
-    relative_tolerance
-    absolute_tolerance
-    max_iterations
-    nonlinear_relative_tolerance
-    relaxed_relative_tolerance
+    relative_tolerance::Union{Nothing, AbstractFloat}
+    absolute_tolerance::Union{Nothing, AbstractFloat}
+    max_iterations::Int
+    nonlinear_relative_tolerance::Union{Nothing, AbstractFloat}
+    relaxed_relative_tolerance::Union{Nothing, AbstractFloat}
+    true_residual::Bool
     verbose
     arguments
-    function IterativeSolverConfig(;relative_tolerance = 1e-3,
-                                    absolute_tolerance = nothing, 
-                                    max_iterations = 100,
-                                    verbose = false,
-                                    nonlinear_relative_tolerance = nothing,
-                                    relaxed_relative_tolerance = 0.1,
-                                    kwarg...)
-        new(relative_tolerance, absolute_tolerance, max_iterations, nonlinear_relative_tolerance, relaxed_relative_tolerance, verbose, kwarg)
-    end
+end
+
+function IterativeSolverConfig(;
+        relative_tolerance = 1e-3,
+        absolute_tolerance = nothing, 
+        max_iterations = 100,
+        verbose = false,
+        nonlinear_relative_tolerance = nothing,
+        relaxed_relative_tolerance = 0.1,
+        true_residual = false,
+        kwarg...
+    )
+    IterativeSolverConfig(
+        relative_tolerance,
+        absolute_tolerance,
+        max_iterations,
+        nonlinear_relative_tolerance,
+        relaxed_relative_tolerance,
+        true_residual,
+        verbose,
+        kwarg
+    )
 end
 
 function linear_solver_tolerance(cfg::IterativeSolverConfig, variant = :relative, T = Float64)
