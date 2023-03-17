@@ -131,7 +131,7 @@ function linear_solve!(sys::LSystem,
     end
 
     if !solved && v >= 0
-        @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rt, atol = $atol, max_it = $max_it"
+        @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
     elseif v > 0 
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end
