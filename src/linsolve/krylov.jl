@@ -88,30 +88,35 @@ function linear_solve!(sys::LSystem,
     # R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
     v = Int64(cfg.verbose)
     max_it = cfg.max_iterations
+    use_relaxed_tol = !isnothing(recorder) && !isnothing(rtol_nl)
+    use_true_rel_norm = true
 
-    if !isnothing(recorder) && !isnothing(rtol_nl)
-        it = subiteration(recorder)
-        r_k = norm(r)
-        r_0 = krylov.r_norm
-        if it == 1
-            krylov.r_norm = r_k
-        elseif !isnothing(rtol_nl) && !isnothing(r_0)
-            maybe_rtol = r_0*rtol_nl/r_k
-            rtol = max(min(maybe_rtol, rtol_relaxed), rtol)
+    if use_relaxed_tol || use_true_rel_norm
+        r_k = norm(r, 2)
+        if use_true_rel_norm
+            # Try to avoid relative reduction in preconditioned norm
+            atol = atol + rtol*r_k
+            rtol = 0.0
+        end
+
+        if use_relaxed_tol
+            it = subiteration(recorder)
+            r_0 = krylov.r_norm
+            if it == 1
+                krylov.r_norm = r_k
+            elseif !isnothing(rtol_nl) && !isnothing(r_0)
+                maybe_rtol = r_0*rtol_nl/r_k
+                rtol = max(min(maybe_rtol, rtol_relaxed), rtol)
+            end
         end
     end
     solve_f, in_place = krylov_jl_solve_function(krylov, op, r)
-    @tic "solve" ret = solve_f(op, r, 
-                            itmax = max_it,
-                            verbose = v,
-                            rtol = rtol,
-                            history = true,
-                            atol = atol,
-                            M = L; cfg.arguments...)
-    if in_place
+    solve_kwarg = (; itmax = max_it, verbose = v, rtol = rtol, history = true, atol = atol, M = L, cfg.arguments...)
+    @tic "solve" if in_place
+        solve_f(op, r; solve_kwarg...)
         x, stats = (krylov.storage.x, krylov.storage.stats)
     else
-        x, stats = ret
+        x, stats = solve_f(op, r; solve_kwarg...)
     end
     res = stats.residuals
     n = length(res) - 1
@@ -121,15 +126,17 @@ function linear_solve!(sys::LSystem,
         initial_res = res[1]
         final_res = res[end]
     else
-        initial_res = norm(r)
-        final_res = norm(op*x - r)
+        initial_res = r_k
+        final_res = norm(op*x - r, 2)
     end
 
     if !solved && v >= 0
-        @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rt, atol = $atol, max_it = $max_it, solver = $solver"
+        @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rt, atol = $atol, max_it = $max_it"
     elseif v > 0 
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end
+    # @info "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)." res
+
     @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
     return linear_solve_return(solved, n, stats)
 end
