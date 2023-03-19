@@ -113,3 +113,9 @@ end
     @test_throws "AssertionError: Number of columns for Matrix scalar defined on Cells() should be 6, was 2" d[:scalar] = rand(93, 2)
     @test tuple(keys(d)...) == (:neighbors, :areas, :normals, :face_centroids, :cell_centroids, :volumes, :cell_vector, :face_vector, :scalar, :data_2d, :data_3d)
 end
+
+@testset "get_1d_interpolator" begin
+    x = collect(0:0.1:4)
+    I = get_1d_interpolator(x, sin.(x))
+    @test isapprox(I(π/2), 1.0, atol = 1e-2)
+end
