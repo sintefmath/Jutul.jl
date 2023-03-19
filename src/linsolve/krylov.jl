@@ -175,11 +175,28 @@ end
 
 function krylov_jl_solve_function(krylov::GenericKrylov, op, r, solver = krylov.solver)
     # Some trickery to generically wrapping a Krylov.jl solver.
-    if isnothing(krylov.storage)
-        F_sym = Krylov.KRYLOV_SOLVERS[solver]
-        krylov.storage = eval(:($F_sym($op, $r)))
+    if solver == :gmres
+        if isnothing(krylov.storage)
+            krylov.storage = GmresSolver(op, r)
+        end
+        solve_f = gmres!
+    elseif solver == :bicgstab
+        if isnothing(krylov.storage)
+            krylov.storage = BicgstabSolver(op, r)
+        end
+        solve_f = bicgstab!
+    elseif solver == :fgmres
+        if isnothing(krylov.storage)
+            krylov.storage = FgmresSolver(op, r)
+        end
+        solve_f = fgmres!
+    else
+        if isnothing(krylov.storage)
+            F_sym = Krylov.KRYLOV_SOLVERS[solver]
+            krylov.storage = eval(:($F_sym($op, $r)))
+        end
+        solver_string = Symbol("$(solver)!")
+        solve_f = eval(:(Krylov.$solver_string))
     end
-    solver_string = Symbol("$(solver)!")
-    solve_f = eval(:(Krylov.$solver_string))
     return (solve_f, krylov.storage)
 end
