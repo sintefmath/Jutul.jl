@@ -4,13 +4,21 @@ function initialize_io(path)
     @assert isdir(path) "$path must be a valid directory for output."
 end
 
-function retrieve_output!(states, config, n)
+function retrieve_output!(states, reports, config, n)
     pth = config[:output_path]
-    if config[:output_states] && !isnothing(pth)
+    if !isnothing(pth)
         @debug "Reading states from $pth..."
         @assert isempty(states)
-        read_results(pth, read_reports = true, states = states, verbose = config[:info_level] >= 0, range = 1:n);
+        states, reports = read_results(
+            pth,
+            read_reports = true,
+            read_states = config[:output_states],
+            states = states,
+            verbose = config[:info_level] >= 0,
+            range = 1:n
+            )
     end
+    return (states, reports)
 end
 
 get_output_state(sim) = get_output_state(sim.storage, sim.model)
@@ -31,6 +39,11 @@ function store_output!(states, reports, step, sim, config, report)
                 file["state"] = state
                 file["report"] = report
                 file["step"] = step
+            end
+            for i in 1:(length(reports)-config[:in_memory_reports])
+                # Only keep the last five time-step reports in memory. These
+                # will be read back before output anyway.
+                reports[i] = missing
             end
         elseif mem_out
             push!(states, state)

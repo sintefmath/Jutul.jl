@@ -40,23 +40,14 @@ function GenericKrylov(solver = :gmres; preconditioner = nothing, kwarg...)
     end
 end
 
+function linear_solver_tolerance(k::GenericKrylov, arg...; kwarg...)
+    return linear_solver_tolerance(k.config, arg...; kwarg...)
+end
+
 function Base.show(io::IO, krylov::GenericKrylov)
-    cfg = krylov.config
-    print(io, "Generic Krylov $(krylov.solver) (ϵ=$(rtol(cfg))) with $(typeof(krylov.preconditioner))")
-end
-
-function atol(cfg, T = Float64)
-    tol = cfg.absolute_tolerance
-    return T(isnothing(tol) ? 0.0 : tol)
-end
-
-function rtol(cfg, T = Float64)
-    tol = cfg.relative_tolerance
-    return T(isnothing(tol) ? 0.0 : tol)
-end
-
-function verbose(cfg)
-    return Int64(cfg.verbose)
+    rtol = linear_solver_tolerance(krylov, :relative)
+    atol = linear_solver_tolerance(krylov, :absolute)
+    print(io, "Generic Krylov using $(krylov.solver) (ϵₐ=$atol, ϵ=$rtol) with prec = $(typeof(krylov.preconditioner))")
 end
 
 function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, side, arg...)
@@ -74,72 +65,76 @@ function update_preconditioner!(prec, sys, model, storage, recorder)
     update!(prec, sys, model, storage, recorder)
 end
 
-function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, dt = nothing, recorder = ProgressRecorder(); 
-                                                                            dx = sys.dx_buffer, r = vector_residual(sys))
-    solver = krylov.solver
+function linear_solve!(sys::LSystem,
+                krylov::GenericKrylov,
+                model,
+                storage = nothing,
+                dt = nothing,
+                recorder = ProgressRecorder();
+                dx = sys.dx_buffer,
+                r = vector_residual(sys),
+                atol = linear_solver_tolerance(krylov, :absolute),
+                rtol = linear_solver_tolerance(krylov, :relative),
+                rtol_nl = linear_solver_tolerance(krylov, :nonlinear_relative),
+                rtol_relaxed = linear_solver_tolerance(krylov, :relaxed_relative)
+                )
     cfg = krylov.config
     prec = krylov.preconditioner
     Ft = float_type(model.context)
-    @tic "prepare" prepare_solve!(sys)
+    @tic "prepare" prepare_linear_solve!(sys)
     op = linear_operator(sys)
     @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder)
     L = preconditioner(krylov, sys, model, storage, recorder, :left, Ft)
-    R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
-    v = verbose(cfg)
+    # R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
+    v = Int64(cfg.verbose)
     max_it = cfg.max_iterations
-    rt = rtol(cfg, Ft)
-    at = atol(cfg, Ft)
+    min_it = cfg.min_iterations
+    use_relaxed_tol = !isnothing(recorder) && !isnothing(rtol_nl)
+    use_true_rel_norm = cfg.true_residual
 
-    rtol_nl = cfg.nonlinear_relative_tolerance    
-    if !isnothing(recorder) && !isnothing(rtol_nl)
-        it = subiteration(recorder)
-        rtol_relaxed = cfg.relaxed_relative_tolerance
-        r_k = norm(r)
-        r_0 = krylov.r_norm
-        if it == 1
-            krylov.r_norm = r_k
-        elseif !isnothing(rtol_nl) && !isnothing(r_0)
-            maybe_rtol = r_0*rtol_nl/r_k
-            rt = max(min(maybe_rtol, rtol_relaxed), rt)
+    if use_relaxed_tol || use_true_rel_norm
+        r_k = norm(r, 2)
+        if use_true_rel_norm
+            # Try to avoid relative reduction in preconditioned norm
+            atol = atol + rtol*r_k
+            rtol = 0.0
+        end
+        if use_relaxed_tol
+            it = subiteration(recorder)
+            r_k = norm(r)
+            r_0 = krylov.r_norm
+            if it == 1
+                krylov.r_norm = r_k
+            elseif !isnothing(rtol_nl) && !isnothing(r_0)
+                maybe_rtol = r_0*rtol_nl/r_k
+                rtol = max(min(maybe_rtol, rtol_relaxed), rtol)
+            end
         end
     end
-    if solver == :gmres
-        if isnothing(krylov.storage)
-            krylov.storage = GmresSolver(op, r, 20)
-        end
-        F = krylov.storage
-        solve_f = (arg...; kwarg...) -> Krylov.gmres!(F, arg...; reorthogonalization = true, kwarg...)
-        in_place = true
-    elseif solver == :bicgstab
-        if isnothing(krylov.storage)
-            krylov.storage = BicgstabSolver(op, r)
-        end
-        F = krylov.storage
-        solve_f = (arg...; kwarg...) -> Krylov.bicgstab!(F, arg...; kwarg...)
-        in_place = true
-    elseif solver == :fgmres
-        if isnothing(krylov.storage)
-            krylov.storage = FgmresSolver(op, r, 20)
-        end
-        F = krylov.storage
-        solve_f = (arg...; kwarg...) -> Krylov.fgmres!(F, arg...; kwarg...)
-        in_place = true
+
+    if min_it > 1
+        rel_tol = rtol
+        abs_tol = atol
+        callback = solver -> krylov_termination_criterion(solver, abs_tol, rel_tol, min_it)
+        # Set to small numbers so the callback fully controls convergence checks
+        atol = 1e-20
+        rtol = 1e-20
+        manual_conv = true
     else
-        solve_f = eval(:(Krylov.$solver))
-        in_place = false
+        callback = solver -> false
+        manual_conv = false
     end
-    @tic "solve" ret = solve_f(op, r, 
+    solve_f, F = krylov_jl_solve_function(krylov, op, r)
+    @tic "solve" solve_f(F, op, r;
                             itmax = max_it,
                             verbose = v,
-                            rtol = rt,
+                            rtol = rtol,
+                            atol = atol,
                             history = true,
-                            atol = at,
-                            M = L; cfg.arguments...)
-    if in_place
-        x, stats = (krylov.storage.x, krylov.storage.stats)
-    else
-        x, stats = ret
-    end
+                            callback = callback,
+                            M = L,
+                            cfg.arguments...)
+    x, stats = (krylov.storage.x, krylov.storage.stats)
     res = stats.residuals
     n = length(res) - 1
     solved = stats.solved
@@ -148,20 +143,43 @@ function solve!(sys::LSystem, krylov::GenericKrylov, model, storage = nothing, d
         initial_res = res[1]
         final_res = res[end]
     else
-        initial_res = norm(r)
-        final_res = norm(op*x - r)
+        initial_res = norm(r, 2)
+        final_res = norm(op*x - r, 2)
     end
 
-    if !solved && v >= 0
-        @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rt, atol = $at, max_it = $max_it, solver = $solver"
+    bad_auto = !manual_conv && !solved
+    bad_manual = manual_conv && stats.niter == max_it
+    if (bad_manual || bad_auto) && v >= 0
+        @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
     elseif v > 0 
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end
+    # @info "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)." res
 
     @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
     return linear_solve_return(solved, n, stats)
 end
 
+function krylov_termination_criterion(solver, atol, rtol, min_its)
+    res = solver.stats.residuals
+    tol = atol + rtol*res[1]
+    ok_tol = res[end] <= tol
+    ok_its = length(res) > min_its
+    done = ok_tol && ok_its
+    return done
+end
+
 function is_mutating(f)
     return String(Symbol(f))[end] == '!'
+end
+
+function krylov_jl_solve_function(krylov::GenericKrylov, op, r, solver = krylov.solver)
+    # Some trickery to generically wrapping a Krylov.jl solver.
+    if isnothing(krylov.storage)
+        F_sym = Krylov.KRYLOV_SOLVERS[solver]
+        krylov.storage = eval(:($F_sym($op, $r)))
+    end
+    solver_string = Symbol("$(solver)!")
+    solve_f = eval(:(Krylov.$solver_string))
+    return (solve_f, krylov.storage)
 end

@@ -16,7 +16,9 @@ end
 function index_map(c_global, m::FiniteVolumeGlobalMap{R}, from_set::GlobalSet, to_set::VariableSet, ce::Cells) where R
     # Previously local_cell
     # local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(findfirst(isequal(c_global), m.cells))::R
-    return only(findfirst(isequal(c_global), m.cells))::R
+    ix = searchsortedfirst(m.cells, c_global)::R
+    @assert ix <= length(m.cells)
+    return ix
 end
 
 function index_map(c, m::FiniteVolumeGlobalMap{R}, from_set::VariableSet, to_set::EquationSet, ce::Cells) where R

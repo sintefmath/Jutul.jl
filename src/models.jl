@@ -261,9 +261,9 @@ function initialize_extra_state_fields!(state, ::Any, model)
     # Do nothing
 end
 
-function setup_parameters!(prm, model, init_values::AbstractDict = Dict())
+function setup_parameters!(prm, data_domain, model, initializer::AbstractDict = Dict())
     for (psym, pvar) in get_parameters(model)
-        initialize_variable_value!(prm, model, pvar, psym, init_values, need_value = false)
+        initialize_parameter_value!(prm, data_domain, model, pvar, psym, initializer)
     end
     return prm
 end
@@ -279,17 +279,27 @@ A scalar (or short vector of the right size for [`VectorVariables`](@ref)) will 
 while a vector (or matrix for [`VectorVariables`](@ref)) with length (number of columns for [`VectorVariables`](@ref))
 equal to the entity count (for example, number of cells for a cell variable) will be used directly.
 """
-function setup_parameters(model::JutulModel; kwarg...)
+function setup_parameters(d::DataDomain, model::JutulModel; kwarg...)
     init = Dict{Symbol, Any}()
     for (k, v) in kwarg
         init[k] = v
     end
-    return setup_parameters(model, init)
+    return setup_parameters(d, model, init)
 end
 
-function setup_parameters(model::JutulModel, init)
+function setup_parameters(model::JutulModel, arg...; kwarg...)
+    data_domain = DataDomain(physical_representation(model))
+    return setup_parameters(data_domain, model, arg...; kwarg...)
+end
+
+function setup_parameters(model::SimulationModel, arg...; kwarg...)
+    data_domain = model.data_domain
+    return setup_parameters(data_domain, model, arg...; kwarg...)
+end
+
+function setup_parameters(data_domain::DataDomain, model::JutulModel, init::AbstractDict)
     prm = Dict{Symbol, Any}()
-    return setup_parameters!(prm, model, init)
+    return setup_parameters!(prm, data_domain, model, init)
 end
 
 """
@@ -298,7 +308,7 @@ end
 Simultaneously set up state and parameters from a single `init` file (typically
 a `Dict` containing values that might either be initial values or parameters)
 """
-function setup_state_and_parameters(model, init)
+function setup_state_and_parameters(data_domain::DataDomain, model::JutulModel, init::AbstractDict)
     init = copy(init)
     prm = Dict{Symbol, Any}()
     for (k, v) in init
@@ -308,8 +318,13 @@ function setup_state_and_parameters(model, init)
         end
     end
     state = setup_state(model, init)
-    parameters = setup_parameters(model, prm)
+    parameters = setup_parameters(data_domain, model, prm)
     return (state, parameters)
+end
+
+function setup_state_and_parameters(model::JutulModel, arg...; kwarg...)
+    data_domain = DataDomain(physical_representation(model))
+    return setup_state_and_parameters(data_domain, model, arg...; kwarg...)
 end
 
 function setup_state_and_parameters(model; kwarg...)
@@ -675,14 +690,14 @@ end
 
 Set default tolerances for the nonlinear convergence check of the governing equations.
 """
-function set_default_tolerances(model)
+function set_default_tolerances(model; kwarg...)
     tol_cfg = Dict{Symbol, Any}()
-    set_default_tolerances!(tol_cfg, model)
+    set_default_tolerances!(tol_cfg, model; kwarg...)
     return tol_cfg
 end
 
-function set_default_tolerances!(tol_cfg, model::SimulationModel)
-    tol_cfg[:default] = 1e-3
+function set_default_tolerances!(tol_cfg, model::SimulationModel; tol = 1e-3)
+    tol_cfg[:default] = tol
 end
 
 function check_convergence(storage, model, config; kwarg...)
@@ -777,7 +792,7 @@ end
 function solve_and_update!(storage, model::JutulModel, dt = nothing; linear_solver = nothing, recorder = nothing, kwarg...)
     lsys = storage.LinearizedSystem
     t_solve = @elapsed begin
-        @tic "linear solve" (ok, n, history) = solve!(lsys, linear_solver, model, storage, dt, recorder)
+        @tic "linear solve" (ok, n, history) = linear_solve!(lsys, linear_solver, model, storage, dt, recorder)
     end
     t_update = @elapsed @tic "primary variables" update = update_primary_variables!(storage, model; kwarg...)
     return (t_solve, t_update, n, history, update)
@@ -876,11 +891,14 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     state = storage.state
     state0 = storage.state0
     report = OrderedDict{Symbol, Any}()
-    for (k, var) in get_primary_variables(model)
-        report[k] = variable_change_report(state[k], state0[k], var)
+    defs = storage.variable_definitions
+    pvar = defs.primary_variables
+    for k in keys(pvar)
+        report[k] = variable_change_report(state[k], state0[k], pvar[k])
     end
-    for (k, var) in get_secondary_variables(model)
-        report[k] = variable_change_report(state[k], state0[k], var)
+    svar = defs.secondary_variables
+    for k in keys(svar)
+        report[k] = variable_change_report(state[k], state0[k], svar[k])
     end
     for key in model.output_variables
         update_values!(state0[key], state[key])

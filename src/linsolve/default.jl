@@ -1,4 +1,4 @@
-export LinearizedSystem, MultiLinearizedSystem, solve!, AMGSolver, CuSparseSolver, transfer, LUSolver
+export LinearizedSystem, MultiLinearizedSystem, linear_solve!, AMGSolver, CuSparseSolver, transfer, LUSolver
 
 # using CUDA, CUDA.CUSPARSE
 
@@ -208,7 +208,7 @@ jacobian(sys) = sys.jac
 residual(sys) = sys.r
 linear_system_context(model, sys) = model.context
 
-function prepare_solve!(sys)
+function prepare_linear_solve!(sys)
     # Default is to do nothing.
 end
 
@@ -290,13 +290,13 @@ end
 
 block_size(lsys::LSystem) = 1
 
-linear_solve_return(ok = true, iterations = 1, stats = nothing) = (ok = ok, iterations = iterations, stats = stats)
+linear_solve_return(ok = true, iterations = 1, stats = nothing) = (ok = ok, iterations = iterations, stats = deepcopy(stats))
 
-solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing; kwarg...) = solve!(sys, linsolve; kwarg...)
-solve!(sys::LSystem, linsolve::Nothing; kwarg...) = solve!(sys; kwarg...)
+linear_solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing; kwarg...) = linear_solve!(sys, linsolve; kwarg...)
+linear_solve!(sys::LSystem, linsolve::Nothing; kwarg...) = linear_solve!(sys; kwarg...)
 
-function solve!(sys; dx = sys.dx, r = sys.r)
-    limit = 50000
+function linear_solve!(sys; dx = sys.dx, r = sys.r, atol = nothing, rtol = nothing)
+    limit = 100_000
     n = length(sys.dx)
     if n > limit
         error("System too big for default direct solver. (Limit is $limit, system was $n by $n.")

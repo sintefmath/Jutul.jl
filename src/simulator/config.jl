@@ -1,4 +1,4 @@
-function simulator_config!(cfg, sim; kwarg...)
+function simulator_config!(cfg, sim; nonlinear_tolerance = 1e-3, kwarg...)
     # Printing, etc
     add_option!(cfg, :info_level, 0, "Info level determines the amount of runtime output to the terminal during simulation.", types = Int,
     description = "
@@ -8,7 +8,7 @@ function simulator_config!(cfg, sim; kwarg...)
 3 - as 1, but prints a table of all non-converged residuals at each iteration
 4 - as 3, but all residuals are printed (even converged values)
 Negative values disable output. The interpretation of this number is subject to change.")
-    add_option!(cfg, :debug_level, 1, "Define the amount of debug output [placeholder].", types = Int)
+    add_option!(cfg, :debug_level, 0, "Define the amount of debug output in the reports. Higher values means more output.", types = Int)
     add_option!(cfg, :end_report, nothing, "Output a final report that includes timings etc. If nothing, depends on info_level instead.", types = Union{Bool, Nothing})
     # Convergence tests
     add_option!(cfg, :max_timestep_cuts, 5, "Max time step cuts in a single mini step before termination of simulation.", types = Int, values = 0:10000)
@@ -30,12 +30,14 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :timestep_max_decrease, 0.1, "Max allowable factor to decrease time-step by. Overrides step selectors.", types = Float64)
     add_option!(cfg, :max_residual, 1e20, "Maximum value allowed for a residual before simulation is terminated.", types = Float64)
     add_option!(cfg, :relaxation, NoRelaxation(), "Non-Linear relaxation used. Currently supports `NoRelaxation` and `SimpleRelaxation`.", types = NonLinearRelaxation)
+    add_option!(cfg, :cutting_criterion, nothing, "Criterion to use for early cutting of time-steps. Default value of nothing means cutting when max_nonlinear_iterations is reached.")
 
     # Tolerances
-    add_option!(cfg, :tolerances, set_default_tolerances(sim.model), "Tolerances used for convergence criterions.")
+    add_option!(cfg, :tolerances, set_default_tolerances(sim.model, tol = nonlinear_tolerance), "Tolerances used for convergence criterions.")
     add_option!(cfg, :tol_factor_final_iteration, 1.0, "Value that multiplies all tolerances for the final convergence check before a time-step is cut.")
 
     add_option!(cfg, :output_path, nothing, "Path to write output. If nothing, output is not written to disk.", types = Union{String, Nothing})
+    add_option!(cfg, :in_memory_reports, 5, "Limit for number of reports kept in memory if output_path is provided.", types = Int)
 
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])

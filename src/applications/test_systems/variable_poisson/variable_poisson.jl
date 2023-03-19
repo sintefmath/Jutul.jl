@@ -33,7 +33,7 @@ end
 
 struct PoissonDiscretization{T} <: JutulDiscretization
     half_face_map::T
-    function PoissonDiscretization(g::AbstractJutulMesh)
+    function PoissonDiscretization(g::JutulMesh)
         N = get_neighborship(g)
         nc = number_of_cells(g)
         hf = half_face_map(N, nc)
@@ -50,8 +50,24 @@ end
 
 struct PoissonFaceCoefficient <: ScalarVariable end
 
+function discretize_domain(d::DataDomain, system::VariablePoissonSystem, ::Val{:default}; kwarg...)
+    g = physical_representation(d)
+    discretization = (poisson = Jutul.PoissonDiscretization(g), )
+    return DiscretizedDomain(g, discretization; kwarg...)
+end
+
 associated_entity(::PoissonFaceCoefficient) = Faces()
 default_value(model, ::PoissonFaceCoefficient) = 1.0
+
+function default_parameter_values(data_domain, model, param::PoissonFaceCoefficient, symb)
+    if haskey(data_domain, :poisson_coefficient, Cells())
+        U = data_domain[:poisson_coefficient]
+    else
+        error(":poisson_coefficient symbol must be present to initialize parameter $symb, had keys: $(keys(data_domain))")
+    end
+    g = physical_representation(data_domain)
+    return compute_face_trans(g, U)
+end
 
 function select_parameters!(S, system::VariablePoissonSystem, model)
     S[:K] = PoissonFaceCoefficient()
@@ -84,7 +100,7 @@ function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::Variab
         return K[face]*(U_self - U_other)
     end
     # Equation is just -∇⋅K∇p = 0, or ∇⋅V where V = -K∇p
-    eq_buf[] = -div(flux)
+    eq_buf[] = div(flux)
 end
 
 function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::VariablePoissonEquationTimeDependent, model, Δt, ldisc = local_discretization(eq, self_cell))
@@ -101,5 +117,5 @@ function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::Variab
     end
     # Define equation
     ∂U∂t = (U_self - U0[self_cell])/Δt
-    eq_buf[] = ∂U∂t - div(flux)
+    eq_buf[] = ∂U∂t + div(flux)
 end

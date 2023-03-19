@@ -1,5 +1,5 @@
 export ParallelCSRContext
-"Context that uses threads etc to accelerate loops"
+"A context that uses a CSR sparse matrix format together with threads. Experimental."
 struct ParallelCSRContext <: CPUJutulContext
     matrix_layout
     minbatch::Integer

@@ -334,7 +334,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     if adjoint_storage.rhs_transfer_needed
         lsys.r_buffer .= rhs
     end
-    @tic "linear solve" lstats = solve!(lsys, lsolve, forward_sim.model, forward_sim.storage; lsolve_arg...)
+    @tic "linear solve" lstats = linear_solve!(lsys, lsolve, forward_sim.model, forward_sim.storage; lsolve_arg...)
     adjoint_transfer_canonical_order!(λ, dx, forward_sim.model, to_canonical = true)
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
@@ -421,7 +421,19 @@ function adjoint_model_copy(model::SimulationModel{O, S, F, C}; context = model.
     # Transpose the system
     new_context = adjoint(context)
     N = typeof(new_context)
-    return SimulationModel{O, S, F, N}(model.domain, model.system, new_context, model.formulation, model.plot_mesh, pvar, svar, prm, eqs, outputs, extra)
+    return SimulationModel{O, S, F, N}(
+        model.domain,
+        model.system,
+        new_context,
+        model.formulation,
+        model.data_domain,
+        pvar,
+        svar,
+        prm,
+        eqs,
+        outputs,
+        extra
+    )
 end
 
 """

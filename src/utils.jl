@@ -386,6 +386,23 @@ function stats_ministep(reports)
             linear_system = linear_system)
 end
 
+function report_iterations(reports::AbstractVector)
+    return sum(report_iterations, reports)
+end
+
+function report_iterations(report)
+    its = 0
+    if haskey(report, :ministeps)
+        for rep in report[:ministeps]
+            if haskey(rep, :update_time)
+                its += 1
+            end
+        end
+    end
+    return its
+end
+
+
 function pick_time_unit(t, wide = is_wide_term())
     m = maximum(t)
     if wide
@@ -422,6 +439,12 @@ function pick_time_unit(t, wide = is_wide_term())
     end
     # Fallback
     return (1, sec)
+end
+
+function autoformat_time(t::Float64; compact = true)
+    u, s = pick_time_unit(t, !compact)
+    t_fmt = @sprintf("%.2f", t/u)
+    return "$t_fmt $s"
 end
 
 function print_stats(reports::AbstractArray; kwarg...)
@@ -644,11 +667,10 @@ end
 report_times(reports; ministeps = false) = cumsum(report_timesteps(reports, ministeps = ministeps, extra_out = false))
 
 
-function get_cell_faces(N, nc = nothing)
+function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where T
     # Create array of arrays where each entry contains the faces of that cell
-    t = eltype(N)
     if length(N) == 0
-        cell_faces = ones(t, 1)
+        cell_faces = ones(T, 1)
     else
         max_n = maximum(N)
         if isnothing(nc)
@@ -656,7 +678,12 @@ function get_cell_faces(N, nc = nothing)
         else
             @assert max_n <= nc "Neighborship had maximum value of $max_n but number of cells provided was $nc: N = $N"
         end
-        cell_faces = [Vector{t}() for i = 1:nc]
+        cell_faces = Vector{Vector{T}}(undef, nc)
+        for i in 1:nc
+            V = Vector{T}()
+            sizehint!(V, 6)
+            cell_faces[i] = V
+        end
         for i in 1:size(N, 1)
             for j = 1:size(N, 2)
                 push!(cell_faces[N[i, j]], j)

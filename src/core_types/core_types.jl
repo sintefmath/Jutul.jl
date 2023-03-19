@@ -1,4 +1,4 @@
-export JutulSystem, JutulDomain, JutulVariables, AbstractJutulMesh, JutulContext
+export JutulSystem, JutulDomain, JutulVariables, JutulMesh, JutulContext
 export SimulationModel, JutulVariables, JutulFormulation, JutulEquation
 export setup_parameters, JutulForce
 export Cells, Nodes, Faces, declare_entities
@@ -219,59 +219,7 @@ include("contexts/default.jl")
 include("contexts/cuda.jl")
 
 # Domains
-"""
-Abstract type for domains where equations can be defined
-"""
-abstract type JutulDomain end
-
-export DiscretizedDomain
-struct DiscretizedDomain{G, D, E, M} <: JutulDomain
-    grid::G
-    discretizations::D
-    entities::E
-    global_map::M
-end
-function Base.show(io::IO, d::DiscretizedDomain)
-    disc = d.discretizations
-    if isnothing(disc)
-        print(io, "DiscretizedDomain with $(d.grid)\n")
-    else
-        print(io, "DiscretizedDomain with $(d.grid) and discretizations for $(join(keys(d.discretizations), ", "))\n")
-    end
-end
-
-"""
-    DiscretizedDomain(grid, disc = nothing)
-
-A type for a discretized domain on some grid. May contain one or more
-discretizations as-needed to write equations.
-"""
-function DiscretizedDomain(grid, disc = nothing; global_map = TrivialGlobalMap())
-    entities = declare_entities(grid)
-    u = Dict{Any, Int64}() # Is this a good definition?
-    for entity in entities
-        num = entity.count
-        @assert num >= 0 "Units must have non-negative counts."
-        u[entity.entity] = num
-    end
-    DiscretizedDomain(grid, disc, u, global_map)
-end
-
-function transfer(context::SingleCUDAContext, domain::DiscretizedDomain)
-    F = context.float_t
-    I = context.index_t
-    t = (x) -> transfer(context, x)
-
-    g = t(domain.grid)
-    d_cpu = domain.discretizations
-
-    k = keys(d_cpu)
-    val = map(t, values(d_cpu))
-    d = (;zip(k, val)...)
-    u = domain.entities
-    return DiscretizedDomain(g, d, u, domain.global_map)
-end
-
+include("domains.jl")
 
 # Formulation
 abstract type JutulFormulation end
@@ -299,7 +247,7 @@ struct SimulationModel{O<:JutulDomain,
     system::S
     context::C
     formulation::F
-    plot_mesh
+    data_domain
     primary_variables::OrderedDict{Symbol, Any}
     secondary_variables::OrderedDict{Symbol, Any}
     parameters::OrderedDict{Symbol, Any}
@@ -316,12 +264,25 @@ Instantiate a model for a given `system` discretized on the `domain`.
 function SimulationModel(domain, system;
                             formulation=FullyImplicit(),
                             context=DefaultContext(),
-                            plot_mesh = nothing,
                             output_level=:primary_variables,
-                            extra = OrderedDict{Symbol, Any}()
+                            data_domain = missing,
+                            extra = OrderedDict{Symbol, Any}(),
+                            plot_mesh = missing,
+                            kwarg...
                         )
     context = initialize_context!(context, domain, system, formulation)
+    if ismissing(data_domain)
+        if domain isa DataDomain
+            data_domain = domain
+        else
+            data_domain = DataDomain(physical_representation(domain))
+        end
+    end
+    domain = discretize_domain(domain, system; kwarg...)
     domain = transfer(context, domain)
+    if !ismissing(plot_mesh)
+        error("plot_mesh argument is deprecated.")
+    end
 
     T = OrderedDict{Symbol,JutulVariables}
     primary = T()
@@ -333,7 +294,7 @@ function SimulationModel(domain, system;
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, plot_mesh, primary, secondary, parameters, equations, outputs, extra)
+    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, data_domain, primary, secondary, parameters, equations, outputs, extra)
     update_model_pre_selection!(model)
     select_primary_variables!(model)
     select_secondary_variables!(model)
@@ -354,6 +315,14 @@ function SimulationModel(domain, system;
     update_model_post_selection!(model)
     return model
 end
+
+"""
+    physical_representation(m::SimulationModel)
+
+Get the underlying physical representation for the model (domain or mesh)
+"""
+physical_representation(m::SimulationModel) = physical_representation(m.domain)
+physical_representation(m::JutulModel) = missing
 
 function update_model_pre_selection!(model)
     return model
@@ -454,12 +423,12 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
 end
 
 # Grids etc
-export JutulEntity, Cells, Faces, Nodes
+export JutulEntity, Cells, Faces, Nodes, NoEntity
 ## Grid
 """
-Abstract type for all Meshes in Jutul.
+A mesh is a type of domain that has been discretized. Abstract subtype.
 """
-abstract type AbstractJutulMesh end
+abstract type JutulMesh <: JutulDomain end
 
 ## Discretized entities
 """
@@ -482,18 +451,23 @@ Entity for Nodes (intersection between multiple [`Faces`](@ref))
 """
 struct Nodes <: JutulEntity end
 
+"""
+An entity for something that isn't associated with an entity
+"""
+struct NoEntity <: JutulEntity end
+
 # Sim model
 
 """
-    SimulationModel(g::AbstractJutulMesh, system; discretization = nothing, kwarg...)
+    SimulationModel(g::JutulMesh, system; discretization = nothing, kwarg...)
 
 Type that defines a simulation model - everything needed to solve the discrete
 equations.
 
-The minimal setup requires a [`AbstractJutulMesh`](@ref) that defines topology
+The minimal setup requires a [`JutulMesh`](@ref) that defines topology
 together with a [`JutulSystem`](@ref) that imposes physical laws.
 """
-function SimulationModel(g::AbstractJutulMesh, system; discretization = nothing, kwarg...)
+function SimulationModel(g::JutulMesh, system; discretization = nothing, kwarg...)
     # Simple constructor that assumes
     d = DiscretizedDomain(g, discretization)
     SimulationModel(d, system; kwarg...)
@@ -593,6 +567,7 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
     variables_always_active::Bool
     function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing; variables_always_active = false)
         n = length(cells)
+        @assert issorted(cells)
         if isnothing(is_boundary)
             is_boundary = repeat([false], length(cells))
         end
@@ -600,7 +575,7 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
         inner_to_full_cells = findall(is_boundary .== false)
         full_to_inner_cells = Vector{Integer}(undef, n)
         for i = 1:n
-            v = only(indexin(i, inner_to_full_cells))
+            v = findfirst(isequal(i), inner_to_full_cells)
             if isnothing(v)
                 v = 0
             end

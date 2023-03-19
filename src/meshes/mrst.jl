@@ -1,14 +1,33 @@
-struct MRSTWrapMesh <: AbstractJutulMesh
+struct MRSTWrapMesh <: JutulMesh
     data
-    function MRSTWrapMesh(G)
-        @assert haskey(G, "cells")
-        @assert haskey(G, "faces")
-        if !haskey(G, "nodes")
-            @warn "Grid is missing nodes. Coarse grid? Plotting will not work."
-        end
-        G = convert_to_immutable_storage(deepcopy(G))
-        return new(G)
+    N::Matrix
+    nc::Int
+    nf::Int
+end
+
+function MRSTWrapMesh(G, N = nothing)
+    @assert haskey(G, "cells")
+    @assert haskey(G, "faces")
+    if !haskey(G, "nodes")
+        @warn "Grid is missing nodes. Coarse grid? Plotting will not work."
     end
+    G = convert_to_immutable_storage(deepcopy(G))
+    if isnothing(N)
+        N = Int64.(G.faces.neighbors)
+        internal_faces = (N[:, 2] .> 0) .& (N[:, 1] .> 0)
+        N = collect(N[internal_faces, :]')
+    end
+    nf = size(N, 2)
+    nc = G.cells.num
+    return MRSTWrapMesh(G, N, nc, nf)
+end
+
+
+function declare_entities(g::MRSTWrapMesh)
+    return [
+        (entity = Cells(), count = number_of_cells(g)),
+        (entity = Faces(), count = number_of_faces(g)),
+    ]
 end
 
 function Base.show(io::IO, m::MRSTWrapMesh)
@@ -17,16 +36,25 @@ function Base.show(io::IO, m::MRSTWrapMesh)
     print(io, "MRSTWrapMesh with $nc cells and $nf faces.")
 end
 
-function tpfv_geometry(g::MRSTWrapMesh; N = nothing)
+function tpfv_geometry(g::MRSTWrapMesh)
     exported = g.data
     faces = exported.faces
     cells = exported.cells
     cell_centroids = copy((cells.centroids)')
 
-    if isnothing(N)
-        N = Int64.(faces.neighbors)
-        internal_faces = (N[:, 2] .> 0) .& (N[:, 1] .> 0)
-        N = copy(N[internal_faces, :]')
+    N = g.N
+    N_raw = Int64.(faces.neighbors)
+    internal_faces = (vec(N_raw[:, 2]) .> 0) .& (vec(N_raw[:, 1]) .> 0)
+    # Neighborship might mismatch the actual grid neighborships if the MRST grid
+    # comes from any number of routines that try to create both a geometrically
+    # valid grid and the TPFA neighborship defined somewhere else. We do some
+    # checks on that plus the geometry fields, otherwise we insert NaN and
+    # assume that the result is still somewhat useful.
+    nf = size(N, 2)
+    check_face(k) = haskey(faces, k) && size(faces[k], 1) == nf
+    N_ok = all(N_raw[internal_faces, :]' == g.N)
+    self_consistent = N_ok && check_face(:areas) && check_face(:normals) && check_face(:centroids)
+    if self_consistent
         face_centroids = copy((faces.centroids[internal_faces, :])')
         face_areas = vec(faces.areas[internal_faces])
         face_normals = faces.normals[internal_faces, :]./face_areas
@@ -34,7 +62,6 @@ function tpfv_geometry(g::MRSTWrapMesh; N = nothing)
     else
         @assert eltype(N)<:Integer
         @assert size(N, 1) == 2
-        nf = size(N, 2)
         dim = size(cell_centroids, 1)
         fake_vec() = repeat([NaN], dim, nf)
         fake_scalar() = repeat([NaN], nf)
@@ -48,8 +75,8 @@ function tpfv_geometry(g::MRSTWrapMesh; N = nothing)
 end
 
 dim(t::MRSTWrapMesh) = Int64(t.data.griddim)
-number_of_cells(t::MRSTWrapMesh) = Int64(t.data.cells.num)
-number_of_faces(t::MRSTWrapMesh) = Int64(t.data.faces.num)
+number_of_cells(t::MRSTWrapMesh) = t.nc
+number_of_faces(t::MRSTWrapMesh) = t.nf
 neighbor(t::MRSTWrapMesh, f, i) = Int64(t.data.faces.neighbors[f, i])
 
 

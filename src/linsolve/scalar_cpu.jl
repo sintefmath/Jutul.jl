@@ -10,12 +10,12 @@ mutable struct LUSolver
     reuse_memory::Bool
     check::Bool
     max_size
-function LUSolver(; reuse_memory = true, check = true, max_size = 50000)
+    function LUSolver(; reuse_memory = true, check = true, max_size = 50000)
         new(nothing, reuse_memory, check, max_size)
     end
 end
 
-function solve!(sys, solver::LUSolver)
+function linear_solve!(sys, solver::LUSolver; kwarg...)
     if length(sys.dx) > solver.max_size
         error("System too big for LU solver. You can increase max_size at your own peril.")
     end

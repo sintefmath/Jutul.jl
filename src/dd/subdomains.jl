@@ -37,10 +37,10 @@ function subgrid
 end
 
 function subdomain(d::DiscretizedDomain, indices; entity = Cells(), variables_always_active = false, kwarg...)
-    grid = d.grid
+    grid = physical_representation(d)
     disc = d.discretizations
 
-    N = grid.neighborship
+    N = get_neighborship(grid)
     t = @elapsed begin
         cells, faces, is_boundary = submap_cells(N, indices; kwarg...)
         mapper = FiniteVolumeGlobalMap(cells, faces, is_boundary, variables_always_active = variables_always_active)

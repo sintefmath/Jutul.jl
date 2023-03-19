@@ -159,11 +159,12 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
         initialize_before_first_timestep!(sim, dt, forces = forces_step, config = config)
     end
     n_solved = no_steps
+    t_elapsed = 0.0
     for step_no = first_step:no_steps
         dT = timesteps[step_no]
         forces_step = forces_for_timestep(sim, forces, timesteps, step_no)
         nextstep_global!(rec, dT)
-        new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot, start_date)
+        new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
         t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dt, reports = reports, step_no = step_no, rec = rec)
         early_termination = !step_done
         subrep = OrderedDict()
@@ -175,13 +176,14 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
             subrep[:output_time] = 0.0
             push!(reports, subrep)
         end
+        t_elapsed += t_step + subrep[:output_time]
         if early_termination
             n_solved = step_no
             break
         end
     end
-    final_simulation_message(sim, p, reports, timesteps, config, early_termination)
-    retrieve_output!(states, config, n_solved)
+    states, reports = retrieve_output!(states, reports, config, n_solved)
+    final_simulation_message(sim, p, rec, t_elapsed, reports, timesteps, config, start_date, early_termination)
     return SimResult(states, reports, start_timestamp)
 end
 
@@ -211,7 +213,6 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
     t_local = 0
     cut_count = 0
     ctr = 1
-    nextstep_local!(rec, dt, false)
     while !done
         # Make sure that we hit the endpoint in case timestep selection is too optimistic.
         dt = min(dt, dT - t_local)
@@ -219,6 +220,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
         @tic "solve" ok, s = solve_ministep(sim, dt, forces, max_its, config; kwarg...)
         # We store the report even if it is a failure.
         push!(ministep_reports, s)
+        nextstep_local!(rec, dt, ok)
         if ok
             t_local += dt
             if t_local >= dT
@@ -253,7 +255,6 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
             end
         end
         ctr += 1
-        nextstep_local!(rec, dt, ok)
     end
     return (done, ministep_reports, dt)
 end
@@ -307,6 +308,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
         report[:linear_solve_time] = t_solve
         report[:update_time] = t_update
     end
+    extra_debug_output!(report, storage, model, config, iteration, dt)
     return (e, converged, report)
 end
 
@@ -321,35 +323,17 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
         update_before_step!(sim, dt, forces, time = cur_time)
     end
     for it = 1:(max_iter+1)
-        next_iteration!(rec)
         do_solve = it <= max_iter
         e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation, solve = do_solve)
+        next_iteration!(rec, r)
         push!(step_reports, r)
         if done
             break
         end
-        w0 = relaxation
-        relaxation = select_nonlinear_relaxation(sim, cfg[:relaxation], step_reports, relaxation)
-        if cfg[:info_level] > 1 && relaxation != w0
-            jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :yellow)
-        end
-        failure = false
-        max_res = cfg[:max_residual]
-        if !isfinite(e)
-            reason = "Simulator produced non-finite residuals: $e."
-            failure = true
-        elseif e > max_res
-            reason = "Simulator produced very large residuals: $e larger than :max_residual=$max_res."
-            failure = true
-        else
-            reason = ""
-        end
-        if failure
-            report[:failure_message] = reason
-            @warn reason
+        relaxation, early_stop = apply_nonlinear_strategy!(sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
+        if early_stop
             break
         end
-        report[:failure] = failure
     end
     report[:steps] = step_reports
     report[:success] = done
@@ -460,4 +444,66 @@ end
 
 function progress_recorder(sim)
     return sim.storage.recorder
+end
+
+function apply_nonlinear_strategy!(sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
+    report = step_reports[end]
+    w0 = relaxation
+    relaxation = select_nonlinear_relaxation(sim, cfg[:relaxation], step_reports, relaxation)
+    if cfg[:info_level] > 1 && relaxation != w0
+        jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :yellow)
+    end
+    failure = false
+    max_res = cfg[:max_residual]
+    if !isfinite(e)
+        reason = "Simulator produced non-finite residuals: $e."
+        failure = true
+    elseif e > max_res
+        reason = "Simulator produced very large residuals: $e larger than :max_residual=$max_res."
+        failure = true
+    else
+        reason = ""
+    end
+    if failure
+        report[:failure_message] = reason
+        @warn reason
+    end
+    report[:failure] = failure
+    cut_crit = cfg[:cutting_criterion]
+    relaxation, early_stop = cutting_criterion(cut_crit, sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
+    do_stop = failure || early_stop
+    return (relaxation, do_stop)
+end
+
+function cutting_criterion(::Nothing, sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
+    return (relaxation, false)
+end
+
+"""
+    extra_debug_output!(report, storage, model, config, iteration, dt)
+
+Add extra debug output to report during a nonlinear iteration.
+"""
+function extra_debug_output!(report, storage, model, config, iteration, dt)
+    level = config[:debug_level]
+    if level > 0
+        debug_report = Dict{Symbol, Any}()
+        report[:debug] = debug_report
+        for i = 1:level
+            extra_debug_output!(debug_report, report, storage, model, config, iteration, dt, Val(i))
+        end
+    end
+
+end
+
+function extra_debug_output!(debug_report, report, storage, model, config, iteration, dt, level::Val)
+    # Default: Do nothing
+end
+
+function extra_debug_output!(debug_report, report, storage, model::Union{SimulationModel, MultiModel}, config, iteration, dt, level::Val{10})
+    if haskey(storage, :LinearizedSystem)
+        lsys = storage.LinearizedSystem
+        r = vector_residual(lsys)
+        debug_report[:linearized_system_norm] = (L1 = norm(r, 1), L2 = norm(r, 2), LInf = norm(r, Inf))
+    end
 end

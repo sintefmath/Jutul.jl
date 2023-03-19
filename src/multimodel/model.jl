@@ -15,11 +15,7 @@ function Base.show(io::IO, t::MIME"text/plain", model::MultiModel)
         ndofi = number_of_degrees_of_freedom(m)
         neqi = number_of_equations(m)
     
-        if hasproperty(m.domain, :grid)
-            g = m.domain.grid
-        else
-            g = typeof(m.domain)
-        end
+        g = physical_representation(m.domain)
         println(io, "    $i) $key ($(neqi)x$ndofi)\n       $(s)\n       ∈ $g")
 
     end
@@ -623,18 +619,28 @@ function setup_state(model::MultiModel; kwarg...)
     return internal_multimodel_setup_state(setup_state, model; kwarg...)
 end
 
-function setup_parameters(model::MultiModel; kwarg...)
-    return internal_multimodel_setup_state(setup_parameters, model; kwarg...)
+function setup_parameters(model::MultiModel, arg...; kwarg...)
+    data_domains = Dict{Symbol, DataDomain}()
+    for k in submodel_symbols(model)
+        data_domains[k] = model[k].data_domain
+    end
+    return setup_parameters(data_domains, model, arg...; kwarg...)
 end
 
-function setup_parameters(model::MultiModel, init)
+function setup_parameters(data_domains::AbstractDict, model::MultiModel; kwarg...)
+    F = (model, init) -> setup_parameters(data_domains, model, init)
+    return internal_multimodel_setup_state(F, model; kwarg...)
+end
+
+function setup_parameters(data_domains::AbstractDict, model::MultiModel, init)
     p = Dict{Symbol, Any}()
     for key in submodels_symbols(model)
         m = model.models[key]
+        d = data_domains[key]
         if haskey(init, key) && !isnothing(init[key])
-            prm = setup_parameters(m, init[key])
+            prm = setup_parameters(d, m, init[key])
         else
-            prm = setup_parameters(m)
+            prm = setup_parameters(d, m)
         end
         p[key] = prm
     end
@@ -671,10 +677,10 @@ function setup_state_and_parameters(model::MultiModel, init)
     return (state, parameters)
 end
 
-function set_default_tolerances!(tol_cfg, model::MultiModel)
+function set_default_tolerances!(tol_cfg, model::MultiModel; kwarg...)
     for (k, model) in pairs(model.models)
         cfg_k = Dict{Symbol, Any}()
-        set_default_tolerances!(cfg_k, model)
+        set_default_tolerances!(cfg_k, model; kwarg...)
         tol_cfg[k] = cfg_k
     end
 end

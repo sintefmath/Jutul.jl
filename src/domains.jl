@@ -1,7 +1,7 @@
 export number_of_cells, number_of_faces, number_of_half_faces, count_entities, get_entities, declare_entities, get_neighborship
 
 
-function declare_entities(G::AbstractJutulMesh)
+function declare_entities(G::JutulDomain)
     return [(entity = Cells(), count = 1)]
 end
 
@@ -14,7 +14,7 @@ function count_entities(D::JutulDomain, ::Cells)
     1
 end
 
-function get_entities(D::DiscretizedDomain)
+function get_entities(D::Union{DiscretizedDomain, DataDomain})
     return keys(D.entities)
 end
 
@@ -25,7 +25,7 @@ function select_variables_domain_helper!(S, domain::DiscretizedDomain, model, f!
             f!(S, d[k], model)
         end
     end
-    f!(S, domain.grid, model)
+    f!(S, physical_representation(domain), model)
 end
 
 select_primary_variables!(S, something, model) = nothing
@@ -50,33 +50,34 @@ function select_equations!(S, domain::DiscretizedDomain, model::SimulationModel)
     select_variables_domain_helper!(S, domain, model, select_equations!)
 end
 
-count_entities(D::DiscretizedDomain, entity::Cells) = D.entities[entity]
-count_entities(D::DiscretizedDomain, entity) = D.entities[entity]
+count_entities(D::Union{DataDomain, DiscretizedDomain}, entity::Cells) = D.entities[entity]
+count_entities(D::Union{DataDomain, DiscretizedDomain}, entity) = D.entities[entity]
 
 count_active_entities(D, entity; kwarg...) = count_entities(D, entity)
 count_active_entities(D::DiscretizedDomain, entity; kwarg...) = count_active_entities(D, D.global_map, entity; kwarg...)
 
-function number_of_cells(D::DiscretizedDomain)
+function number_of_cells(D::Union{DataDomain, DiscretizedDomain})
     return count_entities(D, Cells())
 end
 
-function number_of_faces(D::DiscretizedDomain)
+function number_of_faces(D::Union{DataDomain, DiscretizedDomain})
     return count_entities(D, Faces())
 end
 
-function number_of_half_faces(D::DiscretizedDomain)
+function number_of_half_faces(D::Union{DataDomain, DiscretizedDomain})
     return 2*number_of_faces(D)
 end
 
 function positional_map(domain::JutulDomain, source_entity::JutulEntity, target_entity::JutulEntity)
-    positional_map(domain.grid, source_entity, target_entity)
+    g = physical_representation(domain)
+    positional_map(g, source_entity, target_entity)
 end
 
-function positional_map(grid::AbstractJutulMesh, source_entity, target_entity)
+function positional_map(grid::JutulMesh, source_entity, target_entity)
     error("Not implemented.")
 end
 
-function positional_map(grid::AbstractJutulMesh, ::Cells, ::Faces)
+function positional_map(grid::JutulMesh, ::Cells, ::Faces)
     faces, facePos = get_facepos(grid.neighborship)
     return (indices = faces, pos = facePos)
 end

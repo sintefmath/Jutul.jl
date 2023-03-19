@@ -29,7 +29,7 @@ end
     end
 end
 ##
-@testset "jutul_config" begin
+@testset "JutulConfig" begin
     cfg = JutulConfig("Test configuration")
     add_option!(cfg, :abc, 3.0, "My test number")
     add_option!(cfg, :option_2, NaN, "A second option", description = "This option has a very long description to expand on what exactly it entails to be the second option")
@@ -65,4 +65,51 @@ end
     end
     @test haskey(cfg, :abc)
     @test !haskey(cfg, :abcd)
+end
+
+@testset "DataDomain" begin
+    # number of faces should be distinct from cells
+    nx = 2
+    ny = 3
+    g = CartesianMesh((nx, ny))
+    n = number_of_cells(g)
+    d = DataDomain(g)
+    @test count_entities(d, Cells()) == nx*ny
+    ## Setting entity
+    v = rand(n)
+    d[:cell_vector] = v
+    # Set with default entity
+    @test d[:cell_vector] == v
+    @test d[:cell_vector, Cells()] == v
+    @test_throws "Expected property cell_vector to be defined for Faces(), but was stored as Cells()" d[:cell_vector, Faces()]
+    # Set with face entity
+    nf = number_of_faces(g)
+    vf = rand(nf)
+    d[:face_vector, Faces()] = vf
+    @test d[:face_vector] == vf
+    @test d[:face_vector, Faces()] == vf
+    # Overwrite
+    d[:cell_vector] = rand(n)
+    # Overwrite with same entity
+    d[:cell_vector, Cells()] = rand(n)
+    ##
+    d[:scalar] = 1.0
+    # Should be repeated onto all cells
+    @test d[:scalar] == ones(n)
+    # Test non-entity values
+    m_big = rand(93, 2)
+    d[:scalar, nothing] = m_big
+    @test d[:scalar] == m_big
+    @test d[:scalar, NoEntity()] == m_big
+    # 2D is ok
+    d2d = rand(10, n)
+    d[:data_2d] = d2d
+    @test d[:data_2d] == d2d
+    @test_throws "" d[:data_2d] = rand(n, 10)
+    # 3d, 4d, ... is ok
+    d3d = rand(10, 20, n)
+    d[:data_3d] = d3d
+    @test d[:data_3d] == d3d
+    @test_throws "AssertionError: Number of columns for Matrix scalar defined on Cells() should be 6, was 2" d[:scalar] = rand(93, 2)
+    @test tuple(keys(d)...) == (:neighbors, :areas, :normals, :face_centroids, :cell_centroids, :volumes, :cell_vector, :face_vector, :scalar, :data_2d, :data_3d)
 end

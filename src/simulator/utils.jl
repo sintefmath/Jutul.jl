@@ -66,8 +66,6 @@ function Base.show(io::IO, ::MIME"text/plain", sr::SimResult)
             end
         end
     end
-    fmt = raw"u. dd Y H:mm"
-
     states = sr.states
     n = length(states)
     print(io, sr)
@@ -79,6 +77,11 @@ function Base.show(io::IO, ::MIME"text/plain", sr::SimResult)
         print(io, "\n  reports (timing/debug information)\n")
         print_keys("    ", first(sr.reports))
     end
+    print_sim_result_timing(io, sr)
+end
+
+function print_sim_result_timing(io, sr::SimResult)
+    fmt = raw"u. dd Y H:mm"
     t = sum(x -> x[:total_time], sr.reports)
     print(io, "\n  Completed at $(Dates.format(sr.start_timestamp, fmt)) after $(get_tstr(t)).")
 end

@@ -20,7 +20,7 @@ function update_equation_in_entity!(eq_buf::AbstractVector{T_e}, self_cell, stat
     div_v = ldisc.div(flux)
     for i in eachindex(div_v)
         ∂M∂t = accumulation_term(M, M₀, Δt, i, self_cell)
-        @inbounds eq_buf[i] = ∂M∂t - div_v[i]
+        @inbounds eq_buf[i] = ∂M∂t + div_v[i]
     end
 end
 
@@ -171,7 +171,8 @@ end
 
 function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
     fd = law.flow_discretization
-    neighborship = model.domain.grid.neighborship
+    pr = physical_representation(model.domain)
+    neighborship = get_neighborship(pr)
 
     hflux_faces = eq_s.half_face_flux_faces
     if !isnothing(hflux_faces)
@@ -357,10 +358,10 @@ function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_p
     dims = ad_dims(face_flux)
     fentries = face_flux.entries
     fp = face_flux.jacobian_positions
-    update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, model.context, dims)
+    update_lsys_face_flux_threaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, model.context, dims)
 end
 
-function update_lsys_face_flux_theaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, context, dims)
+function update_lsys_face_flux_threaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, context, dims)
     _, ne, np = dims
     nc = length(conn_pos) - 1
     tb = minbatch(context, nc)
@@ -522,7 +523,8 @@ end
 
 function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Faces) where {T, N}
     nf = number_of_faces(model.domain)
-    neighbors = get_neighborship(model.domain.grid)
+    pr = physical_representation(model.domain)
+    neighbors = get_neighborship(pr)
     tb = minbatch(model.context, nf)
     @tic "flux (faces)" @batch minbatch = tb for f in 1:nf
         state_f = new_entity_index(state, f)

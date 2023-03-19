@@ -36,7 +36,7 @@ struct PotentialFlow{K, U, HF} <: FlowDiscretization
     end
 end
 
-function PotentialFlow(g::AbstractJutulMesh; kwarg...)
+function PotentialFlow(g::JutulMesh; kwarg...)
     N = get_neighborship(g)
     nc = number_of_cells(g)
     PotentialFlow(N, nc; kwarg...)
@@ -95,20 +95,20 @@ function get_connection(face, cell, N, inc_face_sign)
 end
 
 function remap_connection(conn::T, self::I, other::I, face::I) where {T, I<:Integer}
-    D = Dict()
+    vals = values(conn)
+    i = 1
     for k in keys(conn)
         if k == :self
-            newval = self
+            vals = setindex(vals, self, i)
         elseif k == :other
-            newval = other
+            vals = setindex(vals, other, i)
         elseif k == :face
-            newval = face
-        else
-            newval = conn[k]
+            vals = setindex(vals, face, i)
         end
-        D[k] = newval
+        i += 1
     end
-    return convert_to_immutable_storage(D)::T
+    conn = (; zip(keys(conn), vals)...)::T
+    return conn
 end
 
 struct TwoPointPotentialFlowHardCoded{C, D} <: FlowDiscretization
@@ -117,12 +117,16 @@ struct TwoPointPotentialFlowHardCoded{C, D} <: FlowDiscretization
     conn_data::D
 end
 
-function TwoPointPotentialFlowHardCoded(grid::AbstractJutulMesh; ncells = nothing)
+function TwoPointPotentialFlowHardCoded(grid::JutulMesh)
     N = get_neighborship(grid)
+    return TwoPointPotentialFlowHardCoded(N, number_of_cells(grid))
+end
+
+function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N))
     if size(N, 2) > 0
-        faces, face_pos = get_facepos(N, ncells)
+        faces, face_pos = get_facepos(N, nc)
         nhf = length(faces)
-        nc = length(face_pos) - 1
+        @assert length(face_pos) - 1 == nc
         get_el = (face, cell) -> get_connection(face, cell, N, true)
         el = get_el(1, 1) # Could be junk, we just need eltype
         conn_data = Vector{typeof(el)}(undef, nhf)
@@ -217,7 +221,7 @@ function conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn
                     @assert conn.self == c_g
                     counter += 1
                     other = local_cell(conn.other, mapper) # bad performance??
-                    conn_data[hf_offset + counter] = remap_connection(conn, c, other, f)
+                    conn_data[hf_offset + counter] = remap_connection(conn, c, other, f)::T
                     touched[hf_offset + counter] = true
                     done = true
                     # @info conn_data[hf_offset + counter]

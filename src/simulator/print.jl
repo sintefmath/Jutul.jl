@@ -32,25 +32,18 @@ function start_simulation_message(info_level, timesteps)
         jutul_message("Jutul", msg, color = :light_green)
     end
     if info_level == 0
-        p = Progress(n, dt = 0.5, desc = msg)
+        p = Progress(n+1, dt = 0.5, desc = msg)
     end
     return p
 end
 
-function new_simulation_control_step_message(info_level, p, rec, step_no, no_steps, dT, t_tot, start_date)
-    r = rec.recorder
-    t_format = raw"u. dd Y"
+function new_simulation_control_step_message(info_level, p, rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
     if info_level == 0
-        frac = (r.time + dT)/t_tot
-        perc = @sprintf("%2.2f", 100*frac)
-        if isnothing(start_date)
-            e = ""
-        else
-            e = ", at $(Dates.format(start_date + Microsecond(ceil(r.time*1e6)), t_format))"
-        end
-        msg = "Solving step $step_no/$no_steps ($perc% of time interval complete$e)"
-        next!(p; showvalues = [(:Status, msg)])
+        msgvals = progress_showvalues(rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
+        next!(p; showvalues = msgvals)
     elseif info_level > 0
+        r = rec.recorder
+
         count_str = "$no_steps"
         ndig = length(count_str)
         fstr = lpad("$step_no", ndig)
@@ -59,7 +52,7 @@ function new_simulation_control_step_message(info_level, p, rec, step_no, no_ste
         if isnothing(start_date)
             fmt = get_tstr
         else
-            fmt = x -> Dates.format(start_date + Microsecond(ceil(x*1e6)), t_format)
+            fmt = x -> Dates.format(start_date + Microsecond(ceil(x*1e6)), raw"u. dd Y")
         end
         start_time = fmt(t)
         end_time = fmt(t_now)
@@ -69,7 +62,34 @@ function new_simulation_control_step_message(info_level, p, rec, step_no, no_ste
     end
 end
 
-function final_simulation_message(simulator, p, reports, timesteps, config, aborted)
+function progress_showvalues(rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
+    r = rec.recorder
+    frac = (r.time + dT)/t_tot
+    perc = @sprintf("%2.2f", 100*frac)
+    its = rec.recorder.iterations + rec.subrecorder.iterations
+    elapsed_each = elapsed/its
+    done = step_no == no_steps + 1
+    if done
+        msg_status = "Solved step $no_steps/$no_steps"
+    else
+        msg_status = "Solving step $step_no/$no_steps ($perc% of time interval complete)"
+    end
+    msg_timing = "$its iterations in $(autoformat_time(elapsed)) ($(autoformat_time(elapsed_each)) each)"
+    # msg_timing = "$(autoformat_time(elapsed)) elapsed ($(autoformat_time(elapsed/(step_no-1))))"
+
+    msgvals = [
+        (:Progress, msg_status),
+        (:Stats, msg_timing)
+        ]
+
+    if !isnothing(start_date)
+        t_format = raw"u. dd YY"
+        push!(msgvals, (:Date, "$(Dates.format(start_date + Microsecond(ceil(r.time*1e6)), t_format))"))
+    end
+    return msgvals
+end
+
+function final_simulation_message(simulator, p, rec, t_elapsed, reports, timesteps, config, start_date, aborted)
     info_level = config[:info_level]
     print_end_report = config[:end_report]
     verbose = info_level >= 0
@@ -95,6 +115,9 @@ function final_simulation_message(simulator, p, reports, timesteps, config, abor
             if aborted
                 cancel(p, "$start_str $final_message")
             else
+                n = length(timesteps)
+                msgvals = progress_showvalues(rec, t_elapsed, n+1, n, 0.0, t_tot, start_date)
+                next!(p; showvalues = msgvals)
                 finish!(p)
             end
         else
