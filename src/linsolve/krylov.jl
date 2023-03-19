@@ -91,7 +91,6 @@ function linear_solve!(sys::LSystem,
     use_relaxed_tol = !isnothing(recorder) && !isnothing(rtol_nl)
     use_true_rel_norm = cfg.true_residual
 
-    solve_f, in_place = krylov_jl_solve_function(krylov, op, r)
     if use_relaxed_tol || use_true_rel_norm
         r_k = norm(r, 2)
         if use_true_rel_norm
@@ -99,9 +98,9 @@ function linear_solve!(sys::LSystem,
             atol = atol + rtol*r_k
             rtol = 0.0
         end
-
         if use_relaxed_tol
             it = subiteration(recorder)
+            r_k = norm(r)
             r_0 = krylov.r_norm
             if it == 1
                 krylov.r_norm = r_k
@@ -111,13 +110,15 @@ function linear_solve!(sys::LSystem,
             end
         end
     end
-    solve_kwarg = (; itmax = max_it, verbose = v, rtol = rtol, history = true, atol = atol, M = L, cfg.arguments...)
-    @tic "solve" if in_place
-        solve_f(op, r; solve_kwarg...)
-        x, stats = (krylov.storage.x, krylov.storage.stats)
-    else
-        x, stats = solve_f(op, r; solve_kwarg...)
-    end
+    solve_f, F = krylov_jl_solve_function(krylov, op, r)
+    @tic "solve" solve_f(F, op, r, 
+                            itmax = max_it,
+                            verbose = v,
+                            rtol = rtol,
+                            history = true,
+                            atol = atol,
+                            M = L; cfg.arguments...)
+    x, stats = (krylov.storage.x, krylov.storage.stats)
     res = stats.residuals
     n = length(res) - 1
     solved = stats.solved
@@ -146,30 +147,12 @@ function is_mutating(f)
 end
 
 function krylov_jl_solve_function(krylov::GenericKrylov, op, r, solver = krylov.solver)
-    if solver == :gmres
-        if isnothing(krylov.storage)
-            krylov.storage = GmresSolver(op, r, 20)
-        end
-        F = krylov.storage
-        solve_f = (arg...; kwarg...) -> Krylov.gmres!(F, arg...; reorthogonalization = true, kwarg...)
-        in_place = true
-    elseif solver == :bicgstab
-        if isnothing(krylov.storage)
-            krylov.storage = BicgstabSolver(op, r)
-        end
-        F = krylov.storage
-        solve_f = (arg...; kwarg...) -> Krylov.bicgstab!(F, arg...; kwarg...)
-        in_place = true
-    elseif solver == :fgmres
-        if isnothing(krylov.storage)
-            krylov.storage = FgmresSolver(op, r, 20)
-        end
-        F = krylov.storage
-        solve_f = (arg...; kwarg...) -> Krylov.fgmres!(F, arg...; kwarg...)
-        in_place = true
-    else
-        solve_f = eval(:(Krylov.$solver))
-        in_place = false
+    # Some trickery to generically wrapping a Krylov.jl solver.
+    if isnothing(krylov.storage)
+        F_sym = Krylov.KRYLOV_SOLVERS[solver]
+        krylov.storage = eval(:($F_sym($op, $r)))
     end
-    return (solve_f, in_place)
+    solver_string = Symbol("$(solver)!")
+    solve_f = eval(:(Krylov.$solver_string))
+    return (solve_f, krylov.storage)
 end
