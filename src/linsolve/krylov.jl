@@ -88,6 +88,7 @@ function linear_solve!(sys::LSystem,
     # R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
     v = Int64(cfg.verbose)
     max_it = cfg.max_iterations
+    min_it = cfg.min_iterations
     use_relaxed_tol = !isnothing(recorder) && !isnothing(rtol_nl)
     use_true_rel_norm = cfg.true_residual
 
@@ -110,14 +111,29 @@ function linear_solve!(sys::LSystem,
             end
         end
     end
+
+    if min_it > 1
+        rel_tol = rtol
+        abs_tol = atol
+        callback = solver -> krylov_termination_criterion(solver, abs_tol, rel_tol, min_it)
+        # Set to small numbers so the callback fully controls convergence checks
+        atol = 1e-20
+        rtol = 1e-20
+        manual_conv = true
+    else
+        callback = solver -> false
+        manual_conv = false
+    end
     solve_f, F = krylov_jl_solve_function(krylov, op, r)
-    @tic "solve" solve_f(F, op, r, 
+    @tic "solve" solve_f(F, op, r;
                             itmax = max_it,
                             verbose = v,
                             rtol = rtol,
-                            history = true,
                             atol = atol,
-                            M = L; cfg.arguments...)
+                            history = true,
+                            callback = callback,
+                            M = L,
+                            cfg.arguments...)
     x, stats = (krylov.storage.x, krylov.storage.stats)
     res = stats.residuals
     n = length(res) - 1
@@ -131,7 +147,9 @@ function linear_solve!(sys::LSystem,
         final_res = norm(op*x - r, 2)
     end
 
-    if !solved && v >= 0
+    bad_auto = !manual_conv && !solved
+    bad_manual = manual_conv && stats.niter == max_it
+    if (bad_manual || bad_auto) && v >= 0
         @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
     elseif v > 0 
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
@@ -140,6 +158,15 @@ function linear_solve!(sys::LSystem,
 
     @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
     return linear_solve_return(solved, n, stats)
+end
+
+function krylov_termination_criterion(solver, atol, rtol, min_its)
+    res = solver.stats.residuals
+    tol = atol + rtol*res[1]
+    ok_tol = res[end] <= tol
+    ok_its = length(res) > min_its
+    done = ok_tol && ok_its
+    return done
 end
 
 function is_mutating(f)

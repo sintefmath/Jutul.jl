@@ -4,6 +4,7 @@ mutable struct IterativeSolverConfig
     relative_tolerance::Union{Nothing, AbstractFloat}
     absolute_tolerance::Union{Nothing, AbstractFloat}
     max_iterations::Int
+    min_iterations::Int
     nonlinear_relative_tolerance::Union{Nothing, AbstractFloat}
     relaxed_relative_tolerance::Union{Nothing, AbstractFloat}
     true_residual::Bool
@@ -15,6 +16,7 @@ function IterativeSolverConfig(;
         relative_tolerance = 1e-3,
         absolute_tolerance = nothing, 
         max_iterations = 100,
+        min_iterations = 2,
         verbose = false,
         nonlinear_relative_tolerance = nothing,
         relaxed_relative_tolerance = 0.1,
@@ -25,6 +27,7 @@ function IterativeSolverConfig(;
         relative_tolerance,
         absolute_tolerance,
         max_iterations,
+        min_iterations,
         nonlinear_relative_tolerance,
         relaxed_relative_tolerance,
         true_residual,
@@ -45,7 +48,7 @@ function linear_solver_tolerance(cfg::IterativeSolverConfig, variant = :relative
             @assert variant == :absolute
             tol = cfg.absolute_tolerance
         end
-        default_num_tol = sqrt(eps(T))
+        # default_num_tol = sqrt(eps(T))
         default_num_tol = 1e-12
         tol = T(isnothing(tol) ? default_num_tol : tol)
     end
