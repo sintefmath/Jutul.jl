@@ -66,6 +66,13 @@ StaticArrays = "1.5.17"
 TimerOutputs = "0.5.19"
 Tullio = "0.3.4"
 julia = "1.7"
+Makie = "0.19.0"
 
 [extras]
 CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
+
+[weakdeps]
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+
+[extensions]
+JutulMakieExt = "Makie"
