@@ -6,5 +6,5 @@ using Jutul, Makie
     end
 
     include("mesh_plots.jl")
-
+    include("interactive_3d.jl")
 end

@@ -7,6 +7,53 @@ function plot_interactive_impl
 
 end
 
+function plot_multimodel_interactive(arg...; kwarg...)
+    check_plotting_availability()
+    plot_multimodel_interactive_impl(arg...; kwarg...)
+end
+
+function plot_multimodel_interactive_impl
+
+end
+
+
+function plot_mesh(arg...; kwarg...)
+    check_plotting_availability()
+    plot_mesh_impl(arg...; kwarg...)
+end
+
+function plot_mesh_impl
+
+end
+
+function plot_mesh!(arg...; kwarg...)
+    check_plotting_availability()
+    plot_mesh_impl!(arg...; kwarg...)
+end
+
+function plot_mesh_impl!
+
+end
+
+
+function plot_cell_data(arg...; kwarg...)
+    check_plotting_availability()
+    plot_cell_data_impl(arg...; kwarg...)
+end
+
+function plot_cell_data_impl
+
+end
+
+function plot_cell_data!(arg...; kwarg...)
+    check_plotting_availability()
+    plot_cell_data_impl!(arg...; kwarg...)
+end
+
+function plot_cell_data_impl!
+
+end
+
 function check_plotting_availability()
     ok = true
     try
