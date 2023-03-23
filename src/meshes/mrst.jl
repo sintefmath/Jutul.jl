@@ -22,6 +22,39 @@ function MRSTWrapMesh(G, N = nothing)
     return MRSTWrapMesh(G, N, nc, nf)
 end
 
+function grid_dims_ijk(g::MRSTWrapMesh)
+    return tuple(Int.(g.data.cartDims)...)
+end
+
+function cell_dims(g::MRSTWrapMesh, pos::Integer)
+    fp = g.data.cells.facePos
+    faces = Int.(g.data.cells.faces[Int(fp[pos]):Int(fp[pos+1]-1)])
+    fc = g.data.faces.centroids[faces, :]
+    dim = size(fc, 2)
+    tmp = zeros(dim)
+    for i in 1:dim
+        x = fc[:, i]
+        tmp[i] = maximum(x) - minimum(x)
+    end
+    return tuple(tmp...)
+end
+
+function cell_ijk(g::MRSTWrapMesh, base_index::Integer)
+    if haskey(g.data.cells, :indexMap)
+        imap =  g.data.cells.indexMap
+        t = Int(imap[base_index])
+    else
+        t = base_index
+    end
+    nx, ny, nz = grid_dims_ijk(g)
+    # (z-1)*nx*ny + (y-1)*nx + x
+    x = mod(t - 1, nx) + 1
+    y = mod((t - x) ÷ nx, ny) + 1
+    leftover = (t - x - (y-1)*nx)
+    z = (leftover ÷ (nx*ny)) + 1
+    return (x, y, z)
+end
+
 
 function declare_entities(g::MRSTWrapMesh)
     return [
