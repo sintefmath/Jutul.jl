@@ -44,6 +44,12 @@ function plot_interactive_impl(grid, states; plot_type = nothing,
                                         kwarg...)
     has_primitives = !isnothing(primitives)
     active_filters = []
+    if states isa AbstractDict
+        states = [states]
+    end
+    if states isa AbstractVecOrMat && eltype(states)<:AbstractFloat
+        states = [Dict(:data => states)]
+    end
     if grid isa Integer
         # Assume that someone figured out primitives already...
         nc = grid
