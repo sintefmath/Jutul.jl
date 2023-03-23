@@ -94,6 +94,6 @@ module Jutul
     include("discretization/discretization.jl")
 
     # Extensions' interfaces
-    include("makie_ext.jl")
+    include("ext/extensions.jl")
 
 end # module
