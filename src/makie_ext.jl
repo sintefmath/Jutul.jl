@@ -1,3 +1,10 @@
+export plot_interactive, plot_multimodel_interactive
+export plot_mesh, plot_mesh!
+export plot_cell_data!, plot_cell_data
+export plot_solve_breakdown
+export plot_cumulative_solve, plot_cumulative_solve!
+
+
 function plot_interactive(arg...; kwarg...)
     check_plotting_availability()
     plot_interactive_impl(arg...; kwarg...)
@@ -69,5 +76,25 @@ function check_plotting_availability()
 end
 
 function check_plotting_availability_impl
+
+end
+
+function plot_solve_breakdown
+
+end
+
+function plot_cumulative_solve
+
+end
+
+function plot_cumulative_solve!
+
+end
+
+function plot_linear_convergence
+
+end
+
+function plot_linear_convergence!
 
 end

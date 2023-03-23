@@ -7,4 +7,5 @@ using Jutul, Makie
 
     include("mesh_plots.jl")
     include("interactive_3d.jl")
+    include("performance.jl")
 end
