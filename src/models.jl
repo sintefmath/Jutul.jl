@@ -380,11 +380,16 @@ the simulation. The default implementation allocates properties, equations and l
 function setup_storage!(storage, model::JutulModel; setup_linearized_system = true,
                                                     setup_equations = true,
                                                     state0 = setup_state(model),
-                                                    parameters = setup_parameters(model),
+                                                    parameters = missing,
                                                     tag = nothing,
                                                     state0_ad = false,
                                                     state_ad = true,
                                                     kwarg...)
+    if ismissing(parameters)
+        parameters = setup_parameters(model)
+    else
+        parameters = deepcopy(parameters)
+    end
     @tic "state" if !isnothing(state0)
         storage[:parameters] = parameters
         state0 = merge(state0, parameters)
