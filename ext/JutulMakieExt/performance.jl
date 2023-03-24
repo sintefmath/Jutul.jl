@@ -62,6 +62,9 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     title = nothing,
     scatter_points = true
     )
+    if haskey(first(allreports), :ministeps)
+        allreports = [allreports]
+    end
     if isnothing(dt)
         dt = report_timesteps(first(allreports))
     end
@@ -86,8 +89,8 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
 
     ax = Axis(f, xlabel = "Time [years]", title = tit, ylabel = yl)
     get_data = x -> cumsum(vcat(0, F(x)))
-
-    if isnothing(names)
+    names_missing = isnothing(names)
+    if names_missing
         names = map(x -> "dataset $x", eachindex(allreports))
     end
     alldata = []
@@ -99,7 +102,9 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
             scatter!(ax, t, data_i)
         end
     end
-    axislegend(ax, position = :lt)
+    if length(allreports) > 1 && !names_missing
+        axislegend(ax, position = :lt)
+    end
     return (alldata, t)
 end
 
