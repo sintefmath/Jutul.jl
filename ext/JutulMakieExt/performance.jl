@@ -62,7 +62,7 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     title = nothing,
     scatter_points = true
     )
-    if haskey(first(allreports), :ministeps)
+    if first(allreports) isa AbstractDict && haskey(first(allreports), :ministeps)
         allreports = [allreports]
     end
     if isnothing(dt)
