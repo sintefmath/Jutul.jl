@@ -58,10 +58,18 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     use_time = false,
     use_title = true,
     linewidth = 3.5,
+    linestyles = missing,
     t_scale = ("s", 1.0),
     title = nothing,
     scatter_points = true
     )
+    function get_linestyle(i)
+        if ismissing(linestyles)
+            return nothing
+        else
+            return linestyles[i]
+        end
+    end
     if first(allreports) isa AbstractDict && haskey(first(allreports), :ministeps)
         allreports = [allreports]
     end
@@ -97,7 +105,7 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     for i in eachindex(allreports)
         data_i = get_data(r_rep[i])
         push!(alldata, data_i)
-        lines!(ax, t, data_i, label = names[i], linewidth = linewidth)
+        lines!(ax, t, data_i, label = names[i], linewidth = linewidth, linestyle = get_linestyle(i))
         if scatter_points
             scatter!(ax, t, data_i)
         end
