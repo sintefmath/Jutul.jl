@@ -61,15 +61,19 @@ function plot_cell_data_impl!
 
 end
 
-function check_plotting_availability()
+function check_plotting_availability(; throw = true)
     ok = true
     try
         ok = check_plotting_availability_impl()
     catch e
-        if e isa MethodError
-            error("Plotting is not available. You need to have a Makie backend available. For 3D plots, GLMakie is recommended. To fix: using Pkg; Pkg.add(\"GLMakie\")")
+        if throw
+            if e isa MethodError
+                error("Plotting is not available. You need to have a Makie backend available. For 3D plots, GLMakie is recommended. To fix: using Pkg; Pkg.add(\"GLMakie\") and then call using GLMakie to enable plotting.")
+            else
+                rethrow(e)
+            end
         else
-            rethrow(e)
+            ok = false
         end
     end
     return ok
