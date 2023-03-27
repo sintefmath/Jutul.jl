@@ -1,6 +1,5 @@
 # Jutul.jl
-
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://sintefmath.github.io/Jutul.jl/stable/)
+[![DOI](https://zenodo.org/badge/358506421.svg)](https://zenodo.org/badge/latestdoi/358506421)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://sintefmath.github.io/Jutul.jl/dev/)
 [![Build Status](https://github.com/sintefmath/Jutul.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/sintefmath/Jutul.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
