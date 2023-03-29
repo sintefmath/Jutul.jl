@@ -1,5 +1,5 @@
-function Jutul.plot_mesh_impl(m; kwarg...)
-    fig, ax = basic_3d_figure()
+function Jutul.plot_mesh_impl(m; resolution = default_jutul_resolution(), kwarg...)
+    fig, ax = basic_3d_figure(resolution)
     p = Jutul.plot_mesh!(ax, m; kwarg...)
     display(fig)
     return (fig, ax, p)
@@ -21,11 +21,18 @@ function Jutul.plot_mesh_impl!(ax, m; cells = nothing, color = :lightblue, kwarg
     return f
 end
 
-function Jutul.plot_cell_data_impl(m, data; colorbar = :vertical, kwarg...)
-    fig, ax = basic_3d_figure()
+function Jutul.plot_cell_data_impl(m, data;
+        colorbar = :horizontal,
+        resolution = default_jutul_resolution(),
+        kwarg...
+    )
+    fig, ax = basic_3d_figure(resolution)
     p = Jutul.plot_cell_data!(ax, m, data; kwarg...)
-    if !isnothing(colorbar) && maximum(data) != minimum(data)
-        if colorbar == :vertical
+    min_data = minimum(data)
+    max_data = maximum(data)
+    if !isnothing(colorbar) && min_data != max_data
+        # ticks = range(min_data, max_data, 10)
+        if colorbar == :horizontal
             Colorbar(fig[2, 1], p, vertical = false)
         else
             Colorbar(fig[1, 2], p, vertical = true)

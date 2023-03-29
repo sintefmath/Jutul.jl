@@ -514,8 +514,8 @@ function generate_colormap(colormap_name, alphamap_name, base_alpha, low, high)
     return cmap
 end
 
-function basic_3d_figure()
-    fig = Figure()
+function basic_3d_figure(resolution = default_jutul_resolution())
+    fig = Figure(resolution = resolution)
     ax = Axis3(fig[1, 1])
     return (fig, ax)
 end
