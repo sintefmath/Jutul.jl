@@ -51,7 +51,9 @@ function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 4, kwarg.
         reg = m2.selection[]
         @async begin
             sleep(0.1)
-            plot_by_reg = regions -> plot_jutul_line_data!(d, regions = regions, linewidth = s.value[])
+            function plot_by_reg(regions)
+                plot_jutul_line_data!(d; regions = regions, linewidth = s.value[])
+            end
             if reg == "All"
                 plot_by_reg(axes(d, 2))
             elseif reg == "Each"
@@ -59,8 +61,7 @@ function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 4, kwarg.
                     plot_by_reg(reg)
                 end
             else
-                regions = min(parse(Int64, reg), size(d, 2))
-                plot_by_reg(regions)
+                plot_by_reg(min(parse(Int64, reg), size(d, 2)))
             end
         end
     end
