@@ -81,9 +81,8 @@ GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 LayeredLayouts = "f4a74d36-062a-4d48-97cd-1356bad1de4e"
 NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
-Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 
 [extensions]
 JutulMakieExt = "Makie"
 JutulGLMakieExt = "GLMakie"
-JutulGraphMakieExt = ["GraphMakie", "NetworkLayout", "LayeredLayouts", "Makie", "Graphs"]
+JutulGraphMakieExt = ["GraphMakie", "NetworkLayout", "LayeredLayouts", "Makie"]
