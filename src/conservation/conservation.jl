@@ -84,9 +84,7 @@ function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, eq::ConservationLa
     half_face_flux_cells_alignment!(hflux_cells, acc, jac, model.context, M, fd, target_offset = equation_offset, source_offset = variable_offset)
 end
 
-function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, global_map, flow_disc; target_offset = 0, source_offset = 0)
-    # nu, ne, np = ad_dims(acc_cache)
-    dims = ad_dims(acc_cache)
+function half_face_flux_cells_alignment!(face_cache, acc_cache, jac, context, global_map, flow_disc; target_offset = 0, source_offset = 0, dims = ad_dims(acc_cache))
     facepos = flow_disc.conn_pos
     nc = length(facepos) - 1
     cd = flow_disc.conn_data
@@ -100,12 +98,10 @@ end
 function align_half_face_cells(face_cache, jac, cd, f_ix, active_cell_i, dims, context, global_map, target_offset, source_offset)
     nu, ne, np = dims
     cd_f = cd[f_ix]
-    f = cd_f.face
     other = cd_f.other
     cell = full_cell(active_cell_i, global_map)
     @assert cell == cd_f.self "Expected $cell, was $(cd_f.self) for conn $cd_f"
     other_i = interior_cell(other, global_map)
-    # cell_i = interior_cell(cell, global_map)
     if isnothing(other_i) || isnothing(active_cell_i)
         # Either of the two cells is inactive - we set to zero.
         for e in 1:ne

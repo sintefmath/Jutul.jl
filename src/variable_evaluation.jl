@@ -162,8 +162,7 @@ function select_equations!(model::SimulationModel)
     select_equations!(eqs, model.formulation, model)
 end
 
-select_equations!(eqs, ::JutulSystem, model::SimulationModel) = nothing
-select_equations!(eqs, ::JutulFormulation, model::SimulationModel) = nothing
+select_equations!(eqs, something, model) = nothing
 
 function select_minimum_output_variables!(model)
     # Minimum is always all primary variables (for restarting) plus anything added

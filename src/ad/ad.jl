@@ -105,6 +105,7 @@ function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, conte
                                     source_index = 1:cache.number_of_entities,
                                     number_of_entities_source = nothing,
                                     number_of_entities_target = nothing,
+                                    dims = ad_dims(cache),
                                     target_offset = 0,
                                     source_offset = 0)
     _entity::JutulEntity
@@ -114,7 +115,7 @@ function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, conte
         pos = cache.jacobian_positions
     end
     if _entity == c_entity
-        nu_c, ne, np = ad_dims(cache)
+        nu_c, ne, np = dims
         if isnothing(number_of_entities_source)
             nu_s = nu_c
         else
@@ -132,7 +133,6 @@ function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, conte
 end
 
 function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, row_layout, col_layout)
-    np = number_of_partials(cache)
     for index in 1:length(source_index)
         target = target_index[index]
         source = source_index[index]
