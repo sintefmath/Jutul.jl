@@ -45,16 +45,20 @@ DataStructures = "0.18.13"
 ExprTools = "0.1.8"
 ForwardDiff = "0.10.30"
 Graphs = "1.8.0"
+GraphMakie = "0.5.3"
 ILUZero = "0.2.0"
 JLD2 = "0.4.22"
 Krylov = "0.9.0"
 LinearOperators = "2.3.2"
 LoopVectorization = "0.12.115"
+LayeredLayouts = "0.2.5"
 MAT = "0.10.3"
 MappedArrays = "0.4.1"
 Metis = "1.1.0"
 MultiComponentFlash = "1.1.3"
 Meshes = "0.28.0"
+Makie = "0.19.0"
+NetworkLayout = "0.4.5"
 OrderedCollections = "1.4.1"
 Polyester = "0.6.11"
 PolyesterWeave = "0.1.13"
@@ -67,5 +71,18 @@ TimerOutputs = "0.5.19"
 Tullio = "0.3.4"
 julia = "1.7"
 
+
 [extras]
 CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
+
+[weakdeps]
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+LayeredLayouts = "f4a74d36-062a-4d48-97cd-1356bad1de4e"
+NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
+GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
+
+[extensions]
+JutulMakieExt = "Makie"
+JutulGLMakieExt = "GLMakie"
+JutulGraphMakieExt = ["GraphMakie", "NetworkLayout", "LayeredLayouts", "Makie"]

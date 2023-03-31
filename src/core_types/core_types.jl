@@ -223,7 +223,7 @@ include("domains.jl")
 
 # Formulation
 abstract type JutulFormulation end
-struct FullyImplicit <: JutulFormulation end
+struct FullyImplicitFormulation <: JutulFormulation end
 
 # Equations
 """
@@ -233,7 +233,7 @@ abstract type JutulEquation end
 abstract type DiagonalEquation <: JutulEquation end
 
 # Models
-export JutulModel, FullyImplicit, SimulationModel, JutulEquation, JutulFormulation
+export JutulModel, FullyImplicitFormulation, SimulationModel, JutulEquation, JutulFormulation
 
 abstract type JutulModel end
 abstract type AbstractSimulationModel <: JutulModel end
@@ -262,7 +262,7 @@ end
 Instantiate a model for a given `system` discretized on the `domain`.
 """
 function SimulationModel(domain, system;
-                            formulation=FullyImplicit(),
+                            formulation=FullyImplicitFormulation(),
                             context=DefaultContext(),
                             output_level=:primary_variables,
                             data_domain = missing,
@@ -395,10 +395,10 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
                 end
             end
             print(io, "\n")
-        elseif f == :domain
+        elseif f == :domain || f == :data_domain
             print(io, "    ")
             if !isnothing(p)
-                print(io, p)
+                show(io, t, p)
             end
             print(io, "\n")
         elseif f == :equations

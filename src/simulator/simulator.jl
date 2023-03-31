@@ -268,7 +268,6 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
         update_secondary = iteration > 1 || config[:always_update_secondary]
     end
     e, converged = nothing, false
-
     report = OrderedDict()
     # Update the properties and equations
     rec = storage.recorder
@@ -301,12 +300,20 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
     if !converged && solve
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
-        t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec, relaxation = relaxation)
-        report[:update] = rep_update
-        report[:linear_solver] = rep_lsolve
-        report[:linear_iterations] = n_iter
-        report[:linear_solve_time] = t_solve
-        report[:update_time] = t_update
+        try
+            t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec, relaxation = relaxation)
+            report[:update] = rep_update
+            report[:linear_solver] = rep_lsolve
+            report[:linear_iterations] = n_iter
+            report[:linear_solve_time] = t_solve
+            report[:update_time] = t_update    
+        catch e
+            if config[:failure_cuts_timestep]
+                report[:failure_exception] = e
+            else
+                rethrow(e)
+            end
+        end
     end
     extra_debug_output!(report, storage, model, config, iteration, dt)
     return (e, converged, report)
@@ -325,6 +332,11 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
     for it = 1:(max_iter+1)
         do_solve = it <= max_iter
         e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation, solve = do_solve)
+        if haskey(r, :failure_exception)
+            inner_exception = r[:failure_exception]
+            @warn "Exception occurred in perform_step!" inner_exception
+            break
+        end
         next_iteration!(rec, r)
         push!(step_reports, r)
         if done
