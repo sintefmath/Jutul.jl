@@ -1,7 +1,7 @@
 abstract type JutulSimulator end
-struct Simulator <: JutulSimulator
-    model::JutulModel
-    storage::JutulStorage
+struct Simulator{M, S} <: JutulSimulator
+    model::M
+    storage::S
 end
 
 """
@@ -12,8 +12,10 @@ To avoid manually instantiating the simulator, the non-mutating
 [`simulate`](@ref) interface can be used instead.
 """
 function Simulator(model; extra_timing = false, kwarg...)
+    model::JutulModel
     set_global_timer!(extra_timing)
     storage = simulator_storage(model; kwarg...)
+    storage::JutulStorage
     print_global_timer(extra_timing)
     Simulator(model, storage)
 end
