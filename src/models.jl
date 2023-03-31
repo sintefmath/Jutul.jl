@@ -322,9 +322,14 @@ function setup_state_and_parameters(data_domain::DataDomain, model::JutulModel, 
     return (state, parameters)
 end
 
-function setup_state_and_parameters(model::JutulModel, arg...; kwarg...)
+function setup_state_and_parameters(model::JutulModel; kwarg...)
     data_domain = DataDomain(physical_representation(model))
-    return setup_state_and_parameters(data_domain, model, arg...; kwarg...)
+    return setup_state_and_parameters(data_domain, model; kwarg...)
+end
+
+function setup_state_and_parameters(model::SimulationModel; kwarg...)
+    data_domain = model.data_domain
+    return setup_state_and_parameters(data_domain, model; kwarg...)
 end
 
 function setup_state_and_parameters(model; kwarg...)
@@ -333,6 +338,14 @@ function setup_state_and_parameters(model; kwarg...)
         init[k] = v
     end
     return setup_state_and_parameters(model, init)
+end
+
+function setup_state_and_parameters(d, model; kwarg...)
+    init = Dict{Symbol, Any}()
+    for (k, v) in kwarg
+        init[k] = v
+    end
+    return setup_state_and_parameters(d, model, init)
 end
 
 """
