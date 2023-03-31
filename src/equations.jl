@@ -247,13 +247,6 @@ function number_of_equations(model)
 end
 
 """
-Get the number of partials
-"""
-function number_of_partials_per_entity(e::JutulEquation)
-    return get_diagonal_cache(e).npartials
-end
-
-"""
 Give out I, J arrays of equal length for a given equation attached
 to the given model.
 """

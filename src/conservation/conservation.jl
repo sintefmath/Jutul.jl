@@ -459,7 +459,7 @@ function update_accumulation!(eq_s, law, storage, model, dt)
     return acc
 end
 
-export update_half_face_flux!, update_accumulation!, update_equation!, get_diagonal_cache, get_diagonal_entries
+export update_half_face_flux!, update_accumulation!, update_equation!, get_diagonal_entries
 
 function update_equation!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt)
     # Zero out any sparse indices
@@ -554,10 +554,6 @@ function reset_sources!(eq_s::ConservationLawTPFAStorage)
     if use_sparse_sources(eq_s)
         @. eq_s.sources = 0
     end
-end
-
-@inline function get_diagonal_cache(eq::ConservationLaw, eq_s::ConservationLawTPFAStorage)
-    return eq.accumulation
 end
 
 @inline function get_diagonal_entries(eq::ConservationLaw, eq_s::ConservationLawTPFAStorage)
