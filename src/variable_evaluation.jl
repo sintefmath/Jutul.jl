@@ -162,8 +162,6 @@ function select_equations!(model::SimulationModel)
     select_equations!(eqs, model.formulation, model)
 end
 
-select_equations!(eqs, something, model) = nothing
-
 function select_minimum_output_variables!(model)
     # Minimum is always all primary variables (for restarting) plus anything added
     outputs = model.output_variables
