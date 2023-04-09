@@ -84,7 +84,8 @@ function tpfv_geometry(g::MRSTWrapMesh)
     # checks on that plus the geometry fields, otherwise we insert NaN and
     # assume that the result is still somewhat useful.
     nf = size(N, 2)
-    check_face(k) = haskey(faces, k) && size(faces[k], 1) == nf
+    nf_all = size(N_raw, 1)
+    check_face(k) = haskey(faces, k) && size(faces[k], 1) == nf_all
     N_ok = all(N_raw[internal_faces, :]' == g.N)
     self_consistent = N_ok && check_face(:areas) && check_face(:normals) && check_face(:centroids)
     if self_consistent
