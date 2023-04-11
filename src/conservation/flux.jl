@@ -66,7 +66,7 @@ function PotentialFlow(N::AbstractMatrix, nc = maximum(N); kgrad = nothing, upwi
     return PotentialFlow(kgrad, upwind, hf)
 end
 
-function local_discretization(eq::ConservationLaw{S, D, N}, i) where {S, D<:PotentialFlow, N}
+function local_discretization(eq::ConservationLaw{S, D, FT, N}, i) where {S, D<:PotentialFlow, FT, N}
     disc = eq.flow_discretization
     face_map = local_half_face_map(disc.half_face_map, i)
     div = (x, F) -> divergence!(x, F, face_map)

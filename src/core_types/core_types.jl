@@ -695,10 +695,13 @@ end
 "Discretization of kgradp + upwind"
 abstract type FlowDiscretization <: JutulDiscretization end
 
-struct ConservationLaw{C, T<:FlowDiscretization, N} <: JutulEquation
+abstract type FluxType end
+
+struct DefaultFlux <: FluxType end
+struct ConservationLaw{C, T<:FlowDiscretization, FT<:FluxType, N} <: JutulEquation
     flow_discretization::T
-    function ConservationLaw(disc::T, conserved::Symbol = :TotalMasses, N::Integer = 1) where T
-        return new{conserved, T, N}(disc)
+    function ConservationLaw(disc::T, conserved::Symbol = :TotalMasses, N::Integer = 1; flux = DefaultFlux()) where T
+        return new{conserved, T, typeof(flux), N}(disc)
     end
 end
 

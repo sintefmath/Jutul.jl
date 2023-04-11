@@ -1,10 +1,12 @@
 export ConservationLaw, ConservationLawTPFAStorage, conserved_symbol
 
-number_of_equations_per_entity(model::SimulationModel, ::ConservationLaw{<:Any, <:Any, N}) where N = N
+number_of_equations_per_entity(model::SimulationModel, ::ConservationLaw{<:Any, <:Any, <:Any, N}) where N = N
 
-flux_vector_type(::ConservationLaw{<:Any, <:Any, N}, ::Val{T}) where {N, T} = SVector{N, T}
+flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T} = SVector{N, T}
 
 conserved_symbol(::ConservationLaw{C, <:Any}) where C = C
+
+flux_type(::ConservationLaw{<:Any, <:Any, FT}) where FT = FT
 
 discretization(e::ConservationLaw) = e.flow_discretization
 
@@ -68,7 +70,7 @@ function ConservationLawTPFAStorage(model, eq::ConservationLaw; kwarg...)
     return ConservationLawTPFAStorage(acc, conserved_symbol(eq), hf_cells, hf_faces, src)
 end
 
-function setup_equation_storage(model, eq::ConservationLaw{<:Any, <:TwoPointPotentialFlowHardCoded, <:Any}, storage; extra_sparsity = nothing, kwarg...)
+function setup_equation_storage(model, eq::ConservationLaw{<:Any, <:TwoPointPotentialFlowHardCoded, <:Any, <:Any}, storage; extra_sparsity = nothing, kwarg...)
     # Maybe check that the sparsity matches the default?
     return ConservationLawTPFAStorage(model, eq; kwarg...)
 end
@@ -535,7 +537,7 @@ function face_flux!(entry, l, r, f, face_sign, eq, state, model, dt, disc)
     error("Not specialized for $eq")
 end
 
-function face_flux(l, r, f, face_sign, eq::ConservationLaw{<:Any, <:Any, N}, state, model, dt, disc, T = Val(Float64)) where N
+function face_flux(l, r, f, face_sign, eq::ConservationLaw{<:Any, <:Any, <:Any, N}, state, model, dt, disc, T = Val(Float64)) where N
     out = zero(flux_vector_type(eq, T))
     return face_flux!(out, l, r, f, face_sign, eq, state, model, dt, disc)
 end
@@ -544,7 +546,7 @@ function face_flux!(entry, face, eq, state, model, dt, disc, local_disc)
     error("Not specialized for $eq")
 end
 
-@inline function face_flux(face, eq::ConservationLaw{<:Any, <:Any, N}, state, model, dt, disc, ldisc, T = Float64) where N
+@inline function face_flux(face, eq::ConservationLaw{<:Any, <:Any, <:Any, N}, state, model, dt, disc, ldisc, T = Float64) where N
     V_t = flux_vector_type(eq, T)
     out = zero(V_t)
     return face_flux!(out, face, eq, state, model, dt, disc, ldisc)::V_t
