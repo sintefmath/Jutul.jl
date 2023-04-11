@@ -700,8 +700,9 @@ abstract type FluxType end
 struct DefaultFlux <: FluxType end
 struct ConservationLaw{C, T<:FlowDiscretization, FT<:FluxType, N} <: JutulEquation
     flow_discretization::T
+    flux_type::FT
     function ConservationLaw(disc::T, conserved::Symbol = :TotalMasses, N::Integer = 1; flux = DefaultFlux()) where T
-        return new{conserved, T, typeof(flux), N}(disc)
+        return new{conserved, T, typeof(flux), N}(disc, flux)
     end
 end
 

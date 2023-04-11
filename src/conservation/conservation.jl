@@ -6,7 +6,7 @@ flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, 
 
 conserved_symbol(::ConservationLaw{C, <:Any}) where C = C
 
-flux_type(::ConservationLaw{<:Any, <:Any, FT}) where FT = FT
+flux_type(c::ConservationLaw) = c.flux_type
 
 discretization(e::ConservationLaw) = e.flow_discretization
 
