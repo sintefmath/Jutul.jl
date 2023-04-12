@@ -27,6 +27,7 @@ function adjoint_model_copy(model::MultiModel; context = nothing)
 end
 
 function convert_state_ad(model::MultiModel, state, tag = nothing)
+    state = copy(state)
     @assert isnothing(tag)
     for (k, m) in pairs(model.models)
         state[k] = convert_state_ad(m, state[k], k)

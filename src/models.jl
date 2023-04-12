@@ -404,18 +404,19 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
         parameters = deepcopy(parameters)
     end
     @tic "state" if !isnothing(state0)
-        storage[:parameters] = parameters
-        state0 = merge(state0, parameters)
         if state0_ad
-            state = copy(state0)
             state0 = convert_state_ad(model, state0, tag)
         end
         if state_ad
             state = convert_state_ad(model, state0, tag)
         end
+        state0 = merge(state0, parameters)
+        state = merge(state, parameters)
+        # Both states now contain all parameters, ready to store.
         storage[:state0] = state0
         storage[:state] = state
-        storage[:primary_variables] = reference_primary_variables(storage, model) 
+        storage[:parameters] = parameters
+        storage[:primary_variables] = reference_variables(storage, model, :primary)
     end
     @tic "model" setup_storage_model(storage, model)
     @tic "equations" if setup_equations
@@ -456,10 +457,10 @@ function setup_storage_formulation!(storage,  model, formulation)
     # Do nothing
 end
 
-function reference_primary_variables(storage, model::JutulModel; kwarg...)
+function reference_variables(storage, model::JutulModel, vartype = :primary; kwarg...)
     primaries = OrderedDict()
     state = storage[:state]
-    for key in keys(get_primary_variables(model))
+    for key in keys(get_variables_by_type(model, vartype))
         primaries[key] = state[key]
     end
     return primaries
