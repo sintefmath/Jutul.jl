@@ -21,7 +21,7 @@ function retrieve_output!(states, reports, config, n)
     return (states, reports)
 end
 
-get_output_state(sim) = get_output_state(sim.storage, sim.model)
+get_output_state(sim::JutulSimulator) = get_output_state(sim.storage, sim.model)
 
 
 function store_output!(states, reports, step, sim, config, report)
