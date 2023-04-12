@@ -58,8 +58,10 @@ function get_variables_by_type(model, type)
         return get_secondary_variables(model)
     elseif type == :parameters
         return get_parameters(model)
+    elseif type == :all
+        return merge(map(x -> get_variables_by_type(model, x), (:primary, :secondary, :parameters))...)
     else
-        error("type $type was not :primary, :secondary or :parameters.")
+        error("type $type was not :primary, :secondary, :parameters or :all.")
     end
 end
 
