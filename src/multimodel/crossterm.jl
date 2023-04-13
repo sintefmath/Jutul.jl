@@ -150,23 +150,21 @@ end
 
 function source_impact_for_pair(ctp, ct_s, label)
     sgn = 1
-    eq_label = ctp.equation
     if ctp.target != label
-        # impact = ct_s.target_entities
+        # We are dealing with the transposed part, reverse the connection
         impact = ct_s.source_entities
         caches_s = ct_s.target
         caches_t = ct_s.source
-        # pos = ct_s.offdiagonal_alignment.from_source
+        eq_label = ctp.source_equation
         pos = ct_s.offdiagonal_alignment.from_target
         if symmetry(ctp.cross_term) == CTSkewSymmetry()
             sgn = -1
         end
     else
-        # impact = ct_s.source_entities
         impact = ct_s.target_entities
         caches_s = ct_s.source
         caches_t = ct_s.target
-        # pos = ct_s.offdiagonal_alignment.from_target
+        eq_label = ctp.target_equation
         pos = ct_s.offdiagonal_alignment.from_source
     end
     return (eq_label, impact, caches_s, caches_t, pos, sgn)
@@ -377,7 +375,7 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
         target = ctp.target
         source = ctp.source
         impact_t = ct_s.target_entities
-        eq_label = ctp.equation
+        eq_label = ctp.target_equation
         o_algn_t = ct_s.offdiagonal_alignment.from_source
 
         # Align diagonal
@@ -387,6 +385,7 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
 
         # If symmetry, repeat the process with reversed terms
         if has_symmetry(ct)
+            eq_label = ctp.source_equation
             impact_s = ct_s.source_entities
             o_algn_s = ct_s.offdiagonal_alignment.from_target
             diagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, source, target, eq_label, impact_s, equation_offset, variable_offset)
@@ -406,11 +405,11 @@ function setup_cross_terms_storage!(storage, model)
         term = ct.cross_term
         s_t, m_t = storage_and_model(ct.target)
         s_s, m_s = storage_and_model(ct.source)
-        eq_t = ct_equation(m_t, ct.equation)
+        eq_t = ct_equation(m_t, ct.target_equation)
         if isnothing(symmetry(term))
             eq_s = nothing
         else
-            eq_s = ct_equation(m_s, ct.equation)
+            eq_s = ct_equation(m_s, ct.source_equation)
         end
         ct_s = setup_cross_term_storage(term, eq_t, eq_s, m_t, m_s, s_t, s_s)
         push!(v, ct_s)
@@ -477,12 +476,13 @@ function extra_cross_term_sparsity(model, storage, target, include_symmetry = tr
         if is_target
             caches = ct_s.target
             impact = ct_s.target_entities
+            eq = ct_p.target_equation
         else
             caches = ct_s.source
             impact = ct_s.source_entities
+            eq = ct_p.source_equation
             @assert has_symmetry(ct_p.cross_term)
         end
-        eq = ct_p.equation
         if !haskey(sparsity, eq)
             sparsity[eq] = Dict{Symbol, Any}()
         end

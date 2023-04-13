@@ -264,15 +264,17 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         for (ctp, s) in zip(cross_terms, cross_term_storage)
             ct = ctp.cross_term
             transp = ctp.source == target
-            eq_label = ctp.equation
             if transp
-                # The filter found a cross term with symmetry, that has "target" as the source. We then need to add it here,
-                # reversing most of the inputs
+                # The filter found a cross term with symmetry, that has "target"
+                # as the source. We then need to add it here, reversing most of
+                # the inputs
                 @assert ctp.source == target
                 @assert has_symmetry(ctp)
+                eq_label = ctp.source_equation
                 ct_storage = s.target
                 entities = s.source_entities
             else
+                eq_label = ctp.target_equation
                 ct_storage = s.source
                 entities = s.target_entities
             end
@@ -509,7 +511,7 @@ function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_
         if target in targets && source in sources
             ct = ctp.cross_term
             model_t = models[target]
-            eq = ct_equation(model_t, ctp.equation)
+            eq = ct_equation(model_t, ctp.target_equation)
             ct_bare_type = Base.typename(typeof(ct)).name
             @tic "$ct_bare_type" update_cross_term!(ct_s, ct, eq, storage[target], storage[source], model_t, models[source], dt)
         end

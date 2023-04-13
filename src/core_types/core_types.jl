@@ -839,11 +839,16 @@ abstract type CrossTerm end
 struct CrossTermPair
     target::Symbol
     source::Symbol
-    equation::Union{Symbol, Pair{Symbol, Symbol}}
+    target_equation::Union{Symbol, Pair{Symbol, Symbol}}
+    source_equation::Union{Symbol, Pair{Symbol, Symbol}}
     cross_term::CrossTerm
 end
 
-Base.transpose(c::CrossTermPair) = CrossTermPair(c.source, c.target, c.equation, c.cross_term,)
+function CrossTermPair(target, source, equation, cross_term::CrossTerm; source_equation = equation)
+    CrossTermPair(target, source, equation, source_equation, cross_term)
+end
+
+Base.transpose(c::CrossTermPair) = CrossTermPair(c.source, c.target, c.source_equation, c.target_equation, c.cross_term,)
 
 
 """
