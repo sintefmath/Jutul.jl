@@ -268,7 +268,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
         update_secondary = iteration > 1 || config[:always_update_secondary]
     end
     e, converged = nothing, false
-    report = OrderedDict()
+    report = setup_ministep_report()
     # Update the properties and equations
     rec = storage.recorder
     time = rec.recorder.time + dt
@@ -306,7 +306,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
             report[:linear_solver] = rep_lsolve
             report[:linear_iterations] = n_iter
             report[:linear_solve_time] = t_solve
-            report[:update_time] = t_update    
+            report[:update_time] = t_update
         catch e
             if config[:failure_cuts_timestep]
                 report[:failure_exception] = e
@@ -317,6 +317,19 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
     end
     extra_debug_output!(report, storage, model, config, iteration, dt)
     return (e, converged, report)
+end
+
+function setup_ministep_report(; kwarg...)
+    report = OrderedDict{Symbol, Any}()
+    for k in [:secondary_time, :equations_time, :linear_system_time, :convergence_time]
+        report[k] = 0.0
+    end
+    report[:converged] = true
+    report[:errors] = missing
+    for (k, v) in kwarg
+        report[k] = v
+    end
+    return report
 end
 
 function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare = true, relaxation = 1.0)
