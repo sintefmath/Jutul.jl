@@ -334,6 +334,11 @@ function setup_state_and_parameters(model::SimulationModel; kwarg...)
     return setup_state_and_parameters(data_domain, model; kwarg...)
 end
 
+function setup_state_and_parameters(model::SimulationModel, init::AbstractDict)
+    data_domain = model.data_domain
+    return setup_state_and_parameters(data_domain, model, init)
+end
+
 function setup_state_and_parameters(model; kwarg...)
     init = Dict{Symbol, Any}()
     for (k, v) in kwarg
@@ -342,12 +347,12 @@ function setup_state_and_parameters(model; kwarg...)
     return setup_state_and_parameters(model, init)
 end
 
-function setup_state_and_parameters(d, model; kwarg...)
+function setup_state_and_parameters(d::DataDomain, model::SimulationModel; kwarg...)
     init = Dict{Symbol, Any}()
     for (k, v) in kwarg
         init[k] = v
     end
-    return setup_state_and_parameters(d, model, init)
+    return setup_state_and_parameters(d::DataDomain, model::SimulationModel, init)
 end
 
 """
