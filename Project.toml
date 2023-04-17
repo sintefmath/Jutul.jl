@@ -46,6 +46,7 @@ ExprTools = "0.1.8"
 ForwardDiff = "0.10.30"
 Graphs = "1.8.0"
 GraphMakie = "0.5.3"
+HYPRE = "1.4.0"
 ILUZero = "0.2.0"
 JLD2 = "0.4.22"
 Krylov = "0.9.0"
@@ -79,6 +80,7 @@ GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 LayeredLayouts = "f4a74d36-062a-4d48-97cd-1356bad1de4e"
 NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
+HYPRE = "b5ffcf37-a2bd-41ab-a3da-4bd9bc8ad771"
 
 [weakdeps]
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
@@ -86,8 +88,10 @@ GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 LayeredLayouts = "f4a74d36-062a-4d48-97cd-1356bad1de4e"
 NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
+HYPRE = "b5ffcf37-a2bd-41ab-a3da-4bd9bc8ad771"
 
 [extensions]
 JutulMakieExt = "Makie"
 JutulGLMakieExt = "GLMakie"
 JutulGraphMakieExt = ["GraphMakie", "NetworkLayout", "LayeredLayouts", "Makie"]
+JutulHypreExt = "HYPRE"
