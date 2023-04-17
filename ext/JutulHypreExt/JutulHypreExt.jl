@@ -51,7 +51,7 @@ module JutulHypreExt
         return p.data[:n]
     end
 
-    function Jutul.apply!(x, p::BoomerAMGPreconditioner, y, t)
+    function Jutul.apply!(x, p::BoomerAMGPreconditioner, y, arg...)
         ix = p.data[:indices]
         J_h, y_h, x_h = p.data[:converted]
         asm = HYPRE.start_assemble!(x_h)
