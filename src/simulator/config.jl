@@ -38,8 +38,12 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :tolerances, set_default_tolerances(sim.model, tol = nonlinear_tolerance), "Tolerances used for convergence criterions.")
     add_option!(cfg, :tol_factor_final_iteration, 1.0, "Value that multiplies all tolerances for the final convergence check before a time-step is cut.")
 
+    # IO options
     add_option!(cfg, :output_path, nothing, "Path to write output. If nothing, output is not written to disk.", types = Union{String, Nothing})
     add_option!(cfg, :in_memory_reports, 5, "Limit for number of reports kept in memory if output_path is provided.", types = Int)
+
+    # Hooks
+    add_option!(cfg, :post_ministep_hook, missing, "Hook to run after each ministep (successful or not) on format (out, sim, dt, forces, max_iter, cfg) -> out where out = (done, report)")
 
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])
