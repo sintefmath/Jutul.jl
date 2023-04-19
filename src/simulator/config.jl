@@ -43,7 +43,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :in_memory_reports, 5, "Limit for number of reports kept in memory if output_path is provided.", types = Int)
 
     # Hooks
-    add_option!(cfg, :post_ministep_hook, missing, "Hook to run after each ministep (successful or not) on format (out, sim, dt, forces, max_iter, cfg) -> out where out = (done, report)")
+    add_option!(cfg, :post_ministep_hook, missing, "Hook to run after each ministep (successful or not) on format (done, report, sim, dt, forces, max_iter, cfg) -> (done, report)")
 
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])

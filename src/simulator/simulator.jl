@@ -362,22 +362,24 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
     end
     report[:steps] = step_reports
     report[:success] = done
-    t_finalize = @elapsed if finalize
+    report[:prepare_time] = t_prepare
+
+    # Call hook and potentially modify the result
+    post_hook = cfg[:post_ministep_hook]
+    if !ismissing(post_hook)
+        done, report = post_hook(done, report, sim, dt, forces, max_iter, cfg)
+    end
+
+    # Finalize (either reset state or proceed to next step)
+    report[:finalize_time] = @elapsed if finalize
         if done
             report[:post_update] = update_after_step!(sim, dt, forces; time = cur_time + dt)
         else
             reset_state_to_previous_state!(sim)
         end
     end
-    report[:finalize_time] = t_finalize
-    report[:prepare_time] = t_prepare
-    out = (done, report)
-    # Call hook
-    post_hook = cfg[:post_ministep_hook]
-    if !ismissing(post_hook)
-        out = post_hook(out, sim, dt, forces, max_iter, cfg)
-    end
-    return out
+
+    return (done, report)
 end
 
 function initialize_before_first_timestep!(sim, first_dT; kwarg...)
