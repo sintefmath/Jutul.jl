@@ -2,10 +2,10 @@ export TimestepSelector, IterationTimestepSelector, VariableChangeTimestepSelect
 
 abstract type AbstractTimestepSelector end
 
-pick_first_timestep(sel, sim, config, dT) = min(dT*initial_relative(sel), initial_absolute(sel))
-pick_next_timestep(sel, sim, config, dt_prev, dT, reports, current_reports, step_index, new_step) = dt_prev*increase_factor(sel)
+pick_first_timestep(sel, sim, config, dT, forces) = min(dT*initial_relative(sel), initial_absolute(sel))
+pick_next_timestep(sel, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step) = dt_prev*increase_factor(sel)
 
-pick_cut_timestep(sel, sim, config, dt, dT, reports, cut_count) = dt
+pick_cut_timestep(sel, sim, config, dt, dT, forces, reports, cut_count) = dt
 
 decrease_factor(sel) = 2.0
 increase_factor(sel) = Inf
@@ -38,7 +38,7 @@ initial_absolute(sel::TimestepSelector) = sel.init_abs
 maximum_timestep(sel::TimestepSelector) = sel.max
 minimum_timestep(sel::TimestepSelector) = sel.min
 
-function pick_cut_timestep(sel::TimestepSelector, sim, config, dt, dT, reports, cut_count)
+function pick_cut_timestep(sel::TimestepSelector, sim, config, dt, dT, forces, reports, cut_count)
     df = decrease_factor(sel)
     max_cuts = config[:max_timestep_cuts]
     if cut_count + 1 > max_cuts && dt <= dT/(df^max_cuts)
@@ -58,7 +58,7 @@ struct IterationTimestepSelector <: AbstractTimestepSelector
     end
 end
 
-function pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev, dT, reports, current_reports, step_index, new_step)
+function pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step)
     R = successful_reports(reports, current_reports, step_index, 2)
     if length(R) == 0
         return dT
@@ -90,7 +90,7 @@ struct VariableChangeTimestepSelector <: AbstractTimestepSelector
     end
 end
 
-function pick_next_timestep(sel::VariableChangeTimestepSelector, sim, config, dt_prev, dT, reports, current_reports, step_index, new_step)
+function pick_next_timestep(sel::VariableChangeTimestepSelector, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step)
     R = successful_reports(reports, current_reports, step_index, 2)
     if length(R) == 0
         return dT

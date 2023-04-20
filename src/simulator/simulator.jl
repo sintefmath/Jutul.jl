@@ -208,7 +208,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                                                         rec = progress_recorder(sim), kwarg...)
     ministep_reports = []
     # Initialize time-stepping
-    dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = true)
+    dt = pick_timestep(sim, config, dt, dT, forces, reports, ministep_reports, step_index = step_no, new_step = true)
     done = false
     t_local = 0
     cut_count = 0
@@ -229,11 +229,11 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                 break
             else
                 # Pick another for the next step...
-                dt = pick_timestep(sim, config, dt, dT, reports, ministep_reports, step_index = step_no, new_step = false)
+                dt = pick_timestep(sim, config, dt, dT, forces, reports, ministep_reports, step_index = step_no, new_step = false)
             end
         else
             dt_old = dt
-            dt = cut_timestep(sim, config, dt, dT, reports, step_index = step_no, cut_count = cut_count)
+            dt = cut_timestep(sim, config, dt, dT, forces, reports, step_index = step_no, cut_count = cut_count)
             if info_level > 0
                 if isnan(dt)
                     inner_msg = " Aborting."

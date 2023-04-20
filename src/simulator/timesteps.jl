@@ -1,4 +1,4 @@
-function pick_timestep(sim, config, dt_prev, dT, reports, current_reports; step_index = NaN, new_step = false)
+function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_reports; step_index = NaN, new_step = false)
     # Try to do the full step, unless one of our selectors/limits tells us otherwise.
     # No need to limit to whatever remains of the interval since that is fixed on the outside.
     dt = dT
@@ -6,12 +6,12 @@ function pick_timestep(sim, config, dt_prev, dT, reports, current_reports; step_
     is_first = new_step && step_index == 1
     if is_first
         for sel in selectors
-            candidate = pick_first_timestep(sel, sim, config, dT)
+            candidate = pick_first_timestep(sel, sim, config, dT, forces)
             dt = min(dt, candidate)
         end
     else
         for sel in selectors
-            candidate = pick_next_timestep(sel, sim, config, dt_prev, dT, reports, current_reports, step_index, new_step)
+            candidate = pick_next_timestep(sel, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step)
             dt = min(dt, candidate)
         end
         # The selectors might go crazy, so we have some safety bounds
@@ -42,9 +42,9 @@ function pick_timestep(sim, config, dt_prev, dT, reports, current_reports; step_
     return dt
 end
 
-function cut_timestep(sim, config, dt, dT, reports; step_index = NaN, cut_count = 0)
+function cut_timestep(sim, config, dt, dT, forces, reports; step_index = NaN, cut_count = 0)
     for sel in config[:timestep_selectors]
-        candidate = pick_cut_timestep(sel, sim, config, dt, dT, reports, cut_count)
+        candidate = pick_cut_timestep(sel, sim, config, dt, dT, forces, reports, cut_count)
         dt = min(dt, candidate)
     end
     return dt
