@@ -180,3 +180,63 @@ function linear_timestep_selection(x, x0, x1, dt0, dt1, rtol = 1e-3)
     end
     return dt_next
 end
+
+export compress_timesteps
+
+"""
+    compress_timesteps(timesteps, forces = nothing; max_step = Inf)
+
+Compress a set of timesteps and forces to the largest possible steps that still
+covers the same interval and changes forces at exactly the same points in time,
+while being limited to a maximum size of `max_step`.
+"""
+function compress_timesteps(timesteps, forces = nothing; max_step = Inf)
+    new_timesteps = similar(timesteps, 0)
+    has_forces = forces isa Vector
+    if has_forces
+        new_forces = similar(forces, 0)
+        @assert length(forces) == length(timesteps)
+    else
+        # Scalar force
+        @info typeof(forces)
+        new_forces = forces
+    end
+    get_forces(i, ::Nothing) = nothing
+    get_forces(i, ::AbstractVector) = forces[i]
+    get_forces(i, f::Any) = f
+    current_dt = 0.0
+    current_force = get_forces(1, forces)
+
+    function update_output!(dt, force)
+        push!(new_timesteps, dt)
+        if has_forces
+            push!(new_forces, force)
+        end
+    end
+    for (i, dt) in enumerate(timesteps)
+        remaining_dt = dt
+        next_force = get_forces(i, forces)
+        # Deal with changing forces
+        if next_force != current_force
+            update_output!(current_dt, current_force)
+            current_dt = 0
+            current_force = next_force
+        end
+        # Deal with too large step
+        if current_dt + dt >= max_step
+            num_trunc = dt ÷ max_step
+            for _ in 1:num_trunc
+                update_output!(max_step, current_force)
+                remaining_dt -= max_step
+            end
+            @assert remaining_dt < max_step
+        end
+        current_dt += remaining_dt
+    end
+    # Finalize
+    if current_dt > 0
+        update_output!(current_dt, current_force)
+    end
+    @assert sum(timesteps) ≈ sum(new_timesteps)
+    return (new_timesteps, new_forces)
+end

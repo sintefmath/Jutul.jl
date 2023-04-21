@@ -119,3 +119,18 @@ end
     I = get_1d_interpolator(x, sin.(x))
     @test isapprox(I(π/2), 1.0, atol = 1e-2)
 end
+
+@testset "compress_timesteps" begin
+    # Two test forces
+    f1 = (f = 1, )
+    f2 = (f = 2, )
+    @test compress_timesteps([1.0, 2.0, 3.0]) == ([6.0], nothing)
+    @test compress_timesteps([1.0, 2.0, 3.0], nothing) == ([6.0], nothing)
+    @test compress_timesteps([1.0, 2.0, 3.0], f1) == ([6.0], f1)
+    @test compress_timesteps([1.0, 2.0, 3.0, 4.0, 5.0], [f1, f1, f2, f2, f2]) == ([3.0, 12.0], [f1, f2])
+    # Changing and merging forces
+    @test compress_timesteps([1.0, 2.0, 3.0, 4.0, 5.0], [f2, f1, f2, f1, f1]) == ([1.0, 2.0, 3.0, 9.0], [f2, f1, f2, f1])
+    # Limit to max time-step
+    @test compress_timesteps([1.0, 3.0, 0.5, 1.0], max_step = 1.0) == ([1.0, 1.0, 1.0, 1.0, 1.0, 0.5], nothing)
+    @test compress_timesteps([0.9, 3.0, 2.5, 0.62], [f1, f1, f2, f2], max_step = 1.0) == ([1.0, 1.0, 1.0, 0.9, 1.0, 1.0, 1.12], [f1, f1, f1, f1, f2, f2, f2])
+end
