@@ -240,3 +240,16 @@ function compress_timesteps(timesteps, forces = nothing; max_step = Inf)
     @assert sum(timesteps) ≈ sum(new_timesteps)
     return (new_timesteps, new_forces)
 end
+
+"""
+    compress_timesteps(case::JutulCase; max_step = Inf)
+
+Compress time steps for a Jutul case. See [`compress_timesteps`](@ref) for the
+general case.
+"""
+function compress_timesteps(case::JutulCase; kwarg...)
+    (; model, dt, forces, state0, parameters, input_data) = case
+    forces = deepcopy(forces)
+    (new_dt, new_forces) = compress_timesteps(dt, forces; kwarg...)
+    return JutulCase(model, new_dt, new_forces, deepcopy(state0), deepcopy(parameters), deepcopy(input_data))
+end
