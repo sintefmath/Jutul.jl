@@ -122,7 +122,7 @@ function compute_face_gdz(N, z; g = gravity_constant)
     for i in 1:nf
         l = N[1, i]
         r = N[2, i]
-        gdz[i] = -g*(z[l] - z[r])
+        gdz[i] = -g*(z[r] - z[l])
     end
     return gdz
 end

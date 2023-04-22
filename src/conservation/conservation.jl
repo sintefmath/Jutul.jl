@@ -296,7 +296,7 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np},
     stop = @inbounds conn_pos[cell + 1] - 1
     for i = start:stop
         for e in 1:Ne
-            v = acc_r[e] - get_entry_val(cell_flux, i, e)
+            v = acc_r[e] + get_entry_val(cell_flux, i, e)
             acc_r = setindex(acc_r, v, e)
         end
         fpos_outer = get_jacobian_pos(cell_flux, i, 1, 1)
@@ -304,11 +304,11 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np},
         @simd for p in 1:Np
             @inbounds for e in 1:Ne
                 ∂ = get_entry(cell_flux, i, e, p)
-                f_v = acc_partials[e, p] - ∂
+                f_v = acc_partials[e, p] + ∂
                 acc_partials = setindex(acc_partials, f_v, e, p)
                 if is_inner
                     fpos = get_jacobian_pos(cell_flux, i, e, p)
-                    update_jacobian_inner!(nz, fpos, ∂)
+                    update_jacobian_inner!(nz, fpos, -∂)
                 end
             end
         end
@@ -373,7 +373,7 @@ function update_lsys_face_flux_threaded!(Jz, face_flux, conn_pos, conn_data, fen
                 @inbounds for d = 1:np
                     df_di = f.partials[d]
                     fpos = get_jacobian_pos(face_flux, i, e, d, fp)
-                    @inbounds Jz[fpos] = -df_di
+                    @inbounds Jz[fpos] = df_di
                 end
             end
         end

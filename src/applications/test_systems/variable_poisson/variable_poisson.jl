@@ -97,7 +97,7 @@ function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::Variab
     U_self = state.U[self_cell]
     function flux(other_cell, face, sgn)
         U_other = U[other_cell]
-        return K[face]*(U_self - U_other)
+        return -K[face]*(U_self - U_other)
     end
     # Equation is just -∇⋅K∇p = 0, or ∇⋅V where V = -K∇p
     eq_buf[] = div(flux)
@@ -113,7 +113,7 @@ function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::Variab
     # Define flux
     function flux(other_cell, face, sgn)
         U_other = U[other_cell]
-        return K[face]*(U_self - U_other)
+        return -K[face]*(U_self - U_other)
     end
     # Define equation
     ∂U∂t = (U_self - U0[self_cell])/Δt
