@@ -411,11 +411,13 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
         parameters = deepcopy(parameters)
     end
     @tic "state" if !isnothing(state0)
-        if state0_ad
-            state0 = convert_state_ad(model, state0, tag)
-        end
         if state_ad
             state = convert_state_ad(model, state0, tag)
+        else
+            state = deepcopy(state0)
+        end
+        if state0_ad
+            state0 = convert_state_ad(model, state0, tag)
         end
         state0 = merge(state0, parameters)
         state = merge(state, parameters)
