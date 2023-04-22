@@ -198,7 +198,6 @@ function compress_timesteps(timesteps, forces = nothing; max_step = Inf)
         @assert length(forces) == length(timesteps)
     else
         # Scalar force
-        @info typeof(forces)
         new_forces = forces
     end
     get_forces(i, ::Nothing) = nothing
