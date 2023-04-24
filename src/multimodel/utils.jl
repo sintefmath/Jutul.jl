@@ -70,9 +70,9 @@ end
 function add_cross_term!(model::MultiModel, ctm::CrossTermPair)
     @assert haskey(model.models, ctm.target)
     @assert haskey(model.models, ctm.source)
-    @assert haskey(model.models[ctm.target].equations, ctm.equation)
+    @assert haskey(model.models[ctm.target].equations, ctm.target_equation)
     if has_symmetry(ctm.cross_term)
-        @assert haskey(model.models[ctm.source].equations, ctm.equation)
+        @assert haskey(model.models[ctm.source].equations, ctm.target_equation)
     end
     add_cross_term!(model.cross_terms, ctm)
 end
