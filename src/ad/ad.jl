@@ -358,11 +358,20 @@ end
 """
     update_values!(x, dx)
 
-Replace values of `x` in-place by `y`, leaving `x` with the avlues of y and the partials of `x`.
+Replace values of `x` in-place by `y`, leaving `x` with the values of y and the partials of `x`.
 """
-@inline function update_values!(v::AbstractArray, next::AbstractArray)
+@inline function update_values!(v::AbstractArray{<:Real}, next::AbstractArray{<:Real})
     # The ForwardDiff type is immutable, so to preserve the derivatives we do this little trick:
     @. v = v - value(v) + value(next)
+end
+
+"""
+    update_values!(x, dx)
+
+Replace values (for non-Real types, direct assignment)
+"""
+@inline function update_values!(v::AbstractArray{<:Any}, next::AbstractArray{<:Any})
+    @. v = next
 end
 
 """

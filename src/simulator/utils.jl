@@ -82,7 +82,11 @@ end
 
 function print_sim_result_timing(io, sr::SimResult)
     fmt = raw"u. dd Y H:mm"
-    t = sum(x -> x[:total_time], sr.reports)
+    if length(sr.reports) == 0
+        t = 0.0
+    else
+        t = sum(x -> x[:total_time], sr.reports)
+    end
     print(io, "\n  Completed at $(Dates.format(sr.start_timestamp, fmt)) after $(get_tstr(t)).")
 end
 
