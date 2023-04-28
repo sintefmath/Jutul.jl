@@ -31,9 +31,13 @@ module JutulHypreExt
             end
             V = Dict{Int, Matrix{Float64}}()
             for i in min_width:max_width
-                V[i] = zeros(Float64, 1, i)
+                if J isa SparseMatrixCSC
+                    V[i] = zeros(Float64, i, 1)
+                else
+                    V[i] = zeros(Float64, 1, i)
+                end
             end
-            D[:asm_buffers] = (I = zeros(Int, 1), J = zeros(Int, 1, max_width), V = V)
+            D[:asm_buffers] = (I = zeros(Int, 1), J = zeros(Int, max_width), V = V)
             r_h = HYPRE.HYPREVector(r)
             x_h = HYPRE.HYPREVector(copy(r))
             D[:J] = J
@@ -120,17 +124,14 @@ module JutulHypreExt
             k = length(pos_ix)
             J = single_buf
             J[1] = col
-            # ROWS = longer_buf
-            I = zeros(k)
-            # V_buf = V_buffers[k]
-            V_buf = zeros(k, 1)
-            # resize!(ROWS, k)
+            I = longer_buf
+            V_buf = V_buffers[k]
+            resize!(I, k)
             @inbounds for ki in 1:k
                 ri = pos_ix[ki]
                 V_buf[ki] = nzval[ri]
                 I[ki] = rows[ri]
             end
-            # @info "?!" ROWS COLS V_buf
             HYPRE.assemble!(assembler, I, J, V_buf)
         end
         HYPRE.finish_assemble!(assembler)
