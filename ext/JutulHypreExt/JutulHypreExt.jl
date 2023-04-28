@@ -116,7 +116,7 @@ module JutulHypreExt
         nzval = nonzeros(Jac)
         rows = rowvals(Jac)
 
-        n = size(Jac, 1)
+        n = size(Jac, 2)
         @assert length(single_buf) == 1
         assembler = HYPRE.start_assemble!(J_h)
         @inbounds for col in 1:n
@@ -137,7 +137,28 @@ module JutulHypreExt
         HYPRE.finish_assemble!(assembler)
     end
 
-    function reassemble_internal_boomeramg!(I_buf, J_buf, V_buffers, J::Jutul.StaticSparsityMatrixCSR, J_h)
-        error()
+    function reassemble_internal_boomeramg!(single_buf, longer_buf, V_buffers, Jac::Jutul.StaticSparsityMatrixCSR, J_h)
+        nzval = nonzeros(Jac)
+        cols = Jutul.colvals(Jac)
+
+        n = size(Jac, 1)
+        @assert length(single_buf) == 1
+        assembler = HYPRE.start_assemble!(J_h)
+        @inbounds for row in 1:n
+            pos_ix = nzrange(Jac, row)
+            k = length(pos_ix)
+            I = single_buf
+            I[1] = row
+            J = longer_buf
+            resize!(J, k)
+            V_buf = V_buffers[k]
+            @inbounds for ki in 1:k
+                ri = pos_ix[ki]
+                V_buf[ki] = nzval[ri]
+                J[ki] = cols[ri]
+            end
+            HYPRE.assemble!(assembler, I, J, V_buf)
+        end
+        HYPRE.finish_assemble!(assembler)
     end
 end
