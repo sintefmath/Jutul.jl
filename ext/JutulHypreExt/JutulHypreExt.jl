@@ -14,7 +14,7 @@ module JutulHypreExt
         D = preconditioner.data
         # nzval = nonzeros(J)
         # rows = rowvals(J)
-        if haskey(D, :J) && D[:J] == J
+        if haskey(D, :J) && D[:J] === J
             J_h, r_h, x_h = D[:converted]
             if true
                 reassemble_matrix!(J_h, D, J)
