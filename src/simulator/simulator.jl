@@ -446,7 +446,12 @@ end
 function deserialize_restart(pth, restart, states, reports, config, nsteps = nothing)
     @assert !isnothing(pth) "output_path must be specified if restarts are enabled"
     if isa(restart, Bool)
-        restart = maximum(valid_restart_indices(pth)) + 1
+        restart_ix = valid_restart_indices(pth)
+        if length(restart_ix) == 0
+            restart = 1
+        else
+            restart = maximum(restart_ix) + 1
+        end
         if nsteps isa Integer
             restart = min(restart, nsteps+1)
         end
