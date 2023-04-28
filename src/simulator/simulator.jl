@@ -143,17 +143,25 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
             config[k] = v
         end
     end
-    states, reports, first_step, dt = initial_setup!(sim, config, timesteps, restart = restart, state0 = state0, parameters = parameters)
     # Time-step info to keep around
     no_steps = length(timesteps)
     t_tot = sum(timesteps)
+    states, reports, first_step, dt = initial_setup!(
+        sim,
+        config,
+        timesteps,
+        restart = restart,
+        state0 = state0,
+        parameters = parameters,
+        nsteps = no_steps
+    )
     # Config options
     max_its = config[:max_nonlinear_iterations]
     info_level = config[:info_level]
     # Initialize loop
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
-    if initialize
+    if initialize && first_step < no_steps
         check_forces(sim, forces, timesteps)
         forces_step = forces_for_timestep(sim, forces, timesteps, first_step)
         initialize_before_first_timestep!(sim, dt, forces = forces_step, config = config)
@@ -388,7 +396,7 @@ function initialize_before_first_timestep!(sim, first_dT; kwarg...)
     end
 end
 
-function initial_setup!(sim, config, timesteps; restart = nothing, parameters = nothing, state0 = nothing)
+function initial_setup!(sim, config, timesteps; restart = nothing, parameters = nothing, state0 = nothing, nsteps = nothing)
     # Timing stuff
     set_global_timer!(config[:extra_timing])
     # Threading
@@ -402,7 +410,7 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     initialize_io(pth)
     has_restart = !(isnothing(restart) || restart === 0 || restart === 1 || restart == false)
     if has_restart
-        state0, dt, first_step = deserialize_restart(pth, restart, states, reports, config)
+        state0, dt, first_step = deserialize_restart(pth, restart, states, reports, config, nsteps)
         msg = "Restarting from step $first_step."
         state0_has_changed = true
     else
@@ -435,10 +443,16 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     return (states, reports, first_step, dt)
 end
 
-function deserialize_restart(pth, restart, states, reports, config)
+function deserialize_restart(pth, restart, states, reports, config, nsteps = nothing)
     @assert !isnothing(pth) "output_path must be specified if restarts are enabled"
     if isa(restart, Bool)
         restart = maximum(valid_restart_indices(pth)) + 1
+        if nsteps isa Integer
+            restart = min(restart, nsteps+1)
+        end
+    end
+    if nsteps isa Integer
+        @assert restart <= nsteps+1 "Restart was $restart but schedule contains $nsteps steps."
     end
     first_step = restart
     prev_step = restart - 1;

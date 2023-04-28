@@ -7,7 +7,7 @@ end
 function retrieve_output!(states, reports, config, n)
     pth = config[:output_path]
     if !isnothing(pth)
-        @debug "Reading states from $pth..."
+        @debug "Reading $n states from $pth..."
         @assert isempty(states)
         states, reports = read_results(
             pth,
