@@ -409,15 +409,15 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     pth = config[:output_path]
     initialize_io(pth)
     has_restart = !(isnothing(restart) || restart === 0 || restart === 1 || restart == false)
+    dt = timesteps[1]
     if has_restart
-        state0, dt, first_step = deserialize_restart(pth, restart, states, reports, config, nsteps)
+        state0, dt, first_step = deserialize_restart(pth, state0, dt, restart, states, reports, config, nsteps)
         msg = "Restarting from step $first_step."
-        state0_has_changed = true
+        state0_has_changed = first_step != 1
     else
         state0_has_changed = !isnothing(state0)
         msg = "Starting from first step."
         first_step = 1
-        dt = timesteps[first_step]
     end
     if config[:info_level] > 1
         jutul_message("Jutul", msg, color = :light_green)
@@ -443,7 +443,7 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     return (states, reports, first_step, dt)
 end
 
-function deserialize_restart(pth, restart, states, reports, config, nsteps = nothing)
+function deserialize_restart(pth, state0, dt, restart, states, reports, config, nsteps = nothing)
     @assert !isnothing(pth) "output_path must be specified if restarts are enabled"
     if isa(restart, Bool)
         restart_ix = valid_restart_indices(pth)
@@ -460,10 +460,12 @@ function deserialize_restart(pth, restart, states, reports, config, nsteps = not
         @assert restart <= nsteps+1 "Restart was $restart but schedule contains $nsteps steps."
     end
     first_step = restart
-    prev_step = restart - 1;
-    state0, report0 = read_restart(pth, prev_step)
-    read_results(pth, read_reports = true, read_states = false, states = states, reports = reports, range = 1:prev_step);
-    dt = report0[:ministeps][end][:dt]
+    if first_step > 1
+        prev_step = restart - 1;
+        state0, report0 = read_restart(pth, prev_step)
+        read_results(pth, read_reports = true, read_states = false, states = states, reports = reports, range = 1:prev_step);
+        dt = report0[:ministeps][end][:dt]
+    end
     return (state0, dt, first_step)
 end
 
