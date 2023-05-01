@@ -16,7 +16,9 @@ end
 function index_map(c_global, m::FiniteVolumeGlobalMap{R}, from_set::GlobalSet, to_set::VariableSet, ce::Cells) where R
     # Previously local_cell
     # local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(findfirst(isequal(c_global), m.cells))::R
-    ix = searchsortedfirst(m.cells, c_global)::R
+    # TODO: Old sorted version might be faster for some cases but hopefully not used inside simulation loop?
+    # ix = searchsortedfirst(m.cells, c_global)::R
+    ix = findfirst(isequal(c_global), m.cells)::R
     @assert ix <= length(m.cells)
     return ix
 end

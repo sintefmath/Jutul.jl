@@ -57,6 +57,7 @@ end
 
 function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
     @assert buffer == 0 || buffer == 1
+    has_buffer_zone = buffer > 0
 
     facelist, facepos = get_facepos(N)
     nf = size(N, 2)
@@ -92,7 +93,7 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
         insert_cell!(gc, is_bnd)
     end
     # If we have a buffer, we also need to go over and add the buffer cells
-    if buffer == 1
+    if has_buffer_zone
         for gc in indices
             # Also add the neighbors, if not already present
             for fi in facepos[gc]:facepos[gc+1]-1
@@ -117,15 +118,21 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
             end
         end
     end
-    cells = findall(cell_active)
-    is_boundary = cell_is_bnd[cells]
-    for i in 1:length(is_boundary)
-        inside = in(cells[i], indices)
-        if is_boundary[i]
-            @assert !inside
-        else
-            @assert inside
+    if has_buffer_zone
+        is_boundary = cell_is_bnd[cells]
+        for i in 1:length(is_boundary)
+            inside = in(cells[i], indices)
+            if is_boundary[i] && buffer == 1
+                @assert !inside
+            else
+                @assert inside
+            end
         end
+        # TODO: This is not order preserving.
+        cells = findall(cell_active)
+    else
+        cells = copy(indices)
+        is_boundary = BitVector([false for i in 1:length(cells)])
     end
     faces = findall(face_active)
     return (cells = cells, faces = faces, is_boundary = is_boundary)
