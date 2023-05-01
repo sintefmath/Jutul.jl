@@ -155,7 +155,8 @@ function subdiscretization(disc::TwoPointPotentialFlowHardCoded, subg, mapper::F
 
     face_pos_global, conn_data_global = disc.conn_pos, disc.conn_data
     N = get_neighborship(subg)
-    faces, face_pos = get_facepos(N)
+    nc = number_of_cells(subg)
+    faces, face_pos = get_facepos(N, nc)
 
     T = eltype(conn_data_global)
     nc = length(mapper.inner_to_full_cells)
