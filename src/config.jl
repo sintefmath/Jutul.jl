@@ -33,7 +33,8 @@ end
 
 function Base.setindex!(opts::JutulConfig, x, name::Symbol)
     if !haskey(opts.options, name)
-        error("Option $name not found. It must be set up using `add_option!`.")
+        opt_str = join(keys(opts.options), "\n\t")
+        error("Option $name not found. It must be set up using `add_option!`. Available options:\n\t$opt_str\n")
     end
     types = opts.options[name].valid_types
     values = opts.options[name].valid_values
