@@ -268,10 +268,10 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
 end
 
 function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
-    perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
+    perform_step!(simulator.storage, simulator.model, dt, forces, config; executor = simulator.executor, vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config; iteration = NaN, relaxation = 1, update_secondary = nothing, solve = true)
+function perform_step!(storage, model, dt, forces, config; executor = default_executor(), iteration = NaN, relaxation = 1, update_secondary = nothing, solve = true)
     if isnothing(update_secondary)
         update_secondary = iteration > 1 || config[:always_update_secondary]
     end
@@ -283,7 +283,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
     t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
     # Update the linearized system
     t_lsys = @elapsed begin
-        @tic "linear system" update_linearized_system!(storage, model)
+        @tic "linear system" update_linearized_system!(storage, model, executor)
     end
     t_conv = @elapsed begin
         if iteration == config[:max_nonlinear_iterations]

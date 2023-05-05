@@ -676,11 +676,16 @@ end
 
 Update the linearized system with the current set of equations.
 """
-function update_linearized_system!(storage, model::JutulModel; kwarg...)
+function update_linearized_system!(storage, model::JutulModel, executor = default_executor(); kwarg...)
     eqs = model.equations
     eqs_storage = storage.equations
     lsys = storage.LinearizedSystem
     update_linearized_system!(lsys, eqs, eqs_storage, model; kwarg...)
+    post_update_linearized_system!(lsys, executor, storage, model)
+end
+
+function post_update_linearized_system!(lsys, executor, storage, model)
+    # Do nothing.
 end
 
 function update_linearized_system!(lsys, equations, eqs_storage, model::JutulModel; equation_offset = 0)
