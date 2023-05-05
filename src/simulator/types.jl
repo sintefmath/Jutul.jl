@@ -1,5 +1,6 @@
 abstract type JutulSimulator end
-struct Simulator{M, S} <: JutulSimulator
+struct Simulator{E, M, S} <: JutulSimulator
+    exectutor::E
     model::M
     storage::S
 end
@@ -11,17 +12,17 @@ Set up a simulator object for a `model` that can be used by [`simulate!`](@ref).
 To avoid manually instantiating the simulator, the non-mutating
 [`simulate`](@ref) interface can be used instead.
 """
-function Simulator(model; extra_timing = false, kwarg...)
+function Simulator(model; extra_timing = false, executor = nothing, kwarg...)
     model::JutulModel
     set_global_timer!(extra_timing)
     storage = simulator_storage(model; kwarg...)
     storage::JutulStorage
     print_global_timer(extra_timing)
-    Simulator(model, storage)
+    return Simulator(executor, model, storage)
 end
 
 function Simulator(case::JutulCase; kwarg...)
-    Simulator(case.model; state0 = deepcopy(case.state0), parameters = deepcopy(case.parameters), kwarg...)
+    return Simulator(case.model; state0 = deepcopy(case.state0), parameters = deepcopy(case.parameters), kwarg...)
 end
 
 struct SimResult
