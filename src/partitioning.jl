@@ -36,11 +36,16 @@ function partition(mp::MetisPartitioner, A::AbstractSparseMatrix, m; kwarg...)
 end
 
 function partition(mp::MetisPartitioner, g, m; alg = mp.algorithm, kwarg...)
+    n = g.nvtxs
     if m == 1
-        return ones(Int, g.nvtxs)
+        p = ones(Int, n)
     else
-        return Metis.partition(g, m; alg = alg, kwarg...)
+        p = Metis.partition(g, m; alg = alg, kwarg...)
     end
+    for x in 1:m
+        @assert count(isequal(x), p) > 0 "Partitioning of array with $n entries into $m blocks failed: Block $x is empty."
+    end
+    return p
 end
 
 metis_strength(F) = F
