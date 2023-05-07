@@ -39,6 +39,8 @@ function partition(mp::MetisPartitioner, g, m; alg = mp.algorithm, kwarg...)
     n = g.nvtxs
     if m == 1
         p = ones(Int, n)
+    elseif n == m
+        p = collect(1:m)
     else
         p = Metis.partition(g, m; alg = alg, kwarg...)
     end
