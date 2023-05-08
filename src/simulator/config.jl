@@ -35,7 +35,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :cutting_criterion, nothing, "Criterion to use for early cutting of time-steps. Default value of nothing means cutting when max_nonlinear_iterations is reached.")
 
     # Tolerances
-    add_option!(cfg, :tolerances, set_default_tolerances(sim.model, tol = nonlinear_tolerance), "Tolerances used for convergence criterions.")
+    add_option!(cfg, :tolerances, set_default_tolerances(sim, tol = nonlinear_tolerance), "Tolerances used for convergence criterions.")
     add_option!(cfg, :tol_factor_final_iteration, 1.0, "Value that multiplies all tolerances for the final convergence check before a time-step is cut.")
 
     # IO options
