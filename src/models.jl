@@ -878,7 +878,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
     else
         for (pkey, p) in primary
             n = number_of_degrees_of_freedom(model, p)
-            rng = (1:n) .+ offset
+            rng = (offset+1):(n+offset)
             dxi = view(dx, rng)
             if check
                 ok_i = check_increment(dxi, p, pkey)
