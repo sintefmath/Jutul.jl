@@ -161,7 +161,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
     # Initialize loop
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
-    if initialize && first_step < no_steps
+    if initialize && first_step <= no_steps
         check_forces(sim, forces, timesteps)
         forces_step = forces_for_timestep(sim, forces, timesteps, first_step)
         initialize_before_first_timestep!(sim, dt, forces = forces_step, config = config)
