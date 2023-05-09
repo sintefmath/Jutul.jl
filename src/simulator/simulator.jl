@@ -488,7 +488,7 @@ function check_forces(sim, forces, timesteps)
     nothing
 end
 
-function forces_for_timestep(sim, f::NamedTuple, timesteps, step_index)
+function forces_for_timestep(sim, f::Union{AbstractDict, Nothing, NamedTuple}, timesteps, step_index)
     f
 end
 
