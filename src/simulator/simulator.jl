@@ -484,11 +484,19 @@ function update_after_step!(sim, dt, forces; kwarg...)
 end
 
 # Forces - one for the entire sim
-check_forces(sim, forces, timesteps) = nothing
-forces_for_timestep(sim, f, timesteps, step_index) = f
-# Forces as a vector - one per timestep
-forces_for_timestep(sim, f::T, timesteps, step_index) where T<:AbstractArray = f[step_index]
-function check_forces(sim, f::T, timesteps) where T<:AbstractArray
+function check_forces(sim, forces, timesteps)
+    nothing
+end
+
+function forces_for_timestep(sim, f::NamedTuple, timesteps, step_index)
+    f
+end
+
+function forces_for_timestep(sim, f::Vector, timesteps, step_index)
+    f[step_index]
+end
+
+function check_forces(sim, f::Vector, timesteps)
     nf = length(f)
     nt = length(timesteps)
     if nf != nt
