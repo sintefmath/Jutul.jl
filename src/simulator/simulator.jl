@@ -405,7 +405,7 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     end
     # Set up storage
     reports = []
-    state_T = Union{Dict{Symbol, Any}, Vector{Dict{Symbol, Any}}}
+    state_T = Union{Dict{Symbol, Any}, AbstractVector{Dict{Symbol, Any}}}
     states = Vector{state_T}()
     pth = config[:output_path]
     initialize_io(pth)
