@@ -21,6 +21,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :error_on_incomplete, false, "Throw an error if the simulation could not complete. If `false` emit a message and return.", types = Bool)
     add_option!(cfg, :output_states, true, "Return states in-memory as output.",
     description = "For larger models with many time-steps, using `output_path` might be better to avoid filling up your memory.", types = Bool)
+    add_option!(cfg, :output_reports, true, "Return reports in-memory as output.", types = Bool)
     add_option!(cfg, :safe_mode, true, "Add extra checks in simulator that have a small extra cost.", types = Bool)
     add_option!(cfg, :extra_timing, false, "Output extra, highly detailed performance report at simulation end.", 
     description = " This uses TimerOutputs.jl's @timeit_debug macro. You may have to call the function twice with this option the first time you use it.", types = Bool)

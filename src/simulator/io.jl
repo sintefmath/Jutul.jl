@@ -6,13 +6,15 @@ end
 
 function retrieve_output!(states, reports, config, n)
     pth = config[:output_path]
-    if !isnothing(pth)
+    read_reports = config[:output_reports]
+    read_states = config[:output_states]
+    if !isnothing(pth) && (read_reports || read_states)
         @debug "Reading $n states from $pth..."
         @assert isempty(states)
         states, reports = read_results(
             pth,
-            read_reports = true,
-            read_states = config[:output_states],
+            read_reports = read_reports,
+            read_states = read_states,
             states = states,
             verbose = config[:info_level] >= 0,
             range = 1:n

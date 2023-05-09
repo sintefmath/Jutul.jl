@@ -396,7 +396,7 @@ function initialize_before_first_timestep!(sim, first_dT; kwarg...)
     end
 end
 
-function initial_setup!(sim, config, timesteps; restart = nothing, parameters = nothing, state0 = nothing, nsteps = nothing)
+function initial_setup!(sim, config, timesteps; restart = nothing, parameters = nothing, state0 = nothing, nsteps = Inf)
     # Timing stuff
     set_global_timer!(config[:extra_timing])
     # Threading
@@ -411,10 +411,12 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     initialize_io(pth)
     has_restart = !(isnothing(restart) || restart === 0 || restart === 1 || restart == false)
     dt = timesteps[1]
+    simulation_is_done = false
     if has_restart
         state0, dt, first_step = deserialize_restart(pth, state0, dt, restart, states, reports, config, nsteps)
         msg = "Restarting from step $first_step."
-        state0_has_changed = first_step != 1
+        simulation_is_done = first_step == nsteps+1
+        state0_has_changed = first_step != 1 && !simulation_is_done
     else
         state0_has_changed = !isnothing(state0)
         msg = "Starting from first step."
@@ -429,9 +431,9 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
         for k in [:state, :state0, :parameters]
             reset_variables!(sim, parameters, type = k)
         end
-        recompute_state0_secondary = true
+        recompute_state0_secondary = !simulation_is_done
     end
-    if state0_has_changed
+    if state0_has_changed && !simulation_is_done
         # state0 does not match sim, update it.
         # First, reset previous state
         reset_previous_state!(sim, state0)
@@ -444,7 +446,7 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     return (states, reports, first_step, dt)
 end
 
-function deserialize_restart(pth, state0, dt, restart, states, reports, config, nsteps = nothing)
+function deserialize_restart(pth, state0, dt, restart, states, reports, config, nsteps = Inf)
     @assert !isnothing(pth) "output_path must be specified if restarts are enabled"
     if isa(restart, Bool)
         restart_ix = valid_restart_indices(pth)
@@ -464,7 +466,9 @@ function deserialize_restart(pth, state0, dt, restart, states, reports, config, 
     if first_step > 1
         prev_step = restart - 1;
         state0, report0 = read_restart(pth, prev_step)
-        read_results(pth, read_reports = true, read_states = false, states = states, reports = reports, range = 1:prev_step);
+        kept_reports = config[:in_memory_reports]
+        rep_start = max(prev_step-kept_reports+1, 1)
+        read_results(pth, read_reports = true, read_states = false, states = states, reports = reports, range = rep_start:prev_step);
         dt = report0[:ministeps][end][:dt]
     end
     return (state0, dt, first_step)
