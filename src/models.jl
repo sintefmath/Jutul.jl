@@ -729,10 +729,6 @@ function set_default_tolerances(model; kwarg...)
     return tol_cfg
 end
 
-function set_default_tolerances(sim::JutulSimulator; kwarg...)
-    set_default_tolerances(sim.model; kwarg...)
-end
-
 function set_default_tolerances!(tol_cfg, model::SimulationModel; tol = 1e-3)
     tol_cfg[:default] = tol
 end

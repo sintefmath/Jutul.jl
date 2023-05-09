@@ -1,4 +1,9 @@
 abstract type JutulSimulator end
+
+function set_default_tolerances(sim::JutulSimulator; kwarg...)
+    set_default_tolerances(sim.model; kwarg...)
+end
+
 struct Simulator{E, M, S} <: JutulSimulator
     executor::E
     model::M

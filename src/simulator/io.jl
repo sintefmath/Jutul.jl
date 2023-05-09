@@ -21,8 +21,9 @@ function retrieve_output!(states, reports, config, n)
     return (states, reports)
 end
 
-get_output_state(sim::JutulSimulator) = get_output_state(sim.storage, sim.model)
-
+function get_output_state(sim::JutulSimulator)
+    get_output_state(sim.storage, sim.model)
+end
 
 function store_output!(states, reports, step, sim, config, report)
     mem_out = config[:output_states]
