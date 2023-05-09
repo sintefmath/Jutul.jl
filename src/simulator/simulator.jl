@@ -127,6 +127,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
                                                                    restart = nothing,
                                                                    state0 = nothing,
                                                                    parameters = nothing,
+                                                                   forces_per_step = isa(forces, Vector),
                                                                    start_date = nothing,
                                                                    kwarg...)
     rec = progress_recorder(sim)
@@ -162,15 +163,15 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
     if initialize && first_step <= no_steps
-        check_forces(sim, forces, timesteps)
-        forces_step = forces_for_timestep(sim, forces, timesteps, first_step)
+        check_forces(sim, forces, timesteps, per_step = forces_per_step)
+        forces_step = forces_for_timestep(sim, forces, timesteps, first_step, per_step = forces_per_step)
         initialize_before_first_timestep!(sim, dt, forces = forces_step, config = config)
     end
     n_solved = no_steps
     t_elapsed = 0.0
     for step_no = first_step:no_steps
         dT = timesteps[step_no]
-        forces_step = forces_for_timestep(sim, forces, timesteps, step_no)
+        forces_step = forces_for_timestep(sim, forces, timesteps, step_no, per_step = forces_per_step)
         nextstep_global!(rec, dT)
         new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
         t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dt, reports = reports, step_no = step_no, rec = rec)
@@ -488,22 +489,27 @@ function update_after_step!(sim, dt, forces; kwarg...)
 end
 
 # Forces - one for the entire sim
-function check_forces(sim, forces, timesteps)
+function check_forces(sim, forces, timesteps; per_step = false)
     nothing
 end
 
-function forces_for_timestep(sim, f::Union{AbstractDict, Nothing, NamedTuple}, timesteps, step_index)
+function forces_for_timestep(sim, f::Union{AbstractDict, Nothing, NamedTuple}, timesteps, step_index; per_step = false)
     f
 end
 
-function forces_for_timestep(sim, f::Vector, timesteps, step_index)
-    f[step_index]
+function forces_for_timestep(sim, f::Vector, timesteps, step_index; per_step = true)
+    if per_step
+        force = f[step_index]
+    else
+        force = f
+    end
+    return force
 end
 
-function check_forces(sim, f::Vector, timesteps)
+function check_forces(sim, f::Vector, timesteps; per_step = true)
     nf = length(f)
     nt = length(timesteps)
-    if nf != nt
+    if nf != nt && per_step
         error("Number of forces must match the number of timesteps ($nt timesteps, $nf forces)")
     end
 end
