@@ -124,11 +124,10 @@ function update_jutul_variable_internal!(v::AbstractMatrix, active, p, dx, w)
     maxval = maximum_value(p)
     minval = minimum_value(p)
     scale = variable_scale(p)
-    @inbounds for i in 1:nu
+    @inbounds for i in 1 : nu
         a_i = active[i]
-        offset_dx = (i-1)*n
-        for j in 1:n
-            v[j, a_i] = update_value(v[j, a_i], w*dx[offset_dx + j], abs_max, rel_max, minval, maxval, scale)
+        for j in 1 : n
+            v[j, a_i] = update_value(v[j, a_i], w*dx[i + (j - 1)*nu], abs_max, rel_max, minval, maxval, scale)
         end
     end
 end
