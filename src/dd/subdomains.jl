@@ -15,6 +15,7 @@ struct SimplePartition{E, P} <: AbstractDomainPartition
     end
 end
 
+main_partition(sp::SimplePartition) = sp.partition
 number_of_subdomains(sp::SimplePartition) = maximum(sp.partition)
 entity_subset(sp, index, entity = Cells()) = entity_subset(sp, index, entity)
 entity_subset(sp::SimplePartition, index, e::Cells) = findall(sp.partition .== index)
