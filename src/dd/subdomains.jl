@@ -22,7 +22,7 @@ entity_subset(sp::SimplePartition, index, e::Cells) = findall(sp.partition .== i
 
 
 struct SimpleMultiModelPartition <: AbstractDomainPartition
-    partition
+    partition::Dict{Symbol, Any}
     main_symbol::Symbol
     function SimpleMultiModelPartition(p, m)
         new(p, m)
