@@ -3,23 +3,38 @@ export SimplePartition, SimpleMultiModelPartition, number_of_subdomains, entity_
 
 abstract type AbstractDomainPartition end
 
-struct SimplePartition{E, P} <: AbstractDomainPartition
+struct SimplePartition{E, P, S} <: AbstractDomainPartition
     partition::P
+    subsets::S
     entity::E
-    function SimplePartition(p::T; entity = Cells()) where T
-        for i in 1:maximum(p)
-            @assert any(x -> x == i, p)
-        end
-        @assert minimum(p) == 1
-        new{typeof(entity), T}(p, entity)
-    end
 end
 
-main_partition(sp::SimplePartition) = sp.partition
-number_of_subdomains(sp::SimplePartition) = maximum(sp.partition)
-entity_subset(sp, index, entity = Cells()) = entity_subset(sp, index, entity)
-entity_subset(sp::SimplePartition, index, e::Cells) = findall(sp.partition .== index)
+function SimplePartition(p; entity = Cells(), subsets = missing)
+    np = maximum(p)
+    for i in 1:np
+        @assert any(x -> x == i, p)
+    end
+    @assert minimum(p) == 1
+    if ismissing(subsets)
+        subsets = map(
+            index -> findall(isequal(index), p),
+            1:np
+            )
+    else
+        @assert length(subsets) == np
+        for (i, subset) in enumerate(subsets)
+            for c in subset
+                # TODO: Check validity here.
+            end
+        end
+    end
+    return SimplePartition(p, subsets, entity)
+end
 
+main_partition(sp::SimplePartition) = sp
+number_of_subdomains(sp::SimplePartition) = maximum(sp.partition)
+entity_subset(sp, index) = entity_subset(sp, index, Cells())
+entity_subset(sp::SimplePartition, index, e::Cells) = sp.subsets[index]
 
 struct SimpleMultiModelPartition <: AbstractDomainPartition
     partition::Dict{Symbol, Any}
