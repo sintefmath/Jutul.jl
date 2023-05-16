@@ -120,6 +120,8 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
         end
     end
     if has_buffer_zone
+        # TODO: This is not order preserving.
+        cells = findall(cell_active)
         is_boundary = cell_is_bnd[cells]
         for i in 1:length(is_boundary)
             inside = in(cells[i], indices)
@@ -129,8 +131,6 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
                 @assert inside
             end
         end
-        # TODO: This is not order preserving.
-        cells = findall(cell_active)
     else
         cells = copy(indices)
         is_boundary = BitVector([false for i in 1:length(cells)])
