@@ -292,10 +292,15 @@ block_size(lsys::LSystem) = 1
 
 linear_solve_return(ok = true, iterations = 1, stats = nothing) = (ok = ok, iterations = iterations, stats = deepcopy(stats))
 
-linear_solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing; kwarg...) = linear_solve!(sys, linsolve; kwarg...)
-linear_solve!(sys::LSystem, linsolve::Nothing; kwarg...) = linear_solve!(sys; kwarg...)
+# function linear_solve!(sys::LSystem, linsolve, model, storage = nothing, dt = nothing, recorder = nothing, executor = default_executor(); kwarg...)
+#     linear_solve!(sys, linsolve; kwarg...)
+# end
 
-function linear_solve!(sys; dx = sys.dx, r = sys.r, atol = nothing, rtol = nothing)
+# function linear_solve!(sys::LSystem, linsolve::Nothing; kwarg...)
+#     linear_solve!(sys; kwarg...)
+# end
+
+function linear_solve!(sys, ::Nothing, arg...; dx = sys.dx, r = sys.r, atol = nothing, rtol = nothing, executor = default_executor())
     limit = 100_000
     n = length(sys.dx)
     if n > limit

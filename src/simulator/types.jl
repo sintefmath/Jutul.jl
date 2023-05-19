@@ -4,6 +4,8 @@ function set_default_tolerances(sim::JutulSimulator; kwarg...)
     set_default_tolerances(sim.model; kwarg...)
 end
 
+abstract type JutulExecutor end
+struct DefaultExecutor <: JutulExecutor end
 struct Simulator{E, M, S} <: JutulSimulator
     executor::E
     model::M
@@ -26,7 +28,7 @@ function Simulator(model; extra_timing = false, executor = default_executor(), k
     return Simulator(executor, model, storage)
 end
 
-default_executor() = nothing
+default_executor() = DefaultExecutor()
 
 function Simulator(case::JutulCase; kwarg...)
     return Simulator(case.model; state0 = deepcopy(case.state0), parameters = deepcopy(case.parameters), kwarg...)

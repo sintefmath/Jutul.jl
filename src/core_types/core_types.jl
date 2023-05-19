@@ -874,7 +874,7 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
             @assert maximum(groups) <= nm
             @assert minimum(groups) > 0
             @assert length(groups) == nm
-            @assert maximum(groups) == num_groups
+            @assert maximum(groups) == num_groups "Groups must be ordered from 1 to n, was $(unique(groups))"
             if !issorted(groups)
                 # If the groups aren't grouped sequentially, re-sort them so they are
                 # since parts of the multimodel code depends on this ordering

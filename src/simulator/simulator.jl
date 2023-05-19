@@ -310,7 +310,14 @@ function perform_step!(storage, model, dt, forces, config; executor = default_ex
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
         try
-            t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec, relaxation = relaxation)
+            t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(
+                    storage, model, dt,
+                    linear_solver = lsolve,
+                    check = check,
+                    recorder = rec,
+                    relaxation = relaxation,
+                    executor = executor
+                )
             report[:update] = rep_update
             report[:linear_solver] = rep_lsolve
             report[:linear_iterations] = n_iter

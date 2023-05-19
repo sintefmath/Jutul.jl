@@ -35,7 +35,7 @@ mutable struct GenericKrylov
     x
     r_norm
     config::IterativeSolverConfig
-function GenericKrylov(solver = :gmres; preconditioner = nothing, kwarg...)
+    function GenericKrylov(solver = :gmres; preconditioner = nothing, kwarg...)
         new(solver, preconditioner, nothing, nothing, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
@@ -70,7 +70,8 @@ function linear_solve!(sys::LSystem,
                 model,
                 storage = nothing,
                 dt = nothing,
-                recorder = ProgressRecorder();
+                recorder = ProgressRecorder(),
+                executor = default_executor();
                 dx = sys.dx_buffer,
                 r = vector_residual(sys),
                 atol = linear_solver_tolerance(krylov, :absolute),
