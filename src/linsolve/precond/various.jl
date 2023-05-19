@@ -15,7 +15,7 @@ mutable struct LUPreconditioner <: JutulPreconditioner
     end
 end
 
-function update_preconditioner!(lup::LUPreconditioner, A, b, context)
+function update_preconditioner!(lup::LUPreconditioner, A, b, context, executor)
     if isnothing(lup.factor)
         lup.factor = lu(A)
     else
@@ -35,7 +35,7 @@ end
 Trivial / identity preconditioner with size for use in subsystems.
 """
 # Trivial precond
-function update!(tp::TrivialPreconditioner, lsys, arg...)
+function update!(tp::TrivialPreconditioner, lsys, model, storage, recorder, executor)
     A = jacobian(lsys)
     b = residual(lsys)
     tp.dim = size(A).*length(b[1])

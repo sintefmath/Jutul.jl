@@ -21,7 +21,7 @@ end
 matrix_for_amg(A) = A
 matrix_for_amg(A::StaticSparsityMatrixCSR) = copy(A.At')
 
-function update_preconditioner!(amg::AMGPreconditioner{flavor}, A, b, context) where flavor
+function update_preconditioner!(amg::AMGPreconditioner{flavor}, A, b, context, executor) where flavor
     kw = amg.method_kwarg
     A_amg = matrix_for_amg(A)
     @debug string("Setting up preconditioner ", flavor)
@@ -126,7 +126,7 @@ function generate_amg_smoothers(t, A_fine, levels, context)
         else
             error("Smoother :$t is not supported.")
         end
-        update_preconditioner!(prec, A, b, context)
+        update_preconditioner!(prec, A, b, context, default_executor())
         push!(smoothers, (precond = prec, x = zeros(N), b = b, context = context))
         push!(sizes, N)
     end

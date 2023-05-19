@@ -44,7 +44,7 @@ function get_schur_blocks!(sys, include_r = true; update = false, keep_ix = 1, e
     F = sys.factor
 
     if update
-        E_lu = update_preconditioner!(F, lu, lu!, E)
+        E_lu = update_preconditioner!(F, lu, lu!, E, default_executor())
     else
         E_lu = F.factor
     end

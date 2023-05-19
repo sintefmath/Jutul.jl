@@ -6,11 +6,11 @@ function update_preconditioner!(preconditioner, lsys, model, storage, recorder, 
     J = jacobian(lsys)
     r = residual(lsys)
     ctx = linear_system_context(model, lsys)
-    update_preconditioner!(preconditioner, J, r, ctx)
+    update_preconditioner!(preconditioner, J, r, ctx, executor)
 end
 
-function partial_update_preconditioner!(p, A, b, context)
-    update_preconditioner!(p, A, b, context)
+function partial_update_preconditioner!(p, A, b, context, executor)
+    update_preconditioner!(p, A, b, context, executor)
 end
 
 function get_factorization(precond)

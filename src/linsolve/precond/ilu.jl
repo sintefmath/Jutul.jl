@@ -26,7 +26,7 @@ function set_dim!(ilu, A, b)
     ilu.dim = d .* size(A)
 end
 
-function update_preconditioner!(ilu::ILUZeroPreconditioner, A, b, context)
+function update_preconditioner!(ilu::ILUZeroPreconditioner, A, b, context, executor)
     if isnothing(ilu.factor)
         ilu.factor = ilu0(A, eltype(b))
         set_dim!(ilu, A, b)
@@ -35,7 +35,7 @@ function update_preconditioner!(ilu::ILUZeroPreconditioner, A, b, context)
     end
 end
 
-function update_preconditioner!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, context::ParallelCSRContext)
+function update_preconditioner!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, context::ParallelCSRContext, executor)
     if isnothing(ilu.factor)
         mb = A.minbatch
         max_t = max(size(A, 1) ÷ mb, 1)

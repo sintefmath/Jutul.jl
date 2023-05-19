@@ -9,7 +9,7 @@ mutable struct FactorStore
     end
 end
 
-function update_preconditioner!(f::FactorStore, g, g!, A)
+function update_preconditioner!(f::FactorStore, g, g!, A, executor)
     if isnothing(f.factor)
         f.factor = g(A)
     else
@@ -18,7 +18,7 @@ function update_preconditioner!(f::FactorStore, g, g!, A)
     return f.factor
 end
 
-function update_preconditioner!(f::FactorStore, g, g!, A::AbstractArray)
+function update_preconditioner!(f::FactorStore, g, g!, A::AbstractArray, executor)
     if isnothing(f.factor)
         f.factor = map(g, A)
     else
