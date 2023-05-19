@@ -16,7 +16,7 @@ module JutulHypreExt
         # rows = rowvals(J)
         if haskey(D, :J) && D[:J] === J
             J_h, r_h, x_h = D[:converted]
-            reassemble_matrix!(J_h, D, J)
+            reassemble_matrix!(J_h, D, J, executor)
         else
             max_width = 0
             min_width = 1_000_000
@@ -40,35 +40,35 @@ module JutulHypreExt
             D[:n] = n
             (; ilower, iupper) = r_h
             D[:vector_indices] = HYPRE.HYPRE_BigInt.(ilower:iupper)
-            J_h = transfer_matrix_to_hypre!(J, D)
+            J_h = transfer_matrix_to_hypre!(J, D, executor)
         end
         D[:converted] = (J_h, r_h, x_h)
         HYPRE.@check HYPRE.HYPRE_BoomerAMGSetup(preconditioner.prec, J_h, r_h, x_h)
         return preconditioner
     end
 
-    function transfer_matrix_to_hypre!(J, D)
+    function transfer_matrix_to_hypre!(J, D, executor)
         return HYPRE.HYPREMatrix(J)
     end
 
-    function transfer_matrix_to_hypre!(J::Jutul.StaticSparsityMatrixCSR, D)
+    function transfer_matrix_to_hypre!(J::Jutul.StaticSparsityMatrixCSR, D, executor)
         J_h = HYPRE.HYPREMatrix(J.At)
-        reassemble_matrix!(J_h, D, J)
+        reassemble_matrix!(J_h, D, J, executor)
         return J_h
     end
 
-    function transfer_matrix_to_hypre!(J::HYPRE.HYPREMatrix, D)
+    function transfer_matrix_to_hypre!(J::HYPRE.HYPREMatrix, D, executor)
         return J
     end
 
-    function reassemble_matrix!(J_h::HYPRE.HYPREMatrix, D, J::HYPRE.HYPREMatrix)
+    function reassemble_matrix!(J_h::HYPRE.HYPREMatrix, D, J::HYPRE.HYPREMatrix, executor)
         # Already HYPRE system, assembled
         @assert J_h === J
     end
 
-    function reassemble_matrix!(J_h, D, J)
+    function reassemble_matrix!(J_h, D, J, executor)
         I_buf, J_buf, V_buffers = D[:asm_buffers]
-        reassemble_internal_boomeramg!(I_buf, J_buf, V_buffers, J, J_h)
+        reassemble_internal_boomeramg!(I_buf, J_buf, V_buffers, J, J_h, executor)
     end
 
     function Jutul.operator_nrows(p::BoomerAMGPreconditioner)
@@ -117,7 +117,7 @@ module JutulHypreExt
         HYPRE.Internals.assemble_vector(dst)
     end
 
-    function reassemble_internal_boomeramg!(single_buf, longer_buf, V_buffers, Jac::SparseMatrixCSC, J_h)
+    function reassemble_internal_boomeramg!(single_buf, longer_buf, V_buffers, Jac::SparseMatrixCSC, J_h, executor)
         nzval = nonzeros(Jac)
         rows = rowvals(Jac)
 
@@ -128,21 +128,21 @@ module JutulHypreExt
             pos_ix = nzrange(Jac, col)
             k = length(pos_ix)
             J = single_buf
-            J[1] = col
+            J[1] = Jutul.executor_index_to_global(executor, col, :column)
             I = longer_buf
             V_buf = V_buffers[k]
             resize!(I, k)
             @inbounds for ki in 1:k
                 ri = pos_ix[ki]
                 V_buf[ki] = nzval[ri]
-                I[ki] = rows[ri]
+                I[ki] = Jutul.executor_index_to_global(executor, rows[ri], :row)
             end
             HYPRE.assemble!(assembler, I, J, V_buf)
         end
         HYPRE.finish_assemble!(assembler)
     end
 
-    function reassemble_internal_boomeramg!(single_buf, longer_buf, V_buffers, Jac::Jutul.StaticSparsityMatrixCSR, J_h)
+    function reassemble_internal_boomeramg!(single_buf, longer_buf, V_buffers, Jac::Jutul.StaticSparsityMatrixCSR, J_h, executor)
         nzval = nonzeros(Jac)
         cols = Jutul.colvals(Jac)
 
@@ -153,14 +153,14 @@ module JutulHypreExt
             pos_ix = nzrange(Jac, row)
             k = length(pos_ix)
             I = single_buf
-            I[1] = row
+            I[1] = Jutul.executor_index_to_global(executor, row, :row)
             J = longer_buf
             resize!(J, k)
             V_buf = V_buffers[k]
             @inbounds for ki in 1:k
                 ri = pos_ix[ki]
                 V_buf[ki] = nzval[ri]
-                J[ki] = cols[ri]
+                J[ki] = Jutul.executor_index_to_global(executor, cols[ri], :column)
             end
             HYPRE.assemble!(assembler, I, J, V_buf)
         end

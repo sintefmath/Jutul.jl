@@ -102,3 +102,7 @@ function unsafe_reinterpret(::Val{Vt}, v, n) where Vt
     ptr = Base.unsafe_convert(Ptr{Vt}, v)
     return Base.unsafe_wrap(Array, ptr, n)::Vector{Vt}
 end
+
+function executor_index_to_global(executor::JutulExecutor, index, row_or_column::Symbol)
+    return index
+end
