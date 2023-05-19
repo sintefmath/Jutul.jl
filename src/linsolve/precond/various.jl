@@ -15,7 +15,7 @@ mutable struct LUPreconditioner <: JutulPreconditioner
     end
 end
 
-function update!(lup::LUPreconditioner, A, b, context)
+function update_preconditioner!(lup::LUPreconditioner, A, b, context)
     if isnothing(lup.factor)
         lup.factor = lu(A)
     else
@@ -55,12 +55,12 @@ mutable struct GroupWisePreconditioner <: JutulPreconditioner
     end
 end
 
-function update!(prec::GroupWisePreconditioner, lsys::MultiLinearizedSystem, arg...)
+function update_preconditioner!(prec::GroupWisePreconditioner, lsys::MultiLinearizedSystem, arg...)
     s = lsys.subsystems
     n = size(s, 1)
     @assert n == length(prec.preconditioners)
     for i in 1:n
-        update!(prec.preconditioners[i], s[i, i], arg...)
+        update_preconditioner!(prec.preconditioners[i], s[i, i], arg...)
     end
 end
 

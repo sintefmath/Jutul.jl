@@ -2,16 +2,15 @@
 function update!(preconditioner::Nothing, arg...)
     # Do nothing.
 end
-function update!(preconditioner, lsys, model, storage, recorder)
+function update_preconditioner!(preconditioner, lsys, model, storage, recorder, executor)
     J = jacobian(lsys)
     r = residual(lsys)
     ctx = linear_system_context(model, lsys)
-    update!(preconditioner, J, r, ctx)
+    update_preconditioner!(preconditioner, J, r, ctx)
 end
 
-export partial_update!
-function partial_update!(p, A, b, context)
-    update!(p, A, b, context)
+function partial_update_preconditioner!(p, A, b, context)
+    update_preconditioner!(p, A, b, context)
 end
 
 function get_factorization(precond)

@@ -21,7 +21,7 @@ end
 matrix_for_amg(A) = A
 matrix_for_amg(A::StaticSparsityMatrixCSR) = copy(A.At')
 
-function update!(amg::AMGPreconditioner{flavor}, A, b, context) where flavor
+function update_preconditioner!(amg::AMGPreconditioner{flavor}, A, b, context) where flavor
     kw = amg.method_kwarg
     A_amg = matrix_for_amg(A)
     @debug string("Setting up preconditioner ", flavor)
@@ -126,7 +126,7 @@ function generate_amg_smoothers(t, A_fine, levels, context)
         else
             error("Smoother :$t is not supported.")
         end
-        update!(prec, A, b, context)
+        update_preconditioner!(prec, A, b, context)
         push!(smoothers, (precond = prec, x = zeros(N), b = b, context = context))
         push!(sizes, N)
     end
@@ -162,7 +162,7 @@ function apply_smoother!(x, A, b, smoothers::NamedTuple, nsmooth)
     error("Unable to match smoother to matrix: Recieved $m by $m matrix, with smoother sizes $(smoothers.n)")
 end
 
-function partial_update!(amg::AMGPreconditioner, A, b, context)
+function partial_update_preconditioner!(amg::AMGPreconditioner, A, b, context)
     @tic "coarse update" amg.hierarchy = update_hierarchy!(amg, amg.hierarchy, A)
     @tic "smoother update" amg.smoothers = update_smoothers!(amg.smoothers, A, amg.hierarchy.multilevel)
     amg.factor = aspreconditioner(amg.hierarchy.multilevel, amg.cycle)
@@ -352,7 +352,7 @@ function update_smoothers!(S::NamedTuple, A::StaticSparsityMatrixCSR, h)
     n = length(h.levels)
     for i = 1:n
         S_i = S.smoothers[i]
-        update!(S_i.precond, A, S_i.b, S_i.context)
+        update_preconditioner!(S_i.precond, A, S_i.b, S_i.context)
         if i < n
             A = h.levels[i+1].A
         end

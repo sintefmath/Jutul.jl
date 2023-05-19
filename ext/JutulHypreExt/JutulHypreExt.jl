@@ -8,7 +8,7 @@ module JutulHypreExt
         return prec
     end
 
-    function Jutul.update!(preconditioner::BoomerAMGPreconditioner, J, r, ctx)
+    function Jutul.update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx)
         n, m = size(J)
         @assert n == m
         D = preconditioner.data
