@@ -16,11 +16,7 @@ module JutulHypreExt
         # rows = rowvals(J)
         if haskey(D, :J) && D[:J] === J
             J_h, r_h, x_h = D[:converted]
-            if true
-                reassemble_matrix!(J_h, D, J)
-            else
-                J_h = HYPRE.HYPREMatrix(J)
-            end
+            reassemble_matrix!(J_h, D, J)
         else
             max_width = 0
             min_width = 1_000_000
@@ -59,6 +55,15 @@ module JutulHypreExt
         J_h = HYPRE.HYPREMatrix(J.At)
         reassemble_matrix!(J_h, D, J)
         return J_h
+    end
+
+    function transfer_matrix_to_hypre!(J::HYPRE.HYPREMatrix, D)
+        return J
+    end
+
+    function reassemble_matrix!(J_h::HYPRE.HYPREMatrix, D, J::HYPRE.HYPREMatrix)
+        # Already HYPRE system, assembled
+        @assert J_h === J
     end
 
     function reassemble_matrix!(J_h, D, J)
