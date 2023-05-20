@@ -8,6 +8,26 @@ module JutulHypreExt
         return prec
     end
 
+    function generate_assembly_buffer(J::AbstractSparseMatrix; column_major = isa(J, SparseMatrixCSC))
+        max_width = 0
+        min_width = 1_000_000
+        n = size(J, 1)
+        for i in 1:n
+            nz_width = length(nzrange(J, i))
+            max_width = max(max_width, nz_width)
+            min_width = min(min_width, nz_width)
+        end
+        V = Dict{Int, Matrix{Float64}}()
+        for i in min_width:max_width
+            if column_major
+                V[i] = zeros(Float64, i, 1)
+            else
+                V[i] = zeros(Float64, 1, i)
+            end
+        end
+        return (I = zeros(Int, 1), J = zeros(Int, max_width), V = V)
+    end
+
     function Jutul.update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
         n, m = size(J)
         @assert n == m
@@ -18,22 +38,7 @@ module JutulHypreExt
             J_h, r_h, x_h = D[:converted]
             reassemble_matrix!(J_h, D, J, executor)
         else
-            max_width = 0
-            min_width = 1_000_000
-            for i in 1:n
-                nz_width = length(nzrange(J, i))
-                max_width = max(max_width, nz_width)
-                min_width = min(min_width, nz_width)
-            end
-            V = Dict{Int, Matrix{Float64}}()
-            for i in min_width:max_width
-                if J isa SparseMatrixCSC
-                    V[i] = zeros(Float64, i, 1)
-                else
-                    V[i] = zeros(Float64, 1, i)
-                end
-            end
-            D[:asm_buffers] = (I = zeros(Int, 1), J = zeros(Int, max_width), V = V)
+            D[:asm_buffers] = generate_assembly_buffer(J)
             r_h = HYPRE.HYPREVector(r)
             x_h = HYPRE.HYPREVector(copy(r))
             D[:J] = J
