@@ -113,6 +113,12 @@ module JutulHypreExt
         local_copy!(x, x_h, ix)
     end
 
+    function inner_apply!(x::T, y::T, prec, x_h::T, J_h, y_h::T, ix) where T<:HYPRE.HYPREVector
+        asm = HYPRE.start_assemble!(x)
+        HYPRE.finish_assemble!(asm)
+        HYPRE.@check HYPRE.HYPRE_BoomerAMGSolve(prec, J_h, y, x)
+    end
+
     function hypre_check(dst::HYPRE.HYPREVector, src::Vector, ix)
         @assert dst.parvector != C_NULL
         nvalues = length(src)
