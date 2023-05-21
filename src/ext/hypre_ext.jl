@@ -37,3 +37,7 @@ function BoomerAMGPreconditioner(;
     end
     return BoomerAMGPreconditioner(prec, Dict{Symbol, Any}())
 end
+
+function generate_hypre_assembly_helper
+
+end

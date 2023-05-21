@@ -8,7 +8,7 @@ module JutulHypreExt
         return prec
     end
 
-    function generate_assembly_helper(J::AbstractSparseMatrix, executor, ilower = 1, iupper = size(J, 1); column_major = isa(J, SparseMatrixCSC))
+    function Jutul.generate_hypre_assembly_helper(J::AbstractSparseMatrix, executor, ilower = 1, iupper = size(J, 1); column_major = isa(J, SparseMatrixCSC))
         max_width = 0
         min_width = 1_000_000
         n = size(J, 1)
@@ -29,16 +29,16 @@ module JutulHypreExt
     end
 
     function Jutul.update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
-        n, m = size(J)
-        @assert n == m
         D = preconditioner.data
-        # nzval = nonzeros(J)
-        # rows = rowvals(J)
-        if haskey(D, :J) && D[:J] === J
-            J_h, r_h, x_h = D[:converted]
+
+        if !haskey(D, :assembly_helper)
+            D[:assembly_helper] = Jutul.generate_hypre_assembly_helper(J, executor)
+        end
+
+        if haskey(D, :hypre_system)
+            J_h, r_h, x_h = D[:hypre_system]
             reassemble_matrix!(J_h, D, J, executor)
         else
-            D[:assembly_helper] = generate_assembly_helper(J, executor)
             r_h = HYPRE.HYPREVector(r)
             x_h = HYPRE.HYPREVector(copy(r))
             D[:J] = J
@@ -47,7 +47,8 @@ module JutulHypreExt
             # D[:vector_indices] = HYPRE.HYPRE_BigInt.(ilower:iupper)
             J_h = transfer_matrix_to_hypre(J, D, executor)
         end
-        D[:converted] = (J_h, r_h, x_h)
+        D[:hypre_system] = (J_h, r_h, x_h)
+        HYPRE.HYPRE_BoomerAMGSetup(preconditioner.prec, J_h, r_h, x_h)
         HYPRE.@check HYPRE.HYPRE_BoomerAMGSetup(preconditioner.prec, J_h, r_h, x_h)
         return preconditioner
     end
@@ -57,10 +58,14 @@ module JutulHypreExt
     end
 
     function transfer_matrix_to_hypre(J, D, executor)
+        n, m = size(J)
+        @assert n == m
         return HYPRE.HYPREMatrix(J)
     end
 
     function transfer_matrix_to_hypre(J::Jutul.StaticSparsityMatrixCSR, D, executor)
+        n, m = size(J)
+        @assert n == m
         J_h = HYPRE.HYPREMatrix(J.At)
         reassemble_matrix!(J_h, D, J, executor)
         return J_h
@@ -86,7 +91,7 @@ module JutulHypreExt
 
     function Jutul.apply!(x, p::BoomerAMGPreconditioner, y, arg...)
         ix = p.data[:assembly_helper].indices
-        J_h, y_h, x_h = p.data[:converted]
+        J_h, y_h, x_h = p.data[:hypre_system]
         inner_apply!(x, y, p.prec, x_h, J_h, y_h, ix)
     end
 
