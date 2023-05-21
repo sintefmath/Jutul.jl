@@ -168,6 +168,8 @@ module JutulHypreExt
 
         n = size(Jac, 1)
         @assert length(single_buf) == 1
+        (; iupper, ilower) = J_h
+        @assert n == iupper - ilower + 1
         assembler = HYPRE.start_assemble!(J_h)
         @inbounds for row in 1:n
             pos_ix = nzrange(Jac, row)
