@@ -11,7 +11,7 @@ module JutulHypreExt
     function Jutul.generate_hypre_assembly_helper(J::AbstractSparseMatrix, executor, ilower = 1, iupper = size(J, 1); column_major = isa(J, SparseMatrixCSC))
         max_width = 0
         min_width = 1_000_000
-        n = size(J, 1)
+        n = iupper - ilower + 1
         for i in 1:n
             nz_width = length(nzrange(J, i))
             max_width = max(max_width, nz_width)
