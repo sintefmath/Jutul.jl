@@ -48,7 +48,6 @@ module JutulHypreExt
             J_h = transfer_matrix_to_hypre(J, D, executor)
         end
         D[:hypre_system] = (J_h, r_h, x_h)
-        HYPRE.HYPRE_BoomerAMGSetup(preconditioner.prec, J_h, r_h, x_h)
         HYPRE.@check HYPRE.HYPRE_BoomerAMGSetup(preconditioner.prec, J_h, r_h, x_h)
         return preconditioner
     end
