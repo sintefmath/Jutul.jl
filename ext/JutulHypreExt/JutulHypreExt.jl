@@ -1,5 +1,6 @@
 module JutulHypreExt
     using Jutul, HYPRE, SparseArrays
+    import Jutul: local_hypre_copy!
 
     function Jutul.setup_hypre_precond(type = :boomeramg; kwarg...)
         @assert type == :boomeramg
@@ -112,14 +113,14 @@ module JutulHypreExt
         # copy!(x, x_h)
 
         # Fast and less allocating version that uses low level HYPRE calls
-        local_copy!(y_h, y, ix)
-        local_copy!(x_h, zbuf, ix)
+        local_hypre_copy!(y_h, y, ix)
+        local_hypre_copy!(x_h, zbuf, ix)
         HYPRE.@check HYPRE.HYPRE_BoomerAMGSolve(prec, J_h, y_h, x_h)
-        local_copy!(x, x_h, ix)
+        local_hypre_copy!(x, x_h, ix)
     end
 
     function inner_apply!(x::T, y::T, prec, x_h::T, J_h, y_h::T, ix, zbuf) where T<:HYPRE.HYPREVector
-        local_copy!(x, zbuf, ix)
+        local_hypre_copy!(x, zbuf, ix)
         HYPRE.@check HYPRE.HYPRE_BoomerAMGSolve(prec, J_h, y, x)
     end
 
@@ -130,12 +131,12 @@ module JutulHypreExt
         return nvalues
     end
 
-    function local_copy!(dst::Vector{HYPRE.HYPRE_Complex}, src::HYPRE.HYPREVector, ix::Vector{HYPRE.HYPRE_BigInt})
+    function Jutul.local_hypre_copy!(dst::Vector{HYPRE.HYPRE_Complex}, src::HYPRE.HYPREVector, ix::Vector{HYPRE.HYPRE_BigInt})
         nvalues = hypre_check(src, dst, ix)
         HYPRE.@check HYPRE.HYPRE_IJVectorGetValues(src, nvalues, ix, dst)
     end
 
-    function local_copy!(dst::HYPRE.HYPREVector, src::Vector{HYPRE.HYPRE_Complex}, ix::Vector{HYPRE.HYPRE_BigInt})
+    function Jutul.local_hypre_copy!(dst::HYPRE.HYPREVector, src::Vector{HYPRE.HYPRE_Complex}, ix::Vector{HYPRE.HYPRE_BigInt})
         nvalues = hypre_check(dst, src, ix)
         HYPRE.@check HYPRE.HYPRE_IJVectorSetValues(dst, nvalues, ix, src)
         HYPRE.Internals.assemble_vector(dst)
@@ -144,7 +145,6 @@ module JutulHypreExt
     function reassemble_internal_boomeramg!(single_buf, longer_buf, V_buffers, Jac::SparseMatrixCSC, J_h, executor)
         nzval = nonzeros(Jac)
         rows = rowvals(Jac)
-
         n = size(Jac, 2)
         @assert length(single_buf) == 1
         assembler = HYPRE.start_assemble!(J_h)

@@ -41,3 +41,7 @@ end
 function generate_hypre_assembly_helper
 
 end
+
+function local_hypre_copy!
+
+end
