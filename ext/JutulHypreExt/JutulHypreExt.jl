@@ -25,7 +25,13 @@ module JutulHypreExt
                 V[i] = zeros(Float64, 1, i)
             end
         end
-        return (I = zeros(Int, 1), J = zeros(Int, max_width), V = V, indices = HYPRE.HYPRE_BigInt.(ilower:iupper), n = n)
+        return (
+            I = zeros(Int, 1),
+            J = zeros(Int, max_width),
+            V = V, indices = HYPRE.HYPRE_BigInt.(ilower:iupper),
+            native_zeroed_buffer = zeros(n),
+            n = n
+            )
     end
 
     function Jutul.update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
@@ -90,11 +96,12 @@ module JutulHypreExt
 
     function Jutul.apply!(x, p::BoomerAMGPreconditioner, y, arg...)
         ix = p.data[:assembly_helper].indices
+        zbuf = p.data[:assembly_helper].native_zeroed_buffer
         J_h, y_h, x_h = p.data[:hypre_system]
-        inner_apply!(x, y, p.prec, x_h, J_h, y_h, ix)
+        inner_apply!(x, y, p.prec, x_h, J_h, y_h, ix, zbuf)
     end
 
-    function inner_apply!(x, y, prec, x_h, J_h, y_h, ix)
+    function inner_apply!(x, y, prec, x_h, J_h, y_h, ix, zbuf)
         # Safe and allocating version that uses HYPRE.jl API
         # asm = HYPRE.start_assemble!(x_h)
         # HYPRE.finish_assemble!(asm)
@@ -106,15 +113,13 @@ module JutulHypreExt
 
         # Fast and less allocating version that uses low level HYPRE calls
         local_copy!(y_h, y, ix)
-        @. x = 0.0
-        local_copy!(x_h, x, ix)
+        local_copy!(x_h, zbuf, ix)
         HYPRE.@check HYPRE.HYPRE_BoomerAMGSolve(prec, J_h, y_h, x_h)
         local_copy!(x, x_h, ix)
     end
 
-    function inner_apply!(x::T, y::T, prec, x_h::T, J_h, y_h::T, ix) where T<:HYPRE.HYPREVector
-        asm = HYPRE.start_assemble!(x)
-        HYPRE.finish_assemble!(asm)
+    function inner_apply!(x::T, y::T, prec, x_h::T, J_h, y_h::T, ix, zbuf) where T<:HYPRE.HYPREVector
+        local_copy!(x, zbuf, ix)
         HYPRE.@check HYPRE.HYPRE_BoomerAMGSolve(prec, J_h, y, x)
     end
 
