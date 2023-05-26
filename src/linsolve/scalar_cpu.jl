@@ -15,7 +15,7 @@ mutable struct LUSolver
     end
 end
 
-function linear_solve!(sys, solver::LUSolver; kwarg...)
+function linear_solve!(sys, solver::LUSolver, arg...; kwarg...)
     if length(sys.dx) > solver.max_size
         error("System too big for LU solver. You can increase max_size at your own peril.")
     end
