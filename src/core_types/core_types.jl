@@ -565,6 +565,7 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
     faces::Vector{T}
     cell_is_boundary::Vector{Bool}
     variables_always_active::Bool
+    global_to_local::Dict{Int, Int}
     function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing; variables_always_active = false)
         n = length(cells)
         # @assert issorted(cells)
@@ -585,7 +586,11 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
         for i in inner_to_full_cells
             @assert i > 0 && i <= n
         end
-        new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary, variables_always_active)
+        g2l = Dict{Int, Int}()
+        for (i, c) in enumerate(cells)
+            g2l[c] = i
+        end
+        new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary, variables_always_active, g2l)
     end
 end
 
