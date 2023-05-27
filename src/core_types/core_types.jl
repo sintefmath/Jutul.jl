@@ -575,11 +575,12 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
         @assert length(is_boundary) == length(cells)
         inner_to_full_cells = findall(is_boundary .== false)
         full_to_inner_cells = Vector{Integer}(undef, n)
+        inverse_inner_to_full_cells = Dict{Int, Int}()
+        for (i, v) in enumerate(inner_to_full_cells)
+            inverse_inner_to_full_cells[v] = i
+        end
         for i = 1:n
-            v = findfirst(isequal(i), inner_to_full_cells)
-            if isnothing(v)
-                v = 0
-            end
+            v = get(inverse_inner_to_full_cells, i, 0)
             @assert v >= 0 && v <= n
             full_to_inner_cells[i] = v
         end
