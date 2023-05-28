@@ -513,7 +513,7 @@ function forces_for_timestep(sim, f::Vector, timesteps, step_index; per_step = t
     return force
 end
 
-function check_forces(sim, f::Vector, timesteps; per_step = true)
+function check_forces(sim::Simulator, f::Vector, timesteps; per_step = true)
     nf = length(f)
     nt = length(timesteps)
     if nf != nt && per_step
