@@ -4,6 +4,10 @@ function simulate_parray
     
 end
 
+function forces_for_parray_simulator
+
+end
+
 function parray_preconditioner_apply!
 
 end
