@@ -8,7 +8,7 @@ function parray_preconditioner_apply!
 
 end
 
-function parray_update_preconditioners_impl!
+function parray_update_preconditioners!
 
 end
 

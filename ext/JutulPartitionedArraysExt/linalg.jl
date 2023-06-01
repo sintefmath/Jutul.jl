@@ -61,16 +61,16 @@ function setup_distributed_mul!(tmr, simulators, ix = nothing)
     return (Y, X, α, β) -> distributed_mul!(Y::PVector, X::PVector, α, β)
 end
 
-function parray_update_preconditioners!(sim::PArraySimulator, prec_def)
+function parray_update_preconditioners_outer!(sim::PArraySimulator, prec_def)
     preconditioner_base, preconditioners = prec_def
     storage = sim.storage
     recorder = storage.recorder
     tmr = storage.global_timer
     # Additional function call for dispatch nesting
-    return Jutul.parray_update_preconditioners_impl!(sim, preconditioner_base, preconditioners, recorder, tmr)
+    return Jutul.parray_update_preconditioners!(sim, preconditioner_base, preconditioners, recorder, tmr)
 end
 
-function Jutul.parray_update_preconditioners_impl!(sim, preconditioner_base, preconditioners, recorder, tmr)
+function Jutul.parray_update_preconditioners!(sim, preconditioner_base, preconditioners, recorder, tmr)
     map(sim.storage.simulators, preconditioners) do sim, prec
         tic!(tmr)
         sys = sim.storage.LinearizedSystem
@@ -113,7 +113,7 @@ function distributed_linear_system_operator(tmr, simulators, b)
 end
 
 function distributed_preconditioner_linear_operator(simulator, lsolve, b)
-    main_prec, preconditioners = parray_update_preconditioners!(simulator, lsolve.preconditioner)
+    main_prec, preconditioners = parray_update_preconditioners_outer!(simulator, lsolve.preconditioner)
     prec_apply! = (Y, X, arg...) -> Jutul.parray_preconditioner_apply!(Y::PVector, main_prec, X::PVector, preconditioners, simulator, arg...)
     n = length(b)
     M = LinearOperator(Float64, n, n, false, false, prec_apply!)
