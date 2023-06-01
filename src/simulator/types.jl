@@ -4,6 +4,10 @@ function set_default_tolerances(sim::JutulSimulator; kwarg...)
     set_default_tolerances(sim.model; kwarg...)
 end
 
+abstract type JutulBackend end
+
+struct DefaultBackend <: JutulBackend end
+
 abstract type JutulExecutor end
 struct DefaultExecutor <: JutulExecutor end
 struct Simulator{E, M, S} <: JutulSimulator
