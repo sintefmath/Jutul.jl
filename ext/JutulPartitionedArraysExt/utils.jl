@@ -53,6 +53,9 @@ function distribute_case(case, full_partition, backend, ranks)
     model = case.model
     if model isa MultiModel
         model = case.model[full_partition.main_symbol]
+        # Asserts on limitations of current global dof-ordering approach.
+        @assert case.model.groups[1] == 1
+        @assert maximum(case.model.groups) < 3
     end
     domain = model.domain
     nc = number_of_cells(domain)
@@ -81,6 +84,8 @@ function distribute_case(case, full_partition, backend, ranks)
 
     # Extra mapping for degrees of freedom
     block_size = degrees_of_freedom_per_entity(model, Cells())
+    layout = matrix_layout(model.context)
+    @assert block_size == 1 || layout isa BlockMajorLayout || layout == EntityMajorLayout
     if false
         @warn "Debug on" p boundary
         @info "?!" tentative_partition tentative_boundary partition

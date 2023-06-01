@@ -131,7 +131,7 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; ite
     all_processes_converged = nconverged == np
     max_error = reduce(max, errors, init = 0)
 
-    if verbose && config[:info_level] > 0
+    if verbose && config[:info_level] > 1
         Jutul.jutul_message("It $(iteration-1)", "$nconverged/$np processes converged.")
     end
     report = Jutul.setup_ministep_report()
