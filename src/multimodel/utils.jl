@@ -47,8 +47,8 @@ function get_linearized_system_model_pair(storage, model, source, target, lsys =
 end
 
 function group_index(model, symbol)
-    index = model.groups[findfirst(isequal(symbol), keys(model.models))]
-    return index::Integer
+    index = model.group_lookup[symbol]
+    return index::Int
 end
 
 function submodels_symbols(model::MultiModel)

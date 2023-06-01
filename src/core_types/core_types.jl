@@ -871,9 +871,14 @@ struct MultiModel{T} <: JutulModel
     context::Union{JutulContext, Nothing}
     reduction::Union{Symbol, Nothing}
     specialize_ad::Bool
+    group_lookup::Dict{Symbol, Int}
 function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing, specialize = false, specialize_ad = false)
+        group_lookup = Dict{Symbol, Any}()
         if isnothing(groups)
             num_groups = 1
+            for k in keys(models)
+                group_lookup[k] = 1
+            end
         else
             nm = length(models)
             num_groups = length(unique(groups))
@@ -893,6 +898,9 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
                 end
                 models = new_models
                 groups = groups[ix]
+            end
+            for (k, g) in zip(keys(models), groups)
+                group_lookup[k] = g
             end
         end
         if isa(models, AbstractDict)
@@ -917,6 +925,6 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
         else
             T = nothing
         end
-        new{T}(models, cross_terms, groups, context, reduction, specialize_ad)
+        new{T}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
     end
 end
