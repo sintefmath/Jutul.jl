@@ -86,8 +86,6 @@ end
 function Jutul.simulate_parray(case::JutulCase, partition, backend::PArrayBackend; kwarg...)
     (; dt, forces) = case
     outer_sim = PArraySimulator(case, partition, backend = backend)
-    # Now subset the forces
-    # inner_forces, forces_per_step = Jutul.forces_for_parray_simulator(outer_sim, forces)
     result = simulate!(outer_sim, dt, forces = forces)
     # states = consolidate_distributed_states(model, result.states, outer_sim.storage.partition, outer_sim.storage.nc)
     PartitionedArrays.print_timer(outer_sim.storage.global_timer, linechars = :ascii)
