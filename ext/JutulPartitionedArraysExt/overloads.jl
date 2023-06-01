@@ -1,5 +1,5 @@
 
-function Jutul.simulator_config(sim::PArraySimulator; kwarg...)
+function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, kwarg...)
     cfg = JutulConfig("Simulator config")
     v = sim.storage.verbose
     if v
@@ -7,26 +7,13 @@ function Jutul.simulator_config(sim::PArraySimulator; kwarg...)
     else
         il = -1
     end
-    sel = Vector{Any}()
-    t_base = TimestepSelector(initial_absolute = 3600.0*24.0, max = Inf)
-    push!(sel, t_base)
-    t_its = IterationTimestepSelector(8, offset = 1)
-    push!(sel, t_its)
-
-    # tol_cnv = 1e-3
-    # tol_mb = 1e-7
-    # tol_cnv_well = 10*tol_cnv
-    # tol_mb_well = 1e4*tol_mb
 
     is_mpi_win = isa(sim, MPISimulator) && Sys.iswindows()
-    extra_timing = v
-    extra_timing = false
-    Jutul.simulator_config!(cfg, sim; info_level = il, ascii_terminal = is_mpi_win, timestep_selectors = sel, extra_timing = extra_timing, kwarg...)
+    extra_timing = extra_timing && v
+    cfg = Jutul.simulator_config!(cfg, sim; kwarg..., info_level = il, ascii_terminal = is_mpi_win, extra_timing = extra_timing)
     simulators = sim.storage[:simulators]
     configs = map(simulators) do sim
-        subconfig = Jutul.simulator_config(sim, info_level = -1, timestep_selectors = sel, extra_timing = extra_timing)
-        # TODO: Fix this for JutulDarcy integration
-        # JutulDarcy.set_default_cnv_mb!(subconfig, sim.model, tol_cnv = tol_cnv, tol_mb = tol_mb, tol_cnv_well = tol_cnv_well, tol_mb_well = tol_mb_well)
+        subconfig = Jutul.simulator_config(sim, info_level = -1, extra_timing = extra_timing)
         subconfig
     end
     add_option!(cfg, :configs, configs, "Configuration for subdomain simulators.")
@@ -40,10 +27,6 @@ function Jutul.select_linear_solver(sim::PArraySimulator)
         p = ILUZeroPreconditioner()
         solver = GenericKrylov(:bicgstab, preconditioner = p)
     end
-    # TODO: Fix this to be easily overloadable
-    # p = CPRPreconditioner()
-    # p = CPRPreconditioner(BoomerAMGPreconditioner())
-    # @info "CPR hypre" p
     return solver
 end
 
