@@ -35,12 +35,16 @@ end
 
 
 function Jutul.select_linear_solver(sim::PArraySimulator)
-    p = ILUZeroPreconditioner()
+    solver = Jutul.select_linear_solver(sim.storage.model)
+    if !isa(solver, GenericKrylov)
+        p = ILUZeroPreconditioner()
+        solver = GenericKrylov(:bicgstab, preconditioner = p)
+    end
     # TODO: Fix this to be easily overloadable
     # p = CPRPreconditioner()
     # p = CPRPreconditioner(BoomerAMGPreconditioner())
     # @info "CPR hypre" p
-    return GenericKrylov(:bicgstab, preconditioner = p)
+    return solver
 end
 
 function Jutul.set_default_tolerances(sim::PArraySimulator; kwarg...)

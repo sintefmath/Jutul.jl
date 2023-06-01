@@ -47,3 +47,25 @@ end
 function local_hypre_copy!
 
 end
+
+function check_hypre_availability(; throw = true)
+    ok = true
+    try
+        ok = check_hypre_availability_impl()
+    catch e
+        if throw
+            if e isa MethodError
+                error("HYPRE is not available. To fix: using Pkg; Pkg.add(\"HYPRE\") and then call using HYPRE to enable HYPRE.")
+            else
+                rethrow(e)
+            end
+        else
+            ok = false
+        end
+    end
+    return ok
+end
+
+function check_hypre_availability_impl
+
+end

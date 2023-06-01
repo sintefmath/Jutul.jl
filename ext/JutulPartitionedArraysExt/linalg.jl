@@ -35,7 +35,7 @@ function unit_diagonalize!(r, J::Jutul.StaticSparsityMatrixCSR, n_self)
     end
 end
 
-function setup_distributed_mul!(tmr, simulators, ix = nothing)
+function setup_parray_mul!(tmr, simulators, ix = nothing)
     operators = map(simulators) do sim
         lsys = sim.storage.LinearizedSystem
         if !isnothing(ix)
@@ -84,7 +84,9 @@ function Jutul.parray_update_preconditioners!(sim, preconditioner_base, precondi
 end
 
 
-function Jutul.parray_preconditioner_apply!(Y::PVector, main_prec, X::PVector, preconditioners, simulator, arg...)
+function Jutul.parray_preconditioner_apply!(Y, main_prec, X, preconditioners, simulator, arg...)
+    X::PVector
+    Y::PVector
     tmr = simulator.storage.global_timer
     tic!(tmr)
     consistent!(X) |> wait
@@ -106,13 +108,13 @@ function Jutul.parray_preconditioner_apply!(Y::PVector, main_prec, X::PVector, p
 end
 
 
-function distributed_linear_system_operator(tmr, simulators, b)
-    distributed_mul! = setup_distributed_mul!(tmr, simulators)
+function Jutul.parray_linear_system_operator(tmr, simulators, b)
+    distributed_mul! = setup_parray_mul!(tmr, simulators)
     n = length(b)
     return LinearOperator(Float64, n, n, false, false, distributed_mul!)
 end
 
-function distributed_preconditioner_linear_operator(simulator, lsolve, b)
+function parray_preconditioner_linear_operator(simulator, lsolve, b)
     main_prec, preconditioners = parray_update_preconditioners_outer!(simulator, lsolve.preconditioner)
     prec_apply! = (Y, X, arg...) -> Jutul.parray_preconditioner_apply!(Y::PVector, main_prec, X::PVector, preconditioners, simulator, arg...)
     n = length(b)

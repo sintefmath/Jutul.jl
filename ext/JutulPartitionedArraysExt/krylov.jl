@@ -47,8 +47,8 @@ end
 
 
 function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, tmr, b, verbose, atol, rtol)
-    op = distributed_linear_system_operator(tmr, simulators, b)
-    P = distributed_preconditioner_linear_operator(simulator, lsolve, b)
+    op = Jutul.parray_linear_system_operator(tmr, simulators, b)
+    P = parray_preconditioner_linear_operator(simulator, lsolve, b)
     consistent!(b) |> wait
 
     max_it = cfg.max_iterations

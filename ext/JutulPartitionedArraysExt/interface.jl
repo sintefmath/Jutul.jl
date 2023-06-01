@@ -33,6 +33,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     # Make simulators
     n_owned = 0
     process_start = typemax(Int)
+    representative_model = missing
     simulators = map(partition_original_indices, ranks) do p, i
         # @info "$i" p
         n_self = counts[i]
@@ -52,6 +53,9 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         s0 = substate(state0, model, m, :variables)
         prm = substate(parameters, model, m, :parameters)
         sim = Simulator(m, state0 = s0, parameters = prm, executor = exec)
+        if ismissing(representative_model)
+            representative_model = m
+        end
         sim
     end
     data[:nc_process] = n_owned
@@ -60,6 +64,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     data[:distributed_residual] = pzeros(dof_partition)
     data[:distributed_cell_buffer] = pzeros(partition)
     data[:distributed_residual_buffer] = pzeros(dof_partition)
+    data[:model] = representative_model
 
     return PArraySimulator(backend, data)
 end

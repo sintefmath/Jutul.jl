@@ -2,6 +2,11 @@ module JutulHypreExt
     using Jutul, HYPRE, SparseArrays
     import Jutul: local_hypre_copy!
 
+    
+    function Jutul.check_hypre_availability_impl()
+        return true
+    end
+
     function Jutul.setup_hypre_precond(type = :boomeramg; kwarg...)
         @assert type == :boomeramg
         HYPRE.Init()

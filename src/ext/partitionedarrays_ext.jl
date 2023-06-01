@@ -16,6 +16,10 @@ function partition_distributed
 
 end
 
+function parray_linear_system_operator
+
+end
+
 abstract type PArrayBackend <: JutulBackend end
 
 struct DebugPArrayBackend <: PArrayBackend end
