@@ -1,10 +1,6 @@
 export PArrayBackend, MPI_PArrayBackend
 
 function simulate_parray
-    
-end
-
-function forces_for_parray_simulator
 
 end
 

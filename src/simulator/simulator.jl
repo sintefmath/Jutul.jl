@@ -131,6 +131,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
                                                                    start_date = nothing,
                                                                    kwarg...)
     rec = progress_recorder(sim)
+    forces, forces_per_step = preprocess_forces(sim, forces)
     start_timestamp = now()
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
@@ -493,6 +494,10 @@ end
 
 function update_after_step!(sim, dt, forces; kwarg...)
     update_after_step!(sim.storage, sim.model, dt, forces; kwarg...)
+end
+
+function preprocess_forces(sim, forces)
+    return (forces = forces, forces_per_step = forces isa Vector)
 end
 
 # Forces - one for the entire sim
