@@ -47,8 +47,8 @@ function store_output!(states, reports, step, sim, config, report)
                 file["report"] = report
                 file["step"] = step
             end
-            for i in 1:(length(reports)-config[:in_memory_reports])
-                # Only keep the last five time-step reports in memory. These
+            for i in 1:(step-config[:in_memory_reports])
+                # Only keep the last N time-step reports in memory. These
                 # will be read back before output anyway.
                 reports[i] = missing
             end
