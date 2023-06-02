@@ -26,7 +26,9 @@ struct DebugPArrayBackend <: PArrayBackend end
 
 struct JuliaPArrayBackend <: PArrayBackend end
 
-struct MPI_PArrayBackend <: PArrayBackend end
+struct MPI_PArrayBackend{T} <: PArrayBackend
+    comm::T
+end
 
 
 struct PArraySimulator{T} <: Jutul.JutulSimulator

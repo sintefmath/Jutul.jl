@@ -1,9 +1,10 @@
 
-function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDomainPartition; comm = MPI.COMM_WORLD, backend = JuliaPArrayBackend(), kwarg...)
+function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDomainPartition; backend = JuliaPArrayBackend(), kwarg...)
     data = JutulStorage()
     for (k, v) in kwarg
         data[k] = v
     end
+    comm = backend_communicator(backend)
     main_part = Jutul.main_partition(full_partition)
     main_label = Jutul.main_partition_label(full_partition)
     np = maximum(main_part.partition)
@@ -77,6 +78,16 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
 
     return PArraySimulator(backend, data)
 end
+
+function Jutul.MPI_PArrayBackend(; comm = MPI.COMM_WORLD)
+    # Add a constructor that actually supports MPI.
+    MPI.Init()
+    Jutul.MPI_PArrayBackend(comm)
+end
+
+backend_communicator(b::Jutul.MPI_PArrayBackend) = b.comm
+backend_communicator(::Any) = MPI.COMM_WORLD
+
 
 function Jutul.preprocess_forces(psim::PArraySimulator, forces)
     simulators = psim.storage[:simulators]
