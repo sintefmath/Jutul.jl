@@ -13,4 +13,5 @@ module JutulPartitionedArraysExt
     include("krylov.jl")
     include("overloads.jl")
     include("utils.jl")
+    include("io.jl")
 end

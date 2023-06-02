@@ -11,6 +11,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     tmr = PTimer(ranks)
     data[:global_timer] = tmr
     data[:verbose] = i_am_main(ranks)
+    data[:is_main_process] = i_am_main(ranks)
     data[:number_of_processes] = np
 
     partition, dof_partition, counts, remapped_ix, partition_original_indices, block_size, nc = distribute_case(case, full_partition, backend, ranks)
@@ -43,7 +44,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         exec = PArrayExecutor(backend, i, remapped_ix[p],
             main_label = main_label,
             n_self = n_self,
-            np = np,
+            number_of_processes = np,
             partition = p,
             n_total = sum(counts),
             comm = comm

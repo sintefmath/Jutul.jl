@@ -40,13 +40,7 @@ function store_output!(states, reports, step, sim, config, report)
     t_out = @elapsed if mem_out || file_out
         @tic "output state" state = get_output_state(sim)
         @tic "write" if file_out
-            step_path = joinpath(path, "jutul_$step.jld2")
-            @debug "Writing to $step_path"
-            jldopen(step_path, "w") do file
-                file["state"] = state
-                file["report"] = report
-                file["step"] = step
-            end
+            write_result_jld2(path, state, report, step)
             for i in 1:(step-config[:in_memory_reports])
                 # Only keep the last N time-step reports in memory. These
                 # will be read back before output anyway.
@@ -57,4 +51,14 @@ function store_output!(states, reports, step, sim, config, report)
         end
     end
     report[:output_time] = t_out
+end
+
+function write_result_jld2(path, state, report, step)
+    step_path = joinpath(path, "jutul_$step.jld2")
+    @debug "Writing to $step_path"
+    jldopen(step_path, "w") do file
+        file["state"] = state
+        file["report"] = report
+        file["step"] = step
+    end
 end

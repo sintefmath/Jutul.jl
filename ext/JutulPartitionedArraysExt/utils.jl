@@ -86,12 +86,6 @@ function distribute_case(case, full_partition, backend, ranks)
     block_size = degrees_of_freedom_per_entity(model, Cells())
     layout = matrix_layout(model.context)
     @assert block_size == 1 || layout isa BlockMajorLayout || layout == EntityMajorLayout
-    if false
-        @warn "Debug on" p boundary
-        @info "?!" tentative_partition tentative_boundary partition
-        @info "Part" remapped_global_indices p boundary
-        @info "xtra" nc counts block_size
-    end
     layout = matrix_layout(model.context)
 
     dof_partition = partition_degrees_of_freedom(p, boundary, remapped_global_indices, counts, nc, block_size, layout)

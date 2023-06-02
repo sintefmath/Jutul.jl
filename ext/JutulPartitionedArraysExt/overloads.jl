@@ -25,9 +25,9 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, kwar
         # If output is requested we immediately write the partition to a subdir.
         # This makes consolidation of distributed states easier afterwards.
         if write_output
-            np = sd[:np]
+            np = sd[:number_of_processes]
             if np > 1
-                pth = joinpath(output_pth, "proc_$rank")
+                pth = rank_folder(output_pth, rank)
                 if !isdir(pth)
                     @assert isa(pth, String)
                     @debug "Creating $pth for output."
@@ -37,6 +37,7 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, kwar
                     file["partition"] = sd[:partition]
                     file["main_partition_label"] = sd[:main_label]
                     file["n_self"] = sd[:n_self]
+                    file["n_total"] = sd[:n_total]
                     file["rank"] = rank
                 end
             else
@@ -191,6 +192,11 @@ function Jutul.post_update_linearized_system!(linearized_system, executor::PArra
 end
 
 function Jutul.retrieve_output!(sim::PArraySimulator, states, reports, config, n)
-
+    np = sim.storage[:number_of_processes]
+    is_main = sim.storage[:is_main_process]
+    pth = config[:output_path]
+    if np > 1 && is_main && pth isa String
+        consolidate_distributed_results_on_disk!(pth, np, 1:n, cleanup = true)
+    end
     Jutul.retrieve_output!(states, reports, config, n)
 end
