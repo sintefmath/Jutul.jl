@@ -5,6 +5,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         data[k] = v
     end
     main_part = Jutul.main_partition(full_partition)
+    main_label = Jutul.main_partition_label(full_partition)
     np = maximum(main_part.partition)
     ranks = distributed_ranks(backend, np)
     tmr = PTimer(ranks)
@@ -39,7 +40,13 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         n_self = counts[i]
         n_owned += n_self
         process_start = min(process_start, process_offset(i, counts))
-        exec = PArrayExecutor(backend, i, remapped_ix[p], n_self = n_self, partition = p, n_total = sum(counts), comm = comm)
+        exec = PArrayExecutor(backend, i, remapped_ix[p],
+            main_label = main_label,
+            n_self = n_self,
+            partition = p,
+            n_total = sum(counts),
+            comm = comm
+        )
         (; model, state0, parameters) = case
         # Boundary padding has been added, update local subset
         missing_part = setdiff(main_part.subsets[i], p)

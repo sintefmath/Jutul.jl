@@ -12,8 +12,33 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, kwar
     extra_timing = extra_timing && v
     cfg = Jutul.simulator_config!(cfg, sim; kwarg..., info_level = il, ascii_terminal = is_mpi_win, extra_timing = extra_timing)
     simulators = sim.storage[:simulators]
+    output_pth = cfg[:output_path]
+    write_output = !isnothing(output_pth)
     configs = map(simulators) do sim
-        subconfig = Jutul.simulator_config(sim, info_level = -1, extra_timing = extra_timing)
+        rank = sim.executor.rank
+        # If output is requested we immediately write the partition to a subdir.
+        # This makes consolidation of distributed states easier afterwards.
+        if write_output
+            pth = joinpath(output_pth, "proc_$rank")
+            if !isdir(pth)
+                @assert isa(pth, String)
+                @debug "Creating $pth for output."
+                mkpath(pth)
+            end
+            jldopen(joinpath(pth, "partition.jld2"), "w") do file
+                file["partition"] = sim.executor.data[:partition]
+                file["main_partition_label"] = sim.executor.data[:main_label]
+                file["n_self"] = sim.executor.data[:n_self]
+                file["rank"] = rank
+            end
+        else
+            pth = nothing
+        end
+        subconfig = Jutul.simulator_config(sim,
+            info_level = -1,
+            extra_timing = extra_timing,
+            output_path = pth
+        )
         subconfig
     end
     add_option!(cfg, :configs, configs, "Configuration for subdomain simulators.")
@@ -77,6 +102,15 @@ function Jutul.get_output_state(psim::PArraySimulator)
     end
     return state
 end
+
+function Jutul.store_output!(states, reports, step, psim::PArraySimulator, config, report)
+    subsims = psim.storage.simulators
+    subconfigs = config[:configs]
+    map(subsims, subconfigs) do sim, cfg
+        Jutul.store_output!(states, reports, step, sim, cfg, report)
+    end
+end
+
 
 function Jutul.forces_for_timestep(psim::PArraySimulator, forces::Vector, timesteps, step_index; per_step = true)
     force_for_step = map(psim.storage.simulators, forces) do sim, f

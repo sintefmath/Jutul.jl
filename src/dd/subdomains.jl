@@ -32,6 +32,8 @@ function SimplePartition(p; entity = Cells(), subsets = missing)
 end
 
 main_partition(sp::SimplePartition) = sp
+main_partition_label(sp::SimplePartition) = nothing
+
 number_of_subdomains(sp::SimplePartition) = maximum(sp.partition)
 entity_subset(sp, index) = entity_subset(sp, index, Cells())
 entity_subset(sp::SimplePartition, index, e::Cells) = sp.subsets[index]
@@ -45,6 +47,7 @@ struct SimpleMultiModelPartition <: AbstractDomainPartition
 end
 main_partition(mp::SimpleMultiModelPartition) = mp.partition[mp.main_symbol]
 number_of_subdomains(mp::SimpleMultiModelPartition) = number_of_subdomains(main_partition(mp))
+main_partition_label(mp::SimpleMultiModelPartition) = mp.main_symbol
 
 subdiscretization(disc, ::TrivialGlobalMap) = disc
 
