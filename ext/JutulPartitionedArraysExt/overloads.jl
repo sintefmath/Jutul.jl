@@ -10,26 +10,38 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, kwar
 
     is_mpi_win = isa(sim, MPISimulator) && Sys.iswindows()
     extra_timing = extra_timing && v
-    cfg = Jutul.simulator_config!(cfg, sim; kwarg..., info_level = il, ascii_terminal = is_mpi_win, extra_timing = extra_timing)
+    cfg = Jutul.simulator_config!(cfg, sim;
+        kwarg...,
+        info_level = il,
+        ascii_terminal = is_mpi_win,
+        extra_timing = extra_timing
+    )
     simulators = sim.storage[:simulators]
     output_pth = cfg[:output_path]
     write_output = !isnothing(output_pth)
     configs = map(simulators) do sim
+        sd = sim.executor.data
         rank = sim.executor.rank
         # If output is requested we immediately write the partition to a subdir.
         # This makes consolidation of distributed states easier afterwards.
         if write_output
-            pth = joinpath(output_pth, "proc_$rank")
-            if !isdir(pth)
-                @assert isa(pth, String)
-                @debug "Creating $pth for output."
-                mkpath(pth)
-            end
-            jldopen(joinpath(pth, "partition.jld2"), "w") do file
-                file["partition"] = sim.executor.data[:partition]
-                file["main_partition_label"] = sim.executor.data[:main_label]
-                file["n_self"] = sim.executor.data[:n_self]
-                file["rank"] = rank
+            np = sd[:np]
+            if np > 1
+                pth = joinpath(output_pth, "proc_$rank")
+                if !isdir(pth)
+                    @assert isa(pth, String)
+                    @debug "Creating $pth for output."
+                    mkpath(pth)
+                end
+                jldopen(joinpath(pth, "partition.jld2"), "w") do file
+                    file["partition"] = sd[:partition]
+                    file["main_partition_label"] = sd[:main_label]
+                    file["n_self"] = sd[:n_self]
+                    file["rank"] = rank
+                end
+            else
+                # One process in total - we can write as normal.
+                pth = output_pth
             end
         else
             pth = nothing
@@ -176,4 +188,9 @@ function Jutul.post_update_linearized_system!(linearized_system, executor::PArra
     r = lsys.r
     n_self = executor.data[:n_self]
     unit_diagonalize!(r, lsys.jac, n_self)
+end
+
+function Jutul.retrieve_output!(sim::PArraySimulator, states, reports, config, n)
+
+    Jutul.retrieve_output!(states, reports, config, n)
 end

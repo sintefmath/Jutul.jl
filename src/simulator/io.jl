@@ -4,6 +4,10 @@ function initialize_io(path)
     @assert isdir(path) "$path must be a valid directory for output."
 end
 
+function retrieve_output!(sim, states, reports, config, n)
+    retrieve_output!(states, reports, config, n)
+end
+
 function retrieve_output!(states, reports, config, n)
     pth = config[:output_path]
     read_reports = config[:output_reports]

@@ -94,11 +94,7 @@ function Jutul.parray_preconditioner_apply!(Y, main_prec, X, preconditioners, si
     tic!(tmr)
     map(local_values(Y), local_values(X), preconditioners, ghost_values(X)) do y, x, prec, x_g
         @. x_g = 0.0
-        # tmp = copy(x_g)
         apply!(y, prec, x, arg...)
-        # Identity for debugging
-        # @. y = x
-        # @. y_g = tmp
     end
     toc!(tmr, "Apply preconditioner")
     tic!(tmr)

@@ -43,6 +43,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         exec = PArrayExecutor(backend, i, remapped_ix[p],
             main_label = main_label,
             n_self = n_self,
+            np = np,
             partition = p,
             n_total = sum(counts),
             comm = comm

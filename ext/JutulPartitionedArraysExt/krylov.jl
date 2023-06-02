@@ -9,7 +9,6 @@ function parray_linear_solve!(simulator, lsolve;
     b = s.distributed_residual
     prepare_distributed_solve!(simulators, b)
     bsolver = bsolver_setup!(lsolve, simulators, b)
-
     @assert lsolve.solver == :bicgstab "Only :bicgstab supported, was $(lsolve.solver)"
 
     return inner_krylov(bsolver, lsolve, simulator, simulators, cfg, tmr, b, s.verbose, atol, rtol)
