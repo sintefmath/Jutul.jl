@@ -1,5 +1,5 @@
 
-function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDomainPartition; backend = JuliaPArrayBackend(), order = :symrcm, kwarg...)
+function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDomainPartition; backend = JuliaPArrayBackend(), order = :default, kwarg...)
     data = JutulStorage()
     for (k, v) in kwarg
         data[k] = v
