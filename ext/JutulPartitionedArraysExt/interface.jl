@@ -1,5 +1,5 @@
 
-function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDomainPartition; backend = JuliaPArrayBackend(), kwarg...)
+function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDomainPartition; backend = JuliaPArrayBackend(), order = :symrcm, kwarg...)
     data = JutulStorage()
     for (k, v) in kwarg
         data[k] = v
@@ -15,7 +15,8 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     data[:is_main_process] = i_am_main(ranks)
     data[:number_of_processes] = np
 
-    partition, dof_partition, counts, remapped_ix, partition_original_indices, block_size, nc = distribute_case(case, full_partition, backend, ranks)
+    # TODO: Deal with this monsterous interface.
+    partition, dof_partition, counts, remapped_ix, partition_original_indices, block_size, nc = distribute_case(case, full_partition, backend, ranks, order = order)
 
     data[:partition] = partition
     data[:dof_partition] = dof_partition

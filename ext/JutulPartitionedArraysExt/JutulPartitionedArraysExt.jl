@@ -3,7 +3,7 @@ module JutulPartitionedArraysExt
     # Specific dependencies
     using PartitionedArrays, MPI
     # Already in Jutul
-    using SparseArrays, Krylov, LinearAlgebra, LinearOperators, JLD2
+    using SparseArrays, Krylov, LinearAlgebra, LinearOperators, JLD2, SymRCM
 
     import Jutul: PArraySimulator, MPISimulator, PArrayExecutor
     import Jutul: DebugPArrayBackend, JuliaPArrayBackend, MPI_PArrayBackend

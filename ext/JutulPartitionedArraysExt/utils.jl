@@ -1,14 +1,12 @@
 function to_new_indices(original_index, remapped_global_indices)
     return remapped_global_indices[original_index]
-    # return findfirst(isequal(original_index), remapped_global_indices)
 end
 
 function from_new_indices(new_index, inverse_remapped_global_indices::Dict)
     return inverse_remapped_global_indices[new_index]
-    # return findfirst(isequal(new_index), remapped_global_indices)
 end
 
-function remap_global_indices(p, np = max(p))
+function remap_global_indices(p, neighbors, np = max(p); order = :default)
     counts = map(
         x -> sum(isequal(x), p),
         1:np
@@ -17,7 +15,13 @@ function remap_global_indices(p, np = max(p))
     remapped_global_indices = zeros(Int64, nc)
     for i in 1:np
         offset = process_offset(i, counts)
-        self = findall(isequal(i), p)
+        g_i = findall(isequal(i), p)
+        if order == :default
+            self = g_i
+        else
+            @assert order == :symrcm
+            self = local_symrcm_ordering(g_i, neighbors)
+        end
         for (j, ix) in enumerate(self)
             remapped_global_indices[ix] = offset + j
         end
@@ -49,7 +53,40 @@ function partition_boundary(N, p; np = max(p), nc = maximum(N))
     return boundary
 end
 
-function distribute_case(case, full_partition, backend, ranks)
+function local_symrcm_ordering(g_i, neighbors)
+    @assert size(neighbors, 1) == 2
+    I = Vector{Int}()
+    J = Vector{Int}()
+
+    n = length(g_i)
+    n_est = length(g_i)*7 # ~7 point stencil for 3D
+    sizehint!(I, n_est)
+    sizehint!(J, n_est)
+    for c in eachindex(g_i)
+        push!(I, c)
+        push!(J, c)
+    end
+    for i in axes(neighbors, 2)
+        l = neighbors[1, i]
+        r = neighbors[2, i]
+        # To local index range
+        l_local = searchsortedfirst(g_i, l)
+        r_local = searchsortedfirst(g_i, r)
+        if l_local <= n && r_local <= n
+            push!(I, l)
+            push!(J, r)
+            push!(I, r)
+            push!(J, l)
+        end
+    end
+    V = zeros(length(I))
+    A = sparse(I, J, V, n, n)
+    rcm = SymRCM.symrcm(A)
+    # Permute back to original indices
+    return g_i[rcm]
+end
+
+function distribute_case(case, full_partition, backend, ranks; order = :symrcm)
     model = case.model
     if model isa MultiModel
         model = case.model[full_partition.main_symbol]
@@ -68,7 +105,7 @@ function distribute_case(case, full_partition, backend, ranks)
     boundary = partition_boundary(N, p, np = np, nc = nc)
 
     @assert length(p) == nc
-    remapped_global_indices, counts = remap_global_indices(p, np)
+    remapped_global_indices, counts = remap_global_indices(p, N, np, order = order)
     # @info "Remapped" remapped_global_indices counts
     tentative_partition = variable_partition(counts, nc)
 
@@ -98,7 +135,7 @@ function distribute_case(case, full_partition, backend, ranks)
     partition_original_indices = map(partition) do p
         p_original = similar(p)
         for (i, c) in enumerate(p)
-            p_original[i] = from_new_indices(c, tmp_mapper) # This one is bad.
+            p_original[i] = from_new_indices(c, tmp_mapper)
         end
         p_original
     end
@@ -106,12 +143,8 @@ function distribute_case(case, full_partition, backend, ranks)
     return (partition, dof_partition, counts, remapped_global_indices, partition_original_indices, block_size, nc)
 end
 
-
-
-
-
 function Jutul.executor_index_to_global(executor::PArrayExecutor, col_or_row, t::Symbol)
-    return @inbounds executor.to_global[col_or_row]# executor.data[:to_global][col_or_row]
+    return @inbounds executor.to_global[col_or_row]
 end
 
 function distributed_ranks(b::PArrayBackend, np = 1)

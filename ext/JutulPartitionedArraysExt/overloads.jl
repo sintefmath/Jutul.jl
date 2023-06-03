@@ -7,8 +7,8 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, kwar
     else
         il = -1
     end
-
-    is_mpi_win = isa(sim, MPISimulator) && Sys.iswindows()
+    is_mpi = sim.backend isa Jutul.MPI_PArrayBackend
+    is_mpi_win = is_mpi && Sys.iswindows()
     extra_timing = extra_timing && v
     add_option!(cfg, :consolidate_results, true, "Consolidate states after simulation (serially).", types = Bool)
     cfg = Jutul.simulator_config!(cfg, sim;
