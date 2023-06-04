@@ -97,7 +97,7 @@ function local_bicgstab_solver(X::S) where S
     qd = similar(X)
     yz = similar(X)
     t  = similar(X)
-    stats = Krylov.SimpleStats(0, false, false, T[], T[], T[], "unknown")
+    stats = Krylov.SimpleStats(0, false, false, T[], T[], T[], 0.0, "unknown")
     solver = Krylov.BicgstabSolver{T,FC,S}(m, n, Δx, x, r, p, v, s, qd, yz, t, false, stats)
     return solver
 end
