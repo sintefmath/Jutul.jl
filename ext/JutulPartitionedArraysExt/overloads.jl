@@ -1,11 +1,9 @@
 
-function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, kwarg...)
+function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info_level = 1, kwarg...)
     cfg = JutulConfig("Simulator config")
     v = sim.storage.verbose
-    if v
-        il = 1
-    else
-        il = -1
+    if !v
+        info_level = -1
     end
     is_mpi = sim.backend isa Jutul.MPI_PArrayBackend
     is_mpi_win = is_mpi && Sys.iswindows()
@@ -13,7 +11,7 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, kwar
     add_option!(cfg, :consolidate_results, true, "Consolidate states after simulation (serially).", types = Bool)
     cfg = Jutul.simulator_config!(cfg, sim;
         kwarg...,
-        info_level = il,
+        info_level = info_level,
         ascii_terminal = is_mpi_win,
         extra_timing = extra_timing
     )
