@@ -9,8 +9,6 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     main_label = Jutul.main_partition_label(full_partition)
     np = maximum(main_part.partition)
     ranks = distributed_ranks(backend, np)
-    tmr = PTimer(ranks)
-    data[:global_timer] = tmr
     data[:verbose] = i_am_main(ranks)
     data[:is_main_process] = i_am_main(ranks)
     data[:number_of_processes] = np

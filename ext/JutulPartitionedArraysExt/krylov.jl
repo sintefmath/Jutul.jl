@@ -4,14 +4,13 @@ function parray_linear_solve!(simulator, lsolve;
     )
     s = simulator.storage
     cfg = lsolve.config
-    tmr = s.global_timer
     simulators = s.simulators
     b = s.distributed_residual
-    prepare_distributed_solve!(simulators, b)
+    @tic "prepare" prepare_distributed_solve!(simulators, b)
     bsolver = bsolver_setup!(lsolve, simulators, b)
     @assert lsolve.solver == :bicgstab "Only :bicgstab supported, was $(lsolve.solver)"
 
-    return inner_krylov(bsolver, lsolve, simulator, simulators, cfg, tmr, b, s.verbose, atol, rtol)
+    return inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, s.verbose, atol, rtol)
 end
 
 
@@ -45,13 +44,13 @@ end
 
 
 
-function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, tmr, b, verbose, atol, rtol)
-    op = Jutul.parray_linear_system_operator(tmr, simulators, b)
+function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, atol, rtol)
+    op = Jutul.parray_linear_system_operator(simulators, b)
     P = parray_preconditioner_linear_operator(simulator, lsolve, b)
     consistent!(b) |> wait
 
     max_it = cfg.max_iterations
-    Krylov.bicgstab!(
+    @tic "solve" Krylov.bicgstab!(
         bsolver, op, b,
         M = P,
         verbose = 0*Int(verbose),

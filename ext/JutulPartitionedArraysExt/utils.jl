@@ -73,10 +73,10 @@ function local_symrcm_ordering(g_i, neighbors)
         l_local = searchsortedfirst(g_i, l)
         r_local = searchsortedfirst(g_i, r)
         if l_local <= n && r_local <= n
-            push!(I, l)
-            push!(J, r)
-            push!(I, r)
-            push!(J, l)
+            push!(I, l_local)
+            push!(J, r_local)
+            push!(I, r_local)
+            push!(J, l_local)
         end
     end
     V = zeros(length(I))

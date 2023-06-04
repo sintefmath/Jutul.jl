@@ -1,5 +1,7 @@
 module JutulPartitionedArraysExt
     using Jutul
+    import Jutul: @tic
+
     # Specific dependencies
     using PartitionedArrays, MPI
     # Already in Jutul

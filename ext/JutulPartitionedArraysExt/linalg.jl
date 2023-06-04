@@ -1,4 +1,3 @@
-
 function unit_diagonalize!(r, J::SparseMatrixCSC, n_self)
     T = eltype(J)
     rows = rowvals(J)
@@ -35,7 +34,7 @@ function unit_diagonalize!(r, J::Jutul.StaticSparsityMatrixCSR, n_self)
     end
 end
 
-function setup_parray_mul!(tmr, simulators, ix = nothing)
+function setup_parray_mul!(simulators, ix = nothing)
     operators = map(simulators) do sim
         lsys = sim.storage.LinearizedSystem
         if !isnothing(ix)
@@ -44,18 +43,12 @@ function setup_parray_mul!(tmr, simulators, ix = nothing)
         Jutul.linear_operator(lsys)
     end
     function distributed_mul!(Y::PVector, X::PVector, α, β)
-        tic!(tmr)
-        consistent!(X) |> wait
-        toc!(tmr, "mul! communication")
-        tic!(tmr)
+        @tic "communication" consistent!(X) |> wait
         map(local_values(Y), local_values(X), operators) do y, x, local_op
             mul!(y, local_op, x, α, β)
             nothing
         end
-        toc!(tmr, "mul! apply")
-        tic!(tmr)
-        consistent!(Y) |> wait
-        toc!(tmr, "mul! communication")
+        @tic "communication" consistent!(Y) |> wait
         return Y
     end
     return (Y, X, α, β) -> distributed_mul!(Y::PVector, X::PVector, α, β)
@@ -65,19 +58,16 @@ function parray_update_preconditioners_outer!(sim::PArraySimulator, prec_def)
     preconditioner_base, preconditioners = prec_def
     storage = sim.storage
     recorder = storage.recorder
-    tmr = storage.global_timer
     # Additional function call for dispatch nesting
-    return Jutul.parray_update_preconditioners!(sim, preconditioner_base, preconditioners, recorder, tmr)
+    return Jutul.parray_update_preconditioners!(sim, preconditioner_base, preconditioners, recorder)
 end
 
-function Jutul.parray_update_preconditioners!(sim, preconditioner_base, preconditioners, recorder, tmr)
-    map(sim.storage.simulators, preconditioners) do sim, prec
-        tic!(tmr)
+function Jutul.parray_update_preconditioners!(sim, preconditioner_base, preconditioners, recorder)
+   map(sim.storage.simulators, preconditioners) do sim, prec
         sys = sim.storage.LinearizedSystem
         model = sim.model
         storage = sim.storage
         Jutul.update_preconditioner!(prec, sys, model, storage, recorder, sim.executor)
-        toc!(tmr, "Update preconditioner")
         prec
     end
     return (preconditioner_base, preconditioners)
@@ -87,31 +77,23 @@ end
 function Jutul.parray_preconditioner_apply!(Y, main_prec, X, preconditioners, simulator, arg...)
     X::PVector
     Y::PVector
-    tmr = simulator.storage.global_timer
-    tic!(tmr)
-    consistent!(X) |> wait
-    toc!(tmr, "Apply preconditioner communication")
-    tic!(tmr)
+    @tic "communication" consistent!(X) |> wait
     map(local_values(Y), local_values(X), preconditioners, ghost_values(X)) do y, x, prec, x_g
         @. x_g = 0.0
         apply!(y, prec, x, arg...)
     end
-    toc!(tmr, "Apply preconditioner")
-    tic!(tmr)
-    consistent!(Y) |> wait
-    toc!(tmr, "Apply preconditioner communication")
+    @tic "communication" consistent!(Y) |> wait
     Y
 end
 
-
-function Jutul.parray_linear_system_operator(tmr, simulators, b)
-    distributed_mul! = setup_parray_mul!(tmr, simulators)
+function Jutul.parray_linear_system_operator(simulators, b)
+    distributed_mul! = setup_parray_mul!(simulators)
     n = length(b)
     return LinearOperator(Float64, n, n, false, false, distributed_mul!)
 end
 
 function parray_preconditioner_linear_operator(simulator, lsolve, b)
-    main_prec, preconditioners = parray_update_preconditioners_outer!(simulator, lsolve.preconditioner)
+    @tic "precond" main_prec, preconditioners = parray_update_preconditioners_outer!(simulator, lsolve.preconditioner)
     prec_apply! = (Y, X, arg...) -> Jutul.parray_preconditioner_apply!(Y::PVector, main_prec, X::PVector, preconditioners, simulator, arg...)
     n = length(b)
     M = LinearOperator(Float64, n, n, false, false, prec_apply!)

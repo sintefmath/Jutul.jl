@@ -143,18 +143,15 @@ end
 
 function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; iteration = 1, vararg...)
     s = simulator.storage
-    tmr = s.global_timer
     simulators = s.simulators
     np = s.number_of_processes
     verbose = s.verbose
     configs = config[:configs]
-    tic!(tmr)
     out = map(simulators, configs, forces) do sim, config, f
         e, conv, report = perform_step!(sim, dt, f, config; iteration = iteration, solve = false, update_secondary = true)
         (e, Int(conv), report)
     end
     errors, converged, reports = tuple_of_arrays(out)
-    toc!(tmr, "Assembly")
 
     nconverged = sum(converged)
     all_processes_converged = nconverged == np
