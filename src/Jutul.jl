@@ -33,6 +33,7 @@ module Jutul
 
     import Metis
     import Meshes
+    import SymRCM
     # Nice progress bars
     using ProgressMeter
     using Crayons

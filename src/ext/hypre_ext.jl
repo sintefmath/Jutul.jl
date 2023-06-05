@@ -12,11 +12,12 @@ end
 export BoomerAMGPreconditioner
 
 function BoomerAMGPreconditioner(;
-    CoarsenType = 10,      # PMIS
-    StrongThreshold = 0.7, # For 3D
-    AggNumLevels = 2,      # Aggressive coarsening for first levels
+    CoarsenType = 10,      # HMIS
+    StrongThreshold = 0.5, # For 3D
+    AggNumLevels = 3,      # Aggressive coarsening for first levels
     AggTruncFactor = 0.3,  # Remove weak connections
     InterpType = 6,        # ext+i
+    NumPaths = 2,
     kwarg...
     )
     # Default settings inspired by
@@ -29,6 +30,7 @@ function BoomerAMGPreconditioner(;
             AggNumLevels = AggNumLevels,
             AggTruncFactor = AggTruncFactor,
             InterpType = InterpType,
+            NumPaths = NumPaths,
             kwarg...
             )
     catch e
@@ -36,4 +38,34 @@ function BoomerAMGPreconditioner(;
         rethrow(e)
     end
     return BoomerAMGPreconditioner(prec, Dict{Symbol, Any}())
+end
+
+function generate_hypre_assembly_helper
+
+end
+
+function local_hypre_copy!
+
+end
+
+function check_hypre_availability(; throw = true)
+    ok = true
+    try
+        ok = check_hypre_availability_impl()
+    catch e
+        if throw
+            if e isa MethodError
+                error("HYPRE is not available. To fix: using Pkg; Pkg.add(\"HYPRE\") and then call using HYPRE to enable HYPRE.")
+            else
+                rethrow(e)
+            end
+        else
+            ok = false
+        end
+    end
+    return ok
+end
+
+function check_hypre_availability_impl
+
 end

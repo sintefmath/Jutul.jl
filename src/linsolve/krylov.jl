@@ -35,7 +35,7 @@ mutable struct GenericKrylov
     x
     r_norm
     config::IterativeSolverConfig
-function GenericKrylov(solver = :gmres; preconditioner = nothing, kwarg...)
+    function GenericKrylov(solver = :gmres; preconditioner = nothing, kwarg...)
         new(solver, preconditioner, nothing, nothing, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
@@ -60,17 +60,18 @@ function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, si
     return op
 end
 
-export update!
-function update_preconditioner!(prec, sys, model, storage, recorder)
-    update!(prec, sys, model, storage, recorder)
-end
+# export update!
+# function update_preconditioner!(prec, sys, model, storage, recorder)
+#     update!(prec, sys, model, storage, recorder)
+# end
 
 function linear_solve!(sys::LSystem,
                 krylov::GenericKrylov,
                 model,
                 storage = nothing,
                 dt = nothing,
-                recorder = ProgressRecorder();
+                recorder = ProgressRecorder(),
+                executor = default_executor();
                 dx = sys.dx_buffer,
                 r = vector_residual(sys),
                 atol = linear_solver_tolerance(krylov, :absolute),
@@ -83,7 +84,7 @@ function linear_solve!(sys::LSystem,
     Ft = float_type(model.context)
     @tic "prepare" prepare_linear_solve!(sys)
     op = linear_operator(sys)
-    @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder)
+    @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder, executor)
     L = preconditioner(krylov, sys, model, storage, recorder, :left, Ft)
     # R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
     v = Int64(cfg.verbose)

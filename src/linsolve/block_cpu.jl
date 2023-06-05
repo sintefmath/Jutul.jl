@@ -12,7 +12,8 @@ function get_mul!(sys::LinearizedSystem{BlockMajorLayout})
     jac = sys.jac
     Vt = eltype(sys.r)
     N = size(Vt, 1)
-    return (res, x, α, β) -> block_mul!(res, jac, Vt, N, x, α, β)
+    Vt_typed = Val(Vt)
+    return (res, x, α, β) -> block_mul!(res, jac, Vt_typed, N, x, α, β)
 end
 
 function vector_residual(sys::LinearizedSystem{BlockMajorLayout})

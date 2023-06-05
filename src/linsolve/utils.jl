@@ -95,5 +95,14 @@ Unsafely reinterpret v as a n length vector of value type Vt
 """
 function unsafe_reinterpret(Vt, v, n)
     ptr = Base.unsafe_convert(Ptr{Vt}, v)
-    return Base.unsafe_wrap(Array, ptr, n)
+    return Base.unsafe_wrap(Array, ptr, n)::Vector{Vt}
+end
+
+function unsafe_reinterpret(::Val{Vt}, v, n) where Vt
+    ptr = Base.unsafe_convert(Ptr{Vt}, v)
+    return Base.unsafe_wrap(Array, ptr, n)::Vector{Vt}
+end
+
+function executor_index_to_global(executor, index, row_or_column::Symbol)
+    return index
 end

@@ -3,25 +3,43 @@ export SimplePartition, SimpleMultiModelPartition, number_of_subdomains, entity_
 
 abstract type AbstractDomainPartition end
 
-struct SimplePartition{E, P} <: AbstractDomainPartition
+struct SimplePartition{E, P, S} <: AbstractDomainPartition
     partition::P
+    subsets::S
     entity::E
-    function SimplePartition(p::T; entity = Cells()) where T
-        for i in 1:maximum(p)
-            @assert any(x -> x == i, p)
-        end
-        @assert minimum(p) == 1
-        new{typeof(entity), T}(p, entity)
-    end
 end
 
-number_of_subdomains(sp::SimplePartition) = maximum(sp.partition)
-entity_subset(sp, index, entity = Cells()) = entity_subset(sp, index, entity)
-entity_subset(sp::SimplePartition, index, e::Cells) = findall(sp.partition .== index)
+function SimplePartition(p; entity = Cells(), subsets = missing)
+    np = maximum(p)
+    for i in 1:np
+        @assert any(x -> x == i, p)
+    end
+    @assert minimum(p) == 1
+    if ismissing(subsets)
+        subsets = map(
+            index -> findall(isequal(index), p),
+            1:np
+            )
+    else
+        @assert length(subsets) == np
+        for (i, subset) in enumerate(subsets)
+            for c in subset
+                # TODO: Check validity here.
+            end
+        end
+    end
+    return SimplePartition(p, subsets, entity)
+end
 
+main_partition(sp::SimplePartition) = sp
+main_partition_label(sp::SimplePartition) = nothing
+
+number_of_subdomains(sp::SimplePartition) = maximum(sp.partition)
+entity_subset(sp, index) = entity_subset(sp, index, Cells())
+entity_subset(sp::SimplePartition, index, e::Cells) = sp.subsets[index]
 
 struct SimpleMultiModelPartition <: AbstractDomainPartition
-    partition
+    partition::Dict{Symbol, Any}
     main_symbol::Symbol
     function SimpleMultiModelPartition(p, m)
         new(p, m)
@@ -29,6 +47,7 @@ struct SimpleMultiModelPartition <: AbstractDomainPartition
 end
 main_partition(mp::SimpleMultiModelPartition) = mp.partition[mp.main_symbol]
 number_of_subdomains(mp::SimpleMultiModelPartition) = number_of_subdomains(main_partition(mp))
+main_partition_label(mp::SimpleMultiModelPartition) = mp.main_symbol
 
 subdiscretization(disc, ::TrivialGlobalMap) = disc
 
@@ -57,6 +76,7 @@ end
 
 function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
     @assert buffer == 0 || buffer == 1
+    has_buffer_zone = buffer > 0
 
     facelist, facepos = get_facepos(N)
     nf = size(N, 2)
@@ -92,7 +112,7 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
         insert_cell!(gc, is_bnd)
     end
     # If we have a buffer, we also need to go over and add the buffer cells
-    if buffer == 1
+    if has_buffer_zone
         for gc in indices
             # Also add the neighbors, if not already present
             for fi in facepos[gc]:facepos[gc+1]-1
@@ -117,15 +137,21 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
             end
         end
     end
-    cells = findall(cell_active)
-    is_boundary = cell_is_bnd[cells]
-    for i in 1:length(is_boundary)
-        inside = in(cells[i], indices)
-        if is_boundary[i]
-            @assert !inside
-        else
-            @assert inside
+    if has_buffer_zone
+        # TODO: This is not order preserving.
+        cells = findall(cell_active)
+        is_boundary = cell_is_bnd[cells]
+        for i in 1:length(is_boundary)
+            inside = in(cells[i], indices)
+            if is_boundary[i] && buffer == 1
+                @assert !inside
+            else
+                @assert inside
+            end
         end
+    else
+        cells = copy(indices)
+        is_boundary = BitVector([false for i in 1:length(cells)])
     end
     faces = findall(face_active)
     return (cells = cells, faces = faces, is_boundary = is_boundary)

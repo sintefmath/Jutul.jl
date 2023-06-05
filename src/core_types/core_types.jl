@@ -565,27 +565,33 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
     faces::Vector{T}
     cell_is_boundary::Vector{Bool}
     variables_always_active::Bool
+    global_to_local::Dict{Int, Int}
     function FiniteVolumeGlobalMap(cells, faces, is_boundary = nothing; variables_always_active = false)
         n = length(cells)
-        @assert issorted(cells)
+        # @assert issorted(cells)
         if isnothing(is_boundary)
             is_boundary = repeat([false], length(cells))
         end
         @assert length(is_boundary) == length(cells)
         inner_to_full_cells = findall(is_boundary .== false)
         full_to_inner_cells = Vector{Integer}(undef, n)
+        inverse_inner_to_full_cells = Dict{Int, Int}()
+        for (i, v) in enumerate(inner_to_full_cells)
+            inverse_inner_to_full_cells[v] = i
+        end
         for i = 1:n
-            v = findfirst(isequal(i), inner_to_full_cells)
-            if isnothing(v)
-                v = 0
-            end
+            v = get(inverse_inner_to_full_cells, i, 0)
             @assert v >= 0 && v <= n
             full_to_inner_cells[i] = v
         end
         for i in inner_to_full_cells
             @assert i > 0 && i <= n
         end
-        new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary, variables_always_active)
+        g2l = Dict{Int, Int}()
+        for (i, c) in enumerate(cells)
+            g2l[c] = i
+        end
+        new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary, variables_always_active, g2l)
     end
 end
 
@@ -865,16 +871,27 @@ struct MultiModel{T} <: JutulModel
     context::Union{JutulContext, Nothing}
     reduction::Union{Symbol, Nothing}
     specialize_ad::Bool
-function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing, specialize = false, specialize_ad = false)
+    group_lookup::Dict{Symbol, Int}
+function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = missing, specialize = false, specialize_ad = false)
+        group_lookup = Dict{Symbol, Any}()
         if isnothing(groups)
             num_groups = 1
+            for k in keys(models)
+                group_lookup[k] = 1
+            end
+            if ismissing(reduction)
+                reduction = nothing
+            end
         else
+            if ismissing(reduction)
+                reduction = :schur_apply
+            end
             nm = length(models)
             num_groups = length(unique(groups))
             @assert maximum(groups) <= nm
             @assert minimum(groups) > 0
             @assert length(groups) == nm
-            @assert maximum(groups) == num_groups
+            @assert maximum(groups) == num_groups "Groups must be ordered from 1 to n, was $(unique(groups))"
             if !issorted(groups)
                 # If the groups aren't grouped sequentially, re-sort them so they are
                 # since parts of the multimodel code depends on this ordering
@@ -888,14 +905,15 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
                 models = new_models
                 groups = groups[ix]
             end
+            for (k, g) in zip(keys(models), groups)
+                group_lookup[k] = g
+            end
         end
         if isa(models, AbstractDict)
             models = convert_to_immutable_storage(models)
         end
         if reduction == :schur_apply
-            if length(groups) > 1
-                # @assert num_groups == 2
-            else
+            if length(groups) == 1
                 reduction = nothing
             end
         end
@@ -911,6 +929,6 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
         else
             T = nothing
         end
-        new{T}(models, cross_terms, groups, context, reduction, specialize_ad)
+        new{T}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
     end
 end

@@ -127,9 +127,11 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
                                                                    restart = nothing,
                                                                    state0 = nothing,
                                                                    parameters = nothing,
+                                                                   forces_per_step = isa(forces, Vector),
                                                                    start_date = nothing,
                                                                    kwarg...)
     rec = progress_recorder(sim)
+    forces, forces_per_step = preprocess_forces(sim, forces)
     start_timestamp = now()
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
@@ -143,26 +145,34 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
             config[k] = v
         end
     end
-    states, reports, first_step, dt = initial_setup!(sim, config, timesteps, restart = restart, state0 = state0, parameters = parameters)
     # Time-step info to keep around
     no_steps = length(timesteps)
     t_tot = sum(timesteps)
+    states, reports, first_step, dt = initial_setup!(
+        sim,
+        config,
+        timesteps,
+        restart = restart,
+        state0 = state0,
+        parameters = parameters,
+        nsteps = no_steps
+    )
     # Config options
     max_its = config[:max_nonlinear_iterations]
     info_level = config[:info_level]
     # Initialize loop
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
-    if initialize
-        check_forces(sim, forces, timesteps)
-        forces_step = forces_for_timestep(sim, forces, timesteps, first_step)
+    if initialize && first_step <= no_steps
+        check_forces(sim, forces, timesteps, per_step = forces_per_step)
+        forces_step = forces_for_timestep(sim, forces, timesteps, first_step, per_step = forces_per_step)
         initialize_before_first_timestep!(sim, dt, forces = forces_step, config = config)
     end
     n_solved = no_steps
     t_elapsed = 0.0
     for step_no = first_step:no_steps
         dT = timesteps[step_no]
-        forces_step = forces_for_timestep(sim, forces, timesteps, step_no)
+        forces_step = forces_for_timestep(sim, forces, timesteps, step_no, per_step = forces_per_step)
         nextstep_global!(rec, dT)
         new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
         t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dt, reports = reports, step_no = step_no, rec = rec)
@@ -182,7 +192,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
             break
         end
     end
-    states, reports = retrieve_output!(states, reports, config, n_solved)
+    states, reports = retrieve_output!(sim, states, reports, config, n_solved)
     final_simulation_message(sim, p, rec, t_elapsed, reports, timesteps, config, start_date, early_termination)
     return SimResult(states, reports, start_timestamp)
 end
@@ -260,10 +270,10 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
 end
 
 function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
-    perform_step!(simulator.storage, simulator.model, dt, forces, config; vararg...)
+    perform_step!(simulator.storage, simulator.model, dt, forces, config; executor = simulator.executor, vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config; iteration = NaN, relaxation = 1, update_secondary = nothing, solve = true)
+function perform_step!(storage, model, dt, forces, config; executor = default_executor(), iteration = NaN, relaxation = 1, update_secondary = nothing, solve = true)
     if isnothing(update_secondary)
         update_secondary = iteration > 1 || config[:always_update_secondary]
     end
@@ -275,7 +285,7 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
     t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
     # Update the linearized system
     t_lsys = @elapsed begin
-        @tic "linear system" update_linearized_system!(storage, model)
+        @tic "linear system" update_linearized_system!(storage, model, executor)
     end
     t_conv = @elapsed begin
         if iteration == config[:max_nonlinear_iterations]
@@ -301,7 +311,14 @@ function perform_step!(storage, model, dt, forces, config; iteration = NaN, rela
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
         try
-            t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(storage, model, dt, linear_solver = lsolve, check = check, recorder = rec, relaxation = relaxation)
+            t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(
+                    storage, model, dt,
+                    linear_solver = lsolve,
+                    check = check,
+                    recorder = rec,
+                    relaxation = relaxation,
+                    executor = executor
+                )
             report[:update] = rep_update
             report[:linear_solver] = rep_lsolve
             report[:linear_iterations] = n_iter
@@ -388,7 +405,7 @@ function initialize_before_first_timestep!(sim, first_dT; kwarg...)
     end
 end
 
-function initial_setup!(sim, config, timesteps; restart = nothing, parameters = nothing, state0 = nothing)
+function initial_setup!(sim, config, timesteps; restart = nothing, parameters = nothing, state0 = nothing, nsteps = Inf)
     # Timing stuff
     set_global_timer!(config[:extra_timing])
     # Threading
@@ -397,19 +414,22 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     end
     # Set up storage
     reports = []
-    states = Vector{Dict{Symbol, Any}}()
+    state_T = Union{Dict{Symbol, Any}, AbstractVector{Dict{Symbol, Any}}}
+    states = Vector{state_T}()
     pth = config[:output_path]
     initialize_io(pth)
     has_restart = !(isnothing(restart) || restart === 0 || restart === 1 || restart == false)
+    dt = timesteps[1]
+    simulation_is_done = false
     if has_restart
-        state0, dt, first_step = deserialize_restart(pth, restart, states, reports, config)
+        state0, dt, first_step = deserialize_restart(pth, state0, dt, restart, states, reports, config, nsteps)
         msg = "Restarting from step $first_step."
-        state0_has_changed = true
+        simulation_is_done = first_step == nsteps+1
+        state0_has_changed = first_step != 1 && !simulation_is_done
     else
         state0_has_changed = !isnothing(state0)
         msg = "Starting from first step."
         first_step = 1
-        dt = timesteps[first_step]
     end
     if config[:info_level] > 1
         jutul_message("Jutul", msg, color = :light_green)
@@ -420,9 +440,9 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
         for k in [:state, :state0, :parameters]
             reset_variables!(sim, parameters, type = k)
         end
-        recompute_state0_secondary = true
+        recompute_state0_secondary = !simulation_is_done
     end
-    if state0_has_changed
+    if state0_has_changed && !simulation_is_done
         # state0 does not match sim, update it.
         # First, reset previous state
         reset_previous_state!(sim, state0)
@@ -435,16 +455,31 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     return (states, reports, first_step, dt)
 end
 
-function deserialize_restart(pth, restart, states, reports, config)
+function deserialize_restart(pth, state0, dt, restart, states, reports, config, nsteps = Inf)
     @assert !isnothing(pth) "output_path must be specified if restarts are enabled"
     if isa(restart, Bool)
-        restart = maximum(valid_restart_indices(pth)) + 1
+        restart_ix = valid_restart_indices(pth)
+        if length(restart_ix) == 0
+            restart = 1
+        else
+            restart = maximum(restart_ix) + 1
+        end
+        if nsteps isa Integer
+            restart = min(restart, nsteps+1)
+        end
+    end
+    if nsteps isa Integer
+        @assert restart <= nsteps+1 "Restart was $restart but schedule contains $nsteps steps."
     end
     first_step = restart
-    prev_step = restart - 1;
-    state0, report0 = read_restart(pth, prev_step)
-    read_results(pth, read_reports = true, read_states = false, states = states, reports = reports, range = 1:prev_step);
-    dt = report0[:ministeps][end][:dt]
+    if first_step > 1
+        prev_step = restart - 1;
+        state0, report0 = read_restart(pth, prev_step)
+        kept_reports = config[:in_memory_reports]
+        rep_start = max(prev_step-kept_reports+1, 1)
+        read_results(pth, read_reports = true, read_states = false, states = states, reports = reports, range = rep_start:prev_step);
+        dt = report0[:ministeps][end][:dt]
+    end
     return (state0, dt, first_step)
 end
 
@@ -461,15 +496,32 @@ function update_after_step!(sim, dt, forces; kwarg...)
     update_after_step!(sim.storage, sim.model, dt, forces; kwarg...)
 end
 
+function preprocess_forces(sim, forces)
+    return (forces = forces, forces_per_step = forces isa Vector)
+end
+
 # Forces - one for the entire sim
-check_forces(sim, forces, timesteps) = nothing
-forces_for_timestep(sim, f, timesteps, step_index) = f
-# Forces as a vector - one per timestep
-forces_for_timestep(sim, f::T, timesteps, step_index) where T<:AbstractArray = f[step_index]
-function check_forces(sim, f::T, timesteps) where T<:AbstractArray
+function check_forces(sim, forces, timesteps; per_step = false)
+    nothing
+end
+
+function forces_for_timestep(sim, f::Union{AbstractDict, Nothing, NamedTuple}, timesteps, step_index; per_step = false)
+    f
+end
+
+function forces_for_timestep(sim, f::Vector, timesteps, step_index; per_step = true)
+    if per_step
+        force = f[step_index]
+    else
+        force = f
+    end
+    return force
+end
+
+function check_forces(sim::Simulator, f::Vector, timesteps; per_step = true)
     nf = length(f)
     nt = length(timesteps)
-    if nf != nt
+    if nf != nt && per_step
         error("Number of forces must match the number of timesteps ($nt timesteps, $nf forces)")
     end
 end

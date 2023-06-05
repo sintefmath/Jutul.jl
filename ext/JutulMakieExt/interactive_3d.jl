@@ -39,6 +39,7 @@ function plot_interactive_impl(grid, states; plot_type = nothing,
                                         alpha = 1.0,
                                         title = "",
                                         transform = "none",
+                                        new_window = true,
                                         colormap = :viridis,
                                         alphamap = :no_alpha_map,
                                         kwarg...)
@@ -437,7 +438,9 @@ function plot_interactive_impl(grid, states; plot_type = nothing,
 
     Colorbar(fig[3, 1:3], scat, vertical = false)
 
-    # display(GLMakie.Screen(), fig)
+    if new_window
+        Jutul.independent_figure(fig)
+    end
     return fig#, ax
 end
 

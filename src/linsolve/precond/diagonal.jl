@@ -3,7 +3,7 @@ struct DiagonalPrecondFactorization{V}
     minbatch::Int64
 end
 
-function update!(jac::DiagonalPreconditioner, A, b, context)
+function update_preconditioner!(jac::DiagonalPreconditioner, A, b, context, executor)
     mb = minbatch(A)
     if isnothing(jac.factor)
         n = size(A, 1)

@@ -676,11 +676,16 @@ end
 
 Update the linearized system with the current set of equations.
 """
-function update_linearized_system!(storage, model::JutulModel; kwarg...)
+function update_linearized_system!(storage, model::JutulModel, executor = default_executor(); kwarg...)
     eqs = model.equations
     eqs_storage = storage.equations
     lsys = storage.LinearizedSystem
     update_linearized_system!(lsys, eqs, eqs_storage, model; kwarg...)
+    post_update_linearized_system!(lsys, executor, storage, model)
+end
+
+function post_update_linearized_system!(lsys, executor, storage, model)
+    # Do nothing.
 end
 
 function update_linearized_system!(lsys, equations, eqs_storage, model::JutulModel; equation_offset = 0)
@@ -817,10 +822,10 @@ function setup_forces(model::JutulModel)
     return NamedTuple()
 end
 
-function solve_and_update!(storage, model::JutulModel, dt = nothing; linear_solver = nothing, recorder = nothing, kwarg...)
+function solve_and_update!(storage, model::JutulModel, dt = nothing; linear_solver = nothing, recorder = nothing, executor = default_executor(), kwarg...)
     lsys = storage.LinearizedSystem
     t_solve = @elapsed begin
-        @tic "linear solve" (ok, n, history) = linear_solve!(lsys, linear_solver, model, storage, dt, recorder)
+        @tic "linear solve" (ok, n, history) = linear_solve!(lsys, linear_solver, model, storage, dt, recorder, executor)
     end
     t_update = @elapsed @tic "primary variables" update = update_primary_variables!(storage, model; kwarg...)
     return (t_solve, t_update, n, history, update)
@@ -873,7 +878,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
     else
         for (pkey, p) in primary
             n = number_of_degrees_of_freedom(model, p)
-            rng = (1:n) .+ offset
+            rng = (offset+1):(n+offset)
             dxi = view(dx, rng)
             if check
                 ok_i = check_increment(dxi, p, pkey)
@@ -928,7 +933,11 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     for k in keys(svar)
         report[k] = variable_change_report(state[k], state0[k], svar[k])
     end
-    for key in model.output_variables
+    # Synchronize previous state with new state
+    for key in keys(get_primary_variables(model))
+        update_values!(state0[key], state[key])
+    end
+    for key in keys(get_secondary_variables(model))
         update_values!(state0[key], state[key])
     end
     update_after_step!(storage, model.domain, model, dt, forces; kwarg...)

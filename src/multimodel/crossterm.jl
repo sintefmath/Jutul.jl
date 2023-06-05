@@ -556,9 +556,9 @@ apply_force_to_cross_term!(ct_s, cross_term, target, source, model, storage, dt,
 
 export subcrossterm_pair
 function subcrossterm_pair(ctp::CrossTermPair, new_model::MultiModel, partition)
-    (; target, source, equation, cross_term) = ctp
+    (; target, source, target_equation, source_equation, cross_term) = ctp
     m_t = new_model[target]
     m_s = new_model[source]
     new_cross_term = subcrossterm(cross_term, ctp, m_t, m_s, global_map(m_t.domain), global_map(m_s.domain), partition)
-    return CrossTermPair(target, source, equation, new_cross_term)
+    return CrossTermPair(target, source, target_equation, source_equation, new_cross_term)
 end
