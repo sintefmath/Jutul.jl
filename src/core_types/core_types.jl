@@ -872,14 +872,20 @@ struct MultiModel{T} <: JutulModel
     reduction::Union{Symbol, Nothing}
     specialize_ad::Bool
     group_lookup::Dict{Symbol, Int}
-function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = nothing, specialize = false, specialize_ad = false)
+function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = missing, specialize = false, specialize_ad = false)
         group_lookup = Dict{Symbol, Any}()
         if isnothing(groups)
             num_groups = 1
             for k in keys(models)
                 group_lookup[k] = 1
             end
+            if ismissing(reduction)
+                reduction = nothing
+            end
         else
+            if ismissing(reduction)
+                reduction = :schur_apply
+            end
             nm = length(models)
             num_groups = length(unique(groups))
             @assert maximum(groups) <= nm
@@ -907,9 +913,7 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
             models = convert_to_immutable_storage(models)
         end
         if reduction == :schur_apply
-            if length(groups) > 1
-                # @assert num_groups == 2
-            else
+            if length(groups) == 1
                 reduction = nothing
             end
         end

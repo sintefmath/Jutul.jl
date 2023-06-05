@@ -15,7 +15,7 @@ function test_multi(; use_groups = false, specialize_model = false, specialize_s
     sourceB = ScalarTestForce(-1.0)
     forcesB = setup_forces(modelB, sources = sourceB)
     state0B = setup_state(modelB, Dict(:XVar=>0.0))
-    
+
     # Make a multimodel
     if use_groups
         groups = [1, 2]

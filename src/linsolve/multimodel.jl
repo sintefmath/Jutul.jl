@@ -165,7 +165,7 @@ function jacobian(sys::MultiLinearizedSystem)
     if do_schur(sys)
         J = sys[1, 1].jac
     else
-        error()
+        error("Jacobian for multi-system without Schur reduction is not supported.")
     end
     return J
 end
@@ -174,7 +174,7 @@ function residual(sys::MultiLinearizedSystem)
     if do_schur(sys)
         r = sys[1, 1].r
     else
-        error()
+        error("Residual for multi-system without Schur reduction is not supported.")
     end
     return r
 end
@@ -183,7 +183,7 @@ function linear_system_context(model, sys::MultiLinearizedSystem)
     if do_schur(sys)
         ctx = first(model.models).context
     else
-        error()
+        error("Context for multi-system without Schur reduction is not supported (may not be unique).")
     end
     return ctx
 end

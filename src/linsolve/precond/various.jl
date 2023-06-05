@@ -35,7 +35,7 @@ end
 Trivial / identity preconditioner with size for use in subsystems.
 """
 # Trivial precond
-function update!(tp::TrivialPreconditioner, lsys, model, storage, recorder, executor)
+function update_preconditioner!(tp::TrivialPreconditioner, lsys, model, storage, recorder, executor)
     A = jacobian(lsys)
     b = residual(lsys)
     tp.dim = size(A).*length(b[1])

@@ -1,5 +1,5 @@
 
-function update!(preconditioner::Nothing, arg...)
+function update_preconditioner!(preconditioner::Nothing, arg...)
     # Do nothing.
 end
 function update_preconditioner!(preconditioner, lsys, model, storage, recorder, executor)
