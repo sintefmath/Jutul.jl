@@ -45,8 +45,8 @@ end
 
 
 function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, atol, rtol)
-    op = Jutul.parray_linear_system_operator(simulators, b)
-    P = parray_preconditioner_linear_operator(simulator, lsolve, b)
+    t_op = @elapsed op = Jutul.parray_linear_system_operator(simulators, b)
+    t_prec = @elapsed P = parray_preconditioner_linear_operator(simulator, lsolve, b)
     consistent!(b) |> wait
 
     max_it = cfg.max_iterations
@@ -80,7 +80,8 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
             @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
         end
     end
-    return Jutul.linear_solve_return(solved, n_lin_its, stats)
+    t_prep = t_op + t_prec
+    return Jutul.linear_solve_return(solved, n_lin_its, stats, prepare = t_prep)
 end
 
 function local_bicgstab_solver(X::S) where S
