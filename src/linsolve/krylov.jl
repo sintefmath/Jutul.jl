@@ -82,9 +82,9 @@ function linear_solve!(sys::LSystem,
     cfg = krylov.config
     prec = krylov.preconditioner
     Ft = float_type(model.context)
-    @tic "prepare" prepare_linear_solve!(sys)
+    t_prep = @elapsed @tic "prepare" prepare_linear_solve!(sys)
     op = linear_operator(sys)
-    @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder, executor)
+    t_prec = @elapsed @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder, executor)
     L = preconditioner(krylov, sys, model, storage, recorder, :left, Ft)
     # R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
     v = Int64(cfg.verbose)
@@ -158,7 +158,7 @@ function linear_solve!(sys::LSystem,
     # @info "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)." res
 
     @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
-    return linear_solve_return(solved, n, stats)
+    return linear_solve_return(solved, n, stats, prepare = t_prec + t_prep)
 end
 
 function krylov_termination_criterion(solver, atol, rtol, min_its)
