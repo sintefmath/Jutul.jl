@@ -303,7 +303,6 @@ function summarize_report_stats(stats, per = false)
     else
         linscale = itscale = miniscale = identity
     end
-    @info "!!" keys(stats)
     summary = (
                 secondary = itscale(stats[:secondary]), # Not always updated, itscale
                 equations = linscale(stats[:equations]),
