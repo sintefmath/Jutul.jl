@@ -162,7 +162,7 @@ function apply_smoother!(x, A, b, smoothers::NamedTuple, nsmooth)
     error("Unable to match smoother to matrix: Recieved $m by $m matrix, with smoother sizes $(smoothers.n)")
 end
 
-function partial_update_preconditioner!(amg::AMGPreconditioner, A, b, context)
+function partial_update_preconditioner!(amg::AMGPreconditioner, A, b, context, executor)
     @tic "coarse update" amg.hierarchy = update_hierarchy!(amg, amg.hierarchy, A)
     @tic "smoother update" amg.smoothers = update_smoothers!(amg.smoothers, A, amg.hierarchy.multilevel)
     amg.factor = aspreconditioner(amg.hierarchy.multilevel, amg.cycle)
