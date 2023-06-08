@@ -65,15 +65,32 @@ function number_of_faces(t::CartesianMesh)
     return (nx-1)*ny*nz + (ny-1)*nx*nz + (nz-1)*ny*nx
 end
 
+function number_of_boundary_faces(G::CartesianMesh)
+    nx, ny, nz = grid_dims_ijk(G)
+    D = dim(G)
+    if D == 1
+        nbnd = 2
+    elseif D == 2
+        nbnd = 2*(nx + ny)
+    else
+        @assert D == 3
+        nbnd = 2*(nx*ny + ny*nz + nz*nx)
+    end
+    return nbnd
+end
+
 function declare_entities(G::CartesianMesh)
     nf = number_of_faces(G)
     nc = number_of_cells(G)
+    nbnd = number_of_boundary_faces(G)
     return [
             (entity = Cells(), count = nc),
             (entity = Faces(), count = nf),
+            (entity = BoundaryFaces(), count = nbnd),
             (entity = HalfFaces(), count = 2*nf)
         ]
 end
+
 """
 Lower corner for one dimension, without any transforms applied
 """
@@ -192,7 +209,7 @@ function tpfv_geometry(g::CartesianMesh)
     end
 
 
-    nbnd = 2*(nx*ny + ny*nz + nz*nx)
+    nbnd = number_of_boundary_faces(g)
     # Then fix the boundary
     boundary_neighbors = Vector{Int}(undef, nbnd)
     boundary_areas = Vector{Float64}(undef, nbnd)
