@@ -66,8 +66,13 @@ function number_of_faces(t::CartesianMesh)
 end
 
 function declare_entities(G::CartesianMesh)
-    return [(entity = Cells(), count = number_of_cells(G)),
-            (entity = Faces(), count = number_of_faces(G))]
+    nf = number_of_faces(G)
+    nc = number_of_cells(G)
+    return [
+            (entity = Cells(), count = nc),
+            (entity = Faces(), count = nf),
+            (entity = HalfFaces(), count = 2*nf)
+        ]
 end
 """
 Lower corner for one dimension, without any transforms applied
