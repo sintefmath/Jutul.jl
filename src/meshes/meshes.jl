@@ -24,13 +24,31 @@ The two-point finite-volume geometry contains the minimal set of geometry inform
 required to compute standard finite-volume discretizations.
 """
 struct TwoPointFiniteVolumeGeometry <: JutulGeometry
+    "Neighbor list 2 x nf for interior faces"
     neighbors
+    "Area of interior faces"
     areas
+    "Volumes of cells"
     volumes
+    "Unit-normalized normals for each face"
     normals
+    "Cell centroids"
     cell_centroids
+    "Face centroids for interior faces"
     face_centroids
-    function TwoPointFiniteVolumeGeometry(neighbors, A, V, N, C_c, C_f)
+    "Half face map to cells"
+    half_face_cells
+    "Half face map to faces"
+    half_face_faces
+    "Boundary face areas"
+    boundary_areas
+    "Centroid of boundary faces"
+    boundary_centroids
+    "Boundary face normals"
+    boundary_normals
+    "Boundary cell neighbors"
+    boundary_neighbors
+    function TwoPointFiniteVolumeGeometry(neighbors, A, V, N, C_c, C_f, HF_c, HF_f, ∂A, ∂F_c, ∂neighbors, ∂N)
         nf = size(neighbors, 2)
         dim, nc = size(C_c)
 
@@ -45,8 +63,43 @@ struct TwoPointFiniteVolumeGeometry <: JutulGeometry
         # Check areas
         @assert length(A) == nf
         @assert length(V) == nc
-        return new(neighbors, vec(A), vec(V), N, C_c, C_f)
+        if ismissing(HF_c)
+            @assert ismissing(HF_f)
+        else
+            # TODO: Add asserts here.
+        end
+        @assert ismissing(∂A) == ismissing(∂neighbors) == ismissing(∂N) == ismissing(∂F_c)
+        if !ismissing(∂A)
+            # TODO: Add asserts here.
+        end
+        return new(neighbors, vec(A), vec(V), N, C_c, C_f, HF_c, HF_f, ∂A, ∂F_c, ∂neighbors, ∂N)
     end
+end
+
+function TwoPointFiniteVolumeGeometry(
+        neighbors, areas, volumes, normals, cell_centroids, face_centroids;
+        half_face_cells = missing,
+        half_face_faces = missing,
+        boundary_areas = missing,
+        boundary_normals = missing,
+        boundary_centroids = missing,
+        boundary_neighbors = missing
+    )
+    # Call full constructor
+    TwoPointFiniteVolumeGeometry(
+        neighbors,
+        areas,
+        volumes,
+        normals,
+        cell_centroids,
+        face_centroids,
+        half_face_cells,
+        half_face_faces,
+        boundary_areas,
+        boundary_centroids,
+        boundary_normals,
+        boundary_neighbors
+    )
 end
 
 dim(g::TwoPointFiniteVolumeGeometry) = size(g.cell_centroids, 1)
