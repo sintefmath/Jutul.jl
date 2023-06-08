@@ -1,15 +1,50 @@
-function compute_half_face_trans(g, perm)
+export compute_face_trans, compute_half_face_trans, compute_boundary_trans
+
+function compute_half_face_trans(d::DataDomain, k::Symbol = :permeability)
+    @assert haskey(d, k, Cells()) "$k must be defined in Cells."
+    return compute_half_face_trans(d, d[k])
+end
+
+"""
+    compute_half_face_trans(g::DataDomain, perm)
+
+Compute half-face trans for the interior faces. The input `perm` can either be
+the symbol of some data defined on `Cells()`, a vector of numbers for each cell
+or a matrix with number of columns equal to the number of cells.
+"""
+function compute_half_face_trans(g::DataDomain, perm)
+    compute_half_face_trans(g[:cell_centroids], g[:face_centroids], g[:normals], g[:areas], perm, g[:neighbors])
+end
+
+function compute_half_face_trans(g::TwoPointFiniteVolumeGeometry, perm)
     compute_half_face_trans(g.cell_centroids, g.face_centroids, g.normals, g.areas, perm, g.neighbors)
 end
 
 function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
-    nf = size(N, 2)
-    nhf = 2*nf
+    nc = size(cell_centroids, 2)
+    @assert size(N) == (2, length(face_areas))
+    faces, facepos = get_facepos(N, nc)
+    facesigns = similar(faces)
+    for c in 1:nc
+        for ix in facepos[c]:(facepos[c+1]-1)
+            f = faces[ix]
+            if N[2, f] == c
+                facesigns[ix] = -1
+            else
+                facesigns[ix] = 1
+            end
+        end
+    end
+    compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns)
+end
+
+
+function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns)
+    nf = length(face_areas)
     dim = size(cell_centroids, 1)
 
-    T_hf = similar(cell_centroids, nhf)
-    faces, facePos = get_facepos(N)
-    nc = length(facePos)-1
+    T_hf = zeros(eltype(face_areas), length(faces))
+    nc = length(facepos)-1
     if isa(perm, AbstractFloat)
         perm = repeat([perm], 1, nc)
     else
@@ -20,7 +55,7 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     end
 
     # Sanity check
-    @assert(dim == 2 || dim == 3)
+    @assert(dim == 2 || dim == 3 || dim == 1)
     # Check cell centroids
     @assert(size(cell_centroids, 1) == dim)
     @assert(size(cell_centroids, 2) == nc)
@@ -34,19 +69,13 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     @assert(length(face_areas) == nf)
     # Check perm
     @assert(size(perm, 2) == nc)
-    # Check N, just in case
-    @assert(size(N, 2) == nf)
-    Threads.@threads for cell = 1:nc
-        @inbounds for fpos = facePos[cell]:(facePos[cell+1]-1)
+    for cell = 1:nc
+        for fpos = facepos[cell]:(facepos[cell+1]-1)
             face = faces[fpos]
-
             A = face_areas[face]
             K = expand_perm(perm[:, cell], dim)
             C = face_centroids[:, face] - cell_centroids[:, cell]
-            Nn = face_normals[:, face]
-            if N[2, face] == cell
-                Nn = -Nn
-            end
+            Nn = facesigns[fpos]*face_normals[:, face]
             T_hf[fpos] = compute_half_face_trans(A, K, C, Nn)
         end
     end
@@ -97,10 +126,55 @@ function compute_face_trans(g::JutulMesh, perm)
     return compute_face_trans(geo, perm)
 end
 
-export compute_face_trans
 function compute_face_trans(geometry::JutulGeometry, permeability)
     T_hf = compute_half_face_trans(geometry, permeability)
     return compute_face_trans(T_hf, geometry.neighbors)
+end
+
+"""
+compute_face_trans(g::DataDomain, perm)
+
+Compute face trans for the interior faces. The input `perm` can either be
+the symbol of some data defined on `Cells()`, a vector of numbers for each cell
+or a matrix with number of columns equal to the number of cells.
+"""
+function compute_face_trans(d::DataDomain, arg...)
+    T_hf = compute_half_face_trans(d, arg...)
+    return compute_face_trans(T_hf, d[:neighbors])
+end
+
+function compute_boundary_trans(d::DataDomain, k::Symbol = :permeability)
+    @assert haskey(d, k, Cells()) "$k must be defined in Cells."
+    return compute_boundary_trans(d, d[k])
+end
+
+"""
+    compute_boundary_trans(d::DataDomain, perm)
+
+Compute the boundary half face transmissibilities for perm. The input `perm` can
+either be the symbol of some data defined on `Cells()`, a vector of numbers
+for each cell or a matrix with number of columns equal to the number of
+cells.
+"""
+function compute_boundary_trans(d::DataDomain, perm)
+    @assert hasentity(d, BoundaryFaces()) "Domain must have BoundaryFaces() to compute boundary transmissibilities"
+    face_areas = d[:boundary_areas]
+    cells = d[:boundary_neighbors]
+    cell_centroids = d[:cell_centroids][:, cells]
+    face_centroids = d[:boundary_centroids]
+    face_normals = d[:boundary_normals]
+    if perm isa AbstractVector
+        perm = perm[cells]
+    else
+        perm = perm[:, cells]
+    end
+    nf = length(face_areas)
+    nc = length(cells)
+    @assert nf == nc "$nf != $nc"
+    faces = collect(1:nf)
+    facepos = collect(1:(nc+1))
+    facesigns = ones(nf)
+    return compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns)
 end
 
 export compute_face_gdz

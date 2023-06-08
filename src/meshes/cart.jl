@@ -65,6 +65,7 @@ function number_of_faces(t::CartesianMesh)
     return (nx-1)*ny*nz + (ny-1)*nx*nz + (nz-1)*ny*nx
 end
 
+export number_of_boundary_faces
 function number_of_boundary_faces(G::CartesianMesh)
     nx, ny, nz = grid_dims_ijk(G)
     D = dim(G)
