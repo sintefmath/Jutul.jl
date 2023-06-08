@@ -60,6 +60,10 @@ struct DataDomain{R, E, D} <: JutulDomain
     data::D
 end
 
+function hasentity(d::Union{DataDomain, DiscretizedDomain}, e::JutulEntity)
+    return haskey(d.entities, e)
+end
+
 """
     physical_representation(x::DataDomain)
 
