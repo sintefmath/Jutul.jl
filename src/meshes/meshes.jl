@@ -193,4 +193,9 @@ function add_default_domain_data!(Ω::DataDomain, m::Union{CartesianMesh, MRSTWr
     for hfname in [:half_face_cells, :half_face_faces]
         Ω[hfname, HalfFaces()] = getproperty(fv, hfname)
     end
+    if hasentity(Ω, BoundaryFaces())
+        for hfname in [:boundary_areas, :boundary_centroids, :boundary_normals, :boundary_neighbors]
+            Ω[hfname, BoundaryFaces()] = getproperty(fv, hfname)
+        end
+    end
 end
