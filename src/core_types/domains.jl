@@ -60,7 +60,7 @@ struct DataDomain{R, E, D} <: JutulDomain
     data::D
 end
 
-function hasentity(d::Union{DataDomain, DiscretizedDomain}, e::JutulEntity)
+function hasentity(d::Union{DataDomain, DiscretizedDomain}, e)
     return haskey(d.entities, e)
 end
 
