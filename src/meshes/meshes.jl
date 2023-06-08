@@ -85,6 +85,17 @@ function TwoPointFiniteVolumeGeometry(
         boundary_centroids = missing,
         boundary_neighbors = missing
     )
+    if ismissing(half_face_cells)
+        @assert ismissing(half_face_faces)
+        nc = length(volumes)
+        half_face_faces, facepos = get_facepos(neighbors, nc)
+        half_face_cells = similar(half_face_faces)
+        for i in 1:nc
+            for j in facepos[i]:(facepos[i+1]-1)
+                half_face_cells[j] = i
+            end
+        end
+    end
     # Call full constructor
     TwoPointFiniteVolumeGeometry(
         neighbors,
@@ -178,5 +189,8 @@ function add_default_domain_data!(Ω::DataDomain, m::Union{CartesianMesh, MRSTWr
     end
     for cname in [:cell_centroids, :volumes]
         Ω[cname, Cells()] = getproperty(fv, cname)
+    end
+    for hfname in [:half_face_cells, :half_face_faces]
+        Ω[hfname, HalfFaces()] = getproperty(fv, hfname)
     end
 end
