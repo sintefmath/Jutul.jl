@@ -143,7 +143,7 @@ function tpfv_geometry(g::CartesianMesh)
     face_centroids = zeros(d, nf)
     face_normals = zeros(d, nf)
 
-    function add_face!(face_areas, face_normals, face_centroids, x, y, z, D, pos)
+    function add_face!(N, face_areas, face_normals, face_centroids, x, y, z, D, pos)
         t = (x, y, z)
         index = cell_index(g, t)
         N[1, pos] = index
@@ -167,7 +167,7 @@ function tpfv_geometry(g::CartesianMesh)
     for z = 1:nz
         for y in 1:ny
             for x in 1:(nx-1)
-                add_face!(face_areas, face_normals, face_centroids, x, y, z, 1, pos)
+                add_face!(N, face_areas, face_normals, face_centroids, x, y, z, 1, pos)
                 pos += 1
             end
         end
@@ -176,7 +176,7 @@ function tpfv_geometry(g::CartesianMesh)
     for y in 1:(ny-1)
         for z = 1:nz
             for x in 1:nx
-                add_face!(face_areas, face_normals, face_centroids, x, y, z, 2, pos)
+                add_face!(N, face_areas, face_normals, face_centroids, x, y, z, 2, pos)
                 pos += 1
             end
         end
@@ -185,13 +185,88 @@ function tpfv_geometry(g::CartesianMesh)
     for z = 1:(nz-1)
         for y in 1:ny
             for x in 1:nx
-                add_face!(face_areas, face_normals, face_centroids, x, y, z, 3, pos)
+                add_face!(N, face_areas, face_normals, face_centroids, x, y, z, 3, pos)
                 pos += 1
             end
         end
     end
 
-    return TwoPointFiniteVolumeGeometry(N, face_areas, V, face_normals, cell_centroids, face_centroids)
+
+    nbnd = 2*(nx*ny + ny*nz + nz*nx)
+    # Then fix the boundary
+    boundary_neighbors = Vector{Int}(undef, nbnd)
+    boundary_areas = Vector{Float64}(undef, nbnd)
+    boundary_normals = zeros(d, nbnd)
+    boundary_centroids = zeros(d, nbnd)
+
+    function add_boundary_face!(N, face_areas, face_normals, face_centroids, x, y, z, D, pos)
+        t = (x, y, z)
+        is_start = t[D] == 1
+        index = cell_index(g, t)
+        N[pos] = index
+        Δ  = cell_dims(g, t)
+        # Face area
+        A = 1
+        for i in setdiff(1:3, D)
+            A *= Δ[i]
+        end
+        face_areas[pos] = A
+        if is_start
+            sgn = -1.0
+        else
+            sgn = 1.0
+        end
+        face_normals[D, pos] = sgn
+        face_centroids[:, pos] = cell_centroids[:, index]
+        # Offset by the grid size
+        face_centroids[D, pos] += sgn*Δ[D]/2.0
+    end
+
+    pos = 1
+    # x varies, z, y fixed
+    for y in 1:ny
+        for z = 1:nz
+            for x in [1, nx]
+                add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 1, pos)
+                pos += 1
+            end
+        end
+    end
+    if d > 1
+        # y varies, x, z fixed
+        for x = 1:nx
+            for z in 1:nz
+                for y in [1, ny]
+                    add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 2, pos)
+                    pos += 1
+                end
+            end
+        end
+        if d > 2
+            # z varies, x, y fixed
+            for x = 1:nx
+                for y in 1:ny
+                    for z in [1, nz]
+                        add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 3, pos)
+                        pos += 1
+                    end
+                end
+            end
+        end
+    end
+
+    return TwoPointFiniteVolumeGeometry(
+        N,
+        face_areas,
+        V,
+        face_normals,
+        cell_centroids,
+        face_centroids;
+        boundary_areas = boundary_areas,
+        boundary_normals = boundary_normals,
+        boundary_centroids = boundary_centroids,
+        boundary_neighbors = boundary_neighbors
+        )
 end
 
 function get_neighborship(g::CartesianMesh)
