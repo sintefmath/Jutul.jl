@@ -423,7 +423,7 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
 end
 
 # Grids etc
-export JutulEntity, Cells, Faces, Nodes, NoEntity
+export JutulEntity, Cells, Faces, HalfFaces, BoundaryFaces, Nodes, NoEntity
 ## Grid
 """
 A mesh is a type of domain that has been discretized. Abstract subtype.
