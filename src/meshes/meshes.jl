@@ -184,18 +184,17 @@ end
 
 function add_default_domain_data!(Ω::DataDomain, m::Union{CartesianMesh, MRSTWrapMesh, Meshes.Mesh})
     fv = tpfv_geometry(m)
-    for fname in [:neighbors, :areas, :normals, :face_centroids]
-        Ω[fname, Faces()] = getproperty(fv, fname)
-    end
-    for cname in [:cell_centroids, :volumes]
-        Ω[cname, Cells()] = getproperty(fv, cname)
-    end
-    for hfname in [:half_face_cells, :half_face_faces]
-        Ω[hfname, HalfFaces()] = getproperty(fv, hfname)
-    end
-    if hasentity(Ω, BoundaryFaces())
-        for hfname in [:boundary_areas, :boundary_centroids, :boundary_normals, :boundary_neighbors]
-            Ω[hfname, BoundaryFaces()] = getproperty(fv, hfname)
+    geom_pairs = (
+        Pair(Faces(), [:neighbors, :areas, :normals, :face_centroids]),
+        Pair(Cells(), [:cell_centroids, :volumes]),
+        Pair(HalfFaces(), [:half_face_cells, :half_face_faces]),
+        Pair(BoundaryFaces(), [:boundary_areas, :boundary_centroids, :boundary_normals, :boundary_neighbors])
+    )
+    for (entity, names) in geom_pairs
+        if hasentity(Ω, entity)
+            for name in names
+                Ω[name, entity] = getproperty(fv, name)
+            end
         end
     end
 end
