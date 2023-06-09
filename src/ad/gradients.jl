@@ -287,13 +287,31 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
 end
 
 function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
-    # Unpack simulators
+    λ, t, dt, forces = next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces)
+    # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
+    # Increment gradient
     parameter_sim = adjoint_storage.parameter
+    @tic "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, t)
+    lsys_param = parameter_sim.storage.LinearizedSystem
+    op_p = linear_operator(lsys_param)
+    sens_add_mult!(∇G, op_p, λ)
+    dparam = adjoint_storage.dparam
+    @tic "objective parameter gradient" if !isnothing(dparam)
+        if i == N
+            @. dparam = 0
+        end
+        pbuf = adjoint_storage.param_buf
+        state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, i, forces))
+        @. dparam += pbuf
+    end
+end
+
+function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces)
+    # Unpack simulators
     backward_sim = adjoint_storage.backward
     forward_sim = adjoint_storage.forward
     λ = adjoint_storage.lagrange
     λ_b = adjoint_storage.lagrange_buffer
-    dparam = adjoint_storage.dparam
     # Timestep logic
     N = length(timesteps)
     forces = forces_for_timestep(forward_sim, all_forces, timesteps, i)
@@ -336,21 +354,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     end
     @tic "linear solve" lstats = linear_solve!(lsys, lsolve, forward_sim.model, forward_sim.storage; lsolve_arg...)
     adjoint_transfer_canonical_order!(λ, dx, forward_sim.model, to_canonical = true)
-    # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
-    # Increment gradient
-    @tic "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, t)
-    lsys_param = parameter_sim.storage.LinearizedSystem
-    op_p = linear_operator(lsys_param)
-    sens_add_mult!(∇G, op_p, λ)
-
-    @tic "objective parameter gradient" if !isnothing(dparam)
-        if i == N
-            @. dparam = 0
-        end
-        pbuf = adjoint_storage.param_buf
-        state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, i, forces))
-        @. dparam += pbuf
-    end
+    return λ, t, dt, forces
 end
 
 function sens_add_mult!(x::AbstractVector, op::LinearOperator, y::AbstractVector)
