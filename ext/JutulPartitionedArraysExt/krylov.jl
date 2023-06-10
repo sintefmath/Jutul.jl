@@ -47,7 +47,7 @@ end
 function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, atol, rtol)
     t_op = @elapsed op = Jutul.parray_linear_system_operator(simulators, b)
     t_prec = @elapsed P = parray_preconditioner_linear_operator(simulator, lsolve, b)
-    consistent!(b) |> wait
+    @tic "communication" consistent!(b) |> wait
 
     max_it = cfg.max_iterations
     @tic "solve" Krylov.bicgstab!(
@@ -59,14 +59,14 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
         rtol = rtol,
         atol = atol
     )
-    consistent!(bsolver.x) |> wait
+    @tic "communication" consistent!(bsolver.x) |> wait
 
     stats = bsolver.stats
     res = stats.residuals
     n_lin_its = length(res) - 1
     solved = stats.solved
 
-    map(simulators, local_values(bsolver.x)) do sim, dx
+    @tic "dx update" map(simulators, local_values(bsolver.x)) do sim, dx
         sys = sim.storage.LinearizedSystem
         Jutul.update_dx_from_vector!(sys, dx)
     end
