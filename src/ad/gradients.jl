@@ -158,18 +158,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     # Set gradient to zero before solve starts
     @. ∇G = 0
     @tic "sensitivities" for i in N:-1:1
-        fn = deepcopy
-        if i == 1
-            s0 = fn(state0)
-        else
-            s0 = fn(states[i-1])
-        end
-        if i == N
-            s_next = nothing
-        else
-            s_next = fn(states[i+1])
-        end
-        s = fn(states[i])
+        s, s0, s_next = state_pair_adjoint_solve(state0, states, i, N)
         update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
     end
     dparam = storage.dparam
@@ -179,6 +168,22 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
     @assert all(isfinite, ∇G)
     return ∇G
+end
+
+function state_pair_adjoint_solve(state0, states, i, N)
+    fn = deepcopy
+    if i == 1
+        s0 = fn(state0)
+    else
+        s0 = fn(states[i-1])
+    end
+    if i == N
+        s_next = nothing
+    else
+        s_next = fn(states[i+1])
+    end
+    s = fn(states[i])
+    return (s, s0, s_next)
 end
 
 function update_objective_sparsity!(storage, G, states, timesteps, forces, k = :forward)
