@@ -56,12 +56,16 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
                                       targets = parameter_targets(model),
                                       use_sparsity = true,
                                       linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-8),
-                                      param_obj = false, kwarg...)
-    primary_model = adjoint_model_copy(model)
-    # Standard model for: ∂Fₙᵀ / ∂xₙ
-    forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
-    # Same model, but adjoint for: ∂Fₙ₊₁ᵀ / ∂xₙ
-    backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :reverse, extra_timing = nothing)
+                                      param_obj = true,
+                                      kwarg...)
+    # Set up the generic adjoint storage
+    forward_sim, backward_sim, λ, rhs, dx, sparsity_obj, opts = 
+        setup_adjoint_simulator_and_buffers(
+            model, state0, parameters,
+            use_sparsity = use_sparsity,
+            n_objective = n_objective
+        )
+    (; multiple_rhs, rhs_transfer_needed) = opts
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model, targets)
     # Note that primary is here because the target parameters are now the primaries for the parameter_model
@@ -70,24 +74,6 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
     state0_p = swap_variables(state0, parameters, parameter_model, variables = true)
     parameters_p = swap_variables(state0, parameters, parameter_model, variables = false)
     parameter_sim = Simulator(parameter_model, state0 = deepcopy(state0_p), parameters = deepcopy(parameters_p), mode = :sensitivities, extra_timing = nothing)
-    if use_sparsity isa Bool
-        if use_sparsity
-            # We will update these later on
-            sparsity_obj = Dict{Any, Any}(:parameter => nothing, 
-                                        :forward => nothing)
-        else
-            sparsity_obj = nothing
-        end
-    else
-        # Assume it was manually set up
-        sparsity_obj = use_sparsity
-    end
-    n_pvar = number_of_degrees_of_freedom(model)
-    λ = gradient_vec_or_mat(n_pvar, n_objective)
-    fsim_s = forward_sim.storage
-    rhs = vector_residual(fsim_s.LinearizedSystem)
-    dx = fsim_s.LinearizedSystem.dx_buffer
-    n_var = length(dx)
     if param_obj
         n_param = number_of_degrees_of_freedom(parameter_model)
         dobj_dparam = gradient_vec_or_mat(n_param, n_objective)
@@ -95,15 +81,6 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
     else
         dobj_dparam = nothing
         param_buf = nothing
-    end
-    rhs_transfer_needed = length(rhs) != n_var
-    multiple_rhs = !isnothing(n_objective)
-    if multiple_rhs
-        # Need bigger buffers for multiple rhs
-        rhs = gradient_vec_or_mat(n_var, n_objective)
-        dx = gradient_vec_or_mat(n_var, n_objective)
-    elseif rhs_transfer_needed
-        rhs = zeros(n_var)
     end
     return (forward = forward_sim,
             backward = backward_sim,
@@ -121,6 +98,47 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
             rhs_transfer_needed = rhs_transfer_needed,
             n = number_of_degrees_of_freedom(parameter_model)
             )
+end
+
+function setup_adjoint_simulator_and_buffers(model, state0, parameters; use_sparsity = true, n_objective = nothing)
+    primary_model = adjoint_model_copy(model)
+    # Standard model for: ∂Fₙᵀ / ∂xₙ
+    forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
+    # Same model, but adjoint for: ∂Fₙ₊₁ᵀ / ∂xₙ
+    backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :reverse, extra_timing = nothing)
+    if use_sparsity isa Bool
+        if use_sparsity
+            # We will update these later on
+            sparsity_obj = Dict{Any, Any}(:parameter => nothing, 
+                                          :forward => nothing)
+        else
+            sparsity_obj = nothing
+        end
+    else
+        # Assume it was manually set up
+        sparsity_obj = use_sparsity
+    end
+    n_pvar = number_of_degrees_of_freedom(model)
+    λ = gradient_vec_or_mat(n_pvar, n_objective)
+    fsim_s = forward_sim.storage
+    rhs = vector_residual(fsim_s.LinearizedSystem)
+    dx = fsim_s.LinearizedSystem.dx_buffer
+    n_var = length(dx)
+
+    rhs_transfer_needed = length(rhs) != n_var
+    multiple_rhs = !isnothing(n_objective)
+    if multiple_rhs
+        # Need bigger buffers for multiple rhs
+        rhs = gradient_vec_or_mat(n_var, n_objective)
+        dx = gradient_vec_or_mat(n_var, n_objective)
+    elseif rhs_transfer_needed
+        rhs = zeros(n_var)
+    end
+    opts = (
+        rhs_transfer_needed = rhs_transfer_needed,
+        multiple_rhs = multiple_rhs
+    )
+    return (forward_sim, backward_sim, λ, rhs, dx, sparsity_obj, opts)
 end
 
 """
@@ -297,7 +315,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     sens_add_mult!(∇G, op_p, λ)
     dparam = adjoint_storage.dparam
     @tic "objective parameter gradient" if !isnothing(dparam)
-        if i == N
+        if i == length(timesteps)
             @. dparam = 0
         end
         pbuf = adjoint_storage.param_buf
