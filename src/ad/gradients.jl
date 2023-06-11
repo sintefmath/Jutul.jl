@@ -137,6 +137,7 @@ function setup_adjoint_storage_base(model, state0, parameters;
     storage[:lagrange_buffer] = similar(λ)
     storage[:dx] = dx
     storage[:rhs] = rhs
+    storage[:n_forward] = n_var
     storage[:linear_solver] = linear_solver
     storage[:multiple_rhs] = multiple_rhs
     storage[:rhs_transfer_needed] = rhs_transfer_needed
