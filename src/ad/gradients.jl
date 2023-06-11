@@ -59,13 +59,12 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
                                       param_obj = true,
                                       kwarg...)
     # Set up the generic adjoint storage
-    forward_sim, backward_sim, λ, rhs, dx, sparsity_obj, opts = 
-        setup_adjoint_simulator_and_buffers(
+    storage =  setup_adjoint_storage_base(
             model, state0, parameters,
             use_sparsity = use_sparsity,
+            linear_solver = linear_solver,
             n_objective = n_objective
         )
-    (; multiple_rhs, rhs_transfer_needed) = opts
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model, targets)
     # Note that primary is here because the target parameters are now the primaries for the parameter_model
@@ -82,25 +81,20 @@ function setup_adjoint_storage(model; state0 = setup_state(model),
         dobj_dparam = nothing
         param_buf = nothing
     end
-    return (forward = forward_sim,
-            backward = backward_sim,
-            parameter = parameter_sim,
-            parameter_map = parameter_map,
-            objective_sparsity = sparsity_obj,
-            lagrange = λ,
-            lagrange_buffer = similar(λ),
-            dparam = dobj_dparam,
-            param_buf = param_buf,
-            dx = dx,
-            rhs = rhs,
-            linear_solver = linear_solver,
-            multiple_rhs = multiple_rhs,
-            rhs_transfer_needed = rhs_transfer_needed,
-            n = number_of_degrees_of_freedom(parameter_model)
-            )
+    storage[:dparam] = dobj_dparam
+    storage[:param_buf] = param_buf
+    storage[:parameter] = parameter_sim
+    storage[:parameter_map] = parameter_map
+    storage[:n] = number_of_degrees_of_freedom(parameter_model)
+
+    return storage
 end
 
-function setup_adjoint_simulator_and_buffers(model, state0, parameters; use_sparsity = true, n_objective = nothing)
+function setup_adjoint_storage_base(model, state0, parameters;
+        use_sparsity = true,
+        linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-8),
+        n_objective = nothing
+        )
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
     forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
@@ -134,11 +128,20 @@ function setup_adjoint_simulator_and_buffers(model, state0, parameters; use_spar
     elseif rhs_transfer_needed
         rhs = zeros(n_var)
     end
-    opts = (
-        rhs_transfer_needed = rhs_transfer_needed,
-        multiple_rhs = multiple_rhs
-    )
-    return (forward_sim, backward_sim, λ, rhs, dx, sparsity_obj, opts)
+
+    storage = JutulStorage()
+    storage[:forward] = forward_sim
+    storage[:backward] = backward_sim
+    storage[:objective_sparsity] = sparsity_obj
+    storage[:lagrange] = λ
+    storage[:lagrange_buffer] = similar(λ)
+    storage[:dx] = dx
+    storage[:rhs] = rhs
+    storage[:linear_solver] = linear_solver
+    storage[:multiple_rhs] = multiple_rhs
+    storage[:rhs_transfer_needed] = rhs_transfer_needed
+
+    return storage
 end
 
 """
