@@ -133,3 +133,16 @@ function LinearAlgebra.axpby!(α, x::PVector, β, y::PVector)
     y
 end
 
+function Krylov.kaxpy!(n :: Integer, s :: T, x :: PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dx :: Integer, y :: PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dy :: Integer) where T<:AbstractFloat
+    map(local_values(x), local_values(y)) do x_i, y_i
+        LinearAlgebra.axpy!(s, x_i, y_i)
+        nothing
+    end
+end
+
+function Krylov.kaxpby!(n :: Integer, s :: T, x :: PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dx :: Integer, t :: T, y :: PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dy :: Integer) where T<:AbstractFloat
+    map(local_values(x), local_values(y)) do x_i, y_i
+        LinearAlgebra.axpby!(s, x_i, t, y_i)
+        nothing
+    end
+end
