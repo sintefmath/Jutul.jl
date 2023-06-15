@@ -2,7 +2,7 @@ function vectorize_forces(forces, variant = :all; T = Float64)
     meta_for_forces = Dict{Symbol, Any}()
     lengths = map(
         x -> vectorization_length(x, variant),
-        values(forces)
+        filter(x -> !isnothing(x), values(forces))
     )
     n = sum(lengths)
     v = Vector{T}(undef, n)
@@ -441,7 +441,15 @@ function forces_optimization_config(
         end
         for (fname, force) in pairs(forces)
             loc = OrderedDict{Symbol, Any}()
-            ix = add_names!(loc, X, force, meta[fname].meta, ix)
+            if isnothing(force)
+                continue
+            end
+            # TODO: Fix this mess.
+            if force isa Vector
+                ix = add_names!(loc, X, force, meta[fname].meta, ix)
+            else
+                ix = add_names!(loc, X, force, meta[fname], ix)
+            end
             opt_config[fname] = loc
         end
         if print
