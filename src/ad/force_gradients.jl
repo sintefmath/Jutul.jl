@@ -320,7 +320,8 @@ function solve_adjoint_forces(model, states, reports, G, allforces;
 
     N = length(timesteps)
     @assert N == length(states)
-    # out = zeros(length(X))
+    # Do sparsity detection if not already done.
+    update_objective_sparsity!(storage, G, states, timesteps, allforces, :forward)
     for i in N:-1:1
         forceno = timesteps_to_forces[i]
         # Unpack stuff for this force in particular
