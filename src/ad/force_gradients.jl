@@ -124,7 +124,7 @@ function devectorize_force(force::Vector, X, meta, variant)
     return new_force
 end
 
-function determine_sparsity_forces(model, forces, X, config)
+function determine_sparsity_forces(model, forces, X, config; parameters = setup_parameters(model))
     function fake_state(model)
         init = Dict{Symbol, Any}()
         for (k, v) in Jutul.get_variables(model)
@@ -132,8 +132,7 @@ function determine_sparsity_forces(model, forces, X, config)
         end
         # Also add parameters here.
         state = setup_state(model, init)
-        prm = setup_parameters(model)
-        return convert_to_immutable_storage(merge(state, prm))
+        return convert_to_immutable_storage(merge(state, parameters))
     end
     state = fake_state(model)
     storage = (state = state, )
@@ -315,7 +314,7 @@ function solve_adjoint_forces(model, states, reports, G, allforces;
         push!(storage[:forces_gradient], zeros(length(X)))
         push!(storage[:forces_vector], X)
         push!(storage[:forces_config], config)
-        push!(storage[:forces_sparsity], determine_sparsity_forces(model, force, X, config))
+        push!(storage[:forces_sparsity], determine_sparsity_forces(model, force, X, config, parameters = parameters))
         push!(storage[:forces_jac], sparse(Int[], Int[], Float64[], nvar, length(X)))
     end
 
@@ -390,8 +389,8 @@ function forces_optimization_config(
         variant = :all;
         print = true,
         active = true,
-        rel_min = 0.1,
-        rel_max = 10.0,
+        rel_min = -Inf,
+        rel_max = Inf,
         abs_min = -Inf,
         abs_max = Inf,
         use_scaling = true
