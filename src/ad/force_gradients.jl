@@ -25,6 +25,9 @@ function vectorize_forces!(v, config, forces)
     ix = 1
     offset = 0
     for (k, force) in pairs(forces)
+        if isnothing(force)
+            continue
+        end
         n_f = lengths[ix]
         v_f = view(v, (offset+1):(offset+n_f))
         m = vectorize_force!(v_f, force, variant)
@@ -94,6 +97,9 @@ function devectorize_forces(forces, X, config)
     offset = 0
     ix = 1
     for (k, v) in pairs(forces)
+        if isnothing(v)
+            continue
+        end
         n_i = lengths[ix]
         X_i = view(X, (offset+1):(offset+n_i))
         new_forces[k] = devectorize_force(v, X_i, config.meta[k], config.variant)
