@@ -281,27 +281,27 @@ function unique_forces_and_mapping(allforces, timesteps)
     return (forces = unique_forces, forces_to_timesteps = forces_to_timestep, timesteps_to_forces = timesteps_to_forces, num_unique = num_unique_forces)
 end
 
-
-function solve_adjoint_forces(model, states, reports, G, allforces;
-        state0 = setup_state(model),
-        n_objective = nothing,
-        use_sparsity = true,
-        timesteps = report_timesteps(reports),
-        forces_map = unique_forces_and_mapping(allforces, timesteps),
-        parameters = setup_parameters(model)
-    )
+function setup_adjoint_forces_storage(
+    model, allforces, timesteps
+    ;
+    n_objective = nothing,
+    use_sparsity = true,
+    forces_map = unique_forces_and_mapping(allforces, timesteps),
+    state0 = setup_state(model),
+    parameters = setup_parameters(model)
+)
     storage = 
-        Jutul.setup_adjoint_storage_base(
-            model, state0, parameters,
-            use_sparsity = use_sparsity,
-            n_objective = n_objective
-        )
-    
+    Jutul.setup_adjoint_storage_base(
+        model, state0, parameters,
+        use_sparsity = use_sparsity,
+        n_objective = n_objective,
+    )
+
     unique_forces, forces_to_timestep, timesteps_to_forces, = forces_map
-    # @assert forces isa NamedTuple
     storage[:unique_forces] = unique_forces
     storage[:forces_to_timestep] = forces_to_timestep
     storage[:timestep_to_forces] = timesteps_to_forces
+    storage[:forces_map] = forces_map
     storage[:forces_gradient] = []
     storage[:forces_vector] = []
     storage[:forces_config] = []
@@ -317,6 +317,26 @@ function solve_adjoint_forces(model, states, reports, G, allforces;
         push!(storage[:forces_sparsity], determine_sparsity_forces(model, force, X, config, parameters = parameters))
         push!(storage[:forces_jac], sparse(Int[], Int[], Float64[], nvar, length(X)))
     end
+    return storage
+end
+
+function solve_adjoint_forces(model, states, reports, G, allforces;
+        state0 = setup_state(model),
+        timesteps = report_timesteps(reports),
+        parameters = setup_parameters(model),
+        kwarg...
+    )
+    storage = setup_adjoint_forces_storage(model, allforces, timesteps; state0 = state0, parameters = parameters, kwarg...)
+    return solve_adjoint_forces!(storage, model, states, reports, G, allforces; state0 = state0, timesteps = timesteps, parameters = parameters)
+end
+
+function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
+        state0 = setup_state(model),
+        timesteps = report_timesteps(reports),
+        parameters = setup_parameters(model),
+        kwarg...
+    )
+    unique_forces, forces_to_timestep, timesteps_to_forces, = storage[:forces_map]
 
     N = length(timesteps)
     @assert N == length(states)
@@ -524,6 +544,13 @@ function setup_force_optimization(case, G, opt_config)
         end
     end
     global_it = 0
+    force_adj_storage = setup_adjoint_forces_storage(
+        model,
+        forces,
+        dt,
+        state0 = state0,
+        parameters = parameters
+    )
 
     function evaluate_forward(x, g = nothing)
         sim = Simulator(model, state0 = state0, parameters = parameters)
@@ -538,13 +565,20 @@ function setup_force_optimization(case, G, opt_config)
             X_i = X[start:stop]
             fcfg = opt_config.forces_config[i]
             allforces[i] = devectorize_forces(force, X_i, fcfg)
+            # if i == 1
+            #     @info "$i: " allforces[i] force allforces[i] == force
+            #     if allforces[i] != force
+            #         @warn "Diff" allforces[i].bc.y_feed == force.bc.y_feed
+            #     end
+            # end
         end
         simforces = allforces[opt_config.timesteps_to_forces]
+        @error "It $global_it evaluting forward"
         global_it += 1
         states, reports = simulate(sim, dt, forces = simforces, extra_timing = false, info_level = -1)
         output_data[:states] = states
         if !isnothing(g)
-            dforces, grad_adj = solve_adjoint_forces(model, states, reports, G, simforces,
+            dforces, grad_adj = solve_adjoint_forces!(force_adj_storage, model, states, reports, G, simforces,
             state0 = state0, parameters = parameters, forces_map = opt_config[:forces_map])
 
             grad_adj = vcat(grad_adj...)
@@ -554,9 +588,11 @@ function setup_force_optimization(case, G, opt_config)
                 @assert isfinite(∂g) "Non-finite gradient for global $j local $i"
                 g[i] = ∂g
             end
+            @error "It $global_it evaluting grad"
             return g
         else
             obj = Jutul.evaluate_objective(G, model, states, dt, simforces)
+            @info "$global_it:" X obj
             push!(objective_history, obj)
             return obj
         end
