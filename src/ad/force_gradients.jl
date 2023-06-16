@@ -194,7 +194,7 @@ function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 
     return sparsity
 end
 
-function evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno)
+function evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, time)
     state = as_value(storage.forward.storage.state)
     mstorage = (state = state, )
 
@@ -226,14 +226,14 @@ function evaluate_force_gradient(X, model, storage, parameters, forces, config, 
             eq = model.equations[eqname]
             acc = zeros(T, S.dims)
             eq_s = missing
-            time = NaN
             Jutul.apply_forces_to_equation!(acc, mstorage, model, eq, eq_s, force, time)
             # Loop over entities that this force impacts
             for (entity, rows) in zip(S.entity, S.rows)
                 for (i, row) in enumerate(rows)
                     val = acc[i, entity]
                     for p in 1:np
-                        J[row, offset + p] = val.partials[p]
+                        ∂ = val.partials[p]
+                        J[row, offset + p] = ∂
                     end
                 end
             end
@@ -332,7 +332,7 @@ function solve_adjoint_forces(model, states, reports, G, allforces;
 
         s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
         λ, t, dt, forces = Jutul.next_lagrange_multiplier!(storage, i, G, s, s0, s_next, timesteps, forces)
-        J = evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno)
+        J = evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, sum(timesteps[1:i]))
         Δ =  J'*λ
         @. out += Δ
         # display(out)
@@ -523,6 +523,7 @@ function setup_force_optimization(case, G, opt_config)
             push!(offsets, offsets[force_ix] + ctr)
         end
     end
+    global_it = 0
 
     function evaluate_forward(x, g = nothing)
         sim = Simulator(model, state0 = state0, parameters = parameters)
@@ -539,6 +540,7 @@ function setup_force_optimization(case, G, opt_config)
             allforces[i] = devectorize_forces(force, X_i, fcfg)
         end
         simforces = allforces[opt_config.timesteps_to_forces]
+        global_it += 1
         states, reports = simulate(sim, dt, forces = simforces, extra_timing = false, info_level = -1)
         output_data[:states] = states
         if !isnothing(g)
@@ -548,7 +550,9 @@ function setup_force_optimization(case, G, opt_config)
             grad_adj = vcat(grad_adj...)
 
             for (i, j) in enumerate(indices_in_X)
-                g[i] = grad_adj[j]
+                ∂g = grad_adj[j]
+                @assert isfinite(∂g) "Non-finite gradient for global $j local $i"
+                g[i] = ∂g
             end
             return g
         else
