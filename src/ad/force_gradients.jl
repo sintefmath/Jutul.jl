@@ -502,10 +502,20 @@ function setup_force_optimization(case, G, opt_config)
             for (k, v) in fconfig
                 val = v[:base_value]
                 if v[:active]
+                    low = max(v[:abs_min], val*v[:rel_min])
+                    hi = min(v[:abs_max], val*v[:rel_max]) + 1e-12
+
+                    if val < low
+                        @warn "$fkey.$k base_value $val is below lower bound $low, capping to $low."
+                        val = low
+                    elseif val > hi
+                        @warn "$fkey.$k base_value $val is above upper bound $hi, capping to $hi."
+                        val = hi
+                    end
                     push!(x0, val)
                     push!(indices_in_X, v[:global_index])
-                    push!(xmin, max(v[:abs_min], val*v[:rel_min]))
-                    push!(xmax, min(v[:abs_max], val*v[:rel_max]) + 1e-12)
+                    push!(xmin, low)
+                    push!(xmax, hi)
                     ctr += 1
                 end
                 push!(X, val)
