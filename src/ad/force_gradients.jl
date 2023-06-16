@@ -529,8 +529,8 @@ function setup_force_optimization(case, G, opt_config)
         sim = Simulator(model, state0 = state0, parameters = parameters)
         allforces = opt_config.forces
 
-        for (i, v) in zip(indices_in_X, x)
-            X[i] = v
+        for (i, v, j) in zip(indices_in_X, x, 1:length(x))
+            X[i] = clamp(v, xmin[j], xmax[j])
         end
         for (i, force) in enumerate(allforces)
             start = opt_config.offsets[i]
