@@ -406,7 +406,7 @@ function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     update_before_step!(s, model, dt, forces, time = time)
     # Then the current primary variables
     reset_variables!(s, model, state)
-    update_state_dependents!(s, model, dt, forces)
+    update_state_dependents!(s, model, dt, forces, time = time)
     # Finally update the system
     update_linearized_system!(s, model)
 end
