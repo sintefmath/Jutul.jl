@@ -137,16 +137,28 @@ function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N))
                 conn_data[fpos] = get_el(faces[fpos], cell)
             end
         end
-        fn = map(i -> (N[1, i], N[2, i]), 1:size(N, 2))
+    else
+        nc = number_of_cells(grid)
+        conn_data = []
+        face_pos = ones(Int64, nc+1)
+    end
+    f2hf, fn = __generate_hard_coded_hf_map(N, face_pos, conn_data)
+    return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data), typeof(f2hf)}(true, face_pos, conn_data, f2hf, fn)
+end
 
-        function findface(cell, face)
-            for fpos = face_pos[cell]:(face_pos[cell+1]-1)
-                if conn_data[fpos].face == face
-                    return fpos
-                end
+function __generate_hard_coded_hf_map(N, face_pos, conn_data)
+    function findface(cell, face)
+        for fpos = face_pos[cell]:(face_pos[cell+1]-1)
+            if conn_data[fpos].face == face
+                return fpos
             end
-            error()
         end
+        error("This should not occur - bad data")
+    end
+
+    nf = size(N, 2)
+    if nf > 0
+        fn = map(i -> (N[1, i], N[2, i]), 1:size(N, 2))
 
         f2hf = similar(fn)
         for i in eachindex(f2hf)
@@ -154,13 +166,10 @@ function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N))
             f2hf[i] = (findface(l, i), findface(r, i))
         end
     else
-        nc = number_of_cells(grid)
-        conn_data = []
-        face_pos = ones(Int64, nc+1)
         f2hf = Vector{Tuple{Int64, Int64}}() # tuple of positions in half face map
         fn = similar(f2hf) # tuple of left, right face
     end
-    return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data), typeof(f2hf)}(true, face_pos, conn_data, f2hf, fn)
+    return (f2hf, fn)
 end
 
 number_of_half_faces(tp::TwoPointPotentialFlowHardCoded) = length(tp.conn_data)
@@ -185,9 +194,8 @@ function subdiscretization(disc::TwoPointPotentialFlowHardCoded, subg, mapper::F
 
     conn_data = conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn_data_global::Vector{T}, mapper, nc)
     face_pos = next_face_pos
-    # face_pos = new_offsets
-    # conn_data = vcat(new_conn...)
-    return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data)}(has_grav, face_pos, conn_data)
+    f2hf, fn = __generate_hard_coded_hf_map(N, face_pos, conn_data)
+    return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data), typeof(f2hf)}(has_grav, face_pos, conn_data, f2hf, fn)
 end
 
 function compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_global, mapper, nc)
