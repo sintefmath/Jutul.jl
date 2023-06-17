@@ -111,10 +111,12 @@ function remap_connection(conn::T, self::I, other::I, face::I) where {T, I<:Inte
     return conn
 end
 
-struct TwoPointPotentialFlowHardCoded{C, D} <: FlowDiscretization
+struct TwoPointPotentialFlowHardCoded{C, D, F} <: FlowDiscretization
     gravity::Bool
     conn_pos::C
     conn_data::D
+    face_to_half_face::F
+    face_neighborship::F
 end
 
 function TwoPointPotentialFlowHardCoded(grid::JutulMesh)
@@ -135,12 +137,30 @@ function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N))
                 conn_data[fpos] = get_el(faces[fpos], cell)
             end
         end
+        fn = map(i -> (N[1, i], N[2, i]), 1:size(N, 2))
+
+        function findface(cell, face)
+            for fpos = face_pos[cell]:(face_pos[cell+1]-1)
+                if conn_data[fpos].face == face
+                    return fpos
+                end
+            end
+            error()
+        end
+
+        f2hf = similar(fn)
+        for i in eachindex(f2hf)
+            l, r = fn[i]
+            f2hf[i] = (findface(l, i), findface(r, i))
+        end
     else
         nc = number_of_cells(grid)
         conn_data = []
         face_pos = ones(Int64, nc+1)
+        f2hf = Vector{Tuple{Int64, Int64}}() # tuple of positions in half face map
+        fn = similar(f2hf) # tuple of left, right face
     end
-    return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data)}(true, face_pos, conn_data)
+    return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data), typeof(f2hf)}(true, face_pos, conn_data, f2hf, fn)
 end
 
 number_of_half_faces(tp::TwoPointPotentialFlowHardCoded) = length(tp.conn_data)
