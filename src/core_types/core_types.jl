@@ -423,7 +423,7 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
 end
 
 # Grids etc
-export JutulEntity, Cells, Faces, Nodes, NoEntity
+export JutulEntity, Cells, Faces, HalfFaces, BoundaryFaces, Nodes, NoEntity
 ## Grid
 """
 A mesh is a type of domain that has been discretized. Abstract subtype.
@@ -445,6 +445,16 @@ struct Cells <: JutulEntity end
 Entity for Faces (intersection between pairs of [`Cells`](@ref))
 """
 struct Faces <: JutulEntity end
+
+"""
+Entity for faces on the boundary (faces that are only connected to a single [`Cells`](@ref))
+"""
+struct BoundaryFaces <: JutulEntity end
+
+"""
+Entity for half-faces (face associated with a single [`Cells`](@ref))
+"""
+struct HalfFaces <: JutulEntity end
 
 """
 Entity for Nodes (intersection between multiple [`Faces`](@ref))

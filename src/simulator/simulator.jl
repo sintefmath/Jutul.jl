@@ -364,7 +364,9 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
         e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation, solve = do_solve)
         if haskey(r, :failure_exception)
             inner_exception = r[:failure_exception]
-            @warn "Exception occurred in perform_step!" inner_exception
+            if cfg[:info_level] > 0
+                @warn "Exception occurred in perform_step!" inner_exception
+            end
             break
         end
         next_iteration!(rec, r)

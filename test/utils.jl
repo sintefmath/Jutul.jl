@@ -111,7 +111,25 @@ end
     d[:data_3d] = d3d
     @test d[:data_3d] == d3d
     @test_throws "AssertionError: Number of columns for Matrix scalar defined on Cells() should be 6, was 2" d[:scalar] = rand(93, 2)
-    @test tuple(keys(d)...) == (:neighbors, :areas, :normals, :face_centroids, :cell_centroids, :volumes, :cell_vector, :face_vector, :scalar, :data_2d, :data_3d)
+    @test tuple(keys(d)...) == (
+        :neighbors,
+        :areas,
+        :normals,
+        :face_centroids,
+        :cell_centroids,
+        :volumes,
+        :half_face_cells,
+        :half_face_faces,
+        :boundary_areas,
+        :boundary_centroids,
+        :boundary_normals,
+        :boundary_neighbors,
+        :cell_vector,
+        :face_vector,
+        :scalar,
+        :data_2d,
+        :data_3d
+        )
 end
 
 @testset "get_1d_interpolator" begin
@@ -133,4 +151,39 @@ end
     # Limit to max time-step
     @test compress_timesteps([1.0, 3.0, 0.5, 1.0], max_step = 1.0) == ([1.0, 1.0, 1.0, 1.0, 1.0, 0.5], nothing)
     @test compress_timesteps([0.9, 3.0, 2.5, 0.62], [f1, f1, f2, f2], max_step = 1.0) == ([1.0, 1.0, 1.0, 0.9, 1.0, 1.0, 1.12], [f1, f1, f1, f1, f2, f2, f2])
+end
+
+using Jutul, Test
+@testset "Transmissibilities" begin
+    test_meshes = [
+        CartesianMesh((2, 2))
+        CartesianMesh((3, 7, 1), (0.2, 0.3, 1.9))
+        CartesianMesh((3, 4), ([0.1, 0.2, 0.5], [0.4, 0.1, 0.7, 0.2]))
+        CartesianMesh((5,), (1000.0,))
+    ]
+    for g in test_meshes
+        d = DataDomain(g)
+        nc = number_of_cells(g)
+        data = rand(nc)
+        d[:data] = data
+        # Test half trans
+        T1 = compute_half_face_trans(d, data)
+        T2 = compute_half_face_trans(d, :data)
+        @test T1 == T2
+        # Test full trans
+        T1 = compute_face_trans(d, data)
+        T2 = compute_face_trans(d, :data)
+        @test T1 == T2
+        # Test boundary trans
+        Th1 = compute_boundary_trans(d, data)
+        Th2 = compute_boundary_trans(d, :data)
+        @test length(Th1) == number_of_boundary_faces(g)
+        @test Th1 == Th2
+    end
+    # Boundary trans correctness
+    g = CartesianMesh((2, 2, 2))
+    d = DataDomain(g)
+    d[:permeability] = 1.0
+    Tb1 = compute_boundary_trans(d)
+    @test all(Tb1 .== 1)
 end

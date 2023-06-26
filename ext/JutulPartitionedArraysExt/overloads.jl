@@ -172,7 +172,7 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; ite
         t_update = @elapsed map(simulators) do sim
             Jutul.update_primary_variables!(sim.storage, sim.model)
         end
-
+        report[:linear_solver] = res
         report[:linear_solve_time] = t_solved
         report[:update_time] = t_update
         report[:linear_iterations] = n

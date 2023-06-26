@@ -242,8 +242,9 @@ function initialize_report_stats(reports)
                                                  :ministeps => 0,
                                                  :wasted_linearizations => 0,
                                                  :wasted_linear_iterations => 0,
-                                                 :linear_update => 0,
-                                                 :linear_solve => 0,
+                                                 :linear_update => 0.0,
+                                                 :linear_solve => 0.0,
+                                                 :linear_setup => 0.0,
                                                  :linear_iterations => 0,
                                                  :linearizations => 0,
                                                  :finalize => 0.0,
@@ -280,6 +281,7 @@ function ministep_report_stats!(stats, mini_rep)
     stats[:iterations] += s.newtons
     stats[:linear_update] += s.linear_system
     stats[:linear_solve] += s.linear_solve
+    stats[:linear_setup] += s.linear_setup
     stats[:linear_iterations] += s.linear_iterations
     stats[:update] += s.update
     stats[:equations] += s.equations
@@ -306,6 +308,7 @@ function summarize_report_stats(stats, per = false)
                 equations = linscale(stats[:equations]),
                 linear_system = linscale(stats[:linear_update]),
                 linear_solve = itscale(stats[:linear_solve]),
+                linear_setup = itscale(stats[:linear_setup]),
                 update = itscale(stats[:update]),
                 convergence = linscale(stats[:convergence]),
                 io = miniscale(stats[:io]),
@@ -361,13 +364,16 @@ function stats_ministep(reports)
     linear_system = 0
     update = 0
     linsolve = 0
+    linprep = 0
     linear_iterations = 0
     for rep in reports
         linearizations += 1
         if haskey(rep, :update_time)
             its += 1
             update += rep[:update_time]
-            linsolve += rep[:linear_solve_time]
+            lprep = rep[:linear_solver].prepare
+            linsolve += rep[:linear_solve_time] - lprep
+            linprep += lprep
             linear_iterations += rep[:linear_iterations]
         end
         secondary += rep[:secondary_time]
@@ -383,6 +389,7 @@ function stats_ministep(reports)
             update = update,
             linear_iterations = linear_iterations,
             linear_solve = linsolve,
+            linear_setup = linprep,
             linear_system = linear_system)
 end
 
@@ -522,6 +529,8 @@ function print_timing(stats; title = "", table_formatter = tf_unicode_rounded)
             name = :Assembly
         elseif name == :linear_solve
             name = Symbol("Linear solve")
+        elseif name == :linear_setup
+            name = Symbol("Preconditioner")
         elseif name == :update
             name = :Update
         elseif name == :convergence
