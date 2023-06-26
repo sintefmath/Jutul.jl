@@ -68,7 +68,6 @@ function declare_entities(domain::DataDomain)
     return ((entity = key, count = val) for (key, val) in domain.entities)
 end
 
-
 """
     physical_representation(x::DataDomain)
 

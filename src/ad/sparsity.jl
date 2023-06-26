@@ -108,7 +108,7 @@ function determine_sparsity_simple(F, model, state, state0 = nothing)
             f_ad = F(mstate, mstate0)
         end
         V = sum(f_ad)
-        if V isa AbstractFloat
+        if V isa AbstractFloat || V isa Integer
             S = zeros(Int64, 0)
         else
             D = ST.deriv(V)

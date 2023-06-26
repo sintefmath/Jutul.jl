@@ -488,13 +488,17 @@ import Base: getindex, @propagate_inbounds, parent, size, axes
 
 struct JutulStorage{K}
     data::Union{Dict{Symbol, <:Any}, NamedTuple}
-    function JutulStorage(S = Dict{Symbol, Any}())
+    function JutulStorage(S = Dict{Symbol, Any}(); kwarg...)
         if isa(S, Dict)
             K = Nothing
+            for (k, v) in kwarg
+                S[k] = v
+            end
         else
             @assert isa(S, NamedTuple)
             K = keys(S)
             K::Tuple
+            @assert length(kwarg) == 0
         end
         return new{K}(S)
     end

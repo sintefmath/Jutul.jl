@@ -320,7 +320,7 @@ end
 
 function update_other_time_report_stats!(stats)
     sum_measured = 0.0
-    for k in [:equations, :secondary, :linear_update, :linear_solve, :update, :convergence, :io]
+    for k in [:equations, :secondary, :linear_update, :linear_setup, :linear_solve, :update, :convergence, :io]
         sum_measured += stats[k]
     end
     stats[:other_time] = stats[:time] - sum_measured
