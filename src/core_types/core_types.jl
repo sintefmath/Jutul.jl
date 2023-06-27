@@ -487,7 +487,7 @@ end
 import Base: getindex, @propagate_inbounds, parent, size, axes
 
 struct JutulStorage{K}
-    data::Union{Dict{Symbol, <:Any}, NamedTuple}
+    data::Union{Dict{Symbol, Any}, K}
     function JutulStorage(S = Dict{Symbol, Any}(); kwarg...)
         if isa(S, Dict)
             K = Nothing
@@ -496,8 +496,7 @@ struct JutulStorage{K}
             end
         else
             @assert isa(S, NamedTuple)
-            K = keys(S)
-            K::Tuple
+            K = typeof(S)
             @assert length(kwarg) == 0
         end
         return new{K}(S)
@@ -523,7 +522,7 @@ end
 Base.propertynames(S::JutulStorage) = keys(getfield(S, :data))
 
 data(S::JutulStorage{Nothing}) = getfield(S, :data)
-data(S::JutulStorage) = getfield(S, :data)::NamedTuple
+data(S::JutulStorage{T}) where T = getfield(S, :data)::T
 
 function Base.setproperty!(S::JutulStorage, name::Symbol, x)
     Base.setproperty!(data(S), name, x)
