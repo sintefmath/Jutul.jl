@@ -1,6 +1,6 @@
 function simulator_config!(cfg, sim; nonlinear_tolerance = 1e-3, kwarg...)
     # Printing, etc
-    add_option!(cfg, :info_level, 0, "Info level determines the amount of runtime output to the terminal during simulation.", types = Int,
+    add_option!(cfg, :info_level, 0, "Info level determines the amount of runtime output to the terminal during simulation.", types = Union{Int, Float64},
     description = "
 0 - gives minimal output (just a progress bar by default, and a final report)
 1 - gives some more details, printing at the start of each step
