@@ -104,7 +104,12 @@ end
 Partition based on neighborship (with optional groups kept contigious after
 partitioning)
 """
-function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); partitioner = MetisPartitioner(), groups = nothing, n = maximum(N), group_by_weights = false, buffer_group = true)
+function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2));
+        partitioner = MetisPartitioner(),
+        groups = nothing, n = maximum(N),
+        group_by_weights = true,
+        buffer_group = false
+    )
     @assert size(N, 1) == 2
     @assert size(N, 2) == length(weights)
     weights::AbstractVector
