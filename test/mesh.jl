@@ -55,7 +55,8 @@ using Meshes
     @test isapprox(jgeo.cell_centroids, geo.cell_centroids, atol = 1e-12)
     @test isapprox(jgeo.volumes, geo.volumes, atol = 1e-12)
 end
-##
+
+using MAT
 @testset "UnstructuredMesh" begin
     fn = joinpath(pathof(Jutul), "..", "..", "data", "testgrids", "pico.mat")
     exported = MAT.matread(fn)
