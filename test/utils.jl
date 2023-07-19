@@ -187,3 +187,14 @@ using Jutul, Test
     Tb1 = compute_boundary_trans(d)
     @test all(Tb1 .== 1)
 end
+
+@testset "IndirectionMap" begin
+    val = [1.0, 2.0, 3.0, 4.0, 5.0]
+    ix = [1, 3, 6]
+
+    m = Jutul.IndirectionMap(val, ix)
+
+    @test m[2] == [3.0, 4.0, 5.0]
+    @test m[1] == [1.0, 2.0]
+    @test length(m) == 2
+end
