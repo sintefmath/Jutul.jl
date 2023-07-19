@@ -945,3 +945,24 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
         new{T}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
     end
 end
+
+struct IndirectionMap{V}
+    vals::Vector{V}
+    pos::Vector{Int}
+    """
+    IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where V
+
+    Create a indirection map that encodes a variable length dense vector.
+
+    `pos` is assumed to be a Vector{Int} of length n+1 where n is the number of
+    dense vectors that is encoded. The `vals` array holds the entries for vector i
+    in the range `pos[i]:(pos[i+1]-1)` for fast lookup. Indexing into the
+    indirection map with index `k` will give a view into the values for vector `k`.
+    """
+    function IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where V
+        lastpos = pos[end]
+        @assert length(vals) == lastpos - 1 "Expected vals to have length lastpos - 1 = $(lastpos-1), was $(length(vals))"
+        @assert pos[1] == 1
+        new{V}(vals, pos)
+    end    
+end
