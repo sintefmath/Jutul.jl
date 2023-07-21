@@ -149,5 +149,9 @@ using MAT
                 @test geo1.half_face_cells == geo2.half_face_cells
             end
         end
+        # 2D support missing
+        @test_broken UnstructuredMesh(CartesianMesh((3, 2)))
+        # 1D support missing
+        @test_broken UnstructuredMesh(CartesianMesh((3,)))
     end
 end
