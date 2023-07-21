@@ -177,6 +177,19 @@ include("mrst.jl")
 include("cart.jl")
 include("unstructured/unstructured.jl")
 
+
+function declare_entities(G::Union{CartesianMesh, UnstructuredMesh})
+    nf = number_of_faces(G)
+    nc = number_of_cells(G)
+    nbnd = number_of_boundary_faces(G)
+    return [
+            (entity = Cells(), count = nc),
+            (entity = Faces(), count = nf),
+            (entity = BoundaryFaces(), count = nbnd),
+            (entity = HalfFaces(), count = 2*nf)
+        ]
+end
+
 function tpfv_geometry(g::T) where T<:Meshes.Mesh{3, <:Any}
     N, A, V, Nv, Cc, Fc = meshes_fv_geometry_3d(g)
     geo = TwoPointFiniteVolumeGeometry(N, A, V, Nv, Cc, Fc)

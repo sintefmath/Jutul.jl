@@ -80,18 +80,6 @@ function number_of_boundary_faces(G::CartesianMesh)
     return nbnd
 end
 
-function declare_entities(G::CartesianMesh)
-    nf = number_of_faces(G)
-    nc = number_of_cells(G)
-    nbnd = number_of_boundary_faces(G)
-    return [
-            (entity = Cells(), count = nc),
-            (entity = Faces(), count = nf),
-            (entity = BoundaryFaces(), count = nbnd),
-            (entity = HalfFaces(), count = 2*nf)
-        ]
-end
-
 """
 Lower corner for one dimension, without any transforms applied
 """
