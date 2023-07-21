@@ -15,11 +15,27 @@ struct UnstructuredMesh{D, IM, IF, M, F} <: Jutul.JutulMesh
     face_index::IF
 end
 
+function convert_coord_points(points::AbstractMatrix{F}) where F
+    dim, nn = size(points)
+    @assert dim <= 3
+    T_xyz = SVector{dim, eltype(points)}
+    new_points = Vector{T_xyz}(undef, nn)
+    for i in 1:nn
+        new_points[i] = T_xyz(points[:, i])
+    end
+    return (new_points, dim)
+end
+
+function convert_coord_points(pts::Vector{SVector{N, F}}) where {N, F}
+    return (pts, N)
+end
+
 # Outer constructor: Take MRST format and turn into separate lists for interior and boundary
-function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespos, node_points::Matrix, face_neighbors::Matrix{Int}; kwarg...)#  where {T<:IndirectionMap, F<:Real}
+function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespos, node_points, face_neighbors::Matrix{Int}; kwarg...)#  where {T<:IndirectionMap, F<:Real}
     nc = length(cells_facepos)-1
     nf = length(faces_nodespos)-1
-    dim, nn = size(node_points)
+    node_points, dim = convert_coord_points(node_points)
+    nn = length(node_points)
 
     @assert dim <= 3
     @assert dim >= 1
@@ -141,13 +157,10 @@ function UnstructuredMesh(
     nc = length(cells_to_faces)
     nb = length(bnd_to_nodes)
     nf = length(faces_to_nodes)
-    dim, nn = size(node_points)
 
-    T_xyz = SVector{dim, eltype(node_points)}
-    new_points = Vector{T_xyz}(undef, nn)
-    for i in 1:nn
-        new_points[i] = T_xyz(node_points[:, i])
-    end
+    node_points, dim = convert_coord_points(node_points)
+    nn = length(node_points)
+
     @assert dim <= 3
     @assert dim >= 1
     sz_n = size(int_neighbors)
@@ -164,7 +177,7 @@ function UnstructuredMesh(
         new_neighbors[i] = (int_neighbors[1, i], int_neighbors[2, i])
     end
     @assert maximum(faces_to_nodes.vals) <= nn "Too few nodes provided"
-    return UnstructuredMesh(cells_to_faces, cells_to_bnd, faces_to_nodes, bnd_to_nodes, new_points, new_neighbors, bnd_cells; kwarg...)
+    return UnstructuredMesh(cells_to_faces, cells_to_bnd, faces_to_nodes, bnd_to_nodes, node_points, new_neighbors, bnd_cells; kwarg...)
 end
 
 function UnstructuredMesh(
