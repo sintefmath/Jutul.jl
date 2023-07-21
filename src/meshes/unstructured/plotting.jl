@@ -3,7 +3,7 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
     tri = Vector{Matrix{Int64}}()
     cell_index = Vector{Int64}()
     face_index = Vector{Int64}()
-    node_pts = G.node_points
+    node_pts = m.node_points
     T = eltype(node_pts)
     function cyclical_tesselation(n)
         c = ones(Int64, n)
@@ -18,7 +18,7 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
     offset = 0
 
     function add_points!(e, faces)
-        for f in 1:count_entities(G, e)
+        for f in 1:count_entities(m, e)
             C = zero(T)
             nodes = faces.faces_to_nodes[f]
             n = length(nodes)
@@ -64,9 +64,9 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
     end
 
     if !outer
-        add_points!(Faces(), G.faces)
+        add_points!(Faces(), m.faces)
     end
-    add_points!(BoundaryFaces(), G.boundary_faces)
+    add_points!(BoundaryFaces(), m.boundary_faces)
 
     pts = vcat(pts...)
     tri = vcat(tri...)
