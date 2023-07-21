@@ -220,6 +220,213 @@ function UnstructuredMesh(
     return UnstructuredMesh{dim, IM, IF, T, F}(faces, bnd, node_points, index_map, face_index)
 end
 
+"""
+    UnstructuredMesh(g::CartesianMesh)
+
+Convert `CartesianMesh` instance to unstructured grid (3D only)
+"""
+function UnstructuredMesh(g::CartesianMesh)
+    d = dim(g)
+    @assert d == 3 "Conversion from CartesianMesh to UnstructuredMesh is only supported for 3D grids."
+
+    nc = number_of_cells(g)
+    nf = number_of_faces(g)
+    nbf = number_of_boundary_faces(g)
+    nx, ny, nz = grid_dims_ijk(g)
+    num_nodes_x = nx+1
+    num_nodes_y = ny+1
+    num_nodes_z = nz+1
+    num_nodes = num_nodes_x*num_nodes_y*num_nodes_z
+    nodeix = reshape(1:num_nodes, num_nodes_x, num_nodes_y, num_nodes_z)
+
+    P = SVector{d, Float64}
+    node_points = Vector{P}()
+    dx, dy, dz = g.deltas
+    function get_delta(D, i)
+        return D
+    end
+    function get_delta(D::AbstractVector, i)
+        return D[i]
+    end
+    function get_point(D, i)
+        pt = 0
+        for j in 1:(i-1)
+            pt += get_delta(D, i)
+        end
+        return pt
+    end
+
+    for k in 1:num_nodes_z
+        Z = get_point(dz, k)
+        for j in 1:num_nodes_y
+            Y = get_point(dy, j)
+            for i in 1:num_nodes_x
+                X = get_point(dx, i)
+                XYZ = P(X, Y, Z)
+                push!(node_points, XYZ)
+            end
+        end
+    end
+    @assert length(node_points) == length(nodeix)
+    cell_to_faces = Vector{Vector{Int}}()
+    for i in 1:nc
+        push!(cell_to_faces, Int[])
+    end
+    cell_to_boundary = Vector{Vector{Int}}()
+    for i in 1:nc
+        push!(cell_to_boundary, Int[])
+    end
+
+    int_neighbors = Vector{Tuple{Int, Int}}()
+    # Note: The following loops are arranged to reproduce the MRST ordering.
+    function insert_face!(nodes, pos, arg...)
+        for node in arg
+            push!(nodes, node)
+        end
+        push!(pos, pos[end] + length(arg))
+    end
+    function add_internal_neighbor!(t, D)
+        x, y, z = t
+        index = cell_index(g, t)
+        l = index
+        r = cell_index(g, (x + (D == 1), y + (D == 2), z + (D == 3)))
+        push!(int_neighbors, (l, r))
+    end
+    faces_nodes = Int[]
+    faces_nodespos = Int[1]
+    # Faces with X-normal > 0
+    for z = 1:nz
+        for y in 1:ny
+            for x in 2:nx
+                p1 = nodeix[x, y, z]
+                p2 = nodeix[x, y+1, z]
+                p3 = nodeix[x, y+1, z+1]
+                p4 = nodeix[x, y, z+1]
+                insert_face!(faces_nodes, faces_nodespos, p1, p2, p3, p4)
+                add_internal_neighbor!((x-1, y, z), 1)
+            end
+        end
+    end
+    # Faces with Y-normal > 0
+    for y in 2:ny
+        for z = 1:nz
+            for x in 1:nx
+                p1 = nodeix[x, y, z+1]
+                p2 = nodeix[x+1, y, z+1]
+                p3 = nodeix[x+1, y, z]
+                p4 = nodeix[x, y, z]
+                insert_face!(faces_nodes, faces_nodespos, p1, p2, p3, p4)
+                add_internal_neighbor!((x, y-1, z), 2)
+            end
+        end
+    end
+    # Faces with Z-normal > 0
+    for z = 2:nz
+        for y in 1:ny
+            for x in 1:nx
+                p1 = nodeix[x+1, y, z]
+                p2 = nodeix[x+1, y+1, z]
+                p3 = nodeix[x, y+1, z]
+                p4 = nodeix[x, y, z]
+                insert_face!(faces_nodes, faces_nodespos, p1, p2, p3, p4)
+                add_internal_neighbor!((x, y, z-1), 3)
+            end
+        end
+    end
+
+    boundary_faces_nodes = Int[]
+    boundary_faces_nodespos = Int[1]
+    bnd_cells = Int[]
+    function add_boundary_cell!(t, D)
+        index = cell_index(g, t)
+        push!(bnd_cells, index)
+    end
+    for y in 1:ny
+        for z = 1:nz
+            for x in [1, nx+1]
+                p1 = nodeix[x, y, z+1]
+                p2 = nodeix[x, y+1, z+1]
+                p3 = nodeix[x, y+1, z]
+                p4 = nodeix[x, y, z]
+                if x == 1
+                    insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2, p3, p4)
+                    add_boundary_cell!((x, y, z), 1)
+                else
+                    insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p4, p3, p2, p1)
+                    add_boundary_cell!((x-1, y, z), 1)
+                end
+            end
+        end
+    end
+    # Faces with Y-normal > 0
+    for x in 1:nx
+        for z = 1:nz
+            for y in [1, ny+1]
+                p1 = nodeix[x, y, z]
+                p2 = nodeix[x+1, y, z]
+                p3 = nodeix[x+1, y, z+1]
+                p4 = nodeix[x, y, z+1]
+                if y == 1
+                    insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2, p3, p4)
+                    add_boundary_cell!((x, y, z), 2)
+                else
+                    insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p4, p3, p2, p1)
+                    add_boundary_cell!((x, y-1, z), 2)
+                end
+            end
+        end
+    end
+    # Faces with Z-normal > 0
+    for x in 1:nx
+        for y in 1:ny
+            for z = [1, nz+1]
+                p1 = nodeix[x, y, z]
+                p2 = nodeix[x, y+1, z]
+                p3 = nodeix[x+1, y+1, z]
+                p4 = nodeix[x+1, y, z]
+                if z == 1
+                    insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2, p3, p4)
+                    add_boundary_cell!((x, y, z), 3)
+                else
+                    insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p4, p3, p2, p1)
+                    add_boundary_cell!((x, y, z-1), 3)
+                end
+            end
+        end
+    end
+    cells_faces, cells_facepos = get_facepos(reinterpret(reshape, Int, int_neighbors), nc)
+
+    for (bf, bc) in enumerate(bnd_cells)
+        push!(cell_to_boundary[bc], bf)
+    end
+
+    boundary_cells_faces = Int[]
+    boundary_cells_facepos = Int[1]
+    for bfaces in cell_to_boundary
+        n = length(bfaces)
+        for bf in bfaces
+            push!(boundary_cells_faces, bf)
+        end
+        push!(boundary_cells_facepos, boundary_cells_facepos[end]+n)
+    end
+
+    return UnstructuredMesh(
+        cells_faces,
+        cells_facepos,
+        boundary_cells_faces,
+        boundary_cells_facepos,
+        faces_nodes,
+        faces_nodespos,
+        boundary_faces_nodes,
+        boundary_faces_nodespos,
+        node_points,
+        int_neighbors,
+        bnd_cells;
+        index_map = 1:nc
+    )
+end
+
+
 function UnstructuredMesh(g::MRSTWrapMesh)
     G_raw = g.data
     faces_raw = Int.(vec(G_raw.cells.faces[:, 1]))
