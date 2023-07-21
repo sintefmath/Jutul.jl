@@ -30,6 +30,36 @@ function convert_coord_points(pts::Vector{SVector{N, F}}) where {N, F}
     return (pts, N)
 end
 
+function convert_neighborship(N::AbstractMatrix; nf = size(N, 2), nc = maximum(N), kwarg...)
+    @assert size(N, 1) == 2 "Expected neighborship of (2,nf), was $(size(N))"
+
+    N_new = Vector{Tuple{Int, Int}}(undef, nf)
+    for i in 1:nf
+        N_new[i] = (N[1, i], N[2, i])
+    end
+    return convert_neighborship(N_new; nc = nc, nf = nf, kwarg...)
+end
+
+function convert_neighborship(N::Vector{Tuple{Int, Int}}; nc = nothing, nf = nothing, allow_zero = false)
+    # Just do asserts
+    if !isnothing(nf)
+        @assert length(N) == nf
+    end
+    if !isnothing(nc)
+        for (f, t) in enumerate(N)
+            for (c, i) in enumerate(t)
+                @assert c <= nc "Neighborship exceeded $nc in face $f cell $i: neighborship was $t"
+                if allow_zero
+                    @assert c >= 0 "Neighborship was negative in face $f cell $i: neighborship was $t"
+                else
+                    @assert c > 0 "Neighborship was non-positive in face $f cell $i: neighborship was $t"
+                end
+            end
+        end
+    end
+    return N
+end
+
 # Outer constructor: Take MRST format and turn into separate lists for interior and boundary
 function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespos, node_points, face_neighbors::Matrix{Int}; kwarg...)#  where {T<:IndirectionMap, F<:Real}
     nc = length(cells_facepos)-1
@@ -37,11 +67,11 @@ function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespo
     node_points, dim = convert_coord_points(node_points)
     nn = length(node_points)
 
+    face_neighbors = convert_neighborship(face_neighbors, nf = nf, nc = nc, allow_zero = true)
     @assert dim <= 3
     @assert dim >= 1
-    @assert size(face_neighbors) == (2, nf)
-    @assert maximum(face_neighbors) <= nc
-    @assert minimum(face_neighbors) >= 0
+    # @assert maximum(face_neighbors) <= nc
+    # @assert minimum(face_neighbors) >= 0
     @assert maximum(faces_nodes) <= nn "Too few nodes provided"
 
     new_faces_nodes = similar(faces_nodes, 0)
@@ -58,7 +88,7 @@ function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespo
     added_boundary = 0
 
     for face in 1:nf
-        l, r = face_neighbors[:, face]
+        l, r = face_neighbors[face]
         npos = faces_nodespos[face]:(faces_nodespos[face+1]-1)
         n = length(npos)
         bnd = l == 0 || r == 0
@@ -110,10 +140,10 @@ function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespo
         push!(boundary_cells_facepos, boundary_cells_facepos[end] + bnd_count)
     end
 
-    int_neighbors = face_neighbors[:, int_indices]
+    int_neighbors = face_neighbors[int_indices]
     bnd_cells = Int[]
     for i in bnd_indices
-        l, r = face_neighbors[:, i]
+        l, r = face_neighbors[i]
         @assert l == 0 || r == 0
         push!(bnd_cells, l + r)
     end
@@ -163,21 +193,14 @@ function UnstructuredMesh(
 
     @assert dim <= 3
     @assert dim >= 1
-    sz_n = size(int_neighbors)
-    @assert sz_n == (2, nf) "Expected neighborship of (2, $nf), was $sz_n"
-    @assert maximum(int_neighbors) <= nc
-    @assert minimum(int_neighbors) > 0
+    int_neighbors = convert_neighborship(int_neighbors)
     @assert length(bnd_cells) == nb
     bnd_cells::AbstractVector
     @assert maximum(bnd_cells) <= nc
     @assert minimum(bnd_cells) > 0
 
-    new_neighbors = Vector{Tuple{Int, Int}}(undef, nf)
-    for i in 1:nf
-        new_neighbors[i] = (int_neighbors[1, i], int_neighbors[2, i])
-    end
     @assert maximum(faces_to_nodes.vals) <= nn "Too few nodes provided"
-    return UnstructuredMesh(cells_to_faces, cells_to_bnd, faces_to_nodes, bnd_to_nodes, node_points, new_neighbors, bnd_cells; kwarg...)
+    return UnstructuredMesh(cells_to_faces, cells_to_bnd, faces_to_nodes, bnd_to_nodes, node_points, int_neighbors, bnd_cells; kwarg...)
 end
 
 function UnstructuredMesh(
