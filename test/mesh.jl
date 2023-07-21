@@ -120,7 +120,7 @@ using MAT
         test_meshes = [
             CartesianMesh((3, 2, 2)),
             CartesianMesh((3, 2, 2), (10.0, 3.0, 5.0)),
-            # CartesianMesh((3, 2, 2), ([10.0, 5.0, π], 3.0, 5.0)),
+            CartesianMesh((3, 2, 2), ([10.0, 5.0, π], 3.0, 5.0)),
             CartesianMesh((100, 3, 7))
             ]
         for g in test_meshes

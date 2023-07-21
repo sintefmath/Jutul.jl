@@ -251,7 +251,7 @@ function UnstructuredMesh(g::CartesianMesh)
     function get_point(D, i)
         pt = 0
         for j in 1:(i-1)
-            pt += get_delta(D, i)
+            pt += get_delta(D, j)
         end
         return pt
     end
