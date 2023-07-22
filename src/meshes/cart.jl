@@ -36,6 +36,8 @@ struct CartesianMesh{D, Δ, O} <: JutulMesh
         end
         if isnothing(origin)
             origin = zeros(dim)
+        else
+            @assert length(origin) == dim
         end
         function generate_deltas(deltas_or_size)
             deltas = Vector(undef, dim)

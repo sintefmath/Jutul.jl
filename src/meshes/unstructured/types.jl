@@ -239,13 +239,17 @@ function UnstructuredMesh(g::CartesianMesh)
         dz = 1.0
         if d == 2
             dx, dy = g.deltas
+            X0, Y0 = g.origin
         else
             @assert d == 1
             dx = only(g.deltas)
+            X0 = only(g.origin)
+            Y0 = 0.0
         end
-        g = CartesianMesh((nx, ny, nz), (dx, dy, dz), origin = g.origin)
+        g = CartesianMesh((nx, ny, nz), (dx, dy, dz), origin = [X0, Y0, 0.0])
         d = 3
     end
+    X0, Y0, Z0 = g.origin
 
     nc = number_of_cells(g)
     nf = number_of_faces(g)
@@ -279,7 +283,7 @@ function UnstructuredMesh(g::CartesianMesh)
             Y = get_point(dy, j)
             for i in 1:num_nodes_x
                 X = get_point(dx, i)
-                XYZ = P(X, Y, Z)
+                XYZ = P(X + X0, Y + Y0, Z + Z0)
                 push!(node_points, XYZ)
             end
         end

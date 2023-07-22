@@ -146,9 +146,9 @@ using MAT
             end
         end
         # 2D support missing
-        @test_broken UnstructuredMesh(CartesianMesh((3, 2)))
+        @test_warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting 2D grid to 3D." UnstructuredMesh(CartesianMesh((3, 2)))
         # 1D support missing
-        @test_broken UnstructuredMesh(CartesianMesh((3,)))
+        @test_warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting 1D grid to 3D." UnstructuredMesh(CartesianMesh((3,)))
     end
     @testset "extract_subgrid + cart convert" begin
         g = CartesianMesh((2, 2, 2))
