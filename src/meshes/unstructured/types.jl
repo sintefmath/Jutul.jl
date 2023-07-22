@@ -232,12 +232,24 @@ Convert `CartesianMesh` instance to unstructured grid (3D only)
 """
 function UnstructuredMesh(g::CartesianMesh)
     d = dim(g)
-    @assert d == 3 "Conversion from CartesianMesh to UnstructuredMesh is only supported for 3D grids."
+    nx, ny, nz = grid_dims_ijk(g)
+    if d < 3
+        @warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting $(d)D grid to 3D."
+        dy = 1.0
+        dz = 1.0
+        if d == 2
+            dx, dy = g.deltas
+        else
+            @assert d == 1
+            dx = only(g.deltas)
+        end
+        g = CartesianMesh((nx, ny, nz), (dx, dy, dz), origin = g.origin)
+        d = 3
+    end
 
     nc = number_of_cells(g)
     nf = number_of_faces(g)
     nbf = number_of_boundary_faces(g)
-    nx, ny, nz = grid_dims_ijk(g)
     num_nodes_x = nx+1
     num_nodes_y = ny+1
     num_nodes_z = nz+1
