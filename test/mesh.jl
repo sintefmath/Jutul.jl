@@ -63,10 +63,6 @@ using MAT
     G_raw = exported["G"]
     g = MRSTWrapMesh(G_raw)
     G = UnstructuredMesh(g)
-    @testset "conversion" begin
-        G2 = UnstructuredMesh(g)
-        @test G2 isa UnstructuredMesh
-    end
     @testset "basics" begin
         function test_faces(G, g)
             for i = 1:number_of_faces(G)
@@ -153,5 +149,12 @@ using MAT
         @test_broken UnstructuredMesh(CartesianMesh((3, 2)))
         # 1D support missing
         @test_broken UnstructuredMesh(CartesianMesh((3,)))
+    end
+    @testset "extract_subgrid + cart convert" begin
+        g = CartesianMesh((2, 2, 2))
+        G = UnstructuredMesh(g)
+        G_sub = extract_subgrid(g, 1:3)
+        @test number_of_cells(G_sub) == 3
+        @test number_of_faces(G_sub) == 2
     end
 end
