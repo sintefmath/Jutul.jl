@@ -1,3 +1,7 @@
+"""
+Struct that contains mappings for a set of faces that are made up of nodes and
+are part of cells.
+"""
 struct FaceMap{M, N}
     "IndirectionMap that maps cells to faces"
     cells_to_faces::M
@@ -209,14 +213,15 @@ function UnstructuredMesh(
         faces_to_nodes::T,
         bnd_to_nodes::T,
         node_points::Vector{SVector{dim, F}},
-        face_neighbors::AbstractVector,
+        face_neighbors::Vector{Tuple{Int, Int}},
         boundary_cells::Vector{Int};
         index_map::IM = nothing,
         face_index::IF = nothing
     ) where {T<:IndirectionMap, IM, IF, dim, F<:Real}
     faces = FaceMap(cells_to_faces, faces_to_nodes, face_neighbors)
     bnd = FaceMap(cells_to_bnd, bnd_to_nodes, boundary_cells)
-    # F = eltype(eltype(node_points))
+    @assert length(face_neighbors) == length(faces_to_nodes)
+    @assert length(boundary_cells) == length(bnd_to_nodes)
     return UnstructuredMesh{dim, IM, IF, T, F}(faces, bnd, node_points, index_map, face_index)
 end
 
