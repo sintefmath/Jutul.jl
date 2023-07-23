@@ -178,7 +178,7 @@ include("cart.jl")
 include("unstructured/unstructured.jl")
 
 
-function declare_entities(G::Union{CartesianMesh, UnstructuredMesh})
+function declare_entities(G::JutulMesh)
     nf = number_of_faces(G)
     nc = number_of_cells(G)
     nbnd = number_of_boundary_faces(G)
@@ -196,7 +196,7 @@ function tpfv_geometry(g::T) where T<:Meshes.Mesh{3, <:Any}
     return geo
 end
 
-function add_default_domain_data!(Ω::DataDomain, m::Union{CartesianMesh, MRSTWrapMesh, Meshes.Mesh})
+function add_default_domain_data!(Ω::DataDomain, m::Union{JutulMesh, Meshes.Mesh})
     fv = tpfv_geometry(m)
     geom_pairs = (
         Pair(Faces(), [:neighbors, :areas, :normals, :face_centroids]),
