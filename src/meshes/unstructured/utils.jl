@@ -14,7 +14,7 @@ function Base.show(io::IO, t::MIME"text/plain", g::UnstructuredMesh)
     nc = number_of_cells(g)
     nf = number_of_faces(g)
     nb = number_of_boundary_faces(g)
-    print(io, "UnstructuredMesh $nc cells, $nf faces and $nb boundary faces")
+    print(io, "UnstructuredMesh with $nc cells, $nf faces and $nb boundary faces")
 end
 
 export extract_subgrid

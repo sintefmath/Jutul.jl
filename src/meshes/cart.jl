@@ -207,9 +207,8 @@ function tpfv_geometry(g::CartesianMesh)
     boundary_normals = zeros(d, nbnd)
     boundary_centroids = zeros(d, nbnd)
 
-    function add_boundary_face!(N, face_areas, face_normals, face_centroids, x, y, z, D, pos)
+    function add_boundary_face!(N, face_areas, face_normals, face_centroids, x, y, z, D, pos, is_start)
         t = (x, y, z)
-        is_start = t[D] == 1
         index = cell_index(g, t)
         N[pos] = index
         Δ  = cell_dims(g, t)
@@ -234,8 +233,8 @@ function tpfv_geometry(g::CartesianMesh)
     # x varies, z, y fixed
     for y in 1:ny
         for z = 1:nz
-            for x in [1, nx]
-                add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 1, pos)
+            for (x, is_start) in [(1, true), (nx, false)]
+                add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 1, pos, is_start)
                 pos += 1
             end
         end
@@ -244,8 +243,8 @@ function tpfv_geometry(g::CartesianMesh)
         # y varies, x, z fixed
         for x = 1:nx
             for z in 1:nz
-                for y in [1, ny]
-                    add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 2, pos)
+                for (y, is_start) in [(1, true), (ny, false)]
+                    add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 2, pos, is_start)
                     pos += 1
                 end
             end
@@ -254,8 +253,8 @@ function tpfv_geometry(g::CartesianMesh)
             # z varies, x, y fixed
             for x = 1:nx
                 for y in 1:ny
-                    for z in [1, nz]
-                        add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 3, pos)
+                    for (z, is_start) in [(1, true), (nz, false)]
+                        add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 3, pos, is_start)
                         pos += 1
                     end
                 end
