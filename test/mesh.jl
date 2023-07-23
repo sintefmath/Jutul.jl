@@ -160,3 +160,25 @@ using MAT
         @test number_of_faces(G_sub) == 2
     end
 end
+
+@testset "CoarseMesh" begin
+    G = CartesianMesh((4, 1, 1))
+    uG = UnstructuredMesh(G)
+    p = [2, 2, 1, 1]
+
+    CG = CoarseMesh(G, p)
+    geo = tpfv_geometry(G)
+    geo_c = tpfv_geometry(CG)
+
+    @test geo.volumes[1] ≈ geo_c.volumes[1]/2
+    # Make a trivial coarse grid and test
+    CG2 = CoarseMesh(G, [1, 2, 3, 4])
+    geo_c2 = tpfv_geometry(CG2)
+
+    for f in [:neighbors, :boundary_neighbors, :half_face_cells, :half_face_faces]
+        @test getfield(geo_c2, f) == getfield(geo, f)
+    end
+    for f in [:normals, :boundary_centroids, :boundary_normals, :boundary_areas, :cell_centroids, :face_centroids, :volumes, :areas]
+        @test getfield(geo_c2, f) ≈ getfield(geo, f)
+    end
+end

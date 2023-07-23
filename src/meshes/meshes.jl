@@ -188,7 +188,7 @@ end
 include("mrst.jl")
 include("cart.jl")
 include("unstructured/unstructured.jl")
-
+include("coarse.jl")
 
 function declare_entities(G::JutulMesh)
     nf = number_of_faces(G)
