@@ -229,11 +229,7 @@ function tpfv_geometry(G::JutulMesh)
 
     # Face geometry
     nf = number_of_faces(G)
-    N = zeros(Int, 2, nf)
-    for (i, lr) in enumerate(G.faces.neighbors)
-        N[1, i] = lr[1]
-        N[2, i] = lr[2]
-    end
+    N = get_neighborship(G)
     pts = G.node_points
     nf = number_of_faces(G)
 
