@@ -225,6 +225,10 @@ function UnstructuredMesh(
     return UnstructuredMesh{dim, IM, IF, T, F}(faces, bnd, node_points, index_map, face_index)
 end
 
+function UnstructuredMesh(G::UnstructuredMesh)
+    return G
+end
+
 """
     UnstructuredMesh(g::CartesianMesh)
 
