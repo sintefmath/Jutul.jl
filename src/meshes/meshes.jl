@@ -230,10 +230,9 @@ function tpfv_geometry(G::JutulMesh)
     # Face geometry
     nf = number_of_faces(G)
     N = get_neighborship(G)
-    pts = G.node_points
     nf = number_of_faces(G)
 
-    function face_geometry(e, faces)
+    function face_geometry(e)
         nf = count_entities(G, e)
         areas = zeros(nf)
         normals = zeros(D, nf)
@@ -245,13 +244,7 @@ function tpfv_geometry(G::JutulMesh)
             end
             areas[f] = a
             # Assume correct order for normal
-            nodes = faces.faces_to_nodes[f]
-            a = pts[nodes[1]]
-            b = pts[nodes[2]]
-            c = pts[nodes[3]]
-
-            normal = cross(c - b, a - b)
-            normal /= norm(normal, 2)
+            normal = face_normal(G, f, e)
 
             for d in 1:D
                 normals[d, f] = normal[d]
@@ -260,8 +253,8 @@ function tpfv_geometry(G::JutulMesh)
         return (areas, normals, centroids)
     end
 
-    face_areas, face_normals, face_centroids = face_geometry(Faces(), G.faces)
-    boundary_areas, boundary_normals, boundary_centroids = face_geometry(BoundaryFaces(), G.boundary_faces)
+    face_areas, face_normals, face_centroids = face_geometry(Faces())
+    boundary_areas, boundary_normals, boundary_centroids = face_geometry(BoundaryFaces())
 
     return TwoPointFiniteVolumeGeometry(
         N,

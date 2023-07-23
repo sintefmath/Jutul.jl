@@ -15,3 +15,17 @@ function get_neighborship(G::UnstructuredMesh)
     end
     return N
 end
+
+function face_normal(G::UnstructuredMesh, f, e = Faces())
+    get_nodes(::Faces) = G.faces
+    get_nodes(::BoundaryFaces) = G.boundary_faces
+    nodes = get_nodes(e).faces_to_nodes[f]
+    pts = G.node_points
+    a = pts[nodes[1]]
+    b = pts[nodes[2]]
+    c = pts[nodes[3]]
+
+    normal = cross(c - b, a - b)
+    normal /= norm(normal, 2)
+    return normal
+end
