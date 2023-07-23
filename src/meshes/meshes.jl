@@ -113,6 +113,18 @@ function TwoPointFiniteVolumeGeometry(
     )
 end
 
+function count_entities(g::JutulMesh, ::Cells)
+    return number_of_cells(g)
+end
+
+function count_entities(g::JutulMesh, ::Faces)
+    return number_of_faces(g)
+end
+
+function count_entities(g::JutulMesh, ::BoundaryFaces)
+    return number_of_boundary_faces(g)
+end
+
 dim(g::TwoPointFiniteVolumeGeometry) = size(g.cell_centroids, 1)
 
 """
@@ -266,7 +278,7 @@ function tpfv_geometry(G::JutulMesh)
         boundary_areas = boundary_areas,
         boundary_normals = boundary_normals,
         boundary_centroids = boundary_centroids,
-        boundary_neighbors = G.boundary_faces.neighbors
+        boundary_neighbors = get_neighborship(G, internal = false)
     )
 end
 

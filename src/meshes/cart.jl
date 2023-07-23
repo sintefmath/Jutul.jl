@@ -277,10 +277,15 @@ function tpfv_geometry(g::CartesianMesh)
         )
 end
 
-function get_neighborship(g::CartesianMesh)
+function get_neighborship(g::CartesianMesh; internal = true)
     # Expensive but correct
     geo = tpfv_geometry(g)
-    return geo.neighbors
+    if internal
+        N = geo.neighbors
+    else
+        N = geo.boundary_neighbors
+    end
+    return N
 end
 
 function grid_dims_ijk(g)

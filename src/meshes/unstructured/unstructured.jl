@@ -6,12 +6,16 @@ include("plotting.jl")
 
 dim(t::UnstructuredMesh{D}) where D = D::Int
 
-function get_neighborship(G::UnstructuredMesh)
-    nf = number_of_faces(G)
-    N = zeros(Int, 2, nf)
-    for (i, lr) in enumerate(G.faces.neighbors)
-        N[1, i] = lr[1]
-        N[2, i] = lr[2]
+function get_neighborship(G::UnstructuredMesh; internal = true)
+    if internal
+        nf = number_of_faces(G)
+        N = zeros(Int, 2, nf)
+        for (i, lr) in enumerate(G.faces.neighbors)
+            N[1, i] = lr[1]
+            N[2, i] = lr[2]
+        end
+    else
+        N = G.boundary_faces.neighbors
     end
     return N
 end
