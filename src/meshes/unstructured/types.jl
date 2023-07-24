@@ -34,6 +34,16 @@ function convert_coord_points(pts::Vector{SVector{N, F}}) where {N, F}
     return (pts, N)
 end
 
+function convert_coord_points(pts::Vector{NTuple{N, F}}) where {N, F}
+    T = SVector{N, F}
+    nn = length(pts)
+    new_points = Vector{T}(undef, nn)
+    for i in 1:nn
+        new_points[i] = T(pts[i])
+    end
+    return (new_points, N)
+end
+
 function convert_neighborship(N::AbstractMatrix; nf = size(N, 2), nc = maximum(N), kwarg...)
     @assert size(N, 1) == 2 "Expected neighborship of (2,nf), was $(size(N))"
 
