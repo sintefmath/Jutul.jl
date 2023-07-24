@@ -11,7 +11,7 @@ struct FaceMap{M, N}
     neighbors::Vector{N}
 end
 
-struct UnstructuredMesh{D, S, IM, IF, M, F, BM, NM} <: Jutul.JutulMesh
+struct UnstructuredMesh{D, S, IM, IF, M, F, BM, NM} <: FiniteVolumeMesh
     structure::S
     faces::FaceMap{M, Tuple{Int, Int}}
     boundary_faces::FaceMap{M, Int}

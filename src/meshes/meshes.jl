@@ -3,6 +3,8 @@
 export MRSTWrapMesh, CartesianMesh, TwoPointFiniteVolumeGeometry, dim
 export triangulate_mesh, tpfv_geometry, discretized_domain_tpfv_flow
 
+abstract type FiniteVolumeMesh <: JutulMesh end
+
 abstract type JutulGeometry end
 
 """
@@ -208,7 +210,7 @@ function tpfv_geometry(g::T) where T<:Meshes.Mesh{3, <:Any}
     return geo
 end
 
-function add_default_domain_data!(Ω::DataDomain, m::Union{JutulMesh, Meshes.Mesh})
+function add_default_domain_data!(Ω::DataDomain, m::Union{FiniteVolumeMesh, Meshes.Mesh})
     fv = tpfv_geometry(m)
     geom_pairs = (
         Pair(Faces(), [:neighbors, :areas, :normals, :face_centroids]),
@@ -225,7 +227,7 @@ function add_default_domain_data!(Ω::DataDomain, m::Union{JutulMesh, Meshes.Mes
     end
 end
 
-function tpfv_geometry(G::JutulMesh)
+function tpfv_geometry(G::FiniteVolumeMesh)
     D = dim(G)
     nc = number_of_cells(G)
     nf = number_of_faces(G)

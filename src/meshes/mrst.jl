@@ -1,4 +1,4 @@
-struct MRSTWrapMesh <: JutulMesh
+struct MRSTWrapMesh <: FiniteVolumeMesh
     data
     N::Matrix
     nc::Int
