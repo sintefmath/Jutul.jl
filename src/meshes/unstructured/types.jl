@@ -11,12 +11,15 @@ struct FaceMap{M, N}
     neighbors::Vector{N}
 end
 
-struct UnstructuredMesh{D, IM, IF, M, F} <: Jutul.JutulMesh
+struct UnstructuredMesh{D, S, IM, IF, M, F, BM, NM} <: Jutul.JutulMesh
+    structure::S
     faces::FaceMap{M, Tuple{Int, Int}}
     boundary_faces::FaceMap{M, Int}
     node_points::Vector{SVector{D, F}}
-    index_map::IM
-    face_index::IF
+    cell_map::IM
+    face_map::IF
+    boundary_map::BM
+    node_map::NM
 end
 
 function convert_coord_points(points::AbstractMatrix{F}) where F
@@ -75,7 +78,7 @@ function convert_neighborship(N::Vector{Tuple{Int, Int}}; nc = nothing, nf = not
 end
 
 # Outer constructor: Take MRST format and turn into separate lists for interior and boundary
-function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespos, node_points, face_neighbors::Matrix{Int}; kwarg...)#  where {T<:IndirectionMap, F<:Real}
+function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespos, node_points, face_neighbors::Matrix{Int}; kwarg...)
     nc = length(cells_facepos)-1
     nf = length(faces_nodespos)-1
     node_points, dim = convert_coord_points(node_points)
@@ -174,7 +177,7 @@ function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespo
         int_neighbors,
         bnd_cells;
         kwarg...,
-        face_index = faceindex
+        face_map = faceindex
         )
 end
 
@@ -225,14 +228,17 @@ function UnstructuredMesh(
         node_points::Vector{SVector{dim, F}},
         face_neighbors::Vector{Tuple{Int, Int}},
         boundary_cells::Vector{Int};
-        index_map::IM = nothing,
-        face_index::IF = nothing
-    ) where {T<:IndirectionMap, IM, IF, dim, F<:Real}
+        cell_map::IM = nothing,
+        face_map::IF = nothing,
+        boundary_map::BM = nothing,
+        node_map::NM = nothing,
+        structure::S = nothing
+    ) where {T<:IndirectionMap, IM, IF, dim, F<:Real, BM, NM, S}
     faces = FaceMap(cells_to_faces, faces_to_nodes, face_neighbors)
     bnd = FaceMap(cells_to_bnd, bnd_to_nodes, boundary_cells)
     @assert length(face_neighbors) == length(faces_to_nodes)
     @assert length(boundary_cells) == length(bnd_to_nodes)
-    return UnstructuredMesh{dim, IM, IF, T, F}(faces, bnd, node_points, index_map, face_index)
+    return UnstructuredMesh{dim, S, IM, IF, T, F, BM, NM}(structure, faces, bnd, node_points, cell_map, face_map, boundary_map, node_map)
 end
 
 function UnstructuredMesh(G::UnstructuredMesh)
@@ -457,7 +463,8 @@ function UnstructuredMesh(g::CartesianMesh)
         node_points,
         int_neighbors,
         bnd_cells;
-        index_map = 1:nc
+        structure = CartesianIndex(nx, ny, nz),
+        cell_map = 1:nc
     )
 end
 

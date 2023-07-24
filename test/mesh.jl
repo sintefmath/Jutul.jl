@@ -55,7 +55,7 @@ using Meshes
     @test isapprox(jgeo.cell_centroids, geo.cell_centroids, atol = 1e-12)
     @test isapprox(jgeo.volumes, geo.volumes, atol = 1e-12)
 end
-
+##
 using MAT
 @testset "UnstructuredMesh" begin
     fn = joinpath(pathof(Jutul), "..", "..", "data", "testgrids", "pico.mat")
@@ -66,7 +66,7 @@ using MAT
     @testset "basics" begin
         function test_faces(G, g)
             for i = 1:number_of_faces(G)
-                f_ix = G.face_index[i]
+                f_ix = G.face_map[i]
                 if f_ix > 0
                     e = Faces()
                 else
