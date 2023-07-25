@@ -1,6 +1,6 @@
 export CoarseMesh
 
-struct CoarseMesh{G, T} <: JutulMesh
+struct CoarseMesh{G, T} <: FiniteVolumeMesh
     parent::G
     partition::Vector{Int}
     partition_lookup::Vector{Vector{Int}}
