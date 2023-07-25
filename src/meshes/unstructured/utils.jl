@@ -17,19 +17,19 @@ function Base.show(io::IO, t::MIME"text/plain", g::UnstructuredMesh)
     print(io, "UnstructuredMesh with $nc cells, $nf faces and $nb boundary faces")
 end
 
-export extract_subgrid
+export extract_submesh
 
-function extract_subgrid(g, arg...; kwarg...)
-    extract_subgrid(UnstructuredMesh(g), arg...; kwarg...)
+function extract_submesh(g, arg...; kwarg...)
+    extract_submesh(UnstructuredMesh(g), arg...; kwarg...)
 end
 
 
 """
-    extract_subgrid(g::UnstructuredMesh, cells)
+    extract_submesh(g::UnstructuredMesh, cells)
 
 Extract a subgrid for a given mesh and a iterable of `cells` to keep.
 """
-function extract_subgrid(g::UnstructuredMesh, cells)
+function extract_submesh(g::UnstructuredMesh, cells)
     function add_to_indexmap!(vals, pos, iterable)
         n = length(iterable)
         for i in iterable

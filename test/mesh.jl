@@ -152,10 +152,10 @@ using MAT
         # 1D support missing
         @test_warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting 1D grid to 3D." UnstructuredMesh(CartesianMesh((3,)))
     end
-    @testset "extract_subgrid + cart convert" begin
+    @testset "extract_submesh + cart convert" begin
         g = CartesianMesh((2, 2, 2))
         G = UnstructuredMesh(g)
-        G_sub = extract_subgrid(g, 1:3)
+        G_sub = extract_submesh(g, 1:3)
         @test number_of_cells(G_sub) == 3
         @test number_of_faces(G_sub) == 2
     end
