@@ -1,4 +1,4 @@
-using Jutul, Test, SparseArrays
+using Jutul, Test, SparseArrays, LinearAlgebra
 
 @test Jutul.compress_partition([1, 3, 6, 5]) == [1, 2, 4, 3]
 @test Jutul.compress_partition(collect(1:10)) == 1:10

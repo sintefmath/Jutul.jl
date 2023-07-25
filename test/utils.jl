@@ -210,7 +210,7 @@ import Jutul: IndexRenumerator
     @test 3 in im
     @test 1 in im
     @test 7 in im
-    @test indices(im) == [3, 1, 7]
-    @test indices(IndexRenumerator([1, 5, 7, 2])) == [1, 5, 7, 2]
-    @test indices(IndexRenumerator([5, π, 3.0, 17.6])) == [5, π, 3.0, 17.6]
+    @test Jutul.indices(im) == [3, 1, 7]
+    @test Jutul.indices(IndexRenumerator([1, 5, 7, 2])) == [1, 5, 7, 2]
+    @test Jutul.indices(IndexRenumerator([5, π, 3.0, 17.6])) == [5, π, 3.0, 17.6]
 end
