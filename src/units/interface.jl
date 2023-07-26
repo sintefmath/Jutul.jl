@@ -86,3 +86,11 @@ end
 function si_unit(::Val{uname}) where uname
     error("Unknown unit: $uname")
 end
+
+function all_units()
+    d = Dict{Symbol, Float64}()
+    for k in available_units()
+        d[k] = si_unit(k)
+    end
+    return d
+end
