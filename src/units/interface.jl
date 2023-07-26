@@ -22,6 +22,10 @@ function convert_to_si(val, unit::Val)
     return val*si_unit(unit)
 end
 
+function convert_to_si(val, unit::Real)
+    return val*unit
+end
+
 """
     convert_from_si(value, unit_name::Union{Symbol, String})
 
@@ -43,6 +47,10 @@ end
 
 function convert_from_si(val, unit::Val)
     return val/si_unit(unit)
+end
+
+function convert_from_si(val, unit::Real)
+    return val/unit
 end
 
 """
