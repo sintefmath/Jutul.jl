@@ -73,7 +73,7 @@ function cell_index(g::UnstructuredMesh, pos::Tuple)
         @assert number_of_cells(g) == nx*ny*nz
         t = index
     else
-        t = findfirst(isequal(index), g.cell_map[index])
+        t = findfirst(isequal(index), g.cell_map)
     end
     return t
 end
