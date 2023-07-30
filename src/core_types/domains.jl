@@ -78,7 +78,8 @@ physical_representation(x::DataDomain) = x.representation
 function Base.show(io::IO, t::MIME"text/plain", d::DataDomain)
     # disc = d.discretizations
     p = physical_representation(d)
-    print(io, "DataDomain wrapping $p")
+    print(io, "DataDomain wrapping ")
+    Base.show(io, t, p)
     data = d.data
     k = keys(data)
     n = length(k)
