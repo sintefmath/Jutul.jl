@@ -33,3 +33,18 @@ function face_normal(G::UnstructuredMesh, f, e = Faces())
     normal /= norm(normal, 2)
     return normal
 end
+
+function grid_dims_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}) where D
+    dims = Tuple(g.structure)
+    if D == 1
+        nx, = dims
+        ny = nz = 1
+    elseif D == 2
+        nx, ny = dims
+        nz = 1
+    else
+        @assert D == 3
+        nx, ny, nz = dims
+    end
+    return (nx, ny, nz)
+end
