@@ -64,3 +64,32 @@ function cell_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}, index::Integer) whe
     z = (leftover ÷ (nx*ny)) + 1
     return (x, y, z)
 end
+
+function cell_index(g::UnstructuredMesh, pos::Tuple)
+    nx, ny, nz = grid_dims_ijk(g)
+    x, y, z = cell_ijk(g, pos)
+    index = (z-1)*nx*ny + (y-1)*nx + x
+    if isnothing(g.cell_map)
+        @assert number_of_cells(g) == nx*ny*nz
+        t = index
+    else
+        t = findfirst(isequal(index), g.cell_map[index])
+    end
+    return t
+end
+
+function cell_dims(g::UnstructuredMesh, pos)
+    index = cell_index(g, pos)
+    # Pick the nodes
+    T = eltype(g.node_points)
+    minv = Inf .+ zero(T)
+    maxv = -Inf .+ zero(T)
+    for face in g.faces.cells_to_faces[index]
+        for node in g.faces.faces_to_nodes[index]
+            pt = g.node_points[node]
+            minv = min.(pt, minv)
+            maxv = max.(pt, maxv)
+        end
+    end
+    return Tuple(maxv - minv)
+end
