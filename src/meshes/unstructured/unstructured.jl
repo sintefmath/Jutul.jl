@@ -48,3 +48,19 @@ function grid_dims_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}) where D
     end
     return (nx, ny, nz)
 end
+
+function cell_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}, index::Integer) where D
+    nx, ny, nz = grid_dims_ijk(g)
+    if isnothing(g.cell_map)
+        @assert number_of_cells(g) == nx*ny*nz
+        t = index
+    else
+        t = g.cell_map[index]
+    end
+    # (z-1)*nx*ny + (y-1)*nx + x
+    x = mod(t - 1, nx) + 1
+    y = mod((t - x) ÷ nx, ny) + 1
+    leftover = (t - x - (y-1)*nx)
+    z = (leftover ÷ (nx*ny)) + 1
+    return (x, y, z)
+end
