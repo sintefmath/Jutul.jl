@@ -9,6 +9,17 @@ struct FaceMap{M, N}
     faces_to_nodes::M
     "Neighbors for each face"
     neighbors::Vector{N}
+    function FaceMap(c2f::M, f2n::M, neigh::Vector{N}; check = true) where {M, N}
+        nc = length(c2f)
+        nf = length(f2n)
+        @assert length(neigh) == nf
+        for c in 1:nc
+            for face in c2f[c]
+                @assert c in neigh[face]
+            end
+        end
+        new{M, N}(c2f, f2n, neigh)
+    end
 end
 
 struct UnstructuredMesh{D, S, IM, IF, M, F, BM, NM} <: FiniteVolumeMesh
