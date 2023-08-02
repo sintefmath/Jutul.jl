@@ -1,6 +1,16 @@
 import Jutul: plot_interactive_impl
 
 
+function plot_interactive_impl(d::DataDomain; kwarg...)
+    mesh = physical_representation(d)
+    plot_d = Dict{Symbol, Any}()
+    for (k, v) in d.data
+        val, e = v
+        plot_d[k] = val
+    end
+    plot_interactive_impl(mesh, [plot_d])
+end
+
 function plot_interactive_impl(model::MultiModel, states, model_key = nothing; kwarg...)
     if states isa AbstractDict
         states = [states]

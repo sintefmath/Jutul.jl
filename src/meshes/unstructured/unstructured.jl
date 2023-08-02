@@ -101,3 +101,15 @@ function cell_dims(g::UnstructuredMesh, pos)
     @assert all(x -> x > 0, Δ) "Cell dimensions were zero? Computed $Δ for cell $index."
     return Tuple(Δ)
 end
+
+function plot_primitives(mesh::UnstructuredMesh, plot_type; kwarg...)
+    # By default, no plotting is supported
+    if plot_type == :mesh
+        out = triangulate_mesh(mesh; kwarg...)
+    elseif plot_type == :meshscatter
+        out = meshscatter_primitives(mesh; kwarg...)
+    else
+        out = nothing
+    end
+    return out
+end
