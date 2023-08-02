@@ -68,12 +68,16 @@ end
 function cell_index(g::UnstructuredMesh, pos::Tuple)
     nx, ny, nz = grid_dims_ijk(g)
     x, y, z = cell_ijk(g, pos)
+    @assert x > 0 && x <= nx
+    @assert y > 0 && y <= ny
+    @assert z > 0 && z <= nz
     index = (z-1)*nx*ny + (y-1)*nx + x
     if isnothing(g.cell_map)
         @assert number_of_cells(g) == nx*ny*nz
         t = index
     else
         t = findfirst(isequal(index), g.cell_map)
+        @assert !isnothing(t) "Cell $pos not found in active set"
     end
     return t
 end
