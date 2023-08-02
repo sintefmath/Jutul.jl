@@ -88,12 +88,16 @@ function cell_dims(g::UnstructuredMesh, pos)
     T = eltype(g.node_points)
     minv = Inf .+ zero(T)
     maxv = -Inf .+ zero(T)
-    for face in g.faces.cells_to_faces[index]
-        for node in g.faces.faces_to_nodes[index]
-            pt = g.node_points[node]
-            minv = min.(pt, minv)
-            maxv = max.(pt, maxv)
+    for face_set in [g.faces, g.boundary_faces]
+        for face in face_set.cells_to_faces[index]
+            for node in face_set.faces_to_nodes[index]
+                pt = g.node_points[node]
+                minv = min.(pt, minv)
+                maxv = max.(pt, maxv)
+            end
         end
     end
-    return Tuple(maxv - minv)
+    Δ = maxv - minv
+    @assert all(x -> x > 0, Δ) "Cell dimensions were zero? Computed $Δ for cell $index."
+    return Tuple(Δ)
 end
