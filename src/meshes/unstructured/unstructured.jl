@@ -90,7 +90,7 @@ function cell_dims(g::UnstructuredMesh, pos)
     maxv = -Inf .+ zero(T)
     for face_set in [g.faces, g.boundary_faces]
         for face in face_set.cells_to_faces[index]
-            for node in face_set.faces_to_nodes[index]
+            for node in face_set.faces_to_nodes[face]
                 pt = g.node_points[node]
                 minv = min.(pt, minv)
                 maxv = max.(pt, maxv)
