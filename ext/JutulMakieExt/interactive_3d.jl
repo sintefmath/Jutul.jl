@@ -1,14 +1,17 @@
 import Jutul: plot_interactive_impl
 
 
-function plot_interactive_impl(d::DataDomain; kwarg...)
+function plot_interactive_impl(d::DataDomain, data = missing; kwarg...)
     mesh = physical_representation(d)
-    plot_d = Dict{Symbol, Any}()
-    for (k, v) in d.data
-        val, e = v
-        plot_d[k] = val
+    if ismissing(data)
+        plot_d = Dict{Symbol, Any}()
+        for (k, v) in d.data
+            val, e = v
+            plot_d[k] = val
+        end
+        data = [plot_d]
     end
-    plot_interactive_impl(mesh, [plot_d])
+    plot_interactive_impl(mesh, data)
 end
 
 function plot_interactive_impl(model::MultiModel, states, model_key = nothing; kwarg...)
@@ -138,6 +141,9 @@ function plot_interactive_impl(grid, states; plot_type = nothing,
         return ["$x" for x in 1:n]
     end
     datakeys = labels
+    if length(datakeys) == 0
+        error("No plottable properties found.")
+    end
     initial_prop = datakeys[1]
     state_index = Observable{Int64}(1)
     row_index = Observable{Int64}(1)
