@@ -98,7 +98,11 @@ function Jutul.preprocess_forces(psim::PArraySimulator, forces)
     forces_per_step = forces isa AbstractVector
     inner_forces = map(simulators) do sim
         m = Jutul.get_simulator_model(sim)
-        F = x -> first(Jutul.preprocess_forces(sim, subforces(x, m)))
+        function F(x)
+            sf = subforces(x, m)
+            preprocessed = Jutul.preprocess_forces(sim, sf)
+            return first(preprocessed)
+        end
         if forces_per_step
             f = map(F, forces)
         else

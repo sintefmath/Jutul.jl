@@ -165,7 +165,7 @@ function subforces(forces, submodel)
         for k in keys(forces)
             D[k] = subforce(forces[k], submodel)
         end
-        return convert_to_immutable_storage(D)
+        return NamedTuple(pairs(D))
     end
 end
 
@@ -176,7 +176,7 @@ function subforces(forces, submodel::MultiModel)
             D[k] = subforces(forces[k], submodel.models[k])
         end
     end
-    return convert_to_immutable_storage(D)
+    return D
 end
 
 subforce(::Nothing, model) = nothing
