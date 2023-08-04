@@ -36,7 +36,7 @@ end
 
 function setup_parray_mul!(simulators, ix = nothing)
     operators = map(simulators) do sim
-        lsys = sim.storage.LinearizedSystem
+        lsys = Jutul.get_simulator_storage(sim).LinearizedSystem
         if !isnothing(ix)
             lsys = lsys[ix, ix]
         end
