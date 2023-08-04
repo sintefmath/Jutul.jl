@@ -1,5 +1,10 @@
 
-function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDomainPartition; backend = JuliaPArrayBackend(), order = :default, kwarg...)
+function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDomainPartition;
+        backend = JuliaPArrayBackend(),
+        order = :default,
+        simulator_constructor = (m; kwarg...) -> Simulator(m; kwarg...),
+        kwarg...
+        )
     data = JutulStorage()
     for (k, v) in kwarg
         data[k] = v
@@ -61,7 +66,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         end
         s0 = substate(state0, model, m, :variables)
         prm = substate(parameters, model, m, :parameters)
-        sim = Simulator(m, state0 = s0, parameters = prm, executor = exec)
+        sim = simulator_constructor(m, state0 = s0, parameters = prm, executor = exec)
         if ismissing(representative_model)
             representative_model = m
         end
@@ -92,10 +97,12 @@ function Jutul.preprocess_forces(psim::PArraySimulator, forces)
     simulators = psim.storage[:simulators]
     forces_per_step = forces isa AbstractVector
     inner_forces = map(simulators) do sim
+        m = Jutul.get_simulator_model(sim)
+        F = x -> first(Jutul.preprocess_forces(sim, subforces(x, m)))
         if forces_per_step
-            f = map(x -> subforces(x, sim.model), forces)
+            f = map(F, forces)
         else
-            f = subforces(forces, sim.model)
+            f = F(forces)
         end
         f
     end

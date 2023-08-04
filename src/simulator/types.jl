@@ -38,6 +38,14 @@ function Simulator(case::JutulCase; kwarg...)
     return Simulator(case.model; state0 = deepcopy(case.state0), parameters = deepcopy(case.parameters), kwarg...)
 end
 
+function get_simulator_model(sim)
+    return sim.model
+end
+
+function get_simulator_storage(sim)
+    return sim.storage
+end
+
 struct SimResult
     states::AbstractVector
     reports::AbstractVector
