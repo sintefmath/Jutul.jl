@@ -23,13 +23,13 @@ module Jutul
     using LinearOperators
     using Krylov
     using AlgebraicMultigrid
-    
+
     # Misc. utils
     using ExprTools
     using Graphs
     using PrettyTables
     using Polynomials
-    using JLD2
+    using JLD2, MAT
 
     import Metis
     import Meshes

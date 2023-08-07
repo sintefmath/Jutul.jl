@@ -58,8 +58,7 @@ end
 ##
 using MAT
 @testset "UnstructuredMesh" begin
-    fn = joinpath(pathof(Jutul), "..", "..", "data", "testgrids", "pico.mat")
-    exported = MAT.matread(fn)
+    exported = Jutul.get_mat_testgrid("pico")
     G_raw = exported["G"]
     g = MRSTWrapMesh(G_raw)
     G = UnstructuredMesh(g)
