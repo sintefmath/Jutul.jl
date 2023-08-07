@@ -1,7 +1,7 @@
 name = "Jutul"
 uuid = "2b460a1a-8a2b-45b2-b125-b5c536396eb9"
 authors = ["Olav Møyner <olav.moyner@gmail.com>"]
-version = "0.2.11"
+version = "0.2.12"
 
 [deps]
 AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
