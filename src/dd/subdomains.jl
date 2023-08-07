@@ -74,10 +74,18 @@ function subdomain(d::DiscretizedDomain, indices; entity = Cells(), variables_al
     return DiscretizedDomain(sg, subdisc, global_map = mapper)
 end
 
-function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = [])
+function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = [], active_global = missing)
     @assert buffer == 0 || buffer == 1
     has_buffer_zone = buffer > 0
-
+    if has_buffer_zone && !ismissing(active_global)
+        # There's another buffer consideration to be aware of?
+        @assert length(active_global) == nc
+        keep = [false for i in eachindex(indices)]
+        for (i, c) in enumerate(indices)
+            keep[i] = active_global[c]
+        end
+        indices = indices[keep]
+    end
     facelist, facepos = get_facepos(N)
     nf = size(N, 2)
     cell_active = BitArray(false for x = 1:nc)
