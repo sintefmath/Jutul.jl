@@ -61,7 +61,7 @@ function subdomain(d::DiscretizedDomain, indices; entity = Cells(), variables_al
 
     N = get_neighborship(grid)
     t = @elapsed begin
-        cells, faces, is_boundary = submap_cells(N, indices; kwarg...)
+        cells, faces, is_boundary = submap_cells(global_map(d), N, indices; kwarg...)
         mapper = FiniteVolumeGlobalMap(cells, faces, is_boundary, variables_always_active = variables_always_active)
         sg = subgrid(grid, cells = cells, faces = faces)
         d = Dict()
@@ -74,7 +74,7 @@ function subdomain(d::DiscretizedDomain, indices; entity = Cells(), variables_al
     return DiscretizedDomain(sg, subdisc, global_map = mapper)
 end
 
-function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
+function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = [])
     @assert buffer == 0 || buffer == 1
     has_buffer_zone = buffer > 0
 
@@ -126,8 +126,9 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
                 if in(other, excluded)
                     continue
                 end
-                # If a bounded cell is not in the global list of interior cells and not in the current
-                # set of processed cells, we add it and flag as a global boundary
+                # If a bounded cell is not in the global list of interior cells
+                # and not in the current set of processed cells, we add it and
+                # flag as a global boundary
                 insert_face!(face)
                 # if !in(other, cells) && !in(other, indices)
                 if !cell_active[other] && !interior_cells[other]
@@ -152,6 +153,13 @@ function submap_cells(N, indices; nc = maximum(N), buffer = 0, excluded = [])
     else
         cells = copy(indices)
         is_boundary = BitVector([false for i in 1:length(cells)])
+        if gmap isa FiniteVolumeGlobalMap
+            for (i, c) in enumerate(cells)
+                if gmap.cell_is_boundary[c]
+                    is_boundary[i] = true
+                end
+            end
+        end
     end
     faces = findall(face_active)
     return (cells = cells, faces = faces, is_boundary = is_boundary)
