@@ -295,7 +295,7 @@ function perform_step!(storage, model, dt, forces, config; executor = default_ex
         end
         @tic "convergence" converged, e, errors = check_convergence(storage, model, config, iteration = iteration, dt = dt, tol_factor = tf, extra_out = true)
         il = config[:info_level]
-        if il > 1
+        if il > 1.5
             get_convergence_table(errors, il, iteration, config)
         end
         converged = converged && iteration > config[:min_nonlinear_iterations]

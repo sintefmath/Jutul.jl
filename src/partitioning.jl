@@ -99,11 +99,17 @@ function compress_partition(p::AbstractVector)
 end
 
 """
-    partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); partitioner = MetisPartitioner(), groups = nothing, n = maximum(N))
+    partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); partitioner = MetisPartitioner(), groups = nothing, n = maximum(N), group_by_weights = false, buffer_group = true)
 
-Partition based on neighborship (with optional groups kept contigious after partitioning)
+Partition based on neighborship (with optional groups kept contigious after
+partitioning)
 """
-function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); partitioner = MetisPartitioner(), groups = nothing, n = maximum(N))
+function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2));
+        partitioner = MetisPartitioner(),
+        groups = nothing, n = maximum(N),
+        group_by_weights = true,
+        buffer_group = false
+    )
     @assert size(N, 1) == 2
     @assert size(N, 2) == length(weights)
     weights::AbstractVector
@@ -111,7 +117,7 @@ function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); pa
     num_coarse::Integer
 
     has_groups = !isnothing(groups)
-    if has_groups
+    if has_groups && !group_by_weights
         # Some entries are clustered together and should not be divided. We
         # create a subgraph using a partition, and extend back afterwards.
         part = collect(1:n)
@@ -126,6 +132,26 @@ function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); pa
     else
         n_inner = n
     end
+    if has_groups && group_by_weights
+        maxv = 100*maximum(weights)
+        for grp in groups
+            for i in axes(N, 2)
+                has_left = N[1, i] in grp
+                has_right = N[2, i] in grp
+                if buffer_group && (has_left || has_right)
+                    interior = true
+                elseif has_left && has_right
+                    interior = true
+                else
+                    interior = false
+                end
+                if interior
+                    weights[i] = maxv
+                end
+            end
+        end
+    end
+
     @assert num_coarse <= n_inner
     i = vec(N[1, :])
     j = vec(N[2, :])
@@ -136,7 +162,7 @@ function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); pa
 
     g = generate_metis_graph(M)
     p = partition(partitioner, g, num_coarse)
-    if has_groups
+    if has_groups && !group_by_weights
         p = p[part]
     end
     return Int64.(p)

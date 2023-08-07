@@ -5,8 +5,8 @@ function Jutul.plot_mesh_impl(m; resolution = default_jutul_resolution(), kwarg.
     return (fig, ax, p)
 end
 
-function Jutul.plot_mesh_impl!(ax, m; cells = nothing, color = :lightblue, kwarg...)
-    pts, tri, mapper = triangulate_mesh(m)
+function Jutul.plot_mesh_impl!(ax, m; cells = nothing, is_depth = true, outer = false, color = :lightblue, kwarg...)
+    pts, tri, mapper = triangulate_mesh(m, outer = outer, is_depth = is_depth)
     if !isnothing(cells)
         ntri = size(tri, 1)
         keep = [false for i in 1:ntri]
@@ -42,9 +42,9 @@ function Jutul.plot_cell_data_impl(m, data;
     return (fig, ax, p)
 end
 
-function Jutul.plot_cell_data_impl!(ax, m, data::AbstractVecOrMat; cells = nothing, kwarg...)
+function Jutul.plot_cell_data_impl!(ax, m, data::AbstractVecOrMat; cells = nothing, is_depth = true, outer = false, kwarg...)
     nc = number_of_cells(m)
-    pts, tri, mapper = triangulate_mesh(m)
+    pts, tri, mapper = triangulate_mesh(m, outer = outer, is_depth = is_depth)
     data = vec(data)
     if !isnothing(cells)
         new_data = zeros(nc)

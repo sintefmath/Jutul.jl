@@ -25,7 +25,7 @@ julia> CartesianMesh((2, 3), ([1.0, 2.0], [0.1, 3.0, 2.5]))
 CartesianMesh (3D) with 3x5x2=30 cells
 ```
 """
-struct CartesianMesh{D, Δ, O} <: JutulMesh
+struct CartesianMesh{D, Δ, O} <: FiniteVolumeMesh
     dims::D   # Tuple of dimensions (nx, ny, [nz])
     deltas::Δ # Either a tuple of scalars (uniform grid) or a tuple of vectors (non-uniform grid)
     origin::O # Coordinate of lower left corner
@@ -36,6 +36,8 @@ struct CartesianMesh{D, Δ, O} <: JutulMesh
         end
         if isnothing(origin)
             origin = zeros(dim)
+        else
+            @assert length(origin) == dim
         end
         function generate_deltas(deltas_or_size)
             deltas = Vector(undef, dim)
@@ -78,18 +80,6 @@ function number_of_boundary_faces(G::CartesianMesh)
         nbnd = 2*(nx*ny + ny*nz + nz*nx)
     end
     return nbnd
-end
-
-function declare_entities(G::CartesianMesh)
-    nf = number_of_faces(G)
-    nc = number_of_cells(G)
-    nbnd = number_of_boundary_faces(G)
-    return [
-            (entity = Cells(), count = nc),
-            (entity = Faces(), count = nf),
-            (entity = BoundaryFaces(), count = nbnd),
-            (entity = HalfFaces(), count = 2*nf)
-        ]
 end
 
 """
@@ -217,9 +207,8 @@ function tpfv_geometry(g::CartesianMesh)
     boundary_normals = zeros(d, nbnd)
     boundary_centroids = zeros(d, nbnd)
 
-    function add_boundary_face!(N, face_areas, face_normals, face_centroids, x, y, z, D, pos)
+    function add_boundary_face!(N, face_areas, face_normals, face_centroids, x, y, z, D, pos, is_start)
         t = (x, y, z)
-        is_start = t[D] == 1
         index = cell_index(g, t)
         N[pos] = index
         Δ  = cell_dims(g, t)
@@ -244,8 +233,8 @@ function tpfv_geometry(g::CartesianMesh)
     # x varies, z, y fixed
     for y in 1:ny
         for z = 1:nz
-            for x in [1, nx]
-                add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 1, pos)
+            for (x, is_start) in [(1, true), (nx, false)]
+                add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 1, pos, is_start)
                 pos += 1
             end
         end
@@ -254,8 +243,8 @@ function tpfv_geometry(g::CartesianMesh)
         # y varies, x, z fixed
         for x = 1:nx
             for z in 1:nz
-                for y in [1, ny]
-                    add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 2, pos)
+                for (y, is_start) in [(1, true), (ny, false)]
+                    add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 2, pos, is_start)
                     pos += 1
                 end
             end
@@ -264,8 +253,8 @@ function tpfv_geometry(g::CartesianMesh)
             # z varies, x, y fixed
             for x = 1:nx
                 for y in 1:ny
-                    for z in [1, nz]
-                        add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 3, pos)
+                    for (z, is_start) in [(1, true), (nz, false)]
+                        add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 3, pos, is_start)
                         pos += 1
                     end
                 end
@@ -287,10 +276,15 @@ function tpfv_geometry(g::CartesianMesh)
         )
 end
 
-function get_neighborship(g::CartesianMesh)
+function get_neighborship(g::CartesianMesh; internal = true)
     # Expensive but correct
     geo = tpfv_geometry(g)
-    return geo.neighbors
+    if internal
+        N = geo.neighbors
+    else
+        N = geo.boundary_neighbors
+    end
+    return N
 end
 
 function grid_dims_ijk(g)

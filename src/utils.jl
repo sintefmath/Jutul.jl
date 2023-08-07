@@ -786,3 +786,21 @@ function timing_breakdown_ministep(ministep)
     end
     return (assembly = t_asm, solve = t_solve, subdomains = t_local, its = its, no_asm = asm)
 end
+
+
+Base.@propagate_inbounds function Base.getindex(m::IndirectionMap, ix::Int)
+    p = m.pos
+    return view(m.vals, p[ix]:(p[ix+1]-1))
+end
+
+Base.length(m::IndirectionMap) = length(m.pos)-1
+
+function Base.show(io::IO, t::MIME"text/plain", m::IndirectionMap)
+    print(io, "IndirectionMap with $(length(m)) entities and total $(m.pos[end]-1) entries")
+end
+
+function get_mat_testgrid(name)
+    base_path, = splitdir(pathof(Jutul))
+    fn = joinpath(base_path, "..", "data", "testgrids", "$name.mat")
+    return MAT.matread(fn)
+end

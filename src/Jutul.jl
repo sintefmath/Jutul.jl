@@ -23,13 +23,13 @@ module Jutul
     using LinearOperators
     using Krylov
     using AlgebraicMultigrid
-    
+
     # Misc. utils
     using ExprTools
     using Graphs
     using PrettyTables
     using Polynomials
-    using JLD2
+    using JLD2, MAT
 
     import Metis
     import Meshes
@@ -59,7 +59,6 @@ module Jutul
     # Models 
     include("models.jl")
 
-    # include("models.jl")
     # MRST stuff
     # Grids, types
     include("domains.jl")
@@ -83,9 +82,11 @@ module Jutul
     include("interpolation.jl")
     include("partitioning.jl")
 
+    # Systems that are made up of subsystems
     include("composite/composite.jl")
-    # 
+    # Models that contain submodels
     include("multimodel/multimodel.jl")
+    # Domain decomposition
     include("dd/dd.jl")
 
     # Test systems
@@ -96,5 +97,8 @@ module Jutul
 
     # Extensions' interfaces
     include("ext/extensions.jl")
+
+    # Support for SI unit conversion
+    include("units/units.jl")
 
 end # module

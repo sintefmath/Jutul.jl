@@ -187,3 +187,30 @@ using Jutul, Test
     Tb1 = compute_boundary_trans(d)
     @test all(Tb1 .== 1)
 end
+
+@testset "IndirectionMap" begin
+    val = [1.0, 2.0, 3.0, 4.0, 5.0]
+    ix = [1, 3, 6]
+
+    m = Jutul.IndirectionMap(val, ix)
+
+    @test m[2] == [3.0, 4.0, 5.0]
+    @test m[1] == [1.0, 2.0]
+    @test length(m) == 2
+end
+
+import Jutul: IndexRenumerator
+@testset "IndexRenumerator" begin
+    im = IndexRenumerator()
+    @test im[3] == 1
+    @test im[1] == 2
+    @test im[7] == 3
+    @test im[3] == 1
+    @test !(4 in im)
+    @test 3 in im
+    @test 1 in im
+    @test 7 in im
+    @test Jutul.indices(im) == [3, 1, 7]
+    @test Jutul.indices(IndexRenumerator([1, 5, 7, 2])) == [1, 5, 7, 2]
+    @test Jutul.indices(IndexRenumerator([5, π, 3.0, 17.6])) == [5, π, 3.0, 17.6]
+end

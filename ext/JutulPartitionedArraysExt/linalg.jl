@@ -36,7 +36,7 @@ end
 
 function setup_parray_mul!(simulators, ix = nothing)
     operators = map(simulators) do sim
-        lsys = sim.storage.LinearizedSystem
+        lsys = Jutul.get_simulator_storage(sim).LinearizedSystem
         if !isnothing(ix)
             lsys = lsys[ix, ix]
         end
@@ -64,9 +64,9 @@ end
 
 function Jutul.parray_update_preconditioners!(sim, preconditioner_base, preconditioners, recorder)
    map(sim.storage.simulators, preconditioners) do sim, prec
-        sys = sim.storage.LinearizedSystem
-        model = sim.model
-        storage = sim.storage
+        model = Jutul.get_simulator_model(sim)
+        storage = Jutul.get_simulator_storage(sim)
+        sys = storage.LinearizedSystem
         Jutul.update_preconditioner!(prec, sys, model, storage, recorder, sim.executor)
         prec
     end

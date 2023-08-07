@@ -945,3 +945,82 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
         new{T}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
     end
 end
+
+"""
+IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where V
+
+Create a indirection map that encodes a variable length dense vector.
+
+`pos` is assumed to be a Vector{Int} of length n+1 where n is the number of
+dense vectors that is encoded. The `vals` array holds the entries for vector i
+in the range `pos[i]:(pos[i+1]-1)` for fast lookup. Indexing into the
+indirection map with index `k` will give a view into the values for vector `k`.
+"""
+struct IndirectionMap{V}
+    vals::Vector{V}
+    pos::Vector{Int}
+    function IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where V
+        lastpos = pos[end]
+        @assert length(vals) == lastpos - 1 "Expected vals to have length lastpos - 1 = $(lastpos-1), was $(length(vals))"
+        @assert pos[1] == 1
+        new{V}(vals, pos)
+    end    
+end
+
+struct IndexRenumerator{T}
+    indices::Dict{T, Int}
+end
+
+function IndexRenumerator(T = Int)
+    d = Dict{T, Int}()
+    return IndexRenumerator{T}(d)
+end
+
+function IndexRenumerator(x::AbstractArray{T}) where T
+    ir = IndexRenumerator(T)
+    for i in x
+        ir[i]
+    end
+    return ir
+end
+
+
+function Base.length(m::IndexRenumerator)
+    return length(keys(m.indices))
+end
+
+function Base.getindex(m::IndexRenumerator{T}, ix::T) where T
+    indices = m.indices
+    if !(ix in m)
+        n = length(m)+1
+        indices[ix] = n
+    end
+    return indices[ix]
+end
+
+function (m::IndexRenumerator)(ix)
+    Base.getindex(m, ix)
+end
+
+function Base.in(ix::T, m::IndexRenumerator{T}) where T
+    return haskey(m.indices, ix)
+end
+
+function indices(im::IndexRenumerator{T}) where T
+    n = length(im)
+    out = Vector{T}(undef, n)
+    for (k, v) in im.indices
+        out[v] = k
+    end
+    return out
+end
+
+function renumber(x, im::IndexRenumerator)
+    renumber!(similar(x), im)
+end
+
+function renumber!(x, im::IndexRenumerator)
+    for (i, v) in enumerate(x)
+        x[i] = im[v]
+    end
+end

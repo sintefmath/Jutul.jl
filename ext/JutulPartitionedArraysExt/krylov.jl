@@ -16,7 +16,7 @@ end
 
 function prepare_distributed_solve!(simulators, b)
     map(simulators, local_values(b)) do sim, r
-        lsys = sim.storage.LinearizedSystem
+        lsys = Jutul.get_simulator_storage(sim).LinearizedSystem
         N = sim.executor.data[:n_self]
         Jutul.prepare_linear_solve!(lsys)
         r_sim = Jutul.vector_residual(lsys)
@@ -68,7 +68,7 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
     solved = stats.solved
 
     @tic "dx update" map(simulators, local_values(bsolver.x)) do sim, dx
-        sys = sim.storage.LinearizedSystem
+        sys = Jutul.get_simulator_storage(sim).LinearizedSystem
         Jutul.update_dx_from_vector!(sys, dx)
     end
 

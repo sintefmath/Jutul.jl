@@ -74,7 +74,9 @@ end
 function Jutul.initialize_before_first_timestep!(psim::PArraySimulator, first_dT; kwarg...)
     Jutul.@tic "solve" begin
         Jutul.@tic "secondary variables" map(psim.storage[:simulators]) do sim
-            Jutul.update_secondary_variables!(sim.storage, sim.model)
+            s = Jutul.get_simulator_storage(sim)
+            m = Jutul.get_simulator_model(sim)
+            Jutul.update_secondary_variables!(s, m)
             nothing
         end
     end
@@ -170,7 +172,7 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; ite
     if !all_processes_converged
         t_solved = @elapsed ok, n, res = parray_linear_solve!(simulator, config[:linear_solver])
         t_update = @elapsed map(simulators) do sim
-            Jutul.update_primary_variables!(sim.storage, sim.model)
+            Jutul.update_primary_variables!(Jutul.get_simulator_storage(sim), Jutul.get_simulator_model(sim))
         end
         report[:linear_solver] = res
         report[:linear_solve_time] = t_solved

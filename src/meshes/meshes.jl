@@ -3,6 +3,8 @@
 export MRSTWrapMesh, CartesianMesh, TwoPointFiniteVolumeGeometry, dim
 export triangulate_mesh, tpfv_geometry, discretized_domain_tpfv_flow
 
+abstract type FiniteVolumeMesh <: JutulMesh end
+
 abstract type JutulGeometry end
 
 """
@@ -113,6 +115,18 @@ function TwoPointFiniteVolumeGeometry(
     )
 end
 
+function count_entities(g::JutulMesh, ::Cells)
+    return number_of_cells(g)
+end
+
+function count_entities(g::JutulMesh, ::Faces)
+    return number_of_faces(g)
+end
+
+function count_entities(g::JutulMesh, ::BoundaryFaces)
+    return number_of_boundary_faces(g)
+end
+
 dim(g::TwoPointFiniteVolumeGeometry) = size(g.cell_centroids, 1)
 
 """
@@ -175,6 +189,20 @@ end
 
 include("mrst.jl")
 include("cart.jl")
+include("unstructured/unstructured.jl")
+include("coarse.jl")
+
+function declare_entities(G::JutulMesh)
+    nf = number_of_faces(G)
+    nc = number_of_cells(G)
+    nbnd = number_of_boundary_faces(G)
+    return [
+            (entity = Cells(), count = nc),
+            (entity = Faces(), count = nf),
+            (entity = BoundaryFaces(), count = nbnd),
+            (entity = HalfFaces(), count = 2*nf)
+        ]
+end
 
 function tpfv_geometry(g::T) where T<:Meshes.Mesh{3, <:Any}
     N, A, V, Nv, Cc, Fc = meshes_fv_geometry_3d(g)
@@ -182,7 +210,7 @@ function tpfv_geometry(g::T) where T<:Meshes.Mesh{3, <:Any}
     return geo
 end
 
-function add_default_domain_data!(Ω::DataDomain, m::Union{CartesianMesh, MRSTWrapMesh, Meshes.Mesh})
+function add_default_domain_data!(Ω::DataDomain, m::Union{FiniteVolumeMesh, Meshes.Mesh})
     fv = tpfv_geometry(m)
     geom_pairs = (
         Pair(Faces(), [:neighbors, :areas, :normals, :face_centroids]),
@@ -198,3 +226,61 @@ function add_default_domain_data!(Ω::DataDomain, m::Union{CartesianMesh, MRSTWr
         end
     end
 end
+
+function tpfv_geometry(G::FiniteVolumeMesh)
+    D = dim(G)
+    nc = number_of_cells(G)
+    nf = number_of_faces(G)
+    # Cell geometry
+    cell_centroids = zeros(D, nc)
+    volumes = zeros(nc)
+    for i in 1:nc
+        c, volumes[i] = compute_centroid_and_measure(G, Cells(), i)
+        for d in 1:D
+            cell_centroids[d, i] = c[d]
+        end
+    end
+
+    # Face geometry
+    nf = number_of_faces(G)
+    N = get_neighborship(G)
+    nf = number_of_faces(G)
+
+    function face_geometry(e)
+        nf = count_entities(G, e)
+        areas = zeros(nf)
+        normals = zeros(D, nf)
+        centroids = zeros(D, nf)
+        for f in 1:nf
+            c, a = compute_centroid_and_measure(G, e, f)
+            for d in 1:D
+                centroids[d, f] = c[d]
+            end
+            areas[f] = a
+            # Assume correct order for normal
+            normal = face_normal(G, f, e)
+
+            for d in 1:D
+                normals[d, f] = normal[d]
+            end
+        end
+        return (areas, normals, centroids)
+    end
+
+    face_areas, face_normals, face_centroids = face_geometry(Faces())
+    boundary_areas, boundary_normals, boundary_centroids = face_geometry(BoundaryFaces())
+
+    return TwoPointFiniteVolumeGeometry(
+        N,
+        face_areas,
+        volumes,
+        face_normals,
+        cell_centroids,
+        face_centroids,
+        boundary_areas = boundary_areas,
+        boundary_normals = boundary_normals,
+        boundary_centroids = boundary_centroids,
+        boundary_neighbors = get_neighborship(G, internal = false)
+    )
+end
+
