@@ -459,9 +459,9 @@ function print_stats(reports::AbstractArray; kwarg...)
     print_stats(stats; kwarg...)
 end
 
-function print_stats(stats; kwarg...)
-    print_iterations(stats; kwarg...)
-    print_timing(stats; kwarg...)
+function print_stats(stats; title = "", table_formatter = tf_unicode_rounded, kwarg...)
+    print_iterations(stats; title = title, table_formatter = table_formatter, kwarg...)
+    print_timing(stats; title = title, table_formatter = table_formatter)
 end
 
 function is_wide_term()
@@ -469,20 +469,29 @@ function is_wide_term()
     return dim > 90
 end
 
-function print_iterations(stats; title = "", table_formatter = tf_unicode_rounded)
-    flds = [:newtons, :linearizations, :linear_iterations]
+function print_iterations(stats;
+        title = "",
+        table_formatter = tf_unicode_rounded,
+        scale = 1
+    )
+    flds = (:newtons, :linearizations, :linear_iterations)
     names = [:Newton, :Linearization, Symbol("Linear solver")]
     data = Array{Any}(undef, length(flds), 4)
-    nstep = stats.steps
-    nmini = stats.ministeps
+    if scale == 1
+        sf = identity
+    else
+        sf = x -> x/scale
+    end
+    nstep = sf(stats.steps)
+    nmini = sf(stats.ministeps)
 
     tot_time = stats.time_sum.total
     time = map(f -> tot_time/stats[f], flds)
     u, s = pick_time_unit(time)
 
     for (i, f) in enumerate(flds)
-        waste = stats[:wasted][f]
-        raw = stats[f]
+        waste = sf(stats[:wasted][f])
+        raw = sf(stats[f])
         data[i, 1] = raw/nstep         # Avg per step
         data[i, 2] = raw/nmini         # Avg per mini
         data[i, 3] = time[i]/u         # Time each
