@@ -30,13 +30,6 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
 
     data[:recorder] = ProgressRecorder()
 
-    # @info "Starting" main_part.partition
-
-    # map(partition_original_indices, full_partition.subsets, ranks) do p_buf, p, i
-    #     missing_part = setdiff(p, p_buf)
-    #     @info "Block $i" p_buf p
-    #     @warn "Overlap?" missing_part
-    # end
     # Make simulators
     n_owned = 0
     process_start = typemax(Int)
