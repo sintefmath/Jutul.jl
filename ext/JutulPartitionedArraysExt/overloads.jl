@@ -213,7 +213,10 @@ function Jutul.retrieve_output!(sim::PArraySimulator, states, reports, config, n
     Jutul.retrieve_output!(states, reports, config, n)
 end
 
-function Jutul.simulator_reports_per_step(sim::PArraySimulator)
-    n = length(sim.storage[:simulators])
+function Jutul.simulator_reports_per_step(psim::PArraySimulator)
+    n = 0
+    map(psim.storage[:simulators]) do s
+        n += 1
+    end
     return n
 end
