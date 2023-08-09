@@ -829,6 +829,21 @@ function duplicate(case::JutulCase; copy_model = false)
     return JutulCase(model, deepcopy(dt), deepcopy(forces), deepcopy(state0), deepcopy(parameters), deepcopy(input_data))
 end
 
+function Base.getindex(case::JutulCase, ix::Int)
+    return case[ix:ix]
+end
+
+function Base.getindex(case::JutulCase, ix)
+    (; model, dt, forces, state0, parameters, input_data) = case
+    f = deepcopy(forces)
+    if f isa AbstractVector
+        @assert length(f) == length(dt)
+        f = f[ix]
+    end
+    dt = dt[ix]
+    return JutulCase(model, dt, f, deepcopy(state0), deepcopy(parameters), deepcopy(input_data))
+end
+
 export NoRelaxation, SimpleRelaxation
 
 abstract type NonLinearRelaxation end
