@@ -173,7 +173,15 @@ function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = 
     return (cells = cells, faces = faces, is_boundary = is_boundary)
 end
 
-function subforces(forces, submodel)
+function subforces(forces::AbstractDict, submodel)
+    D = Dict{Symbol, Any}()
+    for k in keys(forces)
+        D[k] = subforce(forces[k], submodel)
+    end
+    return D
+end
+
+function subforces(forces::NamedTuple, submodel)
     D = Dict{Symbol, Any}()
     if isnothing(forces)
         return nothing
@@ -185,7 +193,11 @@ function subforces(forces, submodel)
     end
 end
 
-function subforces(forces, submodel::MultiModel)
+function subforces(forces::Vector{T}, submodel::MultiModel) where T<:AbstractDict
+    return map(f -> subforces(f, submodel), forces)
+end
+
+function subforces(forces::AbstractDict, submodel::MultiModel)
     D = Dict{Symbol, Any}()
     for k in keys(forces)
         if haskey(submodel.models, k)
@@ -193,6 +205,10 @@ function subforces(forces, submodel::MultiModel)
         end
     end
     return D
+end
+
+function subforces(::Nothing, submodel)
+    return nothing
 end
 
 subforce(::Nothing, model) = nothing
