@@ -307,7 +307,9 @@ function perform_step!(storage, model, dt, forces, config; executor = default_ex
     report[:linear_system_time] = t_lsys
     report[:convergence_time] = t_conv
 
-    if !converged && solve
+    should_solve = !converged && solve
+    report[:solved] = should_solve
+    if should_solve
         lsolve = config[:linear_solver]
         check = config[:safe_mode]
         try
@@ -341,6 +343,7 @@ function setup_ministep_report(; kwarg...)
     for k in [:secondary_time, :equations_time, :linear_system_time, :convergence_time]
         report[k] = 0.0
     end
+    report[:solved] = true
     report[:converged] = true
     report[:errors] = missing
     for (k, v) in kwarg

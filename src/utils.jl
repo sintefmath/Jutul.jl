@@ -368,8 +368,11 @@ function stats_ministep(reports)
     linear_iterations = 0
     for rep in reports
         linearizations += 1
+        its += rep[:solved]
         if haskey(rep, :update_time)
-            its += 1
+            if !rep[:solved]
+                @warn "Strange data. solved = false but contains :update_time?"
+            end
             update += rep[:update_time]
             lprep = rep[:linear_solver].prepare
             linsolve += rep[:linear_solve_time] - lprep

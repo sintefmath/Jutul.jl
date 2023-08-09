@@ -167,14 +167,15 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; sol
     if verbose && config[:info_level] > 1
         Jutul.jutul_message("It $(iteration-1)", "$nconverged/$np processes converged.")
     end
-    report = Jutul.setup_ministep_report(converged = all_processes_converged)
+    should_solve = solve && !all_processes_converged
+    report = Jutul.setup_ministep_report(converged = all_processes_converged, solved = should_solve)
     map(reports) do subrep
         for k in [:secondary_time, :equations_time, :linear_system_time, :convergence_time]
             report[k] += subrep[k]
         end
     end
     # Proceed to linear solve
-    if solve && !all_processes_converged
+    if should_solve
         t_solved = @elapsed ok, n, res = parray_linear_solve!(simulator, config[:linear_solver])
         t_update = @elapsed map(simulators) do sim
             Jutul.update_primary_variables!(
