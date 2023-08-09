@@ -452,7 +452,9 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
         reset_variables!(sim, state0)
     end
     if recompute_state0_secondary
-        @tic "secondary variables (state0)" update_secondary_variables!(sim.storage, sim.model, true)
+        s = get_simulator_storage(sim)
+        m = get_simulator_model(sim)
+        @tic "secondary variables (state0)" update_secondary_variables!(s, m, true)
     end
     return (states, reports, first_step, dt)
 end
@@ -485,17 +487,34 @@ function deserialize_restart(pth, state0, dt, restart, states, reports, config, 
     return (state0, dt, first_step)
 end
 
-reset_variables!(sim, vars; kwarg...) = reset_variables!(sim.storage, sim.model, vars; kwarg...)
-reset_state_to_previous_state!(sim) = reset_state_to_previous_state!(sim.storage, sim.model)
-reset_previous_state!(sim, state0) = reset_previous_state!(sim.storage, sim.model, state0)
+function reset_variables!(sim, vars; kwarg...)
+    s = get_simulator_storage(sim)
+    m = get_simulator_model(sim)
+    reset_variables!(s, m, vars; kwarg...)
+end
 
+function reset_state_to_previous_state!(sim)
+    s = get_simulator_storage(sim)
+    m = get_simulator_model(sim)
+    reset_state_to_previous_state!(s, m)
+end
+
+function reset_previous_state!(sim, state0)
+    s = get_simulator_storage(sim)
+    m = get_simulator_model(sim)
+    reset_previous_state!(s, m, state0)
+end
 
 function update_before_step!(sim, dt, forces; kwarg...)
-    update_before_step!(sim.storage, sim.model, dt, forces; kwarg...)
+    s = get_simulator_storage(sim)
+    m = get_simulator_model(sim)
+    update_before_step!(s, m, dt, forces; kwarg...)
 end
 
 function update_after_step!(sim, dt, forces; kwarg...)
-    update_after_step!(sim.storage, sim.model, dt, forces; kwarg...)
+    s = get_simulator_storage(sim)
+    m = get_simulator_model(sim)
+    update_after_step!(s, m, dt, forces; kwarg...)
 end
 
 function preprocess_forces(sim, forces)
