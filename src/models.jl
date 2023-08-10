@@ -598,7 +598,7 @@ end
 
 function setup_linearized_system(sparse_arg, model)
     context = model.context
-    LinearizedSystem(sparse_arg, context, matrix_layout(context))
+    return LinearizedSystem(sparse_arg, context, matrix_layout(context))
 end
 
 function align_equations_to_linearized_system!(storage, model::JutulModel; kwarg...)
@@ -676,10 +676,9 @@ end
 
 Update the linearized system with the current set of equations.
 """
-function update_linearized_system!(storage, model::JutulModel, executor = default_executor(); kwarg...)
+function update_linearized_system!(storage, model::JutulModel, executor = default_executor(); lsys = storage.LinearizedSystem, kwarg...)
     eqs = model.equations
     eqs_storage = storage.equations
-    lsys = storage.LinearizedSystem
     update_linearized_system!(lsys, eqs, eqs_storage, model; kwarg...)
     post_update_linearized_system!(lsys, executor, storage, model)
 end
@@ -688,16 +687,14 @@ function post_update_linearized_system!(lsys, executor, storage, model)
     # Do nothing.
 end
 
-function update_linearized_system!(lsys, equations, eqs_storage, model::JutulModel; equation_offset = 0)
-    r_buf = lsys.r_buffer
+function update_linearized_system!(lsys, equations, eqs_storage, model::JutulModel; equation_offset = 0, r = lsys.r_buffer, nzval = lsys.jac_buffer)
     bz = model_block_size(model)
     for key in keys(equations)
         @tic "$key" begin
             eq = equations[key]
             eqs_s = eqs_storage[key]
-            nz = lsys.jac_buffer
-            r = local_residual_view(r_buf, model, eq, equation_offset)
-            update_linearized_system_equation!(nz, r, model, eq, eqs_s)
+            r_view = local_residual_view(r, model, eq, equation_offset)
+            update_linearized_system_equation!(nzval, r_view, model, eq, eqs_s)
             neq = number_of_equations(model, eq)
             equation_offset += neq÷bz
         end
