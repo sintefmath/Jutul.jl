@@ -85,8 +85,12 @@ function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
 end
 
-function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model), kwarg...)
-    storage = JutulStorage()
+function setup_storage!(storage, model::MultiModel;
+        state0 = setup_state(model),
+        parameters = setup_parameters(model),
+        setup_linearized_system = true,
+        kwarg...
+    )
     state0_ref = JutulStorage()
     state_ref = JutulStorage()
     @tic "model" for key in submodels_symbols(model)
@@ -113,10 +117,12 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
             storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = submodel_ad_tag(model, key))
         end
     end
-    @tic "linear system" begin
-        @tic "setup" setup_linearized_system!(storage, model)
-        @tic "alignment" align_equations_to_linearized_system!(storage, model)
-        @tic "alignment cross terms" align_cross_terms_to_linearized_system!(storage, model)
+    if setup_linearized_system
+        @tic "linear system" begin
+            @tic "setup" setup_linearized_system!(storage, model)
+            @tic "alignment" align_equations_to_linearized_system!(storage, model)
+            @tic "alignment cross terms" align_cross_terms_to_linearized_system!(storage, model)
+        end
     end
     setup_multimodel_maps!(storage, model)
     return storage
