@@ -417,6 +417,10 @@ function update_linearized_system_equation!(nz, r, model, equation::JutulEquatio
     end
 end
 
+function update_linearized_system_equation!(nz::Missing, r, model, equation::JutulEquation, caches)
+    @. r = caches.numeric
+end
+
 """
 Update equation based on currently stored properties
 """
@@ -427,9 +431,6 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
         prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt)
     end
     for k in keys(eq_s)
-        if k == :numeric
-            continue
-        end
         cache = eq_s[k]
         update_equation_for_entity!(cache, eq, state, state0, model, dt)
     end
@@ -442,6 +443,15 @@ function update_equation_for_entity!(cache, eq, state, state0, model, dt)
     local_state = local_ad(state, 1, T)
     local_state0 = local_ad(state0, 1, T)
     inner_update_equation_for_entity(cache, eq, local_state, local_state0, model, dt)
+end
+
+function update_equation_for_entity!(cache::AbstractMatrix, eq, state, state0, model, dt)
+    for i in axes(cache, 2)
+        ldisc = local_discretization(eq, i)
+        v_i = view(cache, :, i)
+        update_equation_in_entity!(v_i, i, state, state0, eq, model, dt, ldisc)
+    end
+    return cache
 end
 
 function inner_update_equation_for_entity(cache, eq, state, state0, model, dt)
