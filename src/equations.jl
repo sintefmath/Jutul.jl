@@ -403,7 +403,7 @@ end
 """
 Update a linearized system based on the values and derivatives in the equation.
 """
-function update_linearized_system_equation!(nz, r, model, equation::JutulEquation, diag_cache::CompactAutoDiffCache)
+function update_linearized_system_equation!(nz::AbstractArray, r, model, equation::JutulEquation, diag_cache::CompactAutoDiffCache)
     # NOTE: Default only updates diagonal part
     fill_equation_entries!(nz, r, model, diag_cache)
 end
@@ -417,8 +417,9 @@ function update_linearized_system_equation!(nz, r, model, equation::JutulEquatio
     end
 end
 
-function update_linearized_system_equation!(nz::Missing, r, model, equation::JutulEquation, caches)
-    @. r = caches.numeric
+function update_linearized_system_equation!(nz::Missing, r, model, equation::JutulEquation, cache)
+    d = get_diagonal_entries(equation, cache)
+    @. r = d
 end
 
 """

@@ -586,17 +586,20 @@ function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s
     end
 end
 
-function update_linearized_system!(storage, model::MultiModel, executor = default_executor(); equation_offset = 0, targets = submodel_symbols(model), sources = targets)
+function update_linearized_system!(storage, model::MultiModel, executor = default_executor();
+        equation_offset = 0,
+        targets = submodel_symbols(model),
+        sources = targets,
+        kwarg...)
     @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
     # Update diagonal blocks (model with respect to itself)
-    @tic "models" update_diagonal_blocks!(storage, model, targets)
+    @tic "models" update_diagonal_blocks!(storage, model, targets; kwarg...)
     # Then, update cross terms (models' impact on other models)
-    @tic "cross-model" update_offdiagonal_blocks!(storage, model, targets, sources)
+    @tic "cross-model" update_offdiagonal_blocks!(storage, model, targets, sources; kwarg...)
     post_update_linearized_system!(storage.LinearizedSystem, executor, storage, model)
 end
 
-function update_diagonal_blocks!(storage, model::MultiModel, targets)
-    lsys = storage.LinearizedSystem
+function update_diagonal_blocks!(storage, model::MultiModel, targets; lsys = storage.LinearizedSystem, kwarg...)
     model_keys = submodel_symbols(model)
     if has_groups(model)
         ng = number_of_groups(model)
@@ -607,11 +610,11 @@ function update_diagonal_blocks!(storage, model::MultiModel, targets)
             group_targets = model_keys[subs]
             group_keys = intersect(group_targets, targets)
             offsets = get_submodel_offsets(storage, g)
-            update_main_linearized_system_subgroup!(storage, model, group_keys, offsets, lsys_g)
+            update_main_linearized_system_subgroup!(storage, model, group_keys, offsets, lsys_g; kwarg...)
         end
     else
         offsets = get_submodel_offsets(storage)
-        update_main_linearized_system_subgroup!(storage, model, targets, offsets, lsys)
+        update_main_linearized_system_subgroup!(storage, model, targets, offsets, lsys; kwarg...)
     end
 end
 

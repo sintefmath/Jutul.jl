@@ -131,20 +131,20 @@ end
 cross_term_entities_source(ct, eq::Nothing, model) = nothing
 
 
-function update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
+function update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys; kwarg...)
     for (index, key) in enumerate(model_keys)
         offset = offsets[index]
         m = model.models[key]
         s = storage[key]
         eqs_s = s.equations
         eqs = m.equations
-        update_linearized_system!(lsys, eqs, eqs_s, m; equation_offset = offset)
+        update_linearized_system!(lsys, eqs, eqs_s, m; equation_offset = offset, kwarg...)
     end
     for (index, key) in enumerate(model_keys)
         offset = offsets[index]
         m = model.models[key]
         ct, ct_s = cross_term_target(model, storage, key, true)
-        update_linearized_system_cross_terms!(lsys, ct, ct_s, m, key; equation_offset = offset)
+        update_linearized_system_cross_terms!(lsys, ct, ct_s, m, key; equation_offset = offset, kwarg...)
     end
 end
 
