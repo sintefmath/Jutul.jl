@@ -532,3 +532,12 @@ to create inconsistent Jacobians.
     end
     return D
 end
+
+function transfer_accumulation!(acc, eq::ConservationLaw, state)
+    s = Jutul.conserved_symbol(eq)
+    @. acc = state[s]
+end
+
+function transfer_accumulation!(acc, eq::JutulEquation, state)
+    @. acc = zero(eltype(acc))
+end

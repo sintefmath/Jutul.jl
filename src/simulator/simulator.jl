@@ -11,6 +11,7 @@ include("timesteps.jl")
 include("utils.jl")
 include("optimization.jl")
 include("relaxation.jl")
+include("helper.jl")
 
 function simulator_storage(model; state0 = nothing,
                                 parameters = setup_parameters(model),
