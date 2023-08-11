@@ -65,7 +65,7 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
         ne_s = count_active_entities(model_s.domain, e_s)
     end
     for i in 1:N
-        prepare_cross_term_in_entity!(i, state_t, state_t0,state_s, state_s0, model_t, model_s, ct, eq_t, 1.0)
+        prepare_cross_term_in_entity!(i, state_t, state_t0, state_s, state_s0, model_t, model_s, ct, eq_t, 1.0)
     end
     caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t, self_entity = e_t)
     caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s, self_entity = e_s)
@@ -203,6 +203,20 @@ function update_linearized_system_cross_term!(nz, r, model, ct::AdditiveCrossTer
             continue
         end
         increment_equation_entries!(nz, r, model, caches[k], impact, nu, sgn)
+    end
+end
+
+function update_linearized_system_cross_term!(nz::Missing, r::AbstractArray, model, ct::AdditiveCrossTerm, caches::AbstractArray, impact, nu, sgn)
+    increment_equation_entries!(r, model, caches, impact, nu, sgn)
+end
+
+function increment_equation_entries!(r, model, entries, impact, nu, sgn)
+    ne, nu = size(entries)
+    for ui in 1:nu
+        i = impact[ui]
+        for e in 1:ne
+            r[e, i] += sgn*entries[e, ui]
+        end
     end
 end
 
