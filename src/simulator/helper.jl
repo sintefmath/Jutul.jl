@@ -114,17 +114,26 @@ function model_accumulation!(acc, sim::HelperSimulator, x, dt = 1.0;
     return acc
 end
 
-function model_accumulation_internal!(acc, storage, model)
-    offset = 0
+function model_accumulation_internal!(acc, storage, model; offset = 0)
     state = storage.state
+    is_cm = is_cell_major(matrix_layout(model.context))
     for (k, eq) in model.equations
         N = Jutul.number_of_equations(model, eq)
         m = Jutul.number_of_equations_per_entity(model, eq)
         n = N ÷ m
 
-        acc_i = reshape(view(acc, (offset+1):(offset+n)), m, n)
+        loc_indices = (offset+1):(offset+N)
+        acc_i = view(acc, loc_indices)
+        if is_cm
+            # The equations are always in cell major. We grab a residual view
+            # that matches even if the residual is not in cell major.
+            v = reshape(acc_i, m, n)
+        else
+            v = reshape(acc_i, n, m)'
+        end
         transfer_accumulation!(acc_i, eq, state)
     end
+    return offset
 end
 
 function setup_helper_equation_storage!(storage, r, model; offset = 0)
@@ -135,7 +144,7 @@ function setup_helper_equation_storage!(storage, r, model; offset = 0)
         m = Jutul.number_of_equations_per_entity(model, eq)
         n = N ÷ m
         loc_indices = (offset+1):(offset+N)
-        r_i = reshape(view(r, loc_indices), m, n)
+        r_i = view(r, loc_indices)
         if is_cm
             # The equations are always in cell major. We grab a residual view
             # that matches even if the residual is not in cell major.
