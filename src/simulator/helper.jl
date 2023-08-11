@@ -124,9 +124,9 @@ function setup_helper_equation_storage!(storage, r, model; offset = 0)
         N = Jutul.number_of_equations(model, eq)
         m = Jutul.number_of_equations_per_entity(model, eq)
         n = N ÷ m
-
-        r_i = reshape(view(r, (offset+1):(offset+n)), m, n)
+        loc_indices = (offset+1):(offset+n*m)
+        r_i = reshape(view(r, loc_indices), m, n)
         storage[:equations][k] = r_i
-        # transfer_accumulation!(acc_i, eq, state)
     end
+    return offset
 end

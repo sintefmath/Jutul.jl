@@ -170,18 +170,19 @@ function source_impact_for_pair(ctp, ct_s, label)
     return (eq_label, impact, caches_s, caches_t, pos, sgn)
 end
 
-function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_storage, model, label; equation_offset = 0)
-    # @assert !has_groups(model)
-    nz = lsys.jac_buffer
-    r_buf = lsys.r_buffer
+function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_storage, model, label;
+        equation_offset = 0,
+        r = lsys.r_buffer,
+        nzval = lsys.jac_buffer
+    )
     for (ctp, ct_s) in zip(crossterms, crossterm_storage)
         ct = ctp.cross_term
         eq_label, impact, _, caches, _, sgn = source_impact_for_pair(ctp, ct_s, label)
         eq = ct_equation(model, eq_label)
         @assert !isnothing(impact)
         nu = number_of_entities(model, eq)
-        r = local_residual_view(r_buf, model, eq, equation_offset + get_equation_offset(model, eq_label))
-        update_linearized_system_cross_term!(nz, r, model, ct, caches, impact, nu, sgn)
+        r_ct = local_residual_view(r, model, eq, equation_offset + get_equation_offset(model, eq_label))
+        update_linearized_system_cross_term!(nzval, r_ct, model, ct, caches, impact, nu, sgn)
     end
 end
 
@@ -227,11 +228,12 @@ function increment_equation_entries!(nz, r, model, cache, impact, nu, sgn)
     end
 end
 
-function update_offdiagonal_blocks!(storage, model, targets, sources)
-    linearized_system = storage.LinearizedSystem
-    models = model.models
-    for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
-        update_offdiagonal_block_pair!(linearized_system, ctp, ct_s, storage, model, models, targets, sources)
+function update_offdiagonal_blocks!(storage, model, targets, sources; lsys = storage.LinearizedSystem, r = lsys.r_buffer, nzval = lsys.jac_buffer)
+    if !ismissing(lsys)
+        models = model.models
+        for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+            update_offdiagonal_block_pair!(lsys, ctp, ct_s, storage, model, models, targets, sources)
+        end
     end
 end
 

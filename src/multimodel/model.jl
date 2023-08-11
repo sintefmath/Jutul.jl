@@ -596,7 +596,9 @@ function update_linearized_system!(storage, model::MultiModel, executor = defaul
     @tic "models" update_diagonal_blocks!(storage, model, targets; kwarg...)
     # Then, update cross terms (models' impact on other models)
     @tic "cross-model" update_offdiagonal_blocks!(storage, model, targets, sources; kwarg...)
-    post_update_linearized_system!(storage.LinearizedSystem, executor, storage, model)
+    if haskey(storage, :LinearizedSystem)
+        post_update_linearized_system!(storage.LinearizedSystem, executor, storage, model)
+    end
 end
 
 function update_diagonal_blocks!(storage, model::MultiModel, targets; lsys = storage.LinearizedSystem, kwarg...)
