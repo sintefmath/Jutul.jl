@@ -8,7 +8,9 @@ function vectorize_variables(model, state_or_prm, type_or_map = :primary; config
     return vectorize_variables!(V, model, state_or_prm, mapper, config = config)
 end
 
-vectorized_length(model, mapper) = sum(x -> x.n, values(mapper), init = 0)
+function vectorized_length(model, mapper)
+    sum(x -> x.n, values(mapper), init = 0)
+end
 
 function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary; config = nothing)
     mapper = get_mapper_internal(model, type_or_map)
