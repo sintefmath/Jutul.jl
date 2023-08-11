@@ -29,6 +29,7 @@ function HelperSimulator(model::M, T = Float64; executor::E = Jutul.default_exec
     # TODO: Actually use these.
     storage[:primary_mapper] = Jutul.variable_mapper(model, :primary)
     storage[:parameter_wrapper] = first(Jutul.variable_mapper(model, :parameters))
+    initialize_extra_state_fields!(storage.state, model)
     storage = Jutul.specialize_simulator_storage(storage, model, false)
     S = typeof(storage)
     return HelperSimulator{E, M, S, T}(executor, model, storage)
