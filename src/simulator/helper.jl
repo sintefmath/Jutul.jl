@@ -120,13 +120,20 @@ end
 
 function setup_helper_equation_storage!(storage, r, model; offset = 0)
     state = storage.state
+    is_cm = is_cell_major(matrix_layout(model.context))
     for (k, eq) in model.equations
         N = Jutul.number_of_equations(model, eq)
         m = Jutul.number_of_equations_per_entity(model, eq)
         n = N ÷ m
         loc_indices = (offset+1):(offset+n*m)
         r_i = reshape(view(r, loc_indices), m, n)
-        storage[:equations][k] = r_i
+        if is_cm
+            v = reshape(r_i, m, n)
+        else
+            v = reshape(r_i, n, m)'
+        end
+        @assert size(v) == (m, n)
+        storage[:equations][k] = v
     end
     return offset
 end
