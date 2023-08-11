@@ -132,13 +132,13 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
                                                                    start_date = nothing,
                                                                    kwarg...)
     rec = progress_recorder(sim)
+    # Reset recorder just in case since we are starting a new simulation
+    reset!(rec)
     forces, forces_per_step = preprocess_forces(sim, forces)
     start_timestamp = now()
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     else
-        # Reset recorder just in case since we are starting a new simulation
-        reset!(rec)
         for (k, v) in kwarg
             if !haskey(config, k)
                 @warn "Keyword argument $k not found in initial config."
