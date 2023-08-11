@@ -13,9 +13,14 @@ Construct a helper simulator that can be used to compute the residuals and/or
 accumulation terms for a given type T. Useful for coupling Jutul to other
 solvers and types of automatic differentiation.
 """
-function HelperSimulator(model::M, T = Float64; state0 = setup_state(model), executor::E = Jutul.default_executor()) where {M, E}
+function HelperSimulator(model::M, T = Float64; executor::E = Jutul.default_executor(), kwarg...) where {M, E}
     storage = JutulStorage()
-    Jutul.setup_storage!(storage, model, state0 = state0, setup_linearized_system = false, state0_ad = false, state_ad = false)
+    Jutul.setup_storage!(storage, model;
+        setup_linearized_system = false,
+        state0_ad = false,
+        state_ad = false,
+        kwarg...
+    )
 
     n = Jutul.number_of_degrees_of_freedom(model)
     r = zeros(T, n)
@@ -125,15 +130,18 @@ function setup_helper_equation_storage!(storage, r, model; offset = 0)
         N = Jutul.number_of_equations(model, eq)
         m = Jutul.number_of_equations_per_entity(model, eq)
         n = N ÷ m
-        loc_indices = (offset+1):(offset+n*m)
+        loc_indices = (offset+1):(offset+N)
         r_i = reshape(view(r, loc_indices), m, n)
         if is_cm
+            # The equations are always in cell major. We grab a residual view
+            # that matches even if the residual is not in cell major.
             v = reshape(r_i, m, n)
         else
             v = reshape(r_i, n, m)'
         end
         @assert size(v) == (m, n)
         storage[:equations][k] = v
+        offset += N
     end
     return offset
 end
