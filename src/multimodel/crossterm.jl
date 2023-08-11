@@ -228,7 +228,11 @@ function increment_equation_entries!(nz, r, model, cache, impact, nu, sgn)
     end
 end
 
-function update_offdiagonal_blocks!(storage, model, targets, sources; lsys = storage.LinearizedSystem, r = lsys.r_buffer, nzval = lsys.jac_buffer)
+function update_offdiagonal_blocks!(storage, model, targets, sources;
+        lsys = storage.LinearizedSystem,
+        r = missing,
+        nzval = missing
+    )
     if !ismissing(lsys)
         models = model.models
         for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
