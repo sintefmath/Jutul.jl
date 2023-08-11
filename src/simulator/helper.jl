@@ -35,6 +35,14 @@ function HelperSimulator(model::M, T = Float64; executor::E = Jutul.default_exec
     return HelperSimulator{E, M, S, T}(executor, model, storage)
 end
 
+function HelperSimulator(case::JutulCase, arg...; kwarg...)
+    return HelperSimulator(case.model, arg...;
+        parameters = case.parameters,
+        state0 = case.state0,
+        kwarg...
+    )
+end
+
 """
     model_residual(sim::HelperSimulator, x, y = missing; kwarg...)
 
@@ -43,7 +51,7 @@ Out of place version of `model_residual!`
 function model_residual(sim::HelperSimulator{<:Any, <:Any, <:Any, T}, x, arg...; kwarg...) where T
     model = Jutul.get_simulator_model(sim)
     n = Jutul.number_of_degrees_of_freedom(model)
-    @assert length(x) == n
+    @assert length(x) == n "Expected state vector to have $n values, was $(length(x))"
     r = similar(x)
     return model_residual!(r, sim, x, arg...; kwarg...)
 end
