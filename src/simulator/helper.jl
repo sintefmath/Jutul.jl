@@ -59,11 +59,13 @@ Fill in the model residual into Vector r.
 function model_residual!(r, sim, x, x0 = missing, dt = 1.0;
         forces = setup_forces(sim.model),
         update_secondary = true,
+        time = 0.0,
         include_accumulation = true, # Include the accumulation term?
         kwarg...
     )
-    storage = Jutul.get_simulator_storage(sim)
-    model = Jutul.get_simulator_model(sim)
+    storage = get_simulator_storage(sim)
+    model = get_simulator_model(sim)
+    update_before_step!(sim, dt, forces, time = time)
     if !include_accumulation
         x0 = x
     end
@@ -76,9 +78,9 @@ function model_residual!(r, sim, x, x0 = missing, dt = 1.0;
         end
     end
 
-    model = Jutul.get_simulator_model(sim)
+    model = get_simulator_model(sim)
     update_state_dependents!(storage, model, dt, forces; update_secondary = update_secondary, kwarg...) # time is important potential kwarg...
-    Jutul.update_linearized_system!(storage, model, sim.executor, r = r, nzval = missing, lsys = missing)
+    update_linearized_system!(storage, model, sim.executor, r = r, nzval = missing, lsys = missing)
     return r
 end
 
