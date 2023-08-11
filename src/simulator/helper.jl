@@ -19,7 +19,9 @@ function HelperSimulator(model::M, T = Float64; state0 = setup_state(model), exe
 
     n = Jutul.number_of_degrees_of_freedom(model)
     r = zeros(T, n)
+    setup_helper_equation_storage!(storage, r, model)
     storage[:r] = r
+    # TODO: Actually use these.
     storage[:primary_mapper] = Jutul.variable_mapper(model, :primary)
     storage[:parameter_wrapper] = first(Jutul.variable_mapper(model, :parameters))
     storage = Jutul.specialize_simulator_storage(storage, model, false)
@@ -113,5 +115,18 @@ function model_accumulation_internal!(acc, storage, model)
 
         acc_i = reshape(view(acc, (offset+1):(offset+n)), m, n)
         transfer_accumulation!(acc_i, eq, state)
+    end
+end
+
+function setup_helper_equation_storage!(storage, r, model; offset = 0)
+    state = storage.state
+    for (k, eq) in model.equations
+        N = Jutul.number_of_equations(model, eq)
+        m = Jutul.number_of_equations_per_entity(model, eq)
+        n = N ÷ m
+
+        r_i = reshape(view(r, (offset+1):(offset+n)), m, n)
+        storage[:equations][k] = r_i
+        # transfer_accumulation!(acc_i, eq, state)
     end
 end

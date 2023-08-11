@@ -431,9 +431,16 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
     for i in 1:number_of_entities(model, eq)
         prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt)
     end
-    for k in keys(eq_s)
-        cache = eq_s[k]
-        update_equation_for_entity!(cache, eq, state, state0, model, dt)
+    if eq_s isa AbstractArray
+        update_equation_for_entity!(eq_s, eq, state, state0, model, dt)
+    else
+        for k in keys(eq_s)
+            if k == :numeric
+                continue
+            end
+            cache = eq_s[k]
+            update_equation_for_entity!(cache, eq, state, state0, model, dt)
+        end
     end
 end
 
@@ -532,6 +539,10 @@ to create inconsistent Jacobians.
         D = nothing
     end
     return D
+end
+
+@inline function get_diagonal_entries(eq::JutulEquation, eq_s::AbstractArray)
+    return eq_s
 end
 
 function transfer_accumulation!(acc, eq::ConservationLaw, state)
