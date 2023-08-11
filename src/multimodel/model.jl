@@ -531,21 +531,27 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
 
     state_s = storage_s.state
     state0_s = storage_s.state0
-
     for i in 1:ct_s.N
         prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
     end
 
-    state_s_v = as_value(state_s)
-    state0_s_v = as_value(state0_s)
-    for (_, cache) in pairs(ct_s.target)
-        update_cross_term_inner_target!(cache, ct, eq, state_s_v, state0_s_v, state_t, state0_t, model_t, model_s, dt)
-    end
+    if ct_s[:helper_mode]
+        # Target and source are aliased. We just update one of them.
+        @assert ct_s.target === ct_s.source
+        update_cross_term_for_entity!(ct_s.source, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
+        # update_cross_term_for_entity!(ct_s.source, ct, eq, state_s, state0_s, state_t, state0_t, model_t, model_s, dt)
+    else
+        state_s_v = as_value(state_s)
+        state0_s_v = as_value(state0_s)
+        for (_, cache) in pairs(ct_s.target)
+            update_cross_term_inner_target!(cache, ct, eq, state_s_v, state0_s_v, state_t, state0_t, model_t, model_s, dt)
+        end
 
-    state_t_v = as_value(state_t)
-    state0_t_v = as_value(state0_t)
-    for (_, cache) in pairs(ct_s.source)
-        update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
+        state_t_v = as_value(state_t)
+        state0_t_v = as_value(state0_t)
+        for (_, cache) in pairs(ct_s.source)
+            update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
+        end
     end
 end
 
@@ -583,6 +589,14 @@ function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s
             state0_s = new_entity_index(state0_s, var)
             update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
         end
+    end
+end
+
+function update_cross_term_for_entity!(cache::AbstractArray, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
+    for i in axes(cache, 2)
+        ldisc = local_discretization(ct, i)
+        v_i = @views cache[:, i]
+        update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
     end
 end
 

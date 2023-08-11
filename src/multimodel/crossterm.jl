@@ -81,6 +81,7 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
         offdiagonal_alignment = (from_source = other_align_t, )
     end
     out[:N] = N
+    out[:helper_mode] = false
     out[:target] = caches_t
     out[:source] = caches_s
     out[:target_entities] = remap_impact(active, model_t, e_t)

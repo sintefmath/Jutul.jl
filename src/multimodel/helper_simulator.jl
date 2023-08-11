@@ -16,5 +16,6 @@ function setup_helper_equation_storage!(storage, r, mm::MultiModel; offset = 0)
         x = zeros(T, n, N)
         ct_s[:target] = x
         ct_s[:source] = x
+        ct_s[:helper_mode] = true
     end
 end
