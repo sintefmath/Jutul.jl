@@ -485,6 +485,9 @@ function deserialize_restart(pth, state0, dt, restart, states, reports, config, 
         state0, report0 = read_restart(pth, prev_step)
         kept_reports = config[:in_memory_reports]
         rep_start = max(prev_step-kept_reports+1, 1)
+        for i in 1:(rep_start-1)
+            push!(reports, missing)
+        end
         read_results(pth, read_reports = true, read_states = false, states = states, reports = reports, range = rep_start:prev_step);
         dt = report0[:ministeps][end][:dt]
     end
