@@ -60,6 +60,7 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
         linewidth = 3.5,
         linestyles = missing,
         t_scale = ("s", 1.0),
+        axis_arg = NamedTuple(),
         legend = true,
         title = nothing,
         scatter_points = true,
@@ -97,7 +98,7 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     end
     t = cumsum(vcat(0, dt))/(3600*24*365)
 
-    ax = Axis(f, xlabel = "Time [years]", title = tit, ylabel = yl)
+    ax = Axis(f; xlabel = "Time [years]", title = tit, ylabel = yl, axis_arg...)
     get_data = x -> cumsum(vcat(0, F(x)))
     names_missing = isnothing(names)
     if names_missing
