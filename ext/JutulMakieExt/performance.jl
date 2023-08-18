@@ -49,7 +49,7 @@ end
 
 function Jutul.plot_cumulative_solve(allreports, arg...; kwarg...)
     fig = Figure()
-    ax, plt, alldata, t = Jutul.plot_cumulative_solve!(fig[1, 1], allreports, arg...; kwarg...)
+    ax, alldata, t = Jutul.plot_cumulative_solve!(fig[1, 1], allreports, arg...; kwarg...)
     display(fig)
     return (fig, ax, alldata, t)
 end
