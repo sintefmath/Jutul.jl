@@ -49,19 +49,22 @@ end
 
 function Jutul.plot_cumulative_solve(allreports, arg...; kwarg...)
     fig = Figure()
-    alldata, t = Jutul.plot_cumulative_solve!(fig[1, 1], allreports, arg...; kwarg...)
+    ax, alldata, t = Jutul.plot_cumulative_solve!(fig[1, 1], allreports, arg...; kwarg...)
     display(fig)
-    return (fig, alldata, t)
+    return (fig, ax, alldata, t)
 end
 
 function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothing; 
-    use_time = false,
-    use_title = true,
-    linewidth = 3.5,
-    linestyles = missing,
-    t_scale = ("s", 1.0),
-    title = nothing,
-    scatter_points = true
+        use_time = false,
+        use_title = true,
+        linewidth = 3.5,
+        linestyles = missing,
+        t_scale = ("s", 1.0),
+        axis_arg = NamedTuple(),
+        legend = true,
+        title = nothing,
+        scatter_points = true,
+        kwarg...
     )
     function get_linestyle(i)
         if ismissing(linestyles)
@@ -95,25 +98,25 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     end
     t = cumsum(vcat(0, dt))/(3600*24*365)
 
-    ax = Axis(f, xlabel = "Time [years]", title = tit, ylabel = yl)
+    ax = Axis(f; xlabel = "Time [years]", title = tit, ylabel = yl, axis_arg...)
     get_data = x -> cumsum(vcat(0, F(x)))
     names_missing = isnothing(names)
     if names_missing
-        names = map(x -> "dataset $x", eachindex(allreports))
+        names = map(x -> "dataset $x", eachindex(r_rep))
     end
     alldata = []
-    for i in eachindex(allreports)
+    for i in eachindex(r_rep)
         data_i = get_data(r_rep[i])
         push!(alldata, data_i)
-        lines!(ax, t, data_i, label = names[i], linewidth = linewidth, linestyle = get_linestyle(i))
+        lines!(ax, t, data_i, label = names[i], linewidth = linewidth, linestyle = get_linestyle(i), kwarg...)
         if scatter_points
             scatter!(ax, t, data_i)
         end
     end
-    if length(allreports) > 1 && !names_missing
+    if length(r_rep) > 1 && !names_missing && legend
         axislegend(ax, position = :lt)
     end
-    return (alldata, t)
+    return (ax, alldata, t)
 end
 
 

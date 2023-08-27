@@ -767,6 +767,11 @@ function timing_breakdown(report)
     return NamedTuple(pairs(D))
 end
 
+function timing_breakdown(report::NamedTuple; kwarg...)
+    # Assume that it was already created.
+    return report
+end
+
 function timing_breakdown(reports::Vector; reduce = true)
     avg = map(timing_breakdown, reports)
     if reduce
