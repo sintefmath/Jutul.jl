@@ -108,9 +108,19 @@ function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::Variab
     eq_buf[] = d
 end
 
-function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::VariablePoissonEquationTimeDependent, model, Δt, ldisc = local_discretization(eq, self_cell))
+function update_equation_in_entity!(
+        eq_buf,
+        self_cell,
+        state,
+        state0,
+        eq::VariablePoissonEquationTimeDependent,
+        model,
+        Δt,
+        ldisc = local_discretization(eq, self_cell)
+    )
     # Get implicit and explicit variables
-    (; U, K) = state
+    U = state.U
+    K = state.K
     U0 = state0.U
     # Discretization
     div = ldisc.div

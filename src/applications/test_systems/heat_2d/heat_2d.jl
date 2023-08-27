@@ -4,12 +4,12 @@ struct SimpleHeatSystem <: JutulSystem end
 
 struct SimpleHeatEquation <: JutulEquation end
 
-Base.@propagate_inbounds function update_equation_in_entity!(v, cellno, state, state0, eq::SimpleHeatEquation, model, dt, ldisc = local_discretization(eq, cellno))
+function update_equation_in_entity!(v, cellno, state, state0, eq::SimpleHeatEquation, model, dt, ldisc = local_discretization(eq, cellno))
     g = physical_representation(model.domain)
     g::CartesianMesh # Finite difference scheme based on structured cart mesh, put a type assert
     T = state.T
     T0 = state0.T
-
+    # Define wraparound functions for periodic grid
     function next(x, n)
         if x == n
             x⁺ = 1
@@ -27,11 +27,14 @@ Base.@propagate_inbounds function update_equation_in_entity!(v, cellno, state, s
         return x⁻
     end
     stencil_1d(T_c, T_l, T_r, h) = (T_l - 2*T_c + T_r)/h^2
-    nx, ny = g.dims # Assume 2D grid
+    nx, ny = g.dims # Hard coded 2D grid
     i, j = cell_ijk(g, cellno)
     Δx, Δy, = cell_dims(g, cellno)
-    # Temperature in cell center
+    # Temperature in cell center at current and previous time-step
     T_c = T[cellno]
+    T_c₀ = T0[cellno]
+    # First-order backward Newton
+    ∂t = (T_c - T_c₀)/dt
     # Left-right (X)
     L = cell_index(g, (prev(i, nx), j))
     R = cell_index(g, (next(i, nx), j))
@@ -40,9 +43,9 @@ Base.@propagate_inbounds function update_equation_in_entity!(v, cellno, state, s
     U = cell_index(g, (i, prev(j, ny)))
     D = cell_index(g, (i, next(j, ny)))
     ∂²y = stencil_1d(T_c, T[U], T[D], Δy)
-    # Now do the finite difference stencil, treating the dof at the inter-cell centers (staggered grid)
-    ∂t = (T_c - T0[cellno])/dt
-    v[] = ∂t - (∂²x + ∂²y)
+    # Now do the finite difference stencil, treating the dof at the inter-cell
+    # centers (staggered grid)
+    v[1] = ∂t - (∂²x + ∂²y)
 end
 
 number_of_equations_per_entity(model::SimulationModel, ::SimpleHeatEquation) = 1
