@@ -129,7 +129,9 @@ type that wraps a numeric/potentially AD type.
 end
 
 # Nested states
-@inline next_level_local_ad(x::StateType, E, index) = local_ad(x, index, E)
+@inline function next_level_local_ad(x::StateType, E, index)
+    local_ad(x, index, E)
+end
 
 @inline function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
     index = getfield(state, :index)
@@ -138,7 +140,9 @@ end
     return next_level_local_ad(val, E, index)
 end
 
-@inline Base.getindex(state::LocalStateAD, s::Symbol) = Base.getproperty(state, s)
+@inline function Base.getindex(state::LocalStateAD, s::Symbol)
+    Base.getproperty(state, s)
+end
 
 @inline function Base.getproperty(state::ValueStateAD{T}, f::Symbol) where {T}
     inner_state = getfield(state, :data)
@@ -155,7 +159,9 @@ end
 
 Create local_ad for state for index I of AD tag of type ad_tag
 """
-@inline local_ad(state, index, ad_tag) = local_state_ad(state, index, ad_tag)
+@inline function local_ad(state, index, ad_tag)
+    local_state_ad(state, index, ad_tag)
+end
 
 @inline function local_state_ad(state::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
     return LocalStateAD{T, I, ad_tag}(index, state)
