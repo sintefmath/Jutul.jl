@@ -84,6 +84,15 @@ end
 # Match in type - pass index on
 @inline next_level_local_ad(x::AbstractArray{T}, ::Type{T}, index) where T = local_ad(x, index)
 
+@inline function next_level_local_ad(x::AbstractArray{E}, ::Type{T}, index) where {T, E}
+    # Mismatch in AD type - take value
+    if numerical_type(E) == T
+        return local_ad(x, index)
+    else
+        return as_value(x)
+    end
+end
+
 @inline function next_level_local_ad(x, ::Type{T}, index) where T
     # Mismatch in AD type - take value
     if numerical_type(x) == T
