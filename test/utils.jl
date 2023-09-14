@@ -214,3 +214,21 @@ import Jutul: IndexRenumerator
     @test Jutul.indices(IndexRenumerator([1, 5, 7, 2])) == [1, 5, 7, 2]
     @test Jutul.indices(IndexRenumerator([5, π, 3.0, 17.6])) == [5, π, 3.0, 17.6]
 end
+
+using Test, Jutul
+import Jutul: numerical_type, numerical_eltype
+@testset "numerical_type/eltype" begin
+    num = 1.0
+    ad = Jutul.get_ad_entity_scalar(1.0, 3, 1, tag = Cells())
+
+    @test numerical_type(num) == Float64
+    @test numerical_type(ad) == typeof(ad)
+    @test numerical_type(NaN) == Float64
+    tup = (a = 3, b = 4)
+    @test_throws MethodError numerical_type(tup)
+
+    @test numerical_eltype([ad, ad, ad]) == typeof(ad)
+    @test numerical_eltype([ad ad; ad ad]) == typeof(ad)
+    @test numerical_eltype([num, num, num]) == Float64
+    @test numerical_eltype([num num; num num]) == Float64
+end
