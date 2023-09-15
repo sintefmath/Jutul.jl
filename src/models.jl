@@ -771,6 +771,9 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
                 t_e = tol
             end
             errors = all_crits[e_k].errors
+            if minimum(errors) < 10*eps(Float64)
+                @warn "Negative residuals detected. Programming error?"
+            end
             e = max(e, maximum(errors)/t_e)
             t_actual = t_e*tol_factor
             converged = converged && all(e -> e < t_actual, errors)
