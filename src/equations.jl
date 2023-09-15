@@ -503,7 +503,7 @@ Get the convergence criterion values for a given equation. Can be checked agains
 - `eq_s`: storage for `eq` where values are contained.
 - `r`: the local residual part corresponding to this model, as a matrix with column index equaling entity index
 """
-function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
+function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1.0, update_report = missing)
     n = number_of_equations_per_entity(model, eq)
     @tic "default" @tullio max e[i] := abs(r[i, j])
     if n == 1

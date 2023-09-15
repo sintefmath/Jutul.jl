@@ -274,7 +274,7 @@ function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
     perform_step!(simulator.storage, simulator.model, dt, forces, config; executor = simulator.executor, vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config; executor = default_executor(), iteration = NaN, relaxation = 1, update_secondary = nothing, solve = true)
+function perform_step!(storage, model, dt, forces, config; executor = default_executor(), iteration = NaN, relaxation = 1, update_secondary = nothing, solve = true, prev_report = missing)
     if isnothing(update_secondary)
         update_secondary = iteration > 1 || config[:always_update_secondary]
     end
@@ -294,7 +294,20 @@ function perform_step!(storage, model, dt, forces, config; executor = default_ex
         else
             tf = 1
         end
-        @tic "convergence" converged, e, errors = check_convergence(storage, model, config, iteration = iteration, dt = dt, tol_factor = tf, extra_out = true)
+        if ismissing(prev_report)
+            update_report = missing
+        else
+            update_report = prev_report[:update]
+        end
+        @tic "convergence" converged, e, errors = check_convergence(
+            storage,
+            model,
+            config,
+            iteration = iteration,
+            dt = dt,
+            tol_factor = tf,
+            extra_out = true,
+            update_report = update_report)
         il = config[:info_level]
         if il > 1.5
             get_convergence_table(errors, il, iteration, config)
@@ -363,18 +376,24 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
     t_prepare = @elapsed if prepare
         update_before_step!(sim, dt, forces, time = cur_time)
     end
+    step_report = missing
     for it = 1:(max_iter+1)
         do_solve = it <= max_iter
-        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation, solve = do_solve)
-        if haskey(r, :failure_exception)
-            inner_exception = r[:failure_exception]
+        e, done, step_report = perform_step!(sim, dt, forces, cfg,
+                    iteration = it,
+                    relaxation = relaxation,
+                    solve = do_solve,
+                    prev_report = step_report
+        )
+        if haskey(step_report, :failure_exception)
+            inner_exception = step_report[:failure_exception]
             if cfg[:info_level] > 0
                 @warn "Exception occurred in perform_step!" inner_exception
             end
             break
         end
-        next_iteration!(rec, r)
-        push!(step_reports, r)
+        next_iteration!(rec, step_report)
+        push!(step_reports, step_report)
         if done
             break
         end

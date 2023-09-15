@@ -745,7 +745,7 @@ function update_secondary_variables_state!(state, model::MultiModel)
     end
 end
 
-function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra_out = false, kwarg...)
+function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra_out = false, update_report = missing, kwarg...)
     converged = true
     err = 0
     offset = 0
@@ -758,12 +758,23 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
                 offset = 0
             end
         end
+        if ismissing(update_report)
+            inc = missing
+        else
+            inc = update_report[key]
+        end
         s = storage[key]
         m = model.models[key]
         eqs = m.equations
         eqs_s = s.equations
         ls = get_linearized_system_submodel(storage, model, key, lsys)
-        conv, e, errors[key], = check_convergence(ls, eqs, eqs_s, s, m, tol_cfg[key]; offset = offset, extra_out = true, tol = tol, kwarg...)
+        conv, e, errors[key], = check_convergence(ls, eqs, eqs_s, s, m, tol_cfg[key];
+            offset = offset,
+            extra_out = true,
+            update_report = inc,
+            tol = tol,
+            kwarg...
+        )
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)
