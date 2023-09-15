@@ -764,8 +764,10 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
                 v = tol_cfg[key]
                 if isa(v, AbstractFloat)
                     t_e = v
-                else
+                elseif haskey(v, e_k)
                     t_e = v[e_k]
+                else
+                    t_e = tol
                 end
             else
                 t_e = tol

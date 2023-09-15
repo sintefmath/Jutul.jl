@@ -342,6 +342,7 @@ function perform_step!(storage, model, dt, forces, config; executor = default_ex
             report[:update_time] = t_update
         catch e
             if config[:failure_cuts_timestep]
+                @warn "Exception occured in solve: $e. Attempting to cut time-step since failure_cuts_timestep = true."
                 report[:failure_exception] = e
             else
                 rethrow(e)
