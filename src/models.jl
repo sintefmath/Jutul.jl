@@ -837,10 +837,10 @@ end
 
 function update_primary_variables!(storage, model::JutulModel; kwarg...)
     dx = storage.LinearizedSystem.dx_buffer
-    update_primary_variables!(storage.primary_variables, dx, model; kwarg...)
+    update_primary_variables!(storage.primary_variables, dx, model; state = storage.state, kwarg...)
 end
 
-function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1, check = false)
+function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1, check = false, state = missing)
     layout = matrix_layout(model.context)
     cell_major = is_cell_major(layout)
     offset = 0
@@ -875,7 +875,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
                 end
                 @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
                 local_offset += ni
-                report[pkey] = increment_norm(dxi, primary_storage[pkey], p)
+                report[pkey] = increment_norm(dxi, state, model, primary_storage[pkey], p)
             end
             offset += nu*np
         end
@@ -890,7 +890,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
             end
             @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
             offset += n
-            report[pkey] = increment_norm(dxi, primary_storage[pkey], p)
+            report[pkey] = increment_norm(dxi, state, model, primary_storage[pkey], p)
         end
     end
     if !ok
@@ -899,7 +899,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
     return report
 end
 
-function increment_norm(dX, X, pvar)
+function increment_norm(dX, state, model, X, pvar)
     T = eltype(dX)
     scale = @something variable_scale(pvar) one(T)
     max_v = sum_v = zero(T)
