@@ -804,7 +804,7 @@ function update_primary_variables!(storage, model::MultiModel; kwarg...)
             bz = block_size(lsys[i, i])
             dx_v = reshape(dx_v, bz, :)
         end
-        report[key] = update_primary_variables!(s.state, dx_v, m; kwarg...)
+        report[key] = update_primary_variables!(s.state, dx_v, m; state = s.state, kwarg...)
         offset += ndof
     end
     return report
