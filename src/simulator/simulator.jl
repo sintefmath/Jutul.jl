@@ -280,7 +280,6 @@ function perform_step!(storage, model, dt, forces, config;
         relaxation::Float64 = 1.0,
         update_secondary = nothing,
         solve = true,
-        check_before_solve = true,
         prev_report = missing
     )
     if isnothing(update_secondary)
@@ -299,7 +298,7 @@ function perform_step!(storage, model, dt, forces, config;
     end
     report[:linear_system_time] = t_lsys
     solved = false
-    if check_before_solve
+    if config[:check_before_solve]
         t_conv = @elapsed e, converged = perform_step_check_convergence_impl!(report, prev_report, storage, model, config, dt, iteration)
         should_solve = !converged && solve
         if should_solve

@@ -15,6 +15,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :max_nonlinear_iterations, 15, "Max number of nonlinear iterations in a Newton solve before time-step is cut.", types = Int, values = 0:10000)
     add_option!(cfg, :min_nonlinear_iterations, 1, "Minimum number of nonlinear iterations in Newton solver.", description = "This number of Newtion iterations is always performed, even if all equations are converged.", types = Int, values = 0:10000)
     add_option!(cfg, :failure_cuts_timestep, false, "Cut the timestep if exceptions occur during step. If set to false, throw errors and terminate.", types = Bool)
+    add_option!(cfg, :check_before_solve, true, "Check convergence before solving linear system. Can skip some linear solves if not using increment tolerances.", types = Bool)
 
     # Boolean options
     add_option!(cfg, :always_update_secondary, false, "Always update secondary variables (even when they can be reused from end of previous step). Only useful for nested solvers", types = Bool)
