@@ -285,7 +285,6 @@ function perform_step!(storage, model, dt, forces, config;
     if isnothing(update_secondary)
         update_secondary = iteration > 1 || config[:always_update_secondary]
     end
-    e, converged = nothing, false
     report = setup_ministep_report()
     # Update the properties and equations
     rec = storage.recorder
@@ -299,42 +298,19 @@ function perform_step!(storage, model, dt, forces, config;
     end
     report[:linear_system_time] = t_lsys
 
-    t_conv = @elapsed converged = convergence_check_impl!(report, storage, model, config, dt, iteration)
-
+    t_conv = @elapsed e, converged = perform_step_check_convergence_impl!(report, prev_report, storage, model, config, dt, iteration)
     should_solve = !converged && solve
     report[:solved] = should_solve
     if should_solve
-        lsolve = config[:linear_solver]
-        check = config[:safe_mode]
-        try
-            t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(
-                    storage, model, dt,
-                    linear_solver = lsolve,
-                    check = check,
-                    recorder = rec,
-                    relaxation = relaxation,
-                    executor = executor
-                )
-            report[:update] = rep_update
-            report[:linear_solver] = rep_lsolve
-            report[:linear_iterations] = n_iter
-            report[:linear_solve_time] = t_solve
-            report[:update_time] = t_update
-        catch e
-            if config[:failure_cuts_timestep]
-                @warn "Exception occured in solve: $e. Attempting to cut time-step since failure_cuts_timestep = true."
-                report[:failure_exception] = e
-            else
-                rethrow(e)
-            end
-        end
+        perform_step_solve_impl!(report, storage, model, config, dt, iteration, rec, relaxation, executor)
     end
     extra_debug_output!(report, storage, model, config, iteration, dt)
     return (e, converged, report)
 end
 
-function convergence_check_impl!(report, storage, model, config, dt, iteration)
+function perform_step_check_convergence_impl!(report, prev_report, storage, model, config, dt, iteration)
     converged = false
+    e = NaN
     t_conv = @elapsed begin
         if iteration == config[:max_nonlinear_iterations]
             tf = config[:tol_factor_final_iteration]
@@ -364,7 +340,34 @@ function convergence_check_impl!(report, storage, model, config, dt, iteration)
         report[:errors] = errors
     end
     report[:convergence_time] = t_conv
-    return converged
+    return (e, converged)
+end
+
+function perform_step_solve_impl!(report, storage, model, config, dt, iteration, rec, relaxation, executor)
+    lsolve = config[:linear_solver]
+    check = config[:safe_mode]
+    try
+        t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(
+                storage, model, dt,
+                linear_solver = lsolve,
+                check = check,
+                recorder = rec,
+                relaxation = relaxation,
+                executor = executor
+            )
+        report[:update] = rep_update
+        report[:linear_solver] = rep_lsolve
+        report[:linear_iterations] = n_iter
+        report[:linear_solve_time] = t_solve
+        report[:update_time] = t_update
+    catch e
+        if config[:failure_cuts_timestep]
+            @warn "Exception occured in solve: $e. Attempting to cut time-step since failure_cuts_timestep = true."
+            report[:failure_exception] = e
+        else
+            rethrow(e)
+        end
+    end
 end
 
 function setup_ministep_report(; kwarg...)
