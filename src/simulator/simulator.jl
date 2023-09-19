@@ -274,7 +274,14 @@ function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
     perform_step!(simulator.storage, simulator.model, dt, forces, config; executor = simulator.executor, vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config; executor = default_executor(), iteration = NaN, relaxation = 1, update_secondary = nothing, solve = true, prev_report = missing)
+function perform_step!(storage, model, dt, forces, config;
+        executor = default_executor(),
+        iteration = NaN,
+        relaxation::Float64 = 1.0,
+        update_secondary = nothing,
+        solve = true,
+        prev_report = missing
+    )
     if isnothing(update_secondary)
         update_secondary = iteration > 1 || config[:always_update_secondary]
     end
@@ -284,42 +291,15 @@ function perform_step!(storage, model, dt, forces, config; executor = default_ex
     rec = storage.recorder
     time = rec.recorder.time + dt
     t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
+    report[:secondary_time] = t_secondary
+    report[:equations_time] = t_eqs
     # Update the linearized system
     t_lsys = @elapsed begin
         @tic "linear system" update_linearized_system!(storage, model, executor)
     end
-    t_conv = @elapsed begin
-        if iteration == config[:max_nonlinear_iterations]
-            tf = config[:tol_factor_final_iteration]
-        else
-            tf = 1
-        end
-        if ismissing(prev_report)
-            update_report = missing
-        else
-            update_report = prev_report[:update]
-        end
-        @tic "convergence" converged, e, errors = check_convergence(
-            storage,
-            model,
-            config,
-            iteration = iteration,
-            dt = dt,
-            tol_factor = tf,
-            extra_out = true,
-            update_report = update_report)
-        il = config[:info_level]
-        if il > 1.5
-            get_convergence_table(errors, il, iteration, config)
-        end
-        converged = converged && iteration > config[:min_nonlinear_iterations]
-        report[:converged] = converged
-        report[:errors] = errors
-    end
-    report[:secondary_time] = t_secondary
-    report[:equations_time] = t_eqs
     report[:linear_system_time] = t_lsys
-    report[:convergence_time] = t_conv
+
+    t_conv = @elapsed converged = convergence_check_impl!(report, storage, model, config, dt, iteration)
 
     should_solve = !converged && solve
     report[:solved] = should_solve
@@ -351,6 +331,40 @@ function perform_step!(storage, model, dt, forces, config; executor = default_ex
     end
     extra_debug_output!(report, storage, model, config, iteration, dt)
     return (e, converged, report)
+end
+
+function convergence_check_impl!(report, storage, model, config, dt, iteration)
+    converged = false
+    t_conv = @elapsed begin
+        if iteration == config[:max_nonlinear_iterations]
+            tf = config[:tol_factor_final_iteration]
+        else
+            tf = 1
+        end
+        if ismissing(prev_report)
+            update_report = missing
+        else
+            update_report = prev_report[:update]
+        end
+        @tic "convergence" converged, e, errors = check_convergence(
+            storage,
+            model,
+            config,
+            iteration = iteration,
+            dt = dt,
+            tol_factor = tf,
+            extra_out = true,
+            update_report = update_report)
+        il = config[:info_level]
+        if il > 1.5
+            get_convergence_table(errors, il, iteration, config)
+        end
+        converged = converged && iteration > config[:min_nonlinear_iterations]
+        report[:converged] = converged
+        report[:errors] = errors
+    end
+    report[:convergence_time] = t_conv
+    return converged
 end
 
 function setup_ministep_report(; kwarg...)
