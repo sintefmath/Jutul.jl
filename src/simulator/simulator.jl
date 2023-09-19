@@ -280,6 +280,7 @@ function perform_step!(storage, model, dt, forces, config;
         relaxation::Float64 = 1.0,
         update_secondary = nothing,
         solve = true,
+        check_before_solve = true,
         prev_report = missing
     )
     if isnothing(update_secondary)
@@ -297,13 +298,21 @@ function perform_step!(storage, model, dt, forces, config;
         @tic "linear system" update_linearized_system!(storage, model, executor)
     end
     report[:linear_system_time] = t_lsys
-
-    t_conv = @elapsed e, converged = perform_step_check_convergence_impl!(report, prev_report, storage, model, config, dt, iteration)
-    should_solve = !converged && solve
-    report[:solved] = should_solve
-    if should_solve
+    solved = false
+    if check_before_solve
+        t_conv = @elapsed e, converged = perform_step_check_convergence_impl!(report, prev_report, storage, model, config, dt, iteration)
+        should_solve = !converged && solve
+        if should_solve
+            solved = true
+            perform_step_solve_impl!(report, storage, model, config, dt, iteration, rec, relaxation, executor)
+        end
+    else
         perform_step_solve_impl!(report, storage, model, config, dt, iteration, rec, relaxation, executor)
+        prev_report = report
+        t_conv = @elapsed e, converged = perform_step_check_convergence_impl!(report, prev_report, storage, model, config, dt, iteration)
+        solved = true
     end
+    report[:solved] = solved
     extra_debug_output!(report, storage, model, config, iteration, dt)
     return (e, converged, report)
 end
