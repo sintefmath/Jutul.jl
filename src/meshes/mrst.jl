@@ -257,8 +257,8 @@ function triangulate_mesh(m::MRSTWrapMesh; is_depth = true, outer = false)
             end
         end
     end
-    pts = vcat(pts...)
-    tri = vcat(tri...)
+    pts = plot_flatten_helper(pts)
+    tri = plot_flatten_helper(tri)
 
     mapper = (
                 Cells = (cell_data) -> cell_data[cell_index],

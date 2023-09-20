@@ -68,8 +68,8 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
     end
     add_points!(BoundaryFaces(), m.boundary_faces)
 
-    pts = vcat(pts...)
-    tri = vcat(tri...)
+    pts = plot_flatten_helper(pts)
+    tri = plot_flatten_helper(tri)
 
     mapper = (
                 Cells = (cell_data) -> cell_data[cell_index],
@@ -77,4 +77,19 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
                 indices = (Cells = cell_index, Faces = face_index)
               )
     return (points = pts, triangulation = tri, mapper = mapper)
+end
+
+function plot_flatten_helper(data)
+    n = sum(x -> size(x, 1), data)
+    m = size(first(data), 2)
+    T = eltype(first(data))
+
+    out = zeros(T, n, m)
+    offset = 0
+    for d in data
+        n_i = size(d, 1)
+        @. out[(offset+1):(offset+n_i), :] = d
+        offset += n_i
+    end
+    return out
 end

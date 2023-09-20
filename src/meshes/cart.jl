@@ -467,8 +467,8 @@ function triangulate_mesh(m::CartesianMesh; is_depth = true, outer = false)
             end
         end
     end
-    pts = vcat(pts...)
-    tri = vcat(tri...)
+    pts = plot_flatten_helper(pts)
+    tri = plot_flatten_helper(tri)
 
     cell_ix = vcat(cell_ix...)
     face_index = vcat(face_index...)
