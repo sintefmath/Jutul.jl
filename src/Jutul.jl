@@ -32,7 +32,6 @@ module Jutul
     using JLD2, MAT
 
     import Metis
-    import Meshes
     import SymRCM
     # Nice progress bars
     using ProgressMeter
@@ -48,10 +47,6 @@ module Jutul
     using .StaticCSR
     import .StaticCSR: nthreads, minbatch
     import SparsityTracing as ST
-    # Module for supporting Meshes.jl
-    include("MeshesSupport/MeshesSupport.jl")
-    using .MeshesSupport
-    import .MeshesSupport: meshes_fv_geometry_3d
 
     # Main types
     include("core_types/core_types.jl")

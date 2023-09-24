@@ -204,13 +204,7 @@ function declare_entities(G::JutulMesh)
         ]
 end
 
-function tpfv_geometry(g::T) where T<:Meshes.Mesh{3, <:Any}
-    N, A, V, Nv, Cc, Fc = meshes_fv_geometry_3d(g)
-    geo = TwoPointFiniteVolumeGeometry(N, A, V, Nv, Cc, Fc)
-    return geo
-end
-
-function add_default_domain_data!(Ω::DataDomain, m::Union{FiniteVolumeMesh, Meshes.Mesh})
+function add_default_domain_data!(Ω::DataDomain, m::FiniteVolumeMesh)
     fv = tpfv_geometry(m)
     geom_pairs = (
         Pair(Faces(), [:neighbors, :areas, :normals, :face_centroids]),
