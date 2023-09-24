@@ -188,6 +188,7 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; sol
         report[:update_time] = t_update
         report[:linear_iterations] = n
     end
+    report[:update] = missing
     return (max_error, all_processes_converged, report)
 end
 
