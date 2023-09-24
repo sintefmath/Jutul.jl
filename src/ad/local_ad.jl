@@ -94,10 +94,10 @@ end
 end
 
 @inline function next_level_local_ad(x, ::Type{T}, index) where T
-    # Mismatch in AD type - take value
     if numerical_type(x) == T
         return local_ad(x, index)
     else
+        # Mismatch in AD type - take value
         return as_value(x)
     end
 end
@@ -129,7 +129,7 @@ type that wraps a numeric/potentially AD type.
 end
 
 # Nested states
-@inline function next_level_local_ad(x::StateType, E, index)
+@inline function next_level_local_ad(x::StateType, E::Type, index)
     local_ad(x, index, E)
 end
 
