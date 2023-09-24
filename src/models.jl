@@ -774,7 +774,7 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
             end
             errors = all_crits[e_k].errors
             if minimum(errors) < -10*eps(Float64)
-                @warn "Negative residuals detected for $key. Programming error?" errors
+                @warn "Negative residuals detected for $key: $e_k. Programming error?" errors
             end
             e = max(e, maximum(errors)/t_e)
             t_actual = t_e*tol_factor
