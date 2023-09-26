@@ -47,7 +47,6 @@ test_partition_groups(p, grps)
 p = Jutul.partition(N, np, groups = grps, group_by_weights = true, buffer_group = false)
 test_partition_groups(p, grps)
 
-##
 import Jutul: setup_partitioner_hypergraph, partition_hypergraph
 @testset "hypergraph" begin
     nn = 3
@@ -87,4 +86,9 @@ import Jutul: setup_partitioner_hypergraph, partition_hypergraph
     @test G.edge_weights[1] == 12
 
     @test length(partition_hypergraph(G, 2, MetisPartitioner())) == 3
+
+    if Sys.islinux()
+        using KaHyPar
+        length(partition_hypergraph(G, 2, KaHyParPartitioner())) == 3
+    end
 end

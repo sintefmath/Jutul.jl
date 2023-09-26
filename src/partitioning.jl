@@ -235,7 +235,6 @@ function setup_partitioner_hypergraph(N::Matrix{Int};
     edge_indices = (1:num_edges)[keep]
     N = N[:, keep]
     num_nodes_compressed = maximum(part)
-    num_edges_compressed = length(edge_indices)
     node_weights_compressed = zeros(Int, num_nodes_compressed)
     for (i, v) in enumerate(part)
         node_weights_compressed[v] += node_weights[i]
@@ -258,10 +257,10 @@ function setup_partitioner_hypergraph(N::Matrix{Int};
     J = Int[]
     pos = 1
     conn_pairs = keys(conn)
-    n_conn = length(conn_pairs)
-    edge_weights_compressed = zeros(Int, n_conn)
+    num_edges_compressed = length(conn_pairs)
+    edge_weights_compressed = zeros(Int, num_edges_compressed)
 
-    N_new = zeros(Int, 2, n_conn)
+    N_new = zeros(Int, 2, num_edges_compressed)
     for (i, p) in enumerate(conn_pairs)
         l, r = p
         N_new[1, i] = l
