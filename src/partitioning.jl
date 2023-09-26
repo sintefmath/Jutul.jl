@@ -287,6 +287,13 @@ function setup_partitioner_hypergraph(N::Matrix{Int};
     )
 end
 
+"""
+    partition_hypergraph(g, n::Int, partitioner = MetisPartitioner(); expand = true)
+
+Partition a hypergraph from [setup_partitioner_hypergraph](@ref) using a given
+partitioner. If the optional `expand` parameter is set to true the result will
+be expanded to the full graph (i.e. where groups are not condensed).
+"""
 function partition_hypergraph(g, n::Int, partitioner = MetisPartitioner(); expand = true)
     p = partition_hypergraph_implementation(g, n, partitioner)
     if expand
