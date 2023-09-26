@@ -301,6 +301,14 @@ function partition_hypergraph(g, n::Int, partitioner = MetisPartitioner(); expan
     return p
 end
 
+function partition_hypergraph_implementation(hg, n, partitioner::JutulPartitioner)
+    N = hg.neighbors
+    n = size(hg.graph, 1)
+    C = sparse(N[1, :], N[2, :], hg.edge_weights, n, n)
+    C = C + C' + diagm(hg.node_weights)
+    return partition(partitioner, C, n)
+end
+
 function partition_hypergraph_implementation(hg, n, mp::MetisPartitioner)
     g_metis = hypergraph_to_metis_format(hg)
     return Metis.partition(g_metis, n; alg = mp.algorithm)

@@ -86,6 +86,7 @@ import Jutul: setup_partitioner_hypergraph, partition_hypergraph
     @test G.edge_weights[1] == 12
 
     @test length(partition_hypergraph(G, 2, MetisPartitioner())) == 3
+    @test partition_hypergraph(G, 2, LinearPartitioner()) == [2, 2, 1]
 
     if Sys.islinux()
         using KaHyPar
