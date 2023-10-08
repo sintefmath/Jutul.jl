@@ -400,7 +400,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
     step_reports = []
     cur_time = current_time(rec)
     t_prepare = @elapsed if prepare
-        update_before_step!(sim, dt, forces, time = cur_time)
+        update_before_step!(sim, dt, forces, time = cur_time, recorder = rec)
     end
     step_report = missing
     for it = 1:(max_iter+1)
