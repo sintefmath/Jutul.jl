@@ -56,7 +56,7 @@ end
 
 
 function ilu_initial_setup_par!(factors, A, active, N)
-    Threads.@threads for i in 1:N
+    Threads.@threads :static for i in 1:N
         f = ilu0_csr(A, active = active[i])
         f::eltype(factors)
         factors[i] = f
