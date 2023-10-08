@@ -60,20 +60,20 @@ struct SimResult
 end
 
 mutable struct SolveRecorder
-    step       # Step index in context
-    iterations # Total iterations in context
-    failed     # Failed iterations
-    time       # Time - last converged. Current implicit level at time + dt
-    iteration  # Current iteration (if applicable)
-    dt         # Current timestep
+    step::Int       # Step index in context
+    iterations::Int # Total iterations in context
+    failed::Int     # Failed iterations
+    time::Float64   # Time - last converged. Current implicit level at time + dt
+    iteration::Int  # Current iteration (if applicable)
+    dt::Float64     # Current timestep
     function SolveRecorder()
         new(0, 0, 0, 0.0, 0, NaN)
     end
 end
 
-mutable struct ProgressRecorder
-    recorder
-    subrecorder
+struct ProgressRecorder
+    recorder::SolveRecorder
+    subrecorder::SolveRecorder
     function ProgressRecorder()
         new(SolveRecorder(), SolveRecorder())
     end
