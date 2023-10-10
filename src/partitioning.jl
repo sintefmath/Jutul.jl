@@ -216,13 +216,14 @@ function setup_partitioner_hypergraph(N::Matrix{Int};
         num_edges::Int = size(N, 2),
         node_weights::Vector{Int} = ones(Int, num_nodes),
         edge_weights::Vector{Int} = ones(Int, num_edges),
-        groups = [Int[]]
+        groups = Vector{Vector{Int}}()
     )
     @assert size(N, 1) == 2
     @assert size(N, 2) == num_edges
     @assert length(edge_weights) == num_edges
 
     part = collect(1:num_nodes)
+    groups = merge_overlapping_graph_groups(groups)
     for (i, group) in enumerate(groups)
         for g in group
             part[g] = num_nodes + i
@@ -328,4 +329,47 @@ function hypergraph_to_metis_format(hg)
     w = similar(g0.adjwgt, n)
     @. w = hg.node_weights
     return Metis.Graph(g0.nvtxs, g0.xadj, g0.adjncy, w, g0.adjwgt)
+end
+
+function merge_overlapping_graph_groups(groups::Vector{Vector{Int}})
+    # Merge groups that contain the same node
+    if length(groups) == 0
+        return groups
+    else
+        nc = maximum(maximum, groups)
+        owned = zeros(Int, nc)
+        merge_with = zeros(Int, length(groups))
+        keep = fill(true, eachindex(groups))
+        needs_merging = false
+        for (i, group) in enumerate(groups)
+            for g in group
+                owner = owned[g]
+                if owner == 0
+                    owned[g] = i
+                else
+                    needs_merging = true
+                    merge_target = merge_with[i]
+                    @assert merge_target == 0 || merge_target == owner "Complicated merging not implemented"
+                    merge_with[i] = owner
+                    keep[i] = false
+                end
+            end
+        end
+        if needs_merging
+            new_groups = deepcopy(groups)
+            for i in eachindex(groups)
+                if !keep[i]
+                    target = new_groups[merge_with[i]]
+                    self = new_groups[i]
+                    for c in self
+                        push!(target, c)
+                    end
+                    unique!(target)
+                end
+            end
+            new_groups = new_groups[keep]
+        else
+            return groups
+        end
+    end
 end
