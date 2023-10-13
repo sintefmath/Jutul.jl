@@ -232,3 +232,8 @@ import Jutul: numerical_type, numerical_eltype
     @test numerical_eltype([num, num, num]) == Float64
     @test numerical_eltype([num num; num num]) == Float64
 end
+
+@testset "jutul_output_path" begin
+    @test isdir(jutul_output_path())
+    @test last(splitdir(jutul_output_path("testname"))) == "testname"
+end
