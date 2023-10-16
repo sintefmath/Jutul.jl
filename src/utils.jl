@@ -582,10 +582,10 @@ function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}
         name = subpaths[end]
     end
     if length(indices) == 0
-        @error "Attempted to read simulated data, but no data was found."
+        @error "Attempted to read simulated data from $pth, but no data was found."
         return (states, reports)
     elseif length(indices) != maximum(indices)
-        @warn "Gap in dataset. Some outputs might end up empty."
+        @warn "Gap in dataset at $pth. Some outputs might end up empty."
     end
     if isnothing(range)
         range = 1:maximum(indices)
