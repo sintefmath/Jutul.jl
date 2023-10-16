@@ -46,9 +46,22 @@ function reset!(r::SolveRecorder, dt = NaN)
     r.dt = dt
 end
 
+function reset!(target::SolveRecorder, source::SolveRecorder)
+    target.step = source.step
+    target.iterations = source.iterations
+    target.time = source.time
+    target.iteration = source.iteration
+    target.dt = source.dt
+end
+
 function reset!(r::ProgressRecorder, dt = NaN)
     reset!(r.recorder, dt)
     reset!(r.subrecorder, 0.0)
+end
+
+function reset!(target::ProgressRecorder, source::ProgressRecorder)
+    reset!(target.recorder, source.recorder)
+    reset!(target.subrecorder, source.recorder)
 end
 
 function current_time(r::ProgressRecorder)
