@@ -314,6 +314,11 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
 end
 
 function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
+    for skey in [:backward, :forward, :parameter]
+        s = adjoint_storage[skey]
+        t = @view timesteps[1:(i-1)]
+        reset!(progress_recorder(s), step = i, time = sum(t))
+    end
     λ, t, dt, forces = next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces)
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
@@ -403,7 +408,7 @@ function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     reset_previous_state!(sim, state0)
     update_secondary_variables!(s, model, true)
     # Apply logic as if timestep is starting
-    update_before_step!(s, model, dt, forces, time = time)
+    update_before_step!(s, model, dt, forces, time = time, recorder = progress_recorder(sim))
     # Then the current primary variables
     reset_variables!(s, model, state)
     update_state_dependents!(s, model, dt, forces, time = time)

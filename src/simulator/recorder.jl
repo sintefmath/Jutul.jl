@@ -38,11 +38,11 @@ function nextstep!(l::SolveRecorder, dT, success)
     l.iteration = 0
 end
 
-function reset!(r::SolveRecorder, dt = NaN)
-    r.step = 1
-    r.iterations = 0
-    r.time = 0.0
-    r.iteration = 0
+function reset!(r::SolveRecorder, dt = NaN; step = 1, iterations = 0, iteration = 0, time = 0.0)
+    r.step = step
+    r.iterations = iterations
+    r.time = time
+    r.iteration = iteration
     r.dt = dt
 end
 
@@ -54,8 +54,8 @@ function reset!(target::SolveRecorder, source::SolveRecorder)
     target.dt = source.dt
 end
 
-function reset!(r::ProgressRecorder, dt = NaN)
-    reset!(r.recorder, dt)
+function reset!(r::ProgressRecorder, dt = NaN; kwarg...)
+    reset!(r.recorder, dt; kwarg...)
     reset!(r.subrecorder, 0.0)
 end
 
