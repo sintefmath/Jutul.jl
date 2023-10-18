@@ -46,3 +46,50 @@ test_partition_groups(p, grps)
 
 p = Jutul.partition(N, np, groups = grps, group_by_weights = true, buffer_group = false)
 test_partition_groups(p, grps)
+
+import Jutul: setup_partitioner_hypergraph, partition_hypergraph
+@testset "hypergraph" begin
+    nn = 3
+    ne = 4
+
+    N = [1 2 2 3; 2 3 1 1]
+
+    grps = [[1, 2]]
+
+    G = setup_partitioner_hypergraph(N,
+        groups = grps,
+        num_nodes = nn,
+        num_edges = ne
+    )
+    for g in grps
+        p_g = G.partition[first(g)]
+        # Weights should be equal to length of group
+        @test length(g) == G.node_weights[p_g]
+    end
+    @test G.node_weights[G.partition[3]] == 1
+    @test length(G.edge_weights) == 1
+    @test G.edge_weights[1] == 2
+
+    w_n = [5, 7, 13]
+    w_e = [1, 5, 3, 7]
+    G = setup_partitioner_hypergraph(N,
+        edge_weights = w_e,
+        node_weights = w_n,
+        groups = grps,
+        num_nodes = nn,
+        num_edges = ne
+    )
+    for g in grps
+        p_g = G.partition[first(g)]
+        @test sum(w_n[g]) == G.node_weights[p_g]
+    end
+    @test G.edge_weights[1] == 12
+
+    @test length(partition_hypergraph(G, 2, MetisPartitioner())) == 3
+    @test partition_hypergraph(G, 2, LinearPartitioner()) == [2, 2, 1]
+
+    if Sys.islinux()
+        using KaHyPar
+        length(partition_hypergraph(G, 2, KaHyParPartitioner())) == 3
+    end
+end

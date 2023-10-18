@@ -42,6 +42,7 @@ Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
 HYPRE = "b5ffcf37-a2bd-41ab-a3da-4bd9bc8ad771"
+KaHyPar = "2a6221f6-aa48-11e9-3542-2d9e0ef01880"
 LayeredLayouts = "f4a74d36-062a-4d48-97cd-1356bad1de4e"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
@@ -56,6 +57,7 @@ JutulHypreExt = "HYPRE"
 JutulMakieExt = "Makie"
 JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
 JutulMeshesExt = ["Meshes"]
+JutulKaHyParExt = "KaHyPar"
 
 [compat]
 AlgebraicMultigrid = "0.5.1"
@@ -69,6 +71,7 @@ HYPRE = "1.4.0"
 ILUZero = "0.2.0"
 JLD2 = "0.4.22"
 Krylov = "0.9.1"
+KaHyPar = "0.3.0"
 LayeredLayouts = "0.2.5"
 LinearOperators = "2.3.2"
 LoopVectorization = "0.12.115"
@@ -97,6 +100,7 @@ CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
 HYPRE = "b5ffcf37-a2bd-41ab-a3da-4bd9bc8ad771"
+KaHyPar = "2a6221f6-aa48-11e9-3542-2d9e0ef01880"
 LayeredLayouts = "f4a74d36-062a-4d48-97cd-1356bad1de4e"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
@@ -105,4 +109,4 @@ NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 
 [targets]
-test = ["Meshes"]
+test = ["Meshes", "KaHyPar"]

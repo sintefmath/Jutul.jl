@@ -507,8 +507,8 @@ function select_data(current_filter, state, fld, ix, low, high, limits, transfor
     return d
 end
 
-unpack(x, ix) = x[min(ix, size(x, 1)), :]
-unpack(x::AbstractVector, ix) = copy(x)
+unpack(x, ix) = Float64.(x[min(ix, size(x, 1)), :])
+unpack(x::AbstractVector, ix) = Float64.(x)
 
 function generate_colormap(colormap_name, alphamap_name, base_alpha, low, high)
     cmap = to_colormap(colormap_name)

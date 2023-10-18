@@ -369,7 +369,7 @@ function perform_step_solve_impl!(report, storage, model, config, dt, iteration,
         report[:linear_solve_time] = t_solve
         report[:update_time] = t_update
     catch e
-        if config[:failure_cuts_timestep]
+        if config[:failure_cuts_timestep] && !(e isa InterruptException)
             @warn "Exception occured in solve: $e. Attempting to cut time-step since failure_cuts_timestep = true."
             report[:failure_exception] = e
         else
@@ -392,7 +392,12 @@ function setup_ministep_report(; kwarg...)
     return report
 end
 
-function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare = true, relaxation = 1.0)
+function solve_ministep(sim, dt, forces, max_iter, cfg;
+        finalize = true,
+        prepare = true,
+        relaxation = 1.0,
+        update_explicit = true
+    )
     done = false
     rec = progress_recorder(sim)
     report = OrderedDict()
@@ -400,7 +405,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
     step_reports = []
     cur_time = current_time(rec)
     t_prepare = @elapsed if prepare
-        update_before_step!(sim, dt, forces, time = cur_time)
+        update_before_step!(sim, dt, forces, time = cur_time, recorder = rec, update_explicit = update_explicit)
     end
     step_report = missing
     for it = 1:(max_iter+1)

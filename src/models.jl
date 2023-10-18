@@ -921,7 +921,7 @@ function update_before_step!(storage, model, dt, forces; kwarg...)
     update_before_step!(storage, model.formulation, model, dt, forces; kwarg...)
 end
 
-function update_before_step!(storage, ::Any, model, dt, forces; time = NaN)
+function update_before_step!(storage, ::Any, model, dt, forces; time = NaN, recorder = ProgressRecorder(), update_explicit = true)
     # Do nothing
 end
 

@@ -196,3 +196,180 @@ function load_balanced_interval(b, n, m)
     stop = load_balanced_endpoint(b, n, m)
     return start:stop
 end
+
+"""
+    setup_partitioner_hypergraph(N::Matrix{Int};
+        num_nodes::Int = maximum(N),
+        num_edges::Int = size(N, 2),
+        node_weights::Vector{Int} = ones(Int, num_nodes),
+        edge_weights::Vector{Int} = ones(Int, num_edges),
+        groups = [Int[]]
+    )
+
+Set up a hypergraph structure for a given neighborship matrix. `N` should be a
+matrix with two rows, with one pair of cells in each column. Optionally node and
+edge weights can be provided. If a list of groups are provided, these nodes will
+be accumulated together in the hypergraph.
+"""
+function setup_partitioner_hypergraph(N::Matrix{Int};
+        num_nodes::Int = maximum(N),
+        num_edges::Int = size(N, 2),
+        node_weights::Vector{Int} = ones(Int, num_nodes),
+        edge_weights::Vector{Int} = ones(Int, num_edges),
+        groups = Vector{Vector{Int}}()
+    )
+    @assert size(N, 1) == 2
+    @assert size(N, 2) == num_edges
+    @assert length(edge_weights) == num_edges
+
+    part = collect(1:num_nodes)
+    groups = merge_overlapping_graph_groups(groups)
+    for (i, group) in enumerate(groups)
+        for g in group
+            part[g] = num_nodes + i
+        end
+    end
+    part = Jutul.compress_partition(part)
+    N = part[N]
+    # Filter connections that are interior in a group
+    keep = map(i -> N[1, i] != N[2, i], axes(N, 2))
+    edge_indices = (1:num_edges)[keep]
+    N = N[:, keep]
+    num_nodes_compressed = maximum(part)
+    node_weights_compressed = zeros(Int, num_nodes_compressed)
+    for (i, v) in enumerate(part)
+        node_weights_compressed[v] += node_weights[i]
+    end
+    @assert minimum(node_weights_compressed) > 0
+    # Create map of all connections
+    conn = Dict{Tuple{Int, Int}, Int}()
+    for face in axes(N, 2)
+        e = edge_indices[face]
+        l, r = sort(N[:, face])
+        c = (l, r)
+        w_f = edge_weights[e]
+        if haskey(conn, c)
+            conn[c] += w_f
+        else
+            conn[c] = w_f
+        end
+    end
+    I = Int[]
+    J = Int[]
+    pos = 1
+    conn_pairs = keys(conn)
+    num_edges_compressed = length(conn_pairs)
+    edge_weights_compressed = zeros(Int, num_edges_compressed)
+
+    N_new = zeros(Int, 2, num_edges_compressed)
+    for (i, p) in enumerate(conn_pairs)
+        l, r = p
+        N_new[1, i] = l
+        N_new[2, i] = r
+        # I is cell
+        push!(I, l)
+        push!(I, r)
+
+        # J is connection
+        push!(J, i)
+        push!(J, i)
+
+        edge_weights_compressed[i] = conn[p]
+    end
+    V = ones(Int, length(I))
+    A = sparse(I, J, V, num_nodes_compressed, num_edges_compressed)
+    return (
+        graph = A,
+        node_weights = node_weights_compressed,
+        edge_weights = edge_weights_compressed,
+        neighbors = N_new,
+        partition = part
+    )
+end
+
+"""
+    partition_hypergraph(g, n::Int, partitioner = MetisPartitioner(); expand = true)
+
+Partition a hypergraph from [setup_partitioner_hypergraph](@ref) using a given
+partitioner. If the optional `expand` parameter is set to true the result will
+be expanded to the full graph (i.e. where groups are not condensed).
+"""
+function partition_hypergraph(g::NamedTuple, n::Int, partitioner = MetisPartitioner(); expand = true)
+    p = partition_hypergraph_implementation(g, n, partitioner)
+    if expand
+        p = p[g.partition]
+    end
+    return p
+end
+
+function partition_hypergraph(N::Matrix{Int}, n::Int, partitioner = MetisPartitioner(); expand = true, kwarg...)
+    g = setup_partitioner_hypergraph(N; kwarg...)
+    return partition_hypergraph(g, n, partitioner, expand = expand)
+end
+
+function partition_hypergraph_implementation(hg, n, partitioner::JutulPartitioner)
+    N = hg.neighbors
+    n = size(hg.graph, 1)
+    C = sparse(N[1, :], N[2, :], hg.edge_weights, n, n)
+    C = C + C' + diagm(hg.node_weights)
+    return partition(partitioner, C, n)
+end
+
+function partition_hypergraph_implementation(hg, n, mp::MetisPartitioner)
+    g_metis = hypergraph_to_metis_format(hg)
+    return Metis.partition(g_metis, n; alg = mp.algorithm)
+end
+
+function hypergraph_to_metis_format(hg)
+    N = hg.neighbors
+    n = size(hg.graph, 1)
+    C = sparse(N[1, :], N[2, :], hg.edge_weights, n, n)
+    C = C + C'
+    g0 = Metis.graph(C, weights = true)
+    w = similar(g0.adjwgt, n)
+    @. w = hg.node_weights
+    return Metis.Graph(g0.nvtxs, g0.xadj, g0.adjncy, w, g0.adjwgt)
+end
+
+function merge_overlapping_graph_groups(groups::Vector{Vector{Int}})
+    # Merge groups that contain the same node
+    if length(groups) == 0
+        return groups
+    else
+        nc = maximum(maximum, groups)
+        owned = zeros(Int, nc)
+        merge_with = zeros(Int, length(groups))
+        keep = fill(true, eachindex(groups))
+        needs_merging = false
+        for (i, group) in enumerate(groups)
+            for g in group
+                owner = owned[g]
+                if owner == 0
+                    owned[g] = i
+                else
+                    needs_merging = true
+                    merge_target = merge_with[i]
+                    @assert merge_target == 0 || merge_target == owner "Complicated merging not implemented"
+                    merge_with[i] = owner
+                    keep[i] = false
+                end
+            end
+        end
+        if needs_merging
+            new_groups = deepcopy(groups)
+            for i in eachindex(groups)
+                if !keep[i]
+                    target = new_groups[merge_with[i]]
+                    self = new_groups[i]
+                    for c in self
+                        push!(target, c)
+                    end
+                    unique!(target)
+                end
+            end
+            new_groups = new_groups[keep]
+        else
+            return groups
+        end
+    end
+end
