@@ -981,7 +981,9 @@ function get_output_state(storage, model)
     s0 = storage.state0
     D = Dict{Symbol, Any}()
     for k in model.output_variables
-        D[k] = copy(s0[k])
+        if haskey(s0, k)
+            D[k] = copy(s0[k])
+        end
     end
     return D
 end
