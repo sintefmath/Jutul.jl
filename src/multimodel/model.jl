@@ -544,13 +544,13 @@ function update_cross_term_impl!(state_t, state0_t, state_s, state0_s, ct_s_targ
     end
     state_s_v = as_value(state_s)
     state0_s_v = as_value(state0_s)
-    for (_, cache) in pairs(ct_s_target)
+    for cache in values(ct_s_target)
         update_cross_term_inner_target!(cache, ct, eq, state_s_v, state0_s_v, state_t, state0_t, model_t, model_s, dt)
     end
 
     state_t_v = as_value(state_t)
     state0_t_v = as_value(state0_t)
-    for (_, cache) in pairs(ct_s_source)
+    for cache in values(ct_s_source)
         update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
     end
 end
