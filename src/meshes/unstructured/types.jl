@@ -227,7 +227,7 @@ function UnstructuredMesh(
     @assert maximum(bnd_cells) <= nc
     @assert minimum(bnd_cells) > 0
 
-    @assert maximum(faces_to_nodes.vals) <= nn "Too few nodes provided"
+    @assert maximum(faces_to_nodes.vals, init = 0) <= nn "Too few nodes provided"
     return UnstructuredMesh(cells_to_faces, cells_to_bnd, faces_to_nodes, bnd_to_nodes, node_points, int_neighbors, bnd_cells; kwarg...)
 end
 
