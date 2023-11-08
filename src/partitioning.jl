@@ -339,44 +339,48 @@ end
 
 function merge_overlapping_graph_groups(groups::Vector{Vector{Int}})
     # Merge groups that contain the same node
-    if length(groups) == 0
-        return groups
-    else
+    ng = length(groups)
+    if ng > 0
         nc = maximum(maximum, groups)
         owned = zeros(Int, nc)
-        merge_with = zeros(Int, length(groups))
+        merge_with = zeros(Int, ng)
         keep = fill(true, eachindex(groups))
         needs_merging = false
+        group_adj = sparse(1:ng, 1:ng, [true for i in 1:ng], ng, ng)
         for (i, group) in enumerate(groups)
             for g in group
                 owner = owned[g]
                 if owner == 0
                     owned[g] = i
                 else
+                    # Add adjacency to the overlapping group
+                    group_adj[i, owner] = group_adj[owner, i] = true
                     needs_merging = true
-                    merge_target = merge_with[i]
-                    @assert merge_target == 0 || merge_target == owner "Complicated merging not implemented"
-                    merge_with[i] = owner
-                    keep[i] = false
                 end
             end
         end
         if needs_merging
-            new_groups = deepcopy(groups)
-            for i in eachindex(groups)
-                if !keep[i]
-                    merge_index = merge_with[i]
-                    target = new_groups[merge_index]
-                    nm = length(target)
-                    for c in groups[i]
-                        push!(target, c)
+            # We go over the groups and merge all connected components into new groups.
+            new_groups = Vector{Vector{Int}}()
+            merged = [0 for i in 1:ng]
+            rows = rowvals(group_adj)
+            for i in 1:ng
+                for j in nzrange(group_adj, i)
+                    row = rows[j]
+                    dest_ix = merged[row]
+                    if dest_ix == 0
+                        dest_ix = length(new_groups) + 1
+                        merged[row] = dest_ix
+                        push!(new_groups, Int[])
                     end
-                    unique!(target)
+                    dest = new_groups[dest_ix]
+                    for g in groups[i]
+                        push!(dest, g)
+                    end
                 end
             end
-            return new_groups[keep]
-        else
-            return groups
+            groups = new_groups
         end
     end
+    return groups
 end
