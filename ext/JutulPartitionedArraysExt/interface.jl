@@ -119,11 +119,13 @@ function Jutul.partition_distributed(N, w;
     comm = MPI.COMM_WORLD,
     nc = maximum(vec(N)),
     np,
+    partitioner = MetisPartitioner(),
     kwarg...
     )
     root = 0
     if MPI.Comm_rank(comm) == root
-        p = Jutul.partition(N, np, w; kwarg...)
+        p = Jutul.partition_hypergraph(N, np, partitioner; num_nodes = nc, edge_weights = w, kwarg...)
+        p = Int.(p)
         @assert length(p) == nc "Expected length of partition to be $nc, was $(length(p))."
     else
         p = Array{Int}(undef, nc)
