@@ -224,9 +224,12 @@ function setup_partitioner_hypergraph(N::Matrix{Int};
 
     compressed_partition = collect(1:num_nodes)
     groups = merge_overlapping_graph_groups(groups)
+    touched = [0 for i in 1:num_nodes]
     for (i, group) in enumerate(groups)
         for g in group
             compressed_partition[g] = num_nodes + i
+            @assert touched[g] == 0 "$g was already assigned to group $(touched[g]), cannot assign to $i. Programming error?"
+            touched[g] = i
         end
     end
     compressed_partition = Jutul.compress_partition(compressed_partition)
@@ -342,45 +345,20 @@ function merge_overlapping_graph_groups(groups::Vector{Vector{Int}})
     ng = length(groups)
     if ng > 0
         nc = maximum(maximum, groups)
-        owned = zeros(Int, nc)
-        merge_with = zeros(Int, ng)
-        keep = fill(true, eachindex(groups))
-        needs_merging = false
-        group_adj = sparse(1:ng, 1:ng, [true for i in 1:ng], ng, ng)
-        for (i, group) in enumerate(groups)
-            for g in group
-                owner = owned[g]
-                if owner == 0
-                    owned[g] = i
-                else
-                    # Add adjacency to the overlapping group
-                    group_adj[i, owner] = group_adj[owner, i] = true
-                    needs_merging = true
-                end
-            end
-        end
-        if needs_merging
-            # We go over the groups and merge all connected components into new groups.
-            new_groups = Vector{Vector{Int}}()
-            merged = [0 for i in 1:ng]
-            rows = rowvals(group_adj)
-            for i in 1:ng
-                for j in nzrange(group_adj, i)
-                    row = rows[j]
-                    dest_ix = merged[row]
-                    if dest_ix == 0
-                        dest_ix = length(new_groups) + 1
-                        merged[row] = dest_ix
-                        push!(new_groups, Int[])
-                    end
-                    dest = new_groups[dest_ix]
-                    for g in groups[i]
-                        push!(dest, g)
+        group_graph = SimpleGraph(nc)
+        for group in groups
+            for i in group
+                for j in group
+                    if i != j
+                        add_edge!(group_graph, i, j)
                     end
                 end
             end
-            groups = new_groups
         end
+        conn = Graphs.connected_components(group_graph)
+        # Filter all trivial groups
+        filter!(x -> length(x) > 1, conn)
+        groups = conn
     end
     return groups
 end
