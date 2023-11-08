@@ -51,7 +51,7 @@ function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 4, kwarg.
         reg = m2.selection[]
         begin
             function plot_by_reg(regions)
-                plot_jutul_line_data!(d; regions = regions, linewidth = s.value[])
+                plot_jutul_line_data(d; regions = regions, linewidth = s.value[])
             end
             if reg == "All"
                 plot_by_reg(axes(d, 2))
@@ -68,11 +68,11 @@ function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 4, kwarg.
     return fig
 end
 
-function plot_jutul_line_data!(data::JutulLinePlotData; kwarg...)
-    plot_jutul_line_data!([data]; kwarg...)
+function Jutul.plot_jutul_line_data(data::JutulLinePlotData; kwarg...)
+    plot_jutul_line_data([data]; kwarg...)
 end
 
-function plot_jutul_line_data!(data; resolution = (1600, 900), linewidth = 4, regions = axes(data, 2), kwarg...)
+function Jutul.plot_jutul_line_data(data; resolution = (1600, 900), linewidth = 4, regions = axes(data, 2), kwarg...)
     fig = Figure(resolution = resolution)
     colors = Makie.wong_colors()
     for (col, regix) in enumerate(regions)
