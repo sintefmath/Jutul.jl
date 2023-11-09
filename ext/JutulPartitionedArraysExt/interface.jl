@@ -115,16 +115,31 @@ function Jutul.simulate_parray(case::JutulCase, partition, backend::PArrayBacken
     return result
 end
 
-function Jutul.partition_distributed(N, w;
-    comm = MPI.COMM_WORLD,
-    nc = maximum(vec(N)),
-    np,
-    partitioner = MetisPartitioner(),
-    kwarg...
+function Jutul.partition_distributed(N, edge_weights, node_weights = missing;
+        comm = MPI.COMM_WORLD,
+        nc = maximum(vec(N)),
+        np,
+        partitioner = MetisPartitioner(),
+        groups = [Int[]],
+        kwarg...
     )
     root = 0
     if MPI.Comm_rank(comm) == root
-        p = Jutul.partition_hypergraph(N, np, partitioner; num_nodes = nc, edge_weights = w, kwarg...)
+        if ismissing(node_weights)
+            node_weights = fill(1, nc)
+            for group in groups
+                for g in group
+                    node_weights[g] = 2
+                end
+            end
+        end
+        p = Jutul.partition_hypergraph(N, np, partitioner;
+            num_nodes = nc,
+            edge_weights = edge_weights,
+            node_weights = node_weights,
+            groups = groups,
+            kwarg...
+        )
         p = Int.(p)
         @assert length(p) == nc "Expected length of partition to be $nc, was $(length(p))."
     else

@@ -63,7 +63,7 @@ function parray_update_preconditioners_outer!(sim::PArraySimulator, prec_def)
 end
 
 function Jutul.parray_update_preconditioners!(sim, preconditioner_base, preconditioners, recorder)
-   map(sim.storage.simulators, preconditioners) do sim, prec
+    map(sim.storage.simulators, preconditioners) do sim, prec
         model = Jutul.get_simulator_model(sim)
         storage = Jutul.get_simulator_storage(sim)
         sys = storage.LinearizedSystem
@@ -77,7 +77,7 @@ end
 function Jutul.parray_preconditioner_apply!(Y, main_prec, X, preconditioners, simulator, arg...)
     X::PVector
     Y::PVector
-    @tic "communication" consistent!(X) |> wait
+    # @tic "communication" consistent!(X) |> wait
     map(local_values(Y), local_values(X), preconditioners, ghost_values(X)) do y, x, prec, x_g
         @. x_g = 0.0
         apply!(y, prec, x, arg...)
