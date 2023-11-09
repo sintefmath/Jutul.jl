@@ -48,7 +48,7 @@ function setup_parray_mul!(simulators, ix = nothing)
             mul!(y, local_op, x, α, β)
             nothing
         end
-        @tic "communication" consistent!(Y) |> wait
+        # @tic "communication" consistent!(Y) |> wait
         return Y
     end
     return (Y, X, α, β) -> distributed_mul!(Y::PVector, X::PVector, α, β)
@@ -82,7 +82,7 @@ function Jutul.parray_preconditioner_apply!(Y, main_prec, X, preconditioners, si
         @. x_g = 0.0
         apply!(y, prec, x, arg...)
     end
-    @tic "communication" consistent!(Y) |> wait
+    # @tic "communication" consistent!(Y) |> wait
     Y
 end
 
