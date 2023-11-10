@@ -65,7 +65,7 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
         ne_s = count_active_entities(model_s.domain, e_s)
     end
     for i in 1:N
-        prepare_cross_term_in_entity!(i, state_t, state_t0,state_s, state_s0, model_t, model_s, ct, eq_t, 1.0)
+        prepare_cross_term_in_entity!(i, state_t, state_t0, state_s, state_s0, model_t, model_s, ct, eq_t, 1.0)
     end
     caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t, self_entity = e_t)
     caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s, self_entity = e_s)
@@ -81,6 +81,7 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
         offdiagonal_alignment = (from_source = other_align_t, )
     end
     out[:N] = N
+    out[:helper_mode] = false
     out[:target] = caches_t
     out[:source] = caches_s
     out[:target_entities] = remap_impact(active, model_t, e_t)
@@ -131,20 +132,20 @@ end
 cross_term_entities_source(ct, eq::Nothing, model) = nothing
 
 
-function update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys)
+function update_main_linearized_system_subgroup!(storage, model, model_keys, offsets, lsys; kwarg...)
     for (index, key) in enumerate(model_keys)
         offset = offsets[index]
         m = model.models[key]
         s = storage[key]
         eqs_s = s.equations
         eqs = m.equations
-        update_linearized_system!(lsys, eqs, eqs_s, m; equation_offset = offset)
+        update_linearized_system!(lsys, eqs, eqs_s, m; equation_offset = offset, kwarg...)
     end
     for (index, key) in enumerate(model_keys)
         offset = offsets[index]
         m = model.models[key]
         ct, ct_s = cross_term_target(model, storage, key, true)
-        update_linearized_system_cross_terms!(lsys, ct, ct_s, m, key; equation_offset = offset)
+        update_linearized_system_cross_terms!(lsys, ct, ct_s, m, key; equation_offset = offset, kwarg...)
     end
 end
 
@@ -170,18 +171,19 @@ function source_impact_for_pair(ctp, ct_s, label)
     return (eq_label, impact, caches_s, caches_t, pos, sgn)
 end
 
-function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_storage, model, label; equation_offset = 0)
-    # @assert !has_groups(model)
-    nz = lsys.jac_buffer
-    r_buf = lsys.r_buffer
+function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_storage, model, label;
+        equation_offset = 0,
+        r = lsys.r_buffer,
+        nzval = lsys.jac_buffer
+    )
     for (ctp, ct_s) in zip(crossterms, crossterm_storage)
         ct = ctp.cross_term
         eq_label, impact, _, caches, _, sgn = source_impact_for_pair(ctp, ct_s, label)
         eq = ct_equation(model, eq_label)
         @assert !isnothing(impact)
         nu = number_of_entities(model, eq)
-        r = local_residual_view(r_buf, model, eq, equation_offset + get_equation_offset(model, eq_label))
-        update_linearized_system_cross_term!(nz, r, model, ct, caches, impact, nu, sgn)
+        r_ct = local_residual_view(r, model, eq, equation_offset + get_equation_offset(model, eq_label))
+        update_linearized_system_cross_term!(nzval, r_ct, model, ct, caches, impact, nu, sgn)
     end
 end
 
@@ -202,6 +204,20 @@ function update_linearized_system_cross_term!(nz, r, model, ct::AdditiveCrossTer
             continue
         end
         increment_equation_entries!(nz, r, model, caches[k], impact, nu, sgn)
+    end
+end
+
+function update_linearized_system_cross_term!(nz::Missing, r::AbstractArray, model, ct::AdditiveCrossTerm, caches::AbstractArray, impact, nu, sgn)
+    increment_equation_entries!(r, model, caches, impact, nu, sgn)
+end
+
+function increment_equation_entries!(r, model, entries, impact, nu, sgn)
+    ne, nu = size(entries)
+    for ui in 1:nu
+        i = impact[ui]
+        for e in 1:ne
+            r[e, i] += sgn*entries[e, ui]
+        end
     end
 end
 
@@ -227,11 +243,16 @@ function increment_equation_entries!(nz, r, model, cache, impact, nu, sgn)
     end
 end
 
-function update_offdiagonal_blocks!(storage, model, targets, sources)
-    linearized_system = storage.LinearizedSystem
-    models = model.models
-    for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
-        update_offdiagonal_block_pair!(linearized_system, ctp, ct_s, storage, model, models, targets, sources)
+function update_offdiagonal_blocks!(storage, model, targets, sources;
+        lsys = storage.LinearizedSystem,
+        r = missing,
+        nzval = missing
+    )
+    if !ismissing(lsys)
+        models = model.models
+        for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+            update_offdiagonal_block_pair!(lsys, ctp, ct_s, storage, model, models, targets, sources)
+        end
     end
 end
 

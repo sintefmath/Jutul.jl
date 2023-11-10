@@ -402,10 +402,17 @@ Create a mapped array that produces only the values when indexed.
 
 Only useful for AD arrays, otherwise it does nothing.
 """
-@inline function as_value(x::AbstractArray{D}) where D<:ForwardDiff.Dual
-    mappedarray(value, x)
+@inline function as_value(x::AbstractArray)
+    return mappedarray(value, x)
 end
-@inline as_value(x) = x
+
+@inline function as_value(x::AbstractArray{X}) where X<:AbstractFloat
+    return x
+end
+
+@inline function as_value(x)
+    return x
+end
 
 """
     get_entity_tag(basetag, entity)
@@ -419,3 +426,4 @@ get_entity_tag(::Nothing, entity) = entity
 include("local_ad.jl")
 include("sparsity.jl")
 include("gradients.jl")
+include("force_gradients.jl")

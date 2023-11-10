@@ -83,10 +83,55 @@ end
 
 # Match in type - pass index on
 @inline next_level_local_ad(x::AbstractArray{T}, ::Type{T}, index) where T = local_ad(x, index)
-# Mismatch in AD type - take value
-@inline next_level_local_ad(x, t, index) = as_value(x)
+
+@inline function next_level_local_ad(x::AbstractArray{E}, ::Type{T}, index) where {T, E}
+    # Mismatch in AD type - take value
+    if numerical_type(E) == T
+        return local_ad(x, index)
+    else
+        return as_value(x)
+    end
+end
+
+@inline function next_level_local_ad(x, ::Type{T}, index) where T
+    if numerical_type(x) == T
+        return local_ad(x, index)
+    else
+        # Mismatch in AD type - take value
+        return as_value(x)
+    end
+end
+
+"""
+    numerical_eltype(x::AbstractArray{T}) where T
+
+Get the numerical eltype (i.e. the inner type of the element type that could
+potentially be AD)
+"""
+@inline function numerical_eltype(x::AbstractArray{T}) where T
+    return numerical_type(T)
+end
+
+@inline function numerical_type(::Type{T}) where T
+    return T
+end
+
+"""
+    numerical_type(::T) where T
+
+Get the numerical eltype (i.e. the inner type of the element type that could
+potentially be AD). This function should be overloaded if you have a custom
+type that wraps a numeric/potentially AD type.
+"""
+@inline function numerical_type(::T) where T<:Real
+    # Default numerical type is just the type itself.
+    return T
+end
+
 # Nested states
-@inline next_level_local_ad(x::StateType, E, index) = local_ad(x, index, E)
+@inline function next_level_local_ad(x::StateType, E::Type, index)
+    local_ad(x, index, E)
+end
 
 @inline function Base.getproperty(state::LocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
     index = getfield(state, :index)
@@ -95,7 +140,9 @@ end
     return next_level_local_ad(val, E, index)
 end
 
-@inline Base.getindex(state::LocalStateAD, s::Symbol) = Base.getproperty(state, s)
+@inline function Base.getindex(state::LocalStateAD, s::Symbol)
+    Base.getproperty(state, s)
+end
 
 @inline function Base.getproperty(state::ValueStateAD{T}, f::Symbol) where {T}
     inner_state = getfield(state, :data)
@@ -112,7 +159,9 @@ end
 
 Create local_ad for state for index I of AD tag of type ad_tag
 """
-@inline local_ad(state, index, ad_tag) = local_state_ad(state, index, ad_tag)
+@inline function local_ad(state, index, ad_tag)
+    local_state_ad(state, index, ad_tag)
+end
 
 @inline function local_state_ad(state::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
     return LocalStateAD{T, I, ad_tag}(index, state)

@@ -487,14 +487,17 @@ end
 import Base: getindex, @propagate_inbounds, parent, size, axes
 
 struct JutulStorage{K}
-    data::Union{Dict{Symbol, <:Any}, NamedTuple}
-    function JutulStorage(S = Dict{Symbol, Any}())
+    data::Union{Dict{Symbol, Any}, K}
+    function JutulStorage(S = Dict{Symbol, Any}(); kwarg...)
         if isa(S, Dict)
             K = Nothing
+            for (k, v) in kwarg
+                S[k] = v
+            end
         else
             @assert isa(S, NamedTuple)
-            K = keys(S)
-            K::Tuple
+            K = typeof(S)
+            @assert length(kwarg) == 0
         end
         return new{K}(S)
     end
@@ -519,7 +522,7 @@ end
 Base.propertynames(S::JutulStorage) = keys(getfield(S, :data))
 
 data(S::JutulStorage{Nothing}) = getfield(S, :data)
-data(S::JutulStorage) = getfield(S, :data)::NamedTuple
+data(S::JutulStorage{T}) where T = getfield(S, :data)::T
 
 function Base.setproperty!(S::JutulStorage, name::Symbol, x)
     Base.setproperty!(data(S), name, x)
@@ -542,7 +545,7 @@ function Base.keys(S::JutulStorage{Nothing})
 end
 
 
-function Base.haskey(S::JutulStorage{K}, name::Symbol) where K
+function Base.haskey(S::JutulStorage{NamedTuple{K, V}}, name::Symbol) where {K, V}
     return name in K
 end
 
@@ -826,6 +829,21 @@ function duplicate(case::JutulCase; copy_model = false)
     return JutulCase(model, deepcopy(dt), deepcopy(forces), deepcopy(state0), deepcopy(parameters), deepcopy(input_data))
 end
 
+function Base.getindex(case::JutulCase, ix::Int)
+    return case[ix:ix]
+end
+
+function Base.getindex(case::JutulCase, ix)
+    (; model, dt, forces, state0, parameters, input_data) = case
+    f = deepcopy(forces)
+    if f isa AbstractVector
+        @assert length(f) == length(dt)
+        f = f[ix]
+    end
+    dt = dt[ix]
+    return JutulCase(model, dt, f, deepcopy(state0), deepcopy(parameters), deepcopy(input_data))
+end
+
 export NoRelaxation, SimpleRelaxation
 
 abstract type NonLinearRelaxation end
@@ -940,5 +958,84 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
             T = nothing
         end
         new{T}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+    end
+end
+
+"""
+IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where V
+
+Create a indirection map that encodes a variable length dense vector.
+
+`pos` is assumed to be a Vector{Int} of length n+1 where n is the number of
+dense vectors that is encoded. The `vals` array holds the entries for vector i
+in the range `pos[i]:(pos[i+1]-1)` for fast lookup. Indexing into the
+indirection map with index `k` will give a view into the values for vector `k`.
+"""
+struct IndirectionMap{V}
+    vals::Vector{V}
+    pos::Vector{Int}
+    function IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where V
+        lastpos = pos[end]
+        @assert length(vals) == lastpos - 1 "Expected vals to have length lastpos - 1 = $(lastpos-1), was $(length(vals))"
+        @assert pos[1] == 1
+        new{V}(vals, pos)
+    end    
+end
+
+struct IndexRenumerator{T}
+    indices::Dict{T, Int}
+end
+
+function IndexRenumerator(T = Int)
+    d = Dict{T, Int}()
+    return IndexRenumerator{T}(d)
+end
+
+function IndexRenumerator(x::AbstractArray{T}) where T
+    ir = IndexRenumerator(T)
+    for i in x
+        ir[i]
+    end
+    return ir
+end
+
+
+function Base.length(m::IndexRenumerator)
+    return length(keys(m.indices))
+end
+
+function Base.getindex(m::IndexRenumerator{T}, ix::T) where T
+    indices = m.indices
+    if !(ix in m)
+        n = length(m)+1
+        indices[ix] = n
+    end
+    return indices[ix]
+end
+
+function (m::IndexRenumerator)(ix)
+    Base.getindex(m, ix)
+end
+
+function Base.in(ix::T, m::IndexRenumerator{T}) where T
+    return haskey(m.indices, ix)
+end
+
+function indices(im::IndexRenumerator{T}) where T
+    n = length(im)
+    out = Vector{T}(undef, n)
+    for (k, v) in im.indices
+        out[v] = k
+    end
+    return out
+end
+
+function renumber(x, im::IndexRenumerator)
+    renumber!(similar(x), im)
+end
+
+function renumber!(x, im::IndexRenumerator)
+    for (i, v) in enumerate(x)
+        x[i] = im[v]
     end
 end

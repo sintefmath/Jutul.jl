@@ -16,7 +16,7 @@ end
 
 function prepare_distributed_solve!(simulators, b)
     map(simulators, local_values(b)) do sim, r
-        lsys = sim.storage.LinearizedSystem
+        lsys = Jutul.get_simulator_storage(sim).LinearizedSystem
         N = sim.executor.data[:n_self]
         Jutul.prepare_linear_solve!(lsys)
         r_sim = Jutul.vector_residual(lsys)
@@ -47,7 +47,7 @@ end
 function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, atol, rtol)
     t_op = @elapsed op = Jutul.parray_linear_system_operator(simulators, b)
     t_prec = @elapsed P = parray_preconditioner_linear_operator(simulator, lsolve, b)
-    consistent!(b) |> wait
+    @tic "communication" consistent!(b) |> wait
 
     max_it = cfg.max_iterations
     @tic "solve" Krylov.bicgstab!(
@@ -59,15 +59,15 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
         rtol = rtol,
         atol = atol
     )
-    consistent!(bsolver.x) |> wait
+    @tic "communication" consistent!(bsolver.x) |> wait
 
     stats = bsolver.stats
     res = stats.residuals
     n_lin_its = length(res) - 1
     solved = stats.solved
 
-    map(simulators, local_values(bsolver.x)) do sim, dx
-        sys = sim.storage.LinearizedSystem
+    @tic "dx update" map(simulators, local_values(bsolver.x)) do sim, dx
+        sys = Jutul.get_simulator_storage(sim).LinearizedSystem
         Jutul.update_dx_from_vector!(sys, dx)
     end
 

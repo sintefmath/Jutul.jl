@@ -9,8 +9,9 @@ function submodel(model::SimulationModel, p_i::AbstractVector; context = model.c
     sys = model.system
     f = model.formulation
     if !isnothing(minbatch)
-        @assert isa(context, DefaultContext)
-        context = DefaultContext(matrix_layout = context.matrix_layout, minbatch = minbatch)
+        T = typeof(context)
+        # Hope the constructor fits.
+        context = T(matrix_layout = context.matrix_layout, minbatch = minbatch)
     end
     d_l = subdomain(domain, p_i, entity = Cells(); kwarg...)
     new_model = SimulationModel(d_l, sys, context = context, formulation = f)

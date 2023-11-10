@@ -11,6 +11,7 @@ include("timesteps.jl")
 include("utils.jl")
 include("optimization.jl")
 include("relaxation.jl")
+include("helper.jl")
 
 function simulator_storage(model; state0 = nothing,
                                 parameters = setup_parameters(model),
@@ -131,13 +132,13 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
                                                                    start_date = nothing,
                                                                    kwarg...)
     rec = progress_recorder(sim)
+    # Reset recorder just in case since we are starting a new simulation
+    reset!(rec)
     forces, forces_per_step = preprocess_forces(sim, forces)
     start_timestamp = now()
     if isnothing(config)
         config = simulator_config(sim; kwarg...)
     else
-        # Reset recorder just in case since we are starting a new simulation
-        reset!(rec)
         for (k, v) in kwarg
             if !haskey(config, k)
                 @warn "Keyword argument $k not found in initial config."
@@ -273,67 +274,108 @@ function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
     perform_step!(simulator.storage, simulator.model, dt, forces, config; executor = simulator.executor, vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config; executor = default_executor(), iteration = NaN, relaxation = 1, update_secondary = nothing, solve = true)
+function perform_step!(storage, model, dt, forces, config;
+        executor = default_executor(),
+        iteration = NaN,
+        relaxation::Float64 = 1.0,
+        update_secondary = nothing,
+        solve = true,
+        prev_report = missing
+    )
     if isnothing(update_secondary)
         update_secondary = iteration > 1 || config[:always_update_secondary]
     end
-    e, converged = nothing, false
     report = setup_ministep_report()
     # Update the properties and equations
     rec = storage.recorder
     time = rec.recorder.time + dt
     t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
+    report[:secondary_time] = t_secondary
+    report[:equations_time] = t_eqs
     # Update the linearized system
     t_lsys = @elapsed begin
         @tic "linear system" update_linearized_system!(storage, model, executor)
     end
+    report[:linear_system_time] = t_lsys
+    solved = false
+    if config[:check_before_solve]
+        t_conv = @elapsed e, converged = perform_step_check_convergence_impl!(report, prev_report, storage, model, config, dt, iteration)
+        should_solve = !converged && solve
+        if should_solve
+            solved = true
+            perform_step_solve_impl!(report, storage, model, config, dt, iteration, rec, relaxation, executor)
+        end
+    else
+        perform_step_solve_impl!(report, storage, model, config, dt, iteration, rec, relaxation, executor)
+        prev_report = report
+        t_conv = @elapsed e, converged = perform_step_check_convergence_impl!(report, prev_report, storage, model, config, dt, iteration)
+        solved = true
+    end
+    report[:solved] = solved
+    extra_debug_output!(report, storage, model, config, iteration, dt)
+    return (e, converged, report)
+end
+
+function perform_step_check_convergence_impl!(report, prev_report, storage, model, config, dt, iteration)
+    converged = false
+    e = NaN
     t_conv = @elapsed begin
         if iteration == config[:max_nonlinear_iterations]
             tf = config[:tol_factor_final_iteration]
         else
             tf = 1
         end
-        @tic "convergence" converged, e, errors = check_convergence(storage, model, config, iteration = iteration, dt = dt, tol_factor = tf, extra_out = true)
+        if ismissing(prev_report)
+            update_report = missing
+        else
+            update_report = prev_report[:update]
+        end
+        @tic "convergence" converged, e, errors = check_convergence(
+            storage,
+            model,
+            config,
+            iteration = iteration,
+            dt = dt,
+            tol_factor = tf,
+            extra_out = true,
+            update_report = update_report)
         il = config[:info_level]
-        if il > 1
+        if il > 1.5
             get_convergence_table(errors, il, iteration, config)
         end
         converged = converged && iteration > config[:min_nonlinear_iterations]
         report[:converged] = converged
         report[:errors] = errors
     end
-    report[:secondary_time] = t_secondary
-    report[:equations_time] = t_eqs
-    report[:linear_system_time] = t_lsys
     report[:convergence_time] = t_conv
+    return (e, converged)
+end
 
-    if !converged && solve
-        lsolve = config[:linear_solver]
-        check = config[:safe_mode]
-        try
-            t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(
-                    storage, model, dt,
-                    linear_solver = lsolve,
-                    check = check,
-                    recorder = rec,
-                    relaxation = relaxation,
-                    executor = executor
-                )
-            report[:update] = rep_update
-            report[:linear_solver] = rep_lsolve
-            report[:linear_iterations] = n_iter
-            report[:linear_solve_time] = t_solve
-            report[:update_time] = t_update
-        catch e
-            if config[:failure_cuts_timestep]
-                report[:failure_exception] = e
-            else
-                rethrow(e)
-            end
+function perform_step_solve_impl!(report, storage, model, config, dt, iteration, rec, relaxation, executor)
+    lsolve = config[:linear_solver]
+    check = config[:safe_mode]
+    try
+        t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(
+                storage, model, dt,
+                linear_solver = lsolve,
+                check = check,
+                recorder = rec,
+                relaxation = relaxation,
+                executor = executor
+            )
+        report[:update] = rep_update
+        report[:linear_solver] = rep_lsolve
+        report[:linear_iterations] = n_iter
+        report[:linear_solve_time] = t_solve
+        report[:update_time] = t_update
+    catch e
+        if config[:failure_cuts_timestep] && !(e isa InterruptException)
+            @warn "Exception occured in solve: $e. Attempting to cut time-step since failure_cuts_timestep = true."
+            report[:failure_exception] = e
+        else
+            rethrow(e)
         end
     end
-    extra_debug_output!(report, storage, model, config, iteration, dt)
-    return (e, converged, report)
 end
 
 function setup_ministep_report(; kwarg...)
@@ -341,6 +383,7 @@ function setup_ministep_report(; kwarg...)
     for k in [:secondary_time, :equations_time, :linear_system_time, :convergence_time]
         report[k] = 0.0
     end
+    report[:solved] = true
     report[:converged] = true
     report[:errors] = missing
     for (k, v) in kwarg
@@ -349,7 +392,12 @@ function setup_ministep_report(; kwarg...)
     return report
 end
 
-function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare = true, relaxation = 1.0)
+function solve_ministep(sim, dt, forces, max_iter, cfg;
+        finalize = true,
+        prepare = true,
+        relaxation = 1.0,
+        update_explicit = true
+    )
     done = false
     rec = progress_recorder(sim)
     report = OrderedDict()
@@ -357,18 +405,26 @@ function solve_ministep(sim, dt, forces, max_iter, cfg; finalize = true, prepare
     step_reports = []
     cur_time = current_time(rec)
     t_prepare = @elapsed if prepare
-        update_before_step!(sim, dt, forces, time = cur_time)
+        update_before_step!(sim, dt, forces, time = cur_time, recorder = rec, update_explicit = update_explicit)
     end
+    step_report = missing
     for it = 1:(max_iter+1)
         do_solve = it <= max_iter
-        e, done, r = perform_step!(sim, dt, forces, cfg, iteration = it, relaxation = relaxation, solve = do_solve)
-        if haskey(r, :failure_exception)
-            inner_exception = r[:failure_exception]
-            @warn "Exception occurred in perform_step!" inner_exception
+        e, done, step_report = perform_step!(sim, dt, forces, cfg,
+                    iteration = it,
+                    relaxation = relaxation,
+                    solve = do_solve,
+                    prev_report = step_report
+        )
+        if haskey(step_report, :failure_exception)
+            inner_exception = step_report[:failure_exception]
+            if cfg[:info_level] > 0
+                @warn "Exception occurred in perform_step!" inner_exception
+            end
             break
         end
-        next_iteration!(rec, r)
-        push!(step_reports, r)
+        next_iteration!(rec, step_report)
+        push!(step_reports, step_report)
         if done
             break
         end
@@ -450,7 +506,9 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
         reset_variables!(sim, state0)
     end
     if recompute_state0_secondary
-        @tic "secondary variables (state0)" update_secondary_variables!(sim.storage, sim.model, true)
+        s = get_simulator_storage(sim)
+        m = get_simulator_model(sim)
+        @tic "secondary variables (state0)" update_secondary_variables!(s, m, true)
     end
     return (states, reports, first_step, dt)
 end
@@ -477,23 +535,43 @@ function deserialize_restart(pth, state0, dt, restart, states, reports, config, 
         state0, report0 = read_restart(pth, prev_step)
         kept_reports = config[:in_memory_reports]
         rep_start = max(prev_step-kept_reports+1, 1)
+        for i in 1:(rep_start-1)
+            push!(reports, missing)
+        end
         read_results(pth, read_reports = true, read_states = false, states = states, reports = reports, range = rep_start:prev_step);
         dt = report0[:ministeps][end][:dt]
     end
     return (state0, dt, first_step)
 end
 
-reset_variables!(sim, vars; kwarg...) = reset_variables!(sim.storage, sim.model, vars; kwarg...)
-reset_state_to_previous_state!(sim) = reset_state_to_previous_state!(sim.storage, sim.model)
-reset_previous_state!(sim, state0) = reset_previous_state!(sim.storage, sim.model, state0)
+function reset_variables!(sim, vars; kwarg...)
+    s = get_simulator_storage(sim)
+    m = get_simulator_model(sim)
+    reset_variables!(s, m, vars; kwarg...)
+end
 
+function reset_state_to_previous_state!(sim)
+    s = get_simulator_storage(sim)
+    m = get_simulator_model(sim)
+    reset_state_to_previous_state!(s, m)
+end
+
+function reset_previous_state!(sim, state0)
+    s = get_simulator_storage(sim)
+    m = get_simulator_model(sim)
+    reset_previous_state!(s, m, state0)
+end
 
 function update_before_step!(sim, dt, forces; kwarg...)
-    update_before_step!(sim.storage, sim.model, dt, forces; kwarg...)
+    s = get_simulator_storage(sim)
+    m = get_simulator_model(sim)
+    update_before_step!(s, m, dt, forces; kwarg...)
 end
 
 function update_after_step!(sim, dt, forces; kwarg...)
-    update_after_step!(sim.storage, sim.model, dt, forces; kwarg...)
+    s = get_simulator_storage(sim)
+    m = get_simulator_model(sim)
+    update_after_step!(s, m, dt, forces; kwarg...)
 end
 
 function preprocess_forces(sim, forces)

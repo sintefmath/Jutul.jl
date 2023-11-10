@@ -150,7 +150,7 @@ function successful_reports(old_reports, current_reports, step_index, n = 1)
         end
 
         for r in Iterators.reverse(reports)
-            if r[:success]
+            if !ismissing(r) && r[:success]
                 push!(out, r)
                 if length(out) >= n
                     return out

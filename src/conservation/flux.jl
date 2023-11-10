@@ -174,7 +174,8 @@ end
 
 number_of_half_faces(tp::TwoPointPotentialFlowHardCoded) = length(tp.conn_data)
 
-function get_neighborship(grid)
+function get_neighborship(grid; internal = true)
+    @assert internal
     return grid.neighborship
 end
 

@@ -187,3 +187,54 @@ using Jutul, Test
     Tb1 = compute_boundary_trans(d)
     @test all(Tb1 .== 1)
 end
+
+@testset "IndirectionMap" begin
+    val = [1.0, 2.0, 3.0, 4.0, 5.0]
+    ix = [1, 3, 6]
+
+    m = Jutul.IndirectionMap(val, ix)
+
+    @test m[2] == [3.0, 4.0, 5.0]
+    @test m[1] == [1.0, 2.0]
+    @test length(m) == 2
+end
+
+import Jutul: IndexRenumerator
+@testset "IndexRenumerator" begin
+    im = IndexRenumerator()
+    @test im[3] == 1
+    @test im[1] == 2
+    @test im[7] == 3
+    @test im[3] == 1
+    @test !(4 in im)
+    @test 3 in im
+    @test 1 in im
+    @test 7 in im
+    @test Jutul.indices(im) == [3, 1, 7]
+    @test Jutul.indices(IndexRenumerator([1, 5, 7, 2])) == [1, 5, 7, 2]
+    @test Jutul.indices(IndexRenumerator([5, π, 3.0, 17.6])) == [5, π, 3.0, 17.6]
+end
+
+using Test, Jutul
+import Jutul: numerical_type, numerical_eltype
+@testset "numerical_type/eltype" begin
+    num = 1.0
+    ad = Jutul.get_ad_entity_scalar(1.0, 3, 1, tag = Cells())
+
+    @test numerical_type(num) == Float64
+    @test numerical_type(ad) == typeof(ad)
+    @test numerical_type(NaN) == Float64
+    tup = (a = 3, b = 4)
+    @test_throws MethodError numerical_type(tup)
+
+    @test numerical_eltype([ad, ad, ad]) == typeof(ad)
+    @test numerical_eltype([ad ad; ad ad]) == typeof(ad)
+    @test numerical_eltype([num, num, num]) == Float64
+    @test numerical_eltype([num num; num num]) == Float64
+end
+
+@testset "jutul_output_path" begin
+    @test isdir(jutul_output_path())
+    @test last(splitdir(jutul_output_path("testname"))) == "testname"
+end
+

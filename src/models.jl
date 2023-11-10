@@ -414,10 +414,12 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
         if state_ad
             state = convert_state_ad(model, state0, tag)
         else
-            state = deepcopy(state0)
+            state = setup_state(model, deepcopy(state0))
         end
         if state0_ad
             state0 = convert_state_ad(model, state0, tag)
+        else
+            state0 = setup_state(model, deepcopy(state0))
         end
         state0 = merge(state0, parameters)
         state = merge(state, parameters)
@@ -598,7 +600,7 @@ end
 
 function setup_linearized_system(sparse_arg, model)
     context = model.context
-    LinearizedSystem(sparse_arg, context, matrix_layout(context))
+    return LinearizedSystem(sparse_arg, context, matrix_layout(context))
 end
 
 function align_equations_to_linearized_system!(storage, model::JutulModel; kwarg...)
@@ -676,10 +678,9 @@ end
 
 Update the linearized system with the current set of equations.
 """
-function update_linearized_system!(storage, model::JutulModel, executor = default_executor(); kwarg...)
+function update_linearized_system!(storage, model::JutulModel, executor = default_executor(); lsys = storage.LinearizedSystem, kwarg...)
     eqs = model.equations
     eqs_storage = storage.equations
-    lsys = storage.LinearizedSystem
     update_linearized_system!(lsys, eqs, eqs_storage, model; kwarg...)
     post_update_linearized_system!(lsys, executor, storage, model)
 end
@@ -688,16 +689,14 @@ function post_update_linearized_system!(lsys, executor, storage, model)
     # Do nothing.
 end
 
-function update_linearized_system!(lsys, equations, eqs_storage, model::JutulModel; equation_offset = 0)
-    r_buf = lsys.r_buffer
+function update_linearized_system!(lsys, equations, eqs_storage, model::JutulModel; equation_offset = 0, r = lsys.r_buffer, nzval = lsys.jac_buffer)
     bz = model_block_size(model)
     for key in keys(equations)
         @tic "$key" begin
             eq = equations[key]
             eqs_s = eqs_storage[key]
-            nz = lsys.jac_buffer
-            r = local_residual_view(r_buf, model, eq, equation_offset)
-            update_linearized_system_equation!(nz, r, model, eq, eqs_s)
+            r_view = local_residual_view(r, model, eq, equation_offset)
+            update_linearized_system_equation!(nzval, r_view, model, eq, eqs_s)
             neq = number_of_equations(model, eq)
             equation_offset += neq÷bz
         end
@@ -765,13 +764,18 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
                 v = tol_cfg[key]
                 if isa(v, AbstractFloat)
                     t_e = v
-                else
+                elseif haskey(v, e_k)
                     t_e = v[e_k]
+                else
+                    t_e = tol
                 end
             else
                 t_e = tol
             end
             errors = all_crits[e_k].errors
+            if minimum(errors) < -10*eps(Float64)
+                @warn "Negative residuals detected for $key: $e_k. Programming error?" errors
+            end
             e = max(e, maximum(errors)/t_e)
             t_actual = t_e*tol_factor
             converged = converged && all(e -> e < t_actual, errors)
@@ -833,10 +837,10 @@ end
 
 function update_primary_variables!(storage, model::JutulModel; kwarg...)
     dx = storage.LinearizedSystem.dx_buffer
-    update_primary_variables!(storage.primary_variables, dx, model; kwarg...)
+    update_primary_variables!(storage.primary_variables, dx, model; state = storage.state, kwarg...)
 end
 
-function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1, check = false)
+function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1, check = false, state = missing)
     layout = matrix_layout(model.context)
     cell_major = is_cell_major(layout)
     offset = 0
@@ -871,22 +875,23 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
                 end
                 @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
                 local_offset += ni
-                report[pkey] = increment_norm(dxi, primary_storage[pkey], p)
+                report[pkey] = increment_norm(dxi, state, model, primary_storage[pkey], p)
             end
             offset += nu*np
         end
     else
         for (pkey, p) in primary
             n = number_of_degrees_of_freedom(model, p)
+            m = degrees_of_freedom_per_entity(model, p)
             rng = (offset+1):(n+offset)
-            dxi = view(dx, rng)
+            dxi = reshape(view(dx, rng), n÷m, m)
             if check
                 ok_i = check_increment(dxi, p, pkey)
                 ok = ok && ok_i
             end
             @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
             offset += n
-            report[pkey] = increment_norm(dxi, primary_storage[pkey], p)
+            report[pkey] = increment_norm(dxi, state, model, primary_storage[pkey], p)
         end
     end
     if !ok
@@ -895,7 +900,7 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
     return report
 end
 
-function increment_norm(dX, X, pvar)
+function increment_norm(dX, state, model, X, pvar)
     T = eltype(dX)
     scale = @something variable_scale(pvar) one(T)
     max_v = sum_v = zero(T)
@@ -916,7 +921,7 @@ function update_before_step!(storage, model, dt, forces; kwarg...)
     update_before_step!(storage, model.formulation, model, dt, forces; kwarg...)
 end
 
-function update_before_step!(storage, ::Any, model, dt, forces; time = NaN)
+function update_before_step!(storage, ::Any, model, dt, forces; time = NaN, recorder = ProgressRecorder(), update_explicit = true)
     # Do nothing
 end
 

@@ -74,7 +74,9 @@ end
 function Jutul.initialize_before_first_timestep!(psim::PArraySimulator, first_dT; kwarg...)
     Jutul.@tic "solve" begin
         Jutul.@tic "secondary variables" map(psim.storage[:simulators]) do sim
-            Jutul.update_secondary_variables!(sim.storage, sim.model)
+            s = Jutul.get_simulator_storage(sim)
+            m = Jutul.get_simulator_model(sim)
+            Jutul.update_secondary_variables!(s, m)
             nothing
         end
     end
@@ -141,14 +143,19 @@ function Jutul.forces_for_timestep(psim::PArraySimulator, forces::Union{MPIArray
     return subforces
 end
 
-function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; iteration = 1, vararg...)
+function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; solve = true, iteration = 1, vararg...)
     s = simulator.storage
     simulators = s.simulators
     np = s.number_of_processes
     verbose = s.verbose
     configs = config[:configs]
     out = map(simulators, configs, forces) do sim, config, f
-        e, conv, report = perform_step!(sim, dt, f, config; iteration = iteration, solve = false, update_secondary = true)
+        e, conv, report = perform_step!(sim, dt, f, config;
+            iteration = iteration,
+            solve = false,
+            update_secondary = true,
+            vararg...
+        )
         (e, Int(conv), report)
     end
     errors, converged, reports = tuple_of_arrays(out)
@@ -160,23 +167,28 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; ite
     if verbose && config[:info_level] > 1
         Jutul.jutul_message("It $(iteration-1)", "$nconverged/$np processes converged.")
     end
-    report = Jutul.setup_ministep_report()
+    should_solve = solve && !all_processes_converged
+    report = Jutul.setup_ministep_report(converged = all_processes_converged, solved = should_solve)
     map(reports) do subrep
         for k in [:secondary_time, :equations_time, :linear_system_time, :convergence_time]
             report[k] += subrep[k]
         end
     end
     # Proceed to linear solve
-    if !all_processes_converged
+    if should_solve
         t_solved = @elapsed ok, n, res = parray_linear_solve!(simulator, config[:linear_solver])
         t_update = @elapsed map(simulators) do sim
-            Jutul.update_primary_variables!(sim.storage, sim.model)
+            Jutul.update_primary_variables!(
+                Jutul.get_simulator_storage(sim),
+                Jutul.get_simulator_model(sim)
+            )
         end
         report[:linear_solver] = res
         report[:linear_solve_time] = t_solved
         report[:update_time] = t_update
         report[:linear_iterations] = n
     end
+    report[:update] = missing
     return (max_error, all_processes_converged, report)
 end
 
@@ -201,4 +213,12 @@ function Jutul.retrieve_output!(sim::PArraySimulator, states, reports, config, n
         MPI.Barrier(comm)
     end
     Jutul.retrieve_output!(states, reports, config, n)
+end
+
+function Jutul.simulator_reports_per_step(psim::PArraySimulator)
+    n = 0
+    map(psim.storage[:simulators]) do s
+        n += 1
+    end
+    return n
 end

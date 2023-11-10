@@ -128,7 +128,11 @@ function final_simulation_message(simulator, p, rec, t_elapsed, reports, timeste
     end
     # Optional table of performance numbers etc.
     if print_end_report
-        print_stats(stats, table_formatter = config[:table_formatter])
+        n = simulator_reports_per_step(simulator)
+        print_stats(stats,
+            table_formatter = config[:table_formatter],
+            scale = n
+        )
     end
     # Detailed timing through @tic instrumentation (can be a lot)
     print_global_timer(config[:extra_timing])
@@ -153,4 +157,8 @@ function jutul_message(prestr, substr = nothing; color = :light_blue, kwarg...)
     end
     print(Crayon(foreground = color, bold = true; kwarg...), fmt)
     println(Crayon(reset = true), substr)
+end
+
+function simulator_reports_per_step(simulator)
+    return 1
 end

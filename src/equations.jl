@@ -403,7 +403,7 @@ end
 """
 Update a linearized system based on the values and derivatives in the equation.
 """
-function update_linearized_system_equation!(nz, r, model, equation::JutulEquation, diag_cache::CompactAutoDiffCache)
+function update_linearized_system_equation!(nz::AbstractArray, r, model, equation::JutulEquation, diag_cache::CompactAutoDiffCache)
     # NOTE: Default only updates diagonal part
     fill_equation_entries!(nz, r, model, diag_cache)
 end
@@ -417,6 +417,11 @@ function update_linearized_system_equation!(nz, r, model, equation::JutulEquatio
     end
 end
 
+function update_linearized_system_equation!(nz::Missing, r, model, equation::JutulEquation, cache)
+    d = get_diagonal_entries(equation, cache)
+    @. r = d
+end
+
 """
 Update equation based on currently stored properties
 """
@@ -426,12 +431,16 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
     for i in 1:number_of_entities(model, eq)
         prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt)
     end
-    for k in keys(eq_s)
-        if k == :numeric
-            continue
+    if eq_s isa AbstractArray
+        update_equation_for_entity!(eq_s, eq, state, state0, model, dt)
+    else
+        for k in keys(eq_s)
+            if k == :numeric
+                continue
+            end
+            cache = eq_s[k]
+            update_equation_for_entity!(cache, eq, state, state0, model, dt)
         end
-        cache = eq_s[k]
-        update_equation_for_entity!(cache, eq, state, state0, model, dt)
     end
 end
 
@@ -442,6 +451,15 @@ function update_equation_for_entity!(cache, eq, state, state0, model, dt)
     local_state = local_ad(state, 1, T)
     local_state0 = local_ad(state0, 1, T)
     inner_update_equation_for_entity(cache, eq, local_state, local_state0, model, dt)
+end
+
+function update_equation_for_entity!(cache::AbstractMatrix, eq, state, state0, model, dt)
+    for i in axes(cache, 2)
+        ldisc = local_discretization(eq, i)
+        v_i = view(cache, :, i)
+        update_equation_in_entity!(v_i, i, state, state0, eq, model, dt, ldisc)
+    end
+    return cache
 end
 
 function inner_update_equation_for_entity(cache, eq, state, state0, model, dt)
@@ -485,7 +503,7 @@ Get the convergence criterion values for a given equation. Can be checked agains
 - `eq_s`: storage for `eq` where values are contained.
 - `r`: the local residual part corresponding to this model, as a matrix with column index equaling entity index
 """
-function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1)
+function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1.0, update_report = missing)
     n = number_of_equations_per_entity(model, eq)
     @tic "default" @tullio max e[i] := abs(r[i, j])
     if n == 1
@@ -521,4 +539,17 @@ to create inconsistent Jacobians.
         D = nothing
     end
     return D
+end
+
+@inline function get_diagonal_entries(eq::JutulEquation, eq_s::AbstractArray)
+    return eq_s
+end
+
+function transfer_accumulation!(acc, eq::ConservationLaw, state)
+    s = Jutul.conserved_symbol(eq)
+    @. acc = state[s]
+end
+
+function transfer_accumulation!(acc, eq::JutulEquation, state)
+    @. acc = zero(eltype(acc))
 end

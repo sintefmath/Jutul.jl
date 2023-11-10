@@ -5,6 +5,7 @@ DocMeta.setdocmeta!(Jutul, :DocTestSetup, :(using Jutul); recursive=true)
 
 makedocs(;
     modules=[Jutul],
+    warnonly = true,
     authors="Olav Møyner <olav.moyner@sintef.no> and contributors",
     repo="https://github.com/sintefmath/Jutul.jl/blob/{commit}{path}#{line}",
     sitename="Jutul.jl",

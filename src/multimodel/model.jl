@@ -85,8 +85,12 @@ function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
 end
 
-function setup_storage(model::MultiModel; state0 = setup_state(model), parameters = setup_parameters(model), kwarg...)
-    storage = JutulStorage()
+function setup_storage!(storage, model::MultiModel;
+        state0 = setup_state(model),
+        parameters = setup_parameters(model),
+        setup_linearized_system = true,
+        kwarg...
+    )
     state0_ref = JutulStorage()
     state_ref = JutulStorage()
     @tic "model" for key in submodels_symbols(model)
@@ -113,10 +117,12 @@ function setup_storage(model::MultiModel; state0 = setup_state(model), parameter
             storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = submodel_ad_tag(model, key))
         end
     end
-    @tic "linear system" begin
-        @tic "setup" setup_linearized_system!(storage, model)
-        @tic "alignment" align_equations_to_linearized_system!(storage, model)
-        @tic "alignment cross terms" align_cross_terms_to_linearized_system!(storage, model)
+    if setup_linearized_system
+        @tic "linear system" begin
+            @tic "setup" setup_linearized_system!(storage, model)
+            @tic "alignment" align_equations_to_linearized_system!(storage, model)
+            @tic "alignment cross terms" align_cross_terms_to_linearized_system!(storage, model)
+        end
     end
     setup_multimodel_maps!(storage, model)
     return storage
@@ -525,21 +531,27 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
 
     state_s = storage_s.state
     state0_s = storage_s.state0
-
     for i in 1:ct_s.N
         prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
     end
 
-    state_s_v = as_value(state_s)
-    state0_s_v = as_value(state0_s)
-    for (_, cache) in pairs(ct_s.target)
-        update_cross_term_inner_target!(cache, ct, eq, state_s_v, state0_s_v, state_t, state0_t, model_t, model_s, dt)
-    end
+    if ct_s[:helper_mode]
+        # Target and source are aliased. We just update one of them.
+        @assert ct_s.target === ct_s.source
+        update_cross_term_for_entity!(ct_s.source, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
+        # update_cross_term_for_entity!(ct_s.source, ct, eq, state_s, state0_s, state_t, state0_t, model_t, model_s, dt)
+    else
+        state_s_v = as_value(state_s)
+        state0_s_v = as_value(state0_s)
+        for (_, cache) in pairs(ct_s.target)
+            update_cross_term_inner_target!(cache, ct, eq, state_s_v, state0_s_v, state_t, state0_t, model_t, model_s, dt)
+        end
 
-    state_t_v = as_value(state_t)
-    state0_t_v = as_value(state0_t)
-    for (_, cache) in pairs(ct_s.source)
-        update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
+        state_t_v = as_value(state_t)
+        state0_t_v = as_value(state0_t)
+        for (_, cache) in pairs(ct_s.source)
+            update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
+        end
     end
 end
 
@@ -580,17 +592,30 @@ function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s
     end
 end
 
-function update_linearized_system!(storage, model::MultiModel, executor = default_executor(); equation_offset = 0, targets = submodel_symbols(model), sources = targets)
-    @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
-    # Update diagonal blocks (model with respect to itself)
-    @tic "models" update_diagonal_blocks!(storage, model, targets)
-    # Then, update cross terms (models' impact on other models)
-    @tic "cross-model" update_offdiagonal_blocks!(storage, model, targets, sources)
-    post_update_linearized_system!(storage.LinearizedSystem, executor, storage, model)
+function update_cross_term_for_entity!(cache::AbstractArray, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
+    for i in axes(cache, 2)
+        ldisc = local_discretization(ct, i)
+        v_i = @views cache[:, i]
+        update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
+    end
 end
 
-function update_diagonal_blocks!(storage, model::MultiModel, targets)
-    lsys = storage.LinearizedSystem
+function update_linearized_system!(storage, model::MultiModel, executor = default_executor();
+        equation_offset = 0,
+        targets = submodel_symbols(model),
+        sources = targets,
+        kwarg...)
+    @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
+    # Update diagonal blocks (model with respect to itself)
+    @tic "models" update_diagonal_blocks!(storage, model, targets; kwarg...)
+    # Then, update cross terms (models' impact on other models)
+    @tic "cross-model" update_offdiagonal_blocks!(storage, model, targets, sources; kwarg...)
+    if haskey(storage, :LinearizedSystem)
+        post_update_linearized_system!(storage.LinearizedSystem, executor, storage, model)
+    end
+end
+
+function update_diagonal_blocks!(storage, model::MultiModel, targets; lsys = storage.LinearizedSystem, kwarg...)
     model_keys = submodel_symbols(model)
     if has_groups(model)
         ng = number_of_groups(model)
@@ -601,11 +626,11 @@ function update_diagonal_blocks!(storage, model::MultiModel, targets)
             group_targets = model_keys[subs]
             group_keys = intersect(group_targets, targets)
             offsets = get_submodel_offsets(storage, g)
-            update_main_linearized_system_subgroup!(storage, model, group_keys, offsets, lsys_g)
+            update_main_linearized_system_subgroup!(storage, model, group_keys, offsets, lsys_g; kwarg...)
         end
     else
         offsets = get_submodel_offsets(storage)
-        update_main_linearized_system_subgroup!(storage, model, targets, offsets, lsys)
+        update_main_linearized_system_subgroup!(storage, model, targets, offsets, lsys; kwarg...)
     end
 end
 
@@ -720,7 +745,7 @@ function update_secondary_variables_state!(state, model::MultiModel)
     end
 end
 
-function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra_out = false, kwarg...)
+function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra_out = false, update_report = missing, kwarg...)
     converged = true
     err = 0
     offset = 0
@@ -733,12 +758,23 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
                 offset = 0
             end
         end
+        if ismissing(update_report)
+            inc = missing
+        else
+            inc = update_report[key]
+        end
         s = storage[key]
         m = model.models[key]
         eqs = m.equations
         eqs_s = s.equations
         ls = get_linearized_system_submodel(storage, model, key, lsys)
-        conv, e, errors[key], = check_convergence(ls, eqs, eqs_s, s, m, tol_cfg[key]; offset = offset, extra_out = true, tol = tol, kwarg...)
+        conv, e, errors[key], = check_convergence(ls, eqs, eqs_s, s, m, tol_cfg[key];
+            offset = offset,
+            extra_out = true,
+            update_report = inc,
+            tol = tol,
+            kwarg...
+        )
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)
@@ -768,7 +804,7 @@ function update_primary_variables!(storage, model::MultiModel; kwarg...)
             bz = block_size(lsys[i, i])
             dx_v = reshape(dx_v, bz, :)
         end
-        report[key] = update_primary_variables!(s.state, dx_v, m; kwarg...)
+        report[key] = update_primary_variables!(s.state, dx_v, m; state = s.state, kwarg...)
         offset += ndof
     end
     return report
@@ -797,12 +833,12 @@ function update_before_step!(storage, model::MultiModel, dt, forces; targets = s
         s = storage[key]
         m = model.models[key]
         f = forces[key]
-        update_before_step_multimodel!(storage, model, m, dt, f, key)
+        update_before_step_multimodel!(storage, model, m, dt, f, key; kwarg...)
         update_before_step!(s, m, dt, f; kwarg...)
     end
 end
 
-function update_before_step_multimodel!(storage, model, submodel, dt, subforces, label)
+function update_before_step_multimodel!(storage, model, submodel, dt, subforces, label; kwarg...)
 
 end
 
