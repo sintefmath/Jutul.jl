@@ -9,6 +9,8 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info
     is_mpi_win = is_mpi && Sys.iswindows()
     extra_timing = extra_timing && v
     add_option!(cfg, :consolidate_results, true, "Consolidate states after simulation (serially).", types = Bool)
+    add_option!(cfg, :delete_on_consolidate, true, "Delete processor states once consolidated.", types = Bool)
+
     cfg = Jutul.simulator_config!(cfg, sim;
         kwarg...,
         info_level = info_level,
@@ -208,7 +210,7 @@ function Jutul.retrieve_output!(sim::PArraySimulator, states, reports, config, n
     if config[:consolidate_results]
         MPI.Barrier(comm)
         if np > 1 && is_main && pth isa String
-            consolidate_distributed_results_on_disk!(pth, np, 1:n, cleanup = true)
+            consolidate_distributed_results_on_disk!(pth, np, 1:n, cleanup = config[:delete_on_consolidate])
         end
         MPI.Barrier(comm)
     end

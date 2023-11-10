@@ -198,9 +198,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                 return false
             end
         end
-        h1 = Highlighter(f = not_converged,
-                         crayon = crayon"red" )
-    
+        h1 = Highlighter(f = not_converged, crayon = crayon"red" )
         function nearly_converged(data, i, j)
             if j == rpos
                 d = data[i, j]
@@ -210,9 +208,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                 return false
             end
         end
-        h2 = Highlighter(f = nearly_converged,
-                         crayon = crayon"yellow")
-    
+        h2 = Highlighter(f = nearly_converged, crayon = crayon"yellow")
         function converged(data, i, j)
             if j == rpos
                 return data[i, j] <= tols[i]
@@ -220,11 +216,8 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                 return false
             end
         end
-        h3 = Highlighter(f = converged,
-                         crayon = crayon"green")
-    
+        h3 = Highlighter(f = converged, crayon = crayon"green")
         highlighers = (h1, h2, h3)
-        
         pretty_table(tbl, header = header,
                                 alignment = alignment, 
                                 body_hlines = body_hlines,
@@ -237,24 +230,24 @@ end
 
 function initialize_report_stats(reports)
     stats = Dict{Symbol, Union{Int64, Float64}}(:wasted_iterations => 0,
-                                                 :iterations => 0,
-                                                 :steps => length(reports),
-                                                 :ministeps => 0,
-                                                 :wasted_linearizations => 0,
-                                                 :wasted_linear_iterations => 0,
-                                                 :linear_update => 0.0,
-                                                 :linear_solve => 0.0,
-                                                 :linear_setup => 0.0,
-                                                 :linear_iterations => 0,
-                                                 :linearizations => 0,
-                                                 :finalize => 0.0,
-                                                 :secondary => 0.0,
-                                                 :equations => 0.0,
-                                                 :update => 0.0,
-                                                 :convergence => 0.0,
-                                                 :io => 0.0,
-                                                 :time => 0.0,
-                                                 )
+                                                :iterations => 0,
+                                                :steps => length(reports),
+                                                :ministeps => 0,
+                                                :wasted_linearizations => 0,
+                                                :wasted_linear_iterations => 0,
+                                                :linear_update => 0.0,
+                                                :linear_solve => 0.0,
+                                                :linear_setup => 0.0,
+                                                :linear_iterations => 0,
+                                                :linearizations => 0,
+                                                :finalize => 0.0,
+                                                :secondary => 0.0,
+                                                :equations => 0.0,
+                                                :update => 0.0,
+                                                :convergence => 0.0,
+                                                :io => 0.0,
+                                                :time => 0.0,
+    )
     return stats
 end
 
@@ -457,14 +450,14 @@ function autoformat_time(t::Float64; compact = true)
     return "$t_fmt $s"
 end
 
-function print_stats(reports::AbstractArray; kwarg...)
+function print_stats(reports::AbstractArray, io = stdout; kwarg...)
     stats = report_stats(reports)
-    print_stats(stats; kwarg...)
+    print_stats(stats, io; kwarg...)
 end
 
-function print_stats(stats; title = "", table_formatter = tf_unicode_rounded, kwarg...)
-    print_iterations(stats; title = title, table_formatter = table_formatter, kwarg...)
-    print_timing(stats; title = title, table_formatter = table_formatter)
+function print_stats(stats, io = stdout; title = "", table_formatter = tf_unicode_rounded, kwarg...)
+    print_iterations(stats, io; title = title, table_formatter = table_formatter, kwarg...)
+    print_timing(stats, io; title = title, table_formatter = table_formatter)
 end
 
 function is_wide_term()
@@ -472,7 +465,7 @@ function is_wide_term()
     return dim > 90
 end
 
-function print_iterations(stats;
+function print_iterations(stats, io = stdout;
         title = "",
         table_formatter = tf_unicode_rounded,
         scale = 1
@@ -501,7 +494,7 @@ function print_iterations(stats;
         data[i, 4] = "$raw ($waste)"    # Total
     end
 
-    pretty_table(data; header = (["Avg/step", "Avg/ministep", "Time per", "Total"],
+    pretty_table(io, data; header = (["Avg/step", "Avg/ministep", "Time per", "Total"],
                                 ["$nstep steps", "$nmini ministeps", s, "(wasted)"]), 
                       row_names = names,
                       title = title,
@@ -512,7 +505,7 @@ function print_iterations(stats;
                       row_name_column_title = "Iteration type")
 end
 
-function print_timing(stats; title = "", table_formatter = tf_unicode_rounded)
+function print_timing(stats, io = stdout; title = "", table_formatter = tf_unicode_rounded)
     flds = collect(keys(stats.time_each))
     n = length(flds)
 
@@ -558,7 +551,7 @@ function print_timing(stats; title = "", table_formatter = tf_unicode_rounded)
     end
 
 
-    pretty_table(data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]), 
+    pretty_table(io, data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]), 
                       row_names = map(translate_for_table, flds),
                       formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
                       title = title,
@@ -826,11 +819,12 @@ export jutul_output_path
 """
     pth = jutul_output_path(name = missing; subfolder = "jutul", basedir = missing, create = true)
 
-Get path for output. The final path will be found in
-/basedir/<subfolder/name. If `subfolder=missing`, the path will be set to
-/basedir/name instead. `name` will be autogenerated if not provided.
+Get path for output. The final path will be found in /basedir/<subfolder/name.
+If `subfolder=missing`, the path will be set to /basedir/name instead. `name`
+will be autogenerated if not provided.
 
-Pass the optional input `create = false` to avoid making the directory.
+Pass the optional input `create = false` to avoid making the directory. To
+globally set the default output dir, set `ENV["JUTUL_OUTPUT_PATH"]`` to your desired `basedir``.
 """
 function jutul_output_path(name = missing; subfolder = "jutul", basedir = missing, create = true)
     if ismissing(basedir)

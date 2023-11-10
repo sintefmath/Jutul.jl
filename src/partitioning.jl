@@ -222,22 +222,25 @@ function setup_partitioner_hypergraph(N::Matrix{Int};
     @assert size(N, 2) == num_edges
     @assert length(edge_weights) == num_edges
 
-    part = collect(1:num_nodes)
+    compressed_partition = collect(1:num_nodes)
     groups = merge_overlapping_graph_groups(groups)
+    touched = [0 for i in 1:num_nodes]
     for (i, group) in enumerate(groups)
         for g in group
-            part[g] = num_nodes + i
+            compressed_partition[g] = num_nodes + i
+            @assert touched[g] == 0 "$g was already assigned to group $(touched[g]), cannot assign to $i. Programming error?"
+            touched[g] = i
         end
     end
-    part = Jutul.compress_partition(part)
-    N = part[N]
+    compressed_partition = Jutul.compress_partition(compressed_partition)
+    N = compressed_partition[N]
     # Filter connections that are interior in a group
     keep = map(i -> N[1, i] != N[2, i], axes(N, 2))
     edge_indices = (1:num_edges)[keep]
     N = N[:, keep]
-    num_nodes_compressed = maximum(part)
+    num_nodes_compressed = maximum(compressed_partition)
     node_weights_compressed = zeros(Int, num_nodes_compressed)
-    for (i, v) in enumerate(part)
+    for (i, v) in enumerate(compressed_partition)
         node_weights_compressed[v] += node_weights[i]
     end
     @assert minimum(node_weights_compressed) > 0
@@ -283,7 +286,8 @@ function setup_partitioner_hypergraph(N::Matrix{Int};
         node_weights = node_weights_compressed,
         edge_weights = edge_weights_compressed,
         neighbors = N_new,
-        partition = part
+        partition = compressed_partition,
+        groups = groups
     )
 end
 
@@ -302,9 +306,14 @@ function partition_hypergraph(g::NamedTuple, n::Int, partitioner = MetisPartitio
     return p
 end
 
-function partition_hypergraph(N::Matrix{Int}, n::Int, partitioner = MetisPartitioner(); expand = true, kwarg...)
+function partition_hypergraph(N::Matrix{Int}, n::Int, partitioner = MetisPartitioner(); expand = true, output_graph = false, kwarg...)
     g = setup_partitioner_hypergraph(N; kwarg...)
-    return partition_hypergraph(g, n, partitioner, expand = expand)
+    p = partition_hypergraph(g, n, partitioner, expand = expand)
+    if output_graph
+        out = (p, g)
+    else
+        out = p
+    end
 end
 
 function partition_hypergraph_implementation(hg, n, partitioner::JutulPartitioner)
@@ -333,43 +342,23 @@ end
 
 function merge_overlapping_graph_groups(groups::Vector{Vector{Int}})
     # Merge groups that contain the same node
-    if length(groups) == 0
-        return groups
-    else
+    ng = length(groups)
+    if ng > 0
         nc = maximum(maximum, groups)
-        owned = zeros(Int, nc)
-        merge_with = zeros(Int, length(groups))
-        keep = fill(true, eachindex(groups))
-        needs_merging = false
-        for (i, group) in enumerate(groups)
-            for g in group
-                owner = owned[g]
-                if owner == 0
-                    owned[g] = i
-                else
-                    needs_merging = true
-                    merge_target = merge_with[i]
-                    @assert merge_target == 0 || merge_target == owner "Complicated merging not implemented"
-                    merge_with[i] = owner
-                    keep[i] = false
-                end
-            end
-        end
-        if needs_merging
-            new_groups = deepcopy(groups)
-            for i in eachindex(groups)
-                if !keep[i]
-                    target = new_groups[merge_with[i]]
-                    self = new_groups[i]
-                    for c in self
-                        push!(target, c)
+        group_graph = SimpleGraph(nc)
+        for group in groups
+            for i in group
+                for j in group
+                    if i != j
+                        add_edge!(group_graph, i, j)
                     end
-                    unique!(target)
                 end
             end
-            new_groups = new_groups[keep]
-        else
-            return groups
         end
+        conn = Graphs.connected_components(group_graph)
+        # Filter all trivial groups
+        filter!(x -> length(x) > 1, conn)
+        groups = conn
     end
+    return groups
 end
