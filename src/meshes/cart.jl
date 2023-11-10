@@ -198,28 +198,6 @@ function tpfv_geometry(g::CartesianMesh)
             end
         end
     end
-    if d > 1
-        # y varies, x, z fixed
-        for x = 1:nx
-            for z in 1:nz
-                for y in [1, ny]
-                    add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 2, pos)
-                    pos += 1
-                end
-            end
-        end
-        if d > 2
-            # z varies, x, y fixed
-            for x = 1:nx
-                for y in 1:ny
-                    for z in [1, nz]
-                        add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 3, pos)
-                        pos += 1
-                    end
-                end
-            end
-        end
-    end
     nbnd = number_of_boundary_faces(g)
     # Then fix the boundary
     boundary_neighbors = Vector{Int}(undef, nbnd)
