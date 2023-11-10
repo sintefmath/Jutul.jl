@@ -237,3 +237,4 @@ end
     @test isdir(jutul_output_path())
     @test last(splitdir(jutul_output_path("testname"))) == "testname"
 end
+

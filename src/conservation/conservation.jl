@@ -503,20 +503,43 @@ function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}
     M = global_map(model.domain)
     nc = length(conn_pos)-1
     tb = minbatch(model.context, nc)
-    @tic "flux (cells)" @batch minbatch=tb for c in 1:nc
-        self = full_cell(c, M)
-        state_c = new_entity_index(state, self)
-        update_half_face_flux_tpfa_internal!(hf_cells, eq, state_c, model, dt, flow_disc, conn_pos, conn_data, c)
+    if false
+        # Cell by cell version
+        @tic "flux (cells)" @batch minbatch=tb for c in 1:nc
+            self = full_cell(c, M)
+            state_c = new_entity_index(state, self)
+            update_half_face_flux_tpfa_internal_cell!(hf_cells, eq, state_c, model, dt, flow_disc, conn_pos, conn_data, c)
+        end
+    else
+        # Face by face version
+        Nf = flow_disc.face_neighborship
+        nf = length(Nf)
+        f2hf = flow_disc.face_to_half_face
+        @tic "flux (cells)" @batch minbatch=tb for f in 1:nf
+            update_half_face_flux_tpfa_internal_face!(hf_cells, eq, state, model, dt, flow_disc, M, Nf, f2hf, f)
+        end
     end
 end
 
-function update_half_face_flux_tpfa_internal!(hf_cells::AbstractArray{T}, eq, state, model, dt, flow_disc, conn_pos, conn_data, c) where T
+function update_half_face_flux_tpfa_internal_cell!(hf_cells::AbstractArray{T}, eq, state, model, dt, flow_disc, conn_pos, conn_data, c) where T
     start = @inbounds conn_pos[c]
     stop = @inbounds conn_pos[c+1]-1
     for i in start:stop
         (; self, other, face, face_sign) = @inbounds conn_data[i]
         @inbounds hf_cells[i] = face_flux!(zero(T), self, other, face, face_sign, eq, state, model, dt, flow_disc)
     end
+end
+
+function update_half_face_flux_tpfa_internal_face!(hf_cells::AbstractArray{T}, eq, state, model, dt, flow_disc, M, N, f2hf, f) where T
+    @inbounds l, r = N[f]
+    @inbounds l_hf, r_hf = f2hf[f]
+    internal_face_update(hf_cells, l_hf, l, r, f, 1, eq, new_entity_index(state, l), model, dt, flow_disc, M)
+    internal_face_update(hf_cells, r_hf, r, l, f, -1, eq, new_entity_index(state, r), model, dt, flow_disc, M)
+end
+
+@inline function internal_face_update(hf_cells::AbstractArray{T}, hf, self, other, face, face_sign, eq, state, model, dt, flow_disc, M) where T
+    self = full_cell(self, M)
+    @inbounds hf_cells[hf] = face_flux!(zero(T), self, other, face, face_sign, eq, state, model, dt, flow_disc)
 end
 
 function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Faces) where {T, N}

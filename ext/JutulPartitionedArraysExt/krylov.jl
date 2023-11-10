@@ -49,7 +49,6 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
     t_prec = @elapsed P = parray_preconditioner_linear_operator(simulator, lsolve, b)
     @tic "communication" consistent!(b) |> wait
 
-
     max_it = cfg.max_iterations
     @tic "solve" Krylov.bicgstab!(
         bsolver, op, b,

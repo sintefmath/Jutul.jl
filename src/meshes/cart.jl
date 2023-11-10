@@ -198,8 +198,6 @@ function tpfv_geometry(g::CartesianMesh)
             end
         end
     end
-
-
     nbnd = number_of_boundary_faces(g)
     # Then fix the boundary
     boundary_neighbors = Vector{Int}(undef, nbnd)
