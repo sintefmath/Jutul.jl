@@ -533,12 +533,11 @@ end
 function update_half_face_flux_tpfa_internal_face!(hf_cells::AbstractArray{T}, eq, state, model, dt, flow_disc, M, N, f2hf, f) where T
     @inbounds l, r = N[f]
     @inbounds l_hf, r_hf = f2hf[f]
-    __face_update(hf_cells, l_hf, l, r, f, 1, eq, state, model, dt, flow_disc, M)
-    __face_update(hf_cells, r_hf, r, l, f, -1, eq, state, model, dt, flow_disc, M)
+    internal_face_update(hf_cells, l_hf, l, r, f, 1, eq, new_entity_index(state, l), model, dt, flow_disc, M)
+    internal_face_update(hf_cells, r_hf, r, l, f, -1, eq, new_entity_index(state, r), model, dt, flow_disc, M)
 end
 
-@inline function __face_update(hf_cells::AbstractArray{T}, hf, self, other, face, face_sign, eq, state, model, dt, flow_disc, M) where T
-    state = new_entity_index(state, self)
+@inline function internal_face_update(hf_cells::AbstractArray{T}, hf, self, other, face, face_sign, eq, state, model, dt, flow_disc, M) where T
     self = full_cell(self, M)
     @inbounds hf_cells[hf] = face_flux!(zero(T), self, other, face, face_sign, eq, state, model, dt, flow_disc)
 end
