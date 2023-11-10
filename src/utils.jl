@@ -450,14 +450,14 @@ function autoformat_time(t::Float64; compact = true)
     return "$t_fmt $s"
 end
 
-function print_stats(reports::AbstractArray; kwarg...)
+function print_stats(reports::AbstractArray, io = stdout; kwarg...)
     stats = report_stats(reports)
-    print_stats(stats; kwarg...)
+    print_stats(stats, io; kwarg...)
 end
 
-function print_stats(stats; title = "", table_formatter = tf_unicode_rounded, kwarg...)
-    print_iterations(stats; title = title, table_formatter = table_formatter, kwarg...)
-    print_timing(stats; title = title, table_formatter = table_formatter)
+function print_stats(stats, io = stdout; title = "", table_formatter = tf_unicode_rounded, kwarg...)
+    print_iterations(stats, io; title = title, table_formatter = table_formatter, kwarg...)
+    print_timing(stats, io; title = title, table_formatter = table_formatter)
 end
 
 function is_wide_term()
@@ -465,7 +465,7 @@ function is_wide_term()
     return dim > 90
 end
 
-function print_iterations(stats;
+function print_iterations(stats, io = stdout;
         title = "",
         table_formatter = tf_unicode_rounded,
         scale = 1
@@ -494,7 +494,7 @@ function print_iterations(stats;
         data[i, 4] = "$raw ($waste)"    # Total
     end
 
-    pretty_table(data; header = (["Avg/step", "Avg/ministep", "Time per", "Total"],
+    pretty_table(io, data; header = (["Avg/step", "Avg/ministep", "Time per", "Total"],
                                 ["$nstep steps", "$nmini ministeps", s, "(wasted)"]), 
                       row_names = names,
                       title = title,
@@ -505,7 +505,7 @@ function print_iterations(stats;
                       row_name_column_title = "Iteration type")
 end
 
-function print_timing(stats; title = "", table_formatter = tf_unicode_rounded)
+function print_timing(stats, io = stdout; title = "", table_formatter = tf_unicode_rounded)
     flds = collect(keys(stats.time_each))
     n = length(flds)
 
@@ -551,7 +551,7 @@ function print_timing(stats; title = "", table_formatter = tf_unicode_rounded)
     end
 
 
-    pretty_table(data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]), 
+    pretty_table(io, data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]), 
                       row_names = map(translate_for_table, flds),
                       formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
                       title = title,
