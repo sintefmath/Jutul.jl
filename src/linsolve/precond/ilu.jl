@@ -74,12 +74,15 @@ end
 
 function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
     T = eltype(f)
-    N = size(T, 1)
-    T = eltype(T)
-    Vt = SVector{N, T}
-    as_svec = (x) -> unsafe_reinterpret(Vt, x, length(x) ÷ N)
-
-    ldiv!(as_svec(x), f, as_svec(y))
+    if T == Float64
+        ldiv!(x, f, y)
+    else
+        N = size(T, 1)
+        T = eltype(T)
+        Vt = SVector{N, T}
+        as_svec = (x) -> unsafe_reinterpret(Vt, x, length(x) ÷ N)
+        ldiv!(as_svec(x), f, as_svec(y))
+    end
     return x
 end
 
