@@ -49,7 +49,7 @@ end
 
 
 function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, atol, rtol)
-    t_op = @elapsed op = Jutul.parray_linear_system_operator(simulators, b)
+    t_op = @elapsed op = Jutul.parray_linear_system_operator(simulators, length(b))
     t_prec = @elapsed P = parray_preconditioner_linear_operator(simulator, lsolve, b)
     @tic "communication" consistent!(b) |> wait
 

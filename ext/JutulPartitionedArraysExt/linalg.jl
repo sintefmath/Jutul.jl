@@ -86,9 +86,8 @@ function Jutul.parray_preconditioner_apply!(Y, main_prec, X, preconditioners, si
     Y
 end
 
-function Jutul.parray_linear_system_operator(simulators, b)
+function Jutul.parray_linear_system_operator(simulators, n::Int)
     distributed_mul! = setup_parray_mul!(simulators)
-    n = length(b)
     return LinearOperator(Float64, n, n, false, false, distributed_mul!)
 end
 

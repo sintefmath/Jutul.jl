@@ -71,6 +71,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     data[:distributed_residual] = pzeros(dof_partition)
     data[:distributed_cell_buffer] = pzeros(partition)
     data[:distributed_residual_buffer] = pzeros(dof_partition)
+    data[:distributed_solution_buffer] = pzeros(dof_partition)
     data[:model] = representative_model
 
     return PArraySimulator(backend, data)
