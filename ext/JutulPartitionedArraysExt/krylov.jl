@@ -66,10 +66,12 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
     )
     if lsolve.solver == :bicgstab
         F! = Krylov.bicgstab!
+        extra = NamedTuple()
     else
         F! = Krylov.gmres!
+        extra = (restart = true, )
     end
-    @tic "solve" F!(l_arg...; l_kwarg...)
+    @tic "solve" F!(l_arg...; extra..., l_kwarg...)
     @tic "communication" consistent!(bsolver.x) |> wait
 
     stats = bsolver.stats
