@@ -751,10 +751,7 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
     for key in keys(eqs)
         eq = eqs[key]
         eq_s = eqs_s[key]
-        N = number_of_equations(model, eq)
-        n = number_of_equations_per_entity(model, eq)
-        m = N ÷ n
-        r_v = as_cell_major_matrix(r_buf, n, m, model, offset)
+        r_v = local_residual_view(r_buf, model, eq, offset)
 
         @tic "$key" all_crits = convergence_criterion(model, storage, eq, eq_s, r_v; kwarg...)
         e_keys = keys(all_crits)
@@ -781,7 +778,7 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
             converged = converged && all(e -> e < t_actual, errors)
             tols[e_k] = t_actual
         end
-        offset += N÷bz
+        offset += length(r_v)÷bz
         if extra_out
             push!(output, (name = key, criterions = all_crits, tolerances = tols))
         end
