@@ -156,7 +156,7 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
         @tic "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
         if !isnothing(extra_sparsity)
             # We have some extra sparsity, need to merge that in
-            S_e = extra_sparsity[Symbol(e)]
+            S_e = extra_sparsity[entity_as_symbol(e)]
             @assert length(S_e) == length(S)
             for (i, s_extra) in enumerate(S_e)
                 for extra_ind in s_extra
@@ -170,12 +170,16 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
         has_diagonal = number_of_entities == number_of_entities_total && is_self
         @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source for $T"
         @tic "cache alloc" cache = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal, global_map = global_map)
-        caches[Symbol(e)] = cache
+        caches[entity_as_symbol(e)] = cache
     end
     if !self_entity_found
         caches[:numeric] = zeros(equations_per_entity, number_of_entities)
     end
     return convert_to_immutable_storage(caches)
+end
+
+@inline function entity_as_symbol(::T) where T<:JutulEntity
+    return Symbol(T.name.name)::Symbol
 end
 
 function remap_sparsity!(S, var_entity, eq_model)
@@ -314,7 +318,7 @@ Give out source, target arrays of equal length for a given equation attached
 to the given model.
 """
 function declare_pattern(model, e, eq_s, entity, arg...)
-    k = Symbol(entity)
+    k = entity_as_symbol(entity)
     if haskey(eq_s, k)
         cache = eq_s[k]
         return generic_cache_declare_pattern(cache, arg...)
@@ -363,7 +367,7 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; context = mode
                                                                    number_of_entities_target = nothing,
                                                                    kwarg...)
     # Use generic version
-    k = Symbol(entity)
+    k = entity_as_symbol(entity)
     has_pos = !isnothing(positions)
     if haskey(eq_s, k)
         cache = eq_s[k]
@@ -528,7 +532,11 @@ Note: Be very careful about modifications to this array, as this is a view into 
 to create inconsistent Jacobians.
 """
 @inline function get_diagonal_entries(eq::JutulEquation, eq_s)
-    k = Symbol(associated_entity(eq))
+    return get_diagonal_entries(eq, eq_s, associated_entity(eq))
+end
+
+@inline function get_diagonal_entries(eq::JutulEquation, eq_s, e)
+    k = entity_as_symbol(e)
     if haskey(eq_s, k)
         cache = eq_s[k]
         D = diagonal_view(cache)
