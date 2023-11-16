@@ -130,7 +130,7 @@ function Jutul.partition_distributed(N, edge_weights, node_weights = missing;
             node_weights = fill(1, nc)
             for group in groups
                 for g in group
-                    node_weights[g] = 2
+                    node_weights[g] = 10
                 end
             end
         end
