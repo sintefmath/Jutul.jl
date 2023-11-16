@@ -496,13 +496,13 @@ function print_iterations(stats, io = stdout;
 
     pretty_table(io, data; header = (["Avg/step", "Avg/ministep", "Time per", "Total"],
                                 ["$nstep steps", "$nmini ministeps", s, "(wasted)"]), 
-                      row_names = names,
+                      row_labels = names,
                       title = title,
                       title_alignment = :c,
-                      row_name_alignment = :l,
+                      row_label_alignment = :l,
                       tf = table_formatter,
                       formatters = (ft_printf("%3.4f", 3)),
-                      row_name_column_title = "Iteration type")
+                      row_label_column_title = "Iteration type")
 end
 
 function print_timing(stats, io = stdout; title = "", table_formatter = tf_unicode_rounded)
@@ -552,15 +552,15 @@ function print_timing(stats, io = stdout; title = "", table_formatter = tf_unico
 
 
     pretty_table(io, data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]), 
-                      row_names = map(translate_for_table, flds),
+                      row_labels = map(translate_for_table, flds),
                       formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
                       title = title,
                       title_alignment = :c,
                       tf = table_formatter,
-                      row_name_alignment = :l,
+                      row_label_alignment = :l,
                       alignment = [:r, :r, :r],
                       body_hlines = [n-1],
-                      row_name_column_title = "Timing type")
+                      row_label_column_title = "Timing type")
 end
 
 export read_results
