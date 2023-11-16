@@ -668,8 +668,8 @@ function update_equations!(storage, model, dt = nothing)
 end
 
 function update_equations!(storage, equations_storage, equations, model, dt)
-    for key in keys(equations)
-        @tic "$key" update_equation!(equations_storage[key], equations[key], storage, model, dt)
+    for (key, eq) in pairs(equations)
+        @tic "$key" update_equation!(equations_storage[key], eq, storage, model, dt)
     end
 end
 
