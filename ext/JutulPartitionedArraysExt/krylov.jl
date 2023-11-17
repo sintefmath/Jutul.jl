@@ -8,7 +8,7 @@ function parray_linear_solve!(simulator, lsolve;
     b = s.distributed_residual
     @tic "prepare" prepare_distributed_solve!(simulators, b)
     bsolver = bsolver_setup!(lsolve, simulators, b)
-    @assert lsolve.solver == :bicgstab "Only :bicgstab supported, was $(lsolve.solver)"
+    @assert lsolve.solver in (:bicgstab, :gmres) "Only :bicgstab and :gmres supported, was $(lsolve.solver)"
 
     return inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, s.verbose, atol, rtol)
 end
@@ -27,7 +27,11 @@ end
 
 function bsolver_setup!(lsolve, simulators, b)
     if isnothing(lsolve.storage)
-        lsolve.storage = local_bicgstab_solver(b)
+        if lsolve.solver == :bicgstab
+            lsolve.storage = local_bicgstab_solver(b)
+        else
+            lsolve.storage = local_gmres_solver(b)
+        end
         prec = lsolve.preconditioner
         # Expand to one per local process
         if !isa(prec, Tuple)
@@ -45,14 +49,14 @@ end
 
 
 function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, atol, rtol)
-    t_op = @elapsed op = Jutul.parray_linear_system_operator(simulators, b)
+    t_op = @elapsed op = Jutul.parray_linear_system_operator(simulators, length(b))
     t_prec = @elapsed P = parray_preconditioner_linear_operator(simulator, lsolve, b)
     @tic "communication" consistent!(b) |> wait
 
 
     max_it = cfg.max_iterations
-    @tic "solve" Krylov.bicgstab!(
-        bsolver, op, b,
+    l_arg = (bsolver, op, b)
+    l_kwarg = (
         M = P,
         verbose = 0*Int(verbose),
         itmax = max_it,
@@ -60,6 +64,14 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
         rtol = rtol,
         atol = atol
     )
+    if lsolve.solver == :bicgstab
+        F! = Krylov.bicgstab!
+        extra = NamedTuple()
+    else
+        F! = Krylov.gmres!
+        extra = (restart = true, )
+    end
+    @tic "solve" F!(l_arg...; extra..., l_kwarg...)
     @tic "communication" consistent!(bsolver.x) |> wait
 
     stats = bsolver.stats
@@ -101,5 +113,25 @@ function local_bicgstab_solver(X::S) where S
     t  = similar(X)
     stats = Krylov.SimpleStats(0, false, false, T[], T[], T[], 0.0, "unknown")
     solver = Krylov.BicgstabSolver{T,FC,S}(m, n, Δx, x, r, p, v, s, qd, yz, t, false, stats)
+    return solver
+end
+
+function local_gmres_solver(X::S, memory = 20) where S
+    n = length(X)
+    m = n
+    FC = eltype(S)
+    T  = real(FC)
+    Δx = similar(X)
+    x  = similar(X)
+    w  = similar(X)
+    p  = similar(X)
+    q  = similar(X)
+    V = S[similar(X) for i = 1:memory]
+    c = Vector{T}(undef, memory)
+    s  = Vector{FC}(undef, memory)
+    z  = Vector{FC}(undef, memory)
+    R  = Vector{FC}(undef, div(memory * (memory+1), 2))
+    stats = Krylov.SimpleStats(0, false, false, T[], T[], T[], 0.0, "unknown")
+    solver = Krylov.GmresSolver{T,FC,S}(m, n, Δx, x, w, p, q, V, c, s, z, R, false, 0, stats)
     return solver
 end

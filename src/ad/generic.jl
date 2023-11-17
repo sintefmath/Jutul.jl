@@ -55,7 +55,10 @@ function fill_equation_entries!(nz, r, model, cache::GenericAutoDiffCache)
     entries = cache.entries
     tb = minbatch(model.context)
     dpos = cache.diagonal_positions
+    fill_equation_entries_impl!(nz, r, cache, entries, tb, dpos, nu, Val(ne), Val(np))
+end
 
+function fill_equation_entries_impl!(nz, r, cache, entries, tb, dpos, nu, ::Val{ne}, ::Val{np}) where {ne, np}
     if isnothing(dpos)
         # We don't have diagonals, just fill inn residual whenever
         @batch minbatch = tb for i in 1:nu

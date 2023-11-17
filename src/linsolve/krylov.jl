@@ -6,7 +6,8 @@ struct PrecondWrapper{T, K}
     op::T
     x::K
     function PrecondWrapper(op::T_o) where T_o<:LinearOperator
-        x = zeros(eltype(op), size(op, 1))
+        # x = zeros(eltype(op), size(op, 1))
+        x = missing
         T_x = typeof(x)
         new{T_o, T_x}(op, x)
     end
@@ -16,12 +17,6 @@ Base.eltype(p::PrecondWrapper) = eltype(p.op)
 
 LinearAlgebra.mul!(x, p::PrecondWrapper, y) = mul!(x, p.op, y)
 LinearAlgebra.mul!(x, p::PrecondWrapper, y, α, β) = mul!(x, p.op, y, α, β)
-
-function LinearAlgebra.ldiv!(p::PrecondWrapper, x)
-    y = p.x
-    y = copy!(y, x)
-    mul!(x, p.op, y) 
-end
 
 """
 GenericKrylov(solver = :gmres; preconditioner = nothing; <kwarg>)

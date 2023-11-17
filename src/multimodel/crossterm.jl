@@ -380,7 +380,7 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
                                                                                    col_layout = matrix_layout(source_model.context),
                                                                                    context = model.context)
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
-        a = offdiag_alignment[Symbol(source_e)]
+        a = offdiag_alignment[entity_as_symbol(source_e)]
         if length(a) > 0
             @assert maximum(a) <= length(lsys.jac_buffer)
         end

@@ -71,6 +71,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     data[:distributed_residual] = pzeros(dof_partition)
     data[:distributed_cell_buffer] = pzeros(partition)
     data[:distributed_residual_buffer] = pzeros(dof_partition)
+    data[:distributed_solution_buffer] = pzeros(dof_partition)
     data[:model] = representative_model
 
     return PArraySimulator(backend, data)
@@ -115,15 +116,32 @@ function Jutul.simulate_parray(case::JutulCase, partition, backend::PArrayBacken
     return result
 end
 
-function Jutul.partition_distributed(N, w;
-    comm = MPI.COMM_WORLD,
-    nc = maximum(vec(N)),
-    np,
-    kwarg...
+function Jutul.partition_distributed(N, edge_weights, node_weights = missing;
+        comm = MPI.COMM_WORLD,
+        nc = maximum(vec(N)),
+        np,
+        partitioner = MetisPartitioner(),
+        groups = [Int[]],
+        kwarg...
     )
     root = 0
     if MPI.Comm_rank(comm) == root
-        p = Jutul.partition(N, np, w; kwarg...)
+        if ismissing(node_weights)
+            node_weights = fill(1, nc)
+            for group in groups
+                for g in group
+                    node_weights[g] = 2
+                end
+            end
+        end
+        p = Jutul.partition_hypergraph(N, np, partitioner;
+            num_nodes = nc,
+            edge_weights = edge_weights,
+            node_weights = node_weights,
+            groups = groups,
+            kwarg...
+        )
+        p = Int.(p)
         @assert length(p) == nc "Expected length of partition to be $nc, was $(length(p))."
     else
         p = Array{Int}(undef, nc)
