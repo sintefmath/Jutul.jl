@@ -158,7 +158,7 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; sol
             update_secondary = true,
             vararg...
         )
-        (e, Int(conv), report)
+        return (e, Int(conv), report)
     end
     errors, converged, reports = tuple_of_arrays(out)
 
@@ -175,6 +175,7 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; sol
         for k in [:secondary_time, :equations_time, :linear_system_time, :convergence_time]
             report[k] += subrep[k]
         end
+        nothing
     end
     # Proceed to linear solve
     if should_solve
@@ -184,6 +185,7 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; sol
                 Jutul.get_simulator_storage(sim),
                 Jutul.get_simulator_model(sim)
             )
+            nothing
         end
         report[:linear_solver] = res
         report[:linear_solve_time] = t_solved
