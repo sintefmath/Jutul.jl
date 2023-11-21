@@ -182,7 +182,7 @@ function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing
             for (statek, statev) in pairs(state)
                 outer_state[statek] = as_value(statev)
             end
-            outer_state[mod_k], = create_mock_state(state[mod_k], k, entities)
+            outer_state[mod_k] = create_mock_state(state[mod_k], k, entities)
             # Apply the function
             f_ad = F(outer_state)
 

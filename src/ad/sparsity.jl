@@ -15,39 +15,64 @@ end
 unpack_tag(A::AbstractArray, arg...) = unpack_tag(eltype(A), arg...)
 unpack_tag(::Any, arg...) = nothing
 
+struct SparsityTracingWrapper{T, N, D} <: AbstractArray{T, N}
+    data::Array{D, N}
+end
+
+"""
+    SparsityTracingWrapper(x::AbstractArray{T, N}) where {T, N}
+
+Create a sparsity tracing wrapper for a numeric array. This wrapped array
+produces outputs that have the same value as the wrapped type, but contains a
+SparsityTracing seeded value with seed equal to the column index (if matrix) or
+linear index (if vector).
+"""
+function SparsityTracingWrapper(x::AbstractArray{T, N}) where {T, N}
+    return SparsityTracingWrapper{Float64, N, T}(x)
+end
+
+Base.parent(A::SparsityTracingWrapper) = A.data
+Base.size(A::SparsityTracingWrapper) = size(A.data)
+Base.axes(A::SparsityTracingWrapper) = axes(A.data)
+
+function Base.getindex(A::SparsityTracingWrapper, i, j)
+    return as_tracer(A.data[i, j], j)
+end
+
+function Base.getindex(A::SparsityTracingWrapper{T, 2, D}, ix) where {T, D}
+    n, m = size(A)
+    i = ix ÷ m + 1
+    j = mod(ix-1, m)+1
+    return as_tracer(A.data[i, j], j)
+end
+
+function Base.getindex(A::SparsityTracingWrapper{T, 1, D}, i) where {T, D}
+    return as_tracer(A.data[i], i)
+end
+
+function as_tracer(x::Real, leaf_init)
+    return Jutul.ST.ADval{Float64}(value(x), Jutul.ST.DerivLeaf(leaf_init))
+end
+
+function as_tracer(x, leaf_init)
+    return x
+end
+
 function create_mock_state(state, tag, entities = ad_entities(state))
     mock_state = JutulStorage()
     n = entities[tag].n
-    tracer = ST.create_advec(ones(n));
     for k in keys(state)
         v = state[k]
         if unpack_tag(v) == tag
             # Assign mock value with tracer
-            new_v = as_tracer(v, tracer)
+            new_v = SparsityTracingWrapper(v)
         else
             # Assign mock value as doubles
             new_v = as_value(v)
         end
         mock_state[k] = new_v
     end
-    return (mock_state, tracer)
-end
-
-function as_tracer(x::AbstractVector, tracer)
-    out = ST.create_advec(value(x))
-    @assert eltype(out) == eltype(tracer)
-    return out
-end
-
-function as_tracer(x::AbstractMatrix, tracer)
-    # Repeat the process for each row - in Jutul, each row corresponds to the same entity
-    tmp = map(i -> as_tracer(vec(x[i, :]), tracer)', 1:size(x, 1))
-    return vcat(tmp...)
-end
-
-function as_tracer(x, tracer)
-    # A bit dangerous - should be overloaded for complicated types that can contain AD!
-    return x
+    return mock_state
 end
 
 function ad_entities(state)
@@ -77,13 +102,11 @@ end
 # determine_sparsity(state, tag);
 ##
 function determine_sparsity(F!, n, state, state0, tag, entities, N = entities[tag].n)
-    mstate, tracer = create_mock_state(state, tag, entities)
-    mstate0, = create_mock_state(state0, tag, entities)
+    mstate = create_mock_state(state, tag, entities)
+    mstate0 = create_mock_state(state0, tag, entities)
 
-    out = similar(tracer, n)
+    out = ST.create_advec(zeros(n))
     J = [Vector{Int64}() for i in 1:N]
-    # @batch threadlocal = similar(tracer, n) for i = 1:N
-    #    out = threadlocal
     for i in 1:N
         @inbounds F!(out, mstate, mstate0, i)
         # Take the sum over all return values to reduce to scalar.
@@ -100,11 +123,11 @@ function determine_sparsity_simple(F, model, state, state0 = nothing)
     entities = ad_entities(state)
     sparsity = Dict()
     for (k, v) in entities
-        mstate, = create_mock_state(state, k, entities)
+        mstate = create_mock_state(state, k, entities)
         if isnothing(state0)
             f_ad = F(mstate)
         else
-            mstate0, = create_mock_state(state0, k, entities)
+            mstate0 = create_mock_state(state0, k, entities)
             f_ad = F(mstate, mstate0)
         end
         V = sum(f_ad)
