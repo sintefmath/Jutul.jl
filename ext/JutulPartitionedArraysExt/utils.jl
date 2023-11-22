@@ -49,6 +49,8 @@ function partition_boundary(N, p; np = max(p), nc = maximum(N))
             end
         end
         unique!(bnd)
+        # @info "Block $i/$np has interior: $(sum(interior_cells)) bnd: $(length(bnd))"
+        bnd
     end
     return boundary
 end

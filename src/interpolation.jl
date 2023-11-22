@@ -38,7 +38,7 @@ struct LinearInterpolant{V}
     F::V
     function LinearInterpolant(X::T, F::T; static = false) where T<:AbstractVector
         @assert length(X) == length(F)
-        @assert issorted(X) "Interpolation inputs must be sorted"
+        @assert issorted(X) "Interpolation inputs must be sorted: X = $X"
         if static
             n = length(X)
             T_el = eltype(X)

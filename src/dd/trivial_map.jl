@@ -1,16 +1,16 @@
 @enum EntityStatus Inner Boundary NotPresent
 
-function index_map(index, ::TrivialGlobalMap, from_set::AbstractVariableSet, to_set::AbstractVariableSet, c::JutulEntity)
+@inline function index_map(index, ::TrivialGlobalMap, from_set::AbstractVariableSet, to_set::AbstractVariableSet, c::JutulEntity)
     # The trivial map always gives the same index
     return index
 end
 
-function entity_status(index, ::TrivialGlobalMap, var_type::AbstractVariableSet, ::JutulEntity)
+@inline function entity_status(index, ::TrivialGlobalMap, var_type::AbstractVariableSet, ::JutulEntity)
     # Trivial map means nothing is on the boundary or missing
     return Inner
 end
 
-function is_local_boundary(index, m, var_type, e::JutulEntity)
+@inline function is_local_boundary(index, m, var_type, e::JutulEntity)
     return entity_status(index, m, var_type, e) == Boundary
 end
 
