@@ -27,9 +27,42 @@ function submodel(model::SimulationModel, p_i::AbstractVector; context = model.c
     transfer_vars!(new_model.primary_variables, model.primary_variables)
     transfer_vars!(new_model.secondary_variables, model.secondary_variables)
     transfer_vars!(new_model.parameters, model.parameters)
+
+    new_data_domain = new_model.data_domain
+    old_data_domain = model.data_domain
+    transfer_data_domain_values!(new_data_domain, old_data_domain, global_map(new_model))
     return new_model
 end
 
+function transfer_data_domain_values!(new_data_domain::DataDomain, old_data_domain::DataDomain, m::FiniteVolumeGlobalMap)
+    transfer_data_domain_values!(new_data_domain, old_data_domain, Cells(), m.cells)
+    transfer_data_domain_values!(new_data_domain, old_data_domain, Faces(), m.faces)
+    return new_data_domain
+end
+
+function transfer_data_domain_values!(new_data_domain::DataDomain, old_data_domain::DataDomain, m::TrivialGlobalMap)
+    for (k, v) in pairs(old_data_domain)
+        e = associated_entity(old_data_domain, k)
+        setindex!(new_data_domain, copy(first(v)), k, e)
+    end
+    return new_data_domain
+end
+
+function transfer_data_domain_values!(new_data_domain::DataDomain, old_data_domain::DataDomain, e::JutulEntity, e_ix)
+    for (k, v_pair) in pairs(old_data_domain)
+        v, e_i = v_pair
+        if e_i != e
+            continue
+        end
+        if v isa AbstractVector
+            subv = v[e_ix]
+        else
+            subv = v[:, e_ix]
+        end
+        setindex!(new_data_domain, subv, k, e)
+    end
+    return new_data_domain
+end
 
 function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg...)
     p = main_partition(mp)
