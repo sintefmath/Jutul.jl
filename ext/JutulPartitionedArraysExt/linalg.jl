@@ -10,7 +10,7 @@ function unit_diagonalize!(r, J::SparseMatrixCSC, n_self)
     end
     for i in (n_self+1:length(r))
         r[i] = zero(eltype(r))
-        J[i, i] = one(T)
+        J[i, i] = -one(T)
     end
 end
 
