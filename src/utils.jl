@@ -856,3 +856,121 @@ function jutul_output_path(name = missing; subfolder = "jutul", basedir = missin
     end
     return final_pth
 end
+
+
+function get_step_report_errors(k::Symbol, step_reports)
+    e = first(step_reports)[:errors][k]
+    data = OrderedDict()
+    for (ix, rep) in enumerate(step_reports)
+        e = rep[:errors][k]
+        for equation in e
+            eq_label = equation.name
+            for (crit_label, crit) in pairs(equation.criterions)
+                t = join(crit.names, ", ")
+                label = "$crit_label ($t)"
+                sublabel = "$eq_label"
+                key = (label, sublabel)
+
+                local_error = crit.errors
+                if length(local_error) == 1
+                    local_error = only(local_error)
+                end
+                if haskey(data, key)
+                    push!(data[key], local_error)
+                else
+                    data[key] = [local_error]
+                end
+            end
+        end
+    end
+    data
+end
+
+"""
+    merge_step_report_errors(data; fn = max)
+
+Merge step reports errors of the same type using a pair wise reduction (default: max)
+"""
+function merge_step_report_errors(data; fn = max)
+    new_data = similar(data[1])
+
+    for d in data
+        for (k, vals) in d
+            if haskey(new_data, k)
+                new_vals = new_data[k]
+                @assert length(new_vals) == length(vals)
+                for i in eachindex(new_vals)
+                    new_vals[i] = fn.(new_vals[i], vals[i])
+                end
+                new_data[k] = new_vals
+            else
+                new_data[k] = copy(vals)
+            end
+        end
+    end
+    return new_data
+end
+
+function step_report_convergence_matrix(step_reports, groups = missing)
+    if ismissing(groups)
+        mkeys = keys(step_reports[1][:errors])
+        groups = [(g, [g]) for g in mkeys]
+    end
+    n = 0
+    m = length(step_reports)
+    alldata = []
+    for (gname, gkeys) in groups
+        data = map(x -> get_step_report_errors(x, step_reports), gkeys)
+        res = merge_step_report_errors(data)
+        rkeys = keys(res)
+        n += length(rkeys)
+        push!(alldata, res)
+    end
+    data = Matrix{Any}(undef, m, n)
+    ix = 1
+    group_index = 1
+    labels = String[]
+    sublabels = String[]
+    grouplabels = String[]
+    for (gname, gkeys) in groups
+        d = alldata[group_index]
+        for (i, key) in enumerate(keys(d))
+            names, equation = key
+            push!(labels, names)
+            push!(sublabels, equation)
+            push!(grouplabels, "$gname")
+            data[:, ix] .= d[key]
+            ix += 1
+        end
+        group_index += 1
+    end
+    (data = data, names = labels, equations = sublabels, groups = grouplabels)
+end
+
+function print_step_report_convergence_matrix(step_reports, arg...; kwarg...)
+    print_step_report_convergence_matrix!(stdout, step_reports, arg...; kwarg...)
+end
+
+function print_step_report_convergence_matrix!(io, step_reports, groups = missing; show_it = true)
+    print_num(x) = @sprintf("%1.2e", x)
+    function fmt(val::Base.AbstractVecOrTuple, i, j)
+        join(map(print_num, val), " │ ")
+    end
+    function fmt(val::Real, i, j)
+        print_num(val)
+    end
+    mat, names, equations, groups = step_report_convergence_matrix(step_reports, groups)
+    subheader = map((x, y) -> "$x: $y", groups, equations)
+    if show_it
+        rl = 1:size(mat, 1)
+    else
+        rl = nothing
+    end
+
+    karg = (formatters = fmt, header = (names, subheader), alignment = :c, row_labels = rl)
+    if io == stdout
+        pretty_table(mat; karg...)
+    else
+        pretty_table(io, mat; karg...)
+    end
+end
