@@ -951,7 +951,7 @@ function print_step_report_convergence_matrix(step_reports, arg...; kwarg...)
     print_step_report_convergence_matrix!(stdout, step_reports, arg...; kwarg...)
 end
 
-function print_step_report_convergence_matrix!(io, step_reports, groups = missing; show_it = true)
+function print_step_report_convergence_matrix!(io, step_reports, groups = missing; show_it = true, kwarg...)
     print_num(x) = @sprintf("%1.2e", x)
     function fmt(val::Base.AbstractVecOrTuple, i, j)
         join(map(print_num, val), " │ ")
@@ -967,7 +967,7 @@ function print_step_report_convergence_matrix!(io, step_reports, groups = missin
         rl = nothing
     end
 
-    karg = (formatters = fmt, header = (names, subheader), alignment = :c, row_labels = rl)
+    karg = (formatters = fmt, header = (names, subheader), alignment = :c, row_labels = rl, kwarg...)
     if io == stdout
         pretty_table(mat; karg...)
     else
