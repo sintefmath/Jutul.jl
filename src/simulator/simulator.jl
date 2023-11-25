@@ -628,7 +628,9 @@ function apply_nonlinear_strategy!(sim, dt, forces, it, max_iter, cfg, e, step_r
     end
     if failure
         report[:failure_message] = reason
-        @warn reason
+        if cfg[:info_level] > 0
+            @warn reason
+        end
     end
     report[:failure] = failure
     cut_crit = cfg[:cutting_criterion]
