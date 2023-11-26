@@ -227,6 +227,72 @@ function linear_operator(block::LinearizedBlock; skip_red = false)
     return LinearOperator(block.jac)
 end
 
+function apply_left_diagonal_scaling!(M::SparseMatrixCSC, D::AbstractVector)
+    n = length(D)
+    @assert size(M, 1) == n "$(size(M, 1)) != $n"
+    nzval = nonzeros(M)
+    rows = rowvals(M)
+    for col in 1:size(M, 2)
+        for pos in nzrange(M, col)
+            row = rows[pos]
+            nzval[pos] = D[row]*nzval[pos]
+        end
+    end
+    return M
+end
+
+function apply_left_diagonal_scaling!(M::AbstractVector, D::AbstractVector)
+    @assert length(M) == length(D)
+    for i in eachindex(M)
+        M[i] = D[i]*M[i]
+    end
+    return M
+end
+
+function apply_scaling_to_linearized_system!(lsys::LinearizedSystem, F, type::Symbol)
+    if type == :diagonal
+        F = diagonal_inverse_scaling!(lsys, F)
+        apply_left_diagonal_scaling!(lsys.jac, F)
+        apply_left_diagonal_scaling!(lsys.r, F)
+    else
+        @assert type == :none
+    end
+    return (lsys, F)
+end
+
+function apply_scaling_to_linearized_system!(lsys::LinearizedBlock, F, type::Symbol)
+    if type == :diagonal
+        @assert !isnothing(F)
+        apply_left_diagonal_scaling!(lsys.jac, F)
+    end
+    return (lsys, F)
+end
+
+function diagonal_inverse_scaling!(lsys::LinearizedSystem, F)
+    J = lsys.jac
+    T = eltype(J)
+    if isnothing(F)
+        n = size(J, 1)
+        F = Vector{T}(undef, n)
+    end
+    return diagonal_inverse_scaling!(J, F)
+end
+
+function diagonal_inverse_scaling!(A, F)
+    T = eltype(A)
+    for i in eachindex(F)
+        A_ii = A[i, i]
+        if A_ii ≈ zero(T)
+            F_i = one(T)
+        else
+            F_i = inv(A_ii)
+        end
+        F_i = one(T)
+        F[i] = F_i
+    end
+    return F
+end
+
 # function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorLayout}; skip_red = false)
 #     # Matrix is equation major.
 #     # Row (and output) is equation major.
