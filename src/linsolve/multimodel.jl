@@ -188,7 +188,7 @@ function linear_system_context(model, sys::MultiLinearizedSystem)
     return ctx
 end
 
-function apply_scaling_to_linearized_system!(lsys::MultiLinearizedSystem, F, type::Symbol)
+function apply_scaling_to_linearized_system!(lsys::MultiLinearizedSystem, F, type::Symbol, dt)
     if type != :none
         n = number_of_subsystems(lsys)
         if isnothing(F)
@@ -197,7 +197,7 @@ function apply_scaling_to_linearized_system!(lsys::MultiLinearizedSystem, F, typ
         end
         for i in 1:n
             diag_sys = lsys[i, i]
-            diag_sys, F[i] = apply_scaling_to_linearized_system!(diag_sys, F[i], type)
+            diag_sys, F[i] = apply_scaling_to_linearized_system!(diag_sys, F[i], type, dt)
         end
 
         for i in 1:n
@@ -207,14 +207,7 @@ function apply_scaling_to_linearized_system!(lsys::MultiLinearizedSystem, F, typ
                 end
                 block = lsys[i, j]
                 F_ij = F[i]
-                n_b = size(block.jac, 1)
-                n_f = length(F_ij)
-                if n_b != n_f
-                    @assert mod(n_b, n_f) == 0
-                    bz = n_b ÷ n_f
-                    F_ij = unsafe_reinterpret(Float64, F_ij, n_b)
-                end
-                apply_scaling_to_linearized_system!(block, F_ij, type)
+                apply_scaling_to_linearized_system!(block, F_ij, type, dt)
             end
         end
     end

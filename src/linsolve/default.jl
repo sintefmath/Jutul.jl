@@ -289,7 +289,19 @@ function apply_left_diagonal_scaling!(M::AbstractVector, D::AbstractVector)
     return M
 end
 
-function apply_scaling_to_linearized_system!(lsys::LinearizedSystem, F, type::Symbol)
+function apply_scalar_scaling!(M::AbstractVector, w::Real)
+    for i in eachindex(M)
+        M[i] = w*M[i]
+    end
+    return M
+end
+
+function apply_scalar_scaling!(M::AbstractSparseMatrix, w::Real)
+    apply_scalar_scaling!(nonzeros(M), w)
+    return M
+end
+
+function apply_scaling_to_linearized_system!(lsys::LinearizedSystem, F, type::Symbol, dt)
     if type == :diagonal
         if isnothing(F)
             T = eltype(lsys.dx_buffer)
@@ -299,16 +311,21 @@ function apply_scaling_to_linearized_system!(lsys::LinearizedSystem, F, type::Sy
         F = diagonal_inverse_scaling!(lsys, F)
         apply_left_diagonal_scaling!(lsys.jac, F)
         apply_left_diagonal_scaling!(vec(lsys.r_buffer), F)
+    elseif type == :dt
+        apply_scalar_scaling!(lsys.jac, dt)
+        apply_scalar_scaling!(vec(lsys.r_buffer), dt)
     else
         @assert type == :none
     end
     return (lsys, F)
 end
 
-function apply_scaling_to_linearized_system!(lsys::LinearizedBlock, F, type::Symbol)
+function apply_scaling_to_linearized_system!(lsys::LinearizedBlock, F, type::Symbol, dt)
     if type == :diagonal
         @assert !isnothing(F)
         apply_left_diagonal_scaling!(lsys.jac, F)
+    elseif type == :dt
+        apply_scalar_scaling!(lsys.jac, dt)
     end
     return (lsys, F)
 end

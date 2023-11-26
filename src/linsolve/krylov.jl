@@ -33,6 +33,8 @@ mutable struct GenericKrylov
     r_norm
     config::IterativeSolverConfig
     function GenericKrylov(solver = :gmres; scaling = :none, preconditioner = nothing, kwarg...)
+        @assert scaling == :diagonal || scaling == :none || scaling == :dt
+        @info "$scaling chosen"
         new(solver, scaling, preconditioner, nothing, nothing, nothing, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
@@ -79,7 +81,7 @@ function linear_solve!(sys::LSystem,
     cfg = krylov.config
     prec = krylov.preconditioner
     Ft = float_type(model.context)
-    sys = krylov_scale_system!(sys, krylov)
+    sys = krylov_scale_system!(sys, krylov, dt)
     t_prep = @elapsed @tic "prepare" prepare_linear_solve!(sys)
     op = linear_operator(sys)
     t_prec = @elapsed @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder, executor)
@@ -162,8 +164,8 @@ function linear_solve!(sys::LSystem,
     return linear_solve_return(solved, n, stats, prepare = t_prec + t_prep)
 end
 
-function krylov_scale_system!(sys, krylov::GenericKrylov)
-    sys, krylov.storage_scaling = apply_scaling_to_linearized_system!(sys, krylov.storage_scaling, krylov.scaling)
+function krylov_scale_system!(sys, krylov::GenericKrylov, dt)
+    sys, krylov.storage_scaling = apply_scaling_to_linearized_system!(sys, krylov.storage_scaling, krylov.scaling, dt)
     return sys
 end
 
