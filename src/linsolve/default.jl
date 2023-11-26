@@ -326,7 +326,7 @@ function diagonal_inverse_scaling!(A::AbstractSparseMatrix{T, Int}, F) where T<:
     for i in 1:n
         A_ii = A[i, i]
         for j in 1:bz
-            F[(i-1)*bz + j] = inv(A_ii[j, j])
+            F[(i-1)*bz + j] = 1.0/abs(A_ii[j, j])
         end
     end
     return F
@@ -339,7 +339,7 @@ function diagonal_inverse_scaling!(A::AbstractSparseMatrix, F)
         if A_ii ≈ 0
             A_ii = 1.0
         else
-            A_ii = 1.0/A_ii
+            A_ii = 1.0/abs(A_ii)
         end
         F[i] = A_ii
     end
