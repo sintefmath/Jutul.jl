@@ -143,9 +143,15 @@ function ilu0_factor!(L, U, D, A, active = 1:size(A, 1))
     end
 end
 
-@inline Base.@propagate_inbounds diagonal_inverse(D::SparseVector, global_index, local_index) = nonzeros(D)[local_index]
-@inline Base.@propagate_inbounds diagonal_inverse(D, global_index, local_index) = D[global_index]
-@inline diagonal_inverse(::Nothing, global_index, local_index) = 1.0
+@inline Base.@propagate_inbounds function apply_diagonal_inverse(D::SparseVector, global_index, local_index, v)
+    return nonzeros(D)[local_index]*v
+end
+
+@inline Base.@propagate_inbounds function apply_diagonal_inverse(D, global_index, local_index, v)
+    return D[global_index]*v
+end
+
+@inline apply_diagonal_inverse(::Nothing, global_index, local_index, v) = v
 
 @inline function invert_row!(x, M, D, b, row, local_index)
     col = colvals(M)
@@ -156,7 +162,7 @@ end
         k = col[j]
         v -= nz[j]*x[k]
     end
-    @inbounds x[row] = diagonal_inverse(D, row, local_index)*v
+    @inbounds x[row] = apply_diagonal_inverse(D, row, local_index, v)
 end
 
 function forward_substitute!(x, M, b, order = 1:length(b), D = nothing)
