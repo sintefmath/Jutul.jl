@@ -247,6 +247,26 @@ function apply_left_diagonal_scaling!(M::SparseMatrixCSC{SMatrix{N, N, T, NN}, I
     return M
 end
 
+function apply_left_diagonal_scaling!(M::StaticSparsityMatrixCSR{SMatrix{N, N, T, NN}, Int}, D::AbstractVector) where {N, T, NN}
+    n = length(D)
+    nrow, ncol = size(M)
+    nzval = nonzeros(M)
+    cols = colvals(M)
+
+    D_mat = MMatrix{N, N, T, NN}(I)
+    for row in 1:nrow
+        for k in 1:N
+            D_mat[k, k] = D[(row-1)*N + k]
+        end
+        for pos in nzrange(M, row)
+            col = cols[pos]
+            M_ij = nzval[pos]
+            nzval[pos] = D_mat*nzval[pos]
+        end
+    end
+    return M
+end
+
 function apply_left_diagonal_scaling!(M::SparseMatrixCSC, D::AbstractVector)
     n = length(D)
     nrow, ncol = size(M)
