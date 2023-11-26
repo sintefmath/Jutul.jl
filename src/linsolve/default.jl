@@ -227,12 +227,32 @@ function linear_operator(block::LinearizedBlock; skip_red = false)
     return LinearOperator(block.jac)
 end
 
-function apply_left_diagonal_scaling!(M::SparseMatrixCSC, D::AbstractVector)
+function apply_left_diagonal_scaling!(M::SparseMatrixCSC{SMatrix{N, N, T, NN}, Int}, D::AbstractVector) where {N, T, NN}
     n = length(D)
-    @assert size(M, 1) == n "$(size(M, 1)) != $n"
+    nrow, ncol = size(M)
     nzval = nonzeros(M)
     rows = rowvals(M)
-    for col in 1:size(M, 2)
+
+    D_mat = MMatrix{N, N, T, NN}(I)
+    for col in 1:ncol
+        for pos in nzrange(M, col)
+            row = rows[pos]
+            M_ij = nzval[pos]
+            for k in 1:N
+                D_mat[k, k] = D[(row-1)*N + k]
+            end
+            nzval[pos] = D_mat*nzval[pos]
+        end
+    end
+    return M
+end
+
+function apply_left_diagonal_scaling!(M::SparseMatrixCSC, D::AbstractVector)
+    n = length(D)
+    nrow, ncol = size(M)
+    nzval = nonzeros(M)
+    rows = rowvals(M)
+    for col in 1:ncol
         for pos in nzrange(M, col)
             row = rows[pos]
             nzval[pos] = D[row]*nzval[pos]
@@ -251,9 +271,14 @@ end
 
 function apply_scaling_to_linearized_system!(lsys::LinearizedSystem, F, type::Symbol)
     if type == :diagonal
+        if isnothing(F)
+            T = eltype(lsys.dx_buffer)
+            n_diag = length(lsys.dx_buffer)
+            F = zeros(T, n_diag)
+        end
         F = diagonal_inverse_scaling!(lsys, F)
         apply_left_diagonal_scaling!(lsys.jac, F)
-        apply_left_diagonal_scaling!(lsys.r, F)
+        apply_left_diagonal_scaling!(vec(lsys.r_buffer), F)
     else
         @assert type == :none
     end
@@ -270,25 +295,33 @@ end
 
 function diagonal_inverse_scaling!(lsys::LinearizedSystem, F)
     J = lsys.jac
-    T = eltype(J)
-    if isnothing(F)
-        n = size(J, 1)
-        F = Vector{T}(undef, n)
-    end
     return diagonal_inverse_scaling!(J, F)
 end
 
-function diagonal_inverse_scaling!(A, F)
+function diagonal_inverse_scaling!(A::AbstractSparseMatrix{T, Int}, F) where T<:StaticMatrix
+    n = size(A, 1)
+    m = length(F)
+    bz = m ÷ n
+    @assert bz > 0
+    for i in 1:n
+        A_ii = A[i, i]
+        for j in 1:bz
+            F[(i-1)*bz + j] = inv(A_ii[j, j])
+        end
+    end
+    return F
+end
+
+function diagonal_inverse_scaling!(A::AbstractSparseMatrix, F)
     T = eltype(A)
     for i in eachindex(F)
         A_ii = A[i, i]
-        if A_ii ≈ zero(T)
-            F_i = one(T)
+        if A_ii ≈ 0
+            A_ii = 1.0
         else
-            F_i = inv(A_ii)
+            A_ii = 1.0/A_ii
         end
-        F_i = one(T)
-        F[i] = F_i
+        F[i] = A_ii
     end
     return F
 end
