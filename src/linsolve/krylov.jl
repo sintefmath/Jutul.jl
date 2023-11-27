@@ -34,7 +34,6 @@ mutable struct GenericKrylov
     config::IterativeSolverConfig
     function GenericKrylov(solver = :gmres; scaling = :none, preconditioner = nothing, kwarg...)
         @assert scaling == :diagonal || scaling == :none || scaling == :dt
-        @info "$scaling chosen"
         new(solver, scaling, preconditioner, nothing, nothing, nothing, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
