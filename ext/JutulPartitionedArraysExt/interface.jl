@@ -3,6 +3,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         backend = JuliaPArrayBackend(),
         order = :default,
         simulator_constructor = (m; kwarg...) -> Simulator(m; kwarg...),
+        primary_buffer = false,
         kwarg...
         )
     data = JutulStorage()
@@ -51,12 +52,8 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         # Boundary padding has been added, update local subset
         missing_part = setdiff(main_part.subsets[i], p)
         @assert length(missing_part) == 0
-        if true
-            main_part.subsets[i] = p
-            m = submodel(model, full_partition, i)
-        else
-            m = submodel(model, p)
-        end
+        main_part.subsets[i] = p
+        m = submodel(model, full_partition, i)
         s0 = substate(state0, model, m, :variables)
         prm = substate(parameters, model, m, :parameters)
         sim = simulator_constructor(m, state0 = s0, parameters = prm, executor = exec)
@@ -73,7 +70,17 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     data[:distributed_residual_buffer] = pzeros(dof_partition)
     data[:distributed_solution_buffer] = pzeros(dof_partition)
     data[:model] = representative_model
-
+    if primary_buffer
+        if representative_model isa MultiModel
+            l = Jutul.main_partition_label(full_partition)
+            main_model = representative_model[l]
+        else
+            main_model = representative_model
+        end
+        T_primary = Jutul.scalarized_primary_variable_type(main_model, main_model.primary_variables)
+        pvar_buf = pzeros(T_primary, partition)
+        data[:distributed_primary_variables] = pvar_buf
+    end
     return PArraySimulator(backend, data)
 end
 
