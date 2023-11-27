@@ -220,9 +220,13 @@ function Jutul.retrieve_output!(sim::PArraySimulator, states, reports, config, n
 end
 
 function Jutul.simulator_reports_per_step(psim::PArraySimulator)
-    n = 0
-    map(psim.storage[:simulators]) do s
-        n += 1
+    if psim.backend isa MPI_PArrayBackend
+        n = 0
+        map(psim.storage[:simulators]) do s
+            n += 1
+        end
+    else
+        n = 1
     end
     return n
 end
