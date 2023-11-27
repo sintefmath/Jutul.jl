@@ -1,3 +1,14 @@
+struct ScalarizedJutulVariables{T}
+    vals::T
+end
+
+Base.getindex(v::ScalarizedJutulVariables, i) = Base.getindex(v.vals, i)
+Base.length(v::ScalarizedJutulVariables) = Base.length(v.vals)
+
+function Base.zero(v::ScalarizedJutulVariables{T}) where T
+    return ScalarizedJutulVariables{T}(map(zero, v.vals))
+end
+
 """
     scalarized_primary_variable_type(model, var::Jutul.ScalarVariable)
 
@@ -10,7 +21,7 @@ end
 
 function scalarized_primary_variable_type(model, vars::Tuple)
     types = map(x -> scalarized_primary_variable_type(model, x), vars)
-    return Tuple{types...}
+    return ScalarizedJutulVariables{Tuple{types...}}
 end
 
 function scalarized_primary_variable_type(model, var::NamedTuple)
@@ -97,12 +108,12 @@ end
 
 Scalarize into array. See [scalarize_primary_variables](@ref) for more details.
 """
-function scalarize_primary_variables!(V::Vector{T}, model, state, pvars::NamedTuple) where T
+function scalarize_primary_variables!(V::Vector{ScalarizedJutulVariables{T}}, model, state, pvars::NamedTuple) where T
     pvars_def = values(pvars)
     pvars_keys = keys(pvars)
     for i in eachindex(V)
         val = map((k, d) -> scalarize_primary_variable(model, state[k], d, i), pvars_keys, pvars_def)
-        V[i] = val
+        V[i] = ScalarizedJutulVariables(val)
     end
     V
 end
