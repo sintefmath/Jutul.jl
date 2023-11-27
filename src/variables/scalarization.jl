@@ -9,6 +9,11 @@ function Base.zero(v::ScalarizedJutulVariables{T}) where T
     return ScalarizedJutulVariables{T}(map(zero, v.vals))
 end
 
+function Base.zero(::Type{ScalarizedJutulVariables{T}}) where T
+    t = tuple(T.parameters...)
+    return ScalarizedJutulVariables{T}(map(zero, t))
+end
+
 """
     scalarized_primary_variable_type(model, var::Jutul.ScalarVariable)
 
