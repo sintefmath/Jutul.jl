@@ -166,7 +166,7 @@ function Jutul.partition_distributed(N, edge_weights, node_weights = missing;
     return p
 end
 
-function Jutul.parray_synchronize_primary_variables(psim::PArraySimulator)
+function Jutul.parray_synchronize_primary_variables(psim::PArraySimulator; update_secondary = true)
     @assert haskey(psim.storage, :distributed_primary_variables)
     primary_buffer = psim.storage[:distributed_primary_variables]
     pvar_def = psim.storage[:distributed_primary_variables_def]
@@ -180,8 +180,21 @@ function Jutul.parray_synchronize_primary_variables(psim::PArraySimulator)
     consistent!(primary_buffer) |> wait
 
     map(simulators, local_values(primary_buffer)) do sim, pvar_vec
-        m, s = get_main_model(Jutul.get_simulator_model(sim), l, Jutul.get_simulator_storage(sim))
-        Jutul.descalarize_primary_variables!(s.primary_variables, m, pvar_vec)
+        model, s = get_main_model(Jutul.get_simulator_model(sim), l, Jutul.get_simulator_storage(sim))
+        Jutul.descalarize_primary_variables!(s.primary_variables, model, pvar_vec)
+
+        if update_secondary
+            # TODO: NB assumes that all secondary variables are cell wise.
+            n_own = sim.executor.data[:n_self]
+            n_total = length(pvar_vec)
+            state = s.state
+            # We own the first n_own values and these need not be updated. The
+            # ghost cells are now synchronized for primary and the dependent
+            # secondary variables in those cells should also be updated.
+            ghost_ix = (n_own+1):n_total
+            for (k, v) in pairs(model.secondary_variables)
+                Jutul.update_secondary_variable!(state[k], v, model, state, ghost_ix)
+            end
+        end
     end
 end
-
