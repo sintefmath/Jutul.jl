@@ -74,6 +74,15 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     if primary_buffer
         main_model, = get_main_model(representative_model, main_label)
         pvar_def = (; pairs(main_model.primary_variables)...)
+        e = missing
+        for (k, v) in pairs(pvar_def)
+            e_v = Jutul.associated_entity(v)
+            if ismissing(e)
+                e = e_v
+            else
+                @assert e == e_v "Distributed primary variables assuems that main model have same associated entity for primary variables ($e != $e_v)"
+            end
+        end
         T_primary = Jutul.scalarized_primary_variable_type(main_model, pvar_def)
         pvar_buf = pzeros(T_primary, partition)
         data[:distributed_primary_variables] = pvar_buf
