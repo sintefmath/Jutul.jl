@@ -70,18 +70,26 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     data[:distributed_residual_buffer] = pzeros(dof_partition)
     data[:distributed_solution_buffer] = pzeros(dof_partition)
     data[:model] = representative_model
+    data[:main_label] = main_label
     if primary_buffer
-        if representative_model isa MultiModel
-            l = Jutul.main_partition_label(full_partition)
-            main_model = representative_model[l]
-        else
-            main_model = representative_model
-        end
-        T_primary = Jutul.scalarized_primary_variable_type(main_model, main_model.primary_variables)
+        main_model, = get_main_model(representative_model, main_label)
+        pvar_def = (; pairs(main_model.primary_variables)...)
+        T_primary = Jutul.scalarized_primary_variable_type(main_model, pvar_def)
         pvar_buf = pzeros(T_primary, partition)
         data[:distributed_primary_variables] = pvar_buf
+        data[:distributed_primary_variables_def] = pvar_def
     end
     return PArraySimulator(backend, data)
+end
+
+function get_main_model(model, l, storage = nothing)
+    if model isa MultiModel
+        model = model[l]
+        if !isnothing(storage)
+            storage = storage[l]
+        end
+    end
+    return (model, storage)
 end
 
 function Jutul.MPI_PArrayBackend(; comm = MPI.COMM_WORLD)
@@ -158,4 +166,22 @@ function Jutul.partition_distributed(N, edge_weights, node_weights = missing;
     return p
 end
 
+function Jutul.parray_synchronize_primary_variables(psim::PArraySimulator)
+    @assert haskey(psim.storage, :distributed_primary_variables)
+    primary_buffer = psim.storage[:distributed_primary_variables]
+    pvar_def = psim.storage[:distributed_primary_variables_def]
+    simulators = psim.storage[:simulators]
+    l = psim.storage[:main_label]
+
+    map(simulators, local_values(primary_buffer)) do sim, pvar_vec
+        m, s = get_main_model(Jutul.get_simulator_model(sim), l, Jutul.get_simulator_storage(sim))
+        Jutul.scalarize_primary_variables!(pvar_vec, m, s.primary_variables, pvar_def)
+    end
+    consistent!(primary_buffer) |> wait
+
+    map(simulators, local_values(primary_buffer)) do sim, pvar_vec
+        m, s = get_main_model(Jutul.get_simulator_model(sim), l, Jutul.get_simulator_storage(sim))
+        Jutul.descalarize_primary_variables!(s.primary_variables, m, pvar_vec)
+    end
+end
 
