@@ -145,14 +145,28 @@ function Jutul.forces_for_timestep(psim::PArraySimulator, forces::Union{MPIArray
     return subforces
 end
 
-function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; solve = true, iteration = 1, vararg...)
+function Jutul.perform_step!(
+        simulator::PArraySimulator, dt, forces, config;
+        solve = true,
+        iteration = 1,
+        executor = Jutul.default_executor(),
+        vararg...
+    )
     s = simulator.storage
     simulators = s.simulators
     np = s.number_of_processes
     verbose = s.verbose
     configs = config[:configs]
     reports = map(simulators, configs, forces) do sim, config, f
-        return Jutul.perform_step_per_process_initial_update!(sim, dt, f, config, update_secondary = true)
+        return Jutul.perform_step_per_process_initial_update!(
+            sim, dt, f, config,
+            update_secondary = true,
+            executor = Jutul.simulator_executor(sim),
+            iteration = iteration
+        )
+    end
+    if haskey(s, :distributed_primary_variables)
+        Jutul.parray_synchronize_primary_variables(simulator)
     end
 
     out = map(simulators, configs, forces, reports) do sim, config, f, rep
@@ -161,6 +175,7 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; sol
             solve = false,
             report = rep,
             update_secondary = false,
+            executor = Jutul.simulator_executor(sim),
             vararg...
         )
         return (e, Int(conv))

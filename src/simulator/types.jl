@@ -33,6 +33,7 @@ function Simulator(model; extra_timing = false, executor = default_executor(), k
 end
 
 default_executor() = DefaultExecutor()
+simulator_executor(sim) = sim.executor
 
 function Simulator(case::JutulCase; kwarg...)
     return Simulator(case.model; state0 = deepcopy(case.state0), parameters = deepcopy(case.parameters), kwarg...)

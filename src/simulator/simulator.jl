@@ -436,6 +436,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg;
                     iteration = it,
                     relaxation = relaxation,
                     solve = do_solve,
+                    executor = simulator_executor(sim),
                     prev_report = step_report
         )
         if haskey(step_report, :failure_exception)

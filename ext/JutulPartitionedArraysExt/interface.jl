@@ -91,6 +91,12 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     return PArraySimulator(backend, data)
 end
 
+function Jutul.simulator_executor(sim::PArraySimulator)
+    # We do not return a PArrayExecutor since that is reserved for the inner
+    # simulators. The outer simulator should act like the default.
+    return Jutul.default_executor()
+end
+
 function get_main_model(model, l, storage = nothing)
     if model isa MultiModel
         model = model[l]
