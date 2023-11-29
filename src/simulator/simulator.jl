@@ -276,7 +276,7 @@ end
 
 function perform_step!(storage, model, dt, forces, config;
         executor = default_executor(),
-        iteration = NaN,
+        iteration::Int = 0,
         relaxation::Float64 = 1.0,
         update_secondary = nothing,
         solve = true,
@@ -387,6 +387,7 @@ end
 function perform_step_per_process_initial_update!(storage, model, dt, forces, config;
         executor = default_executor(),
         update_secondary = nothing,
+        iteration = 0,
         report = setup_ministep_report()
     )
     if isnothing(update_secondary)
