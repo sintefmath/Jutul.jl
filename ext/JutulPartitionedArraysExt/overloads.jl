@@ -151,16 +151,21 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; sol
     np = s.number_of_processes
     verbose = s.verbose
     configs = config[:configs]
-    out = map(simulators, configs, forces) do sim, config, f
+    reports = map(simulators, configs, forces) do sim, config, f
+        return Jutul.perform_step_per_process_initial_update!(sim, dt, f, config, update_secondary = true)
+    end
+
+    out = map(simulators, configs, forces, reports) do sim, config, f, rep
         e, conv, report = perform_step!(sim, dt, f, config;
             iteration = iteration,
             solve = false,
-            update_secondary = true,
+            report = rep,
+            update_secondary = false,
             vararg...
         )
-        return (e, Int(conv), report)
+        return (e, Int(conv))
     end
-    errors, converged, reports = tuple_of_arrays(out)
+    errors, converged = tuple_of_arrays(out)
 
     nconverged = sum(converged)
     all_processes_converged = nconverged == np

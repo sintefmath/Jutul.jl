@@ -280,17 +280,19 @@ function perform_step!(storage, model, dt, forces, config;
         relaxation::Float64 = 1.0,
         update_secondary = nothing,
         solve = true,
+        report = setup_ministep_report(),
         prev_report = missing
     )
     if isnothing(update_secondary)
         update_secondary = iteration > 1 || config[:always_update_secondary]
     end
-    report = setup_ministep_report()
     # Update the properties and equations
     rec = storage.recorder
     time = rec.recorder.time + dt
     t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
-    report[:secondary_time] = t_secondary
+    if update_secondary
+        report[:secondary_time] = t_secondary
+    end
     report[:equations_time] = t_eqs
     # Update the linearized system
     t_lsys = @elapsed begin
@@ -376,6 +378,25 @@ function perform_step_solve_impl!(report, storage, model, config, dt, iteration,
             rethrow(e)
         end
     end
+end
+
+function perform_step_per_process_initial_update!(sim::JutulSimulator, dt, forces, config; kwarg...)
+    return perform_step_per_process_initial_update!(sim.storage, sim.model, dt, forces, config; kwarg...)
+end
+
+function perform_step_per_process_initial_update!(storage, model, dt, forces, config;
+        executor = default_executor(),
+        update_secondary = nothing,
+        report = setup_ministep_report()
+    )
+    if isnothing(update_secondary)
+        update_secondary = iteration > 1 || config[:always_update_secondary]
+    end
+    @tic "secondary variables" if update_secondary
+        t_s = @elapsed update_secondary_variables!(storage, model)
+        report[:secondary_time] = t_s
+    end
+    return report
 end
 
 function setup_ministep_report(; kwarg...)
