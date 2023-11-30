@@ -569,8 +569,15 @@ states, reports = read_results(pth; read_states = true, read_reports = true)
 
 Read results from a given `output_path` provded to `simulate` or `simulator_config`.
 """
-function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}}(),
-                           read_reports = true, reports = [], range = nothing, name = nothing, verbose::Bool = true)
+function read_results(pth;
+        read_states = true,
+        states = Vector{Dict{Symbol, Any}}(),
+        read_reports = true,
+        reports = [],
+        range = nothing,
+        name = nothing,
+        verbose::Bool = true
+    )
     indices = valid_restart_indices(pth)
     if isnothing(name)
         subpaths = splitpath(pth)
@@ -588,7 +595,7 @@ function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}
     p = Progress(range[end]; enabled = verbose, desc = "Reading $name...")
     for i in range
         state, report = read_restart(pth, i; read_state = read_states, read_report = read_reports)
-        if isnothing(report)
+        if isnothing(report) && length(keys(state)) == 0
             break
         end
         if read_states
