@@ -69,11 +69,12 @@ end
 function scalarize_primary_variable(model, source_mat, var::Jutul.FractionVariables, index)
     n = degrees_of_freedom_per_entity(model, var)
     if n == 1
-        return value(source_mat[1, index])
+        scalar_v = value(source_mat[1, index])
     else
-        ix = tuple((1:n-1)...)
-        return map(i -> value(source_mat[i, index]), ix)
+        ix = tuple((1:n)...)
+        scalar_v = map(i -> value(source_mat[i, index]), ix)
     end
+    return scalar_v
 end
 
 function descalarize_primary_variable!(dest_array, model, V, var::Jutul.FractionVariables, index)
