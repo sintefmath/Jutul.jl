@@ -565,7 +565,9 @@ end
 
 export read_results
 """
-Read results from a given output_path provded to simulate or simulator_config
+states, reports = read_results(pth; read_states = true, read_reports = true)
+
+Read results from a given `output_path` provded to `simulate` or `simulator_config`.
 """
 function read_results(pth; read_states = true, states = Vector{Dict{Symbol, Any}}(),
                            read_reports = true, reports = [], range = nothing, name = nothing, verbose::Bool = true)
