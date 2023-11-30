@@ -57,22 +57,25 @@ function descalarize_primary_variable!(dest_array, model, V, var::Jutul.ScalarVa
 end
 
 function scalarized_primary_variable_type(model, var::Jutul.FractionVariables)
-    n = degrees_of_freedom_per_entity(model, var)
-    if n == 1
+    N = degrees_of_freedom_per_entity(model, var)
+    if N == 1
         T = Float64
     else
-        T = NTuple{n, Float64}
+        T = SVector{N, Float64}
     end
     return T
 end
 
 function scalarize_primary_variable(model, source_mat, var::Jutul.FractionVariables, index)
-    n = degrees_of_freedom_per_entity(model, var)
-    if n == 1
+    N = degrees_of_freedom_per_entity(model, var)
+    if N == 1
         scalar_v = value(source_mat[1, index])
     else
-        ix = tuple((1:n)...)
-        scalar_v = map(i -> value(source_mat[i, index]), ix)
+        tmp = @MVector zeros(N)
+        for i in 1:N
+            tmp[i] = value(source_mat[i, index])
+        end
+        scalar_v = SVector{N, Float64}(tmp)
     end
     return scalar_v
 end
