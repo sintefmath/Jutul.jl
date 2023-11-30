@@ -110,6 +110,8 @@ function Jutul.update_after_step!(psim::PArraySimulator, dt, forces; kwarg...)
         Jutul.update_after_step!(sim, dt, f; kwarg...)
         nothing
     end
+    # TODO: Fix output for this function.
+    return missing
 end
 
 function Jutul.get_output_state(psim::PArraySimulator)
