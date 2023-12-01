@@ -77,7 +77,8 @@ end
 function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = [], active_global = missing)
     @assert buffer == 0 || buffer == 1
     has_buffer_zone = buffer > 0
-    if has_buffer_zone && !ismissing(active_global)
+    global_boundary_present = has_buffer_zone && !ismissing(active_global)
+    if global_boundary_present
         # There's another buffer consideration to be aware of?
         @assert length(active_global) == nc
         keep = [false for i in eachindex(indices)]
@@ -166,6 +167,13 @@ function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = 
                 if gmap.cell_is_boundary[c]
                     is_boundary[i] = true
                 end
+            end
+        end
+    end
+    if global_boundary_present
+        for (cell, bnd) in zip(cells, is_boundary)
+            if !active_global[cell]
+                @assert bnd
             end
         end
     end
