@@ -4,35 +4,25 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
     tri = Vector{SVector{N, Int64}}()
     cell_index = Vector{Int64}()
     face_index = Vector{Int64}()
-    node_pts = m.node_points
-    T = eltype(node_pts)
 
     offset = 0
 
     dest = (cell_index, face_index, pts, tri)
-    function add_points!(e, faces)
-        for f in 1:count_entities(m, e)
-            C = zero(T)
-            nodes = faces.faces_to_nodes[f]
-            n = length(nodes)
-            for node in nodes
-                C += node_pts[node]
-            end
-            C /= n
-            offset = triangulate_stuff!(dest, f, faces.neighbors[f], C, nodes, node_pts, n; offset = offset, is_depth = is_depth)
-        end
+    for d in dest
+        # Assume hexahedral, 6 faces per cell, triangulated into 4 parts each
+        sizehint!(d, 24*number_of_cells(m))
     end
 
+    add_points!(e, e_def, offset) = triangulate_and_add_faces!(dest, m, e, e_def, offset = offset, is_depth = is_depth)
     if !outer
-        add_points!(Faces(), m.faces)
+        offset = add_points!(Faces(), m.faces, offset)
     end
-    add_points!(BoundaryFaces(), m.boundary_faces)
+    offset = add_points!(BoundaryFaces(), m.boundary_faces, offset)
 
     if flatten
         pts = plot_flatten_helper(pts)
         tri = plot_flatten_helper(tri)
     end
-
     mapper = (
                 Cells = (cell_data) -> cell_data[cell_index],
                 Faces = (face_data) -> face_data[face_index],
@@ -41,7 +31,24 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
     return (points = pts, triangulation = tri, mapper = mapper)
 end
 
-function triangulate_stuff!(dest, face, neighbors, C, nodes, node_pts, n; offset = 0, is_depth = true)
+function triangulate_and_add_faces!(dest, m, e, faces; offset = 0, is_depth = true)
+    node_pts = m.node_points
+    T = eltype(node_pts)
+    for f in 1:count_entities(m, e)
+        C = zero(T)
+        nodes = faces.faces_to_nodes[f]
+        n = length(nodes)
+        for node in nodes
+            C += node_pts[node]
+        end
+        C /= n
+        offset = triangulate_and_add_faces!(dest, f, faces.neighbors[f], C, nodes, node_pts, n; offset = offset, is_depth = is_depth)
+    end
+    return offset
+end
+
+
+function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts, n; offset = 0, is_depth = true)
     cell_index, face_index, pts, tri = dest
     new_vert_count = n + 1
     for cell in neighbors
