@@ -50,18 +50,31 @@ end
 
 function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts, n; offset = 0, is_depth = true)
     cell_index, face_index, pts, tri = dest
-    new_vert_count = n + 1
-    for cell in neighbors
-        if cell > 0
-            for i in 1:new_vert_count
+    if n == 4
+        for cell in neighbors
+            for i in 1:n
                 push!(cell_index, cell)
                 push!(face_index, face)
-                push!(pts, svector_local_point(C, i-1, nodes, node_pts, is_depth))
+                push!(pts, node_pts[nodes[i]])
             end
-            for i in 1:n
-                push!(tri, svector_cyclical_tesselation(n, i, offset))
+            push!(tri, SVector{3, Int}(offset+1, offset + 2, offset + 3))
+            push!(tri, SVector{3, Int}(offset+3, offset + 4, offset + 1))
+            offset += n
+        end
+    else
+        new_vert_count = n + 1
+        for cell in neighbors
+            if cell > 0
+                for i in 1:new_vert_count
+                    push!(cell_index, cell)
+                    push!(face_index, face)
+                    push!(pts, svector_local_point(C, i-1, nodes, node_pts, is_depth))
+                end
+                for i in 1:n
+                    push!(tri, svector_cyclical_tesselation(n, i, offset))
+                end
+                offset = offset + new_vert_count
             end
-            offset = offset + new_vert_count
         end
     end
     return offset
