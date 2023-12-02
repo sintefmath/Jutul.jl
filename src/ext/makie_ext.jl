@@ -6,7 +6,7 @@ export plot_cumulative_solve, plot_cumulative_solve!
 
 
 function plot_interactive(arg...; kwarg...)
-    check_plotting_availability()
+    check_plotting_availability(interactive = true)
     plot_interactive_impl(arg...; kwarg...)
 end
 
@@ -15,7 +15,7 @@ function plot_interactive_impl
 end
 
 function plot_multimodel_interactive(arg...; kwarg...)
-    check_plotting_availability()
+    check_plotting_availability(interactive = true)
     plot_multimodel_interactive_impl(arg...; kwarg...)
 end
 
@@ -61,7 +61,11 @@ function plot_cell_data_impl!
 
 end
 
-function check_plotting_availability(; throw = true)
+function plotting_check_interactive
+
+end
+
+function check_plotting_availability(; throw = true, interactive = false)
     ok = true
     try
         ok = check_plotting_availability_impl()
@@ -75,6 +79,9 @@ function check_plotting_availability(; throw = true)
         else
             ok = false
         end
+    end
+    if interactive
+        plotting_check_interactive()
     end
     return ok
 end
