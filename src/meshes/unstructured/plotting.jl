@@ -5,15 +5,23 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
     face_index = Vector{Int64}()
     node_pts = m.node_points
     T = eltype(node_pts)
-    function cyclical_tesselation(n)
-        c = ones(Int64, n)
+    function cyclical_tesselation(n, offset::Int)
         # Create a triangulation of face, assuming convexity
         # Each tri is two successive points on boundary connected to centroid
-        start = 2
-        stop = n+1
-        l = start:stop
-        r = [stop, (start:stop-1)...]
-        return hcat(l, c, r)
+        out = Matrix{Int}(undef, n, 3)
+        for i in 1:n
+            # First column i + 1
+            out[i, 1] = i + 1 + offset
+            # Second column: Always the center point
+            out[i, 2] = 1 + offset
+            # Third column: Wrap-around to first column
+            if i == 1
+                out[i, 3] = n + 1 + offset
+            else
+                out[i, 3] = i + offset
+            end
+        end
+        return out
     end
     offset = 0
 
@@ -44,8 +52,6 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
                     local_pts[i+1, d] = xyz
                 end
             end
-
-            local_tri = cyclical_tesselation(n)
             new_vert_count = n + 1
 
             for cell in faces.neighbors[f]
@@ -54,8 +60,9 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
                         push!(cell_index, cell)
                         push!(face_index, f)
                     end
+                    tri_cell = cyclical_tesselation(n, offset)::Matrix{Int}
                     push!(pts, local_pts)
-                    push!(tri, local_tri .+ offset)
+                    push!(tri, tri_cell)
 
                     offset = offset + new_vert_count
                 end
