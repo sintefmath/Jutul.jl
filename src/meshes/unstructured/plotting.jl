@@ -9,6 +9,7 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
 
     offset = 0
 
+    dest = (cell_index, face_index, pts, tri)
     function add_points!(e, faces)
         for f in 1:count_entities(m, e)
             C = zero(T)
@@ -18,21 +19,7 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
                 C += node_pts[node]
             end
             C /= n
-            new_vert_count = n + 1
-
-            for cell in faces.neighbors[f]
-                if cell > 0
-                    for i in 1:new_vert_count
-                        push!(cell_index, cell)
-                        push!(face_index, f)
-                        push!(pts, svector_local_point(C, i-1, nodes, node_pts, is_depth))
-                    end
-                    for i in 1:n
-                        push!(tri, svector_cyclical_tesselation(n, i, offset))
-                    end
-                    offset = offset + new_vert_count
-                end
-            end
+            offset = triangulate_stuff!(dest, f, faces.neighbors[f], C, nodes, node_pts, n; offset = offset, is_depth = is_depth)
         end
     end
 
@@ -52,6 +39,25 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
                 indices = (Cells = cell_index, Faces = face_index)
               )
     return (points = pts, triangulation = tri, mapper = mapper)
+end
+
+function triangulate_stuff!(dest, face, neighbors, C, nodes, node_pts, n; offset = 0, is_depth = true)
+    cell_index, face_index, pts, tri = dest
+    new_vert_count = n + 1
+    for cell in neighbors
+        if cell > 0
+            for i in 1:new_vert_count
+                push!(cell_index, cell)
+                push!(face_index, face)
+                push!(pts, svector_local_point(C, i-1, nodes, node_pts, is_depth))
+            end
+            for i in 1:n
+                push!(tri, svector_cyclical_tesselation(n, i, offset))
+            end
+            offset = offset + new_vert_count
+        end
+    end
+    return offset
 end
 
 function svector_cyclical_tesselation(n::Int, i::Int, offset::Int)
