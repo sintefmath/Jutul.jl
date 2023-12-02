@@ -6,33 +6,6 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
     face_index = Vector{Int64}()
     node_pts = m.node_points
     T = eltype(node_pts)
-    function cyclical_tesselation(n::Int, i::Int, offset::Int)
-        # Create a triangulation of face, assuming convexity
-        # Each tri is two successive points on boundary connected to centroid
-        # First column i + 1
-        # Second column: Always the center point
-        # Third column: Wrap-around to first column
-        if i == 1
-            t = n + offset + 1
-        else
-            t = i + offset
-        end
-        return @SVector [i + 1 + offset, 1 + offset, t]
-    end
-
-    function local_point(center, i, nodes, node_pts)
-        if i == 0
-            pt = center
-        else
-            pt = node_pts[nodes[i]]
-        end
-        pt::SVector{N, Float64}
-        if is_depth
-            u = SVector{N, Float64}(1.0, 1.0, -1.0)
-            pt = pt .* u
-        end
-        return pt::SVector{N, Float64}
-    end
 
     offset = 0
 
@@ -52,10 +25,10 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
                     for i in 1:new_vert_count
                         push!(cell_index, cell)
                         push!(face_index, f)
-                        push!(pts, local_point(C, i-1, nodes, node_pts))
+                        push!(pts, svector_local_point(C, i-1, nodes, node_pts, is_depth))
                     end
                     for i in 1:n
-                        push!(tri, cyclical_tesselation(n, i, offset))
+                        push!(tri, svector_cyclical_tesselation(n, i, offset))
                     end
                     offset = offset + new_vert_count
                 end
@@ -80,6 +53,35 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
               )
     return (points = pts, triangulation = tri, mapper = mapper)
 end
+
+function svector_cyclical_tesselation(n::Int, i::Int, offset::Int)
+    # Create a triangulation of face, assuming convexity
+    # Each tri is two successive points on boundary connected to centroid
+    # First column i + 1
+    # Second column: Always the center point
+    # Third column: Wrap-around to first column
+    if i == 1
+        t = n + offset + 1
+    else
+        t = i + offset
+    end
+    return @SVector [i + 1 + offset, 1 + offset, t]
+end
+
+function svector_local_point(center::SVector{N, Float64}, i, nodes, node_pts, is_depth = true) where N
+    if i == 0
+        pt = center
+    else
+        pt = node_pts[nodes[i]]
+    end
+    pt::SVector{N, Float64}
+    if is_depth
+        u = SVector{N, Float64}(1.0, 1.0, -1.0)
+        pt = pt .* u
+    end
+    return pt::SVector{N, Float64}
+end
+
 
 function plot_flatten_helper(data::Vector{Tv}) where Tv<:SVector
     n = length(data)
