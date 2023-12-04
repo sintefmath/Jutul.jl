@@ -2,6 +2,7 @@
 function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info_level = 1, kwarg...)
     cfg = JutulConfig("Simulator config")
     v = sim.storage.verbose
+    main_process_info_level = info_level
     if !v
         info_level = -1
     end
@@ -10,6 +11,7 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info
     extra_timing = extra_timing && v
     add_option!(cfg, :consolidate_results, true, "Consolidate states after simulation (serially).", types = Bool)
     add_option!(cfg, :delete_on_consolidate, true, "Delete processor states once consolidated.", types = Bool)
+    add_option!(cfg, :info_level_parray, main_process_info_level, "Info level for outer printing", types = Int)
 
     cfg = Jutul.simulator_config!(cfg, sim;
         kwarg...,
@@ -217,19 +219,22 @@ end
 
 function parray_print_convergence_status(simulator, config, reports, converged, iteration, nconverged, np)
     s = simulator.storage
-    info_level = config[:info_level]
+    info_level = config[:info_level_parray]
     if s.verbose && info_level > 1
         Jutul.jutul_message("It $(iteration-1)", "$nconverged/$np processes converged.")
     end
     if info_level > 2
+        # These get printed on all processes with a barrier. Performance cost to
+        # barriers, and potentially a lot of output being printed.
         comm = s[:comm]
-        for i in 0:MPI.Comm_size(comm)
+        rank_sz = MPI.Comm_size(comm)
+        self_rank = MPI.Comm_rank(comm)+1
+        for rank in 1:rank_sz
             MPI.Barrier(comm)
-            if i == MPI.Comm_rank(comm)
-                rank = i+1
-                sim_ctr = 1
-                map(reports) do report
-                    jutul_message("Process $rank", "Convergence simulator $sim_ctr", color = :light_cyan)
+            sim_ctr = 1
+            map(reports) do report
+                if rank == self_rank
+                    jutul_message("Process $rank/$rank_sz", "Convergence for simulator $sim_ctr", color = :light_cyan)
                     Jutul.get_convergence_table(report[:errors], info_level, iteration, config)
                     sim_ctr += 1
                 end
