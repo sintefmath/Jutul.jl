@@ -157,7 +157,6 @@ function Jutul.perform_step!(
     s = simulator.storage
     simulators = s.simulators
     np = s.number_of_processes
-    verbose = s.verbose
     configs = config[:configs]
     reports = map(simulators, configs, forces) do sim, config, f
         return Jutul.perform_step_per_process_initial_update!(
@@ -188,9 +187,7 @@ function Jutul.perform_step!(
     all_processes_converged = nconverged == np
     max_error = reduce(max, errors, init = 0)
 
-    if verbose && config[:info_level] > 1
-        Jutul.jutul_message("It $(iteration-1)", "$nconverged/$np processes converged.")
-    end
+    parray_print_convergence_status(simulator, config, reports, converged, iteration, nconverged, np)
     should_solve = solve && !all_processes_converged
     report = Jutul.setup_ministep_report(converged = all_processes_converged, solved = should_solve)
     map(reports) do subrep
@@ -216,6 +213,29 @@ function Jutul.perform_step!(
     end
     report[:update] = missing
     return (max_error, all_processes_converged, report)
+end
+
+function parray_print_convergence_status(simulator, config, reports, converged, iteration, nconverged, np)
+    s = simulator.storage
+    info_level = config[:info_level]
+    if s.verbose && info_level > 1
+        Jutul.jutul_message("It $(iteration-1)", "$nconverged/$np processes converged.")
+    end
+    if info_level > 2
+        comm = s[:comm]
+        for i in 0:MPI.Comm_size(comm)
+            MPI.Barrier(comm)
+            if i == MPI.Comm_rank(comm)
+                rank = i+1
+                sim_ctr = 1
+                map(reports) do report
+                    jutul_message("Process $rank", "Convergence simulator $sim_ctr", color = :light_cyan)
+                    Jutul.get_convergence_table(report[:errors], info_level, iteration, config)
+                    sim_ctr += 1
+                end
+            end
+        end
+    end
 end
 
 function Jutul.post_update_linearized_system!(linearized_system, executor::PArrayExecutor, storage, model)
