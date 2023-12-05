@@ -60,6 +60,7 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
         linewidth = 3.5,
         cumulative = true,
         linestyles = missing,
+        colormap = :tab20,
         t_scale = ("s", 1.0),
         axis_arg = NamedTuple(),
         legend = true,
@@ -111,12 +112,20 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
         names = map(x -> "dataset $x", eachindex(r_rep))
     end
     alldata = []
+    colors = to_colormap(colormap)
+    n_rep = length(r_rep)
     for i in eachindex(r_rep)
+        c = colors[mod(i-1, n_rep)+1]
         data_i = get_data(r_rep[i])
         push!(alldata, data_i)
-        lines!(ax, t, data_i, label = names[i], linewidth = linewidth, linestyle = get_linestyle(i), kwarg...)
+        lines!(ax, t, data_i,
+            label = names[i],
+            linewidth = linewidth,
+            color = c,
+            linestyle = get_linestyle(i);
+            kwarg...)
         if scatter_points
-            scatter!(ax, t, data_i)
+            scatter!(ax, t, data_i, color = c)
         end
     end
     if length(r_rep) > 1 && !names_missing && legend
