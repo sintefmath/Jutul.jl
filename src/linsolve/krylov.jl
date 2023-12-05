@@ -149,11 +149,11 @@ function linear_solve!(sys::LSystem,
 
     bad_auto = !manual_conv && !solved
     bad_manual = manual_conv && stats.niter == max_it
-    if (bad_manual || bad_auto) && v >= 0
+    if (bad_manual || bad_auto)
         bad_msg = "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
         if final_res/initial_res > 1.0
             error("Bad linear solve: $bad_msg")
-        else
+        elseif v > 0
             @warn bad_msg
         end
     elseif v > 0
