@@ -90,7 +90,12 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
         initial_res = res[1]
         final_res = res[end]
         if !stats.solved
-            @warn "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
+            bad_msg = "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
+            if res[end]/res[1] > 1.0
+                error(bad_msg)
+            else
+                @warn bad_msg
+            end
         end
     end
     t_prep = t_op + t_prec
