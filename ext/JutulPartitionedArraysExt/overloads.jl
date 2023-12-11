@@ -171,7 +171,6 @@ function Jutul.perform_step!(
     if haskey(s, :distributed_primary_variables)
         Jutul.parray_synchronize_primary_variables(simulator)
     end
-
     out = map(simulators, configs, forces, reports) do sim, config, f, rep
         e, conv, report = perform_step!(sim, dt, f, config;
             iteration = iteration,
@@ -200,18 +199,29 @@ function Jutul.perform_step!(
     end
     # Proceed to linear solve
     if should_solve
-        t_solved = @elapsed ok, n, res = parray_linear_solve!(simulator, config[:linear_solver])
-        t_update = @elapsed map(simulators) do sim
-            Jutul.update_primary_variables!(
-                Jutul.get_simulator_storage(sim),
-                Jutul.get_simulator_model(sim)
-            )
-            nothing
+        try
+            t_solved = @elapsed ok, n, res = parray_linear_solve!(simulator, config[:linear_solver])
+            t_update = @elapsed map(simulators) do sim
+                Jutul.update_primary_variables!(
+                    Jutul.get_simulator_storage(sim),
+                    Jutul.get_simulator_model(sim)
+                )
+                nothing
+            end
+            report[:linear_solver] = res
+            report[:linear_solve_time] = t_solved
+            report[:update_time] = t_update
+            report[:linear_iterations] = n
+        catch e
+            if config[:failure_cuts_timestep] && !(e isa InterruptException)
+                if config[:info_level] > 0
+                    @warn "Exception occured in solve: $e. Attempting to cut time-step since failure_cuts_timestep = true."
+                end
+                report[:failure_exception] = e
+            else
+                rethrow(e)
+            end
         end
-        report[:linear_solver] = res
-        report[:linear_solve_time] = t_solved
-        report[:update_time] = t_update
-        report[:linear_iterations] = n
     end
     report[:update] = missing
     return (max_error, all_processes_converged, report)
