@@ -8,6 +8,10 @@ end
 function Jutul.plot_mesh_impl!(ax, m; cells = nothing, is_depth = true, outer = false, color = :lightblue, kwarg...)
     pts, tri, mapper = triangulate_mesh(m, outer = outer, is_depth = is_depth)
     if !isnothing(cells)
+        if eltype(cells) == Bool
+            @assert length(cells) == number_of_cells(m)
+            cells = findall(cells)
+        end
         ntri = size(tri, 1)
         keep = [false for i in 1:ntri]
         cell_ix = mapper.indices.Cells
@@ -47,6 +51,10 @@ function Jutul.plot_cell_data_impl!(ax, m, data::AbstractVecOrMat; cells = nothi
     pts, tri, mapper = triangulate_mesh(m, outer = outer, is_depth = is_depth)
     data = vec(data)
     if !isnothing(cells)
+        if eltype(cells) == Bool
+            @assert length(cells) == nc
+            cells = findall(cells)
+        end
         new_data = zeros(nc)
         @. new_data = NaN
         if length(data) == length(cells)
