@@ -187,3 +187,29 @@ function linear_system_context(model, sys::MultiLinearizedSystem)
     end
     return ctx
 end
+
+function apply_scaling_to_linearized_system!(lsys::MultiLinearizedSystem, F, type::Symbol, dt)
+    if type != :none
+        n = number_of_subsystems(lsys)
+        if isnothing(F)
+            F = Vector{Any}(undef, n)
+            F .= nothing
+        end
+        for i in 1:n
+            diag_sys = lsys[i, i]
+            diag_sys, F[i] = apply_scaling_to_linearized_system!(diag_sys, F[i], type, dt)
+        end
+
+        for i in 1:n
+            for j in 1:n
+                if i == j
+                    continue
+                end
+                block = lsys[i, j]
+                F_ij = F[i]
+                apply_scaling_to_linearized_system!(block, F_ij, type, dt)
+            end
+        end
+    end
+    return (lsys, F)
+end

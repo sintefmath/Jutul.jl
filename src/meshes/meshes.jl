@@ -234,35 +234,11 @@ function tpfv_geometry(G::FiniteVolumeMesh)
             cell_centroids[d, i] = c[d]
         end
     end
-
     # Face geometry
-    nf = number_of_faces(G)
     N = get_neighborship(G)
-    nf = number_of_faces(G)
 
-    function face_geometry(e)
-        nf = count_entities(G, e)
-        areas = zeros(nf)
-        normals = zeros(D, nf)
-        centroids = zeros(D, nf)
-        for f in 1:nf
-            c, a = compute_centroid_and_measure(G, e, f)
-            for d in 1:D
-                centroids[d, f] = c[d]
-            end
-            areas[f] = a
-            # Assume correct order for normal
-            normal = face_normal(G, f, e)
-
-            for d in 1:D
-                normals[d, f] = normal[d]
-            end
-        end
-        return (areas, normals, centroids)
-    end
-
-    face_areas, face_normals, face_centroids = face_geometry(Faces())
-    boundary_areas, boundary_normals, boundary_centroids = face_geometry(BoundaryFaces())
+    face_areas, face_normals, face_centroids = face_geometry_helper(G, D, nc, nf, Faces())
+    boundary_areas, boundary_normals, boundary_centroids = face_geometry_helper(G, D, nc, nf, BoundaryFaces())
 
     return TwoPointFiniteVolumeGeometry(
         N,
@@ -278,3 +254,23 @@ function tpfv_geometry(G::FiniteVolumeMesh)
     )
 end
 
+function face_geometry_helper(G, D, nc, nf, e)
+    nf = count_entities(G, e)
+    areas = zeros(nf)
+    normals = zeros(D, nf)
+    centroids = zeros(D, nf)
+    for f in 1:nf
+        c, a = compute_centroid_and_measure(G, e, f)
+        for d in 1:D
+            centroids[d, f] = c[d]
+        end
+        areas[f] = a
+        # Assume correct order for normal
+        normal = face_normal(G, f, e)
+
+        for d in 1:D
+            normals[d, f] = normal[d]
+        end
+    end
+    return (areas, normals, centroids)
+end

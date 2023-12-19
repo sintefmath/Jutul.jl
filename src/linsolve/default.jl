@@ -227,6 +227,142 @@ function linear_operator(block::LinearizedBlock; skip_red = false)
     return LinearOperator(block.jac)
 end
 
+function apply_left_diagonal_scaling!(M::SparseMatrixCSC{SMatrix{N, N, T, NN}, Int}, D::AbstractVector) where {N, T, NN}
+    n = length(D)
+    nrow, ncol = size(M)
+    nzval = nonzeros(M)
+    rows = rowvals(M)
+
+    D_mat = MMatrix{N, N, T, NN}(I)
+    for col in 1:ncol
+        for pos in nzrange(M, col)
+            row = rows[pos]
+            M_ij = nzval[pos]
+            for k in 1:N
+                D_mat[k, k] = D[(row-1)*N + k]
+            end
+            nzval[pos] = D_mat*nzval[pos]
+        end
+    end
+    return M
+end
+
+function apply_left_diagonal_scaling!(M::StaticSparsityMatrixCSR{SMatrix{N, N, T, NN}, Int}, D::AbstractVector) where {N, T, NN}
+    n = length(D)
+    nrow, ncol = size(M)
+    nzval = nonzeros(M)
+    cols = colvals(M)
+
+    D_mat = MMatrix{N, N, T, NN}(I)
+    for row in 1:nrow
+        for k in 1:N
+            D_mat[k, k] = D[(row-1)*N + k]
+        end
+        for pos in nzrange(M, row)
+            col = cols[pos]
+            M_ij = nzval[pos]
+            nzval[pos] = D_mat*nzval[pos]
+        end
+    end
+    return M
+end
+
+function apply_left_diagonal_scaling!(M::SparseMatrixCSC, D::AbstractVector)
+    n = length(D)
+    nrow, ncol = size(M)
+    nzval = nonzeros(M)
+    rows = rowvals(M)
+    for col in 1:ncol
+        for pos in nzrange(M, col)
+            row = rows[pos]
+            nzval[pos] = D[row]*nzval[pos]
+        end
+    end
+    return M
+end
+
+function apply_left_diagonal_scaling!(M::AbstractVector, D::AbstractVector)
+    @assert length(M) == length(D)
+    for i in eachindex(M)
+        M[i] = D[i]*M[i]
+    end
+    return M
+end
+
+function apply_scalar_scaling!(M::AbstractVector, w::Real)
+    for i in eachindex(M)
+        M[i] = w*M[i]
+    end
+    return M
+end
+
+function apply_scalar_scaling!(M::AbstractSparseMatrix, w::Real)
+    apply_scalar_scaling!(nonzeros(M), w)
+    return M
+end
+
+function apply_scaling_to_linearized_system!(lsys::LinearizedSystem, F, type::Symbol, dt)
+    if type == :diagonal
+        if isnothing(F)
+            T = eltype(lsys.dx_buffer)
+            n_diag = length(lsys.dx_buffer)
+            F = zeros(T, n_diag)
+        end
+        F = diagonal_inverse_scaling!(lsys, F)
+        apply_left_diagonal_scaling!(lsys.jac, F)
+        apply_left_diagonal_scaling!(vec(lsys.r_buffer), F)
+    elseif type == :dt
+        apply_scalar_scaling!(lsys.jac, dt)
+        apply_scalar_scaling!(vec(lsys.r_buffer), dt)
+    else
+        @assert type == :none
+    end
+    return (lsys, F)
+end
+
+function apply_scaling_to_linearized_system!(lsys::LinearizedBlock, F, type::Symbol, dt)
+    if type == :diagonal
+        @assert !isnothing(F)
+        apply_left_diagonal_scaling!(lsys.jac, F)
+    elseif type == :dt
+        apply_scalar_scaling!(lsys.jac, dt)
+    end
+    return (lsys, F)
+end
+
+function diagonal_inverse_scaling!(lsys::LinearizedSystem, F)
+    J = lsys.jac
+    return diagonal_inverse_scaling!(J, F)
+end
+
+function diagonal_inverse_scaling!(A::AbstractSparseMatrix{T, Int}, F) where T<:StaticMatrix
+    n = size(A, 1)
+    m = length(F)
+    bz = m ÷ n
+    @assert bz > 0
+    for i in 1:n
+        A_ii = A[i, i]
+        for j in 1:bz
+            F[(i-1)*bz + j] = 1.0/abs(A_ii[j, j])
+        end
+    end
+    return F
+end
+
+function diagonal_inverse_scaling!(A::AbstractSparseMatrix, F)
+    T = eltype(A)
+    for i in eachindex(F)
+        A_ii = A[i, i]
+        if A_ii ≈ 0
+            A_ii = 1.0
+        else
+            A_ii = 1.0/abs(A_ii)
+        end
+        F[i] = A_ii
+    end
+    return F
+end
+
 # function linear_operator(block::LinearizedBlock{EquationMajorLayout, BlockMajorLayout}; skip_red = false)
 #     # Matrix is equation major.
 #     # Row (and output) is equation major.

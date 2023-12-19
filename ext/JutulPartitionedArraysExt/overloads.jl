@@ -2,6 +2,7 @@
 function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info_level = 1, kwarg...)
     cfg = JutulConfig("Simulator config")
     v = sim.storage.verbose
+    main_process_info_level = info_level
     if !v
         info_level = -1
     end
@@ -10,6 +11,7 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info
     extra_timing = extra_timing && v
     add_option!(cfg, :consolidate_results, true, "Consolidate states after simulation (serially).", types = Bool)
     add_option!(cfg, :delete_on_consolidate, true, "Delete processor states once consolidated.", types = Bool)
+    add_option!(cfg, :info_level_parray, main_process_info_level, "Info level for outer printing", types = Int)
 
     cfg = Jutul.simulator_config!(cfg, sim;
         kwarg...,
@@ -110,6 +112,8 @@ function Jutul.update_after_step!(psim::PArraySimulator, dt, forces; kwarg...)
         Jutul.update_after_step!(sim, dt, f; kwarg...)
         nothing
     end
+    # TODO: Fix output for this function.
+    return missing
 end
 
 function Jutul.get_output_state(psim::PArraySimulator)
@@ -145,30 +149,46 @@ function Jutul.forces_for_timestep(psim::PArraySimulator, forces::Union{MPIArray
     return subforces
 end
 
-function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; solve = true, iteration = 1, vararg...)
+function Jutul.perform_step!(
+        simulator::PArraySimulator, dt, forces, config;
+        solve = true,
+        iteration = 1,
+        executor = Jutul.default_executor(),
+        vararg...
+    )
     s = simulator.storage
     simulators = s.simulators
     np = s.number_of_processes
-    verbose = s.verbose
     configs = config[:configs]
-    out = map(simulators, configs, forces) do sim, config, f
+    reports = map(simulators, configs, forces) do sim, config, f
+        return Jutul.perform_step_per_process_initial_update!(
+            sim, dt, f, config,
+            update_secondary = true,
+            executor = Jutul.simulator_executor(sim),
+            iteration = iteration
+        )
+    end
+    if haskey(s, :distributed_primary_variables)
+        Jutul.parray_synchronize_primary_variables(simulator)
+    end
+    out = map(simulators, configs, forces, reports) do sim, config, f, rep
         e, conv, report = perform_step!(sim, dt, f, config;
             iteration = iteration,
             solve = false,
-            update_secondary = true,
+            report = rep,
+            update_secondary = false,
+            executor = Jutul.simulator_executor(sim),
             vararg...
         )
-        return (e, Int(conv), report)
+        return (e, Int(conv))
     end
-    errors, converged, reports = tuple_of_arrays(out)
+    errors, converged = tuple_of_arrays(out)
 
     nconverged = sum(converged)
     all_processes_converged = nconverged == np
     max_error = reduce(max, errors, init = 0)
 
-    if verbose && config[:info_level] > 1
-        Jutul.jutul_message("It $(iteration-1)", "$nconverged/$np processes converged.")
-    end
+    parray_print_convergence_status(simulator, config, reports, converged, iteration, nconverged, np)
     should_solve = solve && !all_processes_converged
     report = Jutul.setup_ministep_report(converged = all_processes_converged, solved = should_solve)
     map(reports) do subrep
@@ -179,21 +199,58 @@ function Jutul.perform_step!(simulator::PArraySimulator, dt, forces, config; sol
     end
     # Proceed to linear solve
     if should_solve
-        t_solved = @elapsed ok, n, res = parray_linear_solve!(simulator, config[:linear_solver])
-        t_update = @elapsed map(simulators) do sim
-            Jutul.update_primary_variables!(
-                Jutul.get_simulator_storage(sim),
-                Jutul.get_simulator_model(sim)
-            )
-            nothing
+        try
+            t_solved = @elapsed ok, n, res = parray_linear_solve!(simulator, config[:linear_solver])
+            t_update = @elapsed map(simulators) do sim
+                Jutul.update_primary_variables!(
+                    Jutul.get_simulator_storage(sim),
+                    Jutul.get_simulator_model(sim)
+                )
+                nothing
+            end
+            report[:linear_solver] = res
+            report[:linear_solve_time] = t_solved
+            report[:update_time] = t_update
+            report[:linear_iterations] = n
+        catch e
+            if config[:failure_cuts_timestep] && !(e isa InterruptException)
+                if config[:info_level] > 0
+                    @warn "Exception occured in solve: $e. Attempting to cut time-step since failure_cuts_timestep = true."
+                end
+                report[:failure_exception] = e
+            else
+                rethrow(e)
+            end
         end
-        report[:linear_solver] = res
-        report[:linear_solve_time] = t_solved
-        report[:update_time] = t_update
-        report[:linear_iterations] = n
     end
     report[:update] = missing
     return (max_error, all_processes_converged, report)
+end
+
+function parray_print_convergence_status(simulator, config, reports, converged, iteration, nconverged, np)
+    s = simulator.storage
+    info_level = config[:info_level_parray]
+    if s.verbose && info_level > 1
+        Jutul.jutul_message("It $(iteration-1)", "$nconverged/$np processes converged.")
+    end
+    if info_level > 2
+        # These get printed on all processes with a barrier. Performance cost to
+        # barriers, and potentially a lot of output being printed.
+        comm = s[:comm]
+        rank_sz = MPI.Comm_size(comm)
+        self_rank = MPI.Comm_rank(comm)+1
+        for rank in 1:rank_sz
+            MPI.Barrier(comm)
+            sim_ctr = 1
+            map(reports) do report
+                if rank == self_rank
+                    jutul_message("Process $rank/$rank_sz", "Convergence for simulator $sim_ctr", color = :light_cyan)
+                    Jutul.get_convergence_table(report[:errors], info_level, iteration, config)
+                    sim_ctr += 1
+                end
+            end
+        end
+    end
 end
 
 function Jutul.post_update_linearized_system!(linearized_system, executor::PArrayExecutor, storage, model)
@@ -220,9 +277,13 @@ function Jutul.retrieve_output!(sim::PArraySimulator, states, reports, config, n
 end
 
 function Jutul.simulator_reports_per_step(psim::PArraySimulator)
-    n = 0
-    map(psim.storage[:simulators]) do s
-        n += 1
+    if psim.backend isa MPI_PArrayBackend
+        n = 0
+        map(psim.storage[:simulators]) do s
+            n += 1
+        end
+    else
+        n = 1
     end
     return n
 end

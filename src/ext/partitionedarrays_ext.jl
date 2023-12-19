@@ -20,6 +20,10 @@ function parray_linear_system_operator
 
 end
 
+function parray_synchronize_primary_variables
+
+end
+
 abstract type PArrayBackend <: JutulBackend end
 
 struct DebugPArrayBackend <: PArrayBackend end

@@ -3,6 +3,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         backend = JuliaPArrayBackend(),
         order = :default,
         simulator_constructor = (m; kwarg...) -> Simulator(m; kwarg...),
+        primary_buffer = false,
         kwarg...
         )
     data = JutulStorage()
@@ -51,12 +52,8 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         # Boundary padding has been added, update local subset
         missing_part = setdiff(main_part.subsets[i], p)
         @assert length(missing_part) == 0
-        if true
-            main_part.subsets[i] = p
-            m = submodel(model, full_partition, i)
-        else
-            m = submodel(model, p)
-        end
+        main_part.subsets[i] = p
+        m = submodel(model, full_partition, i)
         s0 = substate(state0, model, m, :variables)
         prm = substate(parameters, model, m, :parameters)
         sim = simulator_constructor(m, state0 = s0, parameters = prm, executor = exec)
@@ -73,8 +70,41 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     data[:distributed_residual_buffer] = pzeros(dof_partition)
     data[:distributed_solution_buffer] = pzeros(dof_partition)
     data[:model] = representative_model
-
+    data[:main_label] = main_label
+    if primary_buffer
+        main_model, = get_main_model(representative_model, main_label)
+        pvar_def = (; pairs(main_model.primary_variables)...)
+        e = missing
+        for (k, v) in pairs(pvar_def)
+            e_v = Jutul.associated_entity(v)
+            if ismissing(e)
+                e = e_v
+            else
+                @assert e == e_v "Distributed primary variables assuems that main model have same associated entity for primary variables ($e != $e_v)"
+            end
+        end
+        T_primary = Jutul.scalarized_primary_variable_type(main_model, pvar_def)
+        pvar_buf = pzeros(T_primary, partition)
+        data[:distributed_primary_variables] = pvar_buf
+        data[:distributed_primary_variables_def] = pvar_def
+    end
     return PArraySimulator(backend, data)
+end
+
+function Jutul.simulator_executor(sim::PArraySimulator)
+    # We do not return a PArrayExecutor since that is reserved for the inner
+    # simulators. The outer simulator should act like the default.
+    return Jutul.default_executor()
+end
+
+function get_main_model(model, l, storage = nothing)
+    if model isa MultiModel
+        model = model[l]
+        if !isnothing(storage)
+            storage = storage[l]
+        end
+    end
+    return (model, storage)
 end
 
 function Jutul.MPI_PArrayBackend(; comm = MPI.COMM_WORLD)
@@ -151,4 +181,35 @@ function Jutul.partition_distributed(N, edge_weights, node_weights = missing;
     return p
 end
 
+function Jutul.parray_synchronize_primary_variables(psim::PArraySimulator; update_secondary = true)
+    @assert haskey(psim.storage, :distributed_primary_variables)
+    primary_buffer = psim.storage[:distributed_primary_variables]
+    pvar_def = psim.storage[:distributed_primary_variables_def]
+    simulators = psim.storage[:simulators]
+    l = psim.storage[:main_label]
 
+    map(simulators, local_values(primary_buffer)) do sim, pvar_vec
+        m, s = get_main_model(Jutul.get_simulator_model(sim), l, Jutul.get_simulator_storage(sim))
+        Jutul.scalarize_primary_variables!(pvar_vec, m, s.primary_variables, pvar_def)
+    end
+    consistent!(primary_buffer) |> wait
+
+    map(simulators, local_values(primary_buffer)) do sim, pvar_vec
+        model, s = get_main_model(Jutul.get_simulator_model(sim), l, Jutul.get_simulator_storage(sim))
+        Jutul.descalarize_primary_variables!(s.primary_variables, model, pvar_vec)
+
+        if update_secondary
+            # TODO: NB assumes that all secondary variables are cell wise.
+            n_own = sim.executor.data[:n_self]
+            n_total = length(pvar_vec)
+            state = s.state
+            # We own the first n_own values and these need not be updated. The
+            # ghost cells are now synchronized for primary and the dependent
+            # secondary variables in those cells should also be updated.
+            ghost_ix = (n_own+1):n_total
+            for (k, v) in pairs(model.secondary_variables)
+                Jutul.update_secondary_variable!(state[k], v, model, state, ghost_ix)
+            end
+        end
+    end
+end

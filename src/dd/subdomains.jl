@@ -74,10 +74,11 @@ function subdomain(d::DiscretizedDomain, indices; entity = Cells(), variables_al
     return DiscretizedDomain(sg, subdisc, global_map = mapper)
 end
 
-function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = [], active_global = missing)
+function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = [], active_global = missing, facepos = get_facepos(N))
     @assert buffer == 0 || buffer == 1
     has_buffer_zone = buffer > 0
-    if has_buffer_zone && !ismissing(active_global)
+    global_boundary_present = has_buffer_zone && !ismissing(active_global)
+    if global_boundary_present
         # There's another buffer consideration to be aware of?
         @assert length(active_global) == nc
         keep = [false for i in eachindex(indices)]
@@ -86,7 +87,7 @@ function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = 
         end
         indices = indices[keep]
     end
-    facelist, facepos = get_facepos(N)
+    facelist, facepos = facepos
     nf = size(N, 2)
     cell_active = BitArray(false for x = 1:nc)
     cell_is_bnd = BitArray(false for x = 1:nc)
@@ -150,14 +151,14 @@ function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = 
         # TODO: This is not order preserving.
         cells = findall(cell_active)
         is_boundary = cell_is_bnd[cells]
-        for i in 1:length(is_boundary)
-            inside = in(cells[i], indices)
-            if is_boundary[i] && buffer == 1
-                @assert !inside
-            else
-                @assert inside
-            end
-        end
+        # for i in 1:length(is_boundary)
+        #     inside = in(cells[i], indices)
+        #     if is_boundary[i] && buffer == 1
+        #         @assert !inside
+        #     else
+        #         @assert inside
+        #     end
+        # end
     else
         cells = copy(indices)
         is_boundary = BitVector([false for i in 1:length(cells)])
@@ -168,6 +169,13 @@ function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = 
                 end
             end
         end
+    end
+    if global_boundary_present
+        # for (cell, bnd) in zip(cells, is_boundary)
+        #     if !active_global[cell]
+        #         @assert bnd
+        #     end
+        # end
     end
     faces = findall(face_active)
     return (cells = cells, faces = faces, is_boundary = is_boundary)

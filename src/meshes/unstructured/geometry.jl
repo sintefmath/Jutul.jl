@@ -63,43 +63,45 @@ function compute_centroid_and_measure(G::UnstructuredMesh{3}, ::Cells, i)
     vol = 0.0
     centroid = zero(T)
 
-    function sum_volumes(faces, centroid, vol, i)
-        for face in faces.cells_to_faces[i]
-            nodes = faces.faces_to_nodes[face]
-            # Compute center point (not centroid) for face
-            c_node_face = zero(T)
-            for node in nodes
-                c_node_face += pts[node]
-            end
-            c_node_face /= length(nodes)
-            # Then create tets and compute volume
-            for i in eachindex(nodes)
-                if i == 1
-                    l = nodes[end]
-                else
-                    l = nodes[i-1]
-                end
-                r = nodes[i]
-                l_node = pts[l]
-                r_node = pts[r]
-
-                M = @SMatrix [
-                    l_node[1] l_node[2] l_node[3] 1;
-                    r_node[1] r_node[2] r_node[3] 1;
-                    c_node[1] c_node[2] c_node[3] 1;
-                    c_node_face[1] c_node_face[2] c_node_face[3] 1;
-                ]
-                local_volume = (1/6)*abs(det(M))
-                local_centroid = (1/4)*(l_node + r_node + c_node_face + c_node)
-
-                vol += local_volume
-                centroid += local_centroid*local_volume
-            end
-        end
-        return (centroid, vol)
-    end
-    centroid, vol = sum_volumes(G.faces, centroid, vol, i)
-    centroid, vol = sum_volumes(G.boundary_faces, centroid, vol, i)
+    centroid, vol = sum_centroid_volumes_helper(pts, c_node, G.faces, centroid, vol, i)
+    centroid, vol = sum_centroid_volumes_helper(pts, c_node, G.boundary_faces, centroid, vol, i)
     return (centroid./vol, vol)
 end
 
+function sum_centroid_volumes_helper(pts, c_node, faces, centroid, vol, i)
+    T = eltype(pts)
+    c_node::T
+    for face in faces.cells_to_faces[i]
+        nodes = faces.faces_to_nodes[face]
+        # Compute center point (not centroid) for face
+        c_node_face = zero(T)
+        for node in nodes
+            c_node_face += pts[node]
+        end
+        c_node_face /= length(nodes)
+        # Then create tets and compute volume
+        for i in eachindex(nodes)
+            if i == 1
+                l = nodes[end]
+            else
+                l = nodes[i-1]
+            end
+            r = nodes[i]
+            l_node = pts[l]
+            r_node = pts[r]
+
+            M = SMatrix{4, 4, Float64, 16}(
+                l_node[1], r_node[1], c_node[1], c_node_face[1],
+                l_node[2], r_node[2], c_node[2], c_node_face[2],
+                l_node[3], r_node[3], c_node[3], c_node_face[3],
+                1.0, 1.0, 1.0, 1.0
+            )
+            local_volume = (1.0/6.0)*abs(det(M))
+            local_centroid = (1.0/4.0)*(l_node + r_node + c_node_face + c_node)
+
+            vol += local_volume
+            centroid += local_centroid*local_volume
+        end
+    end
+    return (centroid, vol)
+end

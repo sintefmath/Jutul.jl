@@ -24,14 +24,17 @@ GenericKrylov(solver = :gmres; preconditioner = nothing; <kwarg>)
 Solver that wraps `Krylov.jl` with support for preconditioning.
 """
 mutable struct GenericKrylov
-    solver
+    solver::Symbol
+    scaling::Symbol
     preconditioner
     storage
+    storage_scaling
     x
     r_norm
     config::IterativeSolverConfig
-    function GenericKrylov(solver = :gmres; preconditioner = nothing, kwarg...)
-        new(solver, preconditioner, nothing, nothing, nothing, IterativeSolverConfig(;kwarg...))
+    function GenericKrylov(solver = :gmres; scaling = :none, preconditioner = nothing, kwarg...)
+        @assert scaling == :diagonal || scaling == :none || scaling == :dt
+        new(solver, scaling, preconditioner, nothing, nothing, nothing, nothing, IterativeSolverConfig(;kwarg...))
     end
 end
 
@@ -77,6 +80,7 @@ function linear_solve!(sys::LSystem,
     cfg = krylov.config
     prec = krylov.preconditioner
     Ft = float_type(model.context)
+    sys = krylov_scale_system!(sys, krylov, dt)
     t_prep = @elapsed @tic "prepare" prepare_linear_solve!(sys)
     op = linear_operator(sys)
     t_prec = @elapsed @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder, executor)
@@ -145,11 +149,11 @@ function linear_solve!(sys::LSystem,
 
     bad_auto = !manual_conv && !solved
     bad_manual = manual_conv && stats.niter == max_it
-    if (bad_manual || bad_auto) && v >= 0
+    if (bad_manual || bad_auto)
         bad_msg = "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
         if final_res/initial_res > 1.0
             error("Bad linear solve: $bad_msg")
-        else
+        elseif v > 0
             @warn bad_msg
         end
     elseif v > 0
@@ -157,6 +161,11 @@ function linear_solve!(sys::LSystem,
     end
     @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
     return linear_solve_return(solved, n, stats, prepare = t_prec + t_prep)
+end
+
+function krylov_scale_system!(sys, krylov::GenericKrylov, dt)
+    sys, krylov.storage_scaling = apply_scaling_to_linearized_system!(sys, krylov.storage_scaling, krylov.scaling, dt)
+    return sys
 end
 
 function krylov_termination_criterion(solver, atol, rtol, min_its)

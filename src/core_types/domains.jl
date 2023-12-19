@@ -206,7 +206,11 @@ function Base.haskey(domain::DataDomain, name::Symbol, entity)
     if ismissing(entity) || isnothing(entity)
         entity = NoEntity()
     end
-    return haskey(domain.data, name) && last(domain.data[name]) == entity
+    return haskey(domain.data, name) && associated_entity(domain, name) == entity
+end
+
+function associated_entity(domain::DataDomain, name::Symbol)
+    return last(domain.data[name])
 end
 
 Base.iterate(domain::DataDomain) = Base.iterate(domain.data)

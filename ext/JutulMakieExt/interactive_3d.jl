@@ -45,17 +45,19 @@ end
 
 default_jutul_resolution() = (1600, 900)
 
-function plot_interactive_impl(grid, states; plot_type = nothing,
-                                        primitives = nothing,
-                                        transparency = false,
-                                        resolution = default_jutul_resolution(),
-                                        alpha = 1.0,
-                                        title = "",
-                                        transform = "none",
-                                        new_window = true,
-                                        colormap = :viridis,
-                                        alphamap = :no_alpha_map,
-                                        kwarg...)
+function plot_interactive_impl(grid, states;
+        plot_type = nothing,
+        primitives = nothing,
+        transparency = false,
+        resolution = default_jutul_resolution(),
+        alpha = 1.0,
+        title = "",
+        transform = "none",
+        new_window = true,
+        colormap = :viridis,
+        alphamap = :no_alpha_map,
+        kwarg...
+    )
     has_primitives = !isnothing(primitives)
     active_filters = []
     if states isa AbstractDict
@@ -100,7 +102,7 @@ function plot_interactive_impl(grid, states; plot_type = nothing,
     pts = primitives.points
     mapper = primitives.mapper
 
-    fig = Figure(resolution = resolution)
+    fig = Figure(size = resolution)
     if states isa AbstractDict
         states = [states]
     end
@@ -405,7 +407,6 @@ function plot_interactive_impl(grid, states; plot_type = nothing,
         scat = Makie.mesh!(ax, pts, tri; color = ys,
                                         colorrange = lims,
                                         size = 60,
-                                        shading = is_3d,
                                         colormap = cmap,
                                         transparency = transparency,
                                         kwarg...)
@@ -534,7 +535,7 @@ function generate_colormap(colormap_name, alphamap_name, base_alpha, low, high)
 end
 
 function basic_3d_figure(resolution = default_jutul_resolution())
-    fig = Figure(resolution = resolution)
+    fig = Figure(size = resolution)
     ax = Axis3(fig[1, 1])
     return (fig, ax)
 end
@@ -701,4 +702,12 @@ function Jutul.plot_multimodel_interactive_impl(model, states, model_keys = keys
               )
     acc_primitives = (points = points, triangulation = tri, mapper = mapper)
     plot_interactive(total_number_of_cells, new_states, primitives = acc_primitives; kwarg...)
+end
+
+function Jutul.plotting_check_interactive()
+    backend_name = "$(Makie.current_backend())"
+    if backend_name != "GLMakie"
+        msg = "Currently active Makie backend $backend_name may not be interactive or fully supported.\nGLMakie is recommended for Jutul's interactive plots. To install:\n\tusing Pkg; Pkg.add(\"GLMakie\")\nTo use:\n\tusing GLMakie\n\tGLMakie.activate!()\nYou can then retry your plotting command."
+        @warn msg
+    end
 end

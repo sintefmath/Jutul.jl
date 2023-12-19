@@ -41,8 +41,9 @@ end
 
 function Base.getindex(A::SparsityTracingWrapper{T, 2, D}, ix) where {T, D}
     n, m = size(A)
-    i = ix ÷ m + 1
-    j = mod(ix-1, m)+1
+    zero_ix = ix - 1
+    i = (zero_ix ÷ m) + 1
+    j = mod(zero_ix, m) + 1
     return as_tracer(A.data[i, j], j)
 end
 
