@@ -93,13 +93,15 @@ coord_offset(pos, δ::AbstractVector) = sum(δ[1:(pos-1)])
 
 Get linear (scalar) index of mesh cell from provided IJK tuple `pos`.
 """
-function cell_index(g, pos::Tuple)
+function cell_index(g, pos::Tuple; throw = true)
     nx, ny, nz = grid_dims_ijk(g)
     x, y, z = cell_ijk(g, pos)
     return (z-1)*nx*ny + (y-1)*nx + x
 end
 
-cell_index(g, pos::Integer) = pos
+function cell_index(g, pos::Integer; throw = true)
+    return pos
+end
 
 function lower_corner_3d(g, index)
     pos = cell_ijk(g, index)
