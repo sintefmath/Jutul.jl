@@ -20,9 +20,23 @@ function Jutul.plot_mesh_impl!(ax, m; cells = nothing, is_depth = true, outer = 
             keep[i] = cell_ix[tri[i, 1]] in cells
         end
         tri = tri[keep, :]
+        tri, pts = remove_unused_points(tri, pts)
     end
     f = mesh!(ax, pts, tri; color = color, kwarg...)
     return f
+end
+
+function remove_unused_points(tri, pts)
+    unique_pts_ix = unique(vec(tri))
+    renum = Dict{Int, Int}()
+    for (i, ix) in enumerate(unique_pts_ix)
+        renum[ix] = i
+    end
+    pts = pts[unique_pts_ix, :]
+    for i in eachindex(tri)
+        tri[i] = renum[tri[i]]
+    end
+    return (tri, pts)
 end
 
 function Jutul.plot_cell_data_impl(m, data;
@@ -55,11 +69,13 @@ function Jutul.plot_cell_data_impl!(ax, m, data::AbstractVecOrMat; cells = nothi
             @assert length(cells) == nc
             cells = findall(cells)
         end
-        new_data = zeros(nc)
-        @. new_data = NaN
+        new_data = fill(NaN, nc)
         if length(data) == length(cells)
-            new_data[cells] = data
+            for (i, j) in enumerate(cells)
+                new_data[j] = data[i]
+            end
         else
+            @assert length(data) == nc
             for i in cells
                 new_data[i] = data[i]
             end
@@ -67,5 +83,6 @@ function Jutul.plot_cell_data_impl!(ax, m, data::AbstractVecOrMat; cells = nothi
         data = new_data
     end
     @assert length(data) == nc
-    return mesh!(ax, pts, tri; color = mapper.Cells(data), kwarg...)
+    color = mapper.Cells(data)
+    return mesh!(ax, pts, tri; color = color, kwarg...)
 end
