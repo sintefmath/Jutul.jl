@@ -13,29 +13,19 @@ the symbol of some data defined on `Cells()`, a vector of numbers for each cell
 or a matrix with number of columns equal to the number of cells.
 """
 function compute_half_face_trans(g::DataDomain, perm)
-    compute_half_face_trans(g[:cell_centroids], g[:face_centroids], g[:normals], g[:areas], perm, g[:neighbors])
+    return compute_half_face_trans(g[:cell_centroids], g[:face_centroids], g[:normals], g[:areas], perm, g[:neighbors])
 end
 
 function compute_half_face_trans(g::TwoPointFiniteVolumeGeometry, perm)
-    compute_half_face_trans(g.cell_centroids, g.face_centroids, g.normals, g.areas, perm, g.neighbors)
+    return compute_half_face_trans(g.cell_centroids, g.face_centroids, g.normals, g.areas, perm, g.neighbors)
 end
 
 function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
     nc = size(cell_centroids, 2)
     @assert size(N) == (2, length(face_areas))
     faces, facepos = get_facepos(N, nc)
-    facesigns = similar(faces)
-    for c in 1:nc
-        for ix in facepos[c]:(facepos[c+1]-1)
-            f = faces[ix]
-            if N[2, f] == c
-                facesigns[ix] = -1
-            else
-                facesigns[ix] = 1
-            end
-        end
-    end
-    compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns)
+    facesigns = get_facesigns(N, faces, facepos, nc)
+    return compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns)
 end
 
 
@@ -72,9 +62,11 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     for cell = 1:nc
         for fpos = facepos[cell]:(facepos[cell+1]-1)
             face = faces[fpos]
+            cc = cell_centroids[:, cell]
+            fc = face_centroids[:, face]
             A = face_areas[face]
             K = expand_perm(perm[:, cell], dim)
-            C = face_centroids[:, face] - cell_centroids[:, cell]
+            C = fc - cc
             Nn = facesigns[fpos]*face_normals[:, face]
             T_hf[fpos] = compute_half_face_trans(A, K, C, Nn)
         end
@@ -115,9 +107,9 @@ function compute_face_trans(T_hf, N)
     nf = size(N, 2)
     T = zeros(nf)
     for i in eachindex(faces)
-        T[faces[i]] += 1/T_hf[i]
+        T[faces[i]] += 1.0/T_hf[i]
     end
-    T = 1 ./T
+    @. T = 1.0 /T
     return T
 end
 
