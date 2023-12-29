@@ -252,6 +252,9 @@ end
         @test get_mesh_entity_tag(g, Cells(), :group, :tag1) == [1, 2, 3]
         @test get_mesh_entity_tag(g, Cells(), :group, :tag2) == [4, 5, 6] # Sorted.
         @test get_mesh_entity_tag(g, Cells(), :group2, :tag1) == [1, 2, 3, 7] # Sorted.
+        @test mesh_entity_has_tag(g, Cells(), :group, :tag1, 1) == true
+        @test mesh_entity_has_tag(g, Cells(), :group, :tag1, 4) == false
+        @test mesh_entity_has_tag(g, Cells(), :group, :tag1, 3) == true
         @test_throws "Tag group2.tag3 not found in Cells()." get_mesh_entity_tag(g, Cells(), :group2, :tag3)
         @test ismissing(get_mesh_entity_tag(g, Cells(), :group2, :tag3, throw = false))
     end

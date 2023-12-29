@@ -1056,7 +1056,7 @@ Base.keys(et::EntityTags) = Base.keys(et.tags)
 Base.getindex(et::EntityTags, arg...) = Base.getindex(et.tags, arg...)
 Base.setindex!(et::EntityTags, arg...) = Base.setindex!(et.tags, arg...)
 
-export set_mesh_entity_tag!, get_mesh_entity_tag
+export set_mesh_entity_tag!, get_mesh_entity_tag, mesh_entity_has_tag
 struct MeshEntityTags{T}
     tags::Dict{JutulEntity, EntityTags{T}}
 end
@@ -1169,4 +1169,14 @@ function get_mesh_entity_tag(met::MeshEntityTags, entity::JutulEntity, tag_group
         end
     end
     return out
+end
+
+function mesh_entity_has_tag(m::JutulMesh, arg...; kwarg...)
+    return mesh_entity_has_tag(mesh_entity_tags(m), arg...; kwarg...)
+end
+
+function mesh_entity_has_tag(met::MeshEntityTags, entity::JutulEntity, tag_group::Symbol, tag_value::Symbol, ix)
+    tag = get_mesh_entity_tag(met, entity, tag_group, tag_value)
+    ix = searchsortedfirst(tag, ix)
+    return ix < (length(tag)+1)
 end
