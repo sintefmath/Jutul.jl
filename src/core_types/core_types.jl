@@ -1177,6 +1177,11 @@ end
 
 function mesh_entity_has_tag(met::MeshEntityTags, entity::JutulEntity, tag_group::Symbol, tag_value::Symbol, ix)
     tag = get_mesh_entity_tag(met, entity, tag_group, tag_value)
-    ix = searchsortedfirst(tag, ix)
-    return ix < (length(tag)+1)
+    pos = searchsortedfirst(tag, ix)
+    if pos > length(tag)
+        out = false
+    else
+        out = tag[pos] == ix
+    end
+    return out
 end
