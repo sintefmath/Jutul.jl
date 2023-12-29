@@ -84,7 +84,7 @@ julia> si_unit(:day) # Get days represented as seconds
 ```
 """
 function si_unit(uname::Symbol)
-    return si_unit(Val(uname))
+    return si_unit(Val(uname))::Float64
 end
 
 function si_unit(uname::String)
