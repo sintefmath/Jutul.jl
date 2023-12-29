@@ -20,6 +20,7 @@ function MRSTWrapMesh(G, N = nothing)
     end
     nf = size(N, 2)
     nc = G.cells.num
+    tags = MeshEntityTags()
     g = MRSTWrapMesh(G, N, nc, nf, tags)
     initialize_entity_tags!(g)
     return g

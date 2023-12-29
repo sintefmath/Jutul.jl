@@ -8,6 +8,7 @@ struct CoarseMesh{G, T} <: FiniteVolumeMesh
     coarse_boundary_to_fine::T
     face_neighbors::Vector{Tuple{Int, Int}}
     boundary_cells::Vector{Int}
+    tags::MeshEntityTags{Int}
 end
 
 """
@@ -79,8 +80,10 @@ function CoarseMesh(G, p)
         return (IndirectionMap(fmap, pos), neigh)
     end
     cfaces, coarse_neighbors = to_indir_facemap(coarse_faces)
-    # cboundary, coarse_boundary_cells = to_indir_facemap(coarse_boundary)
-    return CoarseMesh(G, p, cells_p, cfaces, cboundary, coarse_neighbors, coarse_boundary_cells)
+    tags = MeshEntityTags()
+    cg = CoarseMesh(G, p, cells_p, cfaces, cboundary, coarse_neighbors, coarse_boundary_cells)
+    initialize_entity_tags!(cg)
+    return cg
 end
 
 function Base.show(io::IO, t::MIME"text/plain", g::CoarseMesh)
