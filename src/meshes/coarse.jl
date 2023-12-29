@@ -81,7 +81,7 @@ function CoarseMesh(G, p)
     end
     cfaces, coarse_neighbors = to_indir_facemap(coarse_faces)
     tags = MeshEntityTags()
-    cg = CoarseMesh(G, p, cells_p, cfaces, cboundary, coarse_neighbors, coarse_boundary_cells)
+    cg = CoarseMesh(G, p, cells_p, cfaces, cboundary, coarse_neighbors, coarse_boundary_cells, tags)
     initialize_entity_tags!(cg)
     return cg
 end
