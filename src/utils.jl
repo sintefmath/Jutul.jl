@@ -753,6 +753,22 @@ function get_facepos(N, arg...)
     return (faces, facePos)
 end
 
+function get_facesigns(N, faces, facepos, nc)
+    facesigns = similar(faces)
+    for c in 1:nc
+        for ix in facepos[c]:(facepos[c+1]-1)
+            f = faces[ix]
+            if N[2, f] == c
+                facesigns[ix] = -1
+            else
+                @assert N[1, f] == c
+                facesigns[ix] = 1
+            end
+        end
+    end
+    return facesigns
+end
+
 export timing_breakdown
 function timing_breakdown(report)
     D = Dict{Symbol, Any}(:total => report[:total_time])
