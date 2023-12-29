@@ -22,7 +22,7 @@ struct FaceMap{M, N}
     end
 end
 
-struct UnstructuredMesh{D, S, IM, IF, M, F, BM, NM} <: FiniteVolumeMesh
+struct UnstructuredMesh{D, S, IM, IF, M, F, BM, NM, T} <: FiniteVolumeMesh
     structure::S
     faces::FaceMap{M, Tuple{Int, Int}}
     boundary_faces::FaceMap{M, Int}
@@ -31,6 +31,8 @@ struct UnstructuredMesh{D, S, IM, IF, M, F, BM, NM} <: FiniteVolumeMesh
     face_map::IF
     boundary_map::BM
     node_map::NM
+    "Tags on cells/faces/nodes"
+    tags::MeshEntityTags{T}
 end
 
 function convert_coord_points(points::AbstractMatrix{F}) where F
@@ -249,7 +251,20 @@ function UnstructuredMesh(
     bnd = FaceMap(cells_to_bnd, bnd_to_nodes, boundary_cells)
     @assert length(face_neighbors) == length(faces_to_nodes)
     @assert length(boundary_cells) == length(bnd_to_nodes)
-    return UnstructuredMesh{dim, S, IM, IF, T, F, BM, NM}(structure, faces, bnd, node_points, cell_map, face_map, boundary_map, node_map)
+    tags = MeshEntityTags()
+    g = UnstructuredMesh{dim, S, IM, IF, T, F, BM, NM, Int}(
+        structure,
+        faces,
+        bnd,
+        node_points,
+        cell_map,
+        face_map,
+        boundary_map,
+        node_map,
+        tags
+    )
+    initialize_entity_tags!(g)
+    return g
 end
 
 function UnstructuredMesh(G::UnstructuredMesh)

@@ -3,6 +3,7 @@ struct MRSTWrapMesh <: FiniteVolumeMesh
     N::Matrix
     nc::Int
     nf::Int
+    tags::MeshEntityTags{Int}
 end
 
 function MRSTWrapMesh(G, N = nothing)
@@ -19,7 +20,9 @@ function MRSTWrapMesh(G, N = nothing)
     end
     nf = size(N, 2)
     nc = G.cells.num
-    return MRSTWrapMesh(G, N, nc, nf)
+    g = MRSTWrapMesh(G, N, nc, nf, tags)
+    initialize_entity_tags!(g)
+    return g
 end
 
 function grid_dims_ijk(g::MRSTWrapMesh)

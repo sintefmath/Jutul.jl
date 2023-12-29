@@ -237,3 +237,22 @@ end
     @test isdir(jutul_output_path())
     @test last(splitdir(jutul_output_path("testname"))) == "testname"
 end
+@testset "mesh tags" begin
+    for i in 1:2
+        g = CartesianMesh((10,1,1))
+        if i == 2
+            g = UnstructuredMesh(g)
+        end
+        set_mesh_entity_tag!(g, Cells(), :group, :tag1, [1, 2, 3])
+        set_mesh_entity_tag!(g, Cells(), :group, :tag2, [5, 4, 6])
+        set_mesh_entity_tag!(g, Cells(), :group2, :tag1, [1, 2, 3])
+        set_mesh_entity_tag!(g, Cells(), :group2, :tag1, [3, 7, 1])
+
+        @test_throws "Tag value must not exceed 10 for Cells()" set_mesh_entity_tag!(g, Cells(), :group2, :tag1, [21])
+        @test get_mesh_entity_tag(g, Cells(), :group, :tag1) == [1, 2, 3]
+        @test get_mesh_entity_tag(g, Cells(), :group, :tag2) == [4, 5, 6] # Sorted.
+        @test get_mesh_entity_tag(g, Cells(), :group2, :tag1) == [1, 2, 3, 7] # Sorted.
+        @test_throws "Tag group2.tag3 not found in Cells()." get_mesh_entity_tag(g, Cells(), :group2, :tag3)
+        @test ismissing(get_mesh_entity_tag(g, Cells(), :group2, :tag3, throw = false))
+    end
+end
