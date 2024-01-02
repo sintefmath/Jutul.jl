@@ -59,13 +59,14 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     @assert(length(face_areas) == nf)
     # Check perm
     @assert(size(perm, 2) == nc)
+    vdim = Val(dim)
     for cell = 1:nc
         for fpos = facepos[cell]:(facepos[cell+1]-1)
             face = faces[fpos]
             cc = cell_centroids[:, cell]
             fc = face_centroids[:, face]
             A = face_areas[face]
-            K = expand_perm(perm[:, cell], dim)
+            K = expand_perm(perm[:, cell], vdim)
             C = fc - cc
             Nn = facesigns[fpos]*face_normals[:, face]
             T_hf[fpos] = compute_half_face_trans(A, K, C, Nn)
@@ -74,27 +75,68 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     return T_hf
 end
 
-function expand_perm(K, dim; full = false)
+function expand_perm(K, dim)
+    return expand_perm(K, Val(dim))
+end
+
+function expand_perm(K, ::Val{1})
+    return only(K)
+end
+
+
+function expand_perm(K, ::Val{2})
+    T = eltype(K)
     n = length(K)
-    if n == dim
-        K_e = diagm(K)
-    elseif n == 1
-        K_e = first(K)
-        if full
-            # Expand to matrix
-            K_e = zeros(dim, dim) + I*K_e
-        end
+    if n == 1
+        K_xx = K_yy = only(K)
+        K_xy = zero(T)
+    elseif n == 2
+        K_xx = K[1]
+        K_yy = K[2]
+        K_xy = zero(T)
+    elseif n == 3
+        K_xx = K[1]
+        K_xy = K[2]
+        K_yy = K[2]
     else
-        if dim == 2
-            @assert n == 3 "Two-dimensional grids require 1/2/3 permeability entries per cell (was $n)"
-            K_e = [K[1] K[2]; K[2] K[3]]
-        else
-            @assert n == 6 "Three-dimensional grids require 1/3/6 permeability entries per cell (was $n)"
-            K_e =  [K[1] K[2] K[3];
-                    K[2] K[4] K[5];
-                    K[3] K[5] K[6]]
-        end
+        error("Permeability for two-dimensional grids must have 1/2/3 entries per cell, had $n")
     end
+    K_e = @SMatrix [
+        K_xx K_xy;
+        K_xy K_yy
+        ]
+    return K_e
+end
+
+function expand_perm(K, ::Val{3})
+    T = eltype(K)
+    n = length(K)
+    K_xy = zero(T)
+    K_xz = zero(T)
+    K_yz = zero(T)
+    if n == 1
+        K_xx = K_yy = K_zz = only(K)
+    elseif n == 3
+        K_xx = K[1]
+        K_yy = K[2]
+        K_zz = K[3]
+    elseif n == 6
+        # First row
+        K_xx = K[1]
+        K_xy = K[2]
+        K_yz = K[3]
+        # Second row excluding symmetry
+        K_yy = K[4]
+        K_yz = K[5]
+        # Last entry
+        K_zz = K[6]
+    else
+        error("Permeability for three-dimensional meshes must have 1/3/6 entries per cell, had $n")
+    end
+    K_e =  @SMatrix[
+        K_xx K_xy K_xz;
+        K_xy K_yy K_yz;
+        K_xz K_yz K_zz]
     return K_e
 end
 
@@ -104,6 +146,7 @@ end
 
 function compute_face_trans(T_hf, N)
     faces, facePos = get_facepos(N)
+    @assert length(T_hf) == length(faces)
     nf = size(N, 2)
     T = zeros(nf)
     for i in eachindex(faces)
