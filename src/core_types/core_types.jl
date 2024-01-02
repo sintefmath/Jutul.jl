@@ -1118,8 +1118,8 @@ function set_mesh_entity_tag!(met::MeshEntityTags{T}, entity::JutulEntity, tag_g
         @assert allow_new "allow_new = false and tag group $tag_group for entity $entity already exists."
         tags[tag_group] = Dict{Symbol, Vector{T}}()
     end
-    @assert maximum(ix) <= tags.count "Tag value must not exceed $(tags.count) for $entity"
-    @assert minimum(ix) > 0 "Tags must have positive indices."
+    @assert maximum(ix, init = one(T)) <= tags.count "Tag value must not exceed $(tags.count) for $entity"
+    @assert minimum(ix, init = tags.count) > 0 "Tags must have positive indices."
 
     tg = tags[tag_group]
     if haskey(tg, tag_value)
