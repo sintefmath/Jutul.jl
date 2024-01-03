@@ -37,7 +37,7 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
 end
 
 
-function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; version = :xyz)
+function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; version = :xyz, face_dir = missing)
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
 
@@ -73,8 +73,26 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     length(face_areas) == nf || throw(ArgumentError("Face areas had $normal_n entries but grid had $nf faces."))
     # Check perm
     size(perm, 2) == nc || throw(ArgumentError("Permeability must have number of columns equal to number of cells (= $nc)."))
-    if !(version in (:xyz, :xyz_local))
-        throw(ArgumentError("version must be :xyz or :xyz_local"))
+    if !(version in (:xyz, :ijk))
+        throw(ArgumentError("version must be :xyz or :ijk"))
+    end
+    is_xyz = version == :xyz
+    if version == :ijk
+        if size(perm, 1) != dim
+            throw(ArgumentError("version = :ijk is only valid when perm is strictly diagonal."))
+        end
+        if ismissing(face_dir)
+            throw(ArgumentError("version = :ijk cannot be used without also passing face_dir."))
+        end
+        if length(face_dir) != nf
+            throw(ArgumentError("face_dir must have one entry per face."))
+        end
+        if maximum(face_dir) > dim
+            throw(ArgumentError("face_dir entry exceeds grid dim ($dim)."))
+        end
+        if minimum(face_dir) < 1
+            throw(ArgumentError("face_dir entry is less than 1."))
+        end
     end
     vdim = Val(dim)
     for cell = 1:nc
@@ -86,8 +104,13 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
             A = face_areas[face]
             C = fc - cc
             Nn = sgn*face_normals[:, face]
-            K = expand_perm(perm[:, cell], vdim)
-            T_hf[fpos] = half_face_trans(A, K, C, Nn)
+            if is_xyz
+                K = expand_perm(perm[:, cell], vdim)
+            else
+                K = perm[face_dir[face], cell]
+            end
+            T = half_face_trans(A, K, C, Nn)
+            T_hf[fpos] = T
         end
     end
     return T_hf
