@@ -1,8 +1,8 @@
 export compute_face_trans, compute_half_face_trans, compute_boundary_trans
 
-function compute_half_face_trans(d::DataDomain, k::Symbol = :permeability)
+function compute_half_face_trans(d::DataDomain, k::Symbol = :permeability; kwarg...)
     @assert haskey(d, k, Cells()) "$k must be defined in Cells."
-    return compute_half_face_trans(d, d[k])
+    return compute_half_face_trans(d, d[k]; kwarg...)
 end
 
 """
@@ -12,24 +12,32 @@ Compute half-face trans for the interior faces. The input `perm` can either be
 the symbol of some data defined on `Cells()`, a vector of numbers for each cell
 or a matrix with number of columns equal to the number of cells.
 """
-function compute_half_face_trans(g::DataDomain, perm)
-    return compute_half_face_trans(g[:cell_centroids], g[:face_centroids], g[:normals], g[:areas], perm, g[:neighbors])
+function compute_half_face_trans(g::DataDomain, perm; kwarg...)
+    return compute_half_face_trans(
+        g[:cell_centroids],
+        g[:face_centroids],
+        g[:normals],
+        g[:areas],
+        perm,
+        g[:neighbors]
+        ; kwarg...
+    )
 end
 
-function compute_half_face_trans(g::TwoPointFiniteVolumeGeometry, perm)
-    return compute_half_face_trans(g.cell_centroids, g.face_centroids, g.normals, g.areas, perm, g.neighbors)
+function compute_half_face_trans(g::TwoPointFiniteVolumeGeometry, perm; kwarg...)
+    return compute_half_face_trans(g.cell_centroids, g.face_centroids, g.normals, g.areas, perm, g.neighbors; kwarg...)
 end
 
-function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N)
+function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N; kwarg...)
     nc = size(cell_centroids, 2)
     @assert size(N) == (2, length(face_areas))
     faces, facepos = get_facepos(N, nc)
     facesigns = get_facesigns(N, faces, facepos, nc)
-    return compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns)
+    return compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; kwarg...)
 end
 
 
-function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns)
+function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; version = :xyz)
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
 
@@ -45,31 +53,41 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     end
 
     # Sanity check
-    @assert(dim == 2 || dim == 3 || dim == 1)
+    if !(dim == 2 || dim == 3 || dim == 1)
+        throw(ArgumentError("Dimension must 1, 2 or 3"))
+    end
     # Check cell centroids
-    @assert(size(cell_centroids, 1) == dim)
-    @assert(size(cell_centroids, 2) == nc)
+    cc_dim, cc_n = size(cell_centroids)
+    cc_dim == dim || throw(ArgumentError("Cell centroids had $cc_dim rows but grid had $dim dimension."))
+    cc_n == nc || throw(ArgumentError("Cell centroids had $cc_n columns but grid had $nc cells."))
     # Check face centroids
-    @assert(size(face_centroids, 1) == dim)
-    @assert(size(face_centroids, 2) == nf)
+    fc_dim, fc_n = size(face_centroids)
+    fc_dim == dim || throw(ArgumentError("Face centroids had $fc_dim rows but grid had $dim dimension."))
+    fc_n == nf || throw(ArgumentError("Face centroids had $fc_n columns but grid had $nf faces."))
     # Check normals
-    @assert(size(face_normals, 1) == dim)
-    @assert(size(face_normals, 2) == nf)
+    normal_dim, normal_n = size(face_normals)
+    normal_dim == dim || throw(ArgumentError("Face normals had $normal_dim rows but grid had $dim dimension."))
+    fc_n == nf || throw(ArgumentError("Face normals had $normal_n columns but grid had $nf faces."))
     # Check areas
-    @assert(length(face_areas) == nf)
+    # TODO: This isn't really checking anything since we get nf from areas...
+    length(face_areas) == nf || throw(ArgumentError("Face areas had $normal_n entries but grid had $nf faces."))
     # Check perm
-    @assert(size(perm, 2) == nc)
+    size(perm, 2) == nc || throw(ArgumentError("Permeability must have number of columns equal to number of cells (= $nc)."))
+    if !(version in (:xyz, :xyz_local))
+        throw(ArgumentError("version must be :xyz or :xyz_local"))
+    end
     vdim = Val(dim)
     for cell = 1:nc
         for fpos = facepos[cell]:(facepos[cell+1]-1)
             face = faces[fpos]
+            sgn = facesigns[fpos]
             cc = cell_centroids[:, cell]
             fc = face_centroids[:, face]
             A = face_areas[face]
-            K = expand_perm(perm[:, cell], vdim)
             C = fc - cc
-            Nn = facesigns[fpos]*face_normals[:, face]
-            T_hf[fpos] = compute_half_face_trans(A, K, C, Nn)
+            Nn = sgn*face_normals[:, face]
+            K = expand_perm(perm[:, cell], vdim)
+            T_hf[fpos] = half_face_trans(A, K, C, Nn)
         end
     end
     return T_hf
@@ -140,7 +158,7 @@ function expand_perm(K, ::Val{3})
     return K_e
 end
 
-function compute_half_face_trans(A, K, C, N)
+function half_face_trans(A, K, C, N)
     return A*(dot(K*C, N))/dot(C, C)
 end
 
@@ -152,7 +170,7 @@ function compute_face_trans(T_hf, N)
     for i in eachindex(faces)
         T[faces[i]] += 1.0/T_hf[i]
     end
-    @. T = 1.0 /T
+    @. T = 1.0 / T
     return T
 end
 
@@ -161,8 +179,8 @@ function compute_face_trans(g::JutulMesh, perm)
     return compute_face_trans(geo, perm)
 end
 
-function compute_face_trans(geometry::JutulGeometry, permeability)
-    T_hf = compute_half_face_trans(geometry, permeability)
+function compute_face_trans(geometry::JutulGeometry, permeability; kwarg...)
+    T_hf = compute_half_face_trans(geometry, permeability; kwarg...)
     return compute_face_trans(T_hf, geometry.neighbors)
 end
 
@@ -173,8 +191,8 @@ Compute face trans for the interior faces. The input `perm` can either be
 the symbol of some data defined on `Cells()`, a vector of numbers for each cell
 or a matrix with number of columns equal to the number of cells.
 """
-function compute_face_trans(d::DataDomain, arg...)
-    T_hf = compute_half_face_trans(d, arg...)
+function compute_face_trans(d::DataDomain, arg...; kwarg...)
+    T_hf = compute_half_face_trans(d, arg...; kwarg...)
     return compute_face_trans(T_hf, d[:neighbors])
 end
 
@@ -191,7 +209,7 @@ either be the symbol of some data defined on `Cells()`, a vector of numbers
 for each cell or a matrix with number of columns equal to the number of
 cells.
 """
-function compute_boundary_trans(d::DataDomain, perm)
+function compute_boundary_trans(d::DataDomain, perm; kwarg...)
     @assert hasentity(d, BoundaryFaces()) "Domain must have BoundaryFaces() to compute boundary transmissibilities"
     face_areas = d[:boundary_areas]
     cells = d[:boundary_neighbors]
@@ -209,7 +227,7 @@ function compute_boundary_trans(d::DataDomain, perm)
     faces = collect(1:nf)
     facepos = collect(1:(nc+1))
     facesigns = ones(nf)
-    return compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns)
+    return compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; kwarg...)
 end
 
 export compute_face_gdz
