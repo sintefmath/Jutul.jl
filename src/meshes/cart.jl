@@ -25,10 +25,15 @@ julia> CartesianMesh((2, 3), ([1.0, 2.0], [0.1, 3.0, 2.5]))
 CartesianMesh (3D) with 3x5x2=30 cells
 ```
 """
-struct CartesianMesh{D, Δ, O} <: FiniteVolumeMesh
-    dims::D   # Tuple of dimensions (nx, ny, [nz])
-    deltas::Δ # Either a tuple of scalars (uniform grid) or a tuple of vectors (non-uniform grid)
-    origin::O # Coordinate of lower left corner
+struct CartesianMesh{D, Δ, O, T} <: FiniteVolumeMesh
+    "Tuple of dimensions (nx, ny, [nz])"
+    dims::D
+    "Either a tuple of scalars (uniform grid) or a tuple of vectors (non-uniform grid)"
+    deltas::Δ
+    "Coordinate of lower left corner"
+    origin::O
+    "Tags on cells/faces/nodes"
+    tags::MeshEntityTags{T}
     function CartesianMesh(dims::Tuple, deltas_or_size::Union{Nothing, Tuple} = nothing; origin = nothing)
         dim = length(dims)
         if isnothing(deltas_or_size)
@@ -55,7 +60,10 @@ struct CartesianMesh{D, Δ, O} <: FiniteVolumeMesh
         end
         @assert length(deltas_or_size) == dim
         deltas = generate_deltas(deltas_or_size)
-        return new{typeof(dims), typeof(deltas), typeof(origin)}(dims, deltas, origin)
+        tags = MeshEntityTags()
+        g = new{typeof(dims), typeof(deltas), typeof(origin), Int}(dims, deltas, origin, tags)
+        initialize_entity_tags!(g)
+        return g
     end
 end
 Base.show(io::IO, g::CartesianMesh) = print(io, "CartesianMesh ($(dim(g))D) with $(join(grid_dims_ijk(g), "x"))=$(number_of_cells(g)) cells")
@@ -93,13 +101,15 @@ coord_offset(pos, δ::AbstractVector) = sum(δ[1:(pos-1)])
 
 Get linear (scalar) index of mesh cell from provided IJK tuple `pos`.
 """
-function cell_index(g, pos::Tuple)
+function cell_index(g, pos::Tuple; throw = true)
     nx, ny, nz = grid_dims_ijk(g)
     x, y, z = cell_ijk(g, pos)
     return (z-1)*nx*ny + (y-1)*nx + x
 end
 
-cell_index(g, pos::Integer) = pos
+function cell_index(g, pos::Integer; throw = true)
+    return pos
+end
 
 function lower_corner_3d(g, index)
     pos = cell_ijk(g, index)

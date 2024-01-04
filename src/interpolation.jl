@@ -80,6 +80,8 @@ function get_1d_interpolator(xs, ys; method = LinearInterpolant, cap_endpoints =
             ys = vcat(ys, ys[end])
         end
     end
+    @assert length(xs) > 1
+    @assert length(ys) == length(xs)
     return method(xs, ys)
 end
 

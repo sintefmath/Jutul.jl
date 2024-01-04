@@ -25,11 +25,26 @@ function face_normal(G::UnstructuredMesh, f, e = Faces())
     get_nodes(::BoundaryFaces) = G.boundary_faces
     nodes = get_nodes(e).faces_to_nodes[f]
     pts = G.node_points
-    a = pts[nodes[1]]
-    b = pts[nodes[2]]
-    c = pts[nodes[3]]
-
-    normal = cross(c - b, a - b)
+    n = length(nodes)
+    # If the geometry is well defined it would be sufficient to take the first
+    # triplet and use that to generate the normals. We assume it isn't and
+    # create a weighted sum where each weight corresponds to the areal between
+    # the triplets.
+    normal = zero(eltype(pts))
+    for i in 1:n
+        if i == 1
+            a = pts[nodes[n]]
+        else
+            a = pts[nodes[i-1]]
+        end
+        b = pts[nodes[i]]
+        if i == n
+            c = pts[nodes[1]]
+        else
+            c = pts[nodes[i+1]]
+        end
+        normal += cross(c - b, a - b)
+    end
     normal /= norm(normal, 2)
     return normal
 end
@@ -65,7 +80,7 @@ function cell_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}, index::Integer) whe
     return (x, y, z)
 end
 
-function cell_index(g::UnstructuredMesh, pos::Tuple)
+function cell_index(g::UnstructuredMesh, pos::Tuple; throw = true)
     nx, ny, nz = grid_dims_ijk(g)
     x, y, z = cell_ijk(g, pos)
     @assert x > 0 && x <= nx
@@ -77,7 +92,13 @@ function cell_index(g::UnstructuredMesh, pos::Tuple)
         t = index
     else
         t = findfirst(isequal(index), g.cell_map)
-        @assert !isnothing(t) "Cell $pos not found in active set"
+        if isnothing(t)
+            if throw
+                error("Cell $pos not found in active set")
+            else
+                return nothing
+            end
+        end
     end
     return t
 end
