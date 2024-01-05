@@ -35,11 +35,39 @@ Base.parent(A::SparsityTracingWrapper) = A.data
 Base.size(A::SparsityTracingWrapper) = size(A.data)
 Base.axes(A::SparsityTracingWrapper) = axes(A.data)
 
-function Base.getindex(A::SparsityTracingWrapper, i, j)
+function Base.getindex(A::SparsityTracingWrapper, i)
+    if i isa Colon
+        return A
+    else
+        return map(i -> A[i], i)
+    end
+end
+
+function Base.getindex(A::SparsityTracingWrapper{T, D, <:Any}, I, J) where {T, D}
+    @assert D > 1
+    if I isa Colon
+        I = axes(A, 1)
+    end
+    if J isa Colon
+        J = axes(A, 2)
+    end
+    Ts = Jutul.ST.ADval{T}
+    n = length(I)
+    m = length(J)
+    out = Matrix{Ts}(undef, n, m)
+    for (i, ix) in enumerate(I)
+        for (j, jx) in enumerate(J)
+            out[i, j] = A[ix, jx]
+        end
+    end
+    return out
+end
+
+function Base.getindex(A::SparsityTracingWrapper, i::Int, j::Int)
     return as_tracer(A.data[i, j], j)
 end
 
-function Base.getindex(A::SparsityTracingWrapper{T, 2, D}, ix) where {T, D}
+function Base.getindex(A::SparsityTracingWrapper{T, 2, D}, ix::Int) where {T, D}
     n, m = size(A)
     zero_ix = ix - 1
     i = (zero_ix ÷ m) + 1
@@ -47,7 +75,7 @@ function Base.getindex(A::SparsityTracingWrapper{T, 2, D}, ix) where {T, D}
     return as_tracer(A.data[i, j], j)
 end
 
-function Base.getindex(A::SparsityTracingWrapper{T, 1, D}, i) where {T, D}
+function Base.getindex(A::SparsityTracingWrapper{T, 1, D}, i::Int) where {T, D}
     return as_tracer(A.data[i], i)
 end
 

@@ -226,8 +226,8 @@ function UnstructuredMesh(
     int_neighbors = convert_neighborship(int_neighbors)
     @assert length(bnd_cells) == nb
     bnd_cells::AbstractVector
-    @assert maximum(bnd_cells) <= nc
-    @assert minimum(bnd_cells) > 0
+    @assert maximum(bnd_cells, init = 1) <= nc
+    @assert minimum(bnd_cells, init = nc) > 0
 
     @assert maximum(faces_to_nodes.vals, init = 0) <= nn "Too few nodes provided"
     return UnstructuredMesh(cells_to_faces, cells_to_bnd, faces_to_nodes, bnd_to_nodes, node_points, int_neighbors, bnd_cells; kwarg...)
