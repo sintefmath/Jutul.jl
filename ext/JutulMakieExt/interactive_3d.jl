@@ -55,7 +55,7 @@ function plot_interactive_impl(grid, states;
         transform = "none",
         new_window = true,
         edge_color = nothing,
-        edge_arg = NamedTuple(),
+        edge_arg = (linewidth = 0.5,),
         colormap = :viridis,
         alphamap = :no_alpha_map,
         kwarg...
