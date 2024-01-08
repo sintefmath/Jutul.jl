@@ -11,7 +11,7 @@ function plot_interactive_impl(d::DataDomain, data = missing; kwarg...)
         end
         data = [plot_d]
     end
-    plot_interactive_impl(mesh, data)
+    plot_interactive_impl(mesh, data; kwarg...)
 end
 
 function plot_interactive_impl(model::MultiModel, states, model_key = nothing; kwarg...)
@@ -54,6 +54,8 @@ function plot_interactive_impl(grid, states;
         title = "",
         transform = "none",
         new_window = true,
+        edge_color = nothing,
+        edge_arg = NamedTuple(),
         colormap = :viridis,
         alphamap = :no_alpha_map,
         kwarg...
@@ -410,6 +412,9 @@ function plot_interactive_impl(grid, states;
                                         colormap = cmap,
                                         transparency = transparency,
                                         kwarg...)
+        if !isnothing(edge_color)
+            Jutul.plot_mesh_edges!(ax, grid; color = edge_color, edge_arg...)
+        end
     elseif plot_type == :meshscatter
         sz = 0.8.*primitives.sizes
         npts, d = size(pts)
