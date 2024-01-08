@@ -42,6 +42,23 @@ function plot_mesh_impl!
 
 end
 
+function plot_mesh_edges(arg...; kwarg...)
+    check_plotting_availability()
+    plot_mesh_edges_impl(arg...; kwarg...)
+end
+
+function plot_mesh_edges_impl
+
+end
+
+function plot_mesh_edges!(arg...; kwarg...)
+    check_plotting_availability()
+    plot_mesh_edges_impl!(arg...; kwarg...)
+end
+
+function plot_mesh_edges_impl!
+
+end
 
 function plot_cell_data(arg...; kwarg...)
     check_plotting_availability()

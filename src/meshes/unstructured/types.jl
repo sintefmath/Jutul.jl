@@ -516,3 +516,55 @@ function UnstructuredMesh(G_raw::AbstractDict)
     return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw)
 end
 
+function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = true, is_depth = false)
+    if !(m isa UnstructuredMesh)
+        m = UnstructuredMesh(m)
+    end
+    nodes = Vector{Tuple{Int, Int}}()
+    for face in 1:number_of_faces(m)
+        l, r = m.faces.neighbors[face]
+        if l > r
+            r, l = l, r
+        end
+        l_in = l in cells
+        r_in = r in cells
+        a = outer && ((l_in && !r_in) || (r_in && !l_in))
+        b = !outer && (l_in || r_in)
+        if a || b
+            @assert !b
+            prev_node = missing
+            f2n = m.faces.faces_to_nodes[face]
+            for node in f2n
+                if !ismissing(prev_node)
+                    push!(nodes, (prev_node, node))
+                end
+                prev_node = node
+            end
+            push!(nodes, (first(f2n), f2n[end]))
+        end
+    end
+
+    for bf in 1:number_of_boundary_faces(m)
+        c = m.boundary_faces.neighbors[bf]
+        if c in cells
+            prev_node = missing
+            f2n = m.boundary_faces.faces_to_nodes[bf]
+            for node in f2n
+                if !ismissing(prev_node)
+                    push!(nodes, (prev_node, node))
+                end
+                prev_node = node
+            end
+            push!(nodes, (first(f2n), f2n[end]))
+        end
+    end
+    pts = map(x -> (m.node_points[x[1]], m.node_points[x[2]]), nodes)
+    if is_depth
+        u = SVector{3, Float64}(1.0, 1.0, -1.0)
+        for i in eachindex(pts)
+            p1, p2 = pts[i]
+            pts[i] = (p1 .* u, p2 .* u)
+        end
+    end
+    return pts
+end

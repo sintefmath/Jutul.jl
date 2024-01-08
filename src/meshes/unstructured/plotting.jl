@@ -33,7 +33,7 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
                 Cells = (cell_data) -> cell_data[cell_index],
                 Faces = (face_data) -> face_data[face_index],
                 indices = (Cells = cell_index, Faces = face_index)
-              )
+            )
     return (points = pts, triangulation = tri, mapper = mapper)
 end
 

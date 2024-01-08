@@ -108,6 +108,10 @@ function Base.show(io::IO, t::MIME"text/plain", d::DataDomain)
 
 end
 
+function triangulate_mesh(d::DataDomain; kwarg...)
+    return triangulate_mesh(physical_representation(d); kwarg...)
+end
+
 """
     DataDomain(domain::JutulDomain; property1 = p1, property2 = p2, ...)
 
