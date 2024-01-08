@@ -19,7 +19,7 @@ LinearAlgebra.mul!(x, p::PrecondWrapper, y) = mul!(x, p.op, y)
 LinearAlgebra.mul!(x, p::PrecondWrapper, y, α, β) = mul!(x, p.op, y, α, β)
 
 """
-GenericKrylov(solver = :gmres; preconditioner = nothing; <kwarg>)
+    GenericKrylov(solver = :gmres; preconditioner = nothing; <kwarg>)
 
 Solver that wraps `Krylov.jl` with support for preconditioning.
 """
