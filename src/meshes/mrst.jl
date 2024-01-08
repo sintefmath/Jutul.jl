@@ -6,6 +6,13 @@ struct MRSTWrapMesh <: FiniteVolumeMesh
     tags::MeshEntityTags{Int}
 end
 
+"""
+    MRSTWrapMesh(G, N = nothing)
+
+Mesh that adapts an exported MRST mesh to the Jutul interface. `G` is assumed to
+be read directly from file using `MAT.matread`. The raw exported grid can be
+found under the `data` field.
+"""
 function MRSTWrapMesh(G, N = nothing)
     @assert haskey(G, "cells")
     @assert haskey(G, "faces")
