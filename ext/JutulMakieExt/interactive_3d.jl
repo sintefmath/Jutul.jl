@@ -311,6 +311,14 @@ function plot_interactive_impl(grid, states;
     end
     top_buttons[1, 1:5] = [genlabel("Filters"), b_clear, b_clear_last, b_add_static, b_add_dynamic]
 
+    # Edge outlines
+    if !isnothing(edge_color)
+        top_layout[1, N_top] = genlabel("Edges")
+        N_top += 1
+        edge_toggle = Toggle(top_layout[1, N_top], active = true)
+        N_top += 1
+    end
+
     # Transform
     top_layout[1, N_top] = genlabel("Transform")
     N_top += 1
@@ -413,7 +421,8 @@ function plot_interactive_impl(grid, states;
                                         transparency = transparency,
                                         kwarg...)
         if !isnothing(edge_color)
-            Jutul.plot_mesh_edges!(ax, grid; color = edge_color, edge_arg...)
+            eplt = Jutul.plot_mesh_edges!(ax, grid; color = edge_color, edge_arg...)
+            connect!(eplt.visible, edge_toggle.active)
         end
     elseif plot_type == :meshscatter
         sz = 0.8.*primitives.sizes
