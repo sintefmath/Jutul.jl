@@ -127,6 +127,10 @@ function count_entities(g::JutulMesh, ::BoundaryFaces)
     return number_of_boundary_faces(g)
 end
 
+function mesh_z_is_depth(g::JutulMesh)
+    return false
+end
+
 dim(g::TwoPointFiniteVolumeGeometry) = size(g.cell_centroids, 1)
 
 """

@@ -59,6 +59,7 @@ function plot_interactive_impl(grid, states;
         aspect = (1.0, 1.0, 1/3),
         colormap = :viridis,
         alphamap = :no_alpha_map,
+        z_is_depth = Jutul.mesh_z_is_depth(grid),
         kwarg...
     )
     has_primitives = !isnothing(primitives)
@@ -196,7 +197,7 @@ function plot_interactive_impl(grid, states;
     is_3d = size(pts, 2) == 3
     ax_pos = fig[2, 1:3]
     if is_3d
-        ax = Axis3(ax_pos, title = title, aspect = aspect)
+        ax = Axis3(ax_pos, title = title, aspect = aspect, zreversed = z_is_depth)
     else
         ax = Axis(ax_pos, title = title)
     end
@@ -549,9 +550,9 @@ function generate_colormap(colormap_name, alphamap_name, base_alpha, low, high)
     return cmap
 end
 
-function basic_3d_figure(resolution = default_jutul_resolution())
+function basic_3d_figure(resolution = default_jutul_resolution(); z_is_depth = false)
     fig = Figure(size = resolution)
-    ax = Axis3(fig[1, 1])
+    ax = Axis3(fig[1, 1], zreversed = z_is_depth)
     return (fig, ax)
 end
 

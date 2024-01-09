@@ -1,4 +1,4 @@
-function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer = false, flatten = true)
+function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; outer = false, flatten = true)
     N = 3
     pts = Vector{SVector{N, Float64}}()
     tri = Vector{SVector{N, Int64}}()
@@ -19,12 +19,6 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; is_depth = true, outer =
     end
     offset = add_points!(BoundaryFaces(), m.boundary_faces, offset)
 
-    if is_depth
-        u = SVector{N, Float64}(1.0, 1.0, -1.0)
-        for i in eachindex(pts)
-            pts[i] = pts[i] .* u
-        end
-    end
     if flatten
         pts = plot_flatten_helper(pts)
         tri = plot_flatten_helper(tri)

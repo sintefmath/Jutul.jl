@@ -1,12 +1,21 @@
-function Jutul.plot_mesh_impl(m; resolution = default_jutul_resolution(), kwarg...)
-    fig, ax = basic_3d_figure(resolution)
+function Jutul.plot_mesh_impl(m;
+        resolution = default_jutul_resolution(),
+        z_is_depth = Jutul.mesh_z_is_depth(m),
+        kwarg...
+    )
+    fig, ax = basic_3d_figure(resolution, z_is_depth = z_is_depth)
     p = Jutul.plot_mesh!(ax, m; kwarg...)
     display(fig)
     return (fig, ax, p)
 end
 
-function Jutul.plot_mesh_impl!(ax, m; cells = nothing, is_depth = true, outer = false, color = :lightblue, kwarg...)
-    pts, tri, mapper = triangulate_mesh(m, outer = outer, is_depth = is_depth)
+function Jutul.plot_mesh_impl!(ax, m;
+        cells = nothing,
+        outer = false,
+        color = :lightblue,
+        kwarg...
+    )
+    pts, tri, mapper = triangulate_mesh(m, outer = outer)
     if !isnothing(cells)
         if eltype(cells) == Bool
             @assert length(cells) == number_of_cells(m)
@@ -42,9 +51,10 @@ end
 function Jutul.plot_cell_data_impl(m, data;
         colorbar = :horizontal,
         resolution = default_jutul_resolution(),
+        z_is_depth = Jutul.mesh_z_is_depth(m),
         kwarg...
     )
-    fig, ax = basic_3d_figure(resolution)
+    fig, ax = basic_3d_figure(resolution, z_is_depth = z_is_depth)
     p = Jutul.plot_cell_data!(ax, m, data; kwarg...)
     min_data = minimum(data)
     max_data = maximum(data)
@@ -89,9 +99,10 @@ end
 
 function Jutul.plot_mesh_edges_impl(m;
         resolution = default_jutul_resolution(),
+        z_is_depth = Jutul.mesh_z_is_depth(m),
         kwarg...
     )
-    fig, ax = basic_3d_figure(resolution)
+    fig, ax = basic_3d_figure(resolution, z_is_depth = z_is_depth)
     p = Jutul.plot_mesh_edges!(ax, m; kwarg...)
     display(fig)
     return (fig, ax, p)
@@ -102,7 +113,6 @@ function Jutul.plot_mesh_edges_impl!(ax, m;
         transparency = true,
         color = :black,
         cells = nothing,
-        is_depth = true,
         outer = true,
         linewidth = 0.3,
         kwarg...)
@@ -110,7 +120,7 @@ function Jutul.plot_mesh_edges_impl!(ax, m;
     if isnothing(cells)
         cells = 1:number_of_cells(m)
     end
-    s = Jutul.mesh_linesegments(m, cells = cells, is_depth = is_depth, outer = outer)
+    s = Jutul.mesh_linesegments(m, cells = cells, outer = outer)
     f = linesegments!(ax, s; linewidth = linewidth, transparency = transparency, color = color, kwarg...)
     return f
 end

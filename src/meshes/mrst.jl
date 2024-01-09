@@ -142,7 +142,7 @@ function triangulate_mesh(m::Dict)
     return triangulate_mesh(mm)
 end
 
-function triangulate_mesh(m::MRSTWrapMesh; is_depth = true, outer = false)
+function triangulate_mesh(m::MRSTWrapMesh; outer = false)
     G = m.data
     d = dim(m)
 
@@ -249,10 +249,6 @@ function triangulate_mesh(m::MRSTWrapMesh; is_depth = true, outer = false)
                 edge_pts = npts[local_nodes, :]
                 # Face centroid first, then nodes
                 local_pts = [center'; edge_pts]
-                if is_depth
-                    # TODO: Reverse zaxis for Makie instead of doing it here.
-                    local_pts[:, 3] *= -1
-                end
                 n = length(local_nodes)
                 local_tri = cyclical_tesselation(n)
                 # Out
@@ -277,4 +273,11 @@ function triangulate_mesh(m::MRSTWrapMesh; is_depth = true, outer = false)
                 indices = (Cells = cell_index, Faces = face_index)
               )
     return (points = pts, triangulation = tri, mapper = mapper)
+end
+
+function mesh_z_is_depth(G::MRSTWrapMesh)
+    return any(
+        x -> lowercase(x) == "mprocessgrdecl" || lowercase(x) == "processgrdecl",
+        G.data.type
+    )
 end
