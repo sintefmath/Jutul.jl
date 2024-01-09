@@ -136,10 +136,13 @@ function descalarize_primary_variables!(state, model, V, pvars::NamedTuple = (; 
     pvars_def = values(pvars)
     pvars_keys = keys(pvars)
     for (j, k, pvar) in zip(eachindex(pvars_def), pvars_keys, pvars_def)
-        vals = state[k]
-        for i in ind
-            descalarize_primary_variable!(vals, model, V[i][j], pvar, i)
-        end
+        descalarize_primary_variable_inner!(state[k], model, V, pvar, ind, Val(j))
     end
     return state
+end
+
+function descalarize_primary_variable_inner!(vals, model, V, pvar, ind, ::Val{j}) where j
+    for i in ind
+        descalarize_primary_variable!(vals, model, V[i][j], pvar, i)
+    end
 end
