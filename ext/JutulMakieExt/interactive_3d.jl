@@ -55,7 +55,8 @@ function plot_interactive_impl(grid, states;
         transform = "none",
         new_window = true,
         edge_color = nothing,
-        edge_arg = (linewidth = 0.5,),
+        edge_arg = NamedTuple(),
+        aspect = (1.0, 1.0, 1/3),
         colormap = :viridis,
         alphamap = :no_alpha_map,
         kwarg...
@@ -193,12 +194,12 @@ function plot_interactive_impl(grid, states;
         state_index[] = val
     end
     is_3d = size(pts, 2) == 3
+    ax_pos = fig[2, 1:3]
     if is_3d
-        make_axis = Axis3
+        ax = Axis3(ax_pos, title = title, aspect = aspect)
     else
-        make_axis = Axis
+        ax = Axis(ax_pos, title = title)
     end
-    ax = make_axis(fig[2, 1:3], title = title)
 
     # Selection of data
     ys = @lift(
