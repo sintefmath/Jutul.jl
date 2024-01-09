@@ -31,7 +31,7 @@ function Jutul.plot_mesh_impl!(ax, m;
         tri = tri[keep, :]
         tri, pts = remove_unused_points(tri, pts)
     end
-    f = mesh!(ax, pts, tri; color = color, kwarg...)
+    f = mesh!(ax, pts, tri; color = color, backlight = 1, kwarg...)
     return f
 end
 
@@ -94,7 +94,7 @@ function Jutul.plot_cell_data_impl!(ax, m, data::AbstractVecOrMat; cells = nothi
     end
     @assert length(data) == nc
     color = mapper.Cells(data)
-    return mesh!(ax, pts, tri; color = color, kwarg...)
+    return mesh!(ax, pts, tri; backlight = 1, color = color, kwarg...)
 end
 
 function Jutul.plot_mesh_edges_impl(m;
