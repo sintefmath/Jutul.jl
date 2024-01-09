@@ -53,6 +53,7 @@ function plot_interactive_impl(grid, states;
         alpha = 1.0,
         title = "",
         transform = "none",
+        free_cam = false,
         new_window = true,
         edge_color = nothing,
         edge_arg = NamedTuple(),
@@ -198,6 +199,9 @@ function plot_interactive_impl(grid, states;
     ax_pos = fig[2, 1:3]
     if is_3d
         ax = Axis3(ax_pos, title = title, aspect = aspect, zreversed = z_is_depth)
+        if free_cam
+            Camera3D(ax.scene)
+        end
     else
         ax = Axis(ax_pos, title = title)
     end
