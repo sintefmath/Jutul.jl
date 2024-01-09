@@ -361,7 +361,7 @@ function plot_primitives(mesh::CartesianMesh, plot_type; kwarg...)
     return out
 end
 
-function triangulate_mesh(m::CartesianMesh; is_depth = true, outer = false)
+function triangulate_mesh(m::CartesianMesh; outer = false)
     pts = []
     tri = []
     cell_ix = []
@@ -434,9 +434,6 @@ function triangulate_mesh(m::CartesianMesh; is_depth = true, outer = false)
                              x0      y0 + dy z]
             end
             local_tri = [1 2 3; 3 4 1]
-            if is_depth
-                @. local_pts[:, 3] *= -1
-            end
             return (local_pts, local_tri)
         end
         if outer

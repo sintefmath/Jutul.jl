@@ -33,6 +33,8 @@ struct UnstructuredMesh{D, S, IM, IF, M, F, BM, NM, T} <: FiniteVolumeMesh
     node_map::NM
     "Tags on cells/faces/nodes"
     tags::MeshEntityTags{T}
+    "Interpret z coordinate as depths in plots"
+    z_is_depth::Bool
 end
 
 function convert_coord_points(points::AbstractMatrix{F}) where F
@@ -245,7 +247,8 @@ function UnstructuredMesh(
         face_map::IF = nothing,
         boundary_map::BM = nothing,
         node_map::NM = nothing,
-        structure::S = nothing
+        structure::S = nothing,
+        z_is_depth = false
     ) where {T<:IndirectionMap, IM, IF, dim, F<:Real, BM, NM, S}
     faces = FaceMap(cells_to_faces, faces_to_nodes, face_neighbors)
     bnd = FaceMap(cells_to_bnd, bnd_to_nodes, boundary_cells)
@@ -261,7 +264,8 @@ function UnstructuredMesh(
         face_map,
         boundary_map,
         node_map,
-        tags
+        tags,
+        z_is_depth
     )
     initialize_entity_tags!(g)
     return g
@@ -269,6 +273,10 @@ end
 
 function UnstructuredMesh(G::UnstructuredMesh)
     return G
+end
+
+function mesh_z_is_depth(G::UnstructuredMesh)
+    return G.z_is_depth
 end
 
 """
@@ -516,7 +524,7 @@ function UnstructuredMesh(G_raw::AbstractDict)
     return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw)
 end
 
-function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = true, is_depth = false)
+function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = true)
     if !(m isa UnstructuredMesh)
         m = UnstructuredMesh(m)
     end
@@ -559,12 +567,5 @@ function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = true, is_dep
         end
     end
     pts = map(x -> (m.node_points[x[1]], m.node_points[x[2]]), nodes)
-    if is_depth
-        u = SVector{3, Float64}(1.0, 1.0, -1.0)
-        for i in eachindex(pts)
-            p1, p2 = pts[i]
-            pts[i] = (p1 .* u, p2 .* u)
-        end
-    end
     return pts
 end
