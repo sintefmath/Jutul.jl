@@ -98,12 +98,19 @@ function Jutul.plot_mesh_edges_impl(m;
 end
 
 
-function Jutul.plot_mesh_edges_impl!(ax, m; transparency = true, color = :black, cells = nothing, is_depth = true, outer = true, kwarg...)
+function Jutul.plot_mesh_edges_impl!(ax, m;
+        transparency = true,
+        color = :black,
+        cells = nothing,
+        is_depth = true,
+        outer = true,
+        linewidth = 0.3,
+        kwarg...)
     m = physical_representation(m)
     if isnothing(cells)
         cells = 1:number_of_cells(m)
     end
     s = Jutul.mesh_linesegments(m, cells = cells, is_depth = is_depth, outer = outer)
-    f = linesegments!(ax, s; transparency = transparency, color = color, kwarg...)
+    f = linesegments!(ax, s; linewidth = linewidth, transparency = transparency, color = color, kwarg...)
     return f
 end
