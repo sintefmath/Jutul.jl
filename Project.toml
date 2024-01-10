@@ -59,7 +59,7 @@ JutulMeshesExt = ["Meshes"]
 JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
 
 [compat]
-AlgebraicMultigrid = "0.5.1"
+AlgebraicMultigrid = "0.5.1, 0.6"
 Crayons = "4.1.1"
 DataStructures = "0.18.13"
 ExprTools = "0.1.8"
