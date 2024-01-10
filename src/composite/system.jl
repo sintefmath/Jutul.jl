@@ -78,7 +78,7 @@ function generate_submodel(m::CompositeModel, label::Symbol)
     subsys = m.system[label]
     model = SimulationModel(m.domain, subsys, formulation = m.formulation,
                                                context = m.context,
-                                               plot_mesh = m.context)
+                                               data_domain = m.data_domain)
     return model
 end
 
