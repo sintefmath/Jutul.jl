@@ -27,6 +27,10 @@ function default_values(model::CompositeModel, u::Pair{Symbol, V}) where V<:Jutu
     default_values(submodel(model, u[1]), u[2])
 end
 
+function default_parameter_values(data_domain, model::CompositeModel, u::Pair{Symbol, V}, symb) where V<:JutulVariables
+    default_parameter_values(data_domain, submodel(model, u[1]), u[2], symb)
+end
+
 function initialize_variable_value(model::CompositeModel, pvar::Pair{Symbol, V}, val; kwarg...) where V<:JutulVariables
     m = submodel(model, pvar[1])
     initialize_variable_value(m, pvar[2], val; kwarg...)
