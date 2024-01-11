@@ -21,7 +21,7 @@ function get_tstr(dT, lim = 3)
     else
         last_unit_s = TIME_UNITS_FOR_PRINTING[end][2]
         if dT < 0
-            out = "-1"
+            out = "-"
             dT = abs(dT)
         else
             out = ""
@@ -29,7 +29,7 @@ function get_tstr(dT, lim = 3)
         count = 1
         for (u, s) in TIME_UNITS_FOR_PRINTING
             is_last = count == lim || s == last_unit_s
-            n = floor(dT/u)
+            n = Int(floor(dT/u))
             if n > 0 || s == last_unit_s
                 is_last = is_last || dT - n*u <= 0.0
                 if is_last
