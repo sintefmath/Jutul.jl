@@ -1,8 +1,59 @@
-function get_tstr(dT)
+const TIME_UNITS_FOR_PRINTING = (
+    (si_unit(:year), :year),
+    (7*si_unit(:day), :week),
+    (si_unit(:day), :day),
+    (si_unit(:hour), :hour),
+    (si_unit(:minute), :minute),
+    (si_unit(:second), :second),
+    (si_unit(:milli)*si_unit(:second), :millisecond),
+    (si_unit(:micro)*si_unit(:second), :microsecond),
+    (si_unit(:nano)*si_unit(:second), :nanosecond),
+)
+
+"""
+    get_tstr(dT, lim = 3)
+
+Get formatted time string of `dT` given in seconds, limited to `lim` number of units.
+"""
+function get_tstr(dT, lim = 3)
     if dT == 0
         return "start"
     else
-        return Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
+        last_unit_s = TIME_UNITS_FOR_PRINTING[end][2]
+        if dT < 0
+            out = "-1"
+            dT = abs(dT)
+        else
+            out = ""
+        end
+        count = 1
+        for (u, s) in TIME_UNITS_FOR_PRINTING
+            is_last = count == lim || s == last_unit_s
+            n = floor(dT/u)
+            if n > 0 || s == last_unit_s
+                is_last = is_last || dT - n*u <= 0.0
+                if is_last
+                    n_str = @sprintf "%1.4g" dT/u
+                    finalizer = "";
+                else
+                    n_str = "$n"
+                    finalizer = ", "
+                end
+                dT -= n*u
+                if n == 1
+                    suffix = ""
+                else
+                    suffix = "s"
+                end
+                out *= "$n_str $(s)$suffix$finalizer"
+                count += 1
+                if is_last
+                    break
+                end
+            end
+        end
+        return out
+        # return Dates.canonicalize(Dates.CompoundPeriod(Millisecond(ceil(1000*dT))))
     end
 end
 
