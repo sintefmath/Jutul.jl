@@ -727,7 +727,7 @@ struct ConservationLaw{C, T<:FlowDiscretization, FT<:FluxType, N} <: JutulEquati
 end
 
 export CompositeSystem
-struct CompositeSystem{T} <: JutulSystem
+struct CompositeSystem{label, T} <: JutulSystem
     systems::T
 end
 
@@ -737,8 +737,10 @@ function Base.show(io::IO, t::CompositeSystem)
         print(io, "($name => $sys)\n")
     end
 end
-function CompositeSystem(; kwarg...)
-    return CompositeSystem(NamedTuple(pairs(kwarg)))
+function CompositeSystem(label::Symbol = :composite; kwarg...)
+    tup = NamedTuple(pairs(kwarg))
+    T = typeof(tup)
+    return CompositeSystem{label, T}(tup)
 end
 
 const CompositeModel = SimulationModel{<:JutulDomain, <:CompositeSystem, <:JutulFormulation, <:JutulContext}
