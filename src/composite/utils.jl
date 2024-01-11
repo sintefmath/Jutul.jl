@@ -37,7 +37,8 @@ function initialize_variable_value(model::CompositeModel, pvar::Pair{Symbol, V},
 end
 
 function initialize_variable_ad!(state, model::CompositeModel, pvar::Pair{Symbol, V}, symb, npartials, diag_pos; kwarg...) where V<:JutulVariables
-    state[symb] = allocate_array_ad(state[symb], diag_pos = diag_pos, context = model.context, npartials = npartials; kwarg...)
+    state[symb] = initialize_variable_ad!(state, model, pvar[2], symb, npartials, diag_pos; kwarg...)
+    # state[symb] = allocate_array_ad(state[symb], diag_pos = diag_pos, context = model.context, npartials = npartials; kwarg...)
     return state
 end
 
