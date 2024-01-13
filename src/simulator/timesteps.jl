@@ -23,6 +23,7 @@ function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_report
     for sel in selectors
         dt = valid_timestep(sel, dt)
     end
+    dt = min(dt, config[:max_timestep])
     if config[:info_level] > 1
         ratio = dt/dt_prev
         if ratio > 5

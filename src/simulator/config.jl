@@ -12,6 +12,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :end_report, nothing, "Output a final report that includes timings etc. If nothing, depends on info_level instead.", types = Union{Bool, Nothing})
     # Convergence tests
     add_option!(cfg, :max_timestep_cuts, 5, "Max time step cuts in a single mini step before termination of simulation.", types = Int, values = 0:10000)
+    add_option!(cfg, :max_timestep, Inf, "Max time step length.", types = Float64)
     add_option!(cfg, :max_nonlinear_iterations, 15, "Max number of nonlinear iterations in a Newton solve before time-step is cut.", types = Int, values = 0:10000)
     add_option!(cfg, :min_nonlinear_iterations, 1, "Minimum number of nonlinear iterations in Newton solver.", description = "This number of Newtion iterations is always performed, even if all equations are converged.", types = Int, values = 0:10000)
     add_option!(cfg, :failure_cuts_timestep, false, "Cut the timestep if exceptions occur during step. If set to false, throw errors and terminate.", types = Bool)
