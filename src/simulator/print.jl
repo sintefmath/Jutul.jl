@@ -50,14 +50,14 @@ function new_simulation_control_step_message(info_level, p, rec, elapsed, step_n
         t = r.time
         t_now = t + dT
         if isnothing(start_date)
-            fmt = get_tstr
+            fmt = x -> get_tstr(x, 2)
         else
             fmt = x -> Dates.format(start_date + Microsecond(ceil(x*1e6)), raw"u. dd Y")
         end
         start_time = fmt(t)
         end_time = fmt(t_now)
 
-        jutul_message("Step $fstr/$count_str", "Solving $start_time to $end_time, Δt = $(get_tstr(dT)) ", color = :blue)
+        jutul_message("Step $fstr/$count_str", "Solving $start_time to $end_time, Δt = $(get_tstr(dT, 2)) ", color = :blue)
         # @info "$(prefix)Solving step $step_no/$no_steps of length $(get_tstr(dT))."
     end
 end
