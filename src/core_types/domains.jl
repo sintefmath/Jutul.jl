@@ -143,6 +143,10 @@ function DataDomain(domain::JutulDomain; kwarg...)
     data = OrderedDict{Symbol, Any}()
     Ω = DataDomain(domain, u, data)
     for (k, v) in kwarg
+        if ismissing(v)
+            # Missing gets skipped.
+            continue
+        end
         if v isa Tuple{Any, JutulEntity}
             Ω[k, last(v)] = first(v)
         else
