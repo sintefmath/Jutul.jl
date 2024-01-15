@@ -1,7 +1,7 @@
 function update_model_pre_selection!(model::CompositeModel)
     models = Dict{Symbol, JutulModel}()
     for k in keys(model.system.systems)
-        models[k] = generate_submodel(model, k)
+        models[k] = composite_generate_submodel(model, k)
     end
     model.extra[:models] = models
     return model

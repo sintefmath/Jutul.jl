@@ -74,7 +74,7 @@ function internal_select_composite!(S, something, model, F!)
     return S
 end
 
-function generate_submodel(m::CompositeModel, label::Symbol)
+function composite_generate_submodel(m::CompositeModel, label::Symbol)
     subsys = m.system[label]
     model = SimulationModel(m.domain, subsys,
                             formulation = m.formulation,
