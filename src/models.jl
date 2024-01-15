@@ -550,35 +550,43 @@ end
 
 function get_sparse_arguments(storage, model, row_layout::T, col_layout::T) where T<:BlockMajorLayout
     eq_storage = storage[:equations]
-    I = []
-    J = []
-    numrows = 0
     primary_entities = get_primary_variable_ordered_entities(model)
-    block_size = degrees_of_freedom_per_entity(model, primary_entities[1])
+    entity = only(primary_entities)
+    block_size = degrees_of_freedom_per_entity(model, entity)
     ndof = number_of_degrees_of_freedom(model) ÷ block_size
+    S = missing
     for eqname in keys(model.equations)
         eq = model.equations[eqname]
         eq_s = eq_storage[eqname]
-        numcols = 0
         eqs_per_entity = number_of_equations_per_entity(model, eq)
-        for u in primary_entities
-            dof_per_entity = degrees_of_freedom_per_entity(model, u)
-            @assert dof_per_entity == eqs_per_entity == block_size "Block major layout only supported for square blocks."
-            S = declare_sparsity(model, eq, eq_s, u, row_layout, col_layout)
-            if !isnothing(S)
-                push!(I, S.I .+ numrows) # Row indices, offset by the size of preceeding equations
-                push!(J, S.J .+ numcols) # Column indices, offset by the partials in entities we have passed
-            end
-            numcols += count_active_entities(model.domain, u, for_variables = true)
+        dof_per_entity = degrees_of_freedom_per_entity(model, entity)
+
+        S_i = declare_sparsity(model, eq, eq_s, entity, row_layout, col_layout)
+        if ismissing(S)
+            S = S_i
+        else
+            @assert S.I == S_i.I
+            @assert S.J == S_i.J
+            @assert S.n/S.block_n == S_i.n/S_i.block_n
+            @assert S.m/S.block_m == S_i.m/S_i.block_m
         end
-        @assert numcols == ndof "Assumed square block, was $numcols x $ndof"
-        numrows += number_of_entities(model, eq)
     end
+    @assert !ismissing(S)
+
     it = index_type(model.context)
 
-    I = Vector{it}(vcat(I...))
-    J = Vector{it}(vcat(J...))
-    return SparsePattern(I, J, numrows, ndof, row_layout, col_layout, block_size)
+    I = Vector{it}()
+    J = Vector{it}()
+    nv = length(S.I)
+    sizehint!(I, nv)
+    sizehint!(J, nv)
+    for i in S.I
+        push!(I, convert(it, i))
+    end
+    for j in S.J
+        push!(J, convert(it, j))
+    end
+    return SparsePattern(I, J, ndof, ndof, row_layout, col_layout, block_size)
 end
 
 function setup_linearized_system!(storage, model::JutulModel)
