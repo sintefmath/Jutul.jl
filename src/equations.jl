@@ -3,22 +3,27 @@ export value, find_sparse_position
 
 
 
-function find_jac_position(A, target_entity_index, source_entity_index, # Typically row and column - global index
+function find_jac_position(A,
+    target_entity_index,source_entity_index, # Typically row and column - global index
+    target_entity_offset,source_entity_offset,
     equation_index, partial_index,        # Index of equation and partial derivative - local index
     nentities_target, nentities_source,         # Row and column sizes for each sub-system
     eqs_per_entity, partials_per_entity,      # Sizes of the smallest inner system
     context::JutulContext)
     layout = matrix_layout(context)
     find_jac_position(
-        A, target_entity_index, source_entity_index, 
+        A, target_entity_index, source_entity_index,
+        target_entity_offset,source_entity_offset,
         equation_index, partial_index,
-        nentities_target, nentities_source, 
-        eqs_per_entity, partials_per_entity, 
+        nentities_target, nentities_source,
+        eqs_per_entity, partials_per_entity,
         layout, layout
         )
 end
 
-function find_jac_position(A, target_entity_index, source_entity_index,
+function find_jac_position(A,
+    target_entity_index, source_entity_index,
+    target_entity_offset, source_entity_offset,
     equation_index, partial_index,
     nentities_target, nentities_source,
     eqs_per_entity, partials_per_entity, row_layout, col_layout)
@@ -26,16 +31,22 @@ function find_jac_position(A, target_entity_index, source_entity_index,
     row_layout = scalarize_layout(row_layout, col_layout)
     col_layout = scalarize_layout(col_layout, row_layout)
 
-    row, col = row_col_sparse(target_entity_index, source_entity_index,
-    equation_index, partial_index,
-    nentities_target, nentities_source,
-    eqs_per_entity, partials_per_entity, row_layout, col_layout)
+    row, col = row_col_sparse(
+        target_entity_index, source_entity_index,
+        target_entity_offset, source_entity_offset,
+        equation_index, partial_index,
+        nentities_target, nentities_source,
+        eqs_per_entity, partials_per_entity,
+        row_layout, col_layout
+    )
     # find_sparse_position then dispatches on the matrix type to find linear indices
     # for whatever storage format A uses internally
     return find_sparse_position(A, row, col, row_layout)
 end
 
-function find_jac_position(A, target_entity_index, source_entity_index,
+function find_jac_position(A,
+    target_entity_index, source_entity_index,
+    target_entity_offset, source_entity_offset,
     equation_index, partial_index,
     nentities_target, nentities_source,
     eqs_per_entity, partials_per_entity, row_layout::T, col_layout::T) where T<:BlockMajorLayout
@@ -60,12 +71,13 @@ function find_jac_position(A, target_entity_index, source_entity_index,
 end
 
 function row_col_sparse(target_entity_index, source_entity_index, # Typically row and column - global index
+    target_entity_offset, source_entity_offset,                    # row/col offsets
     equation_index, partial_index,                                # Index of equation and partial derivative - local index
     nentities_target, nentities_source,                           # Row and column sizes for each sub-system
     eqs_per_entity, partials_per_entity,                          # Sizes of the smallest inner system
     row_layout, col_layout)
-    row = alignment_linear_index(target_entity_index, equation_index, nentities_target, eqs_per_entity, row_layout)
-    col = alignment_linear_index(source_entity_index, partial_index, nentities_source, partials_per_entity, col_layout)
+    row = alignment_linear_index(target_entity_index + target_entity_offset, equation_index, nentities_target, eqs_per_entity, row_layout)
+    col = alignment_linear_index(source_entity_index + source_entity_offset, partial_index, nentities_source, partials_per_entity, col_layout)
     return (row, col)
 end
 

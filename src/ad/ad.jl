@@ -138,10 +138,15 @@ function do_injective_alignment!(jpos, cache, jac, target_index, source_index, n
         source = source_index[index]
         for e in 1:ne
             for d = 1:np
-                jpos[jacobian_cart_ix(index, e, d, np)] = find_jac_position(jac, target + target_offset, source + source_offset, e, d, 
-                nu_t, nu_s,
-                ne, np,
-                row_layout, col_layout)
+                jpos[jacobian_cart_ix(index, e, d, np)] = find_jac_position(
+                    jac,
+                    target, source,
+                    target_offset, source_offset,
+                    e, d,
+                    nu_t, nu_s,
+                    ne, np,
+                    row_layout, col_layout
+                )
             end
         end
     end
