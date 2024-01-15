@@ -44,12 +44,15 @@ function find_jac_position(A,
     return find_sparse_position(A, row, col, row_layout)
 end
 
-function find_jac_position(A,
-    target_entity_index, source_entity_index,
-    target_entity_offset, source_entity_offset,
-    equation_index, partial_index,
-    nentities_target, nentities_source,
-    eqs_per_entity, partials_per_entity, row_layout::T, col_layout::T) where T<:BlockMajorLayout
+function find_jac_position(
+        A,
+        target_entity_index, source_entity_index,
+        target_entity_offset, source_entity_offset,
+        equation_index, partial_index,
+        nentities_target, nentities_source,
+        eqs_per_entity, partials_per_entity,
+        row_layout::T, col_layout::T
+    ) where T<:BlockMajorLayout
 
     row = target_entity_index
     col = source_entity_index
@@ -59,14 +62,23 @@ function find_jac_position(A,
         @assert represented_as_adjoint(col_layout)
         inner_layout = adjoint(inner_layout)
     end
+    @assert source_entity_offset == 0
 
+    equation_index += target_entity_offset ÷ nentities_target
     pos = find_sparse_position(A, row, col, inner_layout)
     base_ix = (pos-1)*eqs_per_entity*partials_per_entity
+
+    # TODO: The use of N needs reworking if backend is to be used for
+    # rectangular blocks.
+    N = partials_per_entity
     if adjoint_layout
-        ix = base_ix + partials_per_entity*(equation_index-1) + partial_index
+        # ix = base_ix + partials_per_entity*(equation_index-1) + partial_index
+        ix = base_ix + N*(equation_index-1) + partial_index
     else
-        ix = base_ix + eqs_per_entity*(partial_index-1) + equation_index
+        # ix = base_ix + eqs_per_entity*(partial_index-1) + equation_index
+        ix = base_ix + N*(partial_index-1) + equation_index
     end
+
     return ix
 end
 
