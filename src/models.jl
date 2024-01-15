@@ -772,10 +772,23 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
     end
     output = []
     bz = model_block_size(model)
+    is_scalar = bz == 1
+    if is_scalar
+        R = r_buf
+    else
+        ndof = number_of_degrees_of_freedom(model)
+        R = local_residual_view(r_buf, model, bz, ndof ÷ bz)
+    end
+    block_offset = 0
     for key in keys(eqs)
         eq = eqs[key]
         eq_s = eqs_s[key]
-        r_v = local_residual_view(r_buf, model, eq, offset)
+        n_block_local = number_of_equations_per_entity(model, eq)
+        if is_scalar
+            r_v = local_residual_view(r_buf, model, eq, offset)
+        else
+            r_v = view(R, (block_offset+1):(block_offset+n_block_local), :)
+        end
 
         @tic "$key" all_crits = convergence_criterion(model, storage, eq, eq_s, r_v; kwarg...)
         e_keys = keys(all_crits)
@@ -803,6 +816,7 @@ function check_convergence(lsys, eqs, eqs_s, storage, model, tol_cfg; iteration 
             tols[e_k] = t_actual
         end
         offset += length(r_v)÷bz
+        block_offset += n_block_local
         if extra_out
             push!(output, (name = key, criterions = all_crits, tolerances = tols))
         end
