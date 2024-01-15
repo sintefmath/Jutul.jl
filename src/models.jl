@@ -699,14 +699,26 @@ end
 
 function update_linearized_system!(lsys, equations, eqs_storage, model::JutulModel; equation_offset = 0, r = lsys.r_buffer, nzval = lsys.jac_buffer)
     bz = model_block_size(model)
-    for key in keys(equations)
-        @tic "$key" begin
-            eq = equations[key]
-            eqs_s = eqs_storage[key]
-            r_view = local_residual_view(r, model, eq, equation_offset)
-            update_linearized_system_equation!(nzval, r_view, model, eq, eqs_s)
-            neq = number_of_equations(model, eq)
-            equation_offset += neq÷bz
+    if bz == 1
+        for key in keys(equations)
+            @tic "$key" begin
+                eq = equations[key]
+                eqs_s = eqs_storage[key]
+                r_view = local_residual_view(r, model, eq, equation_offset)
+                update_linearized_system_equation!(nzval, r_view, model, eq, eqs_s)
+                neq = number_of_equations(model, eq)
+                equation_offset += neq÷bz
+            end
+        end
+    else
+        ndof = number_of_degrees_of_freedom(model)
+        r_view = local_residual_view(r, model, bz, ndof ÷ bz)
+        for key in keys(equations)
+            @tic "$key" begin
+                eq = equations[key]
+                eqs_s = eqs_storage[key]
+                update_linearized_system_equation!(nzval, r_view, model, eq, eqs_s)
+            end
         end
     end
 end
@@ -723,6 +735,10 @@ function local_residual_view(r_buf, model, eq, equation_offset)
     n = number_of_equations_per_entity(model, eq)
     m = N ÷ n
     return as_cell_major_matrix(r_buf, n, m, model, equation_offset)
+end
+
+function local_residual_view(r_buf, model, n::Int, m::Int)
+    return as_cell_major_matrix(r_buf, n, m, model, 0)
 end
 
 """
