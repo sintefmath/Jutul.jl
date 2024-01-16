@@ -119,7 +119,7 @@ function create_extra_alignment(cache; allocate = true)
     return convert_to_immutable_storage(out)
 end
 
-function cross_term_entities(ct, eq, model)
+function cross_term_entities(ct::CrossTerm, eq::JutulEquation, model)
     return 1:count_active_entities(model.domain, associated_entity(eq))
 end
 
