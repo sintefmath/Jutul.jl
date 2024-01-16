@@ -55,7 +55,7 @@ end
 function internal_select_composite!(S, system::CompositeSystem, model, F!)
     for (name, sys) in pairs(system.systems)
         tmp = OrderedDict{Symbol, Any}()
-        F!(tmp, sys, submodel(model, name))
+        F!(tmp, sys, composite_submodel(model, name))
         for (k, v) in tmp
             S[k] = Pair(name, v)
         end
@@ -66,7 +66,7 @@ end
 function internal_select_composite!(S, something, model, F!)
     for name in keys(model.system.systems)
         tmp = OrderedDict{Symbol, Any}()
-        F!(tmp, something, submodel(model, name))
+        F!(tmp, something, composite_submodel(model, name))
         for (k, v) in tmp
             S[k] = Pair(name, v)
         end
@@ -90,7 +90,7 @@ function setup_forces(model::CompositeModel; kwarg...)
     end
     for (k, f) in kwarg
         # This should throw if the forces don't match the labels
-        submodel(model, k)
+        composite_submodel(model, k)
         force[k] = f
     end
     return NamedTuple(pairs(force))
@@ -111,7 +111,7 @@ function apply_forces!(storage, model::CompositeModel, dt, forces; time = NaN)
         diag_part = get_diagonal_entries(eq, eq_s)
         for fkey in keys(k_forces)
             force = k_forces[fkey]
-            apply_forces_to_equation!(diag_part, storage, submodel(model, name), eq, eq_s, force, time)
+            apply_forces_to_equation!(diag_part, storage, composite_submodel(model, name), eq, eq_s, force, time)
         end
     end
 end
