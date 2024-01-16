@@ -63,20 +63,21 @@ function find_jac_position(
         inner_layout = adjoint(inner_layout)
     end
     @assert source_entity_offset == 0
-
-    equation_index += target_entity_offset ÷ nentities_target
-    pos = find_sparse_position(A, row, col, inner_layout)
-    base_ix = (pos-1)*eqs_per_entity*partials_per_entity
-
     # TODO: The use of N needs reworking if backend is to be used for
     # rectangular blocks.
     N = partials_per_entity
+
+    equation_index += (target_entity_offset ÷ nentities_target)
+    pos = find_sparse_position(A, row, col, inner_layout)
+    # base_ix = (pos-1)*eqs_per_entity*partials_per_entity
+    base_ix = (pos-1)*N*N
+
     if adjoint_layout
         # ix = base_ix + partials_per_entity*(equation_index-1) + partial_index
-        ix = base_ix + N*(equation_index-1) + partial_index
+        ix = base_ix + N*(equation_index-1) + partial_index# + offset
     else
         # ix = base_ix + eqs_per_entity*(partial_index-1) + equation_index
-        ix = base_ix + N*(partial_index-1) + equation_index
+        ix = base_ix + N*(partial_index-1) + equation_index# + offset
     end
 
     return ix
