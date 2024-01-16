@@ -712,12 +712,16 @@ function update_linearized_system!(lsys, equations, eqs_storage, model::JutulMod
         end
     else
         ndof = number_of_degrees_of_freedom(model)
-        r_view = local_residual_view(r, model, bz, ndof ÷ bz)
-        for key in keys(equations)
+        block_offset = 0
+        R = local_residual_view(r, model, bz, ndof ÷ bz)
+        for (key, eq) in pairs(equations)
             @tic "$key" begin
+                n_block_local = number_of_equations_per_entity(model, eq)
+                r_view_eq = view(R, (block_offset+1):(block_offset+n_block_local), :)
                 eq = equations[key]
                 eqs_s = eqs_storage[key]
-                update_linearized_system_equation!(nzval, r_view, model, eq, eqs_s)
+                update_linearized_system_equation!(nzval, r_view_eq, model, eq, eqs_s)
+                block_offset += n_block_local
             end
         end
     end
