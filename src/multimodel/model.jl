@@ -222,14 +222,22 @@ end
 
 function get_equation_offset(model::SimulationModel, eq_label::Symbol, bz = nothing)
     offset = 0
-    for k in keys(model.equations)
-        if k == eq_label
-            if !isnothing(bz)
-                offset = Int(offset/bz)
+    layout = matrix_layout(model.context)
+    if layout isa ScalarLayout
+        for k in keys(model.equations)
+            if k == eq_label
+                return offset
+            else
+                offset += number_of_equations(model, model.equations[k])
             end
-            return offset
-        else
-            offset += number_of_equations(model, model.equations[k])
+        end
+    else
+        for k in keys(model.equations)
+            if k == eq_label
+                return offset
+            else
+                offset += number_of_entities(model, model.equations[k])
+            end
         end
     end
     error("Did not find equation $eq_label in $(keys(model.equations))")
