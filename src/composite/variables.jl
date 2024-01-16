@@ -13,6 +13,6 @@ end
 
 function update_primary_variable!(state, p::Pair{Symbol, V}, state_symbol, model::CompositeModel, dx, w) where V<:JutulVariables
     label, var = p
-    m = submodel(model, label)
+    m = composite_submodel(model, label)
     update_primary_variable!(state, var, state_symbol, m, dx, w)
 end
