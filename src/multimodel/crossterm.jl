@@ -302,6 +302,22 @@ function model_block_size(model)
     return bz
 end
 
+function model_block_size(model, offset_eq)
+    layout = matrix_layout(model.context)
+    if layout isa ScalarLayout
+        bz = 1
+    else
+        bz = 0
+        for (k, eq) in model.equations
+            if eq == offset_eq
+                break
+            end
+            bz += number_of_equations_per_entity(model, eq)
+        end
+    end
+    return bz
+end
+
 
 function crossterm_subsystem(model, lsys, target, source; diag = false)
     # neqs = map(number_of_equations, model.models)
@@ -345,6 +361,8 @@ function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source
     equation_offset += local_group_offset(target_keys, target, neqs, bz)
     variable_offset += local_group_offset(target_keys, target, ndofs, bz)
 
+    # bz_t = bz[target]
+    # bz_t = model_block_size(model, )
     equation_offset += get_equation_offset(target_model, eq_label, bz[target])
     for target_e in get_primary_variable_ordered_entities(target_model)
         align_to_jacobian!(s_target, ct, lsys.jac, target_model, target_e, impact,
