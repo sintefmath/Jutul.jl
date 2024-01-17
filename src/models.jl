@@ -1027,7 +1027,7 @@ function setup_primary_variable_views(storage, model, dx)
             offset += n
         end
     end
-    return out
+    return convert_to_immutable_storage(out)
 end
 
 function setup_equations_views(storage, model, r)
