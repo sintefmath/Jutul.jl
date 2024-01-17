@@ -127,7 +127,7 @@ function update_jutul_variable_internal!(v::AbstractMatrix, active, p, dx, w)
     @inbounds for i in 1 : nu
         a_i = active[i]
         for j in 1 : n
-            v[j, a_i] = update_value(v[j, a_i], w*dx[i + (j - 1)*nu], abs_max, rel_max, minval, maxval, scale)
+            v[j, a_i] = update_value(v[j, a_i], w*dx[j, i], abs_max, rel_max, minval, maxval, scale)
         end
     end
 end
@@ -385,7 +385,7 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
     dlast0 = 0.0
     @inbounds for i = 1:(nf-1)
         v = value(s[i, full_cell])
-        dv0 = dx[active_ix + (i-1)*nu]
+        dv0 = dx[i, active_ix]
         dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
         dlast0 -= dv0
         w = pick_relaxation(w, dv, dv0)
@@ -399,7 +399,7 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
         w = w0
     end
     @inbounds for i in 1:(nf-1)
-        s[i, full_cell] += w*dx[active_ix + (i-1)*nu]
+        s[i, full_cell] += w*dx[i, active_ix]
     end
     @inbounds s[nf, full_cell] += w*dlast0
     if bad_update
