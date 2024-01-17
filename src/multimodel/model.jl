@@ -122,6 +122,7 @@ function setup_storage!(storage, model::MultiModel;
             @tic "setup" setup_linearized_system!(storage, model)
             @tic "alignment" align_equations_to_linearized_system!(storage, model)
             @tic "alignment cross terms" align_cross_terms_to_linearized_system!(storage, model)
+            @tic "views" setup_equations_and_primary_variable_views!(storage, model)
         end
     end
     setup_multimodel_maps!(storage, model)
@@ -136,6 +137,27 @@ function setup_multimodel_maps!(storage, model)
         offset_map = map(g -> get_submodel_offsets(model, g), unique(groups))
     end
     storage[:multi_model_maps] = (offset_map = offset_map, );
+end
+
+function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys::MultiLinearizedSystem)
+    mkeys = submodel_symbols(model)
+    out = JutulStorage()
+
+    for (i, g) in enumerate(model.groups)
+        k = mkeys[i]
+        out[k] = setup_equations_and_primary_variable_views(storage[k], model[k], lsys[g, g])
+    end
+    storage[:views] = out
+end
+
+function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys::LinearizedSystem)
+    mkeys = submodel_symbols(model)
+    out = JutulStorage()
+    for (i, k) in enumerate(mkeys)
+        k = mkeys[i]
+        out[k] = setup_equations_and_primary_variable_views(storage[k], model[k], lsys)
+    end
+    storage[:views] = out
 end
 
 function specialize_simulator_storage(storage::JutulStorage, model::MultiModel, specialize)
