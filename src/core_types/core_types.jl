@@ -550,7 +550,7 @@ function Base.haskey(S::JutulStorage{NamedTuple{K, V}}, name::Symbol) where {K, 
     return name in K
 end
 
-function Base.keys(S::JutulStorage{K}) where K
+function Base.keys(S::JutulStorage{NamedTuple{K, V}}) where {K, V}
     return K
 end
 
