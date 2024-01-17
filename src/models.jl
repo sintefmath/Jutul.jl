@@ -1020,7 +1020,7 @@ function setup_primary_variable_views(storage, model, dx)
         for u in get_primary_variable_ordered_entities(model)
             np = number_of_partials_per_entity(model, u)
             nu = count_entities(model.domain, u)
-            Dx = get_matrix_view(dx, np, nu, false, offset)'
+            Dx = get_matrix_view(dx, np, nu, false, offset)
             local_offset = 0
             for (pkey, p) in primary
                 # This is a bit inefficient
@@ -1028,7 +1028,7 @@ function setup_primary_variable_views(storage, model, dx)
                     continue
                 end
                 ni = degrees_of_freedom_per_entity(model, p)
-                dxi = view(Dx, :, (local_offset+1):(local_offset+ni))
+                dxi = view(Dx, (local_offset+1):(local_offset+ni), :)
                 local_offset += ni
                 out[pkey] = dxi
             end
@@ -1040,7 +1040,7 @@ function setup_primary_variable_views(storage, model, dx)
             n = number_of_degrees_of_freedom(model, p)
             m = degrees_of_freedom_per_entity(model, p)
             rng = (offset+1):(n+offset)
-            dxi = reshape(view(dx, rng), n÷m, m)
+            dxi = reshape(view(dx, rng), n÷m, m)'
             out[pkey] = dxi
             offset += n
         end
