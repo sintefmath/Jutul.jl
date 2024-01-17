@@ -145,8 +145,9 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
     for (index, key) in enumerate(model_keys)
         offset = offsets[index]
         m = model.models[key]
+        eq_views = storage[key].views.equations
         ct, ct_s = cross_term_target(model, storage, key, true)
-        update_linearized_system_cross_terms!(lsys, ct, ct_s, m, key; equation_offset = offset, kwarg...)
+        update_linearized_system_cross_terms!(lsys, eq_views, ct, ct_s, m, key; equation_offset = offset, kwarg...)
     end
 end
 
@@ -172,7 +173,7 @@ function source_impact_for_pair(ctp, ct_s, label)
     return (eq_label, impact, caches_s, caches_t, pos, sgn)
 end
 
-function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_storage, model, label;
+function update_linearized_system_cross_terms!(lsys, eq_views, crossterms, crossterm_storage, model, label;
         equation_offset = 0,
         r = lsys.r_buffer,
         nzval = lsys.jac_buffer
@@ -183,7 +184,7 @@ function update_linearized_system_cross_terms!(lsys, crossterms, crossterm_stora
         eq = ct_equation(model, eq_label)
         @assert !isnothing(impact)
         nu = number_of_entities(model, eq)
-        r_ct = local_residual_view(r, model, eq, equation_offset + get_equation_offset(model, eq_label))
+        r_ct = eq_views[eq_label]
         update_linearized_system_cross_term!(nzval, r_ct, model, ct, caches, impact, nu, sgn)
     end
 end
