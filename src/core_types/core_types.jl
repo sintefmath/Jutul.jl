@@ -537,6 +537,11 @@ function Base.getindex(S::JutulStorage, name::Symbol)
     Base.getindex(data(S), name)
 end
 
+function Base.getindex(S::JutulStorage, name::Pair)
+    # This is hacked in for CompositeSystem
+    return S[last(name)]
+end
+
 function Base.haskey(S::JutulStorage{Nothing}, name::Symbol)
     return Base.haskey(data(S), name)
 end
