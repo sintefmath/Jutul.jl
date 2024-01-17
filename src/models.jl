@@ -689,7 +689,8 @@ Update the linearized system with the current set of equations.
 function update_linearized_system!(storage, model::JutulModel, executor = default_executor(); lsys = storage.LinearizedSystem, kwarg...)
     eqs = model.equations
     eqs_storage = storage.equations
-    update_linearized_system!(lsys, eqs, eqs_storage, model; kwarg...)
+    eqs_views = storage.views.equations
+    update_linearized_system!(lsys, eqs, eqs_storage, eqs_views, model; kwarg...)
     post_update_linearized_system!(lsys, executor, storage, model)
 end
 
@@ -697,32 +698,13 @@ function post_update_linearized_system!(lsys, executor, storage, model)
     # Do nothing.
 end
 
-function update_linearized_system!(lsys, equations, eqs_storage, model::JutulModel; equation_offset = 0, r = lsys.r_buffer, nzval = lsys.jac_buffer)
-    bz = model_block_size(model)
-    if bz == 1
-        for key in keys(equations)
-            @tic "$key" begin
-                eq = equations[key]
-                eqs_s = eqs_storage[key]
-                r_view = local_residual_view(r, model, eq, equation_offset)
-                update_linearized_system_equation!(nzval, r_view, model, eq, eqs_s)
-                neq = number_of_equations(model, eq)
-                equation_offset += neq÷bz
-            end
-        end
-    else
-        ndof = number_of_degrees_of_freedom(model)
-        block_offset = 0
-        R = local_residual_view(r, model, bz, ndof ÷ bz)
-        for (key, eq) in pairs(equations)
-            @tic "$key" begin
-                n_block_local = number_of_equations_per_entity(model, eq)
-                r_view_eq = view(R, (block_offset+1):(block_offset+n_block_local), :)
-                eq = equations[key]
-                eqs_s = eqs_storage[key]
-                update_linearized_system_equation!(nzval, r_view_eq, model, eq, eqs_s)
-                block_offset += n_block_local
-            end
+function update_linearized_system!(lsys, equations, eqs_storage, eqs_views, model::JutulModel; equation_offset = 0, r = lsys.r_buffer, nzval = lsys.jac_buffer)
+    for key in keys(equations)
+        @tic "$key" begin
+            eq = equations[key]
+            eqs_s = eqs_storage[key]
+            r_view = eqs_views[key]
+            update_linearized_system_equation!(nzval, r_view, model, eq, eqs_s)
         end
     end
 end
