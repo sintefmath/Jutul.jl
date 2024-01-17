@@ -53,11 +53,12 @@ end
 function check_increment(dx, pvar, key)
     has_bad_values = any(!isfinite, dx)
     if has_bad_values
-        bad = findall(isfinite.(dx) .== false)
+        display(dx)
+        bad = findall(isfinite.(vec(dx)) .== false)
         n_bad = length(bad)
         n = min(10, length(bad))
         bad = bad[1:n]
-        @warn "$key: $n_bad non-finite values found. Indices: (limited to 10) $bad"
+        @warn "$key: $n_bad non-finite values found. Indices: (limited to 10) $bad, values: $(dx[bad])"
     end
     ok = !has_bad_values
     return ok
