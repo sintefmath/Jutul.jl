@@ -139,7 +139,8 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
         s = storage[key]
         eqs_s = s.equations
         eqs = m.equations
-        update_linearized_system!(lsys, eqs, eqs_s, m; equation_offset = offset, kwarg...)
+        eqs_views = s.views.equations
+        update_linearized_system!(lsys, eqs, eqs_s, eqs_views, m; equation_offset = offset, kwarg...)
     end
     for (index, key) in enumerate(model_keys)
         offset = offsets[index]
