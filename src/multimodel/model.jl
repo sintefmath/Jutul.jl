@@ -139,19 +139,31 @@ function setup_multimodel_maps!(storage, model)
     storage[:multi_model_maps] = (offset_map = offset_map, );
 end
 
-function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys::MultiLinearizedSystem)
+function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys)
     mkeys = submodel_symbols(model)
-    for (i, g) in enumerate(model.groups)
-        k = mkeys[i]
-        storage[k][:views] = setup_equations_and_primary_variable_views(storage[k], model[k], lsys[g, g])
+    groups = model.groups
+    if isnothing(groups)
+        groups = ones(Int, length(mkeys))
     end
-end
+    ug = unique(groups)
 
-function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys::LinearizedSystem)
-    mkeys = submodel_symbols(model)
-    for (i, k) in enumerate(mkeys)
-        k = mkeys[i]
-        storage[k][:views] = setup_equations_and_primary_variable_views(storage[k], model[k], lsys)
+    for group in ug
+        lsys_g = lsys[group, group]
+        dx = vec(lsys_g.dx_buffer)
+        r = vec(lsys_g.r_buffer)
+        offset = 0
+        for (i, g) in enumerate(groups)
+            if g != group
+                continue
+            end
+            k = mkeys[i]
+            submodel = model[k]
+            ndof = number_of_degrees_of_freedom(submodel)
+            r_i = view(r, (offset+1):(offset+ndof))
+            dx_i = view(dx, (offset+1):(offset+ndof))
+            storage[k][:views] = setup_equations_and_primary_variable_views(storage[k], submodel, r_i, dx_i)
+            offset += ndof
+        end
     end
 end
 
@@ -823,24 +835,14 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
 end
 
 function update_primary_variables!(storage, model::MultiModel; kwarg...)
-    lsys = storage.LinearizedSystem
-    dx = lsys.dx_buffer
     models = model.models
-
-    offset = 0
     model_keys = submodel_symbols(model)
     report = Dict{Symbol, AbstractDict}()
     for (i, key) in enumerate(model_keys)
         m = models[key]
         s = storage[key]
-        ndof = number_of_degrees_of_freedom(m)
-        dx_v = view(dx, (offset+1):(offset+ndof))
-        if isa(matrix_layout(m.context), BlockMajorLayout)
-            bz = block_size(lsys[i, i])
-            dx_v = reshape(dx_v, bz, :)
-        end
+        dx_v = s.views.primary_variables
         report[key] = update_primary_variables!(s.state, dx_v, m; state = s.state, kwarg...)
-        offset += ndof
     end
     return report
 end

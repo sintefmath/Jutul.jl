@@ -859,62 +859,24 @@ function solve_and_update!(storage, model::JutulModel, dt = nothing; linear_solv
 end
 
 function update_primary_variables!(storage, model::JutulModel; kwarg...)
-    dx = storage.LinearizedSystem.dx_buffer
+    dx = storage.views.primary_variables
     update_primary_variables!(storage.primary_variables, dx, model; state = storage.state, kwarg...)
 end
 
 function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1, check = false, state = missing)
-    layout = matrix_layout(model.context)
-    cell_major = is_cell_major(layout)
-    offset = 0
     primary = get_primary_variables(model)
     ok = true
     report = Dict{Symbol, Any}()
     # Depending on the variable ordering, this can require a bit of array
     # reshaping/indexing tricks.
-    if cell_major
-        offset = 0 # Offset into global r array
-        for u in get_primary_variable_ordered_entities(model)
-            np = number_of_partials_per_entity(model, u)
-            nu = count_entities(model.domain, u)
-            t = isa(layout, BlockMajorLayout)
-            if t
-                Dx = get_matrix_view(dx, np, nu, true, offset)
-            else
-                Dx = get_matrix_view(dx, np, nu, false, offset)'
-            end
-            local_offset = 0
-            for (pkey, p) in primary
-                # This is a bit inefficient
-                if u != associated_entity(p)
-                    continue
-                end
-                ni = degrees_of_freedom_per_entity(model, p)
-                dxi = view(Dx, :, (local_offset+1):(local_offset+ni))
-                if check
-                    ok_i = check_increment(dxi, p, pkey)
-                    ok = ok && ok_i
-                end
-                @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
-                local_offset += ni
-                report[pkey] = increment_norm(dxi, state, model, primary_storage[pkey], p)
-            end
-            offset += nu*np
+    for (pkey, p) in primary
+        dxi = dx[pkey]
+        if check
+            ok_i = check_increment(dxi, p, pkey)
+            ok = ok && ok_i
         end
-    else
-        for (pkey, p) in primary
-            n = number_of_degrees_of_freedom(model, p)
-            m = degrees_of_freedom_per_entity(model, p)
-            rng = (offset+1):(n+offset)
-            dxi = reshape(view(dx, rng), n÷m, m)
-            if check
-                ok_i = check_increment(dxi, p, pkey)
-                ok = ok && ok_i
-            end
-            @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
-            offset += n
-            report[pkey] = increment_norm(dxi, state, model, primary_storage[pkey], p)
-        end
+        @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
+        report[pkey] = increment_norm(dxi, state, model, primary_storage[pkey], p)
     end
     if !ok
         error("Primary variables recieved invalid updates.")
@@ -1038,17 +1000,52 @@ function setup_equations_and_primary_variable_views!(storage, model)
 end
 
 function setup_equations_and_primary_variable_views!(storage, model, lsys)
-    storage[:views] = setup_equations_and_primary_variable_views(storage, model, lsys)
+    storage[:views] = setup_equations_and_primary_variable_views(storage, model, lsys.r_buffer, lsys.dx_buffer)
 end
 
-function setup_equations_and_primary_variable_views(storage, model, lsys)
-    pvar = setup_primary_variable_views(storage, model, lsys.dx_buffer)
-    equations = setup_equations_views(storage, model, lsys.r_buffer)
+function setup_equations_and_primary_variable_views(storage, model, r, dx)
+    pvar = setup_primary_variable_views(storage, model, dx)
+    equations = setup_equations_views(storage, model, r)
     return (equations = equations, primary_variables = pvar)
 end
 
 function setup_primary_variable_views(storage, model, dx)
-
+    out = JutulStorage()
+    layout = matrix_layout(model.context)
+    primary = get_primary_variables(model)
+    # Depending on the variable ordering, this can require a bit of array
+    # reshaping/indexing tricks.
+    if is_cell_major(layout)
+        offset = 0 # Offset into global r array
+        for u in get_primary_variable_ordered_entities(model)
+            np = number_of_partials_per_entity(model, u)
+            nu = count_entities(model.domain, u)
+            Dx = get_matrix_view(dx, np, nu, false, offset)'
+            local_offset = 0
+            for (pkey, p) in primary
+                # This is a bit inefficient
+                if u != associated_entity(p)
+                    continue
+                end
+                ni = degrees_of_freedom_per_entity(model, p)
+                dxi = view(Dx, :, (local_offset+1):(local_offset+ni))
+                local_offset += ni
+                out[pkey] = dxi
+            end
+            offset += nu*np
+        end
+    else
+        offset = 0
+        for (pkey, p) in primary
+            n = number_of_degrees_of_freedom(model, p)
+            m = degrees_of_freedom_per_entity(model, p)
+            rng = (offset+1):(n+offset)
+            dxi = reshape(view(dx, rng), n÷m, m)
+            out[pkey] = dxi
+            offset += n
+        end
+    end
+    return out
 end
 
 function setup_equations_views(storage, model, r)
