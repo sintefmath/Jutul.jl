@@ -141,23 +141,18 @@ end
 
 function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys::MultiLinearizedSystem)
     mkeys = submodel_symbols(model)
-    out = JutulStorage()
-
     for (i, g) in enumerate(model.groups)
         k = mkeys[i]
-        out[k] = setup_equations_and_primary_variable_views(storage[k], model[k], lsys[g, g])
+        storage[k][:views] = setup_equations_and_primary_variable_views(storage[k], model[k], lsys[g, g])
     end
-    storage[:views] = out
 end
 
 function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys::LinearizedSystem)
     mkeys = submodel_symbols(model)
-    out = JutulStorage()
     for (i, k) in enumerate(mkeys)
         k = mkeys[i]
-        out[k] = setup_equations_and_primary_variable_views(storage[k], model[k], lsys)
+        storage[k][:views] = setup_equations_and_primary_variable_views(storage[k], model[k], lsys)
     end
-    storage[:views] = out
 end
 
 function specialize_simulator_storage(storage::JutulStorage, model::MultiModel, specialize)
@@ -807,8 +802,8 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
         m = model.models[key]
         eqs = m.equations
         eqs_s = s.equations
-        ls = get_linearized_system_submodel(storage, model, key, lsys)
-        conv, e, errors[key], = check_convergence(ls, eqs, eqs_s, s, m, tol_cfg[key];
+        eqs_view = s.views.equations
+        conv, e, errors[key], = check_convergence(eqs_view, eqs, eqs_s, s, m, tol_cfg[key];
             offset = offset,
             extra_out = true,
             update_report = inc,
