@@ -438,6 +438,7 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
         # We have the equations and the linearized system.
         # Give the equations a chance to figure out their place in the Jacobians.
         @tic "alignment" align_equations_to_linearized_system!(storage, model)
+        @tic "views" setup_equations_and_primary_variable_views!(storage, model)
     end
 end
 
@@ -889,6 +890,8 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
 
 
 
+    # Depending on the variable ordering, this can require a bit of array
+    # reshaping/indexing tricks.
     if cell_major
         offset = 0 # Offset into global r array
         for u in get_primary_variable_ordered_entities(model)
@@ -1049,3 +1052,47 @@ end
 function reset_variables!(storage, model, new_vars; type = :state)
     replace_values!(storage[type], new_vars)
 end
+
+function setup_equations_and_primary_variable_views!(storage, model)
+    setup_equations_and_primary_variable_views!(storage, model, storage.LinearizedSystem)
+end
+
+function setup_equations_and_primary_variable_views!(storage, model, lsys)
+    storage[:views] = setup_equations_and_primary_variable_views(storage, model, lsys)
+end
+
+function setup_equations_and_primary_variable_views(storage, model, lsys)
+    pvar = setup_primary_variable_views(storage, model, lsys.dx_buffer)
+    equations = setup_equations_views(storage, model, lsys.r_buffer)
+    return (equations = equations, primary_variables = pvar)
+end
+
+function setup_primary_variable_views(storage, model, dx)
+
+end
+
+function setup_equations_views(storage, model, r)
+    out = JutulStorage()
+    bz = model_block_size(model)
+    if bz == 1
+        equation_offset = 0
+        for (key, eq) in pairs(model.equations)
+            neq = number_of_equations(model, eq)
+            r_view = local_residual_view(r, model, eq, equation_offset)
+            equation_offset += neq
+            out[key] = r_view
+        end
+    else
+        ndof = number_of_degrees_of_freedom(model)
+        block_offset = 0
+        R = local_residual_view(r, model, bz, ndof ÷ bz)
+        for (key, eq) in pairs(model.equations)
+            n_block_local = number_of_equations_per_entity(model, eq)
+            r_view_eq = view(R, (block_offset+1):(block_offset+n_block_local), :)
+            block_offset += n_block_local
+            out[key] = r_view_eq
+        end
+    end
+    return convert_to_immutable_storage(out)
+end
+
