@@ -250,9 +250,10 @@ function get_equation_offset(model::SimulationModel, eq_label::Pair, arg...)
 end
 
 function get_equation_offset(model::SimulationModel, eq_label::Symbol, bz = nothing)
+    bz = NaN
     offset = 0
     layout = matrix_layout(model.context)
-    if layout isa ScalarLayout
+    if layout isa ScalarLayout || true
         for k in keys(model.equations)
             if k == eq_label
                 return offset
