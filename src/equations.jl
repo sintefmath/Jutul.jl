@@ -1,37 +1,47 @@
 export allocate_array_ad, get_ad_entity_scalar, update_values!, update_linearized_system_equation!
 export value, find_sparse_position
 
-
-
 function find_jac_position(A,
-    target_entity_index,source_entity_index, # Typically row and column - global index
-    target_entity_offset,source_entity_offset,
-    equation_index, partial_index,        # Index of equation and partial derivative - local index
-    nentities_target, nentities_source,         # Row and column sizes for each sub-system
-    eqs_per_entity, partials_per_entity,      # Sizes of the smallest inner system
-    context::JutulContext)
+        target_entity_index, source_entity_index, # Typically row and column - global index
+        row_offset, column_offset,
+        target_entity_offset, source_entity_offset,
+        equation_index, partial_index,            # Index of equation and partial derivative - local index
+        nentities_target, nentities_source,       # Row and column sizes for each sub-system
+        eqs_per_entity, partials_per_entity,      # Sizes of the smallest inner system
+        context::JutulContext;
+        number_of_equations_for_entity = eqs_per_entity
+    )
     layout = matrix_layout(context)
-    find_jac_position(
+    return find_jac_position(
         A, target_entity_index, source_entity_index,
+        row_offset, column_offset,
         target_entity_offset,source_entity_offset,
         equation_index, partial_index,
         nentities_target, nentities_source,
         eqs_per_entity, partials_per_entity,
-        layout, layout
+        layout, layout,
+        number_of_equations_for_entity = number_of_equations_for_entity
         )
 end
 
 function find_jac_position(A,
-    target_entity_index, source_entity_index,
-    target_entity_offset, source_entity_offset,
-    equation_index, partial_index,
-    nentities_target, nentities_source,
-    eqs_per_entity, partials_per_entity, row_layout, col_layout)
+        target_entity_index, source_entity_index,
+        row_offset, column_offset,
+        target_entity_offset, source_entity_offset,
+        equation_index, partial_index,
+        nentities_target, nentities_source,
+        eqs_per_entity, partials_per_entity,
+        row_layout, col_layout;
+        number_of_equations_for_entity = eqs_per_entity
+    )
     # get row and column index in the specific layout we are looking at
-    row_is_block = row_layout isa BlockMajorLayout
-    if row_is_block
-        equation_index += target_entity_offset ÷ nentities_target
+    if row_layout isa BlockMajorLayout
+        b = (target_entity_offset ÷ nentities_target)
+        equation_index += b
         target_entity_offset = 0
+        # The block we are in could actually be bigger. This only matters for
+        # entity/block major stuff.
+        eqs_per_entity = max(eqs_per_entity, partials_per_entity)
     end
     row_layout = scalarize_layout(row_layout, col_layout)
     col_layout = scalarize_layout(col_layout, row_layout)
@@ -46,33 +56,38 @@ function find_jac_position(A,
     )
     # find_sparse_position then dispatches on the matrix type to find linear indices
     # for whatever storage format A uses internally
-    return find_sparse_position(A, row, col, row_layout)
+    return find_sparse_position(A, row + row_offset, col + column_offset, row_layout)
 end
 
 function find_jac_position(
         A,
         target_entity_index, source_entity_index,
+        row_offset, column_offset,
         target_entity_offset, source_entity_offset,
         equation_index, partial_index,
         nentities_target, nentities_source,
         eqs_per_entity, partials_per_entity,
-        row_layout::T, col_layout::T
+        row_layout::T, col_layout::T;
+        number_of_equations_for_entity = eqs_per_entity
     ) where T<:BlockMajorLayout
 
-    row = target_entity_index
-    col = source_entity_index
+    row = target_entity_index + row_offset
+    col = source_entity_index + column_offset
     inner_layout = EntityMajorLayout()
     adjoint_layout = represented_as_adjoint(row_layout)
     if adjoint_layout
         @assert represented_as_adjoint(col_layout)
         inner_layout = adjoint(inner_layout)
+        # TODO: Check this.
+        partial_index += (source_entity_offset ÷ nentities_source)
+    else
+        equation_index += (target_entity_offset ÷ nentities_target)
     end
     @assert source_entity_offset == 0
     # TODO: The use of N needs reworking if backend is to be used for
     # rectangular blocks.
     N = partials_per_entity
 
-    equation_index += (target_entity_offset ÷ nentities_target)
     pos = find_sparse_position(A, row, col, inner_layout)
     # base_ix = (pos-1)*eqs_per_entity*partials_per_entity
     base_ix = (pos-1)*N*N
@@ -89,11 +104,11 @@ function find_jac_position(
 end
 
 function row_col_sparse(
-        target_entity_index, source_entity_index, # Typically row and column - global index
-        target_entity_offset, source_entity_offset,                    # row/col offsets
-        equation_index, partial_index,                                # Index of equation and partial derivative - local index
-        nentities_target, nentities_source,                           # Row and column sizes for each sub-system
-        eqs_per_entity, partials_per_entity,                          # Sizes of the smallest inner system
+        target_entity_index, source_entity_index,   # Typically row and column - global index
+        target_entity_offset, source_entity_offset,
+        equation_index, partial_index,              # Index of equation and partial derivative - local index
+        nentities_target, nentities_source,         # Row and column sizes for each sub-system
+        eqs_per_entity, partials_per_entity,        # Sizes of the smallest inner system
         row_layout, col_layout
     )
     row = alignment_linear_index(target_entity_index + target_entity_offset, equation_index, nentities_target, eqs_per_entity, row_layout)
@@ -113,7 +128,10 @@ function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMa
     adj = represented_as_adjoint(layout)
     pos = find_sparse_position(A, row, col, adj)
     if pos == 0
-        @error "Unable to map cache entry to Jacobian, ($row,$col) not allocated in Jacobian matrix." A row col represented_as_adjoint(layout)
+        I, J = findnz(A)
+        IJ = map((i, j) -> (i, j), I, J)
+        @error "Unable to map cache entry to Jacobian, ($row,$col) not allocated in Jacobian matrix." A row col represented_as_adjoint(layout) IJ
+        @info "!!" IJ
         error("Jacobian alignment failed. Giving up.")
     end
     return pos
@@ -325,20 +343,31 @@ function column_expansion(I, J, model, e, entity, col_layout)
     return (I, J, m)
 end
 
-function expand_block_indices(I, J, ntotal, nblocks, layout::EquationMajorLayout)
-    if nblocks > 1
-        I = vcat(map((x) -> (x-1)*ntotal .+ I, 1:nblocks)...)
-        J = repeat(J, nblocks)
+function expand_block_indices(I, J, ntotal, neqs, layout::EquationMajorLayout; equation_offset = 0, block_size = neqs)
+    if neqs > 1
+        I = vcat(map((x) -> (x-1)*ntotal .+ I, 1:neqs)...)
+        J = repeat(J, neqs)
     end
     return (I, J)
 end
 
-function expand_block_indices(I, J, ntotal, nblocks, layout::EntityMajorLayout)
-    if nblocks > 1
-        I = vcat(map((x) -> nblocks*(I .- 1) .+ x, 1:nblocks)...)
-        J = repeat(J, nblocks)
+function expand_block_indices(I, J, ntotal, neqs, layout::EntityMajorLayout; equation_offset = 0, block_size = neqs)
+    T = eltype(I)
+    n = length(I)
+    @assert length(J) == n
+    I_expand = T[]
+    J_expand = T[]
+    for (i, j) in zip(I, J)
+        for eq in 1:neqs
+            ii = block_size*(i - 1) + equation_offset + eq
+            push!(I_expand, ii)
+            push!(J_expand, j)
+        end
     end
-    return (I, J)
+    @assert length(I_expand) == length(J_expand)
+    # I = vcat(map((x) -> nblocks*(I .- 1 .+ equation_offset) .+ x, (1+equation_offset):nblocks)...)
+    # J = repeat(J, nblocks)
+    return (I_expand, J_expand)
 end
 
 
@@ -405,12 +434,16 @@ function align_to_jacobian!(eq_s, eq, jac, model; variable_offset = 0, kwarg...)
 end
 
 
-function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; context = model.context,
-                                                                   positions = nothing,
-                                                                   equation_offset = 0,
-                                                                   variable_offset = 0,
-                                                                   number_of_entities_target = nothing,
-                                                                   kwarg...)
+function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...;
+        context = model.context,
+        positions = nothing,
+        row_offset = 0,
+        column_offset = 0,
+        equation_offset = 0,
+        variable_offset = 0,
+        number_of_entities_target = nothing,
+        kwarg...
+    )
     # Use generic version
     k = entity_as_symbol(entity)
     has_pos = !isnothing(positions)
@@ -430,11 +463,17 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...; context = mode
             nt = number_of_entities_target
         end
         I, J = generic_cache_declare_pattern(cache, arg...)
-        injective_alignment!(cache, eq, jac, entity, context, pos = pos, target_index = I, source_index = J,
-                                                                    number_of_entities_source = cache.number_of_entities_source,
-                                                                    number_of_entities_target = nt,
-                                                                    target_offset = equation_offset, source_offset = variable_offset
-                                                                    ; kwarg...)
+        injective_alignment!(cache, eq, jac, entity, context,
+            pos = pos,
+            target_index = I,
+            source_index = J,
+            number_of_entities_source = cache.number_of_entities_source,
+            number_of_entities_target = nt,
+            row_offset = row_offset,
+            column_offset = column_offset,
+            target_offset = equation_offset,
+            source_offset = variable_offset
+            ; kwarg...)
     else
         @warn "Did not find $k in $(keys(eq_s))"
     end

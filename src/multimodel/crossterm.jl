@@ -1,6 +1,6 @@
 local_discretization(::CrossTerm, i) = nothing
 
-function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, row_layout, col_layout)
+function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, row_layout, col_layout; equation_offset = 0, block_size = 1)
     primitive = declare_pattern(target_model, x, x_storage, source_entity, entity_indices)
     if isnothing(primitive)
         out = nothing
@@ -12,24 +12,35 @@ function declare_sparsity(target_model, source_model, eq::JutulEquation, x::Cros
 
         n_partials = number_of_partials_per_entity(source_model, source_entity)
         n_eqs = number_of_equations_per_entity(target_model, eq)
-        out = inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, row_layout, col_layout)
+        out = inner_sparsity_ct(
+            target_impact, source_impact,
+            nentities_source, nentities_target,
+            n_partials, n_eqs,
+            row_layout, col_layout;
+            equation_offset = equation_offset,
+            block_size = block_size
+            )
     end
     return out
 end
 
-function inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, row_layout::ScalarLayout, col_layout::ScalarLayout)
+function inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, row_layout::ScalarLayout, col_layout::ScalarLayout; block_size = 1, equation_offset = 0)
     F = eltype(target_impact)
     I = target_impact
     J = source_impact
-    I, J = expand_block_indices(I, J, nentities_target, n_eqs, row_layout)
+    I, J = expand_block_indices(I, J, nentities_target, n_eqs, row_layout, equation_offset = equation_offset, block_size = block_size)
     J, I = expand_block_indices(J, I, nentities_source, n_partials, col_layout)
 
-    n = n_eqs*nentities_target
+    if block_size > 1
+        n = max(block_size, n_eqs)*nentities_target
+    else
+        n = n_eqs*nentities_target
+    end
     m = n_partials*nentities_source
     return SparsePattern(I, J, n, m, row_layout, col_layout)
 end
 
-function inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, row_layout::T, col_layout::T) where T<:BlockMajorLayout
+function inner_sparsity_ct(target_impact, source_impact, nentities_source, nentities_target, n_partials, n_eqs, row_layout::T, col_layout::T; block_size = 1, equation_offset = 0) where T<:BlockMajorLayout
     I = target_impact
     J = source_impact
     n = nentities_target
@@ -360,16 +371,17 @@ function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source
     neqs = sub_number_of_equations(model)
     bz = sub_block_sizes(model)
     # Diagonal part: Into target equation, and with respect to target variables
-    equation_offset += local_group_offset(target_keys, target, neqs, bz)
-    variable_offset += local_group_offset(target_keys, target, ndofs, bz)
+    row_offset = local_group_offset(target_keys, target, neqs, bz)
+    column_offset = local_group_offset(target_keys, target, ndofs, bz)
 
-    # bz_t = bz[target]
-    # bz_t = model_block_size(model, )
-    equation_offset += get_equation_offset(target_model, eq_label, bz[target])
+    equation_offset += get_equation_offset(target_model, eq_label)
     for target_e in get_primary_variable_ordered_entities(target_model)
         align_to_jacobian!(s_target, ct, lsys.jac, target_model, target_e, impact,
-                                                        equation_offset = equation_offset,
-                                                        variable_offset = variable_offset)
+            row_offset = row_offset,
+            column_offset = column_offset,
+            equation_offset = equation_offset,
+            variable_offset = variable_offset
+        )
         variable_offset += number_of_degrees_of_freedom(target_model, target_e)
     end
 end
@@ -381,31 +393,40 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     neqs = sub_number_of_equations(model)
     bz = sub_block_sizes(model)
     # Diagonal part: Into target equation, and with respect to target variables
-    equation_offset += local_group_offset(target_keys, target, neqs, bz)
-    variable_offset += local_group_offset(source_keys, source, ndofs, bz)
+    # equation_offset += local_group_offset(target_keys, target, neqs, bz)
+    # variable_offset += local_group_offset(source_keys, source, ndofs, bz)
+    row_offset = local_group_offset(target_keys, target, neqs, bz)
+    column_offset = local_group_offset(source_keys, source, ndofs, bz)
 
     target_model = model[target]
     source_model = model[source]
 
-    equation_offset += get_equation_offset(target_model, eq_label, bz[target])
+    equation_offset += get_equation_offset(target_model, eq_label)
+
     @assert !isnothing(offdiag_alignment)
-    # @assert keys(s_source), :numeric == keys(offdiag_alignment)
     nt = number_of_entities(target_model, ct_equation(target_model, eq_label))
     for source_e in get_primary_variable_ordered_entities(source_model)
+        neqs_total = 0
+        for (k, eq) in source_model.equations
+            if associated_entity(eq) == source_e
+                neqs_total += number_of_equations_per_entity(source_model, eq)
+            end
+        end
         align_to_jacobian!(s_source, ct, J, source_model, source_e, impact,
             equation_offset = equation_offset,
             variable_offset = variable_offset,
+            row_offset = row_offset,
+            column_offset = column_offset,
             positions = offdiag_alignment,
             number_of_entities_target = nt,
             row_layout = matrix_layout(target_model.context),
             col_layout = matrix_layout(source_model.context),
+            number_of_equations_for_entity = neqs_total,
             context = model.context
         )
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
         a = offdiag_alignment[entity_as_symbol(source_e)]
-        if length(a) > 0
-            @assert maximum(a) <= length(lsys.jac_buffer)
-        end
+        @assert maximum(a, init = 0) <= length(lsys.jac_buffer)
     end
 end
 

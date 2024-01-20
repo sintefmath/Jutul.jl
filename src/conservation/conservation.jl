@@ -114,7 +114,16 @@ function align_half_face_cells(face_cache, jac, cd, f_ix, active_cell_i, dims, c
     else
         for e in 1:ne
             for d = 1:np
-                pos = find_jac_position(jac, other_i, active_cell_i, target_offset, source_offset, e, d, nu, nu, ne, np, context)
+                pos = find_jac_position(
+                    jac,
+                    other_i, active_cell_i,
+                    0, 0, # These should be zero, I think.
+                    target_offset, source_offset,
+                    e, d,
+                    nu, nu,
+                    ne, np,
+                    context
+                )
                 set_jacobian_pos!(face_cache, f_ix, e, d, pos)
             end
         end
