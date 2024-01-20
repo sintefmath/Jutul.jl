@@ -392,13 +392,15 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     # @assert keys(s_source), :numeric == keys(offdiag_alignment)
     nt = number_of_entities(target_model, ct_equation(target_model, eq_label))
     for source_e in get_primary_variable_ordered_entities(source_model)
-        align_to_jacobian!(s_source, ct, J, source_model, source_e, impact, equation_offset = equation_offset,
-                                                                                   variable_offset = variable_offset,
-                                                                                   positions = offdiag_alignment,
-                                                                                   number_of_entities_target = nt,
-                                                                                   row_layout = matrix_layout(target_model.context),
-                                                                                   col_layout = matrix_layout(source_model.context),
-                                                                                   context = model.context)
+        align_to_jacobian!(s_source, ct, J, source_model, source_e, impact,
+            equation_offset = equation_offset,
+            variable_offset = variable_offset,
+            positions = offdiag_alignment,
+            number_of_entities_target = nt,
+            row_layout = matrix_layout(target_model.context),
+            col_layout = matrix_layout(source_model.context),
+            context = model.context
+        )
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
         a = offdiag_alignment[entity_as_symbol(source_e)]
         if length(a) > 0
@@ -480,8 +482,8 @@ has_symmetry(x::CrossTermPair) = has_symmetry(x.cross_term)
 
 function cross_term_pair(model, storage, source, target, include_symmetry = false)
     if include_symmetry
-        f = x -> (x.target == target && x.source == source) || 
-                 (has_symmetry(x) && (x.target == source && x.source == target))
+        f = x -> (x.target == target && x.source == source) ||
+                (has_symmetry(x) && (x.target == source && x.source == target))
     else
         f = x -> x.target == target && x.source == source
     end
