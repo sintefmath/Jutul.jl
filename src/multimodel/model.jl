@@ -249,8 +249,7 @@ function get_equation_offset(model::SimulationModel, eq_label::Pair, arg...)
     return get_equation_offset(model, last(eq_label), arg...)
 end
 
-function get_equation_offset(model::SimulationModel, eq_label::Symbol, bz = nothing)
-    bz = NaN
+function get_equation_offset(model::SimulationModel, eq_label::Symbol)
     offset = 0
     layout = matrix_layout(model.context)
     for k in keys(model.equations)
@@ -295,7 +294,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target, true)
-
+        # TODO: Fix here?
         for (ctp, s) in zip(cross_terms, cross_term_storage)
             ct = ctp.cross_term
             transp = ctp.source == target
@@ -308,12 +307,16 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
                 eq_label = ctp.source_equation
                 ct_storage = s.target
                 entities = s.source_entities
+                base_equation_offset = group_linearized_system_offset(model, target)
             else
                 eq_label = ctp.target_equation
                 ct_storage = s.source
                 entities = s.target_entities
+                base_equation_offset = group_linearized_system_offset(model, source)
             end
-            add_sparse_local!(I, J, ct, eq_label, ct_storage, target_model, source_model, entities, row_layout, col_layout)
+            base_equation_offset = 0
+            @error "Found offset" base_equation_offset
+            add_sparse_local!(I, J, ct, eq_label, ct_storage, target_model, source_model, entities, row_layout, col_layout, base_equation_offset = base_equation_offset)
         end
         I = vec(vcat(I...))
         J = vec(vcat(J...))
@@ -339,25 +342,43 @@ function number_of_rows(model, layout::BlockMajorLayout)
     return n
 end
 
-function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind, row_layout::ScalarLayout, col_layout::ScalarLayout)
+function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind, row_layout::ScalarLayout, col_layout::ScalarLayout; base_equation_offset = 0)
     eq = ct_equation(target_model, eq_label)
     target_e = associated_entity(eq)
     entities = get_primary_variable_ordered_entities(source_model)
     equation_offset = get_equation_offset(target_model, eq_label)
     variable_offset = 0
+    row_is_eqn_major = row_layout isa EquationMajorLayout
+    if row_is_eqn_major
+        Bz = 1
+        eq_inner_offset = 0
+    else
+        Ne = count_active_entities(target_model.domain, target_e)
+        Bz = model_block_size(target_model)
+        eq_inner_offset = (equation_offset - base_equation_offset) ÷ Ne
+        equation_offset = base_equation_offset
+    end
+
     for (i, source_e) in enumerate(entities)
-        S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, row_layout, col_layout)
-        if !isnothing(S)
-            rows = S.I
-            cols = S.J
-            push!(I, rows .+ equation_offset)
-            push!(J, cols .+ variable_offset)
+        S = declare_sparsity(
+            target_model, source_model,
+            eq, x, s, ind,
+            target_e, source_e,
+            row_layout, col_layout;
+            equation_offset = eq_inner_offset,
+            block_size = Bz
+        )
+        if !isnothing(S) && length(S.I) > 0
+            rows = S.I .+ equation_offset
+            cols = S.J .+ variable_offset
+            push!(I, rows)
+            push!(J, cols)
         end
         variable_offset += number_of_degrees_of_freedom(source_model, source_e)
     end
 end
 
-function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind, row_layout::BlockMajorLayout, col_layout::BlockMajorLayout)
+function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind, row_layout::BlockMajorLayout, col_layout::BlockMajorLayout; base_equation_offset = 0)
     eq = ct_equation(target_model, eq_label)
     target_e = associated_entity(eq)
     entities = get_primary_variable_ordered_entities(source_model)

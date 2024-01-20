@@ -67,6 +67,28 @@ function add_cross_term!(v::AbstractVector, ctm::CrossTermPair)
     return v
 end
 
+function group_linearized_system_offset(model::MultiModel, target, fn = number_of_degrees_of_freedom)
+    models = model.models
+    groups = model.groups
+    if isnothing(groups)
+        groups = ones(Int, length(models))
+    end
+    skeys = submodel_symbols(model)
+    pos = findfirst(isequal(target), skeys)
+    g = groups[pos]
+    offset = 0
+    for (i, k) in enumerate(skeys)
+        if k == target
+            break
+        end
+        if groups[i] != g
+            continue
+        end
+        offset += fn(models[k])
+    end
+    return offset
+end
+
 function add_cross_term!(model::MultiModel, ctm::CrossTermPair)
     @assert haskey(model.models, ctm.target)
     @assert haskey(model.models, ctm.source)

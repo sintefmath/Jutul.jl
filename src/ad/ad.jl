@@ -98,16 +98,20 @@ function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_entitie
 end
 
 function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, context;
-                                    pos = nothing,
-                                    row_layout = matrix_layout(context),
-                                    col_layout = row_layout,
-                                    target_index = 1:cache.number_of_entities,
-                                    source_index = 1:cache.number_of_entities,
-                                    number_of_entities_source = nothing,
-                                    number_of_entities_target = nothing,
-                                    dims = ad_dims(cache),
-                                    target_offset = 0,
-                                    source_offset = 0)
+            pos = nothing,
+            row_layout = matrix_layout(context),
+            col_layout = row_layout,
+            target_index = 1:cache.number_of_entities,
+            source_index = 1:cache.number_of_entities,
+            number_of_entities_source = nothing,
+            number_of_entities_target = nothing,
+            number_of_equations_for_entity = missing,
+            dims = ad_dims(cache),
+            row_offset = 0,
+            column_offset = 0,
+            target_offset = 0,
+            source_offset = 0
+    )
     _entity::JutulEntity
     c_entity = entity(cache)
     c_entity::JutulEntity
@@ -128,11 +132,14 @@ function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, conte
         end
         N = length(source_index)
         @assert length(target_index) == N
-        do_injective_alignment!(pos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, row_layout, col_layout)
+        if ismissing(number_of_equations_for_entity)
+            number_of_equations_for_entity = ne
+        end
+        do_injective_alignment!(pos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, row_offset, column_offset, target_offset, source_offset, context, row_layout, col_layout, number_of_equations_for_entity = number_of_equations_for_entity)
     end
 end
 
-function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context, row_layout, col_layout)
+function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, row_offset, column_offset, target_offset, source_offset, context, row_layout, col_layout; number_of_equations_for_entity = ne)
     for index in 1:length(source_index)
         target = target_index[index]
         source = source_index[index]
@@ -141,11 +148,13 @@ function do_injective_alignment!(jpos, cache, jac, target_index, source_index, n
                 jpos[jacobian_cart_ix(index, e, d, np)] = find_jac_position(
                     jac,
                     target, source,
+                    row_offset, column_offset,
                     target_offset, source_offset,
                     e, d,
                     nu_t, nu_s,
                     ne, np,
-                    row_layout, col_layout
+                    row_layout, col_layout,
+                    number_of_equations_for_entity = number_of_equations_for_entity
                 )
             end
         end
