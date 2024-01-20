@@ -28,6 +28,11 @@ function find_jac_position(A,
     nentities_target, nentities_source,
     eqs_per_entity, partials_per_entity, row_layout, col_layout)
     # get row and column index in the specific layout we are looking at
+    row_is_block = row_layout isa BlockMajorLayout
+    if row_is_block
+        equation_index += target_entity_offset ÷ nentities_target
+        target_entity_offset = 0
+    end
     row_layout = scalarize_layout(row_layout, col_layout)
     col_layout = scalarize_layout(col_layout, row_layout)
 
@@ -83,12 +88,14 @@ function find_jac_position(
     return ix
 end
 
-function row_col_sparse(target_entity_index, source_entity_index, # Typically row and column - global index
-    target_entity_offset, source_entity_offset,                    # row/col offsets
-    equation_index, partial_index,                                # Index of equation and partial derivative - local index
-    nentities_target, nentities_source,                           # Row and column sizes for each sub-system
-    eqs_per_entity, partials_per_entity,                          # Sizes of the smallest inner system
-    row_layout, col_layout)
+function row_col_sparse(
+        target_entity_index, source_entity_index, # Typically row and column - global index
+        target_entity_offset, source_entity_offset,                    # row/col offsets
+        equation_index, partial_index,                                # Index of equation and partial derivative - local index
+        nentities_target, nentities_source,                           # Row and column sizes for each sub-system
+        eqs_per_entity, partials_per_entity,                          # Sizes of the smallest inner system
+        row_layout, col_layout
+    )
     row = alignment_linear_index(target_entity_index + target_entity_offset, equation_index, nentities_target, eqs_per_entity, row_layout)
     col = alignment_linear_index(source_entity_index + source_entity_offset, partial_index, nentities_source, partials_per_entity, col_layout)
     return (row, col)
@@ -285,25 +292,37 @@ function declare_sparsity(model, e::JutulEquation, eq_storage, entity, row_layou
         out = nothing
     else
         I, J = primitive
-        # Limit to active set somehow
+        # Limit to active set
         ni = length(I)
         nj = length(J)
         if length(I) != length(J)
             error("Pattern I, J for $(typeof(e)) must have equal lengths for entity $(typeof(entity)). (|I| = $ni != $nj = |J|)")
         end
-        nu = number_of_entities(model, e)
-        nentities = count_active_entities(model.domain, entity, for_variables = false)
-        nrow_blocks = number_of_equations_per_entity(model, e)
         # Rows
-        I, J = expand_block_indices(I, J, nu, nrow_blocks, row_layout)
-        ncol_blocks = number_of_partials_per_entity(model, entity)
-        # Columns (switched order)
-        J, I = expand_block_indices(J, I, nentities, ncol_blocks, col_layout)
-        n = number_of_equations(model, e)
-        m = nentities*ncol_blocks
+        I, J, n = row_expansion(I, J, model, e, entity, row_layout)
+        # Columns
+        I, J, m = column_expansion(I, J, model, e, entity, col_layout)
         out = SparsePattern(I, J, n, m, row_layout, col_layout)
     end
     return out
+end
+
+function row_expansion(I, J, model, e, entity, row_layout)
+    nu = number_of_entities(model, e)
+    nrow_blocks = number_of_equations_per_entity(model, e)
+    n_eqs = number_of_equations(model, e)
+    # Rows
+    I, J = expand_block_indices(I, J, nu, nrow_blocks, row_layout)
+    return (I, J, n_eqs)
+end
+
+function column_expansion(I, J, model, e, entity, col_layout)
+    ncol_blocks = number_of_partials_per_entity(model, entity)
+    n_entity = count_active_entities(model.domain, entity, for_variables = false)
+    # (switched order)
+    m = n_entity*ncol_blocks
+    J, I = expand_block_indices(J, I, n_entity, ncol_blocks, col_layout)
+    return (I, J, m)
 end
 
 function expand_block_indices(I, J, ntotal, nblocks, layout::EquationMajorLayout)
@@ -321,6 +340,7 @@ function expand_block_indices(I, J, ntotal, nblocks, layout::EntityMajorLayout)
     end
     return (I, J)
 end
+
 
 function declare_sparsity(model, e::JutulEquation, eq_storage, entity, row_layout::T, col_layout::T = row_layout) where T<:BlockMajorLayout
     primitive = declare_pattern(model, e, eq_storage, entity)

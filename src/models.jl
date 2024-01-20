@@ -849,8 +849,6 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel; relax
     primary = get_primary_variables(model)
     ok = true
     report = Dict{Symbol, Any}()
-    # Depending on the variable ordering, this can require a bit of array
-    # reshaping/indexing tricks.
     for (pkey, p) in primary
         dxi = dx[pkey]
         if check
