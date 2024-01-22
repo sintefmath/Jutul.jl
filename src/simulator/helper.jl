@@ -30,6 +30,7 @@ function HelperSimulator(model::M, T = Float64; executor::E = Jutul.default_exec
     storage[:primary_mapper] = Jutul.variable_mapper(model, :primary)
     storage[:parameter_wrapper] = first(Jutul.variable_mapper(model, :parameters))
     initialize_extra_state_fields!(storage.state, model)
+    setup_equations_and_primary_variable_views!(storage, model, (dx_buffer = missing, r_buffer = r))
     storage = Jutul.specialize_simulator_storage(storage, model, false)
     S = typeof(storage)
     return HelperSimulator{E, M, S, T}(executor, model, storage)
@@ -65,7 +66,7 @@ end
 
 Fill in the model residual into Vector r.
 """
-function model_residual!(r, sim, x, x0 = missing, dt = 1.0;
+function model_residual!(r, sim::HelperSimulator, x, x0 = missing, dt = 1.0;
         forces = setup_forces(sim.model),
         update_secondary = true,
         time = 0.0,
@@ -89,7 +90,8 @@ function model_residual!(r, sim, x, x0 = missing, dt = 1.0;
 
     model = get_simulator_model(sim)
     update_state_dependents!(storage, model, dt, forces; update_secondary = update_secondary, kwarg...) # time is important potential kwarg...
-    update_linearized_system!(storage, model, sim.executor, r = r, nzval = missing, lsys = missing)
+    update_linearized_system!(storage, model, sim.executor, r = storage.r, nzval = missing, lsys = missing)
+    @. r = storage.r
     return r
 end
 

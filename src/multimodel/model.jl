@@ -142,15 +142,27 @@ end
 function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys)
     mkeys = submodel_symbols(model)
     groups = model.groups
-    if isnothing(groups)
+    no_groups = isnothing(groups)
+    if no_groups
         groups = ones(Int, length(mkeys))
     end
     ug = unique(groups)
 
     for group in ug
-        lsys_g = lsys[group, group]
-        dx = vec(lsys_g.dx_buffer)
-        r = vec(lsys_g.r_buffer)
+        if no_groups
+            # Hack for helper sim
+            lsys_g = lsys
+        else
+            lsys_g = lsys[group, group]
+        end
+        dx = lsys_g.dx_buffer
+        if !ismissing(dx)
+            dx = vec(dx)
+        end
+        r = lsys_g.r_buffer
+        if !ismissing(r)
+            r = vec(r)
+        end
         offset = 0
         for (i, g) in enumerate(groups)
             if g != group
@@ -159,8 +171,16 @@ function setup_equations_and_primary_variable_views!(storage, model::MultiModel,
             k = mkeys[i]
             submodel = model[k]
             ndof = number_of_degrees_of_freedom(submodel)
-            r_i = view(r, (offset+1):(offset+ndof))
-            dx_i = view(dx, (offset+1):(offset+ndof))
+            if ismissing(r)
+                r_i = r
+            else
+                r_i = view(r, (offset+1):(offset+ndof))
+            end
+            if ismissing(dx)
+                dx_i = dx
+            else
+                dx_i = view(dx, (offset+1):(offset+ndof))
+            end
             storage[k][:views] = setup_equations_and_primary_variable_views(storage[k], submodel, r_i, dx_i)
             offset += ndof
         end
@@ -307,16 +327,12 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
                 eq_label = ctp.source_equation
                 ct_storage = s.target
                 entities = s.source_entities
-                base_equation_offset = group_linearized_system_offset(model, target)
             else
                 eq_label = ctp.target_equation
                 ct_storage = s.source
                 entities = s.target_entities
-                base_equation_offset = group_linearized_system_offset(model, source)
             end
-            base_equation_offset = 0
-            @error "Found offset" base_equation_offset
-            add_sparse_local!(I, J, ct, eq_label, ct_storage, target_model, source_model, entities, row_layout, col_layout, base_equation_offset = base_equation_offset)
+            add_sparse_local!(I, J, ct, eq_label, ct_storage, target_model, source_model, entities, row_layout, col_layout)
         end
         I = vec(vcat(I...))
         J = vec(vcat(J...))

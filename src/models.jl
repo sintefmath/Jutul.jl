@@ -984,8 +984,16 @@ function setup_equations_and_primary_variable_views!(storage, model, lsys)
 end
 
 function setup_equations_and_primary_variable_views(storage, model, r, dx)
-    pvar = setup_primary_variable_views(storage, model, dx)
-    equations = setup_equations_views(storage, model, r)
+    if ismissing(dx)
+        pvar = missing
+    else
+        pvar = setup_primary_variable_views(storage, model, dx)
+    end
+    if ismissing(r)
+        equations = missing
+    else
+        equations = setup_equations_views(storage, model, r)
+    end
     return (equations = equations, primary_variables = pvar)
 end
 
