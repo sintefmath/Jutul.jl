@@ -163,26 +163,29 @@ function setup_equations_and_primary_variable_views!(storage, model::MultiModel,
         if !ismissing(r)
             r = vec(r)
         end
-        offset = 0
+        eq_offset = 0
+        var_offset = 0
         for (i, g) in enumerate(groups)
             if g != group
                 continue
             end
             k = mkeys[i]
             submodel = model[k]
+            neqs = number_of_equations(submodel)
             ndof = number_of_degrees_of_freedom(submodel)
             if ismissing(r)
                 r_i = r
             else
-                r_i = view(r, (offset+1):(offset+ndof))
+                r_i = view(r, (eq_offset+1):(eq_offset+neqs))
             end
             if ismissing(dx)
                 dx_i = dx
             else
-                dx_i = view(dx, (offset+1):(offset+ndof))
+                dx_i = view(dx, (var_offset+1):(var_offset+ndof))
             end
             storage[k][:views] = setup_equations_and_primary_variable_views(storage[k], submodel, r_i, dx_i)
-            offset += ndof
+            eq_offset += neqs
+            var_offset += ndof
         end
     end
 end
