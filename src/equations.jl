@@ -131,7 +131,6 @@ function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMa
         I, J = findnz(A)
         IJ = map((i, j) -> (i, j), I, J)
         @error "Unable to map cache entry to Jacobian, ($row,$col) not allocated in Jacobian matrix." A row col represented_as_adjoint(layout) IJ
-        @info "!!" IJ
         error("Jacobian alignment failed. Giving up.")
     end
     return pos
