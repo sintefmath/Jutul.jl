@@ -70,9 +70,9 @@ function Jutul.plot_cell_data_impl(m, data;
     return (fig, ax, p)
 end
 
-function Jutul.plot_cell_data_impl!(ax, m, data::AbstractVecOrMat; cells = nothing, is_depth = true, outer = false, kwarg...)
+function Jutul.plot_cell_data_impl!(ax, m, data::AbstractVecOrMat; cells = nothing, outer = false, kwarg...)
     nc = number_of_cells(m)
-    pts, tri, mapper = triangulate_mesh(m, outer = outer, is_depth = is_depth)
+    pts, tri, mapper = triangulate_mesh(m, outer = outer)
     data = vec(data)
     if !isnothing(cells)
         if eltype(cells) == Bool
