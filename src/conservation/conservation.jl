@@ -202,7 +202,7 @@ function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc;
             face = flow_disc.conn_data[f_ix].face
             for e in 1:ne
                 for d = 1:np
-                    pos = find_jac_position(jac, cell, face, target_offset, source_offset, e, d, nc, nf, ne, np, context)
+                    pos = find_jac_position(jac, cell, face, 0, 0, target_offset, source_offset, e, d, nc, nf, ne, np, context)
                     set_jacobian_pos!(face_cache, f_ix, e, d, pos)
                 end
             end
