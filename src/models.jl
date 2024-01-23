@@ -1007,7 +1007,7 @@ function setup_primary_variable_views(storage, model, dx)
         offset = 0 # Offset into global r array
         for u in get_primary_variable_ordered_entities(model)
             np = number_of_partials_per_entity(model, u)
-            nu = count_entities(model.domain, u)
+            nu = count_active_entities(model.domain, u)
             Dx = get_matrix_view(dx, np, nu, false, offset)
             local_offset = 0
             for (pkey, p) in primary
