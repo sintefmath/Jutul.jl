@@ -63,6 +63,7 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
         colormap = :tab20,
         t_scale = ("s", 1.0),
         axis_arg = NamedTuple(),
+        x_is_time = true,
         legend = true,
         title = nothing,
         scatter_points = true,
@@ -98,14 +99,22 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     if !use_title
         tit = ""
     end
+    if x_is_time
+        xl = "Time [years]"
+    else
+        xl = "Step"
+    end
 
-    ax = Axis(f; xlabel = "Time [years]", title = tit, ylabel = yl, axis_arg...)
+    ax = Axis(f; xlabel = xl, title = tit, ylabel = yl, axis_arg...)
     if cumulative
         get_data = x -> cumsum(vcat(0, F(x)))
         t = cumsum(vcat(0, dt))/(3600*24*365)
     else
         get_data = x -> F(x)
         t = cumsum(dt)/(3600*24*365)
+    end
+    if !x_is_time
+        t = eachindex(t)
     end
     names_missing = isnothing(names)
     if names_missing
