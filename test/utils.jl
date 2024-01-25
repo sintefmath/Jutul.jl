@@ -1,4 +1,4 @@
-using Jutul, Test
+using Jutul, Test, StaticArrays
 
 @testset "entity_eachindex" begin
     N = 3
@@ -133,9 +133,24 @@ end
 end
 
 @testset "get_1d_interpolator" begin
+    # Test scalar interpolation
     x = collect(0:0.1:4)
     I = get_1d_interpolator(x, sin.(x))
     @test isapprox(I(π/2), 1.0, atol = 1e-2)
+    x = [0.0, 0.5, 1.0]
+    Fx = x.^2
+
+    F_approx = Jutul.LinearInterpolant(x, Fx)
+    @test F_approx(0.5) ≈ 0.25
+    @test F_approx(0.25) ≈ 0.25/2
+    # Test block interpolation
+    x1 = @SVector [0.0, 0.1]
+    x2 = @SVector [0.25, 0.35]
+    x3 = @SVector [1.0, 1.1]
+    Fx_b = [x1, x2, x3]
+    F_approx_b = Jutul.LinearInterpolant(x, Fx_b)
+    @test F_approx_b(0.5) ≈ x2
+    @test F_approx_b(0.25) ≈ (x1 + x2)/2
 end
 
 @testset "compress_timesteps" begin

@@ -33,20 +33,21 @@ end
     return F_0 + ∂F∂X*Δx
 end
 
-struct LinearInterpolant{V}
+struct LinearInterpolant{V, T}
     X::V
-    F::V
-    function LinearInterpolant(X::T, F::T; static = false) where T<:AbstractVector
-        @assert length(X) == length(F)
-        @assert issorted(X) "Interpolation inputs must be sorted: X = $X"
-        if static
-            n = length(X)
-            T_el = eltype(X)
-            X = SVector{n, T_el}(X)
-            F = SVector{n, T_el}(F)
-        end
-        new{T}(X, F)
+    F::T
+end
+
+function LinearInterpolant(X::T, F::T; static = false) where T<:AbstractVector
+    @assert length(X) == length(F)
+    @assert issorted(X) "Interpolation inputs must be sorted: X = $X"
+    if static
+        n = length(X)
+        T_el = eltype(X)
+        X = SVector{n, T_el}(X)
+        F = SVector{n, T_el}(F)
     end
+    return LinearInterpolant{T, T}(X, F)
 end
 
 interpolate(I::LinearInterpolant, x) = linear_interp(I.X, I.F, x)
