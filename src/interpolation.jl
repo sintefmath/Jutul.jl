@@ -68,24 +68,26 @@ Get a 1D interpolator `F(x) ≈ y` for a table `xs, ys` that by default does con
 - `cap_end = cap_endpoints`:Fine-grained version of cap_endpoints for the end of the interval only (extrapolation for `x > xs[end]`)
 """
 function get_1d_interpolator(xs, ys; method = LinearInterpolant, cap_endpoints = true, cap_end = cap_endpoints, cap_start = cap_endpoints)
-    if cap_endpoints
+    if cap_endpoints && (cap_start || cap_end)
         ϵ = 100*sum(abs, xs)
-        # Add perturbed points
-        # Repeat start and end
+        xs = copy(xs)
+        ys = copy(ys)
+        # Add perturbed points, repeat start and end value
         if cap_start
-            xs = vcat(xs[1] - ϵ, xs)
-            ys = vcat(ys[1], ys)
+            pushfirst!(xs, xs[1] - ϵ)
+            pushfirst!(ys, ys[1])
         end
         if cap_end
-            xs = vcat(xs, xs[end] + ϵ)
-            ys = vcat(ys, ys[end])
+            push!(xs, xs[end] + ϵ)
+            push!(ys, ys[end])
         end
     end
-    @assert length(xs) > 1
-    @assert length(ys) == length(xs)
+    nx = length(xs)
+    ny = length(ys)
+    nx > 1 || throw(ArgumentError("xs values must have more than one entry."))
+    nx == ny || throw(ArgumentError("Number of xs ($nx) and ys(x) ($ny) must match"))
     return method(xs, ys)
 end
-
 
 struct UnaryTabulatedVariable <: VectorVariables
     x
