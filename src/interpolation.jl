@@ -88,6 +88,70 @@ function get_1d_interpolator(xs, ys; method = LinearInterpolant, cap_endpoints =
     nx == ny || throw(ArgumentError("Number of xs ($nx) and ys(x) ($ny) must match"))
     return method(xs, ys)
 end
+struct BilinearInterpolant{V, T}
+    X::V
+    Y::V
+    F::T
+    function BilinearInterpolant(xs::T, ys::T, fs::M) where {T, M}
+        issorted(xs) || throw(ArgumentError("xs must be sorted."))
+        issorted(ys) || throw(ArgumentError("ys must be sorted."))
+        nx = length(xs)
+        ny = length(ys)
+        size(fs) == (nx, ny) || throw(ArgumentError("f(x, y) must match lengths of xs (as rows) and xy (as columns) = ($nx,$ny)"))
+        return new{T, M}(xs, ys, fs)
+    end
+end
+
+function bilinear_interp(X, Y, F, x, y)
+    function interp_local(X_0, F_0, X_1, F_1, X)
+        ∂F∂X = (F_1 - F_0)/(X_1 - X_0)
+        ΔX = X - X_0
+        return F_0 + ∂F∂X*ΔX
+    end
+
+    x_pos = Jutul.first_lower(X, value(x))
+    y_pos = Jutul.first_lower(Y, value(y))
+    @inbounds begin
+        x_1 = X[x_pos]
+        x_2 = X[x_pos+1]
+        Δx = x_2 - x_1
+
+        y_1 = Y[y_pos]
+        y_2 = Y[y_pos+1]
+        Δy = y_2 - y_1
+
+        F_11 = F[x_pos, y_pos]
+        F_12 = F[x_pos, y_pos+1]
+        F_21 = F[x_pos+1, y_pos]
+        F_22 = F[x_pos+1, y_pos+1]
+    end
+    F_upper = interp_local(x_1, F_12, x_2, F_22, x)
+    F_lower = interp_local(x_1, F_11, x_2, F_21, x)
+    w_lower = (y - y_2)/Δy
+    w_upper = (y_1 - y)/Δy
+    F = w_lower*F_lower + w_upper*F_upper
+
+    return F
+end
+
+function interpolate(I::BilinearInterpolant, x, y)
+    return bilinear_interp(I.X, I.Y, I.F, x, y)
+end
+
+function (I::BilinearInterpolant)(x, y)
+    return interpolate(I, x, y)
+end
+
+export get_2d_interpolator
+"""
+    get_2d_interpolator(xs, ys, fs; method = BilinearInterpolant)
+
+For `xs` of length `nx` and `ys` of length `ny` generate a 2D interpolation for
+values given as a `nx` by `ny` matrix.
+"""
+function get_2d_interpolator(xs, ys, fs; method = BilinearInterpolant)
+    return method(xs, ys, fs)
+end
 
 struct UnaryTabulatedVariable <: VectorVariables
     x
