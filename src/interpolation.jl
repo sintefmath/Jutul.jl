@@ -176,11 +176,11 @@ end
 
 function get_dependencies(var::UnaryTabulatedVariable, model)
     return [var.x_symbol]
- end
- 
- function update_secondary_variable!(V, var::UnaryTabulatedVariable, model, state)
+end
+
+function update_secondary_variable!(V, var::UnaryTabulatedVariable, model, state)
     update_unary_tabulated!(V, var, model, state[var.x_symbol], entity_eachindex(V))
- end
+end
 
 function update_unary_tabulated!(F_v, tbl::UnaryTabulatedVariable, model, x_v::AbstractVector, ix)
     I = tbl.interpolators

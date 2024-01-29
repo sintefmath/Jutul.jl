@@ -1080,7 +1080,7 @@ function Base.show(io::IO, t::MIME"text/plain", options::MeshEntityTags{T}) wher
         if length(kv) == 0
             kv = "<no tags>"
         else
-            s = map(x -> "x $(keys(v[x]))", collect(kv))
+            s = map(x -> "$x $(keys(v[x]))", collect(kv))
             kv = join(s, ",")
         end
         println(io, "    $k: $(kv)")
@@ -1125,9 +1125,10 @@ function set_mesh_entity_tag!(met::MeshEntityTags{T}, entity::JutulEntity, tag_g
         @assert allow_new "allow_new = false and tag group $tag_group for entity $entity already exists."
         tags[tag_group] = Dict{Symbol, Vector{T}}()
     end
-    @assert maximum(ix, init = one(T)) <= tags.count "Tag value must not exceed $(tags.count) for $entity"
-    @assert minimum(ix, init = tags.count) > 0 "Tags must have positive indices."
-
+    if length(ix) > 0
+        @assert maximum(ix, init = zero(T)) <= tags.count "Tag value must not exceed $(tags.count) for $entity"
+        @assert minimum(ix, init = tags.count) > 0 "Tags must have positive indices."
+    end
     tg = tags[tag_group]
     if haskey(tg, tag_value)
         @assert allow_merge "allow_merge = false and tag $tag_value in group $tag_group for entity $entity already exists."
