@@ -16,7 +16,7 @@ set_global_timer!(::Nothing) = nothing
 function print_global_timer(do_print = true; text = "Detailed timing")
     if do_print
         if !isnothing(text)
-            @info text
+            jutul_message(text, "If empty, the timer was enabled but not compiled. Re-run and it should show.")
         end
         print_timer()
     end
