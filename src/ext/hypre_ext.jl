@@ -14,10 +14,9 @@ export BoomerAMGPreconditioner
 function BoomerAMGPreconditioner(;
     CoarsenType = 10,      # HMIS
     StrongThreshold = 0.5, # For 3D
-    AggNumLevels = 3,      # Aggressive coarsening for first levels
+    AggNumLevels = 1,      # Aggressive coarsening for first levels
     AggTruncFactor = 0.3,  # Remove weak connections
     InterpType = 6,        # ext+i
-    NumPaths = 2,
     kwarg...
     )
     # Default settings inspired by
@@ -30,7 +29,6 @@ function BoomerAMGPreconditioner(;
             AggNumLevels = AggNumLevels,
             AggTruncFactor = AggTruncFactor,
             InterpType = InterpType,
-            NumPaths = NumPaths,
             kwarg...
             )
     catch e
