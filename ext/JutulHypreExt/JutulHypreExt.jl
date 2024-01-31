@@ -1,8 +1,9 @@
 module JutulHypreExt
-    using Jutul, HYPRE, SparseArrays
+    using Jutul, HYPRE, SparseArrays, TimerOutputs
     import Jutul: local_hypre_copy!
 
-    
+    timeit_debug_enabled() = false
+
     function Jutul.check_hypre_availability_impl()
         return true
     end
@@ -109,19 +110,21 @@ module JutulHypreExt
 
     function inner_apply!(x, y, prec, x_h, J_h, y_h, ix, zbuf)
         # Safe and allocating version that uses HYPRE.jl API
-        # asm = HYPRE.start_assemble!(x_h)
-        # HYPRE.finish_assemble!(asm)
-        # assembler = HYPRE.start_assemble!(y_h)
-        # HYPRE.assemble!(assembler, ix, y)
-        # HYPRE.finish_assemble!(assembler)
-        # HYPRE.@check HYPRE.HYPRE_BoomerAMGSolve(prec, J_h, y_h, x_h)
-        # copy!(x, x_h)
-
-        # Fast and less allocating version that uses low level HYPRE calls
-        local_hypre_copy!(y_h, y, ix)
-        local_hypre_copy!(x_h, zbuf, ix)
-        HYPRE.@check HYPRE.HYPRE_BoomerAMGSolve(prec, J_h, y_h, x_h)
-        local_hypre_copy!(x, x_h, ix)
+        if false
+            asm = HYPRE.start_assemble!(x_h)
+            HYPRE.finish_assemble!(asm)
+            assembler = HYPRE.start_assemble!(y_h)
+            HYPRE.assemble!(assembler, ix, y)
+            HYPRE.finish_assemble!(assembler)
+            HYPRE.@check HYPRE.HYPRE_BoomerAMGSolve(prec, J_h, y_h, x_h)
+            copy!(x, x_h)
+        else
+            # Fast and less allocating version that uses low level HYPRE calls
+            local_hypre_copy!(y_h, y, ix)
+            local_hypre_copy!(x_h, zbuf, ix)
+            HYPRE.@check HYPRE.HYPRE_BoomerAMGSolve(prec, J_h, y_h, x_h)
+            local_hypre_copy!(x, x_h, ix)
+        end
     end
 
     function inner_apply!(x::T, y::T, prec, x_h::T, J_h, y_h::T, ix, zbuf) where T<:HYPRE.HYPREVector

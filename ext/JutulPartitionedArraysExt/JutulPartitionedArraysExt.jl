@@ -1,6 +1,8 @@
 module JutulPartitionedArraysExt
-    using Jutul
+    using Jutul, TimerOutputs
     import Jutul: @tic
+
+    timeit_debug_enabled() = false
 
     # Specific dependencies
     using PartitionedArrays, MPI
