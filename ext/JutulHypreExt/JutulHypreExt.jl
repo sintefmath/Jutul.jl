@@ -2,7 +2,7 @@ module JutulHypreExt
     using Jutul, HYPRE, SparseArrays, TimerOutputs
     import Jutul: local_hypre_copy!
 
-    timeit_debug_enabled() = false
+    timeit_debug_enabled() = Jutul.timeit_debug_enabled()
 
     function Jutul.check_hypre_availability_impl()
         return true

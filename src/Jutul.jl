@@ -42,6 +42,8 @@ module Jutul
     using TimerOutputs
     # Shorted alias for @timeit_debug
     const var"@tic" = var"@timeit_debug"
+    timeit_debug_enabled() = false
+
     # Separate module for CSR backend
     include("StaticCSR/StaticCSR.jl")
     using .StaticCSR

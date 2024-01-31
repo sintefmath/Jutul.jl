@@ -2,7 +2,7 @@ module JutulPartitionedArraysExt
     using Jutul, TimerOutputs
     import Jutul: @tic
 
-    timeit_debug_enabled() = false
+    timeit_debug_enabled() = Jutul.timeit_debug_enabled()
 
     # Specific dependencies
     using PartitionedArrays, MPI
