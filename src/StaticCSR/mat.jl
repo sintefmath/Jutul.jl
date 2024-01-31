@@ -22,18 +22,32 @@ function LinearAlgebra.mul!(y::AbstractVector, A::StaticSparsityMatrixCSR, x::Ab
     size(A, 2) == size(x, 1) || throw(DimensionMismatch())
     size(A, 1) == n || throw(DimensionMismatch())
     mb = max(n ÷ nthreads(A), minbatch(A))
-    if β != 1
-        β != 0 ? rmul!(y, β) : fill!(y, zero(eltype(y)))
-    end
-    @batch minbatch = mb for row in 1:n
-        v = zero(eltype(y))
-        @inbounds for nz in nzrange(A, row)
-            col = At.rowval[nz]
-            v += At.nzval[nz]*x[col]
+    if β == 0
+        csr_mul_add!(y, At, x, n, mb, α, Val(false))
+    else
+        if β != 1
+            rmul!(y, β)
         end
-        @inbounds y[row] += α*v
+        csr_mul_add!(y, At, x, n, mb, α, Val(true))
     end
     return y
+end
+
+function csr_mul_add!(y::AbstractVector{Ty}, A, x, n, mb, α, ::Val{do_increment}) where {do_increment, Ty}
+    rowval = A.rowval
+    nzval = A.nzval
+    @batch minbatch = mb for row in 1:n
+        v = zero(Ty)
+        @inbounds for nz in nzrange(A, row)
+            col = rowval[nz]
+            v += nzval[nz]*x[col]
+        end
+        if do_increment
+            @inbounds y[row] += α*v
+        else
+            @inbounds y[row] = α*v
+        end
+    end
 end
 
 nthreads(A::StaticSparsityMatrixCSR) = A.nthreads
