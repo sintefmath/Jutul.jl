@@ -245,6 +245,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
         else
             dt_old = dt
             dt = cut_timestep(sim, config, dt, dT, forces, reports, step_index = step_no, cut_count = cut_count)
+            check_for_inner_exception(dt, s)
             if info_level > 0
                 if isnan(dt)
                     inner_msg = " Aborting."
@@ -441,6 +442,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg;
                     executor = simulator_executor(sim),
                     prev_report = step_report
         )
+        push!(step_reports, step_report)
         if haskey(step_report, :failure_exception)
             inner_exception = step_report[:failure_exception]
             if cfg[:info_level] > 0
@@ -449,7 +451,6 @@ function solve_ministep(sim, dt, forces, max_iter, cfg;
             break
         end
         next_iteration!(rec, step_report)
-        push!(step_reports, step_report)
         if done
             break
         end
@@ -694,5 +695,15 @@ function extra_debug_output!(debug_report, report, storage, model::Union{Simulat
         lsys = storage.LinearizedSystem
         r = vector_residual(lsys)
         debug_report[:linearized_system_norm] = (L1 = norm(r, 1), L2 = norm(r, 2), LInf = norm(r, Inf))
+    end
+end
+
+function check_for_inner_exception(dt, s)
+    if isnan(dt) && length(s[:steps]) > 0
+        last_step = s[:steps][end]
+        if haskey(last_step, :failure_exception)
+            @error "Exception caught in perform_step and cannot cut time-step any further."
+            throw(last_step[:failure_exception])
+        end
     end
 end
