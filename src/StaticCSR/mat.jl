@@ -36,14 +36,16 @@ end
 function csr_mul_add!(y::AbstractVector{Ty}, A, x, n, mb, α, ::Val{do_increment}) where {do_increment, Ty}
     rowval = A.rowval
     nzval = A.nzval
+    colptr = A.colptr
     @batch minbatch = mb for row in 1:n
         v = zero(Ty)
-        @inbounds for nz in nzrange(A, row)
+        @inbounds start = colptr[row]
+        @inbounds stop = colptr[row+1]-1
+        @inbounds for nz in start:stop
             col = rowval[nz]
             A_ij = nzval[nz]
             x_j = x[col]
-            # v += A_ij*x_j
-            v = muladd(A_ij, x_j, v)
+            v = internal_muladd(A_ij, x_j, v)
         end
         if do_increment
             @inbounds y[row] += α*v
@@ -51,6 +53,13 @@ function csr_mul_add!(y::AbstractVector{Ty}, A, x, n, mb, α, ::Val{do_increment
             @inbounds y[row] = α*v
         end
     end
+end
+
+@inline function internal_muladd(A_ij, x_j, v)
+    return v + A_ij*x_j
+end
+@inline function internal_muladd(A_ij, x_j::SVector, v::SVector)
+    return muladd(A_ij, x_j, v)
 end
 
 nthreads(A::StaticSparsityMatrixCSR) = A.nthreads
