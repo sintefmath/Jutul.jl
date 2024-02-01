@@ -14,6 +14,7 @@ function consolidate_distributed_results_on_disk!(pth, np, steps; cleanup = true
         state, report = consolidate_distributed_results(states, reports, partitions)
         Jutul.write_result_jld2(pth, state, report, step)
         push!(allpaths, paths)
+        GC.gc()
     end
     if cleanup
         # Delete the parallel results after consolidation.
