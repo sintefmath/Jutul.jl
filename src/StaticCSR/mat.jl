@@ -40,7 +40,10 @@ function csr_mul_add!(y::AbstractVector{Ty}, A, x, n, mb, α, ::Val{do_increment
         v = zero(Ty)
         @inbounds for nz in nzrange(A, row)
             col = rowval[nz]
-            v += nzval[nz]*x[col]
+            A_ij = nzval[nz]
+            x_j = x[col]
+            # v += A_ij*x_j
+            v = muladd(A_ij, x_j, v)
         end
         if do_increment
             @inbounds y[row] += α*v
