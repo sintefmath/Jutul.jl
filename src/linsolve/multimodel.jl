@@ -140,7 +140,6 @@ end
         # This function does:
         # res ← β*res + α*(B*x - C*(E\(D*x)))
         n = length(D)
-        mul!(res_v, B, x_v, α, β)
         @batch for i = 1:n
             @inbounds b_buf_1, b_buf_2 = schur_buffers[i+1]
             @inbounds D_i = D[i]
@@ -158,6 +157,7 @@ end
     n = size(B, 2)
     res_v = unsafe_reinterpret(r_type, res, n)
     x_v = unsafe_reinterpret(r_type, x, n)
+    @tic "spmv (block)" mul!(res_v, B, x_v, α, β)
     schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, β)
 end
 
