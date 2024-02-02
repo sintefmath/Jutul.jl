@@ -221,7 +221,7 @@ function plot_interactive_impl(grid, states;
                         $transform_name,
                         active_filters
                         )
-                )
+                )::Vector{Float64}
             )
     # Selection of colormap
     colormap_name = Observable(colormap)

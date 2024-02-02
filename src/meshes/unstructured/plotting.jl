@@ -26,20 +26,21 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; outer = false, flatten =
     cell_buffer = zeros(length(cell_index))
     face_buffer = zeros(length(face_index))
     mapper = (
-                Cells = (cell_data) -> mesh_data_to_tris!(cell_buffer, cell_data, cell_index),
-                Faces = (face_data) -> mesh_data_to_tris!(face_buffer, face_data, face_index),
+                Cells = (cell_data) -> mesh_data_to_tris!(cell_buffer, cell_data, cell_index)::Vector{Float64},
+                Faces = (face_data) -> mesh_data_to_tris!(face_buffer, face_data, face_index)::Vector{Float64},
                 indices = (Cells = cell_index, Faces = face_index)
             )
     return (points = pts, triangulation = tri, mapper = mapper)
 end
 
-function mesh_data_to_tris!(out, cell_data, cell_index)
+function mesh_data_to_tris!(out::Vector{Float64}, cell_data::Vector{Float64}, cell_index::Vector{Int})
     n = length(cell_index)
     @assert length(out) == n
-    for (i, c) in enumerate(cell_index)
+    for i in eachindex(cell_index)
+        c = cell_index[i]
         @inbounds out[i] = cell_data[c]
     end
-    return out
+    return out::Vector{Float64}
 end
 
 function triangulate_and_add_faces!(dest, m, e, faces; offset = 0)
