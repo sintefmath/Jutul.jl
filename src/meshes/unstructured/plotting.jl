@@ -23,12 +23,23 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; outer = false, flatten =
         pts = plot_flatten_helper(pts)
         tri = plot_flatten_helper(tri)
     end
+    cell_buffer = zeros(length(cell_index))
+    face_buffer = zeros(length(face_index))
     mapper = (
-                Cells = (cell_data) -> cell_data[cell_index],
-                Faces = (face_data) -> face_data[face_index],
+                Cells = (cell_data) -> mesh_data_to_tris!(cell_buffer, cell_data, cell_index),
+                Faces = (face_data) -> mesh_data_to_tris!(face_buffer, face_data, face_index),
                 indices = (Cells = cell_index, Faces = face_index)
             )
     return (points = pts, triangulation = tri, mapper = mapper)
+end
+
+function mesh_data_to_tris!(out, cell_data, cell_index)
+    n = length(cell_index)
+    @assert length(out) == n
+    for (i, c) in enumerate(cell_index)
+        @inbounds out[i] = cell_data[c]
+    end
+    return out
 end
 
 function triangulate_and_add_faces!(dest, m, e, faces; offset = 0)
