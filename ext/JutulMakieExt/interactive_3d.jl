@@ -205,11 +205,12 @@ function plot_interactive_impl(grid, states;
     else
         ax = Axis(ax_pos, title = title)
     end
-
+    cell_buffer = zeros(number_of_cells(grid))
     # Selection of data
     ys = @lift(
                 mapper.Cells(
                     select_data(
+                        cell_buffer,
                         current_filter,
                         states[$state_index],
                         Symbol($prop_name),
@@ -484,8 +485,8 @@ function plot_interactive_impl(grid, states;
     return fig#, ax
 end
 
-function select_data(current_filter, state, fld, ix, low, high, limits, transform_name, active_filters)
-    d = unpack(state[fld], ix)
+function select_data(buffer, current_filter, state, fld, ix, low, high, limits, transform_name, active_filters)
+    d = unpack(buffer, state[fld], ix)
     current_active = low > 0.0 || high < 1.0
     @. current_filter = false
     function update_filter!(M::AbstractMatrix, ix, arg...)
@@ -531,8 +532,19 @@ function select_data(current_filter, state, fld, ix, low, high, limits, transfor
     return d
 end
 
-unpack(x, ix) = Float64.(x[min(ix, size(x, 1)), :])
-unpack(x::AbstractVector, ix) = Float64.(x)
+function unpack(buffer, x, ix)
+    ix = min(ix, size(x, 1))
+    for j in axes(x, 2)
+        buffer[j] = Float64(x[ix, j])
+    end
+    return buffer
+end
+
+
+function unpack(buffer, x::AbstractVector, ix)
+    @. buffer = Float64(x)
+    return buffer
+end
 
 function generate_colormap(colormap_name, alphamap_name, base_alpha, low, high)
     cmap = to_colormap(colormap_name)
