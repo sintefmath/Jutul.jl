@@ -237,13 +237,15 @@ function plot_interactive_impl(grid, states;
             old = parse(Int64, msel)
         end
         nextn = min(old, length(rows))
-        prop_name[] = s
-        row_index[] = nextn
-        notify(prop_name)
-        notify(menu_2.selection)
+        prop_name.val = s
+        row_index.val = nextn
+        # notify(prop_name)
+        # notify(menu_2.selection)
         menu_2.options = rows
-        menu_2.selection[] = "$nextn"
+        menu_2.selection.val = "$nextn"
         lims[] = transform_plot_limits(limits[s], transform_name[])
+        notify(prop_name)
+        # notify(menu_2.selection)
     end
     # Row of dataset selector
     on(menu_2.selection) do s
