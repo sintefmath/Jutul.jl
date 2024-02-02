@@ -166,7 +166,6 @@ function plot_interactive_impl(grid, states;
         tmp = max(min(ix, nstates), 1)
         sl_x.selected_index = tmp
         state_index[] = tmp
-        notify(state_index)
         return tmp
     end
 
@@ -187,7 +186,7 @@ function plot_interactive_impl(grid, states;
     rs_v = IntervalSlider(fig[4, :], range = LinRange(0, 1, 1000))
 
     on(rs_v.interval) do x
-        low[] = x[1]
+        low.val = x[1]
         hi[] = x[2]
     end
     # point = sl_x.value
