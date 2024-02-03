@@ -116,6 +116,7 @@ function plot_interactive_impl(grid, states;
     end
     data = states[1]
     labels = Vector{String}()
+    row_limits = Dict()
     limits = Dict()
     for k in keys(data)
         d = data[k]
@@ -125,6 +126,8 @@ function plot_interactive_impl(grid, states;
             push!(labels, "$k")
             mv = Inf
             Mv = -Inf
+            ismat = states[1][k] isa Matrix
+
             for s in states
                 di = s[k]
                 mv = min(minimum(x -> isnan(x) ? Inf : x, di), mv)
@@ -134,6 +137,26 @@ function plot_interactive_impl(grid, states;
                 Mv = 1.01*mv + 1e-12
             end
             limits["$k"] = (mv, Mv)
+            row_limits["$k"] = Dict{Int, Tuple}()
+            if ismat
+                nrows = size(states[1][k], 1)
+                if nrows == 1
+                    row_limits["$k"][1] = (mv, Mv)
+                else
+                    for row in 1:nrows
+                        mv = Inf
+                        Mv = -Inf
+                        for s in states
+                            di = view(s[k], row, :)
+                            mv = min(minimum(x -> isnan(x) ? Inf : x, di), mv)
+                            Mv = max(maximum(x -> isnan(x) ? -Inf : x, di), Mv)
+                        end
+                        row_limits["$k"][row] = (mv, Mv)
+                    end
+                end
+            else
+                row_limits["$k"][1] = (mv, Mv)
+            end
         else
             @debug "Skipping $k: Non-numeric type" eltype(d)
         end
@@ -333,7 +356,7 @@ function plot_interactive_impl(grid, states;
     menu_transform = Menu(top_layout[1, N_top], options = ["none", "abs", "log10", "symlog10", "exp", "10^", "log", "≥0", "≤0"], prompt = "none")
     on(menu_transform.selection) do s
         transform_name[] = s
-        old_lims = limits[prop_name[]]
+        old_lims = lims[]
         new_lims = transform_plot_limits(old_lims, transform_name[])
         lims[] = new_lims
     end
@@ -374,6 +397,35 @@ function plot_interactive_impl(grid, states;
     menu_cmap = Menu(top_layout[1, N_top], options = colormaps, prompt = cmap_str)
     on(menu_cmap.selection) do s
         colormap_name[] = Symbol(s)
+    end
+    N_top += 1
+
+    # Colormap selector at the end
+    top_layout[1, N_top] = genlabel("Scale")
+    N_top += 1
+
+    menu_cscale = Menu(
+        top_layout[1, N_top],
+        options = ["All steps", "All steps, row", "Current step, row", "Current step"]
+    )
+    on(menu_cscale.selection) do s
+        pname = prop_name[]
+        row = row_index[]
+        if s == "All steps"
+            new_lims = limits[pname]
+        elseif s == "All steps, row"
+            new_lims = row_limits[pname][row]
+        else
+            if s == "Current step, row"
+                cstateval = ys.val
+                new_lims = (minimum(cstateval), maximum(cstateval))
+            else
+                @assert s == "Current step"
+                cstateval = states[state_index[]][Symbol(pname)]
+                new_lims = (minimum(cstateval), maximum(cstateval))
+            end
+        end
+        lims[] = new_lims
     end
     N_top += 1
 
