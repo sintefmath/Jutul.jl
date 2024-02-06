@@ -210,7 +210,8 @@ function plot_interactive_impl(grid, states;
 
     on(rs_v.interval) do x
         low.val = x[1]
-        hi[] = x[2]
+        hi.val = x[2]
+        notify(prop_name)
     end
     # point = sl_x.value
     on(sl_x.selected_index) do n
@@ -408,23 +409,28 @@ function plot_interactive_impl(grid, states;
         top_layout[1, N_top],
         options = ["All steps", "All steps, row", "Current step, row", "Current step"]
     )
-    on(menu_cscale.selection) do s
-        pname = prop_name[]
-        row = row_index[]
+    function get_limits(s, state_index, pname, row, states)
         if s == "All steps"
             new_lims = limits[pname]
         elseif s == "All steps, row"
             new_lims = row_limits[pname][row]
         else
+            current_val = states[state_index[]][Symbol(pname)]
             if s == "Current step, row"
-                cstateval = ys.val
+                cstateval = view(current_val, row, :)
                 new_lims = (minimum(cstateval), maximum(cstateval))
             else
                 @assert s == "Current step"
-                cstateval = states[state_index[]][Symbol(pname)]
+                cstateval = current_val
                 new_lims = (minimum(cstateval), maximum(cstateval))
             end
         end
+        return new_lims
+    end
+    on(menu_cscale.selection) do s
+        pname = prop_name[]
+        row = row_index[]
+        new_lims = get_limits(s, state_index, pname, row, states)
         lims[] = new_lims
     end
     N_top += 1
