@@ -408,9 +408,14 @@ function plot_interactive_impl(grid, states;
     top_layout[1, N_top] = genlabel("Scale")
     N_top += 1
 
+    if length(states) > 1
+        opt = ["All steps", "All steps, row", "Current step, row", "Current step"]
+    else
+        opt = ["Current step, row", "Current step"]
+    end
     menu_cscale = Menu(
         top_layout[1, N_top],
-        options = ["All steps", "All steps, row", "Current step, row", "Current step"]
+        options = opt
     )
     function get_limits(s, state_index, pname, row, states)
         if s == "All steps"
