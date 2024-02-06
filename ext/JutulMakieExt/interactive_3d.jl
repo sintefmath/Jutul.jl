@@ -240,7 +240,7 @@ function plot_interactive_impl(grid, states;
                         $row_index,
                         $low,
                         $hi,
-                        limits[$prop_name],
+                        $lims,
                         $transform_name,
                         active_filters
                         )
@@ -267,7 +267,8 @@ function plot_interactive_impl(grid, states;
         # notify(menu_2.selection)
         menu_2.options = rows
         menu_2.selection.val = "$nextn"
-        lims[] = transform_plot_limits(limits[s], transform_name[])
+        new_lims = get_limits(menu_cscale.selection[], state_index.val, s, nextn, states)
+        lims[] = transform_plot_limits(new_lims, transform_name[])
         notify(prop_name)
         # notify(menu_2.selection)
     end
@@ -276,7 +277,9 @@ function plot_interactive_impl(grid, states;
         if isnothing(s)
             s = "1"
         end
-        row_index[] = parse(Int64, s)
+        nextn = parse(Int64, s)
+        row_index[] = nextn
+        lims[] = get_limits(menu_cscale.selection[], state_index.val, prop_name.val, nextn, states)
     end
     # Top row
     fig[1, :] = top_layout = GridLayout(tellwidth = false)
