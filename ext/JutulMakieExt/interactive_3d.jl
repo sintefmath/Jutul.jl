@@ -267,8 +267,7 @@ function plot_interactive_impl(grid, states;
         # notify(menu_2.selection)
         menu_2.options = rows
         menu_2.selection.val = "$nextn"
-        new_lims = get_limits(menu_cscale.selection[], state_index.val, s, nextn, states)
-        lims[] = transform_plot_limits(new_lims, transform_name[])
+        lims[] = get_limits(menu_cscale.selection[], state_index.val, s, nextn, states, transform_name[])
         notify(prop_name)
         # notify(menu_2.selection)
     end
@@ -279,7 +278,7 @@ function plot_interactive_impl(grid, states;
         end
         nextn = parse(Int64, s)
         row_index[] = nextn
-        lims[] = get_limits(menu_cscale.selection[], state_index.val, prop_name.val, nextn, states)
+        lims[] = get_limits(menu_cscale.selection[], state_index.val, prop_name.val, nextn, states, transform_name[])
     end
     # Top row
     fig[1, :] = top_layout = GridLayout(tellwidth = false)
@@ -360,9 +359,7 @@ function plot_interactive_impl(grid, states;
     menu_transform = Menu(top_layout[1, N_top], options = ["none", "abs", "log10", "symlog10", "exp", "10^", "log", "≥0", "≤0"], prompt = "none")
     on(menu_transform.selection) do s
         transform_name[] = s
-        old_lims = lims[]
-        new_lims = transform_plot_limits(old_lims, transform_name[])
-        lims[] = new_lims
+        lims[] = get_limits(menu_cscale.selection[], state_index.val, prop_name.val, row_index.val, states, transform_name[])
     end
     N_top += 1
 
@@ -411,35 +408,41 @@ function plot_interactive_impl(grid, states;
     if length(states) > 1
         opt = ["All steps", "All steps, row", "Current step, row", "Current step"]
     else
-        opt = ["Current step, row", "Current step"]
+        opt = ["All rows", "Row"]
     end
     menu_cscale = Menu(
         top_layout[1, N_top],
         options = opt
     )
-    function get_limits(s, state_index, pname, row, states)
+    function get_limits(s, state_index, pname, row, states, transform_name)
         if s == "All steps"
             new_lims = limits[pname]
         elseif s == "All steps, row"
             new_lims = row_limits[pname][row]
         else
             current_val = states[state_index[]][Symbol(pname)]
-            if s == "Current step, row"
+            if s == "Current step, row" || s == "Row"
                 cstateval = view(current_val, row, :)
                 new_lims = (minimum(cstateval), maximum(cstateval))
             else
-                @assert s == "Current step"
+                @assert s == "Current step" || s == "All rows"
                 cstateval = current_val
                 new_lims = (minimum(cstateval), maximum(cstateval))
             end
         end
-        return new_lims
+        lim_lo, lim_hi = transform_plot_limits(new_lims, transform_name)
+        if !isfinite(lim_lo)
+            lim_lo = -1e30
+        end
+        if !isfinite(lim_hi)
+            lim_hi = 1e30
+        end
+        return (lim_lo, lim_hi)
     end
     on(menu_cscale.selection) do s
         pname = prop_name[]
         row = row_index[]
-        new_lims = get_limits(s, state_index, pname, row, states)
-        lims[] = new_lims
+        lims[] = get_limits(s, state_index, pname, row, states, transform_name[])
     end
     N_top += 1
 
