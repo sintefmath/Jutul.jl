@@ -437,6 +437,10 @@ function plot_interactive_impl(grid, states;
         if !isfinite(lim_hi)
             lim_hi = 1e30
         end
+        if lim_lo ≈ lim_hi
+            lim_lo *= 0.999
+            lim_hi = lim_hi*1.001 + 1e-16
+        end
         return (lim_lo, lim_hi)
     end
     on(menu_cscale.selection) do s
