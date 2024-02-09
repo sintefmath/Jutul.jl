@@ -356,7 +356,7 @@ function plot_interactive_impl(grid, states;
     # Transform
     top_layout[1, N_top] = genlabel("Transform")
     N_top += 1
-    menu_transform = Menu(top_layout[1, N_top], options = ["none", "abs", "log10", "symlog10", "exp", "10^", "log", "≥0", "≤0"], prompt = "none")
+    menu_transform = Menu(top_layout[1, N_top], options = ["none", "abs", "log10", "symlog10", "exp", "10^", "log", ">0", "<0"], prompt = "none")
     on(menu_transform.selection) do s
         transform_name[] = s
         lims[] = get_limits(menu_cscale.selection[], state_index.val, prop_name.val, row_index.val, states, transform_name[])
@@ -554,7 +554,7 @@ function plot_interactive_impl(grid, states;
     if new_window
         Jutul.independent_figure(fig)
     end
-    return fig#, ax
+    return fig
 end
 
 function select_data(buffer, current_filter, state, fld, ix, low, high, limits, transform_name, active_filters)
@@ -672,10 +672,10 @@ function plot_transform(x, name)
             x = exp(x)
         elseif name == "10^"
             x = 10^x
-        elseif name == "≥0"
-            x = x >= 0 ? x : NaN
-        elseif name == "≤"
-            x = x <= 0 ? x : NaN
+        elseif name == ">0"
+            x = x > 0 ? x : NaN
+        elseif name == "<0"
+            x = x < 0 ? x : NaN
         else
             error("Unknown transform $name")
         end
@@ -700,16 +700,16 @@ function transform_plot_limits(lims, name)
                 low = plot_transform(low, name)
             end
             hi = plot_transform(hi, name)
-        elseif name == "≥0"
-            hi = 0.0
-        elseif name == "≤0"
+        elseif name == ">0"
             low = 0.0
+        elseif name == "<0"
+            hi = 0.0
         else
             low = plot_transform(low, name)
             hi = plot_transform(hi, name)
         end
     end
-    if hi == low
+    if hi <= low
         hi = low + 1e-12
     end
     return (low, hi)
