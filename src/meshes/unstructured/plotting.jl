@@ -33,7 +33,7 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; outer = false, flatten =
     return (points = pts, triangulation = tri, mapper = mapper)
 end
 
-function mesh_data_to_tris!(out::Vector{Float64}, cell_data::Vector{Float64}, cell_index::Vector{Int})
+function mesh_data_to_tris!(out::Vector{Float64}, cell_data, cell_index)
     n = length(cell_index)
     @assert length(out) == n
     for i in eachindex(cell_index)
