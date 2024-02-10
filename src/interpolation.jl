@@ -144,12 +144,60 @@ end
 
 export get_2d_interpolator
 """
-    get_2d_interpolator(xs, ys, fs; method = BilinearInterpolant)
+    get_2d_interpolator(xs, ys, fs; method = BilinearInterpolant, cap_endpoints = true)
 
 For `xs` of length `nx` and `ys` of length `ny` generate a 2D interpolation for
-values given as a `nx` by `ny` matrix.
+values given as a `nx` by `ny` matrix. By default `cap_endpoints=true`, and
+constant extrapolation is used. Fine-grined control over extrapolation can be
+achieved by setting the keywords arguments `cap_x = (cap_low_x, cap_high_x)` and
+analogously for `cap_y`.
 """
-function get_2d_interpolator(xs, ys, fs; method = BilinearInterpolant)
+function get_2d_interpolator(xs, ys, fs;
+        method = BilinearInterpolant,
+        cap_endpoints = true,
+        cap_x = (cap_endpoints, cap_endpoints),
+        cap_y = (cap_endpoints, cap_endpoints)
+    )
+    cap_xlo, cap_xhi = cap_x
+    cap_ylo, cap_yhi = cap_y
+
+    cap_any_x = cap_xlo || cap_xhi
+    cap_any_y = cap_ylo || cap_yhi
+    if cap_any_x || cap_any_y
+        if cap_any_x
+            xs = copy(xs)
+        end
+        if cap_any_y
+            ys = copy(ys)
+        end
+        ϵ_x = 100*sum(abs, xs)
+        ϵ_y = 100*sum(abs, ys)
+
+        F_t = eltype(fs)
+        nx, ny = size(fs)
+        fs_new = zeros(F_t, nx + cap_xlo + cap_xhi, ny + cap_ylo + cap_yhi)
+        xoffset = cap_xlo
+        yoffset = cap_ylo
+        fs_new[(1+xoffset):(nx+xoffset), (1+yoffset):(ny+yoffset)] .= fs
+        if cap_xlo
+            fs_new[1, :] .= fs_new[2, :]
+            pushfirst!(xs, xs[1] - ϵ_x)
+        end
+        if cap_xhi
+            fs_new[end, :] .= fs_new[end-1, :]
+            push!(xs, xs[end] + ϵ_x)
+        end
+        if cap_ylo
+            fs_new[:, 1] .= fs_new[:, 2]
+            pushfirst!(ys, ys[1] - ϵ_y)
+        end
+        if cap_yhi
+            fs_new[:, end] .= fs_new[:, end-1]
+            push!(ys, ys[end] + ϵ_y)
+        end
+        fs = fs_new
+    end
+
     return method(xs, ys, fs)
 end
 
