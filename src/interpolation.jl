@@ -127,10 +127,8 @@ function bilinear_interp(X, Y, F, x, y)
     end
     F_upper = interp_local(x_1, F_12, x_2, F_22, x)
     F_lower = interp_local(x_1, F_11, x_2, F_21, x)
-    w_lower = (y - y_2)/Δy
-    w_upper = (y_1 - y)/Δy
-    F = w_lower*F_lower + w_upper*F_upper
-
+    w = (y - y_2)/Δy
+    F = w*F_lower + (1.0-w)*F_upper
     return F
 end
 
