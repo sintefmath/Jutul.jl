@@ -1,15 +1,21 @@
 export get_1d_interpolator
 
-first_lower(tab, x) = clamp(searchsortedfirst(tab, x) - 1, 1, length(tab) - 1)
+@inline function first_lower(tab, x, ::Missing)
+    return first_lower(tab, x)
+end
 
-function first_lower_linear(tab, x)
-    for i in eachindex(tab)
-        X = @inbounds tab[i]
-        if X >= x
-            return i-1
-        end
+@inline function first_lower(tab, x)
+    return clamp(searchsortedfirst(tab, x) - 1, 1, length(tab) - 1)
+end
+
+@inline function first_lower(tab, x, lookup)
+    x0, dx, n = lookup
+    if x <= x0 + dx
+        pos = 1
+    else
+        pos = min((x-x0)/dx, n-1)
     end
-    return length(tab)
+    return pos
 end
 
 @inline function interval_weight(t, x, ix)
@@ -20,8 +26,8 @@ end
     return w
 end
 
-@inline function linear_interp(X, F, x)
-    ix = first_lower(X, value(x))
+@inline function linear_interp(X, F, x, lookup = missing)
+    ix = first_lower(X, value(x), lookup)
     return linear_interp_internal(F, X, ix, x)
 end
 
@@ -33,21 +39,50 @@ end
     return F_0 + ∂F∂X*Δx
 end
 
-struct LinearInterpolant{V, T}
-    X::V
-    F::T
+"""
+    interpolation_constant_lookup(X, constant_dx = missing)
+
+Generate a lookup table for linear interpolation when dx is evenly spaced.
+
+Note: Setting `constant_dx=true` can lead to incorrect interpolations if the
+data is not evenly spaced.
+"""
+function interpolation_constant_lookup(X, constant_dx = missing)
+    Δx = X[2] - X[1]
+    if ismissing(constant_dx)
+        constant_dx = true
+        for i in 2:length(X)
+            constant_dx = constant_dx && Δx ≈ X[i] - X[i-1]
+        end
+    end
+    constant_dx::Bool
+
+    if constant_dx
+        lookup = (x0 = X[1], dx = Δx, n = length(X))
+    else
+        lookup = missing
+    end
+    return lookup
 end
 
-function LinearInterpolant(X::T, F::T; static = false) where T<:AbstractVector
-    @assert length(X) == length(F)
-    @assert issorted(X) "Interpolation inputs must be sorted: X = $X"
+struct LinearInterpolant{V, T, L}
+    X::V
+    F::T
+    lookup::L
+end
+
+function LinearInterpolant(X::V, F::T; static = false, constant_dx = missing) where {T<:AbstractVector, V<:AbstractVector}
+    length(X) == length(F) || throw(ArgumentError("X and F values must have equal length."))
+    issorted(X) || throw(ArgumentError("Interpolation inputs must be sorted: X = $X"))
+    lookup = interpolation_constant_lookup(X, constant_dx)
     if static
         n = length(X)
         T_el = eltype(X)
         X = SVector{n, T_el}(X)
         F = SVector{n, T_el}(F)
     end
-    return LinearInterpolant{T, T}(X, F)
+    L = typeof(lookup)
+    return LinearInterpolant{V, T, L}(X, F, lookup)
 end
 
 interpolate(I::LinearInterpolant, x) = linear_interp(I.X, I.F, x)
@@ -66,18 +101,27 @@ Get a 1D interpolator `F(x) ≈ y` for a table `xs, ys` that by default does con
 - `cap_endpoints = true`: Add values so that the endpoints are capped (constant extrapolation). Otherwise, the extrapolation will match the method.
 - `cap_start = cap_endpoints`: Fine-grained version of cap_endpoints for the start of the interval only (extrapolation for `x < xs[1]`)
 - `cap_end = cap_endpoints`:Fine-grained version of cap_endpoints for the end of the interval only (extrapolation for `x > xs[end]`)
+
+Additional keyword arguments are passed onto the interpolator constructor.
 """
-function get_1d_interpolator(xs, ys; method = LinearInterpolant, cap_endpoints = true, cap_end = cap_endpoints, cap_start = cap_endpoints)
+function get_1d_interpolator(xs, ys;
+        method = LinearInterpolant,
+        cap_endpoints = true,
+        cap_end = cap_endpoints,
+        cap_start = cap_endpoints,
+        kwarg...
+    )
     if cap_endpoints && (cap_start || cap_end)
-        ϵ = 100*sum(abs, xs)
         xs = copy(xs)
         ys = copy(ys)
         # Add perturbed points, repeat start and end value
         if cap_start
+            ϵ = xs[2] - xs[1]
             pushfirst!(xs, xs[1] - ϵ)
             pushfirst!(ys, ys[1])
         end
         if cap_end
+            ϵ = xs[end] - xs[end-1]
             push!(xs, xs[end] + ϵ)
             push!(ys, ys[end])
         end
@@ -86,7 +130,7 @@ function get_1d_interpolator(xs, ys; method = LinearInterpolant, cap_endpoints =
     ny = length(ys)
     nx > 1 || throw(ArgumentError("xs values must have more than one entry."))
     nx == ny || throw(ArgumentError("Number of xs ($nx) and ys(x) ($ny) must match"))
-    return method(xs, ys)
+    return method(xs, ys; kwarg...)
 end
 struct BilinearInterpolant{V, T}
     X::V
