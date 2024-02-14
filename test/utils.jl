@@ -1,4 +1,4 @@
-using Jutul, Test, StaticArrays
+using Jutul, Test, StaticArrays, ForwardDiff
 
 @testset "entity_eachindex" begin
     N = 3
@@ -153,6 +153,53 @@ end
     @test F_approx_b(0.25) ≈ (x1 + x2)/2
 end
 
+@testset "get_2d_interpolator" begin
+    using Test
+    f(x, y) = sin(x) + cos(y) + 0.5*x
+    xs = range(0.0, 4.0, 10)
+    ys = range(0.0, 5.0, 8)
+    xs = collect(xs)
+    ys = collect(ys)
+    nx = length(xs)
+    ny = length(ys)
+    fs = zeros(nx, ny)
+    for (i, x) in enumerate(xs)
+        for (j, y) in enumerate(ys)
+            fs[i, j] = f(x, y)
+        end
+    end
+    I = get_2d_interpolator(xs, ys, fs)
+    for (i, x) in enumerate(xs)
+        for (j, y) in enumerate(ys)
+            @test I(x, y) ≈ f(x, y)
+        end
+    end
+    nf = 100
+    xfine = range(-1.0, 5.0, nf)
+    yfine = range(-1.0, 6.0, nf)
+    using ForwardDiff, Test
+
+    F(X) = I(first(X), last(X))
+    function F_num(X)
+        ϵ = 1e-6
+        x = X[1]
+        y = X[2]
+        v0 = I(x, y)
+        vx = I(x + ϵ, y)
+        vy = I(x, y + ϵ)
+        dx = (vx - v0)/ϵ
+        dy = (vy - v0)/ϵ
+        return (dx, dy)
+    end
+    for (i, x) in enumerate(xfine)
+        for (j, y) in enumerate(yfine)
+            dx_i, dy_i = ForwardDiff.gradient(F, [x, y])
+            dx_num, dy_num = F_num([x, y])
+            @test dx_num ≈ dx_i rtol=1e-3 atol=1e-8
+            @test dy_num ≈ dy_i rtol=1e-3 atol=1e-8
+        end
+    end
+end
 @testset "compress_timesteps" begin
     # Two test forces
     f1 = (f = 1, )
