@@ -13,9 +13,10 @@ end
     if x <= x0 + dx
         pos = 1
     else
-        pos = min((x-x0)/dx, n-1)
+        m = Int((x-x0)÷dx)+1
+        pos = min(m, n-1)
     end
-    return pos
+    return pos::Int
 end
 
 @inline function interval_weight(t, x, ix)
@@ -85,7 +86,7 @@ function LinearInterpolant(X::V, F::T; static = false, constant_dx = missing) wh
     return LinearInterpolant{V, T, L}(X, F, lookup)
 end
 
-interpolate(I::LinearInterpolant, x) = linear_interp(I.X, I.F, x)
+interpolate(I::LinearInterpolant, x) = linear_interp(I.X, I.F, x, I.lookup)
 (I::LinearInterpolant)(x) = interpolate(I, x)
 
 """
@@ -132,29 +133,36 @@ function get_1d_interpolator(xs, ys;
     nx == ny || throw(ArgumentError("Number of xs ($nx) and ys(x) ($ny) must match"))
     return method(xs, ys; kwarg...)
 end
-struct BilinearInterpolant{V, T}
+struct BilinearInterpolant{V, T, LX, LY}
     X::V
     Y::V
     F::T
-    function BilinearInterpolant(xs::T, ys::T, fs::M) where {T, M}
+    lookup_x::LX
+    lookup_y::LY
+    function BilinearInterpolant(xs::T, ys::T, fs::M;
+            constant_dx = missing,
+            constant_dy = missing
+        ) where {T, M}
         issorted(xs) || throw(ArgumentError("xs must be sorted."))
         issorted(ys) || throw(ArgumentError("ys must be sorted."))
+        lookup_x = interpolation_constant_lookup(xs, constant_dx)
+        lookup_y = interpolation_constant_lookup(ys, constant_dy)
         nx = length(xs)
         ny = length(ys)
         size(fs) == (nx, ny) || throw(ArgumentError("f(x, y) must match lengths of xs (as rows) and xy (as columns) = ($nx,$ny)"))
-        return new{T, M}(xs, ys, fs)
+        return new{T, M, typeof(lookup_x), typeof(lookup_y)}(xs, ys, fs, lookup_x, lookup_y)
     end
 end
 
-function bilinear_interp(X, Y, F, x, y)
+function bilinear_interp(X, Y, F, x, y, lookup_x = missing, lookup_y = missing)
     function interp_local(X_0, F_0, X_1, F_1, X)
         ∂F∂X = (F_1 - F_0)/(X_1 - X_0)
         ΔX = X - X_0
         return F_0 + ∂F∂X*ΔX
     end
 
-    x_pos = Jutul.first_lower(X, value(x))
-    y_pos = Jutul.first_lower(Y, value(y))
+    x_pos = first_lower(X, value(x), lookup_x)
+    y_pos = first_lower(Y, value(y), lookup_y)
     @inbounds begin
         x_1 = X[x_pos]
         x_2 = X[x_pos+1]
@@ -178,7 +186,7 @@ function bilinear_interp(X, Y, F, x, y)
 end
 
 function interpolate(I::BilinearInterpolant, x, y)
-    return bilinear_interp(I.X, I.Y, I.F, x, y)
+    return bilinear_interp(I.X, I.Y, I.F, x, y, I.lookup_x, I.lookup_y)
 end
 
 function (I::BilinearInterpolant)(x, y)
@@ -199,7 +207,8 @@ function get_2d_interpolator(xs, ys, fs;
         method = BilinearInterpolant,
         cap_endpoints = true,
         cap_x = (cap_endpoints, cap_endpoints),
-        cap_y = (cap_endpoints, cap_endpoints)
+        cap_y = (cap_endpoints, cap_endpoints),
+        kwarg...
     )
     cap_xlo, cap_xhi = cap_x
     cap_ylo, cap_yhi = cap_y
@@ -213,8 +222,6 @@ function get_2d_interpolator(xs, ys, fs;
         if cap_any_y
             ys = copy(ys)
         end
-        ϵ_x = 100*sum(abs, xs)
-        ϵ_y = 100*sum(abs, ys)
 
         F_t = eltype(fs)
         nx, ny = size(fs)
@@ -224,24 +231,28 @@ function get_2d_interpolator(xs, ys, fs;
         fs_new[(1+xoffset):(nx+xoffset), (1+yoffset):(ny+yoffset)] .= fs
         if cap_xlo
             fs_new[1, :] .= fs_new[2, :]
-            pushfirst!(xs, xs[1] - ϵ_x)
+            ϵ = xs[2] - xs[1]
+            pushfirst!(xs, xs[1] - ϵ)
         end
         if cap_xhi
             fs_new[end, :] .= fs_new[end-1, :]
-            push!(xs, xs[end] + ϵ_x)
+            ϵ = xs[end] - xs[end-1]
+            push!(xs, xs[end] + ϵ)
         end
         if cap_ylo
             fs_new[:, 1] .= fs_new[:, 2]
-            pushfirst!(ys, ys[1] - ϵ_y)
+            ϵ = ys[2] - ys[1]
+            pushfirst!(ys, ys[1] - ϵ)
         end
         if cap_yhi
             fs_new[:, end] .= fs_new[:, end-1]
-            push!(ys, ys[end] + ϵ_y)
+            ϵ = ys[end] - ys[end-1]
+            push!(ys, ys[end] + ϵ)
         end
         fs = fs_new
     end
 
-    return method(xs, ys, fs)
+    return method(xs, ys, fs; kwarg...)
 end
 
 struct UnaryTabulatedVariable <: VectorVariables

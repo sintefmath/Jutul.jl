@@ -159,52 +159,77 @@ end
 end
 
 @testset "get_2d_interpolator" begin
-    using Test
-    f(x, y) = sin(x) + cos(y) + 0.5*x
-    xs = range(0.0, 4.0, 10)
-    ys = range(0.0, 5.0, 8)
-    xs = collect(xs)
-    ys = collect(ys)
-    nx = length(xs)
-    ny = length(ys)
-    fs = zeros(nx, ny)
-    for (i, x) in enumerate(xs)
-        for (j, y) in enumerate(ys)
-            fs[i, j] = f(x, y)
-        end
-    end
-    I = get_2d_interpolator(xs, ys, fs)
-    for (i, x) in enumerate(xs)
-        for (j, y) in enumerate(ys)
-            @test I(x, y) ≈ f(x, y)
-        end
-    end
-    nf = 100
-    xfine = range(-1.0, 5.0, nf)
-    yfine = range(-1.0, 6.0, nf)
-    using ForwardDiff, Test
-
-    F(X) = I(first(X), last(X))
-    function F_num(X)
-        ϵ = 1e-6
-        x = X[1]
-        y = X[2]
-        v0 = I(x, y)
-        vx = I(x + ϵ, y)
-        vy = I(x, y + ϵ)
-        dx = (vx - v0)/ϵ
-        dy = (vy - v0)/ϵ
-        return (dx, dy)
-    end
-    for (i, x) in enumerate(xfine)
-        for (j, y) in enumerate(yfine)
-            dx_i, dy_i = ForwardDiff.gradient(F, [x, y])
-            dx_num, dy_num = F_num([x, y])
-            @test dx_num ≈ dx_i rtol=1e-3 atol=1e-8
-            @test dy_num ≈ dy_i rtol=1e-3 atol=1e-8
+    for constant_dx in [true, false, missing]
+        for constant_dy in [true, false, missing]
+            f(x, y) = sin(x) + cos(y) + 0.5*x
+            xs = range(0.0, 4.0, 10)
+            ys = range(0.0, 5.0, 8)
+            xs = collect(xs)
+            ys = collect(ys)
+            nx = length(xs)
+            ny = length(ys)
+            fs = zeros(nx, ny)
+            for (i, x) in enumerate(xs)
+                for (j, y) in enumerate(ys)
+                    fs[i, j] = f(x, y)
+                end
+            end
+            I = get_2d_interpolator(xs, ys, fs,
+                constant_dx = constant_dx, constant_dy = constant_dy)
+            for (i, x) in enumerate(xs)
+                for (j, y) in enumerate(ys)
+                    @test I(x, y) ≈ f(x, y)
+                end
+            end
+            nf = 100
+            xfine = range(-1.0, 5.0, nf)
+            yfine = range(-1.0, 6.0, nf)
+            using ForwardDiff, Test
+    
+            F(X) = I(first(X), last(X))
+            function F_num(X)
+                ϵ = 1e-6
+                x = X[1]
+                y = X[2]
+                v0 = I(x, y)
+                vx = I(x + ϵ, y)
+                vy = I(x, y + ϵ)
+                dx = (vx - v0)/ϵ
+                dy = (vy - v0)/ϵ
+                return (dx, dy)
+            end
+            for (i, x) in enumerate(xfine)
+                for (j, y) in enumerate(yfine)
+                    dx_i, dy_i = ForwardDiff.gradient(F, [x, y])
+                    dx_num, dy_num = F_num([x, y])
+                    @test dx_num ≈ dx_i rtol=1e-3 atol=1e-8
+                    @test dy_num ≈ dy_i rtol=1e-3 atol=1e-8
+                end
+            end
         end
     end
 end
+
+@testset "first_lower fast lookup" begin
+    for nstep in 2:100
+        for t in [(1.5, 3.9), (-100.0, 53.0), (-1e-3, 1e-3)]
+            start, stop = t
+            dx = collect(range(start, stop, length = nstep))
+            lookup = Jutul.interpolation_constant_lookup(dx)
+            @test lookup.dx ≈ (stop - start)/(nstep-1)
+            wd = 0.1*(stop-start)
+            for x in range(start - wd, stop + wd, length = 3*nstep)
+                pos = Jutul.first_lower(dx, x)
+                pos_l = Jutul.first_lower(dx, x, lookup)
+                bnd = start + pos*lookup.dx
+                bnd_l = start + pos_l*lookup.dx
+                at_boundary = isapprox(x, bnd, atol = 1e-10) || isapprox(x, bnd_l, atol = 1e-10)
+                @test pos == pos_l || at_boundary
+            end
+        end
+    end
+end
+
 @testset "compress_timesteps" begin
     # Two test forces
     f1 = (f = 1, )
