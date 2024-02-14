@@ -13,7 +13,7 @@ end
     if x <= x0 + dx
         pos = 1
     else
-        m = Int((x-x0)÷dx)+1
+        m = floor(Int, (x-x0)/dx)+1
         pos = min(m, n-1)
     end
     return pos::Int
