@@ -414,6 +414,9 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
             print(io, "\n")
         elseif f == :output_variables
             print(io, "    $(join(p, ", "))\n\n")
+        elseif f == :extra
+            print(io, "    $(typeof(p)) with keys: $(keys(p))")
+            print(io, "\n")
         else
             print(io, "    ")
             print(io, p)
