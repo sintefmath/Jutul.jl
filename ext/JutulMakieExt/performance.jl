@@ -65,6 +65,7 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
         axis_arg = NamedTuple(),
         x_is_time = true,
         legend = true,
+        ministeps = false,
         title = nothing,
         scatter_points = true,
         kwarg...
@@ -79,8 +80,11 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     if first(allreports) isa AbstractDict && haskey(first(allreports), :ministeps)
         allreports = [allreports]
     end
-    if isnothing(dt)
-        dt = report_timesteps(first(allreports))
+    if ministeps
+        dt = map(x -> report_timesteps(x, ministeps = true), allreports)
+
+    elseif isnothing(dt)
+        dt = map(report_timesteps, allreports)
     end
     r_rep = map(x -> timing_breakdown(x, reduce = false), allreports)
     if use_time
@@ -108,13 +112,13 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     ax = Axis(f; xlabel = xl, title = tit, ylabel = yl, axis_arg...)
     if cumulative
         get_data = x -> cumsum(vcat(0, F(x)))
-        t = cumsum(vcat(0, dt))/(3600*24*365)
+        t = map(dt -> cumsum(vcat(0, dt))/(3600*24*365), dt)
     else
         get_data = x -> F(x)
-        t = cumsum(dt)/(3600*24*365)
+        t = map(dt -> cumsum(dt)/(3600*24*365), dt)
     end
     if !x_is_time
-        t = eachindex(t)
+        t = map(t -> eachindex(t), dt)
     end
     names_missing = isnothing(names)
     if names_missing
@@ -127,14 +131,14 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
         c = colors[mod(i-1, n_rep)+1]
         data_i = get_data(r_rep[i])
         push!(alldata, data_i)
-        lines!(ax, t, data_i,
+        lines!(ax, t[i], data_i,
             label = names[i],
             linewidth = linewidth,
             color = c,
             linestyle = get_linestyle(i);
             kwarg...)
         if scatter_points
-            scatter!(ax, t, data_i, color = c)
+            scatter!(ax, t[i], data_i, color = c)
         end
     end
     if length(r_rep) > 1 && !names_missing && legend
