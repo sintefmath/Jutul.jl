@@ -44,3 +44,9 @@ function set_variable_internal!(vars, model::CompositeModel; kwarg...)
         end
     end
 end
+
+function get_dependencies(svar::Pair, model::CompositeModel)
+    k, var = svar
+    models = model.extra[:models]
+    return get_dependencies(var, models[k])
+end
