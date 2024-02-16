@@ -81,9 +81,9 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
         allreports = [allreports]
     end
     if ministeps
-        dt = map(x -> report_timesteps(x, ministeps = true), allreports)
-
-    elseif isnothing(dt)
+        allreports = map(Jutul.reports_to_ministep_reports, allreports)
+    end
+    if isnothing(dt)
         dt = map(report_timesteps, allreports)
     end
     r_rep = map(x -> timing_breakdown(x, reduce = false), allreports)

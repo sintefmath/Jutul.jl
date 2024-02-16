@@ -406,6 +406,22 @@ function report_iterations(report)
     return its
 end
 
+function reports_to_ministep_reports(reports)
+    next_report = []
+    for report in reports
+        for step_report in report[:ministeps]
+            tmp = similar(report)
+            tmp[:ministeps] = [step_report]
+            if step_report[:success]
+                tmp[:total_time] = step_report[:dt]
+            else
+                tmp[:total_time] = 0.0
+            end
+            push!(next_report, tmp)
+        end
+    end
+    return next_report
+end
 
 function pick_time_unit(t, wide = is_wide_term())
     m = maximum(t)
