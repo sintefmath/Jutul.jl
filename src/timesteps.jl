@@ -58,6 +58,13 @@ struct IterationTimestepSelector <: AbstractTimestepSelector
     end
 end
 
+"""
+    pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step)
+
+Pick the next time-step for `IterationTimestepSelector`. This function uses the
+number of iterations from previous timesteps to estimate the relationship
+between the last and the new time step.
+"""
 function pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step)
     R = successful_reports(reports, current_reports, step_index, 2)
     if length(R) == 0
