@@ -284,7 +284,7 @@ end
 
 Convert `CartesianMesh` instance to unstructured grid (3D only)
 """
-function UnstructuredMesh(g::CartesianMesh)
+function UnstructuredMesh(g::CartesianMesh; kwarg...)
     d = dim(g)
     nx, ny, nz = grid_dims_ijk(g)
     if d < 3
@@ -498,7 +498,8 @@ function UnstructuredMesh(g::CartesianMesh)
         int_neighbors,
         bnd_cells;
         structure = CartesianIndex(nx, ny, nz),
-        cell_map = 1:nc
+        cell_map = 1:nc,
+        kwarg...
     )
 end
 
