@@ -154,8 +154,11 @@ function replace_variables!(model; throw = true, kwarg...)
                     vars[k] = v
                 elseif oldvar isa Pair
                     @assert model.system isa CompositeSystem
-                    vsymb, = oldvar
-                    vars[k] = Pair(vsymb, v)
+                    if v isa Pair
+                        vars[k] = v
+                    else
+                        vars[k] = Pair(first(oldvar), v)
+                    end
                 end
                 done = true
                 break
