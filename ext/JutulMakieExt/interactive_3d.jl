@@ -281,8 +281,8 @@ function plot_interactive_impl(grid, states;
         lims[] = get_limits(menu_cscale.selection[], state_index.val, prop_name.val, nextn, states, transform_name[])
     end
     # Top row
-    fig[1, :] = top_layout = GridLayout(tellwidth = false)
-    N_top = 0
+    fig[1, :] = top_layout = GridLayout(2, 1, tellwidth = false)
+    N_top = 1
 
     # Alpha map selector
     genlabel(l) = Label(fig, l, font = :bold)
@@ -449,6 +449,33 @@ function plot_interactive_impl(grid, states;
         lims[] = get_limits(s, state_index, pname, row, states, transform_name[])
     end
     N_top += 1
+
+    N_mid = 1
+    top_layout[2, N_mid] = genlabel("View")
+    N_mid += 1
+    menu_view = Menu(
+        top_layout[2, N_mid],
+        options = ["Default", "XZ", "YZ", "XY"]
+    )
+    N_mid += 1
+    on(menu_view.selection) do s
+        if s == "XZ"
+            az = 0.5π
+            el = 0.0
+        elseif s == "YZ"
+            az = 0
+            el = 0.0
+        elseif s == "XY"
+            az = -0.5π
+            el = 0.5π
+        elseif s == "Default"
+            az = 1.275π
+            el = 0.125π
+        end
+        ax.azimuth[] = az
+        ax.elevation[] = el
+    end
+
 
     function loopy()
         start = state_index.val
