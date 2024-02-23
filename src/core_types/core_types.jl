@@ -384,8 +384,15 @@ function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
                     end
                     if f == :secondary_variables
                         print(io, "\n")
+                        is_pair = pvar isa Pair
+                        if is_pair
+                            pl, pvar = pvar
+                            pl = " ($pl)"
+                        else
+                            pl = ""
+                        end
                         print_t = Base.typename(typeof(pvar)).wrapper
-                        print(io, "      -> $print_t as evaluator")
+                        print(io, "      -> $print_t as evaluator$pl")
                     end
                     print(io, "\n")
                     #end
