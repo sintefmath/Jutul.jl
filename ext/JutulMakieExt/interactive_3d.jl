@@ -174,8 +174,18 @@ function plot_interactive_impl(grid, states;
     if length(datakeys) == 0
         error("No plottable properties found.")
     end
+    nstates = length(states)
+
     initial_prop = datakeys[1]
     state_index = Observable{Int64}(1)
+    function generate_title(base, ix)
+        if length(base) == 0
+            return "Step $(ix[])/$nstates"
+        else
+            return "$base step $(ix[])/$nstates"
+        end
+    end
+    fig_title = Observable{String}(generate_title(title, state_index))
     row_index = Observable{Int64}(1)
     prop_name = Observable{Any}(initial_prop)
     transform_name = Observable{String}(transform)
@@ -183,12 +193,14 @@ function plot_interactive_impl(grid, states;
     menu = Menu(fig, options = datakeys, prompt = initial_prop)
     menu_2 = Menu(fig, options = get_valid_rows("$initial_prop"), prompt = "1", width = 60)
 
-    nstates = length(states)
 
-    function change_index(ix)
-        tmp = max(min(ix, nstates), 1)
-        sl_x.selected_index = tmp
+    function change_index(ix; update_slider = true)
+        tmp = clamp(ix, 1, nstates)
+        if update_slider
+            sl_x.selected_index = tmp
+        end
         state_index[] = tmp
+        fig_title[] = generate_title(title, state_index)
         return tmp
     end
 
@@ -216,17 +228,17 @@ function plot_interactive_impl(grid, states;
     # point = sl_x.value
     on(sl_x.selected_index) do n
         val = sl_x.selected_index.val
-        state_index[] = val
+        change_index(val, update_slider = false)
     end
     is_3d = size(pts, 2) == 3
     ax_pos = fig[2, 1:3]
     if is_3d
-        ax = Axis3(ax_pos, title = title, aspect = aspect, zreversed = z_is_depth)
+        ax = Axis3(ax_pos, title = fig_title, aspect = aspect, zreversed = z_is_depth)
         if free_cam
             Camera3D(ax.scene)
         end
     else
-        ax = Axis(ax_pos, title = title)
+        ax = Axis(ax_pos, title = fig_title)
     end
     cell_buffer = zeros(number_of_cells(grid))
     # Selection of data
