@@ -74,7 +74,11 @@ end
 
 function LinearInterpolant(X::V, F::T; static = false, constant_dx = missing) where {T<:AbstractVector, V<:AbstractVector}
     length(X) == length(F) || throw(ArgumentError("X and F values must have equal length."))
-    issorted(X) || throw(ArgumentError("Interpolation inputs must be sorted: X = $X"))
+    if !issorted(X)
+        ix = sortperm(X)
+        X = X[ix]
+        F = F[ix]
+    end
     lookup = interpolation_constant_lookup(X, constant_dx)
     if static
         n = length(X)
