@@ -189,7 +189,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
         end
         t_elapsed += t_step + subrep[:output_time]
         if early_termination
-            n_solved = step_no
+            n_solved = step_no-1
             break
         end
     end
