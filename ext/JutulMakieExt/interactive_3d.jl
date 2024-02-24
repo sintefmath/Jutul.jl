@@ -201,6 +201,7 @@ function plot_interactive_impl(grid, states;
         end
         state_index[] = tmp
         fig_title[] = generate_title(title, state_index)
+        lims[] = get_limits(menu_cscale.selection[], state_index.val, prop_name.val, ix, states, transform_name[])
         return tmp
     end
 
