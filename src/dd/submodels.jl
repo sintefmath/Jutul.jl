@@ -144,6 +144,11 @@ Get subvariable of Jutul variable
 """
 subvariable(var, map) = var
 
+function subvariable(var::Pair, map)
+    label, var = var
+    return Pair(label, subvariable(var, map))
+end
+
 partition_variable_slice(v::AbstractVector, partition) = v[partition]
 partition_variable_slice(v::AbstractMatrix, partition) = v[:, partition]
 partition_variable_slice(v, partition) = v

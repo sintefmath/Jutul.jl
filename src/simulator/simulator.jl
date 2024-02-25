@@ -189,7 +189,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
         end
         t_elapsed += t_step + subrep[:output_time]
         if early_termination
-            n_solved = step_no
+            n_solved = step_no-1
             break
         end
     end
@@ -254,7 +254,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                     inner_msg = " Reducing mini-step."
                     c = :yellow
                 end
-                jutul_message("Convergence", "Time-step $step_no with mini-step $(get_tstr(dt_old, 2)) failed to converge.$inner_msg", color = c)
+                jutul_message("Convergence", "Report step $step_no with mini-step $(get_tstr(dt_old, 2)) failed to converge.$inner_msg", color = c)
             end
             if isnan(dt)
                 break

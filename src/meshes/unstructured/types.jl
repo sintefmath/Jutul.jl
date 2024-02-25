@@ -284,7 +284,7 @@ end
 
 Convert `CartesianMesh` instance to unstructured grid (3D only)
 """
-function UnstructuredMesh(g::CartesianMesh)
+function UnstructuredMesh(g::CartesianMesh; kwarg...)
     d = dim(g)
     nx, ny, nz = grid_dims_ijk(g)
     if d < 3
@@ -498,12 +498,13 @@ function UnstructuredMesh(g::CartesianMesh)
         int_neighbors,
         bnd_cells;
         structure = CartesianIndex(nx, ny, nz),
-        cell_map = 1:nc
+        cell_map = 1:nc,
+        kwarg...
     )
 end
 
 
-function UnstructuredMesh(g::MRSTWrapMesh)
+function UnstructuredMesh(g::MRSTWrapMesh; kwarg...)
     G_raw = g.data
     faces_raw = Int.(vec(G_raw.cells.faces[:, 1]))
     facePos_raw = Int.(vec(G_raw.cells.facePos[:, 1]))
@@ -511,7 +512,7 @@ function UnstructuredMesh(g::MRSTWrapMesh)
     nodePos_raw = Int.(vec(G_raw.faces.nodePos[:, 1]))
     coord = collect(G_raw.nodes.coords')
     N_raw = Int.(G_raw.faces.neighbors')
-    return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw)
+    return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw; kwarg...)
 end
 
 function UnstructuredMesh(G_raw::AbstractDict)
