@@ -930,7 +930,7 @@ function submodels_storage_apply!(storage, model, f!, arg...)
 end
 
 function get_output_state(storage, model::MultiModel)
-    out = Dict{Symbol, Any}()
+    out = JUTUL_OUTPUT_TYPE()
     models = model.models
     for key in submodel_symbols(model)
         out[key] = get_output_state(storage[key], models[key])

@@ -43,13 +43,13 @@ function rank_folder(pth, rank)
 end
 
 function consolidate_distributed_results(states, reports, partitions)
-    state = Dict{Symbol, Any}()
-    report = Dict{Symbol, Any}()
+    state = JUTUL_OUTPUT_TYPE()
+    report = JUTUL_OUTPUT_TYPE()
     mlabel = partitions[1]["main_partition_label"]
     if isnothing(mlabel)
         consolidate_cell_values!(state, states, partitions)
     else
-        main_state = Dict{Symbol, Any}()
+        main_state = JUTUL_OUTPUT_TYPE()
         for substate in states
             for (k, v) in pairs(substate)
                 if k == mlabel

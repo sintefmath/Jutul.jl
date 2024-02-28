@@ -651,7 +651,7 @@ function read_restart(pth, i; read_state = true, read_report = true)
             if read_state
                 state = file["state"]
             else
-                state = Dict{Symbol, Any}()
+                state = JUTUL_OUTPUT_TYPE()
             end
             if read_report
                 report = file["report"]
@@ -665,7 +665,7 @@ function read_restart(pth, i; read_state = true, read_report = true)
             return (state, report)
         end
     else
-        state = Dict{Symbol, Any}()
+        state = JUTUL_OUTPUT_TYPE()
         report = nothing
         @warn "Data for step $i was requested, but no such file was found."
     end
