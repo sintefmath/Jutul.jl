@@ -42,7 +42,7 @@ module Jutul
     using TimerOutputs
     # Shorted alias for @timeit_debug
     const var"@tic" = var"@timeit_debug"
-    const JUTUL_REPORT_TYPE = OrderedDict{Symbol, Any}
+    const JUTUL_OUTPUT_TYPE = OrderedDict{Symbol, Any}
 
     timeit_debug_enabled() = false
 
