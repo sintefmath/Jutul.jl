@@ -42,6 +42,8 @@ module Jutul
     using TimerOutputs
     # Shorted alias for @timeit_debug
     const var"@tic" = var"@timeit_debug"
+    const JUTUL_REPORT_TYPE = OrderedDict{Symbol, Any}
+
     timeit_debug_enabled() = false
 
     # Separate module for CSR backend

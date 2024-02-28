@@ -178,7 +178,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
         new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
         t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dt, reports = reports, step_no = step_no, rec = rec)
         early_termination = !step_done
-        subrep = OrderedDict()
+        subrep = JUTUL_REPORT_TYPE()
         subrep[:ministeps] = rep
         subrep[:total_time] = t_step
         if step_done
@@ -404,7 +404,7 @@ function perform_step_per_process_initial_update!(storage, model, dt, forces, co
 end
 
 function setup_ministep_report(; kwarg...)
-    report = OrderedDict{Symbol, Any}()
+    report = JUTUL_REPORT_TYPE()
     for k in [:secondary_time, :equations_time, :linear_system_time, :convergence_time]
         report[k] = 0.0
     end
@@ -425,9 +425,9 @@ function solve_ministep(sim, dt, forces, max_iter, cfg;
     )
     done = false
     rec = progress_recorder(sim)
-    report = OrderedDict()
+    report = JUTUL_REPORT_TYPE()
     report[:dt] = dt
-    step_reports = []
+    step_reports = JUTUL_REPORT_TYPE[]
     cur_time = current_time(rec)
     t_prepare = @elapsed if prepare
         update_before_step!(sim, dt, forces, time = cur_time, recorder = rec, update_explicit = update_explicit)
