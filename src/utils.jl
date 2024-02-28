@@ -269,8 +269,11 @@ function ministep_report_stats!(stats, mini_rep)
     if haskey(mini_rep, :finalize_time)
         stats[:finalize] += mini_rep[:finalize_time]
     end
-
-    s = stats_ministep(mini_rep[:steps])
+    if haskey(mini_rep, :stats)
+        s = mini_rep[:stats]
+    else
+        s = stats_ministep(mini_rep[:steps])
+    end
     stats[:linearizations] += s.linearizations
     stats[:iterations] += s.newtons
     stats[:linear_update] += s.linear_system

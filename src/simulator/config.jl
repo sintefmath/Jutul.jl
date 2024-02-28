@@ -44,6 +44,7 @@ Negative values disable output. The interpretation of this number is subject to 
     # IO options
     add_option!(cfg, :output_path, nothing, "Path to write output. If nothing, output is not written to disk.", types = Union{String, Nothing})
     add_option!(cfg, :in_memory_reports, 5, "Limit for number of reports kept in memory if output_path is provided.", types = Int)
+    add_option!(cfg, :report_level, 1, "Level of information stored in reports when written to disk.", types = Int)
 
     # Hooks
     add_option!(cfg, :post_ministep_hook, missing, "Hook to run after each ministep (successful or not) on format (done, report, sim, dt, forces, max_iter, cfg) -> (done, report)")
