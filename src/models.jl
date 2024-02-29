@@ -857,19 +857,17 @@ end
 
 function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1, check = false, state = missing)
     primary = get_primary_variables(model)
-    ok = true
     report = Dict{Symbol, Any}()
     for (pkey, p) in primary
         dxi = dx[pkey]
         if check
-            ok_i = check_increment(dxi, p, pkey)
-            ok = ok && ok_i
+            ok = check_increment(dxi, p, pkey)
+            if !ok
+                error("Primary variables recieved invalid updates.")
+            end
         end
         @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
         report[pkey] = increment_norm(dxi, state, model, primary_storage[pkey], p)
-    end
-    if !ok
-        error("Primary variables recieved invalid updates.")
     end
     return report
 end
