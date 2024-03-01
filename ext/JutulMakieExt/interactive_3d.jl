@@ -435,7 +435,11 @@ function plot_interactive_impl(grid, states;
         else
             current_val = states[state_index[]][Symbol(pname)]
             if s == "Current step, row" || s == "Row"
-                cstateval = view(current_val, row, :)
+                if current_val isa Vector
+                    cstateval = current_val
+                else
+                    cstateval = view(current_val, row, :)
+                end
                 new_lims = (minimum(cstateval), maximum(cstateval))
             else
                 @assert s == "Current step" || s == "All rows"
@@ -473,7 +477,7 @@ function plot_interactive_impl(grid, states;
     N_mid += 1
     on(menu_view.selection) do s
         if s == "XZ"
-            az = 0.5π
+            az = -0.5π
             el = 0.0
         elseif s == "YZ"
             az = 0
