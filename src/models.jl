@@ -912,6 +912,10 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     for k in keys(svar)
         report[k] = variable_change_report(state[k], state0[k], svar[k])
     end
+    update_after_step!(storage, model.domain, model, dt, forces; kwarg...)
+    update_after_step!(storage, model.system, model, dt, forces; kwarg...)
+    update_after_step!(storage, model.formulation, model, dt, forces; kwarg...)
+
     # Synchronize previous state with new state
     for key in keys(get_primary_variables(model))
         update_values!(state0[key], state[key])
@@ -919,9 +923,7 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     for key in keys(get_secondary_variables(model))
         update_values!(state0[key], state[key])
     end
-    update_after_step!(storage, model.domain, model, dt, forces; kwarg...)
-    update_after_step!(storage, model.system, model, dt, forces; kwarg...)
-    update_after_step!(storage, model.formulation, model, dt, forces; kwarg...)
+    
     return report
 end
 
