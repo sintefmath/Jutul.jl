@@ -74,10 +74,18 @@ function pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev
     # Target
     its_t, ϵ = sel.target, sel.offset
     # Previous number of iterations
-    its_p = length(r[:steps]) - 1
+    if haskey(r, :stats)
+        its_p = r[:stats].newtons
+    else
+        its_p = length(r[:steps]) - 1
+    end
     if length(R) > 1
         r0 = R[end-1]
-        its_p0 = length(r0[:steps]) - 1
+        if haskey(r0, :stats)
+            its_p0 = r0[:stats].newtons
+        else
+            its_p0 = length(r0[:steps]) - 1
+        end
         dt0 = r0[:dt]
     else
         its_p0, dt0 = its_p, dt_prev
