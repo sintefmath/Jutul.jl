@@ -254,7 +254,8 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                     inner_msg = " Reducing mini-step."
                     c = :yellow
                 end
-                jutul_message("Convergence", "Report step $step_no with mini-step $(get_tstr(dt_old, 2)) failed to converge.$inner_msg", color = c)
+                n_so_far = length(ministep_reports)
+                jutul_message("Convergence", "Report step $step_no, mini-step #$n_so_far ($(get_tstr(dt_old, 2))) failed to converge.$inner_msg", color = c)
             end
             if isnan(dt)
                 break
