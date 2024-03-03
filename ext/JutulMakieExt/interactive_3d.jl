@@ -381,34 +381,40 @@ function plot_interactive_impl(grid, states;
     N_top += 1
 
     colormaps = [
-        "viridis",
-        "turbo",
-        "oslo",
-        "jet",
-        "balance",
         "autumn1",
-        "hot",
-        "winter",
-        "terrain",
-        "gnuplot",
-        "ocean",
-        "vik",
-        "twilight",
-        "terrain",
+        "balance",
+        "batlowK",
         "berlin",
+        "brg",
+        "gnuplot",
+        "gray1",
         "hawaii",
+        "hot",
+        "imola",
+        "jet",
+        "ocean",
+        "oslo",
+        "rainbow1",
+        "romaO",
         "seaborn_icefire_gradient",
         "seaborn_rocket_gradient",
-        "imola",
-        "gray1",
-        "rainbow1",
-        "tab20"
-        ]
+        "tab20",
+        "terrain",
+        "terrain",
+        "turbo",
+        "twilight",
+        "vanimo",
+        "vik",
+        "vikO",
+        "viridis",
+        "winter"
+    ]
     cmap_str = "$colormap"
     if !(cmap_str in colormaps)
         push!(colormaps, cmap_str)
     end
-    menu_cmap = Menu(top_layout[1, N_top], options = colormaps, prompt = cmap_str)
+    colormaps = sort(colormaps)
+    menu_cmap = Menu(top_layout[1, N_top], options = colormaps, default = cmap_str)
     on(menu_cmap.selection) do s
         colormap_name[] = Symbol(s)
     end
