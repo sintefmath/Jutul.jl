@@ -43,13 +43,14 @@ function rank_folder(pth, rank)
 end
 
 function consolidate_distributed_results(states, reports, partitions)
-    state = JUTUL_OUTPUT_TYPE()
-    report = JUTUL_OUTPUT_TYPE()
+    JT = Jutul.JUTUL_OUTPUT_TYPE
+    state = JT()
+    report = JT()
     mlabel = partitions[1]["main_partition_label"]
     if isnothing(mlabel)
         consolidate_cell_values!(state, states, partitions)
     else
-        main_state = JUTUL_OUTPUT_TYPE()
+        main_state = JT()
         for substate in states
             for (k, v) in pairs(substate)
                 if k == mlabel
