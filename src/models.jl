@@ -431,8 +431,12 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
         else
             state0 = setup_state(model, deepcopy(state0))
         end
-        state0 = merge(state0, parameters)
-        state = merge(state, parameters)
+        for (k, v) in pairs(model.parameters)
+            if haskey(parameters, k)
+                state0[k] = parameters[k]
+                state[k] = parameters[k]
+            end
+        end
         # Both states now contain all parameters, ready to store.
         storage[:state0] = state0
         storage[:state] = state
