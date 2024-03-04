@@ -889,7 +889,7 @@ function reset_previous_state!(storage, model::MultiModel, state0)
 end
 
 function update_after_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
-    report = OrderedDict{Symbol, Any}()
+    report = JUTUL_OUTPUT_TYPE()
     for key in targets
         report[key] = update_after_step!(storage[key], model.models[key], dt, forces[key]; kwarg...)
     end
@@ -930,7 +930,7 @@ function submodels_storage_apply!(storage, model, f!, arg...)
 end
 
 function get_output_state(storage, model::MultiModel)
-    out = Dict{Symbol, Any}()
+    out = JUTUL_OUTPUT_TYPE()
     models = model.models
     for key in submodel_symbols(model)
         out[key] = get_output_state(storage[key], models[key])

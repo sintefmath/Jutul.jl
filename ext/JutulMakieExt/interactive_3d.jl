@@ -381,34 +381,40 @@ function plot_interactive_impl(grid, states;
     N_top += 1
 
     colormaps = [
-        "viridis",
-        "turbo",
-        "oslo",
-        "jet",
-        "balance",
         "autumn1",
-        "hot",
-        "winter",
-        "terrain",
-        "gnuplot",
-        "ocean",
-        "vik",
-        "twilight",
-        "terrain",
+        "balance",
+        "batlowK",
         "berlin",
+        "brg",
+        "gnuplot",
+        "gray1",
         "hawaii",
+        "hot",
+        "imola",
+        "jet",
+        "ocean",
+        "oslo",
+        "rainbow1",
+        "romaO",
         "seaborn_icefire_gradient",
         "seaborn_rocket_gradient",
-        "imola",
-        "gray1",
-        "rainbow1",
-        "tab20"
-        ]
+        "tab20",
+        "terrain",
+        "terrain",
+        "turbo",
+        "twilight",
+        "vanimo",
+        "vik",
+        "vikO",
+        "viridis",
+        "winter"
+    ]
     cmap_str = "$colormap"
     if !(cmap_str in colormaps)
         push!(colormaps, cmap_str)
     end
-    menu_cmap = Menu(top_layout[1, N_top], options = colormaps, prompt = cmap_str)
+    colormaps = sort(colormaps)
+    menu_cmap = Menu(top_layout[1, N_top], options = colormaps, default = cmap_str)
     on(menu_cmap.selection) do s
         colormap_name[] = Symbol(s)
     end
@@ -435,7 +441,11 @@ function plot_interactive_impl(grid, states;
         else
             current_val = states[state_index[]][Symbol(pname)]
             if s == "Current step, row" || s == "Row"
-                cstateval = view(current_val, row, :)
+                if current_val isa Vector
+                    cstateval = current_val
+                else
+                    cstateval = view(current_val, row, :)
+                end
                 new_lims = (minimum(cstateval), maximum(cstateval))
             else
                 @assert s == "Current step" || s == "All rows"
@@ -473,7 +483,7 @@ function plot_interactive_impl(grid, states;
     N_mid += 1
     on(menu_view.selection) do s
         if s == "XZ"
-            az = 0.5π
+            az = -0.5π
             el = 0.0
         elseif s == "YZ"
             az = 0

@@ -269,8 +269,11 @@ function ministep_report_stats!(stats, mini_rep)
     if haskey(mini_rep, :finalize_time)
         stats[:finalize] += mini_rep[:finalize_time]
     end
-
-    s = stats_ministep(mini_rep[:steps])
+    if haskey(mini_rep, :stats)
+        s = mini_rep[:stats]
+    else
+        s = stats_ministep(mini_rep[:steps])
+    end
     stats[:linearizations] += s.linearizations
     stats[:iterations] += s.newtons
     stats[:linear_update] += s.linear_system
@@ -648,7 +651,7 @@ function read_restart(pth, i; read_state = true, read_report = true)
             if read_state
                 state = file["state"]
             else
-                state = Dict{Symbol, Any}()
+                state = JUTUL_OUTPUT_TYPE()
             end
             if read_report
                 report = file["report"]
@@ -662,7 +665,7 @@ function read_restart(pth, i; read_state = true, read_report = true)
             return (state, report)
         end
     else
-        state = Dict{Symbol, Any}()
+        state = JUTUL_OUTPUT_TYPE()
         report = nothing
         @warn "Data for step $i was requested, but no such file was found."
     end

@@ -178,7 +178,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
         new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
         t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dt, reports = reports, step_no = step_no, rec = rec)
         early_termination = !step_done
-        subrep = OrderedDict()
+        subrep = JUTUL_OUTPUT_TYPE()
         subrep[:ministeps] = rep
         subrep[:total_time] = t_step
         if step_done
@@ -254,7 +254,8 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                     inner_msg = " Reducing mini-step."
                     c = :yellow
                 end
-                jutul_message("Convergence", "Report step $step_no with mini-step $(get_tstr(dt_old, 2)) failed to converge.$inner_msg", color = c)
+                n_so_far = length(ministep_reports)
+                jutul_message("Convergence", "Report step $step_no, mini-step #$n_so_far ($(get_tstr(dt_old, 2))) failed to converge.$inner_msg", color = c)
             end
             if isnan(dt)
                 break
@@ -404,7 +405,7 @@ function perform_step_per_process_initial_update!(storage, model, dt, forces, co
 end
 
 function setup_ministep_report(; kwarg...)
-    report = OrderedDict{Symbol, Any}()
+    report = JUTUL_OUTPUT_TYPE()
     for k in [:secondary_time, :equations_time, :linear_system_time, :convergence_time]
         report[k] = 0.0
     end
@@ -425,9 +426,9 @@ function solve_ministep(sim, dt, forces, max_iter, cfg;
     )
     done = false
     rec = progress_recorder(sim)
-    report = OrderedDict()
+    report = JUTUL_OUTPUT_TYPE()
     report[:dt] = dt
-    step_reports = []
+    step_reports = JUTUL_OUTPUT_TYPE[]
     cur_time = current_time(rec)
     t_prepare = @elapsed if prepare
         update_before_step!(sim, dt, forces, time = cur_time, recorder = rec, update_explicit = update_explicit)
@@ -496,8 +497,7 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     end
     # Set up storage
     reports = []
-    state_T = Union{Dict{Symbol, Any}, AbstractVector{Dict{Symbol, Any}}}
-    states = Vector{state_T}()
+    states = Vector{JUTUL_OUTPUT_TYPE}()
     pth = config[:output_path]
     initialize_io(pth)
     has_restart = !(isnothing(restart) || restart === 0 || restart === 1 || restart == false)

@@ -31,6 +31,25 @@ function get_output_state(sim::JutulSimulator)
     get_output_state(sim.storage, sim.model)
 end
 
+function get_output_report(sim, report, level)
+    if level < 0
+        out = missing
+    elseif level == 0
+        out = copy(report)
+        out[:ministeps] = copy(report[:ministeps])
+        for (i, ministep_i) in enumerate(out[:ministeps])
+            ministep = copy(ministep_i)
+            ministep[:stats] = stats_ministep(ministep[:steps])
+            # Remove old entries
+            delete!(ministep, :steps)
+            out[:ministeps][i] = ministep
+        end
+    else
+        out = report
+    end
+    return out
+end
+
 function store_output!(states, reports, step, sim, config, report)
     mem_out = config[:output_states]
     path = config[:output_path]
@@ -39,8 +58,9 @@ function store_output!(states, reports, step, sim, config, report)
     push!(reports, report)
     t_out = @elapsed if mem_out || file_out
         @tic "output state" state = get_output_state(sim)
+        @tic "output report" out_report = get_output_report(sim, report, config[:report_level])
         @tic "write" if file_out
-            write_result_jld2(path, state, report, step)
+            write_result_jld2(path, state, out_report, step)
             for i in 1:(step-config[:in_memory_reports])
                 # Only keep the last N time-step reports in memory. These
                 # will be read back before output anyway.
