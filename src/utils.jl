@@ -53,7 +53,6 @@ end
 function check_increment(dx, pvar, key)
     has_bad_values = any(!isfinite, dx)
     if has_bad_values
-        display(dx)
         bad = findall(isfinite.(vec(dx)) .== false)
         n_bad = length(bad)
         n = min(10, length(bad))
