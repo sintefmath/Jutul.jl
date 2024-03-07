@@ -1018,3 +1018,92 @@ function print_step_report_convergence_matrix!(io, step_reports, groups = missin
         pretty_table(io, mat; karg...)
     end
 end
+
+"""
+    write_reports_to_mat_format(reports::Vector, path = jutul_output_path(); name = "report", config = missing, verbose = false)
+
+Write the reports to MAT files named "report_1", "report_2", ... to the given path.
+"""
+function write_reports_to_mat_format(reports::Vector, path = jutul_output_path();
+        name = "report",
+        config = missing,
+        verbose = false
+    )
+    for (i, rep) in enumerate(reports)
+        fname = "$(name)_$i"
+        fpath = joinpath(path, fname)
+        if verbose
+            jutul_message("IO", "Writing report $i to $fpath")
+        end
+        write_report_to_mat_format(fpath, rep, config = config)
+    end
+    return path
+end
+
+function write_report_to_mat_format(pth, report; config = missing)
+    basepath, ext = splitext(pth)
+    if ext == ""
+        basepath = "$basename.mat"
+    else
+        @assert lowercase(ext) == ".mat" "File path must end with nothing or .mat, was $ext"
+    end
+    out = get_mat_writable_file_from_report(report)
+    Jutul.MAT.matopen(basepath, "w") do file
+        write(file, "reports", out)
+    end
+end
+
+function get_mat_writable_file_from_report(report; config = missing)
+    sdict = Dict{String, Any}
+    out = []
+    for ministep in report[:ministeps]
+        out_step = sdict()
+        out_step["success"] = ministep[:success]
+        out_step["dt"] = ministep[:dt]
+        out_step["steps"] = []
+        for step in ministep[:steps]
+            next = sdict()
+            errors = sdict()
+            for (k, evals) in pairs(step[:errors])
+                mat_errors = Float64[]
+                mat_names = String[]
+                mat_tolerances = Float64[]
+                for equation_vals in evals
+                    for (cname, crit) in pairs(equation_vals.criterions)
+                        for (name, e) in zip(crit.names, crit.errors)
+                            if ismissing(config)
+                                tol = 1e-3
+                            else
+                                model_tol = config[:tolerances][k]
+                                if haskey(model_tol, equation_vals.name)
+                                    tol = model_tol[equation_vals.name][cname]
+                                else
+                                    tol = model_tol[:default]
+                                end
+                            end
+                            push!(mat_errors, e)
+                            push!(mat_names, "$(cname)_$name")
+                            push!(mat_tolerances, tol)
+                        end
+                    end
+                end
+                errors["$k"] = Dict("names" => mat_names, "errors" => mat_errors, "tolerances" => mat_tolerances)
+            end
+            next["errors"] = errors
+            if haskey(step, :update)
+                update = sdict()
+                for (k, v) in step[:update]
+                    next_update = sdict()
+                    for (ki, vi) in v
+                        next_update["$ki"] = Dict(Pair.(String.(keys(vi)), values(vi)))
+                    end
+                    update["$k"] = next_update
+                end
+                next["update"] = update
+            end
+            push!(out_step["steps"], next)
+        end
+        push!(out, out_step)
+    end
+    return out
+end
