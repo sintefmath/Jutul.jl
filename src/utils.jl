@@ -1024,18 +1024,22 @@ end
 
 Write the reports to MAT files named "report_1", "report_2", ... to the given path.
 """
-function write_reports_to_mat_format(reports::Vector, path = jutul_output_path();
+function write_reports_to_mat_format(reports::Vector, path::String = jutul_output_path();
         name = "report",
         config = missing,
         verbose = false
     )
+    mkpath(path)
     for (i, rep) in enumerate(reports)
         fname = "$(name)_$i"
         fpath = joinpath(path, fname)
         if verbose
-            jutul_message("IO", "Writing report $i to $fpath")
+            jutul_message("IO", "Writing report $i/$(length(reports))")
         end
-        write_report_to_mat_format(fpath, rep, config = config)
+        pth_i = write_report_to_mat_format(fpath, rep, config = config)
+        if verbose
+            jutul_message("IO", "Report written to $pth_i.")
+        end
     end
     return path
 end
@@ -1043,7 +1047,7 @@ end
 function write_report_to_mat_format(pth, report; config = missing)
     basepath, ext = splitext(pth)
     if ext == ""
-        basepath = "$basename.mat"
+        basepath = "$basepath.mat"
     else
         @assert lowercase(ext) == ".mat" "File path must end with nothing or .mat, was $ext"
     end
@@ -1051,6 +1055,7 @@ function write_report_to_mat_format(pth, report; config = missing)
     Jutul.MAT.matopen(basepath, "w") do file
         write(file, "reports", out)
     end
+    return basepath
 end
 
 function get_mat_writable_file_from_report(report; config = missing)
