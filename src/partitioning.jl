@@ -109,7 +109,7 @@ function cartesian_partition_by_points(pts, dim)
         dim = fill(dim, ndim)
     end
     length(dim) == ndim || throw(ArgumentError("Second argument must be one value or one per dimension (=number of rows in pts)"))
-    prow = zeros(ndim, npts)
+    prow = zeros(Int, ndim, npts)
     for d in 1:ndim
         n = dim[d]
         x = view(pts, d, :)
