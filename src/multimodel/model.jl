@@ -578,7 +578,7 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
 end
 
-function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
+function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = submodel_symbols(model))
     models = model.models
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
         target = ctp.target::Symbol
