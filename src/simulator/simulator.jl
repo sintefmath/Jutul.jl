@@ -292,7 +292,7 @@ function perform_step!(storage, model, dt, forces, config;
     rec = storage.recorder
     time = rec.recorder.time + dt
     # Apply a pre-step if it exists
-    t_prep = @elapsed prep = prepare_step!(
+    t_prep = @elapsed prep, forces = prepare_step!(
         storage, model, dt, forces, config, config[:prepare_step];
         executor = executor,
         iteration = iteration,
@@ -304,7 +304,8 @@ function perform_step!(storage, model, dt, forces, config;
     if update_secondary
         report[:secondary_time] = t_secondary
     end
-    report[:equations_time] = t_eqs + t_prep
+    report[:prepare_step_time] = t_prep
+    report[:equations_time] = t_eqs
     # Update the linearized system
     t_lsys = @elapsed begin
         @tic "linear system" update_linearized_system!(storage, model, executor)
@@ -723,5 +724,5 @@ function prepare_step!(storage, model, dt, forces, config, ::Missing;
         update_secondary = true,
         relaxation = 1.0
     )
-    return nothing
+    return (nothing, forces)
 end
