@@ -10,6 +10,7 @@ function simulator_config!(cfg, sim; nonlinear_tolerance = 1e-3, kwarg...)
 Negative values disable output. The interpretation of this number is subject to change.")
     add_option!(cfg, :debug_level, 0, "Define the amount of debug output in the reports. Higher values means more output.", types = Int)
     add_option!(cfg, :end_report, nothing, "Output a final report that includes timings etc. If nothing, depends on info_level instead.", types = Union{Bool, Nothing})
+
     # Convergence tests
     add_option!(cfg, :max_timestep_cuts, 5, "Max time step cuts in a single mini step before termination of simulation.", types = Int, values = 0:10000)
     add_option!(cfg, :max_timestep, Inf, "Max time step length.", types = Float64)
@@ -28,6 +29,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :extra_timing, false, "Output extra, highly detailed performance report at simulation end.", 
     description = " This uses TimerOutputs.jl's @timeit_debug macro. You may have to call the function twice with this option the first time you use it.", types = Bool)
     add_option!(cfg, :ascii_terminal, false, "Avoid unicode (if possible) in terminal output.", types = Bool)
+
     # Linear, nonlinear solver
     add_option!(cfg, :linear_solver, select_linear_solver(sim), "The linear solver used to solve linearized systems.")
     add_option!(cfg, :timestep_selectors, [TimestepSelector()], "Time-step selectors that pick mini steps.")
@@ -48,6 +50,7 @@ Negative values disable output. The interpretation of this number is subject to 
 
     # Hooks
     add_option!(cfg, :post_ministep_hook, missing, "Hook to run after each ministep (successful or not) on format (done, report, sim, dt, forces, max_iter, cfg) -> (done, report)")
+    add_option!(cfg, :prepare_step, missing, "Type instance that get called with prepare_step before each Newton iteration.")
 
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])

@@ -291,11 +291,18 @@ function perform_step!(storage, model, dt, forces, config;
     # Update the properties and equations
     rec = storage.recorder
     time = rec.recorder.time + dt
+    # Apply a pre-step if it exists
+    t_prep = @elapsed report[:prepare_step] = prepare_step!(
+        storage, model, dt, forces, config, config[:prepare_step];
+        executor = executor,
+        iteration = iteration,
+        relaxation = relaxation
+    )
     t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
     if update_secondary
         report[:secondary_time] = t_secondary
     end
-    report[:equations_time] = t_eqs
+    report[:equations_time] = t_eqs + t_prep
     # Update the linearized system
     t_lsys = @elapsed begin
         @tic "linear system" update_linearized_system!(storage, model, executor)
@@ -706,4 +713,12 @@ function check_for_inner_exception(dt, s)
             throw(last_step[:failure_exception])
         end
     end
+end
+
+function prepare_step!(storage, model, dt, forces, config, ::Missing;
+        executor = DefaultExecutor(),
+        iteration = 0,
+        relaxation = 1.0
+    )
+    return nothing
 end
