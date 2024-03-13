@@ -296,6 +296,7 @@ function perform_step!(storage, model, dt, forces, config;
         storage, model, dt, forces, config, config[:prepare_step];
         executor = executor,
         iteration = iteration,
+        update_secondary = update_secondary,
         relaxation = relaxation
     )
     t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
@@ -718,6 +719,7 @@ end
 function prepare_step!(storage, model, dt, forces, config, ::Missing;
         executor = DefaultExecutor(),
         iteration = 0,
+        update_secondary = true,
         relaxation = 1.0
     )
     return nothing

@@ -763,7 +763,13 @@ function check_convergence(storage, model, config; kwarg...)
     check_convergence(eqs_views, eqs, eqs_s, storage, model, config[:tolerances]; kwarg...)
 end
 
-function check_convergence(eqs_views, eqs, eqs_s, storage, model, tol_cfg; iteration = nothing, extra_out = false, tol = nothing, tol_factor = 1.0, offset = 0, kwarg...)
+function check_convergence(eqs_views, eqs, eqs_s, storage, model, tol_cfg;
+        iteration = nothing,
+        extra_out = false,
+        tol = nothing,
+        tol_factor = 1.0,
+        kwarg...
+    )
     converged = true
     e = 0
     if isnothing(tol)

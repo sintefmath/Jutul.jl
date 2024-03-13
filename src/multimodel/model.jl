@@ -805,37 +805,37 @@ function setup_forces(model::MultiModel; kwarg...)
     return forces
 end
 
-function update_secondary_variables!(storage, model::MultiModel, is_state0::Bool)
-    for key in submodels_symbols(model)
+function update_secondary_variables!(storage, model::MultiModel, is_state0::Bool; targets = submodels_symbols(model))
+    for key in targets
         update_secondary_variables!(storage[key], model.models[key], is_state0)
     end
 end
 
-function update_secondary_variables!(storage, model::MultiModel)
-    for key in submodels_symbols(model)
+function update_secondary_variables!(storage, model::MultiModel; targets = submodels_symbols(model))
+    for key in targets
         update_secondary_variables!(storage[key], model.models[key])
     end
 end
 
-function update_secondary_variables_state!(state, model::MultiModel)
-    for key in submodels_symbols(model)
+function update_secondary_variables_state!(state, model::MultiModel; targets = submodels_symbols(model))
+    for key in targets
         update_secondary_variables_state!(state[key], model[key])
     end
 end
 
-function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra_out = false, update_report = missing, kwarg...)
+function check_convergence(storage, model::MultiModel, cfg;
+        tol = nothing,
+        extra_out = false,
+        update_report = missing,
+        targets = submodels_symbols(model),
+        kwarg...
+    )
     converged = true
     err = 0
-    offset = 0
     lsys = storage.LinearizedSystem
     tol_cfg = cfg[:tolerances]
     errors = OrderedDict()
-    for (i, key) in enumerate(submodels_symbols(model))
-        if has_groups(model) && i > 1
-            if model.groups[i] != model.groups[i-1]
-                offset = 0
-            end
-        end
+    for key in targets
         if ismissing(update_report)
             inc = missing
         else
@@ -847,7 +847,6 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
         eqs_s = s.equations
         eqs_view = s.views.equations
         conv, e, errors[key], = check_convergence(eqs_view, eqs, eqs_s, s, m, tol_cfg[key];
-            offset = offset,
             extra_out = true,
             update_report = inc,
             tol = tol,
@@ -856,7 +855,6 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)
-        offset += number_of_degrees_of_freedom(m) ÷ model_block_size(m)
     end
     if extra_out
         return (converged, err, errors)
@@ -865,11 +863,10 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
     end
 end
 
-function update_primary_variables!(storage, model::MultiModel; kwarg...)
+function update_primary_variables!(storage, model::MultiModel; targets = submodel_symbols(model), kwarg...)
     models = model.models
-    model_keys = submodel_symbols(model)
     report = Dict{Symbol, AbstractDict}()
-    for (i, key) in enumerate(model_keys)
+    for key in targets
         m = models[key]
         s = storage[key]
         dx_v = s.views.primary_variables
