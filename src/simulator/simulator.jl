@@ -291,16 +291,20 @@ function perform_step!(storage, model, dt, forces, config;
     # Update the properties and equations
     rec = storage.recorder
     time = rec.recorder.time + dt
+    if update_secondary
+        t_secondary = @elapsed update_secondary_variables!(storage, model)
+    else
+        t_secondary = 0.0
+    end
     # Apply a pre-step if it exists
     t_prep = @elapsed prep, forces = prepare_step!(
         storage, model, dt, forces, config, config[:prepare_step];
         executor = executor,
         iteration = iteration,
-        update_secondary = update_secondary,
         relaxation = relaxation
     )
     report[:prepare_step] = prep
-    t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
+    _, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = false)
     if update_secondary
         report[:secondary_time] = t_secondary
     end
@@ -721,7 +725,6 @@ end
 function prepare_step!(storage, model, dt, forces, config, ::Missing;
         executor = DefaultExecutor(),
         iteration = 0,
-        update_secondary = true,
         relaxation = 1.0
     )
     return (nothing, forces)
