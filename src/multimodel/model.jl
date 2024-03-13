@@ -583,8 +583,10 @@ function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
         target = ctp.target::Symbol
         source = ctp.source::Symbol
-        if target in targets && source in sources
-            ct = ctp.cross_term
+        ct = ctp.cross_term
+        is_match = target in targets && source in sources
+        is_match = is_match || (has_symmetry(ct) && (target in sources && source in targets))
+        if is_match
             model_t = models[target]
             eq = ct_equation(model_t, ctp.target_equation)
             ct_bare_type = Base.typename(typeof(ct)).name
