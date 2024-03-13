@@ -760,7 +760,12 @@ function check_convergence(storage, model, config; kwarg...)
     eqs_views = storage.views.equations
     eqs = model.equations
     eqs_s = storage.equations
-    check_convergence(eqs_views, eqs, eqs_s, storage, model, config[:tolerances]; kwarg...)
+    if config isa JutulConfig
+        cfg_tol = config[:tolerances]
+    else
+        cfg_tol = config
+    end
+    check_convergence(eqs_views, eqs, eqs_s, storage, model, cfg_tol; kwarg...)
 end
 
 function check_convergence(eqs_views, eqs, eqs_s, storage, model, tol_cfg;
