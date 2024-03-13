@@ -572,12 +572,12 @@ end
 function Base.show(io::IO, t::MIME"text/plain", storage::JutulStorage)
     D = data(storage)
     if isa(D, AbstractDict)
-        println("JutulStorage (mutable) with fields:")
+        println(io, "JutulStorage (mutable) with fields:")
     else
-        println("JutulStorage (immutable) with fields:")
+        println(io, "JutulStorage (immutable) with fields:")
     end
     for key in keys(D)
-        println("  $key: $(typeof(D[key]))")
+        println(io, "  $key: $(typeof(D[key]))")
     end
 end
 
