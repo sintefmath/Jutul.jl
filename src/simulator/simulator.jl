@@ -292,13 +292,14 @@ function perform_step!(storage, model, dt, forces, config;
     rec = storage.recorder
     time = rec.recorder.time + dt
     # Apply a pre-step if it exists
-    t_prep = @elapsed report[:prepare_step] = prepare_step!(
+    t_prep = @elapsed prep = prepare_step!(
         storage, model, dt, forces, config, config[:prepare_step];
         executor = executor,
         iteration = iteration,
         update_secondary = update_secondary,
         relaxation = relaxation
     )
+    report[:prepare_step] = prep
     t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
     if update_secondary
         report[:secondary_time] = t_secondary

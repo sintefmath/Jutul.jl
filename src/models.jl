@@ -654,11 +654,11 @@ Perform updates of everything that depends on the state: A full linearization fo
 
 This includes properties, governing equations and the linearized system itself.
 """
-function update_state_dependents!(storage, model::JutulModel, dt, forces; time = NaN, update_secondary = true)
+function update_state_dependents!(storage, model::JutulModel, dt, forces; time = NaN, update_secondary = true, kwarg...)
     t_s = @elapsed if update_secondary
-        @tic "secondary variables" update_secondary_variables!(storage, model)
+        @tic "secondary variables" update_secondary_variables!(storage, model; kwarg...)
     end
-    t_eq = @elapsed update_equations_and_apply_forces!(storage, model, dt, forces; time = time)
+    t_eq = @elapsed update_equations_and_apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     return (secondary = t_s, equations = t_eq)
 end
 
@@ -667,10 +667,10 @@ end
 
 Update the model equations and apply boundary conditions and forces. Does not fill linearized system.
 """
-function update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN)
-    @tic "equations" update_equations!(storage, model, dt)
-    @tic "forces" apply_forces!(storage, model, dt, forces; time = time)
-    @tic "boundary conditions" apply_boundary_conditions!(storage, model)
+function update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN, kwarg...)
+    @tic "equations" update_equations!(storage, model, dt; kwarg...)
+    @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
+    @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
 end
 
 function apply_boundary_conditions!(storage, model::JutulModel)
@@ -777,7 +777,6 @@ function check_convergence(eqs_views, eqs, eqs_s, storage, model, tol_cfg;
     end
     output = []
 
-    block_offset = 0
     for key in keys(eqs)
         eq = eqs[key]
         eq_s = eqs_s[key]

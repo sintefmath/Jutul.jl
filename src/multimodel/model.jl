@@ -559,23 +559,23 @@ function initialize_storage!(storage, model::MultiModel; kwarg...)
     end
 end
 
-function update_equations!(storage, model::MultiModel, dt)
-    @tic "model equations" for k in submodel_symbols(model)
+function update_equations!(storage, model::MultiModel, dt; targets = submodel_symbols(model))
+    @tic "model equations" for k in targets
         update_equations!(storage[k], model[k], dt)
     end
 end
 
-function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN)
+function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, kwarg...)
     # First update all equations
-    @tic "equations" update_equations!(storage, model, dt)
+    @tic "equations" update_equations!(storage, model, dt; kwarg...)
     # Then update the cross terms
-    @tic "crossterm update" update_cross_terms!(storage, model, dt)
+    @tic "crossterm update" update_cross_terms!(storage, model, dt; kwarg...)
     # Apply forces
-    @tic "forces" apply_forces!(storage, model, dt, forces; time = time)
+    @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     # Boundary conditions
-    @tic "boundary conditions" apply_boundary_conditions!(storage, model)
+    @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
     # Apply forces to cross-terms
-    @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time)
+    @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
 end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
@@ -681,7 +681,7 @@ end
 function update_linearized_system!(storage, model::MultiModel, executor = default_executor();
         equation_offset = 0,
         targets = submodel_symbols(model),
-        sources = targets,
+        sources = submodel_symbols(model),
         kwarg...)
     @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
     # Update diagonal blocks (model with respect to itself)
