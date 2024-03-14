@@ -869,7 +869,7 @@ function update_primary_variables!(storage, model::JutulModel; kwarg...)
     update_primary_variables!(storage.primary_variables, dx, model; state = storage.state, kwarg...)
 end
 
-function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1, check = false, state = missing)
+function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1.0, check = false, state = missing)
     primary = get_primary_variables(model)
     report = Dict{Symbol, Any}()
     for (pkey, p) in primary
