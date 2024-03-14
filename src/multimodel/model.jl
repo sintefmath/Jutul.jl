@@ -872,7 +872,8 @@ function update_primary_variables!(storage, model::MultiModel; targets = submode
         m = models[key]
         s = storage[key]
         dx_v = s.views.primary_variables
-        report[key] = update_primary_variables!(s.state, dx_v, m; state = s.state, kwarg...)
+        pdef = s.variable_definitions.primary_variables
+        report[key] = update_primary_variables!(s.state, dx_v, m, pdef; state = s.state, kwarg...)
     end
     return report
 end

@@ -806,9 +806,10 @@ function check_convergence(eqs_views, eqs, eqs_s, storage, model, tol_cfg;
             if minimum(errors) < -10*eps(Float64)
                 @warn "Negative residuals detected for $key: $e_k. Programming error?" errors
             end
-            e = max(e, maximum(errors)/t_e)
+            max_error = maximum(errors)
+            e = max(e, max_error/t_e)
             t_actual = t_e*tol_factor
-            converged = converged && all(e -> e < t_actual, errors)
+            converged = converged && max_error < t_actual
             tols[e_k] = t_actual
         end
         if extra_out
@@ -866,13 +867,14 @@ end
 
 function update_primary_variables!(storage, model::JutulModel; kwarg...)
     dx = storage.views.primary_variables
-    update_primary_variables!(storage.primary_variables, dx, model; state = storage.state, kwarg...)
+    primary_defs = storage.variable_definitions.primary_variables
+    primary = storage.primary_variables
+    update_primary_variables!(primary, primary_defs, dx, model; state = storage.state, kwarg...)
 end
 
-function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1.0, check = false, state = missing)
-    primary = get_primary_variables(model)
+function update_primary_variables!(primary_storage, dx, model::JutulModel, primary = get_primary_variables(model); relaxation = 1.0, check = false, state = missing)
     report = Dict{Symbol, Any}()
-    for (pkey, p) in primary
+    for (pkey, p) in pairs(primary)
         dxi = dx[pkey]
         if check
             ok = check_increment(dxi, p, pkey)
