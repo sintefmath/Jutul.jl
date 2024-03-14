@@ -18,6 +18,7 @@ function simulator_storage(model; state0 = nothing,
                                 copy_state = true,
                                 mode = :forward,
                                 specialize = false,
+                                prepare_step_handler = missing,
                                 kwarg...)
     if mode == :forward
         state_ad = true
@@ -42,10 +43,25 @@ function simulator_storage(model; state0 = nothing,
     # Add internal book keeping of time steps
     storage[:recorder] = ProgressRecorder()
     # Initialize for first time usage
-    @tic "init_storage" initialize_storage!(storage, model; kwarg...)
+    @tic "init_storage" begin
+        initialize_storage!(storage, model; kwarg...)
+        if !ismissing(prepare_step_handler)
+            pstep_storage = prepare_step_storage(prepare_step_handler, storage, model)
+            storage[:prepare_step_handler] = (prepare_step_handler, pstep_storage)
+        end
+    end
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
     # This allows for much faster lookup in the simulation itself.
     return specialize_simulator_storage(storage, model, specialize)
+end
+
+"""
+    prepare_step_storage(storage, model, ::Missing)
+
+Initialize storage for prepare_step_handler.
+"""
+function prepare_step_storage(storage, model, ::Missing)
+    return missing
 end
 
 function specialize_simulator_storage(storage::JutulStorage, model_or_nothing, specialize)
@@ -291,24 +307,27 @@ function perform_step!(storage, model, dt, forces, config;
     # Update the properties and equations
     rec = storage.recorder
     time = rec.recorder.time + dt
-    if update_secondary
-        t_secondary = @elapsed update_secondary_variables!(storage, model)
-    else
-        t_secondary = 0.0
-    end
+    prep, prep_storage = get_prepare_step_handler(storage)
     # Apply a pre-step if it exists
-    t_prep = @elapsed prep, forces = prepare_step!(
-        storage, model, dt, forces, config, config[:prepare_step];
-        executor = executor,
-        iteration = iteration,
-        relaxation = relaxation
-    )
-    report[:prepare_step] = prep
-    _, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = false)
-    if update_secondary
-        report[:secondary_time] = t_secondary
+    if ismissing(prep)
+        t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
+    else
+        if update_secondary
+            t_secondary = @elapsed update_secondary_variables!(storage, model)
+        else
+            t_secondary = 0.0
+        end
+        t_prep = @elapsed prep, forces = prepare_step!(prep_storage, prep,
+            storage, model, dt, forces, config;
+            executor = executor,
+            iteration = iteration,
+            relaxation = relaxation
+        )
+        report[:prepare_step] = prep
+        report[:prepare_step_time] = t_prep
+        _, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = false)
     end
-    report[:prepare_step_time] = t_prep
+    report[:secondary_time] = t_secondary
     report[:equations_time] = t_eqs
     # Update the linearized system
     t_lsys = @elapsed begin
@@ -642,10 +661,6 @@ function check_forces(sim::Simulator, f::Vector, timesteps; per_step = true)
     if nf != nt && per_step
         error("Number of forces must match the number of timesteps ($nt timesteps, $nf forces)")
     end
-end
-
-function progress_recorder(sim)
-    return sim.storage.recorder
 end
 
 function apply_nonlinear_strategy!(sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)

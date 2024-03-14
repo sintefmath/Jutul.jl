@@ -52,6 +52,9 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :post_ministep_hook, missing, "Hook to run after each ministep (successful or not) on format (done, report, sim, dt, forces, max_iter, cfg) -> (done, report)")
     add_option!(cfg, :prepare_step, missing, "Type instance that get called with prepare_step before each Newton iteration.")
 
+    prepare_step_handler, prepare_step_storage = get_prepare_step_handler(sim)
+    simulator_config!(cfg, sim, prepare_step_handler, prepare_step_storage)
+
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])
         cfg[:end_report] = cfg[:info_level] > -1
@@ -70,6 +73,10 @@ Negative values disable output. The interpretation of this number is subject to 
     end
     add_option!(cfg, :table_formatter, fmt, "Formatter for tables.")
     return cfg
+end
+
+function simulator_config!(cfg, sim, ::Missing, ::Missing)
+    # Do nothing
 end
 
 """
