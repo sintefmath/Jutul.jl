@@ -869,7 +869,7 @@ function update_primary_variables!(storage, model::JutulModel; kwarg...)
     dx = storage.views.primary_variables
     primary_defs = storage.variable_definitions.primary_variables
     primary = storage.primary_variables
-    update_primary_variables!(primary, primary_defs, dx, model; state = storage.state, kwarg...)
+    update_primary_variables!(primary, dx, model, primary_defs; state = storage.state, kwarg...)
 end
 
 function update_primary_variables!(primary_storage, dx, model::JutulModel, primary = get_primary_variables(model); relaxation = 1.0, check = false, state = missing)
