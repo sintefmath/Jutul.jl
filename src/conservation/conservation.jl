@@ -401,16 +401,19 @@ function declare_pattern(model, eq::ConservationLaw, e_s::ConservationLawTPFASto
     df = eq.flow_discretization
     hfd = Array(df.conn_data)
     n = number_of_entities(model, eq)
-    # Fluxes
-    I = map(x -> x.self, hfd)
-    J = map(x -> x.other, hfd)
-    I, J = map_ij_to_active(I, J, model.domain, entity)
-
     # Diagonals
     D = [i for i in 1:n]
-
-    I = vcat(I, D)
-    J = vcat(J, D)
+    if length(hfd) > 0
+        # Fluxes
+        I = map(x -> x.self, hfd)
+        J = map(x -> x.other, hfd)
+        I, J = map_ij_to_active(I, J, model.domain, entity)
+        I = vcat(I, D)
+        J = vcat(J, D)
+    else
+        I = collect(D)
+        J = collect(D)
+    end
 
     return (I, J)
 end
