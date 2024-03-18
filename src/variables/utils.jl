@@ -250,9 +250,20 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
     return transfer(model.context, val)
 end
 
-default_value(model, variable) = 0.0
-default_values(model, var::ScalarVariable) = repeat([default_value(model, var)], number_of_entities(model, var))
-default_values(model, var::JutulVariables) = repeat([default_value(model, var)], values_per_entity(model, var), number_of_entities(model, var))
+function default_value(model, variable)
+    return 0.0
+end
+
+function default_values(model, var::ScalarVariable)
+    ne = number_of_entities(model, var)
+    return [default_value(model, var) for _ in 1:ne]
+end
+
+function default_values(model, var::JutulVariables)
+    nv = values_per_entity(model, var)
+    ne = number_of_entities(model, var)
+    return [default_value(model, var) for (i, j) in Iterators.product(1:nv, 1:ne)]
+end
 
 need_default_primary(model, var) = true
 
