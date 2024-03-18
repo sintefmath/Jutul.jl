@@ -811,6 +811,11 @@ end
 Set up a structure that holds the complete specification of a simulation case.
 """
 function JutulCase(model, dt = [1.0], forces = setup_forces(model); state0 = nothing, parameters = nothing, input_data = nothing, kwarg...)
+    for (k, v) in kwarg
+        if k == :forces
+            error("forces was passed as kwarg. It is a positional argument.")
+        end
+    end
     if isnothing(state0) && isnothing(parameters)
         state0, parameters = setup_state_and_parameters(model, kwarg...)
     elseif isnothing(state0)
