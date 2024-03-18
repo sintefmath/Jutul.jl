@@ -119,7 +119,7 @@ function TwoPointPotentialFlowHardCoded(grid::JutulMesh)
     return TwoPointPotentialFlowHardCoded(N, number_of_cells(grid))
 end
 
-function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N))
+function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N, init = 1))
     if size(N, 2) > 0
         faces, face_pos = get_facepos(N, nc)
         nhf = length(faces)
@@ -133,7 +133,6 @@ function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N))
             end
         end
     else
-        nc = number_of_cells(grid)
         conn_data = []
         face_pos = ones(Int64, nc+1)
     end
