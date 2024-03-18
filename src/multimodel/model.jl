@@ -800,7 +800,7 @@ function setup_forces(model::MultiModel; kwarg...)
     for k in submodels_symbols(model)
         forces[k] = setup_forces(models[k])
     end
-    for (k, v) in kwarg
+    for (k, v) in pairs(kwarg)
         @assert haskey(models, k) "$k not found in models" keys(model.models)
         forces[k] = v
     end
