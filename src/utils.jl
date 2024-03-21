@@ -87,7 +87,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
     if info_level == 1
         return
     end
-    id = haskey(cfg, :id) ? "$(cfg[:id]): " : ""
+    id = cfg[:id]
     fmt = cfg[:table_formatter]
     count_crit = 0
     count_ok = 0
