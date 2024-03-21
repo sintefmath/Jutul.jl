@@ -142,7 +142,12 @@ end
 
 Get subvariable of Jutul variable
 """
-subvariable(var, map) = var
+function subvariable(var, map)
+    if hasproperty(var, :regions)
+        @warn "Default subvariable called for $(typeof(var)) that contains regions property. Potential missing interface specialization."
+    end
+    return var
+end
 
 function subvariable(var::Pair, map)
     label, var = var
