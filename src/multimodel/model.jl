@@ -858,6 +858,13 @@ function check_convergence(storage, model::MultiModel, cfg;
         converged = converged && conv
         err = max(e, err)
     end
+
+    if converged
+        if haskey(tol_cfg, :global_check) && !isnothing(tol_cfg[:global_check])
+            converged = tol_cfg[:global_check](model, storage)
+        end
+    end
+        
     if extra_out
         return (converged, err, errors)
     else
