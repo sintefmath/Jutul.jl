@@ -95,15 +95,18 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         end
     end
     vdim = Val(dim)
+    cc = zeros(dim)
+    fc = zeros(dim)
+    Nn = zeros(dim)
     for cell = 1:nc
         for fpos = facepos[cell]:(facepos[cell+1]-1)
             face = faces[fpos]
             sgn = facesigns[fpos]
-            cc = cell_centroids[:, cell]
-            fc = face_centroids[:, face]
+            @. cc = cell_centroids[:, cell]
+            @. fc = face_centroids[:, face]
             A = face_areas[face]
             C = fc - cc
-            Nn = sgn*face_normals[:, face]
+            @. Nn = sgn*face_normals[:, face]
             if is_xyz
                 K = expand_perm(perm[:, cell], vdim)
             else
