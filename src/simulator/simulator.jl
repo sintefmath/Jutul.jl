@@ -180,6 +180,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
     # Initialize loop
     p = start_simulation_message(info_level, timesteps)
     early_termination = false
+    stopnow = false
     if initialize && first_step <= no_steps
         check_forces(sim, forces, timesteps, per_step = forces_per_step)
         forces_step = forces_for_timestep(sim, forces, timesteps, first_step, per_step = forces_per_step)
@@ -192,22 +193,52 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
         forces_step = forces_for_timestep(sim, forces, timesteps, step_no, per_step = forces_per_step)
         nextstep_global!(rec, dT)
         new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
+
         t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dt, reports = reports, step_no = step_no, rec = rec)
+        
         early_termination = !step_done
         subrep = JUTUL_OUTPUT_TYPE()
         subrep[:ministeps] = rep
         subrep[:total_time] = t_step
+        
         if step_done
-            @tic "output" store_output!(states, reports, step_no, sim, config, subrep)
+            
+            if begin
+                lastrep = rep[end]
+                if haskey(lastrep, :stopnow) && lastrep[:stopnow]
+                    true
+                else
+                    false
+                end end
+               
+                subrep[:output_time] = 0.0
+                push!(reports, subrep)
+                stopnow = true
+                
+            else
+                
+                @tic "output" store_output!(states, reports, step_no, sim, config, subrep)
+                
+            end
+            
         else
+            
             subrep[:output_time] = 0.0
             push!(reports, subrep)
+            
         end
+        
         t_elapsed += t_step + subrep[:output_time]
+
         if early_termination
             n_solved = step_no-1
             break
         end
+
+        if stopnow
+            break
+        end
+        
     end
     states, reports = retrieve_output!(sim, states, reports, config, n_solved)
     final_simulation_message(sim, p, rec, t_elapsed, reports, timesteps, config, start_date, early_termination)
@@ -252,6 +283,9 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
             t_local += dt
             if t_local >= dT
                 # Onto the next one
+                done = true
+                break
+            elseif haskey(s, :stopnow) && s[:stopnow]
                 done = true
                 break
             else
