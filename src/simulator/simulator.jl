@@ -138,15 +138,17 @@ Non-allocating (or perhaps less allocating) version of [`simulate!`](@ref).
 
 See also [`simulate`](@ref) for additional supported input arguments.
 """
-function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setup_forces(sim.model),
-                                                                   config = nothing,
-                                                                   initialize = true,
-                                                                   restart = nothing,
-                                                                   state0 = nothing,
-                                                                   parameters = nothing,
-                                                                   forces_per_step = isa(forces, Vector),
-                                                                   start_date = nothing,
-                                                                   kwarg...)
+function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
+        forces = setup_forces(sim.model),
+        config = nothing,
+        initialize = true,
+        restart = nothing,
+        state0 = nothing,
+        parameters = nothing,
+        forces_per_step = isa(forces, Vector),
+        start_date = nothing,
+        kwarg...
+    )
     rec = progress_recorder(sim)
     # Reset recorder just in case since we are starting a new simulation
     reset!(rec)
