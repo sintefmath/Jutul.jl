@@ -460,9 +460,26 @@ function setup_storage_model(storage, model)
     # Reference the variable definitions used for the model.
     # These are immutable, unlike the model definitions.
     vars = JutulStorage()
-    vars[:primary_variables] = NamedTuple(pairs(model.primary_variables))
-    vars[:secondary_variables] = NamedTuple(pairs(model.secondary_variables))
-    vars[:parameters] = NamedTuple(pairs(model.parameters))
+    primary = get_primary_variables(model)
+    secondary = get_secondary_variables(model)
+    parameters = get_parameters(model)
+    extra_keys = Symbol[]
+    for k in keys(storage.state)
+        if k in keys(primary)
+            continue
+        end
+        if k in keys(secondary)
+            continue
+        end
+        if k in keys(parameters)
+            continue
+        end
+        push!(extra_keys, k)
+    end
+    vars[:primary_variables] = NamedTuple(pairs(primary))
+    vars[:secondary_variables] = NamedTuple(pairs(secondary))
+    vars[:parameters] = NamedTuple(pairs(parameters))
+    vars[:extra_variable_fields] = extra_keys
     storage[:variable_definitions] = vars
     # Allow for dispatch specific to model's constitutive parts.
     setup_storage_domain!(storage, model, model.domain)
@@ -931,13 +948,15 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     update_after_step!(storage, model.formulation, model, dt, forces; kwarg...)
 
     # Synchronize previous state with new state
-    for key in keys(get_primary_variables(model))
+    for key in keys(pvar)
         update_values!(state0[key], state[key])
     end
-    for key in keys(get_secondary_variables(model))
+    for key in keys(svar)
         update_values!(state0[key], state[key])
     end
-    
+    for key in defs.extra_variable_fields
+        update_values!(state0[key], state[key])
+    end
     return report
 end
 
