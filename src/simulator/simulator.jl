@@ -258,7 +258,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                 break
             else
                 # Pick another for the next step...
-                dt = pick_timestep(sim, config, dt, dT, forces, reports, ministep_reports, step_index = step_no, new_step = false)
+                dt = pick_timestep(sim, config, dt, dT, forces, reports, ministep_reports, step_index = step_no, new_step = false, remaining_time = dT - t_local)
             end
         else
             dt_old = dt
