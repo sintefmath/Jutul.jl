@@ -669,8 +669,8 @@ function apply_nonlinear_strategy!(sim, dt, forces, it, max_iter, cfg, e, step_r
     report = step_reports[end]
     w0 = relaxation
     relaxation = select_nonlinear_relaxation(sim, cfg[:relaxation], step_reports, relaxation)
-    if cfg[:info_level] > 1 && relaxation != w0
-        jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :yellow)
+    if cfg[:info_level] > 2 && relaxation != w0
+        jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :green)
     end
     failure = false
     max_res = cfg[:max_residual]
