@@ -258,7 +258,7 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                 break
             else
                 # Pick another for the next step...
-                dt = pick_timestep(sim, config, dt, dT, forces, reports, ministep_reports, step_index = step_no, new_step = false)
+                dt = pick_timestep(sim, config, dt, dT, forces, reports, ministep_reports, step_index = step_no, new_step = false, remaining_time = dT - t_local)
             end
         else
             dt_old = dt
@@ -532,7 +532,7 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     end
     # Set up storage
     reports = []
-    states = Vector{JUTUL_OUTPUT_TYPE}()
+    states = Vector{Dict{Symbol, Any}}()
     pth = config[:output_path]
     initialize_io(pth)
     has_restart = !(isnothing(restart) || restart === 0 || restart === 1 || restart == false)
@@ -669,8 +669,8 @@ function apply_nonlinear_strategy!(sim, dt, forces, it, max_iter, cfg, e, step_r
     report = step_reports[end]
     w0 = relaxation
     relaxation = select_nonlinear_relaxation(sim, cfg[:relaxation], step_reports, relaxation)
-    if cfg[:info_level] > 1 && relaxation != w0
-        jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :yellow)
+    if cfg[:info_level] > 2 && relaxation != w0
+        jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :green)
     end
     failure = false
     max_res = cfg[:max_residual]

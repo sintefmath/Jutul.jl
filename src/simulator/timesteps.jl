@@ -1,4 +1,4 @@
-function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_reports; step_index = NaN, new_step = false)
+function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_reports; step_index = NaN, new_step = false, remaining_time = dT)
     # Try to do the full step, unless one of our selectors/limits tells us otherwise.
     # No need to limit to whatever remains of the interval since that is fixed on the outside.
     dt = dT
@@ -23,6 +23,12 @@ function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_report
     for sel in selectors
         dt = valid_timestep(sel, dt)
     end
+    # If we are not going to reach the end anyway, we split the remaining part
+    # into two to avoid a long step and a very short step.
+    half_remain = remaining_time/2.0
+    if dt > half_remain && dt < remaining_time
+        dt = half_remain
+    end
     dt = min(dt, config[:max_timestep])
     if config[:info_level] > 1
         ratio = dt/dt_prev
@@ -37,7 +43,6 @@ function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_report
         else
             t_sym = "🔄"
         end
-        # @info "Selected new sub-timestep $(get_tstr(dt)) from previous $(get_tstr(dt_prev)) $t_sym"
         jutul_message("Next mini-step", "Δt = $(get_tstr(dt)) from previous $(get_tstr(dt_prev)) $t_sym", color = :default)
     end
     return dt
