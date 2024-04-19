@@ -698,6 +698,10 @@ function report_timesteps(reports; ministeps = false, extra_out = false)
             dt[i] = t_loc
             step_no[i] = i
         end
+        if n > 1 && !reports[end][:ministeps][end][:success]
+            dt = resize!(dt, n-1)
+            step_no = resize!(step_no, n-1)
+        end
     end
     if extra_out
         return (dt = dt, step = step_no)
