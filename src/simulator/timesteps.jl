@@ -38,7 +38,7 @@ function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_report
             t_sym = "🔄"
         end
         # @info "Selected new sub-timestep $(get_tstr(dt)) from previous $(get_tstr(dt_prev)) $t_sym"
-        jutul_message("Next mini-step", "Δt = $(get_tstr(dt)) from previous $(get_tstr(dt_prev)) $t_sym", color = :default)
+        jutul_message("Estimated Next mini-step", "Δt = $(get_tstr(dt)) from previous $(get_tstr(dt_prev)) $t_sym", color = :default)
     end
     return dt
 end

@@ -3,7 +3,7 @@
 
 Get formatted time string of `dT` given in seconds, limited to `lim` number of units.
 """
-function get_tstr(dT, lim = 3)
+function get_tstr(dT, lim = 1)
     if dT == 0
         return "start"
     else

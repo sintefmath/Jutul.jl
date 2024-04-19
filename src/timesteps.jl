@@ -3,8 +3,11 @@ export TimestepSelector, IterationTimestepSelector, VariableChangeTimestepSelect
 abstract type AbstractTimestepSelector end
 
 pick_first_timestep(sel, sim, config, dT, forces) = min(dT*initial_relative(sel), initial_absolute(sel))
-pick_next_timestep(sel, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step) = dt_prev*increase_factor(sel)
-
+#pick_next_timestep(sel, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step) = dt_prev*increase_factor(sel)
+function pick_next_timestep(sel, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step)
+    #throw(error())
+    return dt_prev*increase_factor(sel)
+end
 pick_cut_timestep(sel, sim, config, dt, dT, forces, reports, cut_count) = dt
 
 decrease_factor(sel) = 2.0
@@ -65,6 +68,7 @@ Pick the next time-step for `IterationTimestepSelector`. This function uses the
 number of iterations from previous timesteps to estimate the relationship
 between the last and the new time step.
 """
+
 function pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step)
     R = successful_reports(reports, current_reports, step_index, 2)
     if length(R) == 0
@@ -92,6 +96,8 @@ function pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev
     end
     return linear_timestep_selection(its_t + ϵ, its_p0 + ϵ, its_p + ϵ, dt0, dt_prev)
 end
+
+
 
 struct VariableChangeTimestepSelector <: AbstractTimestepSelector
     key::Symbol

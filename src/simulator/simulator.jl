@@ -226,7 +226,27 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
     ctr = 1
     while !done
         # Make sure that we hit the endpoint in case timestep selection is too optimistic.
-        dt = min(dt, dT - t_local)
+        remaining = dT-t_local
+        #@info "dt estimated " dt  remaining
+        
+        if( 1.05*dt > remaining)
+            dt = remaining
+            if(dt >= config[:max_timestep])
+                dt = 0.5*remaining
+            end   
+        elseif( 1.5*dt > remaining)
+            dt = 0.5 * remaining;
+        else
+            dt = min(dt, remaining)
+        end
+        #jutul_message("Next mini-step", "Δt = $(get_tstr(dt)) ", color = :default)
+    
+        #if(1.5*dt > remaining)
+        #    dt = 0.5*remaining
+        #end
+       
+        #dt = min(dt, dT - t_local)
+        #@info "dt " dt 
         # Attempt to solve current step
         @tic "solve" ok, s = solve_ministep(sim, dt, forces, max_its, config; kwarg...)
         # We store the report even if it is a failure.
