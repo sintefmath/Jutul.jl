@@ -100,7 +100,7 @@ function extract_submesh(g::UnstructuredMesh, cells)
         nodes = b2n[bf]
         cell = g.boundary_faces.neighbors[bf]
         if cell in active_cells
-            push!(new_boundary_cells, cell)
+            push!(new_boundary_cells, active_cells[cell])
             add_to_indexmap!(new_boundary_nodes, new_boundary_nodespos, nodes)
             for n in nodes
                 active_nodes(n)
@@ -157,6 +157,8 @@ function extract_submesh(g::UnstructuredMesh, cells)
         new_boundary_nodespos,
         node_points,
         new_neighbors,
-        new_boundary_cells
+        new_boundary_cells,
+        structure = g.structure,
+        cell_map = cells
     )
 end
