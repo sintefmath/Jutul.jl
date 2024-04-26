@@ -180,7 +180,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
     max_its = config[:max_nonlinear_iterations]
     info_level = config[:info_level]
     # Initialize loop
-    p = start_simulation_message(info_level, timesteps)
+    p = start_simulation_message(info_level, timesteps, config)
     early_termination = false
     if initialize && first_step <= no_steps
         check_forces(sim, forces, timesteps, per_step = forces_per_step)

@@ -24,15 +24,32 @@ end
 
 print_global_timer(::Nothing) = nothing
 
-function start_simulation_message(info_level, timesteps)
+function start_simulation_message(info_level, timesteps, config)
     p = nothing
     n = length(timesteps)
-    msg = "Simulating $(get_tstr(sum(timesteps))) as $n report steps"
+    msg = "Simulating $(get_tstr(sum(timesteps), 2)) as $n report steps"
     if info_level > 0
         jutul_message("Jutul", msg, color = :light_green)
     end
     if info_level == 0
-        p = Progress(n+1, dt = 0.5, desc = msg)
+        bg = config[:progress_glyphs]
+        if bg isa Symbol
+            if bg == :default
+                bg = ProgressMeter.defaultglyphs
+            elseif bg == :futuristic
+                bg = BarGlyphs(' ','▰', '▰', '▱',' ',)
+            elseif bg == :thin
+                bg = BarGlyphs(' ','━', '╸', ' ',' ',)
+            else
+                error("Unknown option $bg for glyphs")
+            end
+        end
+        p = Progress(n+1,
+            desc = msg,
+            dt = 0.1,
+            color = config[:progress_color],
+            barglyphs = bg
+        )
     end
     return p
 end

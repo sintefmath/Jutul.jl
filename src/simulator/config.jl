@@ -56,6 +56,10 @@ Negative values disable output. The interpretation of this number is subject to 
     prepare_step_handler, prepare_step_storage = get_prepare_step_handler(sim)
     simulator_config!(cfg, sim, prepare_step_handler, prepare_step_storage)
 
+    # Fine grained control over printing
+    add_option!(cfg, :progress_color, :green, "Color for progress meter.", types = Symbol)
+    add_option!(cfg, :progress_glyphs, :default, "Glyphs", types = Union{Symbol, ProgressMeter.BarGlyphs})
+
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])
         cfg[:end_report] = cfg[:info_level] > -1
