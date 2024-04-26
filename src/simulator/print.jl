@@ -40,6 +40,8 @@ function start_simulation_message(info_level, timesteps, config)
                 bg = BarGlyphs(' ','▰', '▰', '▱',' ',)
             elseif bg == :thin
                 bg = BarGlyphs(' ','━', '╸', ' ',' ',)
+            elseif bg == :dotted
+                bg = BarGlyphs(' ','█', '▒', '░',' ',)
             else
                 error("Unknown option $bg for glyphs")
             end
