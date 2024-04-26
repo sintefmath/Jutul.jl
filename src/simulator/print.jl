@@ -35,7 +35,7 @@ function start_simulation_message(info_level, timesteps, config)
         bg = config[:progress_glyphs]
         if bg isa Symbol
             if bg == :default
-                bg = ProgressMeter.defaultglyphs
+                bg = missing
             elseif bg == :futuristic
                 bg = BarGlyphs(' ','▰', '▰', '▱',' ',)
             elseif bg == :thin
@@ -46,11 +46,16 @@ function start_simulation_message(info_level, timesteps, config)
                 error("Unknown option $bg for glyphs")
             end
         end
-        p = Progress(n+1,
+        if ismissing(bg)
+            arg = NamedTuple()
+        else
+            arg = (barglyphs = bg)
+        end
+        p = Progress(n+1;
             desc = msg,
             dt = 0.1,
             color = config[:progress_color],
-            barglyphs = bg
+            arg...
         )
     end
     return p
