@@ -367,7 +367,7 @@ function perform_step_check_convergence_impl!(report, prev_report, storage, mode
         if ismissing(prev_report)
             update_report = missing
         else
-            update_report = prev_report[:update]
+            update_report = get(prev_report, :update, missing)
         end
         @tic "convergence" converged, e, errors = check_convergence(
             storage,
