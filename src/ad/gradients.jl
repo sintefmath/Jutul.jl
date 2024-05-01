@@ -450,7 +450,7 @@ function adjoint_parameter_model(model, arg...; context = DefaultContext())
     pmodel = adjoint_model_copy(model; context = context)
     # Swap parameters and primary variables
     swap_primary_with_parameters!(pmodel, model, arg...)
-    return pmodel
+    return sort_variables!(pmodel, :all)
 end
 
 function adjoint_model_copy(model::SimulationModel{O, S, F, C}; context = model.context) where {O, S, C, F}
