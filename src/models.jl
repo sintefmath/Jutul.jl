@@ -570,7 +570,7 @@ function get_sparse_arguments(storage, model, row_layout::ScalarLayout, col_layo
             end
             numcols += number_of_degrees_of_freedom(model, u)
         end
-        @assert numcols == ndof
+        @assert numcols == ndof "Mismatch in number of columns ($numcols) and number degrees of freedom ($ndof) for equation $eqname"
         # Number of equations correspond to number of rows
         numrows += number_of_equations(model, eq)
     end
