@@ -183,8 +183,9 @@ end
 Get only the entities where primary variables are present, sorted by their order in the primary variables.
 """
 function get_primary_variable_ordered_entities(model::SimulationModel)
-    out = []
+    out = JutulEntity[]
     current_entity = nothing
+    found = Dict{JutulEntity, Bool}()
     for p in values(model.primary_variables)
         u = associated_entity(p)
         if u != current_entity
@@ -192,6 +193,8 @@ function get_primary_variable_ordered_entities(model::SimulationModel)
             # each other. This is currently asserted in the model constructor.
             push!(out, u)
             current_entity = u
+            !haskey(found, u) || throw(ArgumentError("Primary variables are not sorted by entity ($u repeats)."))
+            found[u] = true
         end
     end
     return out
@@ -554,8 +557,8 @@ end
 function get_sparse_arguments(storage, model, row_layout::ScalarLayout, col_layout::ScalarLayout)
     ndof = number_of_degrees_of_freedom(model)
     eq_storage = storage[:equations]
-    I = []
-    J = []
+    I = Vector{Int}[]
+    J = Vector{Int}[]
     numrows = 0
     primary_entities = get_primary_variable_ordered_entities(model)
     for eqname in keys(model.equations)
