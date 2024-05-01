@@ -5,6 +5,9 @@ export state_gradient, solve_adjoint_sensitivities, solve_adjoint_sensitivities!
 
 Compute sensitivities of `model` parameter with name `target` for objective function `G`.
 
+The objective function is at the moment assumed to be a sum over all states on the form:
+`obj = Σₙ G(model, state, dt_n, n, forces_for_step_n)`
+
 Solves the adjoint equations: For model equations F the gradient with respect to parameters p is
     ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ where n ∈ [1, N].
 Given Lagrange multipliers λₙ from the adjoint equations
@@ -436,7 +439,10 @@ function swap_primary_with_parameters!(pmodel, model, targets = parameter_target
     return pmodel
 end
 
-parameter_targets(model::SimulationModel) = keys(get_parameters(model))
+function parameter_targets(model::SimulationModel)
+    prm = get_parameters(model)
+    return collect(keys(prm))
+end
 
 function adjoint_parameter_model(model, arg...; context = DefaultContext())
     # By default the adjoint model uses the default context since no linear solver
