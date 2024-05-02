@@ -14,18 +14,27 @@ Given Lagrange multipliers λₙ from the adjoint equations
     (∂Fₙ / ∂xₙ)ᵀ λₙ = - (∂J / ∂xₙ)ᵀ - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
 where the last term is omitted for step n = N and G is the objective function.
 """
-function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G; 
-                                        n_objective = nothing,
-                                        extra_timing = false,
-                                        state0 = setup_state(model),
-                                        forces = setup_forces(model),
-                                        raw_output = false,
-                                        extra_output = false, kwarg...)
+function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
+        n_objective = nothing,
+        extra_timing = false,
+        state0 = setup_state(model),
+        forces = setup_forces(model),
+        raw_output = false,
+        extra_output = false,
+        info_level = 0,
+        kwarg...
+    )
     # One simulator object for the equations with respect to primary (at previous time-step)
     # One simulator object for the equations with respect to parameters
     set_global_timer!(extra_timing)
     # Allocation part
-    storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, kwarg...)
+    if info_level > 1
+        jutul_message("Adjoints", "Setting up storage...", color = :blue)
+    end
+    t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, kwarg...)
+    if info_level > 1
+        jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
+    end
     parameter_model = storage.parameter.model
     n_param = number_of_degrees_of_freedom(parameter_model)
     ∇G = gradient_vec_or_mat(n_param, n_objective)
@@ -39,11 +48,20 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
     end
     @assert length(timesteps) == N "Recieved $(length(timesteps)) timesteps and $N states. These should match."
     # Solve!
-    solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces)
+    if info_level > 1
+        jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
+    end
+    t_solve = @elapsed solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces, info_level = info_level)
+    if info_level > 1
+        jutul_message("Adjoints", "Adjoints solved in $(get_tstr(t_solve)).", color = :blue)
+    end
     print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
     if raw_output
         out = ∇G
     else
+        if info_level > 1
+            jutul_message("Adjoints", "Storing sensitivities.", color = :blue)
+        end
         out = store_sensitivities(parameter_model, ∇G, storage.parameter_map)
     end
     if extra_output
@@ -70,7 +88,7 @@ function solve_adjoint_sensitivities(case::JutulCase, some_kind_of_result, G; kw
         some_kind_of_result::SimResult
         states = some_kind_of_result.states
     end
-    return solve_adjoint_sensitivities(case, states, G, kwarg...)
+    return solve_adjoint_sensitivities(case, states, G; kwarg...)
 end
 
 
@@ -181,15 +199,22 @@ end
 
 Non-allocating version of `solve_adjoint_sensitivities`.
 """
-function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model))
+function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model), info_level = 0)
     N = length(timesteps)
     @assert N == length(states)
     # Do sparsity detection if not already done.
+    if info_level > 1
+        jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
+    end
+
     update_objective_sparsity!(storage, G, states, timesteps, forces, :forward)
     update_objective_sparsity!(storage, G, states, timesteps, forces, :parameter)
     # Set gradient to zero before solve starts
     @. ∇G = 0
     @tic "sensitivities" for i in N:-1:1
+        if info_level > 0
+            jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
+        end
         s, s0, s_next = state_pair_adjoint_solve(state0, states, i, N)
         update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
     end
