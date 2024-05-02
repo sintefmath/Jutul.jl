@@ -79,14 +79,16 @@ end
 
 Set up storage for use with `solve_adjoint_sensitivities!`.
 """
-function setup_adjoint_storage(model; state0 = setup_state(model),
-                                      parameters = setup_parameters(model),
-                                      n_objective = nothing,
-                                      targets = parameter_targets(model),
-                                      use_sparsity = true,
-                                      linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-8),
-                                      param_obj = true,
-                                      kwarg...)
+function setup_adjoint_storage(model;
+        state0 = setup_state(model),
+        parameters = setup_parameters(model),
+        n_objective = nothing,
+        targets = parameter_targets(model),
+        use_sparsity = true,
+        linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-6),
+        param_obj = true,
+        kwarg...
+    )
     # Set up the generic adjoint storage
     storage =  setup_adjoint_storage_base(
             model, state0, parameters,
