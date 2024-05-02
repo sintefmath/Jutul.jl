@@ -1,7 +1,7 @@
 export state_gradient, solve_adjoint_sensitivities, solve_adjoint_sensitivities!, setup_adjoint_storage
 
 """
-    solve_adjoint_sensitivities(model, states, reports, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, kwarg...)
+    solve_adjoint_sensitivities(model, states, reports_or_timesteps, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, kwarg...)
 
 Compute sensitivities of `model` parameter with name `target` for objective function `G`.
 
@@ -14,7 +14,7 @@ Given Lagrange multipliers λₙ from the adjoint equations
     (∂Fₙ / ∂xₙ)ᵀ λₙ = - (∂J / ∂xₙ)ᵀ - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
 where the last term is omitted for step n = N and G is the objective function.
 """
-function solve_adjoint_sensitivities(model, states, reports, G; 
+function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G; 
                                         n_objective = nothing,
                                         extra_timing = false,
                                         state0 = setup_state(model),
@@ -30,9 +30,14 @@ function solve_adjoint_sensitivities(model, states, reports, G;
     n_param = number_of_degrees_of_freedom(parameter_model)
     ∇G = gradient_vec_or_mat(n_param, n_objective)
     # Timesteps
-    timesteps = report_timesteps(reports)
     N = length(states)
-    @assert length(reports) == N == length(timesteps)
+    if eltype(reports_or_timesteps)<:Real
+        timesteps = reports_or_timesteps
+    else
+        @assert length(reports) == N
+        timesteps = report_timesteps(reports)
+    end
+    @assert length(timesteps) == N "Recieved $(length(timesteps)) timesteps and $N states. These should match."
     # Solve!
     solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces)
     print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
@@ -47,6 +52,27 @@ function solve_adjoint_sensitivities(model, states, reports, G;
         return out
     end
 end
+
+function solve_adjoint_sensitivities(case::JutulCase, states::Vector, G; kwarg...)
+    return solve_adjoint_sensitivities(
+        case.model, states, case.dt, G;
+        state0 = case.state0,
+        parameters = case.parameters,
+        kwarg...
+    )
+end
+
+
+function solve_adjoint_sensitivities(case::JutulCase, some_kind_of_result, G; kwarg...)
+    if hasproperty(some_kind_of_result, :result)
+        states = some_kind_of_result.result.states
+    else
+        some_kind_of_result::SimResult
+        states = some_kind_of_result.states
+    end
+    return solve_adjoint_sensitivities(case, states, G, kwarg...)
+end
+
 
 """
     setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model))
