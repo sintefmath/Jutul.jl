@@ -43,8 +43,8 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
     if eltype(reports_or_timesteps)<:Real
         timesteps = reports_or_timesteps
     else
-        @assert length(reports) == N
-        timesteps = report_timesteps(reports)
+        @assert length(reports_or_timesteps) == N
+        timesteps = report_timesteps(reports_or_timesteps)
     end
     @assert length(timesteps) == N "Recieved $(length(timesteps)) timesteps and $N states. These should match."
     # Solve!
