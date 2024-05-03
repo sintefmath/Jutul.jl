@@ -483,11 +483,16 @@ function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     # Deal with state0 first
     reset_previous_state!(sim, state0)
     update_secondary_variables!(s, model, true)
+    # Make sure that state is that of the previous state TODO: This does an
+    # extra update of properties that could maybe be avoided, but is needed to
+    # make everything consistent with how the forward simulator works before
+    # update_before_step! is called.
+    reset_state_to_previous_state!(sim)
     # Apply logic as if timestep is starting
     update_before_step!(s, model, dt, forces, time = time, recorder = progress_recorder(sim))
     # Then the current primary variables
     reset_variables!(s, model, state)
-    update_state_dependents!(s, model, dt, forces, time = time)
+    update_state_dependents!(s, model, dt, forces, time = time, update_secondary = true)
     # Finally update the system
     update_linearized_system!(s, model)
 end
