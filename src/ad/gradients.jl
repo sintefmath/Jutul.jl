@@ -31,7 +31,7 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
     if info_level > 1
         jutul_message("Adjoints", "Setting up storage...", color = :blue)
     end
-    t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, kwarg...)
+    t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
     if info_level > 1
         jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
     end
@@ -105,6 +105,7 @@ function setup_adjoint_storage(model;
         use_sparsity = true,
         linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-6),
         param_obj = true,
+        info_level = 0,
         kwarg...
     )
     # Set up the generic adjoint storage
@@ -112,7 +113,8 @@ function setup_adjoint_storage(model;
             model, state0, parameters,
             use_sparsity = use_sparsity,
             linear_solver = linear_solver,
-            n_objective = n_objective
+            n_objective = n_objective,
+            info_level = info_level
         )
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model, targets)
@@ -142,7 +144,8 @@ end
 function setup_adjoint_storage_base(model, state0, parameters;
         use_sparsity = true,
         linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-8),
-        n_objective = nothing
+        n_objective = nothing,
+        info_level = 0
         )
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
@@ -187,9 +190,9 @@ function setup_adjoint_storage_base(model, state0, parameters;
     storage[:dx] = dx
     storage[:rhs] = rhs
     storage[:n_forward] = n_var
-    storage[:linear_solver] = linear_solver
     storage[:multiple_rhs] = multiple_rhs
     storage[:rhs_transfer_needed] = rhs_transfer_needed
+    storage[:forward_config] = simulator_config(forward_sim, linear_solver = linear_solver, info_level = info_level)
 
     return storage
 end
@@ -400,6 +403,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     forward_sim = adjoint_storage.forward
     λ = adjoint_storage.lagrange
     λ_b = adjoint_storage.lagrange_buffer
+    config = adjoint_storage.forward_config
     # Timestep logic
     N = length(timesteps)
     forces = forces_for_timestep(forward_sim, all_forces, timesteps, i)
@@ -407,6 +411,22 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     # Assemble Jacobian w.r.t. current step
     t = sum(timesteps[1:i-1])
     @tic "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces, t)
+    il = config[:info_level]
+    converged, e, errors = check_convergence(
+        forward_sim.storage,
+        forward_sim.model,
+        config,
+        iteration = 1,
+        dt = dt,
+        extra_out = true
+    )
+    if !converged && il >= 0
+        jutul_message("Warning", "Simulation was not converged to default tolerances for step $i in adjoint solve", color = :yellow)
+        if il > 1.5
+            get_convergence_table(errors, il, 1, config)
+        end
+    end
+
     # Note the sign: There is an implicit negative sign in the linear solver when solving for the Newton increment. Therefore, the terms of the
     # right hand side are added with a positive sign instead of negative.
     rhs = adjoint_storage.rhs
@@ -429,7 +449,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
         sens_add_mult!(rhs, op, λ_b)
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
-    lsolve = adjoint_storage.linear_solver
+    lsolve = adjoint_storage.forward_config[:linear_solver]
     dx = adjoint_storage.dx
     if adjoint_storage.multiple_rhs
         lsolve_arg = (dx = dx, r = rhs)
