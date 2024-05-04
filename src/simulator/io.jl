@@ -50,7 +50,7 @@ function get_output_report(sim, report, level)
     return out
 end
 
-function store_output!(states, reports, step, sim, config, report)
+function store_output!(states, reports, step, sim, config, report; substates = missing)
     mem_out = config[:output_states]
     path = config[:output_path]
     file_out = !isnothing(path)
@@ -58,6 +58,9 @@ function store_output!(states, reports, step, sim, config, report)
     push!(reports, report)
     t_out = @elapsed if mem_out || file_out
         @tic "output state" state = get_output_state(sim)
+        if !ismissing(substates)
+            state[:substates] = substates
+        end
         @tic "output report" out_report = get_output_report(sim, report, config[:report_level])
         @tic "write" if file_out
             write_result_jld2(path, state, out_report, step)

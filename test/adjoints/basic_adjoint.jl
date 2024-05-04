@@ -140,6 +140,6 @@ end
                 test_optimization_gradient(use_scaling = use_scaling, use_log = use_log)
             end
         end
-    end    
+    end
 end
 

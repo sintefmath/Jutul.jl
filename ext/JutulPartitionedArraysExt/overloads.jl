@@ -123,9 +123,10 @@ function Jutul.get_output_state(psim::PArraySimulator)
     return state
 end
 
-function Jutul.store_output!(states, reports, step, psim::PArraySimulator, config, report)
+function Jutul.store_output!(states, reports, step, psim::PArraySimulator, config, report; substates = missing)
     subsims = psim.storage.simulators
     subconfigs = config[:configs]
+    # TODO: Deal with substates for PArray.
     map(subsims, subconfigs) do sim, cfg
         Jutul.store_output!(states, reports, step, sim, cfg, report)
     end
