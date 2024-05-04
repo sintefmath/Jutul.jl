@@ -110,7 +110,7 @@ function setup_adjoint_storage(model;
         kwarg...
     )
     # Set up the generic adjoint storage
-    storage =  setup_adjoint_storage_base(
+    storage = setup_adjoint_storage_base(
             model, state0, parameters,
             use_sparsity = use_sparsity,
             linear_solver = linear_solver,
@@ -181,7 +181,6 @@ function setup_adjoint_storage_base(model, state0, parameters;
     elseif rhs_transfer_needed
         rhs = zeros(n_var)
     end
-
     storage = JutulStorage()
     storage[:forward] = forward_sim
     storage[:backward] = backward_sim
@@ -396,7 +395,8 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
             @. dparam = 0
         end
         pbuf = adjoint_storage.param_buf
-        state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, i, forces))
+        S_p = get_objective_sparsity(adjoint_storage, :parameter)
+        state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, i, forces), sparsity = S_p)
         @. dparam += pbuf
     end
 end
