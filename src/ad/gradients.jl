@@ -379,6 +379,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         reset!(progress_recorder(s), step = i, time = sum(t))
     end
     λ, t, dt, forces = next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces)
+    @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
     parameter_sim = adjoint_storage.parameter
