@@ -712,6 +712,41 @@ end
 
 report_times(reports; ministeps = false) = cumsum(report_timesteps(reports, ministeps = ministeps, extra_out = false))
 
+"""
+    substates, dt = expand_to_ministeps(result::SimResult)
+
+Get states and timesteps at the finest stored resolution. Output lengths depend
+on if `output_substates` option to simulator was enabled.
+"""
+function expand_to_ministeps(result::SimResult)
+    return expand_to_ministeps(result.states, result.reports)
+end
+
+"""
+    substates, dt = expand_to_ministeps(states, reports)
+
+Get states and timesteps at the finest stored resolution. Output lengths depend
+on if `output_substates` option to simulator was enabled.
+"""
+function expand_to_ministeps(states, reports)
+    has_ministeps = length(states) > 0 && haskey(first(states), :substates)
+    dt = report_times(reports, ministeps = has_ministeps)
+    if has_ministeps
+        ministates = JUTUL_OUTPUT_TYPE[]
+        for state in states
+            for ministate in state[:substates]
+                push!(ministates, ministate)
+            end
+            state = copy(state)
+            delete!(state, :substates)
+            push!(ministates, state)
+        end
+    else
+        ministates = states
+    end
+    @assert length(ministates) == length(dt)
+    return (ministates, dt)
+end
 
 function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where T
     # Create array of arrays where each entry contains the faces of that cell

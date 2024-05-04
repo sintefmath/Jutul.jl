@@ -15,14 +15,16 @@ function test_single(use_manual)
     X = states[end][:XVar]
     @test only(X) ≈ 1.0
 
-    states, = simulate(state0, model, dt, forces = forces, info_level = -1)
+    states, reports = simulate(state0, model, dt, forces = forces, info_level = -1)
     @test length(states) == 1
     state = states[end]
     X = state[:XVar]
     @test only(X) ≈ 1.0
     @test !haskey(state, :substates)
+    states, dt = Jutul.expand_to_ministeps(states, reports)
+    @test length(states) == 1
 
-    states, = simulate(state0, model, dt,
+    states, reports = simulate(state0, model, dt,
         forces = forces,
         info_level = -1,
         max_timestep = 0.5,
@@ -33,6 +35,9 @@ function test_single(use_manual)
     @test only(only(state[:substates])[:XVar]) ≈ 0.5
     X = states[end][:XVar]
     @test only(X) ≈ 1.0
+
+    states, dt = Jutul.expand_to_ministeps(states, reports)
+    @test length(states) == 2
 end
 
 @testset "Scalar test system" begin

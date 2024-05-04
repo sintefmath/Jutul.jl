@@ -71,9 +71,9 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
     end
 end
 
-function solve_adjoint_sensitivities(case::JutulCase, states::Vector, G; kwarg...)
+function solve_adjoint_sensitivities(case::JutulCase, states::Vector, G; dt = case.dt, kwarg...)
     return solve_adjoint_sensitivities(
-        case.model, states, case.dt, G;
+        case.model, states, dt, G;
         state0 = case.state0,
         parameters = case.parameters,
         kwarg...
@@ -83,12 +83,13 @@ end
 
 function solve_adjoint_sensitivities(case::JutulCase, some_kind_of_result, G; kwarg...)
     if hasproperty(some_kind_of_result, :result)
-        states = some_kind_of_result.result.states
+        simresult = some_kind_of_result.result
     else
-        some_kind_of_result::SimResult
-        states = some_kind_of_result.states
+        simresult = some_kind_of_result
     end
-    return solve_adjoint_sensitivities(case, states, G; kwarg...)
+    simresult::SimResult
+    states, dt = expand_to_ministeps(simresult)
+    return solve_adjoint_sensitivities(case, states, G; dt = dt, kwarg...)
 end
 
 
