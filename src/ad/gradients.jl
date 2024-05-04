@@ -233,7 +233,8 @@ end
 
 function state_pair_adjoint_solve(state0, states, i, N)
     # TODO: Is this required?
-    fn = deepcopy
+    # fn = deepcopy
+    fn = x -> x
     if i == 1
         s0 = fn(state0)
     else
