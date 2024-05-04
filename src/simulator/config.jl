@@ -48,7 +48,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :output_path, nothing, "Path to write output. If nothing, output is not written to disk.", types = Union{String, Nothing})
     add_option!(cfg, :in_memory_reports, 5, "Limit for number of reports kept in memory if output_path is provided.", types = Int)
     add_option!(cfg, :report_level, 1, "Level of information stored in reports when written to disk.", types = Int)
-    add_option!(cfg, :store_substates, false, "Store substates (between report steps) as field on each state.", types = Bool)
+    add_option!(cfg, :output_substates, false, "Store substates (between report steps) as field on each state.", types = Bool)
 
     # Hooks
     add_option!(cfg, :post_ministep_hook, missing, "Hook to run after each ministep (successful or not) on format (done, report, sim, dt, forces, max_iter, cfg) -> (done, report)")

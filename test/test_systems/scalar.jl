@@ -26,7 +26,7 @@ function test_single(use_manual)
         forces = forces,
         info_level = -1,
         max_timestep = 0.5,
-        store_substates = true
+        output_substates = true
     )
     state = states[end]
     @test haskey(state, :substates)

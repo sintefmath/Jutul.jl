@@ -194,7 +194,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
         forces_step = forces_for_timestep(sim, forces, timesteps, step_no, per_step = forces_per_step)
         nextstep_global!(rec, dT)
         new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
-        if config[:store_substates]
+        if config[:output_substates]
             substates = []
         else
             substates = missing
