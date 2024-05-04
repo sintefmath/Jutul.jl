@@ -232,6 +232,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
 end
 
 function state_pair_adjoint_solve(state0, states, i, N)
+    # TODO: Is this required?
     fn = deepcopy
     if i == 1
         s0 = fn(state0)

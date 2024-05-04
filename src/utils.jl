@@ -730,7 +730,9 @@ on if `output_substates` option to simulator was enabled.
 """
 function expand_to_ministeps(states, reports)
     has_ministeps = length(states) > 0 && haskey(first(states), :substates)
-    dt = report_times(reports, ministeps = has_ministeps)
+    report_t = report_times(reports, ministeps = has_ministeps)
+    pushfirst!(report_t, 0.0)
+    dt = diff(report_t)
     if has_ministeps
         ministates = JUTUL_OUTPUT_TYPE[]
         for state in states
