@@ -180,7 +180,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
     max_its = config[:max_nonlinear_iterations]
     info_level = config[:info_level]
     # Initialize loop
-    p = start_simulation_message(info_level, timesteps)
+    p = start_simulation_message(info_level, timesteps, config)
     early_termination = false
     if initialize && first_step <= no_steps
         check_forces(sim, forces, timesteps, per_step = forces_per_step)
@@ -194,13 +194,24 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
         forces_step = forces_for_timestep(sim, forces, timesteps, step_no, per_step = forces_per_step)
         nextstep_global!(rec, dT)
         new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
-        t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dt, reports = reports, step_no = step_no, rec = rec)
+        if config[:output_substates]
+            substates = []
+        else
+            substates = missing
+        end
+        t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config;
+            dt = dt,
+            reports = reports,
+            step_no = step_no,
+            rec = rec,
+            substates = substates
+        )
         early_termination = !step_done
         subrep = JUTUL_OUTPUT_TYPE()
         subrep[:ministeps] = rep
         subrep[:total_time] = t_step
         if step_done
-            @tic "output" store_output!(states, reports, step_no, sim, config, subrep)
+            @tic "output" store_output!(states, reports, step_no, sim, config, subrep, substates = substates)
         else
             subrep[:output_time] = 0.0
             push!(reports, subrep)
@@ -232,9 +243,15 @@ Internal function for solving a single time-step with fixed driving forces.
 Note: This function is exported for fine-grained simulation workflows. The general [`simulate`](@ref) interface is
 both easier to use and performs additional validation.
 """
-function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = nothing, step_no = NaN, 
-                                                        info_level = config[:info_level],
-                                                        rec = progress_recorder(sim), kwarg...)
+function solve_timestep!(sim, dT, forces, max_its, config;
+        dt = dT,
+        reports = nothing,
+        step_no = NaN,
+        info_level = config[:info_level],
+        rec = progress_recorder(sim),
+        substates = missing,
+        kwarg...
+    )
     ministep_reports = []
     # Initialize time-stepping
     dt = pick_timestep(sim, config, dt, dT, forces, reports, ministep_reports, step_index = step_no, new_step = true)
@@ -257,6 +274,10 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                 done = true
                 break
             else
+                # Add to output of intermediate states.
+                if !ismissing(substates)
+                    push!(substates, get_output_state(sim.storage, sim.model))
+                end
                 # Pick another for the next step...
                 dt = pick_timestep(sim, config, dt, dT, forces, reports, ministep_reports, step_index = step_no, new_step = false, remaining_time = dT - t_local)
             end
@@ -367,7 +388,7 @@ function perform_step_check_convergence_impl!(report, prev_report, storage, mode
         if ismissing(prev_report)
             update_report = missing
         else
-            update_report = prev_report[:update]
+            update_report = get(prev_report, :update, missing)
         end
         @tic "convergence" converged, e, errors = check_convergence(
             storage,

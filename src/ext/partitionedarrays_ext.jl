@@ -24,6 +24,10 @@ function parray_synchronize_primary_variables
 
 end
 
+function mpi_scalar_allreduce
+    
+end
+
 abstract type PArrayBackend <: JutulBackend end
 
 struct DebugPArrayBackend <: PArrayBackend end

@@ -447,7 +447,15 @@ function print_parameter_optimization_config(targets, config, model; title = :mo
                     lstr = "$n groups"
                 end
             end
-            fmt_lim(l, u) = @sprintf "[%1.3g, %1.3g]" l u
+            function fmt_lim(l, u)
+                if isnothing(l)
+                    l = -Inf
+                end
+                if isnothing(u)
+                    u = Inf
+                end
+                @sprintf "[%1.3g, %1.3g]" l u
+            end
             data[i, 3] = s
             data[i, 4] = v[:scaler]
             data[i, 5] = fmt_lim(v[:abs_min], v[:abs_max])

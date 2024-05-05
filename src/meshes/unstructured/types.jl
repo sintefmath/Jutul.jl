@@ -228,8 +228,10 @@ function UnstructuredMesh(
     int_neighbors = convert_neighborship(int_neighbors)
     @assert length(bnd_cells) == nb
     bnd_cells::AbstractVector
-    @assert maximum(bnd_cells, init = 1) <= nc
-    @assert minimum(bnd_cells, init = nc) > 0
+    max_bnd = maximum(bnd_cells, init = 1)
+    max_bnd <= nc || throw(ArgumentError("Maximum boundary cell $max_bnd exceeded number of cells $nc."))
+    min_bnd = minimum(bnd_cells, init = nc)
+    minimum(bnd_cells, init = nc) > 0 || throw(ArgumentError("Minimum boundary cell $min_bnd was less than 1."))
 
     @assert maximum(faces_to_nodes.vals, init = 0) <= nn "Too few nodes provided"
     return UnstructuredMesh(cells_to_faces, cells_to_bnd, faces_to_nodes, bnd_to_nodes, node_points, int_neighbors, bnd_cells; kwarg...)

@@ -965,3 +965,10 @@ function reset_variables!(storage, model::MultiModel, state; kwarg...)
         reset_variables!(storage[k], m, state[k]; kwarg...)
     end
 end
+
+function sort_variables!(model::MultiModel, t = :primary)
+    for (k, m) in pairs(model.models)
+        sort_variables!(m, t)
+    end
+    return model
+end

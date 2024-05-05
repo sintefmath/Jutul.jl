@@ -48,6 +48,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :output_path, nothing, "Path to write output. If nothing, output is not written to disk.", types = Union{String, Nothing})
     add_option!(cfg, :in_memory_reports, 5, "Limit for number of reports kept in memory if output_path is provided.", types = Int)
     add_option!(cfg, :report_level, 1, "Level of information stored in reports when written to disk.", types = Int)
+    add_option!(cfg, :output_substates, false, "Store substates (between report steps) as field on each state.", types = Bool)
 
     # Hooks
     add_option!(cfg, :post_ministep_hook, missing, "Hook to run after each ministep (successful or not) on format (done, report, sim, dt, forces, max_iter, cfg) -> (done, report)")
@@ -55,6 +56,10 @@ Negative values disable output. The interpretation of this number is subject to 
 
     prepare_step_handler, prepare_step_storage = get_prepare_step_handler(sim)
     simulator_config!(cfg, sim, prepare_step_handler, prepare_step_storage)
+
+    # Fine grained control over printing
+    add_option!(cfg, :progress_color, :green, "Color for progress meter.", types = Symbol)
+    add_option!(cfg, :progress_glyphs, :default, "Glyphs", types = Union{Symbol, ProgressMeter.BarGlyphs})
 
     overwrite_by_kwargs(cfg; kwarg...)
     if isnothing(cfg[:end_report])

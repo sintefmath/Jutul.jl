@@ -584,7 +584,9 @@ function collect_indices(c::GenericAutoDiffCache, impact, N, M, e)
     for i = 1:n
         # I = index_map(impact[i], M, VariableSet(), EquationSet(), e)
         I = impact[i]
-        entities[I] = c.variables[vrange(c, i)]
+        for var in c.variables[vrange(c, i)]
+            push!(entities[I], var)
+        end
     end
     return entities
 end

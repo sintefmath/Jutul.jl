@@ -96,7 +96,7 @@ function select_contexts(ctype = :csc;
                     context = nothing,
                     block_backend = true,
                     nthreads = Threads.nthreads(),
-                    minbatch = 1000, kwarg...)
+                    minbatch = 1000)
     if block_backend
         matrix_layout = BlockMajorLayout()
     else

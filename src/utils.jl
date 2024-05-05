@@ -698,6 +698,10 @@ function report_timesteps(reports; ministeps = false, extra_out = false)
             dt[i] = t_loc
             step_no[i] = i
         end
+        if n > 1 && !reports[end][:ministeps][end][:success]
+            dt = resize!(dt, n-1)
+            step_no = resize!(step_no, n-1)
+        end
     end
     if extra_out
         return (dt = dt, step = step_no)
@@ -708,6 +712,47 @@ end
 
 report_times(reports; ministeps = false) = cumsum(report_timesteps(reports, ministeps = ministeps, extra_out = false))
 
+"""
+    substates, dt, report_index = expand_to_ministeps(result::SimResult)
+
+Get states and timesteps at the finest stored resolution. Output lengths depend
+on if `output_substates` option to simulator was enabled.
+"""
+function expand_to_ministeps(result::SimResult)
+    return expand_to_ministeps(result.states, result.reports)
+end
+
+"""
+    substates, dt, report_index = expand_to_ministeps(states, reports)
+
+Get states and timesteps at the finest stored resolution. Output lengths depend
+on if `output_substates` option to simulator was enabled.
+"""
+function expand_to_ministeps(states, reports)
+    has_ministeps = length(states) > 0 && haskey(first(states), :substates)
+    report_t = report_times(reports, ministeps = has_ministeps)
+    pushfirst!(report_t, 0.0)
+    dt = diff(report_t)
+    if has_ministeps
+        ministates = JUTUL_OUTPUT_TYPE[]
+        report_step_index = Int[]
+        for (i, state) in enumerate(states)
+            for ministate in state[:substates]
+                push!(ministates, ministate)
+                push!(report_step_index, i)
+            end
+            state = copy(state)
+            delete!(state, :substates)
+            push!(ministates, state)
+            push!(report_step_index, i)
+        end
+    else
+        ministates = states
+        report_step_index = collect(eachindex(states))
+    end
+    @assert length(ministates) == length(dt)
+    return (ministates, dt, report_step_index)
+end
 
 function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where T
     # Create array of arrays where each entry contains the faces of that cell

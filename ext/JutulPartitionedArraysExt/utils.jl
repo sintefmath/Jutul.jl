@@ -226,3 +226,7 @@ function partition_degrees_of_freedom(base_partition, boundary, remapped_indices
     # end
     return combine_boundary(tentative_dof_partition, dof_boundary)
 end
+
+function Jutul.mpi_scalar_allreduce(x, op, exec::Jutul.PArrayExecutor)
+    return MPI.Allreduce(x, op, exec.mode.comm)
+end
