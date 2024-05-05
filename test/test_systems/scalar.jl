@@ -21,7 +21,7 @@ function test_single(use_manual)
     X = state[:XVar]
     @test only(X) ≈ 1.0
     @test !haskey(state, :substates)
-    states, dt = Jutul.expand_to_ministeps(states, reports)
+    states, dt, = Jutul.expand_to_ministeps(states, reports)
     @test length(states) == 1
 
     states, reports = simulate(state0, model, dt,
@@ -36,7 +36,7 @@ function test_single(use_manual)
     X = states[end][:XVar]
     @test only(X) ≈ 1.0
 
-    states, dt = Jutul.expand_to_ministeps(states, reports)
+    states, dt, = Jutul.expand_to_ministeps(states, reports)
     @test length(states) == 2
 end
 

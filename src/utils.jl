@@ -713,7 +713,7 @@ end
 report_times(reports; ministeps = false) = cumsum(report_timesteps(reports, ministeps = ministeps, extra_out = false))
 
 """
-    substates, dt = expand_to_ministeps(result::SimResult)
+    substates, dt, report_index = expand_to_ministeps(result::SimResult)
 
 Get states and timesteps at the finest stored resolution. Output lengths depend
 on if `output_substates` option to simulator was enabled.
@@ -723,7 +723,7 @@ function expand_to_ministeps(result::SimResult)
 end
 
 """
-    substates, dt = expand_to_ministeps(states, reports)
+    substates, dt, report_index = expand_to_ministeps(states, reports)
 
 Get states and timesteps at the finest stored resolution. Output lengths depend
 on if `output_substates` option to simulator was enabled.
@@ -735,19 +735,23 @@ function expand_to_ministeps(states, reports)
     dt = diff(report_t)
     if has_ministeps
         ministates = JUTUL_OUTPUT_TYPE[]
-        for state in states
+        report_step_index = Int[]
+        for (i, state) in enumerate(states)
             for ministate in state[:substates]
                 push!(ministates, ministate)
+                push!(report_step_index, i)
             end
             state = copy(state)
             delete!(state, :substates)
             push!(ministates, state)
+            push!(report_step_index, i)
         end
     else
         ministates = states
+        report_step_index = collect(eachindex(states))
     end
     @assert length(ministates) == length(dt)
-    return (ministates, dt)
+    return (ministates, dt, report_step_index)
 end
 
 function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where T
