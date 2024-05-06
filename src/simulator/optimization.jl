@@ -65,6 +65,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     else
         @assert grad_type == :adjoint
     end
+    sort_variables!(model, :parameters)
     mapper, = variable_mapper(model, :parameters, targets = targets, config = opt_cfg)
     lims = optimization_limits(opt_cfg, mapper, parameters, model)
     if verbose

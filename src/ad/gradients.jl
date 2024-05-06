@@ -424,7 +424,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
         dt = dt,
         extra_out = true
     )
-    if !converged && il >= 0
+    if !converged && il > 0
         jutul_message("Warning", "Simulation was not converged to default tolerances for step $i in adjoint solve", color = :yellow)
         if il > 1.5
             get_convergence_table(errors, il, 1, config)
