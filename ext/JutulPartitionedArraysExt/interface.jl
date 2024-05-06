@@ -87,7 +87,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         pvar_buf = pzeros(T_primary, partition)
         data[:distributed_primary_variables] = pvar_buf
         data[:distributed_primary_variables_def] = pvar_def
-        psync = (; kwarg...) -> parray_synchronize_primary_variables(psim; kwarg...)
+        psync = (; kwarg...) -> Jutul.parray_synchronize_primary_variables(psim; kwarg...)
         map(simulators) do sim
             sim.executor.data[:distributed_primary_variables_sync_function] = psync
         end
