@@ -71,10 +71,11 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
     end
 end
 
-function solve_adjoint_sensitivities(case::JutulCase, states::Vector, G; dt = case.dt, kwarg...)
+function solve_adjoint_sensitivities(case::JutulCase, states::Vector, G; dt = case.dt, forces = case.forces, kwarg...)
     return solve_adjoint_sensitivities(
         case.model, states, dt, G;
         state0 = case.state0,
+        forces = forces,
         parameters = case.parameters,
         kwarg...
     )
@@ -88,10 +89,13 @@ function solve_adjoint_sensitivities(case::JutulCase, some_kind_of_result, G; kw
         simresult = some_kind_of_result
     end
     simresult::SimResult
-    states, dt = expand_to_ministeps(simresult)
-    return solve_adjoint_sensitivities(case, states, G; dt = dt, kwarg...)
+    states, dt, step_ix = expand_to_ministeps(simresult)
+    forces = case.forces
+    if forces isa Vector
+        forces = forces[step_ix]
+    end
+    return solve_adjoint_sensitivities(case, states, G; dt = dt, forces = forces, kwarg...)
 end
-
 
 """
     setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model))
@@ -205,6 +209,9 @@ Non-allocating version of `solve_adjoint_sensitivities`.
 function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model), info_level = 0)
     N = length(timesteps)
     @assert N == length(states)
+    if forces isa Vector
+        @assert length(forces) == N
+    end
     # Do sparsity detection if not already done.
     if info_level > 1
         jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
