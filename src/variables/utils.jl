@@ -299,7 +299,7 @@ function initialize_parameter_value!(parameters, data_domain, model, param, symb
         vals = default_parameter_values(data_domain, model, param, symb)
         s = "computed defaulted"
     end
-    if any(x -> !isfinite(x), vals)
+    if eltype(vals)<:AbstractFloat && any(x -> !isfinite(x), vals)
         @error "Non-finite entries in $s parameter $symb"
     end
     return initialize_variable_value!(parameters, model, param, symb, vals)
