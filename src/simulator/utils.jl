@@ -63,11 +63,17 @@ function Base.show(io::IO, t::MIME"text/plain", sim::T) where T<:JutulSimulator
     end
 end
 
-function overwrite_by_kwargs(cfg; kwarg...)
+function overwrite_by_kwargs(cfg; throw = true, kwarg...)
     # Overwrite with varargin
-    for key in keys(kwarg)
-        cfg[key] = kwarg[key]
+    unused = Dict{Symbol, Any}()
+    for (key, val) in pairs(kwarg)
+        if throw || haskey(cfg, key)
+            cfg[key] = val
+        else
+            unused[key] = val
+        end
     end
+    return unused
 end
 
 function Base.iterate(t::SimResult)

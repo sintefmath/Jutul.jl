@@ -1,4 +1,4 @@
-function simulator_config!(cfg, sim; nonlinear_tolerance = 1e-3, kwarg...)
+function simulator_config!(cfg, sim; output_unused = false, nonlinear_tolerance = 1e-3, kwarg...)
     # Printing, etc
     add_option!(cfg, :info_level, 0, "Info level determines the amount of runtime output to the terminal during simulation.", types = Union{Int, Float64},
     description = "
@@ -61,7 +61,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :progress_color, :green, "Color for progress meter.", types = Symbol)
     add_option!(cfg, :progress_glyphs, :default, "Glyphs", types = Union{Symbol, ProgressMeter.BarGlyphs})
 
-    overwrite_by_kwargs(cfg; kwarg...)
+    unused = overwrite_by_kwargs(cfg; throw = !output_unused, kwarg...)
     if isnothing(cfg[:end_report])
         cfg[:end_report] = cfg[:info_level] > -1
     end
@@ -78,7 +78,12 @@ Negative values disable output. The interpretation of this number is subject to 
         fmt = tf_unicode_rounded
     end
     add_option!(cfg, :table_formatter, fmt, "Formatter for tables.")
-    return cfg
+    if output_unused
+        out = (cfg, unused)
+    else
+        out = cfg
+    end
+    return out
 end
 
 function simulator_config!(cfg, sim, ::Missing, ::Missing)

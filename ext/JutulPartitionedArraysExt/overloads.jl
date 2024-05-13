@@ -13,11 +13,12 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info
     add_option!(cfg, :delete_on_consolidate, true, "Delete processor states once consolidated.", types = Bool)
     add_option!(cfg, :info_level_parray, main_process_info_level, "Info level for outer printing", types = Int)
 
-    cfg = Jutul.simulator_config!(cfg, sim;
+    cfg, unused = Jutul.simulator_config!(cfg, sim;
         kwarg...,
         info_level = info_level,
         ascii_terminal = is_mpi_win,
-        extra_timing = extra_timing
+        extra_timing = extra_timing,
+        output_unused = true
     )
     simulators = sim.storage[:simulators]
     output_pth = cfg[:output_path]
@@ -50,10 +51,11 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info
         else
             pth = nothing
         end
-        subconfig = Jutul.simulator_config(sim,
+        subconfig = Jutul.simulator_config(sim;
             info_level = -1,
             extra_timing = extra_timing,
-            output_path = pth
+            output_path = pth,
+            unused...
         )
         subconfig
     end
