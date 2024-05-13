@@ -107,3 +107,118 @@ end
 
 get_mapper_internal(model, type_or_map::Symbol) = first(variable_mapper(model, type_or_map))
 get_mapper_internal(model, type_or_map) = type_or_map
+
+function vectorize_data_domain(d::DataDomain)
+    n = 0
+    for (k, val_e_pair) in pairs(d.data)
+        val, e = val_e_pair
+        if eltype(val)<:AbstractFloat
+            n += length(val)
+        end
+    end
+    x = zeros(n)
+    return vectorize_data_domain!(x, d::DataDomain)
+end
+
+function vectorize_data_domain!(x, d::DataDomain)
+    offset = 0
+    for (k, val_e_pair) in pairs(d.data)
+        val, e = val_e_pair
+        if eltype(val)<:AbstractFloat
+            n = length(val)
+            for i in 1:n
+                x[offset+i] = val[i]
+            end
+            offset += n
+        end
+    end
+    return x
+end
+
+function devectorize_data_domain(domain::DataDomain{R, E, D}, x::Vector{T}) where {R, E, D, T}
+    r = physical_representation(domain)
+    e = deepcopy(domain.entities)
+    d = similar(domain.data)
+    newd = DataDomain{R, E, D}(r, e, d)
+    for (k, val_e_pair) in pairs(domain)
+        val, e = val_e_pair
+        if eltype(val)<:AbstractFloat
+            sz = size(val)
+            newd[k, e] = zeros(T, sz)
+        else
+            newd[k, e] = copy(val)
+        end
+    end
+    @assert keys(newd) == keys(d)
+    return devectorize_data_domain!(newd, x)
+end
+
+function devectorize_data_domain!(d::DataDomain, x::Vector{T}) where T
+    offset = 0
+    for (k, val_e_pair) in pairs(d.data)
+        val, e = val_e_pair
+        if eltype(val)<:AbstractFloat
+            n = length(val)
+            if eltype(val) == T
+                for i in 1:n
+                    val[i] = x[offset+i]
+                end
+            else
+                val = reshape(x[(offset+1):(offset+n)], size(val))
+                d[k, e] = val
+            end
+            offset += n
+        end
+    end
+    return d
+end
+
+function data_domain_to_parameters_gradient(model0)
+    function get_ad_local(x::ST.ADval, rng, dim, n_total)
+        v = x.val
+        I0, V0 = findnz(ST.deriv(x))
+        grad = SparseVector(n_total, I0, V0)[rng]
+        if length(dim) == 2
+            I, V = findnz(grad)
+            bz, n = dim
+            row = similar(I)
+            col = similar(I)
+            for (i, spos) in enumerate(I)
+                row[i] = mod(spos-1, bz)+1
+                col[i] = div(spos-1, bz)+1
+            end
+            grad = sparse(row, col, V, bz, n)
+        else
+            @assert length(dim) == 1
+        end
+        return grad
+        # return (value = v, gradient = grad)
+    end
+    model = deepcopy(model0)
+    d = model.data_domain
+    x = vectorize_data_domain(d)
+    n_total = length(x)
+    x_ad = ST.create_advec(x)
+    devectorize_data_domain!(d, x_ad)
+    prm = setup_parameters(model)
+    output_prm = Dict{Symbol, Any}()
+    for (prm_name, prm_val) in pairs(prm)
+        subprm = Dict{Symbol, Any}()
+        offset = 0
+        for (k, val_e_pair) in pairs(model0.data_domain.data)
+            val, e = val_e_pair
+            val_ad = d[k, e]
+            if eltype(val)<:AbstractFloat
+                n = length(val)
+                rng = (1+offset):(offset+n)
+                subprm[k] = map(
+                    x -> get_ad_local(x, rng, size(val), n_total),
+                    prm_val
+                    )
+                offset += n
+            end
+        end
+        output_prm[prm_name] = subprm
+    end
+    return output_prm
+end
