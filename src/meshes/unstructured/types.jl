@@ -303,7 +303,7 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
             Y0 = 0.0
         end
         g = CartesianMesh((nx, ny, nz), (dx, dy, dz), origin = [X0, Y0, 0.0])
-        d = 3
+        return UnstructuredMesh(g)
     end
     X0, Y0, Z0 = g.origin
 
@@ -316,18 +316,18 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
     num_nodes = num_nodes_x*num_nodes_y*num_nodes_z
     nodeix = reshape(1:num_nodes, num_nodes_x, num_nodes_y, num_nodes_z)
 
-    P = SVector{d, Float64}
-    node_points = Vector{P}()
+    node_points = Vector{SVector{3, Float64}}()
     dx, dy, dz = g.deltas
-    function get_point(D::Real, i)
-        return (i-1)*D
+    function get_point(D::T, i) where {T<:Real}
+        newpt = (i-1)*D
+        return newpt::T
     end
-    function get_point(D::Vector{T}, i) where T
+    function get_point(D::Vector{T}, i) where {T<:Real}
         pt = zero(T)
         for j in 1:(i-1)
             pt += D[j]
         end
-        return pt
+        return pt::T
     end
 
     for k in 1:num_nodes_z
@@ -336,22 +336,25 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
             Y = get_point(dy, j)
             for i in 1:num_nodes_x
                 X = get_point(dx, i)
-                XYZ = P(X + X0, Y + Y0, Z + Z0)
+                XYZ = SVector{3, Float64}(X + X0, Y + Y0, Z + Z0)
                 push!(node_points, XYZ)
             end
         end
     end
     @assert length(node_points) == length(nodeix)
     cell_to_faces = Vector{Vector{Int}}()
+    sizehint!(cell_to_faces, nc)
     for i in 1:nc
         push!(cell_to_faces, Int[])
     end
     cell_to_boundary = Vector{Vector{Int}}()
+    sizehint!(cell_to_boundary, nc)
     for i in 1:nc
         push!(cell_to_boundary, Int[])
     end
 
     int_neighbors = Vector{Tuple{Int, Int}}()
+    sizehint!(int_neighbors, nf)
     # Note: The following loops are arranged to reproduce the MRST ordering.
     function insert_face!(nodes, pos, arg...)
         for node in arg
@@ -368,6 +371,8 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
     end
     faces_nodes = Int[]
     faces_nodespos = Int[1]
+    sizehint!(faces_nodes, 4*nf)
+    sizehint!(faces_nodespos, nf+1)
     # Faces with X-normal > 0
     for z = 1:nz
         for y in 1:ny
@@ -377,7 +382,7 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
                 p3 = nodeix[x, y+1, z+1]
                 p4 = nodeix[x, y, z+1]
                 insert_face!(faces_nodes, faces_nodespos, p1, p2, p3, p4)
-                add_internal_neighbor!((x-1, y, z), 1)
+                add_internal_neighbor!((x-1.0, y, z), 1)
             end
         end
     end
@@ -390,7 +395,7 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
                 p3 = nodeix[x+1, y, z]
                 p4 = nodeix[x, y, z]
                 insert_face!(faces_nodes, faces_nodespos, p1, p2, p3, p4)
-                add_internal_neighbor!((x, y-1, z), 2)
+                add_internal_neighbor!((x, y-1.0, z), 2)
             end
         end
     end
@@ -403,14 +408,19 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
                 p3 = nodeix[x, y+1, z]
                 p4 = nodeix[x, y, z]
                 insert_face!(faces_nodes, faces_nodespos, p1, p2, p3, p4)
-                add_internal_neighbor!((x, y, z-1), 3)
+                add_internal_neighbor!((x, y, z-1.0), 3)
             end
         end
     end
 
     boundary_faces_nodes = Int[]
     boundary_faces_nodespos = Int[1]
+
+    sizehint!(boundary_faces_nodes, 4*nbf)
+    sizehint!(boundary_faces_nodespos, nbf+1)
+
     bnd_cells = Int[]
+    sizehint!(bnd_cells, nbf)
     function add_boundary_cell!(t, D)
         index = cell_index(g, t)
         push!(bnd_cells, index)
@@ -427,7 +437,7 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
                     add_boundary_cell!((x, y, z), 1)
                 else
                     insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p4, p3, p2, p1)
-                    add_boundary_cell!((x-1, y, z), 1)
+                    add_boundary_cell!((x-1.0, y, z), 1)
                 end
             end
         end
@@ -445,7 +455,7 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
                     add_boundary_cell!((x, y, z), 2)
                 else
                     insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p4, p3, p2, p1)
-                    add_boundary_cell!((x, y-1, z), 2)
+                    add_boundary_cell!((x, y-1.0, z), 2)
                 end
             end
         end
@@ -463,7 +473,7 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
                     add_boundary_cell!((x, y, z), 3)
                 else
                     insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p4, p3, p2, p1)
-                    add_boundary_cell!((x, y, z-1), 3)
+                    add_boundary_cell!((x, y, z-1.0), 3)
                 end
             end
         end
