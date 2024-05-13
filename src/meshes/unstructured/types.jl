@@ -319,16 +319,13 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
     P = SVector{d, Float64}
     node_points = Vector{P}()
     dx, dy, dz = g.deltas
-    function get_delta(D, i)
-        return D
+    function get_point(D::Real, i)
+        return (i-1)*D
     end
-    function get_delta(D::AbstractVector, i)
-        return D[i]
-    end
-    function get_point(D, i)
-        pt = 0
+    function get_point(D::Vector{T}, i) where T
+        pt = zero(T)
         for j in 1:(i-1)
-            pt += get_delta(D, j)
+            pt += D[j]
         end
         return pt
     end
