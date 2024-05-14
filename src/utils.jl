@@ -719,7 +719,8 @@ Get states and timesteps at the finest stored resolution. Output lengths depend
 on if `output_substates` option to simulator was enabled.
 """
 function expand_to_ministeps(result::SimResult)
-    return expand_to_ministeps(result.states, result.reports)
+    states = result.states
+    return expand_to_ministeps(states, result.reports[eachindex(states)])
 end
 
 """
