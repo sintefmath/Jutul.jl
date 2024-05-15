@@ -117,24 +117,30 @@ function final_simulation_message(simulator, p, rec, t_elapsed, reports, timeste
     info_level = config[:info_level]
     print_end_report = config[:end_report]
     verbose = info_level >= 0
-    if verbose || print_end_report
+    if (verbose || print_end_report) && config[:output_reports]
         stats = report_stats(reports)
     else
         stats = nothing
     end
     # Summary message.
     if verbose && length(reports) > 0
+        final_message = "No report statistics available."
         if aborted
             start_str = "Simulation aborted"
-            endstr = "$(length(reports)) of $(length(timesteps))"
-            str_c = :red
         else
             start_str = "Simulation complete"
-            endstr = "$(stats.steps)"
-            str_c = :light_green
         end
-        t_tot = stats.time_sum.total
-        final_message = "Completed $endstr report steps in $(get_tstr(t_tot)) and $(stats.newtons) iterations."
+        if isnothing(stats)
+            t_tot = 0.0
+        else
+            if aborted
+                endstr = "$(length(reports)) of $(length(timesteps))"
+            else
+                endstr = "$(stats.steps)"
+            end
+            t_tot = stats.time_sum.total
+            final_message = "Completed $endstr report steps in $(get_tstr(t_tot)) and $(stats.newtons) iterations."
+        end
         if info_level == 0
             if aborted
                 cancel(p, "$start_str $final_message")
@@ -145,13 +151,18 @@ function final_simulation_message(simulator, p, rec, t_elapsed, reports, timeste
                 finish!(p)
             end
         else
+            if aborted
+                str_c = :red
+            else
+                str_c = :light_green
+            end
             jutul_message(start_str, final_message, color = str_c, underline = true)
         end
     elseif info_level == 0
         cancel(p)
     end
     # Optional table of performance numbers etc.
-    if print_end_report
+    if print_end_report && config[:output_reports]
         n = simulator_reports_per_step(simulator)
         print_stats(stats,
             table_formatter = config[:table_formatter],

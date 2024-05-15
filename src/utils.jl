@@ -345,6 +345,9 @@ end
 function report_stats(reports)
     stats = initialize_report_stats(reports)
     for outer_rep in reports
+        if ismissing(outer_rep)
+            continue
+        end
         outer_step_report_stats!(stats, outer_rep)
     end
     update_other_time_report_stats!(stats)
