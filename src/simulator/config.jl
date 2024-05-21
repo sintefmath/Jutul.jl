@@ -52,6 +52,8 @@ Negative values disable output. The interpretation of this number is subject to 
 
     # Hooks
     add_option!(cfg, :post_ministep_hook, missing, "Hook to run after each ministep (successful or not) on format (done, report, sim, dt, forces, max_iter, cfg) -> (done, report)")
+    add_option!(cfg, :post_iteration_hook, missing, "Hook to run after each iteration on format (converged, report, storage, model, dt, forces, cfg, iteration) -> converged")
+
     add_option!(cfg, :prepare_step, missing, "Type instance that get called with prepare_step before each Newton iteration.")
 
     prepare_step_handler, prepare_step_storage = get_prepare_step_handler(sim)
