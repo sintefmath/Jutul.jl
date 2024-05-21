@@ -213,7 +213,6 @@ end
 function initialize_variable_value(model, pvar, val; perform_copy = true)
     nu = number_of_entities(model, pvar)
     nv = values_per_entity(model, pvar)
-    
     if isa(pvar, ScalarVariable)
         if val isa AbstractVector
             @assert length(val) == nu "Expected $nu entries, but got $(length(val)) for $(typeof(pvar))"
@@ -291,7 +290,7 @@ function initialize_variable_value(model, pvar::ScalarVariable, val::Number)
     return initialize_variable_value(model, pvar, V)
 end
 
-function initialize_parameter_value!(parameters, data_domain, model, param, symb, initializer::AbstractDict)
+function initialize_parameter_value!(parameters, data_domain, model, param, symb, initializer::AbstractDict; kwarg...)
     if haskey(initializer, symb)
         vals = initializer[symb]
         s = "provided"
@@ -302,7 +301,7 @@ function initialize_parameter_value!(parameters, data_domain, model, param, symb
     if eltype(vals)<:AbstractFloat && any(x -> !isfinite(x), vals)
         @error "Non-finite entries in $s parameter $symb"
     end
-    return initialize_variable_value!(parameters, model, param, symb, vals)
+    return initialize_variable_value!(parameters, model, param, symb, vals; kwarg...)
 end
 
 function default_parameter_values(data_domain, model, param, symb)

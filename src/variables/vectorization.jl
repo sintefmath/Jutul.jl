@@ -194,13 +194,22 @@ function data_domain_to_parameters_gradient(model0)
         return grad
         # return (value = v, gradient = grad)
     end
+    function get_ad_local(x::Float64, rng, dim, n_total)
+        if length(dim) == 2
+            bz, n = dim
+            grad = sparse(Int[], Int[], Float64[], bz, n)
+        else
+            grad = SparseVector(n_total, Int[], Float64[])[rng]
+        end
+        return grad
+    end
     model = deepcopy(model0)
     d = model.data_domain
     x = vectorize_data_domain(d)
     n_total = length(x)
     x_ad = ST.create_advec(x)
     devectorize_data_domain!(d, x_ad)
-    prm = setup_parameters(model)
+    prm = setup_parameters(model, perform_copy = false)
     output_prm = Dict{Symbol, Any}()
     for (prm_name, prm_val) in pairs(prm)
         subprm = Dict{Symbol, Any}()
