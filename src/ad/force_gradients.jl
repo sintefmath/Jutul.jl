@@ -317,7 +317,7 @@ function setup_adjoint_forces_storage(
     return storage
 end
 
-function solve_adjoint_forces(case::JutulCase, res::SimResult, G; kwarg...)
+function solve_adjoint_forces(case::JutulCase, res, G; kwarg...)
     return solve_adjoint_forces(
         case.model, res.states, res.reports, G, case.forces;
         parameters = case.parameters,
