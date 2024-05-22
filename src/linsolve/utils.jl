@@ -16,7 +16,7 @@ function IterativeSolverConfig(;
         relative_tolerance = 1e-3,
         absolute_tolerance = nothing, 
         max_iterations = 100,
-        min_iterations = 2,
+        min_iterations = 1,
         verbose = false,
         nonlinear_relative_tolerance = nothing,
         relaxed_relative_tolerance = 0.1,
