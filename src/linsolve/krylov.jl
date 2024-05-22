@@ -126,15 +126,14 @@ function linear_solve!(sys::LSystem,
     end
     solve_f, F = krylov_jl_solve_function(krylov, op, r)
     @tic "solve" solve_f(F, op, r;
-        itmax = max_it,
-        verbose = v,
-        rtol = rtol,
-        atol = atol,
-        history = true,
-        callback = callback,
-        M = L,
-        cfg.arguments...
-    )
+                            itmax = max_it,
+                            verbose = v,
+                            rtol = rtol,
+                            atol = atol,
+                            history = true,
+                            callback = callback,
+                            M = L,
+                            cfg.arguments...)
     x, stats = (krylov.storage.x, krylov.storage.stats)
     res = stats.residuals
     n = length(res) - 1
