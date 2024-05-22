@@ -52,7 +52,7 @@ PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 [extensions]
 JutulGLMakieExt = "GLMakie"
 JutulGraphMakieExt = ["GraphMakie", "NetworkLayout", "LayeredLayouts", "Makie"]
-JutulHypreExt = "HYPRE"
+JutulHYPREExt = "HYPRE"
 JutulKaHyParExt = "KaHyPar"
 JutulMakieExt = "Makie"
 JutulMeshesExt = ["Meshes"]
