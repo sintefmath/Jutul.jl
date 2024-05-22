@@ -26,15 +26,16 @@ module JutulAMGCLWrapExt
         return F
     end
 
-    function Jutul.update_preconditioner!(p::Jutul.AMGCLPreconditioner, A::Jutul.StaticCSR.StaticSparsityMatrixCSR, b, ctx, executor)
-        function replace_values_sparse_array!(x, y)
-            n = length(y)
-            resize!(x, n)
-            for i in 1:n
-                x[i] = y[i] - 1
-            end
-            return x
+    function replace_values_sparse_array!(x, y)
+        n = length(y)
+        resize!(x, n)
+        @inbounds for i in 1:n
+            x[i] = y[i] - 1
         end
+        return x
+    end
+
+    function Jutul.update_preconditioner!(p::Jutul.AMGCLPreconditioner, A::Jutul.StaticCSR.StaticSparsityMatrixCSR, b, ctx, executor)
         n, m = size(A)
         @assert n == m
         rowptr = replace_values_sparse_array!(p.rowptr, A.At.colptr)
