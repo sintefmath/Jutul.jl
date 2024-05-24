@@ -173,57 +173,56 @@ function devectorize_data_domain!(d::DataDomain, x::Vector{T}) where T
     return d
 end
 
-function data_domain_to_parameters_gradient(model0)
-    function get_ad_local(x::ST.ADval, rng, dim, n_total)
-        v = x.val
-        I0, V0 = findnz(ST.deriv(x))
-        grad = SparseVector(n_total, I0, V0)[rng]
-        if length(dim) == 2
-            I, V = findnz(grad)
-            bz, n = dim
-            row = similar(I)
-            col = similar(I)
-            for (i, spos) in enumerate(I)
-                row[i] = mod(spos-1, bz)+1
-                col[i] = div(spos-1, bz)+1
-            end
-            grad = sparse(row, col, V, bz, n)
-        else
-            @assert length(dim) == 1
-        end
-        return grad
-        # return (value = v, gradient = grad)
+
+function parameters_jacobian_wrt_data_domain(model; copy = true, config = nothing)
+    if copy
+        model = deepcopy(model)
     end
-    function get_ad_local(x::Float64, rng, dim, n_total)
-        if length(dim) == 2
-            bz, n = dim
-            grad = sparse(Int[], Int[], Float64[], bz, n)
-        else
-            grad = SparseVector(n_total, Int[], Float64[])[rng]
-        end
-        return grad
-    end
-    model = deepcopy(model0)
-    d = model.data_domain
-    x = vectorize_data_domain(d)
-    n_total = length(x)
+    data_domain = model.data_domain
+    x = vectorize_data_domain(data_domain)
     x_ad = ST.create_advec(x)
-    devectorize_data_domain!(d, x_ad)
+    devectorize_data_domain!(data_domain, x_ad)
     prm = setup_parameters(model, perform_copy = false)
+    prm_flat = vectorize_variables(model, prm, :parameters, T = eltype(x_ad), config = config)
+    n_parameters = length(prm_flat)
+    n_data_domain_values = length(x)
+    # This is Jacobian of parameters with respect to data_domain
+    J = ST.jacobian(prm_flat, n_data_domain_values)
+    @assert size(J) == (n_parameters, n_data_domain_values)
+    return J
+end
+
+function data_domain_to_parameters_gradient(model, parameter_gradient; config = nothing)
+    dp_dd = parameters_jacobian_wrt_data_domain(model, copy = true, config = config)
+    do_dp = vectorize_variables(model, parameter_gradient, :parameters, config = config)
+    # prm_grad_flat = dO/dp
+    # J_prm_wrt_data = dp/dd where d is data
+    # dO/dd = dO/dp * dp/dd
+    # nd = n_total
+    # np = length(do_dp)
+    # dO_dd = dp_dd'*do_dp
+    # @info "!" dO_dd dp_dd do_dp nd np length(x_ad)
+    error()
+
     output_prm = Dict{Symbol, Any}()
     for (prm_name, prm_val) in pairs(prm)
+        d_obj_d_prm = parameter_gradient[prm_name]
         subprm = Dict{Symbol, Any}()
         offset = 0
-        for (k, val_e_pair) in pairs(model0.data_domain.data)
+        for (k, val_e_pair) in pairs(model.data_domain.data)
             val, e = val_e_pair
             val_ad = d[k, e]
             if eltype(val)<:AbstractFloat
                 n = length(val)
                 rng = (1+offset):(offset+n)
-                subprm[k] = map(
-                    x -> get_ad_local(x, rng, size(val), n_total),
-                    prm_val
-                    )
+
+                J = ST.jacobian(vec(val_ad), length(val))
+                @info "??$k" J
+                # ∂data = 
+                # subprm[k] = map(
+                #     x -> get_ad_local(x, rng, size(val), n_total),
+                #     prm_val
+                #     )
                 offset += n
             end
         end
@@ -231,3 +230,50 @@ function data_domain_to_parameters_gradient(model0)
     end
     return output_prm
 end
+
+
+# function data_domain_to_parameters_gradient(model; data_domain = deepcopy(model.data_domain), config = nothing)
+#     x = vectorize_data_domain(data_domain)
+#     n_total = length(x)
+#     x_ad = ST.create_advec(x)
+#     devectorize_data_domain!(data_domain, x_ad)
+#     prm = setup_parameters(deepcopy(model), perform_copy = false)
+#     prm_flat = vectorize_variables(model, prm, :parameters, T = eltype(x_ad), config = config)
+#     return ST.jacobian(prm_flat, n_total)
+# end
+
+# function data_domain_to_parameters_gradient(model0, parameter_gradient; config = nothing)
+#     model = deepcopy(model0)
+#     dO_dd = data_domain_to_parameters_gradient(model, config = config)
+#     do_dp = vectorize_variables(model, parameter_gradient, :parameters, config = config)
+#     dO_dd = dp_dd'*do_dp
+
+#     @info "!" dO_dd dp_dd do_dp nd np length(x_ad)
+#     error()
+
+#     output_prm = Dict{Symbol, Any}()
+#     for (prm_name, prm_val) in pairs(prm)
+#         d_obj_d_prm = parameter_gradient[prm_name]
+#         subprm = Dict{Symbol, Any}()
+#         offset = 0
+#         for (k, val_e_pair) in pairs(model0.data_domain.data)
+#             val, e = val_e_pair
+#             val_ad = d[k, e]
+#             if eltype(val)<:AbstractFloat
+#                 n = length(val)
+#                 rng = (1+offset):(offset+n)
+
+#                 J = ST.jacobian(vec(val_ad), length(val))
+#                 @info "??$k" J
+#                 # ∂data = 
+#                 # subprm[k] = map(
+#                 #     x -> get_ad_local(x, rng, size(val), n_total),
+#                 #     prm_val
+#                 #     )
+#                 offset += n
+#             end
+#         end
+#         output_prm[prm_name] = subprm
+#     end
+#     return output_prm
+# end
