@@ -1,10 +1,10 @@
 export vectorize_variables, vectorize_variables!, devectorize_variables!
 
 
-function vectorize_variables(model, state_or_prm, type_or_map = :primary; config = nothing)
+function vectorize_variables(model, state_or_prm, type_or_map = :primary; config = nothing, T = Float64)
     mapper = get_mapper_internal(model, type_or_map)
     n = vectorized_length(model, mapper)
-    V = zeros(n)
+    V = zeros(T, n)
     return vectorize_variables!(V, model, state_or_prm, mapper, config = config)
 end
 
