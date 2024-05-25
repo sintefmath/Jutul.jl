@@ -2,9 +2,7 @@ using Jutul
 using Test
 using SparseArrays
 
-function basic_poisson_test()
-    nx = 3
-    ny = 1
+function basic_poisson_case(nx = 3, ny = 1)
     sys = VariablePoissonSystem()
     # Unit square
     g = CartesianMesh((nx, ny), (1.0, 1.0))
@@ -23,13 +21,13 @@ function basic_poisson_test()
     forces = setup_forces(model, sources = [pos_src, neg_src])
 
     dt = [1.0]
-    states, = simulate(
-        state0,
-        model,
-        dt,
-        parameters = param,
-        info_level = -1,
-        forces = forces)
+    case = JutulCase(model, dt, forces, state0 = state0, parameters = param)
+    return case
+end
+
+function basic_poisson_test()
+    case = basic_poisson_case()
+    states, = simulate(case, info_level = -1)
     U = states[end][:U]
     # Singular problem, normalize against first element
     U = U .- U[1]
@@ -40,13 +38,10 @@ end
     basic_poisson_test()
 end
 
-@testset "data_domain gradients" begin  
-    nx = 3
-    ny = 1
-    sys = VariablePoissonSystem()
-    g = CartesianMesh((nx, ny), (1.0, 1.0))
-    domain = DataDomain(g, poisson_coefficient = 1.0)
-    model = SimulationModel(domain, sys)
+@testset "data_domain gradients" begin
+    case = basic_poisson_case()
+    model = case.model
+    domain = model.data_domain
     for T in [Float64, Float32]
         x = Jutul.vectorize_data_domain(domain)
         x = T.(x)
@@ -63,11 +58,11 @@ end
             end
         end
     end
-    prm_ad = Jutul.data_domain_to_parameters_gradient(model)
-    for (k, v) in pairs(prm_ad[:K])
-        @test length(v) == number_of_faces(g)
-    end
-    @test prm_ad[:K][:areas][2] ≈ [0.0, 3.0]
-    @test prm_ad[:K][:areas][1] ≈ [3.0, 0.0]
-    @test all(all(iszero, prm_ad[:K][:boundary_centroids]))
+    result = simulate(case)
+    obj = (model, state, dt_n, n, forces_for_step_n) -> sum(state[:U])
+    sens = solve_adjoint_sensitivities(case, result, obj)
+    data_domain_with_gradients = Jutul.data_domain_to_parameters_gradient(model, sens)
+    @test data_domain_with_gradients[:poisson_coefficient] ≈ [-0.33333492279052723, -0.4999980926513673, -0.1666631698608399] rtol=1e-3
+    @test data_domain_with_gradients[:volumes] ≈ [0.0, 0.0, 0.0]
+    @test data_domain_with_gradients[:areas] ≈ [-2/3, -1/3] rtol=1e-3
 end

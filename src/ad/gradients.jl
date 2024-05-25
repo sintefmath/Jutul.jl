@@ -160,8 +160,10 @@ function setup_adjoint_storage_base(model, state0, parameters;
     if use_sparsity isa Bool
         if use_sparsity
             # We will update these later on
-            sparsity_obj = Dict{Any, Any}(:parameter => nothing, 
-                                          :forward => nothing)
+            sparsity_obj = Dict{Any, Any}(
+                :parameter => nothing, 
+                :forward => nothing
+            )
         else
             sparsity_obj = nothing
         end

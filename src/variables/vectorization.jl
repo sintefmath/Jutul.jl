@@ -174,6 +174,13 @@ function devectorize_data_domain!(d::DataDomain, x::Vector{T}) where T
 end
 
 
+"""
+    parameters_jacobian_wrt_data_domain(model; copy = true, config = nothing)
+
+Compute the (sparse) Jacobian of parameters with respect to data_domain values
+(i.e. floating point values). Optionally, `config` can be passed to allow
+`vectorize_variables` to only include a subset of the parameters.
+"""
 function parameters_jacobian_wrt_data_domain(model; copy = true, config = nothing)
     if copy
         model = deepcopy(model)
@@ -192,43 +199,27 @@ function parameters_jacobian_wrt_data_domain(model; copy = true, config = nothin
     return J
 end
 
-function data_domain_to_parameters_gradient(model, parameter_gradient; config = nothing)
-    dp_dd = parameters_jacobian_wrt_data_domain(model, copy = true, config = config)
-    do_dp = vectorize_variables(model, parameter_gradient, :parameters, config = config)
-    # prm_grad_flat = dO/dp
-    # J_prm_wrt_data = dp/dd where d is data
-    # dO/dd = dO/dp * dp/dd
-    # nd = n_total
-    # np = length(do_dp)
-    # dO_dd = dp_dd'*do_dp
-    # @info "!" dO_dd dp_dd do_dp nd np length(x_ad)
-    error()
+"""
+    data_domain_to_parameters_gradient(model, parameter_gradient; dp_dd = missing, config = nothing)
 
-    output_prm = Dict{Symbol, Any}()
-    for (prm_name, prm_val) in pairs(prm)
-        d_obj_d_prm = parameter_gradient[prm_name]
-        subprm = Dict{Symbol, Any}()
-        offset = 0
-        for (k, val_e_pair) in pairs(model.data_domain.data)
-            val, e = val_e_pair
-            val_ad = d[k, e]
-            if eltype(val)<:AbstractFloat
-                n = length(val)
-                rng = (1+offset):(offset+n)
-
-                J = ST.jacobian(vec(val_ad), length(val))
-                @info "??$k" J
-                # ∂data = 
-                # subprm[k] = map(
-                #     x -> get_ad_local(x, rng, size(val), n_total),
-                #     prm_val
-                #     )
-                offset += n
-            end
-        end
-        output_prm[prm_name] = subprm
+Make a data_domain copy that contains the gradient of some objective with
+respect to the fields in the data_domain, assuming that the parameters were
+initialized directly from the data_domain via (`setup_parameters`)[@ref].
+"""
+function data_domain_to_parameters_gradient(model, parameter_gradient; dp_dd = missing, config = nothing)
+    if ismissing(dp_dd)
+        dp_dd = parameters_jacobian_wrt_data_domain(model, copy = true, config = config)
     end
-    return output_prm
+    do_dp = vectorize_variables(model, parameter_gradient, :parameters, config = config)
+    # do/dd = do/dp * dp/dd
+    # do_dp is a column vector, turn into row vector:
+    # do_dd = do_dp'*dp_dd
+    # if we want to output do_dd' (standard julia vector )we can rewrite
+    # do_dd' = (do_dp'*dp_dd)' = dp_dd'*do_dp
+    do_dd = dp_dd'*do_dp
+    data_domain_with_gradients = deepcopy(model.data_domain)
+    devectorize_data_domain!(data_domain_with_gradients, do_dd)
+    return data_domain_with_gradients
 end
 
 
