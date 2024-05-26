@@ -26,11 +26,12 @@ module JutulGraphMakieExt
         ax.xminorticksvisible[] = false
         hidespines!(ax)
         hidedecorations!(ax)
+        marg = (marker = :circle, markersize = 20, strokewidth = 1)
         Legend(fig[2, 1],
             [
-                MarkerElement(color = c1, marker = :circle, markersize = 20),
-                MarkerElement(color = c2, marker = :circle, markersize = 20),
-                MarkerElement(color = c3, marker = :circle, markersize = 20)
+                MarkerElement(color = c1; marg...),
+                MarkerElement(color = c2; marg...),
+                MarkerElement(color = c3; marg...)
             ],
             ["Primary variable", "Secondary variable", "Parameter"],
             orientation = :horizontal
@@ -69,6 +70,7 @@ module JutulGraphMakieExt
             edge_width = [3 for i in 1:ne(graph)],
             edge_color = :grey80,
             node_color = colors,
+            node_strokewidth=1,
             nlabels_align = alignments,
             nlabels = map(String, nodes)
         )
