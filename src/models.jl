@@ -88,7 +88,7 @@ function get_variable(model::SimulationModel, name::Symbol)
 end
 
 
-export set_primary_variables!, set_secondary_variables!, replace_variables!
+export set_primary_variables!, set_secondary_variables!, set_parameters!, replace_variables!
 """
     set_primary_variables!(model, varname = vardef)
     set_primary_variables!(model, varname1 = vardef1, varname2 = vardef2)
