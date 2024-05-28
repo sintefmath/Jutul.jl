@@ -18,6 +18,7 @@ function simulator_storage(model; state0 = nothing,
                                 copy_state = true,
                                 mode = :forward,
                                 specialize = false,
+                                prepare_step_handler = missing,
                                 kwarg...)
     if mode == :forward
         state_ad = true
@@ -42,10 +43,25 @@ function simulator_storage(model; state0 = nothing,
     # Add internal book keeping of time steps
     storage[:recorder] = ProgressRecorder()
     # Initialize for first time usage
-    @tic "init_storage" initialize_storage!(storage, model; kwarg...)
+    @tic "init_storage" begin
+        initialize_storage!(storage, model; kwarg...)
+        if !ismissing(prepare_step_handler)
+            pstep_storage = prepare_step_storage(prepare_step_handler, storage, model)
+            storage[:prepare_step_handler] = (prepare_step_handler, pstep_storage)
+        end
+    end
     # We convert the mutable storage (currently Dict) to immutable (NamedTuple)
     # This allows for much faster lookup in the simulation itself.
     return specialize_simulator_storage(storage, model, specialize)
+end
+
+"""
+    prepare_step_storage(storage, model, ::Missing)
+
+Initialize storage for prepare_step_handler.
+"""
+function prepare_step_storage(storage, model, ::Missing)
+    return missing
 end
 
 function specialize_simulator_storage(storage::JutulStorage, model_or_nothing, specialize)
@@ -122,15 +138,17 @@ Non-allocating (or perhaps less allocating) version of [`simulate!`](@ref).
 
 See also [`simulate`](@ref) for additional supported input arguments.
 """
-function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setup_forces(sim.model),
-                                                                   config = nothing,
-                                                                   initialize = true,
-                                                                   restart = nothing,
-                                                                   state0 = nothing,
-                                                                   parameters = nothing,
-                                                                   forces_per_step = isa(forces, Vector),
-                                                                   start_date = nothing,
-                                                                   kwarg...)
+function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
+        forces = setup_forces(sim.model),
+        config = nothing,
+        initialize = true,
+        restart = nothing,
+        state0 = nothing,
+        parameters = nothing,
+        forces_per_step = isa(forces, Vector),
+        start_date = nothing,
+        kwarg...
+    )
     rec = progress_recorder(sim)
     # Reset recorder just in case since we are starting a new simulation
     reset!(rec)
@@ -162,7 +180,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
     max_its = config[:max_nonlinear_iterations]
     info_level = config[:info_level]
     # Initialize loop
-    p = start_simulation_message(info_level, timesteps)
+    p = start_simulation_message(info_level, timesteps, config)
     early_termination = false
     stopnow = false
     if initialize && first_step <= no_steps
@@ -177,9 +195,18 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
         forces_step = forces_for_timestep(sim, forces, timesteps, step_no, per_step = forces_per_step)
         nextstep_global!(rec, dT)
         new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
-
-        t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config; dt = dt, reports = reports, step_no = step_no, rec = rec)
-        
+        if config[:output_substates]
+            substates = []
+        else
+            substates = missing
+        end
+        t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config;
+            dt = dt,
+            reports = reports,
+            step_no = step_no,
+            rec = rec,
+            substates = substates
+        )
         early_termination = !step_done
         subrep = JUTUL_OUTPUT_TYPE()
         subrep[:ministeps] = rep
@@ -201,7 +228,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = setu
                 
             else
                 
-                @tic "output" store_output!(states, reports, step_no, sim, config, subrep)
+                @tic "output" store_output!(states, reports, step_no, sim, config, subrep, substates = substates)
                 
             end
             
@@ -245,9 +272,15 @@ Internal function for solving a single time-step with fixed driving forces.
 Note: This function is exported for fine-grained simulation workflows. The general [`simulate`](@ref) interface is
 both easier to use and performs additional validation.
 """
-function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = nothing, step_no = NaN, 
-                                                        info_level = config[:info_level],
-                                                        rec = progress_recorder(sim), kwarg...)
+function solve_timestep!(sim, dT, forces, max_its, config;
+        dt = dT,
+        reports = nothing,
+        step_no = NaN,
+        info_level = config[:info_level],
+        rec = progress_recorder(sim),
+        substates = missing,
+        kwarg...
+    )
     ministep_reports = []
     # Initialize time-stepping
     dt = pick_timestep(sim, config, dt, dT, forces, reports, ministep_reports, step_index = step_no, new_step = true)
@@ -273,8 +306,12 @@ function solve_timestep!(sim, dT, forces, max_its, config; dt = dT, reports = no
                 done = true
                 break
             else
+                # Add to output of intermediate states.
+                if !ismissing(substates)
+                    push!(substates, get_output_state(sim.storage, sim.model))
+                end
                 # Pick another for the next step...
-                dt = pick_timestep(sim, config, dt, dT, forces, reports, ministep_reports, step_index = step_no, new_step = false)
+                dt = pick_timestep(sim, config, dt, dT, forces, reports, ministep_reports, step_index = step_no, new_step = false, remaining_time = dT - t_local)
             end
         else
             dt_old = dt
@@ -325,10 +362,27 @@ function perform_step!(storage, model, dt, forces, config;
     # Update the properties and equations
     rec = storage.recorder
     time = rec.recorder.time + dt
-    t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
-    if update_secondary
-        report[:secondary_time] = t_secondary
+    prep, prep_storage = get_prepare_step_handler(storage)
+    # Apply a pre-step if it exists
+    if ismissing(prep)
+        t_secondary, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = update_secondary)
+    else
+        if update_secondary
+            t_secondary = @elapsed update_secondary_variables!(storage, model)
+        else
+            t_secondary = 0.0
+        end
+        t_prep = @elapsed prep, forces = prepare_step!(prep_storage, prep,
+            storage, model, dt, forces, config;
+            executor = executor,
+            iteration = iteration,
+            relaxation = relaxation
+        )
+        report[:prepare_step] = prep
+        report[:prepare_step_time] = t_prep
+        _, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = false)
     end
+    report[:secondary_time] = t_secondary
     report[:equations_time] = t_eqs
     # Update the linearized system
     t_lsys = @elapsed begin
@@ -366,7 +420,7 @@ function perform_step_check_convergence_impl!(report, prev_report, storage, mode
         if ismissing(prev_report)
             update_report = missing
         else
-            update_report = prev_report[:update]
+            update_report = get(prev_report, :update, missing)
         end
         @tic "convergence" converged, e, errors = check_convergence(
             storage,
@@ -531,7 +585,7 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     end
     # Set up storage
     reports = []
-    states = Vector{JUTUL_OUTPUT_TYPE}()
+    states = Vector{Dict{Symbol, Any}}()
     pth = config[:output_path]
     initialize_io(pth)
     has_restart = !(isnothing(restart) || restart === 0 || restart === 1 || restart == false)
@@ -664,16 +718,12 @@ function check_forces(sim::Simulator, f::Vector, timesteps; per_step = true)
     end
 end
 
-function progress_recorder(sim)
-    return sim.storage.recorder
-end
-
 function apply_nonlinear_strategy!(sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
     report = step_reports[end]
     w0 = relaxation
     relaxation = select_nonlinear_relaxation(sim, cfg[:relaxation], step_reports, relaxation)
-    if cfg[:info_level] > 1 && relaxation != w0
-        jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :yellow)
+    if cfg[:info_level] > 2 && relaxation != w0
+        jutul_message("Relaxation", "Changed from $w0 to $relaxation at iteration $it.", color = :green)
     end
     failure = false
     max_res = cfg[:max_residual]
@@ -740,4 +790,12 @@ function check_for_inner_exception(dt, s)
             throw(last_step[:failure_exception])
         end
     end
+end
+
+function prepare_step!(storage, model, dt, forces, config, ::Missing;
+        executor = DefaultExecutor(),
+        iteration = 0,
+        relaxation = 1.0
+    )
+    return (nothing, forces)
 end

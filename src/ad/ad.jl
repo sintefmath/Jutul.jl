@@ -29,14 +29,16 @@ end
     @inbounds get_entries(c)[eqNo, index]
 end
 
+@inline Base.@propagate_inbounds get_entry_impl(x::ForwardDiff.Dual, derNo::Int) = x.partials[derNo]
+@inline Base.@propagate_inbounds get_entry_impl(x::Real, derNo::Int) = x
+
 @inline function get_entry(c::JutulAutoDiffCache, index, eqNo, derNo)
-    @inbounds get_entries(c)[eqNo, index].partials[derNo]
+    @inbounds get_entry_impl(get_entries(c)[eqNo, index], derNo)
 end
 
 @inline function get_entry_val(c::JutulAutoDiffCache, index, eqNo)
-    @inbounds get_entries(c)[eqNo, index].value
+    @inbounds value(get_entries(c)[eqNo, index])
 end
-
 
 include("compact.jl")
 include("generic.jl")

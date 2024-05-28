@@ -36,7 +36,6 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     process_start = typemax(Int)
     representative_model = missing
     simulators = map(partition_original_indices, ranks) do p, i
-        # @info "$i" p
         n_self = counts[i]
         n_owned += n_self
         process_start = min(process_start, process_offset(i, counts))
@@ -71,6 +70,7 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
     data[:distributed_solution_buffer] = pzeros(dof_partition)
     data[:model] = representative_model
     data[:main_label] = main_label
+    psim = PArraySimulator(backend, data)
     if primary_buffer
         main_model, = get_main_model(representative_model, main_label)
         pvar_def = (; pairs(main_model.primary_variables)...)
@@ -87,8 +87,13 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         pvar_buf = pzeros(T_primary, partition)
         data[:distributed_primary_variables] = pvar_buf
         data[:distributed_primary_variables_def] = pvar_def
+        psync = (; kwarg...) -> parray_synchronize_primary_variables(psim; kwarg...)
+        map(simulators) do sim
+            sim.executor.data[:distributed_primary_variables_sync_function] = psync
+        end
+        data[:distributed_primary_variables_sync_function] = psync
     end
-    return PArraySimulator(backend, data)
+    return psim
 end
 
 function Jutul.simulator_executor(sim::PArraySimulator)

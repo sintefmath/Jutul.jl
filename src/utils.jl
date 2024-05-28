@@ -87,7 +87,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
     if info_level == 1
         return
     end
-    id = haskey(cfg, :id) ? "$(cfg[:id]): " : ""
+    id = cfg[:id]
     fmt = cfg[:table_formatter]
     count_crit = 0
     count_ok = 0
@@ -698,6 +698,10 @@ function report_timesteps(reports; ministeps = false, extra_out = false)
             dt[i] = t_loc
             step_no[i] = i
         end
+        if n > 1 && !reports[end][:ministeps][end][:success]
+            dt = resize!(dt, n-1)
+            step_no = resize!(step_no, n-1)
+        end
     end
     if extra_out
         return (dt = dt, step = step_no)
@@ -708,6 +712,47 @@ end
 
 report_times(reports; ministeps = false) = cumsum(report_timesteps(reports, ministeps = ministeps, extra_out = false))
 
+"""
+    substates, dt, report_index = expand_to_ministeps(result::SimResult)
+
+Get states and timesteps at the finest stored resolution. Output lengths depend
+on if `output_substates` option to simulator was enabled.
+"""
+function expand_to_ministeps(result::SimResult)
+    return expand_to_ministeps(result.states, result.reports)
+end
+
+"""
+    substates, dt, report_index = expand_to_ministeps(states, reports)
+
+Get states and timesteps at the finest stored resolution. Output lengths depend
+on if `output_substates` option to simulator was enabled.
+"""
+function expand_to_ministeps(states, reports)
+    has_ministeps = length(states) > 0 && haskey(first(states), :substates)
+    report_t = report_times(reports, ministeps = has_ministeps)
+    pushfirst!(report_t, 0.0)
+    dt = diff(report_t)
+    if has_ministeps
+        ministates = JUTUL_OUTPUT_TYPE[]
+        report_step_index = Int[]
+        for (i, state) in enumerate(states)
+            for ministate in state[:substates]
+                push!(ministates, ministate)
+                push!(report_step_index, i)
+            end
+            state = copy(state)
+            delete!(state, :substates)
+            push!(ministates, state)
+            push!(report_step_index, i)
+        end
+    else
+        ministates = states
+        report_step_index = collect(eachindex(states))
+    end
+    @assert length(ministates) == length(dt)
+    return (ministates, dt, report_step_index)
+end
 
 function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where T
     # Create array of arrays where each entry contains the faces of that cell
@@ -1017,4 +1062,98 @@ function print_step_report_convergence_matrix!(io, step_reports, groups = missin
     else
         pretty_table(io, mat; karg...)
     end
+end
+
+"""
+    write_reports_to_mat_format(reports::Vector, path = jutul_output_path(); name = "report", config = missing, verbose = false)
+
+Write the reports to MAT files named "report_1", "report_2", ... to the given path.
+"""
+function write_reports_to_mat_format(reports::Vector, path::String = jutul_output_path();
+        name = "report",
+        config = missing,
+        verbose = false
+    )
+    mkpath(path)
+    for (i, rep) in enumerate(reports)
+        fname = "$(name)_$i"
+        fpath = joinpath(path, fname)
+        if verbose
+            jutul_message("IO", "Writing report $i/$(length(reports))")
+        end
+        pth_i = write_report_to_mat_format(fpath, rep, config = config)
+        if verbose
+            jutul_message("IO", "Report written to $pth_i.")
+        end
+    end
+    return path
+end
+
+function write_report_to_mat_format(pth, report; config = missing)
+    basepath, ext = splitext(pth)
+    if ext == ""
+        basepath = "$basepath.mat"
+    else
+        @assert lowercase(ext) == ".mat" "File path must end with nothing or .mat, was $ext"
+    end
+    out = get_mat_writable_file_from_report(report)
+    Jutul.MAT.matopen(basepath, "w") do file
+        write(file, "reports", out)
+    end
+    return basepath
+end
+
+function get_mat_writable_file_from_report(report; config = missing)
+    sdict = Dict{String, Any}
+    out = []
+    for ministep in report[:ministeps]
+        out_step = sdict()
+        out_step["success"] = ministep[:success]
+        out_step["dt"] = ministep[:dt]
+        out_step["steps"] = []
+        for step in ministep[:steps]
+            next = sdict()
+            errors = sdict()
+            for (k, evals) in pairs(step[:errors])
+                mat_errors = Float64[]
+                mat_names = String[]
+                mat_tolerances = Float64[]
+                for equation_vals in evals
+                    for (cname, crit) in pairs(equation_vals.criterions)
+                        for (name, e) in zip(crit.names, crit.errors)
+                            if ismissing(config)
+                                tol = 1e-3
+                            else
+                                model_tol = config[:tolerances][k]
+                                if haskey(model_tol, equation_vals.name)
+                                    tol = model_tol[equation_vals.name][cname]
+                                else
+                                    tol = model_tol[:default]
+                                end
+                            end
+                            push!(mat_errors, e)
+                            push!(mat_names, "$(cname)_$name")
+                            push!(mat_tolerances, tol)
+                        end
+                    end
+                end
+                errors["$k"] = Dict("names" => mat_names, "errors" => mat_errors, "tolerances" => mat_tolerances)
+            end
+            next["errors"] = errors
+            if haskey(step, :update)
+                update = sdict()
+                for (k, v) in step[:update]
+                    next_update = sdict()
+                    for (ki, vi) in v
+                        next_update["$ki"] = Dict(Pair.(String.(keys(vi)), values(vi)))
+                    end
+                    update["$k"] = next_update
+                end
+                next["update"] = update
+            end
+            push!(out_step["steps"], next)
+        end
+        push!(out, out_step)
+    end
+    return out
 end

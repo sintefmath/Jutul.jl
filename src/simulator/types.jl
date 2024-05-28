@@ -47,6 +47,25 @@ function get_simulator_storage(sim)
     return sim.storage
 end
 
+function get_prepare_step_handler(sim::JutulSimulator)
+    storage = get_simulator_storage(sim)
+    return get_prepare_step_handler(storage)
+end
+
+function get_prepare_step_handler(storage)
+    if haskey(storage, :prepare_step_handler)
+        handler, hstorage = storage.prepare_step_handler
+    else
+        handler = missing
+        hstorage = missing
+    end
+    return (handler = handler, storage = hstorage)
+end
+
+function progress_recorder(sim)
+    return sim.storage.recorder
+end
+
 struct SimResult
     states::AbstractVector
     reports::AbstractVector

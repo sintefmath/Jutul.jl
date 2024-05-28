@@ -178,7 +178,7 @@ function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing
         entities = ad_entities(substate)
         for (k, v) in entities
             # Create a outer state where everything is value except current focus
-            outer_state = Dict{Symbol, Any}()
+            outer_state = JutulStorage()
             for (statek, statev) in pairs(state)
                 outer_state[statek] = as_value(statev)
             end

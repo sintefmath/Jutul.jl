@@ -183,8 +183,9 @@ end
 Get only the entities where primary variables are present, sorted by their order in the primary variables.
 """
 function get_primary_variable_ordered_entities(model::SimulationModel)
-    out = []
+    out = JutulEntity[]
     current_entity = nothing
+    found = Dict{JutulEntity, Bool}()
     for p in values(model.primary_variables)
         u = associated_entity(p)
         if u != current_entity
@@ -192,6 +193,8 @@ function get_primary_variable_ordered_entities(model::SimulationModel)
             # each other. This is currently asserted in the model constructor.
             push!(out, u)
             current_entity = u
+            !haskey(found, u) || throw(ArgumentError("Primary variables are not sorted by entity ($u repeats)."))
+            found[u] = true
         end
     end
     return out
@@ -460,9 +463,26 @@ function setup_storage_model(storage, model)
     # Reference the variable definitions used for the model.
     # These are immutable, unlike the model definitions.
     vars = JutulStorage()
-    vars[:primary_variables] = NamedTuple(pairs(model.primary_variables))
-    vars[:secondary_variables] = NamedTuple(pairs(model.secondary_variables))
-    vars[:parameters] = NamedTuple(pairs(model.parameters))
+    primary = get_primary_variables(model)
+    secondary = get_secondary_variables(model)
+    parameters = get_parameters(model)
+    extra_keys = Symbol[]
+    for k in keys(storage.state)
+        if k in keys(primary)
+            continue
+        end
+        if k in keys(secondary)
+            continue
+        end
+        if k in keys(parameters)
+            continue
+        end
+        push!(extra_keys, k)
+    end
+    vars[:primary_variables] = NamedTuple(pairs(primary))
+    vars[:secondary_variables] = NamedTuple(pairs(secondary))
+    vars[:parameters] = NamedTuple(pairs(parameters))
+    vars[:extra_variable_fields] = extra_keys
     storage[:variable_definitions] = vars
     # Allow for dispatch specific to model's constitutive parts.
     setup_storage_domain!(storage, model, model.domain)
@@ -537,8 +557,8 @@ end
 function get_sparse_arguments(storage, model, row_layout::ScalarLayout, col_layout::ScalarLayout)
     ndof = number_of_degrees_of_freedom(model)
     eq_storage = storage[:equations]
-    I = []
-    J = []
+    I = Vector{Int}[]
+    J = Vector{Int}[]
     numrows = 0
     primary_entities = get_primary_variable_ordered_entities(model)
     for eqname in keys(model.equations)
@@ -553,7 +573,7 @@ function get_sparse_arguments(storage, model, row_layout::ScalarLayout, col_layo
             end
             numcols += number_of_degrees_of_freedom(model, u)
         end
-        @assert numcols == ndof
+        @assert numcols == ndof "Mismatch in number of columns ($numcols) and number degrees of freedom ($ndof) for equation $eqname"
         # Number of equations correspond to number of rows
         numrows += number_of_equations(model, eq)
     end
@@ -654,11 +674,11 @@ Perform updates of everything that depends on the state: A full linearization fo
 
 This includes properties, governing equations and the linearized system itself.
 """
-function update_state_dependents!(storage, model::JutulModel, dt, forces; time = NaN, update_secondary = true)
+function update_state_dependents!(storage, model::JutulModel, dt, forces; time = NaN, update_secondary = true, kwarg...)
     t_s = @elapsed if update_secondary
-        @tic "secondary variables" update_secondary_variables!(storage, model)
+        @tic "secondary variables" update_secondary_variables!(storage, model; kwarg...)
     end
-    t_eq = @elapsed update_equations_and_apply_forces!(storage, model, dt, forces; time = time)
+    t_eq = @elapsed update_equations_and_apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     return (secondary = t_s, equations = t_eq)
 end
 
@@ -667,10 +687,10 @@ end
 
 Update the model equations and apply boundary conditions and forces. Does not fill linearized system.
 """
-function update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN)
-    @tic "equations" update_equations!(storage, model, dt)
-    @tic "forces" apply_forces!(storage, model, dt, forces; time = time)
-    @tic "boundary conditions" apply_boundary_conditions!(storage, model)
+function update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN, kwarg...)
+    @tic "equations" update_equations!(storage, model, dt; kwarg...)
+    @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
+    @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
 end
 
 function apply_boundary_conditions!(storage, model::JutulModel)
@@ -760,10 +780,21 @@ function check_convergence(storage, model, config; kwarg...)
     eqs_views = storage.views.equations
     eqs = model.equations
     eqs_s = storage.equations
-    check_convergence(eqs_views, eqs, eqs_s, storage, model, config[:tolerances]; kwarg...)
+    if config isa JutulConfig
+        cfg_tol = config[:tolerances]
+    else
+        cfg_tol = config
+    end
+    check_convergence(eqs_views, eqs, eqs_s, storage, model, cfg_tol; kwarg...)
 end
 
-function check_convergence(eqs_views, eqs, eqs_s, storage, model, tol_cfg; iteration = nothing, extra_out = false, tol = nothing, tol_factor = 1.0, offset = 0, kwarg...)
+function check_convergence(eqs_views, eqs, eqs_s, storage, model, tol_cfg;
+        iteration = nothing,
+        extra_out = false,
+        tol = nothing,
+        tol_factor = 1.0,
+        kwarg...
+    )
     converged = true
     e = 0
     if isnothing(tol)
@@ -771,7 +802,6 @@ function check_convergence(eqs_views, eqs, eqs_s, storage, model, tol_cfg; itera
     end
     output = []
 
-    block_offset = 0
     for key in keys(eqs)
         eq = eqs[key]
         eq_s = eqs_s[key]
@@ -796,9 +826,10 @@ function check_convergence(eqs_views, eqs, eqs_s, storage, model, tol_cfg; itera
             if minimum(errors) < -10*eps(Float64)
                 @warn "Negative residuals detected for $key: $e_k. Programming error?" errors
             end
-            e = max(e, maximum(errors)/t_e)
+            max_error = maximum(errors)
+            e = max(e, max_error/t_e)
             t_actual = t_e*tol_factor
-            converged = converged && all(e -> e < t_actual, errors)
+            converged = converged && max_error < t_actual
             tols[e_k] = t_actual
         end
         if extra_out
@@ -856,13 +887,14 @@ end
 
 function update_primary_variables!(storage, model::JutulModel; kwarg...)
     dx = storage.views.primary_variables
-    update_primary_variables!(storage.primary_variables, dx, model; state = storage.state, kwarg...)
+    primary_defs = storage.variable_definitions.primary_variables
+    primary = storage.primary_variables
+    update_primary_variables!(primary, dx, model, primary_defs; state = storage.state, kwarg...)
 end
 
-function update_primary_variables!(primary_storage, dx, model::JutulModel; relaxation = 1, check = false, state = missing)
-    primary = get_primary_variables(model)
+function update_primary_variables!(primary_storage, dx, model::JutulModel, primary = get_primary_variables(model); relaxation = 1.0, check = false, state = missing)
     report = Dict{Symbol, Any}()
-    for (pkey, p) in primary
+    for (pkey, p) in pairs(primary)
         dxi = dx[pkey]
         if check
             ok = check_increment(dxi, p, pkey)
@@ -919,13 +951,15 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     update_after_step!(storage, model.formulation, model, dt, forces; kwarg...)
 
     # Synchronize previous state with new state
-    for key in keys(get_primary_variables(model))
+    for key in keys(pvar)
         update_values!(state0[key], state[key])
     end
-    for key in keys(get_secondary_variables(model))
+    for key in keys(svar)
         update_values!(state0[key], state[key])
     end
-    
+    for key in defs.extra_variable_fields
+        update_values!(state0[key], state[key])
+    end
     return report
 end
 

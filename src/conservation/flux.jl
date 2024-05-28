@@ -76,7 +76,6 @@ function local_discretization(eq::ConservationLaw{S, D, FT, N}, i) where {S, D<:
 end
 
 function get_connection(face, cell, N, inc_face_sign)
-    D = Dict()
     if N[1, face] == cell
         s = 1
         other = N[2, face]
@@ -84,14 +83,12 @@ function get_connection(face, cell, N, inc_face_sign)
         s = -1
         other = N[1, face]
     end
-    D[:self] = cell
-    D[:other] = other
-    D[:face] = face
     if inc_face_sign
-        D[:face_sign] = s
+        out = (self = cell, other = other, face = face, face_sign = s)
+    else
+        out = (self = cell, other = other, face = face)
     end
-
-    return convert_to_immutable_storage(D)
+    return out
 end
 
 function remap_connection(conn::T, self::I, other::I, face::I) where {T, I<:Integer}
@@ -122,7 +119,7 @@ function TwoPointPotentialFlowHardCoded(grid::JutulMesh)
     return TwoPointPotentialFlowHardCoded(N, number_of_cells(grid))
 end
 
-function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N))
+function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N, init = 1))
     if size(N, 2) > 0
         faces, face_pos = get_facepos(N, nc)
         nhf = length(faces)
@@ -136,7 +133,6 @@ function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N))
             end
         end
     else
-        nc = number_of_cells(grid)
         conn_data = []
         face_pos = ones(Int64, nc+1)
     end

@@ -559,32 +559,34 @@ function initialize_storage!(storage, model::MultiModel; kwarg...)
     end
 end
 
-function update_equations!(storage, model::MultiModel, dt)
-    @tic "model equations" for k in submodel_symbols(model)
+function update_equations!(storage, model::MultiModel, dt; targets = submodel_symbols(model))
+    @tic "model equations" for k in targets
         update_equations!(storage[k], model[k], dt)
     end
 end
 
-function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN)
+function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, kwarg...)
     # First update all equations
-    @tic "equations" update_equations!(storage, model, dt)
+    @tic "equations" update_equations!(storage, model, dt; kwarg...)
     # Then update the cross terms
-    @tic "crossterm update" update_cross_terms!(storage, model, dt)
+    @tic "crossterm update" update_cross_terms!(storage, model, dt; kwarg...)
     # Apply forces
-    @tic "forces" apply_forces!(storage, model, dt, forces; time = time)
+    @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     # Boundary conditions
-    @tic "boundary conditions" apply_boundary_conditions!(storage, model)
+    @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
     # Apply forces to cross-terms
-    @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time)
+    @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
 end
 
-function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = targets)
+function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = submodel_symbols(model))
     models = model.models
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
         target = ctp.target::Symbol
         source = ctp.source::Symbol
-        if target in targets && source in sources
-            ct = ctp.cross_term
+        ct = ctp.cross_term
+        is_match = target in targets && source in sources
+        is_match = is_match || (has_symmetry(ct) && (target in sources && source in targets))
+        if is_match
             model_t = models[target]
             eq = ct_equation(model_t, ctp.target_equation)
             ct_bare_type = Base.typename(typeof(ct)).name
@@ -681,7 +683,7 @@ end
 function update_linearized_system!(storage, model::MultiModel, executor = default_executor();
         equation_offset = 0,
         targets = submodel_symbols(model),
-        sources = targets,
+        sources = submodel_symbols(model),
         kwarg...)
     @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
     # Update diagonal blocks (model with respect to itself)
@@ -798,44 +800,44 @@ function setup_forces(model::MultiModel; kwarg...)
     for k in submodels_symbols(model)
         forces[k] = setup_forces(models[k])
     end
-    for (k, v) in kwarg
+    for (k, v) in pairs(kwarg)
         @assert haskey(models, k) "$k not found in models" keys(model.models)
         forces[k] = v
     end
     return forces
 end
 
-function update_secondary_variables!(storage, model::MultiModel, is_state0::Bool)
-    for key in submodels_symbols(model)
+function update_secondary_variables!(storage, model::MultiModel, is_state0::Bool; targets = submodels_symbols(model))
+    for key in targets
         update_secondary_variables!(storage[key], model.models[key], is_state0)
     end
 end
 
-function update_secondary_variables!(storage, model::MultiModel)
-    for key in submodels_symbols(model)
+function update_secondary_variables!(storage, model::MultiModel; targets = submodels_symbols(model))
+    for key in targets
         update_secondary_variables!(storage[key], model.models[key])
     end
 end
 
-function update_secondary_variables_state!(state, model::MultiModel)
-    for key in submodels_symbols(model)
+function update_secondary_variables_state!(state, model::MultiModel; targets = submodels_symbols(model))
+    for key in targets
         update_secondary_variables_state!(state[key], model[key])
     end
 end
 
-function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra_out = false, update_report = missing, kwarg...)
+function check_convergence(storage, model::MultiModel, cfg;
+        tol = nothing,
+        extra_out = false,
+        update_report = missing,
+        targets = submodels_symbols(model),
+        kwarg...
+    )
     converged = true
     err = 0
-    offset = 0
     lsys = storage.LinearizedSystem
     tol_cfg = cfg[:tolerances]
     errors = OrderedDict()
-    for (i, key) in enumerate(submodels_symbols(model))
-        if has_groups(model) && i > 1
-            if model.groups[i] != model.groups[i-1]
-                offset = 0
-            end
-        end
+    for key in targets
         if ismissing(update_report)
             inc = missing
         else
@@ -847,7 +849,6 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
         eqs_s = s.equations
         eqs_view = s.views.equations
         conv, e, errors[key], = check_convergence(eqs_view, eqs, eqs_s, s, m, tol_cfg[key];
-            offset = offset,
             extra_out = true,
             update_report = inc,
             tol = tol,
@@ -856,7 +857,6 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
         # Outer model has converged when all submodels are converged
         converged = converged && conv
         err = max(e, err)
-        offset += number_of_degrees_of_freedom(m) ÷ model_block_size(m)
     end
 
     if converged
@@ -872,15 +872,15 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
     end
 end
 
-function update_primary_variables!(storage, model::MultiModel; kwarg...)
+function update_primary_variables!(storage, model::MultiModel; targets = submodel_symbols(model), kwarg...)
     models = model.models
-    model_keys = submodel_symbols(model)
     report = Dict{Symbol, AbstractDict}()
-    for (i, key) in enumerate(model_keys)
+    for key in targets
         m = models[key]
         s = storage[key]
         dx_v = s.views.primary_variables
-        report[key] = update_primary_variables!(s.state, dx_v, m; state = s.state, kwarg...)
+        pdef = s.variable_definitions.primary_variables
+        report[key] = update_primary_variables!(s.state, dx_v, m, pdef; state = s.state, kwarg...)
     end
     return report
 end
@@ -971,4 +971,11 @@ function reset_variables!(storage, model::MultiModel, state; kwarg...)
     for (k, m) in pairs(model.models)
         reset_variables!(storage[k], m, state[k]; kwarg...)
     end
+end
+
+function sort_variables!(model::MultiModel, t = :primary)
+    for (k, m) in pairs(model.models)
+        sort_variables!(m, t)
+    end
+    return model
 end

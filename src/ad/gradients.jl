@@ -1,9 +1,12 @@
 export state_gradient, solve_adjoint_sensitivities, solve_adjoint_sensitivities!, setup_adjoint_storage
 
 """
-    solve_adjoint_sensitivities(model, states, reports, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, kwarg...)
+    solve_adjoint_sensitivities(model, states, reports_or_timesteps, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, kwarg...)
 
 Compute sensitivities of `model` parameter with name `target` for objective function `G`.
+
+The objective function is at the moment assumed to be a sum over all states on the form:
+`obj = Σₙ G(model, state, dt_n, n, forces_for_step_n)`
 
 Solves the adjoint equations: For model equations F the gradient with respect to parameters p is
     ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ where n ∈ [1, N].
@@ -11,31 +14,54 @@ Given Lagrange multipliers λₙ from the adjoint equations
     (∂Fₙ / ∂xₙ)ᵀ λₙ = - (∂J / ∂xₙ)ᵀ - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
 where the last term is omitted for step n = N and G is the objective function.
 """
-function solve_adjoint_sensitivities(model, states, reports, G; 
-                                        n_objective = nothing,
-                                        extra_timing = false,
-                                        state0 = setup_state(model),
-                                        forces = setup_forces(model),
-                                        raw_output = false,
-                                        extra_output = false, kwarg...)
+function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
+        n_objective = nothing,
+        extra_timing = false,
+        state0 = setup_state(model),
+        forces = setup_forces(model),
+        raw_output = false,
+        extra_output = false,
+        info_level = 0,
+        kwarg...
+    )
     # One simulator object for the equations with respect to primary (at previous time-step)
     # One simulator object for the equations with respect to parameters
     set_global_timer!(extra_timing)
     # Allocation part
-    storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, kwarg...)
+    if info_level > 1
+        jutul_message("Adjoints", "Setting up storage...", color = :blue)
+    end
+    t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
+    if info_level > 1
+        jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
+    end
     parameter_model = storage.parameter.model
     n_param = number_of_degrees_of_freedom(parameter_model)
     ∇G = gradient_vec_or_mat(n_param, n_objective)
     # Timesteps
-    timesteps = report_timesteps(reports)
     N = length(states)
-    @assert length(reports) == N == length(timesteps)
+    if eltype(reports_or_timesteps)<:Real
+        timesteps = reports_or_timesteps
+    else
+        @assert length(reports_or_timesteps) == N
+        timesteps = report_timesteps(reports_or_timesteps)
+    end
+    @assert length(timesteps) == N "Recieved $(length(timesteps)) timesteps and $N states. These should match."
     # Solve!
-    solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces)
+    if info_level > 1
+        jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
+    end
+    t_solve = @elapsed solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces, info_level = info_level)
+    if info_level > 1
+        jutul_message("Adjoints", "Adjoints solved in $(get_tstr(t_solve)).", color = :blue)
+    end
     print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
     if raw_output
         out = ∇G
     else
+        if info_level > 1
+            jutul_message("Adjoints", "Storing sensitivities.", color = :blue)
+        end
         out = store_sensitivities(parameter_model, ∇G, storage.parameter_map)
     end
     if extra_output
@@ -45,25 +71,51 @@ function solve_adjoint_sensitivities(model, states, reports, G;
     end
 end
 
+function solve_adjoint_sensitivities(case::JutulCase, states::Vector, G; dt = case.dt, kwarg...)
+    return solve_adjoint_sensitivities(
+        case.model, states, dt, G;
+        state0 = case.state0,
+        parameters = case.parameters,
+        kwarg...
+    )
+end
+
+
+function solve_adjoint_sensitivities(case::JutulCase, some_kind_of_result, G; kwarg...)
+    if hasproperty(some_kind_of_result, :result)
+        simresult = some_kind_of_result.result
+    else
+        simresult = some_kind_of_result
+    end
+    simresult::SimResult
+    states, dt = expand_to_ministeps(simresult)
+    return solve_adjoint_sensitivities(case, states, G; dt = dt, kwarg...)
+end
+
+
 """
     setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model))
 
 Set up storage for use with `solve_adjoint_sensitivities!`.
 """
-function setup_adjoint_storage(model; state0 = setup_state(model),
-                                      parameters = setup_parameters(model),
-                                      n_objective = nothing,
-                                      targets = parameter_targets(model),
-                                      use_sparsity = true,
-                                      linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-8),
-                                      param_obj = true,
-                                      kwarg...)
+function setup_adjoint_storage(model;
+        state0 = setup_state(model),
+        parameters = setup_parameters(model),
+        n_objective = nothing,
+        targets = parameter_targets(model),
+        use_sparsity = true,
+        linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-6),
+        param_obj = true,
+        info_level = 0,
+        kwarg...
+    )
     # Set up the generic adjoint storage
-    storage =  setup_adjoint_storage_base(
+    storage = setup_adjoint_storage_base(
             model, state0, parameters,
             use_sparsity = use_sparsity,
             linear_solver = linear_solver,
-            n_objective = n_objective
+            n_objective = n_objective,
+            info_level = info_level
         )
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model, targets)
@@ -93,7 +145,8 @@ end
 function setup_adjoint_storage_base(model, state0, parameters;
         use_sparsity = true,
         linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-8),
-        n_objective = nothing
+        n_objective = nothing,
+        info_level = 0
         )
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
@@ -128,7 +181,6 @@ function setup_adjoint_storage_base(model, state0, parameters;
     elseif rhs_transfer_needed
         rhs = zeros(n_var)
     end
-
     storage = JutulStorage()
     storage[:forward] = forward_sim
     storage[:backward] = backward_sim
@@ -138,9 +190,9 @@ function setup_adjoint_storage_base(model, state0, parameters;
     storage[:dx] = dx
     storage[:rhs] = rhs
     storage[:n_forward] = n_var
-    storage[:linear_solver] = linear_solver
     storage[:multiple_rhs] = multiple_rhs
     storage[:rhs_transfer_needed] = rhs_transfer_needed
+    storage[:forward_config] = simulator_config(forward_sim, linear_solver = linear_solver, info_level = info_level)
 
     return storage
 end
@@ -150,15 +202,22 @@ end
 
 Non-allocating version of `solve_adjoint_sensitivities`.
 """
-function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model))
+function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model), info_level = 0)
     N = length(timesteps)
     @assert N == length(states)
     # Do sparsity detection if not already done.
+    if info_level > 1
+        jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
+    end
+
     update_objective_sparsity!(storage, G, states, timesteps, forces, :forward)
     update_objective_sparsity!(storage, G, states, timesteps, forces, :parameter)
     # Set gradient to zero before solve starts
     @. ∇G = 0
     @tic "sensitivities" for i in N:-1:1
+        if info_level > 0
+            jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
+        end
         s, s0, s_next = state_pair_adjoint_solve(state0, states, i, N)
         update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
     end
@@ -172,7 +231,9 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
 end
 
 function state_pair_adjoint_solve(state0, states, i, N)
-    fn = deepcopy
+    # TODO: Is this required?
+    # fn = deepcopy
+    fn = x -> x
     if i == 1
         s0 = fn(state0)
     else
@@ -320,6 +381,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         reset!(progress_recorder(s), step = i, time = sum(t))
     end
     λ, t, dt, forces = next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces)
+    @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
     parameter_sim = adjoint_storage.parameter
@@ -333,7 +395,8 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
             @. dparam = 0
         end
         pbuf = adjoint_storage.param_buf
-        state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, i, forces))
+        S_p = get_objective_sparsity(adjoint_storage, :parameter)
+        state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, i, forces), sparsity = S_p)
         @. dparam += pbuf
     end
 end
@@ -344,6 +407,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     forward_sim = adjoint_storage.forward
     λ = adjoint_storage.lagrange
     λ_b = adjoint_storage.lagrange_buffer
+    config = adjoint_storage.forward_config
     # Timestep logic
     N = length(timesteps)
     forces = forces_for_timestep(forward_sim, all_forces, timesteps, i)
@@ -351,6 +415,22 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     # Assemble Jacobian w.r.t. current step
     t = sum(timesteps[1:i-1])
     @tic "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces, t)
+    il = config[:info_level]
+    converged, e, errors = check_convergence(
+        forward_sim.storage,
+        forward_sim.model,
+        config,
+        iteration = 1,
+        dt = dt,
+        extra_out = true
+    )
+    if !converged && il > 0
+        jutul_message("Warning", "Simulation was not converged to default tolerances for step $i in adjoint solve", color = :yellow)
+        if il > 1.5
+            get_convergence_table(errors, il, 1, config)
+        end
+    end
+
     # Note the sign: There is an implicit negative sign in the linear solver when solving for the Newton increment. Therefore, the terms of the
     # right hand side are added with a positive sign instead of negative.
     rhs = adjoint_storage.rhs
@@ -373,7 +453,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
         sens_add_mult!(rhs, op, λ_b)
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
-    lsolve = adjoint_storage.linear_solver
+    lsolve = adjoint_storage.forward_config[:linear_solver]
     dx = adjoint_storage.dx
     if adjoint_storage.multiple_rhs
         lsolve_arg = (dx = dx, r = rhs)
@@ -407,11 +487,16 @@ function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     # Deal with state0 first
     reset_previous_state!(sim, state0)
     update_secondary_variables!(s, model, true)
+    # Make sure that state is that of the previous state TODO: This does an
+    # extra update of properties that could maybe be avoided, but is needed to
+    # make everything consistent with how the forward simulator works before
+    # update_before_step! is called.
+    reset_state_to_previous_state!(sim)
     # Apply logic as if timestep is starting
     update_before_step!(s, model, dt, forces, time = time, recorder = progress_recorder(sim))
     # Then the current primary variables
     reset_variables!(s, model, state)
-    update_state_dependents!(s, model, dt, forces, time = time)
+    update_state_dependents!(s, model, dt, forces, time = time, update_secondary = true)
     # Finally update the system
     update_linearized_system!(s, model)
 end
@@ -436,7 +521,10 @@ function swap_primary_with_parameters!(pmodel, model, targets = parameter_target
     return pmodel
 end
 
-parameter_targets(model::SimulationModel) = keys(get_parameters(model))
+function parameter_targets(model::SimulationModel)
+    prm = get_parameters(model)
+    return collect(keys(prm))
+end
 
 function adjoint_parameter_model(model, arg...; context = DefaultContext())
     # By default the adjoint model uses the default context since no linear solver
@@ -444,7 +532,7 @@ function adjoint_parameter_model(model, arg...; context = DefaultContext())
     pmodel = adjoint_model_copy(model; context = context)
     # Swap parameters and primary variables
     swap_primary_with_parameters!(pmodel, model, arg...)
-    return pmodel
+    return sort_variables!(pmodel, :all)
 end
 
 function adjoint_model_copy(model::SimulationModel{O, S, F, C}; context = model.context) where {O, S, C, F}

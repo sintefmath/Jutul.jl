@@ -98,6 +98,42 @@ function compress_partition(p::AbstractVector)
     return p_renum
 end
 
+function cartesian_partition_by_points(D::DataDomain, dim)
+    pts = D[:cell_centroids]
+    return cartesian_partition_by_points(pts, dim)
+end
+
+function cartesian_partition_by_points(pts, dim)
+    ndim, npts = size(pts)
+    if dim isa Int
+        dim = fill(dim, ndim)
+    end
+    length(dim) == ndim || throw(ArgumentError("Second argument must be one value or one per dimension (=number of rows in pts)"))
+    prow = zeros(Int, ndim, npts)
+    for d in 1:ndim
+        n = dim[d]
+        x = view(pts, d, :)
+        p_i = view(prow, d, :)
+        x0, x1 = extrema(x)
+        dx = (x1 - x0)/n
+        for (i, xi) in enumerate(x)
+            v = ceil((xi - x0)/dx)
+            p_i[i] = clamp(v, 1, n)
+        end
+    end
+    p = zeros(Int, npts)
+    for d in 1:ndim
+        p_i = view(prow, d, :)
+        offset = prod(dim[1:(d-1)])
+        p += p_i.*offset
+    end
+    p = compress_partition(p)
+    minp, maxp = extrema(p)
+    @assert minp >= 1
+    @assert maxp <= prod(dim)
+    return p
+end
+
 """
     partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2)); partitioner = MetisPartitioner(), groups = nothing, n = maximum(N), group_by_weights = false, buffer_group = true)
 

@@ -56,6 +56,9 @@ function plot_interactive_impl(grid, states;
         free_cam = false,
         new_window = true,
         edge_color = nothing,
+        step = 1,
+        row = 1,
+        key = missing,
         edge_arg = NamedTuple(),
         aspect = (1.0, 1.0, 1/3),
         colormap = :viridis,
@@ -176,8 +179,12 @@ function plot_interactive_impl(grid, states;
     end
     nstates = length(states)
 
-    initial_prop = datakeys[1]
-    state_index = Observable{Int64}(1)
+    if ismissing(key)
+        key = datakeys[1]
+    elseif key isa Symbol
+        key = "$key"
+    end
+    state_index = Observable{Int64}(step)
     function generate_title(base, ix)
         if length(base) == 0
             return "Step $(ix[])/$nstates"
@@ -186,12 +193,12 @@ function plot_interactive_impl(grid, states;
         end
     end
     fig_title = Observable{String}(generate_title(title, state_index))
-    row_index = Observable{Int64}(1)
-    prop_name = Observable{Any}(initial_prop)
+    row_index = Observable{Int64}(row)
+    prop_name = Observable{Any}(key)
     transform_name = Observable{String}(transform)
-    lims = Observable(limits[initial_prop])
-    menu = Menu(fig, options = datakeys, prompt = initial_prop)
-    menu_2 = Menu(fig, options = get_valid_rows("$initial_prop"), prompt = "1", width = 60)
+    lims = Observable(limits[key])
+    menu = Menu(fig, options = datakeys, prompt = key)
+    menu_2 = Menu(fig, options = get_valid_rows("$key"), prompt = "1", width = 60)
 
 
     function change_index(ix; update_slider = true)
@@ -267,7 +274,7 @@ function plot_interactive_impl(grid, states;
     # Menu for field to plot
     on(menu.selection) do s
         rows = get_valid_rows(s)
-        msel =  menu_2.selection[]
+        msel = menu_2.selection[]
         if isnothing(msel)
             old = 1
         else
