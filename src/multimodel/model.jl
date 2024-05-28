@@ -860,8 +860,8 @@ function check_convergence(storage, model::MultiModel, cfg; tol = nothing, extra
     end
 
     if converged
-        if haskey(tol_cfg, :global_check) && !isnothing(tol_cfg[:global_check])
-            converged = tol_cfg[:global_check](model, storage)
+        if haskey(tol_cfg, :global_convergence_check_function) && !isnothing(tol_cfg[:global_convergence_check_function])
+            converged = tol_cfg[:global_convergence_check_function](model, storage)
         end
     end
         
