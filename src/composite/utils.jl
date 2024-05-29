@@ -66,6 +66,10 @@ function number_of_degrees_of_freedom(model::CompositeModel, u::Pair{Symbol, V})
     number_of_degrees_of_freedom(composite_submodel(model, u[1]), u[2])
 end
 
+function number_of_parameters(model::CompositeModel, u::Pair{Symbol, V}) where V<:JutulVariables
+    number_of_parameters(composite_submodel(model, u[1]), u[2])
+end
+
 function initialize_primary_variable_ad!(stateAD, model, pvar::Pair{Symbol, V}, pkey, n_partials; kwarg...) where V<:JutulVariables
     m = composite_submodel(model, pvar[1])
     return initialize_primary_variable_ad!(stateAD, m, pvar[2], pkey, n_partials; kwarg...)

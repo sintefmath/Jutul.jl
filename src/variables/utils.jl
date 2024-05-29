@@ -22,6 +22,14 @@ function number_of_degrees_of_freedom(model::JutulModel)
     return ndof
 end
 
+function number_of_parameters(model::JutulModel)
+    ndof = 0
+    for (pkey, pvar) in get_parameters(model)
+        ndof += number_of_degrees_of_freedom(model, pvar)
+    end
+    return ndof
+end
+
 export number_of_values
 """
 Total number of values for a model, for a given type of variables over all entities
