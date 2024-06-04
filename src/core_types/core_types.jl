@@ -346,7 +346,11 @@ function Base.getindex(model::SimulationModel, s::Symbol)
 end
 
 function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
-    println(io, "SimulationModel:")
+    println(io, "SimulationModel:\n")
+    ne = number_of_equations(model)
+    np = number_of_degrees_of_freedom(model)
+    nprm = number_of_parameters(model)
+    print(io, "  Model with $np degrees of freedom, $ne equations and $nprm parameters\n\n")
     for f in fieldnames(typeof(model))
         p = getfield(model, f)
         print(io, "  $f:\n")

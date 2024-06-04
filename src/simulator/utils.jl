@@ -63,11 +63,17 @@ function Base.show(io::IO, t::MIME"text/plain", sim::T) where T<:JutulSimulator
     end
 end
 
-function overwrite_by_kwargs(cfg; kwarg...)
+function overwrite_by_kwargs(cfg; throw = true, kwarg...)
     # Overwrite with varargin
-    for key in keys(kwarg)
-        cfg[key] = kwarg[key]
+    unused = Dict{Symbol, Any}()
+    for (key, val) in pairs(kwarg)
+        if throw || haskey(cfg, key)
+            cfg[key] = val
+        else
+            unused[key] = val
+        end
     end
+    return unused
 end
 
 function Base.iterate(t::SimResult)
@@ -124,7 +130,11 @@ function print_sim_result_timing(io, sr::SimResult)
     if length(sr.reports) == 0
         t = 0.0
     else
-        t = sum(x -> x[:total_time], sr.reports)
+        if ismissing(sr.reports[1])
+            t = 0.0
+        else
+            t = sum(x -> x[:total_time], sr.reports)
+        end
     end
     print(io, "\n  Completed at $(Dates.format(sr.start_timestamp, fmt)) after $(get_tstr(t)).")
 end

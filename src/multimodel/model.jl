@@ -7,17 +7,16 @@ function Base.show(io::IO, t::MIME"text/plain", model::MultiModel)
     end
     ndof = number_of_degrees_of_freedom(model)
     neq = number_of_equations(model)
-    println(io, "MultiModel with $(length(submodels)) models and $(length(cross_terms)) cross-terms. $neq equations and $ndof degrees of freedom.")
+    nprm = number_of_parameters(model)
+    println(io, "MultiModel with $(length(submodels)) models and $(length(cross_terms)) cross-terms. $neq equations, $ndof degrees of freedom and $nprm parameters.")
     println(io , "\n  models:")
     for (i, key) in enumerate(keys(submodels))
         m = submodels[key]
         s = m.system
         ndofi = number_of_degrees_of_freedom(m)
         neqi = number_of_equations(m)
-    
         g = physical_representation(m.domain)
         println(io, "    $i) $key ($(neqi)x$ndofi)\n       $(s)\n       ∈ $g")
-
     end
     if length(cross_terms) > 0
         println(io , "\n  cross_terms:")
@@ -961,6 +960,10 @@ end
 
 function number_of_degrees_of_freedom(model::MultiModel)
     return sum(number_of_degrees_of_freedom, model.models)
+end
+
+function number_of_parameters(model::MultiModel)
+    return sum(number_of_parameters, model.models)
 end
 
 function number_of_equations(model::MultiModel)

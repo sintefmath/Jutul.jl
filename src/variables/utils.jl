@@ -22,6 +22,14 @@ function number_of_degrees_of_freedom(model::JutulModel)
     return ndof
 end
 
+function number_of_parameters(model::JutulModel)
+    ndof = 0
+    for (pkey, pvar) in get_parameters(model)
+        ndof += number_of_degrees_of_freedom(model, pvar)
+    end
+    return ndof
+end
+
 export number_of_values
 """
 Total number of values for a model, for a given type of variables over all entities
@@ -213,7 +221,6 @@ end
 function initialize_variable_value(model, pvar, val; perform_copy = true)
     nu = number_of_entities(model, pvar)
     nv = values_per_entity(model, pvar)
-    
     if isa(pvar, ScalarVariable)
         if val isa AbstractVector
             @assert length(val) == nu "Expected $nu entries, but got $(length(val)) for $(typeof(pvar))"
@@ -291,7 +298,7 @@ function initialize_variable_value(model, pvar::ScalarVariable, val::Number)
     return initialize_variable_value(model, pvar, V)
 end
 
-function initialize_parameter_value!(parameters, data_domain, model, param, symb, initializer::AbstractDict)
+function initialize_parameter_value!(parameters, data_domain, model, param, symb, initializer::AbstractDict; kwarg...)
     if haskey(initializer, symb)
         vals = initializer[symb]
         s = "provided"
@@ -299,10 +306,10 @@ function initialize_parameter_value!(parameters, data_domain, model, param, symb
         vals = default_parameter_values(data_domain, model, param, symb)
         s = "computed defaulted"
     end
-    if any(x -> !isfinite(x), vals)
+    if eltype(vals)<:AbstractFloat && any(x -> !isfinite(x), vals)
         @error "Non-finite entries in $s parameter $symb"
     end
-    return initialize_variable_value!(parameters, model, param, symb, vals)
+    return initialize_variable_value!(parameters, model, param, symb, vals; kwarg...)
 end
 
 function default_parameter_values(data_domain, model, param, symb)

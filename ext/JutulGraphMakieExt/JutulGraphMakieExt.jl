@@ -5,18 +5,41 @@ module JutulGraphMakieExt
 
     function Jutul.plot_variable_graph(model)
         graph, nodes, = build_variable_graph(model, to_graph = true)
-        colors = Vector{Symbol}()
+        c1 = Makie.ColorSchemes.tab10[1]
+        c2 = Makie.ColorSchemes.tab10[2]
+        c3 = Makie.ColorSchemes.tab10[3]
+
+        colors = Vector()
         for n in nodes
             if n in keys(model.primary_variables)
-                c = :red
+                c = c1
             elseif n in keys(model.secondary_variables)
-                c = :blue
+                c = c2
+            elseif n in keys(model.parameters)
+                c = c3
             else
                 c = :black
             end
             push!(colors, c)
         end
-        plot_jutul_graph(graph, nodes, colors)
+        fig, ax, plt = plot_jutul_graph(graph, nodes, colors)
+        ax.xminorticksvisible[] = false
+        hidespines!(ax)
+        hidedecorations!(ax)
+        marg = (marker = :circle, markersize = 20, strokewidth = 1)
+        Legend(fig[2, 1],
+            [
+                MarkerElement(color = c1; marg...),
+                MarkerElement(color = c2; marg...),
+                MarkerElement(color = c3; marg...)
+            ],
+            ["Primary variable", "Secondary variable", "Parameter"],
+            orientation = :horizontal
+        )
+        autolimits!(ax)
+        xmin, xmax = ax.xaxis.attributes.limits[]
+        xlims!(ax, xmin-3, xmax+2)
+        return fig
     end
 
     function plot_jutul_graph(graph, nodes, colors = [:black for _ in nodes]; kwarg...)
@@ -34,16 +57,23 @@ module JutulGraphMakieExt
             push!(alignments, al)
         end
         N = length(nodes)
-        graphplot(graph, layout=lay,
-                        waypoints=wp,
-                        nlabels_distance=10,
-                        nlabels_textsize=20,
-                        node_size = [20 for i in 1:N],
-                        edge_width= [3 for i in 1:ne(graph)],
-                        edge_color = :grey80,
-                        node_color = colors,
-                        nlabels_align= alignments,
-                        nlabels = map(String, nodes))
+        node_size = 20
+
+        return graphplot(graph,
+            axis = (xminorticksvisible = false,),
+            layout=lay,
+            waypoints=wp,
+            nlabels_distance=10,
+            nlabels_textsize=20,
+            arrow_size = 20,
+            node_size = [node_size for i in 1:N],
+            edge_width = [3 for i in 1:ne(graph)],
+            edge_color = :grey80,
+            node_color = colors,
+            node_strokewidth=1,
+            nlabels_align = alignments,
+            nlabels = map(String, nodes)
+        )
     end
 
     function Jutul.plot_model_graph(model; kwarg...)

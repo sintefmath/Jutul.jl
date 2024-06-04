@@ -88,7 +88,7 @@ function get_variable(model::SimulationModel, name::Symbol)
 end
 
 
-export set_primary_variables!, set_secondary_variables!, replace_variables!
+export set_primary_variables!, set_secondary_variables!, set_parameters!, replace_variables!
 """
     set_primary_variables!(model, varname = vardef)
     set_primary_variables!(model, varname1 = vardef1, varname2 = vardef2)
@@ -276,9 +276,9 @@ function initialize_extra_state_fields!(state, ::Any, model)
     # Do nothing
 end
 
-function setup_parameters!(prm, data_domain, model, initializer::AbstractDict = Dict())
+function setup_parameters!(prm, data_domain, model, initializer::AbstractDict = Dict(); kwarg...)
     for (psym, pvar) in get_parameters(model)
-        initialize_parameter_value!(prm, data_domain, model, pvar, psym, initializer)
+        initialize_parameter_value!(prm, data_domain, model, pvar, psym, initializer; kwarg...)
     end
     return prm
 end
@@ -294,12 +294,12 @@ A scalar (or short vector of the right size for [`VectorVariables`](@ref)) will 
 while a vector (or matrix for [`VectorVariables`](@ref)) with length (number of columns for [`VectorVariables`](@ref))
 equal to the entity count (for example, number of cells for a cell variable) will be used directly.
 """
-function setup_parameters(d::DataDomain, model::JutulModel; kwarg...)
+function setup_parameters(d::DataDomain, model::JutulModel; perform_copy = true, kwarg...)
     init = Dict{Symbol, Any}()
     for (k, v) in kwarg
         init[k] = v
     end
-    return setup_parameters(d, model, init)
+    return setup_parameters(d, model, init, perform_copy = perform_copy)
 end
 
 function setup_parameters(model::JutulModel, arg...; kwarg...)
@@ -312,9 +312,9 @@ function setup_parameters(model::SimulationModel, arg...; kwarg...)
     return setup_parameters(data_domain, model, arg...; kwarg...)
 end
 
-function setup_parameters(data_domain::DataDomain, model::JutulModel, init::AbstractDict)
+function setup_parameters(data_domain::DataDomain, model::JutulModel, init::AbstractDict; kwarg...)
     prm = Dict{Symbol, Any}()
-    return setup_parameters!(prm, data_domain, model, init)
+    return setup_parameters!(prm, data_domain, model, init; kwarg...)
 end
 
 """

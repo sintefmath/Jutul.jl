@@ -345,6 +345,9 @@ end
 function report_stats(reports)
     stats = initialize_report_stats(reports)
     for outer_rep in reports
+        if ismissing(outer_rep)
+            continue
+        end
         outer_step_report_stats!(stats, outer_rep)
     end
     update_other_time_report_stats!(stats)
@@ -719,7 +722,8 @@ Get states and timesteps at the finest stored resolution. Output lengths depend
 on if `output_substates` option to simulator was enabled.
 """
 function expand_to_ministeps(result::SimResult)
-    return expand_to_ministeps(result.states, result.reports)
+    states = result.states
+    return expand_to_ministeps(states, result.reports[eachindex(states)])
 end
 
 """

@@ -1,7 +1,7 @@
 name = "Jutul"
 uuid = "2b460a1a-8a2b-45b2-b125-b5c536396eb9"
 authors = ["Olav Møyner <olav.moyner@gmail.com>"]
-version = "0.2.31"
+version = "0.2.32"
 
 [deps]
 AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
@@ -38,6 +38,7 @@ TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 
 [weakdeps]
+AMGCLWrap = "4f76b812-4ba5-496d-b042-d70715554288"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
 HYPRE = "b5ffcf37-a2bd-41ab-a3da-4bd9bc8ad771"
@@ -50,15 +51,17 @@ NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 
 [extensions]
+JutulAMGCLWrapExt = "AMGCLWrap"
 JutulGLMakieExt = "GLMakie"
 JutulGraphMakieExt = ["GraphMakie", "NetworkLayout", "LayeredLayouts", "Makie"]
-JutulHypreExt = "HYPRE"
+JutulHYPREExt = "HYPRE"
 JutulKaHyParExt = "KaHyPar"
 JutulMakieExt = "Makie"
 JutulMeshesExt = ["Meshes"]
 JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
 
 [compat]
+AMGCLWrap = "=0.3.2"
 AlgebraicMultigrid = "0.5.1"
 Crayons = "4.1.1"
 DataStructures = "0.18.13"

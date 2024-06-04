@@ -58,11 +58,12 @@ function Jutul.plot_cell_data_impl(m, data;
     p = Jutul.plot_cell_data!(ax, m, data; kwarg...)
     min_data = minimum(data)
     max_data = maximum(data)
-    if !isnothing(colorbar) && min_data != max_data
+    if !isnothing(colorbar) && colorbar !=false && min_data != max_data
         # ticks = range(min_data, max_data, 10)
         if colorbar == :horizontal
             Colorbar(fig[2, 1], p, vertical = false)
         else
+            @assert colorbar == :vertical
             Colorbar(fig[1, 2], p, vertical = true)
         end
     end
