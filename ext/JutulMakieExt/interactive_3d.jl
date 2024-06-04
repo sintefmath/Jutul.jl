@@ -868,10 +868,14 @@ function Jutul.plot_multimodel_interactive_impl(model, states, model_keys = keys
     plot_interactive(total_number_of_cells, new_states, primitives = acc_primitives; kwarg...)
 end
 
-function Jutul.plotting_check_interactive()
+function Jutul.plotting_check_interactive(; warn = true)
     backend_name = "$(Makie.current_backend())"
     if backend_name != "GLMakie"
-        msg = "Currently active Makie backend $backend_name may not be interactive or fully supported.\nGLMakie is recommended for Jutul's interactive plots. To install:\n\tusing Pkg; Pkg.add(\"GLMakie\")\nTo use:\n\tusing GLMakie\n\tGLMakie.activate!()\nYou can then retry your plotting command."
-        @warn msg
+        if warn
+            msg = "Currently active Makie backend $backend_name may not be interactive or fully supported.\nGLMakie is recommended for Jutul's interactive plots. To install:\n\tusing Pkg; Pkg.add(\"GLMakie\")\nTo use:\n\tusing GLMakie\n\tGLMakie.activate!()\nYou can then retry your plotting command."
+            @warn msg
+        end
+        return false
     end
+    return true
 end
