@@ -300,7 +300,7 @@ end
 
 function initialize_parameter_value!(parameters, data_domain, model, param, symb, initializer::AbstractDict; kwarg...)
     if haskey(initializer, symb)
-        vals = initializer[symb]
+        vals = initialize_variable_value(model, param, initializer[symb])
         s = "provided"
     else
         vals = default_parameter_values(data_domain, model, param, symb)
