@@ -571,18 +571,19 @@ function print_timing(stats, io = stdout; title = "", table_formatter = tf_unico
         end
         return name
     end
+    @info "!" data
 
-
-    pretty_table(io, data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]), 
-                      row_labels = map(translate_for_table, flds),
-                      formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
-                      title = title,
-                      title_alignment = :c,
-                      tf = table_formatter,
-                      row_label_alignment = :l,
-                      alignment = [:r, :r, :r],
-                      body_hlines = [n-1],
-                      row_label_column_title = "Timing type")
+    pretty_table(io, data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]),
+        row_labels = map(translate_for_table, flds),
+        formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
+        title = title,
+        title_alignment = :c,
+        tf = table_formatter,
+        row_label_alignment = :l,
+        alignment = [:r, :r, :r],
+        body_hlines = [n-1],
+        row_label_column_title = "Timing type"
+    )
 end
 
 export read_results

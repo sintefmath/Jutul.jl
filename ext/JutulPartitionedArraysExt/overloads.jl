@@ -175,7 +175,8 @@ function Jutul.perform_step!(
         Jutul.parray_synchronize_primary_variables(simulator)
     end
     out = map(simulators, configs, forces, reports) do sim, config, f, rep
-        e, conv, report = perform_step!(sim, dt, f, config;
+        t_s = get(rep, :secondary_time, 0.0)
+        e, conv, rep = perform_step!(sim, dt, f, config;
             iteration = iteration,
             solve = false,
             report = rep,
@@ -183,6 +184,11 @@ function Jutul.perform_step!(
             executor = Jutul.simulator_executor(sim),
             vararg...
         )
+        if haskey(rep, :secondary_time)
+            rep[:secondary_time] += t_s
+        else
+            rep[:secondary_time] = t_s
+        end
         return (e, Int(conv))
     end
     errors, converged = tuple_of_arrays(out)
