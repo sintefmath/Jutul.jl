@@ -42,7 +42,6 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
                 col = order[cols[i]]
                 @inbounds if keep(col, row, lower) && insorted(col, active)
                     map[index] = i
-                    sub_vals[index] = vals[i]
                     sub_cols[index] = col
                     index += 1
                 end
@@ -50,6 +49,7 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
         end
     end
     B = StaticSparsityMatrixCSR(n, m, rowptr, sub_cols, sub_vals, nthreads = A.nthreads, minbatch = A.minbatch)
+    update_values!(B, A, map)
     return (B, map)
 end
 
