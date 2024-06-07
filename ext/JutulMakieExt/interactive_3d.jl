@@ -197,9 +197,8 @@ function plot_interactive_impl(grid, states;
     prop_name = Observable{Any}(key)
     transform_name = Observable{String}(transform)
     lims = Observable(limits[key])
-    menu = Menu(fig, options = datakeys, prompt = key)
-    menu_2 = Menu(fig, options = get_valid_rows("$key"), prompt = "1", width = 60)
-
+    menu = Menu(fig, options = datakeys, default = key)
+    menu_2 = Menu(fig, options = get_valid_rows("$key"), default = "1", width = 60)
 
     function change_index(ix; update_slider = true)
         tmp = clamp(ix, 1, nstates)
