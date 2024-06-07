@@ -10,7 +10,7 @@ function keep(col, row, lower)
     end
 end
 
-function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = 1:size(A, 1); lower::Bool = true) where {Tv, Ti}
+function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), order = axes(A, 1); lower::Bool = true) where {Tv, Ti}
     cols = colvals(A)
     vals = nonzeros(A)
     n, m = size(A)
@@ -20,9 +20,9 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = 1:size(A, 1); 
     @inbounds for row in 1:n
         ctr = 0
         if insorted(row, active)
-            for i in nzrange(A, row)
+            for i in nzrange(A, order[row])
                 @inbounds col = cols[i]
-                if keep(col, row, lower) && insorted(col, active)
+                if keep(order[col], row, lower) && insorted(col, active)
                     ctr += 1
                 end
             end
@@ -39,7 +39,7 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = 1:size(A, 1); 
     for row in 1:n
         if insorted(row, active)
             @inbounds for i in nzrange(A, row)
-                col = cols[i]
+                col = order[cols[i]]
                 @inbounds if keep(col, row, lower) && insorted(col, active)
                     map[index] = i
                     sub_vals[index] = vals[i]
@@ -53,7 +53,7 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = 1:size(A, 1); 
     return (B, map)
 end
 
-function diagonal_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = 1:size(A, 1)) where {Tv, Ti}
+function diagonal_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), order = axes(A, 1)) where {Tv, Ti}
     n = length(active)
     N = size(A, 1)
     out = zeros(Tv, n)
@@ -62,7 +62,7 @@ function diagonal_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = 1:size(A, 1
     vals = nonzeros(A)
     for (i, row) in enumerate(active)
         for k in nzrange(A, row)
-            col = cols[k]
+            col = order[cols[k]]
             if col == row
                 out[i] = vals[k]
                 pos[i] = k
@@ -105,7 +105,8 @@ end
     end
 end
 
-function ilu0_factor!(L, U, D, A, active = 1:size(A, 1))
+function ilu0_factor!(L, U, D, A, active = axes(A, 1))
+    A = missing
     cols_l = colvals(L)
     nz_l = nonzeros(L)
 
@@ -181,14 +182,16 @@ function backward_substitute!(x, M, b, order = 1:length(b), D = nothing)
 end
 
 export ilu_solve!
-function ilu_solve!(x, L, U, D, b, active = 1:length(b))
+function ilu_solve!(x, L, U, D, b, active = eachindex(b), order = eachindex(b))
     forward_substitute!(x, L, b, active)
-    return backward_substitute!(x, U, x, active, D)
+    out = backward_substitute!(x, U, x, active, D)
+    @. out[order] = out
+    return out
 end
 
 abstract type AbstractILUFactorization end
 
-struct ILUFactorCSR{Mat_t, Diag_t, Map_t, Act_t} <: AbstractILUFactorization
+struct ILUFactorCSR{Mat_t, Diag_t, Map_t, Act_t, Order_t} <: AbstractILUFactorization
     L::Mat_t
     U::Mat_t
     D::Diag_t
@@ -196,8 +199,9 @@ struct ILUFactorCSR{Mat_t, Diag_t, Map_t, Act_t} <: AbstractILUFactorization
     L_map::Map_t
     U_map::Map_t
     D_map::Map_t
-    function ILUFactorCSR(L::Mt, U::Mt, D::Dt, L_map::Lt, U_map::Lt, D_map::Lt; active = 1:size(L, 1)) where {Mt, Dt, Lt}
-        return new{Mt, Dt, Lt, typeof(active)}(L, U, D, active, L_map, U_map, D_map)
+    order::Order_t
+    function ILUFactorCSR(L::Mt, U::Mt, D::Dt, L_map::Lt, U_map::Lt, D_map::Lt; active = axes(L, 1), order = axes(L, 1)) where {Mt, Dt, Lt}
+        return new{Mt, Dt, Lt, typeof(active), typeof(order)}(L, U, D, active, L_map, U_map, D_map, order)
     end
 end
 
@@ -210,14 +214,14 @@ function Base.show(io::IO, t::MIME"text/plain", ilu::ILUFactorCSR)
 end
 
 export ilu0_csr, ilu0_csr!
-function ilu0_csr(A::StaticSparsityMatrixCSR; active = 1:size(A, 1))
+function ilu0_csr(A::StaticSparsityMatrixCSR; active = axes(A, 1), order = axes(A, 1))
     n, m = size(A)
     @assert n == m
-    L, ml = fixed_block(A, active, lower = true)
-    U, mu = fixed_block(A, active, lower = false)
-    D, md = diagonal_block(A, active)
+    L, ml = fixed_block(A, active, order, lower = true)
+    U, mu = fixed_block(A, active, order, lower = false)
+    D, md = diagonal_block(A, active, order)
     ilu0_factor!(L, U, D, A, active)
-    return ILUFactorCSR(L, U, D, ml, mu, md, active = active)
+    return ILUFactorCSR(L, U, D, ml, mu, md, active = active, order = order)
 end
 
 function ilu0_csr!(LU::ILUFactorCSR, A::StaticSparsityMatrixCSR)
@@ -231,7 +235,7 @@ end
 
 
 function ldiv!(x::AbstractVector, LU::ILUFactorCSR, b::AbstractVector)
-    x = ilu_solve!(x, LU.L, LU.U, LU.D, b, LU.active)
+    x = ilu_solve!(x, LU.L, LU.U, LU.D, b, LU.active, LU.order)
     return x
 end
 
