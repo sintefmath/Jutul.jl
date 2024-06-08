@@ -225,7 +225,13 @@ export ilu0_csr, ilu0_csr!
 function ilu0_csr(A::StaticSparsityMatrixCSR; active = axes(A, 1), order = axes(A, 1))
     n, m = size(A)
     @assert n == m
-    order = reverse(order)
+    # order = reverse(order)
+    if true
+        J, I, V = findnz(A.At)
+        V_topo = ones(length(V))
+        A_topo = sparse(I, J, V_topo, n, m)
+        order = SymRCM.symrcm(A_topo)
+    end
     L, ml = fixed_block(A, active, order, lower = true)
     U, mu = fixed_block(A, active, order, lower = false)
     D, md = diagonal_block(A, active, order)
