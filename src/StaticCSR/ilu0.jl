@@ -22,7 +22,7 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
         if insorted(row, active)
             for i in nzrange(A, order[row])
                 @inbounds col = cols[i]
-                if keep(order[col], row, lower) && insorted(col, active)
+                if keep(col, order[row], lower) && insorted(col, active)
                     ctr += 1
                 end
             end
@@ -39,8 +39,8 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
     for row in 1:n
         if insorted(row, active)
             @inbounds for i in nzrange(A, row)
-                col = order[cols[i]]
-                @inbounds if keep(col, row, lower) && insorted(col, active)
+                col = cols[i]
+                @inbounds if keep(col, order[row], lower) && insorted(col, active)
                     map[index] = i
                     sub_cols[index] = col
                     index += 1
@@ -61,10 +61,10 @@ function diagonal_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1),
     cols = colvals(A)
     vals = nonzeros(A)
     for (i, row) in enumerate(active)
-        for k in nzrange(A, row)
-            col = order[cols[k]]
-            if col == row
-                out[i] = vals[k]
+        new_row = order[row]
+        for k in nzrange(A, new_row)
+            col = cols[k]
+            if col == new_row
                 pos[i] = k
                 break
             else
@@ -77,6 +77,7 @@ function diagonal_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1),
     else
         @assert n == N
     end
+    update_values!(out, A, pos)
     return (out, pos)
 end
 
@@ -183,6 +184,10 @@ end
 
 export ilu_solve!
 function ilu_solve!(x, L, U, D, b, active = eachindex(b), order = eachindex(b))
+    b = b[order]
+    # tmp = similar(b)
+    # tmp[order] .= b
+    # b = tmp
     forward_substitute!(x, L, b, active)
     out = backward_substitute!(x, U, x, active, D)
     @. out[order] = out
@@ -217,6 +222,7 @@ export ilu0_csr, ilu0_csr!
 function ilu0_csr(A::StaticSparsityMatrixCSR; active = axes(A, 1), order = axes(A, 1))
     n, m = size(A)
     @assert n == m
+    order = reverse(order)
     L, ml = fixed_block(A, active, order, lower = true)
     U, mu = fixed_block(A, active, order, lower = false)
     D, md = diagonal_block(A, active, order)
