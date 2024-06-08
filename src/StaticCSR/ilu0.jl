@@ -15,7 +15,7 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
     vals = nonzeros(A)
     n, m = size(A)
     rowptr = zeros(Ti, n+1)
-    sz_est = n*7
+    sz_est = length(vals)÷2
     sub_cols = sizehint!(Vector{Ti}(), sz_est)
     map = sizehint!(Vector{Ti}(), sz_est)
 
