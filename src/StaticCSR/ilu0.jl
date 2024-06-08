@@ -64,15 +64,16 @@ function diagonal_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1),
     vals = nonzeros(A)
     for (i, rowno) in enumerate(active)
         row = order[rowno]
+        found = false
         for k in nzrange(A, row)
             col = cols[k]
             if col == rowno
                 pos[i] = k
+                found = true
                 break
-            else
-                @assert col < rowno "Diagonal must be present in sparsity pattern."
             end
         end
+        @assert found "Diagonal for row $rowno must be present in sparsity pattern."
     end
     if n < N
         out = SparseVector(N, collect(active), out)
