@@ -15,6 +15,10 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
     vals = nonzeros(A)
     n, m = size(A)
     rowptr = zeros(Ti, n+1)
+    sz_est = n*7
+    sub_cols = sizehint!(Vector{Ti}(), sz_est)
+    map = sizehint!(Vector{Ti}(), sz_est)
+
     offset = 1
     rowptr[1] = offset
     @inbounds for rowno in 1:n
@@ -23,33 +27,18 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
         if insorted(row, active)
             for i in nzrange(A, row)
                 @inbounds col = order[cols[i]]
-                if keep(col, rowno, lower) && insorted(col, active)
+                if keep(col, row, lower) && insorted(col, active)
+                    index = offset + ctr
+                    push!(map, i)
+                    push!(sub_cols, col)
                     ctr += 1
                 end
             end
         end
-        offset = offset + ctr
+        offset += ctr
         rowptr[rowno+1] = offset
     end
-    # Next, we actually fill in now that we know the sizes
-    sub_cols = zeros(Ti, offset-1)
-    sub_vals = zeros(Tv, offset-1)
-
-    map = zeros(Ti, offset-1)
-    index = 1
-    for rowno in 1:n
-        row = order[rowno]
-        if insorted(row, active)
-            @inbounds for i in nzrange(A, row)
-                col = order[cols[i]]
-                @inbounds if keep(col, rowno, lower) && insorted(col, active)
-                    map[index] = i
-                    sub_cols[index] = col
-                    index += 1
-                end
-            end
-        end
-    end
+    sub_vals = zeros(Tv, size(sub_cols))
     B = StaticSparsityMatrixCSR(n, m, rowptr, sub_cols, sub_vals, nthreads = A.nthreads, minbatch = A.minbatch)
     update_values!(B, A, map)
     return (B, map)
@@ -226,7 +215,7 @@ function ilu0_csr(A::StaticSparsityMatrixCSR; active = axes(A, 1), order = axes(
     n, m = size(A)
     @assert n == m
     # order = reverse(order)
-    if true
+    if false
         J, I, V = findnz(A.At)
         V_topo = ones(length(V))
         A_topo = sparse(I, J, V_topo, n, m)
