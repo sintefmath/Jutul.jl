@@ -1,5 +1,5 @@
 module StaticCSR
-    using SparseArrays, StaticArrays, Polyester, LinearAlgebra
+    using SparseArrays, StaticArrays, Polyester, LinearAlgebra, SymRCM
 
     export StaticSparsityMatrixCSR, colvals, static_sparsity_sparse
     export nthreads, minbatch
