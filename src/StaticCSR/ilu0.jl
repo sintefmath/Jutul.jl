@@ -22,7 +22,7 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
         row = order[rowno]
         if insorted(row, active)
             for i in nzrange(A, row)
-                @inbounds col = cols[i]
+                @inbounds col = order[cols[i]]
                 if keep(col, rowno, lower) && insorted(col, active)
                     ctr += 1
                 end
@@ -41,7 +41,7 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
         row = order[rowno]
         if insorted(row, active)
             @inbounds for i in nzrange(A, row)
-                col = cols[i]
+                col = order[cols[i]]
                 @inbounds if keep(col, rowno, lower) && insorted(col, active)
                     map[index] = i
                     sub_cols[index] = col
