@@ -67,7 +67,7 @@ function diagonal_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1),
         found = false
         for k in nzrange(A, row)
             col = cols[k]
-            if col == rowno
+            if col == row
                 pos[i] = k
                 found = true
                 break
