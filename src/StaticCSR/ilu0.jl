@@ -17,18 +17,19 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
     rowptr = zeros(Ti, n+1)
     offset = 1
     rowptr[1] = offset
-    @inbounds for row in 1:n
+    @inbounds for rowno in 1:n
         ctr = 0
+        row = order[rowno]
         if insorted(row, active)
-            for i in nzrange(A, order[row])
+            for i in nzrange(A, row)
                 @inbounds col = cols[i]
-                if keep(col, order[row], lower) && insorted(col, active)
+                if keep(col, rowno, lower) && insorted(col, active)
                     ctr += 1
                 end
             end
         end
         offset = offset + ctr
-        rowptr[row+1] = offset
+        rowptr[rowno+1] = offset
     end
     # Next, we actually fill in now that we know the sizes
     sub_cols = zeros(Ti, offset-1)
@@ -36,11 +37,12 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
 
     map = zeros(Ti, offset-1)
     index = 1
-    for row in 1:n
+    for rowno in 1:n
+        row = order[rowno]
         if insorted(row, active)
             @inbounds for i in nzrange(A, row)
                 col = cols[i]
-                @inbounds if keep(col, order[row], lower) && insorted(col, active)
+                @inbounds if keep(col, rowno, lower) && insorted(col, active)
                     map[index] = i
                     sub_cols[index] = col
                     index += 1
@@ -60,15 +62,15 @@ function diagonal_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1),
     pos = zeros(Ti, n)
     cols = colvals(A)
     vals = nonzeros(A)
-    for (i, row) in enumerate(active)
-        new_row = order[row]
-        for k in nzrange(A, new_row)
+    for (i, rowno) in enumerate(active)
+        row = order[rowno]
+        for k in nzrange(A, row)
             col = cols[k]
-            if col == new_row
+            if col == rowno
                 pos[i] = k
                 break
             else
-                @assert col < row "Diagonal must be present in sparsity pattern."
+                @assert col < rowno "Diagonal must be present in sparsity pattern."
             end
         end
     end
