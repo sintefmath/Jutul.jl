@@ -237,7 +237,7 @@ function ilu0_csr(A::StaticSparsityMatrixCSR; active = axes(A, 1), order = axes(
     if true
         J, I, V = findnz(A.At)
         V_topo = ones(length(V))
-        A_topo = sparse(copy(I), copy(J), V_topo, n, m)
+        A_topo = sparse(I, J, V_topo, n, m)
         order = SymRCM.symrcm(A_topo)
     end
     # order = sort(order)
