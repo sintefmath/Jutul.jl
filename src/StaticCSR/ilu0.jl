@@ -29,7 +29,8 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
         if insorted(row_base, active)
             for i in nzrange(A, row_base)
                 col_base = cols[i]
-                @inbounds col = order[col_base]
+                # col = order[col_base]
+                col = findfirst(isequal(col_base), order)
                 if keep(col, row, lower) && insorted(col, active)
                     push!(map, i)
                     push!(columns, col)
