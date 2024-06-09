@@ -3,7 +3,7 @@ import LinearAlgebra.ldiv!, LinearAlgebra.\, SparseArrays.nnz
 export ldiv!
 
 function keep(col, row, lower)
-    return true
+    # return true
     if lower
         return col < row
     else
@@ -23,7 +23,7 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
     rowptr[1] = 1
     @inbounds for row in 1:n
         ctr = 0
-        @warn "Starting row $row"
+        # @warn "Starting row $row"
         # row_base = findfirst(isequal(row), order)
         row_base = order[row]
         if insorted(row_base, active)
@@ -34,10 +34,10 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
                 if keep(col, row, lower) && insorted(col, active)
                     push!(map, i)
                     push!(columns, col)
-                    @info "Adding $i ($row_base, $col_base) -> ($row, $col) $(A.At.nzval[i])"
+                    # @info "Adding $i ($row_base, $col_base) -> ($row, $col) $(A.At.nzval[i])"
                     ctr += 1
                 else
-                    @info "Skipping $i ($row_base, $col_base) -> ($row, $col) $(A.At.nzval[i])"
+                    # @info "Skipping $i ($row_base, $col_base) -> ($row, $col) $(A.At.nzval[i])"
                 end
             end
         end
@@ -49,10 +49,10 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
             columns_view = view(columns, current_range)
             map_view = view(map, current_range)
             sortix = sort(by = i -> columns_view[i], eachindex(columns_view))
-            @info "Before:" columns_view map_view
+            # @info "Before:" columns_view map_view
             @. map_view = map_view[sortix]
             @. columns_view = columns_view[sortix]
-            @info "After:" columns_view map_view
+            # @info "After:" columns_view map_view
 
         end
     end
