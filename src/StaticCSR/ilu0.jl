@@ -3,6 +3,7 @@ import LinearAlgebra.ldiv!, LinearAlgebra.\, SparseArrays.nnz
 export ldiv!
 
 function keep(col, row, lower)
+    return true
     if lower
         return col < row
     else
@@ -22,6 +23,8 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
     rowptr[1] = 1
     @inbounds for row in 1:n
         ctr = 0
+        @warn "Starting row $row"
+        # row_base = findfirst(isequal(row), order)
         row_base = order[row]
         if insorted(row_base, active)
             for i in nzrange(A, row_base)
@@ -30,7 +33,10 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
                 if keep(col, row, lower) && insorted(col, active)
                     push!(map, i)
                     push!(columns, col)
+                    @info "Adding $i ($row_base, $col_base) -> ($row, $col) $(A.At.nzval[i])"
                     ctr += 1
+                else
+                    @info "Skipping $i ($row_base, $col_base) -> ($row, $col) $(A.At.nzval[i])"
                 end
             end
         end
@@ -42,8 +48,11 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
             columns_view = view(columns, current_range)
             map_view = view(map, current_range)
             sortix = sort(by = i -> columns_view[i], eachindex(columns_view))
+            @info "Before:" columns_view map_view
             @. map_view = map_view[sortix]
             @. columns_view = columns_view[sortix]
+            @info "After:" columns_view map_view
+
         end
     end
     sub_vals = zeros(Tv, length(columns))
@@ -184,7 +193,8 @@ end
 
 export ilu_solve!
 function ilu_solve!(x, L, U, D, b, active = eachindex(b), order = eachindex(b))
-    b = b[order]
+    b = copy(b)
+    @. b = b[order]
     # tmp = similar(b)
     # tmp[order] .= b
     # b = tmp
@@ -223,12 +233,14 @@ function ilu0_csr(A::StaticSparsityMatrixCSR; active = axes(A, 1), order = axes(
     n, m = size(A)
     @assert n == m
     # order = reverse(order)
-    if false
+    if true
         J, I, V = findnz(A.At)
         V_topo = ones(length(V))
-        A_topo = sparse(I, J, V_topo, n, m)
+        A_topo = sparse(copy(I), copy(J), V_topo, n, m)
         order = SymRCM.symrcm(A_topo)
     end
+    # order = sort(order)
+    # order = reverse(order)
     L, ml = fixed_block(A, active, order, lower = true)
     U, mu = fixed_block(A, active, order, lower = false)
     D, md = diagonal_block(A, active, order)
