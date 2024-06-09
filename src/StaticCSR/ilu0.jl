@@ -16,30 +16,38 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = axes(A, 1), or
     n, m = size(A)
     rowptr = zeros(Ti, n+1)
     sz_est = length(vals)÷2
-    sub_cols = sizehint!(Vector{Ti}(), sz_est)
+    columns = sizehint!(Vector{Ti}(), sz_est)
     map = sizehint!(Vector{Ti}(), sz_est)
 
-    offset = 1
-    rowptr[1] = offset
-    @inbounds for rowno in 1:n
+    rowptr[1] = 1
+    @inbounds for row in 1:n
         ctr = 0
-        row = order[rowno]
-        if insorted(row, active)
-            for i in nzrange(A, row)
-                @inbounds col = order[cols[i]]
+        row_base = order[row]
+        if insorted(row_base, active)
+            for i in nzrange(A, row_base)
+                col_base = cols[i]
+                @inbounds col = order[col_base]
                 if keep(col, row, lower) && insorted(col, active)
-                    index = offset + ctr
                     push!(map, i)
-                    push!(sub_cols, col)
+                    push!(columns, col)
                     ctr += 1
                 end
             end
         end
-        offset += ctr
-        rowptr[rowno+1] = offset
+        rowptr[row+1] = rowptr[row] + ctr
+
+        # Resort indices here. TODO: Make this conditional.
+        if true
+            current_range = rowptr[row]:(rowptr[row+1]-1)
+            columns_view = view(columns, current_range)
+            map_view = view(map, current_range)
+            sortix = sort(by = i -> columns_view[i], eachindex(columns_view))
+            @. map_view = map_view[sortix]
+            @. columns_view = columns_view[sortix]
+        end
     end
-    sub_vals = zeros(Tv, size(sub_cols))
-    B = StaticSparsityMatrixCSR(n, m, rowptr, sub_cols, sub_vals, nthreads = A.nthreads, minbatch = A.minbatch)
+    sub_vals = zeros(Tv, length(columns))
+    B = StaticSparsityMatrixCSR(n, m, rowptr, columns, sub_vals, nthreads = A.nthreads, minbatch = A.minbatch)
     update_values!(B, A, map)
     return (B, map)
 end
