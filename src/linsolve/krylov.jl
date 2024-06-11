@@ -2,21 +2,27 @@ import LinearAlgebra.mul!
 
 export GenericKrylov
 
-struct PrecondWrapper{T, K}
-    op::T
-    x::K
-    function PrecondWrapper(op::T_o) where T_o<:LinearOperator
-        # x = zeros(eltype(op), size(op, 1))
-        x = missing
-        T_x = typeof(x)
-        new{T_o, T_x}(op, x)
+mutable struct PrecondWrapper{T}
+    const op::T
+    count::Int
+    time::Float64
+    function PrecondWrapper(op::T; count = 0, time = 0.0) where T<:LinearOperator
+        new{T}(op, count, time)
     end
 end
 
 Base.eltype(p::PrecondWrapper) = eltype(p.op)
 
-LinearAlgebra.mul!(x, p::PrecondWrapper, y) = mul!(x, p.op, y)
-LinearAlgebra.mul!(x, p::PrecondWrapper, y, α, β) = mul!(x, p.op, y, α, β)
+function LinearAlgebra.mul!(x, p::PrecondWrapper, y)
+    out = mul!(x, p, y, true, false)
+end
+
+function LinearAlgebra.mul!(x, p::PrecondWrapper, y, α, β)
+    t = @elapsed x = mul!(x, p.op, y, α, β)
+    p.count += 1
+    p.time += t
+    return x
+end
 
 """
     GenericKrylov(solver = :gmres; preconditioner = nothing; <kwarg>)
@@ -160,7 +166,7 @@ function linear_solve!(sys::LSystem,
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end
     @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
-    return linear_solve_return(solved, n, stats, prepare = t_prec + t_prep)
+    return linear_solve_return(solved, n, stats, precond = L.time, precond_count = L.count, prepare = t_prec + t_prep)
 end
 
 function krylov_scale_system!(sys, krylov::GenericKrylov, dt)
