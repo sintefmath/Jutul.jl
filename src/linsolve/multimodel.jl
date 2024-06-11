@@ -158,7 +158,7 @@ end
     res_v = unsafe_reinterpret(r_type, res, n)
     x_v = unsafe_reinterpret(r_type, x, n)
     @tic "spmv (block)" mul!(res_v, B, x_v, α, β)
-    schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, β)
+    schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, true)
 end
 
 function jacobian(sys::MultiLinearizedSystem)
