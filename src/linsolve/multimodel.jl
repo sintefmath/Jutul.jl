@@ -137,8 +137,6 @@ end
 
 @inline function schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, β::T) where T
     @tic "spmv (schur)" begin
-        # This function does:
-        # res ← β*res + α*(B*x - C*(E\(D*x)))
         n = length(D)
         @batch for i = 1:n
             @inbounds b_buf_1, b_buf_2 = schur_buffers[i+1]
@@ -154,6 +152,8 @@ end
 end
 
 @inline function schur_mul!(res, schur_buffers, ::Val{r_type}, B, C, D, E, x, α, β) where r_type
+    # This function does:
+    # res ← β*res + α*(B*x - C*(E\(D*x)))
     n = size(B, 2)
     res_v = unsafe_reinterpret(r_type, res, n)
     x_v = unsafe_reinterpret(r_type, x, n)
