@@ -20,41 +20,19 @@ end
 is_left_preconditioner(::JutulPreconditioner) = true
 is_right_preconditioner(::JutulPreconditioner) = false
 
-function linear_operator(precond::JutulPreconditioner, side::Symbol = :left, float_t = Float64)
+function linear_operator(precond::JutulPreconditioner, float_t = Float64)
     n = operator_nrows(precond)
-    function local_mul!(res, x, α, β::T, type) where T
+    function precond_apply!(res, x, α, β::T) where T
         if β == zero(T)
-            apply!(res, precond, x, type)
+            apply!(res, precond, x)
             if α != one(T)
                 lmul!(α, res)
             end
         else
-            error("Not implemented yet.")
+            error("Preconditioner not implemented for β ≠ 0.")
         end
     end
-
-    if side == :left
-        if is_left_preconditioner(precond)
-            if is_right_preconditioner(precond)
-                f! = (r, x, α, β) -> local_mul!(r, x, α, β, :left)
-            else
-                f! = (r, x, α, β) -> local_mul!(r, x, α, β, :both)
-            end
-            op = LinearOperator(float_t, n, n, false, false, f!)
-        else
-            op = opEye(n, n)
-        end
-    elseif side == :right
-        if is_right_preconditioner(precond)
-            f! = (r, x, α, β) -> local_mul!(r, x, α, β, :right)
-            op = LinearOperator(float_t, n, n, false, false, f!)
-        else
-            op = opEye(n, n)
-        end
-    else
-        error("Side must be :left or :right, was $side")
-    end
-
+    op = LinearOperator(float_t, n, n, false, false, precond_apply!)
     return op
 end
 

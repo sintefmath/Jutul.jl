@@ -64,8 +64,8 @@ function update_preconditioner!(prec::GroupWisePreconditioner, lsys::MultiLinear
     end
 end
 
-function linear_operator(precond::GroupWisePreconditioner, side::Symbol = :left)
-    d = Vector{LinearOperator}(map((x) -> linear_operator(x, side), precond.preconditioners))
+function linear_operator(precond::GroupWisePreconditioner, float_t = Float64)
+    d = Vector{LinearOperator}(map((x) -> linear_operator(x, float_t), precond.preconditioners))
     D = BlockDiagonalOperator(d...)
     return D
 end

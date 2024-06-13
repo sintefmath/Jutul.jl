@@ -56,23 +56,12 @@ function update_preconditioner!(ilu::ILUZeroPreconditioner, A::StaticSparsityMat
     end
 end
 
-function apply!(x, ilu::ILUZeroPreconditioner, y, arg...)
+function apply!(x, ilu::ILUZeroPreconditioner, y)
     factor = get_factorization(ilu)
-    ilu_apply!(x, factor, y, arg...)
+    ilu_apply!(x, factor, y)
 end
 
-function ilu_f(type::Symbol)
-    # Why must this be qualified?
-    if type == :left
-        f = forward_substitution!
-    elseif type == :right
-        f = backward_substitution!
-    else
-        f = ldiv!
-    end
-end
-
-function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
+function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}) where {F<:Real}
     T = eltype(f)
     if T == Float64
         ldiv!(x, f, y)
@@ -86,23 +75,15 @@ function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::Abstrac
     return x
 end
 
-function ilu_apply!(x, f::AbstractILUFactorization, y, type::Symbol = :both)
+function ilu_apply!(x, f::AbstractILUFactorization, y)
     ldiv!(x, f, y)
 end
 
-function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
-    f! = ilu_f(type)
-    f!(x, f, y)
+function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}) where {F<:Real}
+    ldiv!(x, f, y)
 end
 
-# function ilu_apply!(x::AbstractArray{F}, f::CuSparseMatrix{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
-#     x .= y
-#     ix = 'O'
-#     sv2!('N', 'L', 'N', 1.0, f, x, ix)
-#     sv2!('N', 'U', 'U', 1.0, f, x, ix)
-# end
-
-function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)
+function ilu_apply!(x, ilu::ILU0Precon, y)
     T = eltype(ilu.l_nzval)
     N = size(T, 1)
     T = eltype(T)
@@ -110,8 +91,7 @@ function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both)
     as_svec = (x) -> unsafe_reinterpret(Vt, x, length(x) ÷ N)
 
     # Solve by reinterpreting vectors to block (=SVector) vectors
-    f! = ilu_f(type)
-    f!(as_svec(x), ilu, as_svec(y))
+    ldiv!(as_svec(x), ilu, as_svec(y))
     return x
 end
 

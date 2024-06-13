@@ -54,12 +54,12 @@ function Base.show(io::IO, krylov::GenericKrylov)
     print(io, "Generic Krylov using $(krylov.solver) (ϵₐ=$atol, ϵ=$rtol) with prec = $(typeof(krylov.preconditioner))")
 end
 
-function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, side, arg...)
+function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, float_t = Float64)
     M = krylov.preconditioner
     if isnothing(M)
         op = I
     else
-        op = PrecondWrapper(linear_operator(M, side, arg...))
+        op = PrecondWrapper(linear_operator(M, float_t))
     end
     return op
 end
@@ -90,8 +90,7 @@ function linear_solve!(sys::LSystem,
     t_prep = @elapsed @tic "prepare" prepare_linear_solve!(sys)
     op = linear_operator(sys)
     t_prec = @elapsed @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder, executor)
-    L = preconditioner(krylov, sys, model, storage, recorder, :left, Ft)
-    # R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
+    prec_op = preconditioner(krylov, sys, model, storage, recorder, Ft)
     v = Int64(cfg.verbose)
     max_it = cfg.max_iterations
     min_it = cfg.min_iterations
@@ -138,7 +137,8 @@ function linear_solve!(sys::LSystem,
                             atol = atol,
                             history = true,
                             callback = callback,
-                            M = L,
+                            # N = prec_op,
+                            M = prec_op,
                             cfg.arguments...)
     x, stats = (krylov.storage.x, krylov.storage.stats)
     res = stats.residuals
@@ -166,7 +166,7 @@ function linear_solve!(sys::LSystem,
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end
     @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
-    return linear_solve_return(solved, n, stats, precond = L.time, precond_count = L.count, prepare = t_prec + t_prep)
+    return linear_solve_return(solved, n, stats, precond = prec_op.time, precond_count = prec_op.count, prepare = t_prec + t_prep)
 end
 
 function krylov_scale_system!(sys, krylov::GenericKrylov, dt)
