@@ -97,7 +97,11 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
         end
     end
     t_prep = t_op + t_prec
-    return Jutul.linear_solve_return(solved, n_lin_its, stats, prepare = t_prep)
+    return Jutul.linear_solve_return(solved, n_lin_its, stats,
+        prepare = t_prep,
+        precond = P.time,
+        precond_count = P.count
+    )
 end
 
 function local_bicgstab_solver(X::S) where S
