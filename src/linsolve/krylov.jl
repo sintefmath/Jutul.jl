@@ -70,19 +70,19 @@ end
 # end
 
 function linear_solve!(sys::LSystem,
-                krylov::GenericKrylov,
-                model,
-                storage = nothing,
-                dt = nothing,
-                recorder = ProgressRecorder(),
-                executor = default_executor();
-                dx = sys.dx_buffer,
-                r = vector_residual(sys),
-                atol = linear_solver_tolerance(krylov, :absolute),
-                rtol = linear_solver_tolerance(krylov, :relative),
-                rtol_nl = linear_solver_tolerance(krylov, :nonlinear_relative),
-                rtol_relaxed = linear_solver_tolerance(krylov, :relaxed_relative)
-                )
+        krylov::GenericKrylov,
+        model,
+        storage = nothing,
+        dt = nothing,
+        recorder = ProgressRecorder(),
+        executor = default_executor();
+        dx = sys.dx_buffer,
+        r = vector_residual(sys),
+        atol = linear_solver_tolerance(krylov, :absolute),
+        rtol = linear_solver_tolerance(krylov, :relative),
+        rtol_nl = linear_solver_tolerance(krylov, :nonlinear_relative),
+        rtol_relaxed = linear_solver_tolerance(krylov, :relaxed_relative)
+    )
     cfg = krylov.config
     prec = krylov.preconditioner
     Ft = float_type(model.context)
@@ -129,17 +129,22 @@ function linear_solve!(sys::LSystem,
         callback = solver -> false
         manual_conv = false
     end
+    if cfg.precond_side == :right
+        preconditioner_arg = (N = prec_op, )
+    else
+        preconditioner_arg = (M = prec_op, )
+    end
     solve_f, F = krylov_jl_solve_function(krylov, op, r)
     @tic "solve" solve_f(F, op, r;
-                            itmax = max_it,
-                            verbose = v,
-                            rtol = rtol,
-                            atol = atol,
-                            history = true,
-                            callback = callback,
-                            # N = prec_op,
-                            M = prec_op,
-                            cfg.arguments...)
+        preconditioner_arg...,
+        itmax = max_it,
+        verbose = v,
+        rtol = rtol,
+        atol = atol,
+        history = true,
+        callback = callback,
+        cfg.arguments...
+    )
     x, stats = (krylov.storage.x, krylov.storage.stats)
     res = stats.residuals
     n = length(res) - 1
