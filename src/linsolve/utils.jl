@@ -8,6 +8,7 @@ mutable struct IterativeSolverConfig
     nonlinear_relative_tolerance::Union{Nothing, AbstractFloat}
     relaxed_relative_tolerance::Union{Nothing, AbstractFloat}
     true_residual::Bool
+    precond_side::Symbol
     verbose
     arguments
 end
@@ -16,13 +17,15 @@ function IterativeSolverConfig(;
         relative_tolerance = 1e-3,
         absolute_tolerance = nothing, 
         max_iterations = 100,
-        min_iterations = 2,
+        min_iterations = 1,
         verbose = false,
         nonlinear_relative_tolerance = nothing,
         relaxed_relative_tolerance = 0.1,
         true_residual = false,
+        precond_side = :right,
         kwarg...
     )
+    @assert precond_side in (:left, :right)
     IterativeSolverConfig(
         relative_tolerance,
         absolute_tolerance,
@@ -31,6 +34,7 @@ function IterativeSolverConfig(;
         nonlinear_relative_tolerance,
         relaxed_relative_tolerance,
         true_residual,
+        precond_side,
         verbose,
         kwarg
     )
