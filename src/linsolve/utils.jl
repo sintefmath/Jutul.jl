@@ -22,7 +22,7 @@ function IterativeSolverConfig(;
         nonlinear_relative_tolerance = nothing,
         relaxed_relative_tolerance = 0.1,
         true_residual = false,
-        precond_side = :right,
+        precond_side = :left,
         kwarg...
     )
     @assert precond_side in (:left, :right)
