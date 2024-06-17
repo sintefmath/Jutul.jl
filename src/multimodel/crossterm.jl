@@ -263,7 +263,10 @@ function update_offdiagonal_blocks!(storage, model, targets, sources;
     )
     if !ismissing(lsys)
         models = model.models
-        for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+        # for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+        for i in eachindex(model.cross_terms, storage.cross_terms)
+            ctp = model.cross_terms[i]
+            ct_s = storage.cross_terms[i]
             update_offdiagonal_block_pair!(lsys, ctp, ct_s, storage, model, models, targets, sources)
         end
     end
