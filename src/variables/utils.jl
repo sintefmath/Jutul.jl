@@ -345,7 +345,6 @@ degrees_of_freedom_per_entity(model, v::FractionVariables) =  values_per_entity(
 maximum_value(::FractionVariables) = 1.0
 minimum_value(::FractionVariables) = 0.0
 
-
 function initialize_primary_variable_ad!(state, model, pvar::FractionVariables, state_symbol, npartials; kwarg...)
     n = values_per_entity(model, pvar)
     v = state[state_symbol]
@@ -371,7 +370,9 @@ end
 function unit_sum_update!(s, p, model, dx, w, entity = Cells())
     nf, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
-    maxval, minval = maximum_value(p), minimum_value(p)
+    maxval = maximum_value(p)
+    minval = minimum_value(p)
+    maxval = maxval - nf*minval
     active_cells = active_entities(model.domain, entity, for_variables = true)
     if nf == 2
         unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)
