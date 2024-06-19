@@ -715,6 +715,9 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
             continue
         end
         var = vars[t]
+        if var isa Pair
+            var = last(var)
+        end
         n = number_of_values(model, var)
         if !isnothing(config)
             lumping = config[t][:lumping]
