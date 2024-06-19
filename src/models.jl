@@ -1076,7 +1076,12 @@ function setup_primary_variable_views(storage, model, dx)
             n = number_of_degrees_of_freedom(model, p)
             m = degrees_of_freedom_per_entity(model, p)
             rng = (offset+1):(n+offset)
-            dxi = reshape(view(dx, rng), n÷m, m)'
+            if m == 0
+                @assert n == 0
+                dxi = similar(dx, 0)
+            else
+                dxi = reshape(view(dx, rng), n÷m, m)'
+            end
             out[pkey] = dxi
             offset += n
         end
