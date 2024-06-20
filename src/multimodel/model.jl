@@ -918,7 +918,10 @@ end
 
 function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model))
     for key in targets
-        apply_forces!(storage[key], model.models[key], dt, forces[key]; time = time)
+        subforce = forces[key]
+        if !isnothing(subforce)
+            apply_forces!(storage[key], model.models[key], dt, subforce; time = time)
+        end
     end
 end
 
