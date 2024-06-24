@@ -904,15 +904,15 @@ end
 
 function update_before_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
     for key in targets
-        s = storage[key]
         m = model.models[key]
+        update_before_step_multimodel!(storage, model, m, dt, forces, key; kwarg...)
         f = forces[key]
-        update_before_step_multimodel!(storage, model, m, dt, f, key; kwarg...)
+        s = storage[key]
         update_before_step!(s, m, dt, f; kwarg...)
     end
 end
 
-function update_before_step_multimodel!(storage, model, submodel, dt, subforces, label; kwarg...)
+function update_before_step_multimodel!(storage, model, submodel, dt, forces, label; kwarg...)
 
 end
 
