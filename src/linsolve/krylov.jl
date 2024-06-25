@@ -171,7 +171,14 @@ function linear_solve!(sys::LSystem,
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end
     @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
-    return linear_solve_return(solved, n, stats, precond = prec_op.time, precond_count = prec_op.count, prepare = t_prec + t_prep)
+    if prec_op isa PrecondWrapper
+        t_prec_op = prec_op.time
+        t_prec_count = prec_op.count
+    else
+        t_prec_op = 0.0
+        t_prec_count = 0
+    end
+    return linear_solve_return(solved, n, stats, precond = t_prec_op, precond_count = t_prec_count, prepare = t_prec + t_prep)
 end
 
 function krylov_scale_system!(sys, krylov::GenericKrylov, dt)
