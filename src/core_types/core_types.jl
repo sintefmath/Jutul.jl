@@ -915,7 +915,7 @@ A model variant that is made up of many named submodels, each a fully realized [
 
 `models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`.
 """
-struct MultiModel{T} <: JutulModel
+struct MultiModel{T, N} <: JutulModel
     models::NamedTuple
     cross_terms::Vector{CrossTermPair}
     groups::Union{Vector, Nothing}
@@ -923,7 +923,7 @@ struct MultiModel{T} <: JutulModel
     reduction::Union{Symbol, Nothing}
     specialize_ad::Bool
     group_lookup::Dict{Symbol, Int}
-function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = missing, specialize = false, specialize_ad = false)
+    function MultiModel(models, ::Val{N}; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = missing, specialize = false, specialize_ad = false)  where {N}
         group_lookup = Dict{Symbol, Any}()
         if isnothing(groups)
             num_groups = 1
@@ -980,8 +980,12 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
         else
             T = nothing
         end
-        new{T}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
-    end
+        new{T, N}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+    end 
+end
+
+function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = missing, specialize = false, specialize_ad = false)
+    return MultiModel(models, Val(nothing); cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = missing, specialize = false, specialize_ad = false)
 end
 
 """
