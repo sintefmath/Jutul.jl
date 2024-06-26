@@ -28,6 +28,10 @@ function mpi_scalar_allreduce
 
 end
 
+function consolidate_distributed_results_on_disk!
+
+end
+
 abstract type PArrayBackend <: JutulBackend end
 
 struct DebugPArrayBackend <: PArrayBackend end

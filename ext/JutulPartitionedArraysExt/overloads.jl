@@ -283,11 +283,12 @@ function Jutul.retrieve_output!(sim::PArraySimulator, states, reports, config, n
     if config[:consolidate_results]
         MPI.Barrier(comm)
         if np > 1 && is_main && pth isa String
-            consolidate_distributed_results_on_disk!(pth, np, 1:n, cleanup = config[:delete_on_consolidate])
+            Jutul.consolidate_distributed_results_on_disk!(pth, np, 1:n, cleanup = config[:delete_on_consolidate], verbose = config[:info_level] > 0)
         end
         MPI.Barrier(comm)
     end
-    Jutul.retrieve_output!(states, reports, config, n)
+    states, reports = Jutul.retrieve_output!(states, reports, config, n, read_states = config[:output_states] && is_main)
+    return (states, reports)
 end
 
 function Jutul.simulator_reports_per_step(psim::PArraySimulator)

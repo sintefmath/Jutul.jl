@@ -7,7 +7,6 @@ function minbatch(x::Any)
     else
         nb = 1000
     end
-    @info "Setting minbatch" nb
     return nb
 end
 

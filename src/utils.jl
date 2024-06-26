@@ -681,14 +681,14 @@ function read_restart(pth, i; read_state = true, read_report = true)
             end
             stored_i = file["step"]
             if stored_i != i
-                @warn "File contained step $stored_i, but was named as step $i."
+                @warn "File $f contained step $stored_i, but was named as step $i."
             end
             return (state, report)
         end
     else
         state = JUTUL_OUTPUT_TYPE()
         report = nothing
-        @warn "Data for step $i was requested, but no such file was found."
+        @warn "Data for step $i was requested, but no such file was found at $f."
     end
     return (state, report)
 end
