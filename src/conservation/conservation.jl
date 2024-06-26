@@ -366,7 +366,6 @@ function update_lsys_sources_theaded!(nz, r, acc, src, rv_src, nz_src, cp, conte
                 pos = get_jacobian_pos(acc, cell, e, d, cp)
                 @inbounds nz[pos] += v.partials[d]
             end
-            # @info "Entry $e, $cell ($nc x $np): $(v.value)"
         end
     end
 end

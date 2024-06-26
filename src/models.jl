@@ -966,7 +966,7 @@ end
 function variable_change_report(X::AbstractArray, X0::AbstractArray{T}, pvar) where T<:Real
     max_dv = max_v = sum_dv = sum_v = zero(T)
     @inbounds @simd for i in eachindex(X)
-        x = value(X[i])
+        x = value(X[i])::T
         dx = x - value(X0[i])
 
         dx_abs = abs(dx)
