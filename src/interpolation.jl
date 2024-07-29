@@ -284,7 +284,7 @@ function get_dependencies(var::UnaryTabulatedVariable, model)
     return [var.x_symbol]
 end
 
-function update_secondary_variable!(V, var::UnaryTabulatedVariable, model, state)
+function update_secondary_variable!(V, var::UnaryTabulatedVariable, model, state, ix = entity_eachindex(V))
     update_unary_tabulated!(V, var, model, state[var.x_symbol], entity_eachindex(V))
 end
 
