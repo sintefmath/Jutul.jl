@@ -930,7 +930,10 @@ function update_before_step!(storage, model, dt, forces; kwarg...)
 end
 
 function update_before_step!(storage, ::Any, model, dt, forces; time = NaN, recorder = ProgressRecorder(), update_explicit = true)
-    # Do nothing
+    state = storage.state
+    for (k, prm) in pairs(storage.variable_definitions.parameters)
+        update_parameter_before_step!(state[k], prm, storage, model, dt, forces)
+    end
 end
 
 function update_after_step!(storage, model, dt, forces; kwarg...)
@@ -949,9 +952,6 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     update_after_step!(storage, model.domain, model, dt, forces; kwarg...)
     update_after_step!(storage, model.system, model, dt, forces; kwarg...)
     update_after_step!(storage, model.formulation, model, dt, forces; kwarg...)
-    for (k, prm) in pairs(defs.parameters)
-        update_parameter_after_step!(state[k], prm, storage, model, dt, forces)
-    end
 
     # Synchronize previous state with new state
     for key in keys(pvar)
@@ -967,12 +967,12 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
 end
 
 """
-    update_parameter_after_step!(prm_val, prm, storage, model, dt, forces)
+    update_parameter_before_step!(prm_val, prm, storage, model, dt, forces)
 
-Update parameters after time-step. Used for hysteretic parameters.
+Update parameters before time-step. Used for hysteretic parameters.
 """
-function update_parameter_after_step!(prm_val, prm, storage, model, dt, forces)
-    # Do nothing
+function update_parameter_before_step!(prm_val, prm, storage, model, dt, forces)
+    # Do nothing by default.
     return prm_val
 end
 
