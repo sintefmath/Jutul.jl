@@ -949,6 +949,9 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     update_after_step!(storage, model.domain, model, dt, forces; kwarg...)
     update_after_step!(storage, model.system, model, dt, forces; kwarg...)
     update_after_step!(storage, model.formulation, model, dt, forces; kwarg...)
+    for (k, prm) in pairs(defs.parameters)
+        update_parameter_after_step!(state[k], prm, storage, model, dt, forces)
+    end
 
     # Synchronize previous state with new state
     for key in keys(pvar)
@@ -961,6 +964,16 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
         update_values!(state0[key], state[key])
     end
     return report
+end
+
+"""
+    update_parameter_after_step!(prm_val, prm, storage, model, dt, forces)
+
+Update parameters after time-step. Used for hysteretic parameters.
+"""
+function update_parameter_after_step!(prm_val, prm, storage, model, dt, forces)
+    # Do nothing
+    return prm_val
 end
 
 function variable_change_report(X::AbstractArray, X0::AbstractArray{T}, pvar) where T<:Real
