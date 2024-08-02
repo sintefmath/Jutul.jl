@@ -554,7 +554,6 @@ function plot_interactive_impl(grid, states;
         tri = primitives.triangulation
         scat = Makie.mesh!(ax, pts, tri; color = ys,
                                         colorrange = lims,
-                                        size = 60,
                                         backlight = 1,
                                         colormap = cmap,
                                         transparency = transparency,
