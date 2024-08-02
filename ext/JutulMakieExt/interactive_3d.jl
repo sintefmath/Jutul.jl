@@ -392,6 +392,7 @@ function plot_interactive_impl(grid, states;
         "batlowK",
         "berlin",
         "brg",
+        "commercial",
         "gnuplot",
         "gray1",
         "hawaii",
@@ -675,7 +676,11 @@ function unpack(buffer, x::AbstractVector, ix)
 end
 
 function generate_colormap(colormap_name, alphamap_name, base_alpha, low, high)
-    cmap = to_colormap(colormap_name)
+    if colormap_name == :commercial
+        cmap = commercial_colormap()
+    else
+        cmap = to_colormap(colormap_name)
+    end
     n = length(cmap)
     if alphamap_name != :no_alpha_map
         if alphamap_name == :linear
@@ -877,4 +882,28 @@ function Jutul.plotting_check_interactive(; warn = true)
         return false
     end
     return true
+end
+
+function commercial_colormap()
+    blue =   (0, 0, 1)
+    cyan =   (0, 1, 1)
+    green =  (0, 1, 0)
+    yellow = (1, 1, 0)
+    red =    (1, 0, 0)
+
+    function simple_interp(F_0, F_1, x)
+        v = F_0 .+ (F_1 .- F_0).*x
+        return Makie.RGB(v...)
+    end
+    cmap = Vector{typeof(Makie.RGB(0, 0, 0))}()
+    nsteps = [30, 25, 25, 20]
+    colors = (blue, cyan, green, yellow, red)
+    for (i, nstep) in enumerate(nsteps)
+        c1 = colors[i]
+        c2 = colors[i+1]
+        for dx in range(0.0, 1.0, nstep)
+            push!(cmap, simple_interp(c1, c2, dx))
+        end
+    end
+    return cmap
 end
