@@ -1,7 +1,13 @@
-function consolidate_distributed_results_on_disk!(pth, np, steps; cleanup = true)
+function Jutul.consolidate_distributed_results_on_disk!(pth, np, steps; cleanup = true, verbose = false)
     @assert isdir(pth)
     partitions = []
+    function print_msg(x)
+        if verbose
+            jutul_message("IO", x)
+        end
+    end
     for rank in 1:np
+        print_msg("Reading partition for process $rank/$np")
         proc_pth = rank_folder(pth, rank)
         part_path = joinpath(proc_pth, "partition.jld2")
         p = load(part_path)
@@ -9,6 +15,7 @@ function consolidate_distributed_results_on_disk!(pth, np, steps; cleanup = true
     end
     allpaths = []
     for step in steps
+        print_msg("Reading result for state $step/$(length(steps))")
         step::Int
         states, reports, paths = read_step(pth, step, np)
         state, report = consolidate_distributed_results(states, reports, partitions)
@@ -17,6 +24,7 @@ function consolidate_distributed_results_on_disk!(pth, np, steps; cleanup = true
         GC.gc()
     end
     if cleanup
+        print_msg("Cleaning up files...")
         # Delete the parallel results after consolidation.
         for paths in allpaths
             for path in paths

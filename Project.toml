@@ -1,7 +1,7 @@
 name = "Jutul"
 uuid = "2b460a1a-8a2b-45b2-b125-b5c536396eb9"
 authors = ["Olav Møyner <olav.moyner@gmail.com>"]
-version = "0.2.34"
+version = "0.2.35"
 
 [deps]
 AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
@@ -78,9 +78,9 @@ LayeredLayouts = "0.2.5"
 LinearOperators = "2.3.2"
 LoopVectorization = "0.12.115"
 MAT = "0.10.3"
-Makie = "0.20.0"
+Makie = "0.21.0"
 MappedArrays = "0.4.1"
-Meshes = "0.28 - 0.41, 0.46"
+Meshes = "0.28 - 0.41"
 Metis = "1.1.0"
 NetworkLayout = "0.4.5"
 OrderedCollections = "1.4.1"

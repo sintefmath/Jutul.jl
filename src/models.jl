@@ -930,7 +930,10 @@ function update_before_step!(storage, model, dt, forces; kwarg...)
 end
 
 function update_before_step!(storage, ::Any, model, dt, forces; time = NaN, recorder = ProgressRecorder(), update_explicit = true)
-    # Do nothing
+    state = storage.state
+    for (k, prm) in pairs(storage.variable_definitions.parameters)
+        update_parameter_before_step!(state[k], prm, storage, model, dt, forces)
+    end
 end
 
 function update_after_step!(storage, model, dt, forces; kwarg...)
@@ -963,10 +966,20 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     return report
 end
 
+"""
+    update_parameter_before_step!(prm_val, prm, storage, model, dt, forces)
+
+Update parameters before time-step. Used for hysteretic parameters.
+"""
+function update_parameter_before_step!(prm_val, prm, storage, model, dt, forces)
+    # Do nothing by default.
+    return prm_val
+end
+
 function variable_change_report(X::AbstractArray, X0::AbstractArray{T}, pvar) where T<:Real
     max_dv = max_v = sum_dv = sum_v = zero(T)
     @inbounds @simd for i in eachindex(X)
-        x = value(X[i])
+        x = value(X[i])::T
         dx = x - value(X0[i])
 
         dx_abs = abs(dx)
