@@ -302,7 +302,9 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
             X0 = only(g.origin)
             Y0 = 0.0
         end
-        g = CartesianMesh((nx, ny, nz), (dx, dy, dz), origin = [X0, Y0, 0.0])
+        wrap(x::AbstractFloat, n) = fill(x, n)
+        wrap(x, n) = x
+        g = CartesianMesh((nx, ny, nz), (wrap(dx, nx), wrap(dy, ny), wrap(dz, nz)), origin = [X0, Y0, 0.0])
         return UnstructuredMesh(g)
     end
     X0, Y0, Z0 = g.origin
