@@ -525,6 +525,13 @@ end
 
 Base.length(S::JutulStorage, arg...) = Base.length(values(S), arg...)
 Base.iterate(S::JutulStorage, arg...) = Base.iterate(values(S), arg...)
+function Base.map(f, S::JutulStorage)
+    d = data(S)
+    if d isa OrderedDict
+        d = NamedTuple(d)
+    end
+    return Base.map(f, d)
+end
 Base.pairs(S::JutulStorage) = Base.pairs(data(S))
 Base.values(S::JutulStorage) = Base.values(data(S))
 

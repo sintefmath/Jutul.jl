@@ -78,7 +78,10 @@ function replace_variables!(model::MultiModel; kwarg...)
     return model
 end
 
-@inline submodel_symbols(model::MultiModel) = keys(model.models)
+@inline function submodel_symbols(model::MultiModel)
+    # TODO: Get rid of this collect.
+    return collect(keys(model.models))
+end
 
 function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
