@@ -1018,6 +1018,13 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
     return MultiModel(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
 end
 
+function convert_to_immutable_storage(model::MultiModel)
+    (; models, cross_terms, groups, context, reduction, specialize_ad, group_lookup) = model
+    models = convert_to_immutable_storage(models)
+    cross_terms = Tuple(cross_terms)
+    return MultiModel(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+end
+
 """
 IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where V
 

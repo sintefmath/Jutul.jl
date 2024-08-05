@@ -264,7 +264,7 @@ function update_offdiagonal_blocks!(storage, model, targets, sources;
     if !ismissing(lsys)
         models = model.models
         # for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
-        for i in eachindex(model.cross_terms, storage.cross_terms)
+        for i in eachindex(model.cross_terms)
             ctp = model.cross_terms[i]
             ct_s = storage.cross_terms[i]
             update_offdiagonal_block_pair!(lsys, ctp, ct_s, storage, model, models, targets, sources)
@@ -497,9 +497,14 @@ function cross_term(storage, target::Symbol)
 end
 
 function cross_term_mapper(model, storage, f)
-    ind = map(f, model.cross_terms)
+    ind = findall(f, model.cross_terms)
     return (model.cross_terms[ind], storage[:cross_terms][ind])
 end
+
+# function cross_term_mapper(model, storage, f)
+#     ind = map(f, model.cross_terms)
+#     return (model.cross_terms[ind], storage[:cross_terms][ind])
+# end
 
 has_symmetry(x) = !isnothing(symmetry(x))
 has_symmetry(x::CrossTermPair) = has_symmetry(x.cross_term)
