@@ -523,6 +523,19 @@ function convert_to_immutable_storage(S::JutulStorage)
     return JutulStorage(tup)
 end
 
+function Base.getindex(S::JutulStorage, i::Int)
+    d = data(S)
+    if d isa OrderedDict
+        for (j, v) in enumerate(values(d))
+            if j == i
+                return v
+            end
+        end
+        throw(BoundsError("Out of bounds $i for JutulStorage."))
+    else
+        return d[i]
+    end
+end
 Base.length(S::JutulStorage, arg...) = Base.length(values(S), arg...)
 Base.iterate(S::JutulStorage, arg...) = Base.iterate(values(S), arg...)
 function Base.map(f, S::JutulStorage)
