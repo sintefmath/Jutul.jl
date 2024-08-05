@@ -339,7 +339,7 @@ function crossterm_subsystem(model, lsys, target, source; diag = false)
     # neqs = map(number_of_equations, model.models)
     # ndofs = map(number_of_degrees_of_freedom, model.models)
 
-    model_keys = submodel_symbols(model)
+    model_keys = submodels_symbols(model)
     groups = model.groups
 
     function get_group(s)

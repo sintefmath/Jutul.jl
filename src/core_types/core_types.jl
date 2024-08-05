@@ -583,7 +583,7 @@ function Base.haskey(S::JutulStorage{Nothing}, name::Symbol)
 end
 
 function Base.keys(S::JutulStorage{Nothing})
-    return Base.keys(data(S))
+    return Tuple(keys(data(S)))
 end
 
 
