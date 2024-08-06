@@ -532,7 +532,13 @@ end
 
 function parameter_targets(model::SimulationModel)
     prm = get_parameters(model)
-    return collect(keys(prm))
+    targets = Symbol[]
+    for (k, v) in prm
+        if parameter_is_differentiable(v, model)
+            push!(targets, k)
+        end
+    end
+    return targets
 end
 
 function adjoint_parameter_model(model, arg...; context = DefaultContext())

@@ -55,18 +55,26 @@ function variable_scale(u::Pair{Symbol, V}) where V<:JutulVariables
 end
 
 function values_per_entity(model::CompositeModel, u::Pair{Symbol, V}) where V<:JutulVariables
+    # Needs syncing
+    composite_sync_variables!(model, :primary)
     values_per_entity(composite_submodel(model, u[1]), u[2])
 end
 
 function degrees_of_freedom_per_entity(model::CompositeModel, u::Pair{Symbol, V}) where V<:JutulVariables
+    # Needs syncing
+    composite_sync_variables!(model, :primary)
     degrees_of_freedom_per_entity(composite_submodel(model, u[1]), u[2])
 end
 
 function number_of_degrees_of_freedom(model::CompositeModel, u::Pair{Symbol, V}) where V<:JutulVariables
+    # Needs syncing
+    composite_sync_variables!(model, :primary)
     number_of_degrees_of_freedom(composite_submodel(model, u[1]), u[2])
 end
 
 function number_of_parameters(model::CompositeModel, u::Pair{Symbol, V}) where V<:JutulVariables
+    # Needs syncing
+    composite_sync_variables!(model, :parameters)
     number_of_parameters(composite_submodel(model, u[1]), u[2])
 end
 
@@ -131,3 +139,8 @@ end
 minimum_value(x::Pair) = minimum_value(last(x))
 maximum_value(x::Pair) = maximum_value(last(x))
 variable_scale(x::Pair) = variable_scale(last(x))
+
+function parameter_is_differentiable(prm::Pair, model)
+    k, prm = prm
+    parameter_is_differentiable(prm, composite_submodel(model, k))
+end

@@ -83,6 +83,28 @@ function composite_generate_submodel(m::CompositeModel, label::Symbol)
     return model
 end
 
+function composite_sync_variables!(m::CompositeModel, vartype = :all)
+    if vartype == :all
+        for k in (:parameters, :secondary, :primary)
+            composite_sync_variables!(m, k)
+        end
+    else
+        for k in keys(m.system.systems)
+            subm = composite_submodel(m, k)
+            vars0 = get_variables_by_type(subm, vartype)
+            empty!(vars0)
+        end
+        vars = get_variables_by_type(m, vartype)
+        for (k, var) in pairs(vars)
+            submodel_key, var = var
+            subm = composite_submodel(m, submodel_key)
+            vars0 = get_variables_by_type(subm, vartype)
+            vars0[k] = var
+        end
+    end
+    return m
+end
+
 function setup_forces(model::CompositeModel; kwarg...)
     force = Dict{Symbol, Any}()
     for k in keys(model.system.systems)

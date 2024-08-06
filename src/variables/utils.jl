@@ -105,6 +105,8 @@ Lower (inclusive) limit for variable.
 """
 minimum_value(::JutulVariables) = nothing
 
+parameter_is_differentiable(::JutulVariables, model) = true
+
 function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx, w)
     entity = associated_entity(p)
     active = active_entities(model.domain, entity, for_variables = true)

@@ -418,8 +418,8 @@ function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind
 end
 
 function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, row_context, col_context)
-    I = []
-    J = []
+    I = Int[]
+    J = Int[]
     outstr = "Determining sparse pattern of $(length(targets))×$(length(sources)) models:\n"
     equation_offset = 0
     variable_offset = 0
@@ -446,13 +446,18 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
             bz_n = treat_block_size(bz_n, sarg.block_n)
             bz_m = treat_block_size(bz_m, sarg.block_m)
             if length(i) > 0
-                push!(I, i .+ equation_offset)
-                push!(J, j .+ variable_offset)
                 @assert maximum(i) <= n "I index exceeded $n for $source → $target (largest value: $(maximum(i))"
                 @assert maximum(j) <= m "J index exceeded $m for $source → $target (largest value: $(maximum(j))"
 
                 @assert minimum(i) >= 1 "I index was lower than 1 for $source → $target"
                 @assert minimum(j) >= 1 "J index was lower than 1 for $source → $target"
+
+                for ii in i
+                    push!(I, ii + equation_offset)
+                end
+                for jj in j
+                    push!(J, jj + variable_offset)
+                end
             end
             outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1).\n"
             variable_offset += m
@@ -461,8 +466,6 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         equation_offset += n
     end
     @debug outstr
-    I = vec(vcat(I...))
-    J = vec(vcat(J...))
     bz_n = finalize_block_size(bz_n)
     bz_m = finalize_block_size(bz_m)
     return SparsePattern(I, J, equation_offset, variable_offset, matrix_layout(row_context), matrix_layout(col_context), bz_n, bz_m)

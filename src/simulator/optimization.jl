@@ -209,10 +209,11 @@ function objective_and_gradient_opt!(F, dFdx, x, data, arg...)
     return obj
 end
 
-function optimization_config(model, param, active = keys(model.parameters);
-                                                        rel_min = nothing,
-                                                        rel_max = nothing,
-                                                        use_scaling = false)
+function optimization_config(model, param, active = parameter_targets(model);
+        rel_min = nothing,
+        rel_max = nothing,
+        use_scaling = false
+    )
     out = Dict{Symbol, Any}()
     for k in active
         var = model.parameters[k]
