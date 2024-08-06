@@ -359,7 +359,9 @@ function optimization_limits!(lims, config, mapper, param, model)
             low_group = min(low_group, low)
             high_group = max(high_group, hi)
         end
-        high_group = max(high_group, low_group + 1e-8*(low_group + high_group) + 1e-18)
+        if high_group != Inf
+            high_group = max(high_group, low_group + 1e-8*(low_group + high_group) + 1e-18)
+        end
         @assert !isnan(low_group)
         @assert !isnan(high_group)
         cfg[:low] = low_group
