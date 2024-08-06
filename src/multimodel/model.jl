@@ -78,7 +78,9 @@ function replace_variables!(model::MultiModel; kwarg...)
     return model
 end
 
-@inline submodel_symbols(model::MultiModel) = keys(model.models)
+@inline function submodels_symbols(model::MultiModel)
+    return keys(model.models)
+end
 
 function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
@@ -139,7 +141,7 @@ function setup_multimodel_maps!(storage, model)
 end
 
 function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys)
-    mkeys = submodel_symbols(model)
+    mkeys = submodels_symbols(model)
     groups = model.groups
     no_groups = isnothing(groups)
     if no_groups
@@ -192,7 +194,7 @@ end
 function specialize_simulator_storage(storage::JutulStorage, model::MultiModel, specialize)
     specialize_outer = multi_model_is_specialized(model)
     specialize = specialize || specialize_outer
-    sym = submodel_symbols(model)
+    sym = submodels_symbols(model)
     for (k, v) in data(storage)
         if k in sym
             storage[k] = specialize_simulator_storage(v, model[k], specialize)
@@ -219,7 +221,7 @@ end
 
 function align_equations_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
-    model_keys = submodel_symbols(model)
+    model_keys = submodels_symbols(model)
     neqs = sub_number_of_equations(model)
     ndofs = sub_number_of_degrees_of_freedom(model)
     bz = sub_block_sizes(model)
@@ -470,7 +472,7 @@ function setup_linearized_system!(storage, model::MultiModel)
     models = model.models
     context = model.context
 
-    candidates = [i for i in submodel_symbols(model)]
+    candidates = [i for i in submodels_symbols(model)]
     if has_groups(model)
         ndof = values(map(number_of_degrees_of_freedom, models))
         n = sum(ndof)
@@ -558,7 +560,7 @@ function initialize_storage!(storage, model::MultiModel; kwarg...)
     end
 end
 
-function update_equations!(storage, model::MultiModel, dt; targets = submodel_symbols(model))
+function update_equations!(storage, model::MultiModel, dt; targets = submodels_symbols(model))
     @tic "model equations" for k in targets
         update_equations!(storage[k], model[k], dt)
     end
@@ -577,7 +579,7 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
 end
 
-function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = submodel_symbols(model))
+function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels_symbols(model), sources = submodels_symbols(model))
     models = model.models
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
         target = ctp.target::Symbol
@@ -681,8 +683,8 @@ end
 
 function update_linearized_system!(storage, model::MultiModel, executor = default_executor();
         equation_offset = 0,
-        targets = submodel_symbols(model),
-        sources = submodel_symbols(model),
+        targets = submodels_symbols(model),
+        sources = submodels_symbols(model),
         kwarg...)
     @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
     # Update diagonal blocks (model with respect to itself)
@@ -695,7 +697,7 @@ function update_linearized_system!(storage, model::MultiModel, executor = defaul
 end
 
 function update_diagonal_blocks!(storage, model::MultiModel, targets; lsys = storage.LinearizedSystem, kwarg...)
-    model_keys = submodel_symbols(model)
+    model_keys = submodels_symbols(model)
     if has_groups(model)
         ng = number_of_groups(model)
         groups = model.groups
@@ -729,7 +731,7 @@ end
 
 function setup_parameters(model::MultiModel, arg...; kwarg...)
     data_domains = Dict{Symbol, DataDomain}()
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         data_domains[k] = model[k].data_domain
     end
     return setup_parameters(data_domains, model, arg...; kwarg...)
@@ -871,7 +873,7 @@ function check_convergence(storage, model::MultiModel, cfg;
     end
 end
 
-function update_primary_variables!(storage, model::MultiModel; targets = submodel_symbols(model), kwarg...)
+function update_primary_variables!(storage, model::MultiModel; targets = submodels_symbols(model), kwarg...)
     models = model.models
     report = Dict{Symbol, AbstractDict}()
     for key in targets
@@ -941,7 +943,7 @@ end
 function get_output_state(storage, model::MultiModel)
     out = JUTUL_OUTPUT_TYPE()
     models = model.models
-    for key in submodel_symbols(model)
+    for key in submodels_symbols(model)
         out[key] = get_output_state(storage[key], models[key])
     end
     return out

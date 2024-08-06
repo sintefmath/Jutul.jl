@@ -1,6 +1,6 @@
 
 function swap_primary_with_parameters!(pmodel::MultiModel, model::MultiModel, targets = parameter_targets(model))
-    for k in submodel_symbols(pmodel)
+    for k in submodels_symbols(pmodel)
         swap_primary_with_parameters!(pmodel.models[k], model.models[k], targets[k])
     end
     return pmodel
@@ -36,7 +36,7 @@ function convert_state_ad(model::MultiModel, state, tag = nothing)
 end
 
 function merge_state_with_parameters(model::MultiModel, state, parameters)
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         merge_state_with_parameters(model[k], state[k], parameters[k])
     end
     return state
@@ -51,7 +51,7 @@ function state_gradient_outer!(∂F∂x, F, model::MultiModel, state, extra_arg;
     local_view(F::AbstractVector, offset, n) = view(F, (offset+1):(offset+n))
     local_view(F::AbstractMatrix, offset, n) = view(F, :, (offset+1):(offset+n))
 
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         m = model[k]
         n = number_of_degrees_of_freedom(m)
         ∂F∂x_k = local_view(∂F∂x, offset, n)
@@ -69,7 +69,7 @@ end
 
 function store_sensitivities(model::MultiModel, result, prm_map)
     out = Dict{Symbol, Any}()
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         m = model[k]
         out[k] = Dict{Symbol, Any}()
         store_sensitivities!(out[k], m, result, prm_map[k])
@@ -89,7 +89,7 @@ end
 
 function parameter_targets(model::MultiModel)
     targets = Dict{Symbol, Any}()
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         targets[k] = parameter_targets(model[k])
     end
     return targets
@@ -97,7 +97,7 @@ end
 
 function variable_mapper(model::MultiModel, arg...; targets = nothing, config = nothing, offset = 0)
     out = Dict{Symbol, Any}()
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         if isnothing(targets)
             t = nothing
         else
@@ -114,14 +114,14 @@ function variable_mapper(model::MultiModel, arg...; targets = nothing, config = 
 end
 
 function rescale_sensitivities!(dG, model::MultiModel, parameter_map)
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         rescale_sensitivities!(dG, model[k], parameter_map[k])
     end
 end
 
 function optimization_config(model::MultiModel, param, active = nothing; kwarg...)
     out = Dict{Symbol, Any}()
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         m = model[k]
         if isnothing(active) || !haskey(active, k)
             v = optimization_config(m, param[k]; kwarg...)
@@ -135,21 +135,21 @@ end
 
 function optimization_targets(config::Dict, model::MultiModel)
     out = Dict{Symbol, Any}()
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         out[k] = optimization_targets(config[k], model[k])
     end
     return out
 end
 
 function optimization_limits!(lims, config, mapper, param, model::MultiModel)
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         optimization_limits!(lims, config[k], mapper[k], param[k], model[k])
     end
     return lims
 end
 
 function transfer_gradient!(dFdy, dFdx, x, mapper, config, model::MultiModel)
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         transfer_gradient!(dFdy, dFdx, x, mapper[k], config[k], model[k])
     end
     return dFdy
@@ -157,7 +157,7 @@ end
 
 function swap_variables(state, parameters, model::MultiModel; kwarg...)
     out = Dict{Symbol, Any}()
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         out[k] = swap_variables(state[k], parameters[k], model[k]; kwarg...)
     end
     return out
@@ -172,7 +172,7 @@ end
 function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing)
     @assert isnothing(state0) "Not implemented."
     outer_sparsity = Dict()
-    for mod_k in submodel_symbols(model)
+    for mod_k in submodels_symbols(model)
         sparsity = Dict()
         substate = state[mod_k]
         entities = ad_entities(substate)
@@ -202,7 +202,7 @@ end
 
 function solve_numerical_sensitivities(model::MultiModel, states, reports, G; kwarg...)
     out = Dict()
-    for mk in submodel_symbols(model)
+    for mk in submodels_symbols(model)
         inner = Dict()
         for k in keys(model[mk].parameters)
             inner[k] = solve_numerical_sensitivities(model, states, reports, G, (mk, k); kwarg...)

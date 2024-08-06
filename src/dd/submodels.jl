@@ -76,7 +76,7 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     groups_0 = model.groups
     has_groups = !isnothing(groups_0)
     if has_groups
-        groups = Vector{Integer}()
+        groups = Vector{Int}()
     end
 
     for (i, k) in enumerate(keys(submodels))
