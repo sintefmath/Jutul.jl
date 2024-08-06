@@ -933,25 +933,28 @@ end
 
 Base.transpose(c::CrossTermPair) = CrossTermPair(c.source, c.target, c.source_equation, c.target_equation, c.cross_term,)
 
+abstract type AbstractMultiModel{label} <: JutulModel end
+multimodel_label(::AbstractMultiModel{L}) where L = L
 
 """
     MultiModel(models)
+    MultiModel(models, :SomeLabel)
 
 A model variant that is made up of many named submodels, each a fully realized [`SimulationModel`](@ref).
 
 `models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`.
 """
-struct MultiModel{T, CT, G, C} <: JutulModel
+struct MultiModel{label, T, CT, G, C, GL} <: AbstractMultiModel{label}
     models::T
     cross_terms::CT
     groups::G
     context::C
     reduction::Union{Symbol, Nothing}
     specialize_ad::Bool
-    group_lookup::Dict{Symbol, Int}
+    group_lookup::GL
 end
 
-function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = missing, specialize = false, specialize_ad = false)
+function MultiModel(models, label::Union{Nothing, Symbol} = nothing; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = missing, specialize = false, specialize_ad = false)
     group_lookup = Dict{Symbol, Int}()
     if isnothing(groups)
         num_groups = 1
@@ -1015,14 +1018,26 @@ function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = noth
     if specialize
         models = convert_to_immutable_storage(models)
     end
-    return MultiModel(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+    T = typeof(models)
+    CT = typeof(cross_terms)
+    G = typeof(groups)
+    C = typeof(context)
+    GL = typeof(group_lookup)
+    return MultiModel{label, T, CT, G, C, GL}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
 end
 
 function convert_to_immutable_storage(model::MultiModel)
     (; models, cross_terms, groups, context, reduction, specialize_ad, group_lookup) = model
     models = convert_to_immutable_storage(models)
     cross_terms = Tuple(cross_terms)
-    return MultiModel(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+    group_lookup = convert_to_immutable_storage(group_lookup)
+    label = multimodel_label(model)
+    T = typeof(models)
+    CT = typeof(cross_terms)
+    G = typeof(groups)
+    C = typeof(context)
+    GL = typeof(group_lookup)
+    return MultiModel{label, T, CT, G, C, GL}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
 end
 
 """
