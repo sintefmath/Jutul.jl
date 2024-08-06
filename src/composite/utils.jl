@@ -127,3 +127,7 @@ function convergence_criterion(model::CompositeModel, storage, eqn::Pair{Symbol,
     k, eq = eqn
     return convergence_criterion(composite_submodel(model, k), storage, eq, eq_s, r; kwarg...)
 end
+
+minimum_value(x::Pair) = minimum_value(last(x))
+maximum_value(x::Pair) = maximum_value(last(x))
+variable_scale(x::Pair) = variable_scale(last(x))
