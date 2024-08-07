@@ -1,6 +1,6 @@
 local_discretization(::CrossTerm, i) = nothing
 
-function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, row_layout, col_layout; equation_offset = 0, block_size = 1)
+function declare_sparsity(target_model, source_model, eq, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, row_layout, col_layout; equation_offset = 0, block_size = 1)
     primitive = declare_pattern(target_model, x, x_storage, source_entity, entity_indices)
     if isnothing(primitive)
         out = nothing

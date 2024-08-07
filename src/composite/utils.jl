@@ -88,10 +88,6 @@ function initialize_primary_variable_ad!(stateAD, model, pvar::Pair{Symbol, V}, 
     return initialize_primary_variable_ad!(stateAD, m, pvar[2], pkey, n_partials; kwarg...)
 end
 
-function declare_sparsity(model::CompositeModel, eq::Pair{Symbol, V}, eq_s, u, row_layout, col_layout) where V<:JutulEquation
-    k, eq = eq
-    return declare_sparsity(composite_submodel(model, k), eq, eq_s, u, row_layout, col_layout)
-end
 
 function number_of_equations(model::CompositeModel, eq::Pair{Symbol, V}) where V<:JutulEquation
     k, eq = eq
