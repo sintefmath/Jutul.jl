@@ -122,11 +122,6 @@ function update_equation_in_entity!(eq_buf, c, state, state0, eqn::Pair{Symbol, 
     return update_equation_in_entity!(eq_buf, c, state, state0, eq, composite_submodel(model, k), dt, ldisc)
 end
 
-function setup_equation_storage(model::CompositeModel, eqn::Pair{Symbol, V}, storage; kwarg...) where V<:JutulEquation
-    k, eq = eqn
-    return setup_equation_storage(composite_submodel(model, k), eq, storage; kwarg...)
-end
-
 function update_linearized_system_equation!(nz, r, model::CompositeModel, eqn::Pair{Symbol, V}, storage) where V<:JutulEquation
     k, eq = eqn
     return update_linearized_system_equation!(nz, r, composite_submodel(model, k), eq, storage)
