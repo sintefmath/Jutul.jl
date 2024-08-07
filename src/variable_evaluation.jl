@@ -175,6 +175,10 @@ end
 
 select_minimum_output_variables!(outputs, ::Any, model) = nothing
 
+function ensure_model_consistency!(model)
+    return model
+end
+
 function sort_variables!(model, type = :primary)
     if type == :all
         sort_variables!(model, :primary)

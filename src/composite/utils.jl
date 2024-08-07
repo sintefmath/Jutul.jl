@@ -19,6 +19,11 @@ function update_model_post_selection!(model::CompositeModel)
     return model
 end
 
+function ensure_model_consistency!(model::CompositeModel)
+    update_model_pre_selection!(model)
+    return model
+end
+
 function composite_submodel(model::CompositeModel, k::Symbol)
     return model.extra[:models][k]
 end

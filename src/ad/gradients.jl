@@ -547,6 +547,7 @@ function adjoint_parameter_model(model, arg...; context = DefaultContext())
     pmodel = adjoint_model_copy(model; context = context)
     # Swap parameters and primary variables
     swap_primary_with_parameters!(pmodel, model, arg...)
+    ensure_model_consistency!(pmodel)
     return sort_variables!(pmodel, :all)
 end
 

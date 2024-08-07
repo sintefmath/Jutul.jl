@@ -990,3 +990,10 @@ function sort_variables!(model::MultiModel, t = :primary)
     end
     return model
 end
+
+function ensure_model_consistency!(model::MultiModel)
+    for (k, m) in pairs(model.models)
+        ensure_model_consistency!(m)
+    end
+    return model
+end

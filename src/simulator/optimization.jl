@@ -94,11 +94,13 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     data[:sim_config] = config
 
     if grad_type == :adjoint
-        adj_storage = setup_adjoint_storage(model, state0 = state0,
-                                                   parameters = parameters,
-                                                   targets = targets,
-                                                   use_sparsity = use_sparsity,
-                                                   param_obj = param_obj)
+        adj_storage = setup_adjoint_storage(model,
+            state0 = state0,
+            parameters = parameters,
+            targets = targets,
+            use_sparsity = use_sparsity,
+            param_obj = param_obj
+        )
         data[:adjoint_storage] = adj_storage
         grad_adj = zeros(adj_storage.n)
     else

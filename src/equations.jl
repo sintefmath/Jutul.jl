@@ -394,7 +394,7 @@ function declare_pattern(model, e, eq_s, entity, arg...)
     k = entity_as_symbol(entity)
     if haskey(eq_s, k)
         cache = eq_s[k]
-        return generic_cache_declare_pattern(cache, arg...)
+        out = generic_cache_declare_pattern(cache, arg...)
     else
         out = nothing
     end
