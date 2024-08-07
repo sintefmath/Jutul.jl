@@ -540,7 +540,10 @@ end
 function extra_cross_term_sparsity(model, storage, target, include_symmetry = true)
     # Get sparsity of cross terms so that they can be included in any generic equations
     ct_pairs, ct_storage = cross_term_target(model, storage, target, include_symmetry)
-    sparsity = Dict{Union{Symbol, Pair}, Any}()
+    # TODO: Maybe this should just be Symbol?
+    # Old def was
+    # sparsity = Dict{Union{Symbol, Pair}, Any}()
+    sparsity = Dict{Symbol, Any}()
     for (ct_p, ct_s) in zip(ct_pairs, ct_storage)
         # Loop over all cross terms that impact target and grab the global sparsity
         # so that this can be added when doing sparsity detection for the model itself.
@@ -555,6 +558,10 @@ function extra_cross_term_sparsity(model, storage, target, include_symmetry = tr
             eq = ct_p.source_equation
             @assert has_symmetry(ct_p.cross_term)
         end
+        if eq isa Pair
+            eq = last(eq)
+        end
+        eq::Symbol
         if !haskey(sparsity, eq)
             sparsity[eq] = Dict{Symbol, Any}()
         end
