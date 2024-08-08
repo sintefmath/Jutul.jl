@@ -1127,3 +1127,6 @@ function setup_equations_views(storage, model, r)
     return convert_to_immutable_storage(out)
 end
 
+function ensure_model_consistency!(model::JutulModel)
+    return model
+end
