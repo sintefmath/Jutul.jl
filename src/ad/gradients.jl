@@ -645,12 +645,31 @@ function perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
 end
 
 function evaluate_objective(G, model, states, timesteps, all_forces; large_value = 1e20)
+    function convert_state_to_jutul_storage(model, x::JutulStorage)
+        return x
+    end
+    function convert_state_to_jutul_storage(model, x::AbstractDict)
+        return JutulStorage(x)
+    end
+    function convert_state_to_jutul_storage(model::MultiModel, x::AbstractDict)
+        s = JutulStorage()
+        for (k, v) in pairs(x)
+            s[k] = JutulStorage(v)
+        end
+        return s
+    end
     if length(states) < length(timesteps)
         # Failure: Put to a big value.
         @warn "Partial data passed, objective set to large value $large_value."
         obj = large_value
     else
-        F = i -> G(model, states[i], timesteps[i], i, forces_for_timestep(nothing, all_forces, timesteps, i))
+        F = i -> G(
+            model,
+            convert_state_to_jutul_storage(model, states[i]),
+            timesteps[i],
+            i,
+            forces_for_timestep(nothing, all_forces, timesteps, i)
+        )
         obj = sum(F, eachindex(states))
     end
     return obj
