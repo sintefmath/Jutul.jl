@@ -76,7 +76,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         low = lims[1][k]
         high = lims[2][k]
         @assert low <= x0[k] "Computed lower limit $low for parameter #$k was larger than provided x0[k]=$(x0[k])"
-        @assert high >= x0[k] "Computer upper limit $hi for parameter #$k was smaller than provided x0[k]=$(x0[k])"
+        @assert high >= x0[k] "Computer upper limit $high for parameter #$k was smaller than provided x0[k]=$(x0[k])"
     end
     data = Dict()
     data[:n_objective] = 1
