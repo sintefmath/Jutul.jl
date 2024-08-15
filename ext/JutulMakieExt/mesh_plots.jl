@@ -114,7 +114,7 @@ function Jutul.plot_mesh_edges_impl!(ax, m;
         transparency = true,
         color = :black,
         cells = nothing,
-        outer = true,
+        outer = dim(m) == 3,
         linewidth = 0.3,
         kwarg...)
     m = physical_representation(m)
