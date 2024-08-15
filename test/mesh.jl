@@ -112,9 +112,11 @@ using MAT
     end
 
     @testset "cartesian to unstructured" begin
-        test_meshes = [
+        meshes_2d = [
             CartesianMesh((3, 2)),
             CartesianMesh((3, 2), ([1.0, 3.0, 4.0], [1.0, 2.0])),
+        ]
+        meshes_3d = [
             CartesianMesh((3, 2, 2), ((1.0, 3.0, 4.0), (1.0, 2.0), 1.0)),
             CartesianMesh((3, 2, 2)),
             CartesianMesh((4, 1, 1)),
@@ -122,38 +124,47 @@ using MAT
             CartesianMesh((3, 2, 2), (10.0, 3.0, 5.0)),
             CartesianMesh((3, 2, 2), ([10.0, 5.0, π], 3.0, 5.0)),
             CartesianMesh((100, 3, 7))
-            ]
-        for g in test_meshes
-            G = UnstructuredMesh(g)
-            geo1 = tpfv_geometry(g)
-            geo2 = tpfv_geometry(G)
+        ]
+        for mdim in 2:3
+            @testset "$(mdim)D conversion" begin
+                if mdim == 2
+                    test_meshes = meshes_2d
+                else
+                    test_meshes = meshes_3d
+                end
+                for g in test_meshes
+                    G = UnstructuredMesh(g)
+                    geo1 = tpfv_geometry(g)
+                    geo2 = tpfv_geometry(G)
 
-            @testset "cells" begin
-                @test geo1.volumes ≈ geo2.volumes
-                @test geo1.cell_centroids ≈ geo2.cell_centroids
-            end
-            @testset "faces" begin
-                @test geo1.neighbors == geo2.neighbors
-                @test geo1.normals == geo2.normals
-                @test geo1.areas ≈ geo2.areas
-                @test geo1.face_centroids ≈ geo2.face_centroids
-            end
-            @testset "boundary" begin
-                @test geo1.boundary_normals == geo2.boundary_normals
-                @test geo1.boundary_neighbors == geo2.boundary_neighbors
-                @test geo1.boundary_areas ≈ geo2.boundary_areas
-                @test geo1.boundary_centroids ≈ geo2.boundary_centroids
-            end
-            @testset "half-faces" begin
-                @test geo1.half_face_faces == geo2.half_face_faces
-                @test geo1.half_face_cells == geo2.half_face_cells
-            end
-            try
-                triangulate_mesh(g)
-            catch
-                @test false
-            finally
-                @test true
+                    @testset "cells" begin
+                        @test geo1.volumes ≈ geo2.volumes
+                        @test geo1.cell_centroids ≈ geo2.cell_centroids
+                    end
+                    @testset "faces" begin
+                        @test geo1.neighbors == geo2.neighbors
+                        @test geo1.normals == geo2.normals
+                        @test geo1.areas ≈ geo2.areas
+                        @test geo1.face_centroids ≈ geo2.face_centroids
+                    end
+                    @testset "boundary" begin
+                        @test geo1.boundary_normals == geo2.boundary_normals
+                        @test geo1.boundary_neighbors == geo2.boundary_neighbors
+                        @test geo1.boundary_areas ≈ geo2.boundary_areas
+                        @test geo1.boundary_centroids ≈ geo2.boundary_centroids
+                    end
+                    @testset "half-faces" begin
+                        @test geo1.half_face_faces == geo2.half_face_faces
+                        @test geo1.half_face_cells == geo2.half_face_cells
+                    end
+                    try
+                        triangulate_mesh(g)
+                    catch
+                        @test false
+                    finally
+                        @test true
+                    end
+                end
             end
         end
         # 2D support missing
