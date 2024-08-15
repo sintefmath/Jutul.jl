@@ -174,7 +174,7 @@ using MAT
                     end
                     @testset "triangulate_mesh" begin
                         try
-                            triangulate_mesh(g)
+                            triangulate_mesh(G)
                         catch
                             @test false
                         finally
@@ -218,11 +218,3 @@ end
         @test getfield(geo_c2, f) ≈ getfield(geo, f)
     end
 end
-##
-g = UnstructuredMesh(CartesianMesh((3, 2, 3)))
-g = UnstructuredMesh(CartesianMesh((3, 2)))
-# g = UnstructuredMesh(CartesianMesh((3, )))
-tpfv_geometry(g)
-plot_mesh(g)
-##
-plot_mesh(g)

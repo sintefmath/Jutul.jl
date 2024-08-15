@@ -1,7 +1,6 @@
-function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; outer = false, flatten = true)
-    N = 3
-    pts = Vector{SVector{N, Float64}}()
-    tri = Vector{SVector{N, Int64}}()
+function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten = true) where D
+    pts = Vector{SVector{D, Float64}}()
+    tri = Vector{SVector{3, Int64}}()
     cell_index = Vector{Int64}()
     face_index = Vector{Int64}()
 
@@ -12,8 +11,19 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{3}; outer = false, flatten =
         # Assume hexahedral, 6 faces per cell, triangulated into 4 parts each
         sizehint!(d, 24*number_of_cells(m))
     end
+    if D == 2
+        cell_centroids = SVector{D, Float64}[]
+        nc = number_of_cells(m)
+        for i in 1:nc
+            c, v = compute_centroid_and_measure(m, Cells(), i)
+            push!(cell_centroids, c)
+        end
+    else
+        # Not needed.
+        cell_centroids = missing
+    end
 
-    add_points!(e, e_def, offset) = triangulate_and_add_faces!(dest, m, e, e_def, offset = offset)
+    add_points!(e, e_def, offset) = triangulate_and_add_faces!(dest, m, e, e_def, cell_centroids, offset = offset)
     if !outer
         offset = add_points!(Faces(), m.faces, offset)
     end
@@ -43,7 +53,7 @@ function mesh_data_to_tris!(out::Vector{Float64}, cell_data, cell_index)
     return out::Vector{Float64}
 end
 
-function triangulate_and_add_faces!(dest, m, e, faces; offset = 0)
+function triangulate_and_add_faces!(dest, m, e, faces, cell_centroids; offset = 0)
     node_pts = m.node_points
     T = eltype(node_pts)
     for f in 1:count_entities(m, e)
@@ -54,13 +64,33 @@ function triangulate_and_add_faces!(dest, m, e, faces; offset = 0)
             C += node_pts[node]
         end
         C /= n
-        offset = triangulate_and_add_faces!(dest, f, faces.neighbors[f], C, nodes, node_pts, n; offset = offset)
+        offset = triangulate_and_add_faces!(dest, f, faces.neighbors[f], C, nodes, node_pts, cell_centroids, n; offset = offset)
+    end
+    return offset
+end
+
+function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::Vector{SVector{2, T}}, cell_centroids, n; offset = 0) where {T}
+    cell_index, face_index, pts, tri = dest
+    new_vert_count = n + 1
+    @assert new_vert_count == 3
+    for cell in neighbors
+        if cell > 0
+            for i in 1:new_vert_count
+                push!(cell_index, cell)
+                push!(face_index, face)
+                push!(pts, svector_local_point(cell_centroids[cell], i-1, nodes, node_pts))
+            end
+            for i in 1:n
+                push!(tri, svector_cyclical_tesselation(n, i, offset))
+            end
+            offset = offset + new_vert_count
+        end
     end
     return offset
 end
 
 
-function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts, n; offset = 0)
+function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::Vector{SVector{3, T}}, cell_centroids, n; offset = 0) where {T}
     cell_index, face_index, pts, tri = dest
     if n == 4
         # TODO: Could add a 3 mesh specialization here
