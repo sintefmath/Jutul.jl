@@ -704,7 +704,7 @@ function UnstructuredMesh(G_raw::AbstractDict)
     return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw)
 end
 
-function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = true)
+function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = dim(m) == 3)
     if !(m isa UnstructuredMesh)
         m = UnstructuredMesh(m)
     end
@@ -719,7 +719,6 @@ function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = true)
         a = outer && ((l_in && !r_in) || (r_in && !l_in))
         b = !outer && (l_in || r_in)
         if a || b
-            @assert !b
             prev_node = missing
             f2n = m.faces.faces_to_nodes[face]
             for node in f2n
