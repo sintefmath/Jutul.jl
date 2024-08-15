@@ -284,11 +284,31 @@ end
 """
     UnstructuredMesh(g::CartesianMesh)
 
-Convert `CartesianMesh` instance to unstructured grid (3D only)
+Convert `CartesianMesh` instance to unstructured grid. Note that the mesh must
+be 2D and 3D for a 1-to-1 conversion. 1D meshes are implicitly converted to 2D.
 """
-function UnstructuredMesh(g::CartesianMesh; kwarg...)
+function UnstructuredMesh(g::CartesianMesh; warn_1d = true, kwarg...)
     d = dim(g)
-    return unstructured_from_cart(g, Val(d); kwarg...)
+    if d == 1
+        if warn_1d
+            @warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 2D/3D grids. Converting 1D grid to 2D."
+        end
+        nx = number_of_cells(g)
+        dy = 1.0
+        dx = only(g.deltas)
+        X0 = only(g.origin)
+        Y0 = 0.0
+        wrap(x::AbstractFloat, n) = fill(x, n)
+        wrap(x, n) = x
+        g = CartesianMesh(
+            (nx, 1),
+            (wrap(dx, nx), wrap(1.0, 1)),
+            origin = [X0, Y0]
+        )
+        out = UnstructuredMesh(g)
+    else
+        out = unstructured_from_cart(g, Val(d); kwarg...)
+    end
 end
 
 function unstructured_from_cart(g, ::Val{2}; kwarg...)
@@ -455,24 +475,6 @@ function unstructured_from_cart(g, ::Val{3}; kwarg...)
     d = dim(g)
     @assert d == 3
     nx, ny, nz = grid_dims_ijk(g)
-    # if d < 3
-    #     @warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting $(d)D grid to 3D."
-    #     dy = 1.0
-    #     dz = 1.0
-    #     if d == 2
-    #         dx, dy = g.deltas
-    #         X0, Y0 = g.origin
-    #     else
-    #         @assert d == 1
-    #         dx = only(g.deltas)
-    #         X0 = only(g.origin)
-    #         Y0 = 0.0
-    #     end
-    #     wrap(x::AbstractFloat, n) = fill(x, n)
-    #     wrap(x, n) = x
-    #     g = CartesianMesh((nx, ny, nz), (wrap(dx, nx), wrap(dy, ny), wrap(dz, nz)), origin = [X0, Y0, 0.0])
-    #     return UnstructuredMesh(g)
-    # end
     X0, Y0, Z0 = g.origin
 
     nc = number_of_cells(g)
