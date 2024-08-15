@@ -176,7 +176,6 @@ function face_normal(G::UnstructuredMesh{2}, f, e = Faces())
 
     v = pt_r - pt_l
     normal = T(v[2], -v[1])
-    normal = -normal
 
     return normal/norm(normal, 2)
 end

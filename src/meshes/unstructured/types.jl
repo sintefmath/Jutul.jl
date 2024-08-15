@@ -373,7 +373,7 @@ function unstructured_from_cart(g, ::Val{2}; kwarg...)
         for x in 1:nx
             p1 = nodeix[x, y]
             p2 = nodeix[x+1, y]
-            insert_face!(faces_nodes, faces_nodespos, p1, p2)
+            insert_face!(faces_nodes, faces_nodespos, p2, p1)
             add_internal_neighbor!((x, y-1), 2)
         end
     end
@@ -395,10 +395,10 @@ function unstructured_from_cart(g, ::Val{2}; kwarg...)
             p1 = nodeix[x, y]
             p2 = nodeix[x, y+1]
             if x == 1
-                insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2)
+                insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p2, p1)
                 add_boundary_cell!((x, y), 1)
             else
-                insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p2, p1)
+                insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2)
                 add_boundary_cell!((x-1, y), 1)
             end
         end
@@ -408,8 +408,6 @@ function unstructured_from_cart(g, ::Val{2}; kwarg...)
         for y in [1, ny+1]
             p1 = nodeix[x, y]
             p2 = nodeix[x+1, y]
-            p3 = nodeix[x+1, y]
-            p4 = nodeix[x, y]
             if y == 1
                 insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2)
                 add_boundary_cell!((x, y), 2)
