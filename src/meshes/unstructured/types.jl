@@ -324,7 +324,7 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
         newpt = (i-1)*D
         return newpt::T
     end
-    function get_point(D::Vector{T}, i) where {T<:Real}
+    function get_point(D::Union{NTuple{N, T}, Vector{T}}, i) where {T<:Real, N}
         pt = zero(T)
         for j in 1:(i-1)
             pt += D[j]

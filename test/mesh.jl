@@ -113,6 +113,7 @@ using MAT
 
     @testset "cartesian to unstructured" begin
         test_meshes = [
+            CartesianMesh((3, 2, 2), ((1.0, 3.0, 4.0), (1.0, 2.0), 1.0)),
             CartesianMesh((3, 2, 2)),
             CartesianMesh((4, 1, 1)),
             CartesianMesh((9, 7, 5), origin = [0.2, 0.6, 10.1]),
