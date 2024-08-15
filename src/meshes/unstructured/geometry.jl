@@ -86,33 +86,46 @@ function sum_centroid_volumes_helper(pts::Vector{SVector{N, E}}, c_node::SVector
             c_node_face += pts[node]
         end
         c_node_face /= length(nodes)
-        # Then create tets and compute volume
-        for i in eachindex(nodes)
-            if i == 1
-                l = nodes[end]
-            else
-                l = nodes[i-1]
+        if N == 3
+            # Then create tets and compute volume
+            for i in eachindex(nodes)
+                if i == 1
+                    l = nodes[end]
+                else
+                    l = nodes[i-1]
+                end
+                r = nodes[i]
+                l_node = pts[l]
+                r_node = pts[r]
+                if N == 3
+                    M = SMatrix{4, 4, Float64, 16}(
+                        l_node[1], r_node[1], c_node[1], c_node_face[1],
+                        l_node[2], r_node[2], c_node[2], c_node_face[2],
+                        l_node[3], r_node[3], c_node[3], c_node_face[3],
+                        1.0, 1.0, 1.0, 1.0
+                    )
+                    local_volume = (1.0/6.0)*abs(det(M))
+                    local_centroid = (1.0/4.0)*(l_node + r_node + c_node_face + c_node)
+                else
+                    A = r_node - c_node
+                    B = l_node - c_node
+                    local_volume = abs(cross(A, B)/4)
+                    local_centroid = (l_node + r_node + c_node)/3.0
+                    @assert local_volume >= 0
+                end
+                vol += local_volume
+                centroid += local_centroid*local_volume
             end
-            r = nodes[i]
+        else
+            # 2D is much simpler (area = volume in Jutul)
+            @assert length(nodes) == 2
+            l, r = nodes
             l_node = pts[l]
             r_node = pts[r]
-            if N == 3
-                # Statically known if this is the case.
-                M = SMatrix{4, 4, Float64, 16}(
-                    l_node[1], r_node[1], c_node[1], c_node_face[1],
-                    l_node[2], r_node[2], c_node[2], c_node_face[2],
-                    l_node[3], r_node[3], c_node[3], c_node_face[3],
-                    1.0, 1.0, 1.0, 1.0
-                )
-                local_volume = (1.0/6.0)*abs(det(M))
-                local_centroid = (1.0/4.0)*(l_node + r_node + c_node_face + c_node)
-            else
-                A = r_node - c_node
-                B = l_node - c_node
-                local_volume = abs(cross(A, B)/2)
-                local_centroid = (l_node + r_node + c_node)/3.0
-                @assert local_volume >= 0
-            end
+            A = l_node - c_node
+            B = r_node - c_node
+            local_volume = abs(cross(A, B)/2.0)
+            local_centroid = (l_node + r_node + c_node)/3.0
             vol += local_volume
             centroid += local_centroid*local_volume
         end
