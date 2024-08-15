@@ -113,6 +113,8 @@ using MAT
 
     @testset "cartesian to unstructured" begin
         test_meshes = [
+            CartesianMesh((3, 2)),
+            CartesianMesh((3, 2), ([1.0, 3.0, 4.0], [1.0, 2.0])),
             CartesianMesh((3, 2, 2), ((1.0, 3.0, 4.0), (1.0, 2.0), 1.0)),
             CartesianMesh((3, 2, 2)),
             CartesianMesh((4, 1, 1)),
@@ -146,11 +148,18 @@ using MAT
                 @test geo1.half_face_faces == geo2.half_face_faces
                 @test geo1.half_face_cells == geo2.half_face_cells
             end
+            try
+                triangulate_mesh(g)
+            catch
+                @test false
+            finally
+                @test true
+            end
         end
         # 2D support missing
-        @test_warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting 2D grid to 3D." UnstructuredMesh(CartesianMesh((3, 2)))
+        # @test_warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting 2D grid to 3D." UnstructuredMesh(CartesianMesh((3, 2)))
         # 1D support missing
-        @test_warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting 1D grid to 3D." UnstructuredMesh(CartesianMesh((3,)))
+        # @test_warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting 1D grid to 3D." UnstructuredMesh(CartesianMesh((3,)))
     end
     @testset "extract_submesh + cart convert" begin
         g = CartesianMesh((2, 2, 2))
@@ -182,3 +191,11 @@ end
         @test getfield(geo_c2, f) ≈ getfield(geo, f)
     end
 end
+##
+g = UnstructuredMesh(CartesianMesh((3, 2, 3)))
+g = UnstructuredMesh(CartesianMesh((3, 2)))
+# g = UnstructuredMesh(CartesianMesh((3, )))
+tpfv_geometry(g)
+plot_mesh(g)
+##
+plot_mesh(g)
