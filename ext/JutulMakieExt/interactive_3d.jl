@@ -707,6 +707,12 @@ function basic_3d_figure(resolution = default_jutul_resolution(); z_is_depth = f
     return (fig, ax)
 end
 
+function basic_2d_figure(resolution = default_jutul_resolution(); z_is_depth = false)
+    fig = Figure(size = resolution)
+    ax = Axis(fig[1, 1])
+    return (fig, ax)
+end
+
 
 function symlog10(x)
     # Inspired by matplotlib.scale.SymmetricalLogScale

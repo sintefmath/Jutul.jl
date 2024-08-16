@@ -3,7 +3,12 @@ function Jutul.plot_mesh_impl(m;
         z_is_depth = Jutul.mesh_z_is_depth(m),
         kwarg...
     )
-    fig, ax = basic_3d_figure(resolution, z_is_depth = z_is_depth)
+    if dim(m) == 3
+        makefig = basic_3d_figure
+    else
+        makefig = basic_2d_figure
+    end
+    fig, ax = makefig(resolution, z_is_depth = z_is_depth)
     p = Jutul.plot_mesh!(ax, m; kwarg...)
     display(fig)
     return (fig, ax, p)
@@ -54,7 +59,13 @@ function Jutul.plot_cell_data_impl(m, data;
         z_is_depth = Jutul.mesh_z_is_depth(m),
         kwarg...
     )
-    fig, ax = basic_3d_figure(resolution, z_is_depth = z_is_depth)
+    if dim(m) == 3
+        makefig = basic_3d_figure
+    else
+        makefig = basic_2d_figure
+    end
+    fig, ax = makefig(resolution, z_is_depth = z_is_depth)
+
     p = Jutul.plot_cell_data!(ax, m, data; kwarg...)
     min_data = minimum(data)
     max_data = maximum(data)
