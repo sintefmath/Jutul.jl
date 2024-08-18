@@ -1,17 +1,22 @@
-function evaluate_flux(p, hf::NFVMLinearDiscretization)
-    p_l = p[hf.left]
-    p_r = p[hf.right]
+function evaluate_flux(p::AbstractVector{T}, nfvm::NFVMDiscretization) where {T}
+    get_p(cell) = p[cell]
+    return evaluate_flux(get_p, nfvm)
+end
+
+function evaluate_flux(p::Function, hf::NFVMLinearDiscretization)
+    p_l = p(hf.left)
+    p_r = p(hf.right)
     T_l = hf.T_left
     T_r = hf.T_right
     q = T_l*p_l + T_r*p_r
     for cell_and_trans in hf.mpfa
         c, T = cell_and_trans
-        q += p[c]*T
+        q += p(c)*T
     end
     return q
 end
 
-function evaluate_flux(p::AbstractVector{T}, nfvm::NFVMNonLinearDiscretization) where {T}
+function evaluate_flux(p::Function, nfvm::NFVMNonLinearDiscretization)
     L = nfvm.ft_left
     R = nfvm.ft_right
     l, r = cell_pair(L)
@@ -20,8 +25,8 @@ function evaluate_flux(p::AbstractVector{T}, nfvm::NFVMNonLinearDiscretization) 
     r_l = -compute_r(p, L)
     r_r = compute_r(p, R)
 
-    p_l = p[l]
-    p_r = p[r]
+    p_l = p(l)
+    p_r = p(r)
 
     T_ll = -L.T_left
     T_lr = -L.T_right
@@ -45,7 +50,7 @@ function evaluate_flux(p::AbstractVector{T}, nfvm::NFVMNonLinearDiscretization) 
     end
     r_total = r_lw + r_rw
     if abs(r_total) < 1e-10
-        μ_l = μ_r = convert(T, 0.5)
+        μ_l = μ_r = 0.5
     else
         μ_l = r_lw/r_total
         μ_r = r_rw/r_total
@@ -55,11 +60,11 @@ function evaluate_flux(p::AbstractVector{T}, nfvm::NFVMNonLinearDiscretization) 
     return q
 end
 
-function compute_r(p::AbstractVector{T}, hf::NFVMLinearDiscretization) where {T}
-    q = zero(T)
+function compute_r(p::Function, hf::NFVMLinearDiscretization)
+    q = 0.0
     for cell_and_trans in hf.mpfa
         c, T_c = cell_and_trans
-        q += p[c]*T_c
+        q += p(c)*T_c
     end
     return q
 end
