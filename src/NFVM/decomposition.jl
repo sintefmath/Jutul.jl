@@ -48,7 +48,7 @@ function ntpfa_decompose_half_face(G::UnstructuredMesh{D}, cell, face, K, cell_c
 
     trip, trip_w = find_minimizing_triplet(x_t, AKn, points)
     l_r = NFVM.reconstruct_l(trip, trip_w, x_t, points)
-    @assert l_r ≈ AKn "Mismatch in reconstruction, $l_r != $AKn"
+    @assert norm(l_r - AKn)/norm(AKn) < 1e-8 "Mismatch in reconstruction, $l_r != $AKn"
 
     active_weights = map(x -> weights[x], trip)
     return (
