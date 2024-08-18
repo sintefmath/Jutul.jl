@@ -100,4 +100,7 @@ module Jutul
     # Support for SI unit conversion
     include("units/units.jl")
 
+    # Nonlinear finite-volume discretizations
+    include("NFVM/NFVM.jl")
+
 end # module
