@@ -46,7 +46,7 @@ function ntpfa_decompose_half_face(G::UnstructuredMesh{D}, cell, face, K, cell_c
     # Next, figure out which ones we are going to keep.
     x_t = cell_centroids[cell]
 
-    trip, trip_w = find_minimizing_triplet(x_t, AKn, points)
+    trip, trip_w = find_minimizing_basis(x_t, AKn, points)
     l_r = NFVM.reconstruct_l(trip, trip_w, x_t, points)
     @assert norm(l_r - AKn)/norm(AKn) < 1e-8 "Mismatch in reconstruction, $l_r != $AKn"
 

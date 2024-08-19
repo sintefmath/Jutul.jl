@@ -20,7 +20,7 @@ import Jutul.NFVM as NFVM
             factor.*T(1.0, 0.0),
             factor.*T(0.0, 1.0),
         ]
-        pair, w = NFVM.find_minimizing_triplet(x_t, l, all_x)
+        pair, w = NFVM.find_minimizing_basis(x_t, l, all_x)
         l_r = NFVM.reconstruct_l(pair, w, x_t, all_x)
         # Should be the same.
         @test l_r ≈ l
@@ -40,7 +40,7 @@ import Jutul.NFVM as NFVM
                     for i in eachindex(x)
                         x[i] = x[i] .+ offset
                     end
-                    pair, w = NFVM.find_minimizing_triplet(x_t_i, l, x)
+                    pair, w = NFVM.find_minimizing_basis(x_t_i, l, x)
                     l_r = NFVM.reconstruct_l(pair, w, x_t_i, x)
                     @test l_r ≈ l
                 end
@@ -59,7 +59,7 @@ import Jutul.NFVM as NFVM
             factor.*T(0.0, 1.0, 0.0),
             factor.*T(0.0, 0.0, 1.0)
         ]
-        triplet, w = NFVM.find_minimizing_triplet(x_t, l, all_x)
+        triplet, w = NFVM.find_minimizing_basis(x_t, l, all_x)
 
         l_r = NFVM.reconstruct_l(triplet, w, x_t, all_x)
         @test l_r ≈ l
@@ -80,7 +80,7 @@ import Jutul.NFVM as NFVM
                         for i in eachindex(x)
                             x[i] = x[i] .+ offset
                         end
-                        trip, w = NFVM.find_minimizing_triplet(x_t_i, l, x)
+                        trip, w = NFVM.find_minimizing_basis(x_t_i, l, x)
                         l_r = NFVM.reconstruct_l(trip, w, x_t_i, x)
                         @test l_r ≈ l
                     end
@@ -97,7 +97,7 @@ import Jutul.NFVM as NFVM
                 Tt(0.16666666666666666, 0.0)
             ]
             l = Tt(0.0, 0.0010471975511965976)
-            triplet, w = NFVM.find_minimizing_triplet(x_t, l, points, verbose = false)
+            triplet, w = NFVM.find_minimizing_basis(x_t, l, points, verbose = false)
             l_r = NFVM.reconstruct_l(triplet, w, x_t, points)
             @test l_r ≈ l
 
@@ -110,7 +110,7 @@ import Jutul.NFVM as NFVM
                 Tv(0.003131953514408839, 0.855309095397525),
                 Tv(0.16852587628122123, 0.021593752012451912)
             ]
-            ijk, w = NFVM.find_minimizing_triplet(x_t, AKn, points, verbose = true)
+            ijk, w = NFVM.find_minimizing_basis(x_t, AKn, points, verbose = true)
             @test NFVM.reconstruct_l(ijk, w, x_t, points) ≈ AKn
             @test ijk == (1, 2)
             @test w ≈ [0.03151702159776656, 9.182407443929852e-5]

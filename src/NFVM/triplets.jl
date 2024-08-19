@@ -28,7 +28,7 @@ function triplet_coefficients(t_i, t_j, t_k, l)
     return (α, β, γ)
 end
 
-function find_minimizing_triplet_inner(l::SVector{3, Num_t}, all_t, print = false, stop_early = true) where Num_t
+function find_minimizing_basis_inner(l::SVector{3, Num_t}, all_t, print = false, stop_early = true) where Num_t
     N = length(all_t)
     get_t(i) = all_t[i]
     # Intermediate variables
@@ -75,7 +75,7 @@ function find_minimizing_triplet_inner(l::SVector{3, Num_t}, all_t, print = fals
     return (best_triplet, best_triplet_W)
 end
 
-function find_minimizing_triplet_inner(l::SVector{2, Num_t}, all_t, print = false, stop_early = true) where Num_t
+function find_minimizing_basis_inner(l::SVector{2, Num_t}, all_t, print = false, stop_early = true) where Num_t
     N = length(all_t)
     get_t(i) = all_t[i]
     # Intermediate variables
@@ -132,7 +132,7 @@ function candidate_vectors(x_t, x; normalize = true)
     return t
 end
 
-function find_minimizing_triplet(x_t::T, l::T, all_x::AbstractVector{T}; check = false, verbose = false, stop_early = true) where T
+function find_minimizing_basis(x_t::T, l::T, all_x::AbstractVector{T}; check = false, verbose = false, stop_early = true) where T
     all_x = copy(all_x)
     all_t = candidate_vectors(x_t, all_x, normalize = true)
     l_norm = norm(l, 2)
@@ -153,7 +153,7 @@ function find_minimizing_triplet(x_t::T, l::T, all_x::AbstractVector{T}; check =
     end
     sorted_indices = sort(eachindex(all_t), by = F_sort)
 
-    ijk, w = find_minimizing_triplet_inner(l_bar, all_t[sorted_indices], verbose, stop_early)
+    ijk, w = find_minimizing_basis_inner(l_bar, all_t[sorted_indices], verbose, stop_early)
     ijk = map(x -> sorted_indices[x], ijk)
 
     function normalized_weight(i)
