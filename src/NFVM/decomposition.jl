@@ -116,10 +116,12 @@ function NFVMLinearDiscretization(decomp; left, right)
     return NFVMLinearDiscretization(left, right, t_l, t_r, t_mpfa)
 end
 
-function ntpfa_decompose_faces(G::UnstructuredMesh{D}, perm, scheme = :avgmpfa; faces = 1:number_of_faces(G), extra_out = false) where D
+function ntpfa_decompose_faces(G::UnstructuredMesh{D}, perm, scheme::Symbol = :avgmpfa; faces = 1:number_of_faces(G), extra_out = false) where D
     geo = tpfv_geometry(G)
     areas = geo.areas
     Vec_t = SVector{D, Float64}
+    possible_schemes = (:mpfa, :avgmpfa, :ntpfa, :nmpfa)
+    scheme in possible_schemes || throw(ArgumentError("Scheme must be one of $possible_schemes, was :$scheme"))
 
     normals = reinterpret(Vec_t, geo.normals)
     cell_centroids = reinterpret(Vec_t, geo.cell_centroids)
@@ -148,8 +150,7 @@ function ntpfa_decompose_faces(G::UnstructuredMesh{D}, perm, scheme = :avgmpfa; 
 
         l_trans = NFVMLinearDiscretization(left_decompose, left = l, right = r)
         r_trans = NFVMLinearDiscretization(right_decompose, left = l, right = r)
-        # scheme = :ntpfa
-        if scheme == :avgmpfa
+        if scheme == :avgmpfa || scheme == :mpfa
             disc = merge_to_avgmpfa(l_trans, r_trans)
         else
             disc = NFVMNonLinearDiscretization(l_trans, r_trans, scheme)
