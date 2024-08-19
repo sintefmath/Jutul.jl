@@ -14,18 +14,16 @@ function duo_coefficients(t_i, t_j, l)
 end
 
 function triplet_coefficients(t_i, t_j, t_k, l)
-    function D(v1, v2, v3)
-        A = abs(dot(cross(v1, v2), v3))
-        B = norm(v1, 2)*norm(v2, 2)*norm(v3, 2)
-        return A/B
-    end
-    D_f = D(t_i, t_j, t_k)
-    if D_f == 0
-        α = β = γ = Inf
+    M = @SMatrix [
+        t_i[1] t_j[1] t_k[1];
+        t_i[2] t_j[2] t_k[2];
+        t_i[3] t_j[3] t_k[3]
+    ]
+    if abs(det(M)) > 1e-10
+        tmp = M\l
+        α, β, γ = tmp
     else
-        α = D(l, t_j, t_k)/D_f
-        β = D(t_i, l, t_k)/D_f
-        γ = D(t_i, t_j, l)/D_f
+        α = β = γ = Inf
     end
     return (α, β, γ)
 end
