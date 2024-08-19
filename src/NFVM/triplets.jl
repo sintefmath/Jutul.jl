@@ -68,7 +68,6 @@ function find_minimizing_basis_inner(l::SVector{3, Num_t}, all_t, print = false,
             end
         end
     end
-    @assert !any(isequal(0), best_triplet)
     if print
         @info "Picking best found triplet." best_triplet_W best_triplet
     end
@@ -154,6 +153,9 @@ function find_minimizing_basis(x_t::T, l::T, all_x::AbstractVector{T}; check = f
     sorted_indices = sort(eachindex(all_t), by = F_sort)
 
     ijk, w = find_minimizing_basis_inner(l_bar, all_t[sorted_indices], verbose, stop_early)
+    if any(isequal(0), ijk)
+        handle_failure(x_t, l, all_x)
+    end
     ijk = map(x -> sorted_indices[x], ijk)
 
     function normalized_weight(i)
@@ -162,6 +164,18 @@ function find_minimizing_basis(x_t::T, l::T, all_x::AbstractVector{T}; check = f
     end
     w = map(normalized_weight, eachindex(w))
     return (ijk = ijk, w = w)
+end
+
+function handle_failure(x_t, l, all_x)
+    println("Decomposition failed")
+    println("x_t=")
+    Base.show(x_t)
+    println("\nl=")
+    Base.show(l)
+    println("\nall_x=")
+    Base.show(all_x)
+    println("")
+    error("Aborting, unable to continue.")
 end
 
 function reconstruct_l(indices, weights, x_t, all_x)
