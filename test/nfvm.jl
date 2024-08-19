@@ -115,5 +115,56 @@ import Jutul.NFVM as NFVM
             @test ijk == (1, 2)
             @test w ≈ [0.03151702159776656, 9.182407443929852e-5]
         end
+        @testset "2D and 3D comparison" begin
+            Tv = SVector{3, Float64}
+            x_t =
+            Tv(
+                0.0054697673655655955,
+                0.0054697673655655955,
+                0.5
+            )
+            AKn =
+            Tv(
+                1.079510556183061e-15,
+                4.127374112001815e-19,
+                0.0
+            )
+            points =
+            Tv[
+                Tv(0.010940232272671423, 0.005467680910047275, 0.4999999999999999),
+                Tv(0.005467680910047275, 0.010940232272671423, 0.5000000000000001),
+                Tv(0.0, 0.005471161386171925, 0.5),
+                Tv(0.005471161386171925, 0.0, 0.5),
+                Tv(0.0054697673655655955, 0.0054697673655655955, 0.0),
+                Tv(0.0054697673655655955, 0.0054697673655655955, 1.0),
+            ]
+            trip_3d, trip_w_3d = Jutul.NFVM.find_minimizing_basis(x_t, AKn, points, verbose = true)
+            l_r = Jutul.NFVM.reconstruct_l(trip_3d, trip_w_3d, x_t, points)
+            @test l_r ≈ AKn
+            Tv = SVector{2, Float64}
+            x_t =
+            Tv(
+            0.0054697673655655955,
+            0.0054697673655655955
+            )
+            AKn =
+            Tv(
+                1.079510556183061e-15,
+            4.127374112001815e-19
+            )
+            points =
+            Tv[
+            Tv(0.010940232272671423, 0.005467680910047275),
+            Tv(0.005467680910047275, 0.010940232272671423),
+            Tv(0.0, 0.005471161386171925),
+            Tv(0.005471161386171925, 0.0),
+            ]
+            trip_2d, trip_w_2d = Jutul.NFVM.find_minimizing_basis(x_t, AKn, points, verbose = true)
+            l_r = Jutul.NFVM.reconstruct_l(trip_2d, trip_w_2d, x_t, points)
+            @test l_r ≈ AKn
+            # Test that 2D and trivially 3D gives the same
+            @test trip_2d == trip_3d[1:2]
+            @test trip_w_2d ≈ trip_w_3d[1:2]
+        end
     end
 end
