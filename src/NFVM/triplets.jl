@@ -3,13 +3,10 @@ function duo_coefficients(t_i, t_j, l)
         t_i[1] t_j[1];
         t_i[2] t_j[2]
     ]
-    if abs(det(M)) > 1e-10
-        tmp = M\l
-        α, β = tmp
-    else
+    α, β = M\l
+    if isnan(α) || isnan(β)
         α = β = Inf
     end
-    # @info "??" M l M\l (α, β)
     return (α, β)
 end
 
@@ -19,10 +16,8 @@ function triplet_coefficients(t_i, t_j, t_k, l)
         t_i[2] t_j[2] t_k[2];
         t_i[3] t_j[3] t_k[3]
     ]
-    if abs(det(M)) > 1e-10
-        tmp = M\l
-        α, β, γ = tmp
-    else
+    α, β, γ = M\l
+    if isnan(α) || isnan(β) || isnan(γ)
         α = β = γ = Inf
     end
     return (α, β, γ)
@@ -50,7 +45,6 @@ function find_minimizing_basis_inner(l::SVector{3, Num_t}, all_t, print = false,
                     ijk_value = max(α, β, γ)
                     ijk = (i, j, k)
                     W = (α, β, γ)
-                    # @info "Candidate!" ijk_value W
                     if ijk_value ≤ 1 && stop_early
                         if print
                             @info "Found optimal triplet." (α, β, γ) ijk t_i t_j t_k l
@@ -108,7 +102,6 @@ function find_minimizing_basis_inner(l::SVector{2, Num_t}, all_t, print = false,
             end
         end
     end
-    @assert !any(isequal(0), best_triplet)
     if print
         @info "Picking best found triplet." best_triplet_W best_triplet
     end
@@ -131,7 +124,7 @@ function candidate_vectors(x_t, x; normalize = true)
     return t
 end
 
-function find_minimizing_basis(x_t::T, l::T, all_x::AbstractVector{T}; check = false, verbose = false, stop_early = true) where T
+function find_minimizing_basis(x_t::T, l::T, all_x::AbstractVector{T}; check = false, verbose = false, stop_early = true, throw = true) where T
     all_x = copy(all_x)
     all_t = candidate_vectors(x_t, all_x, normalize = true)
     l_norm = norm(l, 2)
@@ -154,15 +147,19 @@ function find_minimizing_basis(x_t::T, l::T, all_x::AbstractVector{T}; check = f
 
     ijk, w = find_minimizing_basis_inner(l_bar, all_t[sorted_indices], verbose, stop_early)
     if any(isequal(0), ijk)
-        handle_failure(x_t, l, all_x)
-    end
-    ijk = map(x -> sorted_indices[x], ijk)
+        if throw
+            handle_failure(x_t, l, all_x)
+        end
+    else
+        # OK!
+        ijk = map(x -> sorted_indices[x], ijk)
 
-    function normalized_weight(i)
-        t = candidate_vectors(x_t, all_x, ijk[i], normalize = false)
-        return l_norm*w[i]/norm(t, 2)
+        function normalized_weight(i)
+            t = candidate_vectors(x_t, all_x, ijk[i], normalize = false)
+            return l_norm*w[i]/norm(t, 2)
+        end
+        w = map(normalized_weight, eachindex(w))
     end
-    w = map(normalized_weight, eachindex(w))
     return (ijk = ijk, w = w)
 end
 
