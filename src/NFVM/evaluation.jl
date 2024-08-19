@@ -2,7 +2,7 @@ function evaluate_flux(p, hf::NFVMLinearDiscretization, ph::Int = 1)
     p_l, p_r = cell_pair_pressures(p, hf, ph)
     T_l = hf.T_left
     T_r = hf.T_right
-    q = T_l*p_l + T_r*p_r + compute_r(p, hf, ph)
+    q = tpfa_flux(p_l, p_r, hf) + compute_r(p, hf, ph)
     return q
 end
 
@@ -16,15 +16,11 @@ function evaluate_flux(p, nfvm::NFVMNonLinearDiscretization, ph::Int = 1)
 
     p_l, p_r = cell_pair_pressures(p, nfvm, ph)
 
-    T_ll = -L.T_left
-    T_lr = -L.T_right
-    q_l = T_ll*p_l + T_lr*p_r
+    q_l = -tpfa_flux(p_l, p_r, L)
     # Add MPFA part
     q_l += r_l
 
-    T_rl = R.T_left
-    T_rr = R.T_right
-    q_r = T_rl*p_l + T_rr*p_r
+    q_r = tpfa_flux(p_l, p_r, R)
     # Add MPFA part
     q_r += r_r
 
@@ -78,4 +74,10 @@ function cell_pair_pressures(p::AbstractMatrix, hf, ph::Int = 1)
     p_l = p[ph, l]
     p_r = p[ph, r]
     return (p_l, p_r)
+end
+
+function tpfa_flux(p_l, p_r, hf::NFVMLinearDiscretization)
+    T_l = hf.T_left
+    T_r = hf.T_right
+    return T_l*p_l + T_r*p_r
 end
