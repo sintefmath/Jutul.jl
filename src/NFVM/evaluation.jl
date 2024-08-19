@@ -1,32 +1,20 @@
-function evaluate_flux(p::AbstractVector{T}, nfvm::NFVMDiscretization) where {T}
-    get_p(cell) = p[cell]
-    return evaluate_flux(get_p, nfvm)
-end
-
-function evaluate_flux(p::Function, hf::NFVMLinearDiscretization)
-    p_l = p(hf.left)
-    p_r = p(hf.right)
+function evaluate_flux(p, hf::NFVMLinearDiscretization, ph::Int = 1)
+    p_l, p_r = cell_pair_pressures(p, hf, ph)
     T_l = hf.T_left
     T_r = hf.T_right
-    q = T_l*p_l + T_r*p_r
-    for cell_and_trans in hf.mpfa
-        c, T = cell_and_trans
-        q += p(c)*T
-    end
+    q = T_l*p_l + T_r*p_r + compute_r(p, hf, ph)
     return q
 end
 
-function evaluate_flux(p::Function, nfvm::NFVMNonLinearDiscretization)
+function evaluate_flux(p, nfvm::NFVMNonLinearDiscretization, ph::Int = 1)
     L = nfvm.ft_left
     R = nfvm.ft_right
-    l, r = cell_pair(L)
 
     # We switch sign for the left handed flux to get to the form in the papers.
     r_l = -compute_r(p, L)
     r_r = compute_r(p, R)
 
-    p_l = p(l)
-    p_r = p(r)
+    p_l, p_r = cell_pair_pressures(p, nfvm, ph)
 
     T_ll = -L.T_left
     T_lr = -L.T_right
@@ -60,11 +48,34 @@ function evaluate_flux(p::Function, nfvm::NFVMNonLinearDiscretization)
     return q
 end
 
-function compute_r(p::Function, hf::NFVMLinearDiscretization)
-    q = 0.0
+function compute_r(p::AbstractVector{T}, hf::NFVMLinearDiscretization, ph::Int = 1) where T
+    q = zero(T)
     for cell_and_trans in hf.mpfa
         c, T_c = cell_and_trans
-        q += p(c)*T_c
+        q += p[c]*T_c
     end
     return q
+end
+
+function compute_r(p::AbstractMatrix{T}, hf::NFVMLinearDiscretization, ph::Int = 1) where T
+    q = zero(T)
+    for cell_and_trans in hf.mpfa
+        c, T_c = cell_and_trans
+        q += p[ph, c]*T_c
+    end
+    return q
+end
+
+function cell_pair_pressures(p::AbstractVector, hf, ph::Int = 1)
+    l, r = cell_pair(hf)
+    p_l = p[l]
+    p_r = p[r]
+    return (p_l, p_r)
+end
+
+function cell_pair_pressures(p::AbstractMatrix, hf, ph::Int = 1)
+    l, r = cell_pair(hf)
+    p_l = p[ph, l]
+    p_r = p[ph, r]
+    return (p_l, p_r)
 end
