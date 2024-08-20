@@ -10,19 +10,10 @@ function evaluate_flux(p, nfvm, ph::Int)
     L = nfvm.ft_left
     R = nfvm.ft_right
 
-    # We switch sign for the left handed flux to get to the form in the papers.
-    r_l = -compute_r(p, L, ph)
-    r_r = compute_r(p, R, ph)
-
     p_l, p_r = cell_pair_pressures(p, nfvm, ph)
-
-    q_l = -tpfa_flux(p_l, p_r, L)
-    # Add MPFA part
-    q_l += r_l
-
-    q_r = tpfa_flux(p_l, p_r, R)
-    # Add MPFA part
-    q_r += r_r
+    # Fluxes from different side with different sign
+    q_l, r_l = ntpfa_half_flux(p_l, p_r, p, L, ph, -1)
+    q_r, r_r = ntpfa_half_flux(p_l, p_r, p, R, ph)
 
     if nfvm.scheme == :ntpfa
         r_lw = r_l
@@ -39,9 +30,16 @@ function evaluate_flux(p, nfvm, ph::Int)
         μ_l = r_lw/r_total
         μ_r = r_rw/r_total
     end
-    q = μ_r*q_l - μ_l*q_r
-
+    q = μ_l*q_r - μ_r*q_l
     return q
+end
+
+function ntpfa_half_flux(p_l, p_r, p, disc, ph, sgn = 1)
+    q = tpfa_flux(p_l, p_r, disc)
+    # Add MPFA part
+    r = compute_r(p, disc, ph)
+    q += r
+    return (sgn*q, sgn*r)
 end
 
 function compute_r(p::AbstractVector{T}, hf::NFVMLinearDiscretization, ph::Int) where T
