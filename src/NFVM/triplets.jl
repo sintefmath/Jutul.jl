@@ -3,9 +3,10 @@ function duo_coefficients(t_i, t_j, l)
         t_i[1] t_j[1];
         t_i[2] t_j[2]
     ]
-    α, β = M\l
-    if isnan(α) || isnan(β)
+    if abs(det(M)) < 1e-8
         α = β = Inf
+    else
+        α, β = M\l
     end
     return (α, β)
 end
@@ -16,9 +17,10 @@ function triplet_coefficients(t_i, t_j, t_k, l)
         t_i[2] t_j[2] t_k[2];
         t_i[3] t_j[3] t_k[3]
     ]
-    α, β, γ = M\l
-    if isnan(α) || isnan(β) || isnan(γ)
+    if abs(det(M)) < 1e-8
         α = β = γ = Inf
+    else
+        α, β, γ = M\l
     end
     return (α, β, γ)
 end
