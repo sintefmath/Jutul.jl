@@ -118,3 +118,25 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
         end
     end
 end
+
+function update_equation!(eq_s::ConservationLawFiniteVolumeStorage, law::ConservationLaw, storage, model, dt)
+    @tic "accumulation" update_accumulation!(eq_s, law, storage, model, dt)
+    @tic "fluxes" fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
+end
+
+function fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
+    function F!(out, state, state0, face)
+        local_disc = nothing# local_discretization(eq, self_cell)
+        # kgrad, upw = ldisc.face_disc(face)
+        face_disc = (face) -> (kgrad = disc.kgrad[face], upwind = disc.upwind[face])
+        local_disc = (face_disc = face_disc,)
+        dt = 1.0
+        N = length(out)
+        T = eltype(out)
+        val = @SVector zeros(T, N)
+        face_flux!(val, face, eq, state, model, dt, disc, local_disc)
+        return out
+    end
+
+    error()
+end
