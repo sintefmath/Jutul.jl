@@ -27,26 +27,27 @@ struct SPU{T} <: UpwindDiscretization
 end
 
 export PotentialFlow
-struct PotentialFlow{K, U, HF} <: FlowDiscretization
+struct PotentialFlow{AD, K, U, HF} <: FlowDiscretization
     kgrad::K
     upwind::U
     half_face_map::HF
-    function PotentialFlow(kgrad::K, upwind::U, hf::HF) where {K, U, HF}
-        return new{K, U, HF}(kgrad, upwind, hf)
+    function PotentialFlow(kgrad::K, upwind::U, hf::HF; ad::Symbol = :generic) where {K, U, HF}
+        @assert ad in (:fvm, :generic)
+        return new{ad, K, U, HF}(kgrad, upwind, hf)
     end
 end
 
 function PotentialFlow(g::JutulMesh; kwarg...)
     N = get_neighborship(g)
     nc = number_of_cells(g)
-    PotentialFlow(N, nc; kwarg...)
+    return PotentialFlow(N, nc; kwarg...)
 end
 
-function PotentialFlow(N::AbstractMatrix, nc = maximum(N); kgrad = nothing, upwind = nothing)
+function PotentialFlow(N::AbstractMatrix, nc = maximum(N); kgrad = nothing, upwind = nothing, ad = :generic)
     nf = size(N, 2)
     hf = half_face_map(N, nc)
     T = eltype(N)
-    if isnothing(kgrad)
+    if isnothing(kgrad) || kgrad == :tpfa
         kgrad = Vector{TPFA{T}}(undef, nf)
         for i in 1:nf
             left = N[1, i]
@@ -55,7 +56,7 @@ function PotentialFlow(N::AbstractMatrix, nc = maximum(N); kgrad = nothing, upwi
             kgrad[i] = TPFA(left, right, face_sign)
         end
     end
-    if isnothing(upwind)
+    if isnothing(upwind) || upwind == :spu
         upwind = Vector{SPU{T}}(undef, nf)
         for i in 1:nf
             left = N[1, i]
@@ -63,7 +64,9 @@ function PotentialFlow(N::AbstractMatrix, nc = maximum(N); kgrad = nothing, upwi
             upwind[i] = SPU(left, right)
         end
     end
-    return PotentialFlow(kgrad, upwind, hf)
+    @assert upwind isa AbstractVector
+    @assert kgrad isa AbstractVector
+    return PotentialFlow(kgrad, upwind, hf, ad = ad)
 end
 
 function local_discretization(eq::ConservationLaw{S, D, FT, N}, i) where {S, D<:PotentialFlow, FT, N}
