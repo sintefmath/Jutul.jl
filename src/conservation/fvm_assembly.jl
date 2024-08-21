@@ -52,6 +52,8 @@ function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawFiniteVo
             if fcell != c
                 push!(I, c)
                 push!(J, fcell)
+                push!(J, c)
+                push!(I, fcell)
             end
         end
     end
@@ -76,24 +78,28 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
     face_cache = eq_s.face_flux_cells
     vpos = face_cache.vpos
     vars = face_cache.variables
+    nc, _, _ = ad_dims(acc)
     nu, ne, np = ad_dims(face_cache)
     @assert nu == nf
     left_facepos = face_cache.jacobian_positions
     right_facepos = eq_s.face_flux_extra_alignment
     N = get_neighborship(model.domain.representation)
     for face in 1:nf
+        l, r = N[face, :]
+        @info "Starting face" face l r
         for pos in vpos[face]:(vpos[face+1]-1)
             cell = vars[pos]
-            l, r = N[face, :]
+            @info "!" cell nc nu ne np
             for e in 1:ne
                 for d = 1:np
+                    @info "$e $d"
                     pos = find_jac_position(
                         jac,
                         l, cell,
                         0, 0,
                         equation_offset, variable_offset,
                         e, d,
-                        nu, nu,
+                        nc, nc,
                         ne, np,
                         model.context
                     )
@@ -104,7 +110,7 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
                         0, 0,
                         equation_offset, variable_offset,
                         e, d,
-                        nu, nu,
+                        nc, nc,
                         ne, np,
                         model.context
                     )
