@@ -11,22 +11,52 @@ end
 
 function Jutul.plot_mesh_impl!(ax, m;
         cells = nothing,
+        faces = nothing,
+        boundaryfaces = nothing,
         outer = false,
         color = :lightblue,
         kwarg...
     )
     pts, tri, mapper = triangulate_mesh(m, outer = outer)
-    if !isnothing(cells)
+    has_cell_filter = !isnothing(cells)
+    has_face_filter = !isnothing(faces)
+    has_bface_filter = !isnothing(boundaryfaces)
+    if has_cell_filter || has_face_filter || has_bface_filter
         if eltype(cells) == Bool
             @assert length(cells) == number_of_cells(m)
             cells = findall(cells)
         end
+        if eltype(faces) == Bool
+            @assert length(faces) == number_of_faces(m)
+            faces = findall(faces)
+        end
+        if eltype(boundaryfaces) == Bool
+            @assert length(boundaryfaces) == number_of_boundary_faces(m)
+            boundaryfaces = findall(boundaryfaces)
+        end
+        if has_bface_filter
+            nf = number_of_faces(m)
+            boundaryfaces = deepcopy(boundaryfaces)
+            boundaryfaces .+= nf
+        end
         ntri = size(tri, 1)
-        keep = [false for i in 1:ntri]
+        keep = fill(false, ntri)
         cell_ix = mapper.indices.Cells
+        face_ix = mapper.indices.Faces
         for i in 1:ntri
             # All tris have same cell so this is ok
-            keep[i] = cell_ix[tri[i, 1]] in cells
+            tri_tmp = tri[i, 1]
+            keep_this = true
+            if has_cell_filter
+                keep_this = keep_this && cell_ix[tri_tmp] in cells
+            end
+            if has_face_filter
+                keep_this = keep_this && face_ix[tri_tmp] in faces
+            end
+            if has_bface_filter
+                keep_this = keep_this && face_ix[tri_tmp] in boundaryfaces
+            end
+            keep[i] = keep_this
         end
         tri = tri[keep, :]
         tri, pts = remove_unused_points(tri, pts)

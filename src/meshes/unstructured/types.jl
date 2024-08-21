@@ -79,7 +79,7 @@ function convert_neighborship(N::Vector{Tuple{Int, Int}}; nc = nothing, nf = not
     end
     if !isnothing(nc)
         for (f, t) in enumerate(N)
-            for (c, i) in enumerate(t)
+            for (i, c) in enumerate(t)
                 @assert c <= nc "Neighborship exceeded $nc in face $f cell $i: neighborship was $t"
                 if allow_zero
                     @assert c >= 0 "Neighborship was negative in face $f cell $i: neighborship was $t"
