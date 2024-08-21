@@ -275,28 +275,3 @@ function upw_flux(v, l::T, r::T) where {T<:ST.ADval}
     end
     return out
 end
-
-function setup_equation_storage(model, eq::ConservationLaw{<:Any, PotentialFlow{:fvm, A, B, C}, <:Any, <:Any}, storage; extra_sparsity = nothing, kwarg...) where {A, B, C}
-    # F!(out, state, state0, i) = face_flux!(out, i, state, state0, eq, model, 1.0)
-    disc = eq.flow_discretization
-
-    function F!(out, state, state0, face)
-        local_disc = nothing# local_discretization(eq, self_cell)
-        # kgrad, upw = ldisc.face_disc(face)
-        face_disc = (face) -> (kgrad = disc.kgrad[face], upwind = disc.upwind[face])
-        local_disc = (face_disc = face_disc,)
-        dt = 1.0
-        N = length(out)
-        T = eltype(out)
-        val = @SVector zeros(T, N)
-        face_flux!(val, face, eq, state, model, dt, disc, local_disc)
-        return out
-    end
-
-    N = number_of_entities(model, eq)
-    n = number_of_equations_per_entity(model, eq)
-    e = associated_entity(eq)
-    nt = count_active_entities(model.domain, e)
-    caches = create_equation_caches(model, n, N, storage, F!, nt; self_entity = e, kwarg...)
-    error()
-end
