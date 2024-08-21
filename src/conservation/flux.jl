@@ -275,3 +275,7 @@ function upw_flux(v, l::T, r::T) where {T<:ST.ADval}
     end
     return out
 end
+
+function setup_equation_storage(model, eq::ConservationLaw{<:Any, PotentialFlow{:fvm, A, B, C}, <:Any, <:Any}, storage; extra_sparsity = nothing, kwarg...) where {A, B, C}
+    error()
+end
