@@ -753,6 +753,8 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM} <: JutulAutoDiffCache wh
     end
 end
 
+Base.eltype(::GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM}) where {N, E, ∂x, A, P, M, D, VM} = ∂x
+
 "Discretization of kgradp + upwind"
 abstract type FlowDiscretization <: JutulDiscretization end
 

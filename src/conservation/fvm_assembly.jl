@@ -128,17 +128,28 @@ function update_equation!(eq_s::ConservationLawFiniteVolumeStorage, law::Conserv
 end
 
 function fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
-    function F!(out, state, state0, face)
-        local_disc = nothing# local_discretization(eq, self_cell)
-        # kgrad, upw = ldisc.face_disc(face)
-        face_disc = (face) -> (kgrad = disc.kgrad[face], upwind = disc.upwind[face])
-        local_disc = (face_disc = face_disc,)
-        dt = 1.0
-        N = length(out)
-        T = eltype(out)
-        val = @SVector zeros(T, N)
-        face_flux!(val, face, eq, state, model, dt, disc, local_disc)
-        return out
+    disc = law.flow_discretization
+    face_disc = (face) -> (kgrad = disc.kgrad[face], upwind = disc.upwind[face])
+    local_disc = (face_disc = face_disc,)
+
+    face_cache = eq_s.face_flux_cells
+    nu, ne, np = ad_dims(face_cache)
+    T = eltype(face_cache)
+    val = @SVector zeros(T, np)
+    local_state = local_ad(storage.state, 1, T)
+    vars = face_cache.variables
+    for face in 1:nu
+        for j in vrange(face_cache, face)
+            v_i = @views face_cache.entries[:, j]
+            var = vars[j]
+
+            state_i = new_entity_index(local_state, var)
+            flux = face_flux!(val, face, law, state_i, model, dt, disc, local_disc)
+            @. v_i = flux
+        end
     end
-    error()
+end
+
+@inline function get_diagonal_entries(eq::ConservationLaw, eq_s::ConservationLawFiniteVolumeStorage)
+    return eq_s.accumulation.entries
 end
