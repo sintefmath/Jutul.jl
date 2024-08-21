@@ -12,8 +12,8 @@ function evaluate_flux(p, nfvm, ph::Int)
 
     p_l, p_r = cell_pair_pressures(p, nfvm, ph)
     # Fluxes from different side with different sign
-    q_l, r_l = ntpfa_half_flux(p_l, p_r, p, L, ph, -1)
-    q_r, r_r = ntpfa_half_flux(p_l, p_r, p, R, ph)
+    q_l, r_l = ntpfa_half_flux(p_l, p_r, p, L, ph)
+    q_r, r_r = ntpfa_half_flux(p_l, p_r, p, R, ph, -1)
 
     if nfvm.scheme == :ntpfa
         r_lw = r_l
@@ -27,10 +27,11 @@ function evaluate_flux(p, nfvm, ph::Int)
     if abs(r_total) < 1e-10
         μ_l = μ_r = 0.5
     else
-        μ_l = r_lw/r_total
-        μ_r = r_rw/r_total
+        μ_l = r_rw/r_total
+        μ_r = r_lw/r_total
     end
-    q = μ_l*q_r - μ_r*q_l
+
+    q = μ_l*q_l - μ_r*q_r
     return q
 end
 
