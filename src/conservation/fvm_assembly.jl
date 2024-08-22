@@ -184,7 +184,22 @@ function update_linearized_system_equation!(nz, r, model, eq::ConservationLaw, e
     zero_ix = eq_s.unique_alignment
     @. nz[zero_ix] = 0.0
     # Accumulation term
-    fill_equation_entries!(nz, r, model, eq_s.accumulation)
+    if false
+        # TODO: Something wrong with expected transpose of r in old cache for residuals.
+        fill_equation_entries!(nz, r, model, eq_s.accumulation)
+    else
+        acc = eq_s.accumulation
+        nc, ne, np = ad_dims(acc)
+        for i in 1:nc
+            for e in 1:ne
+                a = get_entry(acc, i, e)
+                r[e, i] = a.value
+                for d = 1:np
+                    update_jacobian_entry!(nz, acc, i, e, d, a.partials[d])
+                end
+            end
+        end
+    end
     # Fill fluxes
     face_cache = eq_s.face_flux_cells
     face_fluxes = face_cache.entries
