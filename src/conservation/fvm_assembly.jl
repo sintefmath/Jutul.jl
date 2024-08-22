@@ -3,6 +3,8 @@ struct ConservationLawFiniteVolumeStorage{A, HF, HA}
     accumulation_symbol::Symbol
     face_flux_cells::HF
     face_flux_extra_alignment::HA
+    unique_alignment::Vector{Int}
+    neighbors::Vector{Tuple{Int, Int}}
 end
 
 function setup_equation_storage(model, eq::ConservationLaw{conserved, PotentialFlow{:fvm, A, B, C}, <:Any, <:Any}, storage; extra_sparsity = nothing, kwarg...) where {conserved, A, B, C}
@@ -30,11 +32,20 @@ function setup_equation_storage(model, eq::ConservationLaw{conserved, PotentialF
     caches = create_equation_caches(model, n, N, storage, F!, nt; self_entity = e, kwarg...)
     face_cache = caches.Cells
     extra_alignment = similar(face_cache.jacobian_positions)
+    to_zero_pos = Int[]
     # Accumulation term
     nca = count_active_entities(model.domain, Cells())
     acc_cache = CompactAutoDiffCache(n, nca, model, entity = Cells())
+    # TODO: Store unique(extra_alignment and face_cache.jacobian_positions)
     @assert only(get_primary_variable_ordered_entities(model)) == Cells()
-    return ConservationLawFiniteVolumeStorage(acc_cache, conserved, face_cache, extra_alignment)
+    N = get_neighborship(model.domain.representation)
+    neighbors = Tuple{Int, Int}[]
+    @assert size(N, 2) == nt
+    for i in 1:nt
+        push!(neighbors, (N[1, i], N[2, i]))
+    end
+
+    return ConservationLawFiniteVolumeStorage(acc_cache, conserved, face_cache, extra_alignment, to_zero_pos, neighbors)
 end
 
 function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawFiniteVolumeStorage, entity::Cells)
@@ -84,11 +95,15 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
     @assert nu == nf
     left_facepos = face_cache.jacobian_positions
     right_facepos = eq_s.face_flux_extra_alignment
-    N = get_neighborship(model.domain.representation)
+    # N = get_neighborship(model.domain.representation)
+    # touched_left = zeros(Int, size(left_facepos))
+    # touched_right = zeros(Int, size(right_facepos))
+
+    N = eq_s.neighbors
     for face in 1:nf
-        l, r = N[:, face]
-        for pos in vpos[face]:(vpos[face+1]-1)
-            cell = vars[pos]
+        l, r = N[face]
+        for fpos in vpos[face]:(vpos[face+1]-1)
+            cell = vars[fpos]
             for e in 1:ne
                 for d = 1:np
                     pos = find_jac_position(
@@ -101,7 +116,7 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
                         ne, np,
                         model.context
                     )
-                    set_jacobian_pos!(left_facepos, face, e, d, np, pos)
+                    set_jacobian_pos!(left_facepos, fpos, e, d, np, pos)
                     pos = find_jac_position(
                         jac,
                         r, cell,
@@ -112,11 +127,25 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
                         ne, np,
                         model.context
                     )
-                    set_jacobian_pos!(right_facepos, face, e, d, np, pos)
+                    set_jacobian_pos!(right_facepos, fpos, e, d, np, pos)
                 end
             end
         end
     end
+    # Store all touched elements that need to be reset to zero before assembly.
+    ua = eq_s.unique_alignment
+    for i in acc.jacobian_positions
+        push!(ua, i)
+    end
+    for i in left_facepos
+        push!(ua, i)
+    end
+    for i in right_facepos
+        push!(ua, i)
+    end
+    unique!(ua)
+    @assert minimum(ua) > 0
+    return eq_s
 end
 
 function update_equation!(eq_s::ConservationLawFiniteVolumeStorage, law::ConservationLaw, storage, model, dt)
@@ -152,4 +181,64 @@ end
 
 @inline function get_diagonal_entries(eq::ConservationLaw, eq_s::ConservationLawFiniteVolumeStorage)
     return eq_s.accumulation.entries
+end
+
+function update_linearized_system_equation!(nz, r, model, eq::ConservationLaw, eq_s::ConservationLawFiniteVolumeStorage)
+    # Zero out the buffers
+    zero_ix = eq_s.unique_alignment
+    @. nz[zero_ix] = 0.0
+    # Accumulation term
+    fill_equation_entries!(nz, r, model, eq_s.accumulation)
+    # Fill fluxes
+    face_cache = eq_s.face_flux_cells
+    face_fluxes = face_cache.entries
+    left_facepos = face_cache.jacobian_positions
+    right_facepos = eq_s.face_flux_extra_alignment
+    nu, ne, np = ad_dims(face_cache)
+    if false
+        for i in eachindex(face_fluxes)
+            q = face_fluxes[i]
+            for e in 1:ne
+                a = get_entry(cache, i, e)
+                insert_residual_value(r, i + nu*(e-1), a.value)
+                for d = 1:np
+                    update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
+                end
+            end
+            @info "!" i q
+            # left_facepos, right_facepos
+        end
+    end
+    vpos = face_cache.vpos
+    vars = face_cache.variables
+
+    nc = number_of_cells(model.domain)::Int
+    @info size(r)
+    @assert size(r, 1) == ne
+    @assert vpos[end]-1 == size(face_fluxes, 2)
+    N = eq_s.neighbors
+    for face in 1:nu
+        lc, rc = N[face]
+        ctr = 1
+        for fpos in vrange(face_cache, face)
+            for e in 1:ne
+                # Flux (with derivatives with respect to some cell)
+                q = get_entry(face_cache, fpos, e)
+                if ctr <= ne
+                    # Residual here.
+                    ctr += 1
+                    qval = value(q)
+                    r[e, lc] -= qval
+                    r[e, rc] += qval
+                end
+                for d in 1:np
+                    lc_i = get_jacobian_pos(np, fpos, e, d, left_facepos)
+                    rc_i = get_jacobian_pos(np, fpos, e, d, right_facepos)
+                    ∂q = q.partials[d]
+                    nz[lc_i] -= ∂q
+                    nz[rc_i] += ∂q
+                end
+            end
+        end
+    end
 end
