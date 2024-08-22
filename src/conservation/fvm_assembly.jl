@@ -217,8 +217,8 @@ function update_linearized_system_equation!(nz, r, model, eq::ConservationLaw, e
                     lc_i = get_jacobian_pos(np, fpos, e, d, left_facepos)
                     rc_i = get_jacobian_pos(np, fpos, e, d, right_facepos)
                     ∂q = q.partials[d]
-                    nz[lc_i] -= ∂q
-                    nz[rc_i] += ∂q
+                    nz[lc_i] += ∂q
+                    nz[rc_i] -= ∂q
                 end
             end
         end
