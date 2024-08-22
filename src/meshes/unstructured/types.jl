@@ -125,9 +125,14 @@ function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespo
         n = length(npos)
         bnd = l == 0 || r == 0
         if bnd
+            if l == 0
+                npos = reverse(npos)
+            end
+
             for i in npos
                 push!(boundary_faces_nodes, faces_nodes[i])
             end
+            
             push!(boundary_faces_nodespos, boundary_faces_nodespos[end] + n)
             added_boundary += 1
             # Minus sign means boundary index
