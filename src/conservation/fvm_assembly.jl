@@ -201,18 +201,21 @@ function update_linearized_system_equation!(nz, r, model, eq::ConservationLaw, e
     N = eq_s.neighbors
     for face in 1:nu
         lc, rc = N[face]
-        ctr = 1
-        for fpos in vrange(face_cache, face)
+        start = face_cache.vpos[face]
+        stop = face_cache.vpos[face+1]-1
+        if start == stop
+            # No sparsity? A bit odd but guard against it.
+            continue
+        end
+        for e in 1:ne
+            qval = get_entry_val(face_cache, start, e)
+            r[e, lc] += qval
+            r[e, rc] -= qval
+        end
+        for fpos in start:stop
             for e in 1:ne
                 # Flux (with derivatives with respect to some cell)
                 q = get_entry(face_cache, fpos, e)
-                if ctr <= ne
-                    # Residual here.
-                    ctr += 1
-                    qval = value(q)
-                    r[e, lc] -= qval
-                    r[e, rc] += qval
-                end
                 for d in 1:np
                     lc_i = get_jacobian_pos(np, fpos, e, d, left_facepos)
                     rc_i = get_jacobian_pos(np, fpos, e, d, right_facepos)
