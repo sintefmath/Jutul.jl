@@ -12,15 +12,15 @@ function setup_equation_storage(model, eq::ConservationLaw{conserved, PotentialF
     disc = eq.flow_discretization
 
     function F!(out, state, state0, face)
-        local_disc = nothing# local_discretization(eq, self_cell)
-        # kgrad, upw = ldisc.face_disc(face)
         face_disc = (face) -> (kgrad = disc.kgrad[face], upwind = disc.upwind[face])
         local_disc = (face_disc = face_disc,)
+        tmp = face_disc(face)
         dt = 1.0
         N = length(out)
         T = eltype(out)
         val = @SVector zeros(T, N)
-        face_flux!(val, face, eq, state, model, dt, disc, local_disc)
+        q = face_flux!(val, face, eq, state, model, dt, disc, local_disc)
+        @. out = q
         return out
     end
 
@@ -56,16 +56,17 @@ function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawFiniteVo
     vars = face_cache.variables
     IJ = Vector{Tuple{Int, Int}}()
     (; face_pos, cells, faces) = hf_map
+    N = e_s.neighbors
     for c in 1:nc_active
         push!(IJ, (c, c))
-        for i in face_pos[c]:(face_pos[c+1]-1)
-            face = faces[i]
-            fcell = cells[i]
-            for pos in vpos[face]:(vpos[face+1]-1)
-                dcell = vars[pos]
-                push!(IJ, (fcell, dcell))
-                push!(IJ, (dcell, fcell))
-            end
+    end
+    N = e_s.neighbors
+    for face in eachindex(N)
+        lc, rc = N[face]
+        for fpos in vrange(face_cache, face)
+            cell = vars[fpos]
+            push!(IJ, (lc, cell))
+            push!(IJ, (rc, cell))
         end
     end
     IJ = unique!(IJ)
@@ -84,7 +85,6 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
     M = global_map(model.domain)
 
     acc = eq_s.accumulation
-    # hflux_cells = eq_s.half_face_flux_cells
     diagonal_alignment!(acc, eq, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
     nf = number_of_faces(model.domain)
     face_cache = eq_s.face_flux_cells
@@ -95,10 +95,6 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
     @assert nu == nf
     left_facepos = face_cache.jacobian_positions
     right_facepos = eq_s.face_flux_extra_alignment
-    # N = get_neighborship(model.domain.representation)
-    # touched_left = zeros(Int, size(left_facepos))
-    # touched_right = zeros(Int, size(right_facepos))
-
     N = eq_s.neighbors
     for face in 1:nf
         l, r = N[face]
@@ -195,20 +191,6 @@ function update_linearized_system_equation!(nz, r, model, eq::ConservationLaw, e
     left_facepos = face_cache.jacobian_positions
     right_facepos = eq_s.face_flux_extra_alignment
     nu, ne, np = ad_dims(face_cache)
-    if false
-        for i in eachindex(face_fluxes)
-            q = face_fluxes[i]
-            for e in 1:ne
-                a = get_entry(cache, i, e)
-                insert_residual_value(r, i + nu*(e-1), a.value)
-                for d = 1:np
-                    update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
-                end
-            end
-            @info "!" i q
-            # left_facepos, right_facepos
-        end
-    end
     vpos = face_cache.vpos
     vars = face_cache.variables
 
