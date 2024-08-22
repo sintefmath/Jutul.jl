@@ -154,7 +154,12 @@ end
 
 function fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
     disc = law.flow_discretization
-    face_disc = (face) -> (kgrad = disc.kgrad[face], upwind = disc.upwind[face])
+    @inline @inbounds function face_disc(face)
+        return (
+        kgrad = disc.kgrad[face],
+        upwind = disc.upwind[face]
+        )
+    end
     local_disc = (face_disc = face_disc,)
 
     face_cache = eq_s.face_flux_cells
@@ -163,6 +168,10 @@ function fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
     val = @SVector zeros(T, np)
     local_state = local_ad(storage.state, 1, T)
     vars = face_cache.variables
+    fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val)
+end
+
+function fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val)
     for face in 1:nu
         for j in vrange(face_cache, face)
             v_i = @views face_cache.entries[:, j]

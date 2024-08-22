@@ -1,5 +1,5 @@
 function evaluate_flux(p, hf::NFVMLinearDiscretization{T}, ph::Int) where {T}
-    p_l, p_r = cell_pair_pressures(p, hf, ph)
+    @inbounds p_l, p_r = cell_pair_pressures(p, hf, ph)
     T_l = hf.T_left
     T_r = hf.T_right
     @inbounds q = tpfa_flux(p_l, p_r, hf) + compute_r(p, hf, ph)
