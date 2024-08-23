@@ -125,8 +125,24 @@ function NFVMLinearDiscretization(decomp; left, right)
     t_l *= sgn
     t_r *= sgn
 
-    # @info "Computed trans $t_r p_r ($r) $t_l p_l ($l)" t_mpfa
     return NFVMLinearDiscretization(left, right, t_l, t_r, t_mpfa)
+end
+
+function Jutul.subdiscretization(d::NFVMLinearDiscretization, subg, mapper::Jutul.FiniteVolumeGlobalMap, face)
+    (; left, right, T_left, T_right) = d
+    t_mpfa = d.mpfa
+    gmap = mapper.global_to_local
+
+    t_mpfa_new = Tuple{Int, Float64}[]
+    for tm in t_mpfa
+        # TODO: This is a bit dangerous - may have missing MPFA connections
+        c, trans = tm
+        new_c = get(gmap, c, missing)
+        if !ismissing(new_c)
+            push!(t_mpfa_new, (new_c, trans))
+        end
+    end
+    return NFVMLinearDiscretization(gmap[left], gmap[right], T_left, T_right, t_mpfa_new)
 end
 
 function ntpfa_decompose_faces(G::UnstructuredMesh{D}, perm, scheme::Symbol = :avgmpfa;
