@@ -173,13 +173,15 @@ end
 
 function fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val)
     for face in 1:nu
-        for j in vrange(face_cache, face)
+        @inbounds for j in vrange(face_cache, face)
             v_i = @views face_cache.entries[:, j]
             var = vars[j]
 
             state_i = new_entity_index(local_state, var)
             flux = face_flux!(val, face, law, state_i, model, dt, disc, local_disc)
-            @. v_i = flux
+            for i in eachindex(flux)
+                @inbounds v_i[i] = flux[i]
+            end
         end
     end
 end
@@ -191,7 +193,9 @@ end
 function update_linearized_system_equation!(nz, r, model, eq::ConservationLaw, eq_s::ConservationLawFiniteVolumeStorage)
     # Zero out the buffers
     zero_ix = eq_s.unique_alignment
-    @. nz[zero_ix] = 0.0
+    @inbounds for i in zero_ix
+        nz[i] = 0.0
+    end
     # Accumulation term
     if false
         # TODO: Something wrong with expected transpose of r in old cache for residuals.
