@@ -18,12 +18,24 @@ struct TPFA{T} <: KGradDiscretization
     face_sign::T
 end
 
+function subdiscretization(tpfa::TPFA, subg, mapper::Jutul.FiniteVolumeGlobalMap, face)
+    (; left, right, face_sign) = tpfa
+    gmap = mapper.global_to_local
+    return TPFA(gmap[left], gmap[right], face_sign)
+end
+
 """
 Single-point upwinding.
 """
 struct SPU{T} <: UpwindDiscretization
     left::T
     right::T
+end
+
+function subdiscretization(spu::SPU, subg, mapper::Jutul.FiniteVolumeGlobalMap, face)
+    (; left, right) = spu
+    gmap = mapper.global_to_local
+    return SPU(gmap[left], gmap[right])
 end
 
 export PotentialFlow
@@ -66,6 +78,28 @@ function PotentialFlow(N::AbstractMatrix, nc = maximum(N); kgrad = nothing, upwi
     end
     @assert upwind isa AbstractVector
     @assert kgrad isa AbstractVector
+    return PotentialFlow(kgrad, upwind, hf, ad = ad)
+end
+
+function subdiscretization(disc::PotentialFlow{ad}, subg, mapper::FiniteVolumeGlobalMap) where ad
+    # kgrad
+    # upwind
+    # half_face_map -> N -> remap N -> half_face_map
+    N, nc = half_face_map_to_neighbors(disc.half_face_map)
+
+    faces = mapper.faces
+    N = N[:, faces]
+    # Remap cells in N
+    for (i, c) in enumerate(N)
+        N[i] = mapper.global_to_local[c]
+    end
+    kgrad = disc.kgrad[faces]
+    upwind = disc.upwind[faces]
+    for i in eachindex(kgrad, upwind, faces)
+        kgrad[i] = subdiscretization(kgrad[i], subg, mapper, faces[i])
+        upwind[i] = subdiscretization(upwind[i], subg, mapper, faces[i])
+    end
+    hf = half_face_map(N, nc)
     return PotentialFlow(kgrad, upwind, hf, ad = ad)
 end
 

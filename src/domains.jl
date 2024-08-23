@@ -105,6 +105,21 @@ function half_face_map(N, nc)
     return (cells = cells, faces = faces, face_pos = face_pos, face_sign = signs)
 end
 
+function half_face_map_to_neighbors(fmap)
+    (; cells, faces, face_pos, face_sign) = fmap
+    nc = length(face_pos)-1
+    nf = maximum(faces)
+    N = zeros(Int, 2, nf)
+    for (face, cell, sgn) in zip(faces, cells, face_sign)
+        if sgn == -1
+            N[1, face] = cell
+        else
+            N[2, face] = cell
+        end
+    end
+    return (N, nc)
+end
+
 function local_half_face_map(cd, cell_index)
     loc = cd.face_pos[cell_index]:(cd.face_pos[cell_index+1]-1)
     faces = @views cd.faces[loc]
