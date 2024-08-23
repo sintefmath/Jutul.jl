@@ -71,7 +71,7 @@ export get_variable
 
 Get implementation of variable or parameter with name `name` for the model.
 """
-function get_variable(model::SimulationModel, name::Symbol)
+function get_variable(model::SimulationModel, name::Symbol; throw = true)
     pvar = model.primary_variables
     svar = model.secondary_variables
     prm = model.parameters
@@ -82,7 +82,11 @@ function get_variable(model::SimulationModel, name::Symbol)
     elseif haskey(prm, name)
         var = prm[name]
     else
-        error("Variable $name not found in primary/secondary variables or parameters.")
+        if throw
+            error("Variable $name not found in primary/secondary variables or parameters.")
+        else
+            var = nothing
+        end
     end
     return var
 end

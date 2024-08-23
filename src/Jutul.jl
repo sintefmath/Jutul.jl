@@ -65,6 +65,7 @@ module Jutul
     # Meat and potatoes
     include("variable_evaluation.jl")
     include("conservation/flux.jl")
+    include("conservation/fvm_assembly.jl")
     include("linsolve/linsolve.jl")
 
     include("context.jl")
@@ -99,5 +100,8 @@ module Jutul
 
     # Support for SI unit conversion
     include("units/units.jl")
+
+    # Nonlinear finite-volume discretizations
+    include("NFVM/NFVM.jl")
 
 end # module

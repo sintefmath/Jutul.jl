@@ -76,10 +76,15 @@ end
 end
 
 insert_residual_value(::Nothing, ix, v) = nothing
-Base.@propagate_inbounds insert_residual_value(r, ix, v) = r[ix] = v
+Base.@propagate_inbounds function insert_residual_value(r, ix, v)
+    r[ix] = v
+end
 
 insert_residual_value(::Nothing, ix, e, v) = nothing
-Base.@propagate_inbounds insert_residual_value(r, ix, e, v) = r[e, ix] = v
+Base.@propagate_inbounds function insert_residual_value(r, ix, e, v)
+    # TODO: Occasionally this gets passed the transposed r, figure out where.
+    r[e, ix] = v
+end
 
 function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)

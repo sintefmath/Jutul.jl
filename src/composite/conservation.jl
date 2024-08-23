@@ -18,3 +18,21 @@ function setup_equation_storage(
     kwarg...) where {S, T<:TwoPointPotentialFlowHardCoded, H, G}
     return ConservationLawTPFAStorage(model, eq[2]; kwarg...)
 end
+
+function setup_equation_storage(
+    model::CompositeModel,
+    eq::Pair{Symbol, ConservationLaw{S, PotentialFlow{:fvm, A, B, C}, H, G}},
+    storage;
+    kwarg...) where {S, A, B, C, H, G}
+    k, eq = eq
+    return ConservationLawFiniteVolumeStorage(composite_submodel(model, k), eq, storage; kwarg...)
+end
+
+function declare_pattern(
+    model::CompositeModel,
+    eq::Pair{Symbol, ConservationLaw{S, PotentialFlow{:fvm, A, B, C}, H, G}},
+    e_s::ConservationLawFiniteVolumeStorage,
+    entity) where {S, A, B, C, H, G}
+    k, eq = eq
+    return declare_pattern(composite_submodel(model, k), eq, e_s, entity)
+end
