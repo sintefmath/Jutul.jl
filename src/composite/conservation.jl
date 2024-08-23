@@ -31,8 +31,8 @@ end
 function declare_pattern(
     model::CompositeModel,
     eq::Pair{Symbol, ConservationLaw{S, PotentialFlow{:fvm, A, B, C}, H, G}},
+    e_s::ConservationLawFiniteVolumeStorage,
     entity) where {S, A, B, C, H, G}
     k, eq = eq
-    # TODO: Check this.
-    return declare_pattern(composite_submodel(model, k), eq; kwarg...)
+    return declare_pattern(composite_submodel(model, k), eq, e_s, entity)
 end
