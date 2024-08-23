@@ -248,10 +248,12 @@ function fvm_face_assembly!(r, nz, vpos, face_cache, left_facepos, right_facepos
                 # Flux (with derivatives with respect to some cell)
                 q = get_entry(face_cache, fpos, e)
                 @inbounds for d in 1:np
-                    lc_i = get_jacobian_pos(np, fpos, e, d, left_facepos)
-                    rc_i = get_jacobian_pos(np, fpos, e, d, right_facepos)
                     ∂q = q.partials[d]
+                    # Flux for left cell (l -> r)
+                    lc_i = get_jacobian_pos(np, fpos, e, d, left_facepos)
                     nz[lc_i] += ∂q
+                    # Flux for right cell (r -> l)
+                    rc_i = get_jacobian_pos(np, fpos, e, d, right_facepos)
                     nz[rc_i] -= ∂q
                 end
             end
