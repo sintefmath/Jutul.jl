@@ -7,9 +7,13 @@ struct ConservationLawFiniteVolumeStorage{A, HF, HA}
     neighbors::Vector{Tuple{Int, Int}}
 end
 
-function setup_equation_storage(model, eq::ConservationLaw{conserved, PotentialFlow{:fvm, A, B, C}, <:Any, <:Any}, storage; extra_sparsity = nothing, kwarg...) where {conserved, A, B, C}
-    # F!(out, state, state0, i) = face_flux!(out, i, state, state0, eq, model, 1.0)
+function setup_equation_storage(model, eq::ConservationLaw{conserved, PotentialFlow{:fvm, A, B, C}, <:Any, <:Any}, storage; kwarg...) where {conserved, A, B, C}
+    return ConservationLawFiniteVolumeStorage(model, eq, storage; kwarg...)
+end
+
+function ConservationLawFiniteVolumeStorage(model, eq, storage; extra_sparsity = nothing, kwarg...)
     disc = eq.flow_discretization
+    conserved = conserved_symbol(eq)
 
     function F!(out, state, state0, face)
         face_disc = (face) -> (kgrad = disc.kgrad[face], upwind = disc.upwind[face])
