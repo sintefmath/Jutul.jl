@@ -1,8 +1,8 @@
 function evaluate_flux(p, hf::NFVMLinearDiscretization{T}, ph::Int) where {T}
-    @inbounds p_l, p_r = cell_pair_pressures(p, hf, ph)
+    p_l, p_r = cell_pair_pressures(p, hf, ph)
     T_l = hf.T_left
     T_r = hf.T_right
-    @inbounds q = tpfa_flux(p_l, p_r, hf) + compute_r(p, hf, ph)
+    q = tpfa_flux(p_l, p_r, hf) + compute_r(p, hf, ph)
     return q
 end
 
@@ -10,10 +10,10 @@ function evaluate_flux(p, nfvm, ph::Int)
     L = nfvm.ft_left
     R = nfvm.ft_right
 
-    @inbounds p_l, p_r = cell_pair_pressures(p, nfvm, ph)
+    p_l, p_r = cell_pair_pressures(p, nfvm, ph)
     # Fluxes from different side with different sign
-    @inbounds q_l, r_l = ntpfa_half_flux(p_l, p_r, p, L, ph)
-    @inbounds q_r, r_r = ntpfa_half_flux(p_l, p_r, p, R, ph, -1)
+    q_l, r_l = ntpfa_half_flux(p_l, p_r, p, L, ph)
+    q_r, r_r = ntpfa_half_flux(p_l, p_r, p, R, ph, -1)
 
     if nfvm.scheme == :ntpfa
         r_lw = r_l
@@ -35,43 +35,49 @@ function evaluate_flux(p, nfvm, ph::Int)
     return q
 end
 
-Base.@propagate_inbounds function ntpfa_half_flux(p_l, p_r, p, disc, ph, sgn = 1)
+@inline function ntpfa_half_flux(p_l, p_r, p, disc, ph)
     q = tpfa_flux(p_l, p_r, disc)
     # Add MPFA part
     r = compute_r(p, disc, ph)
     q += r
+    return (q, r)
+end
+
+@inline function ntpfa_half_flux(p_l, p_r, p, disc, ph, sgn)
+    q, r = ntpfa_half_flux(p_l, p_r, p, disc, ph)
     return (sgn*q, sgn*r)
 end
 
-Base.@propagate_inbounds @inline function compute_r(p::AbstractVector{T}, hf::NFVMLinearDiscretization, ph::Int) where T
+
+@inline function compute_r(p::AbstractVector{T}, hf::NFVMLinearDiscretization, ph::Int) where T
     q = zero(T)
-    for cell_and_trans in hf.mpfa
-        c, T_c = cell_and_trans
-        q += p[c]*T_c
+    for i in 1:length(hf.mpfa)
+        @inbounds c, T_c = hf.mpfa[i]
+        @inbounds q += p[c]*T_c
     end
     return q
 end
 
-Base.@propagate_inbounds @inline function compute_r(p::AbstractMatrix{T}, hf::NFVMLinearDiscretization, ph::Int) where T
+@inline function compute_r(p::AbstractMatrix{T}, hf::NFVMLinearDiscretization, ph::Int) where T
     q = zero(T)
-    for cell_and_trans in hf.mpfa
-        c, T_c = cell_and_trans
-        q += p[ph, c]*T_c
+    for i in 1:length(hf.mpfa)
+        @inbounds c, T_c = hf.mpfa[i]
+        @inbounds q += p[ph, c]*T_c
     end
     return q
 end
 
-Base.@propagate_inbounds @inline function cell_pair_pressures(p::AbstractVector, hf, ph::Int)
+@inline function cell_pair_pressures(p::AbstractVector, hf, ph::Int)
     l, r = cell_pair(hf)
-    p_l = p[l]
-    p_r = p[r]
+    @inbounds p_l = p[l]
+    @inbounds p_r = p[r]
     return (p_l, p_r)
 end
 
 Base.@propagate_inbounds @inline function cell_pair_pressures(p::AbstractMatrix, hf, ph::Int)
     l, r = cell_pair(hf)
-    p_l = p[ph, l]
-    p_r = p[ph, r]
+    @inbounds p_l = p[ph, l]
+    @inbounds p_r = p[ph, r]
     return (p_l, p_r)
 end
 
