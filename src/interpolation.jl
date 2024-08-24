@@ -117,14 +117,11 @@ function get_1d_interpolator(xs, ys;
         kwarg...
     )
     if length(xs) == 1
-        xs = copy(xs)
-        ys = copy(ys)
-        # Cap start
-        pushfirst!(xs, xs[1] - one(eltype(xs)))
-        push!(ys, ys[1])
-        # Cap end
-        push!(xs, xs[1] + one(eltype(xs)))
-        push!(ys, ys[1])
+        xs = only(xs)
+        ys = only(ys)
+        u = one(typeof(xs))
+        xs = [xs - u, xs, xs + u]
+        ys = [ys, ys, ys]
     elseif cap_endpoints && (cap_start || cap_end)
         xs = copy(xs)
         ys = copy(ys)
