@@ -117,6 +117,8 @@ function get_1d_interpolator(xs, ys;
         kwarg...
     )
     if length(xs) == 1
+        xs = copy(xs)
+        ys = copy(ys)
         # Cap start
         pushfirst!(xs, xs[1] - one(eltype(xs)))
         push!(ys, ys[1])
