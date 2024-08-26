@@ -169,7 +169,7 @@ function fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
     face_cache = eq_s.face_flux_cells
     nu, ne, np = ad_dims(face_cache)
     T = eltype(face_cache)
-    val = @SVector zeros(T, np)
+    val = @SVector zeros(T, ne)
     local_state = local_ad(storage.state, 1, T)
     vars = face_cache.variables
     fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val)

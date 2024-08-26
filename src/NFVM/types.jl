@@ -32,8 +32,8 @@ function NFVMNonLinearDiscretization(l, r; scheme = :ntpfa)
     return NFVMNonLinearDiscretization(l, r, scheme)
 end
 
-cell_pair(x::NFVMNonLinearDiscretization) = cell_pair(x.ft_left)
-cell_pair(x::NFVMLinearDiscretization) = (x.left, x.right)
+Jutul.cell_pair(x::NFVMNonLinearDiscretization) = Jutul.cell_pair(x.ft_left)
+Jutul.cell_pair(x::NFVMLinearDiscretization) = (x.left, x.right)
 
 function Base.show(io::IO, ft::NFVMNonLinearDiscretization{T}) where T
     l, r = cell_pair(ft)

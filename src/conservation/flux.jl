@@ -24,6 +24,10 @@ function subdiscretization(tpfa::TPFA, subg, mapper::Jutul.FiniteVolumeGlobalMap
     return TPFA(gmap[left], gmap[right], face_sign)
 end
 
+function cell_pair(tpfa::TPFA)
+    return (tpfa.left, tpfa.right)
+end
+
 """
 Single-point upwinding.
 """
@@ -36,6 +40,10 @@ function subdiscretization(spu::SPU, subg, mapper::Jutul.FiniteVolumeGlobalMap, 
     (; left, right) = spu
     gmap = mapper.global_to_local
     return SPU(gmap[left], gmap[right])
+end
+
+function cell_pair(spu::SPU)
+    return (spu.left, spu.right)
 end
 
 export PotentialFlow

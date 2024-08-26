@@ -68,14 +68,14 @@ end
 end
 
 @inline function cell_pair_pressures(p::AbstractVector, hf, ph::Int)
-    l, r = cell_pair(hf)
+    l, r = Jutul.cell_pair(hf)
     @inbounds p_l = p[l]
     @inbounds p_r = p[r]
     return (p_l, p_r)
 end
 
 Base.@propagate_inbounds @inline function cell_pair_pressures(p::AbstractMatrix, hf, ph::Int)
-    l, r = cell_pair(hf)
+    l, r = Jutul.cell_pair(hf)
     @inbounds p_l = p[ph, l]
     @inbounds p_r = p[ph, r]
     return (p_l, p_r)
