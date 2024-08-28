@@ -27,6 +27,7 @@ function submodel(model::SimulationModel, p_i::AbstractVector; context = model.c
     transfer_vars!(new_model.primary_variables, model.primary_variables)
     transfer_vars!(new_model.secondary_variables, model.secondary_variables)
     transfer_vars!(new_model.parameters, model.parameters)
+    transfer_vars!(new_model.equations, model.equations)
 
     new_data_domain = new_model.data_domain
     old_data_domain = model.data_domain
