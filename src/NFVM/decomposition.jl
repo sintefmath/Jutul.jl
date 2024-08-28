@@ -137,12 +137,22 @@ function Jutul.subdiscretization(d::NFVMLinearDiscretization, subg, mapper::Jutu
     for tm in t_mpfa
         # TODO: This is a bit dangerous - may have missing MPFA connections
         c, trans = tm
-        new_c = get(gmap, c, missing)
-        if !ismissing(new_c)
+        try
+            new_c = Jutul.local_cell(c, mapper)
             push!(t_mpfa_new, (new_c, trans))
+        catch
+            continue
         end
     end
-    return NFVMLinearDiscretization(gmap[left], gmap[right], T_left, T_right, t_mpfa_new)
+    l_new = Jutul.local_cell(left, mapper)
+    r_new = Jutul.local_cell(right, mapper)
+    return NFVMLinearDiscretization(
+        l_new,
+        r_new,
+        T_left,
+        T_right,
+        t_mpfa_new
+    )
 end
 
 function ntpfa_decompose_faces(G::UnstructuredMesh{D}, perm, scheme::Symbol = :avgmpfa;
