@@ -60,8 +60,8 @@ function merge_to_avgmpfa(a::NFVMLinearDiscretization{T}, b::NFVMLinearDiscretiz
         end
         return next
     end
-    l, r = cell_pair(a)
-    @assert (l, r) == cell_pair(b)
+    l, r = Jutul.cell_pair(a)
+    @assert (l, r) == Jutul.cell_pair(b)
     next = Dict{Int, T}()
     merge_in!(next, a)
     merge_in!(next, b)
