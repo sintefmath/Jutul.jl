@@ -218,3 +218,24 @@ end
         @test getfield(geo_c2, f) ≈ getfield(geo, f)
     end
 end
+
+@testset "Trajectories" begin
+    G = CartesianMesh((4, 4, 5), (100.0, 100.0, 100.0))
+    trajectory = [
+        50.0 25.0 1;
+        55 35.0 25;
+        65.0 40.0 50.0;
+        70.0 70.0 90.0
+    ]
+    cells_3d = Jutul.find_enclosing_cells(G, trajectory)
+    @test cells_3d == [7, 23, 39, 55, 59, 75]
+
+    G = CartesianMesh((5, 5), (1.0, 2.0))
+    trajectory = [
+        0.1 0.1;
+        0.2 0.4;
+        0.3 1.2
+    ]
+    cells_2d = Jutul.find_enclosing_cells(G, trajectory)
+    @test cells_2d == [1, 7, 12]
+end
