@@ -211,34 +211,20 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
         subrep = JUTUL_OUTPUT_TYPE()
         subrep[:ministeps] = rep
         subrep[:total_time] = t_step
-        
         if step_done
-            
-            if begin
-                lastrep = rep[end]
-                if haskey(lastrep, :stopnow) && lastrep[:stopnow]
-                    true
-                else
-                    false
-                end end
-               
+            lastrep = rep[end]
+            if get(lastrep, :stopnow, false)
+                # Something inside the solver told us to stop.
                 subrep[:output_time] = 0.0
                 push!(reports, subrep)
                 stopnow = true
-                
             else
-                
                 @tic "output" store_output!(states, reports, step_no, sim, config, subrep, substates = substates)
-                
             end
-            
         else
-            
             subrep[:output_time] = 0.0
             push!(reports, subrep)
-            
         end
-        
         t_elapsed += t_step + subrep[:output_time]
 
         if early_termination
@@ -249,7 +235,6 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
         if stopnow
             break
         end
-        
     end
     states, reports = retrieve_output!(sim, states, reports, config, n_solved)
     final_simulation_message(sim, p, rec, t_elapsed, reports, timesteps, config, start_date, early_termination)
