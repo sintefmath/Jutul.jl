@@ -27,7 +27,10 @@ function submodel(model::SimulationModel, p_i::AbstractVector; context = model.c
     transfer_vars!(new_model.primary_variables, model.primary_variables)
     transfer_vars!(new_model.secondary_variables, model.secondary_variables)
     transfer_vars!(new_model.parameters, model.parameters)
-    transfer_vars!(new_model.equations, model.equations)
+    subr = physical_representation(d_l)
+    for (k, eq) in model.equations
+        new_model.equations[k] = subequation(eq, subr, M)
+    end
 
     new_data_domain = new_model.data_domain
     old_data_domain = model.data_domain
@@ -153,6 +156,10 @@ end
 function subvariable(var::Pair, map)
     label, var = var
     return Pair(label, subvariable(var, map))
+end
+
+function subequation(eq, subr, map)
+    return eq
 end
 
 partition_variable_slice(v::AbstractVector, partition) = v[partition]

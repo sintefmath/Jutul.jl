@@ -10,6 +10,10 @@ flux_type(c::ConservationLaw) = c.flux_type
 
 discretization(e::ConservationLaw) = e.flow_discretization
 
+function subequation(eq::ConservationLaw{C, T, FT, N}, subr, M) where {C, T, FT, N}
+    disc = subdiscretization(discretization(eq), subr, M)
+    return ConservationLaw(disc, C, N, flux = eq.flux_type)
+end
 
 function update_equation_in_entity!(eq_buf::AbstractVector{T_e}, self_cell, state, state0, eq::ConservationLaw, model, Δt, ldisc = local_discretization(eq, self_cell)) where T_e
     # Compute accumulation term
