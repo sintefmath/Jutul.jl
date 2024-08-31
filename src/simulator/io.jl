@@ -8,10 +8,11 @@ function retrieve_output!(sim, states, reports, config, n)
     retrieve_output!(states, reports, config, n)
 end
 
-function retrieve_output!(states, reports, config, n)
+function retrieve_output!(states, reports, config, n;
+        read_reports = config[:output_reports],
+        read_states = config[:output_states]
+    )
     pth = config[:output_path]
-    read_reports = config[:output_reports]
-    read_states = config[:output_states]
     if !isnothing(pth) && n > 0 && (read_reports || read_states)
         @debug "Reading $n states from $pth..."
         @assert isempty(states)

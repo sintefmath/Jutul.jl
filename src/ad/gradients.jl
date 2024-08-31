@@ -71,10 +71,11 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
     end
 end
 
-function solve_adjoint_sensitivities(case::JutulCase, states::Vector, G; dt = case.dt, kwarg...)
+function solve_adjoint_sensitivities(case::JutulCase, states::Vector, G; dt = case.dt, forces = case.forces, kwarg...)
     return solve_adjoint_sensitivities(
         case.model, states, dt, G;
         state0 = case.state0,
+        forces = forces,
         parameters = case.parameters,
         kwarg...
     )
@@ -88,10 +89,13 @@ function solve_adjoint_sensitivities(case::JutulCase, some_kind_of_result, G; kw
         simresult = some_kind_of_result
     end
     simresult::SimResult
-    states, dt = expand_to_ministeps(simresult)
-    return solve_adjoint_sensitivities(case, states, G; dt = dt, kwarg...)
+    states, dt, step_ix = expand_to_ministeps(simresult)
+    forces = case.forces
+    if forces isa Vector
+        forces = forces[step_ix]
+    end
+    return solve_adjoint_sensitivities(case, states, G; dt = dt, forces = forces, kwarg...)
 end
-
 
 """
     setup_adjoint_storage(model; state0 = setup_state(model), parameters = setup_parameters(model))
@@ -156,8 +160,10 @@ function setup_adjoint_storage_base(model, state0, parameters;
     if use_sparsity isa Bool
         if use_sparsity
             # We will update these later on
-            sparsity_obj = Dict{Any, Any}(:parameter => nothing, 
-                                          :forward => nothing)
+            sparsity_obj = Dict{Any, Any}(
+                :parameter => nothing, 
+                :forward => nothing
+            )
         else
             sparsity_obj = nothing
         end
@@ -205,6 +211,9 @@ Non-allocating version of `solve_adjoint_sensitivities`.
 function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model), info_level = 0)
     N = length(timesteps)
     @assert N == length(states)
+    if forces isa Vector
+        @assert length(forces) == N
+    end
     # Do sparsity detection if not already done.
     if info_level > 1
         jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
@@ -523,7 +532,13 @@ end
 
 function parameter_targets(model::SimulationModel)
     prm = get_parameters(model)
-    return collect(keys(prm))
+    targets = Symbol[]
+    for (k, v) in prm
+        if parameter_is_differentiable(v, model)
+            push!(targets, k)
+        end
+    end
+    return targets
 end
 
 function adjoint_parameter_model(model, arg...; context = DefaultContext())
@@ -532,6 +547,7 @@ function adjoint_parameter_model(model, arg...; context = DefaultContext())
     pmodel = adjoint_model_copy(model; context = context)
     # Swap parameters and primary variables
     swap_primary_with_parameters!(pmodel, model, arg...)
+    ensure_model_consistency!(pmodel)
     return sort_variables!(pmodel, :all)
 end
 
@@ -629,12 +645,31 @@ function perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
 end
 
 function evaluate_objective(G, model, states, timesteps, all_forces; large_value = 1e20)
+    function convert_state_to_jutul_storage(model, x::JutulStorage)
+        return x
+    end
+    function convert_state_to_jutul_storage(model, x::AbstractDict)
+        return JutulStorage(x)
+    end
+    function convert_state_to_jutul_storage(model::MultiModel, x::AbstractDict)
+        s = JutulStorage()
+        for (k, v) in pairs(x)
+            s[k] = JutulStorage(v)
+        end
+        return s
+    end
     if length(states) < length(timesteps)
         # Failure: Put to a big value.
         @warn "Partial data passed, objective set to large value $large_value."
         obj = large_value
     else
-        F = i -> G(model, states[i], timesteps[i], i, forces_for_timestep(nothing, all_forces, timesteps, i))
+        F = i -> G(
+            model,
+            convert_state_to_jutul_storage(model, states[i]),
+            timesteps[i],
+            i,
+            forces_for_timestep(nothing, all_forces, timesteps, i)
+        )
         obj = sum(F, eachindex(states))
     end
     return obj
@@ -706,6 +741,9 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
             continue
         end
         var = vars[t]
+        if var isa Pair
+            var = last(var)
+        end
         n = number_of_values(model, var)
         if !isnothing(config)
             lumping = config[t][:lumping]

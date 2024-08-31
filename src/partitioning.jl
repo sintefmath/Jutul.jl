@@ -142,7 +142,8 @@ partitioning)
 """
 function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2));
         partitioner = MetisPartitioner(),
-        groups = nothing, n = maximum(N),
+        groups = nothing,
+        n = maximum(N),
         group_by_weights = false,
         buffer_group = false
     )

@@ -1,15 +1,14 @@
 function vectorize_forces(forces, variant = :all; T = Float64)
     meta_for_forces = Dict{Symbol, Any}()
-    lengths = map(
-        x -> vectorization_length(x, variant),
-        filter(x -> !isnothing(x), values(forces))
-    )
+    fvals = values(forces)
+    lengths = zeros(Int, length(fvals))
+    for (i, force) in enumerate(fvals)
+        if !isnothing(force)
+            lengths[i] = vectorization_length(force, variant)
+        end
+    end
     n = sum(lengths)
     v = Vector{T}(undef, n)
-    # Create: Offsets here + maps
-    # Partition of the forces vector, mapping force to positions of vector
-    # 
-
     config = (
         lengths = lengths,
         offsets = [1],
@@ -245,8 +244,6 @@ function evaluate_force_gradient(X, model, storage, parameters, forces, config, 
     return J
 end
 
-# sparsity = determine_sparsity_forces(model, forces, X, config)
-#
 function unique_forces_and_mapping(allforces, timesteps)
     function force_steps(forces, dt)
         return ([forces], [1:length(dt)], 1)
@@ -320,6 +317,14 @@ function setup_adjoint_forces_storage(
     return storage
 end
 
+function solve_adjoint_forces(case::JutulCase, res, G; kwarg...)
+    return solve_adjoint_forces(
+        case.model, res.states, res.reports, G, case.forces;
+        parameters = case.parameters,
+        state0 = case.state0
+    )
+end
+
 function solve_adjoint_forces(model, states, reports, G, allforces;
         state0 = setup_state(model),
         timesteps = report_timesteps(reports),
@@ -374,31 +379,6 @@ function get_force_sens(model, state0, parameters, tstep, forces, G)
 
     dforces, grad_adj = solve_adjoint_forces(model, states, reports, G, forces,
                     state0 = state0, parameters = parameters)
-    
-    # X, config = vectorize_forces(forces)
-    # G_base = sum(
-    #     map(
-    #         (state, dt, step_no) -> G(model, state, dt, step_no, forces),
-    #         states, tstep, 1:length(tstep)
-    #         )
-    #     )
-    # dG = similar(X)
-    # for i in eachindex(X)
-    #     X_perturbed = copy(X)
-    #     ϵ = max(abs(X_perturbed[i])*1e-5, 1e-20)
-    #     X_perturbed[i] += ϵ
-    #     eps_forces = devectorize_forces(forces, X_perturbed, config)
-    #     sim = Simulator(model, state0 = state0, parameters = parameters)
-    #     states, reports = simulate(sim, tstep, forces = eps_forces, extra_timing = false, info_level = -1)
-    #     G_eps = sum(
-    #         map(
-    #             (state, dt, step_no) -> G(model, state, dt, step_no, forces),
-    #             states, tstep, 1:length(tstep)
-    #             )
-    #         )
-    #     dG[i] = (G_eps - G_base)/ϵ
-    # end
-    # grad_num = dG
     grad_num = missing
     return (dforces, grad_adj, grad_num)
 end
@@ -565,15 +545,8 @@ function setup_force_optimization(case, G, opt_config)
             X_i = X[start:stop]
             fcfg = opt_config.forces_config[i]
             allforces[i] = devectorize_forces(force, X_i, fcfg)
-            # if i == 1
-            #     @info "$i: " allforces[i] force allforces[i] == force
-            #     if allforces[i] != force
-            #         @warn "Diff" allforces[i].bc.y_feed == force.bc.y_feed
-            #     end
-            # end
         end
         simforces = allforces[opt_config.timesteps_to_forces]
-        @error "It $global_it evaluting forward"
         global_it += 1
         states, reports = simulate(sim, dt, forces = simforces, extra_timing = false, info_level = -1)
         output_data[:states] = states
@@ -588,11 +561,9 @@ function setup_force_optimization(case, G, opt_config)
                 @assert isfinite(∂g) "Non-finite gradient for global $j local $i"
                 g[i] = ∂g
             end
-            @error "It $global_it evaluting grad"
             return g
         else
             obj = Jutul.evaluate_objective(G, model, states, dt, simforces)
-            @info "$global_it:" X obj
             push!(objective_history, obj)
             return obj
         end

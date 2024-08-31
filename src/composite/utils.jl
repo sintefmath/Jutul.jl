@@ -19,6 +19,11 @@ function update_model_post_selection!(model::CompositeModel)
     return model
 end
 
+function ensure_model_consistency!(model::CompositeModel)
+    update_model_pre_selection!(model)
+    return model
+end
+
 function composite_submodel(model::CompositeModel, k::Symbol)
     return model.extra[:models][k]
 end
@@ -55,15 +60,27 @@ function variable_scale(u::Pair{Symbol, V}) where V<:JutulVariables
 end
 
 function values_per_entity(model::CompositeModel, u::Pair{Symbol, V}) where V<:JutulVariables
+    # Needs syncing
+    composite_sync_variables!(model, :primary)
     values_per_entity(composite_submodel(model, u[1]), u[2])
 end
 
 function degrees_of_freedom_per_entity(model::CompositeModel, u::Pair{Symbol, V}) where V<:JutulVariables
+    # Needs syncing
+    composite_sync_variables!(model, :primary)
     degrees_of_freedom_per_entity(composite_submodel(model, u[1]), u[2])
 end
 
 function number_of_degrees_of_freedom(model::CompositeModel, u::Pair{Symbol, V}) where V<:JutulVariables
+    # Needs syncing
+    composite_sync_variables!(model, :primary)
     number_of_degrees_of_freedom(composite_submodel(model, u[1]), u[2])
+end
+
+function number_of_parameters(model::CompositeModel, u::Pair{Symbol, V}) where V<:JutulVariables
+    # Needs syncing
+    composite_sync_variables!(model, :parameters)
+    number_of_parameters(composite_submodel(model, u[1]), u[2])
 end
 
 function initialize_primary_variable_ad!(stateAD, model, pvar::Pair{Symbol, V}, pkey, n_partials; kwarg...) where V<:JutulVariables
@@ -71,10 +88,6 @@ function initialize_primary_variable_ad!(stateAD, model, pvar::Pair{Symbol, V}, 
     return initialize_primary_variable_ad!(stateAD, m, pvar[2], pkey, n_partials; kwarg...)
 end
 
-function declare_sparsity(model::CompositeModel, eq::Pair{Symbol, V}, eq_s, u, row_layout, col_layout) where V<:JutulEquation
-    k, eq = eq
-    return declare_sparsity(composite_submodel(model, k), eq, eq_s, u, row_layout, col_layout)
-end
 
 function number_of_equations(model::CompositeModel, eq::Pair{Symbol, V}) where V<:JutulEquation
     k, eq = eq
@@ -109,11 +122,6 @@ function update_equation_in_entity!(eq_buf, c, state, state0, eqn::Pair{Symbol, 
     return update_equation_in_entity!(eq_buf, c, state, state0, eq, composite_submodel(model, k), dt, ldisc)
 end
 
-function setup_equation_storage(model::CompositeModel, eqn::Pair{Symbol, V}, storage; kwarg...) where V<:JutulEquation
-    k, eq = eqn
-    return setup_equation_storage(composite_submodel(model, k), eq, storage; kwarg...)
-end
-
 function update_linearized_system_equation!(nz, r, model::CompositeModel, eqn::Pair{Symbol, V}, storage) where V<:JutulEquation
     k, eq = eqn
     return update_linearized_system_equation!(nz, r, composite_submodel(model, k), eq, storage)
@@ -122,4 +130,13 @@ end
 function convergence_criterion(model::CompositeModel, storage, eqn::Pair{Symbol, V}, eq_s, r; kwarg...) where V<:JutulEquation
     k, eq = eqn
     return convergence_criterion(composite_submodel(model, k), storage, eq, eq_s, r; kwarg...)
+end
+
+minimum_value(x::Pair) = minimum_value(last(x))
+maximum_value(x::Pair) = maximum_value(last(x))
+variable_scale(x::Pair) = variable_scale(last(x))
+
+function parameter_is_differentiable(prm::Pair, model)
+    k, prm = prm
+    parameter_is_differentiable(prm, composite_submodel(model, k))
 end

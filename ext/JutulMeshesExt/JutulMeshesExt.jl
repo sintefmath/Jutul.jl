@@ -8,7 +8,7 @@ module JutulMeshesExt
         # Global neighborship
         N = zeros(Int64, 2, nf)
         # Normals and centroids
-        normals = Vector{Vec3}(undef, nf)
+        normals = Vector{Meshes.Vec3}(undef, nf)
         cell_centroids = centroid.(grid)
         face_centroids = Vector{Point3}(undef, nf)
         # Measures

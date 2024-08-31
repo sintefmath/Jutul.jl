@@ -426,8 +426,21 @@ end
 
 block_size(lsys::LSystem) = 1
 
-function linear_solve_return(ok = true, iterations = 1, stats = nothing; prepare = 0.0)
-    (ok = ok, iterations = iterations, stats = (stats = deepcopy(stats), prepare = prepare))
+function linear_solve_return(ok = true, iterations = 1, stats = nothing;
+        prepare = 0.0,
+        precond = 0.0,
+        precond_count = 0
+        )
+    (
+        ok = ok,
+        iterations = iterations,
+        stats = (
+            stats = deepcopy(stats),
+            prepare = prepare,
+            precond = precond,
+            precond_count = precond_count
+        )
+    )
 end
 
 function linear_solve!(sys, ::Nothing, arg...; dx = sys.dx, r = sys.r, atol = nothing, rtol = nothing, executor = default_executor())

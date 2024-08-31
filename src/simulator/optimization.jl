@@ -76,7 +76,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         low = lims[1][k]
         high = lims[2][k]
         @assert low <= x0[k] "Computed lower limit $low for parameter #$k was larger than provided x0[k]=$(x0[k])"
-        @assert high >= x0[k] "Computer upper limit $hi for parameter #$k was smaller than provided x0[k]=$(x0[k])"
+        @assert high >= x0[k] "Computer upper limit $high for parameter #$k was smaller than provided x0[k]=$(x0[k])"
     end
     data = Dict()
     data[:n_objective] = 1
@@ -94,11 +94,13 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     data[:sim_config] = config
 
     if grad_type == :adjoint
-        adj_storage = setup_adjoint_storage(model, state0 = state0,
-                                                   parameters = parameters,
-                                                   targets = targets,
-                                                   use_sparsity = use_sparsity,
-                                                   param_obj = param_obj)
+        adj_storage = setup_adjoint_storage(model,
+            state0 = state0,
+            parameters = parameters,
+            targets = targets,
+            use_sparsity = use_sparsity,
+            param_obj = param_obj
+        )
         data[:adjoint_storage] = adj_storage
         grad_adj = zeros(adj_storage.n)
     else
@@ -209,10 +211,11 @@ function objective_and_gradient_opt!(F, dFdx, x, data, arg...)
     return obj
 end
 
-function optimization_config(model, param, active = keys(model.parameters);
-                                                        rel_min = nothing,
-                                                        rel_max = nothing,
-                                                        use_scaling = false)
+function optimization_config(model, param, active = parameter_targets(model);
+        rel_min = nothing,
+        rel_max = nothing,
+        use_scaling = false
+    )
     out = Dict{Symbol, Any}()
     for k in active
         var = model.parameters[k]
@@ -359,7 +362,9 @@ function optimization_limits!(lims, config, mapper, param, model)
             low_group = min(low_group, low)
             high_group = max(high_group, hi)
         end
-        high_group = max(high_group, low_group + 1e-8*(low_group + high_group) + 1e-18)
+        if high_group != Inf
+            high_group = max(high_group, low_group + 1e-8*(low_group + high_group) + 1e-18)
+        end
         @assert !isnan(low_group)
         @assert !isnan(high_group)
         cfg[:low] = low_group

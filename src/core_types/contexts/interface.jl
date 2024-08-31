@@ -1,6 +1,19 @@
 export minbatch
-minbatch(::Any) = 1000
-nthreads(::Any) = Threads.nthreads()
+
+function minbatch(x::Any)
+    nt = nthreads(x)
+    if nt == 1
+        nb = typemax(Int)
+    else
+        nb = 1000
+    end
+    return nb
+end
+
+function nthreads(::Any)
+    Threads.nthreads()
+end
+
 minbatch(x, n) = max(n ÷ nthreads(x), minbatch(x))
 
 function jacobian_eltype(context, layout, block_size)

@@ -71,7 +71,7 @@ export get_variable
 
 Get implementation of variable or parameter with name `name` for the model.
 """
-function get_variable(model::SimulationModel, name::Symbol)
+function get_variable(model::SimulationModel, name::Symbol; throw = true)
     pvar = model.primary_variables
     svar = model.secondary_variables
     prm = model.parameters
@@ -82,13 +82,17 @@ function get_variable(model::SimulationModel, name::Symbol)
     elseif haskey(prm, name)
         var = prm[name]
     else
-        error("Variable $name not found in primary/secondary variables or parameters.")
+        if throw
+            error("Variable $name not found in primary/secondary variables or parameters.")
+        else
+            var = nothing
+        end
     end
     return var
 end
 
 
-export set_primary_variables!, set_secondary_variables!, replace_variables!
+export set_primary_variables!, set_secondary_variables!, set_parameters!, replace_variables!
 """
     set_primary_variables!(model, varname = vardef)
     set_primary_variables!(model, varname1 = vardef1, varname2 = vardef2)
@@ -276,9 +280,9 @@ function initialize_extra_state_fields!(state, ::Any, model)
     # Do nothing
 end
 
-function setup_parameters!(prm, data_domain, model, initializer::AbstractDict = Dict())
+function setup_parameters!(prm, data_domain, model, initializer::AbstractDict = Dict(); kwarg...)
     for (psym, pvar) in get_parameters(model)
-        initialize_parameter_value!(prm, data_domain, model, pvar, psym, initializer)
+        initialize_parameter_value!(prm, data_domain, model, pvar, psym, initializer; kwarg...)
     end
     return prm
 end
@@ -294,12 +298,12 @@ A scalar (or short vector of the right size for [`VectorVariables`](@ref)) will 
 while a vector (or matrix for [`VectorVariables`](@ref)) with length (number of columns for [`VectorVariables`](@ref))
 equal to the entity count (for example, number of cells for a cell variable) will be used directly.
 """
-function setup_parameters(d::DataDomain, model::JutulModel; kwarg...)
+function setup_parameters(d::DataDomain, model::JutulModel; perform_copy = true, kwarg...)
     init = Dict{Symbol, Any}()
     for (k, v) in kwarg
         init[k] = v
     end
-    return setup_parameters(d, model, init)
+    return setup_parameters(d, model, init, perform_copy = perform_copy)
 end
 
 function setup_parameters(model::JutulModel, arg...; kwarg...)
@@ -312,9 +316,9 @@ function setup_parameters(model::SimulationModel, arg...; kwarg...)
     return setup_parameters(data_domain, model, arg...; kwarg...)
 end
 
-function setup_parameters(data_domain::DataDomain, model::JutulModel, init::AbstractDict)
+function setup_parameters(data_domain::DataDomain, model::JutulModel, init::AbstractDict; kwarg...)
     prm = Dict{Symbol, Any}()
-    return setup_parameters!(prm, data_domain, model, init)
+    return setup_parameters!(prm, data_domain, model, init; kwarg...)
 end
 
 """
@@ -930,7 +934,10 @@ function update_before_step!(storage, model, dt, forces; kwarg...)
 end
 
 function update_before_step!(storage, ::Any, model, dt, forces; time = NaN, recorder = ProgressRecorder(), update_explicit = true)
-    # Do nothing
+    state = storage.state
+    for (k, prm) in pairs(storage.variable_definitions.parameters)
+        update_parameter_before_step!(state[k], prm, storage, model, dt, forces)
+    end
 end
 
 function update_after_step!(storage, model, dt, forces; kwarg...)
@@ -963,10 +970,20 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     return report
 end
 
+"""
+    update_parameter_before_step!(prm_val, prm, storage, model, dt, forces)
+
+Update parameters before time-step. Used for hysteretic parameters.
+"""
+function update_parameter_before_step!(prm_val, prm, storage, model, dt, forces)
+    # Do nothing by default.
+    return prm_val
+end
+
 function variable_change_report(X::AbstractArray, X0::AbstractArray{T}, pvar) where T<:Real
     max_dv = max_v = sum_dv = sum_v = zero(T)
     @inbounds @simd for i in eachindex(X)
-        x = value(X[i])
+        x = value(X[i])::T
         dx = x - value(X0[i])
 
         dx_abs = abs(dx)
@@ -1076,7 +1093,12 @@ function setup_primary_variable_views(storage, model, dx)
             n = number_of_degrees_of_freedom(model, p)
             m = degrees_of_freedom_per_entity(model, p)
             rng = (offset+1):(n+offset)
-            dxi = reshape(view(dx, rng), n÷m, m)'
+            if m == 0
+                @assert n == 0
+                dxi = similar(dx, 0)
+            else
+                dxi = reshape(view(dx, rng), n÷m, m)'
+            end
             out[pkey] = dxi
             offset += n
         end
@@ -1109,3 +1131,6 @@ function setup_equations_views(storage, model, r)
     return convert_to_immutable_storage(out)
 end
 
+function ensure_model_consistency!(model::JutulModel)
+    return model
+end

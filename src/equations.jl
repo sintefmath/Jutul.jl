@@ -303,7 +303,7 @@ end
 Give out I, J arrays of equal length for a given equation attached
 to the given model.
 """
-function declare_sparsity(model, e::JutulEquation, eq_storage, entity, row_layout, col_layout = row_layout)
+function declare_sparsity(model, e, eq_storage, entity, row_layout, col_layout = row_layout)
     primitive = declare_pattern(model, e, eq_storage, entity)
     if isnothing(primitive)
         out = nothing
@@ -370,7 +370,7 @@ function expand_block_indices(I, J, ntotal, neqs, layout::EntityMajorLayout; equ
 end
 
 
-function declare_sparsity(model, e::JutulEquation, eq_storage, entity, row_layout::T, col_layout::T = row_layout) where T<:BlockMajorLayout
+function declare_sparsity(model, e, eq_storage, entity, row_layout::T, col_layout::T = row_layout) where T<:BlockMajorLayout
     primitive = declare_pattern(model, e, eq_storage, entity)
     if isnothing(primitive)
         out = nothing
@@ -394,7 +394,7 @@ function declare_pattern(model, e, eq_s, entity, arg...)
     k = entity_as_symbol(entity)
     if haskey(eq_s, k)
         cache = eq_s[k]
-        return generic_cache_declare_pattern(cache, arg...)
+        out = generic_cache_declare_pattern(cache, arg...)
     else
         out = nothing
     end

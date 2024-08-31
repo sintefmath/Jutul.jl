@@ -2,21 +2,27 @@ import LinearAlgebra.mul!
 
 export GenericKrylov
 
-struct PrecondWrapper{T, K}
-    op::T
-    x::K
-    function PrecondWrapper(op::T_o) where T_o<:LinearOperator
-        # x = zeros(eltype(op), size(op, 1))
-        x = missing
-        T_x = typeof(x)
-        new{T_o, T_x}(op, x)
+mutable struct PrecondWrapper{T}
+    const op::T
+    count::Int
+    time::Float64
+    function PrecondWrapper(op::T; count = 0, time = 0.0) where T<:LinearOperator
+        new{T}(op, count, time)
     end
 end
 
 Base.eltype(p::PrecondWrapper) = eltype(p.op)
 
-LinearAlgebra.mul!(x, p::PrecondWrapper, y) = mul!(x, p.op, y)
-LinearAlgebra.mul!(x, p::PrecondWrapper, y, α, β) = mul!(x, p.op, y, α, β)
+function LinearAlgebra.mul!(x, p::PrecondWrapper, y)
+    out = mul!(x, p, y, true, false)
+end
+
+function LinearAlgebra.mul!(x, p::PrecondWrapper, y, α, β)
+    t = @elapsed x = mul!(x, p.op, y, α, β)
+    p.count += 1
+    p.time += t
+    return x
+end
 
 """
     GenericKrylov(solver = :gmres; preconditioner = nothing; <kwarg>)
@@ -48,12 +54,12 @@ function Base.show(io::IO, krylov::GenericKrylov)
     print(io, "Generic Krylov using $(krylov.solver) (ϵₐ=$atol, ϵ=$rtol) with prec = $(typeof(krylov.preconditioner))")
 end
 
-function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, side, arg...)
+function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, float_t = Float64)
     M = krylov.preconditioner
     if isnothing(M)
         op = I
     else
-        op = PrecondWrapper(linear_operator(M, side, arg...))
+        op = PrecondWrapper(linear_operator(M, float_t))
     end
     return op
 end
@@ -64,19 +70,19 @@ end
 # end
 
 function linear_solve!(sys::LSystem,
-                krylov::GenericKrylov,
-                model,
-                storage = nothing,
-                dt = nothing,
-                recorder = ProgressRecorder(),
-                executor = default_executor();
-                dx = sys.dx_buffer,
-                r = vector_residual(sys),
-                atol = linear_solver_tolerance(krylov, :absolute),
-                rtol = linear_solver_tolerance(krylov, :relative),
-                rtol_nl = linear_solver_tolerance(krylov, :nonlinear_relative),
-                rtol_relaxed = linear_solver_tolerance(krylov, :relaxed_relative)
-                )
+        krylov::GenericKrylov,
+        model,
+        storage = nothing,
+        dt = nothing,
+        recorder = ProgressRecorder(),
+        executor = default_executor();
+        dx = sys.dx_buffer,
+        r = vector_residual(sys),
+        atol = linear_solver_tolerance(krylov, :absolute),
+        rtol = linear_solver_tolerance(krylov, :relative),
+        rtol_nl = linear_solver_tolerance(krylov, :nonlinear_relative),
+        rtol_relaxed = linear_solver_tolerance(krylov, :relaxed_relative)
+    )
     cfg = krylov.config
     prec = krylov.preconditioner
     Ft = float_type(model.context)
@@ -84,8 +90,7 @@ function linear_solve!(sys::LSystem,
     t_prep = @elapsed @tic "prepare" prepare_linear_solve!(sys)
     op = linear_operator(sys)
     t_prec = @elapsed @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder, executor)
-    L = preconditioner(krylov, sys, model, storage, recorder, :left, Ft)
-    # R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
+    prec_op = preconditioner(krylov, sys, model, storage, recorder, Ft)
     v = Int64(cfg.verbose)
     max_it = cfg.max_iterations
     min_it = cfg.min_iterations
@@ -124,16 +129,22 @@ function linear_solve!(sys::LSystem,
         callback = solver -> false
         manual_conv = false
     end
+    if cfg.precond_side == :right
+        preconditioner_arg = (N = prec_op, )
+    else
+        preconditioner_arg = (M = prec_op, )
+    end
     solve_f, F = krylov_jl_solve_function(krylov, op, r)
     @tic "solve" solve_f(F, op, r;
-                            itmax = max_it,
-                            verbose = v,
-                            rtol = rtol,
-                            atol = atol,
-                            history = true,
-                            callback = callback,
-                            M = L,
-                            cfg.arguments...)
+        preconditioner_arg...,
+        itmax = max_it,
+        verbose = v,
+        rtol = rtol,
+        atol = atol,
+        history = true,
+        callback = callback,
+        cfg.arguments...
+    )
     x, stats = (krylov.storage.x, krylov.storage.stats)
     res = stats.residuals
     n = length(res) - 1
@@ -160,7 +171,14 @@ function linear_solve!(sys::LSystem,
         @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
     end
     @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
-    return linear_solve_return(solved, n, stats, prepare = t_prec + t_prep)
+    if prec_op isa PrecondWrapper
+        t_prec_op = prec_op.time
+        t_prec_count = prec_op.count
+    else
+        t_prec_op = 0.0
+        t_prec_count = 0
+    end
+    return linear_solve_return(solved, n, stats, precond = t_prec_op, precond_count = t_prec_count, prepare = t_prec + t_prep)
 end
 
 function krylov_scale_system!(sys, krylov::GenericKrylov, dt)

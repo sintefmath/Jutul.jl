@@ -60,13 +60,10 @@ associated_entity(::PoissonFaceCoefficient) = Faces()
 default_value(model, ::PoissonFaceCoefficient) = 1.0
 
 function default_parameter_values(data_domain, model, param::PoissonFaceCoefficient, symb)
-    if haskey(data_domain, :poisson_coefficient, Cells())
-        U = data_domain[:poisson_coefficient]
-    else
+    if !haskey(data_domain, :poisson_coefficient, Cells())
         error(":poisson_coefficient symbol must be present to initialize parameter $symb, had keys: $(keys(data_domain))")
     end
-    g = physical_representation(data_domain)
-    return compute_face_trans(g, U)
+    return compute_face_trans(data_domain, :poisson_coefficient)
 end
 
 function select_parameters!(S, system::VariablePoissonSystem, model)

@@ -405,6 +405,10 @@ function perform_step!(storage, model, dt, forces, config;
     end
     report[:solved] = solved
     extra_debug_output!(report, storage, model, config, iteration, dt)
+    post_hook = config[:post_iteration_hook]
+    if !ismissing(post_hook)
+        converged = post_hook(converged, report, storage, model, dt, forces, config, iteration)
+    end
     return (e, converged, report)
 end
 

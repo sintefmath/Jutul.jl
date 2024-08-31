@@ -13,11 +13,12 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info
     add_option!(cfg, :delete_on_consolidate, true, "Delete processor states once consolidated.", types = Bool)
     add_option!(cfg, :info_level_parray, main_process_info_level, "Info level for outer printing", types = Int)
 
-    cfg = Jutul.simulator_config!(cfg, sim;
+    cfg, unused = Jutul.simulator_config!(cfg, sim;
         kwarg...,
         info_level = info_level,
         ascii_terminal = is_mpi_win,
-        extra_timing = extra_timing
+        extra_timing = extra_timing,
+        output_unused = true
     )
     simulators = sim.storage[:simulators]
     output_pth = cfg[:output_path]
@@ -50,10 +51,11 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info
         else
             pth = nothing
         end
-        subconfig = Jutul.simulator_config(sim,
+        subconfig = Jutul.simulator_config(sim;
             info_level = -1,
             extra_timing = extra_timing,
-            output_path = pth
+            output_path = pth,
+            unused...
         )
         subconfig
     end
@@ -173,7 +175,8 @@ function Jutul.perform_step!(
         Jutul.parray_synchronize_primary_variables(simulator)
     end
     out = map(simulators, configs, forces, reports) do sim, config, f, rep
-        e, conv, report = perform_step!(sim, dt, f, config;
+        t_s = get(rep, :secondary_time, 0.0)
+        e, conv, rep = perform_step!(sim, dt, f, config;
             iteration = iteration,
             solve = false,
             report = rep,
@@ -181,6 +184,11 @@ function Jutul.perform_step!(
             executor = Jutul.simulator_executor(sim),
             vararg...
         )
+        if haskey(rep, :secondary_time)
+            rep[:secondary_time] += t_s
+        else
+            rep[:secondary_time] = t_s
+        end
         return (e, Int(conv))
     end
     errors, converged = tuple_of_arrays(out)
@@ -275,11 +283,12 @@ function Jutul.retrieve_output!(sim::PArraySimulator, states, reports, config, n
     if config[:consolidate_results]
         MPI.Barrier(comm)
         if np > 1 && is_main && pth isa String
-            consolidate_distributed_results_on_disk!(pth, np, 1:n, cleanup = config[:delete_on_consolidate])
+            Jutul.consolidate_distributed_results_on_disk!(pth, np, 1:n, cleanup = config[:delete_on_consolidate], verbose = config[:info_level] > 0)
         end
         MPI.Barrier(comm)
     end
-    Jutul.retrieve_output!(states, reports, config, n)
+    states, reports = Jutul.retrieve_output!(states, reports, config, n, read_states = config[:output_states] && is_main)
+    return (states, reports)
 end
 
 function Jutul.simulator_reports_per_step(psim::PArraySimulator)

@@ -51,10 +51,6 @@ function group_index(model, symbol)
     return index::Int
 end
 
-function submodels_symbols(model::MultiModel)
-    return keys(model.models)
-end
-
 export setup_cross_term, add_cross_term!
 function setup_cross_term(cross_term::CrossTerm; target::Symbol, source::Symbol, equation)
     @assert target != source
@@ -73,7 +69,7 @@ function group_linearized_system_offset(model::MultiModel, target, fn = number_o
     if isnothing(groups)
         groups = ones(Int, length(models))
     end
-    skeys = submodel_symbols(model)
+    skeys = submodels_symbols(model)
     pos = findfirst(isequal(target), skeys)
     g = groups[pos]
     offset = 0

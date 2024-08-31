@@ -197,9 +197,8 @@ function plot_interactive_impl(grid, states;
     prop_name = Observable{Any}(key)
     transform_name = Observable{String}(transform)
     lims = Observable(limits[key])
-    menu = Menu(fig, options = datakeys, prompt = key)
-    menu_2 = Menu(fig, options = get_valid_rows("$key"), prompt = "1", width = 60)
-
+    menu = Menu(fig, options = datakeys, default = key)
+    menu_2 = Menu(fig, options = get_valid_rows("$key"), default = "1", width = 60)
 
     function change_index(ix; update_slider = true)
         tmp = clamp(ix, 1, nstates)
@@ -393,6 +392,7 @@ function plot_interactive_impl(grid, states;
         "batlowK",
         "berlin",
         "brg",
+        "commercial",
         "gnuplot",
         "gray1",
         "hawaii",
@@ -554,7 +554,6 @@ function plot_interactive_impl(grid, states;
         tri = primitives.triangulation
         scat = Makie.mesh!(ax, pts, tri; color = ys,
                                         colorrange = lims,
-                                        size = 60,
                                         backlight = 1,
                                         colormap = cmap,
                                         transparency = transparency,
@@ -676,7 +675,11 @@ function unpack(buffer, x::AbstractVector, ix)
 end
 
 function generate_colormap(colormap_name, alphamap_name, base_alpha, low, high)
-    cmap = to_colormap(colormap_name)
+    if colormap_name == :commercial
+        cmap = commercial_colormap()
+    else
+        cmap = to_colormap(colormap_name)
+    end
     n = length(cmap)
     if alphamap_name != :no_alpha_map
         if alphamap_name == :linear
@@ -701,6 +704,12 @@ end
 function basic_3d_figure(resolution = default_jutul_resolution(); z_is_depth = false)
     fig = Figure(size = resolution)
     ax = Axis3(fig[1, 1], zreversed = z_is_depth)
+    return (fig, ax)
+end
+
+function basic_2d_figure(resolution = default_jutul_resolution(); z_is_depth = false)
+    fig = Figure(size = resolution)
+    ax = Axis(fig[1, 1])
     return (fig, ax)
 end
 
@@ -868,10 +877,38 @@ function Jutul.plot_multimodel_interactive_impl(model, states, model_keys = keys
     plot_interactive(total_number_of_cells, new_states, primitives = acc_primitives; kwarg...)
 end
 
-function Jutul.plotting_check_interactive()
+function Jutul.plotting_check_interactive(; warn = true)
     backend_name = "$(Makie.current_backend())"
     if backend_name != "GLMakie"
-        msg = "Currently active Makie backend $backend_name may not be interactive or fully supported.\nGLMakie is recommended for Jutul's interactive plots. To install:\n\tusing Pkg; Pkg.add(\"GLMakie\")\nTo use:\n\tusing GLMakie\n\tGLMakie.activate!()\nYou can then retry your plotting command."
-        @warn msg
+        if warn
+            msg = "Currently active Makie backend $backend_name may not be interactive or fully supported.\nGLMakie is recommended for Jutul's interactive plots. To install:\n\tusing Pkg; Pkg.add(\"GLMakie\")\nTo use:\n\tusing GLMakie\n\tGLMakie.activate!()\nYou can then retry your plotting command."
+            @warn msg
+        end
+        return false
     end
+    return true
+end
+
+function commercial_colormap()
+    blue =   (0, 0, 1)
+    cyan =   (0, 1, 1)
+    green =  (0, 1, 0)
+    yellow = (1, 1, 0)
+    red =    (1, 0, 0)
+
+    function simple_interp(F_0, F_1, x)
+        v = F_0 .+ (F_1 .- F_0).*x
+        return Makie.RGB(v...)
+    end
+    cmap = Vector{typeof(Makie.RGB(0, 0, 0))}()
+    nsteps = [30, 25, 25, 20]
+    colors = (blue, cyan, green, yellow, red)
+    for (i, nstep) in enumerate(nsteps)
+        c1 = colors[i]
+        c2 = colors[i+1]
+        for dx in range(0.0, 1.0, nstep)
+            push!(cmap, simple_interp(c1, c2, dx))
+        end
+    end
+    return cmap
 end

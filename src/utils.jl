@@ -235,10 +235,13 @@ function initialize_report_stats(reports)
                                                 :ministeps => 0,
                                                 :wasted_linearizations => 0,
                                                 :wasted_linear_iterations => 0,
+                                                :wasted_linear_precond_iterations => 0,
                                                 :linear_update => 0.0,
                                                 :linear_solve => 0.0,
                                                 :linear_setup => 0.0,
                                                 :linear_iterations => 0,
+                                                :linear_precond => 0.0,
+                                                :linear_precond_iterations => 0,
                                                 :linearizations => 0,
                                                 :finalize => 0.0,
                                                 :secondary => 0.0,
@@ -279,6 +282,8 @@ function ministep_report_stats!(stats, mini_rep)
     stats[:linear_solve] += s.linear_solve
     stats[:linear_setup] += s.linear_setup
     stats[:linear_iterations] += s.linear_iterations
+    stats[:linear_precond] += s.linear_solve_precond
+    stats[:linear_precond_iterations] += s.linear_solve_precond_iterations
     stats[:update] += s.update
     stats[:equations] += s.equations
     stats[:secondary] += s.secondary
@@ -288,6 +293,7 @@ function ministep_report_stats!(stats, mini_rep)
         stats[:wasted_iterations] += s.newtons
         stats[:wasted_linearizations] += s.linearizations
         stats[:wasted_linear_iterations] += s.linear_iterations
+        stats[:wasted_linear_precond_iterations] += s.linear_solve_precond_iterations
     end
 end
 
@@ -296,15 +302,17 @@ function summarize_report_stats(stats, per = false)
         linscale = v -> v / max(stats[:linearizations], 1)
         itscale = v -> v / max(stats[:iterations], 1)
         miniscale = v -> v / max(stats[:ministeps], 1)
+        prescale = v -> v / max(stats[:linear_precond_iterations], 1)
     else
-        linscale = itscale = miniscale = identity
+        linscale = itscale = miniscale = prescale = identity
     end
     summary = (
                 secondary = itscale(stats[:secondary]), # Not always updated, itscale
                 equations = linscale(stats[:equations]),
                 linear_system = linscale(stats[:linear_update]),
-                linear_solve = itscale(stats[:linear_solve]),
+                linear_solve = itscale(stats[:linear_solve] - stats[:linear_precond]),
                 linear_setup = itscale(stats[:linear_setup]),
+                linear_precond = prescale(stats[:linear_precond]),
                 update = itscale(stats[:update]),
                 convergence = linscale(stats[:convergence]),
                 io = miniscale(stats[:io]),
@@ -326,25 +334,31 @@ end
 function output_report_stats(stats)
     totals = summarize_report_stats(stats, false)
     each = summarize_report_stats(stats, true)
-
     out = (
         newtons = stats[:iterations],
         linearizations = stats[:linearizations],
         linear_iterations = stats[:linear_iterations],
-        wasted = (newtons = stats[:wasted_iterations],
-                  linearizations = stats[:wasted_linearizations],
-                  linear_iterations = stats[:wasted_linear_iterations]),
+        linear_precond_iterations = stats[:linear_precond_iterations],
+        wasted = (
+            newtons = stats[:wasted_iterations],
+            linearizations = stats[:wasted_linearizations],
+            linear_iterations = stats[:wasted_linear_iterations],
+            linear_precond_iterations = stats[:wasted_linear_precond_iterations]
+        ),
         steps = stats[:steps],
         ministeps = stats[:ministeps],
         time_sum = totals,
         time_each = each
-       )
+    )
     return out
 end
 
 function report_stats(reports)
     stats = initialize_report_stats(reports)
     for outer_rep in reports
+        if ismissing(outer_rep)
+            continue
+        end
         outer_step_report_stats!(stats, outer_rep)
     end
     update_other_time_report_stats!(stats)
@@ -362,6 +376,8 @@ function stats_ministep(reports)
     linsolve = 0
     linprep = 0
     linear_iterations = 0
+    precond_its = 0
+    precond = 0
     for rep in reports
         linearizations += 1
         its += rep[:solved]
@@ -374,22 +390,28 @@ function stats_ministep(reports)
             linsolve += rep[:linear_solve_time] - lprep
             linprep += lprep
             linear_iterations += rep[:linear_iterations]
+            precond_its += rep[:linear_solver].precond_count
+            precond += rep[:linear_solver].precond
         end
         secondary += rep[:secondary_time]
         equations += rep[:equations_time]
         linear_system += rep[:linear_system_time]
         convergence += rep[:convergence_time]
     end
-    return (linearizations = linearizations,
-            newtons = its, 
-            equations = equations,
-            secondary = secondary,
-            convergence = convergence,
-            update = update,
-            linear_iterations = linear_iterations,
-            linear_solve = linsolve,
-            linear_setup = linprep,
-            linear_system = linear_system)
+    return (
+        linearizations = linearizations,
+        newtons = its,
+        equations = equations,
+        secondary = secondary,
+        convergence = convergence,
+        update = update,
+        linear_iterations = linear_iterations,
+        linear_solve = linsolve,
+        linear_setup = linprep,
+        linear_system = linear_system,
+        linear_solve_precond = precond,
+        linear_solve_precond_iterations = precond_its
+    )
 end
 
 function report_iterations(reports::AbstractVector)
@@ -489,9 +511,10 @@ function print_iterations(stats, io = stdout;
         table_formatter = tf_unicode_rounded,
         scale = 1
     )
-    flds = (:newtons, :linearizations, :linear_iterations)
-    names = [:Newton, :Linearization, Symbol("Linear solver")]
-    data = Array{Any}(undef, length(flds), 4)
+    flds = (:newtons, :linearizations, :linear_iterations, :linear_precond_iterations)
+    names = [:Newton, :Linearization, Symbol("Linear solver"), Symbol("Precond apply")]
+    t_tot = stats.time_sum
+    data = Array{Any}(undef, length(flds), 3)
     if scale == 1
         sf = identity
     else
@@ -500,28 +523,26 @@ function print_iterations(stats, io = stdout;
     nstep = sf(stats.steps)
     nmini = sf(stats.ministeps)
 
-    tot_time = stats.time_sum.total
-    time = map(f -> tot_time/stats[f], flds)
-    u, s = pick_time_unit(time)
-
     for (i, f) in enumerate(flds)
         waste = sf(stats[:wasted][f])
         raw = sf(stats[f])
         data[i, 1] = raw/nstep         # Avg per step
         data[i, 2] = raw/nmini         # Avg per mini
-        data[i, 3] = time[i]/u         # Time each
-        data[i, 4] = "$raw ($waste)"    # Total
+        data[i, 3] = "$raw ($waste)"    # Total
     end
 
-    pretty_table(io, data; header = (["Avg/step", "Avg/ministep", "Time per", "Total"],
-                                ["$nstep steps", "$nmini ministeps", s, "(wasted)"]), 
-                      row_labels = names,
-                      title = title,
-                      title_alignment = :c,
-                      row_label_alignment = :l,
-                      tf = table_formatter,
-                      formatters = (ft_printf("%3.4f", 3)),
-                      row_label_column_title = "Iteration type")
+    pretty_table(io, data;
+        header = (
+            ["Avg/step", "Avg/ministep", "Total"],
+            ["$nstep steps", "$nmini ministeps", "(wasted)"]
+        ),
+        row_labels = names,
+        title = title,
+        title_alignment = :c,
+        row_label_alignment = :l,
+        tf = table_formatter,
+        row_label_column_title = "Iteration type"
+    )
 end
 
 function print_timing(stats, io = stdout; title = "", table_formatter = tf_unicode_rounded)
@@ -554,7 +575,9 @@ function print_timing(stats, io = stdout; title = "", table_formatter = tf_unico
         elseif name == :linear_solve
             name = Symbol("Linear solve")
         elseif name == :linear_setup
-            name = Symbol("Preconditioner")
+            name = Symbol("Linear setup")
+        elseif name == :linear_precond
+            name = Symbol("Precond apply")
         elseif name == :update
             name = :Update
         elseif name == :convergence
@@ -568,18 +591,17 @@ function print_timing(stats, io = stdout; title = "", table_formatter = tf_unico
         end
         return name
     end
-
-
-    pretty_table(io, data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]), 
-                      row_labels = map(translate_for_table, flds),
-                      formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
-                      title = title,
-                      title_alignment = :c,
-                      tf = table_formatter,
-                      row_label_alignment = :l,
-                      alignment = [:r, :r, :r],
-                      body_hlines = [n-1],
-                      row_label_column_title = "Timing type")
+    pretty_table(io, data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]),
+        row_labels = map(translate_for_table, flds),
+        formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
+        title = title,
+        title_alignment = :c,
+        tf = table_formatter,
+        row_label_alignment = :l,
+        alignment = [:r, :r, :r],
+        body_hlines = [n-1],
+        row_label_column_title = "Timing type"
+    )
 end
 
 export read_results
@@ -659,14 +681,14 @@ function read_restart(pth, i; read_state = true, read_report = true)
             end
             stored_i = file["step"]
             if stored_i != i
-                @warn "File contained step $stored_i, but was named as step $i."
+                @warn "File $f contained step $stored_i, but was named as step $i."
             end
             return (state, report)
         end
     else
         state = JUTUL_OUTPUT_TYPE()
         report = nothing
-        @warn "Data for step $i was requested, but no such file was found."
+        @warn "Data for step $i was requested, but no such file was found at $f."
     end
     return (state, report)
 end
@@ -719,7 +741,8 @@ Get states and timesteps at the finest stored resolution. Output lengths depend
 on if `output_substates` option to simulator was enabled.
 """
 function expand_to_ministeps(result::SimResult)
-    return expand_to_ministeps(result.states, result.reports)
+    states = result.states
+    return expand_to_ministeps(states, result.reports[eachindex(states)])
 end
 
 """

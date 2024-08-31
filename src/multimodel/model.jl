@@ -7,17 +7,16 @@ function Base.show(io::IO, t::MIME"text/plain", model::MultiModel)
     end
     ndof = number_of_degrees_of_freedom(model)
     neq = number_of_equations(model)
-    println(io, "MultiModel with $(length(submodels)) models and $(length(cross_terms)) cross-terms. $neq equations and $ndof degrees of freedom.")
+    nprm = number_of_parameters(model)
+    println(io, "MultiModel with $(length(submodels)) models and $(length(cross_terms)) cross-terms. $neq equations, $ndof degrees of freedom and $nprm parameters.")
     println(io , "\n  models:")
     for (i, key) in enumerate(keys(submodels))
         m = submodels[key]
         s = m.system
         ndofi = number_of_degrees_of_freedom(m)
         neqi = number_of_equations(m)
-    
         g = physical_representation(m.domain)
         println(io, "    $i) $key ($(neqi)x$ndofi)\n       $(s)\n       ∈ $g")
-
     end
     if length(cross_terms) > 0
         println(io , "\n  cross_terms:")
@@ -79,7 +78,9 @@ function replace_variables!(model::MultiModel; kwarg...)
     return model
 end
 
-@inline submodel_symbols(model::MultiModel) = keys(model.models)
+@inline function submodels_symbols(model::MultiModel)
+    return keys(model.models)
+end
 
 function setup_state!(state, model::MultiModel, init_values)
     error("Mutating version of setup_state not supported for multimodel.")
@@ -140,7 +141,7 @@ function setup_multimodel_maps!(storage, model)
 end
 
 function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys)
-    mkeys = submodel_symbols(model)
+    mkeys = submodels_symbols(model)
     groups = model.groups
     no_groups = isnothing(groups)
     if no_groups
@@ -193,7 +194,7 @@ end
 function specialize_simulator_storage(storage::JutulStorage, model::MultiModel, specialize)
     specialize_outer = multi_model_is_specialized(model)
     specialize = specialize || specialize_outer
-    sym = submodel_symbols(model)
+    sym = submodels_symbols(model)
     for (k, v) in data(storage)
         if k in sym
             storage[k] = specialize_simulator_storage(v, model[k], specialize)
@@ -220,7 +221,7 @@ end
 
 function align_equations_to_linearized_system!(storage, model::MultiModel; equation_offset = 0, variable_offset = 0)
     models = model.models
-    model_keys = submodel_symbols(model)
+    model_keys = submodels_symbols(model)
     neqs = sub_number_of_equations(model)
     ndofs = sub_number_of_degrees_of_freedom(model)
     bz = sub_block_sizes(model)
@@ -417,8 +418,8 @@ function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind
 end
 
 function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, row_context, col_context)
-    I = []
-    J = []
+    I = Int[]
+    J = Int[]
     outstr = "Determining sparse pattern of $(length(targets))×$(length(sources)) models:\n"
     equation_offset = 0
     variable_offset = 0
@@ -445,13 +446,18 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
             bz_n = treat_block_size(bz_n, sarg.block_n)
             bz_m = treat_block_size(bz_m, sarg.block_m)
             if length(i) > 0
-                push!(I, i .+ equation_offset)
-                push!(J, j .+ variable_offset)
                 @assert maximum(i) <= n "I index exceeded $n for $source → $target (largest value: $(maximum(i))"
                 @assert maximum(j) <= m "J index exceeded $m for $source → $target (largest value: $(maximum(j))"
 
                 @assert minimum(i) >= 1 "I index was lower than 1 for $source → $target"
                 @assert minimum(j) >= 1 "J index was lower than 1 for $source → $target"
+
+                for ii in i
+                    push!(I, ii + equation_offset)
+                end
+                for jj in j
+                    push!(J, jj + variable_offset)
+                end
             end
             outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1).\n"
             variable_offset += m
@@ -460,8 +466,6 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         equation_offset += n
     end
     @debug outstr
-    I = vec(vcat(I...))
-    J = vec(vcat(J...))
     bz_n = finalize_block_size(bz_n)
     bz_m = finalize_block_size(bz_m)
     return SparsePattern(I, J, equation_offset, variable_offset, matrix_layout(row_context), matrix_layout(col_context), bz_n, bz_m)
@@ -471,7 +475,7 @@ function setup_linearized_system!(storage, model::MultiModel)
     models = model.models
     context = model.context
 
-    candidates = [i for i in submodel_symbols(model)]
+    candidates = [i for i in submodels_symbols(model)]
     if has_groups(model)
         ndof = values(map(number_of_degrees_of_freedom, models))
         n = sum(ndof)
@@ -559,7 +563,7 @@ function initialize_storage!(storage, model::MultiModel; kwarg...)
     end
 end
 
-function update_equations!(storage, model::MultiModel, dt; targets = submodel_symbols(model))
+function update_equations!(storage, model::MultiModel, dt; targets = submodels_symbols(model))
     @tic "model equations" for k in targets
         update_equations!(storage[k], model[k], dt)
     end
@@ -578,7 +582,7 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
 end
 
-function update_cross_terms!(storage, model::MultiModel, dt; targets = submodel_symbols(model), sources = submodel_symbols(model))
+function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels_symbols(model), sources = submodels_symbols(model))
     models = model.models
     for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
         target = ctp.target::Symbol
@@ -682,8 +686,8 @@ end
 
 function update_linearized_system!(storage, model::MultiModel, executor = default_executor();
         equation_offset = 0,
-        targets = submodel_symbols(model),
-        sources = submodel_symbols(model),
+        targets = submodels_symbols(model),
+        sources = submodels_symbols(model),
         kwarg...)
     @assert equation_offset == 0 "The multimodel version assumes offset == 0, was $offset"
     # Update diagonal blocks (model with respect to itself)
@@ -696,7 +700,7 @@ function update_linearized_system!(storage, model::MultiModel, executor = defaul
 end
 
 function update_diagonal_blocks!(storage, model::MultiModel, targets; lsys = storage.LinearizedSystem, kwarg...)
-    model_keys = submodel_symbols(model)
+    model_keys = submodels_symbols(model)
     if has_groups(model)
         ng = number_of_groups(model)
         groups = model.groups
@@ -730,7 +734,7 @@ end
 
 function setup_parameters(model::MultiModel, arg...; kwarg...)
     data_domains = Dict{Symbol, DataDomain}()
-    for k in submodel_symbols(model)
+    for k in submodels_symbols(model)
         data_domains[k] = model[k].data_domain
     end
     return setup_parameters(data_domains, model, arg...; kwarg...)
@@ -872,7 +876,7 @@ function check_convergence(storage, model::MultiModel, cfg;
     end
 end
 
-function update_primary_variables!(storage, model::MultiModel; targets = submodel_symbols(model), kwarg...)
+function update_primary_variables!(storage, model::MultiModel; targets = submodels_symbols(model), kwarg...)
     models = model.models
     report = Dict{Symbol, AbstractDict}()
     for key in targets
@@ -905,21 +909,24 @@ end
 
 function update_before_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
     for key in targets
-        s = storage[key]
         m = model.models[key]
+        update_before_step_multimodel!(storage, model, m, dt, forces, key; kwarg...)
         f = forces[key]
-        update_before_step_multimodel!(storage, model, m, dt, f, key; kwarg...)
+        s = storage[key]
         update_before_step!(s, m, dt, f; kwarg...)
     end
 end
 
-function update_before_step_multimodel!(storage, model, submodel, dt, subforces, label; kwarg...)
+function update_before_step_multimodel!(storage, model, submodel, dt, forces, label; kwarg...)
 
 end
 
 function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model))
     for key in targets
-        apply_forces!(storage[key], model.models[key], dt, forces[key]; time = time)
+        subforce = forces[key]
+        if !isnothing(subforce)
+            apply_forces!(storage[key], model.models[key], dt, subforce; time = time)
+        end
     end
 end
 
@@ -939,7 +946,7 @@ end
 function get_output_state(storage, model::MultiModel)
     out = JUTUL_OUTPUT_TYPE()
     models = model.models
-    for key in submodel_symbols(model)
+    for key in submodels_symbols(model)
         out[key] = get_output_state(storage[key], models[key])
     end
     return out
@@ -963,6 +970,10 @@ function number_of_degrees_of_freedom(model::MultiModel)
     return sum(number_of_degrees_of_freedom, model.models)
 end
 
+function number_of_parameters(model::MultiModel)
+    return sum(number_of_parameters, model.models)
+end
+
 function number_of_equations(model::MultiModel)
     return sum(number_of_equations, model.models)
 end
@@ -976,6 +987,13 @@ end
 function sort_variables!(model::MultiModel, t = :primary)
     for (k, m) in pairs(model.models)
         sort_variables!(m, t)
+    end
+    return model
+end
+
+function ensure_model_consistency!(model::MultiModel)
+    for (k, m) in pairs(model.models)
+        ensure_model_consistency!(m)
     end
     return model
 end

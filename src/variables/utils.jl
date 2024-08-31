@@ -22,6 +22,14 @@ function number_of_degrees_of_freedom(model::JutulModel)
     return ndof
 end
 
+function number_of_parameters(model::JutulModel)
+    ndof = 0
+    for (pkey, pvar) in get_parameters(model)
+        ndof += number_of_degrees_of_freedom(model, pvar)
+    end
+    return ndof
+end
+
 export number_of_values
 """
 Total number of values for a model, for a given type of variables over all entities
@@ -66,6 +74,7 @@ end
 Number of independent primary variables / degrees of freedom per computational entity.
 """
 degrees_of_freedom_per_entity(model, ::ScalarVariable) = 1
+degrees_of_freedom_per_entity(model, u::JutulVariables) = values_per_entity(model, u)
 
 """
 Number of values held by a primary variable. Normally this is equal to the number of degrees of freedom,
@@ -95,6 +104,8 @@ maximum_value(::JutulVariables) = nothing
 Lower (inclusive) limit for variable.
 """
 minimum_value(::JutulVariables) = nothing
+
+parameter_is_differentiable(::JutulVariables, model) = true
 
 function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx, w)
     entity = associated_entity(p)
@@ -213,7 +224,6 @@ end
 function initialize_variable_value(model, pvar, val; perform_copy = true)
     nu = number_of_entities(model, pvar)
     nv = values_per_entity(model, pvar)
-    
     if isa(pvar, ScalarVariable)
         if val isa AbstractVector
             @assert length(val) == nu "Expected $nu entries, but got $(length(val)) for $(typeof(pvar))"
@@ -291,18 +301,18 @@ function initialize_variable_value(model, pvar::ScalarVariable, val::Number)
     return initialize_variable_value(model, pvar, V)
 end
 
-function initialize_parameter_value!(parameters, data_domain, model, param, symb, initializer::AbstractDict)
+function initialize_parameter_value!(parameters, data_domain, model, param, symb, initializer::AbstractDict; kwarg...)
     if haskey(initializer, symb)
-        vals = initializer[symb]
+        vals = initialize_variable_value(model, param, initializer[symb])
         s = "provided"
     else
         vals = default_parameter_values(data_domain, model, param, symb)
         s = "computed defaulted"
     end
-    if any(x -> !isfinite(x), vals)
-        @error "Non-finite entries in $s parameter $symb"
+    if eltype(vals)<:AbstractFloat && any(x -> !isfinite(x), vals)
+        @error "Non-finite entries in $s parameter $symb" vals
     end
-    return initialize_variable_value!(parameters, model, param, symb, vals)
+    return initialize_variable_value!(parameters, model, param, symb, vals; kwarg...)
 end
 
 function default_parameter_values(data_domain, model, param, symb)
@@ -338,7 +348,6 @@ degrees_of_freedom_per_entity(model, v::FractionVariables) =  values_per_entity(
 maximum_value(::FractionVariables) = 1.0
 minimum_value(::FractionVariables) = 0.0
 
-
 function initialize_primary_variable_ad!(state, model, pvar::FractionVariables, state_symbol, npartials; kwarg...)
     n = values_per_entity(model, pvar)
     v = state[state_symbol]
@@ -364,7 +373,9 @@ end
 function unit_sum_update!(s, p, model, dx, w, entity = Cells())
     nf, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
-    maxval, minval = maximum_value(p), minimum_value(p)
+    maxval = maximum_value(p)
+    minval = minimum_value(p)
+    maxval = maxval - nf*minval
     active_cells = active_entities(model.domain, entity, for_variables = true)
     if nf == 2
         unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)

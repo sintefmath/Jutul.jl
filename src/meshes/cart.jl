@@ -94,7 +94,7 @@ end
 Lower corner for one dimension, without any transforms applied
 """
 coord_offset(pos, δ::AbstractFloat) = (pos-1)*δ
-coord_offset(pos, δ::AbstractVector) = sum(δ[1:(pos-1)])
+coord_offset(pos, δ::Union{AbstractVector, Tuple}) = sum(δ[1:(pos-1)], init = 0.0)
 
 """
     cell_index(g, pos)

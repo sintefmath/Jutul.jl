@@ -1,4 +1,4 @@
-module JutulHypreExt
+module JutulHYPREExt
     using Jutul, HYPRE, SparseArrays, TimerOutputs
     import Jutul: local_hypre_copy!
 

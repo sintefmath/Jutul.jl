@@ -95,9 +95,9 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         end
     end
     vdim = Val(dim)
-    cc = zeros(dim)
-    fc = zeros(dim)
-    Nn = zeros(dim)
+    cc = zeros(eltype(cell_centroids), dim)
+    fc = zeros(eltype(face_centroids), dim)
+    Nn = zeros(eltype(face_normals), dim)
     for cell = 1:nc
         for fpos = facepos[cell]:(facepos[cell+1]-1)
             face = faces[fpos]
@@ -193,7 +193,7 @@ function compute_face_trans(T_hf, N)
     faces, facePos = get_facepos(N)
     @assert length(T_hf) == length(faces)
     nf = size(N, 2)
-    T = zeros(nf)
+    T = zeros(eltype(T_hf), nf)
     for i in eachindex(faces)
         T[faces[i]] += 1.0/T_hf[i]
     end

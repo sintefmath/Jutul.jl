@@ -116,7 +116,13 @@ function get_1d_interpolator(xs, ys;
         cap_start = cap_endpoints,
         kwarg...
     )
-    if cap_endpoints && (cap_start || cap_end)
+    if length(xs) == 1
+        xs = only(xs)
+        ys = only(ys)
+        u = one(typeof(xs))
+        xs = [xs - u, xs, xs + u]
+        ys = [ys, ys, ys]
+    elseif cap_endpoints && (cap_start || cap_end)
         xs = copy(xs)
         ys = copy(ys)
         # Add perturbed points, repeat start and end value
@@ -284,7 +290,7 @@ function get_dependencies(var::UnaryTabulatedVariable, model)
     return [var.x_symbol]
 end
 
-function update_secondary_variable!(V, var::UnaryTabulatedVariable, model, state)
+function update_secondary_variable!(V, var::UnaryTabulatedVariable, model, state, ix = entity_eachindex(V))
     update_unary_tabulated!(V, var, model, state[var.x_symbol], entity_eachindex(V))
 end
 
