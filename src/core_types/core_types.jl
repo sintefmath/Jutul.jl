@@ -502,9 +502,9 @@ end
 import Base: getindex, @propagate_inbounds, parent, size, axes
 
 struct JutulStorage{K}
-    data::Union{Dict{Symbol, Any}, K}
-    function JutulStorage(S = Dict{Symbol, Any}(); kwarg...)
-        if isa(S, Dict)
+    data::Union{OrderedDict{Symbol, Any}, K}
+    function JutulStorage(S = OrderedDict{Symbol, Any}(); kwarg...)
+        if isa(S, AbstractDict)
             K = Nothing
             for (k, v) in kwarg
                 S[k] = v
@@ -523,8 +523,30 @@ function convert_to_immutable_storage(S::JutulStorage)
     return JutulStorage(tup)
 end
 
-Base.iterate(S::JutulStorage) = Base.iterate(data(S))
+function Base.getindex(S::JutulStorage, i::Int)
+    d = data(S)
+    if d isa OrderedDict
+        for (j, v) in enumerate(values(d))
+            if j == i
+                return v
+            end
+        end
+        throw(BoundsError("Out of bounds $i for JutulStorage."))
+    else
+        return d[i]
+    end
+end
+Base.length(S::JutulStorage, arg...) = Base.length(values(S), arg...)
+Base.iterate(S::JutulStorage, arg...) = Base.iterate(values(S), arg...)
+function Base.map(f, S::JutulStorage)
+    d = data(S)
+    if d isa OrderedDict
+        d = NamedTuple(d)
+    end
+    return Base.map(f, d)
+end
 Base.pairs(S::JutulStorage) = Base.pairs(data(S))
+Base.values(S::JutulStorage) = Base.values(data(S))
 
 function Base.getproperty(S::JutulStorage{Nothing}, name::Symbol)
     Base.getindex(data(S), name)
@@ -561,7 +583,7 @@ function Base.haskey(S::JutulStorage{Nothing}, name::Symbol)
 end
 
 function Base.keys(S::JutulStorage{Nothing})
-    return Base.keys(data(S))
+    return Tuple(keys(data(S)))
 end
 
 
@@ -730,6 +752,8 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM} <: JutulAutoDiffCache wh
         return new{nvalues_per_entity, entity, T, A, P, typeof(algn), typeof(diag_ix), M_t}(v, pos, variables, algn, diag_ix, nt, ns, global_map)
     end
 end
+
+Base.eltype(::GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM}) where {N, E, ∂x, A, P, M, D, VM} = ∂x
 
 "Discretization of kgradp + upwind"
 abstract type FlowDiscretization <: JutulDiscretization end
@@ -911,81 +935,116 @@ end
 
 Base.transpose(c::CrossTermPair) = CrossTermPair(c.source, c.target, c.source_equation, c.target_equation, c.cross_term,)
 
+abstract type AbstractMultiModel{label} <: JutulModel end
+multimodel_label(::AbstractMultiModel{L}) where L = L
 
 """
     MultiModel(models)
+    MultiModel(models, :SomeLabel)
 
 A model variant that is made up of many named submodels, each a fully realized [`SimulationModel`](@ref).
 
 `models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`.
 """
-struct MultiModel{T} <: JutulModel
-    models::NamedTuple
-    cross_terms::Vector{CrossTermPair}
-    groups::Union{Vector, Nothing}
-    context::Union{JutulContext, Nothing}
+struct MultiModel{label, T, CT, G, C, GL} <: AbstractMultiModel{label}
+    models::T
+    cross_terms::CT
+    groups::G
+    context::C
     reduction::Union{Symbol, Nothing}
     specialize_ad::Bool
-    group_lookup::Dict{Symbol, Int}
-function MultiModel(models; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = missing, specialize = false, specialize_ad = false)
-        group_lookup = Dict{Symbol, Any}()
-        if isnothing(groups)
-            num_groups = 1
-            for k in keys(models)
-                group_lookup[k] = 1
-            end
-            if ismissing(reduction)
-                reduction = nothing
-            end
-        else
-            if ismissing(reduction)
-                reduction = :schur_apply
-            end
-            nm = length(models)
-            num_groups = length(unique(groups))
-            @assert maximum(groups) <= nm
-            @assert minimum(groups) > 0
-            @assert length(groups) == nm
-            @assert maximum(groups) == num_groups "Groups must be ordered from 1 to n, was $(unique(groups))"
-            if !issorted(groups)
-                # If the groups aren't grouped sequentially, re-sort them so they are
-                # since parts of the multimodel code depends on this ordering
-                ix = sortperm(groups)
-                new_models = OrderedDict{Symbol, Any}()
-                old_keys = keys(models)
-                for i in ix
-                    k = old_keys[i]
-                    new_models[k] = models[k]
-                end
-                models = new_models
-                groups = groups[ix]
-            end
-            for (k, g) in zip(keys(models), groups)
-                group_lookup[k] = g
-            end
+    group_lookup::GL
+end
+
+function MultiModel(models, label::Union{Nothing, Symbol} = nothing; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = missing, specialize = false, specialize_ad = false)
+    group_lookup = Dict{Symbol, Int}()
+    if isnothing(groups)
+        num_groups = 1
+        for k in keys(models)
+            group_lookup[k] = 1
         end
-        if isa(models, AbstractDict)
-            models = convert_to_immutable_storage(models)
+        if ismissing(reduction)
+            reduction = nothing
         end
-        if reduction == :schur_apply
-            if length(groups) == 1
-                reduction = nothing
+    else
+        if ismissing(reduction)
+            reduction = :schur_apply
+        end
+        groups::Vector{Int}
+        nm = length(models)
+        num_groups = length(unique(groups))
+        @assert maximum(groups) <= nm
+        @assert minimum(groups) > 0
+        @assert length(groups) == nm
+        @assert maximum(groups) == num_groups "Groups must be ordered from 1 to n, was $(unique(groups))"
+        if !issorted(groups)
+            # If the groups aren't grouped sequentially, re-sort them so they are
+            # since parts of the multimodel code depends on this ordering
+            ix = sortperm(groups)
+            new_models = OrderedDict{Symbol, Any}()
+            old_keys = keys(models)
+            for i in ix
+                k = old_keys[i]
+                new_models[k] = models[k]
             end
+            models = new_models
+            groups = groups[ix]
         end
-        if isnothing(groups) && !isnothing(context)
-            for (i, m) in enumerate(models)
-                if matrix_layout(m.context) != matrix_layout(context)
-                    error("No groups provided, but the outer context does not match the inner context for model $i")
-                end
-            end
+        for (k, g) in zip(keys(models), groups)
+            group_lookup[k] = g
         end
-        if specialize
-            T = typeof(models)
-        else
-            T = nothing
-        end
-        new{T}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
     end
+    if isa(models, AbstractDict)
+        models = JutulStorage(models)
+    elseif models isa NamedTuple
+        models_new = JutulStorage()
+        for (k, v) in pairs(models)
+            models_new[k] = v
+        end
+        models = models_new
+    else
+        models::JutuLStorage
+    end
+    if reduction == :schur_apply
+        if length(groups) == 1
+            reduction = nothing
+        end
+    end
+    if isnothing(groups) && !isnothing(context)
+        for (i, m) in enumerate(models)
+            if matrix_layout(m.context) != matrix_layout(context)
+                error("No groups provided, but the outer context does not match the inner context for model $i")
+            end
+        end
+    end
+    if specialize
+        models = convert_to_immutable_storage(models)
+    end
+    T = typeof(models)
+    CT = typeof(cross_terms)
+    G = typeof(groups)
+    C = typeof(context)
+    GL = typeof(group_lookup)
+    return MultiModel{label, T, CT, G, C, GL}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+end
+                              
+function MultiModel(models, ::Val{label}; kwarg...) where label
+    # BattMo compatability, support ::Val for symbol
+    return MultiModel(models, label; kwarg...)                              
+end
+
+function convert_to_immutable_storage(model::MultiModel)
+    (; models, cross_terms, groups, context, reduction, specialize_ad, group_lookup) = model
+    models = convert_to_immutable_storage(models)
+    cross_terms = Tuple(cross_terms)
+    group_lookup = convert_to_immutable_storage(group_lookup)
+    label = multimodel_label(model)
+    T = typeof(models)
+    CT = typeof(cross_terms)
+    G = typeof(groups)
+    C = typeof(context)
+    GL = typeof(group_lookup)
+    return MultiModel{label, T, CT, G, C, GL}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
 end
 
 """
@@ -1006,7 +1065,7 @@ struct IndirectionMap{V}
         @assert length(vals) == lastpos - 1 "Expected vals to have length lastpos - 1 = $(lastpos-1), was $(length(vals))"
         @assert pos[1] == 1
         new{V}(vals, pos)
-    end    
+    end
 end
 
 struct IndexRenumerator{T}

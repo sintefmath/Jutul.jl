@@ -116,7 +116,13 @@ function get_1d_interpolator(xs, ys;
         cap_start = cap_endpoints,
         kwarg...
     )
-    if cap_endpoints && (cap_start || cap_end)
+    if length(xs) == 1
+        xs = only(xs)
+        ys = only(ys)
+        u = one(typeof(xs))
+        xs = [xs - u, xs, xs + u]
+        ys = [ys, ys, ys]
+    elseif cap_endpoints && (cap_start || cap_end)
         xs = copy(xs)
         ys = copy(ys)
         # Add perturbed points, repeat start and end value

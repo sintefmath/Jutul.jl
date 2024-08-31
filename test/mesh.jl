@@ -112,44 +112,81 @@ using MAT
     end
 
     @testset "cartesian to unstructured" begin
-        test_meshes = [
+        meshes_1d = [
+            CartesianMesh((3,)),
+            CartesianMesh((3,), ([1.0, 3.0, 4.0], )),
+        ]
+        meshes_2d = [
+            CartesianMesh((3, 2)),
+            CartesianMesh((3, 2), ([1.0, 3.0, 4.0], [1.0, 2.0])),
+        ]
+        meshes_3d = [
+            CartesianMesh((3, 2, 2), ((1.0, 3.0, 4.0), (1.0, 2.0), 1.0)),
             CartesianMesh((3, 2, 2)),
             CartesianMesh((4, 1, 1)),
             CartesianMesh((9, 7, 5), origin = [0.2, 0.6, 10.1]),
             CartesianMesh((3, 2, 2), (10.0, 3.0, 5.0)),
             CartesianMesh((3, 2, 2), ([10.0, 5.0, π], 3.0, 5.0)),
             CartesianMesh((100, 3, 7))
-            ]
-        for g in test_meshes
-            G = UnstructuredMesh(g)
-            geo1 = tpfv_geometry(g)
-            geo2 = tpfv_geometry(G)
+        ]
+        for mdim in 1:3
+            @testset "$(mdim)D conversion" begin
+                if mdim == 1
+                    test_meshes = meshes_1d
+                    subs = 1:1
+                else
+                    if mdim == 2
+                        test_meshes = meshes_2d
+                    else
+                        test_meshes = meshes_3d
+                    end
+                    subs = 1:mdim
+                end
+                for g in test_meshes
+                    G = UnstructuredMesh(g)
+                    geo1 = tpfv_geometry(g)
+                    geo2 = tpfv_geometry(G)
 
-            @testset "cells" begin
-                @test geo1.volumes ≈ geo2.volumes
-                @test geo1.cell_centroids ≈ geo2.cell_centroids
-            end
-            @testset "faces" begin
-                @test geo1.neighbors == geo2.neighbors
-                @test geo1.normals == geo2.normals
-                @test geo1.areas ≈ geo2.areas
-                @test geo1.face_centroids ≈ geo2.face_centroids
-            end
-            @testset "boundary" begin
-                @test geo1.boundary_normals == geo2.boundary_normals
-                @test geo1.boundary_neighbors == geo2.boundary_neighbors
-                @test geo1.boundary_areas ≈ geo2.boundary_areas
-                @test geo1.boundary_centroids ≈ geo2.boundary_centroids
-            end
-            @testset "half-faces" begin
-                @test geo1.half_face_faces == geo2.half_face_faces
-                @test geo1.half_face_cells == geo2.half_face_cells
+                    @testset "cells" begin
+                        @test geo1.volumes ≈ geo2.volumes
+                        @test geo1.cell_centroids ≈ geo2.cell_centroids[1:mdim, :]
+                    end
+                    @testset "faces" begin
+                        @test geo1.neighbors == geo2.neighbors
+                        @test geo1.normals == geo2.normals[1:mdim, :]
+                        @test geo1.areas ≈ geo2.areas
+                        @test geo1.face_centroids ≈ geo2.face_centroids[1:mdim, :]
+                    end
+                    if mdim > 1
+                        @testset "boundary" begin
+                            # Note: 1D grids are currently converted to 2D, so
+                            # the boundary will not be the same after
+                            # conversion.
+                            @test geo1.boundary_normals == geo2.boundary_normals[1:mdim, :]
+                            @test geo1.boundary_neighbors == geo2.boundary_neighbors
+                            @test geo1.boundary_areas ≈ geo2.boundary_areas
+                            @test geo1.boundary_centroids ≈ geo2.boundary_centroids[1:mdim, :]
+                        end
+                    end
+                    @testset "half-faces" begin
+                        @test geo1.half_face_faces == geo2.half_face_faces
+                        @test geo1.half_face_cells == geo2.half_face_cells
+                    end
+                    @testset "triangulate_mesh" begin
+                        try
+                            triangulate_mesh(G)
+                        catch
+                            @test false
+                        finally
+                            @test true
+                        end
+                    end
+                end
             end
         end
-        # 2D support missing
-        @test_warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting 2D grid to 3D." UnstructuredMesh(CartesianMesh((3, 2)))
         # 1D support missing
-        @test_warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting 1D grid to 3D." UnstructuredMesh(CartesianMesh((3,)))
+        @test_warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 2D/3D grids. Converting 1D grid to 2D." UnstructuredMesh(CartesianMesh((3,)))
+        @test_nowarn UnstructuredMesh(CartesianMesh((3,)), warn_1d = false)
     end
     @testset "extract_submesh + cart convert" begin
         g = CartesianMesh((2, 2, 2))
@@ -180,4 +217,25 @@ end
     for f in [:normals, :boundary_centroids, :boundary_normals, :boundary_areas, :cell_centroids, :face_centroids, :volumes, :areas]
         @test getfield(geo_c2, f) ≈ getfield(geo, f)
     end
+end
+
+@testset "Trajectories" begin
+    G = CartesianMesh((4, 4, 5), (100.0, 100.0, 100.0))
+    trajectory = [
+        50.0 25.0 1;
+        55 35.0 25;
+        65.0 40.0 50.0;
+        70.0 70.0 90.0
+    ]
+    cells_3d = Jutul.find_enclosing_cells(G, trajectory)
+    @test cells_3d == [7, 23, 39, 55, 59, 75]
+
+    G = CartesianMesh((5, 5), (1.0, 2.0))
+    trajectory = [
+        0.1 0.1;
+        0.2 0.4;
+        0.3 1.2
+    ]
+    cells_2d = Jutul.find_enclosing_cells(G, trajectory)
+    @test cells_2d == [1, 7, 12]
 end

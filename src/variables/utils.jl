@@ -105,6 +105,8 @@ Lower (inclusive) limit for variable.
 """
 minimum_value(::JutulVariables) = nothing
 
+parameter_is_differentiable(::JutulVariables, model) = true
+
 function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx, w)
     entity = associated_entity(p)
     active = active_entities(model.domain, entity, for_variables = true)
@@ -308,7 +310,7 @@ function initialize_parameter_value!(parameters, data_domain, model, param, symb
         s = "computed defaulted"
     end
     if eltype(vals)<:AbstractFloat && any(x -> !isfinite(x), vals)
-        @error "Non-finite entries in $s parameter $symb"
+        @error "Non-finite entries in $s parameter $symb" vals
     end
     return initialize_variable_value!(parameters, model, param, symb, vals; kwarg...)
 end

@@ -79,7 +79,7 @@ function convert_neighborship(N::Vector{Tuple{Int, Int}}; nc = nothing, nf = not
     end
     if !isnothing(nc)
         for (f, t) in enumerate(N)
-            for (c, i) in enumerate(t)
+            for (i, c) in enumerate(t)
                 @assert c <= nc "Neighborship exceeded $nc in face $f cell $i: neighborship was $t"
                 if allow_zero
                     @assert c >= 0 "Neighborship was negative in face $f cell $i: neighborship was $t"
@@ -125,9 +125,14 @@ function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespo
         n = length(npos)
         bnd = l == 0 || r == 0
         if bnd
+            if l == 0
+                npos = reverse(npos)
+            end
+
             for i in npos
                 push!(boundary_faces_nodes, faces_nodes[i])
             end
+            
             push!(boundary_faces_nodespos, boundary_faces_nodespos[end] + n)
             added_boundary += 1
             # Minus sign means boundary index
@@ -284,27 +289,197 @@ end
 """
     UnstructuredMesh(g::CartesianMesh)
 
-Convert `CartesianMesh` instance to unstructured grid (3D only)
+Convert `CartesianMesh` instance to unstructured grid. Note that the mesh must
+be 2D and 3D for a 1-to-1 conversion. 1D meshes are implicitly converted to 2D.
 """
-function UnstructuredMesh(g::CartesianMesh; kwarg...)
+function UnstructuredMesh(g::CartesianMesh; warn_1d = true, kwarg...)
     d = dim(g)
-    nx, ny, nz = grid_dims_ijk(g)
-    if d < 3
-        @warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 3D grids. Converting $(d)D grid to 3D."
-        dy = 1.0
-        dz = 1.0
-        if d == 2
-            dx, dy = g.deltas
-            X0, Y0 = g.origin
-        else
-            @assert d == 1
-            dx = only(g.deltas)
-            X0 = only(g.origin)
-            Y0 = 0.0
+    if d == 1
+        if warn_1d
+            @warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 2D/3D grids. Converting 1D grid to 2D."
         end
-        g = CartesianMesh((nx, ny, nz), (dx, dy, dz), origin = [X0, Y0, 0.0])
-        return UnstructuredMesh(g)
+        nx = number_of_cells(g)
+        dy = 1.0
+        dx = only(g.deltas)
+        X0 = only(g.origin)
+        Y0 = 0.0
+        wrap(x::AbstractFloat, n) = fill(x, n)
+        wrap(x, n) = x
+        g = CartesianMesh(
+            (nx, 1),
+            (wrap(dx, nx), wrap(1.0, 1)),
+            origin = [X0, Y0]
+        )
+        out = UnstructuredMesh(g)
+    else
+        out = unstructured_from_cart(g, Val(d); kwarg...)
     end
+end
+
+function unstructured_from_cart(g, ::Val{2}; kwarg...)
+    d = dim(g)
+    @assert d == 2
+    nx, ny, = grid_dims_ijk(g)
+
+    X0, Y0 = g.origin
+
+    nc = number_of_cells(g)
+    nf = number_of_faces(g)
+    nbf = number_of_boundary_faces(g)
+    num_nodes_x = nx+1
+    num_nodes_y = ny+1
+    num_nodes = num_nodes_x*num_nodes_y
+    nodeix = reshape(1:num_nodes, num_nodes_x, num_nodes_y)
+
+    node_points = Vector{SVector{2, Float64}}()
+    dx, dy = g.deltas
+    function get_point(D::T, i) where {T<:Real}
+        newpt = (i-1)*D
+        return newpt::T
+    end
+    function get_point(D::Union{NTuple{N, T}, Vector{T}}, i) where {T<:Real, N}
+        pt = zero(T)
+        for j in 1:(i-1)
+            pt += D[j]
+        end
+        return pt::T
+    end
+    for j in 1:num_nodes_y
+        Y = get_point(dy, j)
+        for i in 1:num_nodes_x
+            X = get_point(dx, i)
+            XY = SVector{2, Float64}(X + X0, Y + Y0)
+            push!(node_points, XY)
+        end
+    end
+    @assert length(node_points) == length(nodeix)
+    cell_to_faces = Vector{Vector{Int}}()
+    sizehint!(cell_to_faces, nc)
+    for i in 1:nc
+        push!(cell_to_faces, Int[])
+    end
+    cell_to_boundary = Vector{Vector{Int}}()
+    sizehint!(cell_to_boundary, nc)
+    for i in 1:nc
+        push!(cell_to_boundary, Int[])
+    end
+
+    int_neighbors = Vector{Tuple{Int, Int}}()
+    sizehint!(int_neighbors, nf)
+    # Note: The following loops are arranged to reproduce the MRST ordering.
+    function insert_face!(nodes, pos, arg...)
+        for node in arg
+            push!(nodes, node)
+        end
+        push!(pos, pos[end] + length(arg))
+    end
+    function add_internal_neighbor!(t, D)
+        x, y = t
+        index = cell_index(g, t)
+        l = index
+        r = cell_index(g, (x + (D == 1), y + (D == 2)))
+        push!(int_neighbors, (l, r))
+    end
+    faces_nodes = Int[]
+    faces_nodespos = Int[1]
+    sizehint!(faces_nodes, 4*nf)
+    sizehint!(faces_nodespos, nf+1)
+    # Faces with X-normal > 0
+        for y in 1:ny
+            for x in 2:nx
+                p1 = nodeix[x, y]
+                p2 = nodeix[x, y+1]
+                insert_face!(faces_nodes, faces_nodespos, p1, p2)
+                add_internal_neighbor!((x-1, y), 1)
+            end
+        end
+    # Faces with Y-normal > 0
+    for y in 2:ny
+        for x in 1:nx
+            p1 = nodeix[x, y]
+            p2 = nodeix[x+1, y]
+            insert_face!(faces_nodes, faces_nodespos, p2, p1)
+            add_internal_neighbor!((x, y-1), 2)
+        end
+    end
+
+    boundary_faces_nodes = Int[]
+    boundary_faces_nodespos = Int[1]
+
+    sizehint!(boundary_faces_nodes, 4*nbf)
+    sizehint!(boundary_faces_nodespos, nbf+1)
+
+    bnd_cells = Int[]
+    sizehint!(bnd_cells, nbf)
+    function add_boundary_cell!(t, D)
+        index = cell_index(g, t)
+        push!(bnd_cells, index)
+    end
+    for y in 1:ny
+        for x in [1, nx+1]
+            p1 = nodeix[x, y]
+            p2 = nodeix[x, y+1]
+            if x == 1
+                insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p2, p1)
+                add_boundary_cell!((x, y), 1)
+            else
+                insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2)
+                add_boundary_cell!((x-1, y), 1)
+            end
+        end
+    end
+    # Faces with Y-normal > 0
+    for x in 1:nx
+        for y in [1, ny+1]
+            p1 = nodeix[x, y]
+            p2 = nodeix[x+1, y]
+            if y == 1
+                insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2)
+                add_boundary_cell!((x, y), 2)
+            else
+                insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p2, p1)
+                add_boundary_cell!((x, y-1), 2)
+            end
+        end
+    end
+    cells_faces, cells_facepos = get_facepos(reinterpret(reshape, Int, int_neighbors), nc)
+
+    for (bf, bc) in enumerate(bnd_cells)
+        push!(cell_to_boundary[bc], bf)
+    end
+
+    boundary_cells_faces = Int[]
+    boundary_cells_facepos = Int[1]
+    for bfaces in cell_to_boundary
+        n = length(bfaces)
+        for bf in bfaces
+            push!(boundary_cells_faces, bf)
+        end
+        push!(boundary_cells_facepos, boundary_cells_facepos[end]+n)
+    end
+
+    return UnstructuredMesh(
+        cells_faces,
+        cells_facepos,
+        boundary_cells_faces,
+        boundary_cells_facepos,
+        faces_nodes,
+        faces_nodespos,
+        boundary_faces_nodes,
+        boundary_faces_nodespos,
+        node_points,
+        int_neighbors,
+        bnd_cells;
+        structure = CartesianIndex(nx, ny),
+        cell_map = 1:nc,
+        kwarg...
+    )
+end
+
+function unstructured_from_cart(g, ::Val{3}; kwarg...)
+    d = dim(g)
+    @assert d == 3
+    nx, ny, nz = grid_dims_ijk(g)
     X0, Y0, Z0 = g.origin
 
     nc = number_of_cells(g)
@@ -322,7 +497,7 @@ function UnstructuredMesh(g::CartesianMesh; kwarg...)
         newpt = (i-1)*D
         return newpt::T
     end
-    function get_point(D::Vector{T}, i) where {T<:Real}
+    function get_point(D::Union{NTuple{N, T}, Vector{T}}, i) where {T<:Real, N}
         pt = zero(T)
         for j in 1:(i-1)
             pt += D[j]
@@ -534,7 +709,7 @@ function UnstructuredMesh(G_raw::AbstractDict)
     return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw)
 end
 
-function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = true)
+function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = dim(m) == 3)
     if !(m isa UnstructuredMesh)
         m = UnstructuredMesh(m)
     end
@@ -549,7 +724,6 @@ function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = true)
         a = outer && ((l_in && !r_in) || (r_in && !l_in))
         b = !outer && (l_in || r_in)
         if a || b
-            @assert !b
             prev_node = missing
             f2n = m.faces.faces_to_nodes[face]
             for node in f2n

@@ -1,5 +1,5 @@
 multi_model_is_specialized(m::MultiModel) = true
-multi_model_is_specialized(m::MultiModel{nothing}) = false
+multi_model_is_specialized(m::MultiModel{JutulStorage{Nothing}}) = false
 
 function submodel_ad_tag(m::MultiModel, tag)
     if m.specialize_ad
@@ -10,8 +10,7 @@ function submodel_ad_tag(m::MultiModel, tag)
     return out
 end
 
-submodels(m::MultiModel{nothing}) = m.models
-submodels(m::MultiModel{T}) where T = m.models::T
+submodels(m::MultiModel) = m.models
 
 Base.getindex(m::MultiModel, i::Symbol) = submodels(m)[i]
 

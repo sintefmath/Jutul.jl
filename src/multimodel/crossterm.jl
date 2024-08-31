@@ -1,6 +1,6 @@
 local_discretization(::CrossTerm, i) = nothing
 
-function declare_sparsity(target_model, source_model, eq::JutulEquation, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, row_layout, col_layout; equation_offset = 0, block_size = 1)
+function declare_sparsity(target_model, source_model, eq, x::CrossTerm, x_storage, entity_indices, target_entity, source_entity, row_layout, col_layout; equation_offset = 0, block_size = 1)
     primitive = declare_pattern(target_model, x, x_storage, source_entity, entity_indices)
     if isnothing(primitive)
         out = nothing
@@ -264,7 +264,7 @@ function update_offdiagonal_blocks!(storage, model, targets, sources;
     if !ismissing(lsys)
         models = model.models
         # for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
-        for i in eachindex(model.cross_terms, storage.cross_terms)
+        for i in eachindex(model.cross_terms)
             ctp = model.cross_terms[i]
             ct_s = storage.cross_terms[i]
             update_offdiagonal_block_pair!(lsys, ctp, ct_s, storage, model, models, targets, sources)
@@ -339,7 +339,7 @@ function crossterm_subsystem(model, lsys, target, source; diag = false)
     # neqs = map(number_of_equations, model.models)
     # ndofs = map(number_of_degrees_of_freedom, model.models)
 
-    model_keys = submodel_symbols(model)
+    model_keys = submodels_symbols(model)
     groups = model.groups
 
     function get_group(s)
@@ -497,9 +497,14 @@ function cross_term(storage, target::Symbol)
 end
 
 function cross_term_mapper(model, storage, f)
-    ind = map(f, model.cross_terms)
+    ind = findall(f, model.cross_terms)
     return (model.cross_terms[ind], storage[:cross_terms][ind])
 end
+
+# function cross_term_mapper(model, storage, f)
+#     ind = map(f, model.cross_terms)
+#     return (model.cross_terms[ind], storage[:cross_terms][ind])
+# end
 
 has_symmetry(x) = !isnothing(symmetry(x))
 has_symmetry(x::CrossTermPair) = has_symmetry(x.cross_term)
@@ -535,7 +540,10 @@ end
 function extra_cross_term_sparsity(model, storage, target, include_symmetry = true)
     # Get sparsity of cross terms so that they can be included in any generic equations
     ct_pairs, ct_storage = cross_term_target(model, storage, target, include_symmetry)
-    sparsity = Dict{Union{Symbol, Pair}, Any}()
+    # TODO: Maybe this should just be Symbol?
+    # Old def was
+    # sparsity = Dict{Union{Symbol, Pair}, Any}()
+    sparsity = Dict{Symbol, Any}()
     for (ct_p, ct_s) in zip(ct_pairs, ct_storage)
         # Loop over all cross terms that impact target and grab the global sparsity
         # so that this can be added when doing sparsity detection for the model itself.
@@ -550,6 +558,10 @@ function extra_cross_term_sparsity(model, storage, target, include_symmetry = tr
             eq = ct_p.source_equation
             @assert has_symmetry(ct_p.cross_term)
         end
+        if eq isa Pair
+            eq = last(eq)
+        end
+        eq::Symbol
         if !haskey(sparsity, eq)
             sparsity[eq] = Dict{Symbol, Any}()
         end
