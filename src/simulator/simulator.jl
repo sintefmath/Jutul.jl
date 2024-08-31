@@ -287,7 +287,7 @@ function solve_timestep!(sim, dT, forces, max_its, config;
                 # Onto the next one
                 done = true
                 break
-            elseif haskey(s, :stopnow) && s[:stopnow]
+            elseif get(s, :stopnow, false)
                 done = true
                 break
             else
