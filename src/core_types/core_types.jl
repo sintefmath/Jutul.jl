@@ -1027,6 +1027,11 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing; cross_terms
     GL = typeof(group_lookup)
     return MultiModel{label, T, CT, G, C, GL}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
 end
+                              
+function MultiModel(models, ::Val{label}; kwarg...) where label
+    # BattMo compatability, support ::Val for symbol
+    return MultiModel(models, label; kwarg...)                              
+end
 
 function convert_to_immutable_storage(model::MultiModel)
     (; models, cross_terms, groups, context, reduction, specialize_ad, group_lookup) = model

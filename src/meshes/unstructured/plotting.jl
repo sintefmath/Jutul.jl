@@ -23,11 +23,12 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten =
         cell_centroids = missing
     end
 
-    add_points!(e, e_def, offset) = triangulate_and_add_faces!(dest, m, e, e_def, cell_centroids, offset = offset)
+    add_points!(e, e_def, offset, face_offset) = triangulate_and_add_faces!(dest, m, e, e_def, cell_centroids, offset = offset, face_offset = face_offset)
     if !outer
-        offset = add_points!(Faces(), m.faces, offset)
+        offset = add_points!(Faces(), m.faces, offset, 0)
     end
-    offset = add_points!(BoundaryFaces(), m.boundary_faces, offset)
+    face_offset = number_of_faces(m)
+    offset = add_points!(BoundaryFaces(), m.boundary_faces, offset, face_offset)
 
     if flatten
         pts = plot_flatten_helper(pts)
@@ -35,6 +36,7 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten =
     end
     cell_buffer = zeros(length(cell_index))
     face_buffer = zeros(length(face_index))
+
     mapper = (
                 Cells = (cell_data) -> mesh_data_to_tris!(cell_buffer, cell_data, cell_index)::Vector{Float64},
                 Faces = (face_data) -> mesh_data_to_tris!(face_buffer, face_data, face_index)::Vector{Float64},
@@ -53,7 +55,7 @@ function mesh_data_to_tris!(out::Vector{Float64}, cell_data, cell_index)
     return out::Vector{Float64}
 end
 
-function triangulate_and_add_faces!(dest, m, e, faces, cell_centroids; offset = 0)
+function triangulate_and_add_faces!(dest, m, e, faces, cell_centroids; offset = 0, face_offset = 0)
     node_pts = m.node_points
     T = eltype(node_pts)
     for f in 1:count_entities(m, e)
@@ -64,7 +66,7 @@ function triangulate_and_add_faces!(dest, m, e, faces, cell_centroids; offset = 
             C += node_pts[node]
         end
         C /= n
-        offset = triangulate_and_add_faces!(dest, f, faces.neighbors[f], C, nodes, node_pts, cell_centroids, n; offset = offset)
+        offset = triangulate_and_add_faces!(dest, f + face_offset, faces.neighbors[f], C, nodes, node_pts, cell_centroids, n; offset = offset)
     end
     return offset
 end

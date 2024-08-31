@@ -116,6 +116,7 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
             T_hf[fpos] = T
         end
     end
+    @assert minimum(T_hf) >= 0
     return T_hf
 end
 
