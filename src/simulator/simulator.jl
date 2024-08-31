@@ -123,13 +123,15 @@ end
 simulate(sim::JutulSimulator, timesteps::AbstractVector; kwarg...) = simulate!(sim, timesteps; kwarg...)
 
 """
-    simulate!(sim::JutulSimulator, timesteps::AbstractVector; forces = nothing,
-                                                                   config = nothing,
-                                                                   initialize = true,
-                                                                   restart = nothing,
-                                                                   state0 = nothing,
-                                                                   parameters = nothing,
-                                                                   kwarg...)
+    simulate!(sim::JutulSimulator, timesteps::AbstractVector;
+        forces = nothing,
+        config = nothing,
+        initialize = true,
+        restart = nothing,
+        state0 = nothing,
+        parameters = nothing,
+        kwarg...
+    )
 
 Non-allocating (or perhaps less allocating) version of [`simulate!`](@ref).
 
