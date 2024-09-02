@@ -20,7 +20,7 @@ end
 is_left_preconditioner(::JutulPreconditioner) = true
 is_right_preconditioner(::JutulPreconditioner) = false
 
-function linear_operator(precond::JutulPreconditioner, side::Symbol = :left, float_t = Float64)
+function linear_operator(precond::JutulPreconditioner, side::Symbol = :left, float_t = Float64, args...)
     n = operator_nrows(precond)
     function local_mul!(res, x, α, β::T, type) where T
         if β == zero(T)

@@ -48,12 +48,13 @@ function Base.show(io::IO, krylov::GenericKrylov)
     print(io, "Generic Krylov using $(krylov.solver) (ϵₐ=$atol, ϵ=$rtol) with prec = $(typeof(krylov.preconditioner))")
 end
 
-function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, side, arg...)
+function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, side, Ft, arg...)
     M = krylov.preconditioner
     if isnothing(M)
         op = I
     else
-        op = PrecondWrapper(linear_operator(M, side, arg...))
+        linop = linear_operator(M, side, Ft, sys, model, storage, recorder, arg...)
+        op = PrecondWrapper(linop)
     end
     return op
 end
