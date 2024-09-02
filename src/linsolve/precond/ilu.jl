@@ -1,4 +1,3 @@
-
 """
 ILU(0) preconditioner on CPU
 """
@@ -56,12 +55,24 @@ function update_preconditioner!(ilu::ILUZeroPreconditioner, A::StaticSparsityMat
     end
 end
 
-function apply!(x, ilu::ILUZeroPreconditioner, y)
+function apply!(x, ilu::ILUZeroPreconditioner, y, type, arg...)
     factor = get_factorization(ilu)
-    ilu_apply!(x, factor, y)
+    mytype = :both
+    ilu_apply!(x, factor, y, mytype, arg...)
 end
 
-function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}) where {F<:Real}
+function ilu_f(type::Symbol)
+    # Why must this be qualified?
+    if type == :left
+        f = forward_substitution!
+    elseif type == :right
+        f = backward_substitution!
+    else
+        f = ldiv!
+    end
+end
+
+function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}, type::Symbol = :both, args...) where {F<:Real}
     T = eltype(f)
     if T == Float64
         ldiv!(x, f, y)
@@ -79,11 +90,19 @@ function ilu_apply!(x, f::AbstractILUFactorization, y)
     ldiv!(x, f, y)
 end
 
-function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}) where {F<:Real}
-    ldiv!(x, f, y)
+function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}, type::Symbol = :both, args...) where {F<:Real}
+    f! = ilu_f(type)
+    f!(x, f, y)
 end
 
-function ilu_apply!(x, ilu::ILU0Precon, y)
+# function ilu_apply!(x::AbstractArray{F}, f::CuSparseMatrix{F}, y::AbstractArray{F}, type::Symbol = :both) where {F<:Real}
+#     x .= y
+#     ix = 'O'
+#     sv2!('N', 'L', 'N', 1.0, f, x, ix)
+#     sv2!('N', 'U', 'U', 1.0, f, x, ix)
+# end
+
+function ilu_apply!(x, ilu::ILU0Precon, y, type::Symbol = :both,args...)
     T = eltype(ilu.l_nzval)
     N = size(T, 1)
     T = eltype(T)

@@ -1,11 +1,11 @@
-
 function update_preconditioner!(preconditioner::Nothing, arg...)
     # Do nothing.
 end
-function update_preconditioner!(preconditioner, lsys, model, storage, recorder, executor)
+function update_preconditioner!(preconditioner, lsys, context, model, storage, recorder, executor)
     J = jacobian(lsys)
     r = residual(lsys)
-    ctx = linear_system_context(model, lsys)
+    #ctx = linear_system_context(model, lsys)
+    ctx = context
     update_preconditioner!(preconditioner, J, r, ctx, executor)
 end
 
@@ -20,11 +20,11 @@ end
 is_left_preconditioner(::JutulPreconditioner) = true
 is_right_preconditioner(::JutulPreconditioner) = false
 
-function linear_operator(precond::JutulPreconditioner, float_t = Float64)
+function linear_operator(precond::JutulPreconditioner, side::Symbol = :left, float_t = Float64, args...)
     n = operator_nrows(precond)
     function precond_apply!(res, x, α, β::T) where T
         if β == zero(T)
-            apply!(res, precond, x)
+            apply!(res, precond, x, float_t,args...)
             if α != one(T)
                 lmul!(α, res)
             end
@@ -36,6 +36,7 @@ function linear_operator(precond::JutulPreconditioner, float_t = Float64)
     return op
 end
 
+#nead to be spesilized on type not all JutulPreconditioners has get_factor
 function apply!(x, p::JutulPreconditioner, y, arg...)
     factor = get_factorization(p)
     if is_left_preconditioner(p)
