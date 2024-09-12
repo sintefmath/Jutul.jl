@@ -113,6 +113,18 @@ function plotting_check_interactive
 
 end
 
+"""
+    check_plotting_availability(; throw = true, interactive = false)
+
+Check if plotting through at least one `Makie` backend is available in the Julia
+session (after package has been loaded by for example `using GLMakie`). The
+argument `throw` can be used to control if this function acts as a programmatic
+check (`throw=false`) there the return value indicates availability, or if an
+error message is to be printed telling the user how to get plotting working
+(`throw=true`)
+
+An additional check for specifically `interactive` plots can also be added.
+"""
 function check_plotting_availability(; throw = true, interactive = false)
     ok = true
     try
