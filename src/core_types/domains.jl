@@ -99,7 +99,11 @@ function Base.show(io::IO, t::MIME"text/plain", d::DataDomain)
             for (k, v) in data
                 vals, e = v
                 if e == u
-                    sz = join(map(x -> "$x", size(vals)), "×")
+                    if vals isa AbstractVecOrMat
+                        sz = join(map(x -> "$x", size(vals)), "×")
+                    else
+                        sz = "$(typeof(vals))"
+                    end
                     print(io, "    :$k => $sz $(typeof(vals))\n")
                 end
             end
