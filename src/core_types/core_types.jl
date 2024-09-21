@@ -884,6 +884,15 @@ function Base.getindex(case::JutulCase, ix::Int)
     return case[ix:ix]
 end
 
+function Base.lastindex(case::JutulCase)
+    return length(case.dt)
+end
+
+function Base.getindex(case::JutulCase, d::Int)
+    d == 1 || throw(ArgumentError("JutulCase is 1D."))
+    return Base.lastindex(case)
+end
+
 function Base.getindex(case::JutulCase, ix)
     (; model, dt, forces, state0, parameters, input_data) = case
     f = deepcopy(forces)
