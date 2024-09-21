@@ -888,7 +888,7 @@ function Base.lastindex(case::JutulCase)
     return length(case.dt)
 end
 
-function Base.getindex(case::JutulCase, d::Int)
+function Base.lastindex(case::JutulCase, d::Int)
     d == 1 || throw(ArgumentError("JutulCase is 1D."))
     return Base.lastindex(case)
 end
