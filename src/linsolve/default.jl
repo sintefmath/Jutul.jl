@@ -90,7 +90,7 @@ function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = no
     for i in urng
         J = subsystems[i, i].jac
         ni, mi = size(J)
-        @assert ni == mi
+        @assert ni == mi "Mismatch in block size: $ni != $mi"
         e = eltype(J)
         if e <: Real
             bz = 1
