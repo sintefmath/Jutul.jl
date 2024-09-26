@@ -1168,9 +1168,9 @@ function Base.show(io::IO, t::MIME"text/plain", options::MeshEntityTags{T}) wher
             kv = "<no tags>"
         else
             s = map(x -> "$x $(keys(v[x]))", collect(kv))
-            kv = join(s, ",")
+            kv = join(s, ",\n\t")
         end
-        println(io, "    $k: $(kv)")
+        println(io, "    $k:\n\t$(kv)")
     end
 end
 
