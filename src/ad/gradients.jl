@@ -890,15 +890,33 @@ end
 function update_state0_sensitivities!(storage)
     state0_map = storage.state0_map
     if !ismissing(state0_map)
+        sim = storage.backward
+        model = sim.model
+        if model isa MultiModel
+            for (k, v) in pairs(model.models)
+                @assert matrix_layout(v.context) isa EquationMajorLayout
+            end
+        else
+            @assert matrix_layout(model.context) isa EquationMajorLayout
+        end
         # Assume that this gets called at the end when everything has been set
         # up in terms of the simulators
         λ = storage.lagrange
         ∇x = storage.dstate0
         @. ∇x = 0.0
-        sim = storage.backward
+        # order = collect(eachindex(λ))
+        # renum = similar(order)
+        # TODO: Finish this part and remove the assertions above
+        # Get order to put values into canonical order
+        # adjoint_transfer_canonical_order!(renum, order, model)
+        # λ_renum = similar(λ)
+        # @. λ_renum[renum] = λ
+        # model_prm = storage.parameter.model
         lsys_b = sim.storage.LinearizedSystem
         op_b = linear_operator(lsys_b, skip_red = true)
+        # tmp = zeros(size(∇x))
         sens_add_mult!(∇x, op_b, λ)
+        # adjoint_transfer_canonical_order!(∇x, tmp, model)
         rescale_sensitivities!(∇x, sim.model, storage.state0_map)
     end
 end
