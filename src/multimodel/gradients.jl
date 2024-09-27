@@ -70,8 +70,14 @@ end
 function store_sensitivities(model::MultiModel, result, prm_map)
     out = Dict{Symbol, Any}()
     for k in submodels_symbols(model)
-        m = model[k]
         out[k] = Dict{Symbol, Any}()
+    end
+    return store_sensitivities!(out, model, result, prm_map)
+end
+
+function store_sensitivities!(out, model::MultiModel, result, prm_map)
+    for k in submodels_symbols(model)
+        m = model[k]
         store_sensitivities!(out[k], m, result, prm_map[k])
     end
     return out
