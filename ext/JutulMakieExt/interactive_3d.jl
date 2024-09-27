@@ -68,7 +68,7 @@ function plot_interactive_impl(grid, states;
     )
     has_primitives = !isnothing(primitives)
     active_filters = []
-    if states isa AbstractDict
+    if states isa AbstractDict || states isa DataDomain
         states = [states]
     end
     if states isa AbstractVecOrMat && eltype(states)<:AbstractFloat
