@@ -884,6 +884,15 @@ function Base.getindex(case::JutulCase, ix::Int)
     return case[ix:ix]
 end
 
+function Base.lastindex(case::JutulCase)
+    return length(case.dt)
+end
+
+function Base.lastindex(case::JutulCase, d::Int)
+    d == 1 || throw(ArgumentError("JutulCase is 1D."))
+    return Base.lastindex(case)
+end
+
 function Base.getindex(case::JutulCase, ix)
     (; model, dt, forces, state0, parameters, input_data) = case
     f = deepcopy(forces)
@@ -1159,9 +1168,9 @@ function Base.show(io::IO, t::MIME"text/plain", options::MeshEntityTags{T}) wher
             kv = "<no tags>"
         else
             s = map(x -> "$x $(keys(v[x]))", collect(kv))
-            kv = join(s, ",")
+            kv = join(s, ",\n\t")
         end
-        println(io, "    $k: $(kv)")
+        println(io, "    $k:\n\t$(kv)")
     end
 end
 

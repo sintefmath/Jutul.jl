@@ -56,14 +56,30 @@ count_entities(D::Union{DataDomain, DiscretizedDomain}, entity) = D.entities[ent
 count_active_entities(D, entity; kwarg...) = count_entities(D, entity)
 count_active_entities(D::DiscretizedDomain, entity; kwarg...) = count_active_entities(D, D.global_map, entity; kwarg...)
 
+
+"""
+    number_of_cells(D::Union{DataDomain, DiscretizedDomain})
+
+Get the number of cells in a `DataDomain` or `DiscretizedDomain`.
+"""
 function number_of_cells(D::Union{DataDomain, DiscretizedDomain})
     return count_entities(D, Cells())
 end
 
+"""
+    number_of_faces(D::Union{DataDomain, DiscretizedDomain})
+
+Get the number of faces in a `DataDomain` or `DiscretizedDomain`.
+"""
 function number_of_faces(D::Union{DataDomain, DiscretizedDomain})
     return count_entities(D, Faces())
 end
 
+"""
+    number_of_half_faces(D::Union{DataDomain, DiscretizedDomain})
+
+Get the number of half-faces in a `DataDomain` or `DiscretizedDomain`.
+"""
 function number_of_half_faces(D::Union{DataDomain, DiscretizedDomain})
     return 2*number_of_faces(D)
 end

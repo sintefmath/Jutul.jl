@@ -66,7 +66,11 @@ function Jutul.plot_mesh_impl!(ax, m;
         tri = tri[keep, :]
         tri, pts = remove_unused_points(tri, pts)
     end
-    f = mesh!(ax, pts, tri; color = color, backlight = 1, kwarg...)
+    if length(pts) > 0
+        f = mesh!(ax, pts, tri; color = color, backlight = 1, kwarg...)
+    else
+        f = nothing
+    end
     return f
 end
 

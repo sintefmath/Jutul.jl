@@ -7,9 +7,11 @@ Create a Cartesian mesh with dimensions specified by the `Tuple` `dims`.
 
 # Arguments
 - `dims::Tuple`: Number of grid cells in each direction. For example, `(nx, ny)` will give a 2D grids with `nx` cells in the x-direction.
-- `Δ::Tuple=ones(length(dims))`: Equal length to `dims`. First option: A `Tuple` of scalars where each entry is the length of each cell in that direction. For
-example, specifying `(Δx, Δy) for a uniform grid with each grid cell having area of `Δx*Δy`. Second option: A `Tuple` of vectors where each entry
-contains the cell sizes in the direction.
+- `Δ::Tuple=Tuple(ones(length(dims)))`: Equal length to `dims`. First option: A
+`Tuple` of scalars where each entry is the length of each cell in that
+direction. For example, specifying `(Δx, Δy) for a uniform grid with each grid
+cell having area of `Δx*Δy`. Second option: A `Tuple` of vectors where each
+entry contains the cell sizes in the direction.
 - `origin=zeros(length(dims))`: The origin of the first corner in the grid.
 
 # Examples
@@ -22,7 +24,7 @@ CartesianMesh (3D) with 3x5x2=30 cells
 Generate a non-uniform 2D mesh:
 ```julia-repl
 julia> CartesianMesh((2, 3), ([1.0, 2.0], [0.1, 3.0, 2.5]))
-CartesianMesh (3D) with 3x5x2=30 cells
+CartesianMesh (2D) with 2x3x1=6 cells
 ```
 """
 struct CartesianMesh{D, Δ, O, T} <: FiniteVolumeMesh

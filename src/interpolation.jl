@@ -74,6 +74,11 @@ end
 
 function LinearInterpolant(X::V, F::T; static = false, constant_dx = missing) where {T<:AbstractVector, V<:AbstractVector}
     length(X) == length(F) || throw(ArgumentError("X and F values must have equal length."))
+    if length(X) == 1
+        # Handle single inputs by constant extrapolation
+        push!(X, only(X) + one(eltype(X)))
+        push!(F, only(F))
+    end
     if !issorted(X)
         ix = sortperm(X)
         X = X[ix]

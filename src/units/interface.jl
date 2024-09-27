@@ -54,7 +54,9 @@ function convert_from_si(val, unit::Real)
 end
 
 """
-    si_units(u1, arg...)
+    u1_val = si_units(u1)
+    meter = si_units(:meter)
+    meter, hour = si_units(:meter, :hour)
 
 Get multiplicative SI unit conversion factors for multiple units simultaneously.
 The return value will be a `Tuple` of values, one for each input argument. Each

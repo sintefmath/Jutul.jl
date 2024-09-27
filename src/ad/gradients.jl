@@ -63,6 +63,10 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
             jutul_message("Adjoints", "Storing sensitivities.", color = :blue)
         end
         out = store_sensitivities(parameter_model, ∇G, storage.parameter_map)
+        s0_map = storage.state0_map
+        if !ismissing(s0_map)
+            store_sensitivities!(out, storage.backward.model, ∇G, s0_map)
+        end
     end
     if extra_output
         return (out, storage)
@@ -107,24 +111,27 @@ function setup_adjoint_storage(model;
         parameters = setup_parameters(model),
         n_objective = nothing,
         targets = parameter_targets(model),
+        include_state0 = false,
         use_sparsity = true,
         linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-6),
         param_obj = true,
         info_level = 0,
         kwarg...
     )
-    # Set up the generic adjoint storage
-    storage = setup_adjoint_storage_base(
-            model, state0, parameters,
-            use_sparsity = use_sparsity,
-            linear_solver = linear_solver,
-            n_objective = n_objective,
-            info_level = info_level
-        )
     # Create parameter model for ∂Fₙ / ∂p
     parameter_model = adjoint_parameter_model(model, targets)
+    n_prm = number_of_degrees_of_freedom(parameter_model)
     # Note that primary is here because the target parameters are now the primaries for the parameter_model
     parameter_map, = variable_mapper(parameter_model, :primary, targets = targets; kwarg...)
+    if include_state0
+        state0_map, = variable_mapper(model, :primary)
+        n_state0 = number_of_degrees_of_freedom(model)
+        state0_vec = zeros(n_state0)
+    else
+        state0_map = missing
+        state0_vec = missing
+        n_state0 = 0
+    end
     # Transfer over parameters and state0 variables since many parameters are now variables
     state0_p = swap_variables(state0, parameters, parameter_model, variables = true)
     parameters_p = swap_variables(state0, parameters, parameter_model, variables = false)
@@ -137,11 +144,21 @@ function setup_adjoint_storage(model;
         dobj_dparam = nothing
         param_buf = nothing
     end
+    # Set up the generic adjoint storage
+    storage = setup_adjoint_storage_base(
+            model, state0, parameters,
+            use_sparsity = use_sparsity,
+            linear_solver = linear_solver,
+            n_objective = n_objective,
+            info_level = info_level,
+    )
     storage[:dparam] = dobj_dparam
     storage[:param_buf] = param_buf
     storage[:parameter] = parameter_sim
     storage[:parameter_map] = parameter_map
-    storage[:n] = number_of_degrees_of_freedom(parameter_model)
+    storage[:state0_map] = state0_map
+    storage[:dstate0] = state0_vec
+    storage[:n] = n_prm
 
     return storage
 end
@@ -151,7 +168,7 @@ function setup_adjoint_storage_base(model, state0, parameters;
         linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-8),
         n_objective = nothing,
         info_level = 0
-        )
+    )
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
     forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
@@ -236,6 +253,8 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     end
     rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
     @assert all(isfinite, ∇G)
+    # Finally deal with initial state gradients
+    update_state0_sensitivities!(storage)
     return ∇G
 end
 
@@ -720,6 +739,28 @@ function store_sensitivities!(out, model, variables, result, prm_map, ::Equation
     return out
 end
 
+function store_sensitivities!(out, model, variables, result, prm_map, ::Union{EquationMajorLayout, BlockMajorLayout})
+    scalar_valued_objective = result isa AbstractVector
+    @assert scalar_valued_objective "Only supported for scalar objective"
+
+    us = get_primary_variable_ordered_entities(model)
+    @assert length(us) == 1 "This function is not implemented for more than one entity type for primary variables"
+    u = only(us)
+    bz = degrees_of_freedom_per_entity(model, u)
+    ne = count_active_entities(model.domain, u)
+
+    offset = 1
+    for (k, var) in pairs(variables)
+        m = degrees_of_freedom_per_entity(model, var)
+        var::ScalarVariable
+        pos = offset:bz:(bz*(ne-1)+offset)
+        @assert length(pos) == ne "$(length(pos))"
+        out[k] = result[pos]
+        offset += 1
+    end
+    return out
+end
+
 function extract_sensitivity_subset(r, var, n, m, offset)
     if var isa ScalarVariable
         v = r
@@ -843,5 +884,39 @@ function adjoint_transfer_canonical_order_inner!(λ, dx, model, ::BlockMajorLayo
                 λ[(i-1)*bz + b] = dx[(b-1)*n + i]
             end
         end
+    end
+end
+
+function update_state0_sensitivities!(storage)
+    state0_map = storage.state0_map
+    if !ismissing(state0_map)
+        sim = storage.backward
+        model = sim.model
+        if model isa MultiModel
+            for (k, v) in pairs(model.models)
+                @assert matrix_layout(v.context) isa EquationMajorLayout
+            end
+        else
+            @assert matrix_layout(model.context) isa EquationMajorLayout
+        end
+        # Assume that this gets called at the end when everything has been set
+        # up in terms of the simulators
+        λ = storage.lagrange
+        ∇x = storage.dstate0
+        @. ∇x = 0.0
+        # order = collect(eachindex(λ))
+        # renum = similar(order)
+        # TODO: Finish this part and remove the assertions above
+        # Get order to put values into canonical order
+        # adjoint_transfer_canonical_order!(renum, order, model)
+        # λ_renum = similar(λ)
+        # @. λ_renum[renum] = λ
+        # model_prm = storage.parameter.model
+        lsys_b = sim.storage.LinearizedSystem
+        op_b = linear_operator(lsys_b, skip_red = true)
+        # tmp = zeros(size(∇x))
+        sens_add_mult!(∇x, op_b, λ)
+        # adjoint_transfer_canonical_order!(∇x, tmp, model)
+        rescale_sensitivities!(∇x, sim.model, storage.state0_map)
     end
 end

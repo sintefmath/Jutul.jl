@@ -23,7 +23,20 @@ function plot_multimodel_interactive_impl
 
 end
 
+"""
+    plot_mesh(mesh)
+    plot_mesh(mesh;
+        cells = nothing,
+        faces = nothing,
+        boundaryfaces = nothing,
+        outer = false,
+        color = :lightblue,
+    )
 
+Plot a `mesh` with uniform colors. Optionally, indices `cells`, `faces` or
+`boundaryfaces` can be passed to limit the plotting to a specific selection of
+entities.
+"""
 function plot_mesh(arg...; kwarg...)
     check_plotting_availability()
     plot_mesh_impl(arg...; kwarg...)
@@ -33,6 +46,13 @@ function plot_mesh_impl
 
 end
 
+
+"""
+    plot_mesh!(ax, mesh)
+
+Mutating version of `plot_mesh` that plots into an existing Makie `Axis`
+instance.
+"""
 function plot_mesh!(arg...; kwarg...)
     check_plotting_availability()
     plot_mesh_impl!(arg...; kwarg...)
@@ -42,6 +62,11 @@ function plot_mesh_impl!
 
 end
 
+"""
+    plot_mesh_edges(mesh; kwarg...)
+
+Plot the edges of all cells on the exterior of a mesh.
+"""
 function plot_mesh_edges(arg...; kwarg...)
     check_plotting_availability()
     plot_mesh_edges_impl(arg...; kwarg...)
@@ -51,6 +76,12 @@ function plot_mesh_edges_impl
 
 end
 
+"""
+    plot_mesh_edges!(ax, mesh; kwarg...)
+
+Plot the edges of all cells on the exterior of a mesh into existing Makie
+`Axis` `ax`.
+"""
 function plot_mesh_edges!(arg...; kwarg...)
     check_plotting_availability()
     plot_mesh_edges_impl!(arg...; kwarg...)
@@ -82,6 +113,18 @@ function plotting_check_interactive
 
 end
 
+"""
+    check_plotting_availability(; throw = true, interactive = false)
+
+Check if plotting through at least one `Makie` backend is available in the Julia
+session (after package has been loaded by for example `using GLMakie`). The
+argument `throw` can be used to control if this function acts as a programmatic
+check (`throw=false`) there the return value indicates availability, or if an
+error message is to be printed telling the user how to get plotting working
+(`throw=true`)
+
+An additional check for specifically `interactive` plots can also be added.
+"""
 function check_plotting_availability(; throw = true, interactive = false)
     ok = true
     try
