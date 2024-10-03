@@ -94,7 +94,7 @@ function cell_dims(g::UnstructuredMesh, pos)
     return Tuple(Δ)
 end
 
-function plot_primitives(mesh::UnstructuredMesh, plot_type; kwarg...)
+function plot_primitives(mesh::Union{UnstructuredMesh, CoarseMesh}, plot_type; kwarg...)
     # By default, no plotting is supported
     if plot_type == :mesh
         out = triangulate_mesh(mesh; kwarg...)
