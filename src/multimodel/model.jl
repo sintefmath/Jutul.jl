@@ -569,6 +569,13 @@ function update_equations!(storage, model::MultiModel, dt; targets = submodels_s
     end
 end
 
+function apply_scaling_equations!(storage, model::MultiModel, dt; targets = submodels_symbols(model))
+    @tic "scaling equations" for k in targets
+        apply_scaling_equations!(storage[k], model[k], dt)
+    end
+end
+
+
 function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, kwarg...)
     # First update all equations
     @tic "equations" update_equations!(storage, model, dt; kwarg...)
@@ -580,6 +587,10 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
     @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
     # Apply forces to cross-terms
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
+    # Apply scaling to equations
+    # @tic "crossterm forces" apply_scaling_equations!(storage, model, dt; kwarg...)
+    # Apply scaling to cross-terms
+    # @tic "crossterm forces" apply_scaling_cross_terms!(storage, model, dt; kwarg...)
 end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels_symbols(model), sources = submodels_symbols(model))
@@ -659,6 +670,10 @@ function update_cross_term_inner_target!(cache::GenericAutoDiffCache{<:Any, <:An
     update_cross_term_for_entity!(cache, ct, eq, state_t_local, state0_t_local, state_s, state0_s, model_t, model_s, dt)
 end
 
+function get_scaling(model, eq)
+    return 1.0
+end
+
 function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
     v = cache.entries
     vars = cache.variables
@@ -672,6 +687,8 @@ function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s
             state_s = new_entity_index(state_s, var)
             state0_s = new_entity_index(state0_s, var)
             update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
+            scaling = get_scaling(model_t, eq)
+            v_i = 1/scaling*v_i
         end
     end
 end

@@ -529,6 +529,32 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
             update_equation_for_entity!(cache, eq, state, state0, model, dt)
         end
     end
+    
+    apply_scaling_for_entity!(eq_s, eq, model)
+    
+end
+
+function apply_scaling_for_entity!(eq_s, eq, model)
+
+    scaling = get_scaling(model, eq)
+    @infiltrate
+    scaling = 1.0
+    
+    for k in keys(eq_s)
+        if k == :numeric
+            continue
+        end
+        cache = eq_s[k]
+        cache.entries .*= 1/scaling
+    end
+    
+end
+
+function apply_scaling_for_entity!(eq_s::AbstractMatrix, eq, model)
+
+    scaling = get_scaling(model, eq)
+    eq_s .*= 1/scaling
+    
 end
 
 @inline prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt) = nothing

@@ -721,6 +721,16 @@ function update_equations!(storage, equations_storage, equations, model, dt)
     end
 end
 
+
+function apply_scaling_equations!(storage, equations_storage, equations, model, dt)
+    for (key, eq) in pairs(equations)
+        @tic "$key" apply_scaling_equation!(equations_storage[key], eq, storage, model, dt)
+    end
+end
+
+
+
+
 """
     update_linearized_system!(storage, model::JutulModel; <keyword arguments>)
 
