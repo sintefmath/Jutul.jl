@@ -496,6 +496,22 @@ function update_equation!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw
     @tic "fluxes" update_half_face_flux!(eq_s, law, storage, model, dt)
 end
 
+function apply_scaling_equation!(eq_s::ConservationLawTPFAStorage, equation::ConservationLaw, model)
+
+    scaling = get_scaling(model, equation)
+
+    fields = (:accumulation, :half_face_flux_cells, :half_face_flux_faces)
+
+    for fd in fields
+        eq = getfield(eq_s, fd)
+        if !isnothing(eq)
+            eq.entries .*= 1/scaling
+        end
+    end
+
+end
+
+
 function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt)
     fd = law.flow_discretization
     state = storage.state
