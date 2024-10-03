@@ -191,3 +191,40 @@ function triangulate_mesh(m::CoarseMesh; kwarg...)
     )
     return (points = points, triangulation = triangulation, mapper = mapper)
 end
+
+function plot_primitives(mesh::CoarseMesh, plot_type; kwarg...)
+    if plot_type == :mesh
+        out = triangulate_mesh(mesh; kwarg...)
+    else
+        out = nothing
+    end
+    return out
+end
+
+function cell_dims(cg::CoarseMesh, pos)
+    # TODO: This function is inefficient
+    index = cell_index(cg, pos)
+    g = cg.parent
+    T = eltype(g.node_points)
+    minv = Inf .+ zero(T)
+    maxv = -Inf .+ zero(T)
+
+    for (face, lr) in enumerate(cg.face_neighbors)
+        l, r = lr
+        if l == index || r == index
+            pt, = compute_centroid_and_measure(cg, Faces(), face)
+            minv = min.(pt, minv)
+            maxv = max.(pt, maxv)
+        end
+    end
+    for (bface, bcell) in enumerate(cg.boundary_cells)
+        if bcell == index
+            pt, = compute_centroid_and_measure(cg, BoundaryFaces(), bface)
+            minv = min.(pt, minv)
+            maxv = max.(pt, maxv)
+        end
+    end
+    Δ = maxv - minv
+    @assert all(x -> x > 0, Δ) "Cell dimensions were zero? Computed $Δ for cell $index."
+    return Tuple(Δ)
+end
