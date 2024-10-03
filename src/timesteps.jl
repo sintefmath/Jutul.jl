@@ -177,6 +177,16 @@ function successful_reports(old_reports, current_reports, step_index, n = 1)
 end
 
 """
+    successful_reports(reports; step = length(reports), n = 1)
+
+Get last n successful reports starting at the end of `step` and reversing
+backwards until `n` values have been found.
+"""
+function successful_reports(reports; step = length(reports), n = 1)
+    return successful_reports(reports, reports[step][:ministeps], step, n)
+end
+
+"""
     linear_timestep_selection(x, x0, x1, dt0, dt1)
 
 Produce linear estimate of timestep `dt` for some value `x` from observed
