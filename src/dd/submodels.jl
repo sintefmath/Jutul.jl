@@ -148,7 +148,7 @@ Get subvariable of Jutul variable
 """
 function subvariable(var, map)
     if hasproperty(var, :regions)
-        @warn "Default subvariable called for $(typeof(var)) that contains regions property. Potential missing interface specialization."
+        @warn "Default subvariable called for $(typeof(var)) that contains regions property. Potential missing interface specialization. Map was: $(typeof(map))"
     end
     return var
 end
