@@ -98,12 +98,49 @@ function compress_partition(p::AbstractVector)
     return p_renum
 end
 
-function cartesian_partition_by_points(D::DataDomain, dim)
-    pts = D[:cell_centroids]
-    return cartesian_partition_by_points(pts, dim)
+"""
+    cartesian_partition(D::DataDomain, coarse_dims, ptype = :centroids)
+
+Perform Cartesian partition in centroid or IJK space.
+
+# Examples
+
+Generate 5x5x5 partition based on points (suitable for unstructured meshes)
+
+```julia
+mesh = CartesianMesh((50, 50, 1))
+p_pts = Jutul.cartesian_partition(domain, (5, 5, 5), :centroids)
+```
+
+Generate 5x5x5 partition based on IJK indices (suitable for logically Cartesian meshes)
+
+```julia
+mesh = CartesianMesh((50, 50, 1))
+p_ijk = Jutul.cartesian_partition(domain, (5, 5, 5), :ijk)
+```
+
+"""
+function cartesian_partition(D::DataDomain, coarse_dims, ptype = :centroids)
+    if ptype == :centroids
+        pts = D[:cell_centroids]
+    elseif ptype == :ijk
+        g = physical_representation(D)
+        nc = number_of_cells(g)
+        ijk = map(i -> cell_ijk(g, i), 1:nc)
+        d = dim(g)
+        pts = zeros(Int, d, nc)
+        for i in 1:nc
+            for j in 1:d
+                pts[j, i] = ijk[i][j]
+            end
+        end
+    else
+        error("Partition type $ptype not supported (must be one of :centroids, :ijk)")
+    end
+    return cartesian_partition(pts, coarse_dims)
 end
 
-function cartesian_partition_by_points(pts, dim)
+function cartesian_partition(pts::AbstractMatrix, dim)
     ndim, npts = size(pts)
     if dim isa Int
         dim = fill(dim, ndim)
@@ -115,6 +152,9 @@ function cartesian_partition_by_points(pts, dim)
         x = view(pts, d, :)
         p_i = view(prow, d, :)
         x0, x1 = extrema(x)
+        if x0 ≈ x1
+            continue
+        end
         dx = (x1 - x0)/n
         for (i, xi) in enumerate(x)
             v = ceil((xi - x0)/dx)
