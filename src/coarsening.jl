@@ -11,7 +11,7 @@ struct CoarsenByHarmonicAverage <: AbstractCoarseningFunction end
 
 function inner_apply_coarsening_function!(finevals, fine_indices, op::CoarsenByHarmonicAverage, coarse, fine, name, entity)
     invvals = 1.0./finevals
-    return sum(invvals)/length(invvals)
+    return length(invvals)/sum(invvals)
 end
 
 struct CoarsenByArithemticAverage <: AbstractCoarseningFunction end
