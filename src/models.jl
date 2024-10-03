@@ -722,13 +722,19 @@ function update_equations!(storage, equations_storage, equations, model, dt)
 end
 
 
-function apply_scaling_equations!(storage, equations_storage, equations, model, dt)
-    for (key, eq) in pairs(equations)
-        @tic "$key" apply_scaling_equation!(equations_storage[key], eq, storage, model, dt)
+function apply_scaling_equations!(storage, model)
+    
+    for (key, equation) in pairs(model.equations)
+        @tic "$key" apply_scaling_equation!(storage.equations[key], equation, model)
     end
+    
 end
 
+function apply_scaling_equation!(eq_s, equation::JutulEquation, model)
 
+    apply_scaling_for_entity!(eq_s, equation, model)
+
+end
 
 
 """

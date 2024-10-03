@@ -530,7 +530,6 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
         end
     end
     
-    apply_scaling_for_entity!(eq_s, eq, model)
     
 end
 

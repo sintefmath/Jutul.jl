@@ -571,7 +571,7 @@ end
 
 function apply_scaling_equations!(storage, model::MultiModel, dt; targets = submodels_symbols(model))
     @tic "scaling equations" for k in targets
-        apply_scaling_equations!(storage[k], model[k], dt)
+        apply_scaling_equations!(storage[k], model[k])
     end
 end
 
