@@ -95,6 +95,9 @@ module Jutul
     include("meshes/meshes.jl")
     include("discretization/discretization.jl")
 
+    # Coarsening utilities
+    include("coarsening.jl")
+
     # Extensions' interfaces
     include("ext/extensions.jl")
 

@@ -188,6 +188,6 @@ function triangulate_mesh(m::CoarseMesh; kwarg...)
         Cells = (cell_data) -> cell_data[cell_ix],
         Faces = (face_data) -> face_data[face_index],
         indices = (Cells = cell_ix, Faces = face_index)
-      )
+    )
     return (points = points, triangulation = triangulation, mapper = mapper)
 end
