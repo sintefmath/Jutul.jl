@@ -537,7 +537,6 @@ end
 function apply_scaling_for_entity!(eq_s, eq, model)
 
     scaling = get_scaling(model, eq)
-    @infiltrate
     scaling = 1.0
     
     for k in keys(eq_s)

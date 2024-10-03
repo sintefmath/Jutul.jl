@@ -618,10 +618,40 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
     state0_s = storage_s.state0
     if ct_s[:helper_mode]
         update_cross_term_helper_impl!(state_t, state0_t, state_s, state0_s, ct_s.target, ct_s.source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
+        apply_scaling_cross_terms_helper!(ct_s.target, ct_s.source, eq, model_t)
     else
         update_cross_term_impl!(state_t, state0_t, state_s, state0_s, ct_s.target, ct_s.source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
+        apply_scaling_cross_terms!(ct_s.target, ct_s.source, eq, model_t)
     end
 end
+
+
+function apply_scaling_cross_terms!(ct_s_target,
+                                    ct_s_source,
+                                    equation,
+                                    model)
+
+    scaling = get_scaling(model, equation)
+    scaling = 1.0
+    
+    for cache in values(ct_s_target)
+        cache.entries .*= 1/scaling
+    end
+    
+    for cache in values(ct_s_source)
+        cache.entries .*= 1/scaling
+    end
+    
+end
+
+function apply_scaling_cross_terms_helper!(ct_s_target,
+                                           ct_s_source,
+                                           equation,
+                                           model)
+
+    error("not yet implemented")
+end
+
 
 function update_cross_term_impl!(state_t, state0_t, state_s, state0_s, ct_s_target, ct_s_source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
     for i in 1:ct_s.N
@@ -687,8 +717,6 @@ function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s
             state_s = new_entity_index(state_s, var)
             state0_s = new_entity_index(state0_s, var)
             update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
-            scaling = get_scaling(model_t, eq)
-            v_i = 1/scaling*v_i
         end
     end
 end
