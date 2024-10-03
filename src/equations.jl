@@ -529,14 +529,11 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
             update_equation_for_entity!(cache, eq, state, state0, model, dt)
         end
     end
-    
-    
 end
 
 function apply_scaling_for_entity!(eq_s, eq, model)
 
     scaling = get_scaling(model, eq)
-    scaling = 1.0
     
     for k in keys(eq_s)
         if k == :numeric

@@ -588,9 +588,7 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
     # Apply forces to cross-terms
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
     # Apply scaling to equations
-    # @tic "crossterm forces" apply_scaling_equations!(storage, model, dt; kwarg...)
-    # Apply scaling to cross-terms
-    # @tic "crossterm forces" apply_scaling_cross_terms!(storage, model, dt; kwarg...)
+    @tic "scaling equations" apply_scaling_equations!(storage, model, dt; kwarg...)
 end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels_symbols(model), sources = submodels_symbols(model))
@@ -618,21 +616,20 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
     state0_s = storage_s.state0
     if ct_s[:helper_mode]
         update_cross_term_helper_impl!(state_t, state0_t, state_s, state0_s, ct_s.target, ct_s.source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
-        apply_scaling_cross_terms_helper!(ct_s.target, ct_s.source, eq, model_t)
+        apply_scaling_cross_term_helper!(ct_s.target, ct_s.source, eq, model_t)
     else
         update_cross_term_impl!(state_t, state0_t, state_s, state0_s, ct_s.target, ct_s.source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
-        apply_scaling_cross_terms!(ct_s.target, ct_s.source, eq, model_t)
+        apply_scaling_cross_term!(ct_s.target, ct_s.source, eq, model_t)
     end
 end
 
 
-function apply_scaling_cross_terms!(ct_s_target,
+function apply_scaling_cross_term!(ct_s_target,
                                     ct_s_source,
                                     equation,
                                     model)
 
     scaling = get_scaling(model, equation)
-    scaling = 1.0
     
     for cache in values(ct_s_target)
         cache.entries .*= 1/scaling
@@ -644,7 +641,7 @@ function apply_scaling_cross_terms!(ct_s_target,
     
 end
 
-function apply_scaling_cross_terms_helper!(ct_s_target,
+function apply_scaling_cross_term_helper!(ct_s_target,
                                            ct_s_source,
                                            equation,
                                            model)
