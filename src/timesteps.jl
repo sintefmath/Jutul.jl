@@ -187,8 +187,9 @@ Get last n successful reports starting at the end of `step` and reversing
 backwards until `n` values have been found. `n` can be set to `Inf` to produce
 all successful reports.
 """
-function successful_reports(reports, current_reports = missing; step = length(reports), n = 1)
+function successful_reports(reports, current_reports = missing; step = length(reports)+1, n = 1)
     if ismissing(current_reports)
+        step = clamp(step, 1, length(reports))
         current_reports = reports[step][:ministeps]
     end
     return successful_reports(reports, current_reports, step, n)
