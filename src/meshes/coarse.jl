@@ -213,6 +213,9 @@ function cell_dims(cg::CoarseMesh, pos)
         l, r = lr
         if l == index || r == index
             pt, = compute_centroid_and_measure(cg, Faces(), face)
+            if any(isnan.(pt))
+                continue
+            end
             minv = min.(pt, minv)
             maxv = max.(pt, maxv)
         end
@@ -220,11 +223,14 @@ function cell_dims(cg::CoarseMesh, pos)
     for (bface, bcell) in enumerate(cg.boundary_cells)
         if bcell == index
             pt, = compute_centroid_and_measure(cg, BoundaryFaces(), bface)
+            if any(isnan.(pt))
+                continue
+            end
             minv = min.(pt, minv)
             maxv = max.(pt, maxv)
         end
     end
     Δ = maxv - minv
-    @assert all(x -> x > 0, Δ) "Cell dimensions were zero? Computed $Δ for cell $index."
+    @assert all(x -> x > 0, Δ) "Cell dimensions were zero? Computed $Δ = $maxv - $minv for cell $index."
     return Tuple(Δ)
 end

@@ -2,40 +2,52 @@ abstract type AbstractCoarseningFunction end
 
 struct CoarsenByVolumeAverage <: AbstractCoarseningFunction end
 
-function inner_apply_coarsening_function!(finevals, fine_indices, op::CoarsenByVolumeAverage, coarse, fine, name, entity)
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByVolumeAverage, coarse, fine, name, entity)
     subvols = fine[:volumes][fine_indices]
     return sum(finevals.*subvols)/sum(subvols)
 end
 
 struct CoarsenByHarmonicAverage <: AbstractCoarseningFunction end
 
-function inner_apply_coarsening_function!(finevals, fine_indices, op::CoarsenByHarmonicAverage, coarse, fine, name, entity)
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByHarmonicAverage, coarse, fine, name, entity)
     invvals = 1.0./finevals
     return length(invvals)/sum(invvals)
 end
 
 struct CoarsenByArithemticAverage <: AbstractCoarseningFunction end
 
-function inner_apply_coarsening_function!(finevals, fine_indices, op::CoarsenByArithemticAverage, coarse, fine, name, entity)
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByArithemticAverage, coarse, fine, name, entity)
     return sum(finevals)/length(finevals)
 end
 
-function apply_coarsening_function!(coarsevals, finevals, op, coarse::DataDomain, fine::DataDomain, name, entity::JutulEntity)
+struct CoarsenByFirstValue <: AbstractCoarseningFunction end
+
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByFirstValue, coarse, fine, name, entity)
+    return finevals[1]
+end
+
+function apply_coarsening_function!(coarsevals, finevals, op, coarse::DataDomain, fine::DataDomain, name, entity::Union{Cells, Faces})
     CG = physical_representation(coarse)
-    function block_indices(CG, block)
-        findall(isequal(block), CG.partition)
+    function block_indices(CG, block, ::Cells)
+        return findall(isequal(block), CG.partition)
+    end
+    function block_indices(CG, block, ::Faces)
+        return CG.coarse_faces_to_fine[block]
+    end
+    function block_indices(CG, block, ::BoundaryFaces)
+        return CG.coarse_boundary_to_fine[block]
     end
     ncoarse = count_entities(coarse, entity)
     if finevals isa AbstractVector
         for block in 1:ncoarse
-            ix = block_indices(CG, block)
-            coarsevals[block] = inner_apply_coarsening_function!(view(finevals, ix), ix, op, coarse, fine, name, entity)
+            ix = block_indices(CG, block, entity)
+            coarsevals[block] = inner_apply_coarsening_function(view(finevals, ix), ix, op, coarse, fine, name, entity)
         end
     else
         for block in 1:ncoarse
-            ix = block_indices(CG, block)
+            ix = block_indices(CG, block, entity)
             for j in axes(coarsevals, 1)
-                coarsevals[j, block] = inner_apply_coarsening_function!(view(finevals, j, ix), ix, op, coarse, fine, name, entity)
+                coarsevals[j, block] = inner_apply_coarsening_function(view(finevals, j, ix), ix, op, coarse, fine, name, entity)
             end
         end
     end
@@ -45,6 +57,7 @@ end
 function coarsen_data_domain(D::DataDomain, partition;
         functions = Dict(),
         default = CoarsenByArithemticAverage(),
+        default_other = CoarsenByFirstValue(),
         kwarg...
     )
     for (k, v) in pairs(kwarg)
@@ -57,24 +70,32 @@ function coarsen_data_domain(D::DataDomain, partition;
         if !haskey(cD, name)
             val = D[name]
             e = Jutul.associated_entity(D, name)
+            Te = eltype(val)
+            if !(e in (Cells(), Faces(), BoundaryFaces(), nothing))
+                # Other entities are not supported yet.
+                continue
+            end
             if isnothing(e)
-                # No idea about coarse dims
+                # No idea about coarse dims, just copy
                 coarseval = deepcopy(val)
             elseif val isa AbstractVecOrMat
                 ne = count_entities(cg, e)
-                Te = eltype(val)
                 if val isa AbstractVector
                     coarseval = zeros(Te, ne)
                 else
                     coarseval = zeros(Te, size(val, 1), ne)
                 end
+                if eltype(Te)<:AbstractFloat
+                    f = get(functions, name, default)
+                else
+                    f = get(functions, name, default_other)
+                end
+                coarseval = apply_coarsening_function!(coarseval, val, f, cD, D, name, e)
             else
                 # Don't know what's going on
                 coarseval = deepcopy(val)
             end
-            # Need to coarsen.
-            f = get(functions, name, default)
-            cD[name] = apply_coarsening_function!(coarseval, val, f, cD, D, name, e)
+            cD[name, e] = coarseval
         end
     end
     return cD
