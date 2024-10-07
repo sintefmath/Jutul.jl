@@ -625,10 +625,10 @@ end
 
 
 function apply_scaling_cross_term!(ct_s_target,
-                                    ct_s_source,
-                                    equation,
-                                    model)
-
+                                   ct_s_source,
+                                   equation,
+                                   model)
+    
     scaling = get_scaling(model, equation)
     
     for cache in values(ct_s_target)
@@ -642,9 +642,9 @@ function apply_scaling_cross_term!(ct_s_target,
 end
 
 function apply_scaling_cross_term_helper!(ct_s_target,
-                                           ct_s_source,
-                                           equation,
-                                           model)
+                                          ct_s_source,
+                                          equation,
+                                          model)
 
     error("not yet implemented")
 end
