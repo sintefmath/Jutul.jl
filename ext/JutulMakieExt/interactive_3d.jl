@@ -133,8 +133,7 @@ function plot_interactive_impl(grid, states;
 
             for s in states
                 di = s[k]
-                mv = min(minimum(x -> isnan(x) ? Inf : x, di), mv)
-                Mv = max(maximum(x -> isnan(x) ? -Inf : x, di), Mv)
+                mv, Mv = my_minmax(di, mv, Mv)
             end
             if mv == Mv
                 Mv = 1.01*mv + 1e-12
@@ -151,8 +150,7 @@ function plot_interactive_impl(grid, states;
                         Mv = -Inf
                         for s in states
                             di = view(s[k], row, :)
-                            mv = min(minimum(x -> isnan(x) ? Inf : x, di), mv)
-                            Mv = max(maximum(x -> isnan(x) ? -Inf : x, di), Mv)
+                            mv, Mv = my_minmax(di, mv, Mv)
                         end
                         row_limits["$k"][row] = (mv, Mv)
                     end
@@ -911,4 +909,15 @@ function commercial_colormap()
         end
     end
     return cmap
+end
+
+function my_minmax(di, mv, Mv)
+    for v in di
+        if !isfinite(v)
+            continue
+        end
+        mv = min(mv, v)
+        Mv = max(Mv, v)
+    end
+    return (mv, Mv)
 end
