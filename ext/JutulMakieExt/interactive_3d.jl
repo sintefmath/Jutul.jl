@@ -549,13 +549,17 @@ function plot_interactive_impl(grid, states;
 
     # Actual plotting call
     if plot_type == :mesh
-        tri = primitives.triangulation
-        scat = Makie.mesh!(ax, pts, tri; color = ys,
-                                        colorrange = lims,
-                                        backlight = 1,
-                                        colormap = cmap,
-                                        transparency = transparency,
-                                        kwarg...)
+        # TODO: Not sure if this speeds things up
+        tri_c = Makie.to_triangles(primitives.triangulation)
+        pts_c = Makie.to_vertices(pts)
+        scat = Makie.mesh!(ax, pts_c, tri_c;
+            color = ys,
+            colorrange = lims,
+            backlight = 1,
+            colormap = cmap,
+            transparency = transparency,
+            kwarg...
+        )
         if !isnothing(edge_color)
             eplt = Jutul.plot_mesh_edges!(ax, grid; color = edge_color, edge_arg...)
             connect!(eplt.visible, edge_toggle.active)
