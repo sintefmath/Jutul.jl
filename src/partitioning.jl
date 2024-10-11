@@ -99,6 +99,64 @@ function compress_partition(p::AbstractVector)
 end
 
 """
+    p = process_partition(g::JutulMesh, partition; weights = missing)
+    p = process_partition(N::Vector{Tuple{Int, Int}}, partition; weights = missing)
+    p = process_partition(N::Matrix{Int}, partition; weights = missing)
+
+Perform processing of `partition` on mesh or neighborship to make sure that all
+coarse blocks in the partition are connected. Optionally, weights can be passed
+that will be used to remove connections with weights that are zero (or within
+floating point precision of zero).
+
+The resulting partition vector will be a copy and will have additional coarse
+blocks inserted when blocks were split into two or more components.
+
+```julia
+g = CartesianMesh((5,))
+p = [1, 1, 2, 1, 1] # Block 1 is disconnected!
+process_partition(g, p)
+```
+"""
+function process_partition(g::JutulMesh, partition; weights = missing)
+    return process_partition(get_neighborship(g), partition; weights = weights)
+end
+
+function process_partition(neighbors, partition; weights = missing)
+    new_p = copy(partition)
+    neighbors = Jutul.convert_neighborship(neighbors)
+    max_p = maximum(partition)
+    nfine = length(partition)
+    for coarse in 1:max_p
+        cells = findall(isequal(coarse), partition)
+        if length(cells) > 0
+            g = Graph(length(cells))
+            for (face, n) in enumerate(neighbors)
+                if !ismissing(weights) && weights[face] ≈ 0
+                    continue
+                end
+                l, r = n
+                p_l = partition[l]
+                p_r = partition[r]
+
+                if p_l == p_r == coarse
+                    e_start = findfirst(isequal(l), cells)
+                    e_end = findfirst(isequal(r), cells)
+
+                    add_edge!(g, e_start, e_end)
+                end
+            end
+            comps = connected_components(g)
+            # Note: One component is ok!
+            for comp in comps[2:end]
+                new_p[cells[comp]] .= max_p + 1
+                max_p += 1
+            end
+        end
+    end
+    return new_p
+end
+
+"""
     cartesian_partition(D::DataDomain, coarse_dims, ptype = :centroids)
 
 Perform Cartesian partition in centroid or IJK space.
