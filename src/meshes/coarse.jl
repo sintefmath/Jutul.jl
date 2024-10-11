@@ -99,6 +99,10 @@ function dim(G::CoarseMesh)
     return dim(G.parent)
 end
 
+function mesh_z_is_depth(G::CoarseMesh)
+    return mesh_z_is_depth(G.parent)
+end
+
 function number_of_cells(G::CoarseMesh)
     return length(G.partition_lookup)
 end
