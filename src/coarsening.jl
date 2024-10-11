@@ -2,27 +2,27 @@ abstract type AbstractCoarseningFunction end
 
 struct CoarsenByVolumeAverage <: AbstractCoarseningFunction end
 
-function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByVolumeAverage, coarse, fine, name, entity)
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByVolumeAverage, coarse, fine, row, name, entity)
     subvols = fine[:volumes][fine_indices]
     return sum(finevals.*subvols)/sum(subvols)
 end
 
 struct CoarsenByHarmonicAverage <: AbstractCoarseningFunction end
 
-function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByHarmonicAverage, coarse, fine, name, entity)
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByHarmonicAverage, coarse, fine, row, name, entity)
     invvals = 1.0./finevals
     return length(invvals)/sum(invvals)
 end
 
 struct CoarsenByArithemticAverage <: AbstractCoarseningFunction end
 
-function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByArithemticAverage, coarse, fine, name, entity)
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByArithemticAverage, coarse, fine, row, name, entity)
     return sum(finevals)/length(finevals)
 end
 
 struct CoarsenByFirstValue <: AbstractCoarseningFunction end
 
-function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByFirstValue, coarse, fine, name, entity)
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByFirstValue, coarse, fine, row, name, entity)
     return finevals[1]
 end
 
@@ -41,13 +41,13 @@ function apply_coarsening_function!(coarsevals, finevals, op, coarse::DataDomain
     if finevals isa AbstractVector
         for block in 1:ncoarse
             ix = block_indices(CG, block, entity)
-            coarsevals[block] = inner_apply_coarsening_function(view(finevals, ix), ix, op, coarse, fine, name, entity)
+            coarsevals[block] = inner_apply_coarsening_function(view(finevals, ix), ix, op, coarse, fine, 1, name, entity)
         end
     else
         for block in 1:ncoarse
             ix = block_indices(CG, block, entity)
             for j in axes(coarsevals, 1)
-                coarsevals[j, block] = inner_apply_coarsening_function(view(finevals, j, ix), ix, op, coarse, fine, name, entity)
+                coarsevals[j, block] = inner_apply_coarsening_function(view(finevals, j, ix), ix, op, coarse, fine, j, name, entity)
             end
         end
     end
