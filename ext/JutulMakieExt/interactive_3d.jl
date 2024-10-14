@@ -133,8 +133,7 @@ function plot_interactive_impl(grid, states;
 
             for s in states
                 di = s[k]
-                mv = min(minimum(x -> isnan(x) ? Inf : x, di), mv)
-                Mv = max(maximum(x -> isnan(x) ? -Inf : x, di), Mv)
+                mv, Mv = my_minmax(di, mv, Mv)
             end
             if mv == Mv
                 Mv = 1.01*mv + 1e-12
@@ -151,8 +150,7 @@ function plot_interactive_impl(grid, states;
                         Mv = -Inf
                         for s in states
                             di = view(s[k], row, :)
-                            mv = min(minimum(x -> isnan(x) ? Inf : x, di), mv)
-                            Mv = max(maximum(x -> isnan(x) ? -Inf : x, di), Mv)
+                            mv, Mv = my_minmax(di, mv, Mv)
                         end
                         row_limits["$k"][row] = (mv, Mv)
                     end
@@ -551,13 +549,17 @@ function plot_interactive_impl(grid, states;
 
     # Actual plotting call
     if plot_type == :mesh
-        tri = primitives.triangulation
-        scat = Makie.mesh!(ax, pts, tri; color = ys,
-                                        colorrange = lims,
-                                        backlight = 1,
-                                        colormap = cmap,
-                                        transparency = transparency,
-                                        kwarg...)
+        # TODO: Not sure if this speeds things up
+        tri_c = Makie.to_triangles(primitives.triangulation)
+        pts_c = Makie.to_vertices(pts)
+        scat = Makie.mesh!(ax, pts_c, tri_c;
+            color = ys,
+            colorrange = lims,
+            backlight = 1,
+            colormap = cmap,
+            transparency = transparency,
+            kwarg...
+        )
         if !isnothing(edge_color)
             eplt = Jutul.plot_mesh_edges!(ax, grid; color = edge_color, edge_arg...)
             connect!(eplt.visible, edge_toggle.active)
@@ -911,4 +913,15 @@ function commercial_colormap()
         end
     end
     return cmap
+end
+
+function my_minmax(di, mv, Mv)
+    for v in di
+        if !isfinite(v)
+            continue
+        end
+        mv = min(mv, v)
+        Mv = max(Mv, v)
+    end
+    return (mv, Mv)
 end

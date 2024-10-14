@@ -99,6 +99,10 @@ function dim(G::CoarseMesh)
     return dim(G.parent)
 end
 
+function mesh_z_is_depth(G::CoarseMesh)
+    return mesh_z_is_depth(G.parent)
+end
+
 function number_of_cells(G::CoarseMesh)
     return length(G.partition_lookup)
 end
@@ -188,6 +192,49 @@ function triangulate_mesh(m::CoarseMesh; kwarg...)
         Cells = (cell_data) -> cell_data[cell_ix],
         Faces = (face_data) -> face_data[face_index],
         indices = (Cells = cell_ix, Faces = face_index)
-      )
+    )
     return (points = points, triangulation = triangulation, mapper = mapper)
+end
+
+function plot_primitives(mesh::CoarseMesh, plot_type; kwarg...)
+    if plot_type == :mesh
+        out = triangulate_mesh(mesh; kwarg...)
+    else
+        out = nothing
+    end
+    return out
+end
+
+function cell_dims(cg::CoarseMesh, pos)
+    # TODO: This function is inefficient
+    index = cell_index(cg, pos)
+    g = cg.parent
+    T = eltype(g.node_points)
+    minv = Inf .+ zero(T)
+    maxv = -Inf .+ zero(T)
+
+    for (face, lr) in enumerate(cg.face_neighbors)
+        l, r = lr
+        if l == index || r == index
+            pt, = compute_centroid_and_measure(cg, Faces(), face)
+            if any(isnan.(pt))
+                continue
+            end
+            minv = min.(pt, minv)
+            maxv = max.(pt, maxv)
+        end
+    end
+    for (bface, bcell) in enumerate(cg.boundary_cells)
+        if bcell == index
+            pt, = compute_centroid_and_measure(cg, BoundaryFaces(), bface)
+            if any(isnan.(pt))
+                continue
+            end
+            minv = min.(pt, minv)
+            maxv = max.(pt, maxv)
+        end
+    end
+    Δ = maxv - minv
+    @assert all(x -> x > 0, Δ) "Cell dimensions were zero? Computed $Δ = $maxv - $minv for cell $index."
+    return Tuple(Δ)
 end
