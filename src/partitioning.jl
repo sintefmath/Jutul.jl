@@ -117,6 +117,10 @@ p = [1, 1, 2, 1, 1] # Block 1 is disconnected!
 process_partition(g, p)
 ```
 """
+function process_partition
+
+end
+
 function process_partition(g::JutulMesh, partition; weights = missing)
     return process_partition(get_neighborship(g), partition; weights = weights)
 end
