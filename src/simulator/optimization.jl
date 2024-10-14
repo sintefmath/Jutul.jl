@@ -143,7 +143,12 @@ function gradient_opt!(dFdx, x, data)
             end
             debug_time = false
             set_global_timer!(debug_time)
-            grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt, G, forces = forces)
+            try
+                grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt, G, forces = forces)
+            catch excpt
+                @warn "Exception in adjoint solve, setting gradient to large value." excpt
+                @. grad_adj = 1e10
+            end
             print_global_timer(debug_time; text = "Adjoint solve detailed timing")
         else
             @. grad_adj = 1e10
