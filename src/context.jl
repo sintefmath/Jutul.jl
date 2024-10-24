@@ -104,7 +104,11 @@ function select_contexts(ctype = :csc;
     end
     if isnothing(context)
         # If context is not provided, set to default
-        context = DefaultContext(minbatch = minbatch)
+        if ctype == :csr
+            context = ParallelCSRContext()
+        else
+            context = DefaultContext(minbatch = minbatch)
+        end
     end
     if isnothing(main_context)
         if ctype == :csc
