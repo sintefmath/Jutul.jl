@@ -24,12 +24,14 @@ function LinearAlgebra.mul!(x, p::PrecondWrapper, y, α, β)
     return x
 end
 
+abstract type AbstractKrylov end
+
 """
     GenericKrylov(solver = :gmres; preconditioner = nothing; <kwarg>)
 
 Solver that wraps `Krylov.jl` with support for preconditioning.
 """
-mutable struct GenericKrylov
+mutable struct GenericKrylov <: AbstractKrylov
     solver::Symbol
     scaling::Symbol
     preconditioner
@@ -44,7 +46,7 @@ mutable struct GenericKrylov
     end
 end
 
-function linear_solver_tolerance(k::GenericKrylov, arg...; kwarg...)
+function linear_solver_tolerance(k::AbstractKrylov, arg...; kwarg...)
     return linear_solver_tolerance(k.config, arg...; kwarg...)
 end
 
@@ -54,7 +56,7 @@ function Base.show(io::IO, krylov::GenericKrylov)
     print(io, "Generic Krylov using $(krylov.solver) (ϵₐ=$atol, ϵ=$rtol) with prec = $(typeof(krylov.preconditioner))")
 end
 
-function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, float_t = Float64)
+function preconditioner(krylov::AbstractKrylov, sys, model, storage, recorder, float_t = Float64)
     M = krylov.preconditioner
     if isnothing(M)
         op = I
@@ -199,7 +201,7 @@ function is_mutating(f)
     return String(Symbol(f))[end] == '!'
 end
 
-function krylov_jl_solve_function(krylov::GenericKrylov, op, r, solver = krylov.solver)
+function krylov_jl_solve_function(krylov::AbstractKrylov, op, r, solver = krylov.solver)
     # Some trickery to generically wrapping a Krylov.jl solver.
     if solver == :gmres
         if isnothing(krylov.storage)

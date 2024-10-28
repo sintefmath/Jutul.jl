@@ -138,7 +138,7 @@ end
 function devectorize_data_domain(domain::DataDomain{R, E, D}, x::Vector{T}) where {R, E, D, T}
     r = physical_representation(domain)
     e = deepcopy(domain.entities)
-    d = similar(domain.data)
+    d = empty(domain.data)
     newd = DataDomain{R, E, D}(r, e, d)
     for (k, val_e_pair) in pairs(domain)
         val, e = val_e_pair
