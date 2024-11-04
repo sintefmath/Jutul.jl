@@ -283,7 +283,11 @@ function solve_timestep!(sim, dT, forces, max_its, config;
         # We store the report even if it is a failure.
         push!(ministep_reports, s)
         nextstep_local!(rec, dt, ok)
+        n_so_far = length(ministep_reports)
         if ok
+            if 2 > info_level > 1
+                jutul_message("Convergence", "Ministep #$n_so_far of $(get_tstr(dt, 1)) ($(round(100.0*dt/dT, digits=1))% of report step) converged.", color = :green)
+            end
             t_local += dt
             if t_local >= dT
                 # Onto the next one
@@ -312,7 +316,6 @@ function solve_timestep!(sim, dT, forces, max_its, config;
                     inner_msg = " Reducing mini-step."
                     c = :yellow
                 end
-                n_so_far = length(ministep_reports)
                 jutul_message("Convergence", "Report step $step_no, mini-step #$n_so_far ($(get_tstr(dt_old, 2))) failed to converge.$inner_msg", color = c)
             end
             if isnan(dt)
