@@ -407,6 +407,10 @@ end
     return v
 end
 
+function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where T<:ForwardDiff.Dual
+    @. v = next
+end
+
 """
 Take value of AD.
 """
