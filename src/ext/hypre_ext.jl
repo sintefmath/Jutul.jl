@@ -17,6 +17,9 @@ function BoomerAMGPreconditioner(;
     AggNumLevels = 1,      # Aggressive coarsening for first levels
     AggTruncFactor = 0.3,  # Remove weak connections
     InterpType = 6,        # ext+i
+    PrintLevel = 0,
+    Tol = 0.0,
+    MaxIter = 1,
     kwarg...
     )
     # Default settings inspired by
@@ -29,8 +32,11 @@ function BoomerAMGPreconditioner(;
             AggNumLevels = AggNumLevels,
             AggTruncFactor = AggTruncFactor,
             InterpType = InterpType,
+            Tol = Tol,
+            MaxIter = MaxIter,
+            PrintLevel = PrintLevel,
             kwarg...
-            )
+        )
     catch e
         @error "Unable to initialize HYPRE preconditioner. Is HYPRE.jl loaded and Julia at least 1.9?"
         rethrow(e)

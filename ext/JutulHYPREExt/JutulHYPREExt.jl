@@ -11,7 +11,7 @@ module JutulHYPREExt
     function Jutul.setup_hypre_precond(type = :boomeramg; kwarg...)
         @assert type == :boomeramg
         HYPRE.Init()
-        prec = HYPRE.BoomerAMG(; PrintLevel = 0, Tol = 0.0, MaxIter = 1, kwarg...)
+        prec = HYPRE.BoomerAMG(; kwarg...)
         return prec
     end
 
@@ -42,8 +42,17 @@ module JutulHYPREExt
     end
 
     function Jutul.update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
-        D = preconditioner.data
+        update_boomeramg!(preconditioner, J, r, ctx, executor, do_setup = true)
+        return preconditioner
+    end
 
+    function Jutul.partial_update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
+        update_boomeramg!(preconditioner, J, r, ctx, executor, do_setup = false)
+        return preconditioner
+    end
+
+    function update_boomeramg!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor; do_setup = true)
+        D = preconditioner.data
         if !haskey(D, :assembly_helper)
             D[:assembly_helper] = Jutul.generate_hypre_assembly_helper(J, executor)
         end
@@ -61,8 +70,9 @@ module JutulHYPREExt
             J_h = transfer_matrix_to_hypre(J, D, executor)
         end
         D[:hypre_system] = (J_h, r_h, x_h)
-        HYPRE.@check HYPRE.HYPRE_BoomerAMGSetup(preconditioner.prec, J_h, r_h, x_h)
-        return preconditioner
+        if do_setup
+            HYPRE.@check HYPRE.HYPRE_BoomerAMGSetup(preconditioner.prec, J_h, r_h, x_h)
+        end
     end
 
     function transfer_vector_to_hypre(r, D, executor)
