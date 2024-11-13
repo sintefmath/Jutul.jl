@@ -574,13 +574,6 @@ function update_equations!(storage, model::MultiModel, dt; targets = submodels_s
     end
 end
 
-function apply_scaling_equations!(storage, model::MultiModel, dt; targets = submodels_symbols(model))
-    @tic "scaling equations" for k in targets
-        apply_scaling_equations!(storage[k], model[k])
-    end
-end
-
-
 function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, kwarg...)
     # First update all equations
     @tic "equations" update_equations!(storage, model, dt; kwarg...)
@@ -592,8 +585,6 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
     @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
     # Apply forces to cross-terms
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
-    # Apply scaling to equations
-    @tic "scaling equations" apply_scaling_equations!(storage, model, dt; kwarg...)
 end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels_symbols(model), sources = submodels_symbols(model))
@@ -621,39 +612,10 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
     state0_s = storage_s.state0
     if ct_s[:helper_mode]
         update_cross_term_helper_impl!(state_t, state0_t, state_s, state0_s, ct_s.target, ct_s.source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
-        apply_scaling_cross_term_helper!(ct_s.target, ct_s.source, eq, model_t)
     else
         update_cross_term_impl!(state_t, state0_t, state_s, state0_s, ct_s.target, ct_s.source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
-        apply_scaling_cross_term!(ct_s.target, ct_s.source, eq, model_t)
     end
 end
-
-
-function apply_scaling_cross_term!(ct_s_target,
-                                   ct_s_source,
-                                   equation,
-                                   model)
-    
-    scaling = get_scaling(model, equation)
-    
-    for cache in values(ct_s_target)
-        cache.entries .*= 1/scaling
-    end
-    
-    for cache in values(ct_s_source)
-        cache.entries .*= 1/scaling
-    end
-    
-end
-
-function apply_scaling_cross_term_helper!(ct_s_target,
-                                          ct_s_source,
-                                          equation,
-                                          model)
-
-    error("not yet implemented")
-end
-
 
 function update_cross_term_impl!(state_t, state0_t, state_s, state0_s, ct_s_target, ct_s_source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
     for i in 1:ct_s.N
@@ -700,10 +662,6 @@ function update_cross_term_inner_target!(cache::GenericAutoDiffCache{<:Any, <:An
     state_t_local = local_ad(state_t, 1, ∂x)
     state0_t_local = local_ad(state0_t, 1, ∂x)
     update_cross_term_for_entity!(cache, ct, eq, state_t_local, state0_t_local, state_s, state0_s, model_t, model_s, dt)
-end
-
-function get_scaling(model, eq)
-    return 1.0
 end
 
 function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
