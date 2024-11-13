@@ -900,8 +900,9 @@ end
 
 function solve_and_update!(storage, model::JutulModel, dt = nothing; linear_solver = nothing, recorder = nothing, executor = default_executor(), kwarg...)
     lsys = storage.LinearizedSystem
+    context = model.context
     t_solve = @elapsed begin
-        @tic "linear solve" (ok, n, history) = linear_solve!(lsys, linear_solver, model, storage, dt, recorder, executor)
+        @tic "linear solve" (ok, n, history) = linear_solve!(lsys, linear_solver, context, model, storage, dt, recorder, executor)
     end
     t_update = @elapsed @tic "primary variables" update = update_primary_variables!(storage, model; kwarg...)
     return (t_solve, t_update, n, history, update)

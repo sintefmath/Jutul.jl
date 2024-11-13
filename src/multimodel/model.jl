@@ -130,6 +130,10 @@ function setup_storage!(storage, model::MultiModel;
     return storage
 end
 
+mutable struct MutableWrapper
+    maps
+end
+
 function setup_multimodel_maps!(storage, model)
     groups = model.groups
     if isnothing(groups)
@@ -138,6 +142,7 @@ function setup_multimodel_maps!(storage, model)
         offset_map = map(g -> get_submodel_offsets(model, g), unique(groups))
     end
     storage[:multi_model_maps] = (offset_map = offset_map, );
+    storage[:eq_maps] = MutableWrapper(nothing)
 end
 
 function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys)

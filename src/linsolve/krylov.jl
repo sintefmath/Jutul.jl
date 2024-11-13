@@ -54,12 +54,14 @@ function Base.show(io::IO, krylov::GenericKrylov)
     print(io, "Generic Krylov using $(krylov.solver) (ϵₐ=$atol, ϵ=$rtol) with prec = $(typeof(krylov.preconditioner))")
 end
 
-function preconditioner(krylov::GenericKrylov, sys, model, storage, recorder, float_t = Float64)
+function preconditioner(krylov::GenericKrylov, sys, context, model, storage, recorder, side, arg...)
     M = krylov.preconditioner
+    Ft = float_type(context)
     if isnothing(M)
         op = I
     else
-        op = PrecondWrapper(linear_operator(M, float_t))
+        linop = linear_operator(M, side, Ft, sys, context, model, storage, recorder, arg...)
+        op = PrecondWrapper(linop)
     end
     return op
 end
@@ -70,27 +72,29 @@ end
 # end
 
 function linear_solve!(sys::LSystem,
-        krylov::GenericKrylov,
-        model,
-        storage = nothing,
-        dt = nothing,
-        recorder = ProgressRecorder(),
-        executor = default_executor();
-        dx = sys.dx_buffer,
-        r = vector_residual(sys),
-        atol = linear_solver_tolerance(krylov, :absolute),
-        rtol = linear_solver_tolerance(krylov, :relative),
-        rtol_nl = linear_solver_tolerance(krylov, :nonlinear_relative),
-        rtol_relaxed = linear_solver_tolerance(krylov, :relaxed_relative)
-    )
+                krylov::GenericKrylov,
+                context,
+                model,
+                storage = nothing,
+                dt = nothing,
+                recorder = ProgressRecorder(),
+                executor = default_executor();
+                dx = sys.dx_buffer,
+                r = vector_residual(sys),
+                atol = linear_solver_tolerance(krylov, :absolute),
+                rtol = linear_solver_tolerance(krylov, :relative),
+                rtol_nl = linear_solver_tolerance(krylov, :nonlinear_relative),
+                rtol_relaxed = linear_solver_tolerance(krylov, :relaxed_relative)
+                )
     cfg = krylov.config
     prec = krylov.preconditioner
-    Ft = float_type(model.context)
+    Ft = float_type(context)
     sys = krylov_scale_system!(sys, krylov, dt)
     t_prep = @elapsed @tic "prepare" prepare_linear_solve!(sys)
     op = linear_operator(sys)
-    t_prec = @elapsed @tic "precond" update_preconditioner!(prec, sys, model, storage, recorder, executor)
-    prec_op = preconditioner(krylov, sys, model, storage, recorder, Ft)
+    t_prec = @elapsed @tic "precond" update_preconditioner!(prec, sys, context, model, storage, recorder, executor)
+    prec_op = preconditioner(krylov, sys, context, model, storage, recorder, :left)
+    # R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
     v = Int64(cfg.verbose)
     max_it = cfg.max_iterations
     min_it = cfg.min_iterations
