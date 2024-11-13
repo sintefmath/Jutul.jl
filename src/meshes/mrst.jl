@@ -66,6 +66,10 @@ function cell_ijk(g::MRSTWrapMesh, base_index::Integer)
     return (x, y, z)
 end
 
+function get_neighborship(g::MRSTWrapMesh; internal = true)
+    # TODO: Make this more elegant.
+    return get_neighborship(UnstructuredMesh(g); internal = internal)
+end
 
 function declare_entities(g::MRSTWrapMesh)
     return [

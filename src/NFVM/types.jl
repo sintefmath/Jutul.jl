@@ -11,7 +11,7 @@ struct NFVMLinearDiscretization{T} <: NFVMDiscretization
 end
 
 function Base.show(io::IO, ft::NFVMLinearDiscretization{T}) where T
-    l, r = cell_pair(ft)
+    l, r = Jutul.cell_pair(ft)
     print(io, "NFVMLinearDiscretization{$T} $(l)→$(r)")
     compact = get(io, :compact, false)
     if !compact

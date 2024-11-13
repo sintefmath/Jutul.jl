@@ -115,7 +115,7 @@ end
 """
     scalarize_primary_variables!(V::Vector{T}, model, state, pvars::NamedTuple) where T
 
-Scalarize into array. See [scalarize_primary_variables](@ref) for more details.
+Scalarize into array. See [`scalarize_primary_variables`](@ref) for more details.
 """
 function scalarize_primary_variables!(V::Vector{ScalarizedJutulVariables{T}}, model, state, pvars::NamedTuple) where T
     pvars_def = values(pvars)

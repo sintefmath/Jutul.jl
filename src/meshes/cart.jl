@@ -70,6 +70,13 @@ struct CartesianMesh{D, Δ, O, T} <: FiniteVolumeMesh
 end
 Base.show(io::IO, g::CartesianMesh) = print(io, "CartesianMesh ($(dim(g))D) with $(join(grid_dims_ijk(g), "x"))=$(number_of_cells(g)) cells")
 
+function CartesianMesh(v::Int, d = 1.0; kwarg...)
+    if d isa Float64
+        d = (d, )
+    end
+    return CartesianMesh((v, ), d; kwarg...)
+end
+
 dim(t::CartesianMesh) = length(t.dims)
 number_of_cells(t::CartesianMesh) = prod(t.dims)
 function number_of_faces(t::CartesianMesh)

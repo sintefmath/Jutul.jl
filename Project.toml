@@ -1,7 +1,7 @@
 name = "Jutul"
 uuid = "2b460a1a-8a2b-45b2-b125-b5c536396eb9"
 authors = ["Olav Møyner <olav.moyner@gmail.com>"]
-version = "0.2.37"
+version = "0.2.42"
 
 [deps]
 AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
@@ -69,9 +69,9 @@ ExprTools = "0.1.8"
 ForwardDiff = "0.10.30"
 GraphMakie = "0.5.3"
 Graphs = "1.8.0"
-HYPRE = "1.4.0"
+HYPRE = "1.6.0, 1.7"
 ILUZero = "0.2.0"
-JLD2 = "0.4.22"
+JLD2 = "0.4, 0.5"
 KaHyPar = "0.3.0"
 Krylov = "0.9.1"
 LayeredLayouts = "0.2.5"

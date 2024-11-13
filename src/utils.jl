@@ -895,16 +895,24 @@ function timing_breakdown_ministep(ministep)
     t_local = 0.0
     its = 0
     asm = 0
-    for step in ministep[:steps]
-        asm += 1
-        t_asm += step[:secondary_time] + step[:equations_time] + step[:linear_system_time]
-        if haskey(step, :linear_solve_time)
-            its += 1
-            t_solve += step[:linear_solve_time]
+    if haskey(ministep, :steps)
+        for step in ministep[:steps]
+            asm += 1
+            t_asm += step[:secondary_time] + step[:equations_time] + step[:linear_system_time]
+            if haskey(step, :linear_solve_time)
+                its += 1
+                t_solve += step[:linear_solve_time]
+            end
+            if haskey(step, :time_subdomains)
+                t_local += step[:time_subdomains]
+            end
         end
-        if haskey(step, :time_subdomains)
-            t_local += step[:time_subdomains]
-        end
+    else
+        s = ministep[:stats]
+        asm += s.linearizations
+        its += s.newtons
+        t_asm += s.equations + s.secondary + s.linear_system
+        t_solve += s.linear_solve + s.linear_solve_precond
     end
     return (assembly = t_asm, solve = t_solve, subdomains = t_local, its = its, no_asm = asm)
 end

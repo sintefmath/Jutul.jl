@@ -22,6 +22,11 @@ used in the calculations. You can precompute this if you need to perform many
 searches. The keyword argument `n` can be used to set the number of
 discretizations in each segment.
 
+`use_boundary` is by default set to `false`. If set to true, the boundary faces
+of cells are treated more rigorously when picking exactly what cells are cut by
+a trajectory, but this requires that the boundary normals are oriented outwards,
+which is currently not the case for all meshes from downstream packages.
+
 Examples:
 ```
 # 3D mesh
@@ -56,7 +61,7 @@ lines!(ax, trajectory[:, 1], trajectory[:, 2], linewidth = 3)
 fig
 ```
 """
-function find_enclosing_cells(G, traj; geometry = missing, n = 25)
+function find_enclosing_cells(G, traj; geometry = missing, n = 25, use_boundary = false)
     G = UnstructuredMesh(G)
     if ismissing(geometry)
         geometry = tpfv_geometry(G)
@@ -68,7 +73,11 @@ function find_enclosing_cells(G, traj; geometry = missing, n = 25)
     cell_centroids = vec(reinterpret(T, geometry.cell_centroids))
 
     boundary_centroids = vec(reinterpret(T, geometry.boundary_centroids))
-    boundary_normals = vec(reinterpret(T, geometry.boundary_normals))
+    if use_boundary
+        boundary_normals = vec(reinterpret(T, geometry.boundary_normals))
+    else
+        boundary_normals = boundary_centroids .- cell_centroids[G.boundary_faces.neighbors]
+    end
 
     # Start search near middle of trajectory
     mean_pt = mean(pts)

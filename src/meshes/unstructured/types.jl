@@ -699,14 +699,14 @@ function UnstructuredMesh(g::MRSTWrapMesh; kwarg...)
     return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw; kwarg...)
 end
 
-function UnstructuredMesh(G_raw::AbstractDict)
+function UnstructuredMesh(G_raw::AbstractDict; kwarg...)
     faces_raw = Int.(vec(G_raw["cells"]["faces"][:, 1]))
     facePos_raw = Int.(vec(G_raw["cells"]["facePos"][:, 1]))
     nodes_raw = Int.(vec(G_raw["faces"]["nodes"][:, 1]))
     nodePos_raw = Int.(vec(G_raw["faces"]["nodePos"][:, 1]))
     coord = collect(G_raw["nodes"]["coords"]')
     N_raw = Int.(G_raw["faces"]["neighbors"]')
-    return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw)
+    return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw; kwarg...)
 end
 
 function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = dim(m) == 3)

@@ -156,7 +156,11 @@ Get the `n` last successful solve reports from all previous reports
 """
 function successful_reports(old_reports, current_reports, step_index, n = 1)
     out = similar(current_reports, 0)
-    sizehint!(out, n)
+    if isfinite(n)
+        sizehint!(out, n)
+    else
+        sizehint!(out, 4*length(old_reports))
+    end
     for step in step_index:-1:1
         if step == step_index
             reports = current_reports
@@ -174,6 +178,21 @@ function successful_reports(old_reports, current_reports, step_index, n = 1)
         end
     end
     return out
+end
+
+"""
+    successful_reports(reports; step = length(reports), n = 1)
+
+Get last n successful reports starting at the end of `step` and reversing
+backwards until `n` values have been found. `n` can be set to `Inf` to produce
+all successful reports.
+"""
+function successful_reports(reports, current_reports = missing; step = length(reports)+1, n = 1)
+    if ismissing(current_reports)
+        step = clamp(step, 1, length(reports))
+        current_reports = reports[step][:ministeps]
+    end
+    return successful_reports(reports, current_reports, step, n)
 end
 
 """
