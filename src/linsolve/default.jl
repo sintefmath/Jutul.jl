@@ -51,9 +51,16 @@ struct LinearizedBlock{R, C, J, B} <: JutulLinearSystem
     end
 end
 
-function LinearizedBlock(A, bz::Tuple, row_layout, col_layout)
+function LinearizedBlock(A, bz::Tuple, row_layout, col_layout, row_context, col_context)
     pattern = to_sparse_pattern(A)
-    context = DefaultContext(matrix_layout = row_layout)
+    F_row = float_type(row_context)
+    F_col = float_type(col_context)
+    @assert F_row == F_col
+    I_row = index_type(row_context)
+    I_col = index_type(col_context)
+    @assert I_row == I_col
+
+    context = DefaultContext(matrix_layout = row_layout, float_type = F_row, index_type = I_row)
     sys = LinearizedBlock(pattern, context, row_layout, col_layout, bz)
     J = sys.jac
     for (i, j) in zip(pattern.I, pattern.J)
@@ -150,7 +157,8 @@ function build_jacobian(sparse_arg, context, layout_row, layout_col = layout_row
     I, J, n, m = ijnm(sparse_arg)
     bz = block_size(sparse_arg)
     Jt = jacobian_eltype(context, layout_row, bz)
-    @assert Jt == jacobian_eltype(context, layout_col, bz)
+    Jt_actual = jacobian_eltype(context, layout_col, bz)
+    @assert Jt == Jt_actual "Mismatch in Jacobian element type (expected $Jt, was $Jt_actual)"
     Ft = float_type(context)
 
     V = zeros(Jt, length(I))

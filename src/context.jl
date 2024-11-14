@@ -96,7 +96,8 @@ function select_contexts(ctype = :csc;
                     context = nothing,
                     block_backend = true,
                     nthreads = Threads.nthreads(),
-                    minbatch = 1000)
+                    minbatch = 1000,
+                    kwargs...)
     if block_backend
         matrix_layout = BlockMajorLayout()
     else
@@ -105,17 +106,17 @@ function select_contexts(ctype = :csc;
     if isnothing(context)
         # If context is not provided, set to default
         if ctype == :csr
-            context = ParallelCSRContext()
+            context = ParallelCSRContext(; kwargs...)
         else
-            context = DefaultContext(minbatch = minbatch)
+            context = DefaultContext(;minbatch = minbatch, kwargs...)
         end
     end
     if isnothing(main_context)
         if ctype == :csc
             @assert context isa DefaultContext
-            main_context = DefaultContext(matrix_layout = matrix_layout, minbatch = minbatch, nthreads = nthreads)
+            main_context = DefaultContext(; matrix_layout = matrix_layout, minbatch = minbatch, nthreads = nthreads, kwargs...)
         elseif ctype == :csr
-            main_context = ParallelCSRContext(nthreads, matrix_layout = matrix_layout, minbatch = minbatch)
+            main_context = ParallelCSRContext(nthreads; matrix_layout = matrix_layout, minbatch = minbatch, kwargs...)
         else
             error("Unsupported context type $ctype")
         end

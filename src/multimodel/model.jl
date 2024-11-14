@@ -533,7 +533,7 @@ function setup_linearized_system!(storage, model::MultiModel)
                     sparse_pattern = sparse_pattern'
                 end
                 bz_pair = (block_sizes[rowg], block_sizes[colg])
-                this_block = LinearizedBlock(sparse_pattern, bz_pair, row_layout, col_layout)
+                this_block = LinearizedBlock(sparse_pattern, bz_pair, row_layout, col_layout, row_context, col_context)
                 if is_trans
                     subsystems[colg, rowg] = this_block
                 else

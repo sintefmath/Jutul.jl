@@ -27,7 +27,7 @@ end
 function jacobian_eltype(context::CPUJutulContext, layout::BlockMajorLayout, block_size)
     F = float_type(context)
     if block_size[1] == block_size[2] == 1
-        M = Float64
+        M = F
     else
         M = SMatrix{block_size..., F, prod(block_size)}
     end
