@@ -85,7 +85,10 @@ Abstract type for the context Jutul should execute in (matrix formats, memory al
 """
 abstract type JutulContext end
 abstract type GPUJutulContext <: JutulContext end
-abstract type CPUJutulContext <: JutulContext end
+abstract type CPUJutulContext{Tv, Ti} <: JutulContext end
+
+float_type(::CPUJutulContext{Tv, Ti}) where {Tv, Ti} = Tv
+index_type(::CPUJutulContext{Tv, Ti}) where {Tv, Ti} = Ti
 
 # Traits etc for matrix ordering
 """
