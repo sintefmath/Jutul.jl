@@ -107,4 +107,9 @@ module Jutul
     # Nonlinear finite-volume discretizations
     include("NFVM/NFVM.jl")
 
+    # LBFGS suitable for PDE optimization
+    include("LBFGS/LBFGS.jl")
+    using .LBFGS
+    import .LBFGS: unit_box_bfgs
+
 end # module
