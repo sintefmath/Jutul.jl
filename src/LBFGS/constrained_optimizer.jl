@@ -16,6 +16,7 @@ This is a port of the MRST function `unitBoxBFGS`, relicensed under MIT.
 # Keywords
 - `maximize::Bool=true`: Set to false to minimize objective
 - `step_init::Float64=NaN`: Initial step (gradient scaling). If NaN, uses `max_initial_update/max(|initial gradient|)`
+- `time_limit::Float64=Inf`: Time limit for optimizer.
 - `max_initial_update::Float64=0.05`: Maximum initial update step
 - `history::Any=nothing`: For warm starting based on previous optimization (requires `output_hessian=true`)
 
@@ -67,6 +68,7 @@ function unit_box_bfgs(
         obj_change_tol = 5.0e-4,
         obj_change_tol_rel = -Inf,
         max_it = 25,
+        time_limit = Inf,
         use_bfgs = true,
         limited_memory = true,
         lbfgs_num = 5,
@@ -79,6 +81,7 @@ function unit_box_bfgs(
         history = nothing,
         kwarg...
     )
+    t0 = time()
     if maximize
         f! = (u) -> f_as_negative(u, f)
         objSign = -1
@@ -168,9 +171,14 @@ function unit_box_bfgs(
                 output_hessian = output_hessian
             )
         end
-        # Check stopping criteria
-        success = (it >= max_it) || (norm(pg, Inf) < grad_tol) ||
-            (abs(v - v0) < obj_change_tol) || (abs((v - v0) / v) < obj_change_tol_rel)
+        # Check stopping criteria t0
+        grad_done = (norm(pg, Inf) < grad_tol)
+        it_done = (it >= max_it)
+        change_done = abs(v - v0) < obj_change_tol
+        relchange_done = abs((v - v0) / v) < obj_change_tol_rel
+        time_done = (time() - t0 > time_limit)
+        # Either criterion is enough to terminate
+        success = grad_done || it_done || change_done || relchange_done || time_done
         u0 = deepcopy(u)
         v0 = deepcopy(v)
         g0 = deepcopy(g)
