@@ -283,7 +283,11 @@ function opt_scaler_function(config, key; inv = false)
         F = F_inv = identity
 
         if scale_type == :log || scale_type == :exp
-            base = 10000.0
+            if x_max ≈ x_min || x_min < 1e-12
+                base = 10000
+            else
+                base = abs(x_max)/abs(x_min)
+            end
             myexp = x -> (base^x - 1)/(base - 1)
             mylog = x -> log((base-1)*x + 1)/log(base)
             if scale_type == :log
