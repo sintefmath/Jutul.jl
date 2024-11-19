@@ -20,7 +20,7 @@ This is a port of the MRST function `unitBoxBFGS`, relicensed under MIT.
 - `history::Any=nothing`: For warm starting based on previous optimization (requires `output_hessian=true`)
 
 ## Stopping Criteria
-- `gradTol::Float64=1e-3`: Absolute tolerance of inf-norm of projected gradient
+- `grad_tol::Float64=1e-3`: Absolute tolerance of inf-norm of projected gradient
 - `obj_change_tol::Float64=5e-4`: Absolute objective update tolerance
 - `max_it::Int=25`: Maximum number of iterations
 
@@ -63,7 +63,7 @@ function unit_box_bfgs(
         maximize = true,
         step_init = NaN,
         max_initial_update = 0.05,
-        gradTol = 1.0e-3,
+        grad_tol = 1.0e-3,
         obj_change_tol = 5.0e-4,
         obj_change_tol_rel = -Inf,
         max_it = 25,
@@ -122,7 +122,7 @@ function unit_box_bfgs(
     while !success
         it = it + 1
         d, Hi, pg, maxStep = get_search_direction(u0, g0, Hi, HiPrev, c)
-        if !(norm(pg, Inf) < gradTol) && !isempty(d)
+        if !(norm(pg, Inf) < grad_tol) && !isempty(d)
             # Perform line-search
             tmp, flag, fixed = check_feasible(u0 + d, c, enforce_feasible)
             if !flag && fixed
@@ -146,7 +146,7 @@ function unit_box_bfgs(
                         Hi = V' * Hi * V + r * (du * du')
                     end
                 else
-                    Jutul.jutul_message("Message", "Hessian not updated during iteration $it", color = :red)
+                    print_msg("Hessian not updated during iteration $it", :red)
                 end
             end
             # Update history
@@ -169,7 +169,7 @@ function unit_box_bfgs(
             )
         end
         # Check stopping criteria
-        success = (it >= max_it) || (norm(pg, Inf) < gradTol) ||
+        success = (it >= max_it) || (norm(pg, Inf) < grad_tol) ||
             (abs(v - v0) < obj_change_tol) || (abs((v - v0) / v) < obj_change_tol_rel)
         u0 = deepcopy(u)
         v0 = deepcopy(v)
@@ -263,7 +263,7 @@ function get_search_direction(u0, g0, Hi, HiPrev, c)
         sgn, = classify_constraints(c.i.A, c.i.b, u0, d)
         maxStep, ix = find_next_constraint(c.i.A, c.i.b, u0, d, sgn .<= 0)
         if maxStep < 0.95
-            Jutul.jutul_message("Warning", "Problematic constraint handling, relative step length: $maxStep", color = :yellow)
+            print_msg("Problematic constraint handling, relative step length: $maxStep", :yellow)
         end
         if maxStep < 1
             d, maxStep = maxStep * d, 1
@@ -281,13 +281,13 @@ function get_search_direction(u0, g0, Hi, HiPrev, c)
                 str = "Non-inceasing search direction"
             end
             if cnt == 1
-                Jutul.jutul_message(str, "trying previous Hessian approximation.", color = :yellow)
+                print_msg("$str trying previous Hessian approximation.", :yellow)
             end
             if cnt == 2
-                Jutul.jutul_message(str, "trying to reset Hessian to identity.", color = :yellow)
+                print_msg("$str trying to reset Hessian to identity.", :yellow)
             end
             if cnt == 3
-                Jutul.jutul_message("Exiting", str, color = :yellow)
+                print_msg("Exiting: $str", :yellow)
                 d, maxStep = [], []
             end
         end
@@ -420,12 +420,12 @@ function check_feasible(u, c, enforce = false; nm = :Vector_u)
         end
     end
     if It == max_it
-        Jutul.jutul_message("Warning", "Failed attempt to fix feasibility of $nm, continuing anyway ...", color = :yellow)
+        print_msg("Failed attempt to fix feasibility of $nm, continuing anyway ...", :yellow)
     elseif !flag
         if !enforce
-            Jutul.jutul_message("Warning", "$nm is not feasible within tollerance. Consider running with option: enforce_feasible = true", color = :yellow)
+            print_msg("$nm is not feasible within tollerance. Consider running with option: enforce_feasible = true", :yellow)
         else
-            Jutul.jutul_message("Warning", "$nm was not feasible, fixed feasibility in $(It - 1) iteration(s)", color = :yellow)
+            print_msg("$nm was not feasible, fixed feasibility in $(It - 1) iteration(s)", :yellow)
         end
     end
     return (u, flag, fixed)
@@ -455,7 +455,7 @@ function expand_Q(Q, v)
     if norm(v) / n0 > sqrt(eps())
         Q = hcat(Q, v / norm(v))
     else
-        Jutul.jutul_message("Warning", "Newly active constraint is linear combination of other active constraints ??!!", color = :yellow)
+        print_msg("Newly active constraint is linear combination of other active constraints ??!!", :yellow)
     end
     return Array(Q)
 end
@@ -541,7 +541,7 @@ function line_search(
                     (p.v < p0.v) && # the step yielded an improvement
                     (p.dv < 0)  # continuing further would improve (but not allowed)
                 line_search_done, flag = true, -1
-                jutul_message("Message", "Line search at max step size, Wolfe conditions not satisfied for this step", color = :red)
+                print_msg("Line search at max step size, Wolfe conditions not satisfied for this step", :red)
             else
                 # logic for refining/expanding interval of interest [p1 p2]
                 if p.a > p2.a
@@ -574,7 +574,7 @@ function line_search(
                     a = min(a, p2.a - sgf * (p2.a - p1.a))
                 else
                     a = (p1.a + p2.a) / 2
-                    jutul_message("Message", "Cubic interpolation failed, cutting interval in half ...", color = :red)
+                    print_msg("Cubic interpolation failed, cutting interval in half ...", :red)
                 end
             end
         end
@@ -582,7 +582,7 @@ function line_search(
     # Check if line search succeeded
     if ! line_search_done
         flag = -2
-        jutul_message("Message", "Line search unable to succeed in $max_it iterations ...", color = :red)
+        print_msg("Line search unable to succeed in $max_it iterations ...", :red)
         # Although line search did not succeed in max_it iterations, we ensure
         # to return the greater of p1 and p2's objective value none the less.
         if p1.v < p2.v
@@ -633,4 +633,8 @@ function argmax_cubic(p1::NamedTuple, p2::NamedTuple)
         end
     end
     return xe + shift
+end
+
+function print_msg(msg, color)
+    Jutul.jutul_message("LBFGS", msg, color = color)
 end
