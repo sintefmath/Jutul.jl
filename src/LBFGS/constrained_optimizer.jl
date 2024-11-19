@@ -8,10 +8,10 @@ Iterative line search optimization using BFGS intended for scaled problems where
 This is a port of the MRST function `unitBoxBFGS`, relicensed under MIT.
 
 # Arguments
-- `u0`: Initial guess vector of size n×1 with 0 ≤ u0 ≤ 1, must be feasible with respect to additional constraints
+- `u0`: Initial guess vector of length n with 0 ≤ u0 ≤ 1, must be feasible with respect to additional constraints
 - `f`: Function handle that returns tuple `(v, g)` where:
     * `v`: objective value
-    * `g`: objective gradient vector of size n×1
+    * `g`: objective gradient vector of length n
 
 # Keywords
 - `maximize::Bool=true`: Set to false to minimize objective
