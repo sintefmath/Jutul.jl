@@ -14,7 +14,7 @@ This is a port of the MRST function `unitBoxBFGS`, relicensed under MIT.
     * `g`: objective gradient vector of length n
 
 # Keywords
-- `maximize::Bool=true`: Set to false to minimize objective
+- `maximize::Bool=false`: Set to true to maximize objective
 - `step_init::Float64=NaN`: Initial step (gradient scaling). If NaN, uses `max_initial_update/max(|initial gradient|)`
 - `time_limit::Float64=Inf`: Time limit for optimizer.
 - `max_initial_update::Float64=0.05`: Maximum initial update step
@@ -35,7 +35,7 @@ This is a port of the MRST function `unitBoxBFGS`, relicensed under MIT.
 - `use_bfgs::Bool=true`: Use BFGS (false for pure gradient search)
 - `limited_memory::Bool=true`: Use L-BFGS instead of full Hessian approximations
 - `lbfgs_num::Int=5`: Number of vector-pairs stored for L-BFGS
-- `lbfgs_strategy::String="dynamic"`: Strategy for L-BFGS ("static" or "dynamic")
+- `lbfgs_strategy::Symbol=:dynamic`: Strategy for L-BFGS (:static or :dynamic)
 
 ## Linear Constraints
 - `lin_eq::NamedTuple{(:A,:b)}`: Linear equality constraints A*u=b
@@ -61,7 +61,7 @@ This is a port of the MRST function `unitBoxBFGS`, relicensed under MIT.
 """
 function unit_box_bfgs(
         u0, f;
-        maximize = true,
+        maximize = false,
         step_init = NaN,
         max_initial_update = 0.05,
         grad_tol = 1.0e-3,
@@ -113,7 +113,7 @@ function unit_box_bfgs(
         # Setup struct for gathering optimization history
         history = update_history!([], objSign * v0, u0, norm(g0), NaN, NaN, NaN, Hi, output_hessian = output_hessian)
     else
-
+        error("Warm-start not implemented yet")
     end
     v, u = deepcopy(v0), deepcopy(u0)
     if print > 0
