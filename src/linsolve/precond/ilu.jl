@@ -34,17 +34,21 @@ function update_preconditioner!(ilu::ILUZeroPreconditioner, A, b, context, execu
     end
 end
 
-function update_preconditioner!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, context::ParallelCSRContext, executor)
+function update_preconditioner!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, context, executor)
     if isnothing(ilu.factor)
         mb = A.minbatch
         max_t = max(size(A, 1) ÷ mb, 1)
-        nt = min(nthreads(context), max_t)
+        nt = min(A.nthreads, max_t)
         if nt == 1
             @debug "Setting up serial ILU(0)-CSR"
             F = ilu0_csr(A)
         else
             @debug "Setting up parallel ILU(0)-CSR with $(nthreads(td)) threads"
-            part = context.partitioner
+            if context isa ParallelCSRContext
+                part = context.partitioner
+            else
+                part = MetisPartitioner()
+            end
             lookup = generate_lookup(part, A, nt)
             F = ilu0_csr(A, lookup)
         end
