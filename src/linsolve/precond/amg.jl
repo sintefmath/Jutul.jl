@@ -21,11 +21,6 @@ end
 matrix_for_amg(A) = A
 matrix_for_amg(A::StaticSparsityMatrixCSR) = copy(A.At')
 
-#function apply!(x, prec::AMGPreconditioner, y, float_t, sys, args...)
-#    apply!(x,prec,y)
-#end
-
-
 function update_preconditioner!(amg::AMGPreconditioner{flavor}, A, b, context, executor) where flavor
     kw = amg.method_kwarg
     A_amg = matrix_for_amg(A)

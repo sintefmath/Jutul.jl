@@ -56,7 +56,7 @@ function Base.show(io::IO, krylov::GenericKrylov)
     print(io, "Generic Krylov using $(krylov.solver) (ϵₐ=$atol, ϵ=$rtol) with prec = $(typeof(krylov.preconditioner))")
 end
 
-function preconditioner(krylov::GenericKrylov, sys, context, model, storage, recorder, side, arg...)
+function preconditioner(krylov::AbstractKrylov, sys, context, model, storage, recorder, side, arg...)
     M = krylov.preconditioner
     Ft = float_type(context)
     if isnothing(M)
