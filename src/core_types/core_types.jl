@@ -965,7 +965,17 @@ struct MultiModel{label, T, CT, G, C, GL} <: AbstractMultiModel{label}
     group_lookup::GL
 end
 
-function MultiModel(models, label::Union{Nothing, Symbol} = nothing; cross_terms = Vector{CrossTermPair}(), groups = nothing, context = nothing, reduction = missing, specialize = false, specialize_ad = false)
+function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
+        cross_terms = Vector{CrossTermPair}(),
+        groups = nothing,
+        context = nothing,
+        reduction = missing,
+        specialize = false,
+        specialize_ad = false
+    )
+    if isnothing(context)
+        context = models[first(keys(models))].context
+    end
     group_lookup = Dict{Symbol, Int}()
     if isnothing(groups)
         num_groups = 1
