@@ -1,12 +1,10 @@
 function update_preconditioner!(preconditioner::Nothing, arg...)
     # Do nothing.
 end
-function update_preconditioner!(preconditioner, lsys, context, model, storage, recorder, executor)
+function update_preconditioner!(preconditioner::JutulPreconditioner, lsys::JutulLinearSystem, context, model, storage, recorder, executor)
     J = jacobian(lsys)
     r = residual(lsys)
-    #ctx = linear_system_context(model, lsys)
-    ctx = context
-    update_preconditioner!(preconditioner, J, r, ctx, executor)
+    update_preconditioner!(preconditioner, J, r, context, executor)
 end
 
 function partial_update_preconditioner!(p, A, b, context, executor)
@@ -20,11 +18,11 @@ end
 is_left_preconditioner(::JutulPreconditioner) = true
 is_right_preconditioner(::JutulPreconditioner) = false
 
-function linear_operator(precond::JutulPreconditioner, side::Symbol = :left, float_t = Float64, args...)
+function linear_operator(precond::JutulPreconditioner, side::Symbol = :left, float_t = Float64)
     n = operator_nrows(precond)
     function precond_apply!(res, x, α, β::T) where T
         if β == zero(T)
-            apply!(res, precond, x, float_t,args...)
+            apply!(res, precond, x, float_t)
             if α != one(T)
                 lmul!(α, res)
             end
