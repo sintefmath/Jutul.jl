@@ -48,8 +48,10 @@ function update_preconditioner!(tp::TrivialPreconditioner, lsys, model, storage,
     b = residual(lsys)
     tp.dim = size(A).*length(b[1])
 end
+
 export linear_operator
-function linear_operator(id::TrivialPreconditioner, ::Symbol, args...)
+
+function linear_operator(id::TrivialPreconditioner, args...)
     return opEye(id.dim...)
 end
 

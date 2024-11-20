@@ -18,7 +18,11 @@ end
 is_left_preconditioner(::JutulPreconditioner) = true
 is_right_preconditioner(::JutulPreconditioner) = false
 
-function linear_operator(precond::JutulPreconditioner, side::Symbol = :left, float_t = Float64)
+function linear_operator(precond::JutulPreconditioner)
+    return linear_operator(precond, Float64, nothing, nothing, nothing, nothing, nothing)
+end
+
+function linear_operator(precond::JutulPreconditioner, float_t, sys, context, model, storage, recorder)
     n = operator_nrows(precond)
     function precond_apply!(res, x, α, β::T) where T
         if β == zero(T)
@@ -35,13 +39,7 @@ function linear_operator(precond::JutulPreconditioner, side::Symbol = :left, flo
 end
 
 #nead to be spesilized on type not all JutulPreconditioners has get_factor
-function apply!(x, p::JutulPreconditioner, y, arg...)
+function apply!(x, p::JutulPreconditioner, y)
     factor = get_factorization(p)
-    if is_left_preconditioner(p)
-        ldiv!(x, factor, y)
-    elseif is_right_preconditioner(p)
-        error("Not supported.")
-    else
-        error("Neither left or right preconditioner?")
-    end
+    ldiv!(x, factor, y)
 end

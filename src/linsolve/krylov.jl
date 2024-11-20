@@ -56,13 +56,13 @@ function Base.show(io::IO, krylov::GenericKrylov)
     print(io, "Generic Krylov using $(krylov.solver) (ϵₐ=$atol, ϵ=$rtol) with prec = $(typeof(krylov.preconditioner))")
 end
 
-function preconditioner(krylov::AbstractKrylov, sys, context, model, storage, recorder, side, arg...)
+function preconditioner(krylov::AbstractKrylov, sys, context, model, storage, recorder)
     M = krylov.preconditioner
     Ft = float_type(context)
     if isnothing(M)
         op = I
     else
-        linop = linear_operator(M, side, Ft, sys, context, model, storage, recorder, arg...)
+        linop = linear_operator(M, Ft, sys, context, model, storage, recorder)
         op = PrecondWrapper(linop)
     end
     return op
@@ -95,8 +95,7 @@ function linear_solve!(sys::LSystem,
     t_prep = @elapsed @tic "prepare" prepare_linear_solve!(sys)
     op = linear_operator(sys)
     t_prec = @elapsed @tic "precond" update_preconditioner!(prec, sys, context, model, storage, recorder, executor)
-    prec_op = preconditioner(krylov, sys, context, model, storage, recorder, :left)
-    # R = preconditioner(krylov, sys, model, storage, recorder, :right, Ft)
+    prec_op = preconditioner(krylov, sys, context, model, storage, recorder)
     v = Int64(cfg.verbose)
     max_it = cfg.max_iterations
     min_it = cfg.min_iterations

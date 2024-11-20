@@ -55,12 +55,12 @@ function update_preconditioner!(ilu::ILUZeroPreconditioner, A::StaticSparsityMat
     end
 end
 
-function apply!(x, ilu::ILUZeroPreconditioner, y, type, arg...)
+function apply!(x, ilu::ILUZeroPreconditioner, y)
     factor = get_factorization(ilu)
-    ilu_apply!(x, factor, y, arg...)
+    ilu_apply!(x, factor, y)
 end
 
-function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}, args...) where {F<:Real}
+function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}) where {F<:Real}
     T = eltype(f)
     if T == Float64
         ldiv!(x, f, y)
@@ -78,11 +78,11 @@ function ilu_apply!(x, f::AbstractILUFactorization, y)
     ldiv!(x, f, y)
 end
 
-function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}, args...) where {F<:Real}
+function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}) where {F<:Real}
     ldiv!(x, f, y)
 end
 
-function ilu_apply!(x, ilu::ILU0Precon, y,args...)
+function ilu_apply!(x, ilu::ILU0Precon, y)
     T = eltype(ilu.l_nzval)
     N = size(T, 1)
     T = eltype(T)
