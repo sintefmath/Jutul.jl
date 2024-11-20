@@ -26,7 +26,7 @@ function linear_operator(precond::JutulPreconditioner, float_t, sys, context, mo
     n = operator_nrows(precond)
     function precond_apply!(res, x, α, β::T) where T
         if β == zero(T)
-            apply!(res, precond, x, float_t)
+            apply!(res, precond, x)
             if α != one(T)
                 lmul!(α, res)
             end
