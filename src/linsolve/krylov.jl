@@ -68,15 +68,10 @@ function preconditioner(krylov::AbstractKrylov, sys, context, model, storage, re
     return op
 end
 
-# export update!
-# function update_preconditioner!(prec, sys, model, storage, recorder)
-#     update!(prec, sys, model, storage, recorder)
-# end
-
 function linear_solve!(sys::LSystem,
                 krylov::GenericKrylov,
-                context,
-                model,
+                context::JutulContext,
+                model::JutulModel,
                 storage = nothing,
                 dt = nothing,
                 recorder = ProgressRecorder(),
@@ -184,6 +179,16 @@ function linear_solve!(sys::LSystem,
         t_prec_count = 0
     end
     return linear_solve_return(solved, n, stats, precond = t_prec_op, precond_count = t_prec_count, prepare = t_prec + t_prep)
+end
+
+function linear_solve!(
+        sys::LSystem,
+        krylov::GenericKrylov,
+        model::JutulModel,
+        arg...;
+        kwarg...
+    )
+    return linear_solve!(sys, krylov, model.context, model, arg...; kwarg...)
 end
 
 function krylov_scale_system!(sys, krylov::GenericKrylov, dt)
