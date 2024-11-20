@@ -67,7 +67,8 @@ function Jutul.parray_update_preconditioners!(sim, preconditioner_base, precondi
         model = Jutul.get_simulator_model(sim)
         storage = Jutul.get_simulator_storage(sim)
         sys = storage.LinearizedSystem
-        Jutul.update_preconditioner!(prec, sys, model, storage, recorder, sim.executor)
+        ctx = model.context
+        Jutul.update_preconditioner!(prec, sys, ctx, model, storage, recorder, sim.executor)
         prec
     end
     return (preconditioner_base, preconditioners)

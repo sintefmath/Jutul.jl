@@ -29,11 +29,19 @@ function operator_nrows(lup::LUPreconditioner)
     return size(f.L, 1)
 end
 
+#function operator_nrows(prec::TrivialPreconditioner)
+#    return prec.dim[1]
+#end
 # LU factor as precond for wells?
 
 """
 Trivial / identity preconditioner with size for use in subsystems.
 """
+function apply!(x,tp::TrivialPreconditioner,r, args...)
+    x = copy(r)
+end
+
+
 # Trivial precond
 function update_preconditioner!(tp::TrivialPreconditioner, lsys, model, storage, recorder, executor)
     A = jacobian(lsys)
@@ -41,7 +49,9 @@ function update_preconditioner!(tp::TrivialPreconditioner, lsys, model, storage,
     tp.dim = size(A).*length(b[1])
 end
 
-function linear_operator(id::TrivialPreconditioner, ::Symbol)
+export linear_operator
+
+function linear_operator(id::TrivialPreconditioner, args...)
     return opEye(id.dim...)
 end
 
