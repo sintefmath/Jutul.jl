@@ -331,9 +331,13 @@ module WENO
 
     function evaluate_gradient(grad::NTuple{D, SVector{N, R}}, distance::SVector{D, R}, X::NTuple{N, T}) where {D, N, R, T}
         ∇g = zero(T)
-        for i in 1:D
+        @inbounds for i in 1:D
+            g = grad[i]
             Δ_i = distance[i]
-            ∇g_i = sum(grad[i].*X)
+            ∇g_i = zero(T)
+            @inbounds for j in 1:N
+                ∇g_i += g[j]*X[j]
+            end
             ∇g += ∇g_i*Δ_i
         end
         return ∇g
