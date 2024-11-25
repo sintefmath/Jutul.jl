@@ -27,7 +27,11 @@ module WENO
         return (weno.left.cell, weno.right.cell)
     end
 
-    function weno_upwind(upw::WENOFaceDiscretization, X::AbstractArray, q)
+    function weno_upwind(upw::WENOFaceDiscretization, X::AbstractVector, q)
+        return weno_upwind(upw, c -> X[c], q)
+    end
+
+    function weno_upwind(upw::WENOFaceDiscretization, X, q)
         flag = q < zero(q)
         if flag
             up = upw.right
@@ -36,7 +40,7 @@ module WENO
             up = upw.left
             other = upw.right.cell
         end
-        return interpolate_weno(up, other, X, 1, upw.do_clamp)
+        return interpolate_weno(up, other, X, upw.do_clamp)
     end
 
     function weno_discretize(domain::DataDomain)
@@ -288,20 +292,19 @@ module WENO
         return map(t -> get_gradient(t, D), triplets)
     end
 
-    function interpolate_weno(upw::WENOHalfFaceDiscretization, other_cell, U, ph, do_clamp)
-        getval(x::Vector, i) = x[i]
-        getval(x::Matrix, i) = x[ph, i]
+    function interpolate_weno(upw::WENOHalfFaceDiscretization, other_cell, U, do_clamp)
         cell = upw.cell
+        u_c = U(cell)
+
         distance = upw.distance
-        T = eltype(U)
+        T = typeof(u_c)
         ϵ = 1e-10
 
-        u_c = getval(U, cell)
         Δu = zero(T)
         β_tot = zero(T)
         for i in eachindex(upw.gradient)
             g = upw.gradient[i]
-            u_cells = map(c -> getval(U, c), g.cells)
+            u_cells = map(U, g.cells)
             Ω_i = g.area
             ∇u = evaluate_gradient(g.grad, distance, u_cells)
 
@@ -315,7 +318,7 @@ module WENO
         end
         u_f = u_c + Δu/β_tot
         if do_clamp
-            u_other = getval(U, other_cell)
+            u_other = U(other_cell)
             if u_c > u_other
                 lo, hi = u_other, u_c
             else
