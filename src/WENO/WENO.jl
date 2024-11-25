@@ -6,7 +6,7 @@ module WENO
         distance::SVector{D, R}
         gradient::Vector{
             @NamedTuple{
-                grad::NTuple{D, SVector{N, R}},
+                grad::SVector{N, R},
                 area::R,
                 cells::NTuple{N, Int64}
             }
@@ -76,11 +76,17 @@ module WENO
     end
 
     function weno_discretize_half_face(cell, wenodisc, fc)
-        function half_face_impl(planar_set, grad)
+        function half_face_impl(planar_set, grad, V)
             cells = map(i -> wenodisc.stencil[i].cell, planar_set)
             points = map(i -> wenodisc.stencil[i].point, planar_set)
+            # Now that we know the delta to the face centroid, we can collapse
+            # the gradient basis to a single basis for the set of support cells.
+            new_grad = grad[1]*V[1]
+            for i in 2:length(grad)
+                new_grad += grad[i]*V[i]
+            end
             area = area_from_points(points)
-            return (grad = grad, area = area, cells = cells)
+            return (grad = new_grad, area = area, cells = cells)
         end
         V = wenodisc.S*(fc - wenodisc.center)
         # For each planar set, we need to store:
@@ -89,7 +95,7 @@ module WENO
         # - List of cells
         # ∇u = dot(B1, [u1, u2, u3]) + dot(B2, [u1, u2, u3])
         grad_disc = map(
-            (planar_set, grad) -> half_face_impl(planar_set, grad),
+            (planar_set, grad) -> half_face_impl(planar_set, grad, V),
             wenodisc.planar_set,
             wenodisc.gradients
         )
@@ -311,7 +317,6 @@ module WENO
             end
         end
 
-        distance = upw.distance
         T = typeof(u_c)
         ϵ = 1e-10
 
@@ -321,7 +326,7 @@ module WENO
             g = upw.gradient[i]
             u_cells = map(U, g.cells)
             Ω_i = g.area
-            ∇u = evaluate_gradient(g.grad, distance, u_cells)
+            ∇u = evaluate_gradient(g.grad, u_cells)
             # Assume linear weights are areas
             γ_i = Ω_i
             # Find (unscaled) weight and add to total delta
@@ -342,17 +347,8 @@ module WENO
         return u_f
     end
 
-    function evaluate_gradient(grad::NTuple{D, SVector{N, R}}, distance::SVector{D, R}, X::NTuple{N, T}) where {D, N, R, T}
-        ∇g = zero(T)
-        @inbounds for i in 1:D
-            g = grad[i]
-            Δ_i = distance[i]
-            ∇g_i = zero(T)
-            @inbounds for j in 1:N
-                ∇g_i += g[j]*X[j]
-            end
-            ∇g += ∇g_i*Δ_i
-        end
+    function evaluate_gradient(grad::SVector{N, R}, X::NTuple{N, T}) where {D, N, R, T}
+        ∇g = sum(grad.*X)
         return ∇g
     end
 end
