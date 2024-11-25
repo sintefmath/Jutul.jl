@@ -309,6 +309,10 @@ module WENO
     function interpolate_weno(upw::WENOHalfFaceDiscretization, other_cell, U, do_clamp, threshold, ϵ)
         cell = upw.cell
         u_c = U(cell)
+        if u_c isa Jutul.ST.ADval
+            # Early return for sparsity tracing
+            return weno_sparsity_sum(upw.gradient, U, u_c)
+        end
         u_other = U(other_cell)
         if threshold > 0.0
             val_u_c = value(u_c)
@@ -346,6 +350,16 @@ module WENO
             u_f = clamp(u_f, lo, hi)
         end
         return u_f
+    end
+
+    function weno_sparsity_sum(gradient, U, u_c::Jutul.ST.ADval)
+        for i in eachindex(gradient)
+            g = gradient[i]
+            for c in g.cells
+                u_c += U(c)
+            end
+        end
+        return u_c
     end
 
     function evaluate_gradient(grad::SVector{N, R}, cells, u_c, U) where {N, R}
