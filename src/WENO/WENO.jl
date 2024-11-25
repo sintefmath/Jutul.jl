@@ -18,14 +18,16 @@ module WENO
         right::WENOHalfFaceDiscretization{D, N, R}
         do_clamp::Bool
         threshold::Float64
+        epsilon::Float64
         function WENOFaceDiscretization(
                 l::WENOHalfFaceDiscretization{D, N, R},
                 r::WENOHalfFaceDiscretization{D, N, R};
                 do_clamp = true,
-                threshold = 0.0
+                threshold = 0.0,
+                epsilon = 1e-10
             ) where {D, N, R}
             @assert D == N-1
-            return new{D, N, R}(l, r, do_clamp, threshold)
+            return new{D, N, R}(l, r, do_clamp, threshold, epsilon)
         end
     end
 
@@ -46,7 +48,7 @@ module WENO
             up = upw.left
             other = upw.right.cell
         end
-        return interpolate_weno(up, other, X, upw.do_clamp, upw.threshold)
+        return interpolate_weno(up, other, X, upw.do_clamp, upw.threshold, upw.epsilon)
     end
 
     function weno_discretize(domain::DataDomain)
@@ -304,7 +306,7 @@ module WENO
         return map(t -> get_gradient(t, D), triplets)
     end
 
-    function interpolate_weno(upw::WENOHalfFaceDiscretization, other_cell, U, do_clamp, threshold)
+    function interpolate_weno(upw::WENOHalfFaceDiscretization, other_cell, U, do_clamp, threshold, ϵ)
         cell = upw.cell
         u_c = U(cell)
         u_other = U(other_cell)
@@ -316,17 +318,16 @@ module WENO
                 return u_c
             end
         end
-
         T = typeof(u_c)
-        ϵ = 1e-10
-
         Δu = zero(T)
         β_tot = zero(T)
         for i in eachindex(upw.gradient)
             g = upw.gradient[i]
-            u_cells = map(U, g.cells)
             Ω_i = g.area
-            ∇u = evaluate_gradient(g.grad, u_cells)
+            # This assert should hold since the self cell is always first
+            # Disabled because @assert can't be compile time toggled in Julia
+            # @assert g.cells[1] == cell
+            ∇u = evaluate_gradient(g.grad, g.cells, u_c, U)
             # Assume linear weights are areas
             γ_i = Ω_i
             # Find (unscaled) weight and add to total delta
@@ -347,8 +348,12 @@ module WENO
         return u_f
     end
 
-    function evaluate_gradient(grad::SVector{N, R}, X::NTuple{N, T}) where {D, N, R, T}
-        ∇g = sum(grad.*X)
+    function evaluate_gradient(grad::SVector{N, R}, cells, u_c, U) where {N, R}
+        ∇g = grad[1]*u_c
+        @inbounds for i in 2:N
+            c = cells[i]
+            ∇g += grad[i]*U(c)
+        end
         return ∇g
     end
 end
