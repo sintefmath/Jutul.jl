@@ -170,13 +170,19 @@ module WENO
             else
                 other = l
             end
-            next = new_neighbor(cc[other], other, face)
-            push!(out, next)
+            ccent = cc[other]
+            if all(isfinite, ccent)
+                next = new_neighbor(ccent, other, face)
+                push!(out, next)
+            end
         end
         # Boundary faces
         for bface in g.boundary_faces.cells_to_faces[c]
-            next = new_neighbor(bc[bface], c, bface, true)
-            push!(out, next)
+            bcent = bc[bface]
+            if all(isfinite, bcent)
+                next = new_neighbor(bcent, c, bface, true)
+                push!(out, next)
+            end
         end
         pts = map(x -> x[:point], out)
         S = point_set_transformation_basis(pts)
@@ -189,13 +195,24 @@ module WENO
 
     function point_set_transformation_basis(pts::Vector{SVector{griddim, Float64}}) where griddim
         M = hcat(pts...)'
-        UDV = svd(M)
-        U = UDV.U
-        D = UDV.S
-        Vt = UDV.Vt
-        Dbar = Diagonal(D[1:griddim])
-        S = Dbar*inv(Vt')
-        return S
+        try
+            UDV = svd(M)
+            U = UDV.U
+            D = UDV.S
+            Vt = UDV.Vt
+            Dbar = Diagonal(D[1:griddim])
+            return Dbar*inv(Vt')
+        catch
+            @warn "Failure to decompose point set, using identity" M
+            if griddim == 1
+                return @SMatrix [1.0]
+            elseif griddim == 2
+                return @SMatrix [1.0 0.0; 0.0 1.0]
+            else
+                @assert griddim == 3
+                return @SMatrix [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0]
+            end
+        end
     end
 
     function cell_to_node_indices(g::UnstructuredMesh, c)
