@@ -17,9 +17,15 @@ module WENO
         left::WENOHalfFaceDiscretization{D, N, R}
         right::WENOHalfFaceDiscretization{D, N, R}
         do_clamp::Bool
-        function WENOFaceDiscretization(l::WENOHalfFaceDiscretization{D, N, R}, r::WENOHalfFaceDiscretization{D, N, R}; do_clamp = true) where {D, N, R}
+        threshold::Float64
+        function WENOFaceDiscretization(
+                l::WENOHalfFaceDiscretization{D, N, R},
+                r::WENOHalfFaceDiscretization{D, N, R};
+                do_clamp = true,
+                threshold = 0.0
+            ) where {D, N, R}
             @assert D == N-1
-            return new{D, N, R}(l, r, do_clamp)
+            return new{D, N, R}(l, r, do_clamp, threshold)
         end
     end
 
@@ -40,7 +46,7 @@ module WENO
             up = upw.left
             other = upw.right.cell
         end
-        return interpolate_weno(up, other, X, upw.do_clamp)
+        return interpolate_weno(up, other, X, upw.do_clamp, upw.threshold)
     end
 
     function weno_discretize(domain::DataDomain)
@@ -292,9 +298,18 @@ module WENO
         return map(t -> get_gradient(t, D), triplets)
     end
 
-    function interpolate_weno(upw::WENOHalfFaceDiscretization, other_cell, U, do_clamp)
+    function interpolate_weno(upw::WENOHalfFaceDiscretization, other_cell, U, do_clamp, threshold)
         cell = upw.cell
         u_c = U(cell)
+        u_other = U(other_cell)
+        if threshold > 0.0
+            val_u_c = value(u_c)
+            val_u_other = value(u_other)
+            scale = max(abs(val_u_c), abs(val_u_other), 1e-10)
+            if abs(val_u_c - val_u_other)/scale < threshold
+                return u_c
+            end
+        end
 
         distance = upw.distance
         T = typeof(u_c)
@@ -307,7 +322,6 @@ module WENO
             u_cells = map(U, g.cells)
             Ω_i = g.area
             ∇u = evaluate_gradient(g.grad, distance, u_cells)
-
             # Assume linear weights are areas
             γ_i = Ω_i
             # Find (unscaled) weight and add to total delta
@@ -318,7 +332,6 @@ module WENO
         end
         u_f = u_c + Δu/β_tot
         if do_clamp
-            u_other = U(other_cell)
             if u_c > u_other
                 lo, hi = u_other, u_c
             else
