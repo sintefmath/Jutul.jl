@@ -64,6 +64,7 @@ function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawFiniteVo
     for c in 1:nc_active
         push!(IJ, (c, c))
     end
+    disc = e.flow_discretization
     N = e_s.neighbors
     for face in eachindex(N)
         lc, rc = N[face]
@@ -71,6 +72,12 @@ function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawFiniteVo
             cell = vars[fpos]
             push!(IJ, (lc, cell))
             push!(IJ, (rc, cell))
+        end
+        for facedisc in (disc.kgrad[face], disc.upwind[face])
+            for c in discretization_stencil(facedisc, entity)
+                push!(IJ, (lc, c))
+                push!(IJ, (rc, c))
+            end
         end
     end
     IJ = unique!(IJ)

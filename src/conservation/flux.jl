@@ -46,6 +46,10 @@ function cell_pair(spu::SPU)
     return (spu.left, spu.right)
 end
 
+function discretization_stencil(d::Union{TPFA, SPU}, ::Cells)
+    return cell_pair(d)
+end
+
 export PotentialFlow
 struct PotentialFlow{AD, K, U, HF} <: FlowDiscretization
     kgrad::K
