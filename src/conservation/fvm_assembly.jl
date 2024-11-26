@@ -77,6 +77,10 @@ function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawFiniteVo
             for c in discretization_stencil(facedisc, entity)
                 push!(IJ, (lc, c))
                 push!(IJ, (rc, c))
+                # Assume symmetry - bit of a hack but makes life easier when
+                # setting up linear solvers.
+                push!(IJ, (c, lc))
+                push!(IJ, (c, rc))
             end
         end
     end

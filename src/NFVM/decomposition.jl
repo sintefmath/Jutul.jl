@@ -128,6 +128,18 @@ function NFVMLinearDiscretization(decomp; left, right)
     return NFVMLinearDiscretization(left, right, t_l, t_r, t_mpfa)
 end
 
+function Jutul.discretization_stencil(d::NFVMLinearDiscretization, ::Cells)
+    (; left, right, T_left, T_right) = d
+    t_mpfa = d.mpfa
+
+    cells = Int[left, right]
+    for (c, trans) in t_mpfa
+        push!(cells, c)
+    end
+    unique!(cells)
+    return cells
+end
+
 function Jutul.subdiscretization(d::NFVMLinearDiscretization, subg, mapper::Jutul.FiniteVolumeGlobalMap, face)
     (; left, right, T_left, T_right) = d
     t_mpfa = d.mpfa

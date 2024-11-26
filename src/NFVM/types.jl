@@ -35,6 +35,12 @@ end
 Jutul.cell_pair(x::NFVMNonLinearDiscretization) = Jutul.cell_pair(x.ft_left)
 Jutul.cell_pair(x::NFVMLinearDiscretization) = (x.left, x.right)
 
+function Jutul.discretization_stencil(d::NFVMNonLinearDiscretization, e)
+    l = Jutul.discretization_stencil(d.ft_left, e)
+    r = Jutul.discretization_stencil(d.ft_right, e)
+    return unique!(vcat(l, r))
+end
+
 function Base.show(io::IO, ft::NFVMNonLinearDiscretization{T}) where T
     l, r = cell_pair(ft)
     print(io, "NFVMNonLinearDiscretization{$T} $(l)→$(r)")
