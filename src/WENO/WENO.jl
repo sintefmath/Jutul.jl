@@ -89,7 +89,7 @@ module WENO
         return WENOFaceDiscretization(ldisc, rdisc, do_clamp = do_clamp)
     end
 
-    function weno_discretize_half_face(cell, wenodisc, fc)
+    function weno_discretize_half_face(cell, wenodisc, fc::SVector{D, R}) where {D, R}
         function half_face_impl(planar_set, grad, V)
             cells = map(i -> wenodisc.stencil[i].cell, planar_set)
             points = map(i -> wenodisc.stencil[i].point, planar_set)
@@ -99,7 +99,11 @@ module WENO
             for i in 2:length(grad)
                 new_grad += grad[i]*V[i]
             end
-            area = area_from_points(points)
+            if all(isfinite, new_grad)
+                area = area_from_points(points)
+            else
+                area = Inf
+            end
             return (grad = new_grad, area = area, cells = cells)
         end
         V = wenodisc.S*(fc - wenodisc.center)
@@ -113,6 +117,24 @@ module WENO
             wenodisc.planar_set,
             wenodisc.gradients
         )
+        filter!(
+            x -> x.area > 1e-10 && isfinite(x.area),
+            grad_disc
+        )
+        if length(grad_disc) == 0
+            jutul_message("WENO", "No valid gradients found. Falling back to single-point-upwind", color = :yellow)
+            if D == 2
+                cells = (cell, cell, cell)
+                fake_grad = SVector{3, R}(0.0, 0.0, 0.0)
+            else
+                @assert D == 3
+                cells = (cell, cell, cell, cell)
+                fake_grad = SVector{4, R}(0.0, 0.0, 0.0, 0.0)
+            end
+            grad_disc = [
+                (grad = fake_grad, area = 1.0, cells = cells)
+            ]
+        end
         return WENOHalfFaceDiscretization(cell, V, vec(grad_disc))
     end
 
@@ -308,6 +330,7 @@ module WENO
                     1.0 1.0 1.0
                 ]
                 invC = inv(C)
+                bad = !all(isfinite, invC)
                 B1 = invC[:, 1]
                 B2 = invC[:, 2]
                 return (B1, B2)
@@ -324,10 +347,14 @@ module WENO
                     1.0 1.0 1.0 1.0
                 ]
                 invC = inv(C)
+                bad = !all(isfinite, invC)
                 B1 = invC[:, 1]
                 B2 = invC[:, 2]
                 B3 = invC[:, 3]
                 return (B1, B2, B3)
+            end
+            if bad
+                error("Failure in basis inversion: C = $C")
             end
         end
         center = decomp.center
