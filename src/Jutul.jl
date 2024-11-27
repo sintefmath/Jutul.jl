@@ -107,6 +107,9 @@ module Jutul
     # Nonlinear finite-volume discretizations
     include("NFVM/NFVM.jl")
 
+    # Weighted essentially non-oscillatory (WENO) schemes
+    include("WENO/WENO.jl")
+
     # LBFGS suitable for PDE optimization
     include("LBFGS/LBFGS.jl")
     using .LBFGS
