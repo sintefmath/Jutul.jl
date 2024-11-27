@@ -22,7 +22,7 @@ module WENO
         function WENOFaceDiscretization(
                 l::WENOHalfFaceDiscretization{D, N, R},
                 r::WENOHalfFaceDiscretization{D, N, R};
-                do_clamp = true,
+                do_clamp = false,
                 threshold = 0.0,
                 epsilon = 1e-10
             ) where {D, N, R}
@@ -63,7 +63,7 @@ module WENO
         return interpolate_weno(up, other, X, upw.do_clamp, upw.threshold, upw.epsilon)
     end
 
-    function weno_discretize(domain::DataDomain)
+    function weno_discretize(domain::DataDomain; kwarg...)
         weno_cells = weno_discretize_cells(domain)
         g = physical_representation(domain)
         g::UnstructuredMesh
@@ -77,16 +77,19 @@ module WENO
         # 1. Distance to the face centroid for each cell center
         # 2. The stencil in terms of cells.
         # 3. The gradient basis for each stencil.
-        return map(f -> weno_discretize_face(weno_cells, N[f], fc[f]), 1:length(N))
+        return map(
+            f -> weno_discretize_face(weno_cells, N[f], fc[f]; kwarg...),
+            1:length(N)
+        )
     end
 
-    function weno_discretize_face(weno_cells, N, face_centroid; do_clamp = true)
+    function weno_discretize_face(weno_cells, N, face_centroid; kwarg...)
         l, r = N
         lcell = weno_cells[l]
         rcell = weno_cells[r]
         ldisc = weno_discretize_half_face(l, weno_cells[l], face_centroid)
         rdisc = weno_discretize_half_face(r, weno_cells[r], face_centroid)
-        return WENOFaceDiscretization(ldisc, rdisc, do_clamp = do_clamp)
+        return WENOFaceDiscretization(ldisc, rdisc; kwarg...)
     end
 
     function weno_discretize_half_face(cell, wenodisc, fc::SVector{D, R}) where {D, R}
@@ -363,22 +366,30 @@ module WENO
     end
 
     function interpolate_weno(upw::WENOHalfFaceDiscretization, other_cell, U, do_clamp, threshold, ϵ)
+        has_threshold = !isnan(threshold)
         cell = upw.cell
         u_c = U(cell)
-        u_other = U(other_cell)
-        if threshold > 0.0
+        if has_threshold || do_clamp
+            # If we have a threshold, we need to compare with the other cell.
+            # Similarily for the clamp option.
+            u_other = U(other_cell)
+        else
+            u_other = NaN
+        end
+        if has_threshold
             val_u_c = value(u_c)
             val_u_other = value(u_other)
-            scale = max(abs(val_u_c), abs(val_u_other), 1e-10)
-            if abs(val_u_c - val_u_other)/scale < threshold
+            scale = max(abs(val_u_c) + abs(val_u_other), 1e-12)
+            Δ_f = abs(val_u_c - val_u_other)/scale
+            if Δ_f < threshold
                 return u_c
             end
         end
         T = typeof(u_c)
         Δu = zero(T)
         β_tot = zero(T)
-        for i in eachindex(upw.gradient)
-            g = upw.gradient[i]
+        @simd for i in eachindex(upw.gradient)
+            @inbounds g = upw.gradient[i]
             Ω_i = g.area
             # This assert should hold since the self cell is always first
             # Disabled because @assert can't be compile time toggled in Julia
@@ -387,7 +398,12 @@ module WENO
             # Assume linear weights are areas
             γ_i = Ω_i
             # Find (unscaled) weight and add to total delta
-            β_i = γ_i / (ϵ + sum(∇u.^2)*Ω_i)^2
+            ∇u_squared_sum = zero(T)
+            for ∇u_i in ∇u
+                ∇u_squared_sum += ∇u_i*∇u_i
+            end
+            denom = (ϵ + ∇u_squared_sum*Ω_i)
+            β_i = γ_i / (denom*denom)
             Δu += β_i*∇u
             # Keep track of total since we need to divide by it afterwards
             β_tot += β_i
@@ -404,8 +420,8 @@ module WENO
         return u_f
     end
 
-    function evaluate_gradient(grad::SVector{N, R}, cells, u_c, U) where {N, R}
-        ∇g = grad[1]*u_c
+    @inline function evaluate_gradient(grad::SVector{N, R}, cells, u_c, U) where {N, R}
+        @inbounds ∇g = grad[1]*u_c
         @inbounds for i in 2:N
             c = cells[i]
             ∇g += grad[i]*U(c)
