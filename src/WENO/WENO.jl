@@ -103,7 +103,7 @@ module WENO
                 new_grad += grad[i]*V[i]
             end
             if all(isfinite, new_grad)
-                area = area_from_points(points)
+                area = area_from_points(points, D)
             else
                 area = Inf
             end
@@ -141,7 +141,8 @@ module WENO
         return WENOHalfFaceDiscretization(cell, V, vec(grad_disc))
     end
 
-    function area_from_points(points::NTuple{N, SVector{D, Float64}}) where {N, D}
+    function area_from_points(points, D)
+        N = length(points)
         if D == 2
             @assert N == 3
             u, v, w = points
