@@ -95,7 +95,7 @@ module WENO
     function weno_discretize_half_face(cell, wenodisc, fc::SVector{D, R}) where {D, R}
         function half_face_impl(planar_set, grad, V)
             cells = map(i -> wenodisc.stencil[i].cell, planar_set)
-            points = map(i -> wenodisc.stencil[i].point, planar_set)
+            points = map(i -> convert(SVector{D, R}, wenodisc.stencil[i].point), planar_set)
             # Now that we know the delta to the face centroid, we can collapse
             # the gradient basis to a single basis for the set of support cells.
             new_grad = grad[1]*V[1]
@@ -103,7 +103,7 @@ module WENO
                 new_grad += grad[i]*V[i]
             end
             if all(isfinite, new_grad)
-                area = area_from_points(points, D)
+                area = area_from_points(points)
             else
                 area = Inf
             end
@@ -141,14 +141,16 @@ module WENO
         return WENOHalfFaceDiscretization(cell, V, vec(grad_disc))
     end
 
-    function area_from_points(points, D)
+    function area_from_points(points)
         N = length(points)
+        D = length(first(points))
         if D == 2
             @assert N == 3
             u, v, w = points
-            U = u - w
-            V = v - w
-            area = 0.5*norm(cross(U, V))
+            x1, y1 = u
+            x2, y2 = v
+            x3, y3 = w
+            area = 0.5*abs(x1*(y2 - y3) + x2*(y3 - y1) + x3*(y1 - y2))
         else
             @assert D == 3
             @assert N == 4
@@ -225,7 +227,9 @@ module WENO
         pts = map(x -> x[:point], out)
         S = point_set_transformation_basis(pts)
         function convert_neighbor(i)
-            out[i][:point] = S*(out[i][:point])
+            pt = out[i][:point]
+            T = typeof(pt)
+            out[i][:point] = convert(T, S*pt)
             return (; pairs(out[i])...)
         end
         return (center = center, S = S, stencil = map(convert_neighbor, eachindex(out)))
@@ -233,24 +237,34 @@ module WENO
 
     function point_set_transformation_basis(pts::Vector{SVector{griddim, Float64}}) where griddim
         M = hcat(pts...)'
+        if griddim == 1
+            MT = SMatrix{1, 1, Float64, 1}
+        elseif griddim == 2
+            MT = SMatrix{2, 2, Float64, 4}
+        else
+            @assert griddim == 3
+            MT = SMatrix{3, 3, Float64, 9}
+        end
+        out = missing
         try
             UDV = svd(M)
             U = UDV.U
             D = UDV.S
             Vt = UDV.Vt
             Dbar = Diagonal(D[1:griddim])
-            return Dbar*inv(Vt')
+            out = Dbar*inv(Vt')
         catch
             @warn "Failure to decompose point set, using identity" M
             if griddim == 1
-                return @SMatrix [1.0]
+                out = @SMatrix [1.0]
             elseif griddim == 2
-                return @SMatrix [1.0 0.0; 0.0 1.0]
+                out = @SMatrix [1.0 0.0; 0.0 1.0]
             else
                 @assert griddim == 3
-                return @SMatrix [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0]
+                out = @SMatrix [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0]
             end
         end
+        return convert(MT, out)
     end
 
     function cell_to_node_indices(g::UnstructuredMesh, c)
