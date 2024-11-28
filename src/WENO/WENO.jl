@@ -66,7 +66,9 @@ module WENO
     function weno_discretize(domain::DataDomain; kwarg...)
         weno_cells = weno_discretize_cells(domain)
         g = physical_representation(domain)
-        g::UnstructuredMesh
+        if !(g isa UnstructuredMesh)
+            g = UnstructuredMesh(g)
+        end
         N = g.faces.neighbors
         D = dim(g)
         Point_t = SVector{D, Float64}
@@ -165,6 +167,9 @@ module WENO
 
     function weno_discretize_cells(domain::DataDomain)
         g = physical_representation(domain)
+        if !(g isa UnstructuredMesh)
+            g = UnstructuredMesh(g)
+        end
         D = dim(g)
         Point_t = SVector{D, Float64}
         cc = reinterpret(Point_t, domain[:cell_centroids])
