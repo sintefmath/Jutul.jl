@@ -76,6 +76,11 @@ function map_to_active(V, domain, m::FiniteVolumeGlobalMap, ::Cells)
     # return filter(i -> m.cell_is_boundary[i], V)
 end
 
+function map_ij_to_active(I, J, domain, m::FiniteVolumeGlobalMap, e)
+    # At the moment only cells can have inactive status
+    return (I, J)
+end
+
 function map_ij_to_active(I, J, domain, m::FiniteVolumeGlobalMap, ::Cells)
     n = length(I)
     @assert n == length(J)
