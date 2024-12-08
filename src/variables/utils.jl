@@ -489,8 +489,9 @@ function unit_update_magnitude_local!(s, ix, cell, dx, nf, nu, minval, maxval, a
             # Note: Careful to handle AD values correctly here.
             @inbounds t += value(s[i, cell])
         end
-        for i = 1:nf
-            @inbounds s[i, cell] /= t
+        @inbounds for i = 1:nf
+            s_i = s[i, cell]
+            s[i, cell] = replace_value(s_i, clamp(value(s_i), minval, maxval)/t)
         end
     end
 end
