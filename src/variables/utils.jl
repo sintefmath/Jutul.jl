@@ -486,7 +486,8 @@ function unit_update_magnitude_local!(s, ix, cell, dx, nf, nu, minval, maxval, a
         # Need to renormalize since the last value was not within bounds.
         t = 0.0
         for i = 1:nf
-            @inbounds t += s[i, cell]
+            # Note: Careful to handle AD values correctly here.
+            @inbounds t += value(s[i, cell])
         end
         for i = 1:nf
             @inbounds s[i, cell] /= t
