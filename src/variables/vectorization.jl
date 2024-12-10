@@ -51,7 +51,7 @@ function vectorize_variable!(V, state, k, info, F; config = nothing)
         for i in 1:maximum(lumping)
             # Take the first lumped value as they must be equal by assumption
             ix = findfirst(isequal(i), lumping)
-            V[offset+i] = state_val[ix]
+            V[offset+i] = F(state_val[ix])
         end
     end
 end
