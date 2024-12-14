@@ -406,7 +406,7 @@ function perform_step_check_convergence_impl!(report, prev_report, storage, mode
     converged = false
     e = NaN
     t_conv = @elapsed begin
-        if iteration == config[:max_nonlinear_iterations]
+        if iteration == config[:max_nonlinear_iterations]+1
             tf = config[:tol_factor_final_iteration]
         else
             tf = 1
