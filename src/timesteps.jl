@@ -161,11 +161,10 @@ Base.@kwdef struct LimitByFailedTimestepSelector <: AbstractTimestepSelector
 end
 
 function pick_next_timestep(sel::LimitByFailedTimestepSelector, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step)
-    R = successful_reports(reports, current_reports, step_index, sel.num)
+    R = successful_reports(reports, current_reports, step_index, sel.num, success = r -> true)
     dt = dT
     for rep in R
         if !rep[:success]
-            @info "Limiting step."
             dt = min(dt, rep[:dt]*sel.factor)
         end
     end
