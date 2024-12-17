@@ -149,6 +149,30 @@ function pick_next_timestep(sel::VariableChangeTimestepSelector, sim, config, dt
 end
 
 """
+    sel = LimitByFailedTimestepSelector(num = 10, factor = 0.9)
+
+Limit the timestep by the shortest of `num` failed timesteps, reducing the
+timestep by `factor` multiplied by the shortest failed timestep. If no
+time-steps failed during the last `num` steps, the timestep is not changed.
+"""
+Base.@kwdef struct LimitByFailedTimestepSelector <: AbstractTimestepSelector
+    num::Int = 10
+    factor::Float64 = 0.9
+end
+
+function pick_next_timestep(sel::LimitByFailedTimestepSelector, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step)
+    R = successful_reports(reports, current_reports, step_index, sel.num)
+    dt = dT
+    for rep in R
+        if !rep[:success]
+            @info "Limiting step."
+            dt = min(dt, rep[:dt]*sel.factor)
+        end
+    end
+    return dt
+end
+
+"""
     successful_reports(old_reports, current_reports, step_index, n = 1)
 
 Get the `n` last successful solve reports from all previous reports
