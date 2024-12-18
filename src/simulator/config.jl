@@ -46,7 +46,7 @@ Negative values disable output. The interpretation of this number is subject to 
 
     # IO options
     add_option!(cfg, :output_path, nothing, "Path to write output. If nothing, output is not written to disk.", types = Union{String, Nothing})
-    add_option!(cfg, :in_memory_reports, 5, "Limit for number of reports kept in memory if output_path is provided.", types = Int)
+    add_option!(cfg, :in_memory_reports, 10, "Limit for number of reports kept in memory if output_path is provided.", types = Int)
     add_option!(cfg, :report_level, 0, "Level of information stored in reports when written to disk.", types = Int)
     add_option!(cfg, :output_substates, false, "Store substates (between report steps) as field on each state.", types = Bool)
 
