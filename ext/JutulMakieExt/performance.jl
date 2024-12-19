@@ -131,14 +131,22 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
         c = colors[mod(i-1, n_rep)+1]
         data_i = get_data(r_rep[i])
         push!(alldata, data_i)
-        lines!(ax, t[i], data_i,
-            label = names[i],
-            linewidth = linewidth,
-            color = c,
-            linestyle = get_linestyle(i);
-            kwarg...)
+        lstyle = get_linestyle(i)
+        skip_line = ismissing(lstyle)
+        if !skip_line
+            lines!(ax, t[i], data_i,
+                label = names[i],
+                linewidth = linewidth,
+                color = c,
+                linestyle = lstyle;
+                kwarg...)
+        end
         if scatter_points
-            scatter!(ax, t[i], data_i, color = c)
+            if skip_line
+                scatter!(ax, t[i], data_i, color = c, label = names[i])
+            else
+                scatter!(ax, t[i], data_i, color = c)
+            end
         end
     end
     if length(r_rep) > 1 && !names_missing && legend
