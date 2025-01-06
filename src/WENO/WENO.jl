@@ -24,7 +24,7 @@ module WENO
                 r::WENOHalfFaceDiscretization{D, N, R};
                 do_clamp = false,
                 threshold = 0.0,
-                epsilon = 1e-10
+                epsilon = 1e-7
             ) where {D, N, R}
             @assert D == N-1
             return new{D, N, R}(l, r, do_clamp, threshold, epsilon)

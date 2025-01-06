@@ -1,4 +1,4 @@
-const MINIMUM_SAT_RELAX = 1e-6
+const MINIMUM_SAT_RELAX = 1e-3
 """
 Number of entities (e.g. Cells, Faces) a variable is defined on.
 By default, each primary variable exists on all cells of a discretized domain
@@ -370,6 +370,8 @@ function update_primary_variable!(state, p::FractionVariables, state_symbol, mod
     unit_sum_update!(s, p, model, dx, w)
 end
 
+unit_update_preserve_direction(::FractionVariables) = true
+
 function unit_sum_update!(s, p, model, dx, w, entity = Cells())
     nf, nu = value_dim(model, p)
     abs_max = absolute_increment_limit(p)
@@ -380,7 +382,7 @@ function unit_sum_update!(s, p, model, dx, w, entity = Cells())
     if nf == 2
         unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)
     else
-        if true
+        if unit_update_preserve_direction(p)
             # Preserve direction
             unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, w)
         else
@@ -418,28 +420,32 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
 
     bad_update = w <= MINIMUM_SAT_RELAX
     if bad_update
-        w = w0
-    end
-    @inbounds for i in 1:(nf-1)
-        s[i, full_cell] += w*dx[i, active_ix]
-    end
-    @inbounds s[nf, full_cell] += w*dlast0
-    if bad_update
-        # Dampening is tiny, update and renormalize instead
-        tot = 0.0
-        @inbounds for i in 1:nf
-            s_i = s[i, full_cell]
-            sat = clamp(value(s_i), minval, maxval)
-            tot += sat
-            s_i = replace_value(s_i, sat)
-            s[i, full_cell] = s_i
+        # It was not possible to find a reasonable dampening factor.
+        # We instead go to the magnitude-preserving version.
+        unit_update_magnitude_local!(s, active_ix, full_cell, dx, nf, nu, minval, maxval, abs_max)
+    else
+        @inbounds for i in 1:(nf-1)
+            s[i, full_cell] += w*dx[i, active_ix]
         end
-        @inbounds for i = 1:nf
-            s_i = s[i, full_cell]
-            s_i = replace_value(s_i, value(s_i)/tot)
-            s[i, full_cell] = s_i
+        @inbounds s[nf, full_cell] += w*dlast0
+        if bad_update
+            # Dampening is tiny, update and renormalize instead
+            tot = 0.0
+            @inbounds for i in 1:nf
+                s_i = s[i, full_cell]
+                sat = clamp(value(s_i), minval, maxval)
+                tot += sat
+                s_i = replace_value(s_i, sat)
+                s[i, full_cell] = s_i
+            end
+            @inbounds for i = 1:nf
+                s_i = s[i, full_cell]
+                s_i = replace_value(s_i, value(s_i)/tot)
+                s[i, full_cell] = s_i
+            end
         end
     end
+    return s
 end
 
 function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)
@@ -456,18 +462,19 @@ function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)
 end
 
 function unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
-    for cell in active_cells
-        unit_update_magnitude_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
+    for active_ix in eachindex(active_cells)
+        cell = active_cells[active_ix]
+        unit_update_magnitude_local!(s, active_ix, cell, dx, nf, nu, minval, maxval, abs_max)
     end
 end
 
-function unit_update_magnitude_local!(s, cell, dx, nf, nu, minval, maxval, abs_max)
+function unit_update_magnitude_local!(s, ix, cell, dx, nf, nu, minval, maxval, abs_max)
     # First pass: Find the relaxation factors that keep all fractions in [0, 1]
     # and obeying the maximum change targets
-    dlast0 = 0
+    dlast0 = zero(eltype(dx))
     @inbounds for i = 1:(nf-1)
         v = value(s[i, cell])
-        dv = dx[cell + (i-1)*nu]
+        dv = dx[i, ix]
         dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
         s[i, cell] += dv
         dlast0 -= dv
@@ -476,12 +483,15 @@ function unit_update_magnitude_local!(s, cell, dx, nf, nu, minval, maxval, abs_m
     dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
     s[nf, cell] += dlast
     if dlast != dlast0
+        # Need to renormalize since the last value was not within bounds.
         t = 0.0
         for i = 1:nf
-            @inbounds t += s[i, cell]
+            # Note: Careful to handle AD values correctly here.
+            @inbounds t += value(s[i, cell])
         end
-        for i = 1:nf
-            @inbounds s[i, cell] /= t
+        @inbounds for i = 1:nf
+            s_i = s[i, cell]
+            s[i, cell] = replace_value(s_i, clamp(value(s_i), minval, maxval)/t)
         end
     end
 end

@@ -149,12 +149,36 @@ function pick_next_timestep(sel::VariableChangeTimestepSelector, sim, config, dt
 end
 
 """
+    sel = LimitByFailedTimestepSelector(num = 10, factor = 0.9)
+
+Limit the timestep by the shortest of `num` failed timesteps, reducing the
+timestep by `factor` multiplied by the shortest failed timestep. If no
+time-steps failed during the last `num` steps, the timestep is not changed.
+"""
+Base.@kwdef struct LimitByFailedTimestepSelector <: AbstractTimestepSelector
+    num::Int = 10
+    factor::Float64 = 0.9
+end
+
+function pick_next_timestep(sel::LimitByFailedTimestepSelector, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step)
+    R = successful_reports(reports, current_reports, n = sel.num, success = r -> true)
+    dt = dT
+    for rep in R
+        if !rep[:success]
+            dt = min(dt, rep[:dt]*sel.factor)
+        end
+    end
+    return dt
+end
+
+"""
     successful_reports(old_reports, current_reports, step_index, n = 1)
 
 Get the `n` last successful solve reports from all previous reports
-(old_reports) and the current ministep set.
+(old_reports) and the current ministep set. You can optionally provide a
+function that replaces the default definition of `success=r->r[:success]`.
 """
-function successful_reports(old_reports, current_reports, step_index, n = 1)
+function successful_reports(old_reports, current_reports, step_index, n = 1; success = r -> r[:success])
     out = similar(current_reports, 0)
     if isfinite(n)
         sizehint!(out, n)
@@ -165,11 +189,15 @@ function successful_reports(old_reports, current_reports, step_index, n = 1)
         if step == step_index
             reports = current_reports
         else
+            report = old_reports[step]
+            if ismissing(report)
+                continue
+            end
             reports = old_reports[step][:ministeps]
         end
 
         for r in Iterators.reverse(reports)
-            if !ismissing(r) && r[:success]
+            if !ismissing(r) && success(r)
                 push!(out, r)
                 if length(out) >= n
                     return out
@@ -187,12 +215,12 @@ Get last n successful reports starting at the end of `step` and reversing
 backwards until `n` values have been found. `n` can be set to `Inf` to produce
 all successful reports.
 """
-function successful_reports(reports, current_reports = missing; step = length(reports)+1, n = 1)
+function successful_reports(reports, current_reports = missing; step = length(reports)+1, n = 1, kwarg...)
     if ismissing(current_reports)
         step = clamp(step, 1, length(reports))
         current_reports = reports[step][:ministeps]
     end
-    return successful_reports(reports, current_reports, step, n)
+    return successful_reports(reports, current_reports, step, n; kwarg...)
 end
 
 """

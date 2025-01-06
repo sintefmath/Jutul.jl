@@ -1087,6 +1087,24 @@ struct IndirectionMap{V}
     end
 end
 
+"""
+    imap = IndirectionMap(vec_of_vec::Vector{V}) where V
+
+Create indirection map for a variable length dense vector that is represented as
+a Vector of Vectors.
+"""
+function IndirectionMap(vec_of_vec::Vector{Vector{T}}) where T
+    vals = T[]
+    pos = Int[1]
+    for subvec in vec_of_vec
+        for v in subvec
+            push!(vals, v)
+        end
+        push!(pos, pos[end] + length(subvec))
+    end
+    return IndirectionMap(vals, pos)
+end
+
 struct IndexRenumerator{T}
     indices::Dict{T, Int}
 end
