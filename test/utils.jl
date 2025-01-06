@@ -185,7 +185,6 @@ end
             xfine = range(-1.0, 5.0, nf)
             yfine = range(-1.0, 6.0, nf)
             using ForwardDiff, Test
-    
             F(X) = I(first(X), last(X))
             function F_num(X)
                 ϵ = 1e-6
@@ -352,6 +351,7 @@ end
     end
 end
 
+import Jutul: check_equal_perm
 @testset "check_equal_perm" begin
     @test check_equal_perm(SVector(1, 2, 3), SVector(1, 2, 3))
     @test check_equal_perm(SVector(1, 2, 3), SVector(2, 3, 1))
