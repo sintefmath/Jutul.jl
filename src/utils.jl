@@ -1188,3 +1188,24 @@ function get_mat_writable_file_from_report(report; config = missing)
     end
     return out
 end
+
+function check_equal_perm(a, b)
+    N = length(a)
+    M = length(b)
+    N == M || throw(ArgumentError("Lengths of a and b do not match ($N != $M)"))
+    to_cyclic = i -> mod(i - 1, N) + 1
+    start = a[1]
+    offset = findfirst(isequal(start), b)-1
+    if isnothing(offset)
+        is_equal = false
+    else
+        is_equal = true
+        for i in 2:N
+            if a[i] != b[to_cyclic(i + offset)]
+                is_equal = false
+                break
+            end
+        end
+    end
+    return is_equal
+end

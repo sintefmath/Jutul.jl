@@ -351,3 +351,18 @@ end
         @test ismissing(get_mesh_entity_tag(g, Cells(), :group2, :tag3, throw = false))
     end
 end
+
+@testset "check_equal_perm" begin
+    @test check_equal_perm(SVector(1, 2, 3), SVector(1, 2, 3))
+    @test check_equal_perm(SVector(1, 2, 3), SVector(2, 3, 1))
+    @test check_equal_perm(SVector(1, 2, 3), SVector(3, 1, 2))
+    @test !check_equal_perm(SVector(1, 2, 3), SVector(3, 2, 1))
+    @test !check_equal_perm(SVector(1, 2, 3), SVector(3, 2, 1))
+    @test !check_equal_perm(SVector(1, 2, 3), SVector(2, 1, 3))
+    @test !check_equal_perm(SVector(1, 2, 3), SVector(1, 3, 2))
+    @test !check_equal_perm(SVector(1, 2, 3), SVector(1, 2, 5))
+    @test check_equal_perm(SVector(1, 2, 3, 4), SVector(1, 2, 3, 4))
+    @test check_equal_perm(SVector(1, 2, 3, 4), SVector(2, 3, 4, 1))
+    @test check_equal_perm(SVector(1, 2, 3, 4), SVector(3, 4, 1, 2))
+    @test check_equal_perm(SVector(1, 2, 3, 4), SVector(4, 1, 2, 3))
+end
