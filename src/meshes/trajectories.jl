@@ -27,6 +27,11 @@ of cells are treated more rigorously when picking exactly what cells are cut by
 a trajectory, but this requires that the boundary normals are oriented outwards,
 which is currently not the case for all meshes from downstream packages.
 
+`limit_box` speeds up the search by limiting the search to the minimal bounding
+box that contains both the trajectory and the mesh. This can be turned off by
+passing `false`. There should be no difference in the cells tagged by changing
+this option.
+
 Examples:
 ```
 # 3D mesh
@@ -61,13 +66,30 @@ lines!(ax, trajectory[:, 1], trajectory[:, 2], linewidth = 3)
 fig
 ```
 """
-function find_enclosing_cells(G, traj; geometry = missing, n = 25, use_boundary = false)
+function find_enclosing_cells(G, traj;
+        geometry = missing,
+        n = 25,
+        use_boundary = false,
+        limit_box = true
+    )
     G = UnstructuredMesh(G)
     if ismissing(geometry)
         geometry = tpfv_geometry(G)
     end
     pts = trajectory_to_points(traj)
+    length(pts) > 1 || throw(ArgumentError("Trajectory must have at least two points."))
     T = eltype(pts)
+    # Refine the segments
+    new_pts = T[]
+    for i in 1:(length(pts)-1)
+        pt_start = pts[i]
+        pt_end = pts[i+1]
+        for pt in range(pt_start, pt_end, n)
+            push!(new_pts, pt)
+        end
+    end
+    pts = new_pts
+    # Turn geometry matrices into vectors of vectors
     normals = vec(reinterpret(T, geometry.normals))
     face_centroids = vec(reinterpret(T, geometry.face_centroids))
     cell_centroids = vec(reinterpret(T, geometry.cell_centroids))
@@ -79,22 +101,44 @@ function find_enclosing_cells(G, traj; geometry = missing, n = 25, use_boundary 
         boundary_normals = boundary_centroids .- cell_centroids[G.boundary_faces.neighbors]
     end
 
+    if limit_box
+        # Create a minimal bounding box of the points of the trajectory and grid
+        # itself. Cells and points outside this box will not be considered.
+        D = dim(G)
+        function bounding_box(pts)
+            lo = fill(Inf, D)
+            hi = fill(-Inf, D)
+            for pt in pts
+                for i in 1:D
+                    lo[i] = min(lo[i], pt[i])
+                    hi[i] = max(hi[i], pt[i])
+                end
+            end
+            return (lo, hi)
+        end
+        lo_g, hi_g = bounding_box(G.node_points)
+        lo_t, hi_t = bounding_box(pts)
+        # Find the intersection of the bounding boxes
+        low_bb = max.(lo_g, lo_t)
+        high_bb = min.(hi_g, hi_t)
+
+        inside_bb(x) = all(low_bb .<= x) && all(x .<= high_bb)
+        pts = filter(inside_bb, pts)
+        # Find cells via their nodes - if any node is inside BB we consider the cell
+        cells = cells_inside_bounding_box(G, low_bb, high_bb)
+    else
+        cells = 1:number_of_cells(G)
+    end
     # Start search near middle of trajectory
     mean_pt = mean(pts)
-    nc = number_of_cells(G)
-    cells_by_dist = sort(1:nc, by = cell -> norm(cell_centroids[cell] - mean_pt, 2))
+    cells_by_dist = sort(cells, by = cell -> norm(cell_centroids[cell] - mean_pt, 2))
 
-    nseg = length(pts)-1
     intersected_cells = Int[]
     lengths = Float64
-    for i in 1:nseg
-        pt_start = pts[i]
-        pt_end = pts[i+1]
-        for pt in range(pt_start, pt_end, n)
-            ix = find_enclosing_cell(G, pt, normals, face_centroids, boundary_normals, boundary_centroids, cells_by_dist)
-            if !isnothing(ix)
-                push!(intersected_cells, ix)
-            end
+    for pt in pts
+        ix = find_enclosing_cell(G, pt, normals, face_centroids, boundary_normals, boundary_centroids, cells_by_dist)
+        if !isnothing(ix)
+            push!(intersected_cells, ix)
         end
     end
     return unique!(intersected_cells)
@@ -152,4 +196,28 @@ function find_enclosing_cell(G::UnstructuredMesh{D}, pt::SVector{D, T},
         end
     end
     return nothing
+end
+
+function cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb)
+    inside_bb(x) = all(low_bb .<= x) && all(x .<= high_bb)
+    nodes = G.node_points
+    node_is_active = fill(false, length(nodes))
+    for (i, node) in enumerate(nodes)
+        node_is_active[i] = inside_bb(node)
+    end
+    active_faces = Int[]
+    for face in 1:length(G.faces.faces_to_nodes)
+        for node in G.faces.faces_to_nodes[face]
+            if node_is_active[node]
+                push!(active_faces, face)
+                break
+            end
+        end
+    end
+    cells = Int[]
+    for f in active_faces
+        l, r = G.faces.neighbors[f]
+        push!(cells, l, r)
+    end
+    return cells
 end
