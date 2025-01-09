@@ -1,6 +1,8 @@
 
-function Jutul.mesh_from_gmsh(pth; kwarg...)
-    Gmsh.initialize()
+function Jutul.mesh_from_gmsh(pth; manage_gmsh = true, kwarg...)
+    if manage_gmsh
+        Gmsh.initialize()
+    end
     ext = pth |> splitext |> last
     gmsh.open(pth)
     if lowercase(ext) == ".geo"
@@ -9,9 +11,10 @@ function Jutul.mesh_from_gmsh(pth; kwarg...)
     g = missing
     try
         g = Jutul.mesh_from_gmsh(; kwarg...)
-    catch e
-        Gmsh.finalize()
-        rethrow(e)
+    finally
+        if manage_gmsh
+            Gmsh.finalize()
+        end
     end
     if ismissing(g)
         error("Failed to parse mesh")
@@ -43,9 +46,6 @@ function Jutul.mesh_from_gmsh(; verbose = false, kwarg...)
     face_lookup = generate_face_lookup(faces_to_nodes)
 
     cells_to_faces = parse_cells(remaps, faces_to_nodes, face_lookup, verbose = verbose)
-    # We are done with Gmsh.jl at this point, finalize it.
-    Gmsh.finalize()
-
     neighbors = build_neighbors(cells_to_faces, faces_to_nodes, face_lookup)
 
     # Make both of these in case we have rogue faces that are not connected to any cell.
