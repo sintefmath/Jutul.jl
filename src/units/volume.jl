@@ -1,6 +1,6 @@
 # Volume
 function si_unit(::Union{Val{:liter}, Val{:litre}, Val{:L}, Val{:l}})
-    return si_unit(:deci)*si_unit(:meter)
+    return si_unit(:milli)*si_unit(:meter)
 end
 
 
