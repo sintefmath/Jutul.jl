@@ -1,12 +1,25 @@
 
-function Jutul.mesh_from_gmsh(pth; verbose = false, kwarg...)
+function Jutul.mesh_from_gmsh(pth; kwarg...)
     Gmsh.initialize()
     ext = pth |> splitext |> last
     gmsh.open(pth)
     if lowercase(ext) == ".geo"
         gmsh.model.mesh.generate()
     end
+    g = missing
+    try
+        g = Jutul.mesh_from_gmsh(; kwarg...)
+    catch e
+        Gmsh.finalize()
+        rethrow(e)
+    end
+    if ismissing(g)
+        error("Failed to parse mesh")
+    end
+    return g
+end
 
+function Jutul.mesh_from_gmsh(; verbose = false, kwarg...)
     dim = gmsh.model.getDimension()
     dim == 3 || error("Only 3D models are supported")
 
