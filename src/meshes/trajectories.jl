@@ -150,10 +150,10 @@ function point_in_bounding_box(pt, low_bb, high_bb; atol::Float64 = 0.01)
     N == length(low_bb) == length(high_bb) || throw(ArgumentError("Dimensions must match."))
     for i in 1:N
         pt_i = pt[i]
-        if pt_i < low[i] - atol
+        if pt_i < low_bb[i] - atol
             return false
         end
-        if pt_i > low[i] + atol
+        if pt_i > high_bb[i] + atol
             return false
         end
     end
@@ -218,7 +218,7 @@ function cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb; atol = 
     nodes = G.node_points
     node_is_active = fill(false, length(nodes))
     for (i, node) in enumerate(nodes)
-        node_is_active[i] = node(x, low_bb, high_bb, atol = atol)
+        node_is_active[i] = point_in_bounding_box(node, low_bb, high_bb, atol = atol)
     end
     active_faces = Int[]
     for face in 1:length(G.faces.faces_to_nodes)
