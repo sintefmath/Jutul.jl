@@ -70,6 +70,7 @@ function find_enclosing_cells(G, traj;
         geometry = missing,
         n = 25,
         use_boundary = false,
+        atol = 0.01,
         limit_box = true
     )
     G = UnstructuredMesh(G)
@@ -122,10 +123,10 @@ function find_enclosing_cells(G, traj;
         low_bb = max.(lo_g, lo_t)
         high_bb = min.(hi_g, hi_t)
 
-        inside_bb(x) = all(low_bb .<= x) && all(x .<= high_bb)
+        inside_bb(x) = point_in_bounding_box(x, low_bb, high_bb, atol = atol)
         pts = filter(inside_bb, pts)
         # Find cells via their nodes - if any node is inside BB we consider the cell
-        cells = cells_inside_bounding_box(G, low_bb, high_bb)
+        cells = cells_inside_bounding_box(G, low_bb, high_bb, atol = atol)
     else
         cells = 1:number_of_cells(G)
     end
@@ -142,6 +143,21 @@ function find_enclosing_cells(G, traj;
         end
     end
     return unique!(intersected_cells)
+end
+
+function point_in_bounding_box(pt, low_bb, high_bb; atol::Float64 = 0.01)
+    N = length(pt)
+    N == length(low_bb) == length(high_bb) || throw(ArgumentError("Dimensions must match."))
+    for i in 1:N
+        pt_i = pt[i]
+        if pt_i < low[i] - atol
+            return false
+        end
+        if pt_i > low[i] + atol
+            return false
+        end
+    end
+    return true
 end
 
 """
@@ -198,12 +214,11 @@ function find_enclosing_cell(G::UnstructuredMesh{D}, pt::SVector{D, T},
     return nothing
 end
 
-function cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb)
-    inside_bb(x) = all(low_bb .<= x) && all(x .<= high_bb)
+function cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb; atol = 0.01)
     nodes = G.node_points
     node_is_active = fill(false, length(nodes))
     for (i, node) in enumerate(nodes)
-        node_is_active[i] = inside_bb(node)
+        node_is_active[i] = node(x, low_bb, high_bb, atol = atol)
     end
     active_faces = Int[]
     for face in 1:length(G.faces.faces_to_nodes)
