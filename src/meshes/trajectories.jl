@@ -210,11 +210,32 @@ function find_enclosing_cell(G::UnstructuredMesh{D}, pt::SVector{D, T},
                 break
             end
         end
-        if inside
+        # A final check to see if the point is inside the bounding box of the
+        # cell. This is not strictly necessary, but can be useful for some
+        # degenerate geometries.
+        if inside && point_inside_cell_bounding_box(G, cell, pt)
             return cell
         end
     end
     return nothing
+end
+
+function point_inside_cell_bounding_box(G::UnstructuredMesh, cell, pt::SVector{D, T}; atol = 0.0) where {D, T}
+    bb_low = zero(SVector{D, T}) .+ Inf
+    bb_high = zero(SVector{D, T}) .- Inf
+    for face in G.faces.cells_to_faces[cell]
+        for pt in G.faces.faces_to_nodes[face]
+            bb_low = min.(bb_low, G.node_points[pt])
+            bb_high = max.(bb_high, G.node_points[pt])
+        end
+    end
+    for bface in G.boundary_faces.cells_to_faces[cell]
+        for pt in G.boundary_faces.faces_to_nodes[bface]
+            bb_low = min.(bb_low, G.node_points[pt])
+            bb_high = max.(bb_high, G.node_points[pt])
+        end
+    end
+    return point_in_bounding_box(pt, bb_low, bb_high, atol = atol)
 end
 
 function cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb; atol = 0.01)
