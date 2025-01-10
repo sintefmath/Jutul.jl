@@ -238,7 +238,13 @@ function point_inside_cell_bounding_box(G::UnstructuredMesh, cell, pt::SVector{D
     return point_in_bounding_box(pt, bb_low, bb_high, atol = atol)
 end
 
+"""
+    cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb; atol = 0.01)
+
+
+"""
 function cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb; atol = 0.01)
+    D = dim(G)
     nodes = G.node_points
     node_is_active = fill(false, length(nodes))
     for (i, node) in enumerate(nodes)
@@ -258,5 +264,5 @@ function cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb; atol = 
         l, r = G.faces.neighbors[f]
         push!(cells, l, r)
     end
-    return cells
+    return unique!(sort!(cells))
 end
