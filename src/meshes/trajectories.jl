@@ -239,30 +239,77 @@ function point_inside_cell_bounding_box(G::UnstructuredMesh, cell, pt::SVector{D
 end
 
 """
-    cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb; atol = 0.01)
+    cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb; algorithm = :box, atol = 0.01)
 
 
 """
-function cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb; atol = 0.01)
+function cells_inside_bounding_box(G::UnstructuredMesh, low_bb, high_bb; algorithm = :box, atol = 0.01)
     D = dim(G)
+    length(low_bb) == length(high_bb) == D || throw(ArgumentError("Dimensions of bounding box must match with grid dimension $D."))
     nodes = G.node_points
-    node_is_active = fill(false, length(nodes))
-    for (i, node) in enumerate(nodes)
-        node_is_active[i] = point_in_bounding_box(node, low_bb, high_bb, atol = atol)
+    cells = Int[]
+
+    function bb_overlap(A, B)
+        Amin, Amax = A
+        Bmin, Bmax = B
+        return Amax >= Bmin && Bmax >= Amin
     end
-    active_faces = Int[]
-    for face in 1:length(G.faces.faces_to_nodes)
-        for node in G.faces.faces_to_nodes[face]
-            if node_is_active[node]
-                push!(active_faces, face)
-                break
+
+    if algorithm == :nodal
+        # Check if any node is inside the bounding box
+        node_is_active = fill(false, length(nodes))
+        for (i, node) in enumerate(nodes)
+            node_is_active[i] = point_in_bounding_box(node, low_bb, high_bb, atol = atol)
+        end
+        active_faces = Int[]
+        for face in 1:length(G.faces.faces_to_nodes)
+            for node in G.faces.faces_to_nodes[face]
+                if node_is_active[node]
+                    push!(active_faces, face)
+                    break
+                end
             end
         end
-    end
-    cells = Int[]
-    for f in active_faces
-        l, r = G.faces.neighbors[f]
-        push!(cells, l, r)
+        for f in active_faces
+            l, r = G.faces.neighbors[f]
+            push!(cells, l, r)
+        end
+    elseif algorithm == :box
+        # Check intersection of bounding boxes of cells with the provided bounding box
+        low_bb_cell = zeros(D)
+        high_bb_cell = zeros(D)
+        for cell in 1:number_of_cells(G)
+            @. low_bb_cell = Inf
+            @. high_bb_cell = -Inf
+            for face in G.faces.cells_to_faces[cell]
+                for nodeix in G.faces.faces_to_nodes[face]
+                    node = nodes[nodeix]
+                    low_bb_cell = min.(low_bb_cell, node)
+                    high_bb_cell = max.(high_bb_cell, node)
+                end
+            end
+            for face in G.boundary_faces.cells_to_faces[cell]
+                for nodeix in G.boundary_faces.faces_to_nodes[face]
+                    node = nodes[nodeix]
+                    low_bb_cell = min.(low_bb_cell, node)
+                    high_bb_cell = max.(high_bb_cell, node)
+                end
+            end
+            inside = true
+            for d in 1:D
+                dim_overlap = bb_overlap(
+                    (low_bb_cell[d], high_bb_cell[d]),
+                    (low_bb[d], high_bb[d])
+                )
+                inside = inside && dim_overlap
+            end
+            if inside
+                push!(cells, cell)
+            end
+        end
+    else
+        throw(ArgumentError("Unknown algorithm $algorithm."))
+
     end
     return unique!(sort!(cells))
 end

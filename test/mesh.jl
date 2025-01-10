@@ -219,6 +219,7 @@ end
     end
 end
 
+import Jutul: cells_inside_bounding_box
 @testset "Trajectories" begin
     G = CartesianMesh((4, 4, 5), (100.0, 100.0, 100.0))
     trajectory = [
@@ -233,9 +234,15 @@ end
     G = CartesianMesh((5, 5), (1.0, 2.0))
     trajectory = [
         0.1 0.1;
-        0.2 0.4;
+        0.25 0.4;
         0.3 1.2
     ]
     cells_2d = Jutul.find_enclosing_cells(G, trajectory)
-    @test cells_2d == [1, 7, 12]
+    @test cells_2d == [1, 2, 7, 12]
+    @testset "cells_inside_bounding_box" begin
+        tm = convert(UnstructuredMesh, CartesianMesh((3, 3), (3.0, 3.0)))
+        @test cells_inside_bounding_box(tm, [0.5, 0.5], [1.5, 1.5]) == [1, 2, 4, 5]
+        @test cells_inside_bounding_box(tm, [-1.0, -1.0], [4.0, 4.0]) == 1:9
+        @test cells_inside_bounding_box(tm, [0.1, 0.1], [0.2, 0.2]) == [1]
+    end
 end
