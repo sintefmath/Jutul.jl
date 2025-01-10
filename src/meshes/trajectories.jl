@@ -100,6 +100,9 @@ function find_enclosing_cells(G, traj;
         boundary_normals = vec(reinterpret(T, geometry.boundary_normals))
     else
         boundary_normals = boundary_centroids .- cell_centroids[G.boundary_faces.neighbors]
+        for i in eachindex(boundary_normals)
+            boundary_normals[i] /= norm(boundary_normals[i], 2)
+        end
     end
 
     if limit_box
