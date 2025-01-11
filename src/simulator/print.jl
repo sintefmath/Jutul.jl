@@ -28,7 +28,7 @@ function start_simulation_message(info_level, timesteps, config)
     p = nothing
     n = length(timesteps)
     msg = "Simulating $(get_tstr(sum(timesteps), 2)) as $n report steps"
-    if info_level > 0
+    if info_level >= 0
         jutul_message("Jutul", msg, color = :light_green)
     end
     if info_level == 0
@@ -52,7 +52,7 @@ function start_simulation_message(info_level, timesteps, config)
             arg = (barglyphs = bg)
         end
         p = Progress(n+1;
-            desc = msg,
+            desc = "Progress",
             dt = 0.1,
             color = config[:progress_color],
             arg...
