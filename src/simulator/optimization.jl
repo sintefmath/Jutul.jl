@@ -114,6 +114,8 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     data[:mapper] = mapper
     data[:config] = opt_cfg
     data[:last_obj] = Inf
+    data[:best_obj] = Inf
+    data[:best_x] = copy(x0)
     data[:x_hash] = hash(Inf)
     F = x -> objective_opt!(x, data, print)
     dF = (dFdx, x) -> gradient_opt!(dFdx, x, data)
@@ -189,6 +191,10 @@ function objective_opt!(x, data, print_frequency = 1)
     data[:n_objective] += 1
     if obj != bad_obj
         data[:last_obj] = obj
+    end
+    if obj < data[:best_obj]
+        data[:best_obj] = obj
+        data[:best_x] .= x
     end
     return obj
 end
