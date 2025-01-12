@@ -37,6 +37,7 @@ function Jutul.mesh_from_gmsh(; verbose = false, reverse_z = false, kwarg...)
                 0.0, 0.0, -1.0, 0.0
             ]
         )
+        gmsh.model.mesh.generate()
     end
     node_tags, pts, = gmsh.model.mesh.getNodes()
     node_remap = Dict{UInt64, Int}()
