@@ -6,7 +6,7 @@ struct LocalPerspectiveAD{T, N, A<:AbstractArray{T,N}, I} <: AbstractArray{T,N}
 end
 
 function LocalPerspectiveAD(a::A, index::I_t) where {A<:AbstractArray, I_t<:Integer}
-    LocalPerspectiveAD{eltype(a), ndims(A), A, I_t}(index, a)
+    return LocalPerspectiveAD{eltype(a), ndims(A), A, I_t}(index, a)
 end
 
 struct LocalStateAD{T, I, E} # Data type, index, entity tag
@@ -21,6 +21,12 @@ struct ValueStateAD{T} # Data type
 end
 
 Base.keys(x::ValueStateAD) = keys(getfield(x, :data))
+
+function convert_to_immutable_storage(x::ValueStateAD)
+    data = getfield(x, :data)
+    data = convert_to_immutable_storage(data)
+    return ValueStateAD(data)
+end
 
 const StateType = Union{NamedTuple,AbstractDict,JutulStorage}
 

@@ -869,9 +869,10 @@ function adjoint_transfer_canonical_order_inner!(λ, dx, model, ::BlockMajorLayo
         if bz > 0
             error("Assumed that block major has a single entity group")
         end
-        bz = degrees_of_freedom_per_entity(model, e)
+        bz = degrees_of_freedom_per_entity(model, e)::Int
     end
     n = length(dx) ÷ bz
+    n::Int
     if to_canonical
         for b in 1:bz
             for i in 1:n
