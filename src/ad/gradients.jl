@@ -673,6 +673,9 @@ function evaluate_objective(G, model, states, timesteps, all_forces; large_value
     function convert_state_to_jutul_storage(model::MultiModel, x::AbstractDict)
         s = JutulStorage()
         for (k, v) in pairs(x)
+            if k == :substates
+                continue
+            end
             s[k] = JutulStorage(v)
         end
         return s
