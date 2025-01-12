@@ -22,11 +22,22 @@ function Jutul.mesh_from_gmsh(pth; manage_gmsh = true, kwarg...)
     return g
 end
 
-function Jutul.mesh_from_gmsh(; verbose = false, kwarg...)
+function Jutul.mesh_from_gmsh(; verbose = false, reverse_z = false, kwarg...)
     dim = gmsh.model.getDimension()
     dim == 3 || error("Only 3D models are supported")
 
     gmsh.model.mesh.removeDuplicateNodes()
+    if reverse_z
+        # Note: Gmsh API lets us send only the first 3 rows of the 4 by 4 matrix
+        # which is sufficient here.
+        gmsh.model.mesh.affineTransform(
+            [
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, -1.0, 0.0
+            ]
+        )
+    end
     node_tags, pts, = gmsh.model.mesh.getNodes()
     node_remap = Dict{UInt64, Int}()
     for (i, tag) in enumerate(node_tags)
