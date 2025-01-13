@@ -523,6 +523,10 @@ function convert_to_immutable_storage(S::JutulStorage)
     return JutulStorage(tup)
 end
 
+function convert_to_immutable_storage(S::NamedTuple)
+    return S
+end
+
 function Base.getindex(S::JutulStorage, i::Int)
     d = data(S)
     if d isa OrderedDict

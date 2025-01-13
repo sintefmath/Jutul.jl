@@ -85,7 +85,6 @@ function solve_adjoint_sensitivities(case::JutulCase, states::Vector, G; dt = ca
     )
 end
 
-
 function solve_adjoint_sensitivities(case::JutulCase, some_kind_of_result, G; kwarg...)
     if hasproperty(some_kind_of_result, :result)
         simresult = some_kind_of_result.result
@@ -317,6 +316,7 @@ function merge_sparsity!(sparsity::AbstractDict, s_new::AbstractDict)
         merge_sparsity!(sparsity[k], v)
     end
 end
+
 function merge_sparsity!(sparsity::AbstractVector, s_new::AbstractVector)
     for k in s_new
         push!(sparsity, k)
@@ -355,7 +355,7 @@ function state_gradient_outer!(∂F∂x, F, model, state, extra_arg; sparsity = 
     state_gradient_inner!(∂F∂x, F, model, state, nothing, extra_arg; sparsity = sparsity)
 end
 
-function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_model = model; sparsity = nothing)
+function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_model = model; sparsity = nothing, symbol = nothing)
     layout = matrix_layout(model.context)
     get_partial(x::AbstractFloat, i) = 0.0
     get_partial(x::ForwardDiff.Dual, i) = x.partials[i]
@@ -376,8 +376,12 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
         end
     end
 
-    function diff_entity!(∂F∂x, state, i, S, ne, np, offset)
-        state_i = local_ad(state, i, S)
+    function diff_entity!(∂F∂x, state, i, S, ne, np, offset, symbol)
+        if !isnothing(symbol)
+            state_i = local_ad(state, i, S, symbol)
+        else
+            state_i = local_ad(state, i, S)
+        end
         v = F(eval_model, state_i, extra_arg...)
         store_partials!(∂F∂x, v, i, ne, np, offset)
     end
@@ -395,7 +399,7 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
             ltag = get_entity_tag(tag, e)
             S = typeof(get_ad_entity_scalar(1.0, np, tag = ltag))
             for i in it_rng
-                diff_entity!(∂F∂x, state, i, S, ne, np, offset)
+                diff_entity!(∂F∂x, state, i, S, ne, np, offset, symbol)
             end
         end
         offset += ne*np
@@ -471,7 +475,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     else
         dt_next = timesteps[i+1]
         forces_next = forces_for_timestep(backward_sim, all_forces, timesteps, i+1)
-        @tic "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next, t + dt_next)
+        @tic "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next, t + dt)
         lsys_next = backward_sim.storage.LinearizedSystem
         op = linear_operator(lsys_next, skip_red = true)
         # In-place version of
@@ -673,6 +677,9 @@ function evaluate_objective(G, model, states, timesteps, all_forces; large_value
     function convert_state_to_jutul_storage(model::MultiModel, x::AbstractDict)
         s = JutulStorage()
         for (k, v) in pairs(x)
+            if k == :substates
+                continue
+            end
             s[k] = JutulStorage(v)
         end
         return s
@@ -869,9 +876,10 @@ function adjoint_transfer_canonical_order_inner!(λ, dx, model, ::BlockMajorLayo
         if bz > 0
             error("Assumed that block major has a single entity group")
         end
-        bz = degrees_of_freedom_per_entity(model, e)
+        bz = degrees_of_freedom_per_entity(model, e)::Int
     end
     n = length(dx) ÷ bz
+    n::Int
     if to_canonical
         for b in 1:bz
             for i in 1:n

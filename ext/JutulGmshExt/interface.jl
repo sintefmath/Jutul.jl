@@ -1,16 +1,44 @@
 
-function Jutul.mesh_from_gmsh(pth; verbose = false, kwarg...)
-    Gmsh.initialize()
+function Jutul.mesh_from_gmsh(pth; manage_gmsh = true, kwarg...)
+    if manage_gmsh
+        Gmsh.initialize()
+    end
     ext = pth |> splitext |> last
     gmsh.open(pth)
     if lowercase(ext) == ".geo"
         gmsh.model.mesh.generate()
     end
+    g = missing
+    try
+        g = Jutul.mesh_from_gmsh(; kwarg...)
+    finally
+        if manage_gmsh
+            Gmsh.finalize()
+        end
+    end
+    if ismissing(g)
+        error("Failed to parse mesh")
+    end
+    return g
+end
 
+function Jutul.mesh_from_gmsh(; verbose = false, reverse_z = false, kwarg...)
     dim = gmsh.model.getDimension()
     dim == 3 || error("Only 3D models are supported")
 
     gmsh.model.mesh.removeDuplicateNodes()
+    if reverse_z
+        # Note: Gmsh API lets us send only the first 3 rows of the 4 by 4 matrix
+        # which is sufficient here.
+        gmsh.model.mesh.affineTransform(
+            [
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, -1.0, 0.0
+            ]
+        )
+        gmsh.model.mesh.generate()
+    end
     node_tags, pts, = gmsh.model.mesh.getNodes()
     node_remap = Dict{UInt64, Int}()
     for (i, tag) in enumerate(node_tags)
@@ -30,9 +58,6 @@ function Jutul.mesh_from_gmsh(pth; verbose = false, kwarg...)
     face_lookup = generate_face_lookup(faces_to_nodes)
 
     cells_to_faces = parse_cells(remaps, faces_to_nodes, face_lookup, verbose = verbose)
-    # We are done with Gmsh.jl at this point, finalize it.
-    Gmsh.finalize()
-
     neighbors = build_neighbors(cells_to_faces, faces_to_nodes, face_lookup)
 
     # Make both of these in case we have rogue faces that are not connected to any cell.

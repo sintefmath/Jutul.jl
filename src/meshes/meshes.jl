@@ -279,3 +279,7 @@ function face_geometry_helper(G, D, nc, nf, e)
     end
     return (areas, normals, centroids)
 end
+
+
+import Base: promote_rule
+promote_rule(::Type{UnstructuredMesh}, ::Type{CartesianMesh}) = UnstructuredMesh

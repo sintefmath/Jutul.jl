@@ -6,10 +6,16 @@ struct LocalPerspectiveAD{T, N, A<:AbstractArray{T,N}, I} <: AbstractArray{T,N}
 end
 
 function LocalPerspectiveAD(a::A, index::I_t) where {A<:AbstractArray, I_t<:Integer}
-    LocalPerspectiveAD{eltype(a), ndims(A), A, I_t}(index, a)
+    return LocalPerspectiveAD{eltype(a), ndims(A), A, I_t}(index, a)
 end
 
 struct LocalStateAD{T, I, E} # Data type, index, entity tag
+    index::I
+    data::T
+end
+
+struct MultiModelLocalStateAD{T, I, E} # Data type, index, entity tag
+    symbol::Symbol
     index::I
     data::T
 end
@@ -22,6 +28,12 @@ end
 
 Base.keys(x::ValueStateAD) = keys(getfield(x, :data))
 
+function convert_to_immutable_storage(x::ValueStateAD)
+    data = getfield(x, :data)
+    data = convert_to_immutable_storage(data)
+    return ValueStateAD(data)
+end
+
 const StateType = Union{NamedTuple,AbstractDict,JutulStorage}
 
 as_value(x::StateType) = ValueStateAD(x)
@@ -31,7 +43,6 @@ export local_ad
 @inline local_ad(v, ::Nothing) = as_value(v)
 @inline local_ad(v, i) = v
 
-
 @inline function new_entity_index(state::LocalStateAD{T, I, E}, index::I) where {T, I, E}
     return LocalStateAD{T, I, E}(index, getfield(state, :data))
 end
@@ -39,7 +50,6 @@ end
 @inline function new_entity_index(x, index)
     return x
 end
-
 
 @inline local_entity(a::LocalPerspectiveAD) = a.index
 
@@ -79,7 +89,6 @@ end
     return f in keys
 end
 @inline Base.haskey(state::ValueStateAD, f::Symbol) = haskey(getfield(state, :data), f)
-
 
 # Match in type - pass index on
 @inline next_level_local_ad(x::AbstractArray{T}, ::Type{T}, index) where T = local_ad(x, index)
@@ -140,7 +149,23 @@ end
     return next_level_local_ad(val, E, index)
 end
 
+@inline function Base.getproperty(state::MultiModelLocalStateAD{T, I, E}, f::Symbol) where {T, I, E}
+    index = getfield(state, :index)
+    inner_state = getfield(state, :data)
+    val = getproperty(inner_state, f)
+    sym = getfield(state, :symbol)
+    if sym == f
+        return next_level_local_ad(val, E, index)
+    else
+        return as_value(val)
+    end
+end
+
 @inline function Base.getindex(state::LocalStateAD, s::Symbol)
+    Base.getproperty(state, s)
+end
+
+@inline function Base.getindex(state::MultiModelLocalStateAD, s::Symbol)
     Base.getproperty(state, s)
 end
 
@@ -163,8 +188,16 @@ Create local_ad for state for index I of AD tag of type ad_tag
     local_state_ad(state, index, ad_tag)
 end
 
+@inline function local_ad(state, index, ad_tag, symbol)
+    local_state_ad(state, index, ad_tag, symbol)
+end
+
 @inline function local_state_ad(state::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
     return LocalStateAD{T, I, ad_tag}(index, state)
+end
+
+@inline function local_state_ad(state::T, index::I, ad_tag::∂T, symbol::Symbol) where {T, I<:Integer, ∂T}
+    return MultiModelLocalStateAD{T, I, ad_tag}(symbol, index, state)
 end
 
 function Base.show(io::IO, t::MIME"text/plain", x::LocalStateAD{T, I, E}) where {T, I, E}
