@@ -61,7 +61,7 @@ function state_gradient_outer!(∂F∂x, F, model::MultiModel, state, extra_arg;
             S = nothing
         end
         localtag = submodel_ad_tag(model, k)
-        state_gradient_inner!(∂F∂x_k, F, m, state, localtag, extra_arg, model, sparsity = S)
+        state_gradient_inner!(∂F∂x_k, F, m, state, localtag, extra_arg, model, sparsity = S, symbol = k)
         offset += n
     end
     return ∂F∂x
