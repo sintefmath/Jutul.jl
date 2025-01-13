@@ -316,6 +316,8 @@ function UnstructuredMesh(g::CartesianMesh; warn_1d = true, kwarg...)
     end
 end
 
+Base.convert(::Type{UnstructuredMesh}, g::CartesianMesh) = UnstructuredMesh(g)
+
 function unstructured_from_cart(g, ::Val{2}; kwarg...)
     d = dim(g)
     @assert d == 2
