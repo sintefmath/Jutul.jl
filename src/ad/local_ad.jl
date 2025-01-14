@@ -20,13 +20,11 @@ struct MultiModelLocalStateAD{T, I, E} # Data type, index, entity tag
     data::T
 end
 
-Base.keys(x::LocalStateAD) = keys(getfield(x, :data))
-
 struct ValueStateAD{T} # Data type
     data::T
 end
 
-Base.keys(x::ValueStateAD) = keys(getfield(x, :data))
+Base.keys(x::Union{LocalStateAD, MultiModelLocalStateAD, ValueStateAD}) = keys(getfield(x, :data))
 
 function convert_to_immutable_storage(x::ValueStateAD)
     data = getfield(x, :data)
