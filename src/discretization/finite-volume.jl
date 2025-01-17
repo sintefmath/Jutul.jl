@@ -67,10 +67,10 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     # Check normals
     normal_dim, normal_n = size(face_normals)
     normal_dim == dim || throw(ArgumentError("Face normals had $normal_dim rows but grid had $dim dimension."))
-    fc_n == nf || throw(ArgumentError("Face normals had $normal_n columns but grid had $nf faces."))
+    normal_n == nf || throw(ArgumentError("Face normals had $normal_n columns but grid had $nf faces."))
     # Check areas
     # TODO: This isn't really checking anything since we get nf from areas...
-    length(face_areas) == nf || throw(ArgumentError("Face areas had $normal_n entries but grid had $nf faces."))
+    length(face_areas) == nf || throw(ArgumentError("Face areas had $(length(face_areas)) entries but grid had $nf faces."))
     # Check perm
     size(perm, 2) == nc || throw(ArgumentError("Permeability must have number of columns equal to number of cells (= $nc)."))
     if !(version in (:xyz, :ijk))
