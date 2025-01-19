@@ -699,6 +699,10 @@ function generate_colormap(colormap_name, alphamap_name, base_alpha, low, high)
         for (i, c) in enumerate(cmap)
             cmap[i] = Makie.RGBA{Float64}(c.r, c.g, c.b, base_alpha*F(u[i]))
         end
+    else
+        for (i, c) in enumerate(cmap)
+            cmap[i] = Makie.RGBA{Float64}(c.r, c.g, c.b, base_alpha)
+        end
     end
     return cmap
 end
