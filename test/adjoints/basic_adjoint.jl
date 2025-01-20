@@ -27,8 +27,7 @@ function solve_adjoint_forward_test_system(dim, dt)
     neg_src = PoissonSource(nc, -1.0)
     forces = setup_forces(model, sources = [pos_src, neg_src])
 
-    sim = Simulator(model, state0 = state0, parameters = param)
-    states, reports = simulate(sim, dt, info_level = -1, forces = forces);
+    states, reports = simulate(state0, model, parameters = param, dt, info_level = -1, forces = forces);
     return (model, state0, states, reports, param, forces)
 end
 

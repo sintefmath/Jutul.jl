@@ -38,13 +38,14 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, arg..
 end
 
 function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization_config(case.model, case.parameters);
-                                                            grad_type = :adjoint,
-                                                            config = nothing,
-                                                            print = 1,
-                                                            copy_case = true,
-                                                            param_obj = false,
-                                                            use_sparsity = true,
-                                                            kwarg...)
+        grad_type = :adjoint,
+        config = nothing,
+        print = 1,
+        copy_case = true,
+        param_obj = false,
+        use_sparsity = true,
+        kwarg...
+    )
     if copy_case
         case = duplicate(case)
     end
@@ -156,8 +157,12 @@ function gradient_opt!(dFdx, x, data)
             @. grad_adj = 1e10
         end
     else
-        grad_adj = Jutul.solve_numerical_sensitivities(model, data[:states], data[:reports], G, only(targets),
-                                                                    state0 = state0, forces = forces, parameters = parameters)
+        grad_adj = Jutul.solve_numerical_sensitivities(
+            model, data[:states], data[:reports], G, only(targets),
+            state0 = state0,
+            forces = forces,
+            parameters = parameters
+        )
     end
     transfer_gradient!(dFdx, grad_adj, x, mapper, opt_cfg, model)
     @assert all(isfinite, dFdx) "Non-finite gradients detected."
@@ -186,7 +191,10 @@ function objective_opt!(x, data, print_frequency = 1)
     n = data[:n_objective]
     push!(data[:obj_hist], obj)
     if print_frequency > 0 && mod(n, print_frequency) == 0
-        println("#$n: $obj")
+        fmt = x -> @sprintf("%2.4e", x)
+        rel = obj/data[:obj_hist][1]
+        best = data[:best_obj]
+        jutul_message("Obj. #$n", "$(fmt(obj)) (best: $(fmt(best)), relative: $(fmt(rel)))")
     end
     data[:n_objective] += 1
     if obj != bad_obj
