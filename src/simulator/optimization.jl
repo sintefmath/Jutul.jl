@@ -44,6 +44,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         copy_case = true,
         param_obj = false,
         use_sparsity = true,
+        include_state0 = false,
         kwarg...
     )
     if copy_case
@@ -235,9 +236,17 @@ function optimization_config(model, param, active = parameter_targets(model);
         rel_max = nothing,
         use_scaling = false
     )
+    model_param = get_parameters(model)
+    model_pvar = get_primary_variables(model)
     out = Dict{Symbol, Any}()
     for k in active
-        var = model.parameters[k]
+        if haskey(model_param, k)
+            origin = :parameters
+            var = model.parameters[k]
+        else
+            origin = :primary_variables
+            var = model_pvar[k]
+        end
         scale = variable_scale(var)
         if isnothing(scale)
             scale = 1.0
@@ -251,18 +260,19 @@ function optimization_config(model, param, active = parameter_targets(model);
             abs_max = Inf
         end
         out[k] = OrderedDict(
-                            :active => true,
-                            :use_scaling => use_scaling,
-                            :scaler => :default,
-                            :abs_min => abs_min,
-                            :abs_max => abs_max,
-                            :rel_min => rel_min,
-                            :rel_max => rel_max,
-                            :base_scale => scale,
-                            :lumping => nothing,
-                            :low => nothing,
-                            :high => nothing
-            )
+            :active => true,
+            :use_scaling => use_scaling,
+            :scaler => :default,
+            :abs_min => abs_min,
+            :abs_max => abs_max,
+            :rel_min => rel_min,
+            :rel_max => rel_max,
+            :base_scale => scale,
+            :lumping => nothing,
+            :low => nothing,
+            :high => nothing,
+            :origin => origin
+        )
     end
     return out
 end

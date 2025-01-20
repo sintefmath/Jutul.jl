@@ -553,10 +553,10 @@ function swap_primary_with_parameters!(pmodel, model, targets = parameter_target
     return pmodel
 end
 
-function parameter_targets(model::SimulationModel)
-    prm = get_parameters(model)
+function parameter_targets(model::SimulationModel, t = :parameters)
+    vars = get_variables_by_type(model, t)
     targets = Symbol[]
-    for (k, v) in prm
+    for (k, v) in vars
         if parameter_is_differentiable(v, model)
             push!(targets, k)
         end
