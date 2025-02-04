@@ -276,6 +276,7 @@ function initialize_extra_state_fields!(state, model::JutulModel)
     initialize_extra_state_fields!(state, model.domain, model)
     initialize_extra_state_fields!(state, model.system, model)
     initialize_extra_state_fields!(state, model.formulation, model)
+    return state
 end
 
 function initialize_extra_state_fields!(state, ::Any, model)
@@ -1139,16 +1140,21 @@ function ensure_model_consistency!(model::JutulModel)
 end
 
 function check_output_variables(model::JutulModel; label::Symbol = :Model)
+    tmp = JutulStorage()
+    initialize_extra_state_fields!(tmp, model)
     vars = get_variables_by_type(model, :all)
+    possible = [keys(tmp)..., keys(vars)...]
     missing_vars = Symbol[]
     for k in model.output_variables
-        if !haskey(vars, k)
-            push!(missing_vars, k)
+        if k in possible
+            continue
         end
+        push!(missing_vars, k)
     end
     n = length(missing_vars)
     if n > 0
+        possible = sort!(possible)
         fmt(x) = "\n    "*join(x, ",\n    ")
-        jutul_message("$label", "$n requested output variables were not found in model. Possible spelling errors?\nAvailable variables: $(fmt(missing_vars))\nVariables in model: $(fmt(keys(vars))).", color = :yellow)
+        jutul_message("$label", "$n requested output variables were not found in model. Possible spelling errors?\nRequested variables that were missing: $(fmt(missing_vars))\nVariables in model: $(fmt(possible)).", color = :yellow)
     end
 end
