@@ -1137,3 +1137,18 @@ end
 function ensure_model_consistency!(model::JutulModel)
     return model
 end
+
+function check_output_variables(model::JutulModel; label::Symbol = :Model)
+    vars = get_variables_by_type(model, :all)
+    missing_vars = Symbol[]
+    for k in model.output_variables
+        if !haskey(vars, k)
+            push!(missing_vars, k)
+        end
+    end
+    n = length(missing_vars)
+    if n > 0
+        fmt(x) = "\n    "*join(x, ",\n    ")
+        jutul_message("$label", "$n requested output variables were not found in model. Possible spelling errors?\nAvailable variables: $(fmt(missing_vars))\nVariables in model: $(fmt(keys(vars))).", color = :yellow)
+    end
+end
