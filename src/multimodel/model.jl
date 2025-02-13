@@ -1002,3 +1002,9 @@ function ensure_model_consistency!(model::MultiModel)
     end
     return model
 end
+
+function check_output_variables(model::MultiModel; label::Symbol = :Model)
+    for (k, v) in pairs(model.models)
+        check_output_variables(v, label = k)
+    end
+end

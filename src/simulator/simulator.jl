@@ -13,13 +13,16 @@ include("optimization.jl")
 include("relaxation.jl")
 include("helper.jl")
 
-function simulator_storage(model; state0 = nothing,
-                                parameters = setup_parameters(model),
-                                copy_state = true,
-                                mode = :forward,
-                                specialize = false,
-                                prepare_step_handler = missing,
-                                kwarg...)
+function simulator_storage(model;
+        state0 = nothing,
+        parameters = setup_parameters(model),
+        copy_state = true,
+        check = true,
+        mode = :forward,
+        specialize = false,
+        prepare_step_handler = missing,
+        kwarg...
+    )
     if mode == :forward
         state_ad = true
         state0_ad = false
@@ -30,6 +33,9 @@ function simulator_storage(model; state0 = nothing,
         state_ad = true
         state0_ad = true
         @assert mode == :sensitivities
+    end
+    if check
+        check_output_variables(model)
     end
     # We need to sort the secondary variables according to their dependency ordering before simulating.
     sort_secondary_variables!(model)
