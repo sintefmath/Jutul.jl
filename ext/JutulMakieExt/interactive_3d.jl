@@ -54,7 +54,7 @@ function plot_interactive_impl(grid, states;
         title = "",
         transform = "none",
         free_cam = false,
-        new_window = true,
+        new_window = get(ENV, "CI", "false") == "false",
         edge_color = nothing,
         step = 1,
         row = 1,
@@ -611,6 +611,9 @@ function plot_interactive_impl(grid, states;
 
     if new_window
         Jutul.independent_figure(fig)
+    else
+        # We might be replacing an existing figure that binds a lot of memory.
+        GC.gc()
     end
     return fig
 end
