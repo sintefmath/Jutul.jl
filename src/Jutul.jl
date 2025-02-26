@@ -43,6 +43,8 @@ module Jutul
     # Shorted alias for @timeit_debug
     const var"@tic" = var"@timeit_debug"
     const JUTUL_OUTPUT_TYPE = OrderedDict{Symbol, Any}
+    const JUTUL_IS_CI = get(ENV, "CI", "false") == "true"
+    const JUTUL_PROGRESS_BAR = get(ENV, "JUTUL_PROGRESS_BAR", "true") == "true" && !JUTUL_IS_CI
 
     timeit_debug_enabled() = false
 
