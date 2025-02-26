@@ -19,7 +19,7 @@ function adjoint_model_copy(model::MultiModel; context = nothing)
     new_models = map(F, model.models)
     ctp = copy(model.cross_terms)
     if isnothing(context)
-        new_context = adjoint(DefaultContext())
+        new_context = adjoint(model.context)
     else
         new_context = adjoint(context)
     end
