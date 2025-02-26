@@ -31,7 +31,7 @@ function start_simulation_message(info_level, timesteps, config)
     if info_level >= 0
         jutul_message("Jutul", msg, color = :light_green)
     end
-    if JUTUL_PROGRESS_BAR && info_level == 0
+    if info_level == 0 && !JUTUL_IS_CI && get(ENV, "JUTUL_PROGRESS_BAR", "true") == "true"
         bg = config[:progress_glyphs]
         if bg isa Symbol
             if bg == :default
@@ -63,8 +63,10 @@ end
 
 function new_simulation_control_step_message(info_level, p, rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
     if info_level == 0
-        msgvals = progress_showvalues(rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
-        next!(p; showvalues = msgvals)
+        if !isnothing(p)
+            msgvals = progress_showvalues(rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
+            next!(p; showvalues = msgvals)
+        end
     elseif info_level > 0
         r = rec.recorder
 
@@ -144,7 +146,7 @@ function final_simulation_message(simulator, p, rec, t_elapsed, reports, timeste
         if info_level == 0
             if aborted
                 cancel(p, "$start_str $final_message")
-            else
+            elseif !isnothing(p)
                 n = length(timesteps)
                 msgvals = progress_showvalues(rec, t_elapsed, n+1, n, 0.0, t_tot, start_date)
                 next!(p; showvalues = msgvals)
