@@ -31,7 +31,7 @@ function start_simulation_message(info_level, timesteps, config)
     if info_level >= 0
         jutul_message("Jutul", msg, color = :light_green)
     end
-    if info_level == 0
+    if info_level == 0 && !JUTUL_IS_CI && get(ENV, "JUTUL_PROGRESS_BAR", "true") == "true"
         bg = config[:progress_glyphs]
         if bg isa Symbol
             if bg == :default
@@ -63,8 +63,10 @@ end
 
 function new_simulation_control_step_message(info_level, p, rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
     if info_level == 0
-        msgvals = progress_showvalues(rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
-        next!(p; showvalues = msgvals)
+        if !isnothing(p)
+            msgvals = progress_showvalues(rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
+            next!(p; showvalues = msgvals)
+        end
     elseif info_level > 0
         r = rec.recorder
 
@@ -144,7 +146,7 @@ function final_simulation_message(simulator, p, rec, t_elapsed, reports, timeste
         if info_level == 0
             if aborted
                 cancel(p, "$start_str $final_message")
-            else
+            elseif !isnothing(p)
                 n = length(timesteps)
                 msgvals = progress_showvalues(rec, t_elapsed, n+1, n, 0.0, t_tot, start_date)
                 next!(p; showvalues = msgvals)
@@ -182,7 +184,17 @@ function final_simulation_message(simulator, p, rec, t_elapsed, reports, timeste
 end
 
 export jutul_message
-function jutul_message(prestr, substr = nothing; color = :light_blue, kwarg...)
+"""
+    jutul_message("Jutul", "Hello, world!", color = :light_blue)
+
+Print a line with a colored prefix. The prefix is colored with the `color`
+argument. The `fancy` argument controls whether the output is colored or not.
+"""
+function jutul_message(prestr, substr = nothing;
+        color = :light_blue,
+        fancy = !JUTUL_IS_CI,
+        kwarg...
+    )
     if isnothing(substr)
         fmt = "$prestr"
         substr = ""
@@ -190,8 +202,14 @@ function jutul_message(prestr, substr = nothing; color = :light_blue, kwarg...)
         fmt = "$prestr:"
         substr = " $substr"
     end
-    print(Crayon(foreground = color, bold = true; kwarg...), fmt)
-    println(Crayon(reset = true), substr)
+    if fancy
+        print(Crayon(foreground = color, bold = true; kwarg...), fmt)
+        println(Crayon(reset = true), substr)
+    else
+        # Skip colors on CI or when requested since colors do not render well in
+        # some Documenter exports and terminals.
+        println(fmt, substr)
+    end
 end
 
 function simulator_reports_per_step(simulator)
