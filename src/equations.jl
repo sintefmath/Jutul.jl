@@ -71,32 +71,29 @@ function find_jac_position(
         number_of_equations_for_entity = eqs_per_entity
     ) where T<:BlockMajorLayout
 
-    row = target_entity_index + row_offset
-    col = source_entity_index + column_offset
-    inner_layout = EntityMajorLayout()
-    adjoint_layout = represented_as_adjoint(row_layout)
-    if adjoint_layout
-        @assert represented_as_adjoint(col_layout)
-        inner_layout = adjoint(inner_layout)
-        # TODO: Check this.
-        partial_index += (source_entity_offset ÷ nentities_source)
-    else
-        equation_index += (target_entity_offset ÷ nentities_target)
-    end
     @assert source_entity_offset == 0
     # TODO: The use of N needs reworking if backend is to be used for
     # rectangular blocks.
     N = partials_per_entity
 
-    pos = find_sparse_position(A, row, col, inner_layout)
-    # base_ix = (pos-1)*eqs_per_entity*partials_per_entity
-    base_ix = (pos-1)*N*N
+    row = target_entity_index + row_offset
+    col = source_entity_index + column_offset
+    inner_layout = EntityMajorLayout()
+    
+    partial_index += (source_entity_offset ÷ nentities_source)
+    equation_index += (target_entity_offset ÷ nentities_target)
 
+    adjoint_layout = represented_as_adjoint(row_layout)
     if adjoint_layout
-        # ix = base_ix + partials_per_entity*(equation_index-1) + partial_index
+        @assert represented_as_adjoint(col_layout)
+        inner_layout = adjoint(inner_layout)
+        pos = find_sparse_position(A, row, col, inner_layout)
+        base_ix = (pos-1)*N*N
+        # TODO: Check this.
         ix = base_ix + N*(equation_index-1) + partial_index# + offset
     else
-        # ix = base_ix + eqs_per_entity*(partial_index-1) + equation_index
+        pos = find_sparse_position(A, row, col, inner_layout)
+        base_ix = (pos-1)*N*N
         ix = base_ix + N*(partial_index-1) + equation_index# + offset
     end
 
@@ -430,6 +427,7 @@ function align_to_jacobian!(eq_s, eq, jac, model; variable_offset = 0, kwarg...)
         align_to_jacobian!(eq_s, eq, jac, model, u, variable_offset = variable_offset; kwarg...)
         variable_offset += number_of_degrees_of_freedom(model, u)
     end
+    variable_offset
 end
 
 
