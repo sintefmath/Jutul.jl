@@ -29,7 +29,7 @@ function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_report
     if dt > half_remain && dt < remaining_time
         dt = half_remain
     end
-    dt = min(dt, config[:max_timestep])
+    dt = clamp(dt, config[:min_timestep], config[:max_timestep])
     if config[:info_level] > 1
         ratio = dt/dt_prev
         if ratio > 5
@@ -49,6 +49,9 @@ function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_report
 end
 
 function cut_timestep(sim, config, dt, dT, forces, reports; step_index = NaN, cut_count = 0)
+    if isapprox(dt, config[:min_timestep])
+        return NaN
+    end
     for sel in config[:timestep_selectors]
         candidate = pick_cut_timestep(sel, sim, config, dt, dT, forces, reports, cut_count)
         dt = min(dt, candidate)
