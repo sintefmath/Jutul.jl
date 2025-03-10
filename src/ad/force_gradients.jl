@@ -1,5 +1,19 @@
-function vectorize_forces(forces, model, variant = :all; T = Float64)
+function vectorize_forces(forces, model, variant = :all; T = Float64, offset = 0)
     meta_for_forces = Dict{Symbol, Any}()
+    lengths = vectorization_lengths(forces, model, variant)
+    config = (
+        lengths = lengths,
+        offsets = [offset+1],
+        meta = meta_for_forces,
+        variant = variant
+    )
+    n = sum(lengths)
+    v = Vector{T}(undef, n)
+    vectorize_forces!(v, model, config, forces)
+    return (v, config)
+end
+
+function vectorization_lengths(forces, model, variant = :all)
     fvals = values(forces)
     lengths = zeros(Int, length(fvals))
     for (i, force) in enumerate(fvals)
@@ -7,27 +21,17 @@ function vectorize_forces(forces, model, variant = :all; T = Float64)
             lengths[i] = vectorization_length(force, variant)
         end
     end
-    n = sum(lengths)
-    v = Vector{T}(undef, n)
-    config = (
-        lengths = lengths,
-        offsets = [1],
-        meta = meta_for_forces,
-        variant = variant
-        )
-    vectorize_forces!(v, model, config, forces)
-    return (v, config)
+    return lengths
 end
 
-function vectorize_forces!(v, model, config, forces)
+function vectorize_forces!(v, model, config, forces; offset = 0)
     (; meta, lengths, offsets, variant) = config
-    ix = 1
-    offset = 0
+    lpos = 1
     for (k, force) in pairs(forces)
         if isnothing(force)
             continue
         end
-        n_f = lengths[ix]
+        n_f = lengths[lpos]
         v_f = view(v, (offset+1):(offset+n_f))
         m = vectorize_force!(v_f, force, variant)
         # Update global offset here.
@@ -41,9 +45,10 @@ function vectorize_forces!(v, model, config, forces)
         end
         @assert offsets[end] == offsets[end-1] + n_f
         meta[k] = m
-        ix += 1
+        lpos += 1
         offset += n_f
     end
+    return offset
 end
 
 function vectorization_length(force, variant)
