@@ -200,14 +200,19 @@ function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 
     return sparsity
 end
 
-function evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, time)
+function evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, time; row_offset = 0, col_offset = 0)
+    J = storage[:forces_jac][forceno]
+    # Find maximum width
+    offsets = config.offsets
+    if sum(config.lengths) == 0
+        return J
+    end
     state = as_value(storage.forward.storage.state)
     mstorage = (state = state, )
 
     nvar = storage.n_forward
     sparsity = storage[:forces_sparsity][forceno]
-    # Find maximum width
-    offsets = config.offsets
+
     npartials = maximum(diff(offsets))
     sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1)
     # Initialize acc + forces with that size ForwardDiff.Dual
@@ -222,8 +227,6 @@ function evaluate_force_gradient(X, model, storage, parameters, forces, config, 
     end
     forces_ad = devectorize_forces(forces, model, X_ad, config)
     offsets = config.offsets
-    J = storage[:forces_jac][forceno]
-    # J = sparse(Int[], Int[], Float64[], nvar, length(X))
     fno = 1
     for (fname, force) in pairs(forces_ad)
         offset = offsets[fno] - 1
@@ -239,15 +242,13 @@ function evaluate_force_gradient(X, model, storage, parameters, forces, config, 
                     val = acc[i, entity]
                     for p in 1:np
                         ∂ = val.partials[p]
-                        J[row, offset + p] = ∂
+                        J[row + row_offset, offset + p + col_offset] = ∂
                     end
                 end
             end
         end
         fno += 1
     end
-    # Evaluate
-    # Fit back the gradients into Jacobian
     return J
 end
 
@@ -368,8 +369,6 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         @. out += Δ
         # display(out)
     end
-    # Do sparsity detection if not already done.
-    Jutul.update_objective_sparsity!(storage, G, states, timesteps, allforces, :forward)
 
     dforces = map(
         (forces, out, config) -> devectorize_forces(forces, model, out, config),
