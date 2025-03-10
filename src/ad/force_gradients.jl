@@ -1,4 +1,4 @@
-function vectorize_forces(forces, variant = :all; T = Float64)
+function vectorize_forces(forces, model, variant = :all; T = Float64)
     meta_for_forces = Dict{Symbol, Any}()
     fvals = values(forces)
     lengths = zeros(Int, length(fvals))
@@ -15,11 +15,11 @@ function vectorize_forces(forces, variant = :all; T = Float64)
         meta = meta_for_forces,
         variant = variant
         )
-    vectorize_forces!(v, config, forces)
+    vectorize_forces!(v, model, config, forces)
     return (v, config)
 end
 
-function vectorize_forces!(v, config, forces)
+function vectorize_forces!(v, model, config, forces)
     (; meta, lengths, offsets, variant) = config
     ix = 1
     offset = 0
@@ -90,7 +90,7 @@ function vectorize_force!(v, forces::Vector, variant)
     return (meta = meta_sub, lengths = lengths)
 end
 
-function devectorize_forces(forces, X, config)
+function devectorize_forces(forces, model, X, config)
     new_forces = OrderedDict{Symbol, Any}()
     lengths = config.lengths
     offset = 0
@@ -137,7 +137,7 @@ function determine_sparsity_forces(model, forces, X, config; parameters = setup_
     storage = (state = state, )
     X_ad = ST.create_advec(X)
     T = eltype(X_ad)
-    forces_ad = devectorize_forces(forces, X_ad, config)
+    forces_ad = devectorize_forces(forces, model, X_ad, config)
     sparsity = OrderedDict{Symbol, Any}()
     for (fname, force) in pairs(forces_ad)
         sparsity[fname] = determine_sparsity_force(storage, model, force, T)
@@ -213,7 +213,7 @@ function evaluate_force_gradient(X, model, storage, parameters, forces, config, 
             local_index += 1
         end
     end
-    forces_ad = devectorize_forces(forces, X_ad, config)
+    forces_ad = devectorize_forces(forces, model, X_ad, config)
     offsets = config.offsets
     J = storage[:forces_jac][forceno]
     # J = sparse(Int[], Int[], Float64[], nvar, length(X))
@@ -278,15 +278,13 @@ function unique_forces_and_mapping(allforces, timesteps)
     return (forces = unique_forces, forces_to_timesteps = forces_to_timestep, timesteps_to_forces = timesteps_to_forces, num_unique = num_unique_forces)
 end
 
-function setup_adjoint_forces_storage(
-    model, allforces, timesteps
-    ;
-    n_objective = nothing,
-    use_sparsity = true,
-    forces_map = unique_forces_and_mapping(allforces, timesteps),
-    state0 = setup_state(model),
-    parameters = setup_parameters(model)
-)
+function setup_adjoint_forces_storage(model, allforces, timesteps;
+        n_objective = nothing,
+        use_sparsity = true,
+        forces_map = unique_forces_and_mapping(allforces, timesteps),
+        state0 = setup_state(model),
+        parameters = setup_parameters(model)
+    )
     storage = 
     Jutul.setup_adjoint_storage_base(
         model, state0, parameters,
@@ -307,7 +305,7 @@ function setup_adjoint_forces_storage(
 
     nvar = storage.n_forward
     for (i, force) in enumerate(unique_forces)
-        X, config = vectorize_forces(force)
+        X, config = vectorize_forces(force, model)
         push!(storage[:forces_gradient], zeros(length(X)))
         push!(storage[:forces_vector], X)
         push!(storage[:forces_config], config)
@@ -366,7 +364,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
     Jutul.update_objective_sparsity!(storage, G, states, timesteps, allforces, :forward)
 
     dforces = map(
-        (forces, out, config) -> devectorize_forces(forces, out, config),
+        (forces, out, config) -> devectorize_forces(forces, model, out, config),
         storage[:unique_forces], storage[:forces_gradient], storage[:forces_config]
     )
     out = storage[:forces_gradient]
@@ -402,7 +400,7 @@ function forces_optimization_config(
     configs = []
     offsets = [1]
     for (force_ix, forces) in enumerate(unique_forces)
-        X, config = vectorize_forces(forces, variant)
+        X, config = vectorize_forces(forces, model, variant)
         push!(offsets, offsets[force_ix] + length(X))
         opt_config = OrderedDict{Symbol, Any}()
         meta = config.meta
@@ -544,7 +542,7 @@ function setup_force_optimization(case, G, opt_config)
             stop = opt_config.offsets[i+1]-1
             X_i = X[start:stop]
             fcfg = opt_config.forces_config[i]
-            allforces[i] = devectorize_forces(force, X_i, fcfg)
+            allforces[i] = devectorize_forces(force, model, X_i, fcfg)
         end
         simforces = allforces[opt_config.timesteps_to_forces]
         global_it += 1
