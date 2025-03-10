@@ -315,7 +315,8 @@ function setup_adjoint_forces_storage(model, allforces, timesteps;
         push!(storage[:forces_gradient], zeros(length(X)))
         push!(storage[:forces_vector], X)
         push!(storage[:forces_config], config)
-        push!(storage[:forces_sparsity], determine_sparsity_forces(model, force, X, config, parameters = parameters))
+        S_force = determine_sparsity_forces(model, force, X, config, parameters = parameters)
+        push!(storage[:forces_sparsity], S_force)
         push!(storage[:forces_jac], sparse(Int[], Int[], Float64[], nvar, length(X)))
     end
     return storage
