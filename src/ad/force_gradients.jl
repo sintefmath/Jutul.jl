@@ -33,7 +33,7 @@ function vectorize_forces!(v, model, config, forces; offset = 0)
         end
         n_f = lengths[lpos]
         v_f = view(v, (offset+1):(offset+n_f))
-        m = vectorize_force!(v_f, force, variant)
+        m = vectorize_force!(v_f, model, force, variant)
         # Update global offset here.
         if vectorization_sublength(force, m) == 1
             push!(offsets, offsets[end] + n_f)
@@ -70,25 +70,25 @@ function vectorization_sublength(force::Vector, meta)
     return length(meta.lengths)
 end
 
-function vectorize_force(x::Jutul.JutulForce, variant; T = Float64)
+function vectorize_force(x::Jutul.JutulForce, model, variant; T = Float64)
     n = vectorization_length(x, variant)
     v = zeros(T, n)
-    vectorize_force!(v, x, variant)
+    vectorize_force!(v, model, x, variant)
     return v
 end
 
-function vectorize_force!(v, forces, variant)
+function vectorize_force!(v, model, forces, variant)
     error("Not implemented for $(typeof(forces))")
 end
 
-function vectorize_force!(v, forces::Vector, variant)
+function vectorize_force!(v, model, forces::Vector, variant)
     offset = 0
     meta_sub = Vector{Any}(undef, length(forces))
     lengths = Vector{Int}(undef, length(forces))
     for (i, force) in enumerate(forces)
         n_i = vectorization_length(force, variant)
         v_i = view(v, (offset+1):(offset + n_i))
-        meta_sub[i] = vectorize_force!(v_i, force, variant)
+        meta_sub[i] = vectorize_force!(v_i, model, force, variant)
         offset += n_i
         lengths[i] = n_i
     end
@@ -106,21 +106,21 @@ function devectorize_forces(forces, model, X, config)
         end
         n_i = lengths[ix]
         X_i = view(X, (offset+1):(offset+n_i))
-        new_forces[k] = devectorize_force(v, X_i, config.meta[k], config.variant)
+        new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], config.variant)
         offset += n_i
         ix += 1
     end
     return Jutul.convert_to_immutable_storage(new_forces)
 end
 
-function devectorize_force(force::Vector, X, meta, variant)
+function devectorize_force(force::Vector, model, X, meta, variant)
     # new_force = similar(force)
     new_force_any = Vector{Any}(undef, length(force))
     offset = 0
     for (i, f) in enumerate(force)
         n_i = vectorization_length(f, variant)
         X_i = view(X, (offset+1):(offset+n_i))
-        new_force_any[i] = devectorize_force(f, X_i, meta[i], variant)
+        new_force_any[i] = devectorize_force(f, model, X_i, meta[i], variant)
         offset += n_i
     end
     # Narrow type def

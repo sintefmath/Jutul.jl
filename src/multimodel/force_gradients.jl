@@ -20,7 +20,6 @@ function vectorize_forces(forces, model::MultiModel, variant = :all; T = Float64
     n = offset
     v = Vector{T}(undef, n)
     for k in submodels_symbols(model)
-        submodel = model[k]
         vectorize_forces!(v, model[k], config[k], forces[k])
     end
     return (v, config)
