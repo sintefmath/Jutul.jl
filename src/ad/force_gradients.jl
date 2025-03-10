@@ -200,7 +200,11 @@ function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 
     return sparsity
 end
 
-function evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, time; row_offset = 0, col_offset = 0)
+function evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, time;
+        row_offset = 0,
+        col_offset = 0,
+        model_key = nothing
+    )
     J = storage[:forces_jac][forceno]
     # Find maximum width
     offsets = config.offsets
@@ -231,7 +235,12 @@ function evaluate_force_gradient(X, model, storage, parameters, forces, config, 
     for (fname, force) in pairs(forces_ad)
         offset = offsets[fno] - 1
         np = offsets[fno+1] - offsets[fno] # check off by one
-        for (eqname, S) in pairs(sparsity[fname])
+        if isnothing(model_key)
+            S = sparsity[fname]
+        else
+            S = sparsity[model_key][fname]
+        end
+        for (eqname, S) in pairs(S)
             eq = model.equations[eqname]
             acc = zeros(T, S.dims)
             eq_s = missing

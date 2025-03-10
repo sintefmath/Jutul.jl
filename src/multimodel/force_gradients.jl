@@ -63,15 +63,18 @@ end
 function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time; row_offset = 0, col_offset = 0)
     offset_var = 0
     offset_x = 0
+    J = storage[:forces_jac][forceno]
     for (k, m) in pairs(model.models)
         ndof = number_of_degrees_of_freedom(m)
         nl = sum(config[k].lengths)
         X_k = view(X, (offset_x+1):(offset_x+nl))
         evaluate_force_gradient(X_k, m, storage, parameters[k], forces[k], config[k], forceno, time,
             row_offset = offset_var,
-            col_offset = offset_var
+            col_offset = offset_var,
+            model_key = k
         )
         offset_var += ndof
         offset_x += nl
     end
+    return J
 end
