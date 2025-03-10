@@ -13,12 +13,13 @@ function vectorize_forces(forces, model, variant = :all; T = Float64, offset = 0
     return (v, config)
 end
 
-function vectorization_lengths(forces, model, name, variant = :all)
-    fvals = values(forces)
-    lengths = zeros(Int, length(fvals))
-    for (i, force) in enumerate(fvals)
+function vectorization_lengths(forces, model, variant = :all)
+    fkeys = keys(forces)
+    lengths = zeros(Int, length(fkeys))
+    for (i, force_name) in enumerate(fkeys)
+        force = forces[force_name]
         if !isnothing(force)
-            lengths[i] = vectorization_length(force, model, name, variant)
+            lengths[i] = vectorization_length(force, model, force_name, variant)
         end
     end
     return lengths
