@@ -18,7 +18,7 @@ function vectorization_lengths(forces, model, variant = :all)
     lengths = zeros(Int, length(fvals))
     for (i, force) in enumerate(fvals)
         if !isnothing(force)
-            lengths[i] = vectorization_length(force, variant)
+            lengths[i] = vectorization_length(force, model, variant)
         end
     end
     return lengths
@@ -51,13 +51,13 @@ function vectorize_forces!(v, model, config, forces; offset = 0)
     return offset
 end
 
-function vectorization_length(force, variant)
+function vectorization_length(force, model, variant)
     return 1
 end
 
-function vectorization_length(force::Vector, variant)
+function vectorization_length(force::Vector, model, variant)
     return sum(
-        x -> vectorization_length(x, variant),
+        x -> vectorization_length(x, model, variant),
         force
     )
 end
@@ -71,7 +71,7 @@ function vectorization_sublength(force::Vector, meta)
 end
 
 function vectorize_force(x::Jutul.JutulForce, model, variant; T = Float64)
-    n = vectorization_length(x, variant)
+    n = vectorization_length(x, model, variant)
     v = zeros(T, n)
     vectorize_force!(v, model, x, variant)
     return v
@@ -86,7 +86,7 @@ function vectorize_force!(v, model, forces::Vector, variant)
     meta_sub = Vector{Any}(undef, length(forces))
     lengths = Vector{Int}(undef, length(forces))
     for (i, force) in enumerate(forces)
-        n_i = vectorization_length(force, variant)
+        n_i = vectorization_length(force, model, variant)
         v_i = view(v, (offset+1):(offset + n_i))
         meta_sub[i] = vectorize_force!(v_i, model, force, variant)
         offset += n_i
@@ -118,7 +118,7 @@ function devectorize_force(force::Vector, model, X, meta, variant)
     new_force_any = Vector{Any}(undef, length(force))
     offset = 0
     for (i, f) in enumerate(force)
-        n_i = vectorization_length(f, variant)
+        n_i = vectorization_length(f, model, variant)
         X_i = view(X, (offset+1):(offset+n_i))
         new_force_any[i] = devectorize_force(f, model, X_i, meta[i], variant)
         offset += n_i
