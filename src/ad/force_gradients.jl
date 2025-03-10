@@ -376,15 +376,18 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         J = evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, sum(timesteps[1:i]))
         Δ =  J'*λ
         @. out += Δ
-        # display(out)
     end
 
+    return solve_adjoint_forces_retval(storage, model)
+end
+
+function solve_adjoint_forces_retval(storage, model::SimulationModel)
+    dX = storage[:forces_vector]
     dforces = map(
         (forces, out, config) -> devectorize_forces(forces, model, out, config),
-        storage[:unique_forces], storage[:forces_gradient], storage[:forces_config]
+        storage[:unique_forces], dX, storage[:forces_config]
     )
-    out = storage[:forces_gradient]
-    return (dforces, out)
+    return (dforces, dX)
 end
 
 function get_force_sens(model, state0, parameters, tstep, forces, G)

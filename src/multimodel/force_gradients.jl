@@ -40,26 +40,6 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
     return sparsity
 end
 
-# function devectorize_forces(forces, model::MultiModel, X, config)
-#     new_forces = OrderedDict{Symbol, Any}()
-#     lengths = config.lengths
-#     offset = 0
-#     ix = 1
-#     @info "???" config
-#     error()
-#     for (k, v) in pairs(forces)
-#         if isnothing(v)
-#             continue
-#         end
-#         n_i = lengths[ix]
-#         X_i = view(X, (offset+1):(offset+n_i))
-#         new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], k, config.variant)
-#         offset += n_i
-#         ix += 1
-#     end
-#     return new_forces
-# end
-
 function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time; row_offset = 0, col_offset = 0)
     offset_var = 0
     offset_x = 0
@@ -77,4 +57,26 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
         offset_x += nl
     end
     return J
+end
+
+function solve_adjoint_forces_retval(storage, model::MultiModel)
+    function inner_retval(forces, config, dX_f)
+        retval = Dict{Symbol, Any}()
+        offset = 0
+        for (k, m) in pairs(model.models)
+            f = forces[k]
+            c = config[k]
+            n = sum(c.lengths)
+            retval[k] = devectorize_forces(f, m, dX_f[offset+1:offset+n], c)
+            offset += n
+        end
+        return retval
+    end
+
+    dX = storage[:forces_vector]
+    dforces = map(
+        inner_retval,
+        storage[:unique_forces], storage[:forces_config], dX
+    )
+    return (dforces, dX)
 end
