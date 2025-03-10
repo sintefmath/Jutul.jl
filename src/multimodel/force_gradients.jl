@@ -1,4 +1,5 @@
-function vectorize_forces(forces, model::MultiModel, variant = :all; T = Float64, offset = 0)
+function vectorize_forces(forces, model::MultiModel, variant = :all; T = Float64)
+    offset = 0
     config = Dict{Symbol, Any}()
     for k in submodels_symbols(model)
         submodel = model[k]

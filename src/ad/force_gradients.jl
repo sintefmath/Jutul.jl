@@ -1,9 +1,9 @@
-function vectorize_forces(forces, model, variant = :all; T = Float64, offset = 0)
+function vectorize_forces(forces, model, variant = :all; T = Float64)
     meta_for_forces = Dict{Symbol, Any}()
     lengths = vectorization_lengths(forces, model, variant)
     config = (
         lengths = lengths,
-        offsets = [offset+1],
+        offsets = [1],
         meta = meta_for_forces,
         variant = variant
     )
@@ -25,9 +25,10 @@ function vectorization_lengths(forces, model, variant = :all)
     return lengths
 end
 
-function vectorize_forces!(v, model, config, forces; offset = 0)
+function vectorize_forces!(v, model, config, forces)
     (; meta, lengths, offsets, variant) = config
     lpos = 1
+    offset = 0
     for (k, force) in pairs(forces)
         if isnothing(force)
             continue
