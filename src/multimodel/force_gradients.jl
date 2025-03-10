@@ -24,14 +24,3 @@ function vectorize_forces(forces, model::MultiModel, variant = :all; T = Float64
     end
     return (v, config)
 end
-
-function vectorization_lengths(forces, model::MultiModel, variant = :all)
-    fvals = values(forces)
-    lengths = zeros(Int, length(fvals))
-    for (i, force) in enumerate(fvals)
-        if !isnothing(force)
-            lengths[i] = vectorization_length(force, variant)
-        end
-    end
-    return lengths
-end

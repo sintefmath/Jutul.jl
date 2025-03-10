@@ -13,12 +13,12 @@ function vectorize_forces(forces, model, variant = :all; T = Float64, offset = 0
     return (v, config)
 end
 
-function vectorization_lengths(forces, model, variant = :all)
+function vectorization_lengths(forces, model, name, variant = :all)
     fvals = values(forces)
     lengths = zeros(Int, length(fvals))
     for (i, force) in enumerate(fvals)
         if !isnothing(force)
-            lengths[i] = vectorization_length(force, model, variant)
+            lengths[i] = vectorization_length(force, model, name, variant)
         end
     end
     return lengths
@@ -33,7 +33,7 @@ function vectorize_forces!(v, model, config, forces; offset = 0)
         end
         n_f = lengths[lpos]
         v_f = view(v, (offset+1):(offset+n_f))
-        m = vectorize_force!(v_f, model, force, variant)
+        m = vectorize_force!(v_f, model, force, k, variant)
         # Update global offset here.
         if vectorization_sublength(force, m) == 1
             push!(offsets, offsets[end] + n_f)
@@ -51,13 +51,13 @@ function vectorize_forces!(v, model, config, forces; offset = 0)
     return offset
 end
 
-function vectorization_length(force, model, variant)
+function vectorization_length(force, model, name, variant)
     return 1
 end
 
-function vectorization_length(force::Vector, model, variant)
+function vectorization_length(force::Vector, model, name, variant)
     return sum(
-        x -> vectorization_length(x, model, variant),
+        x -> vectorization_length(x, model, name, variant),
         force
     )
 end
@@ -70,25 +70,25 @@ function vectorization_sublength(force::Vector, meta)
     return length(meta.lengths)
 end
 
-function vectorize_force(x::Jutul.JutulForce, model, variant; T = Float64)
-    n = vectorization_length(x, model, variant)
+function vectorize_force(x::Jutul.JutulForce, model, name, variant; T = Float64)
+    n = vectorization_length(x, model, name, variant)
     v = zeros(T, n)
-    vectorize_force!(v, model, x, variant)
+    vectorize_force!(v, model, x, name, variant)
     return v
 end
 
-function vectorize_force!(v, model, forces, variant)
-    error("Not implemented for $(typeof(forces))")
+function vectorize_force!(v, model, forces, name, variant)
+    error("Not implemented for $name: $(typeof(forces))")
 end
 
-function vectorize_force!(v, model, forces::Vector, variant)
+function vectorize_force!(v, model, forces::Vector, name, variant)
     offset = 0
     meta_sub = Vector{Any}(undef, length(forces))
     lengths = Vector{Int}(undef, length(forces))
     for (i, force) in enumerate(forces)
-        n_i = vectorization_length(force, model, variant)
+        n_i = vectorization_length(force, model, name, variant)
         v_i = view(v, (offset+1):(offset + n_i))
-        meta_sub[i] = vectorize_force!(v_i, model, force, variant)
+        meta_sub[i] = vectorize_force!(v_i, model, force, name, variant)
         offset += n_i
         lengths[i] = n_i
     end
@@ -106,21 +106,21 @@ function devectorize_forces(forces, model, X, config)
         end
         n_i = lengths[ix]
         X_i = view(X, (offset+1):(offset+n_i))
-        new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], config.variant)
+        new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], k, config.variant)
         offset += n_i
         ix += 1
     end
     return Jutul.convert_to_immutable_storage(new_forces)
 end
 
-function devectorize_force(force::Vector, model, X, meta, variant)
+function devectorize_force(force::Vector, model, X, meta, name, variant)
     # new_force = similar(force)
     new_force_any = Vector{Any}(undef, length(force))
     offset = 0
     for (i, f) in enumerate(force)
-        n_i = vectorization_length(f, model, variant)
+        n_i = vectorization_length(f, model, name, variant)
         X_i = view(X, (offset+1):(offset+n_i))
-        new_force_any[i] = devectorize_force(f, model, X_i, meta[i], variant)
+        new_force_any[i] = devectorize_force(f, model, X_i, meta[i], name, variant)
         offset += n_i
     end
     # Narrow type def
