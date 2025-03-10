@@ -40,22 +40,38 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
     return sparsity
 end
 
-function devectorize_forces(forces, model::MultiModel, X, config)
-    new_forces = OrderedDict{Symbol, Any}()
-    lengths = config.lengths
-    offset = 0
-    ix = 1
-    error()
-    for (k, v) in pairs(forces)
-        if isnothing(v)
-            continue
-        end
-        n_i = lengths[ix]
-        X_i = view(X, (offset+1):(offset+n_i))
-        new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], k, config.variant)
-        offset += n_i
-        ix += 1
-    end
-    return new_forces
-end
+# function devectorize_forces(forces, model::MultiModel, X, config)
+#     new_forces = OrderedDict{Symbol, Any}()
+#     lengths = config.lengths
+#     offset = 0
+#     ix = 1
+#     @info "???" config
+#     error()
+#     for (k, v) in pairs(forces)
+#         if isnothing(v)
+#             continue
+#         end
+#         n_i = lengths[ix]
+#         X_i = view(X, (offset+1):(offset+n_i))
+#         new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], k, config.variant)
+#         offset += n_i
+#         ix += 1
+#     end
+#     return new_forces
+# end
 
+function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time; row_offset = 0, col_offset = 0)
+    offset_var = 0
+    offset_x = 0
+    for (k, m) in pairs(model.models)
+        ndof = number_of_degrees_of_freedom(m)
+        nl = sum(config[k].lengths)
+        X_k = view(X, (offset_x+1):(offset_x+nl))
+        evaluate_force_gradient(X_k, m, storage, parameters[k], forces[k], config[k], forceno, time,
+            row_offset = offset_var,
+            col_offset = offset_var
+        )
+        offset_var += ndof
+        offset_x += nl
+    end
+end
