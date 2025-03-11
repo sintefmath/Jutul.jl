@@ -506,7 +506,10 @@ function setup_force_optimization(case, G, opt_config)
     (; model, state0, parameters, dt, forces) = case
 
     objective_history = Float64[]
-    output_data = JutulStorage(objective_history = objective_history)
+    output_data = JutulStorage(
+        objective_history = objective_history,
+        best_obj = Inf,
+    )
     X = Float64[]
     x0 = Float64[]
     xmin = Float64[]
@@ -582,6 +585,16 @@ function setup_force_optimization(case, G, opt_config)
         else
             obj = Jutul.evaluate_objective(G, model, states, dt, simforces)
             push!(objective_history, obj)
+            if obj < output_data[:best_obj]
+                output_data[:best_obj] = obj
+            end
+            if true
+                fmt = x -> @sprintf("%2.4e", x)
+                rel = obj/objective_history[1]
+                best = output_data[:best_obj]
+                n = length(objective_history)
+                jutul_message("Obj. #$n", "$(fmt(obj)) (best: $(fmt(best)), relative: $(fmt(rel)))")
+            end
             return obj
         end
     end
