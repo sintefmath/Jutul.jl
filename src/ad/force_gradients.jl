@@ -205,7 +205,6 @@ end
 
 function evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, time;
         row_offset = 0,
-        col_offset = 0,
         model_key = nothing
     )
     J = storage[:forces_jac][forceno]
@@ -254,7 +253,7 @@ function evaluate_force_gradient(X, model, storage, parameters, forces, config, 
                     val = acc[i, entity]
                     for p in 1:np
                         ∂ = val.partials[p]
-                        J[row + row_offset, offset + p + col_offset] = ∂
+                        J[row + row_offset, offset + p] = ∂
                     end
                 end
             end

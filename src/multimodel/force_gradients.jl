@@ -74,7 +74,6 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
         X_k = view(X, (offset_x+1):(offset_x+nl))
         evaluate_force_gradient(X_k, m, storage, parameters[k], forces[k], config[k], forceno, time,
             row_offset = offset_var,
-            col_offset = offset_var,
             model_key = k
         )
         offset_var += ndof
