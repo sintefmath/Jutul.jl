@@ -359,6 +359,14 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
     )
     unique_forces, forces_to_timestep, timesteps_to_forces, = storage[:forces_map]
 
+
+    fg = storage[:forces_gradient]
+    fv = storage[:forces_vector]
+    fc = storage[:forces_config]
+    for v in fv
+        @. v = 0.0
+    end
+
     N = length(timesteps)
     @assert N == length(states)
     # Do sparsity detection if not already done.
@@ -367,9 +375,9 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         forceno = timesteps_to_forces[i]
         # Unpack stuff for this force in particular
         forces = unique_forces[forceno]
-        config = storage[:forces_config][forceno]
-        out = storage[:forces_gradient][forceno]
-        X = storage[:forces_vector][forceno]
+        config = fc[forceno]
+        out = fg[forceno]
+        X = fv[forceno]
 
         s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
         λ, t, dt, forces = Jutul.next_lagrange_multiplier!(storage, i, G, s, s0, s_next, timesteps, forces)
