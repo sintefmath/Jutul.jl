@@ -33,9 +33,33 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
         submodel = model[k]
         subforces = forces[k]
         subconfig = config[k]
+
+        extra = Dict()
+        for ct in model.cross_terms
+            is_self = ct.target == k
+            is_self_symm = ct.source == k && Jutul.has_symmetry(ct.cross_term)
+            if is_self || is_self_symm
+                if is_self
+                    ekey = ct.target_equation
+                    eq = submodel.equations[ekey]
+                    ct_cells = Jutul.cross_term_entities(ct.cross_term, eq, submodel)
+                end
+                if is_self_symm
+                    ekey = ct.source_equation
+                    eq = submodel.equations[ekey]
+                    ct_cells = Jutul.cross_term_entities_source(ct.cross_term, eq, submodel)
+                end
+                if !haskey(extra, ekey)
+                    extra[ekey] = Int[]
+                end
+                for c in ct_cells
+                    push!(extra[ekey], c)
+                end
+            end
+        end
         subX = X[subconfig.offsets[1]:subconfig.offsets[1]+sum(subconfig.lengths)-1]
         subparameters = parameters[k]
-        sparsity[k] = determine_sparsity_forces(submodel, subforces, subX, subconfig; parameters = subparameters)
+        sparsity[k] = determine_sparsity_forces(submodel, subforces, subX, subconfig; parameters = subparameters, extra_sparsity = extra)
     end
     return sparsity
 end

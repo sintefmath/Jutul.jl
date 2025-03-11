@@ -130,7 +130,7 @@ function devectorize_force(force::Vector, model, X, meta, name, variant)
     return new_force
 end
 
-function determine_sparsity_forces(model, forces, X, config; parameters = setup_parameters(model))
+function determine_sparsity_forces(model, forces, X, config; parameters = setup_parameters(model), extra_sparsity = Dict())
     function fake_state(model)
         init = Dict{Symbol, Any}()
         for (k, v) in Jutul.get_variables(model)
@@ -147,13 +147,13 @@ function determine_sparsity_forces(model, forces, X, config; parameters = setup_
     forces_ad = devectorize_forces(forces, model, X_ad, config)
     sparsity = OrderedDict{Symbol, Any}()
     for (fname, force) in pairs(forces_ad)
-        sparsity[fname] = determine_sparsity_force(storage, model, force, T)
+        sparsity[fname] = determine_sparsity_force(storage, model, force, T, extra_sparsity = extra_sparsity)
     end
 
     return sparsity
 end
 
-function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 0)
+function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 0; extra_sparsity = Dict())
     sparsity = OrderedDict{Symbol, Any}()
     equation_acc = OrderedDict{Symbol, Any}()
     for (eqname, eq) in model.equations
@@ -173,25 +173,28 @@ function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 
         rows = Vector{Vector{Int}}()
         cols = Vector{Vector{Int}}()
         tmp = sum(acc, dims = 1)
-        for (i, v) in enumerate(tmp)
-            D = ST.deriv(v)
-            if length(D.nzind) > 0
-                push!(S, i)
-                I = Int[]
-                # TODO: I / rows is not really needed here?
-                for e in 1:neqs
-                    e_ix = Jutul.alignment_linear_index(i, e, nentity, neqs, EquationMajorLayout())
-                    push!(I, e_ix)
-                end
-                push!(rows, I)
-
-                J = Int[]
-                for p in 1:npartials
-                    p_ix = Jutul.alignment_linear_index(i, p, nentity, npartials, EquationMajorLayout())
-                    push!(J, p_ix)
-                end
-                push!(cols, J)
+        active_entities = findall(i -> length(ST.deriv(tmp[i]).nzind) > 0, eachindex(tmp))
+        if haskey(extra_sparsity, eqname)
+            for c in extra_sparsity[eqname]
+                push!(active_entities, c)
             end
+        end
+        for i in active_entities
+            push!(S, i)
+            I = Int[]
+            # TODO: I / rows is not really needed here?
+            for e in 1:neqs
+                e_ix = Jutul.alignment_linear_index(i, e, nentity, neqs, EquationMajorLayout())
+                push!(I, e_ix)
+            end
+            push!(rows, I)
+
+            J = Int[]
+            for p in 1:npartials
+                p_ix = Jutul.alignment_linear_index(i, p, nentity, npartials, EquationMajorLayout())
+                push!(J, p_ix)
+            end
+            push!(cols, J)
         end
         sparsity[eqname] = (entity = S, rows = rows, cols = cols, dims = (neqs, nentity))
 
