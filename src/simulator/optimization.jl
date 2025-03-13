@@ -409,10 +409,10 @@ function optimization_limits!(lims, config, mapper, param, model)
         if !isnothing(lumping)
             for lno in 1:maximum(lumping)
                 pos = findfirst(isequal(lno), lumping)
-                ref_val = vals[pos + offset]
+                ref_val = vals[pos]
                 for (i, l) in enumerate(lumping)
                     if l == lno
-                        if vals[i + offset] != ref_val
+                        if vals[i] != ref_val
                             error("Initial values for $param_k differed for lumping group $lno at position $i")
                         end
                     end
