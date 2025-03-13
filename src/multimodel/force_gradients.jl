@@ -35,26 +35,23 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
         subconfig = config[k]
 
         extra = Dict()
-        for ct in model.cross_terms
+        for ct in evaluate_force_gradient_get_crossterms(model, k)
             is_self = ct.target == k
-            is_self_symm = ct.source == k && Jutul.has_symmetry(ct.cross_term)
-            if is_self || is_self_symm
-                if is_self
-                    ekey = ct.target_equation
-                    eq = submodel.equations[ekey]
-                    ct_cells = Jutul.cross_term_entities(ct.cross_term, eq, submodel)
-                end
-                if is_self_symm
-                    ekey = ct.source_equation
-                    eq = submodel.equations[ekey]
-                    ct_cells = Jutul.cross_term_entities_source(ct.cross_term, eq, submodel)
-                end
-                if !haskey(extra, ekey)
-                    extra[ekey] = Int[]
-                end
-                for c in ct_cells
-                    push!(extra[ekey], c)
-                end
+            if is_self
+                ekey = ct.target_equation
+                eq = submodel.equations[ekey]
+                ct_cells = Jutul.cross_term_entities(ct.cross_term, eq, submodel)
+            else
+                @assert ct.source == k
+                ekey = ct.source_equation
+                eq = submodel.equations[ekey]
+                ct_cells = Jutul.cross_term_entities_source(ct.cross_term, eq, submodel)
+            end
+            if !haskey(extra, ekey)
+                extra[ekey] = Int[]
+            end
+            for c in ct_cells
+                push!(extra[ekey], c)
             end
         end
         subX = X[subconfig.offsets[1]:subconfig.offsets[1]+sum(subconfig.lengths)-1]
@@ -62,6 +59,26 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
         sparsity[k] = determine_sparsity_forces(submodel, subforces, subX, subconfig; parameters = subparameters, extra_sparsity = extra)
     end
     return sparsity
+end
+
+function evaluate_force_gradient_get_crossterms(model, k, equation = missing)
+    crossterms = CrossTermPair[]
+    for ct in model.cross_terms
+        is_self = ct.target == k
+        is_self_symm = ct.source == k && Jutul.has_symmetry(ct.cross_term)
+        if is_self || is_self_symm
+            if ismissing(equation)
+                push!(crossterms, ct)
+            else
+                if is_self && ct.target_equation == equation
+                    push!(crossterms, ct)
+                elseif is_self_symm && ct.source_equation == equation
+                    push!(crossterms, ct)
+                end
+            end
+        end
+    end
+    return crossterms
 end
 
 function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time; row_offset = 0, col_offset = 0)
