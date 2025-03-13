@@ -361,12 +361,11 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
     )
     unique_forces, forces_to_timestep, timesteps_to_forces, = storage[:forces_map]
 
-
     fg = storage[:forces_gradient]
     fv = storage[:forces_vector]
     fc = storage[:forces_config]
-    for v in fv
-        @. v = 0.0
+    for g in fg
+        @. g = 0.0
     end
 
     N = length(timesteps)
@@ -395,7 +394,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
 end
 
 function solve_adjoint_forces_retval(storage, model::SimulationModel)
-    dX = storage[:forces_vector]
+    dX = storage[:forces_gradient]
     dforces = map(
         (forces, out, config) -> devectorize_forces(forces, model, out, config),
         storage[:unique_forces], dX, storage[:forces_config]
