@@ -96,6 +96,40 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
 end
 
 function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, parameters, forces, config, forceno, time, row_offset::Int)
+    getstate(k) = as_value(storage.forward.storage.state[k])
+    getstate0(k) = as_value(storage.forward.storage.state0[k])
+
+    function add_in_cross_term!(acc, state_t, state0_t, model_t, ct_pair, eq, dt)
+        ct = ct_pair.cross_term
+        if ct_pair.target == model_key
+            impact = cross_term_entities(ct, eq, model_t)
+            sgn = 1.0
+            other = ct_pair.source
+        else
+            impact = cross_term_entities_source(ct, eq, model_t)
+            if symmetry(ctp.cross_term) == CTSkewSymmetry()
+                sgn = -1.0
+            else
+                sgn = 1.0
+            end
+            other = ct_pair.target
+        end
+        model_s = multi_model[other]
+        state_s = getstate(other)
+        state0_s = getstate0(other)
+        N = length(impact)
+        # TODO: apply_force_to_cross_term!
+        v = zeros(eltype(acc), size(acc, 1), N)
+        for i in 1:N
+            prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
+            ldisc = local_discretization(ct, i)
+            v_i = view(v, :, i)
+            update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
+        end
+        increment_equation_entries!(acc, model, v, impact, N, sgn)
+        return acc
+    end
+
     model = multi_model[model_key]
     J = storage[:forces_jac][forceno]
     # Find maximum width
@@ -103,7 +137,8 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
     if sum(config.lengths) == 0
         return J
     end
-    state = as_value(storage.forward.storage.state)
+    state = getstate(model_key)
+    state0 = getstate0(model_key)
     mstorage = (state = state, )
 
     nvar = storage.n_forward
@@ -137,6 +172,11 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             acc = zeros(T, S.dims)
             eq_s = missing
             Jutul.apply_forces_to_equation!(acc, mstorage, model, eq, eq_s, force, time)
+            cts = evaluate_force_gradient_get_crossterms(multi_model, model_key, eqname)
+            for ct_pair in cts
+                dt = NaN # TODO: Fix.
+                add_in_cross_term!(acc, state, state0, model, ct_pair, eq, dt)
+            end
             # Loop over entities that this force impacts
             for (entity, rows) in zip(S.entity, S.rows)
                 for (i, row) in enumerate(rows)
