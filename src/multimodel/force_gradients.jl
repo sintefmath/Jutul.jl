@@ -97,9 +97,21 @@ end
 
 function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, parameters, forces, config, forceno, time, row_offset::Int)
     dt = NaN # TODO: Fix.
-
-    getstate(k) = as_value(storage.forward.storage.state[k])
-    getstate0(k) = as_value(storage.forward.storage.state0[k])
+    is_fake_multimodel = haskey(multi_model.models, :Model) && !haskey(storage.forward.storage.state, :Model)
+    function getstate(k)
+        if is_fake_multimodel
+            return as_value(storage.forward.storage.state)
+        else
+            return as_value(storage.forward.storage.state[k])
+        end
+    end
+    function getstate0(k)
+        if is_fake_multimodel
+            return as_value(storage.forward.storage.state0)
+        else
+            return as_value(storage.forward.storage.state0[k])
+        end
+    end
 
     function add_in_cross_term!(acc, state_t, state0_t, model_t, ct_pair, eq, dt)
         ct = ct_pair.cross_term
@@ -185,7 +197,7 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             for ct_pair in cts
                 add_in_cross_term!(acc, state, state0, model, ct_pair, eq, dt)
             end
-            @info "Done" S.rows acc[:, S.rows[1]]
+            # @info "Done" S.rows acc[:, S.rows[1]]
             # Loop over entities that this force impacts
             for (entity, rows) in zip(S.entity, S.rows)
                 for (i, row) in enumerate(rows)
