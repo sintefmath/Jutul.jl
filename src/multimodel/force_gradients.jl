@@ -128,7 +128,9 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             v_i = view(v, :, i)
             update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
         end
+        # @info "???" v
         increment_equation_entries!(acc, model, v, impact, N, sgn)
+        @info "???" acc[:, impact] impact
         return acc
     end
 
@@ -174,6 +176,7 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             S = sparsity[fname]
         end
         for (eqname, S) in pairs(S)
+            @warn eqname
             eq = model.equations[eqname]
             acc = zeros(T, S.dims)
             eq_s = missing
@@ -182,6 +185,7 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             for ct_pair in cts
                 add_in_cross_term!(acc, state, state0, model, ct_pair, eq, dt)
             end
+            @info "Done" S.rows acc[:, S.rows[1]]
             # Loop over entities that this force impacts
             for (entity, rows) in zip(S.entity, S.rows)
                 for (i, row) in enumerate(rows)
@@ -195,6 +199,7 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
         end
         fno += 1
     end
+    @info "Finally done" nonzeros(J)
     return J
 end
 
