@@ -97,7 +97,7 @@ function vectorize_force!(v, model, forces::Vector, name, variant)
     return (meta = meta_sub, lengths = lengths)
 end
 
-function devectorize_forces(forces, model, X, config)
+function devectorize_forces(forces, model, X, config; offset = 0)
     new_forces = OrderedDict{Symbol, Any}()
     lengths = config.lengths
     offset = 0
@@ -112,7 +112,7 @@ function devectorize_forces(forces, model, X, config)
         offset += n_i
         ix += 1
     end
-    return Jutul.convert_to_immutable_storage(new_forces)
+    return setup_forces(model; new_forces...)
 end
 
 function devectorize_force(force::Vector, model, X, meta, name, variant)

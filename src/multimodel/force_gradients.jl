@@ -176,21 +176,17 @@ function solve_adjoint_forces_retval(storage, model::MultiModel)
     return (dforces, dX)
 end
 
-function devectorize_forces(forces, model::MultiModel, X, config)
-    error()
-    new_forces = OrderedDict{Symbol, Any}()
-    lengths = config.lengths
-    offset = 0
-    ix = 1
-    for (k, v) in pairs(forces)
-        if isnothing(v)
-            continue
-        end
-        n_i = lengths[ix]
-        X_i = view(X, (offset+1):(offset+n_i))
-        new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], k, config.variant)
-        offset += n_i
-        ix += 1
+function devectorize_forces(forces, model::MultiModel, X, config; offset = 0)
+    new_forces = Dict{Symbol, Any}()
+    for k in submodels_symbols(model)
+        submodel = model[k]
+        subforces = forces[k]
+        subconfig = config[k]
+        n = sum(subconfig.lengths)
+        subX = X[(offset+1):(offset+n)]
+        nf = devectorize_forces(subforces, submodel, subX, subconfig)
+        new_forces[k] = setup_forces(submodel; nf...)
+        offset += n
     end
-    return Jutul.convert_to_immutable_storage(new_forces)
+    return new_forces
 end
