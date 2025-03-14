@@ -84,20 +84,75 @@ end
 function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time; row_offset = 0, col_offset = 0)
     offset_var = 0
     offset_x = 0
-    J = storage[:forces_jac][forceno]
     for (k, m) in pairs(model.models)
         ndof = number_of_degrees_of_freedom(m)
         nl = sum(config[k].lengths)
         X_k = view(X, (offset_x+1):(offset_x+nl))
-        evaluate_force_gradient(X_k, m, storage, parameters[k], forces[k], config[k], forceno, time,
-            row_offset = offset_var,
-            model_key = k
-        )
+        evaluate_force_gradient_inner(X_k, model, k, storage, parameters[k], forces[k], config[k], forceno, time, row_offset)
         offset_var += ndof
         offset_x += nl
     end
+    return storage[:forces_jac][forceno]
+end
+
+function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, parameters, forces, config, forceno, time, row_offset::Int)
+    model = multi_model[model_key]
+    J = storage[:forces_jac][forceno]
+    # Find maximum width
+    offsets = config.offsets
+    if sum(config.lengths) == 0
+        return J
+    end
+    state = as_value(storage.forward.storage.state)
+    mstorage = (state = state, )
+
+    nvar = storage.n_forward
+    sparsity = storage[:forces_sparsity][forceno]
+
+    npartials = maximum(diff(offsets))
+    sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1)
+    # Initialize acc + forces with that size ForwardDiff.Dual
+    T = typeof(sample)
+    X_ad = Vector{T}(undef, length(X))
+    for fno in 1:(length(offsets)-1)
+        local_index = 1
+        for j in offsets[fno]:(offsets[fno+1]-1)
+            X_ad[j] = Jutul.get_ad_entity_scalar(X[j], npartials, local_index)
+            local_index += 1
+        end
+    end
+    forces_ad = devectorize_forces(forces, model, X_ad, config)
+    offsets = config.offsets
+    fno = 1
+    for (fname, force) in pairs(forces_ad)
+        offset = offsets[fno] - 1
+        np = offsets[fno+1] - offsets[fno] # check off by one
+        if haskey(sparsity, model_key)
+            S = sparsity[model_key][fname]
+        else
+            S = sparsity[fname]
+        end
+        for (eqname, S) in pairs(S)
+            eq = model.equations[eqname]
+            acc = zeros(T, S.dims)
+            eq_s = missing
+            Jutul.apply_forces_to_equation!(acc, mstorage, model, eq, eq_s, force, time)
+            # Loop over entities that this force impacts
+            for (entity, rows) in zip(S.entity, S.rows)
+                for (i, row) in enumerate(rows)
+                    val = acc[i, entity]
+                    for p in 1:np
+                        ∂ = val.partials[p]
+                        J[row + row_offset, offset + p] = ∂
+                    end
+                end
+            end
+        end
+        fno += 1
+    end
     return J
 end
+
 
 function solve_adjoint_forces_retval(storage, model::MultiModel)
     function inner_retval(forces, config, dX_f)
