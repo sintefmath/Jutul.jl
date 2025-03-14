@@ -96,6 +96,8 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
 end
 
 function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, parameters, forces, config, forceno, time, row_offset::Int)
+    dt = NaN # TODO: Fix.
+
     getstate(k) = as_value(storage.forward.storage.state[k])
     getstate0(k) = as_value(storage.forward.storage.state0[k])
 
@@ -139,7 +141,6 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
     end
     state = getstate(model_key)
     state0 = getstate0(model_key)
-    mstorage = (state = state, )
 
     nvar = storage.n_forward
     sparsity = storage[:forces_sparsity][forceno]
@@ -156,7 +157,12 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             local_index += 1
         end
     end
+    mstorage = JutulStorage()
+    mstorage[:state] = state
+    mstorage[:state0] = state0
+    setup_storage_model(mstorage, model)
     forces_ad = devectorize_forces(forces, model, X_ad, config)
+    update_before_step!(mstorage, model, dt, forces, time = time)
     offsets = config.offsets
     fno = 1
     for (fname, force) in pairs(forces_ad)
@@ -174,7 +180,6 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             Jutul.apply_forces_to_equation!(acc, mstorage, model, eq, eq_s, force, time)
             cts = evaluate_force_gradient_get_crossterms(multi_model, model_key, eqname)
             for ct_pair in cts
-                dt = NaN # TODO: Fix.
                 add_in_cross_term!(acc, state, state0, model, ct_pair, eq, dt)
             end
             # Loop over entities that this force impacts
