@@ -168,7 +168,7 @@ function solve_adjoint_forces_retval(storage, model::MultiModel)
         return retval
     end
 
-    dX = storage[:forces_vector]
+    dX = storage[:forces_gradient]
     dforces = map(
         inner_retval,
         storage[:unique_forces], storage[:forces_config], dX
