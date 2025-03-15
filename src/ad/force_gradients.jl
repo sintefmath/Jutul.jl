@@ -364,9 +364,6 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
         λ, t, dt, forces = Jutul.next_lagrange_multiplier!(storage, i, G, s, s0, s_next, timesteps, forces)
         J = evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, sum(timesteps[1:i]), timesteps[i])
-        if nnz(J) > 0
-            display(J)
-        end
         Δ =  J'*λ
         @. out += Δ
     end
@@ -382,16 +379,6 @@ function solve_adjoint_forces_retval(storage, model::SimulationModel)
     )
     return (dforces, dX)
 end
-
-# function get_force_sens(model, state0, parameters, tstep, forces, G)
-#     sim = Simulator(model, state0 = state0, parameters = parameters)
-#     states, reports = simulate(sim, tstep, forces = forces, extra_timing = false, info_level = -1)
-
-#     dforces, grad_adj = solve_adjoint_forces(model, states, reports, G, forces,
-#                     state0 = state0, parameters = parameters)
-#     grad_num = missing
-#     return (dforces, grad_adj, grad_num)
-# end
 
 function forces_optimization_config(
         model,

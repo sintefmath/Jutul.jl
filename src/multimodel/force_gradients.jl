@@ -140,7 +140,6 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             v_i = view(v, :, i)
             update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
         end
-        # @info "???" v
         increment_equation_entries!(acc, model, v, impact, N, sgn)
         return acc
     end
@@ -157,23 +156,11 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
 
     nvar = storage.n_forward
     sparsity = storage[:forces_sparsity][forceno]
-
-    # mstorage = JutulStorage()
-    # mstorage[:state] = state
-    # mstorage[:state0] = state0
-    # setup_storage_model(mstorage, model)
-    # forces_ad = devectorize_forces(forces, model, X_ad, config)
-    # @info "?????" forces_ad X_ad
-    # update_before_step!(mstorage, model, dt, forces_ad, time = time)
-    # @info "?????" keys(mstorage.state) mstorage.state.WellGroupConfiguration.operating_controls# mstorage.state.Facility
-    # @info "?!??!" mstorage.state.WellGroupConfiguration.requested_controls
-    # @info "?!??!" mstorage.state.WellGroupConfiguration.limits
     offsets = config.offsets
     npartials = maximum(diff(offsets))
     sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1)
     T = typeof(sample)
 
-    @info "FORCES HERE!" forces_ad
     offsets = config.offsets
     fno = 1
     for (fname, force) in pairs(forces_ad)
@@ -194,16 +181,12 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             for ct_pair in cts
                 add_in_cross_term!(acc, state, state0, model, ct_pair, eq, dt)
             end
-            # @info "Done" S.rows acc[:, S.rows[1]]
             # Loop over entities that this force impacts
-            # @info "test" S.entity S.rows S.cols S.dims
             for (entity, rows) in zip(S.entity, S.rows)
                 for (i, row) in enumerate(rows)
                     val = acc[i, entity]
-                    # @info "Accessing row $entity at $i" val
                     for p in 1:np
                         ∂ = val.partials[p]
-                        # @info "??" ∂
                         J[row + row_offset, offset + p] = ∂
                     end
                 end
@@ -211,8 +194,6 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
         end
         fno += 1
     end
-    @info "Finally done" nonzeros(J)
-    # error()
 
     return J
 end
