@@ -81,7 +81,7 @@ function evaluate_force_gradient_get_crossterms(model, k, equation = missing)
     return crossterms
 end
 
-function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time; row_offset = 0, col_offset = 0)
+function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time, dt; row_offset = 0, col_offset = 0)
     forces_ad = devectorize_forces(forces, model, X, config, ad = true)
     offset_var = 0
     offset_x = 0
@@ -100,21 +100,19 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
         setup_storage_model(s, model.models[k])
         mstorage[k] = s
     end
-    dt = NaN
     update_before_step!(mstorage, model, dt, forces_ad, time = time)
     for (k, m) in pairs(model.models)
         ndof = number_of_degrees_of_freedom(m)
         nl = sum(config[k].lengths)
         X_k = view(X, (offset_x+1):(offset_x+nl))
-        evaluate_force_gradient_inner(X_k, model, k, storage, mstorage, parameters[k], forces_ad[k], config[k], forceno, time, row_offset)
+        evaluate_force_gradient_inner(X_k, model, k, storage, mstorage, parameters[k], forces_ad[k], config[k], forceno, time, dt, row_offset)
         offset_var += ndof
         offset_x += nl
     end
     return storage[:forces_jac][forceno]
 end
 
-function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, forces_ad, config, forceno, time, row_offset::Int)
-    dt = NaN # TODO: Fix.
+function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, forces_ad, config, forceno, time, dt, row_offset::Int)
     function add_in_cross_term!(acc, state_t, state0_t, model_t, ct_pair, eq, dt)
         ct = ct_pair.cross_term
         if ct_pair.target == model_key

@@ -228,11 +228,19 @@ function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 
     return sparsity
 end
 
-function evaluate_force_gradient(X, model::SimulationModel, storage, parameters, forces, config, forceno, time)
+function evaluate_force_gradient(X, model::SimulationModel, storage, parameters, forces, config, forceno, time, dt)
     J = storage[:forces_jac][forceno]
     mname = :Model
     mmodel = MultiModel((Model = model,))
-    evaluate_force_gradient(X, mmodel, storage, Dict(mname => parameters), Dict(mname => forces), Dict(mname => config), forceno, time)
+    evaluate_force_gradient(
+        X, mmodel, storage,
+        Dict(mname => parameters),
+        Dict(mname => forces),
+        Dict(mname => config),
+        forceno,
+        time,
+        dt
+    )
     return storage[:forces_jac][forceno]
 end
 
@@ -355,7 +363,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
 
         s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
         λ, t, dt, forces = Jutul.next_lagrange_multiplier!(storage, i, G, s, s0, s_next, timesteps, forces)
-        J = evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, sum(timesteps[1:i]))
+        J = evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, sum(timesteps[1:i]), timesteps[i])
         if nnz(J) > 0
             display(J)
         end
