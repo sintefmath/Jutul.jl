@@ -85,35 +85,36 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
     forces_ad = devectorize_forces(forces, model, X, config, ad = true)
     offset_var = 0
     offset_x = 0
+    is_fake_multimodel = haskey(model.models, :Model) && !haskey(storage.forward.storage.state, :Model)
+
+    mstorage = JutulStorage()
+    for k in submodels_symbols(model)
+        s = JutulStorage()
+        if is_fake_multimodel
+            s[:state] = as_value(storage.forward.storage.state)
+            s[:state0] = as_value(storage.forward.storage.state0)
+        else
+            s[:state] = as_value(storage.forward.storage.state[k])
+            s[:state0] = as_value(storage.forward.storage.state0[k])
+        end
+        setup_storage_model(s, model.models[k])
+        mstorage[k] = s
+    end
+    dt = NaN
+    update_before_step!(mstorage, model, dt, forces_ad, time = time)
     for (k, m) in pairs(model.models)
         ndof = number_of_degrees_of_freedom(m)
         nl = sum(config[k].lengths)
         X_k = view(X, (offset_x+1):(offset_x+nl))
-        evaluate_force_gradient_inner(X_k, model, k, storage, parameters[k], forces_ad[k], config[k], forceno, time, row_offset)
+        evaluate_force_gradient_inner(X_k, model, k, storage, mstorage, parameters[k], forces_ad[k], config[k], forceno, time, row_offset)
         offset_var += ndof
         offset_x += nl
     end
     return storage[:forces_jac][forceno]
 end
 
-function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, parameters, forces_ad, config, forceno, time, row_offset::Int)
+function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, forces_ad, config, forceno, time, row_offset::Int)
     dt = NaN # TODO: Fix.
-    is_fake_multimodel = haskey(multi_model.models, :Model) && !haskey(storage.forward.storage.state, :Model)
-    function getstate(k)
-        if is_fake_multimodel
-            return as_value(storage.forward.storage.state)
-        else
-            return as_value(storage.forward.storage.state[k])
-        end
-    end
-    function getstate0(k)
-        if is_fake_multimodel
-            return as_value(storage.forward.storage.state0)
-        else
-            return as_value(storage.forward.storage.state0[k])
-        end
-    end
-
     function add_in_cross_term!(acc, state_t, state0_t, model_t, ct_pair, eq, dt)
         ct = ct_pair.cross_term
         if ct_pair.target == model_key
@@ -130,8 +131,8 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             other = ct_pair.target
         end
         model_s = multi_model[other]
-        state_s = getstate(other)
-        state0_s = getstate0(other)
+        state_s = model_storage[other].state
+        state0_s = model_storage[other].state0
         N = length(impact)
         # TODO: apply_force_to_cross_term!
         v = zeros(eltype(acc), size(acc, 1), N)
@@ -143,7 +144,6 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
         end
         # @info "???" v
         increment_equation_entries!(acc, model, v, impact, N, sgn)
-        # @info "???" acc[:, impact] impact
         return acc
     end
 
@@ -154,19 +154,19 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
     if sum(config.lengths) == 0
         return J
     end
-    state = getstate(model_key)
-    state0 = getstate0(model_key)
+    state = model_storage[model_key].state
+    state0 = model_storage[model_key].state0
 
     nvar = storage.n_forward
     sparsity = storage[:forces_sparsity][forceno]
 
-    mstorage = JutulStorage()
-    mstorage[:state] = state
-    mstorage[:state0] = state0
-    setup_storage_model(mstorage, model)
+    # mstorage = JutulStorage()
+    # mstorage[:state] = state
+    # mstorage[:state0] = state0
+    # setup_storage_model(mstorage, model)
     # forces_ad = devectorize_forces(forces, model, X_ad, config)
     # @info "?????" forces_ad X_ad
-    update_before_step!(mstorage, model, dt, forces_ad, time = time)
+    # update_before_step!(mstorage, model, dt, forces_ad, time = time)
     # @info "?????" keys(mstorage.state) mstorage.state.WellGroupConfiguration.operating_controls# mstorage.state.Facility
     # @info "?!??!" mstorage.state.WellGroupConfiguration.requested_controls
     # @info "?!??!" mstorage.state.WellGroupConfiguration.limits
@@ -175,8 +175,7 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
     sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1)
     T = typeof(sample)
 
-    @info forces_ad
-    # error()
+    @info "FORCES HERE!" forces_ad
     offsets = config.offsets
     fno = 1
     for (fname, force) in pairs(forces_ad)
@@ -192,7 +191,7 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             eq = model.equations[eqname]
             acc = zeros(T, S.dims)
             eq_s = missing
-            Jutul.apply_forces_to_equation!(acc, mstorage, model, eq, eq_s, force, time)
+            Jutul.apply_forces_to_equation!(acc, model_storage[model_key], model, eq, eq_s, force, time)
             cts = evaluate_force_gradient_get_crossterms(multi_model, model_key, eqname)
             for ct_pair in cts
                 add_in_cross_term!(acc, state, state0, model, ct_pair, eq, dt)
@@ -215,6 +214,8 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
         fno += 1
     end
     @info "Finally done" nonzeros(J)
+    # error()
+
     return J
 end
 
