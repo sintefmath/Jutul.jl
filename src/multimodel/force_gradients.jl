@@ -81,7 +81,7 @@ function evaluate_force_gradient_get_crossterms(model, k, equation = missing)
     return crossterms
 end
 
-function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time, dt; row_offset = 0, col_offset = 0)
+function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time, dt)
     forces_ad = devectorize_forces(forces, model, X, config, ad = true)
     offset_var = 0
     offset_x = 0
@@ -105,7 +105,7 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
         ndof = number_of_degrees_of_freedom(m)
         nl = sum(config[k].lengths)
         X_k = view(X, (offset_x+1):(offset_x+nl))
-        evaluate_force_gradient_inner(X_k, model, k, storage, mstorage, parameters[k], forces_ad[k], config[k], forceno, time, dt, row_offset)
+        evaluate_force_gradient_inner(X_k, model, k, storage, mstorage, parameters[k], forces_ad[k], config[k], forceno, time, dt, offset_var)
         offset_var += ndof
         offset_x += nl
     end
@@ -164,6 +164,7 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
     offsets = config.offsets
     fno = 1
     for (fname, force) in pairs(forces_ad)
+        @info "Offset $model_key" offsets
         offset = offsets[fno] - 1
         np = offsets[fno+1] - offsets[fno] # check off by one
         if haskey(sparsity, model_key)
@@ -189,6 +190,9 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
                         ∂ = val.partials[p]
                         J[row + row_offset, offset + p] = ∂
                     end
+
+                    II, JJ, VV = findnz(J)
+                    @info "???" II JJ VV size(J) row_offset
                 end
             end
         end
