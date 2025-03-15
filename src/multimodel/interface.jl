@@ -11,7 +11,7 @@ function cross_term_entities
 end
 
 function has_symmetry
-    
+
 end
 
 
