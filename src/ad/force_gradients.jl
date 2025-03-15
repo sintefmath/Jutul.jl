@@ -104,19 +104,23 @@ function devectorize_forces(forces, model, X, config; offset = 0, ad = false)
     ix = 1
     if ad
         offsets = config.offsets
-        npartials = maximum(diff(offsets))
-        sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1)
-        # Initialize acc + forces with that size ForwardDiff.Dual
-        T = typeof(sample)
-        X_ad = Vector{T}(undef, length(X))
-        for fno in 1:(length(offsets)-1)
-            local_index = 1
-            for j in offsets[fno]:(offsets[fno+1]-1)
-                X_ad[j] = Jutul.get_ad_entity_scalar(X[j], npartials, local_index)
-                local_index += 1
+        npartials = maximum(diff(offsets), init = 0)
+        if npartials == 0
+            X_eval = X
+        else
+            sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1)
+            # Initialize acc + forces with that size ForwardDiff.Dual
+            T = typeof(sample)
+            X_ad = Vector{T}(undef, length(X))
+            for fno in 1:(length(offsets)-1)
+                local_index = 1
+                for j in offsets[fno]:(offsets[fno+1]-1)
+                    X_ad[j] = Jutul.get_ad_entity_scalar(X[j], npartials, local_index)
+                    local_index += 1
+                end
             end
+            X_eval = X_ad
         end
-        X_eval = X_ad
     else
         X_eval = X
     end
