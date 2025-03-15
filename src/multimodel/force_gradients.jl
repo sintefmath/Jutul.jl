@@ -82,20 +82,21 @@ function evaluate_force_gradient_get_crossterms(model, k, equation = missing)
 end
 
 function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time; row_offset = 0, col_offset = 0)
+    forces_ad = devectorize_forces(forces, model, X, config, ad = true)
     offset_var = 0
     offset_x = 0
     for (k, m) in pairs(model.models)
         ndof = number_of_degrees_of_freedom(m)
         nl = sum(config[k].lengths)
         X_k = view(X, (offset_x+1):(offset_x+nl))
-        evaluate_force_gradient_inner(X_k, model, k, storage, parameters[k], forces[k], config[k], forceno, time, row_offset)
+        evaluate_force_gradient_inner(X_k, model, k, storage, parameters[k], forces_ad[k], config[k], forceno, time, row_offset)
         offset_var += ndof
         offset_x += nl
     end
     return storage[:forces_jac][forceno]
 end
 
-function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, parameters, forces, config, forceno, time, row_offset::Int)
+function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, parameters, forces_ad, config, forceno, time, row_offset::Int)
     dt = NaN # TODO: Fix.
     is_fake_multimodel = haskey(multi_model.models, :Model) && !haskey(storage.forward.storage.state, :Model)
     function getstate(k)
@@ -142,7 +143,7 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
         end
         # @info "???" v
         increment_equation_entries!(acc, model, v, impact, N, sgn)
-        @info "???" acc[:, impact] impact
+        # @info "???" acc[:, impact] impact
         return acc
     end
 
@@ -159,24 +160,23 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
     nvar = storage.n_forward
     sparsity = storage[:forces_sparsity][forceno]
 
-    npartials = maximum(diff(offsets))
-    sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1)
-    # Initialize acc + forces with that size ForwardDiff.Dual
-    T = typeof(sample)
-    X_ad = Vector{T}(undef, length(X))
-    for fno in 1:(length(offsets)-1)
-        local_index = 1
-        for j in offsets[fno]:(offsets[fno+1]-1)
-            X_ad[j] = Jutul.get_ad_entity_scalar(X[j], npartials, local_index)
-            local_index += 1
-        end
-    end
     mstorage = JutulStorage()
     mstorage[:state] = state
     mstorage[:state0] = state0
     setup_storage_model(mstorage, model)
-    forces_ad = devectorize_forces(forces, model, X_ad, config)
-    update_before_step!(mstorage, model, dt, forces, time = time)
+    # forces_ad = devectorize_forces(forces, model, X_ad, config)
+    # @info "?????" forces_ad X_ad
+    update_before_step!(mstorage, model, dt, forces_ad, time = time)
+    # @info "?????" keys(mstorage.state) mstorage.state.WellGroupConfiguration.operating_controls# mstorage.state.Facility
+    # @info "?!??!" mstorage.state.WellGroupConfiguration.requested_controls
+    # @info "?!??!" mstorage.state.WellGroupConfiguration.limits
+    offsets = config.offsets
+    npartials = maximum(diff(offsets))
+    sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1)
+    T = typeof(sample)
+
+    @info forces_ad
+    # error()
     offsets = config.offsets
     fno = 1
     for (fname, force) in pairs(forces_ad)
@@ -188,7 +188,7 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             S = sparsity[fname]
         end
         for (eqname, S) in pairs(S)
-            @warn eqname
+            # @warn "equation: $eqname for $model_key" S.dims
             eq = model.equations[eqname]
             acc = zeros(T, S.dims)
             eq_s = missing
@@ -199,11 +199,14 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             end
             # @info "Done" S.rows acc[:, S.rows[1]]
             # Loop over entities that this force impacts
+            # @info "test" S.entity S.rows S.cols S.dims
             for (entity, rows) in zip(S.entity, S.rows)
                 for (i, row) in enumerate(rows)
                     val = acc[i, entity]
+                    # @info "Accessing row $entity at $i" val
                     for p in 1:np
                         ∂ = val.partials[p]
+                        # @info "??" ∂
                         J[row + row_offset, offset + p] = ∂
                     end
                 end
@@ -238,7 +241,7 @@ function solve_adjoint_forces_retval(storage, model::MultiModel)
     return (dforces, dX)
 end
 
-function devectorize_forces(forces, model::MultiModel, X, config; offset = 0)
+function devectorize_forces(forces, model::MultiModel, X, config; offset = 0, ad = false)
     new_forces = Dict{Symbol, Any}()
     for k in submodels_symbols(model)
         submodel = model[k]
@@ -246,7 +249,7 @@ function devectorize_forces(forces, model::MultiModel, X, config; offset = 0)
         subconfig = config[k]
         n = sum(subconfig.lengths)
         subX = X[(offset+1):(offset+n)]
-        nf = devectorize_forces(subforces, submodel, subX, subconfig)
+        nf = devectorize_forces(subforces, submodel, subX, subconfig, ad = ad)
         new_forces[k] = setup_forces(submodel; nf...)
         offset += n
     end

@@ -97,17 +97,35 @@ function vectorize_force!(v, model, forces::Vector, name, variant)
     return (meta = meta_sub, lengths = lengths)
 end
 
-function devectorize_forces(forces, model, X, config; offset = 0)
+function devectorize_forces(forces, model, X, config; offset = 0, ad = false)
     new_forces = OrderedDict{Symbol, Any}()
     lengths = config.lengths
     offset = 0
     ix = 1
+    if ad
+        offsets = config.offsets
+        npartials = maximum(diff(offsets))
+        sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1)
+        # Initialize acc + forces with that size ForwardDiff.Dual
+        T = typeof(sample)
+        X_ad = Vector{T}(undef, length(X))
+        for fno in 1:(length(offsets)-1)
+            local_index = 1
+            for j in offsets[fno]:(offsets[fno+1]-1)
+                X_ad[j] = Jutul.get_ad_entity_scalar(X[j], npartials, local_index)
+                local_index += 1
+            end
+        end
+        X_eval = X_ad
+    else
+        X_eval = X
+    end
     for (k, v) in pairs(forces)
         if isnothing(v)
             continue
         end
         n_i = lengths[ix]
-        X_i = view(X, (offset+1):(offset+n_i))
+        X_i = view(X_eval, (offset+1):(offset+n_i))
         new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], k, config.variant)
         offset += n_i
         ix += 1
@@ -130,7 +148,10 @@ function devectorize_force(force::Vector, model, X, meta, name, variant)
     return new_force
 end
 
-function determine_sparsity_forces(model, forces, X, config; parameters = setup_parameters(model), extra_sparsity = Dict())
+function determine_sparsity_forces(model, forces, X, config;
+        parameters = setup_parameters(model),
+        extra_sparsity = Dict()
+    )
     function fake_state(model)
         init = Dict{Symbol, Any}()
         for (k, v) in Jutul.get_variables(model)
