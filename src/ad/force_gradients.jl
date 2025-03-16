@@ -271,7 +271,7 @@ function evaluate_force_gradient(X, model::SimulationModel, storage, parameters,
     )
 end
 
-function unique_forces_and_mapping(allforces, timesteps)
+function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
     function force_steps(forces, dt)
         return ([forces], [1:length(dt)], 1)
     end
@@ -293,28 +293,46 @@ function unique_forces_and_mapping(allforces, timesteps)
         @assert sum(length, force_map) == length(forces)
         return (unique_forces, force_map, num_unique_forces)
     end
-    unique_forces, forces_to_timestep, num_unique_forces = force_steps(allforces, timesteps)
-    timesteps_to_forces = zeros(Int, length(timesteps))
-    for (i, m) in enumerate(forces_to_timestep)
-        for j in m
-            timesteps_to_forces[j] = i
+    if eachstep
+        if !(allforces isa Vector)
+            allforces = [copy(allforces) for _ in timesteps]
         end
+        unique_forces = deepcopy(allforces)
+        forces_to_timestep = collect(eachindex(timesteps))
+        timesteps_to_forces = copy(forces_to_timestep)
+        num_unique_forces = length(unique_forces)
+    else
+        unique_forces, forces_to_timestep, num_unique_forces = force_steps(allforces, timesteps)
+        timesteps_to_forces = zeros(Int, length(timesteps))
+        for (i, m) in enumerate(forces_to_timestep)
+            for j in m
+                timesteps_to_forces[j] = i
+            end
+        end
+        @assert all(timesteps_to_forces .> 0)
     end
-    @assert all(timesteps_to_forces .> 0)
 
-    return (forces = unique_forces, forces_to_timesteps = forces_to_timestep, timesteps_to_forces = timesteps_to_forces, num_unique = num_unique_forces)
+    return (
+        forces = unique_forces,
+        forces_to_timesteps = forces_to_timestep,
+        timesteps_to_forces = timesteps_to_forces,
+        num_unique = num_unique_forces
+    )
 end
 
 function setup_adjoint_forces_storage(model, allforces, timesteps;
         n_objective = nothing,
         use_sparsity = true,
+        eachstep = false,
         targets = force_targets(model),
-        forces_map = unique_forces_and_mapping(allforces, timesteps),
+        forces_map = missing,
         state0 = setup_state(model),
         parameters = setup_parameters(model)
     )
-    storage = 
-    Jutul.setup_adjoint_storage_base(
+    if ismissing(forces_map)
+        forces_map = unique_forces_and_mapping(allforces, timesteps, eachstep = eachstep)
+    end
+    storage = Jutul.setup_adjoint_storage_base(
         model, state0, parameters,
         use_sparsity = use_sparsity,
         n_objective = n_objective,
