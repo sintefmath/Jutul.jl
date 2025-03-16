@@ -82,12 +82,14 @@ function evaluate_force_gradient_get_crossterms(model, k, equation = missing)
 end
 
 function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time, dt)
-    forces_ad = devectorize_forces(forces, model, X, config, ad = true)
+    forces = devectorize_forces(forces, model, X, config)
     offset_var = 0
     offset_x = 0
     is_fake_multimodel = haskey(model.models, :Model) && !haskey(storage.forward.storage.state, :Model)
 
     mstorage = JutulStorage()
+    mstate = JutulStorage()
+    mstate0 = JutulStorage()
     for k in submodels_symbols(model)
         s = JutulStorage()
         if is_fake_multimodel
@@ -98,24 +100,28 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
             s[:state0] = as_value(storage.forward.storage.state0[k])
         end
         setup_storage_model(s, model.models[k])
+        mstate[k] = s[:state]
+        mstate0[k] = s[:state0]
         mstorage[k] = s
     end
+    mstorage[:state] = mstate
+    mstorage[:state0] = mstate0
     J = storage[:forces_jac][forceno]
     nz = nonzeros(J)
     @. nz = 0.0
-    update_before_step!(mstorage, model, dt, forces_ad, time = time)
+    update_before_step!(mstorage, model, dt, forces, time = time)
     for (k, m) in pairs(model.models)
         ndof = number_of_degrees_of_freedom(m)
         nl = sum(config[k].lengths)
         X_k = view(X, (offset_x+1):(offset_x+nl))
-        evaluate_force_gradient_inner(X_k, model, k, storage, mstorage, parameters[k], forces_ad[k], config[k], forceno, time, dt, offset_var)
+        evaluate_force_gradient_inner(X_k, model, k, storage, mstorage, parameters[k], forces, config[k], forceno, time, dt, offset_var)
         offset_var += ndof
         offset_x += nl
     end
     return J
 end
 
-function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, forces_ad, config, forceno, time, dt, row_offset::Int)
+function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, all_forces, config, forceno, time, dt, row_offset::Int)
     function add_in_cross_term!(acc, state_t, state0_t, model_t, ct_pair, eq, dt)
         ct = ct_pair.cross_term
         if ct_pair.target == model_key
@@ -166,8 +172,14 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
 
     offsets = config.offsets
     fno = 1
-    for (fname, force) in pairs(forces_ad)
-        @info "Offset $model_key" offsets
+    subforces = all_forces[model_key]
+    for fname in keys(subforces)
+        forces_ad = devectorize_forces(subforces, model, X, config, ad_key = fname)
+        force_ad = forces_ad[fname]
+        all_forces[model_key] = forces_ad
+        update_before_step!(model_storage, multi_model, dt, all_forces, time = time)
+
+        # @info "Offset $model_key" offsets
         offset = offsets[fno] - 1
         np = offsets[fno+1] - offsets[fno] # check off by one
         if haskey(sparsity, model_key)
@@ -180,7 +192,7 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             eq = model.equations[eqname]
             acc = zeros(T, S.dims)
             eq_s = missing
-            Jutul.apply_forces_to_equation!(acc, model_storage[model_key], model, eq, eq_s, force, time)
+            Jutul.apply_forces_to_equation!(acc, model_storage[model_key], model, eq, eq_s, force_ad, time)
             cts = evaluate_force_gradient_get_crossterms(multi_model, model_key, eqname)
             for ct_pair in cts
                 add_in_cross_term!(acc, state, state0, model, ct_pair, eq, dt)
@@ -197,9 +209,8 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
             end
             II, JJ, VV = findnz(J)
 
-            @info "??? $fname" II JJ VV size(J) row_offset
-            display(J[row_offset+1:end, :])
-
+            # @info "??? $fname" II JJ VV size(J) row_offset
+            # display(J[row_offset+1:end, :])
         end
         fno += 1
     end
@@ -230,7 +241,10 @@ function solve_adjoint_forces_retval(storage, model::MultiModel)
     return (dforces, dX)
 end
 
-function devectorize_forces(forces, model::MultiModel, X, config; offset = 0, ad = false)
+function devectorize_forces(forces, model::MultiModel, X, config; offset = 0, model_key = nothing, ad_key = nothing)
+    if isnothing(model_key)
+        @assert isnothing(ad_key)
+    end
     new_forces = Dict{Symbol, Any}()
     for k in submodels_symbols(model)
         submodel = model[k]
@@ -238,7 +252,12 @@ function devectorize_forces(forces, model::MultiModel, X, config; offset = 0, ad
         subconfig = config[k]
         n = sum(subconfig.lengths)
         subX = X[(offset+1):(offset+n)]
-        nf = devectorize_forces(subforces, submodel, subX, subconfig, ad = ad)
+        if model_key == k
+            ad_key_model = ad_key
+        else
+            ad_key_model = nothing
+        end
+        nf = devectorize_forces(subforces, submodel, subX, subconfig, ad_key = ad_key_model)
         new_forces[k] = setup_forces(submodel; nf...)
         offset += n
     end

@@ -97,12 +97,16 @@ function vectorize_force!(v, model, forces::Vector, name, variant)
     return (meta = meta_sub, lengths = lengths)
 end
 
-function devectorize_forces(forces, model, X, config; offset = 0, ad = false)
+function devectorize_forces(forces, model, X, config; offset = 0, ad_key = nothing)
     new_forces = OrderedDict{Symbol, Any}()
     lengths = config.lengths
     offset = 0
     ix = 1
-    if ad
+    @info "??" ad_key
+    if isnothing(ad_key)
+        X_eval = X
+    else
+        ad_key::Symbol
         offsets = config.offsets
         npartials = maximum(diff(offsets), init = 0)
         if npartials == 0
@@ -113,16 +117,20 @@ function devectorize_forces(forces, model, X, config; offset = 0, ad = false)
             T = typeof(sample)
             X_ad = Vector{T}(undef, length(X))
             for fno in 1:(length(offsets)-1)
+                k = keys(forces)[fno]
+                is_ad = k == ad_key
                 local_index = 1
                 for j in offsets[fno]:(offsets[fno+1]-1)
-                    X_ad[j] = Jutul.get_ad_entity_scalar(X[j], npartials, local_index)
-                    local_index += 1
+                    X_j = X[j]
+                    if is_ad
+                        X_j = Jutul.get_ad_entity_scalar(X_j, npartials, local_index)
+                        local_index +=1
+                    end
+                    X_ad[j] = X_j
                 end
             end
             X_eval = X_ad
         end
-    else
-        X_eval = X
     end
     for (k, v) in pairs(forces)
         if isnothing(v)
