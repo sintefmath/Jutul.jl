@@ -1,19 +1,23 @@
-function vectorize_forces(forces, model::MultiModel, variant = :all; T = Float64)
+function force_targets(model::MultiModel, arg...)
+    out = Dict{Symbol, Any}()
+    for k in submodels_symbols(model)
+        out[k] = force_targets(model[k], arg...)
+    end
+    return out
+end
+
+function vectorize_forces(forces, model::MultiModel, targets = force_targets(model); T = Float64)
     offset = 0
     config = Dict{Symbol, Any}()
     for k in submodels_symbols(model)
         submodel = model[k]
-        if variant isa AbstractDict
-            subvariant = variant[k]
-        else
-            subvariant = variant
-        end
-        sublengths = vectorization_lengths(forces[k], submodel, subvariant)
+        target = targets[k]
+        sublengths = vectorization_lengths(forces[k], submodel, target)
         config[k] = (
             lengths = sublengths,
             offsets = [offset+1],
             meta = Dict{Symbol, Any}(),
-            variant = variant
+            targets = target
         )
         offset += sum(sublengths)
     end

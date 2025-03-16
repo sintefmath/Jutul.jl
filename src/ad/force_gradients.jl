@@ -1,11 +1,19 @@
-function vectorize_forces(forces, model, variant = :all; T = Float64)
+function force_targets(model, variant = :all)
+    out = Dict{Symbol, Union{Nothing, Symbol}}()
+    for k in keys(setup_forces(model))
+        out[k] = variant
+    end
+    return out
+end
+
+function vectorize_forces(forces, model, targets = force_targets(model); T = Float64)
     meta_for_forces = Dict{Symbol, Any}()
-    lengths = vectorization_lengths(forces, model, variant)
+    lengths = vectorization_lengths(forces, model, targets)
     config = (
         lengths = lengths,
         offsets = [1],
         meta = meta_for_forces,
-        variant = variant
+        targets = targets
     )
     n = sum(lengths)
     v = Vector{T}(undef, n)
@@ -13,29 +21,38 @@ function vectorize_forces(forces, model, variant = :all; T = Float64)
     return (v, config)
 end
 
-function vectorization_lengths(forces, model, variant = :all)
+function vectorization_lengths(forces, model, targets = force_targets(model))
     fkeys = keys(forces)
     lengths = zeros(Int, length(fkeys))
     for (i, force_name) in enumerate(fkeys)
-        force = forces[force_name]
-        if !isnothing(force)
-            lengths[i] = vectorization_length(force, model, force_name, variant)
+        target = targets[force_name]
+        if isnothing(target)
+            continue
         end
+        force = forces[force_name]
+        if isnothing(force)
+            continue
+        end
+        lengths[i] = vectorization_length(force, model, force_name, target)
     end
     return lengths
 end
 
 function vectorize_forces!(v, model, config, forces)
-    (; meta, lengths, offsets, variant) = config
+    (; meta, lengths, offsets, targets) = config
     lpos = 1
     offset = 0
     for (k, force) in pairs(forces)
+        target = targets[k]
+        if isnothing(target)
+            continue
+        end
         if isnothing(force)
             continue
         end
         n_f = lengths[lpos]
         v_f = view(v, (offset+1):(offset+n_f))
-        m = vectorize_force!(v_f, model, force, k, variant)
+        m = vectorize_force!(v_f, model, force, k, target)
         # Update global offset here.
         if vectorization_sublength(force, m) == 1
             push!(offsets, offsets[end] + n_f)
@@ -132,12 +149,17 @@ function devectorize_forces(forces, model, X, config; offset = 0, ad_key = nothi
         end
     end
     for (k, v) in pairs(forces)
+        target = config.targets[k]
+        if isnothing(target)
+            new_forces[k] = copy(forces[k])
+            continue
+        end
         if isnothing(v)
             continue
         end
         n_i = lengths[ix]
         X_i = view(X_eval, (offset+1):(offset+n_i))
-        new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], k, config.variant)
+        new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], k, target)
         offset += n_i
         ix += 1
     end
@@ -391,7 +413,7 @@ function forces_optimization_config(
         model,
         allforces,
         timesteps,
-        variant = :all;
+        targets = force_targets(model);
         print = true,
         active = true,
         rel_min = -Inf,
@@ -399,14 +421,14 @@ function forces_optimization_config(
         abs_min = -Inf,
         abs_max = Inf,
         use_scaling = true
-        )
+    )
     force_map = unique_forces_and_mapping(allforces, timesteps)
     unique_forces, forces_to_timestep, timesteps_to_forces, = force_map
     force_configs = []
     configs = []
     offsets = [1]
     for (force_ix, forces) in enumerate(unique_forces)
-        X, config = vectorize_forces(forces, model, variant)
+        X, config = vectorize_forces(forces, model, targets)
         push!(offsets, offsets[force_ix] + length(X))
         opt_config = OrderedDict{Symbol, Any}()
         meta = config.meta
@@ -433,7 +455,7 @@ function forces_optimization_config(
                 :high => nothing,
                 :local_index => ix,
                 :global_index => gix
-                )
+            )
         end
 
         function add_names!(loc, X, force, meta, ix)
@@ -457,7 +479,7 @@ function forces_optimization_config(
             opt_config[fname] = loc
         end
         if print
-            @info "Force set number $force_ix"
+            jutul_message("Forces", "Set number $force_ix")
             cfg_keys = keys(local_config(NaN, 1))
             tmp = Matrix{Any}(undef, length(X), length(cfg_keys))
             dix = 1
