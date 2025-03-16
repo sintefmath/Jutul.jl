@@ -110,6 +110,7 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
     end
     mstorage[:state] = mstate
     mstorage[:state0] = mstate0
+    sparsity = storage[:forces_sparsity][forceno]
     J = storage[:forces_jac][forceno]
     nz = nonzeros(J)
     @. nz = 0.0
@@ -118,14 +119,14 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
         ndof = number_of_degrees_of_freedom(m)
         nl = sum(config[k].lengths)
         X_k = view(X, (offset_x+1):(offset_x+nl))
-        evaluate_force_gradient_inner(X_k, model, k, storage, mstorage, parameters[k], forces, config[k], forceno, time, dt, offset_var)
+        evaluate_force_gradient_inner!(J, X_k, model, k, storage, mstorage, parameters[k], forces, config[k], sparsity, time, dt, offset_var)
         offset_var += ndof
         offset_x += nl
     end
     return J
 end
 
-function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, multimodel_forces, config, forceno, time, dt, row_offset::Int)
+function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, multimodel_forces, config, sparsity, time, dt, row_offset::Int)
     function add_in_cross_term!(acc, state_t, state0_t, model_t, ct_pair, eq, dt)
         ct = ct_pair.cross_term
         if ct_pair.target == model_key
@@ -158,7 +159,6 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
     end
 
     model = multi_model[model_key]
-    J = storage[:forces_jac][forceno]
     # Find maximum width
     offsets = config.offsets
     if sum(config.lengths) == 0
@@ -168,7 +168,6 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
     state0 = model_storage[model_key].state0
 
     nvar = storage.n_forward
-    sparsity = storage[:forces_sparsity][forceno]
     offsets = config.offsets
     npartials = maximum(diff(offsets))
 
