@@ -364,10 +364,10 @@ end
 
 function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         state0 = setup_state(model),
-        timesteps = report_timesteps(reports),
         parameters = setup_parameters(model),
         kwarg...
     )
+    states, timesteps, step_ix = expand_to_ministeps(states, reports)
     unique_forces, forces_to_timestep, timesteps_to_forces, = storage[:forces_map]
 
     fg = storage[:forces_gradient]
@@ -382,7 +382,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
     # Do sparsity detection if not already done.
     update_objective_sparsity!(storage, G, states, timesteps, allforces, :forward)
     for i in N:-1:1
-        forceno = timesteps_to_forces[i]
+        forceno = timesteps_to_forces[step_ix[i]]
         # Unpack stuff for this force in particular
         forces = unique_forces[forceno]
         config = fc[forceno]
