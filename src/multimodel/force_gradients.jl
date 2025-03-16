@@ -121,7 +121,7 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
     return J
 end
 
-function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, all_forces, config, forceno, time, dt, row_offset::Int)
+function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, multimodel_forces, config, forceno, time, dt, row_offset::Int)
     function add_in_cross_term!(acc, state_t, state0_t, model_t, ct_pair, eq, dt)
         ct = ct_pair.cross_term
         if ct_pair.target == model_key
@@ -167,17 +167,19 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
     sparsity = storage[:forces_sparsity][forceno]
     offsets = config.offsets
     npartials = maximum(diff(offsets))
-    sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1)
-    T = typeof(sample)
 
     offsets = config.offsets
     fno = 1
-    subforces = all_forces[model_key]
+    subforces = multimodel_forces[model_key]
     for fname in keys(subforces)
-        forces_ad = devectorize_forces(subforces, model, X, config, ad_key = fname)
+        all_forces = deepcopy(multimodel_forces)
+        forces_ad = devectorize_forces(deepcopy(subforces), model, X, config, ad_key = fname)
         force_ad = forces_ad[fname]
         all_forces[model_key] = forces_ad
         update_before_step!(model_storage, multi_model, dt, all_forces, time = time)
+        wcfg = model_storage.Facility.state.WellGroupConfiguration
+        sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1, tag = fname)
+        T = typeof(sample)
 
         offset = offsets[fno] - 1
         np = offsets[fno+1] - offsets[fno]
