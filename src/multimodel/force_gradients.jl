@@ -177,7 +177,6 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
         force_ad = forces_ad[fname]
         all_forces[model_key] = forces_ad
         update_before_step!(model_storage, multi_model, dt, all_forces, time = time)
-        wcfg = model_storage.Facility.state.WellGroupConfiguration
         sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1, tag = fname)
         T = typeof(sample)
 
