@@ -179,16 +179,14 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
         all_forces[model_key] = forces_ad
         update_before_step!(model_storage, multi_model, dt, all_forces, time = time)
 
-        # @info "Offset $model_key" offsets
         offset = offsets[fno] - 1
-        np = offsets[fno+1] - offsets[fno] # check off by one
+        np = offsets[fno+1] - offsets[fno]
         if haskey(sparsity, model_key)
             S = sparsity[model_key][fname]
         else
             S = sparsity[fname]
         end
         for (eqname, S) in pairs(S)
-            # @warn "equation: $eqname for $model_key" S.dims
             eq = model.equations[eqname]
             acc = zeros(T, S.dims)
             eq_s = missing
@@ -207,10 +205,6 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
                     end
                 end
             end
-            II, JJ, VV = findnz(J)
-
-            # @info "??? $fname" II JJ VV size(J) row_offset
-            # display(J[row_offset+1:end, :])
         end
         fno += 1
     end

@@ -102,7 +102,6 @@ function devectorize_forces(forces, model, X, config; offset = 0, ad_key = nothi
     lengths = config.lengths
     offset = 0
     ix = 1
-    @info "??" ad_key
     if isnothing(ad_key)
         X_eval = X
     else
