@@ -308,6 +308,7 @@ end
 function setup_adjoint_forces_storage(model, allforces, timesteps;
         n_objective = nothing,
         use_sparsity = true,
+        targets = force_targets(model),
         forces_map = unique_forces_and_mapping(allforces, timesteps),
         state0 = setup_state(model),
         parameters = setup_parameters(model)
@@ -332,7 +333,7 @@ function setup_adjoint_forces_storage(model, allforces, timesteps;
 
     nvar = storage.n_forward
     for (i, force) in enumerate(unique_forces)
-        X, config = vectorize_forces(force, model)
+        X, config = vectorize_forces(force, model, targets)
         push!(storage[:forces_gradient], zeros(length(X)))
         push!(storage[:forces_vector], X)
         push!(storage[:forces_config], config)
