@@ -392,9 +392,8 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
 
         s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
         λ, t, dt, forces = Jutul.next_lagrange_multiplier!(storage, i, G, s, s0, s_next, timesteps, forces)
-        J = evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, sum(timesteps[1:i]), timesteps[i])
-        Δ =  J'*λ
-        @. out += Δ
+        J = evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, t, timesteps[i])
+        mul!(out, J', λ, 1.0, 1.0)
     end
 
     return solve_adjoint_forces_retval(storage, model)
