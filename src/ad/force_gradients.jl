@@ -258,10 +258,9 @@ function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 
 end
 
 function evaluate_force_gradient(X, model::SimulationModel, storage, parameters, forces, config, forceno, time, dt)
-    J = storage[:forces_jac][forceno]
     mname = :Model
     mmodel = MultiModel((Model = model,))
-    evaluate_force_gradient(
+    return evaluate_force_gradient(
         X, mmodel, storage,
         Dict(mname => parameters),
         Dict(mname => forces),
@@ -270,7 +269,6 @@ function evaluate_force_gradient(X, model::SimulationModel, storage, parameters,
         time,
         dt
     )
-    return storage[:forces_jac][forceno]
 end
 
 function unique_forces_and_mapping(allforces, timesteps)
