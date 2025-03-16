@@ -100,6 +100,9 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
         setup_storage_model(s, model.models[k])
         mstorage[k] = s
     end
+    J = storage[:forces_jac][forceno]
+    nz = nonzeros(J)
+    @. nz = 0.0
     update_before_step!(mstorage, model, dt, forces_ad, time = time)
     for (k, m) in pairs(model.models)
         ndof = number_of_degrees_of_freedom(m)
@@ -109,7 +112,7 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
         offset_var += ndof
         offset_x += nl
     end
-    return storage[:forces_jac][forceno]
+    return J
 end
 
 function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, forces_ad, config, forceno, time, dt, row_offset::Int)
@@ -190,11 +193,13 @@ function evaluate_force_gradient_inner(X, multi_model::MultiModel, model_key::Sy
                         ∂ = val.partials[p]
                         J[row + row_offset, offset + p] = ∂
                     end
-
-                    II, JJ, VV = findnz(J)
-                    @info "???" II JJ VV size(J) row_offset
                 end
             end
+            II, JJ, VV = findnz(J)
+
+            @info "??? $fname" II JJ VV size(J) row_offset
+            display(J[row_offset+1:end, :])
+
         end
         fno += 1
     end
