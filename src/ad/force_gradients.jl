@@ -362,7 +362,13 @@ function setup_adjoint_forces_storage(model, allforces, timesteps;
     return storage
 end
 
-function solve_adjoint_forces(case::JutulCase, res, G; kwarg...)
+"""
+    solve_adjoint_forces(case::JutulCase, res::SimResult, G)
+
+Solve the adjoint equations for the forces in `case` given the simulation result
+`res` and the objective function `G`.
+"""
+function solve_adjoint_forces(case::JutulCase, res::SimResult, G; kwarg...)
     return solve_adjoint_forces(
         case.model, res.states, res.reports, G, case.forces;
         parameters = case.parameters,

@@ -216,7 +216,6 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
     return J
 end
 
-
 function solve_adjoint_forces_retval(storage, model::MultiModel)
     function inner_retval(forces, config, dX_f)
         retval = Dict{Symbol, Any}()
