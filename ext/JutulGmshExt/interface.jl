@@ -4,12 +4,12 @@ function Jutul.mesh_from_gmsh(pth; manage_gmsh = true, kwarg...)
         Gmsh.initialize()
     end
     ext = pth |> splitext |> last
-    gmsh.open(pth)
-    if lowercase(ext) == ".geo"
-        gmsh.model.mesh.generate()
-    end
     g = missing
     try
+        gmsh.open(pth)
+        if lowercase(ext) == ".geo"
+            gmsh.model.mesh.generate()
+        end
         g = Jutul.mesh_from_gmsh(; kwarg...)
     finally
         if manage_gmsh
