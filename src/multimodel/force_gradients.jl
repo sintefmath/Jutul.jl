@@ -236,7 +236,7 @@ function solve_adjoint_forces_retval(storage, model::MultiModel)
         inner_retval,
         storage[:unique_forces], storage[:forces_config], dX
     )
-    return (dforces, dX)
+    return (dforces, storage[:timestep_to_forces], dX)
 end
 
 function devectorize_forces(forces, model::MultiModel, X, config; offset = 0, model_key = nothing, ad_key = nothing)

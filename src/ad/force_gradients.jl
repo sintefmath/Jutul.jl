@@ -422,7 +422,7 @@ function solve_adjoint_forces_retval(storage, model::SimulationModel)
         (forces, out, config) -> devectorize_forces(forces, model, out, config),
         storage[:unique_forces], dX, storage[:forces_config]
     )
-    return (dforces, dX)
+    return (dforces, storage[:timestep_to_forces], dX)
 end
 
 function forces_optimization_config(
@@ -430,7 +430,7 @@ function forces_optimization_config(
         allforces,
         timesteps,
         targets = force_targets(model);
-        print = true,
+        verbose = true,
         active = true,
         rel_min = -Inf,
         rel_max = Inf,
@@ -494,7 +494,7 @@ function forces_optimization_config(
             end
             opt_config[fname] = loc
         end
-        if print
+        if verbose
             jutul_message("Forces", "Set number $force_ix")
             cfg_keys = keys(local_config(NaN, 1))
             tmp = Matrix{Any}(undef, length(X), length(cfg_keys))
@@ -527,7 +527,7 @@ function forces_optimization_config(
         )
 end
 
-function setup_force_optimization(case, G, opt_config)
+function setup_force_optimization(case, G, opt_config; verbose = true)
     (; model, state0, parameters, dt, forces) = case
 
     objective_history = Float64[]
@@ -596,7 +596,7 @@ function setup_force_optimization(case, G, opt_config)
         states, reports = simulate(sim, dt, forces = simforces, extra_timing = false, info_level = -1)
         output_data[:states] = states
         if !isnothing(g)
-            dforces, grad_adj = solve_adjoint_forces!(force_adj_storage, model, states, reports, G, simforces,
+            dforces, t_to_f, grad_adj = solve_adjoint_forces!(force_adj_storage, model, states, reports, G, simforces,
             state0 = state0, parameters = parameters, forces_map = opt_config[:forces_map])
 
             grad_adj = vcat(grad_adj...)
@@ -613,7 +613,7 @@ function setup_force_optimization(case, G, opt_config)
             if obj < output_data[:best_obj]
                 output_data[:best_obj] = obj
             end
-            if true
+            if verbose
                 fmt = x -> @sprintf("%2.4e", x)
                 rel = obj/objective_history[1]
                 best = output_data[:best_obj]
