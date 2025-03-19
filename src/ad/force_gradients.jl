@@ -290,7 +290,7 @@ function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
                 end
             end
         end
-        @assert sum(length, force_map) == length(forces)
+        @assert sum(length, force_map) == length(forces) "Expected all forces to be accounted for ($(sum(length, force_map)) ≠ $(length(forces)))."
         return (unique_forces, force_map, num_unique_forces)
     end
     if eachstep
@@ -372,7 +372,8 @@ function solve_adjoint_forces(case::JutulCase, res, G; kwarg...)
     return solve_adjoint_forces(
         case.model, res.states, res.reports, G, case.forces;
         parameters = case.parameters,
-        state0 = case.state0
+        state0 = case.state0,
+        kwarg...
     )
 end
 
