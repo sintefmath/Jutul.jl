@@ -394,6 +394,9 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
     )
     states, timesteps, step_ix = expand_to_ministeps(states, reports)
     unique_forces, forces_to_timestep, timesteps_to_forces, = storage[:forces_map]
+    if allforces isa Vector
+        allforces = allforces[step_ix]
+    end
 
     fg = storage[:forces_gradient]
     fv = storage[:forces_vector]
