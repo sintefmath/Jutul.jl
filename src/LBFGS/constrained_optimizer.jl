@@ -186,6 +186,9 @@ function unit_box_bfgs(
             printInfo(history, it)
         end
     end
+    if maximize
+        v = -v
+    end
     return (v, u, history)
 end
 
