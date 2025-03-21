@@ -348,6 +348,7 @@ function setup_adjoint_forces_storage(model, allforces, timesteps;
     storage[:forces_config] = []
     storage[:forces_sparsity] = []
     storage[:forces_jac] = []
+    storage[:targets] = targets
 
     nvar = storage.n_forward
     for (i, force) in enumerate(unique_forces)
@@ -384,12 +385,18 @@ function solve_adjoint_forces(model, states, reports, G, allforces;
         kwarg...
     )
     storage = setup_adjoint_forces_storage(model, allforces, timesteps; state0 = state0, parameters = parameters, kwarg...)
-    return solve_adjoint_forces!(storage, model, states, reports, G, allforces; state0 = state0, timesteps = timesteps, parameters = parameters)
+    return solve_adjoint_forces!(storage, model, states, reports, G, allforces;
+        state0 = state0,
+        timesteps = timesteps,
+        parameters = parameters,
+        init = false
+    )
 end
 
 function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         state0 = setup_state(model),
         parameters = setup_parameters(model),
+        init = true,
         kwarg...
     )
     states, timesteps, step_ix = expand_to_ministeps(states, reports)
@@ -401,6 +408,12 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
     fg = storage[:forces_gradient]
     fv = storage[:forces_vector]
     fc = storage[:forces_config]
+    if init
+        t = storage[:targets]
+        for (forceno, force) in enumerate(unique_forces)
+            fv[forceno], fc[forceno] = vectorize_forces(force, model, t)
+        end
+    end
     for g in fg
         @. g = 0.0
     end
