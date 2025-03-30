@@ -52,9 +52,9 @@ function group_index(model, symbol)
 end
 
 export setup_cross_term, add_cross_term!
-function setup_cross_term(cross_term::CrossTerm; target::Symbol, source::Symbol, equation)
+function setup_cross_term(cross_term::CrossTerm; target::Symbol, source::Symbol, equation, source_equation = equation)
     @assert target != source
-    return CrossTermPair(target, source, equation, cross_term)
+    return CrossTermPair(target, source, equation, source_equation, cross_term)
 end
 
 
@@ -94,7 +94,11 @@ function add_cross_term!(model::MultiModel, ctm::CrossTermPair)
     end
     @assert haskey(model.models[ctm.target].equations, target_label)
     if has_symmetry(ctm.cross_term)
-        @assert haskey(model.models[ctm.source].equations, target_label)
+        source_target_label = ctm.source_equation
+        if source_target_label isa Pair
+            source_target_label = source_target_label[2]
+        end
+        @assert haskey(model.models[ctm.source].equations, source_target_label)
     end
     add_cross_term!(model.cross_terms, ctm)
 end
