@@ -37,7 +37,8 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
         submodel = model[k]
         subforces = forces[k]
         subconfig = config[k]
-
+        # TODO: At the moment we don't distinguish between forces since
+        # information can propgate from any force onto the cross terms.
         extra = Dict()
         for ct in evaluate_force_gradient_get_crossterms(model, k)
             is_self = ct.target == k
@@ -60,7 +61,10 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
         end
         subX = X[subconfig.offsets[1]:subconfig.offsets[1]+sum(subconfig.lengths)-1]
         subparameters = parameters[k]
-        sparsity[k] = determine_sparsity_forces(submodel, subforces, subX, subconfig; parameters = subparameters, extra_sparsity = extra)
+        sparsity[k] = determine_sparsity_forces(submodel, subforces, subX, subconfig;
+            parameters = subparameters,
+            extra_sparsity = extra
+        )
     end
     return sparsity
 end

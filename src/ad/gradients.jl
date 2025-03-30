@@ -301,27 +301,31 @@ end
 function determine_objective_sparsity(sim, model, G, states, timesteps, forces)
     update_secondary_variables!(sim.storage, sim.model)
     state = sim.storage.state
-    # m, state, dt, step_no, forces
     F_outer = (state, i) -> G(model, state, timesteps[i], i, forces_for_timestep(sim, forces, timesteps, i))
-    sparsity = determine_sparsity_simple(s -> F_outer(s, 1), model, state)
-    for i in 2:length(states)
+    sparsity = missing
+    for i in 1:length(states)
         s_new = determine_sparsity_simple(s -> F_outer(s, i), model, state)
-        merge_sparsity!(sparsity, s_new)
+        sparsity = merge_sparsity!(sparsity, s_new)
     end
     return sparsity
+end
+
+function merge_sparsity!(::Missing, s)
+    return s
 end
 
 function merge_sparsity!(sparsity::AbstractDict, s_new::AbstractDict)
     for (k, v) in s_new
         merge_sparsity!(sparsity[k], v)
     end
+    return sparsity
 end
 
 function merge_sparsity!(sparsity::AbstractVector, s_new::AbstractVector)
     for k in s_new
         push!(sparsity, k)
     end
-    unique!(sparsity)
+    return unique!(sparsity)
 end
 
 function state_gradient(model, state, F, extra_arg...; kwarg...)
