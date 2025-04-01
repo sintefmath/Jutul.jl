@@ -98,13 +98,17 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
                 other[target] = Dict{Symbol, Any}()
                 for source in keys(cross_term_sparsity[target])
                     if source == k
-                        other[target] = cross_term_sparsity[target][source]
+                        cts = cross_term_sparsity[target][source]
+                        other[target] = determine_sparsity_forces(submodel, subforces, subX, subconfig;
+                            parameters = subparameters,
+                            extra_sparsity = cts
+                        )
                     end
                 end
             end
         end
+        sparsity[k] = (self = self, other = other)
     end
-    error("WIP")
     return sparsity
 end
 
