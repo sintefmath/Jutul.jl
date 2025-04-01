@@ -33,25 +33,32 @@ end
 function determine_sparsity_forces(model::MultiModel, forces, X, config; parameters = setup_parameters(model))
     sparsity = Dict{Symbol, Any}()
     offset = 0
+    cross_term_sparsity = Dict{Symbol, Dict{Symbol, Any}}()
     for k in submodels_symbols(model)
+        cross_term_sparsity_model = Dict{Symbol, Any}()
+        cross_term_sparsity[k] = cross_term_sparsity_model
         submodel = model[k]
-        subforces = forces[k]
-        subconfig = config[k]
         # TODO: At the moment we don't distinguish between forces since
         # information can propgate from any force onto the cross terms.
-        extra = Dict()
+        extra = Dict{Symbol, Any}()
         for ct in evaluate_force_gradient_get_crossterms(model, k)
             is_self = ct.target == k
             if is_self
+                other = ct.source
                 ekey = ct.target_equation
                 eq = submodel.equations[ekey]
                 ct_cells = Jutul.cross_term_entities(ct.cross_term, eq, submodel)
             else
                 @assert ct.source == k
+                other = ct.target
                 ekey = ct.source_equation
                 eq = submodel.equations[ekey]
                 ct_cells = Jutul.cross_term_entities_source(ct.cross_term, eq, submodel)
             end
+            if !haskey(cross_term_sparsity_model, other)
+                cross_term_sparsity_model[other] = Dict{Symbol, Vector{Int}}()
+            end
+            extra = cross_term_sparsity_model[other]
             if !haskey(extra, ekey)
                 extra[ekey] = Int[]
             end
@@ -59,13 +66,34 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
                 push!(extra[ekey], c)
             end
         end
+    end
+    @info "???"  cross_term_sparsity
+
+    for k in submodels_symbols(model)
+        submodel = model[k]
+        subforces = forces[k]
+        subconfig = config[k]
         subX = X[subconfig.offsets[1]:subconfig.offsets[1]+sum(subconfig.lengths)-1]
         subparameters = parameters[k]
-        sparsity[k] = determine_sparsity_forces(submodel, subforces, subX, subconfig;
+        extra = Dict{Symbol, Vector{Int}}()
+        for (other_k, v) in cross_term_sparsity[k]
+            for (k, entities) in v
+                if !haskey(extra, k)
+                    extra[k] = Int[]
+                end
+                for r in entities
+                    push!(extra[k], r)
+                end
+            end
+        end
+        self = determine_sparsity_forces(submodel, subforces, subX, subconfig;
             parameters = subparameters,
             extra_sparsity = extra
         )
+        # other = 
+        # sparsity[k]
     end
+    error("WIP")
     return sparsity
 end
 
