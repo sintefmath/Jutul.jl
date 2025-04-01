@@ -90,8 +90,19 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
             parameters = subparameters,
             extra_sparsity = extra
         )
-        # other = 
-        # sparsity[k]
+        # Get those cross terms that have source equal to k (where the forces
+        # could potentially influence)
+        other = Dict{Symbol, Any}()
+        for target in submodels_symbols(model)
+            if target != k
+                other[target] = Dict{Symbol, Any}()
+                for source in keys(cross_term_sparsity[target])
+                    if source == k
+                        other[target] = cross_term_sparsity[target][source]
+                    end
+                end
+            end
+        end
     end
     error("WIP")
     return sparsity
