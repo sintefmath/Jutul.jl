@@ -99,10 +99,6 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
                 for source in keys(cross_term_sparsity[target])
                     if source == k
                         cts = cross_term_sparsity[target][source]
-                        # other[target] = determine_sparsity_forces(model[target], subforces, subX, subconfig;
-                        #     parameters = subparameters,
-                        #     extra_sparsity = cts
-                        # )
                         other[target] = determine_cross_term_sparsity_forces(model[target], subforces, cts)
                     end
                 end
@@ -189,7 +185,7 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
             other = ct_pair.source
         else
             impact = cross_term_entities_source(ct, eq, model_t)
-            if symmetry(ctp.cross_term) == CTSkewSymmetry()
+            if symmetry(ct_pair.cross_term) == CTSkewSymmetry()
                 sgn = -1.0
             else
                 sgn = 1.0
@@ -268,7 +264,7 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
         for (other_model_key, other_sparsity) in pairs(sparsity.other)
             @info "!" other_model_key model_key other_sparsity
             other_model = multi_model[other_model_key]
-            for (eqname, S) in pairs(other_sparsity)
+            for (eqname, S) in pairs(other_sparsity[fname])
                 @info "Eqname" eqname
                 eq = other_model.equations[eqname]
                 entity = associated_entity(eq)
