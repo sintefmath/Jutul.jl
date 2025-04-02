@@ -159,21 +159,26 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
     mstorage[:state0] = mstate0
     sparsity = storage[:forces_sparsity][forceno]
     J = storage[:forces_jac][forceno]
+    offsets = Dict{Symbol, Int}()
+    offset = 0
+    for (k, m) in pairs(model.models)
+        offsets[k] = offset
+        offset += number_of_degrees_of_freedom(m)
+    end
+
     nz = nonzeros(J)
     @. nz = 0.0
     update_before_step!(mstorage, model, dt, forces, time = time)
     for (k, m) in pairs(model.models)
-        ndof = number_of_degrees_of_freedom(m)
         nl = sum(config[k].lengths)
         X_k = view(X, (offset_x+1):(offset_x+nl))
-        evaluate_force_gradient_inner!(J, X_k, model, k, storage, mstorage, parameters[k], forces, config[k], sparsity, time, dt, offset_var)
-        offset_var += ndof
+        evaluate_force_gradient_inner!(J, X_k, model, k, storage, mstorage, parameters[k], forces, config[k], sparsity, time, dt, offsets)
         offset_x += nl
     end
     return J
 end
 
-function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, multimodel_forces, config, sparsity, time, dt, row_offset::Int)
+function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, multimodel_forces, config, sparsity, time, dt, model_offsets::Dict{Symbol, Int})
     function add_in_cross_term!(acc, state_t, state0_t, model_t, ct_pair, eq, dt)
         ct = ct_pair.cross_term
         if ct_pair.target == model_key
@@ -224,6 +229,8 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
     offsets = config.offsets
     fno = 1
     subforces = multimodel_forces[model_key]
+    row_offset = model_offsets[model_key]
+
     for fname in keys(subforces)
         all_forces = deepcopy(multimodel_forces)
         forces_ad = devectorize_forces(deepcopy(subforces), model, X, config, ad_key = fname)
@@ -235,8 +242,8 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
 
         offset = offsets[fno] - 1
         np = offsets[fno+1] - offsets[fno]
-        S = sparsity.self[fname]
-        for (eqname, S) in pairs(S)
+        self_sparsity = sparsity.self[fname]
+        for (eqname, S) in pairs(self_sparsity)
             eq = model.equations[eqname]
             acc = zeros(T, S.dims)
             eq_s = missing
