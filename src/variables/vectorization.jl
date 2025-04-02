@@ -110,6 +110,7 @@ function devectorize_variable!(state, V, k, info, F_inv; config = c)
         else
             lumping::AbstractVector
             m = size(state_val, 1)
+            @assert size(state_val, 2) == length(lumping) "Lumping must be given as a vector with one value per column for matrix"
             for (i, lump) in enumerate(lumping)
                 for j in 1:m
                     state_val[j, i] = F_inv(V[offset+(lump-1)*m+j])
