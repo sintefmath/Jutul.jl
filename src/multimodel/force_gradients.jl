@@ -275,6 +275,8 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
             end
         end
         for (other_model_key, other_sparsity) in pairs(sparsity.other)
+            row_offset_other = model_offsets[other_model_key]
+
             other_model = multi_model[other_model_key]
             other_state = model_storage[other_model_key].state
             other_state0 = model_storage[other_model_key].state0
@@ -300,7 +302,7 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
                         val = acc[i, entity]
                         for p in 1:np
                             ∂ = val.partials[p]
-                            J[row + row_offset, offset + p] = ∂
+                            J[row + row_offset_other, offset + p] = ∂
                         end
                     end
                 end
