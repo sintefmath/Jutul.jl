@@ -407,13 +407,27 @@ function optimization_limits!(lims, config, mapper, param, model)
         end
         lumping = get_lumping(cfg)
         if !isnothing(lumping)
-            for lno in 1:maximum(lumping)
-                pos = findfirst(isequal(lno), lumping)
-                ref_val = vals[pos]
-                for (i, l) in enumerate(lumping)
-                    if l == lno
-                        if vals[i] != ref_val
-                            error("Initial values for $param_k differed for lumping group $lno at position $i")
+            if vals isa AbstractVector
+                for lno in 1:maximum(lumping)
+                    pos = findfirst(isequal(lno), lumping)
+                    ref_val = vals[pos]
+                    for (i, l) in enumerate(lumping)
+                        if l == lno
+                            if !(vals[i] ≈ ref_val)
+                                error("Initial values for $param_k differed for lumping group $lno at position $i")
+                            end
+                        end
+                    end
+                end
+            else
+                for lno in 1:maximum(lumping)
+                    pos = findfirst(isequal(lno), lumping)
+                    ref_val = vals[:, pos]
+                    for (i, l) in enumerate(lumping)
+                        if l == lno
+                            if !(vals[:, i] ≈ ref_val)
+                                error("Initial values for $param_k differed for lumping group $lno at position $i")
+                            end
                         end
                     end
                 end
