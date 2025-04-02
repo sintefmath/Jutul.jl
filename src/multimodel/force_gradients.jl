@@ -204,6 +204,9 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
         increment_equation_entries!(acc, model, v, impact, N, sgn)
         return acc
     end
+    if haskey(sparsity, model_key)
+        sparsity = sparsity[model_key]
+    end
 
     model = multi_model[model_key]
     # Find maximum width
@@ -232,11 +235,7 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
 
         offset = offsets[fno] - 1
         np = offsets[fno+1] - offsets[fno]
-        if haskey(sparsity, model_key)
-            S = sparsity[model_key][fname]
-        else
-            S = sparsity[fname]
-        end
+        S = sparsity.self[fname]
         for (eqname, S) in pairs(S)
             eq = model.equations[eqname]
             acc = zeros(T, S.dims)
