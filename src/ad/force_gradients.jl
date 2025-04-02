@@ -209,52 +209,70 @@ end
 
 function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 0; extra_sparsity = Dict())
     sparsity = OrderedDict{Symbol, Any}()
-    equation_acc = OrderedDict{Symbol, Any}()
     for (eqname, eq) in model.equations
         entity = Jutul.associated_entity(eq)
         nentity = number_of_entities(model, eq)
         neqs = number_of_equations_per_entity(model, eq)
         npartials = Jutul.number_of_partials_per_entity(model, entity)
         acc = zeros(T, neqs, nentity)
-        equation_acc[eqname] = acc
         eq_s = missing
         time = NaN
         Jutul.apply_forces_to_equation!(acc, storage, model, eq, eq_s, force_as_stracer, time)
-
-        # Determine what entities in the equation this force actually uses.
-        S = Vector{Int}()
-        # I = similar(S)
-        rows = Vector{Vector{Int}}()
-        cols = Vector{Vector{Int}}()
         tmp = sum(acc, dims = 1)
         active_entities = findall(i -> length(ST.deriv(tmp[i]).nzind) > 0, eachindex(tmp))
-        if haskey(extra_sparsity, eqname)
-            for c in extra_sparsity[eqname]
-                push!(active_entities, c)
-            end
-        end
-        for i in active_entities
-            push!(S, i)
-            I = Int[]
-            # TODO: I / rows is not really needed here?
-            for e in 1:neqs
-                e_ix = Jutul.alignment_linear_index(i, e, nentity, neqs, EquationMajorLayout())
-                push!(I, e_ix)
-            end
-            push!(rows, I)
 
-            J = Int[]
-            for p in 1:npartials
-                p_ix = Jutul.alignment_linear_index(i, p, nentity, npartials, EquationMajorLayout())
-                push!(J, p_ix)
-            end
-            push!(cols, J)
-        end
-        sparsity[eqname] = (entity = S, rows = rows, cols = cols, dims = (neqs, nentity))
-
+        # Determine what entities in the equation this force actually uses.
+        setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, active_entities, eqname, offset)
         offset += neqs*nentity
     end
     return sparsity
+end
+
+function setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, active_entities, eqname, offset)
+    S = Vector{Int}()
+    # I = similar(S)
+    rows = Vector{Vector{Int}}()
+    cols = Vector{Vector{Int}}()
+    if haskey(extra_sparsity, eqname)
+        for c in extra_sparsity[eqname]
+            push!(active_entities, c)
+        end
+    end
+    for i in active_entities
+        push!(S, i)
+        I = Int[]
+        # TODO: I / rows is not really needed here?
+        for e in 1:neqs
+            e_ix = Jutul.alignment_linear_index(i, e, nentity, neqs, EquationMajorLayout())
+            push!(I, e_ix)
+        end
+        push!(rows, I)
+
+        J = Int[]
+        for p in 1:npartials
+            p_ix = Jutul.alignment_linear_index(i, p, nentity, npartials, EquationMajorLayout())
+            push!(J, p_ix)
+        end
+        push!(cols, J)
+    end
+    sparsity[eqname] = (entity = S, rows = rows, cols = cols, dims = (neqs, nentity))
+end
+
+function determine_cross_term_sparsity_forces(model, subforces, extra_sparsity, offset = 0)
+    sparsity = OrderedDict{Symbol, Any}()
+    @info "???" extra_sparsity
+    for (eqname, eq) in model.equations
+        entity = Jutul.associated_entity(eq)
+        nentity = number_of_entities(model, eq)
+        neqs = number_of_equations_per_entity(model, eq)
+        npartials = Jutul.number_of_partials_per_entity(model, entity)
+
+        setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, Int[], eqname, offset)
+        offset += neqs*nentity
+    end
+    for (fname, force) in pairs(subforces)
+        # Should all be the same
+    end
 end
 
 function evaluate_force_gradient(X, model::SimulationModel, storage, parameters, forces, config, forceno, time, dt)
