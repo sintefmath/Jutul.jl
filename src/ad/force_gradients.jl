@@ -259,20 +259,24 @@ function setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, 
 end
 
 function determine_cross_term_sparsity_forces(model, subforces, extra_sparsity, offset = 0)
-    sparsity = OrderedDict{Symbol, Any}()
-    @info "???" extra_sparsity
-    for (eqname, eq) in model.equations
-        entity = Jutul.associated_entity(eq)
-        nentity = number_of_entities(model, eq)
-        neqs = number_of_equations_per_entity(model, eq)
-        npartials = Jutul.number_of_partials_per_entity(model, entity)
+    out = OrderedDict{Symbol, Any}()
+    if !isnothing(subforces)
+        sparsity = OrderedDict{Symbol, Any}()
+        for (eqname, eq) in model.equations
+            entity = Jutul.associated_entity(eq)
+            nentity = number_of_entities(model, eq)
+            neqs = number_of_equations_per_entity(model, eq)
+            npartials = Jutul.number_of_partials_per_entity(model, entity)
 
-        setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, Int[], eqname, offset)
-        offset += neqs*nentity
+            setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, Int[], eqname, offset)
+            offset += neqs*nentity
+        end
+        for (fname, force) in pairs(subforces)
+            # Should all be the same
+            out[fname] = sparsity
+        end
     end
-    for (fname, force) in pairs(subforces)
-        # Should all be the same
-    end
+    return out
 end
 
 function evaluate_force_gradient(X, model::SimulationModel, storage, parameters, forces, config, forceno, time, dt)
