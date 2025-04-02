@@ -47,11 +47,23 @@ function vectorize_variable!(V, state, k, info, F; config = nothing)
             end
         end
     else
-        @assert length(state_val) == length(lumping)
-        for i in 1:maximum(lumping)
-            # Take the first lumped value as they must be equal by assumption
-            ix = findfirst(isequal(i), lumping)
-            V[offset+i] = F(state_val[ix])
+        lumping::AbstractVector
+        if state_val isa AbstractVector
+            @assert length(state_val) == length(lumping)
+            for i in 1:maximum(lumping)
+                # Take the first lumped value as they must be equal by assumption
+                ix = findfirst(isequal(i), lumping)
+                V[offset+i] = F(state_val[ix])
+            end
+        else
+            @assert size(state_val, 2) == length(lumping) "Lumping must be given as a vector with one value per column for matrix"
+            m = size(state_val, 1)
+            for i in 1:maximum(lumping)
+                ix = findfirst(isequal(i), lumping)
+                for j in 1:m
+                    V[offset+(i-1)*m+j] = F(state_val[j, ix])
+                end
+            end
         end
     end
 end
@@ -91,8 +103,18 @@ function devectorize_variable!(state, V, k, info, F_inv; config = c)
             end
         end
     else
-        for (i, lump) in enumerate(lumping)
-            state_val[i] = F_inv(V[offset+lump])
+        if state_val isa AbstractVector
+            for (i, lump) in enumerate(lumping)
+                state_val[i] = F_inv(V[offset+lump])
+            end
+        else
+            lumping::AbstractVector
+            m = size(state_val, 1)
+            for (i, lump) in enumerate(lumping)
+                for j in 1:m
+                    state_val[j, i] = F_inv(V[offset+(i-1)*m+j])
+                end
+            end
         end
     end
 end

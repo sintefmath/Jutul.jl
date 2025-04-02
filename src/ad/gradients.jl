@@ -797,13 +797,14 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
             var = last(var)
         end
         n = number_of_values(model, var)
+        m = values_per_entity(model, var)
         if !isnothing(config)
             lumping = config[t][:lumping]
             if !isnothing(lumping)
                 N = maximum(lumping)
-                @assert unique(lumping) == 1:N "Lumping for $t must include all values from 1 to $N"
-                @assert length(lumping) == n "Lumping for $t must have one entry for each value if present"
-                n = N
+                unique(lumping) == 1:N || error("Lumping for $t must include all values from 1 to $N")
+                length(lumping) == n÷m || error("Lumping for $t must have one entry for each value if present")
+                n = N*m
             end
         end
         out[t] = (n = n, offset = offset, scale = variable_scale(var))

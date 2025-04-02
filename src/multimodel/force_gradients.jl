@@ -299,12 +299,14 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
                     for ct_pair in cts
                         add_in_cross_term!(acc, other_state, other_state0, other_model, other_model_key, ct_pair, eqname, dt)
                     end
+                    @info "Extra sparsity... $eqname" model_key other_model_key unique(acc) row_offset_other
                     # Loop over entities that this force impacts
                     for (entity, rows) in zip(S.entity, S.rows)
                         for (i, row) in enumerate(rows)
                             val = acc[i, entity]
                             for p in 1:np
                                 ∂ = val.partials[p]
+                                @info "Setting $(row + row_offset_other), $(offset + p) to $∂"
                                 J[row + row_offset_other, offset + p] = ∂
                             end
                         end
