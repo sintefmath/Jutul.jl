@@ -177,9 +177,9 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
 end
 
 function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, multimodel_forces, config, sparsity, time, dt, model_offsets::Dict{Symbol, Int})
-    function add_in_cross_term!(acc, state_t, state0_t, model_t, ct_pair, eq, dt)
+    function add_in_cross_term!(acc, state_t, state0_t, model_t, target_key::Symbol, ct_pair, eq, dt)
         ct = ct_pair.cross_term
-        if ct_pair.target == model_key
+        if ct_pair.target == target_key
             impact = cross_term_entities(ct, eq, model_t)
             sgn = 1.0
             other = ct_pair.source
@@ -248,7 +248,7 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
             Jutul.apply_forces_to_equation!(acc, model_storage[model_key], model, eq, eq_s, force_ad, time)
             cts = evaluate_force_gradient_get_crossterms(multi_model, model_key, eqname)
             for ct_pair in cts
-                add_in_cross_term!(acc, state, state0, model, ct_pair, eq, dt)
+                add_in_cross_term!(acc, state, state0, model, model_key, ct_pair, eq, dt)
             end
             # Loop over entities that this force impacts
             for (entity, rows) in zip(S.entity, S.rows)
@@ -264,6 +264,8 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
         for (other_model_key, other_sparsity) in pairs(sparsity.other)
             @info "!" other_model_key model_key other_sparsity
             other_model = multi_model[other_model_key]
+            other_state = model_storage[other_model_key].state
+            other_state0 = model_storage[other_model_key].state0
             for (eqname, S) in pairs(other_sparsity[fname])
                 @info "Eqname" eqname
                 eq = other_model.equations[eqname]
@@ -275,7 +277,7 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
                 # Jutul.apply_forces_to_equation!(acc, model_storage[model_key], model, eq, eq_s, force_ad, time)
                 cts = evaluate_force_gradient_get_crossterms(multi_model, other_model_key, eqname)
                 for ct_pair in cts
-                    add_in_cross_term!(acc, state, state0, model, ct_pair, eq, dt)
+                    add_in_cross_term!(acc, other_state, other_state0, other_model, other_model_key, ct_pair, eq, dt)
                 end
                 # Loop over entities that this force impacts
                 for (entity, rows) in zip(S.entity, S.rows)
