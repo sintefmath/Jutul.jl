@@ -177,12 +177,15 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
 end
 
 function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, multimodel_forces, config, sparsity, time, dt, model_offsets::Dict{Symbol, Int})
-    function add_in_cross_term!(acc, state_t, state0_t, model_t, target_key::Symbol, ct_pair, eq, dt)
+    function add_in_cross_term!(acc, state_t, state0_t, model_t, target_key::Symbol, ct_pair, eq_label::Symbol, dt)
         ct = ct_pair.cross_term
-        if ct_pair.target == target_key
+        is_self = ct_pair.target == target_key
+        eq = model_t.equations[eq_label]
+        if is_self
             impact = cross_term_entities(ct, eq, model_t)
             sgn = 1.0
             other = ct_pair.source
+            @assert ct_pair.target_equation == eq_label
         else
             impact = cross_term_entities_source(ct, eq, model_t)
             if symmetry(ct_pair.cross_term) == CTSkewSymmetry()
@@ -191,18 +194,31 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
                 sgn = 1.0
             end
             other = ct_pair.target
+            @assert ct_pair.source_equation == eq_label
         end
+
         model_s = multi_model[other]
         state_s = model_storage[other].state
         state0_s = model_storage[other].state0
+
+        @info "target" keys(state_t) keys(state_s)
+
         N = length(impact)
         # TODO: apply_force_to_cross_term!
         v = zeros(eltype(acc), size(acc, 1), N)
+        if is_self
+            s_arg = (state_t, state0_t, state_s, state0_s, model_t, model_s)
+            eq_for_ct = model_t.equations[ct_pair.target_equation]
+        else
+            s_arg = (state_s, state0_s, state_t, state0_t, model_s, model_t)
+            eq_for_ct = model_s.equations[ct_pair.source_equation]
+        end
+    
         for i in 1:N
-            prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
+            prepare_cross_term_in_entity!(i, s_arg..., ct, eq_for_ct, dt)
             ldisc = local_discretization(ct, i)
             v_i = view(v, :, i)
-            update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
+            update_cross_term_in_entity!(v_i, i, s_arg..., ct, eq_for_ct, dt, ldisc)
         end
         increment_equation_entries!(acc, model, v, impact, N, sgn)
         return acc
@@ -248,7 +264,7 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
             Jutul.apply_forces_to_equation!(acc, model_storage[model_key], model, eq, eq_s, force_ad, time)
             cts = evaluate_force_gradient_get_crossterms(multi_model, model_key, eqname)
             for ct_pair in cts
-                add_in_cross_term!(acc, state, state0, model, model_key, ct_pair, eq, dt)
+                add_in_cross_term!(acc, state, state0, model, model_key, ct_pair, eqname, dt)
             end
             # Loop over entities that this force impacts
             for (entity, rows) in zip(S.entity, S.rows)
@@ -277,7 +293,7 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
                 # Jutul.apply_forces_to_equation!(acc, model_storage[model_key], model, eq, eq_s, force_ad, time)
                 cts = evaluate_force_gradient_get_crossterms(multi_model, other_model_key, eqname)
                 for ct_pair in cts
-                    add_in_cross_term!(acc, other_state, other_state0, other_model, other_model_key, ct_pair, eq, dt)
+                    add_in_cross_term!(acc, other_state, other_state0, other_model, other_model_key, ct_pair, eqname, dt)
                 end
                 # Loop over entities that this force impacts
                 for (entity, rows) in zip(S.entity, S.rows)
@@ -290,7 +306,6 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
                     end
                 end
             end
-
         end
         fno += 1
     end
