@@ -263,6 +263,35 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
                 end
             end
         end
+        for (other_model_key, other_sparsity) in pairs(sparsity.other)
+            @info "!" other_model_key other_sparsity
+            other_model = multi_model[other_model_key]
+            for (eqname, S) in pairs(other_sparsity)
+                @info "Eqname" eqname
+                eq = other_model.equations[eqname]
+                entity = associated_entity(eq)
+                ne = count_entities(other_model.domain, entity)
+                nper_e = number_of_equations_per_entity(other_model, eq)
+                acc = zeros(T, (nper_e, ne))
+                eq_s = missing
+                # Jutul.apply_forces_to_equation!(acc, model_storage[model_key], model, eq, eq_s, force_ad, time)
+                cts = evaluate_force_gradient_get_crossterms(multi_model, other_model_key, eqname)
+                for ct_pair in cts
+                    add_in_cross_term!(acc, state, state0, model, ct_pair, eq, dt)
+                end
+                # Loop over entities that this force impacts
+                for (entity, rows) in zip(S.entity, S.rows)
+                    for (i, row) in enumerate(rows)
+                        val = acc[i, entity]
+                        for p in 1:np
+                            ∂ = val.partials[p]
+                            J[row + row_offset, offset + p] = ∂
+                        end
+                    end
+                end
+            end
+
+        end
         fno += 1
     end
 
