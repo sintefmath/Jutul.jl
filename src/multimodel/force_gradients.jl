@@ -201,8 +201,6 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
         state_s = model_storage[other].state
         state0_s = model_storage[other].state0
 
-        @info "target" keys(state_t) keys(state_s)
-
         N = length(impact)
         # TODO: apply_force_to_cross_term!
         v = zeros(eltype(acc), size(acc, 1), N)
@@ -213,7 +211,6 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
             s_arg = (state_s, state0_s, state_t, state0_t, model_s, model_t)
             eq_for_ct = model_s.equations[ct_pair.source_equation]
         end
-    
         for i in 1:N
             prepare_cross_term_in_entity!(i, s_arg..., ct, eq_for_ct, dt)
             ldisc = local_discretization(ct, i)
@@ -278,12 +275,14 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
             end
         end
         for (other_model_key, other_sparsity) in pairs(sparsity.other)
-            @info "!" other_model_key model_key other_sparsity
             other_model = multi_model[other_model_key]
             other_state = model_storage[other_model_key].state
             other_state0 = model_storage[other_model_key].state0
+            @info "!" other_model_key model_key other_sparsity
+            if !haskey(other_sparsity, fname)
+                continue
+            end
             for (eqname, S) in pairs(other_sparsity[fname])
-                @info "Eqname" eqname
                 eq = other_model.equations[eqname]
                 entity = associated_entity(eq)
                 ne = count_entities(other_model.domain, entity)
