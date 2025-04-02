@@ -252,7 +252,11 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
 
         offset = offsets[fno] - 1
         np = offsets[fno+1] - offsets[fno]
-        self_sparsity = sparsity.self[fname]
+        if haskey(sparsity, :self)
+            self_sparsity = sparsity.self[fname]
+        else
+            self_sparsity = sparsity[fname]
+        end
         for (eqname, S) in pairs(self_sparsity)
             eq = model.equations[eqname]
             acc = zeros(T, S.dims)
@@ -273,34 +277,36 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
                 end
             end
         end
-        for (other_model_key, other_sparsity) in pairs(sparsity.other)
-            row_offset_other = model_offsets[other_model_key]
+        if haskey(sparsity, :other)
+            for (other_model_key, other_sparsity) in pairs(sparsity.other)
+                row_offset_other = model_offsets[other_model_key]
 
-            other_model = multi_model[other_model_key]
-            other_state = model_storage[other_model_key].state
-            other_state0 = model_storage[other_model_key].state0
-            if !haskey(other_sparsity, fname)
-                continue
-            end
-            for (eqname, S) in pairs(other_sparsity[fname])
-                eq = other_model.equations[eqname]
-                entity = associated_entity(eq)
-                ne = count_entities(other_model.domain, entity)
-                nper_e = number_of_equations_per_entity(other_model, eq)
-                acc = zeros(T, (nper_e, ne))
-                eq_s = missing
-                # Jutul.apply_forces_to_equation!(acc, model_storage[model_key], model, eq, eq_s, force_ad, time)
-                cts = evaluate_force_gradient_get_crossterms(multi_model, other_model_key, eqname)
-                for ct_pair in cts
-                    add_in_cross_term!(acc, other_state, other_state0, other_model, other_model_key, ct_pair, eqname, dt)
+                other_model = multi_model[other_model_key]
+                other_state = model_storage[other_model_key].state
+                other_state0 = model_storage[other_model_key].state0
+                if !haskey(other_sparsity, fname)
+                    continue
                 end
-                # Loop over entities that this force impacts
-                for (entity, rows) in zip(S.entity, S.rows)
-                    for (i, row) in enumerate(rows)
-                        val = acc[i, entity]
-                        for p in 1:np
-                            ∂ = val.partials[p]
-                            J[row + row_offset_other, offset + p] = ∂
+                for (eqname, S) in pairs(other_sparsity[fname])
+                    eq = other_model.equations[eqname]
+                    entity = associated_entity(eq)
+                    ne = count_entities(other_model.domain, entity)
+                    nper_e = number_of_equations_per_entity(other_model, eq)
+                    acc = zeros(T, (nper_e, ne))
+                    eq_s = missing
+                    # Jutul.apply_forces_to_equation!(acc, model_storage[model_key], model, eq, eq_s, force_ad, time)
+                    cts = evaluate_force_gradient_get_crossterms(multi_model, other_model_key, eqname)
+                    for ct_pair in cts
+                        add_in_cross_term!(acc, other_state, other_state0, other_model, other_model_key, ct_pair, eqname, dt)
+                    end
+                    # Loop over entities that this force impacts
+                    for (entity, rows) in zip(S.entity, S.rows)
+                        for (i, row) in enumerate(rows)
+                            val = acc[i, entity]
+                            for p in 1:np
+                                ∂ = val.partials[p]
+                                J[row + row_offset_other, offset + p] = ∂
+                            end
                         end
                     end
                 end
