@@ -67,7 +67,6 @@ function determine_sparsity_forces(model::MultiModel, forces, X, config; paramet
             end
         end
     end
-    @info "???"  cross_term_sparsity
 
     for k in submodels_symbols(model)
         submodel = model[k]
@@ -280,7 +279,6 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
             other_model = multi_model[other_model_key]
             other_state = model_storage[other_model_key].state
             other_state0 = model_storage[other_model_key].state0
-            @info "!" other_model_key model_key other_sparsity
             if !haskey(other_sparsity, fname)
                 continue
             end

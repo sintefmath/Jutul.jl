@@ -547,7 +547,7 @@ function forces_optimization_config(
             row_labels = []
             for (fname, fdict) in opt_config
                 for (subname, subdict) in fdict
-                    push!(row_labels, "$fname.$subname")
+                    push!(row_labels, "$dix: $fname.$subname")
                     # pretty_table(subdict, title = "$fname.$subname")
                     for (ii, k) in enumerate(cfg_keys)
                         tmp[dix, ii] = subdict[k]
