@@ -110,14 +110,9 @@ function devectorize_variable!(state, V, k, info, F_inv; config = c)
         else
             lumping::AbstractVector
             m = size(state_val, 1)
-            pos = Dict{Int, Int}()
-            for i in 1:maximum(lumping)
-                pos[i] = findfirst(isequal(i), lumping)
-            end
             for (i, lump) in enumerate(lumping)
-                ix = pos[lump]
                 for j in 1:m
-                    state_val[j, i] = F_inv(V[offset+(ix-1)*m+j])
+                    state_val[j, i] = F_inv(V[offset+(lump-1)*m+j])
                 end
             end
         end
