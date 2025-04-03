@@ -230,7 +230,13 @@ function objective_and_gradient_opt!(F, dFdx, x, data, arg...)
     return obj
 end
 
-function optimization_config(model, param, active = parameter_targets(model);
+function optimization_config(case::JutulCase, active = parameter_targets(case.model); kwarg...)
+    model = case.model
+    param = case.parameters
+    return optimization_config(model, param, active; kwarg...)
+end
+
+function optimization_config(model::SimulationModel, param, active = parameter_targets(model);
         rel_min = nothing,
         rel_max = nothing,
         use_scaling = false
@@ -484,10 +490,11 @@ function print_parameter_optimization_config(targets, config, model; title = :mo
                 lstr = "-"
             else
                 n = length(unique(lumping))
+                estr = "($n×$m=$(n*m) dof)"
                 if n == 1
-                    lstr = "1 group"
+                    lstr = "1 group $estr"
                 else
-                    lstr = "$n groups"
+                    lstr = "$n groups $estr"
                 end
             end
             function fmt_lim(l, u)
