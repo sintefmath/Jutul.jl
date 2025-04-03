@@ -350,7 +350,6 @@ end
 function optimization_limits!(lims, config, mapper, param, model)
     x_min, x_max = lims
     for (param_k, v) in mapper
-        # (; offset, n) = v
         (; n_full, n_x, offset_full, offset_x) = v
         cfg = config[param_k]
         vals = param[param_k]
