@@ -1,3 +1,14 @@
+# TODO: dispatch on model type (scalar model/multimodel)
+
+"""
+    get_multimodel_residuals(report)
+
+Get all residual norms for all equations of all models from a nonlinear
+iteration report, scaled by their respective toelrances. The function returns a
+dict of dicts with the residual norms for each equation on the form
+
+    residuals[model][equation_type][equation][norm] = res/tol
+"""
 function get_multimodel_residuals(report)
 
     models = keys(report)
@@ -13,6 +24,16 @@ function get_multimodel_residuals(report)
 
 end
 
+"""
+    get_model_residuals(report)
+
+
+Get all residual norms for all equations of a model from a nonlinear
+iteration report, scaled by their respective toelrances. The function returns a
+dict of dicts with the residual norms for each equation on the form
+
+    residuals[equation_type][equation][norm] = res/tol
+"""
 function get_model_residuals(report)
 
     residuals = Dict()
@@ -50,6 +71,11 @@ function get_model_residuals(report)
 
 end
 
+"""
+    process_name(name)
+
+Process a names to be suibale as dictionary keys.
+"""
 function process_name(name)
 
     name = String(name)
@@ -58,6 +84,13 @@ function process_name(name)
 
 end
 
+"""
+    flatten_dict(input_dict::Dict, separator::String = ".", trail = [])
+
+Flatten a dict of dicts into a vector of values and a vector of names. The names
+are on the format `"key1<separator>key2<separator>key3"` and the values are the
+corresponding values in the dict.
+"""
 function flatten_dict(input_dict::Dict, separator::String = ".", trail = [])
     values = []
     names = []
