@@ -101,7 +101,12 @@ function parameter_targets(model::MultiModel)
     return targets
 end
 
-function variable_mapper(model::MultiModel, arg...; targets = nothing, config = nothing, offset = 0)
+function variable_mapper(model::MultiModel, arg...;
+        targets = nothing,
+        config = nothing,
+        offset = 0,
+        offset_x = offset
+    )
     out = Dict{Symbol, Any}()
     for k in submodels_symbols(model)
         if isnothing(targets)
@@ -114,9 +119,9 @@ function variable_mapper(model::MultiModel, arg...; targets = nothing, config = 
         else
             c = config[k]
         end
-        out[k], offset = variable_mapper(model[k], arg..., targets = t, config = c, offset = offset)
+        out[k], offset, offset_x = variable_mapper(model[k], arg..., targets = t, config = c, offset = offset, offset_x = offset_x)
     end
-    return (out, offset)
+    return (out, offset, offset_x)
 end
 
 function rescale_sensitivities!(dG, model::MultiModel, parameter_map)

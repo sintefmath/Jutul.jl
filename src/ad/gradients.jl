@@ -785,7 +785,7 @@ end
 gradient_vec_or_mat(n, ::Nothing) = zeros(n)
 gradient_vec_or_mat(n, m) = zeros(n, m)
 
-function variable_mapper(model::SimulationModel, type = :primary; targets = nothing, config = nothing, offset = 0)
+function variable_mapper(model::SimulationModel, type = :primary; targets = nothing, config = nothing, offset = 0, offset_x = offset)
     vars = get_variables_by_type(model, type)
     out = Dict{Symbol, Any}()
     for (t, var) in vars
@@ -798,19 +798,27 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
         end
         n = number_of_values(model, var)
         m = values_per_entity(model, var)
+        n_x = n
         if !isnothing(config)
             lumping = config[t][:lumping]
             if !isnothing(lumping)
                 N = maximum(lumping)
                 unique(lumping) == 1:N || error("Lumping for $t must include all values from 1 to $N")
                 length(lumping) == n÷m || error("Lumping for $t must have one entry for each value if present")
-                n = N*m
+                n_x = N*m
             end
         end
-        out[t] = (n = n, offset = offset, scale = variable_scale(var))
+        out[t] = (
+            n = n,
+            n_x = n_x,
+            offset = offset,
+            offset_x = offset_x,
+            scale = variable_scale(var)
+        )
         offset += n
+        offset_x += n_x
     end
-    return (out, offset)
+    return (out, offset, offset_x)
 end
 
 function rescale_sensitivities!(dG, model, parameter_map)
