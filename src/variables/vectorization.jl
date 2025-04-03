@@ -31,21 +31,22 @@ function vectorize_variable!(V, state, k, info, F; config = nothing)
     state_val = state[k]
     lumping = get_lumping(config)
     if isnothing(lumping)
-        @assert n == n_x
-        @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
+        @assert n_full == n_x
+        @assert length(state_val) == n_x "Expected field $k to have length $n_x, was $(length(state_val))"
         if state_val isa AbstractVector
-            for i in 1:n
-                V[offset+i] = F(state_val[i])
+            for i in 1:n_x
+                V[offset_x+i] = F(state_val[i])
             end
         else
             l, m = size(state_val)
-            ctr = 1
+            ctr = 0
             for i in 1:l
                 for j in 1:m
-                    V[offset+ctr] = F(state_val[i, j])
                     ctr += 1
+                    V[offset_x+ctr] = F(state_val[i, j])
                 end
             end
+            @assert ctr == n_full
         end
     else
         lumping::AbstractVector
