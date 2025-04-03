@@ -24,6 +24,16 @@ function compute_contraction_factor(d, N)
 
 end
 
+"""
+    oscillation(contraction_factors, tol)
+
+Check if the contraction factors are oscillating. The function checks if the
+contraction factors are oscillating by checking if the last three contraction
+factors are below a user-defined tolerance defining "slow" convergece. The
+function returns true if the contraction factors are oscillating, and false
+otherwise. If less than three contraction factors are provided, the function
+returns false.
+"""
 function oscillation(contraction_factors, tol)
 
     θ = contraction_factors
