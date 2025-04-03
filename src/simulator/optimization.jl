@@ -446,13 +446,43 @@ function optimization_limits!(lims, config, mapper, param, model)
 end
 
 function transfer_gradient!(dGdy, dGdx, y, mapper, config, model)
-    for (k, v) in mapper
-        (; offset, n) = v
-        x_to_y = opt_scaler_function(config, k, inv = false)
-        y_to_x = opt_scaler_function(config, k, inv = true)
-        for i in 1:n
-            k = offset + i
-            dGdy[k] = objective_gradient_chain_rule(x_to_y, y_to_x, y[k], dGdx[k])
+    # Note: dGdy is a vector of short length (i.e. with lumping) and dGdx is a
+    # vector of full length (i.e. without lumping)
+    for (varname, v) in mapper
+        (; n_full, n_x, offset_full, offset_x, n_row) = v
+        lumping = get_lumping(config[varname])
+
+        @info "???" length(dGdy) length(dGdx) length(y) offset_full offset_x n_x n_full
+        x_to_y = opt_scaler_function(config, varname, inv = false)
+        y_to_x = opt_scaler_function(config, varname, inv = true)
+
+        if isnothing(lumping)
+            @assert n_x == n_full
+            for i in 1:n_x
+                k = offset_x + i
+                k_full = offset_full + i
+                dGdy[k] = objective_gradient_chain_rule(x_to_y, y_to_x, y[k], dGdx[k_full])
+            end
+        else
+            lumping::AbstractVector
+            m_x = n_x ÷ n_row
+            m_full = n_full ÷ n_row
+            @assert m_x == maximum(lumping) "Lumping group $k has $m_x groups, but $n_x variables"
+            indx(j, lump) = offset_x + (lump - 1)*m_x + j
+            for lump in 1:m_x
+                for j in 1:n_row
+                    dGdy[indx(j, lump)] = 0.0
+                end
+            end
+            for (i, lump) in enumerate(lumping)
+                for j in 1:n_row
+                    ix = indx(j, lump)
+                    ix_full = offset_full + (i - 1)*m_full + j
+                    dGdy[ix] += objective_gradient_chain_rule(x_to_y, y_to_x, y[ix], dGdx[ix_full])
+                end
+            end
+            @info "??" m_x m_full n_row
+            error()
         end
     end
     return dGdy

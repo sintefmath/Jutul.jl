@@ -811,6 +811,7 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
         out[t] = (
             n_full = n,
             n_x = n_x,
+            n_row = m,
             offset_full = offset_full,
             offset_x = offset_x,
             scale = variable_scale(var)
@@ -823,9 +824,9 @@ end
 
 function rescale_sensitivities!(dG, model, parameter_map)
     for (k, v) in parameter_map
-        (; n, offset, scale) = v
+        (; n_full, offset_full, scale) = v
         if !isnothing(scale)
-            interval = (offset+1):(offset+n)
+            interval = (offset_full+1):(offset_full+n_full)
             if dG isa AbstractVector
                 dG_k = view(dG, interval)
             else
