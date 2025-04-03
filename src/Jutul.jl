@@ -116,4 +116,9 @@ module Jutul
     using .LBFGS
     import .LBFGS: unit_box_bfgs
 
+    # Convergence monitors
+    include("ConvergenceMonitors/ConvergenceMonitors.jl")
+    import Jutul.ConvergenceMonitors: ContractionFactorCuttingCriterion
+    import Jutul.ConvergenceMonitors: set_contraction_factor_cutting_criterion!
+
 end # module
