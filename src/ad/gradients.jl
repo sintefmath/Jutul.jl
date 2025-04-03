@@ -728,17 +728,17 @@ function store_sensitivities!(out, model, variables, result, prm_map, ::Equation
         if !haskey(prm_map, k)
             continue
         end
-        (; n, offset) = prm_map[k]
+        (; n_x, offset_x) = prm_map[k]
         m = degrees_of_freedom_per_entity(model, var)
-        if n > 0
-            rng = (offset+1):(offset+n)
+        if n_x > 0
+            rng = (offset_x+1):(offset_x+n_x)
             if scalar_valued_objective
                 result_k = view(result, rng)
-                v = extract_sensitivity_subset(result_k, var, n, m, offset)
+                v = extract_sensitivity_subset(result_k, var, n_x, m, offset_x)
             else
                 # Grab each of the sensitivities and put them in an array for simplicity
                 v = map(
-                    i -> extract_sensitivity_subset(view(result, rng, i), var, n, m, offset + n*(i-1)),
+                    i -> extract_sensitivity_subset(view(result, rng, i), var, n_x, m, offset + n_x*(i-1)),
                     1:N
                 )
             end
