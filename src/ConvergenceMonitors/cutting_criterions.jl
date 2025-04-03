@@ -70,7 +70,8 @@ function Jutul.cutting_criterion(cc::ContractionFactorCuttingCriterion, sim, dt,
     cc.history[:status][it] = status
 
     early_cut = cc.num_violations > cc.num_violations_cut
-    step_reports[end][:cutting_criterion] = cc
+    cc_report = make_report(Θ, Θ_target, is_oscillating, status)
+    step_reports[end][:cutting_criterion] = cc_report
 
     if cfg[:info_level] >= 2
         print_progress(cc, it, it0)
@@ -99,6 +100,17 @@ function reset!(cc::ContractionFactorCuttingCriterion, template, max_iter)
     history[:oscillation][1] = false
     
     cc.history = history
+
+end
+
+function make_report(θ, θ_target, oscillation, status)
+
+    report = Dict()
+    report[:contraction_factor] = θ
+    report[:contraction_factor_target] = θ_target
+    report[:oscillation] = oscillation
+    report[:status] = status
+    return report
 
 end
 
