@@ -350,7 +350,8 @@ end
 function optimization_limits!(lims, config, mapper, param, model)
     x_min, x_max = lims
     for (param_k, v) in mapper
-        (; offset, n) = v
+        # (; offset, n) = v
+        (; n_full, n_x, offset_full, offset_x) = v
         cfg = config[param_k]
         vals = param[param_k]
 
@@ -361,8 +362,8 @@ function optimization_limits!(lims, config, mapper, param, model)
         abs_min = cfg[:abs_min]
         low_group = Inf
         high_group = -Inf
-        for i in 1:n
-            k = i + offset
+        for i in 1:n_x
+            k = i + offset_x
             val = vals[i]
             if isnothing(rel_min)
                 low = abs_min
@@ -403,8 +404,8 @@ function optimization_limits!(lims, config, mapper, param, model)
 
         F = opt_scaler_function(config, param_k, inv = false)
         # F_inv = opt_scaler_function(config, k, inv = true)
-        for i in 1:n
-            k = i + offset
+        for i in 1:n_x
+            k = i + offset_x
             low = F(x_min[k])
             hi = F(x_max[k])
             @assert !isnan(low) "Scaled limit for F($(x_min[k])) was NaN (urange $cscale)"

@@ -104,8 +104,8 @@ end
 function variable_mapper(model::MultiModel, arg...;
         targets = nothing,
         config = nothing,
-        offset = 0,
-        offset_x = offset
+        offset_x = 0,
+        offset_full = offset_x
     )
     out = Dict{Symbol, Any}()
     for k in submodels_symbols(model)
@@ -119,9 +119,14 @@ function variable_mapper(model::MultiModel, arg...;
         else
             c = config[k]
         end
-        out[k], offset, offset_x = variable_mapper(model[k], arg..., targets = t, config = c, offset = offset, offset_x = offset_x)
+        out[k], offset_full, offset_x = variable_mapper(model[k], arg...;
+            targets = t,
+            config = c,
+            offset_full = offset_full,
+            offset_x = offset_x
+        )
     end
-    return (out, offset, offset_x)
+    return (out, offset_full, offset_x)
 end
 
 function rescale_sensitivities!(dG, model::MultiModel, parameter_map)

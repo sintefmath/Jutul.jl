@@ -9,7 +9,7 @@ function vectorize_variables(model, state_or_prm, type_or_map = :primary; config
 end
 
 function vectorized_length(model, mapper)
-    sum(x -> x.n, values(mapper), init = 0)
+    sum(x -> x.n_x, values(mapper), init = 0)
 end
 
 function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary; config = nothing)
@@ -27,10 +27,11 @@ function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary; co
 end
 
 function vectorize_variable!(V, state, k, info, F; config = nothing)
-    (; n, offset) = info
+    (; n_full, n_x, offset_full, offset_x) = info
     state_val = state[k]
     lumping = get_lumping(config)
     if isnothing(lumping)
+        @assert n == n_x
         @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
         if state_val isa AbstractVector
             for i in 1:n
@@ -53,7 +54,7 @@ function vectorize_variable!(V, state, k, info, F; config = nothing)
             for i in 1:maximum(lumping)
                 # Take the first lumped value as they must be equal by assumption
                 ix = findfirst(isequal(i), lumping)
-                V[offset+i] = F(state_val[ix])
+                V[offset_x+i] = F(state_val[ix])
             end
         else
             @assert size(state_val, 2) == length(lumping) "Lumping must be given as a vector with one value per column for matrix"
@@ -61,7 +62,7 @@ function vectorize_variable!(V, state, k, info, F; config = nothing)
             for i in 1:maximum(lumping)
                 ix = findfirst(isequal(i), lumping)
                 for j in 1:m
-                    V[offset+(i-1)*m+j] = F(state_val[j, ix])
+                    V[offset_x+(i-1)*m+j] = F(state_val[j, ix])
                 end
             end
         end
@@ -83,21 +84,22 @@ function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary; 
 end
 
 function devectorize_variable!(state, V, k, info, F_inv; config = c)
-    (; n, offset) = info
+    (; n_full, n_x, offset_full, offset_x) = info
     state_val = state[k]
     lumping = get_lumping(config)
     if isnothing(lumping)
-        @assert length(state_val) == n "Expected field $k to have length $n, was $(length(state_val))"
+        @assert n_full == n_x
+        @assert length(state_val) == n_full "Expected field $k to have length $n_full, was $(length(state_val))"
         if state_val isa AbstractVector
-            for i in 1:n
-                state_val[i] = F_inv(V[offset+i])
+            for i in 1:n_full
+                state_val[i] = F_inv(V[offset_x+i])
             end
         else
             l, m = size(state_val)
             ctr = 1
             for i in 1:l
                 for j in 1:m
-                    state_val[i, j] = F_inv(V[offset+ctr])
+                    state_val[i, j] = F_inv(V[offset_x+ctr])
                     ctr += 1
                 end
             end
@@ -105,7 +107,7 @@ function devectorize_variable!(state, V, k, info, F_inv; config = c)
     else
         if state_val isa AbstractVector
             for (i, lump) in enumerate(lumping)
-                state_val[i] = F_inv(V[offset+lump])
+                state_val[i] = F_inv(V[offset_x+lump])
             end
         else
             lumping::AbstractVector
@@ -114,7 +116,7 @@ function devectorize_variable!(state, V, k, info, F_inv; config = c)
             @assert ncell == nlump "Lumping must be given as a vector with one value per column ($ncell) for matrix, was $nlump"
             for (i, lump) in enumerate(lumping)
                 for j in 1:m
-                    state_val[j, i] = F_inv(V[offset+(lump-1)*m+j])
+                    state_val[j, i] = F_inv(V[offset_x+(lump-1)*m+j])
                 end
             end
         end
