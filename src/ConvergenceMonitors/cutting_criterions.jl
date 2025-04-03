@@ -7,7 +7,7 @@
     # Number of iterations to use for computing contraction factor metrics
     memory = 1
     # Target number of nonlinear iterations for the timestep
-    target_iterations = 5
+    target_iterations = 8
     # Contraction factor parameters
     slow = 0.99
     fast = 0.1
@@ -48,7 +48,7 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     
     # Maximum number of iterations left if we should converge in
     # target_iterations iterations
-    N = max(max_iter - it + 1, 2)
+    N = max(cc.target_iterations - it + 1, 2)
     # First iterate number back in time to compute contraction factor
     it0 = max(it - cc.memory, 1)
 
