@@ -2,8 +2,8 @@ module ConvergenceMonitors
 
     using Jutul
 
-    export ContractionFactorCuttingCriterion
-    export set_contraction_factor_cutting_criterion!
+    export ConvergenceMonitorCuttingCriterion
+    export set_convergence_monitor_cutting_criterion!
 
     include("distance_functions.jl")
     include("contraction_factors.jl")

@@ -1,4 +1,4 @@
-@kwdef mutable struct ContractionFactorCuttingCriterion
+@kwdef mutable struct ConvergenceMonitorCuttingCriterion
 
     # Function to compute the distance from convergence
     distance_function = r -> compute_distance(r)
@@ -17,15 +17,15 @@
 
 end
 
-function set_contraction_factor_cutting_criterion!(config; max_nonlinear_iterations = 50, kwargs...)
+function set_convergence_monitor_cutting_criterion!(config; max_nonlinear_iterations = 50, kwargs...)
 
-    cc = ContractionFactorCuttingCriterion(; kwargs...)
+    cc = ConvergenceMonitorCuttingCriterion(; kwargs...)
     config[:cutting_criterion] = cc
     config[:max_nonlinear_iterations] = max_nonlinear_iterations
 
 end
 
-function Jutul.cutting_criterion(cc::ContractionFactorCuttingCriterion, sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
+function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
     
     N = max(max_iter - it + 1, 2)
     it0 = max(it - cc.memory, 1)
@@ -70,8 +70,8 @@ function Jutul.cutting_criterion(cc::ContractionFactorCuttingCriterion, sim, dt,
     cc.history[:status][it] = status
 
     early_cut = cc.num_violations > cc.num_violations_cut
-    cc_report = make_report(Θ, Θ_target, is_oscillating, status)
-    step_reports[end][:cutting_criterion] = cc_report
+    cm_report = make_report(Θ, Θ_target, is_oscillating, status)
+    step_reports[end][:convergence_monitor] = cm_report
 
     if cfg[:info_level] >= 2
         print_progress(cc, it, it0)
@@ -81,7 +81,7 @@ function Jutul.cutting_criterion(cc::ContractionFactorCuttingCriterion, sim, dt,
 
 end
 
-function reset!(cc::ContractionFactorCuttingCriterion, template, max_iter)
+function reset!(cc::ConvergenceMonitorCuttingCriterion, template, max_iter)
 
     cc.num_violations = 0
     nc = max_iter + 1
@@ -114,7 +114,7 @@ function make_report(θ, θ_target, oscillation, status)
 
 end
 
-function print_progress(cc::ContractionFactorCuttingCriterion, it, it0)
+function print_progress(cc::ConvergenceMonitorCuttingCriterion, it, it0)
 
     round_local(x) = round(x; digits = 2)
 

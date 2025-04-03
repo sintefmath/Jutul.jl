@@ -118,7 +118,7 @@ module Jutul
 
     # Convergence monitors
     include("ConvergenceMonitors/ConvergenceMonitors.jl")
-    import Jutul.ConvergenceMonitors: ContractionFactorCuttingCriterion
-    import Jutul.ConvergenceMonitors: set_contraction_factor_cutting_criterion!
+    import Jutul.ConvergenceMonitors: ConvergenceMonitorCuttingCriterion
+    import Jutul.ConvergenceMonitors: set_convergence_monitor_cutting_criterion!
 
 end # module
