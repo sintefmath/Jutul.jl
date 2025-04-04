@@ -164,8 +164,8 @@ function gradient_opt!(dFdx, x, data)
             parameters = parameters
         )
     end
+    @. dFdx = 0.0
     transfer_gradient!(dFdx, grad_adj, x, mapper, opt_cfg, model)
-    @info "???" dFdx grad_adj
     @assert all(isfinite, dFdx) "Non-finite gradients detected."
     return dFdx
 end
@@ -450,8 +450,6 @@ function transfer_gradient!(dGdy, dGdx, y, mapper, config, model)
     for (varname, v) in mapper
         (; n_full, n_x, offset_full, offset_x, n_row) = v
         lumping = get_lumping(config[varname])
-
-        @info "???" length(dGdy) length(dGdx) length(y) offset_full offset_x n_x n_full
         x_to_y = opt_scaler_function(config, varname, inv = false)
         y_to_x = opt_scaler_function(config, varname, inv = true)
 
@@ -466,8 +464,6 @@ function transfer_gradient!(dGdy, dGdx, y, mapper, config, model)
             lumping::AbstractVector
             m_x = n_x ÷ n_row
             m_full = n_full ÷ n_row
-            @info "??" m_x m_full n_row
-
             @assert m_x == maximum(lumping) "Lumping group $k has $m_x groups, but $n_x variables"
             indx(j, lump) = offset_x + (lump - 1)*n_row + j
             for lump in 1:m_x
@@ -478,7 +474,8 @@ function transfer_gradient!(dGdy, dGdx, y, mapper, config, model)
             for (i, lump) in enumerate(lumping)
                 for j in 1:n_row
                     ix = indx(j, lump)
-                    ix_full = offset_full + (i - 1)*n_row + j
+                    # Note: Gradients follow canonical order (equation major)
+                    ix_full = offset_full + (j - 1)*m_full + i
                     dGdy[ix] += objective_gradient_chain_rule(x_to_y, y_to_x, y[ix], dGdx[ix_full])
                 end
             end
