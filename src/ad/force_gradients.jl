@@ -279,16 +279,21 @@ function determine_cross_term_sparsity_forces(model, subforces, extra_sparsity, 
     return out
 end
 
-function evaluate_force_gradient(X, model::SimulationModel, storage, parameters, forces, config, forceno, time, dt)
+function evaluate_force_gradient!(dobj_dgrad, X, objective, model::SimulationModel, storage, parameters, forces, config, forceno, time, step_no::Int, dt)
     mname = :Model
     mmodel = MultiModel((Model = model,))
-    return evaluate_force_gradient(
-        X, mmodel, storage,
+    return evaluate_force_gradient!(
+        dobj_dgrad,
+        X,
+        objective,
+        mmodel,
+        storage,
         Dict(mname => parameters),
         Dict(mname => forces),
         Dict(mname => config),
         forceno,
         time,
+        step_no,
         dt
     )
 end
@@ -371,6 +376,7 @@ function setup_adjoint_forces_storage(model, allforces, timesteps;
     storage[:forces_sparsity] = []
     storage[:forces_jac] = []
     storage[:targets] = targets
+    storage[:forces_objective_gradient] = Vector{Float64}[]
 
     nvar = storage.n_forward
     for (i, force) in enumerate(unique_forces)
@@ -381,6 +387,7 @@ function setup_adjoint_forces_storage(model, allforces, timesteps;
         S_force = determine_sparsity_forces(model, force, X, config, parameters = parameters)
         push!(storage[:forces_sparsity], S_force)
         push!(storage[:forces_jac], sparse(Int[], Int[], Float64[], nvar, length(X)))
+        push!(storage[:forces_objective_gradient], zeros(length(X)))
     end
     return storage
 end
@@ -430,6 +437,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
     fg = storage[:forces_gradient]
     fv = storage[:forces_vector]
     fc = storage[:forces_config]
+    ograd = storage[:forces_objective_gradient]
     if init
         t = storage[:targets]
         for (forceno, force) in enumerate(unique_forces)
@@ -437,6 +445,9 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         end
     end
     for g in fg
+        @. g = 0.0
+    end
+    for g in ograd
         @. g = 0.0
     end
 
@@ -451,11 +462,15 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         config = fc[forceno]
         out = fg[forceno]
         X = fv[forceno]
+        dobj_dgrad = ograd[forceno]
 
         s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
         λ, t, dt, forces = Jutul.next_lagrange_multiplier!(storage, i, G, s, s0, s_next, timesteps, forces)
-        J = evaluate_force_gradient(X, model, storage, parameters, forces, config, forceno, t, timesteps[i])
+        J = evaluate_force_gradient!(dobj_dgrad, X, G, model, storage, parameters, forces, config, forceno, t, i, timesteps[i])
         mul!(out, J', λ, 1.0, 1.0)
+    end
+    for (g, o) in zip(fg, ograd)
+        @. g += o
     end
 
     return solve_adjoint_forces_retval(storage, model)
