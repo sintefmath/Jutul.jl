@@ -366,3 +366,20 @@ import Jutul: check_equal_perm
     @test check_equal_perm(SVector(1, 2, 3, 4), SVector(3, 4, 1, 2))
     @test check_equal_perm(SVector(1, 2, 3, 4), SVector(4, 1, 2, 3))
 end
+
+import Jutul: BlendingParameter, BlendingVariable
+    @testset "BlendingVariable" begin
+    mock_state = (
+        A = repeat([1.0, 2, 3], 1, 5),
+        B = repeat([10.0, 20, 30], 1, 5),
+        BlendingParameter = range(1.0, 2.0, length = 5)
+    )
+
+    V = similar(mock_state.A)
+    bvar = BlendingVariable([:A, :B], 3)
+    V = Jutul.update_secondary_variable!(V, bvar, nothing, mock_state)
+    @test V[:, 1] ≈ [1, 2, 3] atol = 1e-2
+    @test V[:, end] ≈ [10, 20, 30] atol = 1e-2
+    @test all(V[:, 3] .< [10, 20, 30])
+    @test all(V[:, 3] .> [1, 2, 3])
+end
