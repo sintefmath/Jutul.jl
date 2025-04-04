@@ -26,7 +26,15 @@ config. The function also adjusts the maximum number of nonlinear iterations (to
 """
 function set_convergence_monitor_cutting_criterion!(config; max_nonlinear_iterations = 50, kwargs...)
 
-    cc = ConvergenceMonitorCuttingCriterion(; kwargs...)
+    target_iterations = 8
+    for sel in config[:timestep_selectors]
+        if sel isa IterationTimestepSelector
+            target_iterations = sel.target
+            break
+        end
+    end
+    cc = ConvergenceMonitorCuttingCriterion(; 
+    target_iterations = target_iterations, kwargs...)
     config[:cutting_criterion] = cc
     config[:max_nonlinear_iterations] = max_nonlinear_iterations
 
@@ -65,7 +73,7 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     cc.history[:contraction_factor][it] = Θ
     cc.history[:contraction_factor_target][it] = Θ_target
     # Check if the contraction factors are oscillating
-    oscillating_it = oscillation(cc.history[:contraction_factor][1:it], cc.slow)
+    oscillating_it = oscillation(cc.history[:contraction_factor][1:it])
     cc.history[:oscillation][it] = oscillating_it
     is_oscillating = any(cc.history[:oscillation][it0:it])
     
