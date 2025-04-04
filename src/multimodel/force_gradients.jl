@@ -129,7 +129,7 @@ function evaluate_force_gradient_get_crossterms(model, k, equation = missing)
     return crossterms
 end
 
-function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forces, config, forceno, time, dt)
+function evaluate_force_gradient!(dobj_dgrad, X, objective, model::MultiModel, storage, parameters, forces, config, forceno, time, step_no::Int, dt)
     forces = devectorize_forces(forces, model, X, config)
     offset_var = 0
     offset_x = 0
@@ -169,13 +169,13 @@ function evaluate_force_gradient(X, model::MultiModel, storage, parameters, forc
     for (k, m) in pairs(model.models)
         nl = sum(config[k].lengths)
         X_k = view(X, (offset_x+1):(offset_x+nl))
-        evaluate_force_gradient_inner!(J, X_k, model, k, storage, mstorage, parameters[k], forces, config[k], sparsity, time, dt, offsets)
+        evaluate_force_gradient!_inner!(J, dobj_dgrad, X_k, objective, model, k, storage, mstorage, parameters[k], forces, config[k], sparsity, time, step_no, dt, offsets)
         offset_x += nl
     end
     return J
 end
 
-function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, multimodel_forces, config, sparsity, time, dt, model_offsets::Dict{Symbol, Int})
+function evaluate_force_gradient!_inner!(J, dobj_dgrad, X, objective, multi_model::MultiModel, model_key::Symbol, storage, model_storage, parameters, multimodel_forces, config, sparsity, time, step_no, dt, model_offsets::Dict{Symbol, Int})
     function add_in_cross_term!(acc, state_t, state0_t, model_t, target_key::Symbol, ct_pair, eq_label::Symbol, dt)
         ct = ct_pair.cross_term
         is_self = ct_pair.target == target_key
@@ -225,7 +225,6 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
 
     model = multi_model[model_key]
     # Find maximum width
-    offsets = config.offsets
     if sum(config.lengths) == 0
         return J
     end
@@ -236,7 +235,6 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
     offsets = config.offsets
     npartials = maximum(diff(offsets))
 
-    offsets = config.offsets
     fno = 1
     subforces = multimodel_forces[model_key]
     row_offset = model_offsets[model_key]
@@ -311,6 +309,10 @@ function evaluate_force_gradient_inner!(J, X, multi_model::MultiModel, model_key
                     end
                 end
             end
+        end
+        partial_obj = objective(multi_model, as_value(model_storage.state), dt, step_no, all_forces)
+        for (derno, gderno) in enumerate(offsets[fno]:offsets[fno+1]-1)
+            dobj_dgrad[gderno] += partial_obj.partials[derno]
         end
         fno += 1
     end
