@@ -114,14 +114,9 @@ function schur_dx_update!(x, y, C, D, E, b, sys, dx, Δx, buffers)
     @tullio x[i] = -dx[i]
     # We want to do (in-place):
     # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
-    offsets = cumsum(length(x) for x in b)
+    offset = 0
     n = length(D)
     @inbounds for i in 1:n
-        if i == 1
-            offset = 0
-        else
-            offset = offsets[i-1]
-        end
         b_i = b[i]
         n = length(b_i)
         buf_b, = buffers[i+1]
@@ -132,6 +127,7 @@ function schur_dx_update!(x, y, C, D, E, b, sys, dx, Δx, buffers)
         end
         y_i = view(y, (offset+1):(offset+n))
         ldiv!(y_i, E[i], buf_b)
+        offset += length(b_i)
     end
 end
 
