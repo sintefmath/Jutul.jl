@@ -183,7 +183,7 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, it
         if θ < max(θ_target, θ_fast)
             inequality = "Θ = $θ ≤ max{$θ_target, $θ_fast} = max{Θ_target, θ_fast}"
         else
-            inequality = "Θ = $θ ≤ $θ_slow = Θ_slow"
+            inequality = "θ_target = $θ_target < Θ = $θ ≤ $θ_slow = Θ_slow"
         end
         sym = " →"
         color = :yellow
