@@ -230,6 +230,7 @@ function evaluate_force_gradient!_inner!(J, dobj_dgrad, X, objective, multi_mode
     end
     state = model_storage[model_key].state
     state0 = model_storage[model_key].state0
+    is_fake_multimodel = haskey(multi_model.models, :Model)
 
     nvar = storage.n_forward
     offsets = config.offsets
@@ -310,9 +311,16 @@ function evaluate_force_gradient!_inner!(J, dobj_dgrad, X, objective, multi_mode
                 end
             end
         end
-        partial_obj = objective(multi_model, as_value(model_storage.state), dt, step_no, all_forces)
-        for (derno, gderno) in enumerate(offsets[fno]:offsets[fno+1]-1)
-            dobj_dgrad[gderno] += partial_obj.partials[derno]
+        if is_fake_multimodel
+            vstate = model_storage.state.Model
+        else
+            vstate = model_storage.state
+        end
+        partial_obj = objective(multi_model, as_value(vstate), dt, step_no, all_forces)
+        if !(partial_obj isa Float64)
+            for (derno, gderno) in enumerate(offsets[fno]:offsets[fno+1]-1)
+                dobj_dgrad[gderno] += partial_obj.partials[derno]
+            end
         end
         fno += 1
     end
