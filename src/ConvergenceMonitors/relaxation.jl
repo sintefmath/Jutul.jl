@@ -62,11 +62,16 @@ function Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMon
         report = reports[end-1]
         @assert haskey(report, :convergence_monitor)
         status = report[:convergence_monitor][:status]
+        oscillating = report[:convergence_monitor][:oscillation]
 
-        if status == :bad
+        if status == :bad || oscillating
             ω = ω - dw_decrease
-        elseif status == :good
+        elseif status ∈ [:good, :ok]
             ω = ω + dw_increase
+        elseif status == :none
+            # No change
+        else
+            error("Unknown status: $status")
         end
         ω = clamp(ω, w_min, w_max)
 
