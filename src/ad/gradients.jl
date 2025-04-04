@@ -803,7 +803,7 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
             lumping = config[t][:lumping]
             if !isnothing(lumping)
                 N = maximum(lumping)
-                unique(lumping) == 1:N || error("Lumping for $t must include all values from 1 to $N")
+                sort(unique(lumping)) == 1:N || error("Lumping for $t must include all values from 1 to $N")
                 length(lumping) == n÷m || error("Lumping for $t must have one entry for each value if present")
                 n_x = N*m
             end
