@@ -728,17 +728,17 @@ function store_sensitivities!(out, model, variables, result, prm_map, ::Equation
         if !haskey(prm_map, k)
             continue
         end
-        (; n, offset) = prm_map[k]
+        (; n_x, offset_x) = prm_map[k]
         m = degrees_of_freedom_per_entity(model, var)
-        if n > 0
-            rng = (offset+1):(offset+n)
+        if n_x > 0
+            rng = (offset_x+1):(offset_x+n_x)
             if scalar_valued_objective
                 result_k = view(result, rng)
-                v = extract_sensitivity_subset(result_k, var, n, m, offset)
+                v = extract_sensitivity_subset(result_k, var, n_x, m, offset_x)
             else
                 # Grab each of the sensitivities and put them in an array for simplicity
                 v = map(
-                    i -> extract_sensitivity_subset(view(result, rng, i), var, n, m, offset + n*(i-1)),
+                    i -> extract_sensitivity_subset(view(result, rng, i), var, n_x, m, offset + n_x*(i-1)),
                     1:N
                 )
             end
@@ -785,7 +785,7 @@ end
 gradient_vec_or_mat(n, ::Nothing) = zeros(n)
 gradient_vec_or_mat(n, m) = zeros(n, m)
 
-function variable_mapper(model::SimulationModel, type = :primary; targets = nothing, config = nothing, offset = 0)
+function variable_mapper(model::SimulationModel, type = :primary; targets = nothing, config = nothing, offset_x = 0, offset_full = offset_x)
     vars = get_variables_by_type(model, type)
     out = Dict{Symbol, Any}()
     for (t, var) in vars
@@ -797,26 +797,36 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
             var = last(var)
         end
         n = number_of_values(model, var)
+        m = values_per_entity(model, var)
+        n_x = n
         if !isnothing(config)
             lumping = config[t][:lumping]
             if !isnothing(lumping)
                 N = maximum(lumping)
-                @assert unique(lumping) == 1:N "Lumping for $t must include all values from 1 to $N"
-                @assert length(lumping) == n "Lumping for $t must have one entry for each value if present"
-                n = N
+                sort(unique(lumping)) == 1:N || error("Lumping for $t must include all values from 1 to $N")
+                length(lumping) == n÷m || error("Lumping for $t must have one entry for each value if present")
+                n_x = N*m
             end
         end
-        out[t] = (n = n, offset = offset, scale = variable_scale(var))
-        offset += n
+        out[t] = (
+            n_full = n,
+            n_x = n_x,
+            n_row = m,
+            offset_full = offset_full,
+            offset_x = offset_x,
+            scale = variable_scale(var)
+        )
+        offset_full += n
+        offset_x += n_x
     end
-    return (out, offset)
+    return (out, offset_full, offset_x)
 end
 
 function rescale_sensitivities!(dG, model, parameter_map)
     for (k, v) in parameter_map
-        (; n, offset, scale) = v
+        (; n_full, offset_full, scale) = v
         if !isnothing(scale)
-            interval = (offset+1):(offset+n)
+            interval = (offset_full+1):(offset_full+n_full)
             if dG isa AbstractVector
                 dG_k = view(dG, interval)
             else
