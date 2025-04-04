@@ -34,7 +34,7 @@ function returns true if the contraction factors are oscillating, and false
 otherwise. If less than three contraction factors are provided, the function
 returns false.
 """
-function oscillation(contraction_factors, tol)
+function oscillation(contraction_factors, tol = 1.0)
 
     θ = contraction_factors
     (length(θ) < 3) ? (return false) : nothing
