@@ -1,7 +1,7 @@
 function vectorized_length(::MultiModel, mapper)
     n = 0
     for v in values(mapper)
-        n += sum(x -> x.n, values(v), init = 0)
+        n += sum(x -> x.n_x, values(v), init = 0)
     end
     return n
 end

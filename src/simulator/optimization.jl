@@ -164,6 +164,7 @@ function gradient_opt!(dFdx, x, data)
             parameters = parameters
         )
     end
+    @. dFdx = 0.0
     transfer_gradient!(dFdx, grad_adj, x, mapper, opt_cfg, model)
     @assert all(isfinite, dFdx) "Non-finite gradients detected."
     return dFdx
@@ -230,7 +231,13 @@ function objective_and_gradient_opt!(F, dFdx, x, data, arg...)
     return obj
 end
 
-function optimization_config(model, param, active = parameter_targets(model);
+function optimization_config(case::JutulCase, active = parameter_targets(case.model); kwarg...)
+    model = case.model
+    param = case.parameters
+    return optimization_config(model, param, active; kwarg...)
+end
+
+function optimization_config(model::SimulationModel, param, active = parameter_targets(model);
         rel_min = nothing,
         rel_max = nothing,
         use_scaling = false
@@ -251,18 +258,18 @@ function optimization_config(model, param, active = parameter_targets(model);
             abs_max = Inf
         end
         out[k] = OrderedDict(
-                            :active => true,
-                            :use_scaling => use_scaling,
-                            :scaler => :default,
-                            :abs_min => abs_min,
-                            :abs_max => abs_max,
-                            :rel_min => rel_min,
-                            :rel_max => rel_max,
-                            :base_scale => scale,
-                            :lumping => nothing,
-                            :low => nothing,
-                            :high => nothing
-            )
+            :active => true,
+            :use_scaling => use_scaling,
+            :scaler => :default,
+            :abs_min => abs_min,
+            :abs_max => abs_max,
+            :rel_min => rel_min,
+            :rel_max => rel_max,
+            :base_scale => scale,
+            :lumping => nothing,
+            :low => nothing,
+            :high => nothing
+        )
     end
     return out
 end
@@ -343,7 +350,7 @@ end
 function optimization_limits!(lims, config, mapper, param, model)
     x_min, x_max = lims
     for (param_k, v) in mapper
-        (; offset, n) = v
+        (; n_full, n_x, offset_full, offset_x) = v
         cfg = config[param_k]
         vals = param[param_k]
 
@@ -354,8 +361,8 @@ function optimization_limits!(lims, config, mapper, param, model)
         abs_min = cfg[:abs_min]
         low_group = Inf
         high_group = -Inf
-        for i in 1:n
-            k = i + offset
+        for i in 1:n_x
+            k = i + offset_x
             val = vals[i]
             if isnothing(rel_min)
                 low = abs_min
@@ -396,8 +403,8 @@ function optimization_limits!(lims, config, mapper, param, model)
 
         F = opt_scaler_function(config, param_k, inv = false)
         # F_inv = opt_scaler_function(config, k, inv = true)
-        for i in 1:n
-            k = i + offset
+        for i in 1:n_x
+            k = i + offset_x
             low = F(x_min[k])
             hi = F(x_max[k])
             @assert !isnan(low) "Scaled limit for F($(x_min[k])) was NaN (urange $cscale)"
@@ -407,13 +414,27 @@ function optimization_limits!(lims, config, mapper, param, model)
         end
         lumping = get_lumping(cfg)
         if !isnothing(lumping)
-            for lno in 1:maximum(lumping)
-                pos = findfirst(isequal(lno), lumping)
-                ref_val = vals[pos]
-                for (i, l) in enumerate(lumping)
-                    if l == lno
-                        if vals[i] != ref_val
-                            error("Initial values for $param_k differed for lumping group $lno at position $i")
+            if vals isa AbstractVector
+                for lno in 1:maximum(lumping)
+                    pos = findfirst(isequal(lno), lumping)
+                    ref_val = vals[pos]
+                    for (i, l) in enumerate(lumping)
+                        if l == lno
+                            if !(vals[i] ≈ ref_val)
+                                error("Initial values for $param_k differed for lumping group $lno at position $i")
+                            end
+                        end
+                    end
+                end
+            else
+                for lno in 1:maximum(lumping)
+                    pos = findfirst(isequal(lno), lumping)
+                    ref_val = vals[:, pos]
+                    for (i, l) in enumerate(lumping)
+                        if l == lno
+                            if !(vals[:, i] ≈ ref_val)
+                                error("Initial values for $param_k differed for lumping group $lno at position $i")
+                            end
                         end
                     end
                 end
@@ -424,13 +445,40 @@ function optimization_limits!(lims, config, mapper, param, model)
 end
 
 function transfer_gradient!(dGdy, dGdx, y, mapper, config, model)
-    for (k, v) in mapper
-        (; offset, n) = v
-        x_to_y = opt_scaler_function(config, k, inv = false)
-        y_to_x = opt_scaler_function(config, k, inv = true)
-        for i in 1:n
-            k = offset + i
-            dGdy[k] = objective_gradient_chain_rule(x_to_y, y_to_x, y[k], dGdx[k])
+    # Note: dGdy is a vector of short length (i.e. with lumping) and dGdx is a
+    # vector of full length (i.e. without lumping)
+    for (varname, v) in mapper
+        (; n_full, n_x, offset_full, offset_x, n_row) = v
+        lumping = get_lumping(config[varname])
+        x_to_y = opt_scaler_function(config, varname, inv = false)
+        y_to_x = opt_scaler_function(config, varname, inv = true)
+
+        if isnothing(lumping)
+            @assert n_x == n_full
+            for i in 1:n_x
+                k = offset_x + i
+                k_full = offset_full + i
+                dGdy[k] = objective_gradient_chain_rule(x_to_y, y_to_x, y[k], dGdx[k_full])
+            end
+        else
+            lumping::AbstractVector
+            m_x = n_x ÷ n_row
+            m_full = n_full ÷ n_row
+            @assert m_x == maximum(lumping) "Lumping group $k has $m_x groups, but $n_x variables"
+            indx(j, lump) = offset_x + (lump - 1)*n_row + j
+            for lump in 1:m_x
+                for j in 1:n_row
+                    dGdy[indx(j, lump)] = 0.0
+                end
+            end
+            for (i, lump) in enumerate(lumping)
+                for j in 1:n_row
+                    ix = indx(j, lump)
+                    # Note: Gradients follow canonical order (equation major)
+                    ix_full = offset_full + (j - 1)*m_full + i
+                    dGdy[ix] += objective_gradient_chain_rule(x_to_y, y_to_x, y[ix], dGdx[ix_full])
+                end
+            end
         end
     end
     return dGdy
@@ -470,10 +518,11 @@ function print_parameter_optimization_config(targets, config, model; title = :mo
                 lstr = "-"
             else
                 n = length(unique(lumping))
+                estr = "($n×$m=$(n*m) dof)"
                 if n == 1
-                    lstr = "1 group"
+                    lstr = "1 group $estr"
                 else
-                    lstr = "$n groups"
+                    lstr = "$n groups $estr"
                 end
             end
             function fmt_lim(l, u)
