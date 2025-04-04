@@ -77,8 +77,8 @@ end
 Process a names to be suibale as dictionary keys.
 """
 function process_name(name)
-
-    name = String(name)
+    
+    name = string(name)
     name = replace(name, " " => "_", "(" => "", ")" => "")
     name = Symbol(name)
 
