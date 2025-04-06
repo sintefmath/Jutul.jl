@@ -21,15 +21,17 @@ function Base.show(io::IO, t::MIME"text/plain", model::MultiModel)
     if length(cross_terms) > 0
         println(io , "\n  cross_terms:")
         for (i, ct_s) in enumerate(cross_terms)
-            (; cross_term, target, source, target_equation) = ct_s
+            (; cross_term, target, source, target_equation, source_equation) = ct_s
             equation = target_equation
             print_t = Base.typename(typeof(cross_term)).wrapper
             if has_symmetry(cross_term)
                 arrow = "<->"
+                eqstr = "Eqs: $target_equation <-> $source_equation"
             else
                 arrow = " ->"
+                eqstr = "Eq: $target_equation"
             end
-            println(io, "    $i) $source $arrow $target (Eq: $equation)")
+            println(io, "    $i) $source $arrow $target ($eqstr)")
             println(io, "       $print_t")
         end
     end

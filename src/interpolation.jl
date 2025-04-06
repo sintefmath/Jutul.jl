@@ -312,3 +312,80 @@ function update_unary_tabulated!(F_v, tbl::UnaryTabulatedVariable, model, x_v::A
         F_v[k, i] = I[k](x_v[k, i])
     end
 end
+
+struct BlendingVariable{E, S} <: VectorVariables
+    values_per_entity::Int
+    entity::E
+    alpha::Float64
+    names::S
+    parameter_name::Symbol
+    """
+        BlendingVariable(names)
+
+    Create a blending function for a set of variables. The blending function is
+    a weighted sum of the variables, where the weights are determined by a
+    sigmoid function.
+    """
+    function BlendingVariable(names, values_per_entity::Int = 1;
+            entity = Cells(),
+            alpha = 20.0,
+            parameter_name = :BlendingParameter
+        )
+        entity::JutulEntity
+        @assert eltype(names)<:Symbol
+        alpha > 0.0 || error("Alpha must be positive")
+        if values_per_entity < 1
+            error("values_per_entity must be at least 1")
+        end
+        return new{typeof(entity), typeof(names)}(values_per_entity, entity, alpha, names, parameter_name)
+    end
+end
+
+values_per_entity(model, u::BlendingVariable) = u.values_per_entity
+associated_entity(u::BlendingVariable) = u.entity
+get_dependencies(u::BlendingVariable, model) = [u.names..., u.parameter_name]
+
+function update_secondary_variable!(V, var::BlendingVariable, model, state, ix = entity_eachindex(V))
+    α = var.alpha
+    names = var.names
+    n_max = length(names)
+    sigmoid(x, α) = 1.0 / (1.0 + exp(-α*x))
+    function blend_function(x, pos)
+        w1 = sigmoid(x - pos - 0.5, α)
+        w2 = sigmoid(x - pos + 0.5, α)
+        if pos == 1
+            w = 1.0 - w1
+        elseif pos == n_max
+            w = w2
+        else
+            w = w2 - w1
+        end
+        return w
+    end
+
+    bprm = state[var.parameter_name]
+    n = var.values_per_entity
+    for cell in ix
+        β = bprm[cell]
+        for row in axes(V, 1)
+            nextval = zero(eltype(V))
+            for (i, name) in enumerate(var.names)
+                val = state[name][row, cell]
+                w = blend_function(β, i)
+                nextval += val * w
+            end
+            V[row, cell] = nextval
+        end
+    end
+    return V
+end
+
+struct BlendingParameter <: ScalarVariable
+    number_of_functions::Int
+    function BlendingParameter(number_of_functions::Int)
+        return new(number_of_functions)
+    end
+end
+
+maximum_value(v::BlendingParameter) = v.number_of_functions
+minimum_value(v::BlendingParameter) = 1.0
