@@ -261,7 +261,20 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
 end
 
 function default_value(model, variable)
-    return 0.0
+    minv = minimum_value(variable)
+    if isnothing(minv)
+        minv = -Inf
+    end
+    maxv = maximum_value(variable)
+    if isnothing(maxv)
+        maxv = Inf
+    end
+    if isfinite(minv) && isfinite(maxv)
+        default = (minv + maxv)/2
+    else
+        default = clamp(0.0, minv, maxv)
+    end
+    return default
 end
 
 function default_values(model, var::ScalarVariable)
