@@ -92,7 +92,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     end
     if isnothing(config)
         config = simulator_config(sim; info_level = -1, kwarg...)
-    elseif !verbose
+    elseif print < 2
         config[:info_level] = -1
         config[:end_report] = false
     end
@@ -198,7 +198,6 @@ function objective_opt!(x, data, print_frequency = 1)
     data[:reports] = reports
     bad_obj = 10*data[:last_obj]
     obj = evaluate_objective(G, sim.model, states, dt, forces, large_value = bad_obj)
-    @info "???" obj
     data[:x_hash] = hash(x)
     n = data[:n_objective]
     push!(data[:obj_hist], obj)
