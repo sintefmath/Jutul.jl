@@ -383,7 +383,7 @@ end
 struct BlendingParameter <: ScalarVariable
     number_of_functions::Int
     function BlendingParameter(number_of_functions::Int)
-        return BlendingParameter(number_of_functions)
+        return new(number_of_functions)
     end
 end
 
