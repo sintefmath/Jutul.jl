@@ -24,7 +24,9 @@ end
                                                             kwarg...)
 
 Set up function handles for optimizing the case defined by the inputs to
-`simulate` together with a per-timestep objective function `G`.
+`simulate` together with a per-timestep objective function `G`. The objective
+should be on the form of sum over all steps, where each element of the sum is
+evaluated by `model, state, dt, step_no, forces`.
 
 Generally calling either of the functions will mutate the data Dict. The options are:
 F_o(x) -> evaluate objective
