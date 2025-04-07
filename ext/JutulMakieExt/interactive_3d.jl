@@ -451,12 +451,11 @@ function plot_interactive_impl(grid, states;
                 else
                     cstateval = view(current_val, row, :)
                 end
-                new_lims = (minimum(cstateval), maximum(cstateval))
             else
                 @assert s == "Current step" || s == "All rows"
                 cstateval = current_val
-                new_lims = (minimum(cstateval), maximum(cstateval))
             end
+            new_lims = my_minmax(cstateval, Inf, -Inf)
         end
         lim_lo, lim_hi = transform_plot_limits(new_lims, transform_name)
         if !isfinite(lim_lo)
@@ -575,22 +574,26 @@ function plot_interactive_impl(grid, states;
         for i in eachindex(sizes)
             sizes[i] = Makie.Vec3f(sz[i, 1], sz[i, 2], sz[i, 3])
         end
-        scat = Makie.meshscatter!(ax, pts; color = ys,
-                                        colorrange = lims,
-                                        markersize = sizes,
-                                        shading = is_3d,
-                                        colormap = cmap,
-                                        transparency = transparency,
-                                        kwarg...)
+        scat = Makie.meshscatter!(ax, pts;
+            color = ys,
+            colorrange = lims,
+            markersize = sizes,
+            shading = is_3d,
+            colormap = cmap,
+            transparency = transparency,
+            kwarg...
+        )
     elseif plot_type == :lines
         x = pts[:, 1]
         y = pts[:, 2]
         z = pts[:, 3]
-        scat = Makie.lines!(ax, x, y, z, color = ys,
-                                                    linewidth = 15,
-                                                    transparency = transparency,
-                                                    colormap = cmap,
-                                                    colorrange = lims)
+        scat = Makie.lines!(ax, x, y, z,
+            color = ys,
+            linewidth = 15,
+            transparency = transparency,
+            colormap = cmap,
+            colorrange = lims
+        )
         txt = primitives.top_text
         if !isnothing(txt)
             top = vec(pts[1, :])
