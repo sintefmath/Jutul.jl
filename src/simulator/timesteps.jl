@@ -1,7 +1,7 @@
 function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_reports; step_index = NaN, new_step = false, remaining_time = dT)
     # Try to do the full step, unless one of our selectors/limits tells us otherwise.
     # No need to limit to whatever remains of the interval since that is fixed on the outside.
-    dt = dT
+    dt = remaining_time
     selectors = config[:timestep_selectors]
     is_first = new_step && step_index == 1
     if is_first
