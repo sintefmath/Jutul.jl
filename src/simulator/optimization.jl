@@ -47,6 +47,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         copy_case = true,
         param_obj = false,
         use_sparsity = true,
+        store_all_solves = false,
         kwarg...
     )
     if copy_case
@@ -124,6 +125,9 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     data[:last_obj] = Inf
     data[:best_obj] = Inf
     data[:best_x] = copy(x0)
+    if store_all_solves
+        data[:intermediate_parameters] = []
+    end
     data[:x_hash] = hash(Inf)
     F = x -> objective_opt!(x, data, print)
     dF = (dFdx, x) -> gradient_opt!(dFdx, x, data)
@@ -179,16 +183,15 @@ end
 
 function objective_opt!(x, data, print_frequency = 1)
     (; state0, parameters, forces, dt) = data[:case]
-    # state0 = data[:state0]
-    # param = data[:parameters]
-    # dt = data[:dt]
-    # forces = data[:forces]
     G = data[:G]
     mapper = data[:mapper]
     opt_cfg = data[:config]
     sim = data[:sim]
     model = sim.model
     devectorize_variables!(parameters, model, x, mapper, config = opt_cfg)
+    if haskey(data, :intermediate_parameters)
+        push!(data[:intermediate_parameters], deepcopy(parameters))
+    end
     config = data[:sim_config]
     states, reports = simulate!(sim, dt,
         parameters = parameters,
