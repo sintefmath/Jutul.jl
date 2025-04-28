@@ -63,9 +63,16 @@ function plot_interactive_impl(grid, states;
         aspect = (1.0, 1.0, 1/3),
         colormap = :viridis,
         alphamap = :no_alpha_map,
-        z_is_depth = Jutul.mesh_z_is_depth(grid),
+        z_is_depth = missing,
         kwarg...
     )
+    if ismissing(z_is_depth)
+        if grid isa Integer
+            z_is_depth = false
+        else
+            z_is_depth = Jutul.mesh_z_is_depth(grid)
+        end
+    end
     has_primitives = !isnothing(primitives)
     active_filters = []
     if states isa AbstractDict || states isa DataDomain
