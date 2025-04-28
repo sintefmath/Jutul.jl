@@ -252,7 +252,7 @@ function plot_interactive_impl(grid, states;
     else
         ax = Axis(ax_pos, title = fig_title)
     end
-    cell_buffer = zeros(number_of_cells(grid))
+    cell_buffer = zeros(nc)
     # Selection of data
     ys = @lift(
                 mapper.Cells(
