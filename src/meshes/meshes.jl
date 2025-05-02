@@ -206,7 +206,6 @@ include("unstructured/unstructured.jl")
 include("coarse.jl")
 include("trajectories.jl")
 include("extruded.jl")
-include("RadialMeshes/RadialMeshes.jl")
 
 function declare_entities(G::JutulMesh)
     nf = number_of_faces(G)
@@ -307,3 +306,5 @@ function cellmap_to_posmap(x, num_cells = length(x))
     end
     return (vals, posmap)
 end
+
+include("RadialMeshes/RadialMeshes.jl")
