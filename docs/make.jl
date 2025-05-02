@@ -5,7 +5,7 @@ DocMeta.setdocmeta!(Jutul, :DocTestSetup, :(using Jutul); recursive=true)
 
 makedocs(;
     modules=[Jutul],
-    warnonly = true,
+    warnonly = [:missing_docs],
     authors="Olav Møyner <olav.moyner@sintef.no> and contributors",
     repo="https://github.com/sintefmath/Jutul.jl/blob/{commit}{path}#{line}",
     sitename="Jutul.jl",
@@ -18,6 +18,7 @@ makedocs(;
     pages=[
         "Home" => "index.md",
         "Usage" => "usage.md",
+        "mesh.md",
         "Internals" => "internals.md",
         "Docstrings" => "docstrings.md"
     ],

@@ -154,6 +154,15 @@ Get the number of faces in a mesh.
 """
 number_of_faces(G) = size(get_neighborship(G), 2)
 
+"""
+    number_of_boundary_faces(g)
+
+Get the number of boundary/exterior faces in a mesh.
+"""
+function number_of_boundary_faces
+
+end
+
 export plot_primitives
 function plot_primitives(mesh, plot_type; kwarg...)
     # By default, no plotting is supported
@@ -196,6 +205,7 @@ include("cart.jl")
 include("unstructured/unstructured.jl")
 include("coarse.jl")
 include("trajectories.jl")
+include("RadialMeshes/RadialMeshes.jl")
 
 function declare_entities(G::JutulMesh)
     nf = number_of_faces(G)

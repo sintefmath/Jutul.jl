@@ -246,3 +246,33 @@ import Jutul: cells_inside_bounding_box
         @test cells_inside_bounding_box(tm, [0.1, 0.1], [0.2, 0.2]) == [1]
     end
 end
+
+@testset "RadialMeshes" begin
+    @testset "spiral_mesh" begin
+        spacing = [0.0, 0.5, 1.0]
+        nrotations = 5
+        n_angular_sections = 10
+        rmesh = Jutul.RadialMeshes.spiral_mesh(n_angular_sections, nrotations, spacing = spacing)
+        geo = tpfv_geometry(rmesh)
+
+        @testset "interior normals" begin
+            for f in 1:number_of_faces(rmesh)
+                l, r = rmesh.faces.neighbors[f]
+                cl = geo.cell_centroids[:, l]
+                cr = geo.cell_centroids[:, r]
+                N = geo.normals[:, f]
+                @test dot(N, cr - cl) > 0
+            end
+        end
+        ##
+        @testset "exterior normals" begin
+            for f in 1:number_of_boundary_faces(rmesh)
+                c = rmesh.boundary_faces.neighbors[f]
+                cc = geo.cell_centroids[:, c]
+                fc = geo.boundary_centroids[:, f]
+                N = geo.boundary_normals[:, f]
+                @test dot(N, fc - cc) > 0
+            end
+        end
+    end
+end
