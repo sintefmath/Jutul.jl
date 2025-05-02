@@ -247,6 +247,7 @@ We can also zoom in on a single cell and plot the oriented normals:
 
 ```@example radial
 using LinearAlgebra
+geo = tpfv_geometry(m)
 cellno = 1
 fig, ax, plt = plot_mesh(m, cells = cellno)
 for face in m.faces.cells_to_faces[cellno]
