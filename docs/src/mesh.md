@@ -273,7 +273,6 @@ for bface in m.boundary_faces.cells_to_faces[cellno]
     midpt = (pt1 + pt2) / 2
     lines!(ax, [midpt, midpt + norm(pt2 - pt1, 2)*geo.boundary_normals[:, bface]], color = :green)
 end
-lines!(ax, x, y)
 scatter!(ax, m.node_points)
 fig
 ```
