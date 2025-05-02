@@ -42,6 +42,7 @@ Jutul.number_of_values
 JutulSystem
 JutulContext
 JutulDomain
+DataDomain
 DiscretizedDomain
 Jutul.JutulDiscretization
 ```

@@ -2,12 +2,14 @@
 
 ## Mesh types
 
-Jutul has two main internal mesh types: Cartesian meshes and unstructured meshes. The unstructured format is a general polyhedral mesh format, and a Cartesian mesh can easily be converted to an unstructured mesh.
+Jutul has two main internal mesh types: Cartesian meshes and unstructured meshes. The unstructured format is a general polyhedral mesh format, and a Cartesian mesh can easily be converted to an unstructured mesh. Coarsened meshes can be created by a fine scale mesh and a partition vector.
 
 ```@docs
 JutulMesh
 CartesianMesh
 UnstructuredMesh
+CoarseMesh
+MRSTWrapMesh
 ```
 
 ## Plotting functions
@@ -55,6 +57,8 @@ plot_mesh_edges!(ax, g2d)
 fig
 ```
 
+If we want to drill down a bit further, we can make a plot:
+
 We can make a 3D mesh in the same manner:
 
 ```@example cart_mesh
@@ -82,24 +86,84 @@ fig
 
 ## Mesh API functions
 
+### Queries
+
 ```@docs
 number_of_cells
 number_of_faces
 number_of_boundary_faces
 ```
 
+### Manipulation
 
+```@docs
+Jutul.extrude_mesh
+Jutul.extract_submesh
+```
 
-### Misc
+## Example: Mesh manipulation
+
+```@example
+
+```
 
 ### Geometry
 
 ```@docs
 TwoPointFiniteVolumeGeometry
 Jutul.tpfv_geometry
+Jutul.find_enclosing_cells
+Jutul.cells_inside_bounding_box
+```
+
+## Example: Cell intersection
+
+```@example
+using CairoMakie, Jutul
+# 3D mesh
+G = CartesianMesh((4, 4, 5), (100.0, 100.0, 100.0))
+trajectory = [
+    50.0 25.0 1;
+    55 35.0 25;
+    65.0 40.0 50.0;
+    70.0 70.0 90.0
+]
+
+cells = Jutul.find_enclosing_cells(G, trajectory)
+
+# Optional plotting, requires Makie:
+fig, ax, plt = Jutul.plot_mesh_edges(G)
+plot_mesh!(ax, G, cells = cells, alpha = 0.5, transparency = true)
+lines!(ax, trajectory, linewidth = 10)
+fig
+```
+
+2D version:
+
+```@example
+# 2D mesh
+G = CartesianMesh((50, 50), (1.0, 2.0))
+trajectory = [
+    0.1 0.1;
+    0.2 0.4;
+    0.3 1.2
+]
+fig, ax, plt = Jutul.plot_mesh_edges(G)
+cells = Jutul.find_enclosing_cells(G, trajectory)
+# Plotting, needs Makie
+fig, ax, plt = Jutul.plot_mesh_edges(G)
+plot_mesh!(ax, G, cells = cells, alpha = 0.5, transparency = true)
+lines!(ax, trajectory[:, 1], trajectory[:, 2], linewidth = 3)
+fig
 ```
 
 ## Mesh generation
+
+### Gmsh support
+
+```@docs
+Jutul.mesh_from_gmsh
+```
 
 ### Radial mesh
 
@@ -163,3 +227,4 @@ for (figno, pp) in enumerate(pairs(tags))
 end
 fig
 ```
+
