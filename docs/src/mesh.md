@@ -12,6 +12,8 @@ UnstructuredMesh
 
 ## Plotting functions
 
+Plotting requires that a Makie backend is loaded (typically GLMakie or CairoMakie). The documentation uses `CairoMakie` to work on machines without OpenGL enabled, but if you want fast and interactive plots, `GLMakie` should be preferred.
+
 ### Non-mutating
 
 ```@docs
@@ -29,7 +31,6 @@ plot_cell_data!
 plot_mesh_edges!
 ```
 
-
 ## Example: Cartesian meshes
 
 For example, we can make a small 2D mesh with given physical dimensions and convert it:
@@ -45,11 +46,38 @@ g2d_cart = CartesianMesh((nx, ny), (100.0, 50.0))
 g2d = UnstructuredMesh(g2d_cart)
 ```
 
+We can then plot it, colorizing each cell by its enumeration:
+
+```@example cart_mesh
+using CairoMakie
+fig, ax, plt = plot_cell_data(g2d, 1:number_of_cells(g2d))
+plot_mesh_edges!(ax, g2d)
+fig
+```
+
 We can make a 3D mesh in the same manner:
 
 ```@example cart_mesh
 nz = 3
 g3d = UnstructuredMesh(CartesianMesh((nx, ny, nz), (100.0, 50.0, 30.0)))
+```
+
+And plot it the same way:
+
+```@example cart_mesh
+using CairoMakie
+nc = number_of_cells(g3d)
+fig, ax, plt = plot_cell_data(g3d, 1:nc)
+plot_mesh_edges!(ax, g3d)
+fig
+```
+
+We can also plot only a subset of cells:
+
+```@example cart_mesh
+using CairoMakie
+fig, ax, plt = plot_cell_data(g3d, 1:nc, cells = 1:2:nc)
+fig
 ```
 
 ## Mesh API functions
@@ -97,7 +125,7 @@ fig
 ```
 
 ```@example radial
-fig, ax, plt = plot_cell_data(m, map(last, IJ))
+fig, ax, plt = plot_cell_data(m, map(ijk -> ijk[2], IJ))
 fig
 ```
 
