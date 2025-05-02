@@ -144,13 +144,15 @@ function final_simulation_message(simulator, p, rec, t_elapsed, reports, timeste
             final_message = "Completed $endstr report steps in $(get_tstr(t_tot)) and $(stats.newtons) iterations."
         end
         if info_level == 0
-            if aborted
-                cancel(p, "$start_str $final_message")
-            elseif !isnothing(p)
-                n = length(timesteps)
-                msgvals = progress_showvalues(rec, t_elapsed, n+1, n, 0.0, t_tot, start_date)
-                next!(p; showvalues = msgvals)
-                finish!(p)
+            if !isnothing(p)
+                if aborted
+                    cancel(p, "$start_str: $final_message")
+                else
+                    n = length(timesteps)
+                    msgvals = progress_showvalues(rec, t_elapsed, n+1, n, 0.0, t_tot, start_date)
+                    next!(p; showvalues = msgvals)
+                    finish!(p)
+                end
             end
         else
             if aborted

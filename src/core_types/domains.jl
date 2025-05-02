@@ -146,6 +146,12 @@ function DataDomain(domain::JutulDomain; kwarg...)
     u[NoEntity()] = 1
     data = OrderedDict{Symbol, Any}()
     Ω = DataDomain(domain, u, data)
+    Ω = DataDomain(Ω; kwarg...)
+    add_default_domain_data!(Ω, domain)
+    return Ω
+end
+
+function DataDomain(Ω::DataDomain; kwarg...)
     for (k, v) in kwarg
         if ismissing(v)
             # Missing gets skipped.
@@ -157,7 +163,6 @@ function DataDomain(domain::JutulDomain; kwarg...)
             Ω[k] = v
         end
     end
-    add_default_domain_data!(Ω, domain)
     return Ω
 end
 
