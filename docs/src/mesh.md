@@ -10,8 +10,96 @@ CartesianMesh
 UnstructuredMesh
 ```
 
+## Plotting functions
+
+### Non-mutating
+
+```@docs
+plot_mesh
+plot_cell_data
+plot_mesh_edges
+plot_interactive
+```
+
+### Mutating
+
+```@docs
+plot_mesh!
+plot_cell_data!
+plot_mesh_edges!
+```
+
+
+## Example: Cartesian meshes
+
+For example, we can make a small 2D mesh with given physical dimensions and convert it:
+
+```@example cart_mesh
+using Jutul
+nx = 10
+ny = 5
+g2d_cart = CartesianMesh((nx, ny), (100.0, 50.0))
+```
+
+```@example cart_mesh
+g2d = UnstructuredMesh(g2d_cart)
+```
+
+We can make a 3D mesh in the same manner:
+
+```@example cart_mesh
+nz = 3
+g3d = UnstructuredMesh(CartesianMesh((nx, ny, nz), (100.0, 50.0, 30.0)))
+```
+
+## Mesh API functions
+
+```@docs
+number_of_cells
+number_of_faces
+number_of_boundary_faces
+```
+
+
+
+### Misc
+
+### Geometry
+
+```@docs
+TwoPointFiniteVolumeGeometry
+Jutul.tpfv_geometry
+```
+
 ## Mesh generation
 
+### Radial mesh
+
+```@example radial
+using Jutul, CairoMakie
+import Jutul.RadialMeshes: radial_mesh
+import Jutul: plot_mesh_edges
+nangle = 10
+radii = [0.2, 0.5, 1.0]
+m = radial_mesh(nangle, radii; centerpoint = true)
+plot_mesh_edges(m)
+```
+
+Radial meshes can still be indexed as Cartesian meshes:
+
+```@example radial
+IJ = map(i -> cell_ijk(m, i), 1:number_of_cells(m))
+```
+
+```@example radial
+fig, ax, plt = plot_cell_data(m, map(first, IJ))
+fig
+```
+
+```@example radial
+fig, ax, plt = plot_cell_data(m, map(last, IJ))
+fig
+```
 
 ### Radial meshes
 
@@ -46,21 +134,4 @@ for (figno, pp) in enumerate(pairs(tags))
     plot_cell_data!(ax, rmesh, val)
 end
 fig
-```
-
-## Mesh API functions
-
-```@docs
-number_of_cells
-number_of_faces
-number_of_boundary_faces
-```
-
-### Misc
-
-### Geometry
-
-```@docs
-TwoPointFiniteVolumeGeometry
-Jutul.tpfv_geometry
 ```

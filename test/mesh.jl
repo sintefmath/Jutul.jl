@@ -275,4 +275,31 @@ end
             end
         end
     end
+    @testset "radial mesh" begin
+        nangle = 10
+        radii = [0.2, 0.5, 1.0]
+        for centerpoint in [true, false]
+            m = radial_mesh(nangle, radii; centerpoint = centerpoint)
+
+            geo = tpfv_geometry(m)
+            @testset "interior normals" begin
+                for f in 1:number_of_faces(m)
+                    l, r = m.faces.neighbors[f]
+                    cl = geo.cell_centroids[:, l]
+                    cr = geo.cell_centroids[:, r]
+                    N = geo.normals[:, f]
+                    @test dot(N, cr - cl) > 0
+                end
+            end
+            @testset "exterior normals" begin
+                for f in 1:number_of_boundary_faces(m)
+                    c = m.boundary_faces.neighbors[f]
+                    cc = geo.cell_centroids[:, c]
+                    fc = geo.boundary_centroids[:, f]
+                    N = geo.boundary_normals[:, f]
+                    @test dot(N, fc - cc) > 0
+                end
+            end
+        end
+    end
 end
