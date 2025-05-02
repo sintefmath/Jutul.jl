@@ -103,8 +103,34 @@ Jutul.extract_submesh
 
 ## Example: Mesh manipulation
 
-```@example
+We can quickly build new meshes by applying transformations to an already existing mesh. Let us create a Cartesian mesh and extract the cells that lie within a circle:
 
+```@example extrude_submesh
+using Jutul, CairoMakie
+g = UnstructuredMesh(CartesianMesh((10, 10), (1.0, 1.0)))
+geo = tpfv_geometry(g)
+keep = Int[]
+for c in 1:number_of_cells(g)
+    x, y = geo.cell_centroids[:, c]
+    if (x - 0.5)^2 + (y - 0.5)^2 < 0.25
+        push!(keep, c)
+    end
+end
+subg = extract_submesh(g, keep)
+fig, ax, plt = plot_mesh(subg)
+plot_mesh_edges!(ax, g, color = :red)
+fig
+```
+
+We can turn this into a 3D mesh by extruding it, and then tweak the nodes:
+
+```@example extrude_submesh
+g3d = Jutul.extrude_mesh(subg, 20)
+for node in eachindex(subg.node_points)
+    g3d.node_points[node] += 0.01*rand(3)
+end
+fig, ax, plt = plot_mesh(g3d)
+fig
 ```
 
 ### Geometry
@@ -141,6 +167,7 @@ fig
 2D version:
 
 ```@example
+using CairoMakie, Jutul
 # 2D mesh
 G = CartesianMesh((50, 50), (1.0, 2.0))
 trajectory = [
@@ -193,7 +220,63 @@ fig, ax, plt = plot_cell_data(m, map(ijk -> ijk[2], IJ))
 fig
 ```
 
-### Radial meshes
+We can also plot the faces by using the nodes together with standard Makie plotting calls. We regenerate the mesh and make it contain a single cell in the middle before plotting it:
+
+```@example radial
+m = radial_mesh(nangle, radii; centerpoint = false)
+ncells = number_of_cells(m)
+fig, ax, plt = plot_cell_data(m, 1:ncells, alpha = 0.25)
+scatter!(ax, m.node_points)
+for face in 1:number_of_faces(m)
+    n1, n2 = m.faces.faces_to_nodes[face]
+    pt1 = m.node_points[n1]
+    pt2 = m.node_points[n2]
+    lines!(ax, [pt1, pt2], color = :red)
+end
+
+for bface in 1:number_of_boundary_faces(m)
+    n1, n2 = m.boundary_faces.faces_to_nodes[bface]
+    pt1 = m.node_points[n1]
+    pt2 = m.node_points[n2]
+    lines!(ax, [pt1, pt2], color = :blue)
+end
+fig
+```
+
+We can also zoom in on a single cell and plot the oriented normals:
+
+```@example radial
+cellno = 1
+fig, ax, plt = plot_mesh(m, cells = cellno)
+for face in m.faces.cells_to_faces[cellno]
+    n1, n2 = m.faces.faces_to_nodes[face]
+    @info "Interior edge $n1 to $n2"
+    pt1 = m.node_points[n1]
+    pt2 = m.node_points[n2]
+    lines!(ax, [pt1, pt2], color = :red)
+    midpt = (pt1 + pt2) / 2
+    if m.faces.neighbors[face][1] == cellno
+        sgn = 1
+    else
+        sgn = -1
+    end
+    lines!(ax, [midpt, midpt + sgn*norm(pt2 - pt1, 2)*geo.normals[:, face]], color = :orange)
+end
+for bface in m.boundary_faces.cells_to_faces[cellno]
+    n1, n2 = m.boundary_faces.faces_to_nodes[bface]
+    @info "Exterior edge $n1 to $n2"
+    pt1 = m.node_points[n1]
+    pt2 = m.node_points[n2]
+    lines!(ax, [pt1, pt2], color = :blue)
+    midpt = (pt1 + pt2) / 2
+    lines!(ax, [midpt, midpt + norm(pt2 - pt1, 2)*geo.boundary_normals[:, bface]], color = :green)
+end
+lines!(ax, x, y)
+scatter!(ax, m.node_points)
+fig
+```
+
+### Spiral meshes
 
 ```@docs
 Jutul.RadialMeshes.spiral_mesh
