@@ -1,5 +1,6 @@
 using Jutul
 using Test
+using LinearAlgebra
 
 @testset "CartesianMesh indices" begin
     for dims in [(3, 5, 7), (5, 7), (8,)]
@@ -274,5 +275,82 @@ end
                 @test dot(N, fc - cc) > 0
             end
         end
+    end
+    @testset "radial mesh" begin
+        nangle = 10
+        radii = [0.2, 0.5, 1.0]
+        for centerpoint in [true, false]
+            m = Jutul.RadialMeshes.radial_mesh(nangle, radii; centerpoint = centerpoint)
+
+            geo = tpfv_geometry(m)
+            @testset "interior normals" begin
+                for f in 1:number_of_faces(m)
+                    l, r = m.faces.neighbors[f]
+                    cl = geo.cell_centroids[:, l]
+                    cr = geo.cell_centroids[:, r]
+                    N = geo.normals[:, f]
+                    @test dot(N, cr - cl) > 0
+                end
+            end
+            @testset "exterior normals" begin
+                for f in 1:number_of_boundary_faces(m)
+                    c = m.boundary_faces.neighbors[f]
+                    cc = geo.cell_centroids[:, c]
+                    fc = geo.boundary_centroids[:, f]
+                    N = geo.boundary_normals[:, f]
+                    @test dot(N, fc - cc) > 0
+                end
+            end
+        end
+    end
+end
+
+@testset "extrude_mesh" begin
+    m2d = UnstructuredMesh(CartesianMesh((2, 2)))
+    set_mesh_entity_tag!(m2d, Cells(), :test_tag, :tag1, [1, 3])
+    set_mesh_entity_tag!(m2d, Cells(), :test_tag, :tag2, [2, 4])
+    m3d = Jutul.extrude_mesh(m2d, 2)
+    geo = tpfv_geometry(m3d)
+
+    @testset "volumes" begin
+        for v in geo.volumes
+            @test v ≈ 0.5^3
+        end
+    end
+    @testset "interior normals" begin
+        for f in 1:number_of_faces(m3d)
+            l, r = m3d.faces.neighbors[f]
+            cl = geo.cell_centroids[:, l]
+            cr = geo.cell_centroids[:, r]
+            N = geo.normals[:, f]
+            @test dot(N, cr - cl) > 0
+        end
+    end
+    @testset "exterior normals" begin
+        for f in 1:number_of_boundary_faces(m3d)
+            c = m3d.boundary_faces.neighbors[f]
+            cc = geo.cell_centroids[:, c]
+            fc = geo.boundary_centroids[:, f]
+            N = geo.boundary_normals[:, f]
+            @test dot(N, fc - cc) > 0
+        end
+    end
+    @testset "num_faces" begin
+        @test number_of_faces(m3d) == 12
+        @test number_of_boundary_faces(m3d) == 24
+    end
+
+    @testset "num_cells" begin
+        @test number_of_cells(m3d) == 8
+    end
+    @testset "faces per cell" begin
+        for cell in 1:number_of_cells(m3d)
+            @test length(m3d.faces.cells_to_faces[cell]) == 3
+            @test length(m3d.boundary_faces.cells_to_faces[cell]) == 3
+        end
+    end
+    @testset "cell tags" begin
+        @test get_mesh_entity_tag(m3d, Cells(), :test_tag, :tag1) == [1, 3, 5, 7]
+        @test get_mesh_entity_tag(m3d, Cells(), :test_tag, :tag2) == [2, 4, 6, 8]
     end
 end

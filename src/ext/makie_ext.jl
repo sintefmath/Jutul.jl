@@ -5,6 +5,13 @@ export plot_solve_breakdown
 export plot_cumulative_solve, plot_cumulative_solve!
 
 
+"""
+    plot_interactive(mesh, vector_of_dicts; kwarg...)
+
+Launch an interactive plot of a mesh with the given `vector_of_dicts` (or just a
+dict). Each dict can have cell data either as vectors (one value per cell) or
+matrices (one column per cell).
+"""
 function plot_interactive(arg...; kwarg...)
     check_plotting_availability(interactive = true)
     plot_interactive_impl(arg...; kwarg...)
@@ -62,6 +69,7 @@ function plot_mesh_impl!
 
 end
 
+export plot_mesh_edges, plot_mesh_edges!
 """
     plot_mesh_edges(mesh; kwarg...)
 
@@ -91,6 +99,18 @@ function plot_mesh_edges_impl!
 
 end
 
+"""
+    plot_cell_data(mesh::JutulMesh, data::Vector; kwarg...)
+    plot_cell_data(mesh, data;
+        cells = nothing,
+        faces = nothing,
+        boundaryfaces = nothing
+    )
+
+Plot cell-wise values (as a vector) on the mesh. Optionally, indices `cells`,
+`faces` or `boundaryfaces` can be passed to limit the plotting to a specific
+selection of entities.
+"""
 function plot_cell_data(arg...; kwarg...)
     check_plotting_availability()
     plot_cell_data_impl(arg...; kwarg...)
@@ -100,6 +120,11 @@ function plot_cell_data_impl
 
 end
 
+"""
+    plot_cell_data!(ax, mesh, data; kwarg...)
+
+Mutating version of `plot_cell_data` that plots into an existing Makie `Axis`
+"""
 function plot_cell_data!(arg...; kwarg...)
     check_plotting_availability()
     plot_cell_data_impl!(arg...; kwarg...)

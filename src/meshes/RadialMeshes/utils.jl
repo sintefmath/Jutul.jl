@@ -1,17 +1,3 @@
-
-function cellmap_to_posmap(x, num_cells = length(x))
-    posmap = Int[1]
-    vals = Int[]
-    for cell in 1:num_cells
-        vals_cell = get(x, cell, [])
-        push!(posmap, posmap[end] + length(vals_cell))
-        for f in vals_cell
-            push!(vals, f)
-        end
-    end
-    return (vals, posmap)
-end
-
 """
     spiral_mesh_tags(rmesh, spacing = missing)
 

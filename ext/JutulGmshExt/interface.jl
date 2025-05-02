@@ -1,4 +1,17 @@
 
+"""
+    Jutul.mesh_from_gmsh("path/to/file.geo", manage_gmsh = true)
+
+Convert Gmsh mesh file to Jutul mesh. If `manage_gmsh` is true, the Gmsh API is
+initialized and finalized automatically. Otherwise, the user is responsible for
+calling `Gmsh.initialize()` and `Gmsh.finalize()` before and after this
+function, respectively.
+
+To use this function, you need to have the Gmsh library installed and loaded by
+calling `using Gmsh`. Please note that, unlike Jutul, Gmsh is GPL licensed
+software, and you should comply with the license terms when using it in your
+projects.
+"""
 function Jutul.mesh_from_gmsh(pth; manage_gmsh = true, kwarg...)
     if manage_gmsh
         Gmsh.initialize()

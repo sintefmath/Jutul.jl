@@ -31,40 +31,6 @@ which is currently not the case for all meshes from downstream packages.
 box that contains both the trajectory and the mesh. This can be turned off by
 passing `false`. There should be no difference in the cells tagged by changing
 this option.
-
-Examples:
-```
-# 3D mesh
-G = CartesianMesh((4, 4, 5), (100.0, 100.0, 100.0))
-trajectory = [
-    50.0 25.0 1;
-    55 35.0 25;
-    65.0 40.0 50.0;
-    70.0 70.0 90.0
-]
-
-cells = Jutul.find_enclosing_cells(G, trajectory)
-
-# Optional plotting, requires Makie:
-fig, ax, plt = Jutul.plot_mesh_edges(G)
-plot_mesh!(ax, G, cells = cells, alpha = 0.5, transparency = true)
-lines!(ax, trajectory, linewidth = 10)
-fig
-# 2D mesh
-G = CartesianMesh((50, 50), (1.0, 2.0))
-trajectory = [
-    0.1 0.1;
-    0.2 0.4;
-    0.3 1.2
-]
-fig, ax, plt = Jutul.plot_mesh_edges(G)
-cells = Jutul.find_enclosing_cells(G, trajectory)
-# Plotting, needs Makie
-fig, ax, plt = Jutul.plot_mesh_edges(G)
-plot_mesh!(ax, G, cells = cells, alpha = 0.5, transparency = true)
-lines!(ax, trajectory[:, 1], trajectory[:, 2], linewidth = 3)
-fig
-```
 """
 function find_enclosing_cells(G, traj;
         geometry = missing,

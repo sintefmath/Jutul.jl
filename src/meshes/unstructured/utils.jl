@@ -30,6 +30,7 @@ end
 Extract a subgrid for a given mesh and a iterable of `cells` to keep.
 """
 function extract_submesh(g::UnstructuredMesh, cells)
+    g = deepcopy(g)
     function add_to_indexmap!(vals, pos, iterable)
         n = length(iterable)
         for i in iterable

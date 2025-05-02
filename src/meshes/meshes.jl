@@ -205,7 +205,7 @@ include("cart.jl")
 include("unstructured/unstructured.jl")
 include("coarse.jl")
 include("trajectories.jl")
-include("RadialMeshes/RadialMeshes.jl")
+include("extruded.jl")
 
 function declare_entities(G::JutulMesh)
     nf = number_of_faces(G)
@@ -293,3 +293,18 @@ end
 
 import Base: promote_rule
 promote_rule(::Type{UnstructuredMesh}, ::Type{CartesianMesh}) = UnstructuredMesh
+
+function cellmap_to_posmap(x, num_cells = length(x))
+    posmap = Int[1]
+    vals = Int[]
+    for cell in 1:num_cells
+        vals_cell = get(x, cell, [])
+        push!(posmap, posmap[end] + length(vals_cell))
+        for f in vals_cell
+            push!(vals, f)
+        end
+    end
+    return (vals, posmap)
+end
+
+include("RadialMeshes/RadialMeshes.jl")
