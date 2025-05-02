@@ -280,7 +280,7 @@ end
         nangle = 10
         radii = [0.2, 0.5, 1.0]
         for centerpoint in [true, false]
-            m = radial_mesh(nangle, radii; centerpoint = centerpoint)
+            m = Jutul.RadialMeshes.radial_mesh(nangle, radii; centerpoint = centerpoint)
 
             geo = tpfv_geometry(m)
             @testset "interior normals" begin
@@ -304,7 +304,7 @@ end
         end
     end
 end
-##
+
 @testset "extrude_mesh" begin
     m2d = UnstructuredMesh(CartesianMesh((2, 2)))
     set_mesh_entity_tag!(m2d, Cells(), :test_tag, :tag1, [1, 3])
