@@ -399,7 +399,7 @@ Replace values (for non-Real types, direct assignment)
     @. v = next
 end
 
-@inline function update_values!(v::AbstractArray{<:Any}, next::AbstractArray{<:ForwardDiff.Dual})
+@inline function update_values!(v::AbstractArray{<:AbstractFloat}, next::AbstractArray{<:ForwardDiff.Dual})
     @inbounds for i in eachindex(v, next)
         next_val = next[i]
         v[i] = value(next_val)
