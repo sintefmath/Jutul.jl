@@ -828,7 +828,7 @@ function rescale_sensitivities!(dG, model, parameter_map; order = nothing)
         if !isnothing(scale)
             interval = (offset_full+1):(offset_full+n_full)
             if !isnothing(order)
-                @. interval = order[interval]
+                interval = order[interval]
             end
             if dG isa AbstractVector
                 dG_k = view(dG, interval)
