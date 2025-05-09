@@ -1,4 +1,4 @@
-export vectorize_variables, vectorize_variables!, devectorize_variables!
+export vectorize_variables, vectorize_variables!, devectorize_variables!, devectorize_state_and_parameters!
 
 
 function vectorize_variables(model, state_or_prm, type_or_map = :primary; config = nothing, T = Float64)
@@ -120,6 +120,18 @@ function devectorize_variable!(state, V, k, info, F_inv; config = c)
                     state_val[j, i] = F_inv(V[offset_x+(lump-1)*m+j])
                 end
             end
+        end
+    end
+end
+
+function devectorize_state_and_parameters!(state, parameters, model, x, mapper, config)
+    state_and_parameters = merge(state, parameters)
+    devectorize_variables!(state_and_parameters, model, x, mapper; config=config)
+    for k in keys(mapper)
+        if haskey(state, k)
+            state[k] = state_and_parameters[k]
+        else
+            parameters[k] = state_and_parameters[k]
         end
     end
 end
