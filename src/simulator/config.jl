@@ -28,7 +28,7 @@ Negative values disable output. The interpretation of this number is subject to 
     description = "For larger models with many time-steps, using `output_path` might be better to avoid filling up your memory.", types = Bool)
     add_option!(cfg, :output_reports, true, "Return reports in-memory as output.", types = Bool)
     add_option!(cfg, :safe_mode, true, "Add extra checks in simulator that have a small extra cost.", types = Bool)
-    add_option!(cfg, :extra_timing, false, "Output extra, highly detailed performance report at simulation end.", 
+    add_option!(cfg, :extra_timing, get(ENV, "JUTUL_EXTRA_TIMING", false), "Output extra, highly detailed performance report at simulation end.", 
     description = " This uses TimerOutputs.jl's @timeit_debug macro. You may have to call the function twice with this option the first time you use it.", types = Bool)
     add_option!(cfg, :ascii_terminal, false, "Avoid unicode (if possible) in terminal output.", types = Bool)
 
