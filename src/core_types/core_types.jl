@@ -1026,7 +1026,7 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
         end
         models = models_new
     else
-        models::JutuLStorage
+        models::JutulStorage
     end
     if reduction == :schur_apply
         if length(groups) == 1
