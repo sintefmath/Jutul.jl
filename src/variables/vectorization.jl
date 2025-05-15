@@ -124,9 +124,9 @@ function devectorize_variable!(state, V, k, info, F_inv; config = c)
     end
 end
 
-function devectorize_state_and_parameters!(state, parameters, model, x, mapper, config)
+function devectorize_state_and_parameters!(state, parameters, model, V, mapper, config)
     state_and_parameters = merge(state, parameters)
-    devectorize_variables!(state_and_parameters, model, x, mapper; config=config)
+    devectorize_variables!(state_and_parameters, model, V, mapper; config=config)
     for k in keys(mapper)
         if haskey(state, k)
             state[k] = state_and_parameters[k]
@@ -134,6 +134,7 @@ function devectorize_state_and_parameters!(state, parameters, model, x, mapper, 
             parameters[k] = state_and_parameters[k]
         end
     end
+    return (state, parameters)
 end
 
 function get_lumping(config::Nothing)

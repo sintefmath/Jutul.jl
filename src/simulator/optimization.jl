@@ -72,12 +72,13 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     end
     sort_variables!(model, :parameters)
 
-    include_state0 = opt_cfg.include_state0
-    variables = parameters
+    include_state0 = state0_active(opt_cfg)
     if include_state0
-        variables = merge(variables, state0)
+        merge_state_with_parameters(model, state0, parameters)
+        variables = state0
         type = :all
     else
+        variables = parameters
         type = :parameters
     end
 
@@ -283,6 +284,14 @@ Base.iterate(opt_cfg::OptimizationConfig, state) = iterate(opt_cfg.config, state
 Base.getindex(opt_cfg::OptimizationConfig, key) = opt_cfg.config[key]
 Base.pairs(opt_cfg::OptimizationConfig) = pairs(opt_cfg.config)
 Base.setindex!(opt_cfg::OptimizationConfig, value, key) = opt_cfg.config[key] = value
+
+function state0_active(configs::Dict{Symbol, OptimizationConfig})
+    return any(state0_active, values(configs))
+end
+
+function state0_active(cfg::OptimizationConfig)
+    return cfg.include_state0
+end
 
 function optimization_config(model::SimulationModel, param, active = parameter_targets(model);
         rel_min = nothing,
