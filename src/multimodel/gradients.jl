@@ -136,7 +136,7 @@ function rescale_sensitivities!(dG, model::MultiModel, parameter_map)
 end
 
 function optimization_config(model::MultiModel, param, active = nothing; kwarg...)
-    out = Dict{Symbol, Any}()
+    out = Dict{Symbol, OptimizationConfig}()
     for k in submodels_symbols(model)
         m = model[k]
         if isnothing(active) || !haskey(active, k)

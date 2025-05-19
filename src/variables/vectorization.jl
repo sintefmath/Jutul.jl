@@ -1,4 +1,4 @@
-export vectorize_variables, vectorize_variables!, devectorize_variables!
+export vectorize_variables, vectorize_variables!, devectorize_variables!, devectorize_state_and_parameters!
 
 
 function vectorize_variables(model, state_or_prm, type_or_map = :primary; config = nothing, T = Float64)
@@ -122,6 +122,19 @@ function devectorize_variable!(state, V, k, info, F_inv; config = c)
             end
         end
     end
+end
+
+function devectorize_state_and_parameters!(state, parameters, model, V, mapper, config)
+    state_and_parameters = merge(state, parameters)
+    devectorize_variables!(state_and_parameters, model, V, mapper; config=config)
+    for k in keys(mapper)
+        if haskey(state, k)
+            state[k] = state_and_parameters[k]
+        else
+            parameters[k] = state_and_parameters[k]
+        end
+    end
+    return (state, parameters)
 end
 
 function get_lumping(config::Nothing)
