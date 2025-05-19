@@ -161,7 +161,8 @@ function gradient_opt!(dFdx, x, data)
     grad_adj = data[:grad_adj]
     if haskey(data, :adjoint_storage)
         states = data[:states]
-        if length(states) == length(dt)
+        dt_current = get(data, :dt_current, dt)
+        if length(states) == length(dt_current)
             storage = data[:adjoint_storage]
             for sim in [storage.forward, storage.backward, storage.parameter]
                 for k in [:state, :state0, :parameters]
@@ -171,13 +172,14 @@ function gradient_opt!(dFdx, x, data)
             debug_time = false
             set_global_timer!(debug_time)
             try
-                grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt, G, forces = forces)
+                grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt_current, G, forces = forces)
             catch excpt
                 @warn "Exception in adjoint solve, setting gradient to large value." excpt
                 @. grad_adj = 1e10
             end
             print_global_timer(debug_time; text = "Adjoint solve detailed timing")
         else
+            @warn "Mismatch in states and timesteps for adjoints."
             @. grad_adj = 1e10
         end
     else
@@ -221,7 +223,16 @@ function objective_opt!(x, data, print_frequency = 1)
     data[:states] = states
     data[:reports] = reports
     bad_obj = 10*data[:last_obj]
-    obj = evaluate_objective(G, sim.model, states, dt, forces, large_value = bad_obj)
+    if length(states) == 0
+        obj = bad_obj
+        @warn "Partial data passed, objective set to large value $large_value."
+    elseif !ismissing(config[:post_ministep_hook]) && reports[end][:ministeps][end][:success]
+        dt_current = report_timesteps(reports)[1:length(states)]
+        data[:dt_current] = dt_current
+        obj = evaluate_objective(G, sim.model, states, dt_current, forces, large_value = bad_obj)
+    else
+        obj = evaluate_objective(G, sim.model, states, dt, forces, large_value = bad_obj)
+    end
     data[:x_hash] = hash(x)
     n = data[:n_objective]
     push!(data[:obj_hist], obj)
