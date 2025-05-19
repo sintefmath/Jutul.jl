@@ -129,9 +129,9 @@ function variable_mapper(model::MultiModel, arg...;
     return (out, offset_full, offset_x)
 end
 
-function rescale_sensitivities!(dG, model::MultiModel, parameter_map; order = nothing)
+function rescale_sensitivities!(dG, model::MultiModel, parameter_map; renum = nothing)
     for k in submodels_symbols(model)
-        rescale_sensitivities!(dG, model[k], parameter_map[k], order = order)
+        rescale_sensitivities!(dG, model[k], parameter_map[k], renum = renum)
     end
 end
 

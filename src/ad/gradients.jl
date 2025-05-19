@@ -253,7 +253,12 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
     @assert all(isfinite, ∇G)
     # Finally deal with initial state gradients
-    update_state0_sensitivities!(storage)
+    if !ismissing(storage.state0_map)
+        forces1 = forces_for_timestep(storage.forward, forces, timesteps, 1)
+        dt1 = timesteps[1]
+        adjoint_reassemble!(storage.backward, states[1], state0, dt1, forces1, dt1)
+        update_state0_sensitivities!(storage)
+    end
     return ∇G
 end
 
@@ -822,13 +827,13 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
     return (out, offset_full, offset_x)
 end
 
-function rescale_sensitivities!(dG, model, parameter_map; order = nothing)
+function rescale_sensitivities!(dG, model, parameter_map; renum = nothing)
     for (k, v) in parameter_map
         (; n_full, offset_full, scale) = v
         if !isnothing(scale)
             interval = (offset_full+1):(offset_full+n_full)
-            if !isnothing(order)
-                interval = order[interval]
+            if !isnothing(renum)
+                interval = renum[interval]
             end
             if dG isa AbstractVector
                 dG_k = view(dG, interval)
@@ -930,6 +935,6 @@ function update_state0_sensitivities!(storage)
         ∇x = storage.dstate0
         @. ∇x = 0.0
         sens_add_mult!(∇x, op_b, λ_renum)
-        rescale_sensitivities!(∇x, model, storage.state0_map, order = order)
+        rescale_sensitivities!(∇x, model, storage.state0_map, renum = renum)
     end
 end
