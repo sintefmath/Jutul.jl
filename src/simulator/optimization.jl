@@ -71,12 +71,23 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         @assert grad_type == :adjoint
     end
     sort_variables!(model, :parameters)
-    mapper, = variable_mapper(model, :parameters, targets = targets, config = opt_cfg)
-    lims = optimization_limits(opt_cfg, mapper, parameters, model)
+
+    include_state0 = state0_active(opt_cfg)
+    if include_state0
+        merge_state_with_parameters(model, state0, parameters)
+        variables = state0
+        type = :all
+    else
+        variables = parameters
+        type = :parameters
+    end
+
+    mapper, = variable_mapper(model, type, targets = targets, config = opt_cfg)
+    lims = optimization_limits(opt_cfg, mapper, variables, model)
     if verbose
         print_parameter_optimization_config(targets, opt_cfg, model)
     end
-    x0 = vectorize_variables(model, parameters, mapper, config = opt_cfg)
+    x0 = vectorize_variables(model, variables, mapper, config = opt_cfg)
     for k in eachindex(x0)
         low = lims[1][k]
         high = lims[2][k]
@@ -105,10 +116,11 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     if grad_type == :adjoint
         adj_storage = setup_adjoint_storage(model,
             state0 = state0,
-            parameters = parameters,
+            parameters = variables,
             targets = targets,
             use_sparsity = use_sparsity,
-            param_obj = param_obj
+            param_obj = param_obj,
+            include_state0 = include_state0
         )
         data[:adjoint_storage] = adj_storage
         grad_adj = zeros(adj_storage.n)
@@ -129,6 +141,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         data[:intermediate_parameters] = []
     end
     data[:x_hash] = hash(Inf)
+    data[:include_state0] = include_state0
     F = x -> objective_opt!(x, data, print)
     dF = (dFdx, x) -> gradient_opt!(dFdx, x, data)
     F_and_dF = (F, dFdx, x) -> objective_and_gradient_opt!(F, dFdx, x, data, print)
@@ -148,7 +161,8 @@ function gradient_opt!(dFdx, x, data)
     grad_adj = data[:grad_adj]
     if haskey(data, :adjoint_storage)
         states = data[:states]
-        if length(states) == length(dt)
+        dt_current = get(data, :dt_current, dt)
+        if length(states) == length(dt_current)
             storage = data[:adjoint_storage]
             for sim in [storage.forward, storage.backward, storage.parameter]
                 for k in [:state, :state0, :parameters]
@@ -158,13 +172,14 @@ function gradient_opt!(dFdx, x, data)
             debug_time = false
             set_global_timer!(debug_time)
             try
-                grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt, G, forces = forces)
+                grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt_current, G, forces = forces)
             catch excpt
                 @warn "Exception in adjoint solve, setting gradient to large value." excpt
                 @. grad_adj = 1e10
             end
             print_global_timer(debug_time; text = "Adjoint solve detailed timing")
         else
+            @warn "Mismatch in states and timesteps for adjoints."
             @. grad_adj = 1e10
         end
     else
@@ -188,9 +203,15 @@ function objective_opt!(x, data, print_frequency = 1)
     opt_cfg = data[:config]
     sim = data[:sim]
     model = sim.model
-    devectorize_variables!(parameters, model, x, mapper, config = opt_cfg)
+    if data[:include_state0]
+        devectorize_state_and_parameters!(state0, parameters, model, x, mapper, opt_cfg)
+        variables = merge(state0, parameters)
+    else
+        devectorize_variables!(parameters, model, x, mapper, config = opt_cfg)
+        variables = parameters
+    end
     if haskey(data, :intermediate_parameters)
-        push!(data[:intermediate_parameters], deepcopy(parameters))
+        push!(data[:intermediate_parameters], deepcopy(variables))
     end
     config = data[:sim_config]
     states, reports = simulate!(sim, dt,
@@ -202,7 +223,16 @@ function objective_opt!(x, data, print_frequency = 1)
     data[:states] = states
     data[:reports] = reports
     bad_obj = 10*data[:last_obj]
-    obj = evaluate_objective(G, sim.model, states, dt, forces, large_value = bad_obj)
+    if length(states) == 0
+        obj = bad_obj
+        @warn "Partial data passed, objective set to large value $large_value."
+    elseif !ismissing(config[:post_ministep_hook]) && reports[end][:ministeps][end][:success]
+        dt_current = report_timesteps(reports)[1:length(states)]
+        data[:dt_current] = dt_current
+        obj = evaluate_objective(G, sim.model, states, dt_current, forces, large_value = bad_obj)
+    else
+        obj = evaluate_objective(G, sim.model, states, dt, forces, large_value = bad_obj)
+    end
     data[:x_hash] = hash(x)
     n = data[:n_objective]
     push!(data[:obj_hist], obj)
@@ -252,14 +282,40 @@ function optimization_config(case::JutulCase, active = parameter_targets(case.mo
     return optimization_config(model, param, active; kwarg...)
 end
 
+struct OptimizationConfig
+    config::Dict{Symbol, Any}
+    include_state0::Bool
+    function OptimizationConfig(config::Dict{Symbol, Any} = Dict{Symbol, Any}(); include_state0 = false)
+        new(config, include_state0)
+    end
+end
+# Convenience functions for easy access to the config data field
+Base.iterate(opt_cfg::OptimizationConfig) = iterate(opt_cfg.config)
+Base.iterate(opt_cfg::OptimizationConfig, state) = iterate(opt_cfg.config, state)
+Base.getindex(opt_cfg::OptimizationConfig, key) = opt_cfg.config[key]
+Base.pairs(opt_cfg::OptimizationConfig) = pairs(opt_cfg.config)
+Base.setindex!(opt_cfg::OptimizationConfig, value, key) = opt_cfg.config[key] = value
+
+function state0_active(configs::Dict{Symbol, OptimizationConfig})
+    return any(state0_active, values(configs))
+end
+
+function state0_active(cfg::OptimizationConfig)
+    return cfg.include_state0
+end
+
 function optimization_config(model::SimulationModel, param, active = parameter_targets(model);
         rel_min = nothing,
         rel_max = nothing,
-        use_scaling = false
+        use_scaling = false,
+        include_state0 = false
     )
-    out = Dict{Symbol, Any}()
+    out = OptimizationConfig(; include_state0 = include_state0)
+    if include_state0
+        active = union(active, keys(get_variables_by_type(model, :primary)))
+    end
     for k in active
-        var = model.parameters[k]
+        var = get_variable(model, k, throw = true)
         scale = variable_scale(var)
         if isnothing(scale)
             scale = 1.0
@@ -289,7 +345,7 @@ function optimization_config(model::SimulationModel, param, active = parameter_t
     return out
 end
 
-function optimization_targets(config::Dict, model)
+function optimization_targets(config::Union{Dict, OptimizationConfig}, model)
     out = Vector{Symbol}()
     for (k, v) in pairs(config)
         if v[:active]
@@ -514,12 +570,14 @@ end
 function print_parameter_optimization_config(targets, config, model; title = :model)
     nt = length(targets)
     if nt > 0
-        data = Matrix{Any}(undef, nt, 8)
+        data = Matrix{Any}(undef, nt, 9)
+        parameter_names = keys(get_variables_by_type(model, :parameters))
+        state_names = keys(get_variables_by_type(model, :primary))
         for (i, target) in enumerate(targets)
-            prm = model.parameters[target]
-            e = associated_entity(prm)
+            variable = get_variable(model, target, throw = true)
+            e = associated_entity(variable)
             n = count_active_entities(model.domain, e)
-            m = degrees_of_freedom_per_entity(model, prm)
+            m = degrees_of_freedom_per_entity(model, variable)
             v = config[target]
             data[i, 1] = target
             data[i, 2] = "$e"[1:end-2]
@@ -555,8 +613,16 @@ function print_parameter_optimization_config(targets, config, model; title = :mo
             data[i, 6] = fmt_lim(v[:rel_min], v[:rel_max])
             data[i, 7] = fmt_lim(v[:low], v[:high])
             data[i, 8] = lstr
+            if target in parameter_names
+                t = "parameter"
+            elseif target in state_names
+                t = "state"
+            else
+                error("$target is not a parameter or state variable")
+            end
+            data[i, 9] = t
         end
-        h = ["Name", "Entity", "N", "Scale", "Abs. limits", "Rel. limits", "Limits", "Lumping"]
+        h = ["Name", "Entity", "N", "Scale", "Abs. limits", "Rel. limits", "Limits", "Lumping", "Type"]
         pretty_table(data, header = h, title = "Parameters for $title")
     end
 end

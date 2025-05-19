@@ -31,3 +31,15 @@ function devectorize_variables!(state_or_prm, model::MultiModel, V, type_or_map 
     end
     return state_or_prm
 end
+
+function devectorize_state_and_parameters!(state, parameters, model::MultiModel, V, mapper, config)
+    for (k, submodel) in pairs(model.models)
+        if isnothing(config)
+            c = nothing
+        else
+            c = config[k]
+        end
+        devectorize_state_and_parameters!(state[k], parameters[k], submodel, V, mapper[k], c)
+    end
+    return (state, parameters)
+end
