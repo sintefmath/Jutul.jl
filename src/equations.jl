@@ -189,34 +189,40 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     return create_equation_caches(model, n, N, storage, F!, nt; self_entity = e, kwarg...)
 end
 
-function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, number_of_entities_total::Integer = 0; global_map = global_map(model), self_entity = nothing, extra_sparsity = nothing, kwarg...)
+function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, number_of_entities_total::Integer = 0;
+        global_map = global_map(model),
+        self_entity = nothing,
+        extra_sparsity = nothing,
+        ad = true,
+        kwarg...
+    )
     state = storage[:state]
     state0 = storage[:state0]
-    entities = all_ad_entities(state, state0)
     caches = Dict()
     self_entity_found = false
-    # n = number_of_equations_per_entity(model, eq)
-    for (e, epack) in entities
-        is_self = e == self_entity
-        self_entity_found = self_entity_found || is_self
-        @tic "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
-        if !isnothing(extra_sparsity)
-            # We have some extra sparsity, need to merge that in
-            S_e = extra_sparsity[entity_as_symbol(e)]
-            @assert length(S_e) == length(S)
-            for (i, s_extra) in enumerate(S_e)
-                for extra_ind in s_extra
-                    push!(S[i], extra_ind)
+    if ad
+        for (e, epack) in all_ad_entities(state, state0)
+            is_self = e == self_entity
+            self_entity_found = self_entity_found || is_self
+            @tic "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
+            if !isnothing(extra_sparsity)
+                # We have some extra sparsity, need to merge that in
+                S_e = extra_sparsity[entity_as_symbol(e)]
+                @assert length(S_e) == length(S)
+                for (i, s_extra) in enumerate(S_e)
+                    for extra_ind in s_extra
+                        push!(S[i], extra_ind)
+                    end
+                    unique!(S[i])
                 end
-                unique!(S[i])
             end
+            _, T = epack
+            S, number_of_entities_source = remap_sparsity!(S, e, model)
+            has_diagonal = number_of_entities == number_of_entities_total && is_self
+            @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source for $T"
+            @tic "cache alloc" cache = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal, global_map = global_map)
+            caches[entity_as_symbol(e)] = cache
         end
-        _, T = epack
-        S, number_of_entities_source = remap_sparsity!(S, e, model)
-        has_diagonal = number_of_entities == number_of_entities_total && is_self
-        @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source for $T"
-        @tic "cache alloc" cache = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal, global_map = global_map)
-        caches[entity_as_symbol(e)] = cache
     end
     if !self_entity_found
         caches[:numeric] = zeros(equations_per_entity, number_of_entities)
