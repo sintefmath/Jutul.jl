@@ -430,6 +430,7 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
     else
         parameters = deepcopy(parameters)
     end
+    use_internal_ad = state0_ad || state_ad
     @tic "state" if !isnothing(state0)
         if state_ad
             state = convert_state_ad(model, state0, tag)
@@ -455,7 +456,7 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
     end
     @tic "model" setup_storage_model(storage, model)
     @tic "equations" if setup_equations
-        storage[:equations] = setup_storage_equations(storage, model; tag = tag, kwarg...) 
+        storage[:equations] = setup_storage_equations(storage, model; ad = use_internal_ad, tag = tag, kwarg...) 
     end
     @tic "linear system" if setup_linearized_system
         @tic "setup" storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
