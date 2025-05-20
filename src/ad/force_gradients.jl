@@ -57,10 +57,8 @@ function vectorize_forces!(v, model, config, forces)
         if vectorization_sublength(force, m) == 1
             push!(offsets, offsets[end] + n_f)
         else
-            @assert haskey(m, lengths) "Bad setup for vector?"
-            for l in m[:lengths]
-                push!(offsets, offsets[end] + l)
-            end
+            @assert haskey(m, :lengths) "Bad setup for vector?"
+            push!(offsets, offsets[end] + sum(m[:lengths]))
         end
         @assert offsets[end] == offsets[end-1] + n_f
         meta[k] = m
@@ -166,14 +164,14 @@ function devectorize_forces(forces, model, X, config; offset = 0, ad_key = nothi
     return setup_forces(model; new_forces...)
 end
 
-function devectorize_force(force::Vector, model, X, meta, name, variant)
+function devectorize_force(force::Vector, model, X, cfg, name, variant)
     # new_force = similar(force)
     new_force_any = Vector{Any}(undef, length(force))
     offset = 0
     for (i, f) in enumerate(force)
         n_i = vectorization_length(f, model, name, variant)
         X_i = view(X, (offset+1):(offset+n_i))
-        new_force_any[i] = devectorize_force(f, model, X_i, meta[i], name, variant)
+        new_force_any[i] = devectorize_force(f, model, X_i, cfg.meta[i], name, variant)
         offset += n_i
     end
     # Narrow type def
