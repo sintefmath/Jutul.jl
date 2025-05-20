@@ -95,6 +95,35 @@ function model_residual!(r, sim::HelperSimulator, x, x0 = missing, dt = 1.0;
     return r
 end
 
+function model_residual(sim::HelperSimulator;
+        dt = 1.0,
+        forces = setup_forces(sim.model),
+        update_secondary = true,
+        time = 0.0,
+        kwarg...
+    )
+    storage = get_simulator_storage(sim)
+    model = get_simulator_model(sim)
+    update_before_step!(sim, dt, forces, time = time)
+
+    if update_secondary
+        update_secondary_variables!(storage, model, true)
+    end
+
+    model = get_simulator_model(sim)
+    update_state_dependents!(storage, model, dt, forces; update_secondary = update_secondary, kwarg...) # time is important potential kwarg...
+    update_linearized_system!(storage, model, sim.executor, r = storage.r, nzval = missing, lsys = missing)
+    return storage.r
+end
+
+function model_residual!(r, sim::HelperSimulator;
+        kwarg...
+    )
+    r_internal = model_residual(sim; kwarg...)
+    @. r = r_internal
+    return r
+end
+
 function model_accumulation(sim::HelperSimulator, x, arg...; kwarg...)
     model = Jutul.get_simulator_model(sim)
     n = Jutul.number_of_degrees_of_freedom(model)
