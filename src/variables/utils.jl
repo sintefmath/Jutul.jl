@@ -221,20 +221,23 @@ function initialize_variable_ad!(state, model, pvar, symb, npartials, diag_pos; 
     return state
 end
 
-function initialize_variable_value(model, pvar, val; perform_copy = true)
+function initialize_variable_value(model, pvar, val; T = Float64, perform_copy = true)
     nu = number_of_entities(model, pvar)
     nv = values_per_entity(model, pvar)
+    if T != Float64
+        val = convert(T, val)
+    end
     if isa(pvar, ScalarVariable)
         if val isa AbstractVector
             @assert length(val) == nu "Expected $nu entries, but got $(length(val)) for $(typeof(pvar))"
         else
-            val = repeat([val], nu)
+            val = fill(val, nu)
         end
         # Type-assert that this should be scalar, with a vector input
         val::AbstractVector
     else
         if isa(val, Real)
-            val = repeat([val], nv, nu)
+            val = fill(val, nv, nu)
         end
         err_str() = "Passed value for $(typeof(pvar))"
         nm = length(val)
