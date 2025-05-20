@@ -57,7 +57,7 @@ function vectorize_forces!(v, model, config, forces)
         if vectorization_sublength(force, m) == 1
             push!(offsets, offsets[end] + n_f)
         else
-            @assert haskey(m, lengths) "Bad setup for vector?"
+            @assert haskey(m, :lengths) "Bad setup for vector?"
             for l in m[:lengths]
                 push!(offsets, offsets[end] + l)
             end
