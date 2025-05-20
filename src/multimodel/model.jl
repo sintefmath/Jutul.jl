@@ -92,10 +92,13 @@ function setup_storage!(storage, model::MultiModel;
         state0 = setup_state(model),
         parameters = setup_parameters(model),
         setup_linearized_system = true,
+        state0_ad = false,
+        state_ad = true,
         kwarg...
     )
     state0_ref = JutulStorage()
     state_ref = JutulStorage()
+    use_internal_ad = state0_ad || state_ad
     @tic "model" for key in submodels_symbols(model)
         m = model[key]
         @tic "$key" begin
@@ -103,6 +106,8 @@ function setup_storage!(storage, model::MultiModel;
                                         parameters = parameters[key],
                                         setup_linearized_system = false,
                                         setup_equations = false,
+                                        state0_ad = state0_ad,
+                                        state_ad = state_ad,
                                         tag = submodel_ad_tag(model, key),
                                         kwarg...)
         end
@@ -112,12 +117,16 @@ function setup_storage!(storage, model::MultiModel;
     end
     storage[:state] = state_ref
     storage[:state0] = state0_ref
-    @tic "cross terms" setup_cross_terms_storage!(storage, model)
+    @tic "cross terms" setup_cross_terms_storage!(storage, model, ad = use_internal_ad)
     @tic "equations" for key in submodels_symbols(model)
         m = model[key]
         @tic "$key" begin
             ct_i = extra_cross_term_sparsity(model, storage, key, true)
-            storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = submodel_ad_tag(model, key))
+            storage[key][:equations] = setup_storage_equations(storage[key], m,
+                ad = use_internal_ad,
+                extra_sparsity = ct_i,
+                tag = submodel_ad_tag(model, key)
+            )
         end
     end
     if setup_linearized_system

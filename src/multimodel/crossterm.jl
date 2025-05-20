@@ -48,7 +48,7 @@ function inner_sparsity_ct(target_impact, source_impact, nentities_source, nenti
     return SparsePattern(I, J, n, m, row_layout, col_layout)
 end
 
-function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, storage_t, storage_s)
+function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, storage_t, storage_s; ad::Bool = true)
     is_symm = has_symmetry(ct)
     # Find all entities x
     active = cross_term_entities(ct, eq_t, model_t)
@@ -462,7 +462,7 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
 end
 
 
-function setup_cross_terms_storage!(storage, model)
+function setup_cross_terms_storage!(storage, model; ad = true)
     cross_terms = model.cross_terms
     models = model.models
 
@@ -478,7 +478,7 @@ function setup_cross_terms_storage!(storage, model)
         else
             eq_s = ct_equation(m_s, ct.source_equation)
         end
-        ct_s = setup_cross_term_storage(term, eq_t, eq_s, m_t, m_s, s_t, s_s)
+        ct_s = setup_cross_term_storage(term, eq_t, eq_s, m_t, m_s, s_t, s_s, ad = ad)
         push!(v, ct_s)
     end
     storage[:cross_terms] = v
