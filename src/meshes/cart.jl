@@ -141,13 +141,14 @@ end
 function tpfv_geometry(g::CartesianMesh)
     Δ = g.deltas
     d = dim(g)
+    T = Base.promote_type(map(eltype, Δ)..., eltype(g.origin))
 
     nx, ny, nz = grid_dims_ijk(g)
 
     # Cell data first - volumes and centroids
     nc = nx*ny*nz
-    V = zeros(nc)
-    cell_centroids = zeros(d, nc)
+    V = zeros(T, nc)
+    cell_centroids = zeros(T, d, nc)
     for x in 1:nx
         for y in 1:ny
             for z = 1:nz
@@ -166,9 +167,9 @@ function tpfv_geometry(g::CartesianMesh)
     # Then face data:
     nf = number_of_faces(g)
     N = Matrix{Int}(undef, 2, nf)
-    face_areas = Vector{Float64}(undef, nf)
-    face_centroids = zeros(d, nf)
-    face_normals = zeros(d, nf)
+    face_areas = Vector{T}(undef, nf)
+    face_centroids = zeros(T, d, nf)
+    face_normals = zeros(T, d, nf)
 
     function add_face!(N, face_areas, face_normals, face_centroids, x, y, z, D, pos)
         t = (x, y, z)
@@ -222,9 +223,9 @@ function tpfv_geometry(g::CartesianMesh)
     nbnd = number_of_boundary_faces(g)
     # Then fix the boundary
     boundary_neighbors = Vector{Int}(undef, nbnd)
-    boundary_areas = Vector{Float64}(undef, nbnd)
-    boundary_normals = zeros(d, nbnd)
-    boundary_centroids = zeros(d, nbnd)
+    boundary_areas = Vector{T}(undef, nbnd)
+    boundary_normals = zeros(T, d, nbnd)
+    boundary_centroids = zeros(T, d, nbnd)
 
     function add_boundary_face!(N, face_areas, face_normals, face_centroids, x, y, z, D, pos, is_start)
         t = (x, y, z)
