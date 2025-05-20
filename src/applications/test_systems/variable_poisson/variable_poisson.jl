@@ -75,7 +75,7 @@ struct PoissonSource{T} <: JutulForce
     value::T
 end
 
-function apply_forces_to_equation!(d, storage, model, eq::AbstractPoissonEquation, eq_s, force::Vector{PoissonSource}, time)
+function apply_forces_to_equation!(d, storage, model, eq::AbstractPoissonEquation, eq_s, force::Vector{PoissonSource{T}}, time) where T
     U = storage.state.U
     for f in force
         c = f.cell
