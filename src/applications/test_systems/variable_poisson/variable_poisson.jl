@@ -70,9 +70,9 @@ function select_parameters!(S, system::VariablePoissonSystem, model)
     S[:K] = PoissonFaceCoefficient()
 end
 
-struct PoissonSource <: JutulForce
-    cell::Integer
-    value::Float64
+struct PoissonSource{T} <: JutulForce
+    cell::Int
+    value::T
 end
 
 function apply_forces_to_equation!(d, storage, model, eq::AbstractPoissonEquation, eq_s, force::Vector{PoissonSource}, time)
