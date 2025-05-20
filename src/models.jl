@@ -301,12 +301,12 @@ A scalar (or short vector of the right size for [`VectorVariables`](@ref)) will 
 while a vector (or matrix for [`VectorVariables`](@ref)) with length (number of columns for [`VectorVariables`](@ref))
 equal to the entity count (for example, number of cells for a cell variable) will be used directly.
 """
-function setup_parameters(d::DataDomain, model::JutulModel; perform_copy = true, kwarg...)
+function setup_parameters(d::DataDomain, model::JutulModel; T = Float64, perform_copy = true, kwarg...)
     init = Dict{Symbol, Any}()
     for (k, v) in kwarg
         init[k] = v
     end
-    return setup_parameters(d, model, init, perform_copy = perform_copy)
+    return setup_parameters(d, model, init, T = T, perform_copy = perform_copy)
 end
 
 function setup_parameters(model::JutulModel, arg...; kwarg...)
@@ -424,23 +424,28 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
                                                     tag = nothing,
                                                     state0_ad = false,
                                                     state_ad = true,
+                                                    T = Float64,
                                                     kwarg...)
     if ismissing(parameters)
-        parameters = setup_parameters(model)
+        parameters = setup_parameters(model, T = T)
     else
-        parameters = deepcopy(parameters)
+        if T == Float64
+            parameters = deepcopy(parameters)
+        else
+            parameters = setup_parameters(model, parameters, T = T)
+        end
     end
     use_internal_ad = state0_ad || state_ad
     @tic "state" if !isnothing(state0)
         if state_ad
             state = convert_state_ad(model, state0, tag)
         else
-            state = setup_state(model, deepcopy(state0))
+            state = setup_state(model, deepcopy(state0), T = T)
         end
         if state0_ad
             state0 = convert_state_ad(model, state0, tag)
         else
-            state0 = setup_state(model, deepcopy(state0))
+            state0 = setup_state(model, deepcopy(state0), T = T)
         end
         for (k, v) in pairs(model.parameters)
             if haskey(parameters, k)

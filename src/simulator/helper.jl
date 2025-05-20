@@ -19,6 +19,7 @@ function HelperSimulator(model::M, T = Float64; executor::E = Jutul.default_exec
         setup_linearized_system = false,
         state0_ad = false,
         state_ad = false,
+        T = T,
         kwarg...
     )
 
