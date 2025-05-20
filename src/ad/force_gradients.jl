@@ -59,9 +59,6 @@ function vectorize_forces!(v, model, config, forces)
         else
             @assert haskey(m, :lengths) "Bad setup for vector?"
             push!(offsets, offsets[end] + sum(m[:lengths]))
-            # for l in m[:lengths]
-            #     push!(offsets, offsets[end] + l)
-            # end
         end
         @assert offsets[end] == offsets[end-1] + n_f
         meta[k] = m
