@@ -201,7 +201,8 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
     caches = Dict()
     self_entity_found = false
     if ad
-        for (e, epack) in all_ad_entities(state, state0)
+        entities = all_ad_entities(state, state0)
+        for (e, epack) in entities
             is_self = e == self_entity
             self_entity_found = self_entity_found || is_self
             @tic "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
