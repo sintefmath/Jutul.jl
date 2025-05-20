@@ -78,8 +78,8 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     for i in 1:N
         prepare_cross_term_in_entity!(i, state_t, state_t0, state_s, state_s0, model_t, model_s, ct, eq_t, 1.0)
     end
-    caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t, self_entity = e_t)
-    caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s, self_entity = e_s)
+    caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t, self_entity = e_t, ad = ad)
+    caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s, self_entity = e_s, ad = ad)
     # Extra alignment - for off diagonal blocks
     other_align_t = create_extra_alignment(caches_s, allocate = is_symm)
     out = JutulStorage()
