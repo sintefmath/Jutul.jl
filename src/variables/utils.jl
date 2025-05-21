@@ -310,7 +310,7 @@ function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict;
         # We do not really need to initialize this, as it will be updated elsewhere.
         value = default_values(model, pvar)
     end
-    return initialize_variable_value!(state, model, pvar, symb, value)
+    return initialize_variable_value!(state, model, pvar, symb, value, T = T)
 end
 
 # Scalar primary variables

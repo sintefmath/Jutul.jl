@@ -248,7 +248,7 @@ function setup_state(model::JutulModel; kwarg...)
     for (k, v) in kwarg
         init[k] = v
     end
-    return setup_state(model, init)
+    return setup_state(model, init; kwarg...)
 end
 
 """
