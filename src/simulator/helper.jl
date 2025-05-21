@@ -13,7 +13,7 @@ Construct a helper simulator that can be used to compute the residuals and/or
 accumulation terms for a given type T. Useful for coupling Jutul to other
 solvers and types of automatic differentiation.
 """
-function HelperSimulator(model::M, T = Float64; executor::E = Jutul.default_executor(), kwarg...) where {M, E}
+function HelperSimulator(model::M, T = Float64; executor::E = Jutul.default_executor(), cache = Dict(), kwarg...) where {M, E}
     storage = JutulStorage()
     Jutul.setup_storage!(storage, model;
         setup_linearized_system = false,
@@ -22,17 +22,24 @@ function HelperSimulator(model::M, T = Float64; executor::E = Jutul.default_exec
         T = T,
         kwarg...
     )
-
     n = Jutul.number_of_degrees_of_freedom(model)
-    r = zeros(T, n)
-    setup_helper_equation_storage!(storage, r, model)
-    storage[:r] = r
-    # TODO: Actually use these.
-    storage[:primary_mapper] = Jutul.variable_mapper(model, :primary)
-    storage[:parameter_wrapper] = first(Jutul.variable_mapper(model, :parameters))
-    initialize_extra_state_fields!(storage.state, model)
-    setup_equations_and_primary_variable_views!(storage, model, (dx_buffer = missing, r_buffer = r))
-    storage = Jutul.specialize_simulator_storage(storage, model, false)
+    ckey = (T, n)
+    if haskey(cache, ckey)
+        storage = cache[ckey]
+        @assert haskey(storage, :r) "Expected storage to have :r key"
+        @assert length(storage[:r]) == n "Expected storage to have length $n"
+        @assert eltype(storage[:r]) == T "Expected cached storage to have eltype $T"
+    else
+        r = zeros(T, n)
+        setup_helper_equation_storage!(storage, r, model)
+        storage[:r] = r
+        # TODO: Actually use these.
+        storage[:primary_mapper] = Jutul.variable_mapper(model, :primary)
+        storage[:parameter_wrapper] = first(Jutul.variable_mapper(model, :parameters))
+        initialize_extra_state_fields!(storage.state, model)
+        setup_equations_and_primary_variable_views!(storage, model, (dx_buffer = missing, r_buffer = r))
+        storage = Jutul.specialize_simulator_storage(storage, model, false)
+    end
     S = typeof(storage)
     return HelperSimulator{E, M, S, T}(executor, model, storage)
 end
