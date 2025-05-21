@@ -132,6 +132,50 @@ function model_residual!(r, sim::HelperSimulator;
     return r
 end
 
+function model_residual(state, state0, sim::HelperSimulator;
+        dt = 1.0,
+        forces = setup_forces(sim.model),
+        time = 0.0,
+        kwarg...
+    )
+    function dict_pvar_copy(x, m::MultiModel)
+        out = JutulStorage()
+        for k in submodels_symbols(m)
+            out[k] = dict_pvar_copy(x[k], m[k])
+        end
+        return out
+    end
+    function dict_pvar_copy(x, m::SimulationModel)
+        pvars = get_primary_variables(m)
+        out = JutulStorage()
+        for k in keys(pvars)
+            if haskey(out, k)
+                out[k] = x[k]
+            end
+        end
+        return out
+    end
+    storage = get_simulator_storage(sim)
+    model = get_simulator_model(sim)
+    # Update the internal state/state0 primary variables
+    reset_variables!(storage, model, dict_pvar_copy(state0, model), type = :state0)
+    update_secondary_variables!(storage, model, true)
+    reset_variables!(storage, model, dict_pvar_copy(state, model), type = :state)
+    update_before_step!(sim, dt, forces, time = time)
+    # Update equations and residual
+    update_state_dependents!(storage, model, dt, forces; update_secondary = true, kwarg...) # time is important potential kwarg...
+    update_linearized_system!(storage, model, sim.executor, r = storage.r, nzval = missing, lsys = missing)
+    return storage.r
+end
+
+function model_residual!(r, state, state0, sim::HelperSimulator;
+        kwarg...
+    )
+    r_internal = model_residual(state, state0, sim; kwarg...)
+    @. r = r_internal
+    return r
+end
+
 function model_accumulation(sim::HelperSimulator, x, arg...; kwarg...)
     model = Jutul.get_simulator_model(sim)
     n = Jutul.number_of_degrees_of_freedom(model)
