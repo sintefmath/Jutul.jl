@@ -237,9 +237,9 @@ equal to the entity count (for example, number of cells for a cell variable) wil
 
 Note: You likely want to overload [`setup_state!`]@ref for a custom model instead of `setup_state`
 """
-function setup_state(model::JutulModel, arg...)
+function setup_state(model::JutulModel, arg...; kwarg...)
     state = Dict{Symbol, Any}()
-    setup_state!(state, model, arg...)
+    setup_state!(state, model, arg...; kwarg...)
     return state
 end
 
@@ -256,14 +256,14 @@ end
 
 Initialize primary variables and other state fields, given initial values as a Dict
 """
-function setup_state!(state, model::JutulModel, init_values::AbstractDict = Dict())
+function setup_state!(state, model::JutulModel, init_values::AbstractDict = Dict(); T = float_type(model.context))
     for (psym, pvar) in get_primary_variables(model)
-        initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true)
+        initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true, T = T)
     end
     for (psym, svar) in get_secondary_variables(model)
-        initialize_variable_value!(state, model, svar, psym, init_values, need_value = false)
+        initialize_variable_value!(state, model, svar, psym, init_values, need_value = false, T = T)
     end
-    initialize_extra_state_fields!(state, model)
+    initialize_extra_state_fields!(state, model, T = T)
 end
 
 """
@@ -272,14 +272,14 @@ end
 
 Add model-dependent changing variables that need to be in state, but are never AD variables themselves (for example status flags).
 """
-function initialize_extra_state_fields!(state, model::JutulModel)
-    initialize_extra_state_fields!(state, model.domain, model)
-    initialize_extra_state_fields!(state, model.system, model)
-    initialize_extra_state_fields!(state, model.formulation, model)
+function initialize_extra_state_fields!(state, model::JutulModel; kwarg...)
+    initialize_extra_state_fields!(state, model.domain, model; kwarg...)
+    initialize_extra_state_fields!(state, model.system, model; kwarg...)
+    initialize_extra_state_fields!(state, model.formulation, model; kwarg...)
     return state
 end
 
-function initialize_extra_state_fields!(state, ::Any, model)
+function initialize_extra_state_fields!(state, ::Any, model; kwarg...)
     # Do nothing
 end
 
@@ -424,7 +424,7 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
                                                     tag = nothing,
                                                     state0_ad = false,
                                                     state_ad = true,
-                                                    T = Float64,
+                                                    T = float_type(model.context),
                                                     kwarg...)
     if ismissing(parameters)
         parameters = setup_parameters(model, T = T)
