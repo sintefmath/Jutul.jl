@@ -149,7 +149,7 @@ function model_residual(state, state0, sim::HelperSimulator;
         pvars = get_primary_variables(m)
         out = JutulStorage()
         for k in keys(pvars)
-            if haskey(out, k)
+            if haskey(x, k)
                 out[k] = x[k]
             end
         end
@@ -157,10 +157,13 @@ function model_residual(state, state0, sim::HelperSimulator;
     end
     storage = get_simulator_storage(sim)
     model = get_simulator_model(sim)
+
+    state0 = dict_pvar_copy(state0, model)
+    state = dict_pvar_copy(state, model)
     # Update the internal state/state0 primary variables
-    reset_variables!(storage, model, dict_pvar_copy(state0, model), type = :state0)
+    reset_variables!(storage, model, state0, type = :state0)
     update_secondary_variables!(storage, model, true)
-    reset_variables!(storage, model, dict_pvar_copy(state, model), type = :state)
+    reset_variables!(storage, model, state, type = :state)
     update_before_step!(sim, dt, forces, time = time)
     # Update equations and residual
     update_state_dependents!(storage, model, dt, forces; update_secondary = true, kwarg...) # time is important potential kwarg...
