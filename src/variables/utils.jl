@@ -221,12 +221,9 @@ function initialize_variable_ad!(state, model, pvar, symb, npartials, diag_pos; 
     return state
 end
 
-function initialize_variable_value(model, pvar, val; T = Float64, perform_copy = true)
+function initialize_variable_value(model, pvar, val; T = float_type(model.context), perform_copy = true)
     nu = number_of_entities(model, pvar)
     nv = values_per_entity(model, pvar)
-    if T != Float64
-        val = convert(T, val)
-    end
     if isa(pvar, ScalarVariable)
         if val isa AbstractVector
             @assert length(val) == nu "Expected $nu entries, but got $(length(val)) for $(typeof(pvar))"
@@ -260,7 +257,12 @@ function initialize_variable_value(model, pvar, val; T = Float64, perform_copy =
         end
         clamp!(val, minv, maxv)
     end
-    return transfer(model.context, val)
+    if T == float_type(model.context) 
+        val = transfer(model.context, val)
+    elseif eltype(val) != T
+        val = map(x -> convert(T, x), val)
+    end
+    return val
 end
 
 function default_value(model, variable)
@@ -298,7 +300,7 @@ function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     return state
 end
 
-function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict; need_value = true)
+function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict; need_value = true, T = float_type(model.context))
     if haskey(val, symb)
         value = val[symb]
     elseif need_value && need_default_primary(model, pvar)

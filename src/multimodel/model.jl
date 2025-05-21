@@ -734,12 +734,12 @@ function update_diagonal_blocks!(storage, model::MultiModel, targets; lsys = sto
     end
 end
 
-function setup_state(model::MultiModel, initializers)
+function setup_state(model::MultiModel, initializers; kwarg...)
     state = Dict()
     for key in submodels_symbols(model)
         m = model.models[key]
         init = initializers[key]
-        state[key] = setup_state(m, init)
+        state[key] = setup_state(m, init; kwarg...)
     end
     return state
 end
