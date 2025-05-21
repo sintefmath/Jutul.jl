@@ -98,7 +98,7 @@ function sum_centroid_volumes_helper(pts::Vector{SVector{N, E}}, c_node::SVector
                 l_node = pts[l]
                 r_node = pts[r]
                 if N == 3
-                    M = SMatrix{4, 4, Float64, 16}(
+                    M = SMatrix{4, 4, E, 16}(
                         l_node[1], r_node[1], c_node[1], c_node_face[1],
                         l_node[2], r_node[2], c_node[2], c_node_face[2],
                         l_node[3], r_node[3], c_node[3], c_node_face[3],
