@@ -37,6 +37,10 @@ struct UnstructuredMesh{D, S, IM, IF, M, F, BM, NM, T} <: FiniteVolumeMesh
     z_is_depth::Bool
 end
 
+function float_type(::UnstructuredMesh{<:Any, <:Any, <:Any, <:Any, <:Any, T, <:Any, <:Any, <:Any}) where T
+    return T
+end
+
 function convert_coord_points(points::AbstractMatrix{F}) where F
     dim, nn = size(points)
     @assert dim <= 3

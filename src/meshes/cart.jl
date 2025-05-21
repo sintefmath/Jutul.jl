@@ -138,10 +138,15 @@ function cell_dims(g, pos)
     return (get_delta(Δ, x, 1), get_delta(Δ, y, 2), get_delta(Δ, z, 3))
 end
 
+function float_type(g::CartesianMesh)
+    Δ = g.deltas
+    return Base.promote_type(map(eltype, Δ)..., eltype(g.origin))
+end
+
 function tpfv_geometry(g::CartesianMesh)
     Δ = g.deltas
     d = dim(g)
-    T = Base.promote_type(map(eltype, Δ)..., eltype(g.origin))
+    T = float_type(g)
 
     nx, ny, nz = grid_dims_ijk(g)
 
