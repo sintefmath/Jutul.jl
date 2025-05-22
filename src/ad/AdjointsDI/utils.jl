@@ -69,7 +69,9 @@ function vectorize_nested!(x, data; setup = missing, active = missing)
         v = d[lastname]
         if v isa AbstractArray
             subx = view(x, start:stop)
-            @. subx = v
+            for i in eachindex(subx, v)
+                subx[i] = v[i]
+            end
         else
             @assert start == stop "Expected start=$start=$stop=stop for scalar $v"
             x[start] = v
@@ -105,10 +107,12 @@ function devectorize_nested!(data, x, setup)
             @assert start == stop "Expected start=$start=$stop=stop for scalar $name"
             d[lastname] = x[start]
         else
-            if haskey(d, lastname)
+            if haskey(d, lastname) && eltype(d[lastname]) == eltype(x)
                 subx = view(x, start:stop)
                 v = d[lastname]
-                @. v = subx
+                for i in eachindex(subx, v)
+                    v[i] = subx[i]
+                end
             else
                 d[lastname] = reshape(x[start:stop], dims)
             end
