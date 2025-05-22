@@ -368,7 +368,7 @@ import Jutul: check_equal_perm
 end
 
 import Jutul: BlendingParameter, BlendingVariable
-    @testset "BlendingVariable" begin
+@testset "BlendingVariable" begin
     mock_state = (
         A = repeat([1.0, 2, 3], 1, 5),
         B = repeat([10.0, 20, 30], 1, 5),
@@ -382,4 +382,56 @@ import Jutul: BlendingParameter, BlendingVariable
     @test V[:, end] ≈ [10, 20, 30] atol = 1e-2
     @test all(V[:, 3] .< [10, 20, 30])
     @test all(V[:, 3] .> [1, 2, 3])
+end
+
+import Jutul.AdjointsDI: devectorize_nested, vectorize_nested, devectorize_nested!
+@testset "devectorize_nested" begin
+    tmpcell = Dict(
+        "SomeMaterial" => Dict(
+            "Density" => 10.0,
+            "DiffusionCoefficient" => 20.0,
+            "Porosity" => 30.0,
+            "Conductivity" => 40.0,
+            "SomeString" => "Hello, world"
+        ),
+        "Electrolyte" => Dict(
+            "Density" => 50.0,
+            "DiffusionCoefficient" => 60.0,
+            "Porosity" => [70.0, 80.0, 90.0],
+            "Conductivity" => 100.0,
+        ),
+        "Separator" => Dict(
+            "Density" => 110.0,
+            "DiffusionCoefficient" => 120.0,
+            "Porosity" => 130.0,
+            "Conductivity" => 140.0,
+        ),
+        "SomeFloat" => 150.0,
+        "SomeInt" => 160,
+        "DeeplyNested" => Dict(
+            "SomeMaterial" => Dict(
+                "Density" => 170.0,
+                "DiffusionCoefficient" => 180.0,
+                "Porosity" => 190.0,
+                "Conductivity" => 200.0,
+            ),
+            "Electrolyte" => Dict(
+                "Density" => 210.0,
+                "DiffusionCoefficient" => 220.0,
+                "Porosity" => 230.0,
+                "Conductivity" => 240.0,
+            ),
+        ),
+    )
+
+    x, s = vectorize_nested(tmpcell)
+    @test minimum(diff(s.offsets)) == 1
+    @test length(x) == 24
+
+    d = devectorize_nested(x, s)
+    d2 = devectorize_nested!(deepcopy(tmpcell), x, s)
+    for di in [d, d2]
+        @test di["DeeplyNested"]["SomeMaterial"]["Density"] == tmpcell["DeeplyNested"]["SomeMaterial"]["Density"]
+        @test di["Electrolyte"]["Porosity"] == tmpcell["Electrolyte"]["Porosity"]
+    end
 end
