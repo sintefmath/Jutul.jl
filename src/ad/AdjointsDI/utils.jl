@@ -4,7 +4,7 @@ function setup_vectorize_nested(data, active = missing; kwarg...)
     return meta
 end
 
-function setup_vectorize_nested!(meta, data, active = missing; header = [], active_type = Union{Real, AbstractArray{<:Real}})
+function setup_vectorize_nested!(meta, data, active = missing; header = [], active_type = Float64)
     function active_name(name)
         for i in 1:min(length(name), length(header))
             if name[i] != header[i]
@@ -18,7 +18,7 @@ function setup_vectorize_nested!(meta, data, active = missing; header = [], acti
             subheader = copy(header)
             push!(subheader, k)
             setup_vectorize_nested!(meta, v, active; active_type = active_type, header = subheader)
-        elseif v isa active_type
+        elseif v isa Union{active_type, AbstractArray{<:active_type}}
             name = copy(header)
             push!(name, k)
             if ismissing(active) || active_name(name)
