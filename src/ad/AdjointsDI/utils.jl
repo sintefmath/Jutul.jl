@@ -43,7 +43,7 @@ function vectorize_nested(data; kwarg...)
     return vectorize_nested!(missing, data; kwarg...)
 end
 
-function vectorize_nested!(x, data; setup = missing, active = missing)
+function vectorize_nested!(x, data; setup = missing, active = missing, active_type = Float64)
     function get_subdict(name_list::Vector)
         d = data
         for name in name_list[1:end-1]
@@ -55,7 +55,7 @@ function vectorize_nested!(x, data; setup = missing, active = missing)
         throw(ArgumentError("Both setup and active cannot be provided."))
     end
     if ismissing(setup)
-        setup = setup_vectorize_nested(data, active)
+        setup = setup_vectorize_nested(data, active, active_type = active_type)
     end
     n = setup.offsets[end]-1
     if ismissing(x)
