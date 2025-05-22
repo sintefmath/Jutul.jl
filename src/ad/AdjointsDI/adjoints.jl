@@ -1,8 +1,6 @@
-    function solve_adjoint_sensitivities_generic(model, states, reports_or_timesteps, G;
+    function solve_adjoint_sensitivities_generic(X, F, states, reports_or_timesteps, G;
             n_objective = nothing,
             extra_timing = false,
-            state0 = setup_state(model),
-            forces = setup_forces(model),
             raw_output = false,
             extra_output = false,
             info_level = 0,
@@ -13,13 +11,18 @@
         if info_level > 1
             jutul_message("Adjoints", "Setting up storage...", color = :blue)
         end
-        t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
+        # t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
+        storage = setup_adjoint_storage_base(
+                model, state0, parameters,
+                use_sparsity = true,
+                linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-6),
+                n_objective = n_objective,
+                info_level = info_level,
+        )
         if info_level > 1
             jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
         end
-        parameter_model = storage.parameter.model
-        n_param = number_of_degrees_of_freedom(parameter_model)
-        ∇G = gradient_vec_or_mat(n_param, n_objective)
+        ∇G = gradient_vec_or_mat(n_param)
         # Timesteps
         N = length(states)
         if eltype(reports_or_timesteps)<:Real
@@ -33,7 +36,7 @@
         if info_level > 1
             jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
         end
-        t_solve = @elapsed solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G, forces = forces, info_level = info_level)
+        t_solve = @elapsed solve_adjoint_sensitivities_generic!(∇G, storage, states, state0, timesteps, G, forces = forces, info_level = info_level)
         if info_level > 1
             jutul_message("Adjoints", "Adjoints solved in $(get_tstr(t_solve)).", color = :blue)
         end
