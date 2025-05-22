@@ -65,7 +65,7 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
         out = store_sensitivities(parameter_model, ∇G, storage.parameter_map)
         s0_map = storage.state0_map
         if !ismissing(s0_map)
-            store_sensitivities!(out, storage.backward.model, ∇G, s0_map)
+            store_sensitivities!(out, storage.backward.model, storage.dstate0, s0_map)
         end
     end
     if extra_output
@@ -253,7 +253,12 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
     @assert all(isfinite, ∇G)
     # Finally deal with initial state gradients
-    update_state0_sensitivities!(storage)
+    if !ismissing(storage.state0_map)
+        forces1 = forces_for_timestep(storage.forward, forces, timesteps, 1)
+        dt1 = timesteps[1]
+        adjoint_reassemble!(storage.backward, states[1], state0, dt1, forces1, dt1)
+        update_state0_sensitivities!(storage)
+    end
     return ∇G
 end
 
@@ -822,11 +827,14 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
     return (out, offset_full, offset_x)
 end
 
-function rescale_sensitivities!(dG, model, parameter_map)
+function rescale_sensitivities!(dG, model, parameter_map; renum = nothing)
     for (k, v) in parameter_map
         (; n_full, offset_full, scale) = v
         if !isnothing(scale)
             interval = (offset_full+1):(offset_full+n_full)
+            if !isnothing(renum)
+                interval = renum[interval]
+            end
             if dG isa AbstractVector
                 dG_k = view(dG, interval)
             else
@@ -914,31 +922,19 @@ function update_state0_sensitivities!(storage)
     if !ismissing(state0_map)
         sim = storage.backward
         model = sim.model
-        if model isa MultiModel
-            for (k, v) in pairs(model.models)
-                @assert matrix_layout(v.context) isa EquationMajorLayout
-            end
-        else
-            @assert matrix_layout(model.context) isa EquationMajorLayout
-        end
         # Assume that this gets called at the end when everything has been set
         # up in terms of the simulators
-        λ = storage.lagrange
-        ∇x = storage.dstate0
-        @. ∇x = 0.0
-        # order = collect(eachindex(λ))
-        # renum = similar(order)
-        # TODO: Finish this part and remove the assertions above
-        # Get order to put values into canonical order
-        # adjoint_transfer_canonical_order!(renum, order, model)
-        # λ_renum = similar(λ)
-        # @. λ_renum[renum] = λ
-        # model_prm = storage.parameter.model
+        λ = storage.lagrange # has canonical order
+        order = collect(eachindex(λ))
+        renum = similar(order) # use for reordering λ and scaling
+        adjoint_transfer_canonical_order!(renum, order, model)
+        λ_renum = similar(λ)
+        @. λ_renum[renum] = λ
         lsys_b = sim.storage.LinearizedSystem
         op_b = linear_operator(lsys_b, skip_red = true)
-        # tmp = zeros(size(∇x))
-        sens_add_mult!(∇x, op_b, λ)
-        # adjoint_transfer_canonical_order!(∇x, tmp, model)
-        rescale_sensitivities!(∇x, sim.model, storage.state0_map)
+        ∇x = storage.dstate0
+        @. ∇x = 0.0
+        sens_add_mult!(∇x, op_b, λ_renum)
+        rescale_sensitivities!(∇x, model, storage.state0_map, renum = renum)
     end
 end
