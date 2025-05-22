@@ -18,14 +18,6 @@ function HelperSimulator(model::M, T = Float64;
         cache = missing,
         kwarg...
     ) where {M, E}
-    storage = JutulStorage()
-    Jutul.setup_storage!(storage, model;
-        setup_linearized_system = false,
-        state0_ad = false,
-        state_ad = false,
-        T = T,
-        kwarg...
-    )
     n = Jutul.number_of_degrees_of_freedom(model)
     ckey = (T, n)
     has_cache = !ismissing(cache)
@@ -35,6 +27,14 @@ function HelperSimulator(model::M, T = Float64;
         @assert length(storage[:r]) == n "Expected storage to have length $n"
         @assert eltype(storage[:r]) == T "Expected cached storage to have eltype $T"
     else
+        storage = JutulStorage()
+        Jutul.setup_storage!(storage, model;
+            setup_linearized_system = false,
+            state0_ad = false,
+            state_ad = false,
+            T = T,
+            kwarg...
+        )
         r = zeros(T, n)
         setup_helper_equation_storage!(storage, r, model)
         storage[:r] = r
