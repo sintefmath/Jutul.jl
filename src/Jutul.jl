@@ -1,5 +1,4 @@
 module Jutul
-    using ForwardDiff
     # Arrays etc
     using LinearAlgebra
     using SparseArrays
@@ -37,6 +36,13 @@ module Jutul
     using ProgressMeter
     using Crayons
     using Crayons.Box
+
+    # AD
+    import ForwardDiff
+
+    import DifferentiationInterface: AutoSparse, prepare_jacobian, jacobian
+    import SparseConnectivityTracer: TracerLocalSparsityDetector
+    import SparseMatrixColorings: GreedyColoringAlgorithm
 
     # Timing
     using TimerOutputs
