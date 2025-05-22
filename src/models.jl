@@ -243,12 +243,12 @@ function setup_state(model::JutulModel, arg...; kwarg...)
     return state
 end
 
-function setup_state(model::JutulModel; kwarg...)
+function setup_state(model::JutulModel; T = float_type(model.context), kwarg...)
     init = Dict{Symbol, Any}()
     for (k, v) in kwarg
         init[k] = v
     end
-    return setup_state(model, init; kwarg...)
+    return setup_state(model, init; T = T)
 end
 
 """
