@@ -260,6 +260,7 @@ function initialize_variable_value(model, pvar, val; T = float_type(model.contex
     if T == float_type(model.context) 
         val = transfer(model.context, val)
     elseif eltype(val) != T
+        T = promote_type(T, eltype(val))
         val = map(x -> convert(T, x), val)
     end
     return val
