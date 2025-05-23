@@ -3,22 +3,24 @@
             extra_timing = false,
             raw_output = false,
             extra_output = false,
+            forces = missing,
             info_level = 0,
             kwarg...
         )
         # F(X, step_info) -> model
         # F(X, step_info) -> case (current step)
         # F(X, step_info) -> case (all steps)
-        set_global_timer!(extra_timing)
+        Jutul.set_global_timer!(extra_timing)
         # Allocation part
         if info_level > 1
             jutul_message("Adjoints", "Setting up storage...", color = :blue)
         end
+        # model, state0, parameters = setup_case(X, F, step_info, forces)
         # t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
         storage = setup_adjoint_storage_base(
                 model, state0, parameters,
                 use_sparsity = true,
-                linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-6),
+                linear_solver = Jutul.select_linear_solver(model, mode = :adjoint, rtol = 1e-6),
                 n_objective = n_objective,
                 info_level = info_level,
         )
@@ -82,4 +84,11 @@
     # Finally deal with initial state gradients
     update_state0_sensitivities!(storage)
     return ∇G
+end
+
+function setup_case(x, step_info, forces)
+
+    # F(X, step_info) -> model
+    # F(X, step_info) -> case (current step)
+    # F(X, step_info) -> case (all steps)
 end
