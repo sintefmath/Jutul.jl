@@ -1,4 +1,4 @@
-    function solve_adjoint_sensitivities_generic(X, F, states, reports_or_timesteps, G;
+    function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
             n_objective = nothing,
             extra_timing = false,
             raw_output = false,
@@ -6,6 +6,9 @@
             info_level = 0,
             kwarg...
         )
+        # F(X, step_info) -> model
+        # F(X, step_info) -> case (current step)
+        # F(X, step_info) -> case (all steps)
         set_global_timer!(extra_timing)
         # Allocation part
         if info_level > 1
@@ -36,7 +39,7 @@
         if info_level > 1
             jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
         end
-        t_solve = @elapsed solve_adjoint_sensitivities_generic!(∇G, storage, states, state0, timesteps, G, forces = forces, info_level = info_level)
+        t_solve = @elapsed solve_adjoint_generic!(∇G, storage, states, state0, timesteps, G, forces = forces, info_level = info_level)
         if info_level > 1
             jutul_message("Adjoints", "Adjoints solved in $(get_tstr(t_solve)).", color = :blue)
         end
@@ -48,7 +51,7 @@
         end
     end
 
-    function solve_adjoint_sensitivities_generic!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model), info_level = 0)
+    function solve_adjoint_generic!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model), info_level = 0)
     N = length(timesteps)
     @assert N == length(states)
     if forces isa Vector
