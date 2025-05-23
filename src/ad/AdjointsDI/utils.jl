@@ -5,13 +5,26 @@ function setup_vectorize_nested(data, active = missing; kwarg...)
 end
 
 function setup_vectorize_nested!(meta, data, active = missing; header = [], active_type = Float64)
-    function active_name(name)
-        for i in 1:min(length(name), length(header))
-            if name[i] != header[i]
-                return false
+    function name_is_active(n)
+        act = false
+        if ismissing(active)
+            act = true
+        else
+            for active_name in active
+                this_name_act = true
+                for i in 1:min(length(active_name), length(n))
+                    if n[i] != active_name[i]
+                        this_name_act = false
+                        break
+                    end
+                end
+                if this_name_act
+                    act = true
+                    break
+                end
             end
         end
-        return true
+        return act
     end
     for (k, v) in pairs(data)
         if v isa AbstractDict || v isa JutulStorage
@@ -21,7 +34,7 @@ function setup_vectorize_nested!(meta, data, active = missing; header = [], acti
         elseif v isa Union{active_type, AbstractArray{<:active_type}}
             name = copy(header)
             push!(name, k)
-            if ismissing(active) || active_name(name)
+            if name_is_active(name)
                 if v isa AbstractArray
                     d = size(v)
                     num = length(v)

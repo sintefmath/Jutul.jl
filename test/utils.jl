@@ -426,7 +426,7 @@ import Jutul.AdjointsDI: devectorize_nested, vectorize_nested, devectorize_neste
 
     x, s = vectorize_nested(tmpcell)
     @test minimum(diff(s.offsets)) == 1
-    @test length(x) == 24
+    @test length(x) == 23
 
     d = devectorize_nested(x, s)
     d2 = devectorize_nested!(deepcopy(tmpcell), x, s)
@@ -434,4 +434,14 @@ import Jutul.AdjointsDI: devectorize_nested, vectorize_nested, devectorize_neste
         @test di["DeeplyNested"]["SomeMaterial"]["Density"] == tmpcell["DeeplyNested"]["SomeMaterial"]["Density"]
         @test di["Electrolyte"]["Porosity"] == tmpcell["Electrolyte"]["Porosity"]
     end
+
+    x, s = vectorize_nested(tmpcell, active = [["SomeFloat"]])
+    @test length(x) == 1
+    @test x == [150.0]
+    x, s = vectorize_nested(tmpcell, active = [["DeeplyNested", "SomeMaterial"]])
+    @test length(x) == 4
+    @test sort(x) == [170.0, 180.0, 190.0, 200.0]
+    x, s = vectorize_nested(tmpcell, active = [["DeeplyNested", "SomeMaterial", "Density"], ["DeeplyNested", "SomeMaterial", "Conductivity"]])
+    @test length(x) == 2
+    @test sort(x) == [170.0, 200.0]
 end
