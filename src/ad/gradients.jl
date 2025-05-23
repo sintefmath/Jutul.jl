@@ -437,7 +437,9 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         end
         pbuf = adjoint_storage.param_buf
         S_p = get_objective_sparsity(adjoint_storage, :parameter)
-        state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, i, forces), sparsity = S_p)
+        rec = progress_recorder(parameter_sim)
+        step_info = optimization_step_info(i, current_time(rec))
+        state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
         @. dparam += pbuf
     end
 end
@@ -477,7 +479,9 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     rhs = adjoint_storage.rhs
     # Fill rhs with (∂J / ∂x)ᵀₙ (which will be treated with a negative sign when the result is written by the linear solver)
     S_p = get_objective_sparsity(adjoint_storage, :forward)
-    @tic "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, i, forces), sparsity = S_p)
+    rec = progress_recorder(backward_sim)
+    step_info = optimization_step_info(i, current_time(rec))
+    @tic "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
     if isnothing(state_next)
         @assert i == N
         @. λ = 0
@@ -676,7 +680,7 @@ function perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
     param_i[target][j + i*(sz[1]-1)] += ϵ
 end
 
-function evaluate_objective(G, model, states, timesteps, all_forces; large_value = 1e20)
+function evaluate_objective(G, model, states, timesteps, all_forces; large_value = 1e20, kwarg...)
     function convert_state_to_jutul_storage(model, x::JutulStorage)
         return x
     end
@@ -698,14 +702,19 @@ function evaluate_objective(G, model, states, timesteps, all_forces; large_value
         @warn "Partial data passed, objective set to large value $large_value."
         obj = large_value
     else
-        F = i -> G(
-            model,
-            convert_state_to_jutul_storage(model, states[i]),
-            timesteps[i],
-            i,
-            forces_for_timestep(nothing, all_forces, timesteps, i)
-        )
-        obj = sum(F, eachindex(states))
+        obj = 0.0
+        t = 0.0
+        for (i, dt) in enumerate(timesteps)
+            state_i = convert_state_to_jutul_storage(model, states[i])
+            force_i = forces_for_timestep(nothing, all_forces, timesteps, i)
+            obj += G(
+                model,
+                state_i,
+                dt,
+                optimization_step_info(i, t; kwarg...),
+                force_i
+            )
+        end
     end
     return obj
 end
@@ -939,7 +948,7 @@ function update_state0_sensitivities!(storage)
     end
 end
 
-function optimization_step_info(step::Int, time::Real, case = missing; substep = 1, kwarg...)
+function optimization_step_info(step::Int, time::Real; case = missing, substep = 1, kwarg...)
     return OrderedDict{Symbol, Any}(
         :time => time,
         :step => step,
