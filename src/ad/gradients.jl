@@ -942,3 +942,13 @@ function update_state0_sensitivities!(storage)
         rescale_sensitivities!(∇x, sim.model, storage.state0_map)
     end
 end
+
+function optimization_step_info(step::Int, time::Real, case = missing; substep = 1, kwarg...)
+    return OrderedDict{Symbol, Any}(
+        :time => time,
+        :step => step,
+        :substep => substep,
+        :case => case;
+        kwarg...
+    )
+end
