@@ -35,12 +35,7 @@
                 info_level = info_level,
         )
 
-        sparse_forward_backend = AutoSparse(
-            AutoForwardDiff();
-            sparsity_detector = TracerLocalSparsityDetector(),
-            coloring_algorithm = GreedyColoringAlgorithm(),
-        )
-        storage[:preparation_di] = prepare_jacobian(F, sparse_forward_backend, X);
+        setup_jacobian_evaluation!(storage, X, F, G, states, case0)
 
         if info_level > 1
             jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
@@ -157,4 +152,29 @@ end
 
 function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces, state0)
     return (model, parameters, forces, state0)
+end
+
+function setup_jacobian_evaluation!(storage, X, F, G, states, case0)
+    sparse_forward_backend = AutoSparse(
+        AutoForwardDiff();
+        sparsity_detector = TracerLocalSparsityDetector(),
+        coloring_algorithm = GreedyColoringAlgorithm(),
+    )
+
+    cache = Dict()
+    function evaluate_for_states(x, state, state0, step_info, dt)
+        case = F(x)
+        if step_info[:step] == 1
+            state0 = case.state0
+        end
+        sim = HelperSimulator(case, eltype(x), cache = cache)
+        r = model_residual(state, state0, sim, forces = case.forces, dt = dt)
+        return r
+    end
+    dt = case0.dt[1]
+    info = Jutul.optimization_step_info(1, 0.0, dt)
+    evaluate0(x) = evaluate_for_states(x, case0.state0, case0.state0, info, dt)
+    storage[:preparation_di] = prepare_jacobian(evaluate0, sparse_forward_backend, X);
+    storage[:function_di] = evaluate_for_states
+    return storage
 end
