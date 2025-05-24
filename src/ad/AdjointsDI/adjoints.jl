@@ -3,27 +3,30 @@
             extra_timing = false,
             extra_output = false,
             forces = missing,
-            info_level = 0,
             state0 = missing,
+            info_level = 0,
             kwarg...
         )
-        # F(X, step_info) -> model*
-        # F(X, step_info) -> model, parameters*
-        # F(X, step_info) -> model, parameters, forces*
-        # F(X, step_info) -> case (current step)
-        # F(X, step_info) -> case (all steps)
-        # *state0 needs to be provided
         Jutul.set_global_timer!(extra_timing)
+        N = length(states)
+        # Timesteps
+        if eltype(reports_or_timesteps)<:Real
+            timesteps = reports_or_timesteps
+        else
+            @assert length(reports_or_timesteps) == N
+            timesteps = report_timesteps(reports_or_timesteps)
+        end
         # Allocation part
         if info_level > 1
             jutul_message("Adjoints", "Setting up storage...", color = :blue)
         end
-        # model, state0, parameters = setup_case(X, F, step_info, forces)
+        case_for_step(x_i, step_info) = setup_case(x_i, F, step_info, state0, forces, N)
+        case0 = case_for_step(X, Jutul.optimization_step_info(1, 0.0, timesteps[1]))
         # t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
         storage = setup_adjoint_storage_base(
-                model, state0, parameters,
+                case0.model, case0.state0, case0.parameters,
                 use_sparsity = true,
-                linear_solver = Jutul.select_linear_solver(model, mode = :adjoint, rtol = 1e-6),
+                linear_solver = Jutul.select_linear_solver(case0.model, mode = :adjoint, rtol = 1e-6),
                 n_objective = n_objective,
                 info_level = info_level,
         )
@@ -31,14 +34,7 @@
             jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
         end
         ∇G = gradient_vec_or_mat(n_param)
-        # Timesteps
-        N = length(states)
-        if eltype(reports_or_timesteps)<:Real
-            timesteps = reports_or_timesteps
-        else
-            @assert length(reports_or_timesteps) == N
-            timesteps = report_timesteps(reports_or_timesteps)
-        end
+
         @assert length(timesteps) == N "Recieved $(length(timesteps)) timesteps and $N states. These should match."
         # Solve!
         if info_level > 1
@@ -89,9 +85,64 @@
     return ∇G
 end
 
-function setup_case(x, step_info, forces)
-
-    # F(X, step_info) -> model
+function setup_case(x, F, step_info, state0, forces, N)
+    # F(X, step_info) -> model*
+    # F(X, step_info) -> model, parameters*
+    # F(X, step_info) -> model, parameters, forces*
+    # F(X, step_info) -> model, parameters, forces*, state0*
     # F(X, step_info) -> case (current step)
     # F(X, step_info) -> case (all steps)
+    # *state0 needs to be provided
+    c = unpack_setup(step_info, N, F(x, step_info))
+    if c isa JutulCase
+        case = c
+    else
+        model, p, f, s0 = c
+        if ismissing(state0)
+            state0 = s0
+        end
+        if ismissing(forces)
+            forces = f
+        end
+        if ismissing(p)
+            parameters = Jutul.setup_parameters(model)
+        else
+            parameters = p
+        end
+        dt = step_info[:dt]
+        case = JutulCase(model, dt, forces, parameters = parameters, state0 = state0)
+    end
+    return case
+end
+
+function unpack_setup(step_info, N, case::JutulCase)
+    # Either case for all steps or case for current step
+    Ns = length(case.dt)
+    if Ns > 1
+        if case.forces isa Vector
+            Ns == N || error("case.forces was a vector and expected $N steps, got $Ns.")
+        end
+        case = case[step_info[:step]]
+    end
+    return case
+end
+
+function unpack_setup(step_info, N, out::Tuple)
+    unpack_setup(step_info, N, out...)
+end
+
+function unpack_setup(step_info, N, model::Jutul.JutulModel)
+    return (model, missing, missing, missing)
+end
+
+function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters)
+    return (model, parameters, missing, missing)
+end
+
+function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces)
+    return (model, parameters, forces, missing)
+end
+
+function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces, state0)
+    return (model, parameters, forces, state0)
 end
