@@ -34,6 +34,14 @@
                 n_objective = nothing,
                 info_level = info_level,
         )
+
+        sparse_forward_backend = AutoSparse(
+            AutoForwardDiff();
+            sparsity_detector = TracerLocalSparsityDetector(),
+            coloring_algorithm = GreedyColoringAlgorithm(),
+        )
+        storage[:preparation_di] = prepare_jacobian(F, sparse_forward_backend, X);
+
         if info_level > 1
             jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
         end
