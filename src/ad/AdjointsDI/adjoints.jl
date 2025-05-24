@@ -24,7 +24,10 @@
         case_for_step(x_i, step_info) = setup_case(x_i, F, step_info, state0, forces, N)
         case0 = case_for_step(X, Jutul.optimization_step_info(1, 0.0, timesteps[1]))
         if ismissing(forces)
-            forces = Jutul.setup_forces(case0.model)
+            forces = case0.forces
+        end
+        if ismissing(state0)
+            state0 = case0.state0
         end
         # t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
         storage = Jutul.setup_adjoint_storage_base(
@@ -34,6 +37,7 @@
                 n_objective = nothing,
                 info_level = info_level,
         )
+        storage[:dparam] = zeros(length(X))
 
         setup_jacobian_evaluation!(storage, X, F, G, states, case0)
 
@@ -47,11 +51,11 @@
         if info_level > 1
             jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
         end
-        t_solve = @elapsed solve_adjoint_generic!(∇G, storage, states, state0, timesteps, G, forces = forces, info_level = info_level)
+        t_solve = @elapsed solve_adjoint_generic!(∇G, X, storage, states, state0, timesteps, G, forces, info_level = info_level)
         if info_level > 1
             jutul_message("Adjoints", "Adjoints solved in $(get_tstr(t_solve)).", color = :blue)
         end
-        print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
+        Jutul.print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
         if extra_output
             return (∇G, storage)
         else
@@ -59,7 +63,8 @@
         end
     end
 
-function solve_adjoint_generic!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model), info_level = 0)
+function solve_adjoint_generic!(∇G, X, storage, states, state0, timesteps, G, forces; info_level = 0)
+    F_eval = storage[:function_di]
     N = length(timesteps)
     @assert N == length(states)
     if forces isa Vector
@@ -79,16 +84,45 @@ function solve_adjoint_generic!(∇G, storage, states, state0, timesteps, G; for
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
         s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
-        update_sensitivities_generic!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
+        update_sensitivities_generic!(∇G, X, F_eval, i, G, storage, s0, s, s_next, timesteps, forces)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
         @. ∇G += dparam
     end
-    rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
+    # rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
     @assert all(isfinite, ∇G)
     # Finally deal with initial state gradients
-    update_state0_sensitivities!(storage)
+    # update_state0_sensitivities!(storage)
+    return ∇G
+end
+
+function update_sensitivities_generic!(∇G, X, F_eval, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
+    solved_timesteps = @view timesteps[1:(i-1)]
+    current_time = sum(solved_timesteps)
+    for skey in [:backward, :forward]
+        s = adjoint_storage[skey]
+        Jutul.reset!(Jutul.progress_recorder(s), step = i, time = current_time)
+    end
+    λ, t, dt, forces = Jutul.next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces)
+    @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
+
+    step_info = Jutul.optimization_step_info(i, current_time, dt)
+    F(x) = F_eval(x, state, state0, step_info, dt)
+    @time jac = jacobian(F, AutoForwardDiff(), X)
+    # Add zero entry (corresponding to objective values) to avoid resizing matrix.
+    N = length(λ)
+    push!(λ, 0.0)
+    # tmp = jac'*λ
+    mul!(∇G, jac', λ, 1.0, 1.0)
+    resize!(λ, N)
+    # Gradient of partial objective to parameters
+    dparam = adjoint_storage.dparam
+    if i == length(timesteps)
+        @. dparam = 0
+    end
+    dobj = jac[end, :]
+    @. dparam += dobj
     return ∇G
 end
 

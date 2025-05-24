@@ -1,6 +1,7 @@
 module AdjointsDI
     using Jutul
     import Jutul: @tic
+    using LinearAlgebra
     using DifferentiationInterface
     using SparseConnectivityTracer
     using SparseMatrixColorings
