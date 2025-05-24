@@ -16,6 +16,7 @@ solvers and types of automatic differentiation.
 function HelperSimulator(model::M, T = Float64;
         executor::E = Jutul.default_executor(),
         cache = missing,
+        n_extra = 0,
         kwarg...
     ) where {M, E}
     n = Jutul.number_of_degrees_of_freedom(model)
@@ -35,9 +36,16 @@ function HelperSimulator(model::M, T = Float64;
             T = T,
             kwarg...
         )
-        r = zeros(T, n)
-        setup_helper_equation_storage!(storage, r, model)
+        if n_extra == 0
+            r = zeros(T, n)
+            r_extended = r
+        else
+            r_extended = zeros(T, n + n_extra)
+            r = view(r_extended, 1:n)
+        end
+        storage[:r_extended] = r_extended
         storage[:r] = r
+        setup_helper_equation_storage!(storage, r, model)
         # TODO: Actually use these.
         storage[:primary_mapper] = Jutul.variable_mapper(model, :primary)
         storage[:parameter_wrapper] = first(Jutul.variable_mapper(model, :parameters))
