@@ -306,7 +306,7 @@ end
 function determine_objective_sparsity(sim, model, G, states, timesteps, forces)
     update_secondary_variables!(sim.storage, sim.model)
     state = sim.storage.state
-    F_outer = (state, i) -> G(model, state, timesteps[i], i, forces_for_timestep(sim, forces, timesteps, i))
+    F_outer = (state, i) -> G(model, state, timesteps[i], Jutul.optimization_step_info(i, timesteps), forces_for_timestep(sim, forces, timesteps, i))
     sparsity = missing
     for i in 1:length(states)
         s_new = determine_sparsity_simple(s -> F_outer(s, i), model, state)
@@ -957,4 +957,12 @@ function optimization_step_info(step::Int, time::Real, dt::Real; case = missing,
         :case => case;
         kwarg...
     )
+end
+
+function optimization_step_info(step::Int, dts::Vector; kwarg...)
+    t = 0.0
+    for i in 1:(step-1)
+        t += dts[i]
+    end
+    return optimization_step_info(step, t, dts[step]; kwarg...)
 end

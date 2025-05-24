@@ -1,5 +1,5 @@
     function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
-            n_objective = nothing,
+            # n_objective = nothing,
             extra_timing = false,
             extra_output = false,
             forces = missing,
@@ -9,6 +9,7 @@
         )
         Jutul.set_global_timer!(extra_timing)
         N = length(states)
+        n_param = length(X)
         # Timesteps
         if eltype(reports_or_timesteps)<:Real
             timesteps = reports_or_timesteps
@@ -22,18 +23,21 @@
         end
         case_for_step(x_i, step_info) = setup_case(x_i, F, step_info, state0, forces, N)
         case0 = case_for_step(X, Jutul.optimization_step_info(1, 0.0, timesteps[1]))
+        if ismissing(forces)
+            forces = Jutul.setup_forces(case0.model)
+        end
         # t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
-        storage = setup_adjoint_storage_base(
+        storage = Jutul.setup_adjoint_storage_base(
                 case0.model, case0.state0, case0.parameters,
                 use_sparsity = true,
                 linear_solver = Jutul.select_linear_solver(case0.model, mode = :adjoint, rtol = 1e-6),
-                n_objective = n_objective,
+                n_objective = nothing,
                 info_level = info_level,
         )
         if info_level > 1
             jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
         end
-        ∇G = gradient_vec_or_mat(n_param)
+        ∇G = zeros(n_param)
 
         @assert length(timesteps) == N "Recieved $(length(timesteps)) timesteps and $N states. These should match."
         # Solve!
@@ -52,7 +56,7 @@
         end
     end
 
-    function solve_adjoint_generic!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model), info_level = 0)
+function solve_adjoint_generic!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model), info_level = 0)
     N = length(timesteps)
     @assert N == length(states)
     if forces isa Vector
@@ -63,16 +67,16 @@
         jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
     end
 
-    update_objective_sparsity!(storage, G, states, timesteps, forces, :forward)
-    update_objective_sparsity!(storage, G, states, timesteps, forces, :parameter)
+    Jutul.update_objective_sparsity!(storage, G, states, timesteps, forces, :forward)
+    # update_objective_sparsity!(storage, G, states, timesteps, forces, :parameter)
     # Set gradient to zero before solve starts
     @. ∇G = 0
     @tic "sensitivities" for i in N:-1:1
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
-        s, s0, s_next = state_pair_adjoint_solve(state0, states, i, N)
-        update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
+        s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
+        update_sensitivities_generic!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
@@ -101,8 +105,8 @@ function setup_case(x, F, step_info, state0, forces, N)
         if ismissing(state0)
             state0 = s0
         end
-        if ismissing(forces)
-            forces = f
+        if ismissing(f)
+            f = forces
         end
         if ismissing(p)
             parameters = Jutul.setup_parameters(model)
