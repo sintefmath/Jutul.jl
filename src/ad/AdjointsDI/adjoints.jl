@@ -109,7 +109,9 @@ function update_sensitivities_generic!(∇G, X, F_eval, i, G, adjoint_storage, s
 
     step_info = Jutul.optimization_step_info(i, current_time, dt)
     F(x) = F_eval(x, state, state0, step_info, dt)
-    @time jac = jacobian(F, AutoForwardDiff(), X)
+    prep = adjoint_storage[:prep_di]
+    backend = adjoint_storage[:backend_di]
+    jac = jacobian(F, prep, backend, X)
     # Add zero entry (corresponding to objective values) to avoid resizing matrix.
     N = length(λ)
     push!(λ, 0.0)
@@ -210,7 +212,10 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0)
     dt = case0.dt[1]
     info = Jutul.optimization_step_info(1, 0.0, dt)
     evaluate0(x) = evaluate_for_states(x, case0.state0, case0.state0, info, dt)
-    storage[:preparation_di] = prepare_jacobian(evaluate0, sparse_forward_backend, X);
     storage[:function_di] = evaluate_for_states
+    # Note: strict = false is needed because we create another function on the fly
+    # that essentially calls the same function.
+    storage[:prep_di] = prepare_jacobian(evaluate0, sparse_forward_backend, X, strict=Val(false))
+    storage[:backend_di] = sparse_forward_backend
     return storage
 end
