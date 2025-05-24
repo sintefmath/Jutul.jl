@@ -1,15 +1,18 @@
     function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
             n_objective = nothing,
             extra_timing = false,
-            raw_output = false,
             extra_output = false,
             forces = missing,
             info_level = 0,
+            state0 = missing,
             kwarg...
         )
-        # F(X, step_info) -> model
+        # F(X, step_info) -> model*
+        # F(X, step_info) -> model, parameters*
+        # F(X, step_info) -> model, parameters, forces*
         # F(X, step_info) -> case (current step)
         # F(X, step_info) -> case (all steps)
+        # *state0 needs to be provided
         Jutul.set_global_timer!(extra_timing)
         # Allocation part
         if info_level > 1

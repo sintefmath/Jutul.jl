@@ -438,7 +438,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         pbuf = adjoint_storage.param_buf
         S_p = get_objective_sparsity(adjoint_storage, :parameter)
         rec = progress_recorder(parameter_sim)
-        step_info = optimization_step_info(i, current_time(rec))
+        step_info = optimization_step_info(i, current_time(rec), dt)
         state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
         @. dparam += pbuf
     end
@@ -480,7 +480,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     # Fill rhs with (∂J / ∂x)ᵀₙ (which will be treated with a negative sign when the result is written by the linear solver)
     S_p = get_objective_sparsity(adjoint_storage, :forward)
     rec = progress_recorder(backward_sim)
-    step_info = optimization_step_info(i, current_time(rec))
+    step_info = optimization_step_info(i, current_time(rec), dt)
     @tic "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
     if isnothing(state_next)
         @assert i == N
@@ -711,7 +711,7 @@ function evaluate_objective(G, model, states, timesteps, all_forces; large_value
                 model,
                 state_i,
                 dt,
-                optimization_step_info(i, t; kwarg...),
+                optimization_step_info(i, t, dt; kwarg...),
                 force_i
             )
         end
@@ -948,9 +948,10 @@ function update_state0_sensitivities!(storage)
     end
 end
 
-function optimization_step_info(step::Int, time::Real; case = missing, substep = 1, kwarg...)
+function optimization_step_info(step::Int, time::Real, dt::Real; case = missing, substep = 1, kwarg...)
     return OrderedDict{Symbol, Any}(
         :time => time,
+        :dt => dt,
         :step => step,
         :substep => substep,
         :case => case;
