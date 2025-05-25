@@ -180,9 +180,10 @@ function model_residual(state, state0, sim::HelperSimulator;
     reset_variables!(storage, model, state0, type = :state0)
     update_secondary_variables!(storage, model, true)
     reset_variables!(storage, model, state, type = :state)
+    update_secondary_variables!(storage, model, false)
     update_before_step!(sim, dt, forces, time = time)
     # Update equations and residual
-    update_state_dependents!(storage, model, dt, forces; update_secondary = true, kwarg...) # time is important potential kwarg...
+    update_state_dependents!(storage, model, dt, forces; update_secondary = false, time = time, kwarg...) # time is important potential kwarg...
     update_linearized_system!(storage, model, sim.executor, r = storage.r, nzval = missing, lsys = missing)
     return storage.r
 end
