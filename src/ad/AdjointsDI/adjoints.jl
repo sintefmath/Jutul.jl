@@ -22,7 +22,8 @@
             jutul_message("Adjoints", "Setting up storage...", color = :blue)
         end
         case_for_step(x_i, step_info) = setup_case(x_i, F, step_info, state0, forces, N)
-        case0 = case_for_step(X, Jutul.optimization_step_info(1, 0.0, timesteps[1]))
+        total_time = sum(timesteps)
+        case0 = case_for_step(X, Jutul.optimization_step_info(1, 0.0, timesteps[1], total_time = total_time))
         if ismissing(forces)
             forces = case0.forces
         end
@@ -107,7 +108,8 @@ function update_sensitivities_generic!(∇G, X, F_eval, i, G, adjoint_storage, s
     λ, t, dt, forces = Jutul.next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces)
     @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
 
-    step_info = Jutul.optimization_step_info(i, current_time, dt)
+    total_time = sum(timesteps)
+    step_info = Jutul.optimization_step_info(i, current_time, dt, total_time = total_time)
     F(x) = F_eval(x, state, state0, step_info, dt)
     prep = adjoint_storage[:prep_di]
     backend = adjoint_storage[:backend_di]
@@ -210,7 +212,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0)
         return r
     end
     dt = case0.dt[1]
-    info = Jutul.optimization_step_info(1, 0.0, dt)
+    info = Jutul.optimization_step_info(1, 0.0, dt, total_time = sum(dt))
     evaluate0(x) = evaluate_for_states(x, case0.state0, case0.state0, info, dt)
     storage[:function_di] = evaluate_for_states
     # Note: strict = false is needed because we create another function on the fly
