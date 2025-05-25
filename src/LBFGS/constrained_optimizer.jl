@@ -209,20 +209,21 @@ function box_bfgs(x0, f, lb, ub; kwarg...)
             throw(ArgumentError("Lower bound must be less than upper bound for index $i: lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
         end
     end
+    δ = ub .- lb
 
     function dx_to_du!(g)
         for i in 1:n
-            g[i] = g[i] * (ub[i] - lb[i])
+            g[i] = g[i] * δ[i]
         end
     end
 
     function x_to_u(x)
-        u = (x - lb) ./ (ub - lb)
+        u = (x - lb) ./ δ
         return u
     end
 
     function u_to_x(u)
-        x = u .* (ub - lb) + lb
+        x = u .* δ + lb
         return x
     end
 
