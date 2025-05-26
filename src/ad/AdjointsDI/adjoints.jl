@@ -201,7 +201,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0)
 
     cache = Dict()
     function evaluate_for_states(x, state, state0, step_info, dt)
-        case = F(x)
+        case = F(x, step_info)
         if step_info[:step] == 1
             state0 = case.state0
         end

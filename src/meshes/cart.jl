@@ -49,13 +49,13 @@ struct CartesianMesh{D, Δ, O, T} <: FiniteVolumeMesh
         function generate_deltas(deltas_or_size)
             deltas = Vector(undef, dim)
             for (i, D) = enumerate(deltas_or_size)
-                if isa(D, AbstractFloat)
-                    # Deltas are actually size of domain in each direction
-                    deltas[i] = D/dims[i]
-                else
+                if isa(D, Integer)
                     # Deltas are the actual cell widths
                     @assert length(D) == dims[i]
                     deltas[i] = D
+                else
+                    # Deltas are actually size of domain in each direction
+                    deltas[i] = D/dims[i]
                 end
             end
             return Tuple(deltas)
@@ -102,7 +102,7 @@ end
 """
 Lower corner for one dimension, without any transforms applied
 """
-coord_offset(pos, δ::AbstractFloat) = (pos-1)*δ
+coord_offset(pos, δ::Real) = (pos-1)*δ
 coord_offset(pos, δ::Union{AbstractVector, Tuple}) = sum(δ[1:(pos-1)], init = 0.0)
 
 """
@@ -356,10 +356,10 @@ end
 function get_delta(Δ, index, d)
     if length(Δ) >= d
         δ = Δ[d]
-        if isa(δ, AbstractFloat)
-            v = δ
-        else
+        if isa(δ, Union{AbstractArray, Tuple, NamedTuple})
             v = δ[index]
+        else
+            v = δ
         end
     else
         v = 1.0
