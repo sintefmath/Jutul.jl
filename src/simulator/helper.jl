@@ -163,8 +163,10 @@ function model_residual(state, state0, sim::HelperSimulator;
     end
     function dict_pvar_copy(x, m::SimulationModel)
         pvars = get_primary_variables(m)
+        svars = get_secondary_variables(m)
+        prms = get_parameters(m)
         out = JutulStorage()
-        for k in keys(pvars)
+        for k in setdiff(keys(x), svars, prms)
             if haskey(x, k)
                 out[k] = x[k]
             end
