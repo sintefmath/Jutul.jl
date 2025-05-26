@@ -9,7 +9,7 @@ function poisson_test_objective_vec(model, state)
     return [poisson_test_objective(model, state), poisson_test_objective(model, state)]
 end
 
-function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = 2, dt = [1.0])
+function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = (2, 2), dt = [1.0])
     sys = VariablePoissonSystem(time_dependent = true)
     # Unit square
     g = CartesianMesh(dim, (dx, dy))
@@ -146,4 +146,42 @@ end
         end
     end
 end
+
+##
+import Jutul.AdjointsDI: solve_adjoint_generic
+
+
+function setup_poisson_test_case_from_vector(x::Vector; kwarg...)
+    return setup_poisson_test_case(x...; kwarg...)
+end
+
+
+function num_grad_generic(F, G, x0)
+    out = similar(x)
+    ϵ = 1e-6
+    ϵ = 1e-12
+    function objective_from_x(xi)
+        case = F(xi, missing)
+        r = simulate(case, info_level = -1)
+        return Jutul.evaluate_objective(G, case, r)
+    end
+    G0 = objective_from_x(x0)
+    for i in eachindex(x)
+        x = copy(x0)
+        x[i] += ϵ
+        Gi = objective_from_x(x)
+        out[i] = (Gi - G0)/ϵ
+    end
+    return out
+end
+
+x = ones(5)
+case = setup_poisson_test_case_from_vector(x)
+states, reports = simulate(case, info_level = -1)
+
+F = (x, step_info) -> setup_poisson_test_case_from_vector(x)
+G = (model, state, dt, step_info, forces) -> poisson_test_objective(model, state)
+num_grad_generic(F, G, x)
+##
+dGdx = solve_adjoint_generic(x, F, states, reports, G)
 
