@@ -689,16 +689,6 @@ function perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
     param_i[target][j + i*(sz[1]-1)] += ϵ
 end
 
-function evaluate_objective(G, case::JutulCase, result::SimResult; kwarg...)
-    states, timesteps, ix = expand_to_ministeps(result)
-    if case.forces isa Vector
-        all_forces = case.forces[ix]
-    else
-        all_forces = case.forces
-    end
-    return evaluate_objective(G, case.model, states, timesteps, all_forces; kwarg...)
-end
-
 function evaluate_objective(G, model, states, timesteps, all_forces; large_value = 1e20, kwarg...)
     function convert_state_to_jutul_storage(model, x::JutulStorage)
         return x
