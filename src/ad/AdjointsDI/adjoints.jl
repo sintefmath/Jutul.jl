@@ -213,7 +213,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0)
     end
     dt = case0.dt[1]
     info = Jutul.optimization_step_info(1, 0.0, dt, total_time = sum(dt))
-    evaluate0(x) = evaluate_for_states(x, case0.state0, case0.state0, info, dt)
+    evaluate0(x) = evaluate_for_states(x, states[1], case0.state0, info, dt)
     storage[:function_di] = evaluate_for_states
     # Note: strict = false is needed because we create another function on the fly
     # that essentially calls the same function.
