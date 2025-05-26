@@ -206,7 +206,11 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0)
             state0 = case.state0
         end
         sim = HelperSimulator(case, eltype(x), cache = cache, n_extra = 1)
-        model_residual(state, state0, sim, forces = case.forces, time = step_info[:time], dt = dt)
+        model_residual(state, state0, sim,
+            forces = case.forces,
+            time = step_info[:time],
+            dt = dt
+        )
         r = sim.storage.r_extended
         r[end] = G(case.model, state, dt, step_info, case.forces)
         return r

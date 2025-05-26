@@ -154,7 +154,6 @@ function setup_poisson_test_case_from_vector(x::Vector; kwarg...)
     return setup_poisson_test_case(x...; kwarg...)
 end
 
-
 function num_grad_generic(F, G, x0)
     out = similar(x)
     ϵ = 1e-6
@@ -173,10 +172,11 @@ function num_grad_generic(F, G, x0)
     end
     return out
 end
-function test_for_timesteps(timesteps)
+
+function test_for_timesteps(timesteps; atol = 1e-3)
     # dx, dy, U0, k_val, srcval
     x = ones(5)
-    case = setup_poisson_test_case_from_vector(x)
+    case = setup_poisson_test_case_from_vector(x, dt = timesteps)
     states, reports = simulate(case, info_level = -1)
 
     F = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps)
@@ -184,7 +184,11 @@ function test_for_timesteps(timesteps)
     dGdx_num = num_grad_generic(F, G, x)
     dGdx_adj = solve_adjoint_generic(x, F, states, reports, G)
 
-    @test dGdx_adj ≈ dGdx_num atol = 1e-3
+    @test dGdx_adj ≈ dGdx_num atol = atol
 end
 
-test_for_timesteps([1.0])
+@testset "AdjointDI.solve_adjoint_generic" begin
+    test_for_timesteps([1.0])
+    test_for_timesteps([100.0])
+    test_for_timesteps([10.0, 3.0, 500.0, 100.0], atol = 0.01)
+end
