@@ -9,26 +9,31 @@ function poisson_test_objective_vec(model, state)
     return [poisson_test_objective(model, state), poisson_test_objective(model, state)]
 end
 
-function solve_adjoint_forward_test_system(dim, dt)
+function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = 2, dt = [1.0])
     sys = VariablePoissonSystem(time_dependent = true)
     # Unit square
-    g = CartesianMesh(dim, (1.0, 1.0))
+    g = CartesianMesh(dim, (dx, dy))
     # Set up a model with the grid and system
     discretization = (poisson = Jutul.PoissonDiscretization(g), )
     D = DiscretizedDomain(g, discretization)
     model = SimulationModel(D, sys)
     # Initial condition doesn't matter
-    state0 = setup_state(model, Dict(:U=>1.0))
-    K = compute_face_trans(g, 1.0)
+    state0 = setup_state(model, Dict(:U=>U0))
+    K = compute_face_trans(g, k_val)
     param = setup_parameters(model, K = K)
 
     nc = number_of_cells(g)
-    pos_src = PoissonSource(1, 1.0)
-    neg_src = PoissonSource(nc, -1.0)
+    pos_src = PoissonSource(1, srcval)
+    neg_src = PoissonSource(nc, -srcval)
     forces = setup_forces(model, sources = [pos_src, neg_src])
+    return JutulCase(model, dt, forces; parameters = param, state0 = state0)
+end
 
-    states, reports = simulate(state0, model, parameters = param, dt, info_level = -1, forces = forces);
-    return (model, state0, states, reports, param, forces)
+function solve_adjoint_forward_test_system(dim, dt)
+    case = setup_poisson_test_case(1.0, 1.0, 1.0, 1.0, 1.0, dim = dim, dt = dt)
+    (; state0, forces, model, parameters, dt) = case
+    states, reports = simulate(state0, model, parameters = parameters, dt, info_level = -1, forces = forces);
+    return (model, state0, states, reports, parameters, forces)
 end
 
 function test_basic_adjoint(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, scalar_obj = true)
