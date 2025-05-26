@@ -2,7 +2,7 @@ using Jutul, Test
 
 function poisson_test_objective(model, state)
     U = state[:U]
-    return 2*U[1] + 3*U[end]
+    return 2.5*(U[end] - U[1])
 end
 
 function poisson_test_objective_vec(model, state)
@@ -17,7 +17,6 @@ function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = (2, 2), dt = [
     discretization = (poisson = Jutul.PoissonDiscretization(g), )
     D = DiscretizedDomain(g, discretization)
     model = SimulationModel(D, sys)
-    # Initial condition doesn't matter
     state0 = setup_state(model, Dict(:U=>U0))
     K = compute_face_trans(g, k_val)
     param = setup_parameters(model, K = K)
@@ -174,14 +173,18 @@ function num_grad_generic(F, G, x0)
     end
     return out
 end
+function test_for_timesteps(timesteps)
+    # dx, dy, U0, k_val, srcval
+    x = ones(5)
+    case = setup_poisson_test_case_from_vector(x)
+    states, reports = simulate(case, info_level = -1)
 
-x = ones(5)
-case = setup_poisson_test_case_from_vector(x)
-states, reports = simulate(case, info_level = -1)
+    F = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps)
+    G = (model, state, dt, step_info, forces) -> poisson_test_objective(model, state)
+    dGdx_num = num_grad_generic(F, G, x)
+    dGdx_adj = solve_adjoint_generic(x, F, states, reports, G)
 
-F = (x, step_info) -> setup_poisson_test_case_from_vector(x)
-G = (model, state, dt, step_info, forces) -> poisson_test_objective(model, state)
-num_grad_generic(F, G, x)
-##
-dGdx = solve_adjoint_generic(x, F, states, reports, G)
+    @test dGdx_adj ≈ dGdx_num atol = 1e-3
+end
 
+test_for_timesteps([1.0])
