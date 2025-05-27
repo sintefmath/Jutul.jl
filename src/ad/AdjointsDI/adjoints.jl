@@ -6,6 +6,7 @@
             state0 = missing,
             backend = missing,
             do_prep = true,
+            single_step_sparsity = true,
             info_level = 0,
             use_sparsity = true,
             kwarg...
@@ -43,7 +44,7 @@
         )
         storage[:dparam] = zeros(length(X))
 
-        setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, N, backend, do_prep)
+        setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity)
 
         if info_level > 1
             jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
@@ -198,7 +199,8 @@ function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces,
     return (model, parameters, forces, state0)
 end
 
-function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, N, backend, do_prep)
+function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity)
+    N = length(timesteps)
     if ismissing(backend)
         backend = AutoSparse(
             AutoForwardDiff();
@@ -224,8 +226,17 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, N, 
         return r
     end
     dt = case0.dt[1]
-    info = Jutul.optimization_step_info(1, 0.0, dt, total_time = sum(dt))
-    evaluate0(x) = evaluate_for_states(x, states[1], case0.state0, info, dt)
+    function evaluate0(x)
+        info = Jutul.optimization_step_info(1, 0.0, dt, total_time = sum(timesteps))
+        v = evaluate_for_states(x, states[1], case0.state0, info, dt)
+        if !single_step_sparsity
+            for i in 2:N
+                step_info = Jutul.optimization_step_info(i, sum(timesteps[1:(i-1)]), timesteps[i], total_time = sum(timesteps))
+                v .+= evaluate_for_states(x, states[i], states[i-1], step_info, timesteps[i])
+            end
+        end
+        return v
+    end
     storage[:function_di] = evaluate_for_states
     # Note: strict = false is needed because we create another function on the fly
     # that essentially calls the same function.
