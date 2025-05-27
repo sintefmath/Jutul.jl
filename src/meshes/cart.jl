@@ -49,13 +49,13 @@ struct CartesianMesh{D, Δ, O, T} <: FiniteVolumeMesh
         function generate_deltas(deltas_or_size)
             deltas = Vector(undef, dim)
             for (i, D) = enumerate(deltas_or_size)
-                if isa(D, Integer)
+                if isa(D, Real)
+                    # Deltas are actually size of domain in each direction
+                    deltas[i] = D/dims[i]
+                else
                     # Deltas are the actual cell widths
                     @assert length(D) == dims[i]
                     deltas[i] = D
-                else
-                    # Deltas are actually size of domain in each direction
-                    deltas[i] = D/dims[i]
                 end
             end
             return Tuple(deltas)
