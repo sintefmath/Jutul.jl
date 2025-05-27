@@ -723,7 +723,8 @@ function evaluate_objective(G, model, states, timesteps, all_forces; large_value
                 dt,
                 optimization_step_info(i, t, dt; total_time = total_time, kwarg...),
                 force_i
-            )
+                )
+            t += dt
         end
     end
     return obj
