@@ -44,7 +44,7 @@
         )
         storage[:dparam] = zeros(length(X))
 
-        setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity)
+        setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse)
 
         if info_level > 1
             jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
@@ -199,14 +199,18 @@ function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces,
     return (model, parameters, forces, state0)
 end
 
-function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity)
+function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse)
     N = length(timesteps)
     if ismissing(backend)
-        backend = AutoSparse(
-            AutoForwardDiff();
-            sparsity_detector = TracerLocalSparsityDetector(),
-            coloring_algorithm = GreedyColoringAlgorithm(),
-        )
+        if di_sparse
+            backend = AutoSparse(
+                AutoForwardDiff();
+                sparsity_detector = TracerLocalSparsityDetector(),
+                coloring_algorithm = GreedyColoringAlgorithm(),
+            )
+        else
+            backend = AutoForwardDiff()
+        end
     end
     cache = Dict()
     function evaluate_for_states(x, state, state0, step_info, dt)
@@ -227,12 +231,18 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
     end
     dt = case0.dt[1]
     function evaluate0(x)
-        info = Jutul.optimization_step_info(1, 0.0, dt, total_time = sum(timesteps))
+        t = 0.0
+        total_time = sum(timesteps)
+        info = Jutul.optimization_step_info(1, t, dt, total_time = total_time)
         v = evaluate_for_states(x, states[1], case0.state0, info, dt)
+        t += dt
         if !single_step_sparsity
             for i in 2:N
-                step_info = Jutul.optimization_step_info(i, sum(timesteps[1:(i-1)]), timesteps[i], total_time = sum(timesteps))
-                v .+= evaluate_for_states(x, states[i], states[i-1], step_info, timesteps[i])
+                dt_i = timesteps[i]
+                step_info = Jutul.optimization_step_info(i, t, dt_i, total_time = total_time)
+                tmp = evaluate_for_states(x, states[i], states[i-1], step_info, dt_i)
+                @. v += tmp
+                t += dt_i
             end
         end
         return v
