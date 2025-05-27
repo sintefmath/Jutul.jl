@@ -341,7 +341,7 @@ end
 """
 Initializer for the value of non-scalar primary variables
 """
-function initialize_variable_value(model, pvar::VectorVariables, val::AbstractVector)
+function initialize_variable_value(model, pvar::VectorVariables, val::AbstractVector; kwarg...)
     n = values_per_entity(model, pvar)
     m = number_of_entities(model, pvar)
     nv = length(val)
@@ -354,12 +354,12 @@ function initialize_variable_value(model, pvar::VectorVariables, val::AbstractVe
     else
         error("Variable $(typeof(pvar)) should have initializer of length $n or $m")
     end
-    return initialize_variable_value(model, pvar, V)
+    return initialize_variable_value(model, pvar, V; kwarg...)
 end
 
-function initialize_variable_value(model, pvar::VectorVariables, symb::Symbol, val::Number)
+function initialize_variable_value(model, pvar::VectorVariables, symb::Symbol, val::Number; kwarg...)
     n = values_per_entity(model, pvar)
-    return initialize_variable_value(model, pvar, symb, repeat([val], n))
+    return initialize_variable_value(model, pvar, symb, repeat([val], n); kwarg...)
 end
 
 # Specific variable implementations that are generic for many types of system follow

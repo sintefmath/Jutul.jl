@@ -757,7 +757,7 @@ function expand_to_ministeps(states, reports)
     pushfirst!(report_t, 0.0)
     dt = diff(report_t)
     if has_ministeps
-        ministates = Dict{Symbol, Any}[]
+        ministates = JUTUL_OUTPUT_TYPE[]
         report_step_index = Int[]
         for (i, state) in enumerate(states)
             for ministate in state[:substates]
