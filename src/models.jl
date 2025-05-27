@@ -1018,7 +1018,7 @@ end
 function get_output_state(storage, model)
     # As this point (after a converged step) state0 should be state without AD.
     s0 = storage.state0
-    D = Dict{Symbol, Any}()
+    D = JUTUL_OUTPUT_TYPE()
     for k in model.output_variables
         if haskey(s0, k)
             D[k] = copy(s0[k])
