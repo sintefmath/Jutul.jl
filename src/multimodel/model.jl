@@ -884,7 +884,7 @@ function check_convergence(storage, model::MultiModel, cfg;
             converged = tol_cfg[:global_convergence_check_function](model, storage)
         end
     end
-        
+
     if extra_out
         return (converged, err, errors)
     else

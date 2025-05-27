@@ -32,7 +32,7 @@
         end
         # t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
         storage = Jutul.setup_adjoint_storage_base(
-                case0.model, case0.state0, case0.parameters,
+                case0.model, state0, case0.parameters,
                 use_sparsity = true,
                 linear_solver = Jutul.select_linear_solver(case0.model, mode = :adjoint, rtol = 1e-6),
                 n_objective = nothing,
@@ -40,7 +40,7 @@
         )
         storage[:dparam] = zeros(length(X))
 
-        setup_jacobian_evaluation!(storage, X, F, G, states, case0)
+        setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, N)
 
         if info_level > 1
             jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
@@ -114,6 +114,7 @@ function update_sensitivities_generic!(∇G, X, F_eval, i, G, adjoint_storage, s
     prep = adjoint_storage[:prep_di]
     backend = adjoint_storage[:backend_di]
     jac = jacobian(F, prep, backend, X)
+    # jac = jacobian(F, AutoForwardDiff(), X)
     # Add zero entry (corresponding to objective values) to avoid resizing matrix.
     N = length(λ)
     push!(λ, 0.0)
@@ -150,12 +151,10 @@ function setup_case(x, F, step_info, state0, forces, N)
             f = forces
         end
         if ismissing(p)
-            parameters = Jutul.setup_parameters(model)
-        else
-            parameters = p
+            p = Jutul.setup_parameters(model)
         end
-        dt = step_info[:dt]
-        case = JutulCase(model, dt, forces, parameters = parameters, state0 = state0)
+        dt = [step_info[:dt]]
+        case = JutulCase(model, dt, f, parameters = p, state0 = state0)
     end
     return case
 end
@@ -192,7 +191,7 @@ function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces,
     return (model, parameters, forces, state0)
 end
 
-function setup_jacobian_evaluation!(storage, X, F, G, states, case0)
+function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, N)
     sparse_forward_backend = AutoSparse(
         AutoForwardDiff();
         sparsity_detector = TracerLocalSparsityDetector(),
@@ -201,7 +200,8 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0)
 
     cache = Dict()
     function evaluate_for_states(x, state, state0, step_info, dt)
-        case = F(x, step_info)
+        # case = F(x, step_info)
+        case = setup_case(x, F, step_info, state0, forces, N)
         if step_info[:step] == 1
             state0 = case.state0
         end
