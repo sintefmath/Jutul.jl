@@ -7,6 +7,7 @@
             backend = missing,
             do_prep = true,
             info_level = 0,
+            use_sparsity = true,
             kwarg...
         )
         Jutul.set_global_timer!(extra_timing)
@@ -35,7 +36,7 @@
         # t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
         storage = Jutul.setup_adjoint_storage_base(
                 case0.model, state0, case0.parameters,
-                use_sparsity = true,
+                use_sparsity = use_sparsity,
                 linear_solver = Jutul.select_linear_solver(case0.model, mode = :adjoint, rtol = 1e-6),
                 n_objective = nothing,
                 info_level = info_level,
