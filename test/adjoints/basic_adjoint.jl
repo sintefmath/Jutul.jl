@@ -190,7 +190,7 @@ function num_grad_generic(F, G, x0)
     return out
 end
 
-function test_for_timesteps(timesteps; atol = 1e-3, fmt = :case)
+function test_for_timesteps(timesteps; atol = 1e-3, fmt = :case, kwarg...)
     # dx, dy, U0, k_val, srcval
     x = ones(5)
     case = setup_poisson_test_case_from_vector(x, dt = timesteps)
@@ -200,7 +200,11 @@ function test_for_timesteps(timesteps; atol = 1e-3, fmt = :case)
     F_num = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps, fmt = :case)
     G = (model, state, dt, step_info, forces) -> poisson_test_objective(model, state)
     dGdx_num = num_grad_generic(F_num, G, x)
-    dGdx_adj = solve_adjoint_generic(x, F, states, reports, G, state0 = case.state0, forces = case.forces)
+    dGdx_adj = solve_adjoint_generic(x, F, states, reports, G;
+        state0 = case.state0,
+        forces = case.forces,
+        kwarg...
+    )
 
     if fmt == :model_and_prm || fmt == :model
         dGdx_adj = dGdx_adj[1:4]
@@ -211,6 +215,11 @@ end
 
 @testset "AdjointDI.solve_adjoint_generic" begin
     test_for_timesteps([1.0])
+    # Sparse forwarddiff with sparsity recomputed
+    test_for_timesteps([1.0], do_prep = false)
+    # Non-sparse forwarddiff
+    test_for_timesteps([1.0], backend = Jutul.AdjointsDI.AutoForwardDiff(), do_prep = false)
+
     test_for_timesteps([100.0])
     test_for_timesteps([10.0, 3.0, 500.0, 100.0], atol = 0.01)
     for fmt in [:case, :onecase, :model_and_prm, :model_and_prm_and_forces, :model_and_prm_and_forces_and_state0]

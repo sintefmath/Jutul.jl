@@ -4,6 +4,8 @@
             extra_output = false,
             forces = missing,
             state0 = missing,
+            backend = missing,
+            do_prep = true,
             info_level = 0,
             kwarg...
         )
@@ -40,7 +42,7 @@
         )
         storage[:dparam] = zeros(length(X))
 
-        setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, N)
+        setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, N, backend, do_prep)
 
         if info_level > 1
             jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
@@ -113,7 +115,11 @@ function update_sensitivities_generic!(∇G, X, F_eval, i, G, adjoint_storage, s
     F(x) = F_eval(x, state, state0, step_info, dt)
     prep = adjoint_storage[:prep_di]
     backend = adjoint_storage[:backend_di]
-    jac = jacobian(F, prep, backend, X)
+    if isnothing(prep)
+        jac = jacobian(F, backend, X)
+    else
+        jac = jacobian(F, prep, backend, X)
+    end
     # jac = jacobian(F, AutoForwardDiff(), X)
     # Add zero entry (corresponding to objective values) to avoid resizing matrix.
     N = length(λ)
@@ -191,13 +197,14 @@ function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces,
     return (model, parameters, forces, state0)
 end
 
-function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, N)
-    sparse_forward_backend = AutoSparse(
-        AutoForwardDiff();
-        sparsity_detector = TracerLocalSparsityDetector(),
-        coloring_algorithm = GreedyColoringAlgorithm(),
-    )
-
+function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, N, backend, do_prep)
+    if ismissing(backend)
+        backend = AutoSparse(
+            AutoForwardDiff();
+            sparsity_detector = TracerLocalSparsityDetector(),
+            coloring_algorithm = GreedyColoringAlgorithm(),
+        )
+    end
     cache = Dict()
     function evaluate_for_states(x, state, state0, step_info, dt)
         # case = F(x, step_info)
@@ -221,7 +228,11 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, N)
     storage[:function_di] = evaluate_for_states
     # Note: strict = false is needed because we create another function on the fly
     # that essentially calls the same function.
-    storage[:prep_di] = prepare_jacobian(evaluate0, sparse_forward_backend, X, strict=Val(false))
-    storage[:backend_di] = sparse_forward_backend
+    if do_prep
+        storage[:prep_di] = prepare_jacobian(evaluate0, backend, X, strict=Val(false))
+    else
+        storage[:prep_di] = nothing
+    end
+    storage[:backend_di] = backend
     return storage
 end
