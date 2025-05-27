@@ -316,7 +316,8 @@ function evaluate_force_gradient!_inner!(J, dobj_dgrad, X, objective, multi_mode
         else
             vstate = model_storage.state
         end
-        partial_obj = objective(multi_model, as_value(vstate), dt, step_no, all_forces)
+        step_info = Jutul.optimization_step_info(step_no, 0.0, dt)
+        partial_obj = objective(multi_model, as_value(vstate), dt, step_info, all_forces)
         if !(partial_obj isa Float64)
             for (derno, gderno) in enumerate(offsets[fno]:offsets[fno+1]-1)
                 dobj_dgrad[gderno] += partial_obj.partials[derno]
