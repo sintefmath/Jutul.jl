@@ -175,6 +175,8 @@ function model_residual(state, state0, sim::HelperSimulator;
     end
     storage = get_simulator_storage(sim)
     model = get_simulator_model(sim)
+    r = storage.r
+    @. r = 0.0
 
     state0 = dict_pvar_copy(state0, model)
     state = dict_pvar_copy(state, model)
@@ -186,8 +188,8 @@ function model_residual(state, state0, sim::HelperSimulator;
     update_before_step!(sim, dt, forces, time = time)
     # Update equations and residual
     update_state_dependents!(storage, model, dt, forces; update_secondary = false, time = time, kwarg...) # time is important potential kwarg...
-    update_linearized_system!(storage, model, sim.executor, r = storage.r, nzval = missing, lsys = missing)
-    return storage.r
+    update_linearized_system!(storage, model, sim.executor, r = r, nzval = missing, lsys = missing)
+    return r
 end
 
 function model_residual!(r, state, state0, sim::HelperSimulator;
