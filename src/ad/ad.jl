@@ -416,9 +416,9 @@ end
     return v
 end
 
-function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where T<:ForwardDiff.Dual
-    @. v = next
-end
+# function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where T<:ForwardDiff.Dual
+#     @. v = next
+# end
 
 function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where {Tag, T<:(ForwardDiff.Dual{Tag})}
     @. v = next
@@ -427,8 +427,17 @@ end
 """
 Take value of AD.
 """
+@inline function value(x::ForwardDiff.Dual{Tag}) where Tag
+    if Tag isa JutulEntity
+        # If the tag is a Jutul entity, we know that the AD came from Jutul, so we can
+        # use the ForwardDiff value function to get the value. Otherwise we leave it be.
+        x = ForwardDiff.value(x)
+    end
+    return x
+end
+
 @inline function value(x)
-    return ForwardDiff.value(x)
+    return x
 end
 
 @inline function value(x::AbstractArray)
