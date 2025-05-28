@@ -214,35 +214,22 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
         end
     end
     cache = Dict()
-    function evaluate_for_states(x, state, state0, step_info, dt)
-        # case = F(x, step_info)
-        case = setup_case(x, F, step_info, state0, forces, N)
-        if step_info[:step] == 1
-            state0 = case.state0
-        end
-        sim = HelperSimulator(case, eltype(x), cache = cache, n_extra = 1)
-        model_residual(state, state0, sim,
-            forces = case.forces,
-            time = step_info[:time],
-            dt = dt
-        )
-        r = sim.storage.r_extended
-        r[end] = G(case.model, state, dt, step_info, case.forces)
-        return r
-    end
-    dt = case0.dt[1]
+    # TODO: Pass cache to evaluate_residual_and_jacobian_for_state_pair
+    evaluate_for_states(x, state, state0, step_info, dt) = evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_info, dt, F, G, forces, N)
     function evaluate0(x)
         t = 0.0
+        dt_i = case0.dt[1]
         total_time = sum(timesteps)
-        info = Jutul.optimization_step_info(1, t, dt, total_time = total_time)
-        v = evaluate_for_states(x, states[1], case0.state0, info, dt)
-        t += dt
+        info = Jutul.optimization_step_info(1, t, dt_i, total_time = total_time)
+        v = evaluate_for_states(x, states[1], case0.state0, info, dt_i)
+        t += dt_i
         if !single_step_sparsity
+            @. v = v^2
             for i in 2:N
                 dt_i = timesteps[i]
                 step_info = Jutul.optimization_step_info(i, t, dt_i, total_time = total_time)
                 tmp = evaluate_for_states(x, states[i], states[i-1], step_info, dt_i)
-                @. v += tmp
+                @. v += tmp.^2
                 t += dt_i
             end
         end
@@ -258,4 +245,20 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
     end
     storage[:backend_di] = backend
     return storage
+end
+
+function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_info, dt, F, G, forces, N = 1, cache = missing)
+    case = setup_case(x, F, step_info, state0, forces, N)
+    if step_info[:step] == 1
+        state0 = case.state0
+    end
+    sim = HelperSimulator(case, eltype(x), cache = cache, n_extra = 1)
+    model_residual(state, state0, sim,
+        forces = case.forces,
+        time = step_info[:time],
+        dt = dt
+    )
+    r = sim.storage.r_extended
+    r[end] = G(case.model, state, dt, step_info, case.forces)
+    return copy(r)
 end
