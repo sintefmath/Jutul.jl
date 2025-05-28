@@ -6,6 +6,7 @@
             state0 = missing,
             backend = missing,
             do_prep = true,
+            di_sparse = true,
             single_step_sparsity = true,
             info_level = 0,
             use_sparsity = true,
