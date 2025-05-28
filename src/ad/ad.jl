@@ -381,7 +381,7 @@ end
 
 Replace values of `x` in-place by `y`, leaving `x` with the values of y and the partials of `x`.
 """
-@inline function update_values!(v::AbstractArray{<:ForwardDiff.Dual{<:Tag}}, next::AbstractArray{<:Real}) where Tag
+@inline function update_values!(v::AbstractArray{<:ForwardDiff.Dual{Tag}}, next::AbstractArray{<:Real}) where Tag
     if Tag isa JutulEntity
         # The ForwardDiff type is immutable, so to preserve the derivatives we
         # do this little trick if we are working with a Jutul entity tag. This
@@ -407,7 +407,8 @@ Replace values (for non-Real types, direct assignment)
     @. v = next
 end
 
-@inline function update_values!(v::AbstractArray{<:Any}, next::AbstractArray{<:ForwardDiff.Dual})
+@inline function update_values!(v::AbstractArray{<:Real}, next::AbstractArray{<:ForwardDiff.Dual{Tag}}) where Tag
+    Tag::JutulEntity
     @inbounds for i in eachindex(v, next)
         next_val = next[i]
         v[i] = value(next_val)
@@ -416,6 +417,10 @@ end
 end
 
 function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where T<:ForwardDiff.Dual
+    @. v = next
+end
+
+function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where {Tag, T<:(ForwardDiff.Dual{Tag})}
     @. v = next
 end
 
