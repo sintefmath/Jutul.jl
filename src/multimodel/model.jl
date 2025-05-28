@@ -905,6 +905,13 @@ function update_primary_variables!(storage, model::MultiModel; targets = submode
     return report
 end
 
+function update_extra_state_fields!(storage, model::MultiModel, dt, time)
+    for key in submodels_symbols(model)
+        update_extra_state_fields!(storage[key], model.models[key], dt, time)
+    end
+    return storage
+end
+
 function reset_state_to_previous_state!(storage, model::MultiModel)
     submodels_storage_apply!(storage, model, reset_state_to_previous_state!)
 end

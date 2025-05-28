@@ -690,6 +690,7 @@ This includes properties, governing equations and the linearized system itself.
 function update_state_dependents!(storage, model::JutulModel, dt, forces; time = NaN, update_secondary = true, kwarg...)
     t_s = @elapsed if update_secondary
         @tic "secondary variables" update_secondary_variables!(storage, model; kwarg...)
+        @tic "extra state fields" update_extra_state_fields!(storage, model, dt, time)
     end
     t_eq = @elapsed update_equations_and_apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     return (secondary = t_s, equations = t_eq)
@@ -904,6 +905,10 @@ function update_primary_variables!(storage, model::JutulModel; kwarg...)
     primary_defs = storage.variable_definitions.primary_variables
     primary = storage.primary_variables
     update_primary_variables!(primary, dx, model, primary_defs; state = storage.state, kwarg...)
+end
+
+function update_extra_state_fields!(storage, model, dt, time)
+    return storage
 end
 
 function update_primary_variables!(primary_storage, dx, model::JutulModel, primary = get_primary_variables(model); relaxation = 1.0, check = false, state = missing)
