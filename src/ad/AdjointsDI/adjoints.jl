@@ -221,14 +221,14 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
         dt_i = case0.dt[1]
         total_time = sum(timesteps)
         N = length(timesteps)
-        info = Jutul.optimization_step_info(1, t, dt_i, total_time = total_time, Nsteps = N)
+        info = Jutul.optimization_step_info(1, t, dt_i, total_time = total_time, Nstep = N)
         v = evaluate_for_states(x, states[1], case0.state0, info, dt_i)
         t += dt_i
         if !single_step_sparsity
             @. v = v^2
             for i in 2:N
                 dt_i = timesteps[i]
-                step_info = Jutul.optimization_step_info(i, t, dt_i, total_time = total_time, Nsteps = N)
+                step_info = Jutul.optimization_step_info(i, t, dt_i, total_time = total_time, Nstep = N)
                 tmp = evaluate_for_states(x, states[i], states[i-1], step_info, dt_i)
                 @. v += tmp.^2
                 t += dt_i
