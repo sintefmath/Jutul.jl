@@ -28,7 +28,7 @@
         end
         case_for_step(x_i, step_info) = setup_case(x_i, F, step_info, state0, forces, N)
         total_time = sum(timesteps)
-        case0 = case_for_step(X, Jutul.optimization_step_info(1, 0.0, timesteps[1], total_time = total_time))
+        case0 = case_for_step(X, Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = total_time))
         if ismissing(forces)
             forces = case0.forces
         end
@@ -114,7 +114,7 @@ function update_sensitivities_generic!(∇G, X, F_eval, i, G, adjoint_storage, s
     @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
 
     total_time = sum(timesteps)
-    step_info = Jutul.optimization_step_info(i, current_time, dt, total_time = total_time)
+    step_info = Jutul.optimization_step_info(i, current_time, dt, total_time = total_time, Nstep = length(timesteps))
     F(x) = F_eval(x, state, state0, step_info, dt)
     prep = adjoint_storage[:prep_di]
     backend = adjoint_storage[:backend_di]
@@ -220,14 +220,15 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
         t = 0.0
         dt_i = case0.dt[1]
         total_time = sum(timesteps)
-        info = Jutul.optimization_step_info(1, t, dt_i, total_time = total_time)
+        N = length(timesteps)
+        info = Jutul.optimization_step_info(1, t, dt_i, total_time = total_time, Nsteps = N)
         v = evaluate_for_states(x, states[1], case0.state0, info, dt_i)
         t += dt_i
         if !single_step_sparsity
             @. v = v^2
             for i in 2:N
                 dt_i = timesteps[i]
-                step_info = Jutul.optimization_step_info(i, t, dt_i, total_time = total_time)
+                step_info = Jutul.optimization_step_info(i, t, dt_i, total_time = total_time, Nsteps = N)
                 tmp = evaluate_for_states(x, states[i], states[i-1], step_info, dt_i)
                 @. v += tmp.^2
                 t += dt_i
