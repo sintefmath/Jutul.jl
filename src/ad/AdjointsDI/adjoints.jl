@@ -246,8 +246,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
         end
     end
     cache = Dict()
-    # TODO: Pass cache to evaluate_residual_and_jacobian_for_state_pair
-    evaluate_for_states(x, state, state0, step_info, dt) = evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_info, dt, F, G, forces, N)
+    evaluate_for_states(x, state, state0, step_info, dt) = evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_info, dt, F, G, forces, N, cache)
     function evaluate0(x)
         t = 0.0
         dt_i = case0.dt[1]
