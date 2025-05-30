@@ -2,14 +2,7 @@
             # n_objective = nothing,
             extra_timing = false,
             extra_output = false,
-            forces = missing,
-            state0 = missing,
-            backend = missing,
-            do_prep = true,
-            di_sparse = true,
-            single_step_sparsity = true,
             info_level = 0,
-            use_sparsity = true,
             kwarg...
         )
         Jutul.set_global_timer!(extra_timing)
@@ -26,26 +19,10 @@
         if info_level > 1
             jutul_message("Adjoints", "Setting up storage...", color = :blue)
         end
-        case_for_step(x_i, step_info) = setup_case(x_i, F, step_info, state0, forces, N)
-        total_time = sum(timesteps)
-        case0 = case_for_step(X, Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = total_time))
-        if ismissing(forces)
-            forces = case0.forces
-        end
-        if ismissing(state0)
-            state0 = case0.state0
-        end
-        # t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
-        storage = Jutul.setup_adjoint_storage_base(
-                case0.model, state0, case0.parameters,
-                use_sparsity = use_sparsity,
-                linear_solver = Jutul.select_linear_solver(case0.model, mode = :adjoint, rtol = 1e-6),
-                n_objective = nothing,
-                info_level = info_level,
+        t_storage = @elapsed storage = setup_adjoint_storage_generic(X, F, states, timesteps, G;
+            info_level = info_level,
+            kwarg...
         )
-        storage[:dparam] = zeros(length(X))
-
-        setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse)
 
         if info_level > 1
             jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
@@ -57,7 +34,7 @@
         if info_level > 1
             jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
         end
-        t_solve = @elapsed solve_adjoint_generic!(∇G, X, storage, states, state0, timesteps, G, forces, info_level = info_level)
+        t_solve = @elapsed solve_adjoint_generic!(∇G, X, storage, states, storage[:state0], timesteps, G, storage[:forces], info_level = info_level)
         if info_level > 1
             jutul_message("Adjoints", "Adjoints solved in $(get_tstr(t_solve)).", color = :blue)
         end
@@ -82,7 +59,6 @@ function solve_adjoint_generic!(∇G, X, storage, states, state0, timesteps, G, 
     end
 
     Jutul.update_objective_sparsity!(storage, G, states, timesteps, forces, :forward)
-    # update_objective_sparsity!(storage, G, states, timesteps, forces, :parameter)
     # Set gradient to zero before solve starts
     @. ∇G = 0
     @tic "sensitivities" for i in N:-1:1
@@ -96,11 +72,44 @@ function solve_adjoint_generic!(∇G, X, storage, states, state0, timesteps, G, 
     if !isnothing(dparam)
         @. ∇G += dparam
     end
-    # rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
-    @assert all(isfinite, ∇G)
-    # Finally deal with initial state gradients
-    # update_state0_sensitivities!(storage)
+    all(isfinite, ∇G) || error("Adjoint solve resulted in non-finite gradient values.")
     return ∇G
+end
+
+function setup_adjoint_storage_generic(X, F, states, timesteps, G;
+        forces = missing,
+        state0 = missing,
+        backend = missing,
+        do_prep = true,
+        di_sparse = true,
+        info_level = 0,
+        single_step_sparsity = true,
+        use_sparsity = true
+    )
+    N = length(timesteps)
+    eltype(timesteps)<:Real
+    @assert length(states) == N "Received $(length(states)) states and $N timesteps. These should match."
+    case_for_step(x_i, step_info) = setup_case(x_i, F, step_info, state0, forces, N)
+    total_time = sum(timesteps)
+    case0 = case_for_step(X, Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = total_time))
+    if ismissing(forces)
+        forces = case0.forces
+    end
+    if ismissing(state0)
+        state0 = case0.state0
+    end
+    storage = Jutul.setup_adjoint_storage_base(
+            case0.model, state0, case0.parameters,
+            use_sparsity = use_sparsity,
+            linear_solver = Jutul.select_linear_solver(case0.model, mode = :adjoint, rtol = 1e-6),
+            n_objective = nothing,
+            info_level = info_level,
+    )
+    storage[:dparam] = zeros(length(X))
+    storage[:forces] = forces
+    storage[:state0] = state0
+    setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse)
+    return storage
 end
 
 function update_sensitivities_generic!(∇G, X, F_eval, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
