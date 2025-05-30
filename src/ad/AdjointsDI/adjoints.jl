@@ -312,10 +312,14 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
     # that essentially calls the same function.
     if do_prep
         if single_step_sparsity
+            H.state = states[1]
+            H.state0 = case0.state0
+            H.step_info = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = sum(timesteps))
+            H.dt = timesteps[1]
             prep = prepare_jacobian(H, backend, X)
         else
             H.states = states
-            prep = prepare_jacobian(H, backend, X)#, strict=Val(false))
+            prep = prepare_jacobian(H, backend, X)
             H.states = missing
         end
         storage[:prep_di] = prep
