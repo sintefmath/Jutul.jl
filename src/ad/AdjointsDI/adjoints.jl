@@ -2,6 +2,8 @@
             # n_objective = nothing,
             extra_timing = false,
             extra_output = false,
+            state0 = missing,
+            forces = missing,
             info_level = 0,
             kwarg...
         )
@@ -21,6 +23,8 @@
         end
         t_storage = @elapsed storage = setup_adjoint_storage_generic(X, F, states, timesteps, G;
             info_level = info_level,
+            state0 = state0,
+            forces = forces,
             kwarg...
         )
 
@@ -34,7 +38,11 @@
         if info_level > 1
             jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
         end
-        t_solve = @elapsed solve_adjoint_generic!(∇G, X, storage, states, storage[:state0], timesteps, G, storage[:forces], info_level = info_level)
+        t_solve = @elapsed solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G,
+            info_level = info_level,
+            state0 = state0,
+            forces = forces
+        )
         if info_level > 1
             jutul_message("Adjoints", "Adjoints solved in $(get_tstr(t_solve)).", color = :blue)
         end
@@ -46,10 +54,27 @@
         end
     end
 
-function solve_adjoint_generic!(∇G, X, storage, states, state0, timesteps, G, forces; info_level = 0)
+function solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G;
+        info_level = 0,
+        state0 = missing,
+        forces = missing
+    )
+
     F_eval = storage[:function_di]
     N = length(timesteps)
     @assert N == length(states)
+    badstate0 = ismissing(state0)
+    badforces = ismissing(forces)
+    if badstate0 || badforces
+        sinfo0 = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = sum(timesteps))
+        case0 = setup_case(X, F, sinfo0, state0, forces, N)
+        if badstate0
+            state0 = case0.state0
+        end
+        if badforces
+            forces = case0.forces
+        end
+    end
     if forces isa Vector
         @assert length(forces) == N
     end
@@ -89,9 +114,9 @@ function setup_adjoint_storage_generic(X, F, states, timesteps, G;
     N = length(timesteps)
     eltype(timesteps)<:Real
     @assert length(states) == N "Received $(length(states)) states and $N timesteps. These should match."
-    case_for_step(x_i, step_info) = setup_case(x_i, F, step_info, state0, forces, N)
     total_time = sum(timesteps)
-    case0 = case_for_step(X, Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = total_time))
+    sinfo0 = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = total_time)
+    case0 = setup_case(X, F, sinfo0, state0, forces, N)
     if ismissing(forces)
         forces = case0.forces
     end
@@ -106,8 +131,6 @@ function setup_adjoint_storage_generic(X, F, states, timesteps, G;
             info_level = info_level,
     )
     storage[:dparam] = zeros(length(X))
-    storage[:forces] = forces
-    storage[:state0] = state0
     setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse)
     return storage
 end
