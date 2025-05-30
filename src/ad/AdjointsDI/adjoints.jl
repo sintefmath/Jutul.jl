@@ -1,4 +1,4 @@
-    function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
+function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
             # n_objective = nothing,
             extra_timing = false,
             extra_output = false,
@@ -60,7 +60,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G;
         forces = missing
     )
 
-    F_eval = storage[:function_di]
+    H = storage[:callable_di]
     N = length(timesteps)
     @assert N == length(states)
     badstate0 = ismissing(state0)
@@ -91,7 +91,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G;
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
         s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
-        update_sensitivities_generic!(∇G, X, F_eval, i, G, storage, s0, s, s_next, timesteps, forces)
+        update_sensitivities_generic!(∇G, X, H, i, G, storage, s0, s, s_next, timesteps, forces)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
@@ -135,7 +135,7 @@ function setup_adjoint_storage_generic(X, F, states, timesteps, G;
     return storage
 end
 
-function update_sensitivities_generic!(∇G, X, F_eval, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
+function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
     solved_timesteps = @view timesteps[1:(i-1)]
     current_time = sum(solved_timesteps)
     for skey in [:backward, :forward]
@@ -147,13 +147,13 @@ function update_sensitivities_generic!(∇G, X, F_eval, i, G, adjoint_storage, s
 
     total_time = sum(timesteps)
     step_info = Jutul.optimization_step_info(i, current_time, dt, total_time = total_time, Nstep = length(timesteps))
-    F(x) = F_eval(x, state, state0, step_info, dt)
+    set_to_step!(H, state, state0, step_info, dt)
     prep = adjoint_storage[:prep_di]
     backend = adjoint_storage[:backend_di]
     if isnothing(prep)
-        jac = jacobian(F, backend, X)
+        jac = jacobian(H, backend, X)
     else
-        jac = jacobian(F, prep, backend, X)
+        jac = jacobian(H, prep, backend, X)
     end
     # jac = jacobian(F, AutoForwardDiff(), X)
     # Add zero entry (corresponding to objective values) to avoid resizing matrix.
@@ -232,6 +232,60 @@ function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces,
     return (model, parameters, forces, state0)
 end
 
+Base.@kwdef mutable struct AdjointsObjectiveHelper
+    state = missing
+    state0 = missing
+    step_info = missing
+    dt = missing
+    F
+    G
+    forces
+    N
+    cache = Dict()
+    states = missing
+    case = missing
+end
+
+function set_to_step!(H::AdjointsObjectiveHelper, state, state0, step_info, dt)
+    # Set the state and state0 to the step
+    H.state = state
+    H.state0 = state0
+    H.step_info = step_info
+    H.dt = dt
+    H.states = missing
+    return H
+end
+
+function (H::AdjointsObjectiveHelper)(x)
+    (; state, state0, step_info, dt, F, G, forces, N, cache, states) = H
+    getv(x, s, s0, si, dt_i) = evaluate_residual_and_jacobian_for_state_pair(x, s, s0, si, dt_i, F, G, forces, N, cache)
+    if ismissing(states)
+        v = getv(x, state, state0, step_info, dt)
+    else
+        case = H.case
+        # Loop over all to get the "extended sparsity".
+        # This is a bit of a hack, but it covers the case where there is some change in dynamics/controls at a later step.
+        t = 0.0
+        timesteps = case.dt
+        dt_i = timesteps[1]
+        total_time = sum(timesteps)
+        N = length(timesteps)
+        info = Jutul.optimization_step_info(1, t, dt_i, total_time = total_time, Nstep = N)
+        v = getv(x, states[1], case.state0, info, dt_i)
+        t += dt_i
+        @. v = abs.(v)
+        for i in 2:N
+            dt_i = timesteps[i]
+            step_info = Jutul.optimization_step_info(i, t, dt_i, total_time = total_time, Nstep = N)
+            tmp = getv(x, states[i], states[i-1], step_info, dt_i)
+            @. v += abs.(tmp)
+            t += dt_i
+        end
+    end
+    return v
+end
+
+
 function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse)
     N = length(timesteps)
     if ismissing(backend)
@@ -245,33 +299,26 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
             backend = AutoForwardDiff()
         end
     end
-    cache = Dict()
-    evaluate_for_states(x, state, state0, step_info, dt) = evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_info, dt, F, G, forces, N, cache)
-    function evaluate0(x)
-        t = 0.0
-        dt_i = case0.dt[1]
-        total_time = sum(timesteps)
-        N = length(timesteps)
-        info = Jutul.optimization_step_info(1, t, dt_i, total_time = total_time, Nstep = N)
-        v = evaluate_for_states(x, states[1], case0.state0, info, dt_i)
-        t += dt_i
-        if !single_step_sparsity
-            @. v = v^2
-            for i in 2:N
-                dt_i = timesteps[i]
-                step_info = Jutul.optimization_step_info(i, t, dt_i, total_time = total_time, Nstep = N)
-                tmp = evaluate_for_states(x, states[i], states[i-1], step_info, dt_i)
-                @. v += tmp.^2
-                t += dt_i
-            end
-        end
-        return v
-    end
-    storage[:function_di] = evaluate_for_states
+
+    H = AdjointsObjectiveHelper(
+        F = F,
+        G = G,
+        forces = forces,
+        N = N,
+        case = case0
+    )
+    storage[:callable_di] = H
     # Note: strict = false is needed because we create another function on the fly
     # that essentially calls the same function.
     if do_prep
-        storage[:prep_di] = prepare_jacobian(evaluate0, backend, X, strict=Val(false))
+        if single_step_sparsity
+            prep = prepare_jacobian(H, backend, X)
+        else
+            H.states = states
+            prep = prepare_jacobian(H, backend, X)#, strict=Val(false))
+            H.states = missing
+        end
+        storage[:prep_di] = prep
     else
         storage[:prep_di] = nothing
     end
