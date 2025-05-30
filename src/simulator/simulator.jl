@@ -204,7 +204,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
         nextstep_global!(rec, dT)
         new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
         if config[:output_substates]
-            substates = []
+            substates = JUTUL_OUTPUT_TYPE[]
         else
             substates = missing
         end
@@ -585,7 +585,7 @@ function initial_setup!(sim, config, timesteps; restart = nothing, parameters = 
     end
     # Set up storage
     reports = []
-    states = Vector{Dict{Symbol, Any}}()
+    states = Vector{JUTUL_OUTPUT_TYPE}()
     pth = config[:output_path]
     initialize_io(pth)
     has_restart = !(isnothing(restart) || restart === 0 || restart === 1 || restart == false)

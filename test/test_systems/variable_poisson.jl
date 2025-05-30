@@ -58,7 +58,7 @@ end
             end
         end
     end
-    result = simulate(case)
+    result = simulate(case, info_level = -1)
     obj = (model, state, dt_n, n, forces_for_step_n) -> sum(state[:U])
     sens = solve_adjoint_sensitivities(case, result, obj)
     data_domain_with_gradients = Jutul.data_domain_to_parameters_gradient(model, sens)

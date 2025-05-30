@@ -241,8 +241,9 @@ function tpfv_geometry(G::FiniteVolumeMesh)
     nc = number_of_cells(G)
     nf = number_of_faces(G)
     # Cell geometry
-    cell_centroids = zeros(D, nc)
-    volumes = zeros(nc)
+    T = float_type(G)
+    cell_centroids = zeros(T, D, nc)
+    volumes = zeros(T, nc)
     for i in 1:nc
         c, volumes[i] = compute_centroid_and_measure(G, Cells(), i)
         for d in 1:D
@@ -271,9 +272,10 @@ end
 
 function face_geometry_helper(G, D, nc, nf, e)
     nf = count_entities(G, e)
-    areas = zeros(nf)
-    normals = zeros(D, nf)
-    centroids = zeros(D, nf)
+    T = float_type(G)
+    areas = zeros(T, nf)
+    normals = zeros(T, D, nf)
+    centroids = zeros(T, D, nf)
     for f in 1:nf
         c, a = compute_centroid_and_measure(G, e, f)
         for d in 1:D

@@ -2,33 +2,37 @@ using Jutul, Test
 
 function poisson_test_objective(model, state)
     U = state[:U]
-    return 2*U[1] + 3*U[end]
+    return 2.5*(U[end] - U[1])
 end
 
 function poisson_test_objective_vec(model, state)
     return [poisson_test_objective(model, state), poisson_test_objective(model, state)]
 end
 
-function solve_adjoint_forward_test_system(dim, dt)
+function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = (2, 2), dt = [1.0])
     sys = VariablePoissonSystem(time_dependent = true)
     # Unit square
-    g = CartesianMesh(dim, (1.0, 1.0))
+    g = CartesianMesh(dim, (dx, dy))
     # Set up a model with the grid and system
     discretization = (poisson = Jutul.PoissonDiscretization(g), )
     D = DiscretizedDomain(g, discretization)
     model = SimulationModel(D, sys)
-    # Initial condition doesn't matter
-    state0 = setup_state(model, Dict(:U=>1.0))
-    K = compute_face_trans(g, 1.0)
+    state0 = setup_state(model, Dict(:U=>U0))
+    K = compute_face_trans(g, k_val)
     param = setup_parameters(model, K = K)
 
     nc = number_of_cells(g)
-    pos_src = PoissonSource(1, 1.0)
-    neg_src = PoissonSource(nc, -1.0)
+    pos_src = PoissonSource(1, srcval)
+    neg_src = PoissonSource(nc, -srcval)
     forces = setup_forces(model, sources = [pos_src, neg_src])
+    return JutulCase(model, dt, forces; parameters = param, state0 = state0)
+end
 
-    states, reports = simulate(state0, model, parameters = param, dt, info_level = -1, forces = forces);
-    return (model, state0, states, reports, param, forces)
+function solve_adjoint_forward_test_system(dim, dt)
+    case = setup_poisson_test_case(1.0, 1.0, 1.0, 1.0, 1.0, dim = dim, dt = dt)
+    (; state0, forces, model, parameters, dt) = case
+    states, reports = simulate(state0, model, parameters = parameters, dt, info_level = -1, forces = forces);
+    return (model, state0, states, reports, parameters, forces)
 end
 
 function test_basic_adjoint(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, scalar_obj = true)
@@ -142,3 +146,83 @@ end
     end
 end
 
+##
+import Jutul.AdjointsDI: solve_adjoint_generic
+
+
+function setup_poisson_test_case_from_vector(x::Vector; fmt = :case, kwarg...)
+    case = setup_poisson_test_case(x...; kwarg...)
+    # Various formats that the sensitivity code can use.
+    if fmt == :case
+        out = case
+    elseif fmt == :onecase
+        out = case[1:1]
+    elseif fmt == :model
+        # TODO: This part currently isn't tested.
+        out = case.model
+    elseif fmt == :model_and_prm
+        out = (case.model, case.parameters)
+    elseif fmt == :model_and_prm_and_forces
+        out = (case.model, case.parameters, case.forces)
+    elseif fmt == :model_and_prm_and_forces_and_state0
+        out = (case.model, case.parameters, case.forces, case.state0)
+    else
+        error("Unknown format $fmt for setup_poisson_test_case_from_vector")
+    end
+    return out
+end
+
+function num_grad_generic(F, G, x0)
+    out = similar(x0)
+    ϵ = 1e-12
+    function objective_from_x(xi)
+        case = F(xi, missing)
+        r = simulate(case, info_level = -1)
+        return Jutul.evaluate_objective(G, case, r)
+    end
+    G0 = objective_from_x(x0)
+    for i in eachindex(x0)
+        x = copy(x0)
+        x[i] += ϵ
+        Gi = objective_from_x(x)
+        out[i] = (Gi - G0)/ϵ
+    end
+    return out
+end
+
+function test_for_timesteps(timesteps; atol = 1e-3, fmt = :case, kwarg...)
+    # dx, dy, U0, k_val, srcval
+    x = ones(5)
+    case = setup_poisson_test_case_from_vector(x, dt = timesteps)
+    states, reports = simulate(case, info_level = -1)
+
+    F = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps, fmt = fmt)
+    F_num = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps, fmt = :case)
+    G = (model, state, dt, step_info, forces) -> poisson_test_objective(model, state)
+    dGdx_num = num_grad_generic(F_num, G, x)
+    dGdx_adj = solve_adjoint_generic(x, F, states, reports, G;
+        state0 = case.state0,
+        forces = case.forces,
+        kwarg...
+    )
+
+    if fmt == :model_and_prm || fmt == :model
+        dGdx_adj = dGdx_adj[1:4]
+        dGdx_num = dGdx_num[1:4]
+    end
+    @test dGdx_adj ≈ dGdx_num atol = atol
+end
+
+@testset "AdjointDI.solve_adjoint_generic" begin
+    test_for_timesteps([1.0])
+    # Sparse forwarddiff with sparsity recomputed
+    test_for_timesteps([1.0], do_prep = false)
+    # Non-sparse forwarddiff
+    test_for_timesteps([1.0], backend = Jutul.AdjointsDI.AutoForwardDiff(), do_prep = false)
+
+    test_for_timesteps([100.0])
+    test_for_timesteps([10.0, 3.0, 500.0, 100.0], atol = 0.01)
+    for fmt in [:case, :onecase, :model_and_prm, :model_and_prm_and_forces, :model_and_prm_and_forces_and_state0]
+        test_for_timesteps([100.0], fmt = fmt)
+    end
+end

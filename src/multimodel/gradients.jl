@@ -10,7 +10,7 @@ function adjoint_model_copy(model::MultiModel; context = nothing)
     if isnothing(context)
         F = m -> adjoint_model_copy(m)
         g = model.groups
-        r = model.reduction    
+        r = model.reduction
     else
         F = m -> adjoint_model_copy(m, context = context)
         g = nothing

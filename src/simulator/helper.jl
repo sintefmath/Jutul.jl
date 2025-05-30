@@ -13,25 +13,49 @@ Construct a helper simulator that can be used to compute the residuals and/or
 accumulation terms for a given type T. Useful for coupling Jutul to other
 solvers and types of automatic differentiation.
 """
-function HelperSimulator(model::M, T = Float64; executor::E = Jutul.default_executor(), kwarg...) where {M, E}
-    storage = JutulStorage()
-    Jutul.setup_storage!(storage, model;
-        setup_linearized_system = false,
-        state0_ad = false,
-        state_ad = false,
+function HelperSimulator(model::M, T = Float64;
+        executor::E = Jutul.default_executor(),
+        cache = missing,
+        n_extra = 0,
         kwarg...
-    )
-
+    ) where {M, E}
     n = Jutul.number_of_degrees_of_freedom(model)
-    r = zeros(T, n)
-    setup_helper_equation_storage!(storage, r, model)
-    storage[:r] = r
-    # TODO: Actually use these.
-    storage[:primary_mapper] = Jutul.variable_mapper(model, :primary)
-    storage[:parameter_wrapper] = first(Jutul.variable_mapper(model, :parameters))
-    initialize_extra_state_fields!(storage.state, model)
-    setup_equations_and_primary_variable_views!(storage, model, (dx_buffer = missing, r_buffer = r))
-    storage = Jutul.specialize_simulator_storage(storage, model, false)
+    ckey = (T, n)
+    has_cache = !ismissing(cache)
+    if has_cache && haskey(cache, ckey)
+        storage = cache[ckey]
+        @assert haskey(storage, :r) "Expected storage to have :r key"
+        @assert length(storage[:r]) == n "Expected storage to have length $n"
+        @assert eltype(storage[:r]) == T "Expected cached storage to have eltype $T"
+    else
+        storage = JutulStorage()
+        Jutul.setup_storage!(storage, model;
+            setup_linearized_system = false,
+            state0_ad = false,
+            state_ad = false,
+            T = T,
+            kwarg...
+        )
+        if n_extra == 0
+            r = zeros(T, n)
+            r_extended = r
+        else
+            r_extended = zeros(T, n + n_extra)
+            r = view(r_extended, 1:n)
+        end
+        storage[:r_extended] = r_extended
+        storage[:r] = r
+        setup_helper_equation_storage!(storage, r, model)
+        # TODO: Actually use these.
+        storage[:primary_mapper] = Jutul.variable_mapper(model, :primary)
+        storage[:parameter_wrapper] = first(Jutul.variable_mapper(model, :parameters))
+        initialize_extra_state_fields!(storage.state, model)
+        setup_equations_and_primary_variable_views!(storage, model, (dx_buffer = missing, r_buffer = r))
+        storage = Jutul.specialize_simulator_storage(storage, model, false)
+        if has_cache
+            cache[ckey] = storage
+        end
+    end
     S = typeof(storage)
     return HelperSimulator{E, M, S, T}(executor, model, storage)
 end
@@ -92,6 +116,88 @@ function model_residual!(r, sim::HelperSimulator, x, x0 = missing, dt = 1.0;
     update_state_dependents!(storage, model, dt, forces; update_secondary = update_secondary, kwarg...) # time is important potential kwarg...
     update_linearized_system!(storage, model, sim.executor, r = storage.r, nzval = missing, lsys = missing)
     @. r = storage.r
+    return r
+end
+
+function model_residual(sim::HelperSimulator;
+        dt = 1.0,
+        forces = setup_forces(sim.model),
+        update_secondary = true,
+        time = 0.0,
+        kwarg...
+    )
+    storage = get_simulator_storage(sim)
+    model = get_simulator_model(sim)
+    update_before_step!(sim, dt, forces, time = time)
+
+    if update_secondary
+        update_secondary_variables!(storage, model, true)
+    end
+
+    model = get_simulator_model(sim)
+    update_state_dependents!(storage, model, dt, forces; update_secondary = update_secondary, kwarg...) # time is important potential kwarg...
+    update_linearized_system!(storage, model, sim.executor, r = storage.r, nzval = missing, lsys = missing)
+    return storage.r
+end
+
+function model_residual!(r, sim::HelperSimulator;
+        kwarg...
+    )
+    r_internal = model_residual(sim; kwarg...)
+    @. r = r_internal
+    return r
+end
+
+function model_residual(state, state0, sim::HelperSimulator;
+        dt = 1.0,
+        forces = setup_forces(sim.model),
+        time = 0.0,
+        kwarg...
+    )
+    function dict_pvar_copy(x, m::MultiModel)
+        out = JutulStorage()
+        for k in submodels_symbols(m)
+            out[k] = dict_pvar_copy(x[k], m[k])
+        end
+        return out
+    end
+    function dict_pvar_copy(x, m::SimulationModel)
+        pvars = get_primary_variables(m)
+        svars = get_secondary_variables(m)
+        prms = get_parameters(m)
+        out = JutulStorage()
+        for k in setdiff(keys(x), svars, prms)
+            if haskey(x, k)
+                out[k] = x[k]
+            end
+        end
+        return out
+    end
+    storage = get_simulator_storage(sim)
+    model = get_simulator_model(sim)
+    r = storage.r
+    @. r = 0.0
+
+    state0 = dict_pvar_copy(state0, model)
+    state = dict_pvar_copy(state, model)
+    # Update the internal state/state0 primary variables
+    reset_variables!(storage, model, state0, type = :state0)
+    update_secondary_variables!(storage, model, true)
+    reset_variables!(storage, model, state, type = :state)
+    update_secondary_variables!(storage, model, false)
+    update_before_step!(sim, dt, forces, time = time)
+    # Update equations and residual
+    update_extra_state_fields!(storage, model, dt, time)
+    update_state_dependents!(storage, model, dt, forces; update_secondary = false, time = time, kwarg...) # time is important potential kwarg...
+    update_linearized_system!(storage, model, sim.executor, r = r, nzval = missing, lsys = missing)
+    return r
+end
+
+function model_residual!(r, state, state0, sim::HelperSimulator;
+        kwarg...
+    )
+    r_internal = model_residual(state, state0, sim; kwarg...)
+    @. r = r_internal
     return r
 end
 

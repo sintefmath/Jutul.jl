@@ -306,9 +306,17 @@ end
 function determine_objective_sparsity(sim, model, G, states, timesteps, forces)
     update_secondary_variables!(sim.storage, sim.model)
     state = sim.storage.state
-    F_outer = (state, i) -> G(model, state, timesteps[i], i, forces_for_timestep(sim, forces, timesteps, i))
+    total_time = sum(timesteps)
+    N = length(states)
+    F_outer = (state, i) -> G(
+        model,
+        state,
+        timesteps[i],
+        Jutul.optimization_step_info(i, timesteps, total_time = total_time, Nstep = N),
+        forces_for_timestep(sim, forces, timesteps, i)
+    )
     sparsity = missing
-    for i in 1:length(states)
+    for i in 1:N
         s_new = determine_sparsity_simple(s -> F_outer(s, i), model, state)
         sparsity = merge_sparsity!(sparsity, s_new)
     end
@@ -431,13 +439,17 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     op_p = linear_operator(lsys_param)
     sens_add_mult!(∇G, op_p, λ)
     dparam = adjoint_storage.dparam
+    total_time = sum(timesteps)
+    N = length(timesteps)
     @tic "objective parameter gradient" if !isnothing(dparam)
-        if i == length(timesteps)
+        if i == N
             @. dparam = 0
         end
         pbuf = adjoint_storage.param_buf
         S_p = get_objective_sparsity(adjoint_storage, :parameter)
-        state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, i, forces), sparsity = S_p)
+        rec = progress_recorder(parameter_sim)
+        step_info = optimization_step_info(i, current_time(rec), dt, total_time = total_time, Nstep = N)
+        state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
         @. dparam += pbuf
     end
 end
@@ -477,7 +489,10 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     rhs = adjoint_storage.rhs
     # Fill rhs with (∂J / ∂x)ᵀₙ (which will be treated with a negative sign when the result is written by the linear solver)
     S_p = get_objective_sparsity(adjoint_storage, :forward)
-    @tic "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, i, forces), sparsity = S_p)
+    rec = progress_recorder(backward_sim)
+    total_time = sum(timesteps)
+    step_info = optimization_step_info(i, current_time(rec), dt, total_time = total_time, Nstep = N)
+    @tic "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
     if isnothing(state_next)
         @assert i == N
         @. λ = 0
@@ -676,7 +691,7 @@ function perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
     param_i[target][j + i*(sz[1]-1)] += ϵ
 end
 
-function evaluate_objective(G, model, states, timesteps, all_forces; large_value = 1e20)
+function evaluate_objective(G, model, states, timesteps, all_forces; large_value = 1e20, kwarg...)
     function convert_state_to_jutul_storage(model, x::JutulStorage)
         return x
     end
@@ -698,14 +713,22 @@ function evaluate_objective(G, model, states, timesteps, all_forces; large_value
         @warn "Partial data passed, objective set to large value $large_value."
         obj = large_value
     else
-        F = i -> G(
-            model,
-            convert_state_to_jutul_storage(model, states[i]),
-            timesteps[i],
-            i,
-            forces_for_timestep(nothing, all_forces, timesteps, i)
-        )
-        obj = sum(F, eachindex(states))
+        obj = 0.0
+        t = 0.0
+        total_time = sum(timesteps)
+        N = length(timesteps)
+        for (i, dt) in enumerate(timesteps)
+            state_i = convert_state_to_jutul_storage(model, states[i])
+            force_i = forces_for_timestep(nothing, all_forces, timesteps, i)
+            obj += G(
+                model,
+                state_i,
+                dt,
+                optimization_step_info(i, t, dt; total_time = total_time, Nstep = N, kwarg...),
+                force_i
+                )
+            t += dt
+        end
     end
     return obj
 end
@@ -937,4 +960,36 @@ function update_state0_sensitivities!(storage)
         sens_add_mult!(∇x, op_b, λ_renum)
         rescale_sensitivities!(∇x, model, storage.state0_map, renum = renum)
     end
+end
+
+function optimization_step_info(step::Int, time::Real, dt::Real;
+        Nstep = missing,
+        total_time = missing,
+        case = missing,
+        substep = 1,
+        Nsubstep = 1,
+        kwarg...
+    )
+    out = OrderedDict{Symbol, Any}(
+        :time => time,
+        :dt => dt,
+        :step => step,
+        :Nstep => Nstep,
+        :substep => substep,
+        :Nsubstep => Nsubstep,
+        :total_time => total_time,
+        :case => case
+    )
+    for (k, v) in kwarg
+        out[k] = v
+    end
+    return out
+end
+
+function optimization_step_info(step::Int, dts::Vector; kwarg...)
+    t = 0.0
+    for i in 1:(step-1)
+        t += dts[i]
+    end
+    return optimization_step_info(step, t, dts[step]; Nstep = length(dts), total_time = sum(dts), kwarg...)
 end

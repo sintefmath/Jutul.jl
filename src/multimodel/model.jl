@@ -92,10 +92,13 @@ function setup_storage!(storage, model::MultiModel;
         state0 = setup_state(model),
         parameters = setup_parameters(model),
         setup_linearized_system = true,
+        state0_ad = false,
+        state_ad = true,
         kwarg...
     )
     state0_ref = JutulStorage()
     state_ref = JutulStorage()
+    use_internal_ad = state0_ad || state_ad
     @tic "model" for key in submodels_symbols(model)
         m = model[key]
         @tic "$key" begin
@@ -103,6 +106,8 @@ function setup_storage!(storage, model::MultiModel;
                                         parameters = parameters[key],
                                         setup_linearized_system = false,
                                         setup_equations = false,
+                                        state0_ad = state0_ad,
+                                        state_ad = state_ad,
                                         tag = submodel_ad_tag(model, key),
                                         kwarg...)
         end
@@ -112,12 +117,16 @@ function setup_storage!(storage, model::MultiModel;
     end
     storage[:state] = state_ref
     storage[:state0] = state0_ref
-    @tic "cross terms" setup_cross_terms_storage!(storage, model)
+    @tic "cross terms" setup_cross_terms_storage!(storage, model, ad = use_internal_ad)
     @tic "equations" for key in submodels_symbols(model)
         m = model[key]
         @tic "$key" begin
             ct_i = extra_cross_term_sparsity(model, storage, key, true)
-            storage[key][:equations] = setup_storage_equations(storage[key], m, extra_sparsity = ct_i, tag = submodel_ad_tag(model, key))
+            storage[key][:equations] = setup_storage_equations(storage[key], m,
+                ad = use_internal_ad,
+                extra_sparsity = ct_i,
+                tag = submodel_ad_tag(model, key)
+            )
         end
     end
     if setup_linearized_system
@@ -725,12 +734,12 @@ function update_diagonal_blocks!(storage, model::MultiModel, targets; lsys = sto
     end
 end
 
-function setup_state(model::MultiModel, initializers)
+function setup_state(model::MultiModel, initializers; kwarg...)
     state = Dict()
     for key in submodels_symbols(model)
         m = model.models[key]
         init = initializers[key]
-        state[key] = setup_state(m, init)
+        state[key] = setup_state(m, init; kwarg...)
     end
     return state
 end
@@ -875,7 +884,7 @@ function check_convergence(storage, model::MultiModel, cfg;
             converged = tol_cfg[:global_convergence_check_function](model, storage)
         end
     end
-        
+
     if extra_out
         return (converged, err, errors)
     else
@@ -894,6 +903,13 @@ function update_primary_variables!(storage, model::MultiModel; targets = submode
         report[key] = update_primary_variables!(s.state, dx_v, m, pdef; state = s.state, kwarg...)
     end
     return report
+end
+
+function update_extra_state_fields!(storage, model::MultiModel, dt, time)
+    for key in submodels_symbols(model)
+        update_extra_state_fields!(storage[key], model.models[key], dt, time)
+    end
+    return storage
 end
 
 function reset_state_to_previous_state!(storage, model::MultiModel)

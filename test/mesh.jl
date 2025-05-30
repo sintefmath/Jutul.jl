@@ -144,7 +144,7 @@ using MAT
                     subs = 1:mdim
                 end
                 for g in test_meshes
-                    G = UnstructuredMesh(g)
+                    G = UnstructuredMesh(g, warn_1d = false)
                     geo1 = tpfv_geometry(g)
                     geo2 = tpfv_geometry(G)
 

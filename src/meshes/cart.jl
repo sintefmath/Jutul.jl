@@ -49,7 +49,7 @@ struct CartesianMesh{D, Δ, O, T} <: FiniteVolumeMesh
         function generate_deltas(deltas_or_size)
             deltas = Vector(undef, dim)
             for (i, D) = enumerate(deltas_or_size)
-                if isa(D, AbstractFloat)
+                if isa(D, Real)
                     # Deltas are actually size of domain in each direction
                     deltas[i] = D/dims[i]
                 else
@@ -102,7 +102,7 @@ end
 """
 Lower corner for one dimension, without any transforms applied
 """
-coord_offset(pos, δ::AbstractFloat) = (pos-1)*δ
+coord_offset(pos, δ::Real) = (pos-1)*δ
 coord_offset(pos, δ::Union{AbstractVector, Tuple}) = sum(δ[1:(pos-1)], init = 0.0)
 
 """
@@ -138,16 +138,22 @@ function cell_dims(g, pos)
     return (get_delta(Δ, x, 1), get_delta(Δ, y, 2), get_delta(Δ, z, 3))
 end
 
+function float_type(g::CartesianMesh)
+    Δ = g.deltas
+    return Base.promote_type(map(eltype, Δ)..., eltype(g.origin))
+end
+
 function tpfv_geometry(g::CartesianMesh)
     Δ = g.deltas
     d = dim(g)
+    T = float_type(g)
 
     nx, ny, nz = grid_dims_ijk(g)
 
     # Cell data first - volumes and centroids
     nc = nx*ny*nz
-    V = zeros(nc)
-    cell_centroids = zeros(d, nc)
+    V = zeros(T, nc)
+    cell_centroids = zeros(T, d, nc)
     for x in 1:nx
         for y in 1:ny
             for z = 1:nz
@@ -166,9 +172,9 @@ function tpfv_geometry(g::CartesianMesh)
     # Then face data:
     nf = number_of_faces(g)
     N = Matrix{Int}(undef, 2, nf)
-    face_areas = Vector{Float64}(undef, nf)
-    face_centroids = zeros(d, nf)
-    face_normals = zeros(d, nf)
+    face_areas = Vector{T}(undef, nf)
+    face_centroids = zeros(T, d, nf)
+    face_normals = zeros(T, d, nf)
 
     function add_face!(N, face_areas, face_normals, face_centroids, x, y, z, D, pos)
         t = (x, y, z)
@@ -222,9 +228,9 @@ function tpfv_geometry(g::CartesianMesh)
     nbnd = number_of_boundary_faces(g)
     # Then fix the boundary
     boundary_neighbors = Vector{Int}(undef, nbnd)
-    boundary_areas = Vector{Float64}(undef, nbnd)
-    boundary_normals = zeros(d, nbnd)
-    boundary_centroids = zeros(d, nbnd)
+    boundary_areas = Vector{T}(undef, nbnd)
+    boundary_normals = zeros(T, d, nbnd)
+    boundary_centroids = zeros(T, d, nbnd)
 
     function add_boundary_face!(N, face_areas, face_normals, face_centroids, x, y, z, D, pos, is_start)
         t = (x, y, z)
@@ -350,10 +356,10 @@ end
 function get_delta(Δ, index, d)
     if length(Δ) >= d
         δ = Δ[d]
-        if isa(δ, AbstractFloat)
-            v = δ
-        else
+        if isa(δ, Union{AbstractArray, Tuple, NamedTuple})
             v = δ[index]
+        else
+            v = δ
         end
     else
         v = 1.0
