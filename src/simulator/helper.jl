@@ -154,6 +154,9 @@ function model_residual(state, state0, sim::HelperSimulator;
         time = 0.0,
         kwarg...
     )
+    if forces isa AbstractVector
+        forces = only(forces)
+    end
     function dict_pvar_copy(x, m::MultiModel)
         out = JutulStorage()
         for k in submodels_symbols(m)
