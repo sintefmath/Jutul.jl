@@ -67,7 +67,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G;
     badforces = ismissing(forces)
     if badstate0 || badforces
         sinfo0 = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = sum(timesteps))
-        case0 = setup_case(X, F, sinfo0, state0, forces, N)
+        case0 = setup_case(X, F, sinfo0, state0, forces, N; all = true)
         if badstate0
             state0 = case0.state0
         end
@@ -76,7 +76,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G;
         end
     end
     if forces isa Vector
-        @assert length(forces) == N
+        @assert length(forces) == N "Expected $N forces (one per time-step), got $(length(forces))."
     end
     # Do sparsity detection if not already done.
     if info_level > 1
@@ -172,7 +172,7 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, state0
     return ∇G
 end
 
-function setup_case(x, F, step_info, state0, forces, N)
+function setup_case(x, F, step_info, state0, forces, N; all = false)
     # F(X, step_info) -> model*
     # F(X, step_info) -> model, parameters*
     # F(X, step_info) -> model, parameters, forces*
@@ -180,7 +180,7 @@ function setup_case(x, F, step_info, state0, forces, N)
     # F(X, step_info) -> case (current step)
     # F(X, step_info) -> case (all steps)
     # *state0 needs to be provided
-    c = unpack_setup(step_info, N, F(x, step_info))
+    c = unpack_setup(step_info, N, F(x, step_info), all = all)
     if c isa JutulCase
         case = c
     else
@@ -200,35 +200,37 @@ function setup_case(x, F, step_info, state0, forces, N)
     return case
 end
 
-function unpack_setup(step_info, N, case::JutulCase)
+function unpack_setup(step_info, N, case::JutulCase; all = false)
     # Either case for all steps or case for current step
     Ns = length(case.dt)
     if Ns > 1
         if case.forces isa Vector
             Ns == N || error("case.forces was a vector and expected $N steps, got $Ns.")
         end
-        case = case[step_info[:step]]
+        if !all
+            case = case[step_info[:step]]
+        end
     end
     return case
 end
 
-function unpack_setup(step_info, N, out::Tuple)
-    unpack_setup(step_info, N, out...)
+function unpack_setup(step_info, N, out::Tuple; all = false)
+    unpack_setup(step_info, N, out...; all = all)
 end
 
-function unpack_setup(step_info, N, model::Jutul.JutulModel)
+function unpack_setup(step_info, N, model::Jutul.JutulModel; all = false)
     return (model, missing, missing, missing)
 end
 
-function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters)
+function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters; all = false)
     return (model, parameters, missing, missing)
 end
 
-function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces)
+function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces; all = false)
     return (model, parameters, forces, missing)
 end
 
-function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces, state0)
+function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces, state0; all = false)
     return (model, parameters, forces, state0)
 end
 
