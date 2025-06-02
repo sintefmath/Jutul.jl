@@ -179,122 +179,122 @@ function devectorize_force(force::Vector, model, X, cfg, name, variant)
     return new_force
 end
 
-function determine_sparsity_forces(model, forces, X, config;
-        parameters = setup_parameters(model),
-        extra_sparsity = Dict()
-    )
-    function fake_state(model)
-        init = Dict{Symbol, Any}()
-        for (k, v) in Jutul.get_variables(model)
-            init[k] = 1.0
-        end
-        # Also add parameters here.
-        state = setup_state(model, init)
-        return convert_to_immutable_storage(merge(state, parameters))
-    end
-    state = fake_state(model)
-    storage = (state = state, )
-    X_ad = ST.create_advec(X)
-    T = eltype(X_ad)
-    forces_ad = devectorize_forces(forces, model, X_ad, config)
-    sparsity = OrderedDict{Symbol, Any}()
-    for (fname, force) in pairs(forces_ad)
-        sparsity[fname] = determine_sparsity_force(storage, model, force, T, extra_sparsity = extra_sparsity)
-    end
+# function determine_sparsity_forces(model, forces, X, config;
+#         parameters = setup_parameters(model),
+#         extra_sparsity = Dict()
+#     )
+#     function fake_state(model)
+#         init = Dict{Symbol, Any}()
+#         for (k, v) in Jutul.get_variables(model)
+#             init[k] = 1.0
+#         end
+#         # Also add parameters here.
+#         state = setup_state(model, init)
+#         return convert_to_immutable_storage(merge(state, parameters))
+#     end
+#     state = fake_state(model)
+#     storage = (state = state, )
+#     X_ad = ST.create_advec(X)
+#     T = eltype(X_ad)
+#     forces_ad = devectorize_forces(forces, model, X_ad, config)
+#     sparsity = OrderedDict{Symbol, Any}()
+#     for (fname, force) in pairs(forces_ad)
+#         sparsity[fname] = determine_sparsity_force(storage, model, force, T, extra_sparsity = extra_sparsity)
+#     end
 
-    return sparsity
-end
+#     return sparsity
+# end
 
-function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 0; extra_sparsity = Dict())
-    sparsity = OrderedDict{Symbol, Any}()
-    for (eqname, eq) in model.equations
-        entity = Jutul.associated_entity(eq)
-        nentity = number_of_entities(model, eq)
-        neqs = number_of_equations_per_entity(model, eq)
-        npartials = Jutul.number_of_partials_per_entity(model, entity)
-        acc = zeros(T, neqs, nentity)
-        eq_s = missing
-        time = NaN
-        Jutul.apply_forces_to_equation!(acc, storage, model, eq, eq_s, force_as_stracer, time)
-        tmp = sum(acc, dims = 1)
-        active_entities = findall(i -> length(ST.deriv(tmp[i]).nzind) > 0, eachindex(tmp))
+# function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 0; extra_sparsity = Dict())
+#     sparsity = OrderedDict{Symbol, Any}()
+#     for (eqname, eq) in model.equations
+#         entity = Jutul.associated_entity(eq)
+#         nentity = number_of_entities(model, eq)
+#         neqs = number_of_equations_per_entity(model, eq)
+#         npartials = Jutul.number_of_partials_per_entity(model, entity)
+#         acc = zeros(T, neqs, nentity)
+#         eq_s = missing
+#         time = NaN
+#         Jutul.apply_forces_to_equation!(acc, storage, model, eq, eq_s, force_as_stracer, time)
+#         tmp = sum(acc, dims = 1)
+#         active_entities = findall(i -> length(ST.deriv(tmp[i]).nzind) > 0, eachindex(tmp))
 
-        # Determine what entities in the equation this force actually uses.
-        setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, active_entities, eqname, offset)
-        offset += neqs*nentity
-    end
-    return sparsity
-end
+#         # Determine what entities in the equation this force actually uses.
+#         setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, active_entities, eqname, offset)
+#         offset += neqs*nentity
+#     end
+#     return sparsity
+# end
 
-function setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, active_entities, eqname, offset)
-    S = Vector{Int}()
-    # I = similar(S)
-    rows = Vector{Vector{Int}}()
-    cols = Vector{Vector{Int}}()
-    if haskey(extra_sparsity, eqname)
-        for c in extra_sparsity[eqname]
-            push!(active_entities, c)
-        end
-    end
-    for i in active_entities
-        push!(S, i)
-        I = Int[]
-        # TODO: I / rows is not really needed here?
-        for e in 1:neqs
-            e_ix = Jutul.alignment_linear_index(i, e, nentity, neqs, EquationMajorLayout())
-            push!(I, e_ix)
-        end
-        push!(rows, I)
+# function setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, active_entities, eqname, offset)
+#     S = Vector{Int}()
+#     # I = similar(S)
+#     rows = Vector{Vector{Int}}()
+#     cols = Vector{Vector{Int}}()
+#     if haskey(extra_sparsity, eqname)
+#         for c in extra_sparsity[eqname]
+#             push!(active_entities, c)
+#         end
+#     end
+#     for i in active_entities
+#         push!(S, i)
+#         I = Int[]
+#         # TODO: I / rows is not really needed here?
+#         for e in 1:neqs
+#             e_ix = Jutul.alignment_linear_index(i, e, nentity, neqs, EquationMajorLayout())
+#             push!(I, e_ix)
+#         end
+#         push!(rows, I)
 
-        J = Int[]
-        for p in 1:npartials
-            p_ix = Jutul.alignment_linear_index(i, p, nentity, npartials, EquationMajorLayout())
-            push!(J, p_ix)
-        end
-        push!(cols, J)
-    end
-    sparsity[eqname] = (entity = S, rows = rows, cols = cols, dims = (neqs, nentity))
-end
+#         J = Int[]
+#         for p in 1:npartials
+#             p_ix = Jutul.alignment_linear_index(i, p, nentity, npartials, EquationMajorLayout())
+#             push!(J, p_ix)
+#         end
+#         push!(cols, J)
+#     end
+#     sparsity[eqname] = (entity = S, rows = rows, cols = cols, dims = (neqs, nentity))
+# end
 
-function determine_cross_term_sparsity_forces(model, subforces, extra_sparsity, offset = 0)
-    out = OrderedDict{Symbol, Any}()
-    if !isnothing(subforces)
-        sparsity = OrderedDict{Symbol, Any}()
-        for (eqname, eq) in model.equations
-            entity = Jutul.associated_entity(eq)
-            nentity = number_of_entities(model, eq)
-            neqs = number_of_equations_per_entity(model, eq)
-            npartials = Jutul.number_of_partials_per_entity(model, entity)
+# function determine_cross_term_sparsity_forces(model, subforces, extra_sparsity, offset = 0)
+#     out = OrderedDict{Symbol, Any}()
+#     if !isnothing(subforces)
+#         sparsity = OrderedDict{Symbol, Any}()
+#         for (eqname, eq) in model.equations
+#             entity = Jutul.associated_entity(eq)
+#             nentity = number_of_entities(model, eq)
+#             neqs = number_of_equations_per_entity(model, eq)
+#             npartials = Jutul.number_of_partials_per_entity(model, entity)
 
-            setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, Int[], eqname, offset)
-            offset += neqs*nentity
-        end
-        for (fname, force) in pairs(subforces)
-            # Should all be the same
-            out[fname] = sparsity
-        end
-    end
-    return out
-end
+#             setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, Int[], eqname, offset)
+#             offset += neqs*nentity
+#         end
+#         for (fname, force) in pairs(subforces)
+#             # Should all be the same
+#             out[fname] = sparsity
+#         end
+#     end
+#     return out
+# end
 
-function evaluate_force_gradient!(dobj_dgrad, X, objective, model::SimulationModel, storage, parameters, forces, config, forceno, time, step_no::Int, dt)
-    mname = :Model
-    mmodel = MultiModel((Model = model,))
-    return evaluate_force_gradient!(
-        dobj_dgrad,
-        X,
-        objective,
-        mmodel,
-        storage,
-        Dict(mname => parameters),
-        Dict(mname => forces),
-        Dict(mname => config),
-        forceno,
-        time,
-        step_no,
-        dt
-    )
-end
+# function evaluate_force_gradient!(dobj_dgrad, X, objective, model::SimulationModel, storage, parameters, forces, config, forceno, time, step_no::Int, dt)
+#     mname = :Model
+#     mmodel = MultiModel((Model = model,))
+#     return evaluate_force_gradient!(
+#         dobj_dgrad,
+#         X,
+#         objective,
+#         mmodel,
+#         storage,
+#         Dict(mname => parameters),
+#         Dict(mname => forces),
+#         Dict(mname => config),
+#         forceno,
+#         time,
+#         step_no,
+#         dt
+#     )
+# end
 
 function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
     function force_steps(forces, dt)
@@ -345,7 +345,7 @@ function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
     )
 end
 
-function setup_adjoint_forces_storage(model, allforces, timesteps;
+function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
         n_objective = nothing,
         use_sparsity = true,
         eachstep = false,
@@ -364,30 +364,72 @@ function setup_adjoint_forces_storage(model, allforces, timesteps;
     )
 
     unique_forces, forces_to_timestep, timesteps_to_forces, = forces_map
-    storage[:unique_forces] = unique_forces
-    storage[:forces_to_timestep] = forces_to_timestep
-    storage[:timestep_to_forces] = timesteps_to_forces
+
+    # storage[:unique_forces] = unique_forces
+    # storage[:forces_to_timestep] = forces_to_timestep
+    # storage[:timestep_to_forces] = timesteps_to_forces
     storage[:forces_map] = forces_map
-    storage[:forces_gradient] = []
-    storage[:forces_vector] = []
+    # storage[:forces_gradient] = []
+    # storage[:forces_vector] = []
     storage[:forces_config] = []
-    storage[:forces_sparsity] = []
-    storage[:forces_jac] = []
+    storage[:forces_offsets] = Int[1]
+    # storage[:forces_sparsity] = []
+    # storage[:forces_jac] = []
     storage[:targets] = targets
-    storage[:forces_objective_gradient] = Vector{Float64}[]
+    # storage[:forces_objective_gradient] = Vector{Float64}[]
 
     nvar = storage.n_forward
+    offsets = storage[:forces_offsets]
     for (i, force) in enumerate(unique_forces)
         X, config = vectorize_forces(force, model, targets)
-        push!(storage[:forces_gradient], zeros(length(X)))
-        push!(storage[:forces_vector], X)
+        # push!(storage[:forces_gradient], zeros(length(X)))
+        # push!(storage[:forces_vector], X)
         push!(storage[:forces_config], config)
-        S_force = determine_sparsity_forces(model, force, X, config, parameters = parameters)
-        push!(storage[:forces_sparsity], S_force)
-        push!(storage[:forces_jac], sparse(Int[], Int[], Float64[], nvar, length(X)))
-        push!(storage[:forces_objective_gradient], zeros(length(X)))
+        push!(offsets, offsets[end]+length(X))
+        # S_force = determine_sparsity_forces(model, force, X, config, parameters = parameters)
+        # push!(storage[:forces_sparsity], S_force)
+        # push!(storage[:forces_jac], sparse(Int[], Int[], Float64[], nvar, length(X)))
+        # push!(storage[:forces_objective_gradient], zeros(length(X)))
     end
+    X = get_adjoint_forces_vector(model, storage)
+    F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
+    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, states, timesteps, G)
     return storage
+end
+
+function get_adjoint_forces_vector(model, storage)
+    offsets = storage[:forces_offsets]::Vector{Int}
+    fmap = storage[:forces_map]
+    N = storage[:forces_offsets][end]-1
+    X = zeros(N)
+    for (i, forces) in enumerate(fmap.forces)
+        X_i = view(X, offsets[i]:(offsets[i+1]-1))
+        cfg = storage[:forces_config][i]
+        vectorize_forces!(X, model, cfg, forces)
+    end
+    return X
+end
+
+function get_adjoint_forces_setup_function(storage, model, parameters, state0)
+    offsets = storage[:forces_offsets]::Vector{Int}
+    configs = storage[:forces_config]
+    fmap = storage[:forces_map]
+    function F(X, step_info)
+        ix = step_info[:step]
+        i = fmap.timesteps_to_forces[ix]
+        X_i = view(X, offsets[i]:(offsets[i+1]-1))
+
+        f = deepcopy(fmap.forces[i])
+        dt = step_info[:dt]
+        cfg = configs[i]
+        return adjoint_forces_setup_case(X_i, cfg, f, dt, model, parameters, state0)
+    end
+    return F
+end
+
+function adjoint_forces_setup_case(X, config, forces, dt, model, p, s0)
+    forces = devectorize_forces(forces, model, X, config)
+    return JutulCase(model, [dt], forces, parameters = p, state0 = s0)
 end
 
 """
@@ -411,7 +453,11 @@ function solve_adjoint_forces(model, states, reports, G, allforces;
         parameters = setup_parameters(model),
         kwarg...
     )
-    storage = setup_adjoint_forces_storage(model, allforces, timesteps; state0 = state0, parameters = parameters, kwarg...)
+    storage = setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
+        state0 = state0,
+        parameters = parameters,
+        kwarg...
+    )
     return solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         state0 = state0,
         timesteps = timesteps,
@@ -627,13 +673,7 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
         end
     end
     global_it = 0
-    force_adj_storage = setup_adjoint_forces_storage(
-        model,
-        forces,
-        dt,
-        state0 = state0,
-        parameters = parameters
-    )
+    force_adj_storage = missing
 
     function evaluate_forward(x, g = nothing)
         sim = Simulator(model, state0 = state0, parameters = parameters)
@@ -652,6 +692,17 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
         simforces = allforces[opt_config.timesteps_to_forces]
         global_it += 1
         states, reports = simulate(sim, dt, forces = simforces, extra_timing = false, info_level = -1)
+        if ismissing(forces_adj_storage)
+            forces_adj_storage = setup_adjoint_forces_storage(
+                    model,
+                    states,
+                    forces,
+                    dt,
+                    G,
+                    state0 = state0,
+                    parameters = parameters
+                )
+        end
         output_data[:states] = states
         if !isnothing(g)
             dforces, t_to_f, grad_adj = solve_adjoint_forces!(force_adj_storage, model, states, reports, G, simforces,

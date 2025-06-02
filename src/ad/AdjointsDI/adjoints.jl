@@ -172,7 +172,7 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, state0
     return ∇G
 end
 
-function setup_case(x, F, step_info, state0, forces, N; all = false)
+function setup_case(x::AbstractVector, F, step_info, state0, forces, N; all = false)
     # F(X, step_info) -> model*
     # F(X, step_info) -> model, parameters*
     # F(X, step_info) -> model, parameters, forces*
