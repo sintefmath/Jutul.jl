@@ -37,6 +37,10 @@ struct UnstructuredMesh{D, S, IM, IF, M, F, BM, NM, T} <: FiniteVolumeMesh
     z_is_depth::Bool
 end
 
+function float_type(::UnstructuredMesh{<:Any, <:Any, <:Any, <:Any, <:Any, T, <:Any, <:Any, <:Any}) where T
+    return T
+end
+
 function convert_coord_points(points::AbstractMatrix{F}) where F
     dim, nn = size(points)
     @assert dim <= 3
@@ -493,8 +497,10 @@ function unstructured_from_cart(g, ::Val{3}; kwarg...)
     num_nodes = num_nodes_x*num_nodes_y*num_nodes_z
     nodeix = reshape(1:num_nodes, num_nodes_x, num_nodes_y, num_nodes_z)
 
-    node_points = Vector{SVector{3, Float64}}()
     dx, dy, dz = g.deltas
+    Float_T = promote_type(eltype(dx), eltype(dy), eltype(dz), eltype(X0), eltype(Y0), eltype(Z0))
+    node_points = Vector{SVector{3, Float_T}}()
+
     function get_point(D::T, i) where {T<:Real}
         newpt = (i-1)*D
         return newpt::T
@@ -513,7 +519,7 @@ function unstructured_from_cart(g, ::Val{3}; kwarg...)
             Y = get_point(dy, j)
             for i in 1:num_nodes_x
                 X = get_point(dx, i)
-                XYZ = SVector{3, Float64}(X + X0, Y + Y0, Z + Z0)
+                XYZ = SVector{3, Float_T}(X + X0, Y + Y0, Z + Z0)
                 push!(node_points, XYZ)
             end
         end

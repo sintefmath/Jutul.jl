@@ -43,7 +43,7 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
 
     T_hf = zeros(eltype(face_areas), length(faces))
     nc = length(facepos)-1
-    if isa(perm, AbstractFloat)
+    if isa(perm, Real)
         perm = repeat([perm], 1, nc)
     else
         perm::AbstractVecOrMat

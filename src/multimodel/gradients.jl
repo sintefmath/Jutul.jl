@@ -10,7 +10,7 @@ function adjoint_model_copy(model::MultiModel; context = nothing)
     if isnothing(context)
         F = m -> adjoint_model_copy(m)
         g = model.groups
-        r = model.reduction    
+        r = model.reduction
     else
         F = m -> adjoint_model_copy(m, context = context)
         g = nothing
@@ -129,14 +129,14 @@ function variable_mapper(model::MultiModel, arg...;
     return (out, offset_full, offset_x)
 end
 
-function rescale_sensitivities!(dG, model::MultiModel, parameter_map)
+function rescale_sensitivities!(dG, model::MultiModel, parameter_map; renum = nothing)
     for k in submodels_symbols(model)
-        rescale_sensitivities!(dG, model[k], parameter_map[k])
+        rescale_sensitivities!(dG, model[k], parameter_map[k], renum = renum)
     end
 end
 
 function optimization_config(model::MultiModel, param, active = nothing; kwarg...)
-    out = Dict{Symbol, Any}()
+    out = Dict{Symbol, OptimizationConfig}()
     for k in submodels_symbols(model)
         m = model[k]
         if isnothing(active) || !haskey(active, k)

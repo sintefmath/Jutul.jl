@@ -561,6 +561,7 @@ function plot_interactive_impl(grid, states;
         scat = Makie.mesh!(ax, pts_c, tri_c;
             color = ys,
             colorrange = lims,
+            highclip = :transparent,
             backlight = 1,
             colormap = cmap,
             transparency = transparency,
@@ -644,10 +645,6 @@ function select_data(buffer, current_filter, state, fld, ix, low, high, limits, 
         end
     end
 
-    if current_active
-        L, U = limits
-        update_filter!(d, 1, L, U, low, high)
-    end
     for filt in active_filters
         if filt isa Vector{Bool}
             @. current_filter |= filt
@@ -670,6 +667,11 @@ function select_data(buffer, current_filter, state, fld, ix, low, high, limits, 
         for i in eachindex(d)
             d[i] = plot_transform(d[i], transform_name)
         end
+    end
+
+    if current_active
+        L, U = limits
+        update_filter!(d, 1, L, U, low, high)
     end
     apply_filter!(d)
     return d

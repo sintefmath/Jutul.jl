@@ -48,7 +48,7 @@ function inner_sparsity_ct(target_impact, source_impact, nentities_source, nenti
     return SparsePattern(I, J, n, m, row_layout, col_layout)
 end
 
-function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, storage_t, storage_s)
+function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, storage_t, storage_s; ad::Bool = true)
     is_symm = has_symmetry(ct)
     # Find all entities x
     active = cross_term_entities(ct, eq_t, model_t)
@@ -78,8 +78,8 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     for i in 1:N
         prepare_cross_term_in_entity!(i, state_t, state_t0, state_s, state_s0, model_t, model_s, ct, eq_t, 1.0)
     end
-    caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t, self_entity = e_t)
-    caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s, self_entity = e_s)
+    caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t, self_entity = e_t, ad = ad)
+    caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s, self_entity = e_s, ad = ad)
     # Extra alignment - for off diagonal blocks
     other_align_t = create_extra_alignment(caches_s, allocate = is_symm)
     out = JutulStorage()
@@ -462,7 +462,7 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
 end
 
 
-function setup_cross_terms_storage!(storage, model)
+function setup_cross_terms_storage!(storage, model; ad = true)
     cross_terms = model.cross_terms
     models = model.models
 
@@ -478,7 +478,7 @@ function setup_cross_terms_storage!(storage, model)
         else
             eq_s = ct_equation(m_s, ct.source_equation)
         end
-        ct_s = setup_cross_term_storage(term, eq_t, eq_s, m_t, m_s, s_t, s_s)
+        ct_s = setup_cross_term_storage(term, eq_t, eq_s, m_t, m_s, s_t, s_s, ad = ad)
         push!(v, ct_s)
     end
     storage[:cross_terms] = v

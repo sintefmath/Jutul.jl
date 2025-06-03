@@ -192,6 +192,58 @@ function unit_box_bfgs(
     return (v, u, history)
 end
 
+
+function box_bfgs(x0, f, lb, ub; kwarg...)
+    n = length(x0)
+    length(lb) == n || throw(ArgumentError("Length of lower bound must match length of initial guess"))
+    length(ub) == n || throw(ArgumentError("Length of upper bound must match length of initial guess"))
+    # Check bounds
+    for i in eachindex(x0, lb, ub)
+        if x0[i] < lb[i] || x0[i] > ub[i]
+            throw(ArgumentError("Initial guess x0[$i] = $(x0[i]) is outside bounds [$(lb[i]), $(ub[i])]"))
+        end
+        if !isfinite(lb[i]) || !isfinite(ub[i])
+            throw(ArgumentError("Bounds must be finite, got lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
+        end
+        if lb[i] >= ub[i]
+            throw(ArgumentError("Lower bound must be less than upper bound for index $i: lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
+        end
+    end
+    δ = ub .- lb
+
+    function dx_to_du!(g)
+        for i in 1:n
+            g[i] = g[i] * δ[i]
+        end
+    end
+
+    function x_to_u(x)
+        u = (x - lb) ./ δ
+        return u
+    end
+
+    function u_to_x(u)
+        x = u .* δ + lb
+        return x
+    end
+
+    function F(u)
+        x = u_to_x(u)
+        obj, g = f(x)
+        dx_to_du!(g)
+        return (obj, g)
+    end
+
+    u0 = x_to_u(x0)
+    v, u, history = unit_box_bfgs(u0, F; kwarg...)
+    x = u_to_x(u)
+    return (v, x, history)
+end
+
+function box_bfgs(u0, f, bounds; kwarg...)
+    return box_bfgs(u0, f, bounds...; kwarg...)
+end
+
 function get_search_direction(u0, g0, Hi, HiPrev, c)
     # Find search-direction which is (sum of) the projection(s) of Hi*g0
     # restricted to directions with non-active constraints.

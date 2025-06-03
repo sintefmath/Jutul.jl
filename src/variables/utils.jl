@@ -221,20 +221,20 @@ function initialize_variable_ad!(state, model, pvar, symb, npartials, diag_pos; 
     return state
 end
 
-function initialize_variable_value(model, pvar, val; perform_copy = true)
+function initialize_variable_value(model, pvar, val; T = float_type(model.context), perform_copy = true)
     nu = number_of_entities(model, pvar)
     nv = values_per_entity(model, pvar)
     if isa(pvar, ScalarVariable)
         if val isa AbstractVector
             @assert length(val) == nu "Expected $nu entries, but got $(length(val)) for $(typeof(pvar))"
         else
-            val = repeat([val], nu)
+            val = fill(val, nu)
         end
         # Type-assert that this should be scalar, with a vector input
         val::AbstractVector
     else
         if isa(val, Real)
-            val = repeat([val], nv, nu)
+            val = fill(val, nv, nu)
         end
         err_str() = "Passed value for $(typeof(pvar))"
         nm = length(val)
@@ -257,7 +257,13 @@ function initialize_variable_value(model, pvar, val; perform_copy = true)
         end
         clamp!(val, minv, maxv)
     end
-    return transfer(model.context, val)
+    if T == float_type(model.context) 
+        val = transfer(model.context, val)
+    elseif eltype(val) != T
+        T = promote_type(T, eltype(val))
+        val = map(x -> convert(T, x), val)
+    end
+    return val
 end
 
 function default_value(model, variable)
@@ -295,7 +301,7 @@ function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     return state
 end
 
-function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict; need_value = true)
+function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict; need_value = true, T = float_type(model.context))
     if haskey(val, symb)
         value = val[symb]
     elseif need_value && need_default_primary(model, pvar)
@@ -305,7 +311,7 @@ function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict;
         # We do not really need to initialize this, as it will be updated elsewhere.
         value = default_values(model, pvar)
     end
-    return initialize_variable_value!(state, model, pvar, symb, value)
+    return initialize_variable_value!(state, model, pvar, symb, value, T = T)
 end
 
 # Scalar primary variables
@@ -335,7 +341,7 @@ end
 """
 Initializer for the value of non-scalar primary variables
 """
-function initialize_variable_value(model, pvar::VectorVariables, val::AbstractVector)
+function initialize_variable_value(model, pvar::VectorVariables, val::AbstractVector; kwarg...)
     n = values_per_entity(model, pvar)
     m = number_of_entities(model, pvar)
     nv = length(val)
@@ -348,12 +354,12 @@ function initialize_variable_value(model, pvar::VectorVariables, val::AbstractVe
     else
         error("Variable $(typeof(pvar)) should have initializer of length $n or $m")
     end
-    return initialize_variable_value(model, pvar, V)
+    return initialize_variable_value(model, pvar, V; kwarg...)
 end
 
-function initialize_variable_value(model, pvar::VectorVariables, symb::Symbol, val::Number)
+function initialize_variable_value(model, pvar::VectorVariables, symb::Symbol, val::Number; kwarg...)
     n = values_per_entity(model, pvar)
-    return initialize_variable_value(model, pvar, symb, repeat([val], n))
+    return initialize_variable_value(model, pvar, symb, repeat([val], n); kwarg...)
 end
 
 # Specific variable implementations that are generic for many types of system follow

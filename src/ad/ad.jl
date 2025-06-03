@@ -381,11 +381,19 @@ end
 
 Replace values of `x` in-place by `y`, leaving `x` with the values of y and the partials of `x`.
 """
-@inline function update_values!(v::AbstractArray{<:ForwardDiff.Dual}, next::AbstractArray{<:Real})
-    # The ForwardDiff type is immutable, so to preserve the derivatives we do this little trick:
-    @inbounds for i in eachindex(v, next)
-        val = v[i]
-        v[i] = val - value(val) + value(next[i])
+@inline function update_values!(v::AbstractArray{<:ForwardDiff.Dual{Tag}}, next::AbstractArray{<:Real}) where Tag
+    if Tag isa JutulEntity
+        # The ForwardDiff type is immutable, so to preserve the derivatives we
+        # do this little trick if we are working with a Jutul entity tag. This
+        # signifies that we are currently working with a Jutul AD variable.
+        @inbounds for i in eachindex(v, next)
+            val = v[i]
+            v[i] = val - value(val) + value(next[i])
+        end
+    else
+        @inbounds for i in eachindex(v, next)
+            v[i] = next[i]
+        end
     end
     return v
 end
@@ -399,7 +407,8 @@ Replace values (for non-Real types, direct assignment)
     @. v = next
 end
 
-@inline function update_values!(v::AbstractArray{<:AbstractFloat}, next::AbstractArray{<:ForwardDiff.Dual})
+@inline function update_values!(v::AbstractArray{<:Real}, next::AbstractArray{<:ForwardDiff.Dual{Tag}}) where Tag
+    Tag::JutulEntity
     @inbounds for i in eachindex(v, next)
         next_val = next[i]
         v[i] = value(next_val)
@@ -407,15 +416,28 @@ end
     return v
 end
 
-function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where T<:ForwardDiff.Dual
+# function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where T<:ForwardDiff.Dual
+#     @. v = next
+# end
+
+function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where {Tag, T<:(ForwardDiff.Dual{Tag})}
     @. v = next
 end
 
 """
 Take value of AD.
 """
+@inline function value(x::ForwardDiff.Dual{Tag}) where Tag
+    if Tag isa JutulEntity
+        # If the tag is a Jutul entity, we know that the AD came from Jutul, so we can
+        # use the ForwardDiff value function to get the value. Otherwise we leave it be.
+        x = ForwardDiff.value(x)
+    end
+    return x
+end
+
 @inline function value(x)
-    return ForwardDiff.value(x)
+    return x
 end
 
 @inline function value(x::AbstractArray)
@@ -464,3 +486,4 @@ include("local_ad.jl")
 include("sparsity.jl")
 include("gradients.jl")
 include("force_gradients.jl")
+include("AdjointsDI/AdjointsDI.jl")

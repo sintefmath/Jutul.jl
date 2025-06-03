@@ -95,6 +95,10 @@ function Base.show(io::IO, t::MIME"text/plain", g::CoarseMesh)
     print(io, ")")
 end
 
+function float_type(G::CoarseMesh)
+    return float_type(G.parent)
+end
+
 function dim(G::CoarseMesh)
     return dim(G.parent)
 end

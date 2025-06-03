@@ -502,8 +502,8 @@ end
 import Base: getindex, @propagate_inbounds, parent, size, axes
 
 struct JutulStorage{K}
-    data::Union{OrderedDict{Symbol, Any}, K}
-    function JutulStorage(S = OrderedDict{Symbol, Any}(); kwarg...)
+    data::Union{JUTUL_OUTPUT_TYPE, K}
+    function JutulStorage(S = JUTUL_OUTPUT_TYPE(); kwarg...)
         if isa(S, AbstractDict)
             K = Nothing
             for (k, v) in kwarg

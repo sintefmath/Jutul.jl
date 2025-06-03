@@ -237,18 +237,18 @@ equal to the entity count (for example, number of cells for a cell variable) wil
 
 Note: You likely want to overload [`setup_state!`]@ref for a custom model instead of `setup_state`
 """
-function setup_state(model::JutulModel, arg...)
+function setup_state(model::JutulModel, arg...; kwarg...)
     state = Dict{Symbol, Any}()
-    setup_state!(state, model, arg...)
+    setup_state!(state, model, arg...; kwarg...)
     return state
 end
 
-function setup_state(model::JutulModel; kwarg...)
+function setup_state(model::JutulModel; T = float_type(model.context), kwarg...)
     init = Dict{Symbol, Any}()
     for (k, v) in kwarg
         init[k] = v
     end
-    return setup_state(model, init)
+    return setup_state(model, init; T = T)
 end
 
 """
@@ -256,14 +256,14 @@ end
 
 Initialize primary variables and other state fields, given initial values as a Dict
 """
-function setup_state!(state, model::JutulModel, init_values::AbstractDict = Dict())
+function setup_state!(state, model::JutulModel, init_values::AbstractDict = Dict(); T = float_type(model.context))
     for (psym, pvar) in get_primary_variables(model)
-        initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true)
+        initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true, T = T)
     end
     for (psym, svar) in get_secondary_variables(model)
-        initialize_variable_value!(state, model, svar, psym, init_values, need_value = false)
+        initialize_variable_value!(state, model, svar, psym, init_values, need_value = false, T = T)
     end
-    initialize_extra_state_fields!(state, model)
+    initialize_extra_state_fields!(state, model, T = T)
 end
 
 """
@@ -272,14 +272,14 @@ end
 
 Add model-dependent changing variables that need to be in state, but are never AD variables themselves (for example status flags).
 """
-function initialize_extra_state_fields!(state, model::JutulModel)
-    initialize_extra_state_fields!(state, model.domain, model)
-    initialize_extra_state_fields!(state, model.system, model)
-    initialize_extra_state_fields!(state, model.formulation, model)
+function initialize_extra_state_fields!(state, model::JutulModel; kwarg...)
+    initialize_extra_state_fields!(state, model.domain, model; kwarg...)
+    initialize_extra_state_fields!(state, model.system, model; kwarg...)
+    initialize_extra_state_fields!(state, model.formulation, model; kwarg...)
     return state
 end
 
-function initialize_extra_state_fields!(state, ::Any, model)
+function initialize_extra_state_fields!(state, ::Any, model; kwarg...)
     # Do nothing
 end
 
@@ -301,12 +301,12 @@ A scalar (or short vector of the right size for [`VectorVariables`](@ref)) will 
 while a vector (or matrix for [`VectorVariables`](@ref)) with length (number of columns for [`VectorVariables`](@ref))
 equal to the entity count (for example, number of cells for a cell variable) will be used directly.
 """
-function setup_parameters(d::DataDomain, model::JutulModel; perform_copy = true, kwarg...)
+function setup_parameters(d::DataDomain, model::JutulModel; T = Float64, perform_copy = true, kwarg...)
     init = Dict{Symbol, Any}()
     for (k, v) in kwarg
         init[k] = v
     end
-    return setup_parameters(d, model, init, perform_copy = perform_copy)
+    return setup_parameters(d, model, init, T = T, perform_copy = perform_copy)
 end
 
 function setup_parameters(model::JutulModel, arg...; kwarg...)
@@ -424,22 +424,28 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
                                                     tag = nothing,
                                                     state0_ad = false,
                                                     state_ad = true,
+                                                    T = float_type(model.context),
                                                     kwarg...)
     if ismissing(parameters)
-        parameters = setup_parameters(model)
+        parameters = setup_parameters(model, T = T)
     else
-        parameters = deepcopy(parameters)
+        if T == Float64
+            parameters = deepcopy(parameters)
+        else
+            parameters = setup_parameters(model, parameters, T = T)
+        end
     end
+    use_internal_ad = state0_ad || state_ad
     @tic "state" if !isnothing(state0)
         if state_ad
             state = convert_state_ad(model, state0, tag)
         else
-            state = setup_state(model, deepcopy(state0))
+            state = setup_state(model, deepcopy(state0), T = T)
         end
         if state0_ad
             state0 = convert_state_ad(model, state0, tag)
         else
-            state0 = setup_state(model, deepcopy(state0))
+            state0 = setup_state(model, deepcopy(state0), T = T)
         end
         for (k, v) in pairs(model.parameters)
             if haskey(parameters, k)
@@ -455,7 +461,7 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
     end
     @tic "model" setup_storage_model(storage, model)
     @tic "equations" if setup_equations
-        storage[:equations] = setup_storage_equations(storage, model; tag = tag, kwarg...) 
+        storage[:equations] = setup_storage_equations(storage, model; ad = use_internal_ad, tag = tag, kwarg...) 
     end
     @tic "linear system" if setup_linearized_system
         @tic "setup" storage[:LinearizedSystem] = setup_linearized_system!(storage, model)
@@ -684,6 +690,7 @@ This includes properties, governing equations and the linearized system itself.
 function update_state_dependents!(storage, model::JutulModel, dt, forces; time = NaN, update_secondary = true, kwarg...)
     t_s = @elapsed if update_secondary
         @tic "secondary variables" update_secondary_variables!(storage, model; kwarg...)
+        @tic "extra state fields" update_extra_state_fields!(storage, model, dt, time)
     end
     t_eq = @elapsed update_equations_and_apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     return (secondary = t_s, equations = t_eq)
@@ -900,6 +907,10 @@ function update_primary_variables!(storage, model::JutulModel; kwarg...)
     update_primary_variables!(primary, dx, model, primary_defs; state = storage.state, kwarg...)
 end
 
+function update_extra_state_fields!(storage, model, dt, time)
+    return storage
+end
+
 function update_primary_variables!(primary_storage, dx, model::JutulModel, primary = get_primary_variables(model); relaxation = 1.0, check = false, state = missing)
     report = Dict{Symbol, Any}()
     for (pkey, p) in pairs(primary)
@@ -1012,7 +1023,7 @@ end
 function get_output_state(storage, model)
     # As this point (after a converged step) state0 should be state without AD.
     s0 = storage.state0
-    D = Dict{Symbol, Any}()
+    D = JUTUL_OUTPUT_TYPE()
     for k in model.output_variables
         if haskey(s0, k)
             D[k] = copy(s0[k])

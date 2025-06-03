@@ -149,3 +149,12 @@ function Base.show(io::IO, sr::SimResult)
     print(io, "SimResult with $n $s")
 end
 
+function evaluate_objective(G, case::JutulCase, result::SimResult; kwarg...)
+    states, timesteps, ix = expand_to_ministeps(result)
+    if case.forces isa Vector
+        all_forces = case.forces[ix]
+    else
+        all_forces = case.forces
+    end
+    return evaluate_objective(G, case.model, states, timesteps, all_forces; kwarg...)
+end
