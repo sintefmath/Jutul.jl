@@ -24,10 +24,15 @@ function vectorize_forces(forces, model::MultiModel, targets = force_targets(mod
     # Actually vectorize
     n = offset
     v = Vector{T}(undef, n)
+    vectorize_forces!(v, model, config, forces)
+    return (v, config)
+end
+
+function vectorize_forces!(v, model::MultiModel, config, forces)
     for k in submodels_symbols(model)
         vectorize_forces!(v, model[k], config[k], forces[k])
     end
-    return (v, config)
+    return v
 end
 
 # function determine_sparsity_forces(model::MultiModel, forces, X, config; parameters = setup_parameters(model))
