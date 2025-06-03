@@ -391,20 +391,30 @@ function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
         # push!(storage[:forces_jac], sparse(Int[], Int[], Float64[], nvar, length(X)))
         # push!(storage[:forces_objective_gradient], zeros(length(X)))
     end
-    X = get_adjoint_forces_vector(model, storage)
+    X = get_adjoint_forces_vector(model, storage, allforces)
     F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
     storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, states, timesteps, G)
     return storage
 end
 
-function get_adjoint_forces_vector(model, storage)
+function get_adjoint_forces_vector(model, storage, allforces)
     offsets = storage[:forces_offsets]::Vector{Int}
     fmap = storage[:forces_map]
-    N = storage[:forces_offsets][end]-1
-    X = zeros(N)
-    for (i, forces) in enumerate(fmap.forces)
+    if !haskey(storage, :X)
+        N = storage[:forces_offsets][end]-1
+        storage[:X] = zeros(N)
+    end
+    X = storage[:X]
+    configs = storage[:forces_config]
+    for (i, cfg) in enumerate(configs)
+        fno = fmap.forces_to_timesteps[i][1]
+        if allforces isa AbstractVector
+            forces = allforces[fno]
+        else
+            @assert length(configs) == 1
+            forces = allforces
+        end
         X_i = view(X, offsets[i]:(offsets[i+1]-1))
-        cfg = storage[:forces_config][i]
         vectorize_forces!(X, model, cfg, forces)
     end
     return X
