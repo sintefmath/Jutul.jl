@@ -561,6 +561,7 @@ function plot_interactive_impl(grid, states;
         scat = Makie.mesh!(ax, pts_c, tri_c;
             color = ys,
             colorrange = lims,
+            highclip = :transparent,
             backlight = 1,
             colormap = cmap,
             transparency = transparency,
