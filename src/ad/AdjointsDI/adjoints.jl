@@ -344,6 +344,14 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_in
         dt = dt
     )
     r = sim.storage.r_extended
-    r[end] = G(case.model, state, dt, step_info, case.forces)
+    s = JutulStorage()
+    if sim.model isa Jutul.MultiModel
+        for (k, v) in pairs(state)
+            s[k] = JutulStorage(v)
+        end
+    else
+        s = JutulStorage(state)
+    end
+    r[end] = G(case.model, s, dt, step_info, case.forces)
     return copy(r)
 end
