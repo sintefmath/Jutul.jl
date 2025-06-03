@@ -45,7 +45,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         simulator = nothing,
         print = 1,
         copy_case = true,
-        param_obj = false,
+        param_obj = true,
         use_sparsity = true,
         store_all_solves = false,
         kwarg...
@@ -225,7 +225,7 @@ function objective_opt!(x, data, print_frequency = 1)
     bad_obj = 10*data[:last_obj]
     if length(states) == 0
         obj = bad_obj
-        @warn "Partial data passed, objective set to large value $large_value."
+        @warn "Partial data passed, objective set to large value $bad_obj."
     elseif !ismissing(config[:post_ministep_hook]) && reports[end][:ministeps][end][:success]
         dt_current = report_timesteps(reports)[1:length(states)]
         data[:dt_current] = dt_current

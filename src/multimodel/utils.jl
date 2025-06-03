@@ -118,9 +118,9 @@ function error_sum_scaled(model::MultiModel, rep)
     return err_sum
 end
 
-function initialize_extra_state_fields!(state, mm::MultiModel)
+function initialize_extra_state_fields!(state, mm::MultiModel; kwarg...)
     for (k, model) in pairs(mm.models)
-        initialize_extra_state_fields!(state[k], model)
+        initialize_extra_state_fields!(state[k], model; kwarg...)
     end
     return state
 end

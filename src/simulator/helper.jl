@@ -49,7 +49,7 @@ function HelperSimulator(model::M, T = Float64;
         # TODO: Actually use these.
         storage[:primary_mapper] = Jutul.variable_mapper(model, :primary)
         storage[:parameter_wrapper] = first(Jutul.variable_mapper(model, :parameters))
-        initialize_extra_state_fields!(storage.state, model)
+        initialize_extra_state_fields!(storage.state, model, T = T)
         setup_equations_and_primary_variable_views!(storage, model, (dx_buffer = missing, r_buffer = r))
         storage = Jutul.specialize_simulator_storage(storage, model, false)
         if has_cache
@@ -154,6 +154,9 @@ function model_residual(state, state0, sim::HelperSimulator;
         time = 0.0,
         kwarg...
     )
+    if forces isa AbstractVector
+        forces = only(forces)
+    end
     function dict_pvar_copy(x, m::MultiModel)
         out = JutulStorage()
         for k in submodels_symbols(m)
