@@ -393,7 +393,7 @@ function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
     end
     X, = get_adjoint_forces_vectors(model, storage, allforces)
     F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
-    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, states, timesteps, G)
+    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, states, timesteps, G, single_step_sparsity = false, di_sparse = false)
     return storage
 end
 
