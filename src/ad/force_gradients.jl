@@ -391,20 +391,22 @@ function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
         # push!(storage[:forces_jac], sparse(Int[], Int[], Float64[], nvar, length(X)))
         # push!(storage[:forces_objective_gradient], zeros(length(X)))
     end
-    X = get_adjoint_forces_vector(model, storage, allforces)
+    X, = get_adjoint_forces_vectors(model, storage, allforces)
     F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
     storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, states, timesteps, G)
     return storage
 end
 
-function get_adjoint_forces_vector(model, storage, allforces)
+function get_adjoint_forces_vectors(model, storage, allforces)
     offsets = storage[:forces_offsets]::Vector{Int}
     fmap = storage[:forces_map]
     if !haskey(storage, :X)
         N = storage[:forces_offsets][end]-1
         storage[:X] = zeros(N)
+        storage[:forces_gradient] = zeros(N)
     end
     X = storage[:X]
+    dX = storage[:forces_gradient]
     configs = storage[:forces_config]
     for (i, cfg) in enumerate(configs)
         fno = fmap.forces_to_timesteps[i][1]
@@ -417,7 +419,7 @@ function get_adjoint_forces_vector(model, storage, allforces)
         X_i = view(X, offsets[i]:(offsets[i+1]-1))
         vectorize_forces!(X, model, cfg, forces)
     end
-    return X
+    return (X, dX)
 end
 
 function get_adjoint_forces_setup_function(storage, model, parameters, state0)
@@ -488,55 +490,57 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         allforces = allforces[step_ix]
     end
 
-    fg = storage[:forces_gradient]
-    fv = storage[:forces_vector]
-    fc = storage[:forces_config]
-    ograd = storage[:forces_objective_gradient]
-    if init
-        t = storage[:targets]
-        for (forceno, force) in enumerate(unique_forces)
-            fv[forceno], fc[forceno] = vectorize_forces(force, model, t)
-        end
-    end
-    for g in fg
-        @. g = 0.0
-    end
-    for g in ograd
-        @. g = 0.0
-    end
+    X, dX = get_adjoint_forces_vectors(model, storage, allforces)
+    F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
 
-    N = length(timesteps)
-    @assert N == length(states)
-    # Do sparsity detection if not already done.
-    update_objective_sparsity!(storage, G, states, timesteps, allforces, :forward)
-    for i in N:-1:1
-        forceno = timesteps_to_forces[step_ix[i]]
-        # Unpack stuff for this force in particular
-        forces = unique_forces[forceno]
-        config = fc[forceno]
-        out = fg[forceno]
-        X = fv[forceno]
-        dobj_dgrad = ograd[forceno]
 
-        s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
-        λ, t, dt, forces = Jutul.next_lagrange_multiplier!(storage, i, G, s, s0, s_next, timesteps, forces)
-        J = evaluate_force_gradient!(dobj_dgrad, X, G, model, storage, parameters, forces, config, forceno, t, i, timesteps[i])
-        mul!(out, J', λ, 1.0, 1.0)
-    end
-    for (g, o) in zip(fg, ograd)
-        @. g += o
-    end
+    # fg = storage[:forces_gradient]
+    # fv = storage[:forces_vector]
+    # fc = storage[:forces_config]
+    # ograd = storage[:forces_objective_gradient]
+    # if init
+    #     t = storage[:targets]
+    #     for (forceno, force) in enumerate(unique_forces)
+    #         fv[forceno], fc[forceno] = vectorize_forces(force, model, t)
+    #     end
+    # end
+    # for g in fg
+    #     @. g = 0.0
+    # end
+    # for g in ograd
+    #     @. g = 0.0
+    # end
 
-    return solve_adjoint_forces_retval(storage, model)
-end
+    # N = length(timesteps)
+    # @assert N == length(states)
+    # # Do sparsity detection if not already done.
+    # update_objective_sparsity!(storage, G, states, timesteps, allforces, :forward)
+    # for i in N:-1:1
+    #     forceno = timesteps_to_forces[step_ix[i]]
+    #     # Unpack stuff for this force in particular
+    #     forces = unique_forces[forceno]
+    #     config = fc[forceno]
+    #     out = fg[forceno]
+    #     X = fv[forceno]
+    #     dobj_dgrad = ograd[forceno]
 
-function solve_adjoint_forces_retval(storage, model::SimulationModel)
-    dX = storage[:forces_gradient]
+    #     s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
+    #     λ, t, dt, forces = Jutul.next_lagrange_multiplier!(storage, i, G, s, s0, s_next, timesteps, forces)
+    #     J = evaluate_force_gradient!(dobj_dgrad, X, G, model, storage, parameters, forces, config, forceno, t, i, timesteps[i])
+    #     mul!(out, J', λ, 1.0, 1.0)
+    # end
+    # for (g, o) in zip(fg, ograd)
+    #     @. g += o
+    # end
+    Jutul.AdjointsDI.solve_adjoint_generic!(dX, X, F, storage[:adjoint], states, timesteps, G, state0 = state0, forces = allforces)
+
     dforces = map(
-        (forces, out, config) -> devectorize_forces(forces, model, out, config),
-        storage[:unique_forces], dX, storage[:forces_config]
+        i -> F(X, Jutul.optimization_step_info(i, timesteps)),
+        map(first, forces_to_timestep)
     )
-    return (dforces, storage[:timestep_to_forces], dX)
+    offsets = storage[:forces_offsets]
+    dX_i = map(i -> dX[offsets[i]:(offsets[i+1]-1)], 1:(length(offsets)-1))
+    return (dforces, timesteps_to_forces, dX_i)
 end
 
 function forces_optimization_config(
@@ -683,7 +687,7 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
         end
     end
     global_it = 0
-    force_adj_storage = missing
+    cache = Dict()
 
     function evaluate_forward(x, g = nothing)
         sim = Simulator(model, state0 = state0, parameters = parameters)
@@ -702,8 +706,8 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
         simforces = allforces[opt_config.timesteps_to_forces]
         global_it += 1
         states, reports = simulate(sim, dt, forces = simforces, extra_timing = false, info_level = -1)
-        if ismissing(forces_adj_storage)
-            forces_adj_storage = setup_adjoint_forces_storage(
+        if !haskey(cache, :storage)
+            cache[:storage] = setup_adjoint_forces_storage(
                     model,
                     states,
                     forces,
@@ -713,6 +717,7 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
                     parameters = parameters
                 )
         end
+        force_adj_storage = cache[:storage]
         output_data[:states] = states
         if !isnothing(g)
             dforces, t_to_f, grad_adj = solve_adjoint_forces!(force_adj_storage, model, states, reports, G, simforces,
