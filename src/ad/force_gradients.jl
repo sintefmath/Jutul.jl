@@ -178,8 +178,8 @@ function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
             allforces = [copy(allforces) for _ in timesteps]
         end
         unique_forces = deepcopy(allforces)
-        forces_to_timestep = [[i] for i in eachindex(timesteps)]
-        timesteps_to_forces = copy(forces_to_timestep)
+        timesteps_to_forces = collect(eachindex(timesteps))
+        forces_to_timestep = [[i] for i in timesteps_to_forces]
         num_unique_forces = length(unique_forces)
     else
         unique_forces, forces_to_timestep, num_unique_forces = force_steps(allforces, timesteps)
@@ -360,6 +360,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         new_timesteps_to_forces = timesteps_to_forces
         new_forces_to_timesteps = forces_to_timesteps
     end
+    new_timesteps_to_forces::Vector{Int}
     storage[:forces_map] = (
         forces = forces,
         forces_to_timesteps = new_forces_to_timesteps,
