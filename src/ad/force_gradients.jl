@@ -208,7 +208,9 @@ function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
         targets = force_targets(model),
         forces_map = missing,
         state0 = setup_state(model),
-        parameters = setup_parameters(model)
+        parameters = setup_parameters(model),
+        single_step_sparsity = false,
+        di_sparse = use_sparsity
     )
     if ismissing(forces_map)
         forces_map = unique_forces_and_mapping(allforces, timesteps, eachstep = eachstep)
@@ -236,7 +238,7 @@ function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
     end
     X, = get_adjoint_forces_vectors(model, storage, allforces)
     F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
-    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, states, timesteps, G, single_step_sparsity = false, di_sparse = use_sparsity)
+    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, states, timesteps, G, single_step_sparsity = single_step_sparsity, di_sparse = di_sparse)
     return storage
 end
 
