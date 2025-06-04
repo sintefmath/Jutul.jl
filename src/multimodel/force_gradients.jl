@@ -356,10 +356,7 @@ end
 #     return (dforces, storage[:timestep_to_forces], dX)
 # end
 
-function devectorize_forces(forces, model::MultiModel, X, config; offset = 0, model_key = nothing, ad_key = nothing)
-    if isnothing(model_key)
-        @assert isnothing(ad_key)
-    end
+function devectorize_forces(forces, model::MultiModel, X, config; offset = 0)
     new_forces = Dict{Symbol, Any}()
     for k in submodels_symbols(model)
         submodel = model[k]
@@ -367,12 +364,7 @@ function devectorize_forces(forces, model::MultiModel, X, config; offset = 0, mo
         subconfig = config[k]
         n = sum(subconfig.lengths)
         subX = X[(offset+1):(offset+n)]
-        if model_key == k
-            ad_key_model = ad_key
-        else
-            ad_key_model = nothing
-        end
-        nf = devectorize_forces(subforces, submodel, subX, subconfig, ad_key = ad_key_model)
+        nf = devectorize_forces(subforces, submodel, subX, subconfig)
         new_forces[k] = setup_forces(submodel; nf...)
         offset += n
     end
