@@ -188,6 +188,37 @@ function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N, init 
     return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data)}(true, face_pos, conn_data)
 end
 
+function local_discretization(eq::ConservationLaw{S, D, FT, N}, i) where {S, D<:TwoPointPotentialFlowHardCoded, FT, N}
+    disc = eq.flow_discretization
+    start = disc.conn_pos[i]
+    stop = disc.conn_pos[i+1]-1
+    return view(disc.conn_data, start:stop)
+end
+
+function update_equation_in_entity!(eq_buf::AbstractVector{T_e}, self_cell, state, state0, eq::ConservationLaw{S, D, FT, N}, model, Δt, ldisc = local_discretization(eq, self_cell)) where {T_e, S, D<:TwoPointPotentialFlowHardCoded, FT<:Jutul.FluxType, N}
+    # This will be called if a local TPFA code is used with some kind of general
+    # AD, e.g. in adjoints.
+    # Compute accumulation term
+    conserved = conserved_symbol(eq)
+    M₀ = state0[conserved]
+    M = state[conserved]
+    # Compute ∇⋅V
+    flux(ld) = face_flux(ld.self, ld.other, ld.face, ld.face_sign, eq, state, model, Δt, eq.flow_discretization, Val(T_e))
+    # div_v = zero(T_e)
+    div_v = flux(ldisc[1])
+    for i in 2:length(ldisc)
+        ld = ldisc[i]
+        q_i = flux(ld)
+        div_v += q_i
+    end
+    for i in eachindex(div_v)
+        ∂M∂t = accumulation_term(M, M₀, Δt, i, self_cell)
+        @inbounds eq_buf[i] = ∂M∂t + div_v[i]
+    end
+    return eq_buf
+end
+
+
 number_of_half_faces(tp::TwoPointPotentialFlowHardCoded) = length(tp.conn_data)
 
 function get_neighborship(grid; internal = true)

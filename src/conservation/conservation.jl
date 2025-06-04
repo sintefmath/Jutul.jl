@@ -2,7 +2,9 @@ export ConservationLaw, ConservationLawTPFAStorage, conserved_symbol
 
 number_of_equations_per_entity(model::SimulationModel, ::ConservationLaw{<:Any, <:Any, <:Any, N}) where N = N
 
-flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T} = SVector{N, T}
+flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T<:ForwardDiff.Dual} = SVector{N, T}
+flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T<:AbstractFloat} = SVector{N, T}
+flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T} = MVector{N, T}
 
 conserved_symbol(::ConservationLaw{C, <:Any}) where C = C
 

@@ -172,7 +172,7 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, state0
     return ∇G
 end
 
-function setup_case(x, F, step_info, state0, forces, N; all = false)
+function setup_case(x::AbstractVector, F, step_info, state0, forces, N; all = false)
     # F(X, step_info) -> model*
     # F(X, step_info) -> model, parameters*
     # F(X, step_info) -> model, parameters, forces*
@@ -245,6 +245,7 @@ Base.@kwdef mutable struct AdjointsObjectiveHelper
     N
     cache = Dict()
     states = missing
+    timesteps = missing
     case = missing
 end
 
@@ -255,6 +256,7 @@ function set_to_step!(H::AdjointsObjectiveHelper, state, state0, step_info, dt)
     H.step_info = step_info
     H.dt = dt
     H.states = missing
+    H.timesteps = missing
     return H
 end
 
@@ -268,7 +270,8 @@ function (H::AdjointsObjectiveHelper)(x)
         # Loop over all to get the "extended sparsity".
         # This is a bit of a hack, but it covers the case where there is some change in dynamics/controls at a later step.
         t = 0.0
-        timesteps = case.dt
+        # timesteps = case.dt
+        timesteps = H.timesteps
         dt_i = timesteps[1]
         total_time = sum(timesteps)
         N = length(timesteps)
@@ -321,8 +324,10 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
             prep = prepare_jacobian(H, backend, X)
         else
             H.states = states
+            H.timesteps = timesteps
             prep = prepare_jacobian(H, backend, X)
             H.states = missing
+            H.timesteps = missing
         end
         storage[:prep_di] = prep
     else
@@ -334,6 +339,7 @@ end
 
 function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_info, dt, F, G, forces, N = 1, cache = missing)
     case = setup_case(x, F, step_info, state0, forces, N)
+    case = reset_context_and_groups(case)
     if step_info[:step] == 1
         state0 = case.state0
     end
@@ -344,6 +350,45 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_in
         dt = dt
     )
     r = sim.storage.r_extended
-    r[end] = G(case.model, state, dt, step_info, case.forces)
+    s = JutulStorage()
+    if sim.model isa Jutul.MultiModel
+        for (k, v) in pairs(state)
+            if k == :substates
+                continue
+            end
+            s[k] = JutulStorage(v)
+        end
+    else
+        s = JutulStorage(state)
+    end
+    r[end] = G(case.model, s, dt, step_info, case.forces)
     return copy(r)
+end
+
+function reset_context_and_groups(case::Jutul.JutulCase)
+    model = reset_context_and_groups(case.model)
+    return JutulCase(model, case.dt, case.forces, case.state0, case.parameters, case.input_data)
+end
+
+function reset_context_and_groups(model::Jutul.MultiModel{label}) where label
+    new_models = Jutul.OrderedDict()
+    for (k, m) in pairs(model.models)
+        new_models[k] = reset_context_and_groups(m)
+    end
+    return MultiModel(new_models, label, cross_terms = model.cross_terms)
+end
+
+function reset_context_and_groups(model::Jutul.SimulationModel)
+    if model.context != Jutul.DefaultContext()
+        model = SimulationModel(model.domain, model.system,
+            formulation = model.formulation,
+            data_domain = model.data_domain,
+            extra = model.extra,
+            primary_variables = model.primary_variables,
+            secondary_variables = model.secondary_variables,
+            parameters = model.parameters,
+            equations = model.equations
+        )
+    end
+    return model
 end

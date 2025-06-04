@@ -7,7 +7,7 @@ function force_targets(model, variant = :all)
 end
 
 function vectorize_forces(forces, model, targets = force_targets(model); T = Float64)
-    meta_for_forces = Dict{Symbol, Any}()
+    meta_for_forces = OrderedDict{Symbol, Any}()
     lengths = vectorization_lengths(forces, model, targets)
     config = (
         lengths = lengths,
@@ -17,7 +17,7 @@ function vectorize_forces(forces, model, targets = force_targets(model); T = Flo
     )
     n = sum(lengths)
     v = Vector{T}(undef, n)
-    vectorize_forces!(v, model, config, forces)
+    vectorize_forces!(v, model, config, forces, update_config = true)
     return (v, config)
 end
 
@@ -38,7 +38,7 @@ function vectorization_lengths(forces, model, targets = force_targets(model))
     return lengths
 end
 
-function vectorize_forces!(v, model, config, forces)
+function vectorize_forces!(v, model, config, forces; update_config = false)
     (; meta, lengths, offsets, targets) = config
     lpos = 1
     offset = 0
@@ -54,14 +54,16 @@ function vectorize_forces!(v, model, config, forces)
         v_f = view(v, (offset+1):(offset+n_f))
         m = vectorize_force!(v_f, model, force, k, target)
         # Update global offset here.
-        if vectorization_sublength(force, m) == 1
-            push!(offsets, offsets[end] + n_f)
-        else
-            @assert haskey(m, :lengths) "Bad setup for vector?"
-            push!(offsets, offsets[end] + sum(m[:lengths]))
+        if update_config
+            if vectorization_sublength(force, m) == 1
+                push!(offsets, offsets[end] + n_f)
+            else
+                @assert haskey(m, :lengths) "Bad setup for vector?"
+                push!(offsets, offsets[end] + sum(m[:lengths]))
+            end
+            @assert offsets[end] == offsets[end-1] + n_f
+            meta[k] = m
         end
-        @assert offsets[end] == offsets[end-1] + n_f
-        meta[k] = m
         lpos += 1
         offset += n_f
     end
@@ -112,40 +114,11 @@ function vectorize_force!(v, model, forces::Vector, name, variant)
     return (meta = meta_sub, lengths = lengths)
 end
 
-function devectorize_forces(forces, model, X, config; offset = 0, ad_key = nothing)
+function devectorize_forces(forces, model, X, config; offset = 0)
     new_forces = OrderedDict{Symbol, Any}()
     lengths = config.lengths
     offset = 0
     ix = 1
-    if isnothing(ad_key)
-        X_eval = X
-    else
-        ad_key::Symbol
-        offsets = config.offsets
-        npartials = maximum(diff(offsets), init = 0)
-        if npartials == 0
-            X_eval = X
-        else
-            sample = Jutul.get_ad_entity_scalar(1.0, npartials, 1, tag = ad_key)
-            # Initialize acc + forces with that size ForwardDiff.Dual
-            T = typeof(sample)
-            X_ad = Vector{T}(undef, length(X))
-            for fno in 1:(length(offsets)-1)
-                k = keys(forces)[fno]
-                is_ad = k == ad_key
-                local_index = 1
-                for j in offsets[fno]:(offsets[fno+1]-1)
-                    X_j = X[j]
-                    if is_ad
-                        X_j = Jutul.get_ad_entity_scalar(X_j, npartials, local_index, tag = ad_key)
-                        local_index +=1
-                    end
-                    X_ad[j] = X_j
-                end
-            end
-            X_eval = X_ad
-        end
-    end
     for (k, v) in pairs(forces)
         target = config.targets[k]
         if isnothing(target)
@@ -156,7 +129,7 @@ function devectorize_forces(forces, model, X, config; offset = 0, ad_key = nothi
             continue
         end
         n_i = lengths[ix]
-        X_i = view(X_eval, (offset+1):(offset+n_i))
+        X_i = view(X, (offset+1):(offset+n_i))
         new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], k, target)
         offset += n_i
         ix += 1
@@ -165,7 +138,6 @@ function devectorize_forces(forces, model, X, config; offset = 0, ad_key = nothi
 end
 
 function devectorize_force(force::Vector, model, X, cfg, name, variant)
-    # new_force = similar(force)
     new_force_any = Vector{Any}(undef, length(force))
     offset = 0
     for (i, f) in enumerate(force)
@@ -179,129 +151,13 @@ function devectorize_force(force::Vector, model, X, cfg, name, variant)
     return new_force
 end
 
-function determine_sparsity_forces(model, forces, X, config;
-        parameters = setup_parameters(model),
-        extra_sparsity = Dict()
-    )
-    function fake_state(model)
-        init = Dict{Symbol, Any}()
-        for (k, v) in Jutul.get_variables(model)
-            init[k] = 1.0
-        end
-        # Also add parameters here.
-        state = setup_state(model, init)
-        return convert_to_immutable_storage(merge(state, parameters))
-    end
-    state = fake_state(model)
-    storage = (state = state, )
-    X_ad = ST.create_advec(X)
-    T = eltype(X_ad)
-    forces_ad = devectorize_forces(forces, model, X_ad, config)
-    sparsity = OrderedDict{Symbol, Any}()
-    for (fname, force) in pairs(forces_ad)
-        sparsity[fname] = determine_sparsity_force(storage, model, force, T, extra_sparsity = extra_sparsity)
-    end
-
-    return sparsity
-end
-
-function determine_sparsity_force(storage, model, force_as_stracer, T, offset = 0; extra_sparsity = Dict())
-    sparsity = OrderedDict{Symbol, Any}()
-    for (eqname, eq) in model.equations
-        entity = Jutul.associated_entity(eq)
-        nentity = number_of_entities(model, eq)
-        neqs = number_of_equations_per_entity(model, eq)
-        npartials = Jutul.number_of_partials_per_entity(model, entity)
-        acc = zeros(T, neqs, nentity)
-        eq_s = missing
-        time = NaN
-        Jutul.apply_forces_to_equation!(acc, storage, model, eq, eq_s, force_as_stracer, time)
-        tmp = sum(acc, dims = 1)
-        active_entities = findall(i -> length(ST.deriv(tmp[i]).nzind) > 0, eachindex(tmp))
-
-        # Determine what entities in the equation this force actually uses.
-        setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, active_entities, eqname, offset)
-        offset += neqs*nentity
-    end
-    return sparsity
-end
-
-function setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, active_entities, eqname, offset)
-    S = Vector{Int}()
-    # I = similar(S)
-    rows = Vector{Vector{Int}}()
-    cols = Vector{Vector{Int}}()
-    if haskey(extra_sparsity, eqname)
-        for c in extra_sparsity[eqname]
-            push!(active_entities, c)
-        end
-    end
-    for i in active_entities
-        push!(S, i)
-        I = Int[]
-        # TODO: I / rows is not really needed here?
-        for e in 1:neqs
-            e_ix = Jutul.alignment_linear_index(i, e, nentity, neqs, EquationMajorLayout())
-            push!(I, e_ix)
-        end
-        push!(rows, I)
-
-        J = Int[]
-        for p in 1:npartials
-            p_ix = Jutul.alignment_linear_index(i, p, nentity, npartials, EquationMajorLayout())
-            push!(J, p_ix)
-        end
-        push!(cols, J)
-    end
-    sparsity[eqname] = (entity = S, rows = rows, cols = cols, dims = (neqs, nentity))
-end
-
-function determine_cross_term_sparsity_forces(model, subforces, extra_sparsity, offset = 0)
-    out = OrderedDict{Symbol, Any}()
-    if !isnothing(subforces)
-        sparsity = OrderedDict{Symbol, Any}()
-        for (eqname, eq) in model.equations
-            entity = Jutul.associated_entity(eq)
-            nentity = number_of_entities(model, eq)
-            neqs = number_of_equations_per_entity(model, eq)
-            npartials = Jutul.number_of_partials_per_entity(model, entity)
-
-            setup_sparsity_struct_forces!(sparsity, extra_sparsity, nentity, neqs, npartials, Int[], eqname, offset)
-            offset += neqs*nentity
-        end
-        for (fname, force) in pairs(subforces)
-            # Should all be the same
-            out[fname] = sparsity
-        end
-    end
-    return out
-end
-
-function evaluate_force_gradient!(dobj_dgrad, X, objective, model::SimulationModel, storage, parameters, forces, config, forceno, time, step_no::Int, dt)
-    mname = :Model
-    mmodel = MultiModel((Model = model,))
-    return evaluate_force_gradient!(
-        dobj_dgrad,
-        X,
-        objective,
-        mmodel,
-        storage,
-        Dict(mname => parameters),
-        Dict(mname => forces),
-        Dict(mname => config),
-        forceno,
-        time,
-        step_no,
-        dt
-    )
-end
-
 function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
     function force_steps(forces, dt)
         return ([forces], [1:length(dt)], 1)
     end
 
     function force_steps(forces::Vector, dt)
+        length(allforces) == length(dt) || error("Mismatch in length of forces $(length(allforces)) and dt ($(length(dt)))")
         unique_forces = unique(forces)
         num_unique_forces = length(unique_forces)
         force_map = Vector{Vector{Int}}(undef, num_unique_forces)
@@ -323,8 +179,8 @@ function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
             allforces = [copy(allforces) for _ in timesteps]
         end
         unique_forces = deepcopy(allforces)
-        forces_to_timestep = collect(eachindex(timesteps))
-        timesteps_to_forces = copy(forces_to_timestep)
+        timesteps_to_forces = collect(eachindex(timesteps))
+        forces_to_timestep = [[i] for i in timesteps_to_forces]
         num_unique_forces = length(unique_forces)
     else
         unique_forces, forces_to_timestep, num_unique_forces = force_steps(allforces, timesteps)
@@ -345,14 +201,16 @@ function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
     )
 end
 
-function setup_adjoint_forces_storage(model, allforces, timesteps;
+function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
         n_objective = nothing,
         use_sparsity = true,
         eachstep = false,
         targets = force_targets(model),
         forces_map = missing,
         state0 = setup_state(model),
-        parameters = setup_parameters(model)
+        parameters = setup_parameters(model),
+        single_step_sparsity = false,
+        di_sparse = use_sparsity
     )
     if ismissing(forces_map)
         forces_map = unique_forces_and_mapping(allforces, timesteps, eachstep = eachstep)
@@ -364,30 +222,70 @@ function setup_adjoint_forces_storage(model, allforces, timesteps;
     )
 
     unique_forces, forces_to_timestep, timesteps_to_forces, = forces_map
-    storage[:unique_forces] = unique_forces
-    storage[:forces_to_timestep] = forces_to_timestep
-    storage[:timestep_to_forces] = timesteps_to_forces
+
+    storage[:forces_map_base] = forces_map
     storage[:forces_map] = forces_map
-    storage[:forces_gradient] = []
-    storage[:forces_vector] = []
     storage[:forces_config] = []
-    storage[:forces_sparsity] = []
-    storage[:forces_jac] = []
+    storage[:forces_offsets] = Int[1]
     storage[:targets] = targets
-    storage[:forces_objective_gradient] = Vector{Float64}[]
 
     nvar = storage.n_forward
+    offsets = storage[:forces_offsets]
     for (i, force) in enumerate(unique_forces)
         X, config = vectorize_forces(force, model, targets)
-        push!(storage[:forces_gradient], zeros(length(X)))
-        push!(storage[:forces_vector], X)
         push!(storage[:forces_config], config)
-        S_force = determine_sparsity_forces(model, force, X, config, parameters = parameters)
-        push!(storage[:forces_sparsity], S_force)
-        push!(storage[:forces_jac], sparse(Int[], Int[], Float64[], nvar, length(X)))
-        push!(storage[:forces_objective_gradient], zeros(length(X)))
+        push!(offsets, offsets[end]+length(X))
     end
+    X, = get_adjoint_forces_vectors(model, storage, allforces)
+    F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
+    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, states, timesteps, G, single_step_sparsity = single_step_sparsity, di_sparse = di_sparse)
     return storage
+end
+
+function get_adjoint_forces_vectors(model, storage, allforces)
+    offsets = storage[:forces_offsets]::Vector{Int}
+    fmap = storage[:forces_map]
+    if !haskey(storage, :X)
+        N = storage[:forces_offsets][end]-1
+        storage[:X] = zeros(N)
+        storage[:forces_gradient] = zeros(N)
+    end
+    X = storage[:X]
+    dX = storage[:forces_gradient]
+    configs = storage[:forces_config]
+    for (i, cfg) in enumerate(configs)
+        fno = fmap.forces_to_timesteps[i][1]
+        if allforces isa AbstractVector
+            forces = allforces[fno]
+        else
+            @assert length(configs) == 1
+            forces = allforces
+        end
+        X_i = view(X, offsets[i]:(offsets[i+1]-1))
+        vectorize_forces!(X_i, model, cfg, forces)
+    end
+    return (X, dX)
+end
+
+function get_adjoint_forces_setup_function(storage, model, parameters, state0)
+    offsets = storage[:forces_offsets]::Vector{Int}
+    configs = storage[:forces_config]
+    function F(X, step_info)
+        fmap = storage[:forces_map]
+        ix = step_info[:step]
+        i = fmap.timesteps_to_forces[ix]
+        X_i = view(X, offsets[i]:(offsets[i+1]-1))
+        f = deepcopy(fmap.forces[i])
+        dt = step_info[:dt]
+        cfg = configs[i]
+        return adjoint_forces_setup_case(X_i, cfg, f, dt, model, parameters, state0)
+    end
+    return F
+end
+
+function adjoint_forces_setup_case(X, config, forces, dt, model, p, s0)
+    forces = devectorize_forces(forces, model, X, config)
+    return JutulCase(model, [dt], forces, parameters = p, state0 = s0)
 end
 
 """
@@ -411,7 +309,11 @@ function solve_adjoint_forces(model, states, reports, G, allforces;
         parameters = setup_parameters(model),
         kwarg...
     )
-    storage = setup_adjoint_forces_storage(model, allforces, timesteps; state0 = state0, parameters = parameters, kwarg...)
+    storage = setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
+        state0 = state0,
+        parameters = parameters,
+        kwarg...
+    )
     return solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         state0 = state0,
         timesteps = timesteps,
@@ -424,63 +326,59 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         state0 = setup_state(model),
         parameters = setup_parameters(model),
         init = true,
+        extra_out = true,
         kwarg...
     )
+    has_substates = haskey(first(states), :substates)
     states, timesteps, step_ix = expand_to_ministeps(states, reports)
-    unique_forces, forces_to_timestep, timesteps_to_forces, = storage[:forces_map]
+    (; forces, forces_to_timesteps, timesteps_to_forces, num_unique) = storage[:forces_map_base]
+    # Account for ministeps
+    if has_substates
+        new_forces_to_timesteps = Vector{Vector{Int}}()
+        for i in eachindex(forces_to_timesteps)
+            next = Int[]
+            old = forces_to_timesteps[i]
+            for j in step_ix
+                if insorted(j, old)
+                    push!(next, j)
+                end
+            end
+            push!(new_forces_to_timesteps, next)
+        end
+        new_timesteps_to_forces = timesteps_to_forces[step_ix]
+    else
+        new_timesteps_to_forces = timesteps_to_forces
+        new_forces_to_timesteps = forces_to_timesteps
+    end
+    new_timesteps_to_forces::Vector{Int}
+    storage[:forces_map] = (
+        forces = forces,
+        forces_to_timesteps = new_forces_to_timesteps,
+        timesteps_to_forces = new_timesteps_to_forces,
+        num_unique = num_unique
+    )
+
     if allforces isa Vector
         allforces = allforces[step_ix]
     end
 
-    fg = storage[:forces_gradient]
-    fv = storage[:forces_vector]
-    fc = storage[:forces_config]
-    ograd = storage[:forces_objective_gradient]
-    if init
-        t = storage[:targets]
-        for (forceno, force) in enumerate(unique_forces)
-            fv[forceno], fc[forceno] = vectorize_forces(force, model, t)
-        end
-    end
-    for g in fg
-        @. g = 0.0
-    end
-    for g in ograd
-        @. g = 0.0
-    end
+    X, dX = get_adjoint_forces_vectors(model, storage, allforces)
+    F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
 
-    N = length(timesteps)
-    @assert N == length(states)
-    # Do sparsity detection if not already done.
-    update_objective_sparsity!(storage, G, states, timesteps, allforces, :forward)
-    for i in N:-1:1
-        forceno = timesteps_to_forces[step_ix[i]]
-        # Unpack stuff for this force in particular
-        forces = unique_forces[forceno]
-        config = fc[forceno]
-        out = fg[forceno]
-        X = fv[forceno]
-        dobj_dgrad = ograd[forceno]
+    Jutul.AdjointsDI.solve_adjoint_generic!(dX, X, F, storage[:adjoint], states, timesteps, G, state0 = state0, forces = allforces)
 
-        s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
-        λ, t, dt, forces = Jutul.next_lagrange_multiplier!(storage, i, G, s, s0, s_next, timesteps, forces)
-        J = evaluate_force_gradient!(dobj_dgrad, X, G, model, storage, parameters, forces, config, forceno, t, i, timesteps[i])
-        mul!(out, J', λ, 1.0, 1.0)
+    if extra_out
+        dforces = map(
+            i -> F(dX, Jutul.optimization_step_info(i, timesteps)).forces,
+            map(first, new_forces_to_timesteps)
+        )
+        offsets = storage[:forces_offsets]
+        dX_i = map(i -> dX[offsets[i]:(offsets[i+1]-1)], 1:(length(offsets)-1))
+        out = (dforces, new_timesteps_to_forces, dX_i, storage[:forces_config])
+    else
+        out = dX
     end
-    for (g, o) in zip(fg, ograd)
-        @. g += o
-    end
-
-    return solve_adjoint_forces_retval(storage, model)
-end
-
-function solve_adjoint_forces_retval(storage, model::SimulationModel)
-    dX = storage[:forces_gradient]
-    dforces = map(
-        (forces, out, config) -> devectorize_forces(forces, model, out, config),
-        storage[:unique_forces], dX, storage[:forces_config]
-    )
-    return (dforces, storage[:timestep_to_forces], dX)
+    return out
 end
 
 function forces_optimization_config(
@@ -627,13 +525,7 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
         end
     end
     global_it = 0
-    force_adj_storage = setup_adjoint_forces_storage(
-        model,
-        forces,
-        dt,
-        state0 = state0,
-        parameters = parameters
-    )
+    cache = Dict()
 
     function evaluate_forward(x, g = nothing)
         sim = Simulator(model, state0 = state0, parameters = parameters)
@@ -652,6 +544,18 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
         simforces = allforces[opt_config.timesteps_to_forces]
         global_it += 1
         states, reports = simulate(sim, dt, forces = simforces, extra_timing = false, info_level = -1)
+        if !haskey(cache, :storage)
+            cache[:storage] = setup_adjoint_forces_storage(
+                    model,
+                    states,
+                    forces,
+                    dt,
+                    G,
+                    state0 = state0,
+                    parameters = parameters
+                )
+        end
+        force_adj_storage = cache[:storage]
         output_data[:states] = states
         if !isnothing(g)
             dforces, t_to_f, grad_adj = solve_adjoint_forces!(force_adj_storage, model, states, reports, G, simforces,

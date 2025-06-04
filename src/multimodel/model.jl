@@ -159,7 +159,7 @@ end
 function setup_equations_and_primary_variable_views!(storage, model::MultiModel, lsys)
     mkeys = submodels_symbols(model)
     groups = model.groups
-    no_groups = isnothing(groups)
+    no_groups = isnothing(groups) || lsys isa NamedTuple
     if no_groups
         groups = ones(Int, length(mkeys))
     end
