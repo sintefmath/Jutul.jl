@@ -456,10 +456,11 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         init = true,
         kwarg...
     )
+    has_substates = haskey(first(states), :substates)
     states, timesteps, step_ix = expand_to_ministeps(states, reports)
     (; forces, forces_to_timesteps, timesteps_to_forces, num_unique) = storage[:forces_map_base]
     # Account for ministeps
-    if haskey(states[1], :substates)
+    if has_substates
         new_forces_to_timesteps = Vector{Vector{Int}}()
         for i in eachindex(forces_to_timesteps)
             next = Int[]
