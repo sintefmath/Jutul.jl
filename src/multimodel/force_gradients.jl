@@ -24,13 +24,13 @@ function vectorize_forces(forces, model::MultiModel, targets = force_targets(mod
     # Actually vectorize
     n = offset
     v = Vector{T}(undef, n)
-    vectorize_forces!(v, model, config, forces)
+    vectorize_forces!(v, model, config, forces, update_config = true)
     return (v, config)
 end
 
-function vectorize_forces!(v, model::MultiModel, config, forces)
+function vectorize_forces!(v, model::MultiModel, config, forces; kwarg...)
     for k in submodels_symbols(model)
-        vectorize_forces!(v, model[k], config[k], forces[k])
+        vectorize_forces!(v, model[k], config[k], forces[k]; kwarg...)
     end
     return v
 end

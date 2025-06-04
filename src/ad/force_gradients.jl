@@ -17,7 +17,7 @@ function vectorize_forces(forces, model, targets = force_targets(model); T = Flo
     )
     n = sum(lengths)
     v = Vector{T}(undef, n)
-    vectorize_forces!(v, model, config, forces)
+    vectorize_forces!(v, model, config, forces, update_config = true)
     return (v, config)
 end
 
@@ -38,7 +38,7 @@ function vectorization_lengths(forces, model, targets = force_targets(model))
     return lengths
 end
 
-function vectorize_forces!(v, model, config, forces)
+function vectorize_forces!(v, model, config, forces; update_config = false)
     (; meta, lengths, offsets, targets) = config
     lpos = 1
     offset = 0
@@ -54,14 +54,16 @@ function vectorize_forces!(v, model, config, forces)
         v_f = view(v, (offset+1):(offset+n_f))
         m = vectorize_force!(v_f, model, force, k, target)
         # Update global offset here.
-        if vectorization_sublength(force, m) == 1
-            push!(offsets, offsets[end] + n_f)
-        else
-            @assert haskey(m, :lengths) "Bad setup for vector?"
-            push!(offsets, offsets[end] + sum(m[:lengths]))
+        if update_config
+            if vectorization_sublength(force, m) == 1
+                push!(offsets, offsets[end] + n_f)
+            else
+                @assert haskey(m, :lengths) "Bad setup for vector?"
+                push!(offsets, offsets[end] + sum(m[:lengths]))
+            end
+            @assert offsets[end] == offsets[end-1] + n_f
+            meta[k] = m
         end
-        @assert offsets[end] == offsets[end-1] + n_f
-        meta[k] = m
         lpos += 1
         offset += n_f
     end
@@ -220,32 +222,18 @@ function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
 
     unique_forces, forces_to_timestep, timesteps_to_forces, = forces_map
 
-    # storage[:unique_forces] = unique_forces
-    # storage[:forces_to_timestep] = forces_to_timestep
-    # storage[:timestep_to_forces] = timesteps_to_forces
     storage[:forces_map_base] = forces_map
     storage[:forces_map] = forces_map
-    # storage[:forces_gradient] = []
-    # storage[:forces_vector] = []
     storage[:forces_config] = []
     storage[:forces_offsets] = Int[1]
-    # storage[:forces_sparsity] = []
-    # storage[:forces_jac] = []
     storage[:targets] = targets
-    # storage[:forces_objective_gradient] = Vector{Float64}[]
 
     nvar = storage.n_forward
     offsets = storage[:forces_offsets]
     for (i, force) in enumerate(unique_forces)
         X, config = vectorize_forces(force, model, targets)
-        # push!(storage[:forces_gradient], zeros(length(X)))
-        # push!(storage[:forces_vector], X)
         push!(storage[:forces_config], config)
         push!(offsets, offsets[end]+length(X))
-        # S_force = determine_sparsity_forces(model, force, X, config, parameters = parameters)
-        # push!(storage[:forces_sparsity], S_force)
-        # push!(storage[:forces_jac], sparse(Int[], Int[], Float64[], nvar, length(X)))
-        # push!(storage[:forces_objective_gradient], zeros(length(X)))
     end
     X, = get_adjoint_forces_vectors(model, storage, allforces)
     F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
@@ -383,7 +371,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
     )
     offsets = storage[:forces_offsets]
     dX_i = map(i -> dX[offsets[i]:(offsets[i+1]-1)], 1:(length(offsets)-1))
-    return (dforces, new_timesteps_to_forces, dX_i)
+    return (dforces, new_timesteps_to_forces, dX_i, storage[:forces_config])
 end
 
 function forces_optimization_config(
