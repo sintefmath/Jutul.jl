@@ -261,7 +261,7 @@ function get_adjoint_forces_vectors(model, storage, allforces)
             forces = allforces
         end
         X_i = view(X, offsets[i]:(offsets[i+1]-1))
-        vectorize_forces!(X, model, cfg, forces)
+        vectorize_forces!(X_i, model, cfg, forces)
     end
     return (X, dX)
 end
