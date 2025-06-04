@@ -16,7 +16,7 @@ function vectorize_forces(forces, model::MultiModel, targets = force_targets(mod
         config[k] = (
             lengths = sublengths,
             offsets = [offset+1],
-            meta = Dict{Symbol, Any}(),
+            meta = OrderedDict{Symbol, Any}(),
             targets = target
         )
         offset += sum(sublengths)

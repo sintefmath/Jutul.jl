@@ -7,7 +7,7 @@ function force_targets(model, variant = :all)
 end
 
 function vectorize_forces(forces, model, targets = force_targets(model); T = Float64)
-    meta_for_forces = Dict{Symbol, Any}()
+    meta_for_forces = OrderedDict{Symbol, Any}()
     lengths = vectorization_lengths(forces, model, targets)
     config = (
         lengths = lengths,
