@@ -517,7 +517,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
 
     dforces = map(
         i -> F(X, Jutul.optimization_step_info(i, timesteps)),
-        map(first, forces_to_timestep)
+        map(first, forces_to_timesteps)
     )
     offsets = storage[:forces_offsets]
     dX_i = map(i -> dX[offsets[i]:(offsets[i+1]-1)], 1:(length(offsets)-1))

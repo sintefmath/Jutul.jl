@@ -372,7 +372,15 @@ end
 
 function reset_context_and_groups(model::Jutul.SimulationModel)
     if model.context != Jutul.DefaultContext()
-        model = SimulationModel(model.domain, model.system, formulation = model.formulation, data_domain = model.data_domain, extra = model.extra)
+        model = SimulationModel(model.domain, model.system,
+            formulation = model.formulation,
+            data_domain = model.data_domain,
+            extra = model.extra,
+            primary_variables = model.primary_variables,
+            secondary_variables = model.secondary_variables,
+            parameters = model.parameters,
+            equations = model.equations
+        )
     end
     return model
 end
