@@ -348,6 +348,9 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_in
     s = JutulStorage()
     if sim.model isa Jutul.MultiModel
         for (k, v) in pairs(state)
+            if k == :substates
+                continue
+            end
             s[k] = JutulStorage(v)
         end
     else
