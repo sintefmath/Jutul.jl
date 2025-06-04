@@ -334,6 +334,7 @@ end
 
 function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_info, dt, F, G, forces, N = 1, cache = missing)
     case = setup_case(x, F, step_info, state0, forces, N)
+    case = reset_context_and_groups(case)
     if step_info[:step] == 1
         state0 = case.state0
     end
@@ -354,4 +355,24 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_in
     end
     r[end] = G(case.model, s, dt, step_info, case.forces)
     return copy(r)
+end
+
+function reset_context_and_groups(case::Jutul.JutulCase)
+    model = reset_context_and_groups(case.model)
+    return JutulCase(model, case.dt, case.forces, case.state0, case.parameters, case.input_data)
+end
+
+function reset_context_and_groups(model::Jutul.MultiModel{label}) where label
+    new_models = Jutul.OrderedDict()
+    for (k, m) in pairs(model.models)
+        new_models[k] = reset_context_and_groups(m)
+    end
+    return MultiModel(new_models, label, cross_terms = model.cross_terms)
+end
+
+function reset_context_and_groups(model::Jutul.SimulationModel)
+    if model.context != Jutul.DefaultContext()
+        model = SimulationModel(model.domain, model.system, formulation = model.formulation, data_domain = model.data_domain, extra = model.extra)
+    end
+    return model
 end

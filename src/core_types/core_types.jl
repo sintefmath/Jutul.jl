@@ -268,6 +268,11 @@ function SimulationModel(domain, system;
                             data_domain = missing,
                             extra = OrderedDict{Symbol, Any}(),
                             plot_mesh = missing,
+                            primary_variables = missing,
+                            secondary_variables = missing,
+                            parameters = missing,
+                            equations = missing,
+                            outputs = Vector{Symbol}(),
                             kwarg...
                         )
     context = initialize_context!(context, domain, system, formulation)
@@ -285,32 +290,54 @@ function SimulationModel(domain, system;
     end
 
     T = OrderedDict{Symbol,JutulVariables}
-    primary = T()
-    secondary = T()
-    parameters = T()
-    equations = OrderedDict{Symbol,JutulEquation}()
+    need_primary = ismissing(primary_variables)
+    if need_primary
+        primary_variables = T()
+    end
+    need_secondary = ismissing(secondary_variables)
+    if need_secondary
+        secondary_variables = T()
+    end
+    need_parameters = ismissing(parameters)
+    if need_parameters
+        parameters = T()
+    end
+    need_equations = ismissing(equations)
+    if need_equations
+        equations = OrderedDict{Symbol,JutulEquation}()
+    end
     outputs = Vector{Symbol}()
     D = typeof(domain)
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, data_domain, primary, secondary, parameters, equations, outputs, extra)
+    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, data_domain, primary_variables, secondary_variables, parameters, equations, outputs, extra)
     update_model_pre_selection!(model)
-    select_primary_variables!(model)
-    select_secondary_variables!(model)
-    select_parameters!(model)
-    select_equations!(model)
-    function check_prim(pvar)
-        a = map(associated_entity, values(pvar))
-        for u in unique(a)
-            ut = typeof(u)
-            deltas = diff(findall(typeof.(a) .== ut))
-            if any(deltas .!= 1)
-                error("All primary variables of the same type must come sequentially: Error ocurred for $ut:\nPrimary: $pvar\nTypes: $a")
+    if need_primary
+        select_primary_variables!(model)
+    end
+    if need_secondary
+        select_secondary_variables!(model)
+    end
+    if need_parameters
+        select_parameters!(model)
+    end
+    if need_equations
+        select_equations!(model)
+        function check_prim(pvar)
+            a = map(associated_entity, values(pvar))
+            for u in unique(a)
+                ut = typeof(u)
+                deltas = diff(findall(typeof.(a) .== ut))
+                if any(deltas .!= 1)
+                    error("All primary variables of the same type must come sequentially: Error ocurred for $ut:\nPrimary: $pvar\nTypes: $a")
+                end
             end
         end
     end
-    check_prim(primary)
+    if need_primary
+        check_prim(primary_variables)
+    end
     select_output_variables!(model, output_level)
     update_model_post_selection!(model)
     return model
@@ -1026,7 +1053,7 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
         end
         models = models_new
     else
-        models::JutuLStorage
+        models::JutulStorage
     end
     if reduction == :schur_apply
         if length(groups) == 1

@@ -273,6 +273,7 @@ function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
     end
 
     function force_steps(forces::Vector, dt)
+        length(allforces) == length(dt) || error("Mismatch in length of forces $(length(allforces)) and dt ($(length(dt)))")
         unique_forces = unique(forces)
         num_unique_forces = length(unique_forces)
         force_map = Vector{Vector{Int}}(undef, num_unique_forces)
@@ -339,6 +340,7 @@ function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
     # storage[:unique_forces] = unique_forces
     # storage[:forces_to_timestep] = forces_to_timestep
     # storage[:timestep_to_forces] = timesteps_to_forces
+    storage[:forces_map_base] = forces_map
     storage[:forces_map] = forces_map
     # storage[:forces_gradient] = []
     # storage[:forces_vector] = []
@@ -396,12 +398,11 @@ end
 function get_adjoint_forces_setup_function(storage, model, parameters, state0)
     offsets = storage[:forces_offsets]::Vector{Int}
     configs = storage[:forces_config]
-    fmap = storage[:forces_map]
     function F(X, step_info)
+        fmap = storage[:forces_map]
         ix = step_info[:step]
         i = fmap.timesteps_to_forces[ix]
         X_i = view(X, offsets[i]:(offsets[i+1]-1))
-
         f = deepcopy(fmap.forces[i])
         dt = step_info[:dt]
         cfg = configs[i]
@@ -456,7 +457,16 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         kwarg...
     )
     states, timesteps, step_ix = expand_to_ministeps(states, reports)
-    unique_forces, forces_to_timestep, timesteps_to_forces, = storage[:forces_map]
+    (; forces, forces_to_timesteps, timesteps_to_forces, num_unique) = storage[:forces_map_base]
+
+
+    storage[:forces_map] = (
+        forces = forces,
+        forces_to_timesteps = forces_to_timesteps, # TODO:
+        timesteps_to_forces = timesteps_to_forces[step_ix],
+        num_unique = num_unique
+    )
+
     if allforces isa Vector
         allforces = allforces[step_ix]
     end
