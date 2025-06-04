@@ -458,12 +458,28 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
     )
     states, timesteps, step_ix = expand_to_ministeps(states, reports)
     (; forces, forces_to_timesteps, timesteps_to_forces, num_unique) = storage[:forces_map_base]
-
-
+    # Account for ministeps
+    if haskey(states[1], :substates)
+        new_forces_to_timesteps = Vector{Vector{Int}}()
+        for i in eachindex(forces_to_timesteps)
+            next = Int[]
+            old = forces_to_timesteps[i]
+            for j in step_ix
+                if insorted(j, old)
+                    push!(next, j)
+                end
+            end
+            push!(new_forces_to_timesteps, next)
+        end
+        new_timesteps_to_forces = timesteps_to_forces[step_ix]
+    else
+        new_timesteps_to_forces = timesteps_to_forces
+        new_forces_to_timesteps = forces_to_timesteps
+    end
     storage[:forces_map] = (
         forces = forces,
-        forces_to_timesteps = forces_to_timesteps, # TODO:
-        timesteps_to_forces = timesteps_to_forces[step_ix],
+        forces_to_timesteps = new_forces_to_timesteps,
+        timesteps_to_forces = new_timesteps_to_forces,
         num_unique = num_unique
     )
 
@@ -517,11 +533,11 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
 
     dforces = map(
         i -> F(X, Jutul.optimization_step_info(i, timesteps)).forces,
-        map(first, forces_to_timesteps)
+        map(first, new_forces_to_timesteps)
     )
     offsets = storage[:forces_offsets]
     dX_i = map(i -> dX[offsets[i]:(offsets[i+1]-1)], 1:(length(offsets)-1))
-    return (dforces, timesteps_to_forces, dX_i)
+    return (dforces, new_timesteps_to_forces, dX_i)
 end
 
 function forces_optimization_config(
