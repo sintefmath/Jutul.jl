@@ -245,6 +245,7 @@ Base.@kwdef mutable struct AdjointsObjectiveHelper
     N
     cache = Dict()
     states = missing
+    timesteps = missing
     case = missing
 end
 
@@ -255,6 +256,7 @@ function set_to_step!(H::AdjointsObjectiveHelper, state, state0, step_info, dt)
     H.step_info = step_info
     H.dt = dt
     H.states = missing
+    H.timesteps = missing
     return H
 end
 
@@ -268,7 +270,8 @@ function (H::AdjointsObjectiveHelper)(x)
         # Loop over all to get the "extended sparsity".
         # This is a bit of a hack, but it covers the case where there is some change in dynamics/controls at a later step.
         t = 0.0
-        timesteps = case.dt
+        # timesteps = case.dt
+        timesteps = H.timesteps
         dt_i = timesteps[1]
         total_time = sum(timesteps)
         N = length(timesteps)
@@ -321,8 +324,10 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
             prep = prepare_jacobian(H, backend, X)
         else
             H.states = states
+            H.timesteps = timesteps
             prep = prepare_jacobian(H, backend, X)
             H.states = missing
+            H.timesteps = missing
         end
         storage[:prep_di] = prep
     else
