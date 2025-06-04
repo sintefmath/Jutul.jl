@@ -138,7 +138,6 @@ function devectorize_forces(forces, model, X, config; offset = 0)
 end
 
 function devectorize_force(force::Vector, model, X, cfg, name, variant)
-    # new_force = similar(force)
     new_force_any = Vector{Any}(undef, length(force))
     offset = 0
     for (i, f) in enumerate(force)
@@ -325,6 +324,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         state0 = setup_state(model),
         parameters = setup_parameters(model),
         init = true,
+        extra_out = true,
         kwarg...
     )
     has_substates = haskey(first(states), :substates)
@@ -365,13 +365,18 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
 
     Jutul.AdjointsDI.solve_adjoint_generic!(dX, X, F, storage[:adjoint], states, timesteps, G, state0 = state0, forces = allforces)
 
-    dforces = map(
-        i -> F(X, Jutul.optimization_step_info(i, timesteps)).forces,
-        map(first, new_forces_to_timesteps)
-    )
-    offsets = storage[:forces_offsets]
-    dX_i = map(i -> dX[offsets[i]:(offsets[i+1]-1)], 1:(length(offsets)-1))
-    return (dforces, new_timesteps_to_forces, dX_i, storage[:forces_config])
+    if extra_out
+        dforces = map(
+            i -> F(dX, Jutul.optimization_step_info(i, timesteps)).forces,
+            map(first, new_forces_to_timesteps)
+        )
+        offsets = storage[:forces_offsets]
+        dX_i = map(i -> dX[offsets[i]:(offsets[i+1]-1)], 1:(length(offsets)-1))
+        out = (dforces, new_timesteps_to_forces, dX_i, storage[:forces_config])
+    else
+        out = dX
+    end
+    return out
 end
 
 function forces_optimization_config(
