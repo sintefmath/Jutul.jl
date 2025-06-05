@@ -110,7 +110,7 @@ function simulator_config(sim; kwarg...)
     return cfg
 end
 
-function select_linear_solver(sim::Union{Simulator, HelperSimulator}; kwarg...)
+function select_linear_solver(sim::Simulator; kwarg...)
     return select_linear_solver(sim.model; kwarg...)
 end
 
