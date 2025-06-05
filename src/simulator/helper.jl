@@ -280,3 +280,7 @@ function setup_helper_equation_storage!(storage, r, model; offset = 0)
     end
     return offset
 end
+
+function select_linear_solver(sim::HelperSimulator; kwarg...)
+    return select_linear_solver(sim.model; kwarg...)
+end

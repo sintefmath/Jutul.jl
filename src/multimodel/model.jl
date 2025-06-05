@@ -854,7 +854,6 @@ function check_convergence(storage, model::MultiModel, cfg;
     )
     converged = true
     err = 0
-    lsys = storage.LinearizedSystem
     tol_cfg = cfg[:tolerances]
     errors = OrderedDict()
     for key in targets
