@@ -338,9 +338,9 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         for i in eachindex(forces_to_timesteps)
             next = Int[]
             old = forces_to_timesteps[i]
-            for j in step_ix
+            for (new_step_no, j) in enumerate(step_ix)
                 if insorted(j, old)
-                    push!(next, j)
+                    push!(next, new_step_no)
                 end
             end
             push!(new_forces_to_timesteps, next)
@@ -351,6 +351,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         new_forces_to_timesteps = forces_to_timesteps
     end
     new_timesteps_to_forces::Vector{Int}
+    @assert sum(length, new_forces_to_timesteps) == length(timesteps)
     storage[:forces_map] = (
         forces = forces,
         forces_to_timesteps = new_forces_to_timesteps,
