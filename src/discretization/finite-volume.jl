@@ -41,7 +41,6 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
 
-    T_hf = zeros(eltype(face_areas), length(faces))
     nc = length(facepos)-1
     if isa(perm, Real)
         perm = repeat([perm], 1, nc)
@@ -51,6 +50,9 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
             perm = reshape(perm, 1, :)
         end
     end
+    # Make sure that types match
+    T_num = promote_type(eltype(face_areas), eltype(cell_centroids), eltype(face_normals), eltype(face_areas), eltype(perm))
+    T_hf = zeros(T_num, length(faces))
 
     # Sanity check
     if !(dim == 2 || dim == 3 || dim == 1)
