@@ -17,8 +17,12 @@ function HelperSimulator(model::M, T = Float64;
         executor::E = Jutul.default_executor(),
         cache = missing,
         n_extra = 0,
+        sort_variables = true,
         kwarg...
     ) where {M, E}
+    if sort_variables
+        Jutul.sort_secondary_variables!(model)
+    end
     n = Jutul.number_of_degrees_of_freedom(model)
     ckey = (T, n)
     has_cache = !ismissing(cache)
