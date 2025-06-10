@@ -168,10 +168,18 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
     end
 
     pkeys = active_keys(dopt)
-    print_table(pkeys, "Active optimization parameters")
+    if length(pkeys) == 0
+        println(io, "No active optimization parameters.")
+    else
+        print_table(pkeys, "Active optimization parameters")
+    end
     if print_inactive
         ikeys = inactive_keys(dopt)
-        print_table(ikeys, "Inactive optimization parameters", false)
+        if length(ikeys) == 0
+            println(io, "No inactive optimization parameters.")
+        else
+            print_table(ikeys, "Inactive optimization parameters", false)
+        end
     end
 end
 
