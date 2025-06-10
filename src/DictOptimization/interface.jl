@@ -68,6 +68,35 @@ function optimize(dopt::DictParameters, objective, setup_fn;
     return (prm_out, history)
 end
 
+function parameters_gradient(dopt::DictParameters, objective, setup_fn;
+        simulator = missing,
+        config = missing,
+        cache = missing,
+        raw_output = false,
+        backend_arg = (
+            use_sparsity = false,
+            di_sparse = true,
+            single_step_sparsity = false,
+            do_prep = true,
+        )
+    )
+    x0, x_setup, = optimization_setup(dopt, include_limits = false)
+    if ismissing(cache)
+        cache = setup_optimization_cache(dopt, simulator = simulator, config = config)
+    end
+
+    f, g = solve_and_differentiate_for_optimization(x0, dopt, setup_fn, objective, x_setup, cache;
+        backend_arg
+    )
+    if raw_output
+        out = (f, g)
+    else
+        # Put gradients into the same structure as the input
+        out = Jutul.AdjointsDI.devectorize_nested(g, x_setup)
+    end
+    return out
+end
+
 function freeze_optimization_parameter!(dopt::DictParameters, parameter_name, val = missing)
     parameter_name = convert_key(parameter_name)
     if !ismissing(val)

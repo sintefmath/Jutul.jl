@@ -328,5 +328,9 @@ import Jutul.DictOptimization as DictOptimization
 
         @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
         @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
+
+        grad = parameters_gradient(dprm, poisson_mismatch_objective, setup_poisson_test_case_from_dict)
+        @test grad["k_val"] ≈ 0.0276189 atol = 0.01
+        @test grad["U0"] ≈ 0.00 atol = 1e-8
     end
 end

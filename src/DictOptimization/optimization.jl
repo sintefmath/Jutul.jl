@@ -71,13 +71,17 @@ end
 
 
 
-function optimization_setup(dopt::DictParameters)
+function optimization_setup(dopt::DictParameters; include_limits = true)
     x0, x_setup = Jutul.AdjointsDI.vectorize_nested(dopt.parameters,
         active = active_keys(dopt),
         active_type = dopt.active_type
     )
-    length(x0) > 0 || error("Cannot optimize zero active parameters. Call free_optimization_parameter! first.")
-    lims = realize_limits(dopt)
+    length(x0) > 0 || error("Cannot optimize/differentiate zero active parameters. Call free_optimization_parameter! first.")
+    if include_limits
+        lims = realize_limits(dopt)
+    else
+        lims = missing
+    end
     return (x0 = x0, x_setup = x_setup, limits = lims)
 end
 

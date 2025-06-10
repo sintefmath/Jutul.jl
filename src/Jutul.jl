@@ -124,8 +124,8 @@ module Jutul
 
     # High level adjoints+optimization
     include("DictOptimization/DictOptimization.jl")
-    import Jutul.DictOptimization: DictParameters, optimize, freeze_optimization_parameter!, free_optimization_parameter!, set_optimization_parameter!
-    export DictParameters, optimize, freeze_optimization_parameter!, free_optimization_parameter!, set_optimization_parameter!
+    import Jutul.DictOptimization: DictParameters, optimize, freeze_optimization_parameter!, free_optimization_parameter!, set_optimization_parameter!, parameters_gradient
+    export DictParameters, optimize, freeze_optimization_parameter!, free_optimization_parameter!, set_optimization_parameter!, parameters_gradient
 
 
     # Convergence monitors
