@@ -146,9 +146,7 @@ end
     end
 end
 
-##
 import Jutul.AdjointsDI: solve_adjoint_generic
-
 
 function setup_poisson_test_case_from_vector(x::Vector; fmt = :case, kwarg...)
     case = setup_poisson_test_case(x...; kwarg...)
@@ -292,4 +290,43 @@ import Jutul.DictOptimization as DictOptimization
 
     @test DictOptimization.realize_limit_inner(-1.0, Inf, 4.0, is_max = true) ≈ 4.0
     @test DictOptimization.realize_limit_inner(-1.0, 2.0, 4.0, is_max = true) ≈ 0.0
+
+    @testset "optimizer" begin
+        function default_poisson_dict()
+            return Dict(
+                "dx" => 1.0,
+                "dy" => 1.0,
+                "U0" => 1.0,
+                "k_val" => 1.0,
+                "srcval" => 1.0
+            )
+        end
+
+        function setup_poisson_test_case_from_dict(d::AbstractDict, step_info = missing; fmt = :case, kwarg...)
+            return setup_poisson_test_case(d["dx"], d["dy"], d["U0"], d["k_val"], d["srcval"]; dim = (2, 2), dt = [1.0])
+        end
+
+        prm_truth = default_poisson_dict()
+        states, = simulate(setup_poisson_test_case_from_dict(prm_truth), info_level = -1)
+        function poisson_mismatch_objective(m, s, dt, step_info, forces)
+            step = step_info[:step]
+            U = s[:U]
+            U_ref = states[step][:U]
+            v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U, U_ref))
+            return dt*v
+        end
+        # Perturb a parameter
+        prm = default_poisson_dict()
+        prm["k_val"] = 3.333
+
+        dprm = DictParameters(prm, verbose = false)
+        free_optimization_parameter!(dprm, "k_val", abs_max = 10.0, abs_min = 0.1)
+        # Also do one with relative limits that should not change much
+        free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1)
+
+        prm_opt, hist = optimize(dprm, poisson_mismatch_objective, setup_poisson_test_case_from_dict, max_it = 25);
+
+        @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
+        @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
+    end
 end

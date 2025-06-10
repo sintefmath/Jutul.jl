@@ -83,9 +83,15 @@ function realize_limits(dopt::DictParameters)
     ub = Float64[]
     for parameter_name in active_keys(dopt)
         lims = realize_limits(dopt, parameter_name)
-        for i in eachindex(lims.min, lims.max)
-            push!(lb, lims.min[i])
-            push!(ub, lims.max[i])
+        if lims.min isa Number
+            lims.max::Number
+            push!(lb, lims.min)
+            push!(ub, lims.max)
+        else
+            for i in eachindex(lims.min, lims.max)
+                push!(lb, lims.min[i])
+                push!(ub, lims.max[i])
+            end
         end
     end
     @assert length(lb) == length(ub)
@@ -142,7 +148,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             if is_optimized
                 v = get_nested_dict_value(prm_opt, k)
                 v_avg = avg(v)
-                perc = round(100*(v0_avg-v_avg)/max(v0_avg, 1e-20), digits = 2)
+                perc = round(100*(v_avg-v0_avg)/max(v0_avg, 1e-20), digits = 2)
                 tab[i, 4] = format_value(v)
                 tab[i, 5] = "$perc%"
             end

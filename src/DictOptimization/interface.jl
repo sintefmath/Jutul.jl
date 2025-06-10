@@ -25,7 +25,9 @@ function optimize(dopt::DictParameters, objective, setup_fn;
     solve_and_differentiate(x) = solve_and_differentiate_for_optimization(x, dopt, setup_fn, objective, x_setup, adj_cache;
         backend_arg
     )
-    jutul_message("Calibration", "Starting calibration of $(length(x0)) parameters.", color = :green)
+    if dopt.verbose
+        jutul_message("Calibration", "Starting calibration of $(length(x0)) parameters.", color = :green)
+    end
 
     t_opt = @elapsed if ismissing(opt_fun)
         v, x, history = Jutul.LBFGS.box_bfgs(x0, solve_and_differentiate, lb, ub;
@@ -55,7 +57,9 @@ function optimize(dopt::DictParameters, objective, setup_fn;
         end
         x, history = opt_fun(f!, g!, x0, lb, ub)
     end
-    jutul_message("Calibration", "Calibration finished in $t_opt seconds.", color = :green)
+    if dopt.verbose
+        jutul_message("Calibration", "Calibration finished in $t_opt seconds.", color = :green)
+    end
     # Also remove AD from the internal ones and update them
     prm_out = deepcopy(dopt.parameters)
     Jutul.AdjointsDI.devectorize_nested!(prm_out, x, x_setup)
