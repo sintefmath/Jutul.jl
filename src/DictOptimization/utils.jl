@@ -112,14 +112,14 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
     end
 
     function format_value(x)
-        return "$x (scalar)"
+        return "$(round(x, sigdigits=3))"
     end
 
     function format_value(x::AbstractArray)
         u = unique(x)
         N = length(x)
         if length(u) == 1
-            return "$(only(u))"
+            return format_value(only(u))
         else
             a = avg(x)
             std = sqrt(sum((x .- a)).^2)
