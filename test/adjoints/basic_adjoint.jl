@@ -226,3 +226,70 @@ end
         test_for_timesteps([100.0], fmt = fmt)
     end
 end
+
+import Jutul.DictOptimization as DictOptimization
+@testset "DictOptimization" begin
+    testdata = Dict(
+        "scalar" => 3.0,
+        "nested" => Dict(
+            "vector" => [5.0, 1.0, 2.0, 3.0],
+            "scalar" => 3.0
+        ),
+        "negative_scalar" => -3.0,
+        "vector" => [3.0, -1.0],
+        "matrix" => [1.0 -pi; 5.0 4.0]
+    )
+
+    dopt = DictParameters(testdata)
+
+    @test_throws "[\"scalar\"] has limit abs_min larger than initial value 3.0" DictOptimization.free_optimization_parameter!(dopt, "scalar", abs_min = 5.0, abs_max = 4.0)
+    @test_throws "[\"scalar\"] has no feasible values for abs_min = 3.0 and abs_max = 3.0" DictOptimization.free_optimization_parameter!(dopt, "scalar", abs_min = 3.0, abs_max = 3.0)
+    @test_throws "[\"vector\"] has limit abs_min larger than initial value -1.0 in entry at CartesianIndex(2,)." DictOptimization.free_optimization_parameter!(dopt, "vector", abs_min = 0.0, abs_max = 4.0)
+
+    free_optimization_parameter!(dopt, "scalar", abs_min = -2.0, abs_max = 4.0)
+    s = dopt.parameter_targets[["scalar"]]
+    @test s.abs_min == -2.0
+    @test s.abs_max == 4.0
+    @test s.rel_min == -Inf
+    @test s.rel_max == Inf
+
+    freeze_optimization_parameter!(dopt, "scalar")
+    @test !haskey(dopt.parameter_targets, ["scalar"])
+
+    free_optimization_parameter!(dopt, "vector", abs_min = [0.2, -2.0], abs_max = 4.0)
+    v = dopt.parameter_targets[["vector"]]
+    @test v.abs_min == [0.2, -2.0]
+    @test v.abs_max == 4.0
+    @test v.rel_min == -Inf
+    @test v.rel_max == Inf
+
+
+    lims = DictOptimization.realize_limits(dopt, "vector")
+    @test lims.min ≈ [0.2, -2.0]
+    @test lims.max ≈ [4.0, 4.0]
+
+    l = DictOptimization.KeyLimits(rel_min = 0.1, rel_max = 1.5)
+
+    # Relative limits
+    @test DictOptimization.realize_limit(1.0, l, is_max = true) ≈ 1.5
+    @test DictOptimization.realize_limit(100.0, l, is_max = true) ≈ 150.0
+
+    @test DictOptimization.realize_limit(1.0, l, is_max = false) ≈ 0.1
+    @test DictOptimization.realize_limit(100.0, l, is_max = false) ≈ 10.0
+
+    # Absolute limits
+    l = DictOptimization.KeyLimits(abs_min = 0.1, abs_max = 150.0)
+    @test DictOptimization.realize_limit(1.0, l, is_max = true) ≈ 150.0
+    @test DictOptimization.realize_limit(100.0, l, is_max = true) ≈ 150.0
+
+    @test DictOptimization.realize_limit(1.0, l, is_max = false) ≈ 0.1
+    @test DictOptimization.realize_limit(100.0, l, is_max = false) ≈ 0.1
+
+    # Mixed limits
+    l = DictOptimization.KeyLimits(abs_min = 0.1, abs_max = 150.0, rel_min = 0.1, rel_max = 1.5)
+    @test DictOptimization.realize_limit(1.0, l, is_max = true) ≈ 1.5
+    @test DictOptimization.realize_limit(100.0, l, is_max = true) ≈ 150.0
+
+    @test DictOptimization.realize_limit_inner(-1.0, Inf, 4.0, is_max = true) ≈ 4.0
+    @test DictOptimization.realize_limit_inner(-1.0, 2.0, 4.0, is_max = true) ≈ 0.0
+end

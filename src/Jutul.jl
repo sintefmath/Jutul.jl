@@ -122,6 +122,12 @@ module Jutul
     using .LBFGS
     import .LBFGS: unit_box_bfgs
 
+    # High level adjoints+optimization
+    include("DictOptimization/DictOptimization.jl")
+    import Jutul.DictOptimization: DictParameters, optimize, freeze_optimization_parameter!, free_optimization_parameter!, set_optimization_parameter!
+    export DictParameters, optimize, freeze_optimization_parameter!, free_optimization_parameter!, set_optimization_parameter!
+
+
     # Convergence monitors
     include("ConvergenceMonitors/ConvergenceMonitors.jl")
     import Jutul.ConvergenceMonitors: ConvergenceMonitorCuttingCriterion
