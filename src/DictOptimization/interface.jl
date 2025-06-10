@@ -73,6 +73,7 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn;
         config = missing,
         cache = missing,
         raw_output = false,
+        output_cache = false,
         backend_arg = (
             use_sparsity = false,
             di_sparse = true,
@@ -89,10 +90,17 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn;
         backend_arg
     )
     if raw_output
-        out = (f, g)
+        if output_cache
+            out = (f, g, cache)
+        else
+            out = (f, g)
+        end
     else
         # Put gradients into the same structure as the input
         out = Jutul.AdjointsDI.devectorize_nested(g, x_setup)
+        if output_cache
+            out = (out, cache)
+        end
     end
     return out
 end
