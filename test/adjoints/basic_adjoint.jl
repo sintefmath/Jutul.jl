@@ -332,5 +332,17 @@ import Jutul.DictOptimization as DictOptimization
         grad = parameters_gradient(dprm, poisson_mismatch_objective, setup_poisson_test_case_from_dict)
         @test grad["k_val"] ≈ 0.0276189 atol = 0.01
         @test grad["U0"] ≈ 0.00 atol = 1e-8
+        @test !haskey(grad, "dx")
+        @test !haskey(grad, "dy")
+        @test !haskey(grad, "srcval")
+
+        dprm.strict = false
+        free_optimization_parameters!(dprm)
+        grad_all = parameters_gradient(dprm, poisson_mismatch_objective, setup_poisson_test_case_from_dict)
+        @test grad_all["k_val"] ≈ 0.0276189 atol = 0.01
+        @test grad_all["U0"] ≈ 0.00 atol = 1e-8
+        @test grad_all["dx"] ≈ 0.0 atol = 1e-8
+        @test grad_all["dy"] ≈ 0.0 atol = 1e-8
+        @test grad_all["srcval"] ≈ -0.105863 atol = 0.01
     end
 end

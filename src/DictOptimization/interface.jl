@@ -140,6 +140,13 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
     return dopt
 end
 
+function free_optimization_parameters!(dopt::DictParameters, targets = all_keys(dopt); kwarg...)
+    for k in targets
+        free_optimization_parameter!(dopt, k; kwarg...)
+    end
+    return dopt
+end
+
 function set_optimization_parameter!(dopt::DictParameters, parameter_name, value)
     set_nested_dict_value!(dopt.parameters, parameter_name, value)
 end
