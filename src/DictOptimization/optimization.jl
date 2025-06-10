@@ -9,7 +9,9 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         # Set the parameters from the vector
         Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup)
         # Return the case setup function
-        return setup_fn(prm, step_info)
+        # This is a function that sets up the case from the parameters
+        F() = setup_fn(prm, step_info)
+        return redirect_stdout(F, devnull)
     end
 
     case = setup_from_vector(x, missing)
