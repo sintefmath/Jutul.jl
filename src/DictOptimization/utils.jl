@@ -119,10 +119,11 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         u = unique(x)
         N = length(x)
         if length(u) == 1
-            return "$(only(u)) ($N values)"
+            return "$(only(u))"
         else
             a = avg(x)
-            return "Avg. $a ($N values)"
+            std = sqrt(sum((x .- a)).^2)
+            return "μ=$(round(a, sigdigits=3)), σ=$(round(std, sigdigits=3))"
         end
     end
 
@@ -131,7 +132,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         prm = dopt.parameters
         prm_opt = dopt.parameters_optimized
         is_optimized = !ismissing(prm_opt) && print_opt
-        header = ["Name", "Initial value", "Bounds"]
+        header = ["Name", "Initial value", "Count", "Bounds"]
         if is_optimized
             push!(header, "Optimized value")
             push!(header, "Change")
@@ -154,13 +155,14 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             end
             tab[i, 1] = join(k, ".")
             tab[i, 2] = format_value(v0)
-            tab[i, 3] = limstr
+            tab[i, 3] = length(v0)
+            tab[i, 4] = limstr
             if is_optimized
                 v = get_nested_dict_value(prm_opt, k)
                 v_avg = avg(v)
                 perc = round(100*(v_avg-v0_avg)/max(v0_avg, 1e-20), digits = 2)
-                tab[i, 4] = format_value(v)
-                tab[i, 5] = "$perc%"
+                tab[i, 5] = format_value(v)
+                tab[i, 6] = "$perc%"
             end
         end
         # TODO: Do this properly instead of via Jutul's import...
