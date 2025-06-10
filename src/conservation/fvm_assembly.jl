@@ -186,7 +186,7 @@ function fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
     fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val)
 end
 
-function fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val)
+function fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val::T) where T
     for face in 1:nu
         @inbounds for j in vrange(face_cache, face)
             v_i = @views face_cache.entries[:, j]
@@ -194,6 +194,7 @@ function fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc,
 
             state_i = new_entity_index(local_state, var)
             flux = face_flux!(val, face, law, state_i, model, dt, disc, local_disc)
+            flux::T
             for i in eachindex(flux)
                 @inbounds v_i[i] = flux[i]
             end

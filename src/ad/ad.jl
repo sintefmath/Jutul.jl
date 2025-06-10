@@ -407,7 +407,7 @@ Replace values (for non-Real types, direct assignment)
     @. v = next
 end
 
-@inline function update_values!(v::AbstractArray{<:Real}, next::AbstractArray{<:ForwardDiff.Dual{Tag}}) where Tag
+@inline function update_values!(v::AbstractArray{<:AbstractFloat}, next::AbstractArray{<:ForwardDiff.Dual{Tag}}) where Tag
     Tag::JutulEntity
     @inbounds for i in eachindex(v, next)
         next_val = next[i]
