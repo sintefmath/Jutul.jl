@@ -30,14 +30,14 @@ end
 function realize_limit(dopt::DictParameters, parameter_name; is_max::Bool)
     vals = get_nested_dict_value(dopt.parameters, parameter_name)
     lims = get_parameter_limits(dopt, parameter_name)
-    return realize_limit(vals, lims, is_max = is_max)
+    return realize_limit(vals, lims, is_max = is_max, strict = dopt.strict)
 end
 
-function realize_limit(initial::Union{Number, Array}, lims::KeyLimits; is_max::Bool)
+function realize_limit(initial::Union{Number, Array}, lims::KeyLimits; is_max::Bool, strict::Bool = true)
     if is_max
-        l = realize_limit_inner(initial, lims.rel_max, lims.abs_max, is_max = true)
+        l = realize_limit_inner(initial, lims.rel_max, lims.abs_max, is_max = true, strict = strict)
     else
-        l = realize_limit_inner(initial, lims.rel_min, lims.abs_min, is_max = false)
+        l = realize_limit_inner(initial, lims.rel_min, lims.abs_min, is_max = false, strict = strict)
     end
     return l
 end
@@ -50,24 +50,28 @@ function limit_getindex(x::Array, I)
     return x[I]
 end
 
-function realize_limit_inner(initial::Array, rel, abs; is_max::Bool)
+function realize_limit_inner(initial::Array, rel, abs; is_max::Bool, strict = true)
     out = similar(initial)
     for (i, v) in enumerate(initial)
         r = limit_getindex(rel, i)
         a = limit_getindex(abs, i)
-        out[i] = realize_limit_inner(v, r, a, is_max = is_max)
+        out[i] = realize_limit_inner(v, r, a, is_max = is_max, strict = strict)
     end
     return out
 end
 
-function realize_limit_inner(initial::Number, rel_lim::Number, abs_lim::Number; is_max::Bool)
+function realize_limit_inner(initial::Number, rel_lim::Number, abs_lim::Number; is_max::Bool, strict::Bool = true)
     rel_delta = abs(initial*(rel_lim-1.0))
     if is_max
         l = min(abs_lim, initial + rel_delta)
-        @assert initial <= l
+        if strict
+            @assert initial <= l
+        end
     else
         l = max(abs_lim, initial - rel_delta)
-        @assert initial >= l
+        if strict
+            @assert initial >= l
+        end
     end
     return l
 end
@@ -138,7 +142,13 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             v0_avg = avg(v0)
             if haskey(pt, k)
                 lims = realize_limits(dopt, k)
-                limstr = "$(minimum(lims.min)) to $(maximum(lims.max))"
+                min_lim = minimum(lims.min)
+                max_lim = maximum(lims.max)
+                if !isfinite(min_lim) && !isfinite(max_lim)
+                    limstr = "(Not set)"
+                else
+                    limstr = "$(min_lim) to $(max_lim)"
+                end
             else
                 limstr = "(Not set)"
             end
