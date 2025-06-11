@@ -146,7 +146,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
                 if !isfinite(min_lim) && !isfinite(max_lim)
                     limstr = "(Not set)"
                 else
-                    limstr = "$(min_lim) to $(max_lim)"
+                    limstr = "$(round(min_lim, sigdigits=3)) to $(round(max_lim, sigdigits=3))"
                 end
             else
                 limstr = "(Not set)"
