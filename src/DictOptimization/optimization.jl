@@ -84,7 +84,7 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
     )
     length(x0) > 0 || error("Cannot optimize/differentiate zero active parameters. Call free_optimization_parameter! first.")
     if include_limits
-        lims = realize_limits(dopt)
+        lims = realize_limits(dopt, x_setup)
     else
         lims = missing
     end

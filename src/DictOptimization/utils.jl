@@ -82,10 +82,10 @@ function realize_limits(dopt::DictParameters, parameter_name)
     return (min = lb, max = ub)
 end
 
-function realize_limits(dopt::DictParameters)
+function realize_limits(dopt::DictParameters, x_setup::NamedTuple)
     lb = Float64[]
     ub = Float64[]
-    for parameter_name in active_keys(dopt)
+    for parameter_name in x_setup.names
         lims = realize_limits(dopt, parameter_name)
         if lims.min isa Number
             lims.max::Number
