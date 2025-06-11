@@ -21,12 +21,11 @@ function optimize(dopt::DictParameters, objective, setup_fn;
     # Set up a cache for forward/backward sim
     adj_cache = setup_optimization_cache(dopt, simulator = simulator, config = config)
 
-    # setup_battmo_case(X, step_info = missing) = setup_battmo_case_for_calibration(X, sim, x_setup, step_info)
     solve_and_differentiate(x) = solve_and_differentiate_for_optimization(x, dopt, setup_fn, objective, x_setup, adj_cache;
         backend_arg
     )
     if dopt.verbose
-        jutul_message("Calibration", "Starting calibration of $(length(x0)) parameters.", color = :green)
+        jutul_message("Optimization", "Starting calibration of $(length(x0)) parameters.", color = :green)
     end
 
     t_opt = @elapsed if ismissing(opt_fun)
@@ -58,7 +57,7 @@ function optimize(dopt::DictParameters, objective, setup_fn;
         x, history = opt_fun(f!, g!, x0, lb, ub)
     end
     if dopt.verbose
-        jutul_message("Calibration", "Calibration finished in $t_opt seconds.", color = :green)
+        jutul_message("Optimization", "Finished in $t_opt seconds.", color = :green)
     end
     # Also remove AD from the internal ones and update them
     prm_out = deepcopy(dopt.parameters)
@@ -142,7 +141,7 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
 
     targets = dopt.parameter_targets
     if haskey(targets, parameter_name) && dopt.verbose
-        println("Overwriting value for $parameter_name.")
+        jutul_message("Optimization", "Overwriting limits for $parameter_name.")
     end
     targets[parameter_name] = KeyLimits(rel_min, rel_max, abs_min, abs_max)
     return dopt

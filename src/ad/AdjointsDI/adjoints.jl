@@ -208,7 +208,17 @@ function unpack_setup(step_info, N, case::JutulCase; all = false)
             Ns == N || error("case.forces was a vector and expected $N steps, got $Ns.")
         end
         if !all
-            case = case[step_info[:step]]
+            time = step_info[:time]
+            pos = length(case.dt)
+            t = 0.0
+            for (i, dt) in enumerate(case.dt)
+                if time >= t && time <= t + dt
+                    pos = i
+                    break
+                end
+                t += dt
+            end
+            case = case[pos]
         end
     end
     return case
