@@ -22,11 +22,15 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     if gradient
         S = get(adj_cache, :storage, missing)
         if ismissing(S)
-            S = Jutul.AdjointsDI.setup_adjoint_storage_generic(
+            if dopt.verbose
+                jutul_message("Optimization", "Setting up adjoint storage.")
+            end
+            t_setup = @elapsed S = Jutul.AdjointsDI.setup_adjoint_storage_generic(
                 x, setup_from_vector, states, dt, objective;
                 backend_arg...,
                 info_level = adj_cache[:config][:info_level]
             )
+            jutul_message("Optimization", "Finished setup in $t_setup seconds.", color = :green)
             adj_cache[:storage] = S
         end
         g = get(adj_cache, :dx, missing)

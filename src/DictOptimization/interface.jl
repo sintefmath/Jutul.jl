@@ -27,7 +27,6 @@ function optimize(dopt::DictParameters, objective, setup_fn;
     if dopt.verbose
         jutul_message("Optimization", "Starting calibration of $(length(x0)) parameters.", color = :green)
     end
-
     t_opt = @elapsed if ismissing(opt_fun)
         v, x, history = Jutul.LBFGS.box_bfgs(x0, solve_and_differentiate, lb, ub;
             maximize = false,
