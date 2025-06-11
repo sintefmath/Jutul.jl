@@ -117,14 +117,10 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
 
     function format_value(x::AbstractArray)
         u = unique(x)
-        N = length(x)
-        if length(u) == 1
-            return format_value(only(u))
-        else
-            a = avg(x)
-            std = sqrt(sum((x .- a)).^2)
-            return "μ=$(round(a, sigdigits=3)), σ=$(round(std, sigdigits=3))"
-        end
+        a = avg(x)
+        minval, maxval = extrema(x)
+        maxdiff = max(abs(a - minval), abs(maxval - a))
+        return "$(round(a, sigdigits=3)) ±$(round(maxdiff, sigdigits=3))"
     end
 
     function print_table(subkeys, t, print_opt = true)
@@ -133,9 +129,11 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         prm_opt = dopt.parameters_optimized
         is_optimized = !ismissing(prm_opt) && print_opt
         header = ["Name", "Initial value", "Count", "Bounds"]
+        alignment = [:r, :l, :r, :r]
         if is_optimized
             push!(header, "Optimized value")
             push!(header, "Change")
+            push!(alignment, :l, :r)
         end
         tab = Matrix{Any}(undef, length(subkeys), length(header))
         for (i, k) in enumerate(subkeys)
@@ -160,13 +158,13 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             if is_optimized
                 v = get_nested_dict_value(prm_opt, k)
                 v_avg = avg(v)
-                perc = round(100*(v_avg-v0_avg)/max(v0_avg, 1e-20), digits = 2)
+                perc = round(100*(v_avg-v0_avg)/max(v0_avg, 1e-20), sigdigits = 2)
                 tab[i, 5] = format_value(v)
                 tab[i, 6] = "$perc%"
             end
         end
         # TODO: Do this properly instead of via Jutul's import...
-        Jutul.PrettyTables.pretty_table(io, tab, header=header, title = t)
+        Jutul.PrettyTables.pretty_table(io, tab, header=header, title = t, alignment = alignment)
     end
 
     pkeys = active_keys(dopt)
