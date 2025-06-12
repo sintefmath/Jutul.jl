@@ -1,5 +1,5 @@
 module DictOptimization
-    using Jutul
+    using Jutul, PrettyTables
     include("types.jl")
     include("interface.jl")
     include("validation.jl")

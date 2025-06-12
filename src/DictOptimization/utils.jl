@@ -107,11 +107,21 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         return "$(round(x, sigdigits=3))"
     end
 
-    function fmt_lim(x::Number)
-        if isfinite(x)
-            s = fmt(x)
+    function fmt_lim(x; is_max)
+        u = unique(x)
+        if length(u) == 1 || length(x) > 3
+            if is_max
+                x = maximum(x)
+            else
+                x = minimum(x)
+            end
+            if isfinite(x)
+                s = fmt(x)
+            else
+                s = "-"
+            end
         else
-            s = "-"
+            s = join(map(fmt, x), ", ")
         end
         return s
     end
@@ -130,10 +140,15 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
 
     function format_value(x::AbstractArray)
         u = unique(x)
-        a = avg(x)
-        minval, maxval = extrema(x)
-        maxdiff = max(abs(a - minval), abs(maxval - a))
-        return "$(round(a, sigdigits=3)) ±$(round(maxdiff, sigdigits=3))"
+        if length(x) > 3 || length(u) == 1
+            a = avg(x)
+            minval, maxval = extrema(x)
+            maxdiff = max(abs(a - minval), abs(maxval - a))
+            str = "$(round(a, sigdigits=3)) ± $(round(maxdiff, sigdigits=3))"
+        else
+            str = join(map(fmt, x), ", ")
+        end
+        return str
     end
 
     function print_table(subkeys, t, print_opt = true)
@@ -154,12 +169,12 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             v0_avg = avg(v0)
             if haskey(pt, k)
                 lims = realize_limits(dopt, k)
-                min_lim = minimum(lims.min)
-                max_lim = maximum(lims.max)
-                limstr_min = fmt_lim(min_lim)
-                limstr_max = fmt_lim(max_lim)
+                # min_lim = minimum(lims.min)
+                # max_lim = maximum(lims.max)
+                limstr_min = fmt_lim(lims.min, is_max = false)
+                limstr_max = fmt_lim(lims.max, is_max = true)
             else
-                limstr_min = limstr_max = fmt_lim(NaN)
+                limstr_min = limstr_max = fmt_lim(NaN, is_max = false)
             end
             tab[i, 1] = join(k, ".")
             tab[i, 2] = format_value(v0)
@@ -174,8 +189,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
                 tab[i, 7] = "$perc%"
             end
         end
-        # TODO: Do this properly instead of via Jutul's import...
-        Jutul.PrettyTables.pretty_table(io, tab, header=header, title = t, alignment = alignment)
+        PrettyTables.pretty_table(io, tab, header=header, title = t, alignment = alignment)
     end
 
     pkeys = active_keys(dopt)
