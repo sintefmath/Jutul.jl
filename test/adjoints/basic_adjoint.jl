@@ -146,9 +146,7 @@ end
     end
 end
 
-##
 import Jutul.AdjointsDI: solve_adjoint_generic
-
 
 function setup_poisson_test_case_from_vector(x::Vector; fmt = :case, kwarg...)
     case = setup_poisson_test_case(x...; kwarg...)
@@ -224,5 +222,128 @@ end
     test_for_timesteps([10.0, 3.0, 500.0, 100.0], atol = 0.01)
     for fmt in [:case, :onecase, :model_and_prm, :model_and_prm_and_forces, :model_and_prm_and_forces_and_state0]
         test_for_timesteps([100.0], fmt = fmt)
+    end
+end
+
+import Jutul.DictOptimization as DictOptimization
+@testset "DictOptimization" begin
+    testdata = Dict(
+        "scalar" => 3.0,
+        "nested" => Dict(
+            "vector" => [5.0, 1.0, 2.0, 3.0],
+            "scalar" => 3.0
+        ),
+        "negative_scalar" => -3.0,
+        "vector" => [3.0, -1.0],
+        "matrix" => [1.0 -pi; 5.0 4.0]
+    )
+
+    dopt = DictParameters(testdata)
+
+    @test_throws "[\"scalar\"] has limit abs_min larger than initial value 3.0" DictOptimization.free_optimization_parameter!(dopt, "scalar", abs_min = 5.0, abs_max = 4.0)
+    @test_throws "[\"scalar\"] has no feasible values for abs_min = 3.0 and abs_max = 3.0" DictOptimization.free_optimization_parameter!(dopt, "scalar", abs_min = 3.0, abs_max = 3.0)
+    @test_throws "[\"vector\"] has limit abs_min larger than initial value -1.0 in entry at CartesianIndex(2,)." DictOptimization.free_optimization_parameter!(dopt, "vector", abs_min = 0.0, abs_max = 4.0)
+
+    free_optimization_parameter!(dopt, "scalar", abs_min = -2.0, abs_max = 4.0)
+    s = dopt.parameter_targets[["scalar"]]
+    @test s.abs_min == -2.0
+    @test s.abs_max == 4.0
+    @test s.rel_min == -Inf
+    @test s.rel_max == Inf
+
+    freeze_optimization_parameter!(dopt, "scalar")
+    @test !haskey(dopt.parameter_targets, ["scalar"])
+
+    free_optimization_parameter!(dopt, "vector", abs_min = [0.2, -2.0], abs_max = 4.0)
+    v = dopt.parameter_targets[["vector"]]
+    @test v.abs_min == [0.2, -2.0]
+    @test v.abs_max == 4.0
+    @test v.rel_min == -Inf
+    @test v.rel_max == Inf
+
+
+    lims = DictOptimization.realize_limits(dopt, "vector")
+    @test lims.min ≈ [0.2, -2.0]
+    @test lims.max ≈ [4.0, 4.0]
+
+    l = DictOptimization.KeyLimits(rel_min = 0.1, rel_max = 1.5)
+
+    # Relative limits
+    @test DictOptimization.realize_limit(1.0, l, is_max = true) ≈ 1.5
+    @test DictOptimization.realize_limit(100.0, l, is_max = true) ≈ 150.0
+
+    @test DictOptimization.realize_limit(1.0, l, is_max = false) ≈ 0.1
+    @test DictOptimization.realize_limit(100.0, l, is_max = false) ≈ 10.0
+
+    # Absolute limits
+    l = DictOptimization.KeyLimits(abs_min = 0.1, abs_max = 150.0)
+    @test DictOptimization.realize_limit(1.0, l, is_max = true) ≈ 150.0
+    @test DictOptimization.realize_limit(100.0, l, is_max = true) ≈ 150.0
+
+    @test DictOptimization.realize_limit(1.0, l, is_max = false) ≈ 0.1
+    @test DictOptimization.realize_limit(100.0, l, is_max = false) ≈ 0.1
+
+    # Mixed limits
+    l = DictOptimization.KeyLimits(abs_min = 0.1, abs_max = 150.0, rel_min = 0.1, rel_max = 1.5)
+    @test DictOptimization.realize_limit(1.0, l, is_max = true) ≈ 1.5
+    @test DictOptimization.realize_limit(100.0, l, is_max = true) ≈ 150.0
+
+    @test DictOptimization.realize_limit_inner(-1.0, Inf, 4.0, is_max = true) ≈ 4.0
+    @test DictOptimization.realize_limit_inner(-1.0, 2.0, 4.0, is_max = true) ≈ 0.0
+
+    @testset "optimizer" begin
+        function default_poisson_dict()
+            return Dict(
+                "dx" => 1.0,
+                "dy" => 1.0,
+                "U0" => 1.0,
+                "k_val" => 1.0,
+                "srcval" => 1.0
+            )
+        end
+
+        function setup_poisson_test_case_from_dict(d::AbstractDict, step_info = missing; fmt = :case, kwarg...)
+            return setup_poisson_test_case(d["dx"], d["dy"], d["U0"], d["k_val"], d["srcval"]; dim = (2, 2), dt = [1.0])
+        end
+
+        prm_truth = default_poisson_dict()
+        states, = simulate(setup_poisson_test_case_from_dict(prm_truth), info_level = -1)
+        function poisson_mismatch_objective(m, s, dt, step_info, forces)
+            step = step_info[:step]
+            U = s[:U]
+            U_ref = states[step][:U]
+            v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U, U_ref))
+            return dt*v
+        end
+        # Perturb a parameter
+        prm = default_poisson_dict()
+        prm["k_val"] = 3.333
+
+        dprm = DictParameters(prm, setup_poisson_test_case_from_dict, verbose = false)
+        free_optimization_parameter!(dprm, "k_val", abs_max = 10.0, abs_min = 0.1)
+        # Also do one with relative limits that should not change much
+        free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1)
+
+        prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25);
+
+        @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
+        @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
+
+        grad = parameters_gradient(dprm, poisson_mismatch_objective, setup_poisson_test_case_from_dict)
+        @test grad["k_val"] ≈ 0.0276189 atol = 0.01
+        @test grad["U0"] ≈ 0.00 atol = 1e-8
+        @test !haskey(grad, "dx")
+        @test !haskey(grad, "dy")
+        @test !haskey(grad, "srcval")
+
+        dprm.strict = false
+        free_optimization_parameters!(dprm)
+        # Test the version without explicitly passing the setup function
+        grad_all = parameters_gradient(dprm, poisson_mismatch_objective)
+        @test grad_all["k_val"] ≈ 0.0276189 atol = 0.01
+        @test grad_all["U0"] ≈ 0.00 atol = 1e-8
+        @test grad_all["dx"] ≈ 0.0 atol = 1e-8
+        @test grad_all["dy"] ≈ 0.0 atol = 1e-8
+        @test grad_all["srcval"] ≈ -0.105863 atol = 0.01
     end
 end

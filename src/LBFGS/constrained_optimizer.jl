@@ -195,8 +195,8 @@ end
 
 function box_bfgs(x0, f, lb, ub; kwarg...)
     n = length(x0)
-    length(lb) == n || throw(ArgumentError("Length of lower bound must match length of initial guess"))
-    length(ub) == n || throw(ArgumentError("Length of upper bound must match length of initial guess"))
+    length(lb) == n || throw(ArgumentError("Length of lower bound ($(length(lb))) must match length of initial guess ($n)"))
+    length(ub) == n || throw(ArgumentError("Length of upper bound ($(length(ub))) must match length of initial guess ($n)"))
     # Check bounds
     for i in eachindex(x0, lb, ub)
         if x0[i] < lb[i] || x0[i] > ub[i]
