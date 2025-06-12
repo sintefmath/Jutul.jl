@@ -15,9 +15,13 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     end
 
     case = setup_from_vector(x, missing)
-    states, dt = forward_simulate_for_optimization(case, adj_cache)
+    states, dt, step_ix = forward_simulate_for_optimization(case, adj_cache)
     # Evaluate the objective function
-    f = Jutul.evaluate_objective(objective, case.model, states, dt, case.forces)
+    cforces = case.forces
+    if cforces isa Vector
+        cforces = cforces[step_ix]
+    end
+    f = Jutul.evaluate_objective(objective, case.model, states, dt, cforces)
     # Solve adjoints
     if gradient
         S = get(adj_cache, :storage, missing)
@@ -71,8 +75,7 @@ function forward_simulate_for_optimization(case, adj_cache)
         parameters = case.parameters,
         forces = case.forces
     )
-    states, dt, = Jutul.expand_to_ministeps(result)
-    return (states, dt)
+    return Jutul.expand_to_ministeps(result)
 end
 
 
