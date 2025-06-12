@@ -319,12 +319,12 @@ import Jutul.DictOptimization as DictOptimization
         prm = default_poisson_dict()
         prm["k_val"] = 3.333
 
-        dprm = DictParameters(prm, verbose = false)
+        dprm = DictParameters(prm, setup_poisson_test_case_from_dict, verbose = false)
         free_optimization_parameter!(dprm, "k_val", abs_max = 10.0, abs_min = 0.1)
         # Also do one with relative limits that should not change much
         free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1)
 
-        prm_opt, hist = optimize(dprm, poisson_mismatch_objective, setup_poisson_test_case_from_dict, max_it = 25);
+        prm_opt, hist = optimize(dprm, poisson_mismatch_objective, max_it = 25);
 
         @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
         @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
@@ -338,7 +338,8 @@ import Jutul.DictOptimization as DictOptimization
 
         dprm.strict = false
         free_optimization_parameters!(dprm)
-        grad_all = parameters_gradient(dprm, poisson_mismatch_objective, setup_poisson_test_case_from_dict)
+        # Test the version without explicitly passing the setup function
+        grad_all = parameters_gradient(dprm, poisson_mismatch_objective)
         @test grad_all["k_val"] ≈ 0.0276189 atol = 0.01
         @test grad_all["U0"] ≈ 0.00 atol = 1e-8
         @test grad_all["dx"] ≈ 0.0 atol = 1e-8

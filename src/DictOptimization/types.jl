@@ -18,12 +18,26 @@ mutable struct DictParameters
     strict::Bool
     verbose::Bool
     active_type
+    setup_function
     history
-    function DictParameters(parameters::AbstractDict; strict = true, verbose = true, active_type = Float64)
+    function DictParameters(parameters::AbstractDict, setup_function = missing;
+            strict = true,
+            verbose = true,
+            active_type = Float64
+        )
         possible_targets = Jutul.AdjointsDI.setup_vectorize_nested(parameters; active_type = active_type)
         pkeys = possible_targets.names
         length(pkeys) > 0 || error("No targets found.")
-        return new(deepcopy(parameters), missing, Jutul.OrderedDict{Vector{KEYTYPE}, KeyLimits}(), pkeys, strict, verbose, active_type, missing)
+        return new(
+            deepcopy(parameters),
+            missing,
+            Jutul.OrderedDict{Vector{KEYTYPE}, KeyLimits}(),
+            pkeys,
+            strict,
+            verbose,
+            active_type,
+            setup_function, missing
+        )
     end
 end
 

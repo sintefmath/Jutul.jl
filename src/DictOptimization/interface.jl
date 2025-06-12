@@ -1,4 +1,4 @@
-function optimize(dopt::DictParameters, objective, setup_fn;
+function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
         grad_tol = 1e-6,
         obj_change_tol = 1e-6,
         max_it = 25,
@@ -14,6 +14,9 @@ function optimize(dopt::DictParameters, objective, setup_fn;
         ),
         kwarg...
     )
+    if ismissing(setup_fn)
+        error("Setup function was not found in DictParameters struct or as last positional argument.")
+    end
     x0, x_setup, limits = optimization_setup(dopt)
 
     ub = limits.max
@@ -66,7 +69,7 @@ function optimize(dopt::DictParameters, objective, setup_fn;
     return (prm_out, history)
 end
 
-function parameters_gradient(dopt::DictParameters, objective, setup_fn;
+function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
         simulator = missing,
         config = missing,
         cache = missing,
@@ -131,6 +134,9 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
         set_calibration_parameter!(dopt, parameter_name, initial)
     end
     initial = get_nested_dict_value(dopt.parameters, parameter_name)
+    if eltype(initial) isa dopt.active_type
+        error("$parameter_name is not an array or single value of the designated active type $(dopt.active_type)")
+    end
     check_limit(parameter_name, initial, abs_min, is_max = false, is_rel = false)
     check_limit(parameter_name, initial, abs_max, is_max = true, is_rel = false)
     check_limit(parameter_name, initial, rel_min, is_max = false, is_rel = true)
