@@ -69,8 +69,9 @@ function solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G;
     badstate0 = ismissing(state0)
     badforces = ismissing(forces)
     if badstate0 || badforces
+        Ns = length(unique(step_index))
         sinfo0 = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = sum(timesteps))
-        case0 = setup_case(X, F, sinfo0, state0, forces, N; all = true)
+        case0 = setup_case(X, F, sinfo0, state0, forces, Ns; all = true)
         if badstate0
             state0 = case0.state0
         end
@@ -90,12 +91,21 @@ function solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G;
     Jutul.update_objective_sparsity!(storage, G, states, timesteps, forces, :forward)
     # Set gradient to zero before solve starts
     @. ∇G = 0
+    prev_step = 0
+    substep = 0
     @tic "sensitivities" for i in N:-1:1
+        step = step_index[i]
+        if step != prev_step
+            substep = 1
+            prev_step = step
+        else
+            substep += 1
+        end
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
         s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
-        update_sensitivities_generic!(∇G, X, H, i, G, storage, s0, s, s_next, timesteps, forces)
+        update_sensitivities_generic!(∇G, X, H, i, G, storage, s0, s, s_next, timesteps, forces, step = step, substep = substep)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
@@ -113,14 +123,16 @@ function setup_adjoint_storage_generic(X, F, states, timesteps, G;
         di_sparse = true,
         info_level = 0,
         single_step_sparsity = true,
+        step_index = eachindex(states),
         use_sparsity = true
     )
     N = length(timesteps)
     eltype(timesteps)<:Real
     @assert length(states) == N "Received $(length(states)) states and $N timesteps. These should match."
+    Ns = length(unique(step_index))
     total_time = sum(timesteps)
-    sinfo0 = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = total_time)
-    case0 = setup_case(X, F, sinfo0, state0, forces, N)
+    sinfo0 = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = Ns, total_time = total_time)
+    case0 = setup_case(X, F, sinfo0, state0, forces, Ns)
     if ismissing(forces)
         forces = case0.forces
     end
@@ -135,22 +147,24 @@ function setup_adjoint_storage_generic(X, F, states, timesteps, G;
             info_level = info_level,
     )
     storage[:dparam] = zeros(length(X))
-    setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse)
+    setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse, step_index = step_index, Ns = Ns)
     return storage
 end
 
-function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
+function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces;
+        step::Int = i, substep::Int = 1)
     solved_timesteps = @view timesteps[1:(i-1)]
     current_time = sum(solved_timesteps)
     for skey in [:backward, :forward]
         s = adjoint_storage[skey]
         Jutul.reset!(Jutul.progress_recorder(s), step = i, time = current_time)
     end
-    λ, t, dt, forces = Jutul.next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces)
+    total_time = sum(timesteps)
+    step_info = Jutul.optimization_step_info(step, current_time, timesteps[i], total_time = total_time, substep = substep, Nstep = length(timesteps))
+
+    λ, t, dt, forces = Jutul.next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces, step_info = step_info)
     @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
 
-    total_time = sum(timesteps)
-    step_info = Jutul.optimization_step_info(i, current_time, dt, total_time = total_time, Nstep = length(timesteps))
     set_to_step!(H, state, state0, step_info, dt)
     prep = adjoint_storage[:prep_di]
     backend = adjoint_storage[:backend_di]
@@ -305,7 +319,9 @@ function (H::AdjointsObjectiveHelper)(x)
 end
 
 
-function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse)
+function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse;
+        step_index = eachindex(states), Ns = length(states)
+    )
     N = length(timesteps)
     if ismissing(backend)
         if di_sparse
@@ -323,7 +339,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
         F = F,
         G = G,
         forces = forces,
-        N = N,
+        N = Ns,
         case = case0
     )
     storage[:callable_di] = H
@@ -333,12 +349,16 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
         if single_step_sparsity
             H.state = states[1]
             H.state0 = case0.state0
-            H.step_info = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = sum(timesteps))
+            H.step_info = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = Ns, total_time = sum(timesteps))
             H.dt = timesteps[1]
             prep = prepare_jacobian(H, backend, X)
         else
-            H.states = states
-            H.timesteps = timesteps
+            ix = Int[]
+            for v in unique(step_index)
+                push!(ix, findfirst(isequal(v), step_index))
+            end
+            H.states = states[ix]
+            H.timesteps = timesteps[ix]
             prep = prepare_jacobian(H, backend, X)
             H.states = missing
             H.timesteps = missing

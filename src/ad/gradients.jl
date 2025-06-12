@@ -454,17 +454,24 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     end
 end
 
-function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces)
+function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces; step_info = missing)
     # Unpack simulators
     backward_sim = adjoint_storage.backward
     forward_sim = adjoint_storage.forward
     λ = adjoint_storage.lagrange
     λ_b = adjoint_storage.lagrange_buffer
     config = adjoint_storage.forward_config
+    rec = progress_recorder(backward_sim)
+    total_time = sum(timesteps)
     # Timestep logic
     N = length(timesteps)
-    forces = forces_for_timestep(forward_sim, all_forces, timesteps, i)
-    dt = timesteps[i]
+    if ismissing(step_info)
+        dt = timesteps[i]
+        step_info = optimization_step_info(i, current_time(rec), dt, total_time = total_time, Nstep = N)
+    else
+        dt = timesteps[step_info[:step]]
+    end
+    forces = forces_for_timestep(forward_sim, all_forces, timesteps, step_info[:step])
     # Assemble Jacobian w.r.t. current step
     t = sum(timesteps[1:i-1])
     @tic "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces, t)
@@ -489,9 +496,6 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     rhs = adjoint_storage.rhs
     # Fill rhs with (∂J / ∂x)ᵀₙ (which will be treated with a negative sign when the result is written by the linear solver)
     S_p = get_objective_sparsity(adjoint_storage, :forward)
-    rec = progress_recorder(backward_sim)
-    total_time = sum(timesteps)
-    step_info = optimization_step_info(i, current_time(rec), dt, total_time = total_time, Nstep = N)
     @tic "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
     if isnothing(state_next)
         @assert i == N
@@ -691,7 +695,11 @@ function perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
     param_i[target][j + i*(sz[1]-1)] += ϵ
 end
 
-function evaluate_objective(G, model, states, timesteps, all_forces; large_value = 1e20, kwarg...)
+function evaluate_objective(G, model, states, timesteps, all_forces;
+        large_value = 1e20,
+        step_index = eachindex(states),
+        kwarg...
+    )
     function convert_state_to_jutul_storage(model, x::JutulStorage)
         return x
     end
@@ -717,14 +725,23 @@ function evaluate_objective(G, model, states, timesteps, all_forces; large_value
         t = 0.0
         total_time = sum(timesteps)
         N = length(timesteps)
+        prev_step = 0
+        substep = 0
         for (i, dt) in enumerate(timesteps)
+            step = step_index[i]
+            if step != prev_step
+                substep = 1
+                prev_step = step
+            else
+                substep += 1
+            end
             state_i = convert_state_to_jutul_storage(model, states[i])
             force_i = forces_for_timestep(nothing, all_forces, timesteps, i)
             obj += G(
                 model,
                 state_i,
                 dt,
-                optimization_step_info(i, t, dt; total_time = total_time, Nstep = N, kwarg...),
+                optimization_step_info(i, t, dt; total_time = total_time, substep = substep, step = step, Nstep = N, kwarg...),
                 force_i
                 )
             t += dt
@@ -967,7 +984,6 @@ function optimization_step_info(step::Int, time::Real, dt::Real;
         total_time = missing,
         case = missing,
         substep = 1,
-        Nsubstep = 1,
         kwarg...
     )
     out = OrderedDict{Symbol, Any}(
@@ -976,7 +992,6 @@ function optimization_step_info(step::Int, time::Real, dt::Real;
         :step => step,
         :Nstep => Nstep,
         :substep => substep,
-        :Nsubstep => Nsubstep,
         :total_time => total_time,
         :case => case
     )
