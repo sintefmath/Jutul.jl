@@ -66,7 +66,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     Jutul.AdjointsDI.devectorize_nested!(prm_out, x, x_setup)
     dopt.parameters_optimized = prm_out
     dopt.history = history
-    return (prm_out, history)
+    return prm_out
 end
 
 function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
