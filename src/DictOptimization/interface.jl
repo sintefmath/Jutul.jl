@@ -6,6 +6,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         minimize = true,
         simulator = missing,
         config = missing,
+        solution_history = false,
         backend_arg = (
             use_sparsity = false,
             di_sparse = true,
@@ -24,8 +25,14 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     # Set up a cache for forward/backward sim
     adj_cache = setup_optimization_cache(dopt, simulator = simulator, config = config)
 
+    if solution_history
+        sols = []
+    else
+        sols = missing
+    end
     solve_and_differentiate(x) = solve_and_differentiate_for_optimization(x, dopt, setup_fn, objective, x_setup, adj_cache;
-        backend_arg
+        backend_arg,
+        solution_history = sols
     )
     if dopt.verbose
         jutul_message("Optimization", "Starting calibration of $(length(x0)) parameters.", color = :green)
@@ -66,6 +73,11 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     Jutul.AdjointsDI.devectorize_nested!(prm_out, x, x_setup)
     dopt.parameters_optimized = prm_out
     dopt.history = history
+    if solution_history
+        dopt.history = (history = history, solutions = sols)
+    else
+        dopt.history = history
+    end
     return prm_out
 end
 
