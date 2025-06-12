@@ -103,6 +103,19 @@ function realize_limits(dopt::DictParameters, x_setup::NamedTuple)
 end
 
 function print_optimization_overview(dopt::DictParameters; io = Base.stdout, print_inactive = false)
+    function fmt(x::Number)
+        return "$(round(x, sigdigits=3))"
+    end
+
+    function fmt_lim(x::Number)
+        if isfinite(x)
+            s = fmt(x)
+        else
+            s = "-"
+        end
+        return s
+    end
+
     function avg(x)
         return x
     end
@@ -112,7 +125,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
     end
 
     function format_value(x)
-        return "$(round(x, sigdigits=3))"
+        return fmt(x)
     end
 
     function format_value(x::AbstractArray)
@@ -128,8 +141,8 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         prm = dopt.parameters
         prm_opt = dopt.parameters_optimized
         is_optimized = !ismissing(prm_opt) && print_opt
-        header = ["Name", "Initial value", "Count", "Bounds"]
-        alignment = [:r, :l, :r, :r]
+        header = ["Name", "Initial value", "Count", "Min", "Max"]
+        alignment = [:r, :l, :r, :r, :r]
         if is_optimized
             push!(header, "Optimized value")
             push!(header, "Change")
@@ -143,24 +156,22 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
                 lims = realize_limits(dopt, k)
                 min_lim = minimum(lims.min)
                 max_lim = maximum(lims.max)
-                if !isfinite(min_lim) && !isfinite(max_lim)
-                    limstr = "(Not set)"
-                else
-                    limstr = "$(round(min_lim, sigdigits=3)) to $(round(max_lim, sigdigits=3))"
-                end
+                limstr_min = fmt_lim(min_lim)
+                limstr_max = fmt_lim(max_lim)
             else
-                limstr = "(Not set)"
+                limstr_min = limstr_max = fmt_lim(NaN)
             end
             tab[i, 1] = join(k, ".")
             tab[i, 2] = format_value(v0)
             tab[i, 3] = length(v0)
-            tab[i, 4] = limstr
+            tab[i, 4] = limstr_min
+            tab[i, 5] = limstr_max
             if is_optimized
                 v = get_nested_dict_value(prm_opt, k)
                 v_avg = avg(v)
                 perc = round(100*(v_avg-v0_avg)/max(v0_avg, 1e-20), sigdigits = 2)
-                tab[i, 5] = format_value(v)
-                tab[i, 6] = "$perc%"
+                tab[i, 6] = format_value(v)
+                tab[i, 7] = "$perc%"
             end
         end
         # TODO: Do this properly instead of via Jutul's import...
