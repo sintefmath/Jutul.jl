@@ -5,6 +5,7 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
             state0 = missing,
             forces = missing,
             info_level = 0,
+            step_index = eachindex(states),
             kwarg...
         )
         Jutul.set_global_timer!(extra_timing)
@@ -41,7 +42,8 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
         t_solve = @elapsed solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G,
             info_level = info_level,
             state0 = state0,
-            forces = forces
+            forces = forces,
+            step_index = step_index
         )
         if info_level > 1
             jutul_message("Adjoints", "Adjoints solved in $(get_tstr(t_solve)).", color = :blue)
@@ -56,6 +58,7 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
 
 function solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G;
         info_level = 0,
+        step_index = eachindex(states),
         state0 = missing,
         forces = missing
     )
@@ -76,6 +79,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G;
         end
     end
     if forces isa Vector
+        forces = forces[step_index]
         @assert length(forces) == N "Expected $N forces (one per time-step), got $(length(forces))."
     end
     # Do sparsity detection if not already done.

@@ -44,6 +44,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         end
         Jutul.AdjointsDI.solve_adjoint_generic!(
             g, x, setup_from_vector, S, states, dt, objective,
+            step_index = step_ix
         )
         # g = Jutul.AdjointsDI.solve_adjoint_generic(
         #     x, setup_from_vector, states, dt, objective,
