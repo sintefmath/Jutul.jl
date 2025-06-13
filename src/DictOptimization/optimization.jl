@@ -1,7 +1,8 @@
 
 function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup_fn, objective, x_setup, adj_cache;
         backend_arg = NamedTuple(),
-        gradient = true
+        gradient = true,
+        solution_history = missing
     )
 
     prm = adj_cache[:parameters]
@@ -21,9 +22,12 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     if cforces isa Vector
         cforces = cforces[step_ix]
     end
-    f = Jutul.evaluate_objective(objective, case.model, states, dt, cforces)
+    f = Jutul.evaluate_objective(objective, case.model, states, dt, cforces, step_index = step_ix)
     # Solve adjoints
     if gradient
+        if !ismissing(solution_history)
+            push!(solution_history, (x = x, states = deepcopy(states), objective = f))
+        end
         S = get(adj_cache, :storage, missing)
         if ismissing(S)
             if dopt.verbose
@@ -31,6 +35,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             end
             t_setup = @elapsed S = Jutul.AdjointsDI.setup_adjoint_storage_generic(
                 x, setup_from_vector, states, dt, objective;
+                step_index = step_ix,
                 backend_arg...,
                 info_level = adj_cache[:config][:info_level]
             )
