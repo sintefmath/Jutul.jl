@@ -3,7 +3,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         obj_change_tol = 1e-6,
         max_it = 25,
         opt_fun = missing,
-        minimize = true,
+        maximize = false,
         simulator = missing,
         config = missing,
         solution_history = false,
@@ -39,11 +39,11 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     end
     t_opt = @elapsed if ismissing(opt_fun)
         v, x, history = Jutul.LBFGS.box_bfgs(x0, solve_and_differentiate, lb, ub;
-            maximize = false,
             print = Int(dopt.verbose),
             max_it = max_it,
             grad_tol = grad_tol,
             obj_change_tol = obj_change_tol,
+            maximize = maximize,
             kwarg...
         )
     else

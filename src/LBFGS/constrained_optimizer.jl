@@ -149,7 +149,7 @@ function unit_box_bfgs(
                         Hi = V' * Hi * V + r * (du * du')
                     end
                 else
-                    print_msg("Hessian not updated during iteration $it", :red)
+                    print_msg("Hessian not updated during iteration $it", :yellow)
                 end
             end
             # Update history
@@ -560,7 +560,17 @@ function update_history!(hst::Union{OptimizationHistory, Vector}, val, u, pg, al
 end
 
 function printInfo(history, it)
-    return @printf("It: %3d | val: %.3e | ls-its: %d | pgrad: %.3e\n", it, abs(history.val[end]), history.lsit[end], history.pg[end][end])
+    lsit = history.lsit[end]
+    if it == 0
+        println("It.  | Objective  | Proj. grad | Linesearch-its")
+        println("-----------------------------------------------")
+    end
+    if isnan(lsit)
+        lsit = "-"
+    else
+        lsit = "$(lsit)"
+    end
+    return @printf("%4d | %.4e | %.4e | %s\n", it, abs(history.val[end]), history.pg[end][end], lsit)
 end
 
 function line_search(
@@ -637,7 +647,7 @@ function line_search(
                     a = min(a, p2.a - sgf * (p2.a - p1.a))
                 else
                     a = (p1.a + p2.a) / 2
-                    print_msg("Cubic interpolation failed, cutting interval in half ...", :red)
+                    print_msg("Cubic interpolation failed, cutting interval in half ...", :yellow)
                 end
             end
         end
@@ -645,7 +655,7 @@ function line_search(
     # Check if line search succeeded
     if ! line_search_done
         flag = -2
-        print_msg("Line search unable to succeed in $max_it iterations ...", :red)
+        print_msg("Line search unable to succeed in $max_it iterations ...", :yellow)
         # Although line search did not succeed in max_it iterations, we ensure
         # to return the greater of p1 and p2's objective value none the less.
         if p1.v < p2.v
