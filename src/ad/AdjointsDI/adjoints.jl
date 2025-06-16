@@ -378,11 +378,12 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_in
         state0 = case.state0
     end
     sim = HelperSimulator(case, eltype(x), cache = cache, n_extra = 1)
-    if forces isa AbstractVector
-        forces = only(forces)
+    forces_for_eval = case.forces
+    if forces_for_eval isa AbstractVector
+        forces_for_eval = only(forces_for_eval)
     end
     model_residual(state, state0, sim,
-        forces = forces,
+        forces = forces_for_eval,
         time = step_info[:time],
         dt = dt
     )
@@ -398,7 +399,7 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_in
     else
         s = JutulStorage(state)
     end
-    r[end] = G(case.model, s, dt, step_info, forces)
+    r[end] = G(case.model, s, dt, step_info, forces_for_eval)
     return copy(r)
 end
 
