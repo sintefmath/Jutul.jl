@@ -81,7 +81,7 @@ function Jutul.plot_mesh_impl!(ax, m;
             keep[i] = keep_this
         end
         tri = tri[keep, :]
-        tri, pts = remove_unused_points(tri, pts)
+        tri, pts, = remove_unused_points(tri, pts)
     end
     if length(pts) > 0
         f = mesh!(ax, pts, tri; color = color, backlight = 1, kwarg...)
@@ -101,7 +101,7 @@ function remove_unused_points(tri, pts)
     for i in eachindex(tri)
         tri[i] = renum[tri[i]]
     end
-    return (tri, pts)
+    return (tri, pts, unique_pts_ix)
 end
 
 function Jutul.plot_cell_data_impl(m, data;
@@ -157,6 +157,25 @@ function Jutul.plot_cell_data_impl!(ax, m, data::AbstractVecOrMat; cells = nothi
     end
     @assert length(data) == nc
     color = mapper.Cells(data)
+    keep = map(isfinite, color)
+
+    keep_tri = Int[]
+    for i in axes(tri, 1)
+        keep = true
+        for j in axes(tri, 2)
+            keep = keep && isfinite(color[tri[i, j]])
+        end
+        if keep
+            push!(keep_tri, i)
+        end
+    end
+    tri = tri[keep_tri, :]
+    tri, pts, unique_pts_ix = remove_unused_points(tri, pts)
+    if color isa AbstractVector
+        color = color[unique_pts_ix]
+    elseif color isa AbstractMatrix
+        color = color[unique_pts_ix, :]
+    end
     return mesh!(ax, pts, tri; backlight = 1, color = color, kwarg...)
 end
 
