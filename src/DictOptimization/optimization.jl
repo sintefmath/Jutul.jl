@@ -139,20 +139,24 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
         active = active_keys(dopt),
         active_type = dopt.active_type
     )
+
     lumping = get_lumping_for_vectorize_nested(dopt)
     scaler = get_scaler_for_vectorize_nested(dopt)
     if length(keys(lumping)) > 0 || length(keys(scaler)) > 0
         off = x_setup.offsets
         x0_new = similar(x0, 0)
+        function push_new!(xs, sf)
+            for xi in xs
+                push!(x0_new, apply_scaler(xi, sf))
+            end
+        end
         for (i, k) in enumerate(x_setup.names)
             x_sub = view(x0, off[i]:(off[i+1]-1))
             if haskey(lumping, k)
                 x_sub = x_sub[lumping[k].first_index]
             end
-            for xi in x_sub
-                push!(x0_new, xi)
-            end
-            # TODO: Scalers.
+            s = get(scaler, k, missing)
+            push_new!(x_sub, s)
         end
         x0 = x0_new
         x_setup = (
