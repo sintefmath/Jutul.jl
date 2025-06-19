@@ -192,7 +192,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         end
         tab = Matrix{Any}(undef, length(subkeys), length(header))
         for (i, k) in enumerate(subkeys)
-            v0 = get_parameter_value(dopt, k)
+            v0 = get_parameter_value(dopt, k, optimized = false)
             v0_avg = avg(v0)
             if haskey(pt, k)
                 lims = realize_limits(dopt, k)
@@ -207,7 +207,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             tab[i, 4] = limstr_min
             tab[i, 5] = limstr_max
             if is_optimized
-                v = get_parameter_value(dopt, k)
+                v = get_parameter_value(dopt, k, optimized = true)
                 v_avg = avg(v)
                 perc = round(100*(v_avg-v0_avg)/max(v0_avg, 1e-20), sigdigits = 2)
                 tab[i, 6] = format_value(v)
@@ -242,8 +242,13 @@ function get_parameter_limits(x::DictParameters, key; throw = true)
     return val
 end
 
-function get_parameter_value(x::DictParameters, key)
-    val = get_nested_dict_value(x.parameters, key)
+function get_parameter_value(x::DictParameters, key; optimized::Bool = false)
+    if optimized
+        prm = x.parameters_optimized
+    else
+        prm = x.parameters
+    end
+    val = get_nested_dict_value(prm, key)
     L = get_parameter_limits(x, key, throw = false)
     lumping = L.lumping
     if !ismissing(lumping)
