@@ -1,6 +1,10 @@
 function apply_scaler(x::Real, s::Symbol)
     if s == :log
+        x = log(x + 1e-20)
+    elseif s == :standard_log
         x = log(x)
+    elseif s == :log10
+        x = log10(x)
     else
         error("Unknown scaler $s")
     end
@@ -17,7 +21,11 @@ end
 
 function undo_scaler(x::Real, s::Symbol)
     if s == :log
+        x = exp(x) - 1e-20
+    elseif s == :standard_log
         x = exp(x)
+    elseif s == :log10
+        x = 10^x
     else
         error("Unknown scaler $s")
     end
