@@ -70,7 +70,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     end
     # Also remove AD from the internal ones and update them
     prm_out = deepcopy(dopt.parameters)
-    Jutul.AdjointsDI.devectorize_nested!(prm_out, x, x_setup)
+    optimizer_devectorize!(prm_out, x, x_setup)
     dopt.parameters_optimized = prm_out
     dopt.history = history
     if solution_history
@@ -131,7 +131,9 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
         abs_min = -Inf,
         abs_max = Inf,
         rel_min = -Inf,
-        rel_max = Inf
+        rel_max = Inf,
+        scaler = nothing,
+        lumping = nothing
     )
     parameter_name = convert_key(parameter_name)
     if dopt.strict
@@ -155,12 +157,30 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
     check_limit(parameter_name, initial, rel_max, is_max = true, is_rel = true)
     check_limit_pair(parameter_name, initial, rel_min, rel_max, is_rel = true)
     check_limit_pair(parameter_name, initial, abs_min, abs_max, is_rel = false)
-
+    if !isnothing(lumping)
+        size(lumping) == size(initial) || error("Lumping array must have the same size as the parameter $parameter_name.")
+        eltype(lumping) == Int || error("Lumping array must be of type Int.")
+        minimum(lumping) >= 1 || error("Lumping array must have positive integers.")
+        max_lumping = maximum(lumping)
+        for i in 1:max_lumping
+            subset = findall(isequal(i), lumping)
+            if length(subset) == 0
+                error("Lumping array must contain all integers from 1 to $max_lumping.")
+            else
+                firstval = initial[subset[1]]
+                for j in subset
+                    if initial[j] != firstval
+                        error("Lumping array must contain the same value for all indices in the lumping group $i (value at $j differend from first value at $(subset[1])).")
+                    end
+                end
+            end
+        end
+    end
     targets = dopt.parameter_targets
     if haskey(targets, parameter_name) && dopt.verbose
         jutul_message("Optimization", "Overwriting limits for $parameter_name.")
     end
-    targets[parameter_name] = KeyLimits(rel_min, rel_max, abs_min, abs_max)
+    targets[parameter_name] = KeyLimits(rel_min, rel_max, abs_min, abs_max, scaler, lumping)
     return dopt
 end
 

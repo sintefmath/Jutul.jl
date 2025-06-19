@@ -6,6 +6,8 @@ Base.@kwdef mutable struct KeyLimits
     rel_max::LIMIT_TYPE = Inf
     abs_min::LIMIT_TYPE = -Inf
     abs_max::LIMIT_TYPE = Inf
+    scaler::Union{Symbol, Nothing} = nothing
+    lumping::Union{Array{Int, <:Any}, Nothing} = nothing
 end
 
 mutable struct DictParameters

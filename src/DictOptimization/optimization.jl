@@ -7,8 +7,31 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
 
     prm = adj_cache[:parameters]
     function setup_from_vector(X, step_info)
-        # Set the parameters from the vector
-        Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup)
+        # if haskey(x_setup, :lumping)
+        #     X_new = similar(X, 0)
+        #     pos = 0
+        #     for (i, k) in enumerate(x_setup.names)
+        #         if haskey(x_setup.lumping, k)
+        #             L = x_setup.lumping[k]
+        #             first_index = L.first_index
+        #             N = length(first_index)
+        #             for v in L.lumping
+        #                 push!(X_new, X[pos + v])
+        #             end
+        #         else
+        #             N = x_setup.offsets[i+1]-x_setup.offsets[i]
+        #             for i in pos+1:pos+N
+        #                 push!(X_new, X[i])
+        #             end
+        #         end
+        #         pos += N
+        #     end
+        #     X = X_new
+        # end
+        # @assert length(X) == x_setup.offsets[end]-1
+        # # Set the parameters from the vector
+        # Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup)
+        optimizer_devectorize!(prm, X, x_setup)
         # Return the case setup function
         # This is a function that sets up the case from the parameters
         F() = setup_fn(prm, step_info)
@@ -84,16 +107,68 @@ function forward_simulate_for_optimization(case, adj_cache)
     return Jutul.expand_to_ministeps(result)
 end
 
-
+function optimizer_devectorize!(prm, X, x_setup)
+    if haskey(x_setup, :lumping)
+        X_new = similar(X, 0)
+        pos = 0
+        for (i, k) in enumerate(x_setup.names)
+            if haskey(x_setup.lumping, k)
+                L = x_setup.lumping[k]
+                first_index = L.first_index
+                N = length(first_index)
+                for v in L.lumping
+                    push!(X_new, X[pos + v])
+                end
+            else
+                N = x_setup.offsets[i+1]-x_setup.offsets[i]
+                for i in pos+1:pos+N
+                    push!(X_new, X[i])
+                end
+            end
+            pos += N
+        end
+        X = X_new
+    end
+    @assert length(X) == x_setup.offsets[end]-1
+    # Set the parameters from the vector
+    return Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup)
+end
 
 function optimization_setup(dopt::DictParameters; include_limits = true)
     x0, x_setup = Jutul.AdjointsDI.vectorize_nested(dopt.parameters,
         active = active_keys(dopt),
         active_type = dopt.active_type
     )
+    lumping = get_lumping_for_vectorize_nested(dopt)
+    scaler = get_scaler_for_vectorize_nested(dopt)
+    if length(keys(lumping)) > 0 || length(keys(scaler)) > 0
+        off = x_setup.offsets
+        x0_new = similar(x0, 0)
+        for (i, k) in enumerate(x_setup.names)
+            x_sub = view(x0, off[i]:(off[i+1]-1))
+            if haskey(lumping, k)
+                x_sub = x_sub[lumping[k].first_index]
+            end
+            for xi in x_sub
+                push!(x0_new, xi)
+            end
+            # TODO: Scalers.
+        end
+        x0 = x0_new
+        x_setup = (
+            offsets = x_setup.offsets,
+            names = x_setup.names,
+            dims = x_setup.dims,
+            scaler = scaler,
+            lumping = lumping
+        )
+    end
+
     length(x0) > 0 || error("Cannot optimize/differentiate zero active parameters. Call free_optimization_parameter! first.")
     if include_limits
         lims = realize_limits(dopt, x_setup)
+        @assert length(lims.min) == length(lims.max) "Upper bound length ($(length(lims.max))) does not match lower bound length ($(length(lims.min)))."
+        @assert length(lims.max) == length(x0) "Bound length ($(length(lims.max))) does not match parameter vector length ($(length(x0)))."
     else
         lims = missing
     end
