@@ -108,21 +108,22 @@ function forward_simulate_for_optimization(case, adj_cache)
 end
 
 function optimizer_devectorize!(prm, X, x_setup)
-    if haskey(x_setup, :lumping)
+    if haskey(x_setup, :lumping) || haskey(x_setup, :scalers)
         X_new = similar(X, 0)
         pos = 0
         for (i, k) in enumerate(x_setup.names)
+            scaler = get(x_setup.scalers, k, missing)
             if haskey(x_setup.lumping, k)
                 L = x_setup.lumping[k]
                 first_index = L.first_index
                 N = length(first_index)
                 for v in L.lumping
-                    push!(X_new, X[pos + v])
+                    push!(X_new, undo_scaler(X[pos + v], scaler))
                 end
             else
                 N = x_setup.offsets[i+1]-x_setup.offsets[i]
                 for i in pos+1:pos+N
-                    push!(X_new, X[i])
+                    push!(X_new, undo_scaler(X[i], scaler))
                 end
             end
             pos += N
@@ -139,10 +140,16 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
         active = active_keys(dopt),
         active_type = dopt.active_type
     )
+    length(x0) > 0 || error("Cannot optimize/differentiate zero active parameters. Call free_optimization_parameter! first.")
+    if include_limits
+        lims = realize_limits(dopt, x_setup)
+    else
+        lims = missing
+    end
 
     lumping = get_lumping_for_vectorize_nested(dopt)
-    scaler = get_scaler_for_vectorize_nested(dopt)
-    if length(keys(lumping)) > 0 || length(keys(scaler)) > 0
+    scalers = get_scaler_for_vectorize_nested(dopt)
+    if length(keys(lumping)) > 0 || length(keys(scalers)) > 0
         off = x_setup.offsets
         x0_new = similar(x0, 0)
         function push_new!(xs, sf)
@@ -150,31 +157,34 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
                 push!(x0_new, apply_scaler(xi, sf))
             end
         end
+        pos = 0
         for (i, k) in enumerate(x_setup.names)
             x_sub = view(x0, off[i]:(off[i+1]-1))
             if haskey(lumping, k)
                 x_sub = x_sub[lumping[k].first_index]
             end
-            s = get(scaler, k, missing)
-            push_new!(x_sub, s)
+            scale = get(scalers, k, missing)
+            push_new!(x_sub, scale)
+            if include_limits && !ismissing(scale)
+                for index in (pos+1):(pos+length(x_sub))
+                    lims.min[index] = apply_scaler(lims.min[index], scale)
+                    lims.max[index] = apply_scaler(lims.max[index], scale)
+                end
+            end
+            pos += length(x_sub)
         end
         x0 = x0_new
         x_setup = (
             offsets = x_setup.offsets,
             names = x_setup.names,
             dims = x_setup.dims,
-            scaler = scaler,
+            scalers = scalers,
             lumping = lumping
         )
     end
-
-    length(x0) > 0 || error("Cannot optimize/differentiate zero active parameters. Call free_optimization_parameter! first.")
     if include_limits
-        lims = realize_limits(dopt, x_setup)
         @assert length(lims.min) == length(lims.max) "Upper bound length ($(length(lims.max))) does not match lower bound length ($(length(lims.min)))."
         @assert length(lims.max) == length(x0) "Bound length ($(length(lims.max))) does not match parameter vector length ($(length(x0)))."
-    else
-        lims = missing
     end
     return (x0 = x0, x_setup = x_setup, limits = lims)
 end

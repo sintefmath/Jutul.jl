@@ -132,8 +132,8 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
         abs_max = Inf,
         rel_min = -Inf,
         rel_max = Inf,
-        scaler = nothing,
-        lumping = nothing
+        scaler = missing,
+        lumping = missing
     )
     parameter_name = convert_key(parameter_name)
     if dopt.strict
@@ -157,7 +157,7 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
     check_limit(parameter_name, initial, rel_max, is_max = true, is_rel = true)
     check_limit_pair(parameter_name, initial, rel_min, rel_max, is_rel = true)
     check_limit_pair(parameter_name, initial, abs_min, abs_max, is_rel = false)
-    if !isnothing(lumping)
+    if !ismissing(lumping)
         size(lumping) == size(initial) || error("Lumping array must have the same size as the parameter $parameter_name.")
         eltype(lumping) == Int || error("Lumping array must be of type Int.")
         minimum(lumping) >= 1 || error("Lumping array must have positive integers.")

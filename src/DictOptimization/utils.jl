@@ -292,7 +292,6 @@ function convert_key(x::Vector)
     return x
 end
 
-
 function widen_dict_copy(x::AbstractDict)
     new_dict = Jutul.OrderedDict()
     for (k, v) in pairs(x)
