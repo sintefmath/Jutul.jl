@@ -8,6 +8,8 @@
     memory = 1
     # Target number of nonlinear iterations for the timestep
     target_iterations = 8
+    # Max number of estimated iterations left for iterate to be classified as ok
+    max_iterations_left = 2*target_iterations
     # Contraction factor parameters
     slow = 0.99
     fast = 0.1
@@ -81,8 +83,8 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     
     # Determine if current rate of convergence is adequate
     good = all(θ .<= max(θ_target, cc.fast)) && !is_oscillating
-    ok = all(θ .<= cc.slow) && its_left <= cc.target_iterations
-    bad = any(θ .> cc.slow) || its_left > cc.target_iterations
+    ok = all(θ .<= cc.slow) && its_left <= cc.max_iterations_left
+    bad = any(θ .> cc.slow) || its_left > cc.max_iterations_left
 
     if good
         # Convergence rate good, decrease number of violations
@@ -201,9 +203,9 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, it
         sym = " →"
         color = :yellow
     elseif status == :bad
-        its_target = cc.target_iterations
-        if its_left > its_target
-            inequality = "Iterations left = $its_left > $its_target = target iterations"
+        max_its = cc.max_iterations_left
+        if its_left > max_its
+            inequality = "Iterations left = $its_left > $max_its = upper limit"
         else
             inequality = "Θ = $θ > $θ_slow = Θ_slow"
         end
