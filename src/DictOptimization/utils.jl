@@ -250,9 +250,8 @@ function get_parameter_value(x::DictParameters, key; optimized::Bool = false)
     end
     val = get_nested_dict_value(prm, key)
     L = get_parameter_limits(x, key, throw = false)
-    lumping = L.lumping
-    if !ismissing(lumping)
-        ix = get_lumping_first_entry(lumping)
+    if !ismissing(L) && !ismissing(L.lumping)
+        ix = get_lumping_first_entry(L.lumping)
         val = val[ix]
     end
     return val
