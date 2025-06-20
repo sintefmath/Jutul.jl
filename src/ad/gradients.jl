@@ -465,11 +465,11 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     total_time = sum(timesteps)
     # Timestep logic
     N = length(timesteps)
+    dt = timesteps[i]
     if ismissing(step_info)
-        dt = timesteps[i]
         step_info = optimization_step_info(i, current_time(rec), dt, total_time = total_time, Nstep = N)
     else
-        dt = timesteps[step_info[:step]]
+        @assert dt == step_info[:dt]
     end
     forces = forces_for_timestep(forward_sim, all_forces, timesteps, step_info[:step])
     # Assemble Jacobian w.r.t. current step

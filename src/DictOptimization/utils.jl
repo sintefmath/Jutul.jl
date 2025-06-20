@@ -39,6 +39,10 @@ function realize_limit(initial::Union{Number, Array}, lims::KeyLimits; is_max::B
     else
         l = realize_limit_inner(initial, lims.rel_min, lims.abs_min, is_max = false, strict = strict)
     end
+    if !ismissing(lims.lumping) && l isa AbstractArray
+        ix = get_lumping_first_entry(lims.lumping)
+        l = l[ix]
+    end
     return l
 end
 
@@ -100,6 +104,29 @@ function realize_limits(dopt::DictParameters, x_setup::NamedTuple)
     end
     @assert length(lb) == length(ub)
     return (min = lb, max = ub)
+end
+
+function get_lumping_for_vectorize_nested(dopt::DictParameters)
+    lumping = Dict()
+    for k in active_keys(dopt)
+        lims = get_parameter_limits(dopt, k, throw = false)
+        if !ismissing(lims) && !ismissing(lims.lumping)
+            firstix = get_lumping_first_entry(lims.lumping)
+            lumping[k] = (first_index = firstix, lumping = lims.lumping)
+        end
+    end
+    return lumping
+end
+
+function get_scaler_for_vectorize_nested(dopt::DictParameters)
+    scalers = Dict()
+    for k in active_keys(dopt)
+        lims = get_parameter_limits(dopt, k, throw = false)
+        if !ismissing(lims) && !ismissing(lims.scaler)
+            scalers[k] = lims.scaler
+        end
+    end
+    return scalers
 end
 
 function print_optimization_overview(dopt::DictParameters; io = Base.stdout, print_inactive = false)
@@ -165,12 +192,10 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         end
         tab = Matrix{Any}(undef, length(subkeys), length(header))
         for (i, k) in enumerate(subkeys)
-            v0 = get_nested_dict_value(prm, k)
+            v0 = get_parameter_value(dopt, k, optimized = false)
             v0_avg = avg(v0)
             if haskey(pt, k)
                 lims = realize_limits(dopt, k)
-                # min_lim = minimum(lims.min)
-                # max_lim = maximum(lims.max)
                 limstr_min = fmt_lim(lims.min, is_max = false)
                 limstr_max = fmt_lim(lims.max, is_max = true)
             else
@@ -182,7 +207,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             tab[i, 4] = limstr_min
             tab[i, 5] = limstr_max
             if is_optimized
-                v = get_nested_dict_value(prm_opt, k)
+                v = get_parameter_value(dopt, k, optimized = true)
                 v_avg = avg(v)
                 perc = round(100*(v_avg-v0_avg)/max(v0_avg, 1e-20), sigdigits = 2)
                 tab[i, 6] = format_value(v)
@@ -217,6 +242,29 @@ function get_parameter_limits(x::DictParameters, key; throw = true)
     return val
 end
 
+function get_parameter_value(x::DictParameters, key; optimized::Bool = false)
+    if optimized
+        prm = x.parameters_optimized
+    else
+        prm = x.parameters
+    end
+    val = get_nested_dict_value(prm, key)
+    L = get_parameter_limits(x, key, throw = false)
+    if !ismissing(L) && !ismissing(L.lumping)
+        ix = get_lumping_first_entry(L.lumping)
+        val = val[ix]
+    end
+    return val
+end
+
+function get_lumping_first_entry(lumping)
+    vals = Int[]
+    for i in 1:maximum(lumping)
+        push!(vals, findfirst(isequal(i), lumping))
+    end
+    return vals
+end
+
 function get_nested_dict_value(x::AbstractDict, key)
     key = convert_key(key)
     for k in key
@@ -247,7 +295,6 @@ function convert_key(x::Vector)
     eltype(x)<:KEYTYPE
     return x
 end
-
 
 function widen_dict_copy(x::AbstractDict)
     new_dict = Jutul.OrderedDict()

@@ -6,6 +6,8 @@ Base.@kwdef mutable struct KeyLimits
     rel_max::LIMIT_TYPE = Inf
     abs_min::LIMIT_TYPE = -Inf
     abs_max::LIMIT_TYPE = Inf
+    scaler::Union{Symbol, Missing} = missing
+    lumping::Union{Array{Int, <:Any}, Missing} = missing
 end
 
 mutable struct DictParameters
@@ -20,7 +22,31 @@ mutable struct DictParameters
     active_type
     setup_function
     history
-    function DictParameters(parameters::AbstractDict, setup_function = missing;
+    @doc"""
+        DictParameters(parameters)
+        DictParameters(parameters::AbstractDict, setup_function = missing;
+                strict = true,
+                verbose = true,
+                active_type = Float64
+            )
+
+    Set up a `DictParameters` object for optimization. Optionally, the setup
+    function that takes an instance with the same keys as `parameters` together
+    with a `step_info` dictionary can be provided. The setup function should
+    return a `JutulCase` set up from the parameters in the Dict.
+
+    Optional keyword arguments:
+    - `strict`: If true, the optimization will throw an error if any of the
+      parameters are not set with at least one of the upper or lower bounds.
+    - `verbose`: If true, the optimization will print information about the
+      optimization process.
+    - `active_type`: The type of the parameters that are considered active in
+      the optimization. Defaults to `Float64`. This is used to determine which
+      parameters are active and should be optimized. This means that all entries
+      (and entries in nested dictionaries) of the `parameters` dictionary must
+      be of this type or an array with this type as element type.
+    """
+function DictParameters(parameters::AbstractDict, setup_function = missing;
             strict = true,
             verbose = true,
             active_type = Float64

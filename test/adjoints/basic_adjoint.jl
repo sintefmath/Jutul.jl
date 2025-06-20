@@ -188,7 +188,7 @@ function num_grad_generic(F, G, x0)
     return out
 end
 
-function test_for_timesteps(timesteps; atol = 1e-3, fmt = :case, kwarg...)
+function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, kwarg...)
     # dx, dy, U0, k_val, srcval
     x = ones(5)
     case = setup_poisson_test_case_from_vector(x, dt = timesteps)

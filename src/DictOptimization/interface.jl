@@ -1,3 +1,55 @@
+"""
+    optimized_dict = optimize(dopt, objective)
+    optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
+        grad_tol = 1e-6,
+        obj_change_tol = 1e-6,
+        max_it = 25,
+        opt_fun = missing,
+        maximize = false,
+        simulator = missing,
+        config = missing,
+        solution_history = false,
+        backend_arg = (
+            use_sparsity = false,
+            di_sparse = true,
+            single_step_sparsity = false,
+            do_prep = true,
+        ),
+        kwarg...
+    )
+
+Optimize parameters defined in a [`DictParameters`](@ref) object using the
+provided objective function. At least one variable has to be declared to be free
+using `free_optimization_parameter!` prior to calling the optimizer.
+
+# Arguments
+- `dopt::DictParameters`: Container with parameters to optimize
+- `objective`: The objective function to minimize (or maximize)
+- `setup_fn`: Function to set up the optimization problem. Defaults to `dopt.setup_function`
+
+# Keyword Arguments
+- `grad_tol`: Gradient tolerance for stopping criterion
+- `obj_change_tol`: Objective function change tolerance for stopping criterion
+- `max_it`: Maximum number of iterations
+- `opt_fun`: Optional custom optimization function. If missing, L-BFGS will be used
+- `maximize`: Set to `true` to maximize the objective instead of minimizing
+- `simulator`: Optional simulator object used in forward simulations
+- `config`: Optional configuration for the setup
+- `solution_history`: If `true`, stores all intermediate solutions
+- `backend_arg`: Options for the autodiff backend:
+  - `use_sparsity`: Enable sparsity detection for the objective function
+  - `di_sparse`: Use sparse differentiation
+  - `single_step_sparsity`: Enable single step sparsity detection (if sparsity does not change during timesteps)
+  - `do_prep`: Perform preparation step
+
+# Returns
+The optimized parameters as a dictionary.
+
+# Notes
+- The function stores the optimization history and optimized parameters in the input `dopt` object.
+- If `solution_history` is `true`, intermediate solutions are stored in `dopt.history.solutions`.
+- The default optimization algorithm is L-BFGS with box constraints.
+"""
 function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
         grad_tol = 1e-6,
         obj_change_tol = 1e-6,
@@ -70,7 +122,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     end
     # Also remove AD from the internal ones and update them
     prm_out = deepcopy(dopt.parameters)
-    Jutul.AdjointsDI.devectorize_nested!(prm_out, x, x_setup)
+    optimizer_devectorize!(prm_out, x, x_setup)
     dopt.parameters_optimized = prm_out
     dopt.history = history
     if solution_history
@@ -81,6 +133,15 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     return prm_out
 end
 
+"""
+    parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.setup_function)
+
+Compute the gradient of the objective function with respect to the parameters
+defined in the `DictParameters` object. This function will return the gradient
+as a dictionary with the same structure as the input parameters, where each
+entry is a vector of gradients for each parameter. Only gradients with respect
+to free parameters will be computed.
+"""
 function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
         simulator = missing,
         config = missing,
@@ -118,6 +179,16 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.se
     return out
 end
 
+"""
+    freeze_optimization_parameter!(dopt, "parameter_name")
+    freeze_optimization_parameter!(dopt, ["dict_name", "parameter_name"])
+    freeze_optimization_parameter!(dopt::DictParameters, parameter_name, val = missing)
+
+Freeze an optimization parameter in the `DictParameters` object. This will
+remove the parameter from the optimization targets and set its value to `val` if
+provided. Any limits/lumping/scaling settings for this parameter will be
+removed.
+"""
 function freeze_optimization_parameter!(dopt::DictParameters, parameter_name, val = missing)
     parameter_name = convert_key(parameter_name)
     if !ismissing(val)
@@ -126,12 +197,62 @@ function freeze_optimization_parameter!(dopt::DictParameters, parameter_name, va
     delete!(dopt.parameter_targets, parameter_name)
 end
 
+"""
+    free_optimization_parameter!(dopt, "parameter_name", rel_min = 0.01, rel_max = 100.0)
+    free_optimization_parameter!(dopt, ["dict_name", "parameter_name"], abs_min = -8.0, abs_max = 7.0)
+
+Free an existing parameter for optimization in the `DictParameters` object. This
+will allow the parameter to be optimized through a call to [`optimize`](@ref).
+
+# Nesting structures
+If your `DictParameters` has a nesting structure, you can use a vector of
+strings or symbols to specify the parameter name, e.g. `["dict_name",
+"parameter_name"]` to access the parameter located at
+`["dict_name"]["parameter_name"]`.
+
+# Setting limits
+The limits can be set using the following keyword arguments:
+- `abs_min`: Absolute minimum value for the parameter.  If not set, no absolute
+  minimum will be applied.
+- `abs_max`: Absolute maximum value for the parameter. If not set, no absolute
+  maximum will be applied.
+- `rel_min`: Relative minimum value for the parameter. If not set, no relative
+  minimum will be applied.
+- `rel_max`: Relative maximum value for the parameter. If not set, no relative
+  maximum will be applied.
+
+For either of these entries it is possible to pass either a scalar, or an array.
+If an array is passed, it must have the same size as the parameter being set.
+
+Note that if `dopt.strict` is set to `true`, at least one of the upper or lower
+bounds must be set for free parameters. If `dopt.strict` is set to `false`, the
+bounds are optional and the `DictParameters` object can be used to compute
+sensitivities, but the built-in optimization routine assumes that finite limits
+are set for all parameters.
+
+# Other keyword arguments
+- `initial`: Initial value for the parameter. If not set, the current value in
+  `dopt.parameters` will be used.
+- `scaler=missing`: Optional scaler for the parameter. If not set, no scaling
+  will be applied. Available scalers are `:log`, `:exp`. The scaler will be
+  applied
+- `lumping=missing`: Optional lumping array for the parameter. If not set, no
+  lumping will be applied. The lumping array should have the same size as the
+  parameter and contain positive integers. The lumping array defines groups of
+  indices that should be lumped together, i.e. the same value will be used for
+  all indices in the same group. The lumping array should contain all integers
+  from 1 to the maximum value in the array, and all indices in the same group
+  should have the same value in the initial parameter, otherwise an error will
+  be thrown.
+"""
 function free_optimization_parameter!(dopt::DictParameters, parameter_name;
         initial = missing,
         abs_min = -Inf,
         abs_max = Inf,
         rel_min = -Inf,
-        rel_max = Inf
+        rel_max = Inf,
+        scaler = missing,
+        lumping = missing
     )
     parameter_name = convert_key(parameter_name)
     if dopt.strict
@@ -155,12 +276,30 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
     check_limit(parameter_name, initial, rel_max, is_max = true, is_rel = true)
     check_limit_pair(parameter_name, initial, rel_min, rel_max, is_rel = true)
     check_limit_pair(parameter_name, initial, abs_min, abs_max, is_rel = false)
-
+    if !ismissing(lumping)
+        size(lumping) == size(initial) || error("Lumping array must have the same size as the parameter $parameter_name.")
+        eltype(lumping) == Int || error("Lumping array must be of type Int.")
+        minimum(lumping) >= 1 || error("Lumping array must have positive integers.")
+        max_lumping = maximum(lumping)
+        for i in 1:max_lumping
+            subset = findall(isequal(i), lumping)
+            if length(subset) == 0
+                error("Lumping array must contain all integers from 1 to $max_lumping.")
+            else
+                firstval = initial[subset[1]]
+                for j in subset
+                    if initial[j] != firstval
+                        error("Lumping array must contain the same value for all indices in the lumping group $i (value at $j differend from first value at $(subset[1])).")
+                    end
+                end
+            end
+        end
+    end
     targets = dopt.parameter_targets
     if haskey(targets, parameter_name) && dopt.verbose
         jutul_message("Optimization", "Overwriting limits for $parameter_name.")
     end
-    targets[parameter_name] = KeyLimits(rel_min, rel_max, abs_min, abs_max)
+    targets[parameter_name] = KeyLimits(rel_min, rel_max, abs_min, abs_max, scaler, lumping)
     return dopt
 end
 
@@ -171,6 +310,12 @@ function free_optimization_parameters!(dopt::DictParameters, targets = all_keys(
     return dopt
 end
 
+"""
+    set_optimization_parameter!(dopt::DictParameters, parameter_name, value)
+
+Set a specific optimization parameter in the `DictParameters` object. This
+function will update the value of the parameter in the `dopt.parameters` dictionary.
+"""
 function set_optimization_parameter!(dopt::DictParameters, parameter_name, value)
     set_nested_dict_value!(dopt.parameters, parameter_name, value)
 end
