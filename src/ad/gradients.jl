@@ -220,11 +220,11 @@ function setup_adjoint_storage_base(model, state0, parameters;
 end
 
 """
-    solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model))
+    solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces)
 
 Non-allocating version of `solve_adjoint_sensitivities`.
 """
-function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces = setup_forces(model), info_level = 0)
+function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces, info_level = 0)
     N = length(timesteps)
     @assert N == length(states)
     if forces isa Vector

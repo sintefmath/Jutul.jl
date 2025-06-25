@@ -30,7 +30,7 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
         )
 
         if info_level > 1
-            jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
+            jutul_message("Adjoints", "Storage set up in $(Jutul.get_tstr(t_storage)).", color = :blue)
         end
         ∇G = zeros(n_param)
 
@@ -46,7 +46,7 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
             step_index = step_index
         )
         if info_level > 1
-            jutul_message("Adjoints", "Adjoints solved in $(get_tstr(t_solve)).", color = :blue)
+            jutul_message("Adjoints", "Adjoints solved in $(Jutul.get_tstr(t_solve)).", color = :blue)
         end
         Jutul.print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
         if extra_output
