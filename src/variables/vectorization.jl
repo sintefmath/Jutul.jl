@@ -84,7 +84,7 @@ function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary; 
     return state_or_prm
 end
 
-function devectorize_variable!(state, V, k, info, F_inv; config = c)
+function devectorize_variable!(state, V, k, info, F_inv; config = nothing)
     (; n_full, n_x, offset_full, offset_x) = info
     state_val = state[k]
     lumping = get_lumping(config)

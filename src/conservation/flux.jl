@@ -1,4 +1,4 @@
-export SPU, TPFA, TwoPointPotentialFlowHardCoded, TrivialFlow, get_neighborship
+export SPU, TPFA, TwoPointPotentialFlowHardCoded, get_neighborship
 
 abstract type TwoPointDiscretization <: JutulDiscretization end
 

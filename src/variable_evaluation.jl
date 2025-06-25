@@ -268,7 +268,7 @@ function build_variable_graph(model, primary = model.primary_variables, secondar
         for (i, edge) in enumerate(edges)
             for d in edge
                 pos = findall(nodes .== d)
-                @assert length(pos) == 1 "Symbol $d must appear exactly once in secondary variables or parameters, found $(length(pos)) entries. Declared secondary/parameters:\n $symbols. Declared dependencies:\n $deps"
+                @assert length(pos) == 1 "Symbol $d must appear exactly once in secondary variables or parameters, found $(length(pos)) entries. Declared secondary/parameters:\n $nodes. Declared dependencies:\n $edges"
                 add_edge!(graph, i, pos[])
             end
         end

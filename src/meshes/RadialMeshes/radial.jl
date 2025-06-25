@@ -30,7 +30,7 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
     for i in 2:length(angles)
         δ = angles[i] - angles[i-1]
         δ > 0 || throw(ArgumentError("Angles entries must be in increasing order with entries between 0 and 1"))
-        abs(δ) > 1e-10 || throw(ArgumentError("Difference between entries below tolerance $tol for entry $i ($(abs(δ)))."))
+        abs(δ) > 1e-10 || throw(ArgumentError("Difference between entries below tolerance 1e-10 for entry $i ($(abs(δ)))."))
     end
 
     nangle = length(angles)

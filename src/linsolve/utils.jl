@@ -1,4 +1,4 @@
-export IterativeSolverConfig, reservoir_linsolve
+export IterativeSolverConfig
 
 mutable struct IterativeSolverConfig
     relative_tolerance::Union{Nothing, AbstractFloat}

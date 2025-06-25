@@ -264,7 +264,7 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
         end
     end
     if !ismissing(initial)
-        set_calibration_parameter!(dopt, parameter_name, initial)
+        set_optimization_parameter!(dopt, parameter_name, initial)
     end
     initial = get_nested_dict_value(dopt.parameters, parameter_name)
     if eltype(initial) isa dopt.active_type

@@ -782,8 +782,9 @@ function store_sensitivities!(out, model, variables, result, prm_map, ::Equation
                 v = extract_sensitivity_subset(result_k, var, n_x, m, offset_x)
             else
                 # Grab each of the sensitivities and put them in an array for simplicity
+                # TODO: Update this part
                 v = map(
-                    i -> extract_sensitivity_subset(view(result, rng, i), var, n_x, m, offset + n_x*(i-1)),
+                    i -> extract_sensitivity_subset(view(result, rng, i), var, n_x, m, n_x*(i-1)),
                     1:N
                 )
             end
