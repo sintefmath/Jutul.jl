@@ -121,6 +121,7 @@ function find_enclosing_cells(G, traj;
         n = length(unique_cells)
         lengths = zeros(T_f, n)
         direction = zeros(T, n)
+        norm_direction = zeros(T, n)
         for (cellno, cell) in enumerate(unique_cells)
             for ptno in 2:length(pts)
                 prev_c = intersected_cells[ptno-1]
@@ -143,9 +144,11 @@ function find_enclosing_cells(G, traj;
                 end
             end
             direction[cellno] /= lengths[cellno]
+            norm_direction[cellno] = direction[cellno]./cell_dims(G, cellno)
         end
         extra[:lengths] = lengths
         extra[:direction] = direction
+        extra[:normed_direction] = norm_direction
         retval = (unique_cells, extra)
     else
         retval = unique_cells
