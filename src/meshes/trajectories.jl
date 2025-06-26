@@ -37,7 +37,8 @@ function find_enclosing_cells(G, traj;
         n = 25,
         use_boundary = false,
         atol = 0.01,
-        limit_box = true
+        limit_box = true,
+        extra_out = false
     )
     G = UnstructuredMesh(G)
     if ismissing(geometry)
@@ -104,14 +105,52 @@ function find_enclosing_cells(G, traj;
     cells_by_dist = sort(cells, by = cell -> norm(cell_centroids[cell] - mean_pt, 2))
 
     intersected_cells = Int[]
-    lengths = Float64
     for pt in pts
         ix = find_enclosing_cell(G, pt, normals, face_centroids, boundary_normals, boundary_centroids, cells_by_dist)
-        if !isnothing(ix)
-            push!(intersected_cells, ix)
+        if isnothing(ix)
+            ix = 0
         end
+        push!(intersected_cells, ix)
     end
-    return unique!(intersected_cells)
+    unique_cells = filter!(!isequal(0), unique(intersected_cells))
+    if extra_out
+        # StaticArrays -> inner type
+        T_f = eltype(T)
+        # Compute orientation, lengths, etc of the segments inside each cell
+        extra = Dict{Symbol, Any}()
+        n = length(unique_cells)
+        lengths = zeros(T_f, n)
+        direction = zeros(T, n)
+        for (cellno, cell) in enumerate(unique_cells)
+            for ptno in 2:length(pts)
+                prev_c = intersected_cells[ptno-1]
+                curr_c = intersected_cells[ptno]
+                is_prev = prev_c == cell
+                is_curr = curr_c == cell
+                if is_prev || is_curr
+                    pt_start = pts[ptno-1]
+                    pt_end = pts[ptno]
+                    seg_d = norm(pt_end - pt_start, 2)
+                    if is_prev && is_curr
+                        # This segment is entirely inside the cell
+                        v = seg_d
+                    else
+                        # This cell is partially inside the segment
+                        v = seg_d/2.0
+                    end
+                    lengths[cellno] += v
+                    direction[cellno] += (pt_end - pt_start)*v
+                end
+            end
+            direction[cellno] /= lengths[cellno]
+        end
+        extra[:lengths] = lengths
+        extra[:direction] = direction
+        retval = (unique_cells, extra)
+    else
+        retval = unique_cells
+    end
+    return retval
 end
 
 function point_in_bounding_box(pt, low_bb, high_bb; atol::Float64 = 0.01)
@@ -149,6 +188,7 @@ function find_enclosing_cell(G::UnstructuredMesh{D}, pt::SVector{D, T},
         cells = 1:number_of_cells(G)
     ) where {D, T}
     inside_normal(pt, normal, centroid) = dot(normal, pt - centroid) <= 0
+    found_cell = nothing
     for cell in cells
         inside = true
         for face in G.faces.cells_to_faces[cell]
@@ -180,10 +220,11 @@ function find_enclosing_cell(G::UnstructuredMesh{D}, pt::SVector{D, T},
         # cell. This is not strictly necessary, but can be useful for some
         # degenerate geometries.
         if inside && point_inside_cell_bounding_box(G, cell, pt)
-            return cell
+            found_cell = cell
+            break
         end
     end
-    return nothing
+    return found_cell
 end
 
 function point_inside_cell_bounding_box(G::UnstructuredMesh, cell, pt::SVector{D, T}; atol = 0.0) where {D, T}
