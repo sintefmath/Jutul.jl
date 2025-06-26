@@ -140,8 +140,8 @@ function find_enclosing_cells(G, traj;
                         # This segment is partially inside the cell
                         fctr = 0.5
                     end
+                    direction[cellno] += dir*fctr
                     lengths[cellno] += seg_d*fctr
-                    direction[cellno] += (pt_end - pt_start)*fctr
                 end
             end
             norm_direction[cellno] = direction[cellno]./cell_dims(G, cellno)
