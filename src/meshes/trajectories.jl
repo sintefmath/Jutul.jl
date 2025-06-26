@@ -131,20 +131,21 @@ function find_enclosing_cells(G, traj;
                 if is_prev || is_curr
                     pt_start = pts[ptno-1]
                     pt_end = pts[ptno]
-                    seg_d = norm(pt_end - pt_start, 2)
+                    dir = (pt_end - pt_start)
+                    seg_d = norm(dir, 2)
                     if is_prev && is_curr
                         # This segment is entirely inside the cell
-                        v = seg_d
+                        fctr = 1.0
                     else
-                        # This cell is partially inside the segment
-                        v = seg_d/2.0
+                        # This segment is partially inside the cell
+                        fctr = 0.5
                     end
-                    lengths[cellno] += v
-                    direction[cellno] += (pt_end - pt_start)*v
+                    lengths[cellno] += seg_d*fctr
+                    direction[cellno] += (pt_end - pt_start)*fctr
                 end
             end
-            direction[cellno] /= lengths[cellno]
             norm_direction[cellno] = direction[cellno]./cell_dims(G, cellno)
+            direction[cellno] /= lengths[cellno]
         end
         extra[:lengths] = lengths
         extra[:direction] = direction
