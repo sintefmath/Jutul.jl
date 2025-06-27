@@ -490,6 +490,12 @@ function triangulate_mesh(m::CartesianMesh; outer = false)
             end
         end
     end
+
+    o = hcat(m.origin...)
+    for i = 1:length(pts)
+        pts[i] .+= o
+    end
+
     pts = plot_flatten_helper(pts)
     tri = plot_flatten_helper(tri)
 
