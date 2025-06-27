@@ -78,8 +78,7 @@ index_type(context) = Int64
 nzval_index_type(context) = index_type(context)
 
 function synchronize(::SingleCUDAContext)
-    # Needed because of an issue with kernel abstractions.
-    CUDA.synchronize()
+
 end
 
 # For many GPUs we want to use single precision. Specialize interfaces accordingly.

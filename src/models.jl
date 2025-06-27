@@ -1,7 +1,5 @@
 export update_state_dependents!, check_convergence
 
-export setup_parameters_domain!, setup_parameters_system!, setup_parameters_context!, setup_parameters_formulation!
-
 """
     get_primary_variables(model::SimulationModel)
 

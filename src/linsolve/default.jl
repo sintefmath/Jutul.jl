@@ -1,4 +1,4 @@
-export LinearizedSystem, MultiLinearizedSystem, linear_solve!, AMGSolver, CuSparseSolver, transfer, LUSolver
+export LinearizedSystem, MultiLinearizedSystem, linear_solve!, transfer, LUSolver
 
 # using CUDA, CUDA.CUSPARSE
 

@@ -535,7 +535,7 @@ function transfer_gradient!(dGdy, dGdx, y, mapper, config, model)
             lumping::AbstractVector
             m_x = n_x ÷ n_row
             m_full = n_full ÷ n_row
-            @assert m_x == maximum(lumping) "Lumping group $k has $m_x groups, but $n_x variables"
+            @assert m_x == maximum(lumping) "Lumping group $varname has $m_x groups, but $n_x variables"
             indx(j, lump) = offset_x + (lump - 1)*n_row + j
             for lump in 1:m_x
                 for j in 1:n_row

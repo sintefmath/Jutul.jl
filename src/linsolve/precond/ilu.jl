@@ -43,7 +43,7 @@ function update_preconditioner!(ilu::ILUZeroPreconditioner, A::StaticSparsityMat
             @debug "Setting up serial ILU(0)-CSR"
             F = ilu0_csr(A)
         else
-            @debug "Setting up parallel ILU(0)-CSR with $(nthreads(td)) threads"
+            @debug "Setting up parallel ILU(0)-CSR with $(nthreads(A)) threads"
             if context isa ParallelCSRContext
                 part = context.partitioner
             else

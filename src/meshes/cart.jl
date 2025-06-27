@@ -383,6 +383,7 @@ function triangulate_mesh(m::CartesianMesh; outer = false)
     face_index = []
     offset = 0
     d = dim(m)
+    include_all = !outer
     # nc = number_of_cells(m)
     function append_face!(pts, tri, cell_ix, t, v, offset)
         local_pts, local_tri = v

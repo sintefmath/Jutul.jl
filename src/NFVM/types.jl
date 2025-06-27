@@ -42,7 +42,7 @@ function Jutul.discretization_stencil(d::NFVMNonLinearDiscretization, e)
 end
 
 function Base.show(io::IO, ft::NFVMNonLinearDiscretization{T}) where T
-    l, r = cell_pair(ft)
+    l, r = Jutul.cell_pair(ft)
     print(io, "NFVMNonLinearDiscretization{$T} $(l)→$(r)")
     compact = get(io, :compact, false)
     if !compact
