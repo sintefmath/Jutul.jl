@@ -475,7 +475,7 @@ function plot_interactive_impl(grid, states;
             lim_lo *= 0.999
             lim_hi = lim_hi*1.001 + 1e-16
         end
-        return (lim_lo, lim_hi)
+        return (lim_lo, lim_hi*1.000001)
     end
     on(menu_cscale.selection) do s
         pname = prop_name[]
