@@ -77,9 +77,12 @@ module JutulMeshesExt
         return geo
     end
 
-    function Jutul.add_default_domain_data!(Ω::DataDomain, m::Meshes.Mesh)
+    function Jutul.add_default_domain_data!(Ω::DataDomain, m::Meshes.Mesh; geometry = missing)
         # TODO: Fix this code duplication
-        fv = tpfv_geometry(m)
+        if ismissing(geometry)
+            geometry = tpfv_geometry(m)
+        end
+        fv = geometry
         geom_pairs = (
             Pair(Faces(), [:neighbors, :areas, :normals, :face_centroids]),
             Pair(Cells(), [:cell_centroids, :volumes]),
