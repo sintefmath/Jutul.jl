@@ -114,7 +114,7 @@ end
 
 function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector{SVector{dim, T}}, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, ::Val{is_xyz} = Val(true)) where {dim, T, is_xyz}
     for cell in eachindex(cell_centroids)
-        for fpos = facepos[cell]:(facepos[cell+1]-1)
+        @inbounds for fpos = facepos[cell]:(facepos[cell+1]-1)
             face = faces[fpos]
             sgn = facesigns[fpos]
             cc = cell_centroids[cell]
