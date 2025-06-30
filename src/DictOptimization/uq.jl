@@ -13,7 +13,7 @@ function Jutul.simulate(dps::DictParametersSampler, x::AbstractVector)
         out = qoi
     else
         obj = Jutul.evaluate_objective(dps.objective, case.model, result.states, case.dt, case.forces)
-        out = (qoi, obj)
+        out = (output = qoi, objective = obj)
     end
     return out
 end
