@@ -96,15 +96,15 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         end
     end
     vdim = Val(dim)
-    compute_half_face_trans!(T_hf, cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, vdim, version = version)
+    is_xyz = Val(version == :xyz)
+    compute_half_face_trans!(T_hf, cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, vdim, is_xyz)
     return T_hf
 end
 
-function compute_half_face_trans!(T_hf, cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, vdim::Val{dim}; version = :xyz) where dim
+function compute_half_face_trans!(T_hf, cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, vdim::Val{dim}, ::Val{is_xyz}) where {dim, is_xyz}
     cc = zeros(eltype(cell_centroids), dim)
     fc = zeros(eltype(face_centroids), dim)
     Nn = zeros(eltype(face_normals), dim)
-    is_xyz = version == :xyz
 
     for cell in axes(cell_centroids, 2)
         for fpos = facepos[cell]:(facepos[cell+1]-1)
@@ -116,12 +116,13 @@ function compute_half_face_trans!(T_hf, cell_centroids, face_centroids, face_nor
             C = fc - cc
             @. Nn = sgn*face_normals[:, face]
             if is_xyz
-                K = expand_perm(perm[:, cell], vdim)
+                perm_c = view(perm, :, cell)
+                K = expand_perm(perm_c, vdim)
             else
                 K = perm[face_dir[face], cell]
             end
-            T = half_face_trans(A, K, C, Nn)
-            T_hf[fpos] = T
+            T = 
+            T_hf[fpos] = half_face_trans(A, K, C, Nn)
         end
     end
     return T_hf
