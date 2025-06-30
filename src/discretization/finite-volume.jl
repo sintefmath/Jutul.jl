@@ -28,12 +28,18 @@ function compute_half_face_trans(g::TwoPointFiniteVolumeGeometry, perm; kwarg...
     return compute_half_face_trans(g.cell_centroids, g.face_centroids, g.normals, g.areas, perm, g.neighbors; kwarg...)
 end
 
-function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N; kwarg...)
+function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N; extra_out = false, kwarg...)
     nc = size(cell_centroids, 2)
     @assert size(N) == (2, length(face_areas))
     faces, facepos = get_facepos(N, nc)
     facesigns = get_facesigns(N, faces, facepos, nc)
-    return compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; kwarg...)
+    T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; kwarg...)
+    if extra_out
+        out = (T_hf, faces, facepos)
+    else
+        out = T_hf
+    end
+    return out
 end
 
 
@@ -202,8 +208,7 @@ function half_face_trans(A, K, C, N)
     return A*(dot(K*C, N))/dot(C, C)
 end
 
-function compute_face_trans(T_hf, N)
-    faces, facePos = get_facepos(N)
+function compute_face_trans(T_hf, N, faces = first(get_facepos(N)))
     @assert length(T_hf) == length(faces)
     nf = size(N, 2)
     T = zeros(eltype(T_hf), nf)
@@ -232,8 +237,8 @@ the symbol of some data defined on `Cells()`, a vector of numbers for each cell
 or a matrix with number of columns equal to the number of cells.
 """
 function compute_face_trans(d::DataDomain, arg...; kwarg...)
-    T_hf = compute_half_face_trans(d, arg...; kwarg...)
-    return compute_face_trans(T_hf, d[:neighbors])
+    T_hf, faces, = compute_half_face_trans(d, arg...; extra_out = true, kwarg...)
+    return compute_face_trans(T_hf, d[:neighbors], faces)
 end
 
 function compute_boundary_trans(d::DataDomain, k::Symbol = :permeability)
