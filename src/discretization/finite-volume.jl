@@ -78,7 +78,6 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     if !(version in (:xyz, :ijk))
         throw(ArgumentError("version must be :xyz or :ijk"))
     end
-    is_xyz = version == :xyz
     if version == :ijk
         if size(perm, 1) != dim
             throw(ArgumentError("version = :ijk is only valid when perm is strictly diagonal."))
@@ -97,10 +96,17 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         end
     end
     vdim = Val(dim)
+    compute_half_face_trans!(T_hf, cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, vdim, version = version)
+    return T_hf
+end
+
+function compute_half_face_trans!(T_hf, cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, vdim::Val{dim}; version = :xyz) where dim
     cc = zeros(eltype(cell_centroids), dim)
     fc = zeros(eltype(face_centroids), dim)
     Nn = zeros(eltype(face_normals), dim)
-    for cell = 1:nc
+    is_xyz = version == :xyz
+
+    for cell in axes(cell_centroids, 2)
         for fpos = facepos[cell]:(facepos[cell+1]-1)
             face = faces[fpos]
             sgn = facesigns[fpos]
