@@ -7,33 +7,9 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
 
     prm = adj_cache[:parameters]
     function setup_from_vector(X, step_info)
-        # if haskey(x_setup, :lumping)
-        #     X_new = similar(X, 0)
-        #     pos = 0
-        #     for (i, k) in enumerate(x_setup.names)
-        #         if haskey(x_setup.lumping, k)
-        #             L = x_setup.lumping[k]
-        #             first_index = L.first_index
-        #             N = length(first_index)
-        #             for v in L.lumping
-        #                 push!(X_new, X[pos + v])
-        #             end
-        #         else
-        #             N = x_setup.offsets[i+1]-x_setup.offsets[i]
-        #             for i in pos+1:pos+N
-        #                 push!(X_new, X[i])
-        #             end
-        #         end
-        #         pos += N
-        #     end
-        #     X = X_new
-        # end
-        # @assert length(X) == x_setup.offsets[end]-1
-        # # Set the parameters from the vector
-        # Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup)
         optimizer_devectorize!(prm, X, x_setup)
-        # Return the case setup function
-        # This is a function that sets up the case from the parameters
+        # Return the case setup function This is a function that sets up the
+        # case from the parameters
         F() = setup_fn(prm, step_info)
         return redirect_stdout(F, devnull)
     end

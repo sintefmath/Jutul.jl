@@ -6,4 +6,5 @@ module DictOptimization
     include("optimization.jl")
     include("utils.jl")
     include("scaler.jl")
+    include("uq.jl")
 end
