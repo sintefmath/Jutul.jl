@@ -95,33 +95,39 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
             throw(ArgumentError("face_dir entry is less than 1."))
         end
     end
-    vdim = Val(dim)
     is_xyz = Val(version == :xyz)
-    compute_half_face_trans!(T_hf, cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, vdim, is_xyz)
+    to_vec_of_svectors(x) = vec(reinterpret(SVector{dim, eltype(x)}, x))
+    compute_half_face_trans!(
+        T_hf,
+        to_vec_of_svectors(cell_centroids),
+        to_vec_of_svectors(face_centroids),
+        to_vec_of_svectors(face_normals),
+        face_areas,
+        perm,
+        faces,
+        facepos,
+        facesigns,
+        is_xyz
+    )
     return T_hf
 end
 
-function compute_half_face_trans!(T_hf, cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, vdim::Val{dim}, ::Val{is_xyz}) where {dim, is_xyz}
-    cc = zeros(eltype(cell_centroids), dim)
-    fc = zeros(eltype(face_centroids), dim)
-    Nn = zeros(eltype(face_normals), dim)
-
-    for cell in axes(cell_centroids, 2)
+function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector{SVector{dim, T}}, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, ::Val{is_xyz} = Val(true)) where {dim, T, is_xyz}
+    for cell in eachindex(cell_centroids)
         for fpos = facepos[cell]:(facepos[cell+1]-1)
             face = faces[fpos]
             sgn = facesigns[fpos]
-            @. cc = cell_centroids[:, cell]
-            @. fc = face_centroids[:, face]
+            cc = cell_centroids[cell]
+            fc = face_centroids[face]
             A = face_areas[face]
             C = fc - cc
-            @. Nn = sgn*face_normals[:, face]
+            Nn = sgn*face_normals[face]
             if is_xyz
                 perm_c = view(perm, :, cell)
-                K = expand_perm(perm_c, vdim)
+                K = expand_perm(perm_c, Val(dim))
             else
                 K = perm[face_dir[face], cell]
             end
-            T = 
             T_hf[fpos] = half_face_trans(A, K, C, Nn)
         end
     end
@@ -135,7 +141,6 @@ end
 function expand_perm(K, ::Val{1})
     return only(K)
 end
-
 
 function expand_perm(K, ::Val{2})
     T = eltype(K)
