@@ -102,7 +102,15 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         end
     end
     is_xyz = Val(version == :xyz)
-    to_vec_of_svectors(x) = vec(reinterpret(SVector{dim, eltype(x)}, x))
+    function to_vec_of_svectors(x)
+        elT = eltype(x)
+        if isbitstype(elT)
+            x_vec = vec(reinterpret(SVector{dim, eltype(x)}, x))
+        else
+            x_vec = [x[:, i] for i in axes(x, 2)]
+        end
+        return x_vec
+    end
     compute_half_face_trans!(
         T_hf,
         to_vec_of_svectors(cell_centroids),
@@ -119,23 +127,27 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     return T_hf
 end
 
-function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector{SVector{dim, T}}, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, face_dir, ::Val{is_xyz} = Val(true)) where {dim, T, is_xyz}
-    for cell in eachindex(cell_centroids)
-        @inbounds for fpos = facepos[cell]:(facepos[cell+1]-1)
-            face = faces[fpos]
-            sgn = facesigns[fpos]
-            cc = cell_centroids[cell]
-            fc = face_centroids[face]
-            A = face_areas[face]
-            C = fc - cc
-            Nn = sgn*face_normals[face]
-            if is_xyz
-                perm_c = view(perm, :, cell)
-                K = expand_perm(perm_c, Val(dim))
-            else
-                K = perm[face_dir[face], cell]
+function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, face_dir, ::Val{is_xyz} = Val(true)) where {is_xyz}
+    if length(cell_centroids) > 0
+        dim = length(cell_centroids[1])
+        T = eltype(eltype(cell_centroids))
+        for cell in eachindex(cell_centroids)
+            @inbounds for fpos = facepos[cell]:(facepos[cell+1]-1)
+                face = faces[fpos]
+                sgn = facesigns[fpos]
+                cc = cell_centroids[cell]
+                fc = face_centroids[face]
+                A = face_areas[face]
+                C = fc - cc
+                Nn = sgn*face_normals[face]
+                if is_xyz
+                    perm_c = view(perm, :, cell)
+                    K = expand_perm(perm_c, Val(dim))
+                else
+                    K = perm[face_dir[face], cell]
+                end
+                T_hf[fpos] = half_face_trans(A, K, C, Nn)
             end
-            T_hf[fpos] = half_face_trans(A, K, C, Nn)
         end
     end
     return T_hf
