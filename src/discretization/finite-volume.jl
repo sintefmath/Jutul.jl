@@ -28,12 +28,18 @@ function compute_half_face_trans(g::TwoPointFiniteVolumeGeometry, perm; kwarg...
     return compute_half_face_trans(g.cell_centroids, g.face_centroids, g.normals, g.areas, perm, g.neighbors; kwarg...)
 end
 
-function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N; kwarg...)
+function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, N; extra_out = false, kwarg...)
     nc = size(cell_centroids, 2)
     @assert size(N) == (2, length(face_areas))
     faces, facepos = get_facepos(N, nc)
     facesigns = get_facesigns(N, faces, facepos, nc)
-    return compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; kwarg...)
+    T_hf = compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; kwarg...)
+    if extra_out
+        out = (T_hf, faces, facepos)
+    else
+        out = T_hf
+    end
+    return out
 end
 
 
@@ -78,7 +84,6 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     if !(version in (:xyz, :ijk))
         throw(ArgumentError("version must be :xyz or :ijk"))
     end
-    is_xyz = version == :xyz
     if version == :ijk
         if size(perm, 1) != dim
             throw(ArgumentError("version = :ijk is only valid when perm is strictly diagonal."))
@@ -96,26 +101,53 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
             throw(ArgumentError("face_dir entry is less than 1."))
         end
     end
-    vdim = Val(dim)
-    cc = zeros(eltype(cell_centroids), dim)
-    fc = zeros(eltype(face_centroids), dim)
-    Nn = zeros(eltype(face_normals), dim)
-    for cell = 1:nc
-        for fpos = facepos[cell]:(facepos[cell+1]-1)
-            face = faces[fpos]
-            sgn = facesigns[fpos]
-            @. cc = cell_centroids[:, cell]
-            @. fc = face_centroids[:, face]
-            A = face_areas[face]
-            C = fc - cc
-            @. Nn = sgn*face_normals[:, face]
-            if is_xyz
-                K = expand_perm(perm[:, cell], vdim)
-            else
-                K = perm[face_dir[face], cell]
+    is_xyz = Val(version == :xyz)
+    function to_vec_of_svectors(x)
+        elT = eltype(x)
+        if isbitstype(elT)
+            x_vec = vec(reinterpret(SVector{dim, eltype(x)}, x))
+        else
+            x_vec = [x[:, i] for i in axes(x, 2)]
+        end
+        return x_vec
+    end
+    compute_half_face_trans!(
+        T_hf,
+        to_vec_of_svectors(cell_centroids),
+        to_vec_of_svectors(face_centroids),
+        to_vec_of_svectors(face_normals),
+        face_areas,
+        perm,
+        faces,
+        facepos,
+        facesigns,
+        face_dir,
+        is_xyz
+    )
+    return T_hf
+end
+
+function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, face_dir, ::Val{is_xyz} = Val(true)) where {is_xyz}
+    if length(cell_centroids) > 0
+        dim = length(cell_centroids[1])
+        T = eltype(eltype(cell_centroids))
+        for cell in eachindex(cell_centroids)
+            @inbounds for fpos = facepos[cell]:(facepos[cell+1]-1)
+                face = faces[fpos]
+                sgn = facesigns[fpos]
+                cc = cell_centroids[cell]
+                fc = face_centroids[face]
+                A = face_areas[face]
+                C = fc - cc
+                Nn = sgn*face_normals[face]
+                if is_xyz
+                    perm_c = view(perm, :, cell)
+                    K = expand_perm(perm_c, Val(dim))
+                else
+                    K = perm[face_dir[face], cell]
+                end
+                T_hf[fpos] = half_face_trans(A, K, C, Nn)
             end
-            T = half_face_trans(A, K, C, Nn)
-            T_hf[fpos] = T
         end
     end
     return T_hf
@@ -128,7 +160,6 @@ end
 function expand_perm(K, ::Val{1})
     return only(K)
 end
-
 
 function expand_perm(K, ::Val{2})
     T = eltype(K)
@@ -190,8 +221,7 @@ function half_face_trans(A, K, C, N)
     return A*(dot(K*C, N))/dot(C, C)
 end
 
-function compute_face_trans(T_hf, N)
-    faces, facePos = get_facepos(N)
+function compute_face_trans(T_hf, N, faces = first(get_facepos(N)))
     @assert length(T_hf) == length(faces)
     nf = size(N, 2)
     T = zeros(eltype(T_hf), nf)
@@ -220,8 +250,8 @@ the symbol of some data defined on `Cells()`, a vector of numbers for each cell
 or a matrix with number of columns equal to the number of cells.
 """
 function compute_face_trans(d::DataDomain, arg...; kwarg...)
-    T_hf = compute_half_face_trans(d, arg...; kwarg...)
-    return compute_face_trans(T_hf, d[:neighbors])
+    T_hf, faces, = compute_half_face_trans(d, arg...; extra_out = true, kwarg...)
+    return compute_face_trans(T_hf, d[:neighbors], faces)
 end
 
 function compute_boundary_trans(d::DataDomain, k::Symbol = :permeability)

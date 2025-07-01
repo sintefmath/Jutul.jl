@@ -70,6 +70,33 @@ end
 function Base.show(io::IO, t::MIME"text/plain", dopt::DictParameters)
     active_names = active_keys(dopt)
     inactive_names = inactive_keys(dopt)
-    println(io, "DictParameters with $(length(active_names)) active parameters and $(length(active_names)) inactive:")
+    println(io, "DictParameters with $(length(active_names)) active parameters and $(length(inactive_names)) inactive:")
     print_optimization_overview(dopt; io = io, print_inactive = true)
+end
+
+struct DictParametersSampler
+    parameters
+    setup_function
+    output_function
+    objective
+    simulator
+    config
+    setup
+end
+
+function DictParametersSampler(dopt::DictParameters, output_function = (case, result) -> result;
+        simulator = missing,
+        config = missing,
+        objective = missing
+    )
+    parameters = deepcopy(dopt.parameters)
+    setup = optimization_setup(dopt)
+    if ismissing(simulator)
+        case = dopt.setup_function(parameters, missing)
+        simulator = Jutul.Simulator(case)
+    end
+    if ismissing(config)
+        config = simulator_config(simulator, info_level = -1, output_substates = true)
+    end
+    return DictParametersSampler(parameters, dopt.setup_function, output_function, objective, simulator, config, setup)
 end

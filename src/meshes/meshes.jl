@@ -219,8 +219,10 @@ function declare_entities(G::JutulMesh)
         ]
 end
 
-function add_default_domain_data!(Ω::DataDomain, m::FiniteVolumeMesh)
-    fv = tpfv_geometry(m)
+function add_default_domain_data!(Ω::DataDomain, m::FiniteVolumeMesh; geometry = missing)
+    if ismissing(geometry)
+        geometry = tpfv_geometry(m)
+    end
     geom_pairs = (
         Pair(Faces(), [:neighbors, :areas, :normals, :face_centroids]),
         Pair(Cells(), [:cell_centroids, :volumes]),
@@ -230,7 +232,7 @@ function add_default_domain_data!(Ω::DataDomain, m::FiniteVolumeMesh)
     for (entity, names) in geom_pairs
         if hasentity(Ω, entity)
             for name in names
-                Ω[name, entity] = getproperty(fv, name)
+                Ω[name, entity] = getproperty(geometry, name)
             end
         end
     end

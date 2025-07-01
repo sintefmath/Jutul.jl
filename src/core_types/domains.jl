@@ -136,7 +136,7 @@ d[:cell_vec, Cells()] = rand(10, 3, 6) #ok
 d[:not_on_face_or_cell, nothing] = rand(3) # also ok
 ```
 """
-function DataDomain(domain::JutulDomain; kwarg...)
+function DataDomain(domain::JutulDomain; geometry = missing, kwarg...)
     entities = declare_entities(domain)
     u = Dict{JutulEntity, Int}()
     for (entity, num) in entities
@@ -147,7 +147,7 @@ function DataDomain(domain::JutulDomain; kwarg...)
     data = OrderedDict{Symbol, Any}()
     Ω = DataDomain(domain, u, data)
     Ω = DataDomain(Ω; kwarg...)
-    add_default_domain_data!(Ω, domain)
+    add_default_domain_data!(Ω, domain, geometry = geometry)
     return Ω
 end
 
@@ -166,7 +166,7 @@ function DataDomain(Ω::DataDomain; kwarg...)
     return Ω
 end
 
-add_default_domain_data!(Ω::DataDomain, domain) = nothing
+add_default_domain_data!(Ω::DataDomain, domain; geometry = missing) = nothing
 
 function Base.setindex!(domain::DataDomain, val, key::Symbol, entity = Cells())
     if ismissing(entity) || isnothing(entity)
