@@ -171,7 +171,7 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.se
         end
     else
         # Put gradients into the same structure as the input
-        out = optimizer_devectorize!(deepcopy(dopt.parameters), g, x_setup)
+        out = Jutul.AdjointsDI.devectorize_nested(g, x_setup)
         if output_cache
             out = (out, cache)
         end
