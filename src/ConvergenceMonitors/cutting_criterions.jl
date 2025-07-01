@@ -8,6 +8,8 @@
     memory = 1
     # Target number of nonlinear iterations for the timestep
     target_iterations = 8
+    # Max number of estimated iterations left for iterate to be classified as ok
+    max_iterations_left = 2*target_iterations
     # Contraction factor parameters
     slow = 0.99
     fast = 0.1
@@ -69,18 +71,20 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     cc.history[:distance][it] = dist
 
     # Compute contraction factor and update history
-    Θ, Θ_target = compute_contraction_factor(cc.history[:distance][it0:it], N)
-    cc.history[:contraction_factor][it] = Θ
-    cc.history[:contraction_factor_target][it] = Θ_target
+    θ, θ_target = compute_contraction_factor(cc.history[:distance][it0:it], N)
+    its_left = iterations_left(θ, dist)
+    cc.history[:contraction_factor][it] = θ
+    cc.history[:contraction_factor_target][it] = θ_target
+    cc.history[:iterations_left][it] = its_left
     # Check if the contraction factors are oscillating
     oscillating_it = oscillation(cc.history[:contraction_factor][1:it])
     cc.history[:oscillation][it] = oscillating_it
     is_oscillating = any(cc.history[:oscillation][it0:it])
     
     # Determine if current rate of convergence is adequate
-    good = all(Θ .<= max(Θ_target, cc.fast)) && !is_oscillating
-    ok = all(Θ .<= cc.slow)
-    bad = any(Θ .> cc.slow)
+    good = all(θ .<= max(θ_target, cc.fast)) && !is_oscillating
+    ok = all(θ .<= cc.slow) && its_left <= cc.max_iterations_left
+    bad = any(θ .> cc.slow) || its_left > cc.max_iterations_left
 
     if good
         # Convergence rate good, decrease number of violations
@@ -107,7 +111,7 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     early_cut = cc.num_violations > cc.num_violations_cut
     
     # Generate convergence monitor report and store in step report
-    cm_report = make_report(Θ, Θ_target, is_oscillating, status)
+    cm_report = make_report(θ, θ_target, is_oscillating, status)
     step_reports[end][:convergence_monitor] = cm_report
 
     # Print status of convergence monitoring
@@ -132,11 +136,13 @@ function reset!(cc::ConvergenceMonitorCuttingCriterion, template, max_iter)
     history[:distance] = Array{typeof(template[1])}(undef, nc, length(template))
     history[:contraction_factor] = Array{typeof(template[1])}(undef, nc, length(template))
     history[:contraction_factor_target] = Array{typeof(template[1])}(undef, nc, length(template))
-    history[:status] = Array{Symbol}(undef, nc, length(template))
-    history[:oscillation] = Array{Bool}(undef, nc, length(template))
+    history[:iterations_left] = Vector{Union{Int64, Float64}}(undef, nc)
+    history[:status] = Vector{Symbol}(undef, nc)
+    history[:oscillation] = Vector{Bool}(undef, nc)
 
     history[:contraction_factor][1] = NaN
     history[:contraction_factor_target][1] = NaN
+    history[:iterations_left][1] = NaN
     history[:status][1] = :none
     history[:oscillation][1] = false
     
@@ -171,6 +177,7 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, it
 
     θ = cc.history[:contraction_factor][it]
     θ_target = cc.history[:contraction_factor_target][it]
+    its_left = cc.history[:iterations_left][it]
     θ_slow = cc.slow
     θ_fast = cc.fast
     status = cc.history[:status][it]
@@ -196,7 +203,12 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, it
         sym = " →"
         color = :yellow
     elseif status == :bad
-        inequality = "Θ = $θ > $θ_slow = Θ_slow"
+        max_its = cc.max_iterations_left
+        if its_left > max_its
+            inequality = "Iterations left = $its_left > $max_its = upper limit"
+        else
+            inequality = "Θ = $θ > $θ_slow = Θ_slow"
+        end
         color = :red
         sym = " ↑"
     else

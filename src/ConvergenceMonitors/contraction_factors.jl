@@ -50,3 +50,14 @@ function oscillation(contraction_factors, tol = 1.0)
     return .&(xor.(ok_1, ok_2), xor.(ok_2, ok_3))
 
 end
+
+function iterations_left(contraction_factor, dist)
+
+    # Compute number of iterations left if we should converge in target_iterations
+    # iterations
+    θ = contraction_factor
+    N = ceil(-log(dist)/log(θ))
+    N = (N > 0) ? Int64(N) : 0
+    return N
+
+end
