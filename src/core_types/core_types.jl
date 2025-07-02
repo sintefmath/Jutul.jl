@@ -1447,6 +1447,25 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
     if !ismissing(forces)
         forces = map(i -> forces_for_timestep(nothing, forces, dt, i), step_index)
     end
-    states = map(JutulStorage, states)
+    function convert_state_to_jutul_storage(x::JutulStorage)
+        return x
+    end
+    function convert_state_to_jutul_storage(x::JUTUL_OUTPUT_TYPE)
+        return JutulStorage(x)
+    end
+    function convert_state_to_jutul_storage(x::Any)
+        return x
+    end
+    function convert_state_to_jutul_storage(x::AbstractDict)
+        s = JutulStorage()
+        for (k, v) in pairs(x)
+            if k == :substates
+                continue
+            end
+            s[k] = convert_state_to_jutul_storage(v)
+        end
+        return s
+    end
+    states = map(s -> convert_state_to_jutul_storage(s), states)
     return AdjointPackedResult(states, step_infos, maximum(step_index), forces)
 end

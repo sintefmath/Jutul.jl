@@ -690,56 +690,26 @@ function perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
 end
 
 function evaluate_objective(G, model, states, timesteps, all_forces;
-        large_value = 1e20,
         step_index = eachindex(states),
+    )
+    packed_steps = AdjointPackedResult(states, timesteps, all_forces, step_index)
+    return evaluate_objective(G, model, packed_steps)
+end
+
+function evaluate_objective(G, model, packed_steps::AdjointPackedResult;
         kwarg...
     )
-    function convert_state_to_jutul_storage(model, x::JutulStorage)
-        return x
-    end
-    function convert_state_to_jutul_storage(model, x::AbstractDict)
-        return JutulStorage(x)
-    end
-    function convert_state_to_jutul_storage(model::MultiModel, x::AbstractDict)
-        s = JutulStorage()
-        for (k, v) in pairs(x)
-            if k == :substates
-                continue
-            end
-            s[k] = JutulStorage(v)
-        end
-        return s
-    end
-    if length(states) < length(timesteps)
-        # Failure: Put to a big value.
-        @warn "Partial data passed, objective set to large value $large_value."
-        obj = large_value
-    else
-        obj = 0.0
-        t = 0.0
-        total_time = sum(timesteps)
-        N = length(timesteps)
-        prev_step = 0
-        substep = 0
-        for (i, dt) in enumerate(timesteps)
-            step = step_index[i]
-            if step != prev_step
-                substep = 1
-                prev_step = step
-            else
-                substep += 1
-            end
-            state_i = convert_state_to_jutul_storage(model, states[i])
-            force_i = forces_for_timestep(nothing, all_forces, timesteps, i)
-            obj += G(
-                model,
-                state_i,
-                dt,
-                optimization_step_info(i, t, dt; total_time = total_time, substep = substep, step = step, Nstep = N, kwarg...),
-                force_i
-                )
-            t += dt
-        end
+    obj = 0.0
+    for i in 1:length(packed_steps)
+        packed = packed_steps[i]
+        si = packed.step_info
+        obj += G(
+            model,
+            packed.state,
+            si[:dt],
+            si,
+            packed.forces
+        )
     end
     return obj
 end

@@ -81,7 +81,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     return ∇G
 end
 
-function setup_adjoint_storage_generic(X, F, packed_steps, G;
+function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, G;
         state0 = missing,
         backend = missing,
         do_prep = true,

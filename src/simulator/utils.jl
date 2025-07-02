@@ -150,11 +150,6 @@ function Base.show(io::IO, sr::SimResult)
 end
 
 function evaluate_objective(G, case::JutulCase, result::SimResult; kwarg...)
-    states, timesteps, ix = expand_to_ministeps(result)
-    if case.forces isa Vector
-        all_forces = case.forces[ix]
-    else
-        all_forces = case.forces
-    end
-    return evaluate_objective(G, case.model, states, timesteps, all_forces; kwarg...)
+    packed_steps = AdjointPackedResult(result, case)
+    return evaluate_objective(G, case.model, packed_steps; kwarg...)
 end
