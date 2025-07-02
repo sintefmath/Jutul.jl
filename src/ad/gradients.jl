@@ -225,26 +225,23 @@ end
 Non-allocating version of `solve_adjoint_sensitivities`.
 """
 function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces, info_level = 0)
-    N = length(timesteps)
-    @assert N == length(states)
-    if forces isa Vector
-        @assert length(forces) == N
-    end
+    packed_steps = AdjointPackedResult(states, timesteps, forces)
+    packed_steps.state0 = state0
     # Do sparsity detection if not already done.
     if info_level > 1
         jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
     end
-
-    update_objective_sparsity!(storage, G, states, timesteps, forces, :forward)
-    update_objective_sparsity!(storage, G, states, timesteps, forces, :parameter)
+    N = length(packed_steps)
+    update_objective_sparsity!(storage, G, packed_steps, :forward)
+    update_objective_sparsity!(storage, G, packed_steps, :parameter)
     # Set gradient to zero before solve starts
     @. ∇G = 0
     @tic "sensitivities" for i in N:-1:1
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
-        s, s0, s_next = state_pair_adjoint_solve(state0, states, i, N)
-        update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
+        s, s0, s_next = state_pair_adjoint_solve(packed_steps, i)
+        update_sensitivities!(∇G, i, G, storage, s0, s, s_next, packed_steps)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
@@ -254,9 +251,10 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     @assert all(isfinite, ∇G)
     # Finally deal with initial state gradients
     if !ismissing(storage.state0_map)
-        forces1 = forces_for_timestep(storage.forward, forces, timesteps, 1)
-        dt1 = timesteps[1]
-        adjoint_reassemble!(storage.backward, states[1], state0, dt1, forces1, dt1)
+        ps1 = packed_steps[1]
+        forces1 = ps1.forces
+        dt1 = ps1.step_info[:dt]
+        adjoint_reassemble!(storage.backward, ps1.state, state0, dt1, forces1, dt1)
         update_state0_sensitivities!(storage)
     end
     return ∇G
@@ -419,32 +417,36 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
     end
 end
 
-function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
+function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, packed_steps::AdjointPackedResult)
+    N = length(packed_steps)
+    # Figure out when we are in discrete index and time
+    packed_step = packed_steps[i]
+    step_info = packed_step.step_info
+    dt = step_info[:dt]
+    current_time = step_info[:time]
+    report_step = step_info[:step]
+    forces = packed_step.forces
     for skey in [:backward, :forward, :parameter]
         s = adjoint_storage[skey]
-        t = @view timesteps[1:(i-1)]
-        reset!(progress_recorder(s), step = i, time = sum(t))
+        reset!(progress_recorder(s), step = report_step, time = current_time)
     end
-    λ, t, dt, forces = next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces)
+    λ = next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, packed_steps)
+    # λ, t, dt, forces
     @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
     parameter_sim = adjoint_storage.parameter
-    @tic "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, t)
+    @tic "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, current_time)
     lsys_param = parameter_sim.storage.LinearizedSystem
     op_p = linear_operator(lsys_param)
     sens_add_mult!(∇G, op_p, λ)
     dparam = adjoint_storage.dparam
-    total_time = sum(timesteps)
-    N = length(timesteps)
     @tic "objective parameter gradient" if !isnothing(dparam)
         if i == N
             @. dparam = 0
         end
         pbuf = adjoint_storage.param_buf
         S_p = get_objective_sparsity(adjoint_storage, :parameter)
-        rec = progress_recorder(parameter_sim)
-        step_info = optimization_step_info(i, current_time(rec), dt, total_time = total_time, Nstep = N)
         state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
         @. dparam += pbuf
     end
