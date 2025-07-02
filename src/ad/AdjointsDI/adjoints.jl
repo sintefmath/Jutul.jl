@@ -175,7 +175,7 @@ function setup_case(x::AbstractVector, F, packed_steps::AdjointPackedResult, sta
     # *state0 needs to be provided
     packed_step = packed_steps[i]
     step_info = packed_step.step_info
-    N = length(packed_steps)
+    N = maximum(x -> x[:step], packed_steps.step_infos)
     c = unpack_setup(step_info, N, F(x, step_info), all = all)
     if c isa JutulCase
         case = c
