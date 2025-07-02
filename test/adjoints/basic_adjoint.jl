@@ -34,7 +34,7 @@ function solve_adjoint_forward_test_system(dim, dt)
     states, reports = simulate(state0, model, parameters = parameters, dt, info_level = -1, forces = forces);
     return (model, state0, states, reports, parameters, forces)
 end
-
+##
 function test_basic_adjoint(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, scalar_obj = true)
     model, state0, states, reports, param, forces = solve_adjoint_forward_test_system((nx, ny), dt)
     K = param[:K]

@@ -49,18 +49,14 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
 
 function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPackedResult, G;
         info_level = 0,
-        state0 = missing,
-        forces = missing
+        state0 = missing
     )
 
     H = storage[:callable_di]
     N = length(packed_steps)
 
     case0 = setup_case(X, F, packed_steps, state0, :all)
-    packed_steps = set_adjoint_forces!(packed_steps, case0)
-    if ismissing(state0)
-        state0 = case0.state0
-    end
+    packed_steps = set_packed_result_dynamic_values!(packed_steps, case0)
 
     # Do sparsity detection if not already done.
     if info_level > 1
@@ -75,8 +71,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
-        s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, packed_steps.states, i, N)
-        update_sensitivities_generic!(∇G, X, H, i, G, storage, s0, s, s_next, packed_steps)
+        update_sensitivities_generic!(∇G, X, H, i, G, storage, packed_steps)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
@@ -95,25 +90,22 @@ function setup_adjoint_storage_generic(X, F, packed_steps, G;
         single_step_sparsity = true,
         use_sparsity = true
     )
-    case0 = setup_case(X, F, packed_steps, state0, 1)
-    if ismissing(state0)
-        state0 = case0.state0
-    end
-    packed_steps = set_adjoint_forces!(packed_steps, case0)
+    case = setup_case(X, F, packed_steps, state0, :all)
+    packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
     storage = Jutul.setup_adjoint_storage_base(
-            case0.model, state0, case0.parameters,
+            case.model, case.state0, case.parameters,
             use_sparsity = use_sparsity,
-            linear_solver = Jutul.select_linear_solver(case0.model, mode = :adjoint, rtol = 1e-6),
+            linear_solver = Jutul.select_linear_solver(case.model, mode = :adjoint, rtol = 1e-6),
             n_objective = nothing,
             info_level = info_level,
     )
     storage[:dparam] = zeros(length(X))
-    setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backend, do_prep, single_step_sparsity, di_sparse)
+    setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse)
     return storage
 end
 
-function set_adjoint_forces!(packed_steps, case0)
-    f = case0.forces
+function set_packed_result_dynamic_values!(packed_steps, case)
+    f = case.forces
     if f isa Vector
         steps = map(x -> x[:step], packed_steps.step_infos)
         forces = f[steps]
@@ -121,24 +113,25 @@ function set_adjoint_forces!(packed_steps, case0)
         forces = [f for _ in 1:length(packed_steps)]
     end
     packed_steps.forces = forces
+    packed_steps.state0 = case.state0
     length(forces) == length(packed_steps.step_infos) || error("Expected $(length(packed_steps.step_infos)) forces, got $(length(forces)).")
     return packed_steps
 end
 
-function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, state0, state, state_next, packed_steps::AdjointPackedResult)
-    solved_timesteps = @view timesteps[1:(i-1)]
-    current_time = sum(solved_timesteps)
+function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed_steps::AdjointPackedResult)
+    state0, state, state_next = Jutul.state_pair_adjoint_solve(packed_steps, i)
+    step_info = packed_steps.step_infos[i]
+    current_time = step_info[:time]
+    report_step = step_info[:step]
     for skey in [:backward, :forward]
         s = adjoint_storage[skey]
-        Jutul.reset!(Jutul.progress_recorder(s), step = i, time = current_time)
+        Jutul.reset!(Jutul.progress_recorder(s), step = report_step, time = current_time)
     end
-    total_time = sum(timesteps)
-    step_info = Jutul.optimization_step_info(step, current_time, timesteps[i], total_time = total_time, substep = substep, Nstep = length(timesteps))
 
-    λ, t, dt, forces = Jutul.next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces, step_info = step_info)
+    λ = Jutul.next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, packed_steps)
     @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
 
-    set_to_step!(H, state, state0, step_info, dt)
+    set_to_step!(H, state, state0, i)
     prep = adjoint_storage[:prep_di]
     backend = adjoint_storage[:backend_di]
     if isnothing(prep)
@@ -155,7 +148,7 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, state0
     resize!(λ, N)
     # Gradient of partial objective to parameters
     dparam = adjoint_storage.dparam
-    if i == length(timesteps)
+    if i == length(packed_steps)
         @. dparam = 0
     end
     dobj = jac[end, :]
@@ -255,14 +248,11 @@ Base.@kwdef mutable struct AdjointsObjectiveHelper
     cache = Dict()
 end
 
-function set_to_step!(H::AdjointsObjectiveHelper, state, state0, step_no)
+function set_to_step!(H::AdjointsObjectiveHelper, state, state0, step_index::Int)
     # Set the state and state0 to the step
     H.state = state
     H.state0 = state0
-    H.step_info = step_info
-    H.dt = dt
-    H.states = missing
-    H.timesteps = missing
+    H.step_index = step_index
     return H
 end
 

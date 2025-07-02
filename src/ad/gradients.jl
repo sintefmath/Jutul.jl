@@ -262,21 +262,19 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     return ∇G
 end
 
-function state_pair_adjoint_solve(state0, states, i, N)
-    # TODO: Is this required?
-    # fn = deepcopy
-    fn = x -> x
+function state_pair_adjoint_solve(packed_steps::AdjointPackedResult, i::Int)
+    states = packed_steps.states
     if i == 1
-        s0 = fn(state0)
+        s0 = packed_steps.state0
     else
-        s0 = fn(states[i-1])
+        s0 = states[i-1]
     end
-    if i == N
+    s = states[i]
+    if i == length(states)
         s_next = nothing
     else
-        s_next = fn(states[i+1])
+        s_next = states[i+1]
     end
-    s = fn(states[i])
     return (s, s0, s_next)
 end
 
@@ -452,27 +450,22 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     end
 end
 
-function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces; step_info = missing)
+function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, packed_steps::AdjointPackedResult)
     # Unpack simulators
     backward_sim = adjoint_storage.backward
     forward_sim = adjoint_storage.forward
     λ = adjoint_storage.lagrange
     λ_b = adjoint_storage.lagrange_buffer
     config = adjoint_storage.forward_config
-    rec = progress_recorder(backward_sim)
-    total_time = sum(timesteps)
-    # Timestep logic
-    N = length(timesteps)
-    dt = timesteps[i]
-    if ismissing(step_info)
-        step_info = optimization_step_info(i, current_time(rec), dt, total_time = total_time, Nstep = N)
-    else
-        @assert dt == step_info[:dt]
-    end
-    forces = forces_for_timestep(forward_sim, all_forces, timesteps, step_info[:step])
+
+    packed_step = packed_steps[i]
+    step_info = packed_step.step_info
+    dt = step_info[:dt]
+    forces = packed_step.forces
+    N = length(packed_steps)
+
     # Assemble Jacobian w.r.t. current step
-    t = sum(timesteps[1:i-1])
-    @tic "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces, t)
+    @tic "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces, step_info[:time])
     il = config[:info_level]
     converged, e, errors = check_convergence(
         forward_sim.storage,
@@ -524,7 +517,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     end
     @tic "linear solve" lstats = linear_solve!(lsys, lsolve, forward_sim.model, forward_sim.storage; lsolve_arg...)
     adjoint_transfer_canonical_order!(λ, dx, forward_sim.model, to_canonical = true)
-    return λ, t, dt, forces
+    return λ
 end
 
 function sens_add_mult!(x::AbstractVector, op::LinearOperator, y::AbstractVector)
