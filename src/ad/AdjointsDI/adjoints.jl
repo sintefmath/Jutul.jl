@@ -131,7 +131,7 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed
     λ = Jutul.next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, packed_steps)
     @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
 
-    set_to_step!(H, state, state0, i)
+    H.step_index = i
     prep = adjoint_storage[:prep_di]
     backend = adjoint_storage[:backend_di]
     if isnothing(prep)
@@ -240,42 +240,42 @@ function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces,
     return (model, parameters, forces, state0)
 end
 
-Base.@kwdef mutable struct AdjointsObjectiveHelper
-    state = missing
-    state0 = missing
-    step_index::Union{Int, Missing} = missing
+mutable struct AdjointsObjectiveHelper
     F
     G
-    packed_steps::Union{AdjointPackedResult, Missing} = missing
-    cache = Dict()
-end
-
-function set_to_step!(H::AdjointsObjectiveHelper, state, state0, step_index::Int)
-    # Set the state and state0 to the step
-    H.state = state
-    H.state0 = state0
-    H.step_index = step_index
-    return H
+    step_index::Union{Int, Missing}
+    packed_steps::AdjointPackedResult
+    cache::Dict{Tuple{DataType, Int64}, Any}
+    function AdjointsObjectiveHelper(F, G, packed_steps::AdjointPackedResult)
+        new(F, G, missing, packed_steps, Dict())
+    end
 end
 
 function (H::AdjointsObjectiveHelper)(x)
-    (; state, state0, F, G, packed_steps, cache, step_index) = H
-    function evaluate(x, s, s0, ix)
-        evaluate_residual_and_jacobian_for_state_pair(x, s, s0, F, G, packed_steps, ix, cache)
+    packed = H.packed_steps
+    states = packed.states
+    state0 = packed.state0
+    function evaluate(x, ix)
+        if ix == 1
+            s0 = state0
+        else
+            s0 = states[ix-1]
+        end
+        s = states[ix]
+        evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.G, packed, ix, H.cache)
     end
-    if ismissing(step_index)
+    if ismissing(H.step_index)
         # Loop over all to get the "extended sparsity". This is a bit of a hack,
         # but it covers the case where there is some change in dynamics/controls
         # at a later step.
-        states = packed_steps.states
-        v = evaluate(x, states[1], H.state0, 1)
+        v = evaluate(x, 1)
         @. v = abs.(v)
-        for i in 2:length(packed_steps)
-            tmp = evaluate(x, states[i], states[i-1], i)
+        for i in 2:length(packed)
+            tmp = evaluate(x, i)
             @. v += abs.(tmp)
         end
     else
-        v = evaluate(x, state, state0, step_index)
+        v = evaluate(x, H.step_index)
     end
     return v
 end
@@ -293,18 +293,12 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
         end
     end
 
-    H = AdjointsObjectiveHelper(
-        F = F,
-        G = G,
-        packed_steps = packed_steps,
-    )
+    H = AdjointsObjectiveHelper(F, G, packed_steps)
     storage[:callable_di] = H
     # Note: strict = false is needed because we create another function on the fly
     # that essentially calls the same function.
     if do_prep
-        H.state0 = JutulStorage(case0.state0)
         if single_step_sparsity
-            H.state = packed_steps.states[1]
             H.step_index = 1
             prep = prepare_jacobian(H, backend, X)
         else
