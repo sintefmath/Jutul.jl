@@ -280,7 +280,7 @@ function state_pair_adjoint_solve(state0, states, i, N)
     return (s, s0, s_next)
 end
 
-function update_objective_sparsity!(storage, G, states, timesteps, forces, k = :forward)
+function update_objective_sparsity!(storage, G, packed_steps::AdjointPackedResult, k = :forward)
     obj_sparsity = storage.objective_sparsity
     if isnothing(obj_sparsity) || (k == :parameter && isnothing(storage.dparam))
         return
@@ -288,7 +288,7 @@ function update_objective_sparsity!(storage, G, states, timesteps, forces, k = :
         sparsity = obj_sparsity[k]
         if isnothing(sparsity)
             sim = storage[k]
-            obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, states, timesteps, forces)
+            obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, packed_steps)
         end
     end
 end
@@ -303,20 +303,18 @@ function get_objective_sparsity(storage, k)
     return S
 end
 
-function determine_objective_sparsity(sim, model, G, states, timesteps, forces)
+function determine_objective_sparsity(sim, model, G, packed_steps::AdjointPackedResult)
     update_secondary_variables!(sim.storage, sim.model)
     state = sim.storage.state
-    total_time = sum(timesteps)
-    N = length(states)
-    F_outer = (state, i) -> G(
-        model,
-        state,
-        timesteps[i],
-        Jutul.optimization_step_info(i, timesteps, total_time = total_time, Nstep = N),
-        forces_for_timestep(sim, forces, timesteps, i)
-    )
+
+    function F_outer(state, i)
+        ps = packed_steps[i]
+        si = ps.step_info
+        f = ps.forces
+        return G(model, state, si[:dt], si, f)
+    end
     sparsity = missing
-    for i in 1:N
+    for i in 1:length(packed_steps)
         s_new = determine_sparsity_simple(s -> F_outer(s, i), model, state)
         sparsity = merge_sparsity!(sparsity, s_new)
     end
@@ -983,7 +981,6 @@ end
 function optimization_step_info(step::Int, time::Real, dt::Real;
         Nstep = missing,
         total_time = missing,
-        case = missing,
         substep = 1,
         kwarg...
     )
@@ -994,7 +991,6 @@ function optimization_step_info(step::Int, time::Real, dt::Real;
         :Nstep => Nstep,
         :substep => substep,
         :total_time => total_time,
-        :case => case
     )
     for (k, v) in kwarg
         out[k] = v

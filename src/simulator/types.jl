@@ -66,19 +66,6 @@ function progress_recorder(sim)
     return sim.storage.recorder
 end
 
-struct SimResult
-    states::AbstractVector
-    reports::AbstractVector
-    start_timestamp::DateTime
-    end_timestamp::DateTime
-    function SimResult(states, reports, start_time)
-        nr = length(reports)
-        ns = length(states)
-        @assert ns == nr || ns == nr-1 || ns == 0 "Recieved $ns or $ns - 1 states different from $nr reports"
-        return new(states, reports, start_time, now())
-    end
-end
-
 mutable struct SolveRecorder
     step::Int       # Step index in context
     iterations::Int # Total iterations in context

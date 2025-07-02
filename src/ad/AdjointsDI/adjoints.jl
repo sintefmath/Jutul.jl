@@ -1,3 +1,5 @@
+import Jutul: AdjointPackedResult
+
 function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
             # n_objective = nothing,
             extra_timing = false,
@@ -5,27 +7,19 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
             state0 = missing,
             forces = missing,
             info_level = 0,
-            step_index = eachindex(states),
             kwarg...
         )
+        packed_steps = AdjointPackedResult(states, reports_or_timesteps, forces)
         Jutul.set_global_timer!(extra_timing)
         N = length(states)
         n_param = length(X)
-        # Timesteps
-        if eltype(reports_or_timesteps)<:Real
-            timesteps = reports_or_timesteps
-        else
-            @assert length(reports_or_timesteps) == N
-            timesteps = report_timesteps(reports_or_timesteps)
-        end
         # Allocation part
         if info_level > 1
             jutul_message("Adjoints", "Setting up storage...", color = :blue)
         end
-        t_storage = @elapsed storage = setup_adjoint_storage_generic(X, F, states, timesteps, G;
+        t_storage = @elapsed storage = setup_adjoint_storage_generic(X, F, packed_steps, G;
             info_level = info_level,
             state0 = state0,
-            forces = forces,
             kwarg...
         )
 
@@ -34,16 +28,13 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
         end
         ∇G = zeros(n_param)
 
-        @assert length(timesteps) == N "Recieved $(length(timesteps)) timesteps and $N states. These should match."
         # Solve!
         if info_level > 1
             jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
         end
-        t_solve = @elapsed solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G,
+        t_solve = @elapsed solve_adjoint_generic!(∇G, X, F, storage, packed_steps, G,
             info_level = info_level,
             state0 = state0,
-            forces = forces,
-            step_index = step_index
         )
         if info_level > 1
             jutul_message("Adjoints", "Adjoints solved in $(Jutul.get_tstr(t_solve)).", color = :blue)
@@ -56,56 +47,36 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
         end
     end
 
-function solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G;
+function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPackedResult, G;
         info_level = 0,
-        step_index = eachindex(states),
         state0 = missing,
         forces = missing
     )
 
     H = storage[:callable_di]
-    N = length(timesteps)
-    @assert N == length(states)
-    badstate0 = ismissing(state0)
-    badforces = ismissing(forces)
-    if badstate0 || badforces
-        Ns = length(unique(step_index))
-        sinfo0 = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = N, total_time = sum(timesteps))
-        case0 = setup_case(X, F, sinfo0, state0, forces, Ns; all = true)
-        if badstate0
-            state0 = case0.state0
-        end
-        if badforces
-            forces = case0.forces
-        end
+    N = length(packed_steps)
+
+    case0 = setup_case(X, F, packed_steps, state0, :all)
+    packed_steps = set_adjoint_forces!(packed_steps, case0)
+    if ismissing(state0)
+        state0 = case0.state0
     end
-    if forces isa Vector
-        forces = forces[step_index]
-        @assert length(forces) == N "Expected $N forces (one per time-step), got $(length(forces))."
-    end
+
     # Do sparsity detection if not already done.
     if info_level > 1
         jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
     end
 
-    Jutul.update_objective_sparsity!(storage, G, states, timesteps, forces, :forward)
+    Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward)
     # Set gradient to zero before solve starts
     @. ∇G = 0
-    prev_step = 0
     substep = 0
     @tic "sensitivities" for i in N:-1:1
-        step = step_index[i]
-        if step != prev_step
-            substep = 1
-            prev_step = step
-        else
-            substep += 1
-        end
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
-        s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, states, i, N)
-        update_sensitivities_generic!(∇G, X, H, i, G, storage, s0, s, s_next, timesteps, forces, step = step, substep = substep)
+        s, s0, s_next = Jutul.state_pair_adjoint_solve(state0, packed_steps.states, i, N)
+        update_sensitivities_generic!(∇G, X, H, i, G, storage, s0, s, s_next, packed_steps)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
@@ -115,30 +86,20 @@ function solve_adjoint_generic!(∇G, X, F, storage, states, timesteps, G;
     return ∇G
 end
 
-function setup_adjoint_storage_generic(X, F, states, timesteps, G;
-        forces = missing,
+function setup_adjoint_storage_generic(X, F, packed_steps, G;
         state0 = missing,
         backend = missing,
         do_prep = true,
         di_sparse = true,
         info_level = 0,
         single_step_sparsity = true,
-        step_index = eachindex(states),
         use_sparsity = true
     )
-    N = length(timesteps)
-    eltype(timesteps)<:Real
-    @assert length(states) == N "Received $(length(states)) states and $N timesteps. These should match."
-    Ns = length(unique(step_index))
-    total_time = sum(timesteps)
-    sinfo0 = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = Ns, total_time = total_time)
-    case0 = setup_case(X, F, sinfo0, state0, forces, Ns)
-    if ismissing(forces)
-        forces = case0.forces
-    end
+    case0 = setup_case(X, F, packed_steps, state0, 1)
     if ismissing(state0)
         state0 = case0.state0
     end
+    packed_steps = set_adjoint_forces!(packed_steps, case0)
     storage = Jutul.setup_adjoint_storage_base(
             case0.model, state0, case0.parameters,
             use_sparsity = use_sparsity,
@@ -147,12 +108,24 @@ function setup_adjoint_storage_generic(X, F, states, timesteps, G;
             info_level = info_level,
     )
     storage[:dparam] = zeros(length(X))
-    setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse, step_index = step_index, Ns = Ns)
+    setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backend, do_prep, single_step_sparsity, di_sparse)
     return storage
 end
 
-function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces;
-        step::Int = i, substep::Int = 1)
+function set_adjoint_forces!(packed_steps, case0)
+    f = case0.forces
+    if f isa Vector
+        steps = map(x -> x[:step], packed_steps.step_infos)
+        forces = f[steps]
+    else
+        forces = [f for _ in 1:length(packed_steps)]
+    end
+    packed_steps.forces = forces
+    length(forces) == length(packed_steps.step_infos) || error("Expected $(length(packed_steps.step_infos)) forces, got $(length(forces)).")
+    return packed_steps
+end
+
+function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, state0, state, state_next, packed_steps::AdjointPackedResult)
     solved_timesteps = @view timesteps[1:(i-1)]
     current_time = sum(solved_timesteps)
     for skey in [:backward, :forward]
@@ -190,7 +163,15 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, state0
     return ∇G
 end
 
-function setup_case(x::AbstractVector, F, step_info, state0, forces, N; all = false)
+function setup_case(x::AbstractVector, F, packed_steps::AdjointPackedResult, state0, i::Union{Symbol, Int})
+    if i == :all
+        all = true
+        i = 1
+    else
+        all = false
+        i > 0 || error("Step index `i` must be positive or `:all`. Got $i.")
+        i <= length(packed_steps) || error("Step index `i` must be less than or equal to the number of steps. Got $i, but there are only $(length(packed_steps)) steps.")
+    end
     # F(X, step_info) -> model*
     # F(X, step_info) -> model, parameters*
     # F(X, step_info) -> model, parameters, forces*
@@ -198,7 +179,9 @@ function setup_case(x::AbstractVector, F, step_info, state0, forces, N; all = fa
     # F(X, step_info) -> case (current step)
     # F(X, step_info) -> case (all steps)
     # *state0 needs to be provided
-    c = unpack_setup(step_info, N, F(x, step_info), all = all)
+    step_info = packed_steps[i].step_info
+    N = length(packed_steps)
+    c = unpack_setup(packed_steps, N, F(x, step_info), all = all)
     if c isa JutulCase
         case = c
     else
@@ -265,19 +248,14 @@ end
 Base.@kwdef mutable struct AdjointsObjectiveHelper
     state = missing
     state0 = missing
-    step_info = missing
-    dt = missing
+    step_index::Union{Int, Missing} = missing
     F
     G
-    forces
-    N
+    packed_steps::Union{AdjointPackedResult, Missing} = missing
     cache = Dict()
-    states = missing
-    timesteps = missing
-    case = missing
 end
 
-function set_to_step!(H::AdjointsObjectiveHelper, state, state0, step_info, dt)
+function set_to_step!(H::AdjointsObjectiveHelper, state, state0, step_no)
     # Set the state and state0 to the step
     H.state = state
     H.state0 = state0
@@ -289,40 +267,28 @@ function set_to_step!(H::AdjointsObjectiveHelper, state, state0, step_info, dt)
 end
 
 function (H::AdjointsObjectiveHelper)(x)
-    (; state, state0, step_info, dt, F, G, forces, N, cache, states) = H
-    getv(x, s, s0, si, dt_i) = evaluate_residual_and_jacobian_for_state_pair(x, s, s0, si, dt_i, F, G, forces, N, cache)
-    if ismissing(states)
+    (; state, state0, F, G, packed_steps, cache, step_index) = H
+    function evaluate(x, s, s0, ix)
+        evaluate_residual_and_jacobian_for_state_pair(x, s, s0, F, G, packed_steps, ix, cache)
+    end
+    if ismissing(step_index)
         v = getv(x, state, state0, step_info, dt)
     else
-        case = H.case
-        # Loop over all to get the "extended sparsity".
-        # This is a bit of a hack, but it covers the case where there is some change in dynamics/controls at a later step.
-        t = 0.0
-        # timesteps = case.dt
-        timesteps = H.timesteps
-        dt_i = timesteps[1]
-        total_time = sum(timesteps)
-        N = length(timesteps)
-        info = Jutul.optimization_step_info(1, t, dt_i, total_time = total_time, Nstep = N)
-        v = getv(x, states[1], case.state0, info, dt_i)
-        t += dt_i
+        # Loop over all to get the "extended sparsity". This is a bit of a hack,
+        # but it covers the case where there is some change in dynamics/controls
+        # at a later step.
+        states = packed_steps.states
+        v = evaluate(x, states[1], H.state0, 1)
         @. v = abs.(v)
-        for i in 2:N
-            dt_i = timesteps[i]
-            step_info = Jutul.optimization_step_info(i, t, dt_i, total_time = total_time, Nstep = N)
-            tmp = getv(x, states[i], states[i-1], step_info, dt_i)
+        for i in 2:length(packed_steps)
+            tmp = getv(x, states[i], states[i-1], i)
             @. v += abs.(tmp)
-            t += dt_i
         end
     end
     return v
 end
 
-
-function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, timesteps, backend, do_prep, single_step_sparsity, di_sparse;
-        step_index = eachindex(states), Ns = length(states)
-    )
-    N = length(timesteps)
+function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backend, do_prep, single_step_sparsity, di_sparse)
     if ismissing(backend)
         if di_sparse
             backend = AutoSparse(
@@ -338,30 +304,20 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
     H = AdjointsObjectiveHelper(
         F = F,
         G = G,
-        forces = forces,
-        N = Ns,
-        case = case0
+        packed_steps = packed_steps,
     )
     storage[:callable_di] = H
     # Note: strict = false is needed because we create another function on the fly
     # that essentially calls the same function.
     if do_prep
+        H.state0 = JutulStorage(case0.state0)
         if single_step_sparsity
-            H.state = states[1]
-            H.state0 = case0.state0
-            H.step_info = Jutul.optimization_step_info(1, 0.0, timesteps[1], Nstep = Ns, total_time = sum(timesteps))
-            H.dt = timesteps[1]
+            H.state = packed_steps.states[1]
+            H.step_index = 1
             prep = prepare_jacobian(H, backend, X)
         else
-            ix = Int[]
-            for v in unique(step_index)
-                push!(ix, findfirst(isequal(v), step_index))
-            end
-            H.states = states[ix]
-            H.timesteps = timesteps[ix]
+            H.step_index = missing
             prep = prepare_jacobian(H, backend, X)
-            H.states = missing
-            H.timesteps = missing
         end
         storage[:prep_di] = prep
     else
@@ -371,8 +327,10 @@ function setup_jacobian_evaluation!(storage, X, F, G, states, case0, forces, tim
     return storage
 end
 
-function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, step_info, dt, F, G, forces, N = 1, cache = missing)
-    case = setup_case(x, F, step_info, state0, forces, N)
+function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, G, packed_steps::AdjointPackedResult, step_index::Int, cache = missing)
+    step_info = packed_steps[step_index].step_info
+    dt = step_info[:dt]
+    case = setup_case(x, F, packed_steps, state0, step_index)
     case = reset_context_and_groups(case)
     if step_info[:step] == 1
         state0 = case.state0
