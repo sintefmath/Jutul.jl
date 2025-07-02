@@ -238,7 +238,8 @@ function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
     end
     X, = get_adjoint_forces_vectors(model, storage, allforces)
     F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
-    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, states, timesteps, G, single_step_sparsity = single_step_sparsity, di_sparse = di_sparse)
+    packed_steps = AdjointPackedResult(states, timesteps, allforces)
+    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, packed_steps, G, single_step_sparsity = single_step_sparsity, di_sparse = di_sparse)
     return storage
 end
 
