@@ -301,7 +301,7 @@ function initialize_variable_value!(state, model, pvar, symb, val; kwarg...)
     return state
 end
 
-function initialize_variable_value!(state, model, pvar, symb, val::AbstractDict; need_value = true, T = float_type(model.context))
+function initialize_variable_value!(state, model, pvar, symb, val::Union{JutulStorage, AbstractDict}; need_value = true, T = float_type(model.context))
     if haskey(val, symb)
         value = val[symb]
     elseif need_value && need_default_primary(model, pvar)
@@ -320,7 +320,7 @@ function initialize_variable_value(model, pvar::ScalarVariable, val::Number)
     return initialize_variable_value(model, pvar, V)
 end
 
-function initialize_parameter_value!(parameters, data_domain, model, param, symb, initializer::AbstractDict; kwarg...)
+function initialize_parameter_value!(parameters, data_domain, model, param, symb, initializer::Union{JutulStorage, AbstractDict}; kwarg...)
     if haskey(initializer, symb)
         vals = initialize_variable_value(model, param, initializer[symb])
         s = "provided"

@@ -492,9 +492,10 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
         @assert i == N
         @. λ = 0
     else
-        dt_next = timesteps[i+1]
-        forces_next = forces_for_timestep(backward_sim, all_forces, timesteps, i+1)
-        @tic "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next, t + dt)
+        next_packed_step = packed_steps[i+1]
+        next_step_info = next_packed_step.step_info
+        forces_next = next_packed_step.forces
+        @tic "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, next_step_info[:dt], forces_next, next_step_info[:time])
         lsys_next = backward_sim.storage.LinearizedSystem
         op = linear_operator(lsys_next, skip_red = true)
         # In-place version of

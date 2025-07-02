@@ -157,7 +157,8 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed
 end
 
 function setup_case(x::AbstractVector, F, packed_steps::AdjointPackedResult, state0, i::Union{Symbol, Int})
-    if i == :all
+    if i isa Symbol
+        i == :all || error("Step index `i` must be positive or `:all`. Got $i.")
         all = true
         i = 1
     else
@@ -172,9 +173,10 @@ function setup_case(x::AbstractVector, F, packed_steps::AdjointPackedResult, sta
     # F(X, step_info) -> case (current step)
     # F(X, step_info) -> case (all steps)
     # *state0 needs to be provided
-    step_info = packed_steps[i].step_info
+    packed_step = packed_steps[i]
+    step_info = packed_step.step_info
     N = length(packed_steps)
-    c = unpack_setup(packed_steps, N, F(x, step_info), all = all)
+    c = unpack_setup(step_info, N, F(x, step_info), all = all)
     if c isa JutulCase
         case = c
     else
@@ -183,7 +185,7 @@ function setup_case(x::AbstractVector, F, packed_steps::AdjointPackedResult, sta
             state0 = s0
         end
         if ismissing(f)
-            f = forces
+            f = packed_step.forces
         end
         if ismissing(p)
             p = Jutul.setup_parameters(model)
@@ -271,7 +273,7 @@ function (H::AdjointsObjectiveHelper)(x)
         v = evaluate(x, states[1], H.state0, 1)
         @. v = abs.(v)
         for i in 2:length(packed_steps)
-            tmp = getv(x, states[i], states[i-1], i)
+            tmp = evaluate(x, states[i], states[i-1], i)
             @. v += abs.(tmp)
         end
     end
