@@ -264,8 +264,6 @@ function (H::AdjointsObjectiveHelper)(x)
         evaluate_residual_and_jacobian_for_state_pair(x, s, s0, F, G, packed_steps, ix, cache)
     end
     if ismissing(step_index)
-        v = getv(x, state, state0, step_info, dt)
-    else
         # Loop over all to get the "extended sparsity". This is a bit of a hack,
         # but it covers the case where there is some change in dynamics/controls
         # at a later step.
@@ -276,6 +274,8 @@ function (H::AdjointsObjectiveHelper)(x)
             tmp = evaluate(x, states[i], states[i-1], i)
             @. v += abs.(tmp)
         end
+    else
+        v = evaluate(x, state, state0, step_index)
     end
     return v
 end
