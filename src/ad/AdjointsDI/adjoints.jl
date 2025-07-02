@@ -240,18 +240,18 @@ function unpack_setup(step_info, N, model::Jutul.JutulModel, parameters, forces,
     return (model, parameters, forces, state0)
 end
 
-mutable struct AdjointsObjectiveHelper
+mutable struct AdjointObjectiveHelper
     F
     G
     step_index::Union{Int, Missing}
     packed_steps::AdjointPackedResult
     cache::Dict{Tuple{DataType, Int64}, Any}
-    function AdjointsObjectiveHelper(F, G, packed_steps::AdjointPackedResult)
+    function AdjointObjectiveHelper(F, G, packed_steps::AdjointPackedResult)
         new(F, G, missing, packed_steps, Dict())
     end
 end
 
-function (H::AdjointsObjectiveHelper)(x)
+function (H::AdjointObjectiveHelper)(x)
     packed = H.packed_steps
     states = packed.states
     state0 = packed.state0
@@ -293,7 +293,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
         end
     end
 
-    H = AdjointsObjectiveHelper(F, G, packed_steps)
+    H = AdjointObjectiveHelper(F, G, packed_steps)
     storage[:callable_di] = H
     # Note: strict = false is needed because we create another function on the fly
     # that essentially calls the same function.
