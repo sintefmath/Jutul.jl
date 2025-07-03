@@ -241,7 +241,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
         s0, s, s_next = state_pair_adjoint_solve(packed_steps, i)
-        update_sensitivities!(∇G, i, G, storage, s, s0, s_next, packed_steps)
+        update_sensitivities!(∇G, i, G, storage, s0, s, s_next, packed_steps)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
