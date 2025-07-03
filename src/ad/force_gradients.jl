@@ -331,7 +331,8 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         kwarg...
     )
     has_substates = haskey(first(states), :substates)
-    states, timesteps, step_ix = expand_to_ministeps(states, reports)
+    packed_steps = AdjointPackedResult(states, reports, allforces)
+    step_ix = map(x -> x[:step], packed_steps.step_infos)
     (; forces, forces_to_timesteps, timesteps_to_forces, num_unique) = storage[:forces_map_base]
     # Account for ministeps
     if has_substates
@@ -352,7 +353,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         new_forces_to_timesteps = forces_to_timesteps
     end
     new_timesteps_to_forces::Vector{Int}
-    @assert sum(length, new_forces_to_timesteps) == length(timesteps)
+    @assert sum(length, new_forces_to_timesteps) == length(packed_steps)
     storage[:forces_map] = (
         forces = forces,
         forces_to_timesteps = new_forces_to_timesteps,
@@ -362,17 +363,21 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
 
     if allforces isa Vector
         allforces = allforces[step_ix]
+    else
+        allforces = [allforces for _ in step_ix]
     end
+    @assert length(allforces) == length(packed_steps)
+    packed_steps.forces = allforces
 
     X, dX = get_adjoint_forces_vectors(model, storage, allforces)
     F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
 
-    Jutul.AdjointsDI.solve_adjoint_generic!(dX, X, F, storage[:adjoint], states, timesteps, G, state0 = state0, forces = allforces)
+    Jutul.AdjointsDI.solve_adjoint_generic!(dX, X, F, storage[:adjoint], packed_steps, G, state0 = state0)
 
     if extra_out
         dforces = map(
-            i -> F(dX, Jutul.optimization_step_info(i, timesteps)).forces,
-            map(first, new_forces_to_timesteps)
+            info -> F(dX, info).forces,
+            packed_steps.step_infos[map(first, new_forces_to_timesteps)]
         )
         offsets = storage[:forces_offsets]
         dX_i = map(i -> dX[offsets[i]:(offsets[i+1]-1)], 1:(length(offsets)-1))
