@@ -53,9 +53,8 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     )
 
     N = length(packed_steps)
-
-    case0 = setup_case(X, F, packed_steps, state0, :all)
-    packed_steps = set_packed_result_dynamic_values!(packed_steps, case0)
+    case = setup_case(X, F, packed_steps, state0, :all)
+    packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
     H = storage[:callable_di]
     H.packed_steps = packed_steps
 
@@ -293,15 +292,14 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
     if do_prep
         if single_step_sparsity
             H.step_index = 1
-            prep = prepare_jacobian(H, backend, X)
         else
             H.step_index = missing
-            prep = prepare_jacobian(H, backend, X)
         end
-        storage[:prep_di] = prep
+        prep = prepare_jacobian(H, backend, X)
     else
-        storage[:prep_di] = nothing
+        prep = nothing
     end
+    storage[:prep_di] = prep
     storage[:backend_di] = backend
     return storage
 end
