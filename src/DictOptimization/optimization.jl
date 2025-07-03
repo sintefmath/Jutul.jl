@@ -15,13 +15,12 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     end
 
     case = setup_from_vector(x, missing)
-    states, dt, step_ix = forward_simulate_for_optimization(case, adj_cache)
+    result = forward_simulate_for_optimization(case, adj_cache)
+    packed_steps = Jutul.AdjointPackedResult(result, case)
+    packed_steps = Jutul.AdjointsDI.set_packed_result_dynamic_values!(packed_steps, case)
+
     # Evaluate the objective function
-    cforces = case.forces
-    if cforces isa Vector
-        cforces = cforces[step_ix]
-    end
-    f = Jutul.evaluate_objective(objective, case.model, states, dt, cforces, step_index = step_ix)
+    f = Jutul.evaluate_objective(objective, case.model, packed_steps)
     # Solve adjoints
     if gradient
         if !ismissing(solution_history)
@@ -33,8 +32,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
                 jutul_message("Optimization", "Setting up adjoint storage.")
             end
             t_setup = @elapsed S = Jutul.AdjointsDI.setup_adjoint_storage_generic(
-                x, setup_from_vector, states, dt, objective;
-                step_index = step_ix,
+                x, setup_from_vector, packed_steps, objective;
                 backend_arg...,
                 info_level = adj_cache[:config][:info_level]
             )
@@ -47,16 +45,8 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             adj_cache[:dx] = g
         end
         Jutul.AdjointsDI.solve_adjoint_generic!(
-            g, x, setup_from_vector, S, states, dt, objective,
-            step_index = step_ix
+            g, x, setup_from_vector, S, packed_steps, objective
         )
-        # g = Jutul.AdjointsDI.solve_adjoint_generic(
-        #     x, setup_from_vector, states, dt, objective,
-        #     use_sparsity = false,
-        #     di_sparse = false,
-        #     single_step_sparsity = false,
-        #     do_prep = false
-        # )
     else
         g = missing
     end
@@ -74,13 +64,12 @@ function forward_simulate_for_optimization(case, adj_cache)
         config = simulator_config(sim, info_level = -1, output_substates = true)
         adj_cache[:config] = config
     end
-    result = simulate!(sim, case.dt,
+    return simulate!(sim, case.dt,
         config = config,
         state0 = case.state0,
         parameters = case.parameters,
         forces = case.forces
     )
-    return Jutul.expand_to_ministeps(result)
 end
 
 function optimizer_devectorize!(prm, X, x_setup)

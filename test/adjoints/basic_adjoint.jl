@@ -34,7 +34,7 @@ function solve_adjoint_forward_test_system(dim, dt)
     states, reports = simulate(state0, model, parameters = parameters, dt, info_level = -1, forces = forces);
     return (model, state0, states, reports, parameters, forces)
 end
-
+##
 function test_basic_adjoint(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = false, scalar_obj = true)
     model, state0, states, reports, param, forces = solve_adjoint_forward_test_system((nx, ny), dt)
     K = param[:K]
@@ -145,7 +145,7 @@ end
         end
     end
 end
-
+##
 import Jutul.AdjointsDI: solve_adjoint_generic
 
 function setup_poisson_test_case_from_vector(x::Vector; fmt = :case, kwarg...)
@@ -346,4 +346,23 @@ import Jutul.DictOptimization as DictOptimization
         @test grad_all["dy"] ≈ 0.0 atol = 1e-8
         @test grad_all["srcval"] ≈ -0.105863 atol = 0.01
     end
+end
+
+##
+@testset "AdjointPackedResult" begin
+    dt_test = [1.0, 2.0, 3.0]
+    case = setup_poisson_test_case(1.0, 1.0, 1.0, 1.0, 1.0, dt = dt_test)
+    r = simulate(case, info_level = -1, output_substates = true, max_timestep = 0.5)
+    pr = Jutul.AdjointPackedResult(r, case)
+    dt_i = report_timesteps(r.reports, ministeps = true)
+    @test length(pr) == length(dt_i)
+
+    r2 = simulate(case, info_level = -1, output_substates = false, max_timestep = 0.5)
+    pr2 = Jutul.AdjointPackedResult(r2, case)
+    @test length(pr2) == length(case.dt)
+
+    pr3 = Jutul.AdjointPackedResult(r2, missing)
+    @test length(pr3) == length(case.dt)
+    @test ismissing(pr3.forces)
+    @test ismissing(pr3[2].forces)
 end

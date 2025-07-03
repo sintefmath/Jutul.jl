@@ -164,11 +164,7 @@ function gradient_opt!(dFdx, x, data)
         dt_current = get(data, :dt_current, dt)
         if length(states) == length(dt_current)
             storage = data[:adjoint_storage]
-            for sim in [storage.forward, storage.backward, storage.parameter]
-                for k in [:state, :state0, :parameters]
-                    reset_variables!(sim, parameters, type = k)
-                end
-            end
+            adjoint_reset_parameters!(storage, parameters)
             debug_time = false
             set_global_timer!(debug_time)
             try
@@ -229,9 +225,14 @@ function objective_opt!(x, data, print_frequency = 1)
     elseif !ismissing(config[:post_ministep_hook]) && reports[end][:ministeps][end][:success]
         dt_current = report_timesteps(reports)[1:length(states)]
         data[:dt_current] = dt_current
-        obj = evaluate_objective(G, sim.model, states, dt_current, forces, large_value = bad_obj)
+        obj = evaluate_objective(G, sim.model, states, dt_current, forces)
     else
-        obj = evaluate_objective(G, sim.model, states, dt, forces, large_value = bad_obj)
+        if length(states) != length(dt)
+            @warn "Partial data passed, objective set to large value $bad_obj."
+            obj = bad_obj
+        else
+            obj = evaluate_objective(G, sim.model, states, dt, forces)
+        end
     end
     data[:x_hash] = hash(x)
     n = data[:n_objective]

@@ -536,6 +536,9 @@ struct JutulStorage{K}
             for (k, v) in kwarg
                 S[k] = v
             end
+        elseif S isa JutulStorage
+            @assert length(kwarg) == 0
+            return S
         else
             @assert isa(S, NamedTuple)
             K = typeof(S)
@@ -1338,4 +1341,128 @@ function mesh_entity_has_tag(met::MeshEntityTags, entity::JutulEntity, tag_group
         out = tag[pos] == ix
     end
     return out
+end
+
+struct SimResult
+    states::AbstractVector
+    reports::AbstractVector
+    start_timestamp::DateTime
+    end_timestamp::DateTime
+    function SimResult(states, reports, start_time)
+        nr = length(reports)
+        ns = length(states)
+        @assert ns == nr || ns == nr-1 || ns == 0 "Recieved $ns or $ns - 1 states different from $nr reports"
+        return new(states, reports, start_time, now())
+    end
+end
+
+mutable struct AdjointPackedResult
+    step_infos
+    states
+    forces
+    state0
+    Nstep::Int
+    function AdjointPackedResult(states::Vector{JutulStorage{T}}, step_infos::Vector, Nstep::Int, forces::Union{Vector, Missing}; state0 = missing) where T
+        if length(states) != length(step_infos)
+            error("States and step_infos must have the same length, was $(length(states)) and $(length(step_infos))")
+        end
+        if !ismissing(forces) && length(forces) != length(step_infos)
+            error("Forces and step_infos must have the same length, was $(length(forces)) and $(length(step_infos))")
+        end
+        new(step_infos, states, forces, state0, Nstep)
+    end
+end
+
+function Base.getindex(r::AdjointPackedResult, i::Int)
+    if ismissing(r.forces)
+        f_i = missing
+    else
+        f_i = r.forces[i]
+    end
+    return (state = r.states[i], step_info = r.step_infos[i], forces = f_i)
+end
+
+function Base.length(r::AdjointPackedResult)
+    return length(r.states)
+end
+
+function AdjointPackedResult(r::SimResult, case::JutulCase)
+    return AdjointPackedResult(r, case.forces)
+end
+
+function AdjointPackedResult(r::SimResult, forces)
+    states, dt, report_step_ix = expand_to_ministeps(r)
+    return AdjointPackedResult(states, dt, forces, report_step_ix)
+end
+
+function AdjointPackedResult(states, dt::Vector{Float64}, forces)
+    return AdjointPackedResult(states, dt, forces, eachindex(dt, states))
+end
+
+function AdjointPackedResult(states, reports, forces)
+    states, dt, report_step_ix = expand_to_ministeps(states, reports)
+    return AdjointPackedResult(states, dt, forces, report_step_ix)
+end
+
+function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
+    N_report_step = maximum(step_index)
+    N_mini_step = length(dt)
+    if forces isa Vector
+        N_forces = length(forces)
+        if N_forces != N_mini_step
+            if N_forces == N_report_step
+                forces = forces[step_index]
+            else
+                error("Forces must have the same length as either states or timesteps, was $(N_forces), $(N_mini_step) and $(N_report_step)")
+            end
+        end
+    end
+    length(states) == length(dt) || error("States and timesteps must have the same length, was $(length(states)) and $(length(dt))")
+    total_time = sum(dt)
+    # Set
+    time = 0.0
+    ministep_ix = 1
+    prev_ministep = 0
+    step_infos = missing
+    for (i, dt_i) in enumerate(dt)
+        step_ix = step_index[i]
+        if step_ix != prev_ministep
+            ministep_ix = 1
+            prev_ministep = step_ix
+        else
+            ministep_ix += 1
+        end
+        step_info = optimization_step_info(step_ix, time, dt_i,
+            Nstep = N_report_step,
+            substep = ministep_ix,
+            total_time = total_time
+        )
+        if i == 1
+            step_infos = [step_info]
+        else
+            push!(step_infos, step_info)
+        end
+        time += dt_i
+    end
+    if !ismissing(forces)
+        forces = map(i -> forces_for_timestep(nothing, forces, dt, i), step_index)
+    end
+    function convert_state_to_jutul_storage(x::JutulStorage)
+        return x
+    end
+    function convert_state_to_jutul_storage(x::Any)
+        return x
+    end
+    function convert_state_to_jutul_storage(x::JUTUL_OUTPUT_TYPE)
+        s = JutulStorage()
+        for (k, v) in pairs(x)
+            if k == :substates
+                continue
+            end
+            s[k] = convert_state_to_jutul_storage(v)
+        end
+        return s
+    end
+    states = map(s -> convert_state_to_jutul_storage(s), states)
+    return AdjointPackedResult(states, step_infos, maximum(step_index), forces)
 end

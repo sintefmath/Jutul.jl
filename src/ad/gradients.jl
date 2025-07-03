@@ -225,26 +225,23 @@ end
 Non-allocating version of `solve_adjoint_sensitivities`.
 """
 function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces, info_level = 0)
-    N = length(timesteps)
-    @assert N == length(states)
-    if forces isa Vector
-        @assert length(forces) == N
-    end
+    packed_steps = AdjointPackedResult(states, timesteps, forces)
+    packed_steps.state0 = state0
     # Do sparsity detection if not already done.
     if info_level > 1
         jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
     end
-
-    update_objective_sparsity!(storage, G, states, timesteps, forces, :forward)
-    update_objective_sparsity!(storage, G, states, timesteps, forces, :parameter)
+    N = length(packed_steps)
+    update_objective_sparsity!(storage, G, packed_steps, :forward)
+    update_objective_sparsity!(storage, G, packed_steps, :parameter)
     # Set gradient to zero before solve starts
     @. ∇G = 0
     @tic "sensitivities" for i in N:-1:1
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
-        s, s0, s_next = state_pair_adjoint_solve(state0, states, i, N)
-        update_sensitivities!(∇G, i, G, storage, s0, s, s_next, timesteps, forces)
+        s0, s, s_next = adjoint_step_state_triplet(packed_steps, i)
+        update_sensitivities!(∇G, i, G, storage, s0, s, s_next, packed_steps)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
@@ -254,33 +251,46 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     @assert all(isfinite, ∇G)
     # Finally deal with initial state gradients
     if !ismissing(storage.state0_map)
-        forces1 = forces_for_timestep(storage.forward, forces, timesteps, 1)
-        dt1 = timesteps[1]
-        adjoint_reassemble!(storage.backward, states[1], state0, dt1, forces1, dt1)
+        ps1 = packed_steps[1]
+        forces1 = ps1.forces
+        dt1 = ps1.step_info[:dt]
+        adjoint_reassemble!(storage.backward, ps1.state, state0, dt1, forces1, dt1)
         update_state0_sensitivities!(storage)
     end
     return ∇G
 end
 
-function state_pair_adjoint_solve(state0, states, i, N)
-    # TODO: Is this required?
-    # fn = deepcopy
-    fn = x -> x
-    if i == 1
-        s0 = fn(state0)
+function adjoint_reset_parameters!(storage, parameters)
+    if haskey(storage, :parameter)
+        sims = (storage.forward, storage.backward, storage.parameter)
     else
-        s0 = fn(states[i-1])
+        sims = (storage.forward, storage.backward)
     end
-    if i == N
-        s_next = nothing
-    else
-        s_next = fn(states[i+1])
+    for sim in sims
+        for k in (:state, :state0, :parameters)
+            reset_variables!(sim, parameters, type = k)
+        end
     end
-    s = fn(states[i])
-    return (s, s0, s_next)
+    return storage
 end
 
-function update_objective_sparsity!(storage, G, states, timesteps, forces, k = :forward)
+function adjoint_step_state_triplet(packed_steps::AdjointPackedResult, i::Int)
+    states = packed_steps.states
+    if i == 1
+        s0 = packed_steps.state0
+    else
+        s0 = states[i-1]
+    end
+    s = states[i]
+    if i == length(states)
+        s_next = nothing
+    else
+        s_next = states[i+1]
+    end
+    return (s0, s, s_next)
+end
+
+function update_objective_sparsity!(storage, G, packed_steps::AdjointPackedResult, k = :forward)
     obj_sparsity = storage.objective_sparsity
     if isnothing(obj_sparsity) || (k == :parameter && isnothing(storage.dparam))
         return
@@ -288,7 +298,7 @@ function update_objective_sparsity!(storage, G, states, timesteps, forces, k = :
         sparsity = obj_sparsity[k]
         if isnothing(sparsity)
             sim = storage[k]
-            obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, states, timesteps, forces)
+            obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, packed_steps)
         end
     end
 end
@@ -303,20 +313,18 @@ function get_objective_sparsity(storage, k)
     return S
 end
 
-function determine_objective_sparsity(sim, model, G, states, timesteps, forces)
+function determine_objective_sparsity(sim, model, G, packed_steps::AdjointPackedResult)
     update_secondary_variables!(sim.storage, sim.model)
     state = sim.storage.state
-    total_time = sum(timesteps)
-    N = length(states)
-    F_outer = (state, i) -> G(
-        model,
-        state,
-        timesteps[i],
-        Jutul.optimization_step_info(i, timesteps, total_time = total_time, Nstep = N),
-        forces_for_timestep(sim, forces, timesteps, i)
-    )
+
+    function F_outer(state, i)
+        ps = packed_steps[i]
+        si = ps.step_info
+        f = ps.forces
+        return G(model, state, si[:dt], si, f)
+    end
     sparsity = missing
-    for i in 1:N
+    for i in 1:length(packed_steps)
         s_new = determine_sparsity_simple(s -> F_outer(s, i), model, state)
         sparsity = merge_sparsity!(sparsity, s_new)
     end
@@ -423,58 +431,57 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
     end
 end
 
-function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, timesteps, all_forces)
+function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, packed_steps::AdjointPackedResult)
+    N = length(packed_steps)
+    # Figure out when we are in discrete index and time
+    packed_step = packed_steps[i]
+    step_info = packed_step.step_info
+    dt = step_info[:dt]
+    current_time = step_info[:time]
+    report_step = step_info[:step]
+    forces = packed_step.forces
     for skey in [:backward, :forward, :parameter]
         s = adjoint_storage[skey]
-        t = @view timesteps[1:(i-1)]
-        reset!(progress_recorder(s), step = i, time = sum(t))
+        reset!(progress_recorder(s), step = report_step, time = current_time)
     end
-    λ, t, dt, forces = next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces)
+    λ = next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_next, packed_steps)
+    # λ, t, dt, forces
     @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
     # Increment gradient
     parameter_sim = adjoint_storage.parameter
-    @tic "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, t)
+    @tic "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, current_time)
     lsys_param = parameter_sim.storage.LinearizedSystem
     op_p = linear_operator(lsys_param)
     sens_add_mult!(∇G, op_p, λ)
     dparam = adjoint_storage.dparam
-    total_time = sum(timesteps)
-    N = length(timesteps)
     @tic "objective parameter gradient" if !isnothing(dparam)
         if i == N
             @. dparam = 0
         end
         pbuf = adjoint_storage.param_buf
         S_p = get_objective_sparsity(adjoint_storage, :parameter)
-        rec = progress_recorder(parameter_sim)
-        step_info = optimization_step_info(i, current_time(rec), dt, total_time = total_time, Nstep = N)
         state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
         @. dparam += pbuf
     end
 end
 
-function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, timesteps, all_forces; step_info = missing)
+function next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_next, packed_steps::AdjointPackedResult)
     # Unpack simulators
     backward_sim = adjoint_storage.backward
     forward_sim = adjoint_storage.forward
     λ = adjoint_storage.lagrange
     λ_b = adjoint_storage.lagrange_buffer
     config = adjoint_storage.forward_config
-    rec = progress_recorder(backward_sim)
-    total_time = sum(timesteps)
-    # Timestep logic
-    N = length(timesteps)
-    dt = timesteps[i]
-    if ismissing(step_info)
-        step_info = optimization_step_info(i, current_time(rec), dt, total_time = total_time, Nstep = N)
-    else
-        @assert dt == step_info[:dt]
-    end
-    forces = forces_for_timestep(forward_sim, all_forces, timesteps, step_info[:step])
+
+    packed_step = packed_steps[i]
+    step_info = packed_step.step_info
+    dt = step_info[:dt]
+    forces = packed_step.forces
+    N = length(packed_steps)
+
     # Assemble Jacobian w.r.t. current step
-    t = sum(timesteps[1:i-1])
-    @tic "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces, t)
+    @tic "jacobian (standard)" adjoint_reassemble!(forward_sim, state, state0, dt, forces, step_info[:time])
     il = config[:info_level]
     converged, e, errors = check_convergence(
         forward_sim.storage,
@@ -501,9 +508,10 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
         @assert i == N
         @. λ = 0
     else
-        dt_next = timesteps[i+1]
-        forces_next = forces_for_timestep(backward_sim, all_forces, timesteps, i+1)
-        @tic "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, dt_next, forces_next, t + dt)
+        next_packed_step = packed_steps[i+1]
+        next_step_info = next_packed_step.step_info
+        forces_next = next_packed_step.forces
+        @tic "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, next_step_info[:dt], forces_next, next_step_info[:time])
         lsys_next = backward_sim.storage.LinearizedSystem
         op = linear_operator(lsys_next, skip_red = true)
         # In-place version of
@@ -526,7 +534,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_n
     end
     @tic "linear solve" lstats = linear_solve!(lsys, lsolve, forward_sim.model, forward_sim.storage; lsolve_arg...)
     adjoint_transfer_canonical_order!(λ, dx, forward_sim.model, to_canonical = true)
-    return λ, t, dt, forces
+    return λ
 end
 
 function sens_add_mult!(x::AbstractVector, op::LinearOperator, y::AbstractVector)
@@ -696,56 +704,26 @@ function perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
 end
 
 function evaluate_objective(G, model, states, timesteps, all_forces;
-        large_value = 1e20,
         step_index = eachindex(states),
+    )
+    packed_steps = AdjointPackedResult(states, timesteps, all_forces, step_index)
+    return evaluate_objective(G, model, packed_steps)
+end
+
+function evaluate_objective(G, model, packed_steps::AdjointPackedResult;
         kwarg...
     )
-    function convert_state_to_jutul_storage(model, x::JutulStorage)
-        return x
-    end
-    function convert_state_to_jutul_storage(model, x::AbstractDict)
-        return JutulStorage(x)
-    end
-    function convert_state_to_jutul_storage(model::MultiModel, x::AbstractDict)
-        s = JutulStorage()
-        for (k, v) in pairs(x)
-            if k == :substates
-                continue
-            end
-            s[k] = JutulStorage(v)
-        end
-        return s
-    end
-    if length(states) < length(timesteps)
-        # Failure: Put to a big value.
-        @warn "Partial data passed, objective set to large value $large_value."
-        obj = large_value
-    else
-        obj = 0.0
-        t = 0.0
-        total_time = sum(timesteps)
-        N = length(timesteps)
-        prev_step = 0
-        substep = 0
-        for (i, dt) in enumerate(timesteps)
-            step = step_index[i]
-            if step != prev_step
-                substep = 1
-                prev_step = step
-            else
-                substep += 1
-            end
-            state_i = convert_state_to_jutul_storage(model, states[i])
-            force_i = forces_for_timestep(nothing, all_forces, timesteps, i)
-            obj += G(
-                model,
-                state_i,
-                dt,
-                optimization_step_info(i, t, dt; total_time = total_time, substep = substep, step = step, Nstep = N, kwarg...),
-                force_i
-                )
-            t += dt
-        end
+    obj = 0.0
+    for i in 1:length(packed_steps)
+        packed = packed_steps[i]
+        si = packed.step_info
+        obj += G(
+            model,
+            packed.state,
+            si[:dt],
+            si,
+            packed.forces
+        )
     end
     return obj
 end
@@ -983,7 +961,6 @@ end
 function optimization_step_info(step::Int, time::Real, dt::Real;
         Nstep = missing,
         total_time = missing,
-        case = missing,
         substep = 1,
         kwarg...
     )
@@ -994,7 +971,6 @@ function optimization_step_info(step::Int, time::Real, dt::Real;
         :Nstep => Nstep,
         :substep => substep,
         :total_time => total_time,
-        :case => case
     )
     for (k, v) in kwarg
         out[k] = v

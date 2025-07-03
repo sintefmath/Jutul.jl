@@ -254,7 +254,7 @@ end
 
 Initialize primary variables and other state fields, given initial values as a Dict
 """
-function setup_state!(state, model::JutulModel, init_values::AbstractDict = Dict(); T = float_type(model.context))
+function setup_state!(state, model::JutulModel, init_values::Union{JutulStorage, AbstractDict} = Dict(); T = float_type(model.context))
     for (psym, pvar) in get_primary_variables(model)
         initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true, T = T)
     end
