@@ -66,7 +66,6 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward)
     # Set gradient to zero before solve starts
     @. ∇G = 0
-    substep = 0
     @tic "sensitivities" for i in N:-1:1
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
@@ -119,7 +118,7 @@ function set_packed_result_dynamic_values!(packed_steps, case)
 end
 
 function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed_steps::AdjointPackedResult)
-    state0, state, state_next = Jutul.state_pair_adjoint_solve(packed_steps, i)
+    state0, state, state_next = Jutul.adjoint_step_state_triplet(packed_steps, i)
     step_info = packed_steps.step_infos[i]
     current_time = step_info[:time]
     report_step = step_info[:step]
@@ -253,15 +252,8 @@ end
 
 function (H::AdjointObjectiveHelper)(x)
     packed = H.packed_steps
-    states = packed.states
-    state0 = packed.state0
     function evaluate(x, ix)
-        if ix == 1
-            s0 = state0
-        else
-            s0 = states[ix-1]
-        end
-        s = states[ix]
+        s0, s, = Jutul.adjoint_step_state_triplet(packed, ix)
         evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.G, packed, ix, H.cache)
     end
     if ismissing(H.step_index)

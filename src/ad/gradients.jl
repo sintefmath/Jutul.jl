@@ -240,7 +240,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
-        s0, s, s_next = state_pair_adjoint_solve(packed_steps, i)
+        s0, s, s_next = adjoint_step_state_triplet(packed_steps, i)
         update_sensitivities!(∇G, i, G, storage, s0, s, s_next, packed_steps)
     end
     dparam = storage.dparam
@@ -260,7 +260,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     return ∇G
 end
 
-function state_pair_adjoint_solve(packed_steps::AdjointPackedResult, i::Int)
+function adjoint_step_state_triplet(packed_steps::AdjointPackedResult, i::Int)
     states = packed_steps.states
     if i == 1
         s0 = packed_steps.state0
