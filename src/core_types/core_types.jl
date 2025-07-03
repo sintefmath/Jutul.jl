@@ -1450,13 +1450,10 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
     function convert_state_to_jutul_storage(x::JutulStorage)
         return x
     end
-    function convert_state_to_jutul_storage(x::JUTUL_OUTPUT_TYPE)
-        return JutulStorage(x)
-    end
     function convert_state_to_jutul_storage(x::Any)
         return x
     end
-    function convert_state_to_jutul_storage(x::AbstractDict)
+    function convert_state_to_jutul_storage(x::JUTUL_OUTPUT_TYPE)
         s = JutulStorage()
         for (k, v) in pairs(x)
             if k == :substates
