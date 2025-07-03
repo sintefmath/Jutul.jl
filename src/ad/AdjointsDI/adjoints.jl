@@ -52,11 +52,12 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         state0 = missing
     )
 
-    H = storage[:callable_di]
     N = length(packed_steps)
 
     case0 = setup_case(X, F, packed_steps, state0, :all)
     packed_steps = set_packed_result_dynamic_values!(packed_steps, case0)
+    H = storage[:callable_di]
+    H.packed_steps = packed_steps
 
     # Do sparsity detection if not already done.
     if info_level > 1
