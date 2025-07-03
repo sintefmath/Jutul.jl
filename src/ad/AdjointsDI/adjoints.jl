@@ -128,7 +128,7 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed
         Jutul.reset!(Jutul.progress_recorder(s), step = report_step, time = current_time)
     end
 
-    λ = Jutul.next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, packed_steps)
+    λ = Jutul.next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_next, packed_steps)
     @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
 
     H.step_index = i

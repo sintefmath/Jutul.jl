@@ -240,8 +240,8 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
-        s, s0, s_next = state_pair_adjoint_solve(packed_steps, i)
-        update_sensitivities!(∇G, i, G, storage, s0, s, s_next, packed_steps)
+        s0, s, s_next = state_pair_adjoint_solve(packed_steps, i)
+        update_sensitivities!(∇G, i, G, storage, s, s0, s_next, packed_steps)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
@@ -273,7 +273,7 @@ function state_pair_adjoint_solve(packed_steps::AdjointPackedResult, i::Int)
     else
         s_next = states[i+1]
     end
-    return (s, s0, s_next)
+    return (s0, s, s_next)
 end
 
 function update_objective_sparsity!(storage, G, packed_steps::AdjointPackedResult, k = :forward)
@@ -430,7 +430,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         s = adjoint_storage[skey]
         reset!(progress_recorder(s), step = report_step, time = current_time)
     end
-    λ = next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, packed_steps)
+    λ = next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_next, packed_steps)
     # λ, t, dt, forces
     @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
     # ∇ₚG = Σₙ (∂Fₙ / ∂p)ᵀ λₙ
@@ -452,7 +452,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     end
 end
 
-function next_lagrange_multiplier!(adjoint_storage, i, G, state, state0, state_next, packed_steps::AdjointPackedResult)
+function next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_next, packed_steps::AdjointPackedResult)
     # Unpack simulators
     backward_sim = adjoint_storage.backward
     forward_sim = adjoint_storage.forward
