@@ -231,7 +231,12 @@ function objective_opt!(x, data, print_frequency = 1)
         data[:dt_current] = dt_current
         obj = evaluate_objective(G, sim.model, states, dt_current, forces)
     else
-        obj = evaluate_objective(G, sim.model, states, dt, forces)
+        if length(states) != length(dt)
+            @warn "Partial data passed, objective set to large value $bad_obj."
+            obj = bad_obj
+        else
+            obj = evaluate_objective(G, sim.model, states, dt, forces)
+        end
     end
     data[:x_hash] = hash(x)
     n = data[:n_objective]
