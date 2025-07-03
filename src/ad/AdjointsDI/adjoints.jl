@@ -9,43 +9,48 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
             info_level = 0,
             kwarg...
         )
-        packed_steps = AdjointPackedResult(states, reports_or_timesteps, forces)
-        Jutul.set_global_timer!(extra_timing)
-        N = length(states)
-        n_param = length(X)
-        # Allocation part
-        if info_level > 1
-            jutul_message("Adjoints", "Setting up storage...", color = :blue)
-        end
-        t_storage = @elapsed storage = setup_adjoint_storage_generic(X, F, packed_steps, G;
-            info_level = info_level,
-            state0 = state0,
-            kwarg...
-        )
-
-        if info_level > 1
-            jutul_message("Adjoints", "Storage set up in $(Jutul.get_tstr(t_storage)).", color = :blue)
-        end
-        ∇G = zeros(n_param)
-
-        # Solve!
-        if info_level > 1
-            jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
-        end
-        t_solve = @elapsed solve_adjoint_generic!(∇G, X, F, storage, packed_steps, G,
-            info_level = info_level,
-            state0 = state0,
-        )
-        if info_level > 1
-            jutul_message("Adjoints", "Adjoints solved in $(Jutul.get_tstr(t_solve)).", color = :blue)
-        end
-        Jutul.print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
-        if extra_output
-            return (∇G, storage)
-        else
-            return ∇G
-        end
+    packed_steps = AdjointPackedResult(states, reports_or_timesteps, forces)
+    Jutul.set_global_timer!(extra_timing)
+    N = length(states)
+    n_param = length(X)
+    # Allocation part
+    if info_level > 1
+        jutul_message("Adjoints", "Setting up storage...", color = :blue)
     end
+    t_storage = @elapsed storage = setup_adjoint_storage_generic(X, F, packed_steps, G;
+        info_level = info_level,
+        state0 = state0,
+        kwarg...
+    )
+
+    if info_level > 1
+        jutul_message("Adjoints", "Storage set up in $(Jutul.get_tstr(t_storage)).", color = :blue)
+    end
+    ∇G = zeros(n_param)
+
+    # Solve!
+    if info_level > 1
+        jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
+    end
+    t_solve = @elapsed solve_adjoint_generic!(∇G, X, F, storage, packed_steps, G,
+        info_level = info_level,
+        state0 = state0,
+    )
+    if info_level > 1
+        jutul_message("Adjoints", "Adjoints solved in $(Jutul.get_tstr(t_solve)).", color = :blue)
+    end
+    Jutul.print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
+    if extra_output
+        return (∇G, storage)
+    else
+        return ∇G
+    end
+end
+
+function solve_adjoint_generic!(∇G, X, F, storage, states, dt, G; kwarg...)
+    packed_steps = AdjointPackedResult(states, dt, missing)
+    return solve_adjoint_generic!(∇G, X, F, storage, packed_steps, G; kwarg...)
+end
 
 function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPackedResult, G;
         info_level = 0,
@@ -79,6 +84,11 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     end
     all(isfinite, ∇G) || error("Adjoint solve resulted in non-finite gradient values.")
     return ∇G
+end
+
+function setup_adjoint_storage_generic(x, F, states, dt, objective; kwarg...)
+    packed_steps = AdjointPackedResult(states, dt, missing)
+    return setup_adjoint_storage_generic(x, F, packed_steps, objective; kwarg...)
 end
 
 function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, G;
