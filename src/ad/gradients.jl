@@ -260,6 +260,20 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     return ∇G
 end
 
+function adjoint_reset_parameters!(storage, parameters)
+    if haskey(storage, :parameter)
+        sims = (storage.forward, storage.backward, storage.parameter)
+    else
+        sims = (storage.forward, storage.backward)
+    end
+    for sim in sims
+        for k in (:state, :state0, :parameters)
+            reset_variables!(sim, parameters, type = k)
+        end
+    end
+    return storage
+end
+
 function adjoint_step_state_triplet(packed_steps::AdjointPackedResult, i::Int)
     states = packed_steps.states
     if i == 1

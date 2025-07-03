@@ -164,11 +164,7 @@ function gradient_opt!(dFdx, x, data)
         dt_current = get(data, :dt_current, dt)
         if length(states) == length(dt_current)
             storage = data[:adjoint_storage]
-            for sim in [storage.forward, storage.backward, storage.parameter]
-                for k in [:state, :state0, :parameters]
-                    reset_variables!(sim, parameters, type = k)
-                end
-            end
+            adjoint_reset_parameters!(storage, parameters)
             debug_time = false
             set_global_timer!(debug_time)
             try

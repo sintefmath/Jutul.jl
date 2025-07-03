@@ -51,11 +51,12 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         info_level = 0,
         state0 = missing
     )
-
     N = length(packed_steps)
     case = setup_case(X, F, packed_steps, state0, :all)
+    Jutul.adjoint_reset_parameters!(storage, case.parameters)
+
     packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
-    H = storage[:callable_di]
+    H = storage[:adjoint_objective_helper]
     H.packed_steps = packed_steps
 
     # Do sparsity detection if not already done.
@@ -138,7 +139,7 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed
     else
         jac = jacobian(H, prep, backend, X)
     end
-    # jac = jacobian(F, AutoForwardDiff(), X)
+    # jac = jacobian(H, AutoForwardDiff(), X)
     # Add zero entry (corresponding to objective values) to avoid resizing matrix.
     N = length(λ)
     push!(λ, 0.0)
@@ -286,7 +287,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
     end
 
     H = AdjointObjectiveHelper(F, G, packed_steps)
-    storage[:callable_di] = H
+    storage[:adjoint_objective_helper] = H
     # Note: strict = false is needed because we create another function on the fly
     # that essentially calls the same function.
     if do_prep
