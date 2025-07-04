@@ -76,7 +76,7 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
 
     K = param[:K]
     G = (model, state, dt, step_no, forces) -> poisson_test_objective(model, state)
-    function G_global(model, states, step_infos, forces)
+    function G_global(model, state0, states, step_infos, forces, case)
         obj = 0.0
         for (i, s) in enumerate(states)
             obj += G(model, s, step_infos[i], forces)
@@ -94,7 +94,14 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
         end
     end
 
-    for obj in [G, G_global]
+    for (objtype, obj) in [(:local, G), (:global, G_global)]
+        @info "Testing $objtype objective"
+        wrap_obj = Jutul.adjoint_wrap_objective(obj, model)
+        if objtype == :global
+            @test wrap_obj isa Jutul.WrappedGlobalObjective
+        else
+            @test wrap_obj isa Jutul.WrappedSumObjective
+        end
         cfg = optimization_config(model, param, use_scaling = use_scaling, rel_min = 0.1, rel_max = 10)
         if use_log
             cfg[:K][:scaler] = :log

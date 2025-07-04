@@ -730,6 +730,10 @@ function evaluate_objective(G::AbstractSumObjective, model, packed_steps::Adjoin
     return obj
 end
 
+function evaluate_objective(G::AbstractGlobalObjective, model, packed_steps::AdjointPackedResult; kwarg...)
+    return G(model, packed_steps.state0, packed_steps.state0, packed_steps.step_infos, packed_steps.forces)
+end
+
 function store_sensitivities(model, result, prm_map)
     out = Dict{Symbol, Any}()
     store_sensitivities!(out, model, result, prm_map)

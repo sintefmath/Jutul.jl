@@ -1,11 +1,19 @@
 function adjoint_wrap_objective(G, model)
     # Scalar objective:
+    force_type = Union{AbstractVector, AbstractDict, NamedTuple}
     # model, state, dt, step_no, forces
-    is_sum_obj = applicable(G, model, JUTUL_OUTPUT_TYPE(), [1.0], Dict(), [])
+    is_sum_obj = hasmethod(G, Tuple{JutulModel, JUTUL_OUTPUT_TYPE, AbstractVector, AbstractDict, force_type})
+    # model, state0, states, step_infos, forces, input_data
+    is_global_obj = hasmethod(G, Tuple{JutulModel, JUTUL_OUTPUT_TYPE, AbstractVector, AbstractVector{AbstractDict}, force_type, Any})
+
     if is_sum_obj
         obj = WrappedSumObjective(G)
     else
-        error("Objective function must be a sum of scalar objectives.")
+        if is_global_obj
+            obj = WrappedGlobalObjective(G)
+        else
+            error("Objective function must be a sum of scalar objectives or....")
+        end
     end
     return obj
 end
