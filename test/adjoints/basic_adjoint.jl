@@ -56,7 +56,7 @@ function test_basic_adjoint(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = fa
         @test isapprox(grad_num, grad_adj, atol = 1e-4)
     else
         # Test vector objective
-        G = (model, state, dt, step_no, forces) -> poisson_test_objective_vec(model, state)
+        G = (model, state, dt, step_info, forces) -> poisson_test_objective_vec(model, state)
         n_obj = 2
         if in_place
             grad_adj = zeros(n_grad, n_obj)
@@ -75,11 +75,12 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
     num_tol = 1e-4
 
     K = param[:K]
-    G = (model, state, dt, step_no, forces) -> poisson_test_objective(model, state)
+    G = (model, state, dt, step_info, forces) -> poisson_test_objective(model, state)
     function G_global(model, state0, states, step_infos, forces, case)
         obj = 0.0
         for (i, s) in enumerate(states)
-            obj += G(model, s, step_infos[i], forces)
+            si = step_infos[i]
+            obj += G(model, s, si[:dt], si, forces)
         end
         return obj
     end

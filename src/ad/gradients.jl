@@ -706,10 +706,11 @@ end
 
 function evaluate_objective(G, model, states, timesteps, all_forces;
         step_index = eachindex(states),
+        kwarg...
     )
     packed_steps = AdjointPackedResult(states, timesteps, all_forces, step_index)
     obj = adjoint_wrap_objective(G, model)
-    return evaluate_objective(obj, model, packed_steps)
+    return evaluate_objective(obj, model, packed_steps; kwarg...)
 end
 
 function evaluate_objective(G::AbstractSumObjective, model, packed_steps::AdjointPackedResult;
@@ -730,8 +731,8 @@ function evaluate_objective(G::AbstractSumObjective, model, packed_steps::Adjoin
     return obj
 end
 
-function evaluate_objective(G::AbstractGlobalObjective, model, packed_steps::AdjointPackedResult; kwarg...)
-    return G(model, packed_steps.state0, packed_steps.state0, packed_steps.step_infos, packed_steps.forces)
+function evaluate_objective(G::AbstractGlobalObjective, model, packed_steps::AdjointPackedResult; case = missing)
+    return G(model, packed_steps.state0, packed_steps.states, packed_steps.step_infos, packed_steps.forces, case)
 end
 
 function store_sensitivities(model, result, prm_map)
