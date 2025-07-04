@@ -1468,3 +1468,16 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
     states = map(s -> convert_state_to_jutul_storage(s), states)
     return AdjointPackedResult(states, step_infos, maximum(step_index), forces)
 end
+
+abstract type AbstractJutulObjective end
+
+abstract type AbstractSumObjective <: AbstractJutulObjective end
+abstract type AbstractGlobalObjective <: AbstractJutulObjective end
+
+struct WrappedSumObjective{T} <: AbstractSumObjective
+    objective::T
+end
+
+struct WrappedGlobalObjective{T} <: AbstractGlobalObjective
+    objective::T
+end
