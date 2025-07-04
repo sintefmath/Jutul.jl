@@ -1480,7 +1480,7 @@ abstract type AbstractSumObjective <: AbstractJutulObjective end
 
 """
 Abstract type for objective as a global objective function on the form:
-    ```F(model, states, step_infos, forces)```
+    ```F(model, state0, states, step_infos, forces, input_data)```
 """
 abstract type AbstractGlobalObjective <: AbstractJutulObjective end
 
