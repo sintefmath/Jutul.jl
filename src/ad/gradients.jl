@@ -652,7 +652,7 @@ function solve_numerical_sensitivities(model, states, reports, G, target;
                                                 parameters = setup_parameters(model),
                                                 epsilon = 1e-8)
     timesteps = report_timesteps(reports)
-    G = adjoint_wrap_objective(G, model, states, timesteps, forces)
+    G = adjoint_wrap_objective(G, model)
     N = length(states)
     @assert length(reports) == N == length(timesteps)
     # Base objective
@@ -708,7 +708,8 @@ function evaluate_objective(G, model, states, timesteps, all_forces;
         step_index = eachindex(states),
     )
     packed_steps = AdjointPackedResult(states, timesteps, all_forces, step_index)
-    return evaluate_objective(G, model, packed_steps)
+    obj = adjoint_wrap_objective(G, model)
+    return evaluate_objective(obj, model, packed_steps)
 end
 
 function evaluate_objective(G::AbstractSumObjective, model, packed_steps::AdjointPackedResult;

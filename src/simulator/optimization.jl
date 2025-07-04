@@ -53,6 +53,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     if copy_case
         case = duplicate(case)
     end
+    G = adjoint_wrap_objective(G, case.model)
     # Pick active set of targets from the optimization config and construct a mapper
     (; model, state0, parameters) = case
     if print isa Bool
