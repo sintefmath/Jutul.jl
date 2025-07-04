@@ -76,7 +76,7 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
 
     K = param[:K]
     G = (model, state, dt, step_info, forces) -> poisson_test_objective(model, state)
-    function G_global(model, state0, states, step_infos, forces, case)
+    function G_global(model, state0, states, step_infos, forces, input_data)
         obj = 0.0
         for (i, s) in enumerate(states)
             si = step_infos[i]

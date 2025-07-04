@@ -153,5 +153,5 @@ function evaluate_objective(G, case::JutulCase, result::SimResult; kwarg...)
     packed_steps = AdjointPackedResult(result, case)
     model = case.model
     obj = adjoint_wrap_objective(G, model)
-    return evaluate_objective(obj, model, packed_steps; case = case, kwarg...)
+    return evaluate_objective(obj, model, packed_steps; input_data = case.input_data, kwarg...)
 end
