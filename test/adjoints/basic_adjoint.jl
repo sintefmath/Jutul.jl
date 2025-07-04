@@ -76,42 +76,51 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
 
     K = param[:K]
     G = (model, state, dt, step_no, forces) -> poisson_test_objective(model, state)
-
-    cfg = optimization_config(model, param, use_scaling = use_scaling, rel_min = 0.1, rel_max = 10)
-    if use_log
-        cfg[:K][:scaler] = :log
+    function G_global(model, states, step_infos, forces)
+        obj = 0.0
+        for (i, s) in enumerate(states)
+            obj += G(model, s, step_infos[i], forces)
+        end
+        return obj
     end
-    tmp = setup_parameter_optimization(model, state0, param, dt, forces, G, cfg, param_obj = true, print = false);
-    F_o, dF_o, F_and_dF, x0, lims, data = tmp
-    # Evaluate gradient first to initialize
-    F0 = F_o(x0)
-    # This interface is only safe if F0 was called with x0 first.
-    dF_initial = dF_o(similar(x0), x0)
 
-    dF_num = similar(dF_initial)
-    num_grad!(dF_num, x0, ϵ, F_o)
-
-    # Check around initial point
-    @test isapprox(dF_num, dF_initial, rtol = num_tol)
-    # Perturb the data in a few different directions and verify
-    # the gradients there too. Use the F_and_dF interface, that
-    # computes gradients together with the objective
-    for delta in [1.05, 0.85, 0.325, 1.55]
-        x_mod = delta.*x0
-        dF_mod = similar(dF_initial)
-        F_and_dF(NaN, dF_mod, x_mod)
-        num_grad!(dF_num, x_mod, ϵ, F_o)
-        @test isapprox(dF_num, dF_mod, rtol = num_tol)
+    function num_grad!(dF_num, x0, ϵ, F_o)
+        F_initial = F_o(x0)
+        for i in eachindex(dF_num)
+            x = copy(x0)
+            x[i] += ϵ
+            F_perturbed = F_o(x)
+            dF_num[i] = (F_perturbed - F_initial)/ϵ
+        end
     end
-end
 
-function num_grad!(dF_num, x0, ϵ, F_o)
-    F_initial = F_o(x0)
-    for i in eachindex(dF_num)
-        x = copy(x0)
-        x[i] += ϵ
-        F_perturbed = F_o(x)
-        dF_num[i] = (F_perturbed - F_initial)/ϵ
+    for obj in [G, G_global]
+        cfg = optimization_config(model, param, use_scaling = use_scaling, rel_min = 0.1, rel_max = 10)
+        if use_log
+            cfg[:K][:scaler] = :log
+        end
+        tmp = setup_parameter_optimization(model, state0, param, dt, forces, obj, cfg, param_obj = true, print = false);
+        F_o, dF_o, F_and_dF, x0, lims, data = tmp
+        # Evaluate gradient first to initialize
+        F0 = F_o(x0)
+        # This interface is only safe if F0 was called with x0 first.
+        dF_initial = dF_o(similar(x0), x0)
+
+        dF_num = similar(dF_initial)
+        num_grad!(dF_num, x0, ϵ, F_o)
+
+        # Check around initial point
+        @test isapprox(dF_num, dF_initial, rtol = num_tol)
+        # Perturb the data in a few different directions and verify
+        # the gradients there too. Use the F_and_dF interface, that
+        # computes gradients together with the objective
+        for delta in [1.05, 0.85, 0.325, 1.55]
+            x_mod = delta.*x0
+            dF_mod = similar(dF_initial)
+            F_and_dF(NaN, dF_mod, x_mod)
+            num_grad!(dF_num, x_mod, ϵ, F_o)
+            @test isapprox(dF_num, dF_mod, rtol = num_tol)
+        end
     end
 end
 

@@ -1471,7 +1471,17 @@ end
 
 abstract type AbstractJutulObjective end
 
+"""
+Abstract type for objective as a sum of function values on the form:
+    ```F(model, state, dt, step_info, forces)```
+evaluated for each step.
+"""
 abstract type AbstractSumObjective <: AbstractJutulObjective end
+
+"""
+Abstract type for objective as a global objective function on the form:
+    ```F(model, states, step_infos, forces)```
+"""
 abstract type AbstractGlobalObjective <: AbstractJutulObjective end
 
 struct WrappedSumObjective{T} <: AbstractSumObjective
