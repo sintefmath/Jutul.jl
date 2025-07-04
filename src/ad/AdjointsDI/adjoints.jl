@@ -286,9 +286,12 @@ end
 function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backend, do_prep, single_step_sparsity, di_sparse)
     if ismissing(backend)
         if di_sparse
+            gt = SparseConnectivityTracer.GradientTracer{SparseConnectivityTracer.IndexSetGradientPattern{Int, Set{Int}}}
+            sparsity_detector = TracerLocalSparsityDetector(gradient_tracer_type=gt)
+            # sparsity_detector = TracerLocalSparsityDetector()
             backend = AutoSparse(
                 AutoForwardDiff();
-                sparsity_detector = TracerLocalSparsityDetector(),
+                sparsity_detector = sparsity_detector,
                 coloring_algorithm = GreedyColoringAlgorithm(),
             )
         else
