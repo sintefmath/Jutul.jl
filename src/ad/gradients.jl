@@ -731,8 +731,8 @@ function evaluate_objective(G::AbstractSumObjective, model, packed_steps::Adjoin
     return obj
 end
 
-function evaluate_objective(G::AbstractGlobalObjective, model, packed_steps::AdjointPackedResult; case = missing)
-    return G(model, packed_steps.state0, packed_steps.states, packed_steps.step_infos, packed_steps.forces, case)
+function evaluate_objective(G::AbstractGlobalObjective, model, packed_steps::AdjointPackedResult; input_data = missing)
+    return G(model, packed_steps.state0, packed_steps.states, packed_steps.step_infos, packed_steps.forces, input_data)
 end
 
 function store_sensitivities(model, result, prm_map)

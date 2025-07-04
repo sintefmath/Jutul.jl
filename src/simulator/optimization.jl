@@ -168,12 +168,16 @@ function gradient_opt!(dFdx, x, data)
             adjoint_reset_parameters!(storage, parameters)
             debug_time = false
             set_global_timer!(debug_time)
-            try
+            # try
                 grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt_current, G, forces = forces)
-            catch excpt
-                @warn "Exception in adjoint solve, setting gradient to large value." excpt
-                @. grad_adj = 1e10
-            end
+            # catch excpt
+            #     if excpt isa InterruptException
+            #         rehtrow(excpt)
+            #     else
+            #         @warn "Exception in adjoint solve, setting gradient to large value." excpt
+            #         @. grad_adj = 1e10
+            #     end
+            # end
             print_global_timer(debug_time; text = "Adjoint solve detailed timing")
         else
             @warn "Mismatch in states and timesteps for adjoints."

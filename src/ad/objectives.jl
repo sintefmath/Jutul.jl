@@ -25,6 +25,11 @@ end
 function (WSO::WrappedSumObjective)(model, state, dt, step_info, forces)
     return WSO.objective(model, state, dt, step_info, forces)
 end
-function (WSO::WrappedGlobalObjective)(model, state0, states, step_infos, forces, case = missing)
-    return WSO.objective(model, state0, states, step_infos, forces, case)
+
+function objective_evaluate_with_state(model, pr::AdjointPackedResult, objective::WrappedSumObjective, input_data = missing)
+
+end
+
+function (WSO::WrappedGlobalObjective)(model, state0, states, step_infos, forces, input_data = missing)
+    return WSO.objective(model, state0, states, step_infos, forces, input_data)
 end
