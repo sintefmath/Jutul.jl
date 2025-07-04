@@ -1435,6 +1435,8 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
         step_info = optimization_step_info(step_ix, time, dt_i,
             Nstep = N_report_step,
             substep = ministep_ix,
+            substep_global = i,
+            Nsubstep_global = length(dt),
             total_time = total_time
         )
         if i == 1

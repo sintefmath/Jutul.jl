@@ -257,12 +257,16 @@ function get_parameter_value(x::DictParameters, key; optimized::Bool = false)
     return val
 end
 
-function get_lumping_first_entry(lumping)
+function get_lumping_first_entry(lumping::AbstractVector)
     vals = Int[]
     for i in 1:maximum(lumping)
         push!(vals, findfirst(isequal(i), lumping))
     end
     return vals
+end
+
+function get_lumping_first_entry(lumping)
+    return get_lumping_first_entry(vec(lumping))
 end
 
 function get_nested_dict_value(x::AbstractDict, key)

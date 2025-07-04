@@ -961,6 +961,8 @@ end
 function optimization_step_info(step::Int, time::Real, dt::Real;
         Nstep = missing,
         total_time = missing,
+        substep_global = step,
+        Nsubstep_global = Nstep,
         substep = 1,
         kwarg...
     )
@@ -970,6 +972,8 @@ function optimization_step_info(step::Int, time::Real, dt::Real;
         :step => step,
         :Nstep => Nstep,
         :substep => substep,
+        :substep_global => substep_global,
+        :Nsubstep_global => Nsubstep_global,
         :total_time => total_time,
     )
     for (k, v) in kwarg
