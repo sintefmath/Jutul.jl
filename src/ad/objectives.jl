@@ -25,3 +25,6 @@ end
 function (WSO::WrappedSumObjective)(model, state, dt, step_info, forces)
     return WSO.objective(model, state, dt, step_info, forces)
 end
+function (WSO::WrappedGlobalObjective)(model, state0, states, step_infos, forces, case = missing)
+    return WSO.objective(model, state0, states, step_infos, forces, case)
+end
