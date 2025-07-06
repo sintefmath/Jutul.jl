@@ -221,22 +221,58 @@ Compute the (sparse) Jacobian of parameters with respect to data_domain values
 (i.e. floating point values). Optionally, `config` can be passed to allow
 `vectorize_variables` to only include a subset of the parameters.
 """
-function parameters_jacobian_wrt_data_domain(model; copy = true, config = nothing)
-    if copy
-        model = deepcopy(model)
-    end
+function parameters_jacobian_wrt_data_domain(model;
+        copy = true,
+        config = nothing,
+        use_di = true,
+        backend = default_di_backend(),
+        prep = missing
+    )
     data_domain = model.data_domain
     x = vectorize_data_domain(data_domain)
-    x_ad = ST.create_advec(x)
-    devectorize_data_domain!(data_domain, x_ad)
-    prm = setup_parameters(model, perform_copy = false)
-    prm_flat = vectorize_variables(model, prm, :parameters, T = eltype(x_ad), config = config)
-    n_parameters = length(prm_flat)
-    n_data_domain_values = length(x)
-    # This is Jacobian of parameters with respect to data_domain
-    J = ST.jacobian(prm_flat, n_data_domain_values)
-    @assert size(J) == (n_parameters, n_data_domain_values)
+    if use_di
+        if copy
+            model = deepcopy(model)
+        end
+        function F(X)
+            model_tmp = deepcopy(model)
+            dd = model_tmp.data_domain
+            devectorize_data_domain!(dd, X)
+            prm = setup_parameters(model_tmp, perform_copy = false)
+            return vectorize_variables(model_tmp, prm, :parameters, T = eltype(X), config = config)
+        end
+        if ismissing(prep)
+            J = jacobian(F, backend, x)
+        else
+            J = jacobian(F, prep, backend, x)
+        end
+    else
+        x_ad = ST.create_advec(x)
+        devectorize_data_domain!(data_domain, x_ad)
+        prm = setup_parameters(model, perform_copy = false)
+        prm_flat = vectorize_variables(model, prm, :parameters, T = eltype(x_ad), config = config)
+        n_parameters = length(prm_flat)
+        n_data_domain_values = length(x)
+        # This is Jacobian of parameters with respect to data_domain
+        J = ST.jacobian(prm_flat, n_data_domain_values)
+        @assert size(J) == (n_parameters, n_data_domain_values)
+    end
     return J
+end
+
+function default_di_backend(; sparse = true)
+    if sparse
+        gt = GradientTracer{IndexSetGradientPattern{Int, Set{Int}}}
+        sparsity_detector = TracerLocalSparsityDetector(gradient_tracer_type=gt)
+        backend = AutoSparse(
+            AutoForwardDiff();
+            sparsity_detector = sparsity_detector,
+            coloring_algorithm = GreedyColoringAlgorithm(),
+        )
+    else
+        backend = AutoForwardDiff()
+    end
+    return backend
 end
 
 """
@@ -246,9 +282,9 @@ Make a data_domain copy that contains the gradient of some objective with
 respect to the fields in the data_domain, assuming that the parameters were
 initialized directly from the data_domain via (`setup_parameters`)[@ref].
 """
-function data_domain_to_parameters_gradient(model, parameter_gradient; dp_dd = missing, config = nothing)
+function data_domain_to_parameters_gradient(model, parameter_gradient; dp_dd = missing, config = nothing, kwarg...)
     if ismissing(dp_dd)
-        dp_dd = parameters_jacobian_wrt_data_domain(model, copy = true, config = config)
+        dp_dd = parameters_jacobian_wrt_data_domain(model; copy = true, config = config, kwarg...)
     end
     do_dp = vectorize_variables(model, parameter_gradient, :parameters, config = config)
     # do/dd = do/dp * dp/dd
