@@ -93,9 +93,9 @@ end
 
 function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, G;
         state0 = missing,
-        backend = missing,
         do_prep = true,
         di_sparse = true,
+        backend = Jutul.default_di_backend(sparse = di_sparse),
         info_level = 0,
         single_step_sparsity = true,
         use_sparsity = true
@@ -285,18 +285,7 @@ end
 
 function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backend, do_prep, single_step_sparsity, di_sparse)
     if ismissing(backend)
-        if di_sparse
-            gt = SparseConnectivityTracer.GradientTracer{SparseConnectivityTracer.IndexSetGradientPattern{Int, Set{Int}}}
-            sparsity_detector = TracerLocalSparsityDetector(gradient_tracer_type=gt)
-            # sparsity_detector = TracerLocalSparsityDetector()
-            backend = AutoSparse(
-                AutoForwardDiff();
-                sparsity_detector = sparsity_detector,
-                coloring_algorithm = GreedyColoringAlgorithm(),
-            )
-        else
-            backend = AutoForwardDiff()
-        end
+        backend = Jutul.default_di_backend(sparse = di_sparse)
     end
 
     H = AdjointObjectiveHelper(F, G, packed_steps)
