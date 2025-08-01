@@ -262,8 +262,7 @@ end
 
 function default_di_backend(; sparse = true)
     if sparse
-        gt = GradientTracer{IndexSetGradientPattern{Int, Set{Int}}}
-        sparsity_detector = TracerLocalSparsityDetector(gradient_tracer_type=gt)
+        sparsity_detector = TracerLocalSparsityDetector(gradient_pattern_type=Set{Int})
         backend = AutoSparse(
             AutoForwardDiff();
             sparsity_detector = sparsity_detector,

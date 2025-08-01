@@ -41,7 +41,7 @@ module Jutul
     import ForwardDiff
 
     import DifferentiationInterface: AutoSparse, prepare_jacobian, jacobian, AutoForwardDiff
-    import SparseConnectivityTracer: TracerLocalSparsityDetector, GradientTracer, IndexSetGradientPattern
+    import SparseConnectivityTracer: TracerLocalSparsityDetector
     import SparseMatrixColorings: GreedyColoringAlgorithm
 
     # Timing
