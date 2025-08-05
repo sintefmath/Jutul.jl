@@ -332,22 +332,15 @@ function determine_objective_sparsity(sim, model, G::AbstractSumObjective, packe
 end
 
 function determine_objective_sparsity(sim, model, G::AbstractGlobalObjective, packed_steps::AdjointPackedResult)
-    # model, state0, states, step_infos, forces, input_data
-    error()
     update_secondary_variables!(sim.storage, sim.model)
     state = sim.storage.state
-
-    function F_outer(state, i)
-        ps = packed_steps[i]
-        si = ps.step_info
-        f = ps.forces
-        return G(model, state, si[:dt], si, f)
+    function F_outer(state)
+        si = packed_steps.step_infos
+        f = packed_steps.forces
+        states = [state for _ in 1:length(packed_steps.states)]
+        return G(model, state, states, si, f, missing)
     end
-    sparsity = missing
-    for i in 1:length(packed_steps)
-        s_new = determine_sparsity_simple(s -> F_outer(s, i), model, state)
-        sparsity = merge_sparsity!(sparsity, s_new)
-    end
+    sparsity = determine_sparsity_simple(F_outer, model, state)
     return sparsity
 end
 
