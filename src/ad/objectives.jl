@@ -26,10 +26,17 @@ function (WSO::WrappedSumObjective)(model, state, dt, step_info, forces)
     return WSO.objective(model, state, dt, step_info, forces)
 end
 
-function objective_evaluate_with_state(model, pr::AdjointPackedResult, objective::WrappedSumObjective, input_data = missing)
-
-end
-
 function (WSO::WrappedGlobalObjective)(model, state0, states, step_infos, forces, input_data = missing)
     return WSO.objective(model, state0, states, step_infos, forces, input_data)
+end
+
+function objective_evaluator_from_model_and_state(G::AbstractSumObjective, model, packed_steps, i)
+    # (model, state) -> obj
+    step = packed_steps[i]
+    step_info = step.step_info
+    return (model, state) -> G(model, state, step_info[:dt], step_info, step.forces)
+end
+
+function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, model, packed_steps, i)
+    error("Not implemented yet.")
 end

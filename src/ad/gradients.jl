@@ -386,14 +386,14 @@ function merge_state_with_parameters(model, state, parameters)
     return state
 end
 
-function state_gradient_outer!(∂F∂x, F, model, state, extra_arg; sparsity = nothing)
+function state_gradient_outer!(∂F∂x, obj_eval, model, state; sparsity = nothing)
     if !isnothing(sparsity)
         @. ∂F∂x = 0
     end
-    state_gradient_inner!(∂F∂x, F, model, state, nothing, extra_arg; sparsity = sparsity)
+    state_gradient_inner!(∂F∂x, obj_eval, model, state, nothing; sparsity = sparsity)
 end
 
-function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_model = model; sparsity = nothing, symbol = nothing)
+function state_gradient_inner!(∂F∂x, F, model, state, tag, eval_model = model; sparsity = nothing, symbol = nothing)
     layout = matrix_layout(model.context)
     get_partial(x::AbstractFloat, i) = 0.0
     get_partial(x::ForwardDiff.Dual, i) = x.partials[i]
@@ -420,7 +420,7 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, extra_arg, eval_m
         else
             state_i = local_ad(state, i, S)
         end
-        v = F(eval_model, state_i, extra_arg...)
+        v = F(eval_model, state_i)
         store_partials!(∂F∂x, v, i, ne, np, offset)
     end
 
@@ -472,9 +472,10 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
         if i == N
             @. dparam = 0
         end
+        obj_eval = objective_evaluator_from_model_and_state(G, parameter_sim.model, packed_steps, i)
         pbuf = adjoint_storage.param_buf
         S_p = get_objective_sparsity(adjoint_storage, :parameter)
-        state_gradient_outer!(pbuf, G, parameter_sim.model, parameter_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
+        state_gradient_outer!(pbuf, obj_eval, parameter_sim.model, parameter_sim.storage.state, sparsity = S_p)
         @. dparam += pbuf
     end
 end
@@ -516,7 +517,9 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_n
     rhs = adjoint_storage.rhs
     # Fill rhs with (∂J / ∂x)ᵀₙ (which will be treated with a negative sign when the result is written by the linear solver)
     S_p = get_objective_sparsity(adjoint_storage, :forward)
-    @tic "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
+    obj_eval = objective_evaluator_from_model_and_state(G, forward_sim.model, packed_steps, i)
+    @tic "objective primary gradient" state_gradient_outer!(rhs, obj_eval, forward_sim.model, forward_sim.storage.state, sparsity = S_p)
+    # @tic "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
     if isnothing(state_next)
         @assert i == N
         @. λ = 0
