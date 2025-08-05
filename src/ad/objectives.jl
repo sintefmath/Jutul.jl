@@ -38,5 +38,13 @@ function objective_evaluator_from_model_and_state(G::AbstractSumObjective, model
 end
 
 function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, model, packed_steps, i)
+    # (model, state) -> obj
+
+    # G(model, state0, allstates, step_infos, allforces, input_data)
+    # Create copy of states
+    # Make sure that all parameters are references in each state apart from the one we are evaluating
+    function myfunc(model, state)
+        # G(model, state0, allstates, step_infos, allforces, input_data)
+    end
     error("Not implemented yet.")
 end
