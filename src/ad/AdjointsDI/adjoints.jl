@@ -144,6 +144,7 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed
     @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
 
     H.step_index = i
+    set_objective_helper_step_index!(H, adjoint_storage.forward.model, i)
     prep = adjoint_storage[:prep_di]
     backend = adjoint_storage[:backend_di]
     if isnothing(prep)
@@ -255,12 +256,21 @@ end
 mutable struct AdjointObjectiveHelper
     F
     G
+    objective_evaluator
     step_index::Union{Int, Missing}
     packed_steps::AdjointPackedResult
     cache::Dict{Tuple{DataType, Int64}, Any}
     function AdjointObjectiveHelper(F, G, packed_steps::AdjointPackedResult)
-        new(F, G, missing, packed_steps, Dict())
+        new(F, G, missing, missing, packed_steps, Dict())
     end
+end
+
+function set_objective_helper_step_index!(H::AdjointObjectiveHelper, model, step_index)
+    step_index isa Int || ismissing(step_index) || error("Step index must be an integer or missing. Got $step_index.")
+    step_index > 0 || error("Step index must be positive. Got $step_index.")
+    step_index <= length(H.packed_steps) || error("Step index $step_index is larger than the number of steps $(length(H.packed_steps)).")
+    H.step_index = step_index
+    H.objective_evaluator = Jutul.objective_evaluator_from_model_and_state(H.G, model, H.packed_steps, step_index)
 end
 
 function (H::AdjointObjectiveHelper)(x)
@@ -296,10 +306,11 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
     # that essentially calls the same function.
     if do_prep
         if single_step_sparsity
-            H.step_index = 1
+            step_index = 1
         else
-            H.step_index = missing
+            step_index = missing
         end
+        set_objective_helper_step_index!(H, case0.model, step_index)
         prep = prepare_jacobian(H, backend, X)
     else
         prep = nothing
