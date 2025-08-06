@@ -47,6 +47,9 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
     # Make shallow copies of states
     # Needs to be nested shallow copy if multimodel
     state0 = packed_steps.state0
+    step_infos = packed_steps.step_infos
+    allforces = packed_steps.forces
+    input_data = missing
     allstates = Any[objective_state_shallow_copy(s, model) for s in packed_steps.states]
     function myfunc(model, state)
         # G(model, state0, allstates, step_infos, allforces, input_data)
