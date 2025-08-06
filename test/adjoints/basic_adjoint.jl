@@ -208,7 +208,7 @@ function num_grad_generic(F, G, x0)
     return out
 end
 
-function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, kwarg...)
+function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objective = false, kwarg...)
     # dx, dy, U0, k_val, srcval
     x = ones(5)
     case = setup_poisson_test_case_from_vector(x, dt = timesteps)
@@ -216,7 +216,20 @@ function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, kwarg...)
 
     F = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps, fmt = fmt)
     F_num = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps, fmt = :case)
-    G = (model, state, dt, step_info, forces) -> poisson_test_objective(model, state)
+    G_local(model, state, dt, step_info, forces) = poisson_test_objective(model, state)
+    function G_global(model, state0, states, step_infos, forces, input_data)
+        obj = 0.0
+        for (i, s) in enumerate(states)
+            si = step_infos[i]
+            obj += G_local(model, s, si[:dt], si, forces)
+        end
+        return obj
+    end
+    if global_objective
+        G = G_global
+    else
+        G = G_local
+    end
     dGdx_num = num_grad_generic(F_num, G, x)
     dGdx_adj = solve_adjoint_generic(x, F, states, reports, G;
         state0 = case.state0,
@@ -232,16 +245,20 @@ function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, kwarg...)
 end
 
 @testset "AdjointDI.solve_adjoint_generic" begin
-    test_for_timesteps([1.0])
-    # Sparse forwarddiff with sparsity recomputed
-    test_for_timesteps([1.0], do_prep = false)
-    # Non-sparse forwarddiff
-    test_for_timesteps([1.0], backend = Jutul.AdjointsDI.AutoForwardDiff(), do_prep = false)
+    for global_obj in [true, false]
+        @testset "global_objective=$global_obj" begin
+            test_for_timesteps([1.0], global_objective = global_obj)
+            # Sparse forwarddiff with sparsity recomputed
+            test_for_timesteps([1.0], do_prep = false, global_objective = global_obj)
+            # Non-sparse forwarddiff
+            test_for_timesteps([1.0], backend = Jutul.AdjointsDI.AutoForwardDiff(), do_prep = false, global_objective = global_obj)
 
-    test_for_timesteps([100.0])
-    test_for_timesteps([10.0, 3.0, 500.0, 100.0], atol = 0.01)
-    for fmt in [:case, :onecase, :model_and_prm, :model_and_prm_and_forces, :model_and_prm_and_forces_and_state0]
-        test_for_timesteps([100.0], fmt = fmt)
+            test_for_timesteps([100.0], global_objective = global_obj)
+            test_for_timesteps([10.0, 3.0, 500.0, 100.0], atol = 0.01, global_objective = global_obj)
+            for fmt in [:case, :onecase, :model_and_prm, :model_and_prm_and_forces, :model_and_prm_and_forces_and_state0]
+                test_for_timesteps([100.0], fmt = fmt, global_objective = global_obj)
+            end
+        end
     end
 end
 
