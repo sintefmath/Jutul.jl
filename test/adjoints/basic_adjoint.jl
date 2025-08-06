@@ -96,7 +96,6 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
     end
 
     for (objtype, obj) in [(:local, G), (:global, G_global)]
-        @info "Testing $objtype objective"
         wrap_obj = Jutul.adjoint_wrap_objective(obj, model)
         if objtype == :global
             @test wrap_obj isa Jutul.WrappedGlobalObjective
