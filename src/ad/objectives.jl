@@ -51,7 +51,8 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
     allforces = packed_steps.forces
     input_data = missing
     allstates = Any[objective_state_shallow_copy(s, model) for s in packed_steps.states]
-    function myfunc(model, state)
+    function myfunc(model, state, parameters, forces)
+        @info "???" typeof(state) keys(state)
         # G(model, state0, allstates, step_infos, allforces, input_data)
         # references all parameters (needs to be multimodel aware)
         for i in 1:length(packed_steps)

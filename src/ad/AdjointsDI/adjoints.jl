@@ -323,6 +323,8 @@ end
 function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, step_index::Int, cache = missing)
     step_info = packed_steps[step_index].step_info
     dt = step_info[:dt]
+    # TODO: If we are using a global objective we should get all states
+    # TODO: Need to merge in parameters (for some versions of the objective)
     case = setup_case(x, F, packed_steps, state0, step_index)
     case = reset_context_and_groups(case)
     if step_info[:step] == 1
