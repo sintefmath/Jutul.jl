@@ -225,6 +225,7 @@ end
 Non-allocating version of `solve_adjoint_sensitivities`.
 """
 function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces, info_level = 0)
+    G = adjoint_wrap_objective(G, storage.forward.model)
     packed_steps = AdjointPackedResult(states, timesteps, forces)
     packed_steps.state0 = state0
     # Do sparsity detection if not already done.

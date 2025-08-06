@@ -1,14 +1,14 @@
 import Jutul: AdjointPackedResult
 
 function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
-            # n_objective = nothing,
-            extra_timing = false,
-            extra_output = false,
-            state0 = missing,
-            forces = missing,
-            info_level = 0,
-            kwarg...
-        )
+        # n_objective = nothing,
+        extra_timing = false,
+        extra_output = false,
+        state0 = missing,
+        forces = missing,
+        info_level = 0,
+        kwarg...
+    )
     packed_steps = AdjointPackedResult(states, reports_or_timesteps, forces)
     Jutul.set_global_timer!(extra_timing)
     N = length(states)
@@ -58,6 +58,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     )
     N = length(packed_steps)
     case = setup_case(X, F, packed_steps, state0, :all)
+    G = Jutul.adjoint_wrap_objective(G, case.model)
     Jutul.adjoint_reset_parameters!(storage, case.parameters)
 
     packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
@@ -101,6 +102,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         use_sparsity = true
     )
     case = setup_case(X, F, packed_steps, state0, :all)
+    G = Jutul.adjoint_wrap_objective(G, case.model)
     packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
     storage = Jutul.setup_adjoint_storage_base(
             case.model, case.state0, case.parameters,
