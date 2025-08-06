@@ -277,7 +277,9 @@ function (H::AdjointObjectiveHelper)(x)
     packed = H.packed_steps
     function evaluate(x, ix)
         s0, s, = Jutul.adjoint_step_state_triplet(packed, ix)
-        evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.objective_evaluator, packed, ix, H.cache)
+        is_sum = H.G isa AbstractSumObjective
+        H.G::AbstractJutulObjective
+        evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.objective_evaluator, packed, ix, H.cache; is_sum = is_sum)
     end
     if ismissing(H.step_index)
         # Loop over all to get the "extended sparsity". This is a bit of a hack,
@@ -320,20 +322,34 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
     return storage
 end
 
-function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, step_index::Int, cache = missing)
+function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, step_index::Int, cache = missing; is_sum = true)
     step_info = packed_steps[step_index].step_info
     dt = step_info[:dt]
     # TODO: If we are using a global objective we should get all states
     # TODO: Need to merge in parameters (for some versions of the objective)
-    case = setup_case(x, F, packed_steps, state0, step_index)
+    if is_sum
+        case = setup_case(x, F, packed_steps, state0, step_index)
+    else
+        case = setup_case(x, F, packed_steps, state0, :all)
+    end
     case = reset_context_and_groups(case)
     if step_info[:step] == 1
         state0 = case.state0
     end
     sim = HelperSimulator(case, eltype(x), cache = cache, n_extra = 1)
     forces_for_eval = case.forces
-    if forces_for_eval isa AbstractVector
-        forces_for_eval = only(forces_for_eval)
+    forces_is_vec = forces_for_eval isa AbstractVector
+    if is_sum
+        if forces_is_vec
+            forces_for_eval = only(forces_for_eval)
+        end
+    else
+        if forces_is_vec
+            allforces = case.forces
+            forces_for_eval = forces_for_eval[step_index]
+        else
+            allforces = [forces_for_eval for _ in 1:packed_steps.step_infos[end][:step]]
+        end
     end
     model_residual(state, state0, sim,
         forces = forces_for_eval,
@@ -352,8 +368,7 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, obje
     else
         s = JutulStorage(state)
     end
-    # TODO: Forces, input_data.
-    r[end] = objective_eval(case.model, s)
+    r[end] = objective_eval(case.model, s, allforces, case.input_data)
     # r[end] = G(case.model, s, dt, step_info, forces_for_eval)
     return copy(r)
 end
