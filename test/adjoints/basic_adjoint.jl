@@ -146,11 +146,15 @@ end
 @testset "simple adjoint sensitivities" begin
     @testset "adjoint" begin
         for scalar_obj in [true, false]
-            for in_place in [false, true]
-                # Test single step since it hits less of the code
-                test_basic_adjoint(dt = [1.0], in_place = in_place, scalar_obj = scalar_obj)
-                # Test with multiple time-steps
-                test_basic_adjoint(in_place = in_place, scalar_obj = scalar_obj)
+            @testset "scalar=$scalar_obj" begin
+                for in_place in [false, true]
+                    @testset "in_place=$in_place" begin
+                        # Test single step since it hits less of the code
+                        test_basic_adjoint(dt = [1.0], in_place = in_place, scalar_obj = scalar_obj)
+                        # Test with multiple time-steps
+                        test_basic_adjoint(in_place = in_place, scalar_obj = scalar_obj)
+                    end
+                end
             end
         end
     end
