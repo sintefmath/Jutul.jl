@@ -37,14 +37,43 @@ function objective_evaluator_from_model_and_state(G::AbstractSumObjective, model
     return (model, state) -> G(model, state, step_info[:dt], step_info, step.forces)
 end
 
-function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, model, packed_steps, i)
+function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, model, packed_steps, current_step)
     # (model, state) -> obj
 
     # G(model, state0, allstates, step_infos, allforces, input_data)
     # Create copy of states
     # Make sure that all parameters are references in each state apart from the one we are evaluating
+
+    # Make shallow copies of states
+    # Needs to be nested shallow copy if multimodel
+    state0 = packed_steps.state0
+    allstates = Any[objective_state_shallow_copy(s, model) for s in packed_steps.states]
     function myfunc(model, state)
         # G(model, state0, allstates, step_infos, allforces, input_data)
+        # references all parameters (needs to be multimodel aware)
+        for i in 1:length(packed_steps)
+            if i == current_step
+                continue
+            end
+            allstates[i] = objective_state_reference_parameters(allstates[i], state, model)
+        end
+        allstates[current_step] = state
+        return G(model, state0, allstates, step_infos, allforces, input_data)
     end
-    error("Not implemented yet.")
+    return myfunc
+end
+
+function objective_state_reference_parameters(target_state, state, model::SimulationModel)
+    for k in keys(model.parameters)
+        target_state[k] = state[k]
+    end
+    return target_state
+end
+
+function objective_state_shallow_copy(state, model::SimulationModel)
+    target_state = JutulStorage()
+    for k in keys(state)
+        target_state[k] = state[k]
+    end
+    return target_state
 end

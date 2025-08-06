@@ -227,3 +227,18 @@ function solve_numerical_sensitivities(model::MultiModel, states, reports, G; kw
     end
     return out
 end
+
+function objective_state_reference_parameters(target_state, state, model::MultiModel)
+    for k in submodels_symbols(model)
+        target_state[k] = objective_state_reference_parameters(target_state[k], state[k], model[k])
+    end
+    return target_state
+end
+
+function objective_state_shallow_copy(state, model::MultiModel)
+    target_state = JutulStorage()
+    for k in submodels_symbols(model)
+        target_state[k] = objective_state_shallow_copy(state[k], model[k])
+    end
+    return target_state
+end
