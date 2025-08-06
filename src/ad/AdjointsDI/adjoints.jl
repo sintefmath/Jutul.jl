@@ -309,7 +309,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
     return storage
 end
 
-function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, G, packed_steps::AdjointPackedResult, step_index::Int, cache = missing)
+function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, G::Jutul.AbstractSumObjective, packed_steps::AdjointPackedResult, step_index::Int, cache = missing)
     step_info = packed_steps[step_index].step_info
     dt = step_info[:dt]
     case = setup_case(x, F, packed_steps, state0, step_index)
