@@ -277,7 +277,7 @@ function (H::AdjointObjectiveHelper)(x)
     packed = H.packed_steps
     function evaluate(x, ix)
         s0, s, = Jutul.adjoint_step_state_triplet(packed, ix)
-        evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.G, packed, ix, H.cache)
+        evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.objective_evaluator, packed, ix, H.cache)
     end
     if ismissing(H.step_index)
         # Loop over all to get the "extended sparsity". This is a bit of a hack,
@@ -320,7 +320,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
     return storage
 end
 
-function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, G::Jutul.AbstractSumObjective, packed_steps::AdjointPackedResult, step_index::Int, cache = missing)
+function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, step_index::Int, cache = missing)
     step_info = packed_steps[step_index].step_info
     dt = step_info[:dt]
     case = setup_case(x, F, packed_steps, state0, step_index)
@@ -350,7 +350,9 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, G::J
     else
         s = JutulStorage(state)
     end
-    r[end] = G(case.model, s, dt, step_info, forces_for_eval)
+    # TODO: Forces, input_data.
+    r[end] = objective_eval(case.model, s)
+    # r[end] = G(case.model, s, dt, step_info, forces_for_eval)
     return copy(r)
 end
 
