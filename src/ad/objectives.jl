@@ -32,20 +32,18 @@ end
 
 function objective_evaluator_from_model_and_state(G::AbstractSumObjective, model, packed_steps, i)
     # (model, state; kwarg...) -> obj
+    if ismissing(i)
+        # This is hack for the case where we want to evaluate the objective for
+        # all steps for sparsity detection but the objective is a sum. So we
+        # fake it by taking the first step.
+        i = 1
+    end
     step = packed_steps[i]
     step_info = step.step_info
     return (model, state; forces = step.forces, kwarg...) -> G(model, state, step_info[:dt], step_info, forces)
 end
 
 function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, model, packed_steps, current_step)
-    # (model, state) -> obj
-
-    # G(model, state0, allstates, step_infos, allforces, input_data)
-    # Create copy of states
-    # Make sure that all parameters are references in each state apart from the one we are evaluating
-
-    # Make shallow copies of states
-    # Needs to be nested shallow copy if multimodel
     state0 = packed_steps.state0
     step_infos = packed_steps.step_infos
     allstates = Any[objective_state_shallow_copy(s, model) for s in packed_steps.states]
@@ -55,9 +53,6 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
             forces = packed_steps.forces[current_step], # Forces for current step
             input_data = missing # Input data for setting up the model
         )
-        @info "???" typeof(state) keys(state) typeof(parameters)
-        # G(model, state0, allstates, step_infos, allforces, input_data)
-        # references all parameters (needs to be multimodel aware)
         if ismissing(parameters)
             prm_src = state
         else
