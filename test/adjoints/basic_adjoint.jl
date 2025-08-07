@@ -25,7 +25,8 @@ function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = (2, 2), dt = [
     pos_src = PoissonSource(1, srcval)
     neg_src = PoissonSource(nc, -srcval)
     forces = setup_forces(model, sources = [pos_src, neg_src])
-    return JutulCase(model, dt, forces; parameters = param, state0 = state0)
+    idata = Dict(:dx => dx, :dy => dy, :U0 => U0, :k_val => k_val, :srcval => srcval)
+    return JutulCase(model, dt, forces; parameters = param, state0 = state0, input_data = idata)
 end
 
 function solve_adjoint_forward_test_system(dim, dt)
@@ -218,6 +219,9 @@ function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objectiv
     F_num = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps, fmt = :case)
     G_local(model, state, dt, step_info, forces) = poisson_test_objective(model, state)
     function G_global(model, state0, states, step_infos, forces, input_data)
+        @testset "Passing of input_data" begin
+            @test !ismissing(input_data)
+        end
         obj = 0.0
         for (i, s) in enumerate(states)
             si = step_infos[i]

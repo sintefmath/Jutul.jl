@@ -1361,15 +1361,16 @@ mutable struct AdjointPackedResult
     states
     forces
     state0
+    input_data
     Nstep::Int
-    function AdjointPackedResult(states::Vector{JutulStorage{T}}, step_infos::Vector, Nstep::Int, forces::Union{Vector, Missing}; state0 = missing) where T
+    function AdjointPackedResult(states::Vector{JutulStorage{T}}, step_infos::Vector, Nstep::Int, forces::Union{Vector, Missing}; state0 = missing, input_data = missing) where T
         if length(states) != length(step_infos)
             error("States and step_infos must have the same length, was $(length(states)) and $(length(step_infos))")
         end
         if !ismissing(forces) && length(forces) != length(step_infos)
             error("Forces and step_infos must have the same length, was $(length(forces)) and $(length(step_infos))")
         end
-        new(step_infos, states, forces, state0, Nstep)
+        new(step_infos, states, forces, state0, input_data, Nstep)
     end
 end
 

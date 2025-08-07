@@ -126,6 +126,7 @@ function set_packed_result_dynamic_values!(packed_steps, case)
     end
     packed_steps.forces = forces
     packed_steps.state0 = case.state0
+    packed_steps.input_data = case.input_data
     length(forces) == length(packed_steps.step_infos) || error("Expected $(length(packed_steps.step_infos)) forces, got $(length(forces)).")
     return packed_steps
 end
@@ -328,8 +329,6 @@ end
 function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, step_index::Int, cache = missing; is_sum = true)
     step_info = packed_steps[step_index].step_info
     dt = step_info[:dt]
-    # TODO: If we are using a global objective we should get all states
-    # TODO: Need to merge in parameters (for some versions of the objective)
     if is_sum
         case = setup_case(x, F, packed_steps, state0, step_index)
     else

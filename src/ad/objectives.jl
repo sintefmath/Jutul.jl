@@ -47,11 +47,11 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
     state0 = packed_steps.state0
     step_infos = packed_steps.step_infos
     allstates = Any[objective_state_shallow_copy(s, model) for s in packed_steps.states]
-    function myfunc(model, state;
+    function obj_eval(model, state;
             parameters = missing, # Parameters - if not in state.
             allforces = packed_steps.forces, # Forces for all steps
             forces = packed_steps.forces[current_step], # Forces for current step
-            input_data = missing # Input data for setting up the model
+            input_data = packed_steps.input_data # Input data for setting up the model
         )
         if ismissing(parameters)
             prm_src = state
@@ -73,7 +73,7 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
         allstates[current_step] = state
         return G(model, state0, allstates, step_infos, forces, input_data)
     end
-    return myfunc
+    return obj_eval
 end
 
 function objective_state_reference_parameters(target_state, state, model::SimulationModel)

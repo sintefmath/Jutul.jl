@@ -339,7 +339,7 @@ function determine_objective_sparsity(sim, model, G::AbstractGlobalObjective, pa
         si = packed_steps.step_infos
         f = packed_steps.forces
         states = [state for _ in 1:length(packed_steps.states)]
-        return G(model, state, states, si, f, missing)
+        return G(model, state, states, si, f, packed_steps.input_data)
     end
     sparsity = determine_sparsity_simple(F_outer, model, state)
     return sparsity
@@ -520,7 +520,6 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_n
     S_p = get_objective_sparsity(adjoint_storage, :forward)
     obj_eval = objective_evaluator_from_model_and_state(G, forward_sim.model, packed_steps, i)
     @tic "objective primary gradient" state_gradient_outer!(rhs, obj_eval, forward_sim.model, forward_sim.storage.state, sparsity = S_p)
-    # @tic "objective primary gradient" state_gradient_outer!(rhs, G, forward_sim.model, forward_sim.storage.state, (dt, step_info, forces), sparsity = S_p)
     if isnothing(state_next)
         @assert i == N
         @. λ = 0
