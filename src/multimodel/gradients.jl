@@ -42,7 +42,7 @@ function merge_state_with_parameters(model::MultiModel, state, parameters)
     return state
 end
 
-function state_gradient_outer!(∂F∂x, F, model::MultiModel, state, extra_arg; sparsity = nothing)
+function state_gradient_outer!(∂F∂x, obj_eval, model::MultiModel, state; sparsity = nothing)
     offset = 0
     has_sparsity = !isnothing(sparsity)
     if has_sparsity
@@ -61,7 +61,7 @@ function state_gradient_outer!(∂F∂x, F, model::MultiModel, state, extra_arg;
             S = nothing
         end
         localtag = submodel_ad_tag(model, k)
-        state_gradient_inner!(∂F∂x_k, F, m, state, localtag, extra_arg, model, sparsity = S, symbol = k)
+        state_gradient_inner!(∂F∂x_k, obj_eval, m, state, localtag, model, sparsity = S, symbol = k)
         offset += n
     end
     return ∂F∂x
