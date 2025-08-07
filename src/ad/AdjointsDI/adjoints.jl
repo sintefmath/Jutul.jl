@@ -266,9 +266,12 @@ mutable struct AdjointObjectiveHelper
 end
 
 function set_objective_helper_step_index!(H::AdjointObjectiveHelper, model, step_index)
-    step_index isa Int || ismissing(step_index) || error("Step index must be an integer or missing. Got $step_index.")
-    step_index > 0 || error("Step index must be positive. Got $step_index.")
-    step_index <= length(H.packed_steps) || error("Step index $step_index is larger than the number of steps $(length(H.packed_steps)).")
+    if step_index isa Int
+        step_index > 0 || error("Step index must be positive. Got $step_index.")
+        step_index <= length(H.packed_steps) || error("Step index $step_index is larger than the number of steps $(length(H.packed_steps)).")
+    else
+        ismissing(step_index) || error("Step index must be an integer or missing. Got $step_index.")
+    end
     H.step_index = step_index
     H.objective_evaluator = Jutul.objective_evaluator_from_model_and_state(H.G, model, H.packed_steps, step_index)
 end
@@ -277,8 +280,8 @@ function (H::AdjointObjectiveHelper)(x)
     packed = H.packed_steps
     function evaluate(x, ix)
         s0, s, = Jutul.adjoint_step_state_triplet(packed, ix)
-        is_sum = H.G isa AbstractSumObjective
-        H.G::AbstractJutulObjective
+        is_sum = H.G isa Jutul.AbstractSumObjective
+        H.G::Jutul.AbstractJutulObjective
         evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.objective_evaluator, packed, ix, H.cache; is_sum = is_sum)
     end
     if ismissing(H.step_index)
@@ -343,6 +346,7 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, obje
         if forces_is_vec
             forces_for_eval = only(forces_for_eval)
         end
+        forces_arg = (forces = forces_for_eval,)
     else
         if forces_is_vec
             allforces = case.forces
@@ -350,6 +354,7 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, obje
         else
             allforces = [forces_for_eval for _ in 1:packed_steps.step_infos[end][:step]]
         end
+        forces_arg = (allforces = allforces, forces = forces_for_eval,)
     end
     model_residual(state, state0, sim,
         forces = forces_for_eval,
@@ -368,7 +373,11 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, obje
     else
         s = JutulStorage(state)
     end
-    r[end] = objective_eval(case.model, s, allforces, case.input_data)
+    r[end] = objective_eval(case.model, s;
+        input_data = case.input_data,
+        parameters = case.parameters,
+        forces_arg...
+    )
     # r[end] = G(case.model, s, dt, step_info, forces_for_eval)
     return copy(r)
 end

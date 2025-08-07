@@ -31,10 +31,10 @@ function (WSO::WrappedGlobalObjective)(model, state0, states, step_infos, forces
 end
 
 function objective_evaluator_from_model_and_state(G::AbstractSumObjective, model, packed_steps, i)
-    # (model, state) -> obj
+    # (model, state; kwarg...) -> obj
     step = packed_steps[i]
     step_info = step.step_info
-    return (model, state) -> G(model, state, step_info[:dt], step_info, step.forces)
+    return (model, state; forces = step.forces, kwarg...) -> G(model, state, step_info[:dt], step_info, forces)
 end
 
 function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, model, packed_steps, current_step)
@@ -48,21 +48,35 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
     # Needs to be nested shallow copy if multimodel
     state0 = packed_steps.state0
     step_infos = packed_steps.step_infos
-    allforces = packed_steps.forces
-    input_data = missing
     allstates = Any[objective_state_shallow_copy(s, model) for s in packed_steps.states]
-    function myfunc(model, state, parameters, forces)
-        @info "???" typeof(state) keys(state)
+    function myfunc(model, state;
+            parameters = missing, # Parameters - if not in state.
+            allforces = packed_steps.forces, # Forces for all steps
+            forces = packed_steps.forces[current_step], # Forces for current step
+            input_data = missing # Input data for setting up the model
+        )
+        @info "???" typeof(state) keys(state) typeof(parameters)
         # G(model, state0, allstates, step_infos, allforces, input_data)
         # references all parameters (needs to be multimodel aware)
+        if ismissing(parameters)
+            prm_src = state
+        else
+            prm_src = parameters
+        end
+        if ismissing(forces)
+            forces = allforces
+            if !(forces isa AbstractVector)
+                forces = [f for f in forces]
+            end
+        end
         for i in 1:length(packed_steps)
             if i == current_step
                 continue
             end
-            allstates[i] = objective_state_reference_parameters(allstates[i], state, model)
+            allstates[i] = objective_state_reference_parameters(allstates[i], prm_src, model)
         end
         allstates[current_step] = state
-        return G(model, state0, allstates, step_infos, allforces, input_data)
+        return G(model, state0, allstates, step_infos, forces, input_data)
     end
     return myfunc
 end
