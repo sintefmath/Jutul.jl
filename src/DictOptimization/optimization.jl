@@ -15,6 +15,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     end
 
     case = setup_from_vector(x, missing)
+    objective = Jutul.adjoint_wrap_objective(objective, case.model)
     result = forward_simulate_for_optimization(case, adj_cache)
     packed_steps = Jutul.AdjointPackedResult(result, case)
     packed_steps = Jutul.AdjointsDI.set_packed_result_dynamic_values!(packed_steps, case)

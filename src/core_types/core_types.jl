@@ -1361,15 +1361,16 @@ mutable struct AdjointPackedResult
     states
     forces
     state0
+    input_data
     Nstep::Int
-    function AdjointPackedResult(states::Vector{JutulStorage{T}}, step_infos::Vector, Nstep::Int, forces::Union{Vector, Missing}; state0 = missing) where T
+    function AdjointPackedResult(states::Vector{JutulStorage{T}}, step_infos::Vector, Nstep::Int, forces::Union{Vector, Missing}; state0 = missing, input_data = missing) where T
         if length(states) != length(step_infos)
             error("States and step_infos must have the same length, was $(length(states)) and $(length(step_infos))")
         end
         if !ismissing(forces) && length(forces) != length(step_infos)
             error("Forces and step_infos must have the same length, was $(length(forces)) and $(length(step_infos))")
         end
-        new(step_infos, states, forces, state0, Nstep)
+        new(step_infos, states, forces, state0, input_data, Nstep)
     end
 end
 
@@ -1467,4 +1468,50 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
     end
     states = map(s -> convert_state_to_jutul_storage(s), states)
     return AdjointPackedResult(states, step_infos, maximum(step_index), forces)
+end
+
+"""
+Abstract type for Jutul objectives.
+"""
+abstract type AbstractJutulObjective end
+
+"""
+Abstract type for objective as a sum of function values on the form:
+
+    F(model, state, dt, step_info, forces)
+
+evaluated for each step. This means that the objective is a sum of all of these
+values. If you want to only depend on a single step, you can look up
+"""
+abstract type AbstractSumObjective <: AbstractJutulObjective end
+
+"""
+Abstract type for objective as a global objective function on the form:
+
+    F(model, state0, states, step_infos, forces, input_data)
+
+"""
+abstract type AbstractGlobalObjective <: AbstractJutulObjective end
+
+"""
+    WrappedSumObjective(objective)
+
+An objective that is a sum of function values, evaluated for each step, defined
+by a function. This type automatically wraps functions/callable structs that are
+passed to the optimization interface if they have the sum signature (five
+arguments).
+"""
+struct WrappedSumObjective{T} <: AbstractSumObjective
+    objective::T
+end
+
+"""
+    WrappedGlobalObjective(objective)
+
+A global (in time) objective that wraps a function/callable. This type
+automatically wraps functions/callable structs that are passed to the
+optimization interface if they have the sum signature (five arguments).
+"""
+struct WrappedGlobalObjective{T} <: AbstractGlobalObjective
+    objective::T
 end

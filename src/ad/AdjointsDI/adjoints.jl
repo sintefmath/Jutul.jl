@@ -1,14 +1,14 @@
 import Jutul: AdjointPackedResult
 
 function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
-            # n_objective = nothing,
-            extra_timing = false,
-            extra_output = false,
-            state0 = missing,
-            forces = missing,
-            info_level = 0,
-            kwarg...
-        )
+        # n_objective = nothing,
+        extra_timing = false,
+        extra_output = false,
+        state0 = missing,
+        forces = missing,
+        info_level = 0,
+        kwarg...
+    )
     packed_steps = AdjointPackedResult(states, reports_or_timesteps, forces)
     Jutul.set_global_timer!(extra_timing)
     N = length(states)
@@ -58,6 +58,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     )
     N = length(packed_steps)
     case = setup_case(X, F, packed_steps, state0, :all)
+    G = Jutul.adjoint_wrap_objective(G, case.model)
     Jutul.adjoint_reset_parameters!(storage, case.parameters)
 
     packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
@@ -101,6 +102,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         use_sparsity = true
     )
     case = setup_case(X, F, packed_steps, state0, :all)
+    G = Jutul.adjoint_wrap_objective(G, case.model)
     packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
     storage = Jutul.setup_adjoint_storage_base(
             case.model, case.state0, case.parameters,
@@ -124,6 +126,7 @@ function set_packed_result_dynamic_values!(packed_steps, case)
     end
     packed_steps.forces = forces
     packed_steps.state0 = case.state0
+    packed_steps.input_data = case.input_data
     length(forces) == length(packed_steps.step_infos) || error("Expected $(length(packed_steps.step_infos)) forces, got $(length(forces)).")
     return packed_steps
 end
@@ -142,6 +145,7 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed
     @assert all(isfinite, λ) "Non-finite lagrange multiplier found in step $i. Linear solver failure?"
 
     H.step_index = i
+    set_objective_helper_step_index!(H, adjoint_storage.forward.model, i)
     prep = adjoint_storage[:prep_di]
     backend = adjoint_storage[:backend_di]
     if isnothing(prep)
@@ -253,19 +257,33 @@ end
 mutable struct AdjointObjectiveHelper
     F
     G
+    objective_evaluator
     step_index::Union{Int, Missing}
     packed_steps::AdjointPackedResult
     cache::Dict{Tuple{DataType, Int64}, Any}
     function AdjointObjectiveHelper(F, G, packed_steps::AdjointPackedResult)
-        new(F, G, missing, packed_steps, Dict())
+        new(F, G, missing, missing, packed_steps, Dict())
     end
+end
+
+function set_objective_helper_step_index!(H::AdjointObjectiveHelper, model, step_index)
+    if step_index isa Int
+        step_index > 0 || error("Step index must be positive. Got $step_index.")
+        step_index <= length(H.packed_steps) || error("Step index $step_index is larger than the number of steps $(length(H.packed_steps)).")
+    else
+        ismissing(step_index) || error("Step index must be an integer or missing. Got $step_index.")
+    end
+    H.step_index = step_index
+    H.objective_evaluator = Jutul.objective_evaluator_from_model_and_state(H.G, model, H.packed_steps, step_index)
 end
 
 function (H::AdjointObjectiveHelper)(x)
     packed = H.packed_steps
     function evaluate(x, ix)
         s0, s, = Jutul.adjoint_step_state_triplet(packed, ix)
-        evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.G, packed, ix, H.cache)
+        is_sum = H.G isa Jutul.AbstractSumObjective
+        H.G::Jutul.AbstractJutulObjective
+        evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.objective_evaluator, packed, ix, H.cache; is_sum = is_sum)
     end
     if ismissing(H.step_index)
         # Loop over all to get the "extended sparsity". This is a bit of a hack,
@@ -294,10 +312,11 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
     # that essentially calls the same function.
     if do_prep
         if single_step_sparsity
-            H.step_index = 1
+            step_index = 1
         else
-            H.step_index = missing
+            step_index = missing
         end
+        set_objective_helper_step_index!(H, case0.model, step_index)
         prep = prepare_jacobian(H, backend, X)
     else
         prep = nothing
@@ -307,18 +326,34 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
     return storage
 end
 
-function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, G, packed_steps::AdjointPackedResult, step_index::Int, cache = missing)
+function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, step_index::Int, cache = missing; is_sum = true)
     step_info = packed_steps[step_index].step_info
     dt = step_info[:dt]
-    case = setup_case(x, F, packed_steps, state0, step_index)
+    if is_sum
+        case = setup_case(x, F, packed_steps, state0, step_index)
+    else
+        case = setup_case(x, F, packed_steps, state0, :all)
+    end
     case = reset_context_and_groups(case)
     if step_info[:step] == 1
         state0 = case.state0
     end
     sim = HelperSimulator(case, eltype(x), cache = cache, n_extra = 1)
     forces_for_eval = case.forces
-    if forces_for_eval isa AbstractVector
-        forces_for_eval = only(forces_for_eval)
+    forces_is_vec = forces_for_eval isa AbstractVector
+    if is_sum
+        if forces_is_vec
+            forces_for_eval = only(forces_for_eval)
+        end
+        forces_arg = (forces = forces_for_eval,)
+    else
+        if forces_is_vec
+            allforces = case.forces
+            forces_for_eval = forces_for_eval[step_index]
+        else
+            allforces = [forces_for_eval for _ in 1:packed_steps.step_infos[end][:step]]
+        end
+        forces_arg = (allforces = allforces, forces = forces_for_eval,)
     end
     model_residual(state, state0, sim,
         forces = forces_for_eval,
@@ -337,7 +372,12 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, G, p
     else
         s = JutulStorage(state)
     end
-    r[end] = G(case.model, s, dt, step_info, forces_for_eval)
+    r[end] = objective_eval(case.model, s;
+        input_data = case.input_data,
+        parameters = case.parameters,
+        forces_arg...
+    )
+    # r[end] = G(case.model, s, dt, step_info, forces_for_eval)
     return copy(r)
 end
 

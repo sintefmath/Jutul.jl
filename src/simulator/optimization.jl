@@ -16,22 +16,25 @@ end
 
 """
     setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model, param);
-                                                            grad_type = :adjoint,
-                                                            config = nothing,
-                                                            print = 1,
-                                                            copy_case = true,
-                                                            param_obj = false,
-                                                            kwarg...)
+        grad_type = :adjoint,
+        config = nothing,
+        print = 1,
+        copy_case = true,
+        param_obj = false,
+        kwarg...
+    )
 
 Set up function handles for optimizing the case defined by the inputs to
 `simulate` together with a per-timestep objective function `G`. The objective
-should be on the form of sum over all steps, where each element of the sum is
-evaluated by `model, state, dt, step_no, forces`.
+function should fit the format described in [AbstractGlobalObjective](@ref) or
+[AbstractSumObjective](@ref).
 
 Generally calling either of the functions will mutate the data Dict. The options are:
-F_o(x) -> evaluate objective
-dF_o(dFdx, x) -> evaluate gradient of objective, mutating dFdx (may trigger evaluation of F_o)
-F_and_dF(F, dFdx, x) -> evaluate F and/or dF. Value of nothing will mean that the corresponding entry is skipped.
+
+- `F_o(x)`: evaluate objective
+- `dF_o(dFdx, x)`: evaluate gradient of objective, mutating `dFdx` (may trigger evaluation of `F_o`)
+- `F_and_dF(F, dFdx, x)`: evaluate `F` and/or `dF`. If `nothing` is passed for
+  an entry, the corresponding entry is skipped.
 
 """
 function setup_parameter_optimization(model, state0, param, dt, forces, G, arg...; kwarg...)
@@ -53,6 +56,7 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     if copy_case
         case = duplicate(case)
     end
+    G = adjoint_wrap_objective(G, case.model)
     # Pick active set of targets from the optimization config and construct a mapper
     (; model, state0, parameters) = case
     if print isa Bool
@@ -167,12 +171,16 @@ function gradient_opt!(dFdx, x, data)
             adjoint_reset_parameters!(storage, parameters)
             debug_time = false
             set_global_timer!(debug_time)
-            try
+            # try
                 grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt_current, G, forces = forces)
-            catch excpt
-                @warn "Exception in adjoint solve, setting gradient to large value." excpt
-                @. grad_adj = 1e10
-            end
+            # catch excpt
+            #     if excpt isa InterruptException
+            #         rehtrow(excpt)
+            #     else
+            #         @warn "Exception in adjoint solve, setting gradient to large value." excpt
+            #         @. grad_adj = 1e10
+            #     end
+            # end
             print_global_timer(debug_time; text = "Adjoint solve detailed timing")
         else
             @warn "Mismatch in states and timesteps for adjoints."

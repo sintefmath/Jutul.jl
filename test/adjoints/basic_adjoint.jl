@@ -25,7 +25,8 @@ function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = (2, 2), dt = [
     pos_src = PoissonSource(1, srcval)
     neg_src = PoissonSource(nc, -srcval)
     forces = setup_forces(model, sources = [pos_src, neg_src])
-    return JutulCase(model, dt, forces; parameters = param, state0 = state0)
+    idata = Dict(:dx => dx, :dy => dy, :U0 => U0, :k_val => k_val, :srcval => srcval)
+    return JutulCase(model, dt, forces; parameters = param, state0 = state0, input_data = idata)
 end
 
 function solve_adjoint_forward_test_system(dim, dt)
@@ -56,7 +57,7 @@ function test_basic_adjoint(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = fa
         @test isapprox(grad_num, grad_adj, atol = 1e-4)
     else
         # Test vector objective
-        G = (model, state, dt, step_no, forces) -> poisson_test_objective_vec(model, state)
+        G = (model, state, dt, step_info, forces) -> poisson_test_objective_vec(model, state)
         n_obj = 2
         if in_place
             grad_adj = zeros(n_grad, n_obj)
@@ -75,43 +76,59 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
     num_tol = 1e-4
 
     K = param[:K]
-    G = (model, state, dt, step_no, forces) -> poisson_test_objective(model, state)
-
-    cfg = optimization_config(model, param, use_scaling = use_scaling, rel_min = 0.1, rel_max = 10)
-    if use_log
-        cfg[:K][:scaler] = :log
+    G = (model, state, dt, step_info, forces) -> poisson_test_objective(model, state)
+    function G_global(model, state0, states, step_infos, forces, input_data)
+        obj = 0.0
+        for (i, s) in enumerate(states)
+            si = step_infos[i]
+            obj += G(model, s, si[:dt], si, forces)
+        end
+        return obj
     end
-    tmp = setup_parameter_optimization(model, state0, param, dt, forces, G, cfg, param_obj = true, print = false);
-    F_o, dF_o, F_and_dF, x0, lims, data = tmp
-    # Evaluate gradient first to initialize
-    F0 = F_o(x0)
-    # This interface is only safe if F0 was called with x0 first.
-    dF_initial = dF_o(similar(x0), x0)
 
-    dF_num = similar(dF_initial)
-    num_grad!(dF_num, x0, ϵ, F_o)
-
-    # Check around initial point
-    @test isapprox(dF_num, dF_initial, rtol = num_tol)
-    # Perturb the data in a few different directions and verify
-    # the gradients there too. Use the F_and_dF interface, that
-    # computes gradients together with the objective
-    for delta in [1.05, 0.85, 0.325, 1.55]
-        x_mod = delta.*x0
-        dF_mod = similar(dF_initial)
-        F_and_dF(NaN, dF_mod, x_mod)
-        num_grad!(dF_num, x_mod, ϵ, F_o)
-        @test isapprox(dF_num, dF_mod, rtol = num_tol)
+    function num_grad!(dF_num, x0, ϵ, F_o)
+        F_initial = F_o(x0)
+        for i in eachindex(dF_num)
+            x = copy(x0)
+            x[i] += ϵ
+            F_perturbed = F_o(x)
+            dF_num[i] = (F_perturbed - F_initial)/ϵ
+        end
     end
-end
 
-function num_grad!(dF_num, x0, ϵ, F_o)
-    F_initial = F_o(x0)
-    for i in eachindex(dF_num)
-        x = copy(x0)
-        x[i] += ϵ
-        F_perturbed = F_o(x)
-        dF_num[i] = (F_perturbed - F_initial)/ϵ
+    for (objtype, obj) in [(:local, G), (:global, G_global)]
+        wrap_obj = Jutul.adjoint_wrap_objective(obj, model)
+        if objtype == :global
+            @test wrap_obj isa Jutul.WrappedGlobalObjective
+        else
+            @test wrap_obj isa Jutul.WrappedSumObjective
+        end
+        cfg = optimization_config(model, param, use_scaling = use_scaling, rel_min = 0.1, rel_max = 10)
+        if use_log
+            cfg[:K][:scaler] = :log
+        end
+        tmp = setup_parameter_optimization(model, state0, param, dt, forces, obj, cfg, param_obj = true, print = false);
+        F_o, dF_o, F_and_dF, x0, lims, data = tmp
+        # Evaluate gradient first to initialize
+        F0 = F_o(x0)
+        # This interface is only safe if F0 was called with x0 first.
+        dF_initial = dF_o(similar(x0), x0)
+
+        dF_num = similar(dF_initial)
+        num_grad!(dF_num, x0, ϵ, F_o)
+
+        # Check around initial point
+        @test isapprox(dF_num, dF_initial, rtol = num_tol)
+        # Perturb the data in a few different directions and verify
+        # the gradients there too. Use the F_and_dF interface, that
+        # computes gradients together with the objective
+        for delta in [1.05, 0.85, 0.325, 1.55]
+            x_mod = delta.*x0
+            dF_mod = similar(dF_initial)
+            F_and_dF(NaN, dF_mod, x_mod)
+            num_grad!(dF_num, x_mod, ϵ, F_o)
+            @test isapprox(dF_num, dF_mod, rtol = num_tol)
+        end
     end
 end
 
@@ -129,11 +146,15 @@ end
 @testset "simple adjoint sensitivities" begin
     @testset "adjoint" begin
         for scalar_obj in [true, false]
-            for in_place in [false, true]
-                # Test single step since it hits less of the code
-                test_basic_adjoint(dt = [1.0], in_place = in_place, scalar_obj = scalar_obj)
-                # Test with multiple time-steps
-                test_basic_adjoint(in_place = in_place, scalar_obj = scalar_obj)
+            @testset "scalar=$scalar_obj" begin
+                for in_place in [false, true]
+                    @testset "in_place=$in_place" begin
+                        # Test single step since it hits less of the code
+                        test_basic_adjoint(dt = [1.0], in_place = in_place, scalar_obj = scalar_obj)
+                        # Test with multiple time-steps
+                        test_basic_adjoint(in_place = in_place, scalar_obj = scalar_obj)
+                    end
+                end
             end
         end
     end
@@ -188,7 +209,7 @@ function num_grad_generic(F, G, x0)
     return out
 end
 
-function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, kwarg...)
+function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objective = false, kwarg...)
     # dx, dy, U0, k_val, srcval
     x = ones(5)
     case = setup_poisson_test_case_from_vector(x, dt = timesteps)
@@ -196,7 +217,23 @@ function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, kwarg...)
 
     F = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps, fmt = fmt)
     F_num = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps, fmt = :case)
-    G = (model, state, dt, step_info, forces) -> poisson_test_objective(model, state)
+    G_local(model, state, dt, step_info, forces) = poisson_test_objective(model, state)
+    function G_global(model, state0, states, step_infos, forces, input_data)
+        @testset "Passing of input_data" begin
+            @test !ismissing(input_data)
+        end
+        obj = 0.0
+        for (i, s) in enumerate(states)
+            si = step_infos[i]
+            obj += G_local(model, s, si[:dt], si, forces)
+        end
+        return obj
+    end
+    if global_objective
+        G = G_global
+    else
+        G = G_local
+    end
     dGdx_num = num_grad_generic(F_num, G, x)
     dGdx_adj = solve_adjoint_generic(x, F, states, reports, G;
         state0 = case.state0,
@@ -212,19 +249,23 @@ function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, kwarg...)
 end
 
 @testset "AdjointDI.solve_adjoint_generic" begin
-    test_for_timesteps([1.0])
-    # Sparse forwarddiff with sparsity recomputed
-    test_for_timesteps([1.0], do_prep = false)
-    # Non-sparse forwarddiff
-    test_for_timesteps([1.0], backend = Jutul.AdjointsDI.AutoForwardDiff(), do_prep = false)
+    for global_obj in [true, false]
+        @testset "global_objective=$global_obj" begin
+            test_for_timesteps([1.0], global_objective = global_obj)
+            # Sparse forwarddiff with sparsity recomputed
+            test_for_timesteps([1.0], do_prep = false, global_objective = global_obj)
+            # Non-sparse forwarddiff
+            test_for_timesteps([1.0], backend = Jutul.AdjointsDI.AutoForwardDiff(), do_prep = false, global_objective = global_obj)
 
-    test_for_timesteps([100.0])
-    test_for_timesteps([10.0, 3.0, 500.0, 100.0], atol = 0.01)
-    for fmt in [:case, :onecase, :model_and_prm, :model_and_prm_and_forces, :model_and_prm_and_forces_and_state0]
-        test_for_timesteps([100.0], fmt = fmt)
+            test_for_timesteps([100.0], global_objective = global_obj)
+            test_for_timesteps([10.0, 3.0, 500.0, 100.0], atol = 0.01, global_objective = global_obj)
+            for fmt in [:case, :onecase, :model_and_prm, :model_and_prm_and_forces, :model_and_prm_and_forces_and_state0]
+                test_for_timesteps([100.0], fmt = fmt, global_objective = global_obj)
+            end
+        end
     end
 end
-
+##
 import Jutul.DictOptimization as DictOptimization
 @testset "DictOptimization" begin
     testdata = Dict(

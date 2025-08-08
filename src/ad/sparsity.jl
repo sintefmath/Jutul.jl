@@ -126,10 +126,6 @@ function ad_entities(state)
     return out
 end
 
-
-# tag = :Cells
-# determine_sparsity(state, tag);
-##
 function determine_sparsity(F!, n, state, state0, tag, entities, N = entities[tag].n)
     mstate = create_mock_state(state, tag, entities)
     mstate0 = create_mock_state(state0, tag, entities)
