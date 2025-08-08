@@ -93,8 +93,10 @@ function distribute_case(case, full_partition, backend, ranks; order = :symrcm)
     if model isa MultiModel
         model = case.model[full_partition.main_symbol]
         # Asserts on limitations of current global dof-ordering approach.
-        @assert case.model.groups[1] == 1
-        @assert maximum(case.model.groups) < 3
+        if !isnothing(case.model.groups)
+            @assert case.model.groups[1] == 1
+            @assert maximum(case.model.groups) < 3
+        end
     end
     domain = model.domain
     nc = number_of_cells(domain)
