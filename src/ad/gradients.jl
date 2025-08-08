@@ -981,6 +981,29 @@ function update_state0_sensitivities!(storage)
     end
 end
 
+"""
+    optimization_step_info(step::Int, time::Real, dt; kwarg...)
+
+Optimization step information is normally not set up manually, but the output
+from this function will be passed to objective functions as `step_info`. This
+function is a `Dict` with the following fields:
+
+# Fields
+- `:time` - The time at the start of the step. To get time at the end of the
+  step, use `step_info[:time] + step_info[:dt]`
+- `:dt` - The time step size for this step.
+- `:step` - The step number, starting at 1. Not that this is the report step,
+  and multiple `step_info` entries could have the same step if substeps are
+  used.
+- `:Nstep` - The total number of steps in the simulation. 
+- `:substep` - The substep number, starting at 1. This is used to indicate
+  that multiple steps are taken within a single step.
+- `:substep_global` - The global substep number, starting at 1 and will not
+  reset between global steps.
+- `:Nsubstep_global` - The total number of substeps in the simulation.
+- `:total_time` - The total time of the simulation (i.e. dt + time at the final
+  step and substep)
+"""
 function optimization_step_info(step::Int, time::Real, dt::Real;
         Nstep = missing,
         total_time = missing,

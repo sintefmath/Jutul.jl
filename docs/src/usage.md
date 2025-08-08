@@ -75,32 +75,6 @@ JutulConfig
 add_option!
 ```
 
-## Sensitivities, adjoints and optimization
-
-```@docs
-solve_adjoint_sensitivities
-solve_adjoint_sensitivities!
-Jutul.solve_numerical_sensitivities
-setup_parameter_optimization
-```
-
-### Generic optimization interface
-
-```@docs
-DictParameters
-```
-
-```@docs
-free_optimization_parameter!
-freeze_optimization_parameter!
-set_optimization_parameter!
-```
-
-```@docs
-optimize
-parameters_gradient
-```
-
 ## Linear solvers
 
 ```@docs

@@ -18,6 +18,7 @@ makedocs(;
     pages=[
         "Home" => "index.md",
         "Usage" => "usage.md",
+        "optimization.md",
         "mesh.md",
         "Internals" => "internals.md",
         "Docstrings" => "docstrings.md"

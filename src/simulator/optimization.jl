@@ -16,22 +16,25 @@ end
 
 """
     setup_parameter_optimization(model, state0, param, dt, forces, G, opt_cfg = optimization_config(model, param);
-                                                            grad_type = :adjoint,
-                                                            config = nothing,
-                                                            print = 1,
-                                                            copy_case = true,
-                                                            param_obj = false,
-                                                            kwarg...)
+        grad_type = :adjoint,
+        config = nothing,
+        print = 1,
+        copy_case = true,
+        param_obj = false,
+        kwarg...
+    )
 
 Set up function handles for optimizing the case defined by the inputs to
 `simulate` together with a per-timestep objective function `G`. The objective
-should be on the form of sum over all steps, where each element of the sum is
-evaluated by `model, state, dt, step_no, forces`.
+function should fit the format described in [AbstractGlobalObjective](@ref) or
+[AbstractSumObjective](@ref).
 
 Generally calling either of the functions will mutate the data Dict. The options are:
-F_o(x) -> evaluate objective
-dF_o(dFdx, x) -> evaluate gradient of objective, mutating dFdx (may trigger evaluation of F_o)
-F_and_dF(F, dFdx, x) -> evaluate F and/or dF. Value of nothing will mean that the corresponding entry is skipped.
+
+- `F_o(x)`: evaluate objective
+- `dF_o(dFdx, x)`: evaluate gradient of objective, mutating `dFdx` (may trigger evaluation of `F_o`)
+- `F_and_dF(F, dFdx, x)`: evaluate `F` and/or `dF`. If `nothing` is passed for
+  an entry, the corresponding entry is skipped.
 
 """
 function setup_parameter_optimization(model, state0, param, dt, forces, G, arg...; kwarg...)

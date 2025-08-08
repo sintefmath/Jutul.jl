@@ -1470,25 +1470,48 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
     return AdjointPackedResult(states, step_infos, maximum(step_index), forces)
 end
 
+"""
+Abstract type for Jutul objectives.
+"""
 abstract type AbstractJutulObjective end
 
 """
 Abstract type for objective as a sum of function values on the form:
-    ```F(model, state, dt, step_info, forces)```
-evaluated for each step.
+
+    F(model, state, dt, step_info, forces)
+
+evaluated for each step. This means that the objective is a sum of all of these
+values. If you want to only depend on a single step, you can look up
 """
 abstract type AbstractSumObjective <: AbstractJutulObjective end
 
 """
 Abstract type for objective as a global objective function on the form:
-    ```F(model, state0, states, step_infos, forces, input_data)```
+
+    F(model, state0, states, step_infos, forces, input_data)
+
 """
 abstract type AbstractGlobalObjective <: AbstractJutulObjective end
 
+"""
+    WrappedSumObjective(objective)
+
+An objective that is a sum of function values, evaluated for each step, defined
+by a function. This type automatically wraps functions/callable structs that are
+passed to the optimization interface if they have the sum signature (five
+arguments).
+"""
 struct WrappedSumObjective{T} <: AbstractSumObjective
     objective::T
 end
 
+"""
+    WrappedGlobalObjective(objective)
+
+A global (in time) objective that wraps a function/callable. This type
+automatically wraps functions/callable structs that are passed to the
+optimization interface if they have the sum signature (five arguments).
+"""
 struct WrappedGlobalObjective{T} <: AbstractGlobalObjective
     objective::T
 end
