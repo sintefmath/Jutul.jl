@@ -189,7 +189,7 @@ function setup_case(x::AbstractVector, F, packed_steps::AdjointPackedResult, sta
     # *state0 needs to be provided
     packed_step = packed_steps[i]
     step_info = packed_step.step_info
-    N = maximum(x -> x[:step], packed_steps.step_infos)
+    N = step_info[:Nstep]
     c = unpack_setup(step_info, N, F(x, step_info), all = all)
     if c isa JutulCase
         case = c
@@ -331,7 +331,7 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, obje
     dt = step_info[:dt]
     step_index = step_info[:step]
     if is_sum
-        case = setup_case(x, F, packed_steps, state0, step_index)
+        case = setup_case(x, F, packed_steps, state0, substep_index)
     else
         case = setup_case(x, F, packed_steps, state0, :all)
     end
