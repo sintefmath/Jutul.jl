@@ -189,7 +189,7 @@ function setup_case(x::AbstractVector, F, packed_steps::AdjointPackedResult, sta
     # *state0 needs to be provided
     packed_step = packed_steps[i]
     step_info = packed_step.step_info
-    N = maximum(x -> x[:step], packed_steps.step_infos)
+    N = step_info[:Nstep]
     c = unpack_setup(step_info, N, F(x, step_info), all = all)
     if c isa JutulCase
         case = c
@@ -218,17 +218,7 @@ function unpack_setup(step_info, N, case::JutulCase; all = false)
             Ns == N || error("case.forces was a vector and expected $N steps, got $Ns.")
         end
         if !all
-            time = step_info[:time]
-            pos = length(case.dt)
-            t = 0.0
-            for (i, dt) in enumerate(case.dt)
-                if time >= t && time <= t + dt
-                    pos = i
-                    break
-                end
-                t += dt
-            end
-            case = case[pos]
+            case = case[step_info[:step]]
         end
     end
     return case
@@ -326,11 +316,12 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
     return storage
 end
 
-function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, step_index::Int, cache = missing; is_sum = true)
-    step_info = packed_steps[step_index].step_info
+function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, substep_index::Int, cache = missing; is_sum = true)
+    step_info = packed_steps[substep_index].step_info
     dt = step_info[:dt]
+    step_index = step_info[:step]
     if is_sum
-        case = setup_case(x, F, packed_steps, state0, step_index)
+        case = setup_case(x, F, packed_steps, state0, substep_index)
     else
         case = setup_case(x, F, packed_steps, state0, :all)
     end
@@ -351,7 +342,7 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, obje
             allforces = case.forces
             forces_for_eval = forces_for_eval[step_index]
         else
-            allforces = [forces_for_eval for _ in 1:packed_steps.step_infos[end][:step]]
+            allforces = [forces_for_eval for _ in 1:step_info[:Nstep]]
         end
         forces_arg = (allforces = allforces, forces = forces_for_eval,)
     end
@@ -377,7 +368,6 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, obje
         parameters = case.parameters,
         forces_arg...
     )
-    # r[end] = G(case.model, s, dt, step_info, forces_for_eval)
     return copy(r)
 end
 
