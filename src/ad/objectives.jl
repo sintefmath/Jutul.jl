@@ -44,6 +44,10 @@ function objective_evaluator_from_model_and_state(G::AbstractSumObjective, model
 end
 
 function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, model, packed_steps, current_step)
+    if ismissing(current_step)
+        # Same hack as for AbstractSumObjective
+        current_step = 1
+    end
     state0 = packed_steps.state0
     step_infos = packed_steps.step_infos
     allstates = Any[objective_state_shallow_copy(s, model) for s in packed_steps.states]
