@@ -1490,6 +1490,11 @@ Abstract type for objective as a global objective function on the form:
 
     F(model, state0, states, step_infos, forces, input_data)
 
+Note that if substeps are enabled by setting `output_substates=true` in the
+simulator setup, the length of forces and states will be dynamic and of equal
+length to `step_infos`. If you want to recover the state at a specific step, you
+can reason about `:step` field of the corresponding entry in the `step_infos`
+array.
 """
 abstract type AbstractGlobalObjective <: AbstractJutulObjective end
 
