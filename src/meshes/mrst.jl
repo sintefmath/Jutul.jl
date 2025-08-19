@@ -34,7 +34,16 @@ function MRSTWrapMesh(G, N = nothing)
 end
 
 function grid_dims_ijk(g::MRSTWrapMesh)
-    return tuple(Int.(g.data.cartDims)...)
+    cart = Int.(vec(g.data.cartDims)) 
+    if length(cart) == 3
+        return (cart[1], cart[2], cart[3])
+    elseif length(cart) == 2
+        return (cart[1], cart[2], 1)
+    elseif length(cart) == 1
+        return (cart[1], 1, 1)
+    else
+        error("Unsupported cartDims length = $(length(cart))")
+    end 
 end
 
 function cell_dims(g::MRSTWrapMesh, pos::Integer)
