@@ -14,11 +14,15 @@ function compute_contraction_factor(d, N)
     # Number of iterates used to estimate contraction factor
     n = size(r,1)-1
     # Approximate log10 of contraction factor using least squares
-    num = sum(log.(r[2:end]./r[1]).*(1:n))
+    num = r[1,:].*0.0
+    for k = 1:n
+        num .+= log.(r[k+1,:]./r[1,:]).^k
+    end
+    # num = sum(log.(r[2:end,:]./r[1,:]).*(1:n), dims=1)
     den = sum((1:n).^2)
-    θ = exp(num./den)
+    θ = exp.(num./den)
     # Compute target contraction factor convergence in N iterations
-    θ_target = r[1].^(-1/N)
+    θ_target = r[1,:].^(-1/N)
     
     return θ, θ_target
 
@@ -34,30 +38,30 @@ function returns true if the contraction factors are oscillating, and false
 otherwise. If less than three contraction factors are provided, the function
 returns false.
 """
-function oscillation(contraction_factors, tol = 1.0)
+function oscillation(distance)
 
-    θ = contraction_factors
-    (length(θ) < 3) ? (return false) : nothing
+    d = distance
+    (size(d,1) < 3) ? (return falses(size(distance,2))) : nothing
 
-    θ_1 = θ[end-2]
-    θ_2 = θ[end-1]
-    θ_3 = θ[end]
+    Δ1 = distance[end-2,:]
+    Δ2 = distance[end-1,:]
+    Δ3 = distance[end,:]
 
-    ok_1 = θ_1 .< tol
-    ok_2 = θ_2 .< tol
-    ok_3 = θ_3 .< tol
+    osc = Δ3 .> Δ2 .< Δ1 .|| Δ3 .< Δ2 .> Δ1
 
-    return .&(xor.(ok_1, ok_2), xor.(ok_2, ok_3))
+    return osc
 
 end
 
 function iterations_left(contraction_factor, dist)
 
-    # Compute number of iterations left if we should converge in target_iterations
-    # iterations
+    # Compute number of iterations left if we should converge in
+    # target_iterations iterations
     θ = contraction_factor
-    N = ceil(-log(dist)/log(θ))
-    N = (N > 0) ? Int64(N) : 0
+    N = ceil.(-log.(dist)./log.(θ))
+    N = max.(N, 0)
+    ok = isfinite.(N)
+    N[ok] .= Int64.(N[ok])
     return N
 
 end
