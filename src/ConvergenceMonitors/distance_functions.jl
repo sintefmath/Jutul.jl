@@ -5,10 +5,9 @@ Compute distance from convergence using a user-defined distance function, and
 optionally apply a mapping to the distance. The function returns the distance
 and the names of equation residual norms used in the distance computation.
 """
-function compute_distance(
-        report;
-        distance_function = r -> scaled_residual_norm(r),
-        mapping = v -> maximum(v)
+function compute_distance(report; 
+    distance_function = r -> scaled_residual_norm(r),
+    mapping = v -> [maximum(v)]
     )
 
     # Compute distance using distance function
@@ -39,8 +38,8 @@ end
 """
     nonconverged_equations(report)
 
-Compute distance to convergence as non-converged equations, e.g., 1.0 for
-non-converged and 0.0 for converged. The final distance is typically taken as
+Compute distance to convergence as non-converged equations, (1.0 for
+non-converged and 0.0 for converged). The final distance is typically taken as
 the sum of the output from this function.
 """
 function nonconverged_equations(report)
