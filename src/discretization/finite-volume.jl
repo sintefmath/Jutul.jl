@@ -174,7 +174,7 @@ function expand_perm(K, ::Val{2})
     elseif n == 3
         K_xx = K[1]
         K_xy = K[2]
-        K_yy = K[2]
+        K_yy = K[3]
     else
         error("Permeability for two-dimensional grids must have 1/2/3 entries per cell, had $n")
     end
@@ -201,7 +201,7 @@ function expand_perm(K, ::Val{3})
         # First row
         K_xx = K[1]
         K_xy = K[2]
-        K_yz = K[3]
+        K_xz = K[3]
         # Second row excluding symmetry
         K_yy = K[4]
         K_yz = K[5]
