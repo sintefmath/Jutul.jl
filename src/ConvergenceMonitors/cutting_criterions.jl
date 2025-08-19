@@ -68,32 +68,55 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     # Reset cc if first iteration
     (it == 1) ? reset!(cc, dist, max_iter) : nothing
     # Store distance
-    cc.history[:distance][it] = dist
+    cc.history[:distance][it,:] .= dist
 
-    # Compute contraction factor and update history
-    θ, θ_target = compute_contraction_factor(cc.history[:distance][it0:it], N)
+    # Compute contraction factor and iterations left to convergence
+    θ, θ_target = compute_contraction_factor(cc.history[:distance][it0:it,:], N)
     its_left = iterations_left(θ, dist)
-    cc.history[:contraction_factor][it] = θ
-    cc.history[:contraction_factor_target][it] = θ_target
-    cc.history[:iterations_left][it] = its_left
-    # Check if the contraction factors are oscillating
-    oscillating_it = oscillation(cc.history[:contraction_factor][1:it])
-    cc.history[:oscillation][it] = oscillating_it
-    is_oscillating = any(cc.history[:oscillation][it0:it])
+    # Check for oscillations
+    oscillating_it = oscillation(cc.history[:distance][1:it,:])
     
-    # Determine if current rate of convergence is adequate
-    good = all(θ .<= max(θ_target, cc.fast)) && !is_oscillating
-    ok = all(θ .<= cc.slow) && its_left <= cc.max_iterations_left
-    bad = any(θ .> cc.slow) || its_left > cc.max_iterations_left
+    # Converged residuals should not be monitored
+    converged = dist .== 0.0
+    θ[converged] .= 0.0
+    its_left[converged] .= 0
+    oscillating_it[converged] .= false
 
-    if good
+    # Update history
+    cc.history[:contraction_factor][it,:] .= θ
+    cc.history[:contraction_factor_target][it,:] .= θ_target
+    cc.history[:iterations_left][it,:] .= its_left
+    cc.history[:oscillation][it,:] .= oscillating_it
+
+    # Determine if current rate of convergence is adequate
+    is_oscillating = any(cc.history[:oscillation][it0:it,:])
+    good = θ .<= max.(θ_target, cc.fast) .&& .!is_oscillating
+    good = good .|| converged
+    ok = θ .<= cc.slow .&& its_left .<= cc.max_iterations_left
+    bad = θ .> cc.slow .|| its_left .> cc.max_iterations_left
+
+    # println("θ = $θ")
+    # println("θ_target = $(θ_target)")
+    # println("N = $its_left")
+    # println("Converged = $converged")
+    # println("Good = $good")
+    # println("Ok = $ok")
+    # println("Bad = $bad")
+
+    # if good = all(good)
+
+    # good = all(θ .<= max.(θ_target, cc.fast)) && all(.!is_oscillating)
+    # ok = all(θ .<= cc.slow) && all(its_left .<= cc.max_iterations_left)
+    # bad = any(θ .> cc.slow) || any(its_left .> cc.max_iterations_left)
+
+    if all(good)
         # Convergence rate good, decrease number of violations
         cc.num_violations -= 1
         status = :good
-    elseif ok
+    elseif all(ok .|| good)
         # Convergence rate ok, keep number of violations
         status = :ok
-    elseif bad
+    elseif any(bad)
         # Not converging, increase number of violations
         cc.num_violations += 1
         status = :bad
@@ -136,12 +159,12 @@ function reset!(cc::ConvergenceMonitorCuttingCriterion, template, max_iter)
     history[:distance] = Array{typeof(template[1])}(undef, nc, length(template))
     history[:contraction_factor] = Array{typeof(template[1])}(undef, nc, length(template))
     history[:contraction_factor_target] = Array{typeof(template[1])}(undef, nc, length(template))
-    history[:iterations_left] = Vector{Union{Int64, Float64}}(undef, nc)
+    history[:iterations_left] = Array{Union{Int64, Float64}}(undef, nc, length(template))
     history[:status] = Vector{Symbol}(undef, nc)
-    history[:oscillation] = Vector{Bool}(undef, nc)
+    history[:oscillation] = Array{Bool}(undef, nc, length(template))
 
-    history[:contraction_factor][1] = NaN
-    history[:contraction_factor_target][1] = NaN
+    history[:contraction_factor][1,:] .= NaN
+    history[:contraction_factor_target][1,:] .= NaN
     history[:iterations_left][1] = NaN
     history[:status][1] = :none
     history[:oscillation][1] = false
@@ -175,18 +198,24 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, it
 
     round_local(x) = round(x; digits = 2)
 
-    θ = cc.history[:contraction_factor][it]
-    θ_target = cc.history[:contraction_factor_target][it]
-    its_left = cc.history[:iterations_left][it]
+    θ = cc.history[:contraction_factor][it,:]
+    θ_target = cc.history[:contraction_factor_target][it,:]
+
+    Δθ = θ .- θ_target
+    _, worst_ix = findmax(Δθ)
+
+    θ, θ_target = θ[worst_ix], θ_target[worst_ix]
+
+    its_left = cc.history[:iterations_left][it,worst_ix]
     θ_slow = cc.slow
     θ_fast = cc.fast
     status = cc.history[:status][it]
     oscillation = any(cc.history[:oscillation][it0:it])
 
-    θ = round_local(θ)
-    θ_target = round_local(θ_target)
-    θ_slow = round_local(θ_slow)
-    θ_fast = round_local(θ_fast)
+    θ = round_local.(θ)
+    θ_target = round_local.(θ_target)
+    θ_slow = round_local.(θ_slow)
+    θ_fast = round_local.(θ_fast)
     
     if status == :none
         inequality, sym, color, reason = "", "", :white, ""
