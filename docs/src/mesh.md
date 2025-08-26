@@ -14,9 +14,9 @@ MRSTWrapMesh
 
 ## Plotting functions
 
-Plotting requires that a Makie backend is loaded (typically GLMakie or CairoMakie). The documentation uses `CairoMakie` to work on machines without OpenGL enabled, but if you want fast and interactive plots, `GLMakie` should be preferred.
+Plotting requires that a Makie backend is loaded (typically GLMakie or CairoMakie). For comprehensive plotting documentation and examples, see the [Plotting](plotting.md) section.
 
-### Mesh visualization
+### Basic mesh plotting
 
 #### Non-mutating
 
@@ -33,37 +33,6 @@ plot_interactive
 plot_mesh!
 plot_cell_data!
 plot_mesh_edges!
-```
-
-### Multi-model plotting
-
-```@docs
-plot_multimodel_interactive
-```
-
-### Performance analysis
-
-```@docs
-plot_solve_breakdown
-plot_cumulative_solve
-plot_cumulative_solve!
-plot_linear_convergence
-plot_linear_convergence!
-```
-
-### Graph visualization
-
-These functions require the GraphMakie.jl package to be loaded.
-
-```@docs
-plot_variable_graph
-plot_model_graph
-```
-
-### Plotting utilities
-
-```@docs
-check_plotting_availability
 ```
 
 ## Example: Cartesian meshes
