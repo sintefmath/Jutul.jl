@@ -1426,6 +1426,7 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
     prev_ministep = 0
     step_infos = missing
     for (i, dt_i) in enumerate(dt)
+        time += dt_i
         step_ix = step_index[i]
         if step_ix != prev_ministep
             ministep_ix = 1
@@ -1445,7 +1446,6 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
         else
             push!(step_infos, step_info)
         end
-        time += dt_i
     end
     if !ismissing(forces)
         forces = map(i -> forces_for_timestep(nothing, forces, dt, i), step_index)
