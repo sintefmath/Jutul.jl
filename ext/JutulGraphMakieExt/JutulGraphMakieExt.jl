@@ -3,6 +3,27 @@ module JutulGraphMakieExt
     using Jutul, Makie
     using GraphMakie, Graphs, LayeredLayouts, NetworkLayout
 
+    """
+        plot_variable_graph(model)
+
+    Plot a graph visualization of variable dependencies in a simulation model.
+
+    # Arguments
+    - `model`: A Jutul simulation model
+
+    # Returns
+    - `fig`: Figure object containing the variable dependency graph
+
+    This function creates a directed graph showing the relationships between primary
+    variables, secondary variables, and parameters in the simulation model. Different
+    node types are color-coded:
+    - Primary variables: Blue  
+    - Secondary variables: Orange
+    - Parameters: Green
+
+    The graph layout uses a layered approach to clearly show the dependency structure
+    and data flow within the model.
+    """
     function Jutul.plot_variable_graph(model)
         graph, nodes, = build_variable_graph(model, to_graph = true)
         c1 = Makie.ColorSchemes.tab10[1]
@@ -76,6 +97,31 @@ module JutulGraphMakieExt
         )
     end
 
+    """
+        plot_model_graph(model; kwarg...)
+
+    Plot a graph visualization of model structure and equation relationships.
+
+    # Arguments
+    - `model`: A Jutul simulation model (can be `MultiModel` or single model)
+
+    # Keyword Arguments
+    - Additional keyword arguments are passed to the plotting functions
+
+    # Returns
+    - Plot object containing the model structure graph
+
+    For single models, this is equivalent to `plot_variable_graph`. For `MultiModel`
+    instances, this creates a more complex graph showing:
+    - Individual model components (colored by model)
+    - Equations within each model  
+    - Cross-term relationships between models
+    - Edge labels indicating cross-term types
+
+    The visualization helps understand the coupling structure in multi-physics
+    simulations and can be useful for debugging model setup and analyzing
+    computational dependencies.
+    """
     function Jutul.plot_model_graph(model; kwarg...)
         Jutul.plot_variable_graph(model; kwarg...)
     end

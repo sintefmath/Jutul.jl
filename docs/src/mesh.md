@@ -16,7 +16,9 @@ MRSTWrapMesh
 
 Plotting requires that a Makie backend is loaded (typically GLMakie or CairoMakie). The documentation uses `CairoMakie` to work on machines without OpenGL enabled, but if you want fast and interactive plots, `GLMakie` should be preferred.
 
-### Non-mutating
+### Mesh visualization
+
+#### Non-mutating
 
 ```@docs
 plot_mesh
@@ -25,12 +27,43 @@ plot_mesh_edges
 plot_interactive
 ```
 
-### Mutating
+#### Mutating
 
 ```@docs
 plot_mesh!
 plot_cell_data!
 plot_mesh_edges!
+```
+
+### Multi-model plotting
+
+```@docs
+plot_multimodel_interactive
+```
+
+### Performance analysis
+
+```@docs
+plot_solve_breakdown
+plot_cumulative_solve
+plot_cumulative_solve!
+plot_linear_convergence
+plot_linear_convergence!
+```
+
+### Graph visualization
+
+These functions require the GraphMakie.jl package to be loaded.
+
+```@docs
+plot_variable_graph
+plot_model_graph
+```
+
+### Plotting utilities
+
+```@docs
+check_plotting_availability
 ```
 
 ## Example: Cartesian meshes
