@@ -445,3 +445,64 @@ import Jutul.AdjointsDI: devectorize_nested, vectorize_nested, devectorize_neste
     @test length(x) == 2
     @test sort(x) == [170.0, 200.0]
 end
+
+import Jutul:
+    ProgressRecorder,
+    recorder_start_step!,
+    recorder_increment_iteration!,
+    recorder_log_step!,
+    recorder_current_time
+
+# Mock simulation to test the global and local recorders
+@testset "Progress recorder" begin
+    rec = ProgressRecorder()
+    report = Dict(:update_time => nothing) # Just need this to be present for the API
+
+    # First global step
+    recorder_start_step!(rec, 1.0, :global)
+    recorder_start_step!(rec, 0.5, :local)
+    for i in 1:5 # some iterations to solve
+        recorder_increment_iteration!(rec, report, :local)
+    end
+    recorder_log_step!(rec, true, :local)
+    @test recorder_current_time(rec, :local) == 0.5
+
+    recorder_start_step!(rec, 0.5, :local)
+    for i in 1:3 # some iterations to solve
+        recorder_increment_iteration!(rec, report, :local)
+    end
+    recorder_log_step!(rec, true, :local)
+    @test recorder_current_time(rec, :local) == 1.0
+
+    recorder_log_step!(rec, true, :global)
+    @test recorder_current_time(rec, :global) == 1.0
+
+    # Second global step
+    recorder_start_step!(rec, 1.0, :global)
+    recorder_start_step!(rec, 0.75, :local)
+    for i in 1:10 # some iterations to solve
+        recorder_increment_iteration!(rec, report, :local)
+    end
+    recorder_log_step!(rec, false, :local) # "Simulation" does not converge
+    @test recorder_current_time(rec, :local) == 0.0
+
+    # Emulate cut
+    recorder_start_step!(rec, 0.5, :local)
+    for i in 1:4 # some iterations to solve
+        recorder_increment_iteration!(rec, report, :local)
+    end
+    recorder_log_step!(rec, true, :local)
+    @test recorder_current_time(rec, :local) == 0.5
+
+    recorder_start_step!(rec, 0.5, :local)
+    for i in 1:2 # some iterations to solve
+        recorder_increment_iteration!(rec, report, :local)
+    end
+    recorder_log_step!(rec, true, :local)
+    @test recorder_current_time(rec, :local) == 1.0
+
+    recorder_log_step!(rec, true, :global)
+    @test recorder_current_time(rec, :global) == 2.0
+
+    @test rec.recorder.iterations == 24 # Check total iterations
+end
