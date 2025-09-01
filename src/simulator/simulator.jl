@@ -159,7 +159,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
     )
     rec = progress_recorder(sim)
     # Reset recorder just in case since we are starting a new simulation
-    reset!(rec)
+    recorder_reset!(rec)
     forces, forces_per_step = preprocess_forces(sim, forces)
     start_timestamp = now()
     if isnothing(config)

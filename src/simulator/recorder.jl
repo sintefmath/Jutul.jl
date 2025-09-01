@@ -35,7 +35,7 @@ function recorder_log_step!(rec::ProgressRecorder, success, level::Symbol)
         g.iteration = l.iterations
         g.failed += l.failed
         update!(g, success)
-        reset!(l)
+        recorder_reset!(l)
     end
 end
 
@@ -57,7 +57,7 @@ function recorder_increment_iteration!(rec::ProgressRecorder, report, level::Sym
     end
 end
 
-function reset!(r::SolveRecorder, dt = NaN; step = 1, iterations = 0, iteration = 0, time = 0.0)
+function recorder_reset!(r::SolveRecorder, dt = NaN; step = 1, iterations = 0, iteration = 0, time = 0.0)
     r.step = step
     r.iterations = iterations
     r.time = time
@@ -65,7 +65,7 @@ function reset!(r::SolveRecorder, dt = NaN; step = 1, iterations = 0, iteration 
     r.dt = dt
 end
 
-function reset!(target::SolveRecorder, source::SolveRecorder)
+function recorder_reset!(target::SolveRecorder, source::SolveRecorder)
     target.step = source.step
     target.iterations = source.iterations
     target.time = source.time
@@ -73,12 +73,22 @@ function reset!(target::SolveRecorder, source::SolveRecorder)
     target.dt = source.dt
 end
 
-function reset!(r::ProgressRecorder, dt = NaN; kwarg...)
-    reset!(r.recorder, dt; kwarg...)
-    reset!(r.subrecorder, 0.0)
+function recorder_reset!(r::ProgressRecorder, dt = NaN; kwarg...)
+    recorder_reset!(r.recorder, dt; kwarg...)
+    recorder_reset!(r.subrecorder, 0.0)
 end
 
-function reset!(target::ProgressRecorder, source::ProgressRecorder)
-    reset!(target.recorder, source.recorder)
-    reset!(target.subrecorder, source.recorder)
+function recorder_reset!(target::ProgressRecorder, source::ProgressRecorder)
+    recorder_reset!(target.recorder, source.recorder)
+    recorder_reset!(target.subrecorder, source.recorder)
 end
+
+@deprecate reset!(r::SolveRecorder, dt = NaN;
+    step = 1,
+    iterations = 0,
+    iteration = 0,
+    time = 0.0) recorder_reset!(r, dt; step, iterations, iteration, time)
+
+@deprecate reset!(target::SolveRecorder, source::SolveRecorder) recorder_reset!(targe, source)
+@deprecate reset!(r::ProgressRecorder, dt = NaN; kwarg...) recorder_reset!(r, dt; kwarg...)
+@deprecate reset!(target::ProgressRecorder, source::ProgressRecorder) recorder_reset!(target, source)
