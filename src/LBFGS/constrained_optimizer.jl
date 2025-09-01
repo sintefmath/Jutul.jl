@@ -241,11 +241,15 @@ function box_bfgs(x0, f, lb, ub; kwarg...)
 end
 
 function box_bfgs(u0, f, bounds; kwarg...)
+    
     return box_bfgs(u0, f, bounds...; kwarg...)
+    
 end
 
 function log_box_bfgs(x0, f, lb, ub; kwargs...)
+
     n = length(x0)
+    
     length(lb) == n || throw(ArgumentError("Length of lower bound ($(length(lb))) must match length of initial guess ($n)"))
     length(ub) == n || throw(ArgumentError("Length of upper bound ($(length(ub))) must match length of initial guess ($n)"))
     
@@ -265,6 +269,7 @@ function log_box_bfgs(x0, f, lb, ub; kwargs...)
     # Log-transform bounds
     log_lb = log.(lb)
     log_ub = log.(ub)
+    
     δ_log = log_ub .- log_lb
 
     # Transformation functions
@@ -300,76 +305,19 @@ function log_box_bfgs(x0, f, lb, ub; kwargs...)
     
     # Transform back to original space
     x = u_to_x(u)
+    
     return (v, x, history)
+    
 end
 
 function log_box_bfgs(u0, f, bounds; kwargs...)
     # Unpack bounds
+    
     lb, ub = bounds
     return log_box_bfgs(u0, f, lb, ub; kwargs...)
+    
 end
 
-
-
-function box_bfgs_log_scale(x0, f, lb, ub; kwarg...)
-    @info "log scale box BFGS optimization started"
-    n = length(x0)
-    length(lb) == n || throw(ArgumentError("Length of lower bound ($(length(lb))) must match length of initial guess ($n)"))
-    length(ub) == n || throw(ArgumentError("Length of upper bound ($(length(ub))) must match length of initial guess ($n)"))
-    # Check bounds
-    for i in eachindex(x0, lb, ub)
-        if x0[i] < lb[i] || x0[i] > ub[i]
-            throw(ArgumentError("Initial guess x0[$i] = $(x0[i]) is outside bounds [$(lb[i]), $(ub[i])]"))
-        end
-        if !isfinite(lb[i]) || !isfinite(ub[i])
-            throw(ArgumentError("Bounds must be finite, got lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
-        end
-        if lb[i] >= ub[i]
-            throw(ArgumentError("Lower bound must be less than upper bound for index $i: lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
-        end
-    end
-    δ = ub .- lb
-    base = ub ./ lb
-    # Ensure scaling_base is positive and finite
-    for i in 1:n    
-        if base[i] <= 0 || !isfinite(base[i])
-            throw(ArgumentError("Scaling base must be positive and finite, got scaling_base[$i] = $(scaling_base[i])"))
-        end
-    end
-
-    function dx_to_du!(g,x)
-        for i in 1:n
-            g[i] = g[i] ./ (log(base[i]) * x[i])
-        end
-    end
-
-    function x_to_u(x)
-        # Convert x to u in the unit box [0, 1]^n
-        u = log.(x ./ lb) ./ log.(base)
-        return u
-    end
-
-    function u_to_x(u)
-        x = lb .* exp.(u .* log.(base))
-        return x
-    end
-
-    function F(u)
-        x = u_to_x(u)
-        obj, g = f(x)
-        dx_to_du!(g,x)
-        return (obj, g)
-    end
-
-    u0 = x_to_u(x0)
-    v, u, history = unit_box_bfgs(u0, F; kwarg...)
-    x = u_to_x(u)
-    return (v, x, history)
-end
-
-function box_bfgs_log_scale(u0, f, bounds; kwarg...)
-    return box_bfgs_log_scale(u0, f, bounds...; kwarg...)
-end
 
 function get_search_direction(u0, g0, Hi, HiPrev, c)
     # Find search-direction which is (sum of) the projection(s) of Hi*g0
