@@ -12,17 +12,18 @@ function compute_contraction_factor(d, N)
     # Use distance from convergence + 1 to avoid division by small numbers
     r = d .+ 1.0
     # Number of iterates used to estimate contraction factor
-    n = size(r,1)-1
-    # Approximate log10 of contraction factor using least squares
-    num = r[1,:].*0.0
+    n = size(r,1)
+    # Use least-squares regression on log-transformed contraction factors:
+    # minₖ ∑(θ^{k-1} - rₖ/r₁)² ~ minₖ ∑[(k-1)log(θ) - log(rₖ/r₁)]²
+    # ⇒ log(θ) ∑(k-1)² = ∑(k-1)log(rₖ/r₁)
+    num, den = zeros(size(r,2)), 0.0
     for k = 1:n
-        num .+= log.(r[k+1,:]./r[1,:]).^k
+        num .+= (k-1).*log.(r[k,:]./r[1,:])
+        den += (k-1)^2
     end
-    # num = sum(log.(r[2:end,:]./r[1,:]).*(1:n), dims=1)
-    den = sum((1:n).^2)
     θ = exp.(num./den)
-    # Compute target contraction factor convergence in N iterations
-    θ_target = r[1,:].^(-1/N)
+    # Compute target contraction to converge in N iterations
+    θ_target = r[end,:].^(-1/N)
     
     return θ, θ_target
 
@@ -38,16 +39,21 @@ function returns true if the contraction factors are oscillating, and false
 otherwise. If less than three contraction factors are provided, the function
 returns false.
 """
-function oscillation(distance)
+function oscillation(distance, tol=1e-6)
 
-    d = distance
-    (size(d,1) < 3) ? (return falses(size(distance,2))) : nothing
 
+    # Early return if we only have two iterates
+    (size(distance,1) < 3) ? (return falses(size(distance,2))) : nothing
+    # Get last three distances to convergence
     Δ1 = distance[end-2,:]
     Δ2 = distance[end-1,:]
     Δ3 = distance[end,:]
-
-    osc = Δ3 .> Δ2 .< Δ1 .|| Δ3 .< Δ2 .> Δ1
+    # Check if Δ1 > Δ2 < Δ3 or Δ1 < Δ2 > Δ3
+    gt_tol = (x,y) -> (x .- y) .> tol
+    lt_tol = (x,y) -> gt_tol(y,x)
+    osc_1 = lt_tol(Δ2, Δ1) .&& lt_tol(Δ2, Δ3)
+    osc_2 = gt_tol(Δ2, Δ1) .&& gt_tol(Δ2, Δ3)
+    osc = osc_1 .|| osc_2
 
     return osc
 
@@ -58,10 +64,11 @@ function iterations_left(contraction_factor, dist)
     # Compute number of iterations left if we should converge in
     # target_iterations iterations
     θ = contraction_factor
-    N = ceil.(-log.(dist)./log.(θ))
+    r = dist .+ 1
+    N = ceil.(-log.(r)./log.(θ))
     N = max.(N, 0)
-    ok = isfinite.(N)
-    N[ok] .= Int64.(N[ok])
+    # ok = isfinite.(N)
+    # N[ok] .= Int64.(N[ok])
     return N
 
 end
