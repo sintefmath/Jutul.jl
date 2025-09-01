@@ -14,6 +14,9 @@ function compute_distance(report;
     distance, names = distance_function(report)
     # Apply transformation
     distance = mapping(distance)
+    if !(distance isa Vector)
+        distance = [distance]
+    end
 
     return distance, names
 
