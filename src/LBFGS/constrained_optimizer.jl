@@ -241,8 +241,83 @@ function box_bfgs(x0, f, lb, ub; kwarg...)
 end
 
 function box_bfgs(u0, f, bounds; kwarg...)
+    
     return box_bfgs(u0, f, bounds...; kwarg...)
+    
 end
+
+function log_box_bfgs(x0, f, lb, ub; kwargs...)
+
+    n = length(x0)
+    
+    length(lb) == n || throw(ArgumentError("Length of lower bound ($(length(lb))) must match length of initial guess ($n)"))
+    length(ub) == n || throw(ArgumentError("Length of upper bound ($(length(ub))) must match length of initial guess ($n)"))
+    
+    # Check bounds and initial guess
+    for i in eachindex(x0, lb, ub)
+        if x0[i] ≤ 0 || lb[i] ≤ 0
+            throw(ArgumentError("Log scaling requires positive values: x0[$i] = $(x0[i]), lb[$i] = $(lb[i]) must be > 0"))
+        end
+        if x0[i] < lb[i] || x0[i] > ub[i]
+            throw(ArgumentError("Initial guess x0[$i] = $(x0[i]) is outside bounds [$(lb[i]), $(ub[i])]"))
+        end
+        if lb[i] >= ub[i]
+            throw(ArgumentError("Lower bound must be less than upper bound for index $i: lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
+        end
+    end
+
+    # Log-transform bounds
+    log_lb = log.(lb)
+    log_ub = log.(ub)
+    
+    δ_log = log_ub .- log_lb
+
+    # Transformation functions
+    function x_to_u(x)
+        log_x = log.(x)
+        u = (log_x .- log_lb) ./ δ_log
+        return u
+    end
+
+    function u_to_x(u)
+        log_x = u .* δ_log .+ log_lb
+        x = exp.(log_x)
+        return x
+    end
+
+    function dx_to_du!(g, x)
+        g .= g .* x .* δ_log  # Chain rule: df/du = df/dx * dx/du
+    end
+
+    # Wrapped objective function
+    function F(u)
+        x = u_to_x(u)
+        obj, g = f(x)
+        dx_to_du!(g, x)
+        return (obj, g)
+    end
+
+    # Initial guess in transformed space
+    u0 = x_to_u(x0)
+
+    # Optimize in unit box
+    v, u, history = unit_box_bfgs(u0, F; kwargs...)
+    
+    # Transform back to original space
+    x = u_to_x(u)
+    
+    return (v, x, history)
+    
+end
+
+function log_box_bfgs(u0, f, bounds; kwargs...)
+    # Unpack bounds
+    
+    lb, ub = bounds
+    return log_box_bfgs(u0, f, lb, ub; kwargs...)
+    
+end
+
 
 function get_search_direction(u0, g0, Hi, HiPrev, c)
     # Find search-direction which is (sum of) the projection(s) of Hi*g0
