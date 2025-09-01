@@ -2,6 +2,8 @@
 
     # Function to compute the distance from convergence
     distance_function = r -> compute_distance(r)
+    # Count viloations per residual
+    per_residual = false
     # Dict for storing contraction factor history
     history = nothing
     # Number of iterations to use for computing contraction factor metrics
@@ -9,12 +11,12 @@
     # Target number of nonlinear iterations for the timestep
     target_iterations = 8
     # Max number of estimated iterations left for iterate to be classified as ok
-    max_iterations_left = 2*target_iterations
+    max_iterations_left = 4*target_iterations
     # Contraction factor parameters
     slow = 0.99
     fast = 0.1
     # Violation counter and limit for timestep cut
-    num_violations::Int     = 0
+    num_violations::Vector{Int} = [0]
     num_violations_cut::Int = 3
 
 end
@@ -64,7 +66,7 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
 
     # Get distance from convergence
     report = step_reports[end][:errors]
-    dist, = cc.distance_function(report)
+    dist, names = cc.distance_function(report)
     # Reset cc if first iteration
     (it == 1) ? reset!(cc, dist, max_iter) : nothing
     # Store distance
@@ -82,6 +84,8 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     its_left[converged] .= 0
     oscillating_it[converged] .= false
 
+    # println("Iterations left: $its_left")
+
     # Update history
     cc.history[:contraction_factor][it,:] .= θ
     cc.history[:contraction_factor_target][it,:] .= θ_target
@@ -89,37 +93,28 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     cc.history[:oscillation][it,:] .= oscillating_it
 
     # Determine if current rate of convergence is adequate
-    is_oscillating = any(cc.history[:oscillation][it0:it,:])
+    is_oscillating = vec(any(cc.history[:oscillation][it0:it,:], dims=1))
     good = θ .<= max.(θ_target, cc.fast) .&& .!is_oscillating
     good = good .|| converged
     ok = θ .<= cc.slow .&& its_left .<= cc.max_iterations_left
     bad = θ .> cc.slow .|| its_left .> cc.max_iterations_left
 
-    # println("θ = $θ")
-    # println("θ_target = $(θ_target)")
-    # println("N = $its_left")
-    # println("Converged = $converged")
-    # println("Good = $good")
-    # println("Ok = $ok")
-    # println("Bad = $bad")
-
-    # if good = all(good)
-
-    # good = all(θ .<= max.(θ_target, cc.fast)) && all(.!is_oscillating)
-    # ok = all(θ .<= cc.slow) && all(its_left .<= cc.max_iterations_left)
-    # bad = any(θ .> cc.slow) || any(its_left .> cc.max_iterations_left)
+    if cc.per_residual
+        cc.num_violations[good] .-= 1
+        cc.num_violations[bad] .+= 1
+    end
 
     if all(good)
         # Convergence rate good, decrease number of violations
-        cc.num_violations -= 1
         status = :good
+        !cc.per_residual ? cc.num_violations .-= 1 : nothing
     elseif all(ok .|| good)
         # Convergence rate ok, keep number of violations
         status = :ok
     elseif any(bad)
         # Not converging, increase number of violations
-        cc.num_violations += 1
         status = :bad
+        !cc.per_residual ? cc.num_violations .+= 1 : nothing
     else
         # First iteration
         @assert it == 1
@@ -127,18 +122,19 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     end
     cc.history[:status][it] = status
     # Clamp number of violations to be non-negative
-    cc.num_violations = max(0, cc.num_violations)
+    cc.num_violations = max.(0, cc.num_violations)
 
     # Check if the number of violations exceeds the limit, in which case the
     # timstep should be aborted
-    early_cut = cc.num_violations > cc.num_violations_cut
+    # early_cut = cc.num_violations > cc.num_violations_cut
+    early_cut = any(cc.num_violations .> cc.num_violations_cut)
     
     # Generate convergence monitor report and store in step report
-    cm_report = make_report(θ, θ_target, is_oscillating, status)
+    cm_report = make_report(names, θ, θ_target, is_oscillating, status)
     step_reports[end][:convergence_monitor] = cm_report
 
     # Print status of convergence monitoring
-    (cfg[:info_level] >= 2) ? print_convergence_status(cc, it, it0) : nothing
+    (cfg[:info_level] >= 2) ? print_convergence_status(cc, it, it0, names) : nothing
 
     return (relaxation, early_cut)
 
@@ -151,7 +147,7 @@ Utility for resetting convergence monitor cutting criterion.
 """
 function reset!(cc::ConvergenceMonitorCuttingCriterion, template, max_iter)
 
-    cc.num_violations = 0
+    cc.num_violations = zeros(Int64, length(template))
     nc = max_iter + 1
 
     history = Dict()
@@ -178,9 +174,10 @@ end
 
 Utility for generating a report from the convergence monitor.
 """
-function make_report(θ, θ_target, oscillation, status)
+function make_report(names, θ, θ_target, oscillation, status)
 
     report = Dict()
+    report[:names] = names
     report[:contraction_factor] = θ
     report[:contraction_factor_target] = θ_target
     report[:oscillation] = oscillation
@@ -194,29 +191,35 @@ end
 
 Utility for printing the status of the convergence monitor.
 """
-function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, it0)
+function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, it0, names)
 
-    round_local(x) = round(x; digits = 2)
-
+    # Get convergence monitor status and actual and target contraction factor
+    status = cc.history[:status][it]
     θ = cc.history[:contraction_factor][it,:]
     θ_target = cc.history[:contraction_factor_target][it,:]
-
+    print_eq = length(θ) > 1
+    # Find index of worst-offending residual
     Δθ = θ .- θ_target
+    if status != :good
+        Δθ[θ.<=cc.slow] = 0.0
+    end
     _, worst_ix = findmax(Δθ)
-
     θ, θ_target = θ[worst_ix], θ_target[worst_ix]
-
-    its_left = cc.history[:iterations_left][it,worst_ix]
+    oscillation = any(cc.history[:oscillation][it0:it,:], dims=1)[worst_ix]
+    # Find index of max estimated iterations left
+    its_left, worst_ix_its = findmax(cc.history[:iterations_left][it,:])
+    max_its = cc.max_iterations_left
+    worst_ix = its_left > max_its ? worst_ix_its : worst_ix
+    # Get convergence monitor 
     θ_slow = cc.slow
     θ_fast = cc.fast
-    status = cc.history[:status][it]
-    oscillation = any(cc.history[:oscillation][it0:it])
-
+    # Round values for printing
+    round_local(x) = round(x; digits = 2)
     θ = round_local.(θ)
     θ_target = round_local.(θ_target)
     θ_slow = round_local.(θ_slow)
     θ_fast = round_local.(θ_fast)
-    
+    # Determine print message
     if status == :none
         inequality, sym, color, reason = "", "", :white, ""
     elseif status == :good
@@ -232,7 +235,6 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, it
         sym = " →"
         color = :yellow
     elseif status == :bad
-        max_its = cc.max_iterations_left
         if its_left > max_its
             inequality = "Iterations left = $its_left > $max_its = upper limit"
         else
@@ -243,17 +245,19 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, it
     else
         error("Unknown status: $status")
     end
-
+    # Add reason and equation name
     if status != :none        
         reason = "\n\t\t Reason: " * inequality
         reason *= oscillation ? " (oscillation)" : ""
+        reason *= print_eq ? ". Equation: $(names[worst_ix])" : ""
     end
-
+    # Concatenate
     msg = "(It. $(it-1)): "
     msg *= "status = $(cc.history[:status][it]), "
-    msg *= "violations = $(cc.num_violations)" * sym
+    msg *= "violations = $(maximum((cc.num_violations)))" * sym
     msg *= reason
     msg *= "."
+    # Print message
     Jutul.jutul_message("\tConvergence monitor", msg, color = color)
 
 end
