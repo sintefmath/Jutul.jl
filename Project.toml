@@ -120,4 +120,4 @@ NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 
 [targets]
-test = ["Meshes", "KaHyPar"]
+test = ["Meshes", "KaHyPar", "HYPRE"]
