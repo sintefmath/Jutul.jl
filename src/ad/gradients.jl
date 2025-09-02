@@ -989,8 +989,8 @@ from this function will be passed to objective functions as `step_info`. This
 function is a `Dict` with the following fields:
 
 # Fields
-- `:time` - The time at the start of the step. To get time at the end of the
-  step, use `step_info[:time] + step_info[:dt]`
+- `:time` - The time at the end of the step. To get time at the start of the
+  step, use `step_info[:time] - step_info[:dt]`
 - `:dt` - The time step size for this step.
 - `:step` - The step number, starting at 1. Not that this is the report step,
   and multiple `step_info` entries could have the same step if substeps are
@@ -1001,7 +1001,7 @@ function is a `Dict` with the following fields:
 - `:substep_global` - The global substep number, starting at 1 and will not
   reset between global steps.
 - `:Nsubstep_global` - The total number of substeps in the simulation.
-- `:total_time` - The total time of the simulation (i.e. dt + time at the final
+- `:total_time` - The total time of the simulation (i.e. time at the final
   step and substep)
 """
 function optimization_step_info(step::Int, time::Real, dt::Real;
@@ -1030,7 +1030,7 @@ end
 
 function optimization_step_info(step::Int, dts::Vector; kwarg...)
     t = 0.0
-    for i in 1:(step-1)
+    for i in 1:(step)
         t += dts[i]
     end
     return optimization_step_info(step, t, dts[step]; Nstep = length(dts), total_time = sum(dts), kwarg...)
