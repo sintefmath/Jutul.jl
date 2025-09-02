@@ -159,7 +159,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
     )
     rec = progress_recorder(sim)
     # Reset recorder just in case since we are starting a new simulation
-    reset!(rec)
+    recorder_reset!(rec)
     forces, forces_per_step = preprocess_forces(sim, forces)
     start_timestamp = now()
     if isnothing(config)
@@ -201,7 +201,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
     for step_no = first_step:no_steps
         dT = timesteps[step_no]
         forces_step = forces_for_timestep(sim, forces, timesteps, step_no, per_step = forces_per_step)
-        nextstep_global!(rec, dT)
+        recorder_start_step!(rec, dT, :global)
         new_simulation_control_step_message(info_level, p, rec, t_elapsed, step_no, no_steps, dT, t_tot, start_date)
         if config[:output_substates]
             substates = JUTUL_OUTPUT_TYPE[]
@@ -219,6 +219,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
         subrep = JUTUL_OUTPUT_TYPE()
         subrep[:ministeps] = rep
         subrep[:total_time] = t_step
+        recorder_log_step!(rec, step_done, :global)
         if step_done
             lastrep = rep[end]
             if get(lastrep, :stopnow, false)
@@ -284,11 +285,13 @@ function solve_timestep!(sim, dT, forces, max_its, config;
     while !done
         # Make sure that we hit the endpoint in case timestep selection is too optimistic.
         dt = min(dt, dT - t_local)
+        recorder_start_step!(rec, dt, :local)
         # Attempt to solve current step
         @tic "solve" ok, s = solve_ministep(sim, dt, forces, max_its, config; kwarg...)
+        recorder_log_step!(rec, ok, :local)
+
         # We store the report even if it is a failure.
         push!(ministep_reports, s)
-        nextstep_local!(rec, dt, ok)
         n_so_far = length(ministep_reports)
         if ok
             if 2 > info_level > 1
@@ -357,7 +360,7 @@ function perform_step!(storage, model, dt, forces, config;
     end
     # Update the properties and equations
     rec = storage.recorder
-    time = rec.recorder.time + dt
+    time = recorder_current_time(rec, :global) + dt
     prep, prep_storage = get_prepare_step_handler(storage)
     # Apply a pre-step if it exists
     if ismissing(prep)
@@ -517,7 +520,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg;
     report = JUTUL_OUTPUT_TYPE()
     report[:dt] = dt
     step_reports = JUTUL_OUTPUT_TYPE[]
-    cur_time = current_time(rec)
+    cur_time = recorder_current_time(rec, :global)
     t_prepare = @elapsed if prepare
         update_before_step!(sim, dt, forces, time = cur_time, recorder = rec, update_explicit = update_explicit)
     end
@@ -539,7 +542,7 @@ function solve_ministep(sim, dt, forces, max_iter, cfg;
             end
             break
         end
-        next_iteration!(rec, step_report)
+        recorder_increment_iteration!(rec, step_report, :local)
         if done
             break
         end

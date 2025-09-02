@@ -138,7 +138,7 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed
     report_step = step_info[:step]
     for skey in [:backward, :forward]
         s = adjoint_storage[skey]
-        Jutul.reset!(Jutul.progress_recorder(s), step = report_step, time = current_time)
+        Jutul.recorder_reset!(Jutul.progress_recorder(s), step = report_step, time = current_time)
     end
 
     λ = Jutul.next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_next, packed_steps)

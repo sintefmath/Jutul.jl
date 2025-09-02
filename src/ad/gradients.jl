@@ -456,7 +456,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     forces = packed_step.forces
     for skey in [:backward, :forward, :parameter]
         s = adjoint_storage[skey]
-        reset!(progress_recorder(s), step = report_step, time = current_time)
+        recorder_reset!(progress_recorder(s), step = report_step, time = current_time)
     end
     λ = next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_next, packed_steps)
     # λ, t, dt, forces
