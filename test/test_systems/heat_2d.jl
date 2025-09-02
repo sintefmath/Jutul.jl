@@ -1,7 +1,7 @@
 using Jutul
 using Test
 
-function test_heat_2d(nx = 3, ny = nx)
+function test_heat_2d(nx = 3, ny = nx; kwarg...)
     sys = SimpleHeatSystem()
     # Unit square
     g = CartesianMesh((nx, ny), (1.0, 1.0))
@@ -13,7 +13,7 @@ function test_heat_2d(nx = 3, ny = nx)
     T0 = rand(nc)
     state0 = setup_state(model, Dict(:T=>T0))
     sim = Simulator(model, state0 = state0)
-    states, = simulate(sim, [1.0], info_level = -1)
+    states, = simulate(sim, [1.0]; info_level = -1, kwarg...)
     return states
 end
 
@@ -22,4 +22,15 @@ end
         states = test_heat_2d(4, 4)
         true
     end
+end
+
+using HYPRE
+@testset "Algebraic multigrid heat" begin
+    lsolve = GenericKrylov(:bicgstab, preconditioner = Jutul.AMGPreconditioner(:smoothed_aggregation))
+    states = test_heat_2d(4, 4, linear_solver = lsolve)
+    @test length(states) == 1
+
+    lsolve = GenericKrylov(:bicgstab, preconditioner = Jutul.BoomerAMGPreconditioner())
+    states = test_heat_2d(4, 4, linear_solver = lsolve)
+    @test length(states) == 1
 end

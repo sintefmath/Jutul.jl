@@ -61,10 +61,10 @@ module JutulHYPREExt
             J_h, r_h, x_h = D[:hypre_system]
             reassemble_matrix!(J_h, D, J, executor)
         else
-            r_h = HYPRE.HYPREVector(r)
+            r_h = HYPRE.HYPREVector(copy(r))
             x_h = HYPRE.HYPREVector(copy(r))
             D[:J] = J
-            # D[:n] = n
+            D[:n] = length(r)
             # (; ilower, iupper) = r_h
             # D[:vector_indices] = HYPRE.HYPRE_BigInt.(ilower:iupper)
             J_h = transfer_matrix_to_hypre(J, D, executor)
