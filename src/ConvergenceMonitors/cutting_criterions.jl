@@ -3,7 +3,7 @@
     # Function to compute the distance from convergence
     distance_function = r -> compute_distance(r)
     # Count viloations per residual
-    per_residual = false
+    count_per_residual = false
     # Dict for storing contraction factor history
     history = nothing
     # Number of iterations to use for computing contraction factor metrics
@@ -99,7 +99,7 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     ok = θ .<= cc.slow .&& its_left .<= cc.max_iterations_left
     bad = θ .> cc.slow .|| its_left .> cc.max_iterations_left
 
-    if cc.per_residual
+    if cc.count_per_residual
         cc.num_violations[good] .-= 1
         cc.num_violations[bad] .+= 1
     end
@@ -107,14 +107,14 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     if all(good)
         # Convergence rate good, decrease number of violations
         status = :good
-        !cc.per_residual ? cc.num_violations .-= 1 : nothing
+        !cc.count_per_residual ? cc.num_violations .-= 1 : nothing
     elseif all(ok .|| good)
         # Convergence rate ok, keep number of violations
         status = :ok
     elseif any(bad)
         # Not converging, increase number of violations
         status = :bad
-        !cc.per_residual ? cc.num_violations .+= 1 : nothing
+        !cc.count_per_residual ? cc.num_violations .+= 1 : nothing
     else
         # First iteration
         @assert it == 1
