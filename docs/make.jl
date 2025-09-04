@@ -20,6 +20,7 @@ makedocs(;
         "Usage" => "usage.md",
         "optimization.md",
         "mesh.md",
+        "Plotting" => "plotting.md",
         "Internals" => "internals.md",
         "Docstrings" => "docstrings.md"
     ],
