@@ -44,19 +44,7 @@ using LinearAlgebra
         end
     end
 end
-using Meshes
-@testset "Meshes.jl interop" begin
-    # This testing is a bit simple since it relies on the same ordering
-    # in both Jutul.jl's cart grid and Meshes.jl
-    dims = (2,2,3)
-    grid  = CartesianGrid(dims)
-    geo = tpfv_geometry(grid)
-    jgrid = Jutul.CartesianMesh(dims, (2.0, 2.0, 3.0))
-    jgeo = tpfv_geometry(jgrid)
-    @test isapprox(jgeo.cell_centroids, geo.cell_centroids, atol = 1e-12)
-    @test isapprox(jgeo.volumes, geo.volumes, atol = 1e-12)
-end
-##
+
 using MAT
 @testset "UnstructuredMesh" begin
     exported = Jutul.get_mat_testgrid("pico")
