@@ -50,7 +50,6 @@ KaHyPar = "2a6221f6-aa48-11e9-3542-2d9e0ef01880"
 LayeredLayouts = "f4a74d36-062a-4d48-97cd-1356bad1de4e"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
-Meshes = "eacbb407-ea5a-433e-ab97-5258b1ca43fa"
 NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 
@@ -62,7 +61,6 @@ JutulGraphMakieExt = ["GraphMakie", "NetworkLayout", "LayeredLayouts", "Makie"]
 JutulHYPREExt = "HYPRE"
 JutulKaHyParExt = "KaHyPar"
 JutulMakieExt = "Makie"
-JutulMeshesExt = ["Meshes"]
 JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
 
 [compat]
@@ -86,7 +84,6 @@ LoopVectorization = "0.12.115"
 MAT = "0.10.3"
 Makie = "0.21, 0.22, 0.23"
 MappedArrays = "0.4.1"
-Meshes = "0.28 - 0.41"
 Metis = "1.1.0"
 NetworkLayout = "0.4.5"
 OrderedCollections = "1.4.1"
@@ -115,9 +112,8 @@ KaHyPar = "2a6221f6-aa48-11e9-3542-2d9e0ef01880"
 LayeredLayouts = "f4a74d36-062a-4d48-97cd-1356bad1de4e"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
-Meshes = "eacbb407-ea5a-433e-ab97-5258b1ca43fa"
 NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 
 [targets]
-test = ["Meshes", "KaHyPar", "HYPRE"]
+test = ["KaHyPar", "HYPRE"]
