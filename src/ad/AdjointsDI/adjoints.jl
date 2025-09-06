@@ -96,6 +96,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         state0 = missing,
         do_prep = true,
         di_sparse = true,
+        deps = :all,
         backend = Jutul.default_di_backend(sparse = di_sparse),
         info_level = 0,
         single_step_sparsity = true,
@@ -112,7 +113,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             info_level = info_level,
     )
     storage[:dparam] = zeros(length(X))
-    setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse)
+    setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, deps)
     return storage
 end
 
@@ -291,10 +292,11 @@ function (H::AdjointObjectiveHelper)(x)
     return v
 end
 
-function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backend, do_prep, single_step_sparsity, di_sparse)
+function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backend, do_prep, single_step_sparsity, di_sparse, deps::Symbol)
     if ismissing(backend)
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
+    setup_outer_chain_rule(F, case0, deps)
 
     H = AdjointObjectiveHelper(F, G, packed_steps)
     storage[:adjoint_objective_helper] = H
@@ -314,6 +316,35 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
     storage[:prep_di] = prep
     storage[:backend_di] = backend
     return storage
+end
+
+function setup_outer_chain_rule(F, case, deps::Symbol)
+    model = case.model
+    # Two approaches:
+    # 1. S(X) -> Y (vector of parameters) -> C(Y) (updated case)
+    # 2. F(X) -> case directly and C = F
+    if deps != :all
+        deps in (:parameters, :parameters_and_state0) || error("deps must be :all, :parameters or :parameters_and_state0. Got $deps.")
+        # cfg = optimization_config(case0, include_state0 = deps == :parameters_and_state0)
+        inc_state0 = deps == :parameters_and_state0
+        parameters_map, = variable_mapper(model, :parameters)
+        if inc_state0
+            state0_map, = variable_mapper(model, :primary)
+        else
+            state0_map = missing
+        end
+        # Replace F
+        storage[:X_to_Y]
+        storage[:dYdx]
+        storage[:F_Y]
+        storage[:F_X]
+    else
+        C = F
+        S = x -> x
+        X_to_Y = x -> x
+        dYdX = V -> V
+    end
+    return (S, X_to_Y, dYdX, C)
 end
 
 function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, substep_index::Int, cache = missing; is_sum = true)
