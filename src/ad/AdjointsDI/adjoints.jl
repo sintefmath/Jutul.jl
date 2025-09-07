@@ -304,10 +304,10 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
     # 1. F_static(X) -> Y (vector of parameters) -> F_dynamic(Y) (updated case)
     # 2. F(X) -> case directly and F_dynamic = F and F_static = identity
     fully_dynamic = deps == :all
+    prep_static = nothing
     if fully_dynamic
         F_dynamic = F
         F_static = x -> x
-        prep_static = nothing
     else
         deps in (:parameters, :parameters_and_state0) || error("deps must be :all, :parameters or :parameters_and_state0. Got $deps.")
         # cfg = optimization_config(case0, include_state0 = deps == :parameters_and_state0)
@@ -322,14 +322,8 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
         F_static = (X, step_info = missing) -> map_X_to_Y(F, X, case.model, parameters_map, state0_map, cache_static)
         F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, parameters_map, state0_map)
         if do_prep
-            prep = prepare_jacobian(F_static, backend, X)
-        else
-            prep_static = nothing
+            prep_static = prepare_jacobian(F_static, backend, X)
         end
-        error()
-        F_dynamic = F
-        F_static = x -> x
-        # dF_static_dX_prep = V -> V
     end
 
     # Whatever was input - for checking

@@ -16,10 +16,10 @@ function map_X_to_Y(F, X, model, parameters_map, state0_map, cache)
     Y = cache[T]
     resize!(Y, N)
     Y_prm = view(Y, 1:N_prm)
-    vectorize_variables!(Y_prm, model, parameters_map, parameters_map)
+    vectorize_variables!(Y_prm, model, case.parameters, parameters_map)
     if has_state0
         Y_s0 = view(Y, (N_prm+1):(N_prm+N_s0))
-        vectorize_variables!(Y_s0, model, state0_map, state0_map)
+        vectorize_variables!(Y_s0, model, case.state0, state0_map)
     end
     return Y
 end
