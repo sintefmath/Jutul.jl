@@ -321,8 +321,8 @@ end
 function setup_outer_chain_rule(F, case, deps::Symbol)
     model = case.model
     # Two approaches:
-    # 1. S(X) -> Y (vector of parameters) -> C(Y) (updated case)
-    # 2. F(X) -> case directly and C = F
+    # 1. F_static(X) -> Y (vector of parameters) -> F_dynamic(Y) (updated case)
+    # 2. F(X) -> case directly and F_dynamic = F and F_static = identity
     if deps != :all
         deps in (:parameters, :parameters_and_state0) || error("deps must be :all, :parameters or :parameters_and_state0. Got $deps.")
         # cfg = optimization_config(case0, include_state0 = deps == :parameters_and_state0)
@@ -333,18 +333,12 @@ function setup_outer_chain_rule(F, case, deps::Symbol)
         else
             state0_map = missing
         end
-        # Replace F
-        storage[:X_to_Y]
-        storage[:dYdx]
-        storage[:F_Y]
-        storage[:F_X]
     else
-        C = F
-        S = x -> x
-        X_to_Y = x -> x
-        dYdX = V -> V
+        F_dynamic = F
+        F_static = x -> x
+        dF_static_dX = V -> V
     end
-    return (S, X_to_Y, dYdX, C)
+    return (F_dynamic, F_static, dF_static_dX)
 end
 
 function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, substep_index::Int, cache = missing; is_sum = true)

@@ -64,6 +64,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
             di_sparse = true,
             single_step_sparsity = false,
             do_prep = true,
+            deps = :all,
         ),
         kwarg...
     )
