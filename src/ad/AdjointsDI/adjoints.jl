@@ -320,7 +320,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
         end
         cache_static = Dict{Type, AbstractVector}()
         F_static = (X, step_info = missing) -> map_X_to_Y(F, X, case.model, parameters_map, state0_map, cache_static)
-        F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, parameters_map, state0_map)
+        F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, case, parameters_map, state0_map)
         if do_prep
             prep_static = prepare_jacobian(F_static, backend, X)
         end
@@ -334,8 +334,9 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
     storage[:F_static] = F_static
     # Jacobian action
     storage[:dF_static_dX_prep] = prep_static
-    Y = F_static(X)
 
+    # Switch to Y and F_dynamic(Y) as main function
+    Y = F_static(X)
     H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
     # Note: strict = false is needed because we create another function on the fly
@@ -347,7 +348,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
             step_index = missing
         end
         set_objective_helper_step_index!(H, case.model, step_index)
-        prep = prepare_jacobian(H, backend, X)
+        prep = prepare_jacobian(H, backend, Y)
     else
         prep = nothing
     end
