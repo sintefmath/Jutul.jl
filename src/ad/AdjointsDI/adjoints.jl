@@ -12,7 +12,6 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
     packed_steps = AdjointPackedResult(states, reports_or_timesteps, forces)
     Jutul.set_global_timer!(extra_timing)
     N = length(states)
-    n_param = length(X)
     # Allocation part
     if info_level > 1
         jutul_message("Adjoints", "Setting up storage...", color = :blue)
@@ -26,13 +25,16 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
     if info_level > 1
         jutul_message("Adjoints", "Storage set up in $(Jutul.get_tstr(t_storage)).", color = :blue)
     end
-    ∇G = zeros(n_param)
+    n_param = storage[:n_dynamic]
+    n_param_static = storage[:n_static]
+    n_param_static == length(X) || error("Internal error: static parameter length mismatch.")
+    ∇G = zeros(n_param_static)
 
     # Solve!
     if info_level > 1
         jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
     end
-    t_solve = @elapsed solve_adjoint_generic!(∇G, X, F, storage, packed_steps, G,
+    t_solve = @elapsed solve_adjoint_generic!(storage[:dynamic_buffer], X, F, storage, packed_steps, G,
         info_level = info_level,
         state0 = state0,
     )
@@ -118,8 +120,8 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             n_objective = nothing,
             info_level = info_level,
     )
-    storage[:dparam] = zeros(length(X))
     setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, deps)
+    storage[:dparam] = zeros(storage[:n_dynamic])
     return storage
 end
 
@@ -340,6 +342,9 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
 
     # Switch to Y and F_dynamic(Y) as main function
     Y = F_static(X)
+    storage[:n_static] = length(X)
+    storage[:n_dynamic] = length(Y)
+    storage[:dynamic_buffer] = Y
     H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
     # Note: strict = false is needed because we create another function on the fly
