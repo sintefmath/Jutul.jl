@@ -61,6 +61,9 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     if F != storage[:F_input]
         @warn "The function F used in the solve must be the same as the one used in the setup."
     end
+    F_dynamic = storage[:F_dynamic]
+    F_static = storage[:F_static]
+    Y = F_static(X)
     G = Jutul.adjoint_wrap_objective(G, case.model)
     Jutul.adjoint_reset_parameters!(storage, case.parameters)
 
@@ -80,7 +83,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
-        update_sensitivities_generic!(∇G, X, H, i, G, storage, packed_steps)
+        update_sensitivities_generic!(∇G, Y, H, i, G, storage, packed_steps)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
