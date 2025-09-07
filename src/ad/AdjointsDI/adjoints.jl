@@ -312,9 +312,9 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
         deps in (:parameters, :parameters_and_state0) || error("deps must be :all, :parameters or :parameters_and_state0. Got $deps.")
         # cfg = optimization_config(case0, include_state0 = deps == :parameters_and_state0)
         inc_state0 = deps == :parameters_and_state0
-        parameters_map, = variable_mapper(model, :parameters)
+        parameters_map, = Jutul.variable_mapper(model, :parameters)
         if inc_state0
-            state0_map, = variable_mapper(model, :primary)
+            state0_map, = Jutul.variable_mapper(model, :primary)
         else
             state0_map = missing
         end

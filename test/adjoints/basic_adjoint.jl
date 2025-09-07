@@ -262,6 +262,10 @@ end
             for fmt in [:case, :onecase, :model_and_prm, :model_and_prm_and_forces, :model_and_prm_and_forces_and_state0]
                 test_for_timesteps([100.0], fmt = fmt, global_objective = global_obj)
             end
+            @testset "parameters" begin
+                test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters)
+                test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters_and_state0)
+            end
         end
     end
 end
