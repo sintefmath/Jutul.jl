@@ -307,7 +307,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
     if fully_dynamic
         F_dynamic = F
         F_static = x -> x
-        dF_static_dX = V -> V
+        prep_static = nothing
     else
         deps in (:parameters, :parameters_and_state0) || error("deps must be :all, :parameters or :parameters_and_state0. Got $deps.")
         # cfg = optimization_config(case0, include_state0 = deps == :parameters_and_state0)
@@ -318,11 +318,18 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
         else
             state0_map = missing
         end
-        
+        cache_static = Dict{Type, AbstractVector}()
+        F_static = (X, step_info = missing) -> map_X_to_Y(F, X, case.model, parameters_map, state0_map, cache_static)
+        F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, parameters_map, state0_map)
+        if do_prep
+            prep = prepare_jacobian(F_static, backend, X)
+        else
+            prep_static = nothing
+        end
         error()
         F_dynamic = F
         F_static = x -> x
-        dF_static_dX = V -> V
+        # dF_static_dX_prep = V -> V
     end
 
     # Whatever was input - for checking
@@ -332,7 +339,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
     # Static part - once
     storage[:F_static] = F_static
     # Jacobian action
-    storage[:dF_static_dX] = dF_static_dX
+    storage[:dF_static_dX_prep] = prep_static
     Y = F_static(X)
 
     H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
@@ -440,4 +447,29 @@ function reset_context_and_groups(model::Jutul.SimulationModel)
         )
     end
     return model
+end
+
+function map_X_to_Y(F, X, model, parameters_map, state0_map, cache)
+    has_state0 = !ismissing(state0_map)
+    case = F(X, missing)
+    N_prm = Jutul.vectorized_length(model, parameters_map)
+    if has_state0
+        N_s0 = Jutul.vectorized_length(model, state0_map)
+    else
+        N = N_prm
+    end
+    N = N_prm + N_s0
+    T = eltype(X)
+    if !haskey(cache, T)
+        cache[T] = zeros(T, N)
+    end
+    Y = cache[T]
+    resize!(Y, N)
+    Y_prm = view(Y, 1:N_prm)
+    vectorize_variables!(Y_prm, model, parameters_map, parameters_map)
+    if has_state0
+        Y_s0 = view(Y, (N_prm+1):(N_prm+N_s0))
+        vectorize_variables!(Y_s0, model, state0_map, state0_map)
+    end
+    return Y
 end
