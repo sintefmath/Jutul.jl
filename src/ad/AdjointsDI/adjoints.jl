@@ -58,6 +58,9 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     )
     N = length(packed_steps)
     case = setup_case(X, F, packed_steps, state0, :all)
+    if F != storage[:F_input]
+        @warn "The function F used in the solve must be the same as the one used in the setup."
+    end
     G = Jutul.adjoint_wrap_objective(G, case.model)
     Jutul.adjoint_reset_parameters!(storage, case.parameters)
 
@@ -292,13 +295,47 @@ function (H::AdjointObjectiveHelper)(x)
     return v
 end
 
-function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backend, do_prep, single_step_sparsity, di_sparse, deps::Symbol)
+function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, deps::Symbol)
     if ismissing(backend)
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
-    setup_outer_chain_rule(F, case0, deps)
+    model = case.model
+    # Two approaches:
+    # 1. F_static(X) -> Y (vector of parameters) -> F_dynamic(Y) (updated case)
+    # 2. F(X) -> case directly and F_dynamic = F and F_static = identity
+    fully_dynamic = deps == :all
+    if fully_dynamic
+        F_dynamic = F
+        F_static = x -> x
+        dF_static_dX = V -> V
+    else
+        deps in (:parameters, :parameters_and_state0) || error("deps must be :all, :parameters or :parameters_and_state0. Got $deps.")
+        # cfg = optimization_config(case0, include_state0 = deps == :parameters_and_state0)
+        inc_state0 = deps == :parameters_and_state0
+        parameters_map, = variable_mapper(model, :parameters)
+        if inc_state0
+            state0_map, = variable_mapper(model, :primary)
+        else
+            state0_map = missing
+        end
+        
+        error()
+        F_dynamic = F
+        F_static = x -> x
+        dF_static_dX = V -> V
+    end
 
-    H = AdjointObjectiveHelper(F, G, packed_steps)
+    # Whatever was input - for checking
+    storage[:F_input] = F
+    # Dynamic part - every timestep
+    storage[:F_dynamic] = F_dynamic
+    # Static part - once
+    storage[:F_static] = F_static
+    # Jacobian action
+    storage[:dF_static_dX] = dF_static_dX
+    Y = F_static(X)
+
+    H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
     # Note: strict = false is needed because we create another function on the fly
     # that essentially calls the same function.
@@ -308,7 +345,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
         else
             step_index = missing
         end
-        set_objective_helper_step_index!(H, case0.model, step_index)
+        set_objective_helper_step_index!(H, case.model, step_index)
         prep = prepare_jacobian(H, backend, X)
     else
         prep = nothing
@@ -319,25 +356,6 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
 end
 
 function setup_outer_chain_rule(F, case, deps::Symbol)
-    model = case.model
-    # Two approaches:
-    # 1. F_static(X) -> Y (vector of parameters) -> F_dynamic(Y) (updated case)
-    # 2. F(X) -> case directly and F_dynamic = F and F_static = identity
-    if deps != :all
-        deps in (:parameters, :parameters_and_state0) || error("deps must be :all, :parameters or :parameters_and_state0. Got $deps.")
-        # cfg = optimization_config(case0, include_state0 = deps == :parameters_and_state0)
-        inc_state0 = deps == :parameters_and_state0
-        parameters_map, = variable_mapper(model, :parameters)
-        if inc_state0
-            state0_map, = variable_mapper(model, :primary)
-        else
-            state0_map = missing
-        end
-    else
-        F_dynamic = F
-        F_static = x -> x
-        dF_static_dX = V -> V
-    end
     return (F_dynamic, F_static, dF_static_dX)
 end
 
