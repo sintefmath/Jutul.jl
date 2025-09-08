@@ -934,7 +934,7 @@ function Base.getindex(case::JutulCase, ix)
         forces = forces[ix]
     end
     dt = dt[ix]
-    return JutulCase(model, dt, f, state0, parameters, input_data)
+    return JutulCase(model, dt, forces, state0, parameters, input_data)
 end
 
 export NoRelaxation, SimpleRelaxation
