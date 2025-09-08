@@ -87,6 +87,11 @@ end
 function devectorize_variable!(state, V, k, info, F_inv; config = nothing)
     (; n_full, n_x, offset_full, offset_x) = info
     state_val = state[k]
+    T = eltype(V)
+    if eltype(state_val) != T
+        state_val = similar(state_val, T)
+        state[k] = state_val
+    end
     lumping = get_lumping(config)
     if isnothing(lumping)
         @assert n_full == n_x

@@ -12,7 +12,6 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
     packed_steps = AdjointPackedResult(states, reports_or_timesteps, forces)
     Jutul.set_global_timer!(extra_timing)
     N = length(states)
-    n_param = length(X)
     # Allocation part
     if info_level > 1
         jutul_message("Adjoints", "Setting up storage...", color = :blue)
@@ -26,7 +25,10 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
     if info_level > 1
         jutul_message("Adjoints", "Storage set up in $(Jutul.get_tstr(t_storage)).", color = :blue)
     end
-    ∇G = zeros(n_param)
+    n_param = storage[:n_dynamic]
+    n_param_static = storage[:n_static]
+    n_param_static == length(X) || error("Internal error: static parameter length mismatch.")
+    ∇G = zeros(n_param_static)
 
     # Solve!
     if info_level > 1
@@ -58,6 +60,20 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     )
     N = length(packed_steps)
     case = setup_case(X, F, packed_steps, state0, :all)
+    if F != storage[:F_input]
+        @warn "The function F used in the solve must be the same as the one used in the setup."
+    end
+    F_dynamic = storage[:F_dynamic]
+    F_static = storage[:F_static]
+    is_fully_dynamic = storage[:F_fully_dynamic]
+    if is_fully_dynamic
+        Y = X
+        dYdX = missing
+    else
+        prep = storage[:dF_static_dX_prep]
+        backend = storage[:backend_di]
+        Y, dYdX = value_and_jacobian(F_static, prep, backend, X)
+    end
     G = Jutul.adjoint_wrap_objective(G, case.model)
     Jutul.adjoint_reset_parameters!(storage, case.parameters)
 
@@ -72,17 +88,24 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
 
     Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward)
     # Set gradient to zero before solve starts
-    @. ∇G = 0
+    dG_dynamic = storage[:dynamic_buffer]
+    @. dG_dynamic = 0
     @tic "sensitivities" for i in N:-1:1
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
-        update_sensitivities_generic!(∇G, X, H, i, G, storage, packed_steps)
+        update_sensitivities_generic!(dG_dynamic, Y, H, i, G, storage, packed_steps)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
-        @. ∇G += dparam
+        @. dG_dynamic += dparam
     end
+    if is_fully_dynamic
+        copyto!(∇G, dG_dynamic)
+    else
+        mul!(∇G, dYdX', dG_dynamic)
+    end
+
     all(isfinite, ∇G) || error("Adjoint solve resulted in non-finite gradient values.")
     return ∇G
 end
@@ -96,6 +119,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         state0 = missing,
         do_prep = true,
         di_sparse = true,
+        deps = :case,
         backend = Jutul.default_di_backend(sparse = di_sparse),
         info_level = 0,
         single_step_sparsity = true,
@@ -111,8 +135,8 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             n_objective = nothing,
             info_level = info_level,
     )
-    storage[:dparam] = zeros(length(X))
-    setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse)
+    setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, deps)
+    storage[:dparam] = zeros(storage[:n_dynamic])
     return storage
 end
 
@@ -291,12 +315,54 @@ function (H::AdjointObjectiveHelper)(x)
     return v
 end
 
-function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backend, do_prep, single_step_sparsity, di_sparse)
+function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, deps::Symbol)
     if ismissing(backend)
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
+    model = case.model
+    # Two approaches:
+    # 1. F_static(X) -> Y (vector of parameters) -> F_dynamic(Y) (updated case)
+    # 2. F(X) -> case directly and F_dynamic = F and F_static = identity
+    fully_dynamic = deps == :case
+    prep_static = nothing
+    if fully_dynamic
+        F_dynamic = F
+        F_static = x -> x
+    else
+        deps in (:parameters, :parameters_and_state0) || error("deps must be :case, :parameters or :parameters_and_state0. Got $deps.")
+        # cfg = optimization_config(case0, include_state0 = deps == :parameters_and_state0)
+        inc_state0 = deps == :parameters_and_state0
+        parameters_map, = Jutul.variable_mapper(model, :parameters)
+        if inc_state0
+            state0_map, = Jutul.variable_mapper(model, :primary)
+        else
+            state0_map = missing
+        end
+        cache_static = Dict{Type, AbstractVector}()
+        F_static = (X, step_info = missing) -> map_X_to_Y(F, X, case.model, parameters_map, state0_map, cache_static)
+        F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, case, parameters_map, state0_map)
+        if do_prep
+            prep_static = prepare_jacobian(F_static, backend, X)
+        end
+    end
 
-    H = AdjointObjectiveHelper(F, G, packed_steps)
+    # Whatever was input - for checking
+    storage[:F_input] = F
+    # Dynamic part - every timestep
+    storage[:F_dynamic] = F_dynamic
+    # Static part - once
+    storage[:F_static] = F_static
+    # Jacobian action
+    storage[:dF_static_dX_prep] = prep_static
+    storage[:F_fully_dynamic] = fully_dynamic
+    storage[:deps] = deps
+
+    # Switch to Y and F_dynamic(Y) as main function
+    Y = F_static(X)
+    storage[:n_static] = length(X)
+    storage[:n_dynamic] = length(Y)
+    storage[:dynamic_buffer] = similar(Y)
+    H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
     # Note: strict = false is needed because we create another function on the fly
     # that essentially calls the same function.
@@ -306,14 +372,18 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case0, backe
         else
             step_index = missing
         end
-        set_objective_helper_step_index!(H, case0.model, step_index)
-        prep = prepare_jacobian(H, backend, X)
+        set_objective_helper_step_index!(H, case.model, step_index)
+        prep = prepare_jacobian(H, backend, Y)
     else
         prep = nothing
     end
     storage[:prep_di] = prep
     storage[:backend_di] = backend
     return storage
+end
+
+function setup_outer_chain_rule(F, case, deps::Symbol)
+    return (F_dynamic, F_static, dF_static_dX)
 end
 
 function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, substep_index::Int, cache = missing; is_sum = true)

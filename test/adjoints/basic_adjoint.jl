@@ -209,7 +209,7 @@ function num_grad_generic(F, G, x0)
     return out
 end
 
-function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objective = false, kwarg...)
+function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objective = false, deps = :case, kwarg...)
     # dx, dy, U0, k_val, srcval
     x = ones(5)
     case = setup_poisson_test_case_from_vector(x, dt = timesteps)
@@ -238,12 +238,22 @@ function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objectiv
     dGdx_adj = solve_adjoint_generic(x, F, states, reports, G;
         state0 = case.state0,
         forces = case.forces,
+        deps = deps,
         kwarg...
     )
 
     if fmt == :model_and_prm || fmt == :model
         dGdx_adj = dGdx_adj[1:4]
         dGdx_num = dGdx_num[1:4]
+    end
+    if deps == :parameters
+        ix = [1, 2, 4]
+        dGdx_adj = dGdx_adj[ix]
+        dGdx_num = dGdx_num[ix]
+    elseif deps == :parameters_and_state0
+        ix = 1:4
+        dGdx_adj = dGdx_adj[ix]
+        dGdx_num = dGdx_num[ix]
     end
     @test dGdx_adj ≈ dGdx_num atol = atol
 end
@@ -262,10 +272,14 @@ end
             for fmt in [:case, :onecase, :model_and_prm, :model_and_prm_and_forces, :model_and_prm_and_forces_and_state0]
                 test_for_timesteps([100.0], fmt = fmt, global_objective = global_obj)
             end
+            @testset "parameters" begin
+                test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters)
+                test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters_and_state0)
+            end
         end
     end
 end
-##
+
 import Jutul.DictOptimization as DictOptimization
 @testset "DictOptimization" begin
     testdata = Dict(

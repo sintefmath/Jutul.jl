@@ -36,6 +36,8 @@ using `free_optimization_parameter!` prior to calling the optimizer.
 - `simulator`: Optional simulator object used in forward simulations
 - `config`: Optional configuration for the setup
 - `solution_history`: If `true`, stores all intermediate solutions
+- `deps`: One of `:case`, `:parameters`, `:parameters_and_state0`. Defines the
+  dependencies for the adjoint computation. See notes for more details.
 - `backend_arg`: Options for the autodiff backend:
   - `use_sparsity`: Enable sparsity detection for the objective function
   - `di_sparse`: Use sparse differentiation
@@ -49,6 +51,21 @@ The optimized parameters as a dictionary.
 - The function stores the optimization history and optimized parameters in the input `dopt` object.
 - If `solution_history` is `true`, intermediate solutions are stored in `dopt.history.solutions`.
 - The default optimization algorithm is L-BFGS with box constraints.
+
+## Type of dependencies in `deps`
+The `deps` argument is used to set the type of dependency the `case` setup
+function has on the active optimization parameters. The default, `:case`, is
+fully general and allows dependencies on everything contained within the `case`
+instance. This can be slow, however, as the setup function must be called for
+every time-step. If you know that the model instance and forces are independent
+of the active parameters, you can use `deps = :parameters_and_state0`. If there
+is no dependence on `state0`, you can set `deps = :parameters`. This can
+substantially speed up the optimization process, but as there is no programmatic
+verification that this assumption is true, it should be used with care.
+
+This interface is dependent on the model supporting use of
+`vectorize_variables!` and `devectorize_variables!` for `state0/parameters`,
+which should be the case for most Jutul models.
 """
 function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
         grad_tol = 1e-6,
@@ -59,11 +76,13 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         simulator = missing,
         config = missing,
         solution_history = false,
+        deps::Symbol = :case,
         backend_arg = (
             use_sparsity = false,
             di_sparse = true,
             single_step_sparsity = false,
             do_prep = true,
+            deps = deps,
         ),
         kwarg...
     )
