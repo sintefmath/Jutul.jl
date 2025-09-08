@@ -190,6 +190,10 @@ end
     local_state_ad(state, index, ad_tag, symbol)
 end
 
+@inline function local_ad(state, index, ad_tag, ::Nothing)
+    local_state_ad(state, index, ad_tag)
+end
+
 @inline function local_state_ad(state::T, index::I, ad_tag::∂T) where {T, I<:Integer, ∂T}
     return LocalStateAD{T, I, ad_tag}(index, state)
 end
