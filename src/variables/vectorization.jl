@@ -93,6 +93,11 @@ function devectorize_variable!(state, V, k, info, F_inv; config = nothing)
         state[k] = state_val
     end
     lumping = get_lumping(config)
+    devectorize_variable_inner!(state_val, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
+    return state
+end
+
+function devectorize_variable_inner!(state_val, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
     if isnothing(lumping)
         @assert n_full == n_x
         @assert length(state_val) == n_full "Expected field $k to have length $n_full, was $(length(state_val))"

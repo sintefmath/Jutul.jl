@@ -929,13 +929,12 @@ end
 
 function Base.getindex(case::JutulCase, ix)
     (; model, dt, forces, state0, parameters, input_data) = case
-    f = deepcopy(forces)
-    if f isa AbstractVector
-        @assert length(f) == length(dt)
-        f = f[ix]
+    if forces isa AbstractVector
+        @assert length(forces) == length(dt)
+        forces = forces[ix]
     end
     dt = dt[ix]
-    return JutulCase(model, dt, f, deepcopy(state0), deepcopy(parameters), deepcopy(input_data))
+    return JutulCase(model, dt, forces, state0, parameters, input_data)
 end
 
 export NoRelaxation, SimpleRelaxation

@@ -367,7 +367,7 @@ import Jutul.DictOptimization as DictOptimization
             step = step_info[:step]
             U = s[:U]
             U_ref = states[step][:U]
-            v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U, U_ref))
+            v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
             return dt*v
         end
         # Perturb a parameter
