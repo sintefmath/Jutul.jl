@@ -247,12 +247,17 @@ function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objectiv
         dGdx_num = dGdx_num[1:4]
     end
     if deps == :parameters
-        dGdx_adj = dGdx_adj[4:4]
-        dGdx_num = dGdx_num[4:4]
+        ix = [1, 2, 4]
+        dGdx_adj = dGdx_adj[ix]
+        dGdx_num = dGdx_num[ix]
+    elseif deps == :parameters_and_state0
+        ix = 1:4
+        dGdx_adj = dGdx_adj[ix]
+        dGdx_num = dGdx_num[ix]
     end
     @test dGdx_adj ≈ dGdx_num atol = atol
 end
-##
+
 @testset "AdjointDI.solve_adjoint_generic" begin
     for global_obj in [true, false]
         @testset "global_objective=$global_obj" begin
@@ -269,15 +274,12 @@ end
             end
             @testset "parameters" begin
                 test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters)
-                # test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters_and_state0)
+                test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters_and_state0)
             end
         end
     end
 end
-##
-test_for_timesteps([100.0], fmt = :case, global_objective = false, deps = :parameters_and_state0)
 
-##
 import Jutul.DictOptimization as DictOptimization
 @testset "DictOptimization" begin
     testdata = Dict(
