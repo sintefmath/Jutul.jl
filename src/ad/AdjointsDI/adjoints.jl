@@ -34,10 +34,13 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
     if info_level > 1
         jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
     end
-    t_solve = @elapsed solve_adjoint_generic!(storage[:dynamic_buffer], X, F, storage, packed_steps, G,
+    dG_buf = storage[:dynamic_buffer]
+    @assert size(dG_buf) == size(∇G)
+    t_solve = @elapsed solve_adjoint_generic!(dG_buf, X, F, storage, packed_steps, G,
         info_level = info_level,
         state0 = state0,
     )
+    copyto!(∇G, dG_buf)
     if info_level > 1
         jutul_message("Adjoints", "Adjoints solved in $(Jutul.get_tstr(t_solve)).", color = :blue)
     end
@@ -344,7 +347,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
     Y = F_static(X)
     storage[:n_static] = length(X)
     storage[:n_dynamic] = length(Y)
-    storage[:dynamic_buffer] = Y
+    storage[:dynamic_buffer] = similar(Y)
     H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
     # Note: strict = false is needed because we create another function on the fly
