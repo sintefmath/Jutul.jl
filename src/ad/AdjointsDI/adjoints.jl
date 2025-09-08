@@ -65,7 +65,15 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     end
     F_dynamic = storage[:F_dynamic]
     F_static = storage[:F_static]
-    Y = F_static(X)
+    is_fully_dynamic = storage[:F_fully_dynamic]
+    if is_fully_dynamic
+        Y = X
+        dYdX = missing
+    else
+        prep = storage[:dF_static_dX_prep]
+        backend = storage[:backend_di]
+        Y, dYdX = value_and_jacobian(F_static, prep, backend, X)
+    end
     G = Jutul.adjoint_wrap_objective(G, case.model)
     Jutul.adjoint_reset_parameters!(storage, case.parameters)
 
@@ -92,11 +100,10 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     if !isnothing(dparam)
         @. dG_dynamic += dparam
     end
-    if storage[:F_fully_dynamic]
+    if is_fully_dynamic
         copyto!(∇G, dG_dynamic)
     else
-        prep = storage[:dF_static_dX_prep]
-        backend = storage[:backend_di]
+        mul!(∇G, dYdX', dG_dynamic)
     end
 
     all(isfinite, ∇G) || error("Adjoint solve resulted in non-finite gradient values.")
