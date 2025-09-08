@@ -5,7 +5,7 @@ function map_X_to_Y(F, X, model, parameters_map, state0_map, cache)
     if has_state0
         N_s0 = Jutul.vectorized_length(model, state0_map)
     else
-        N = N_prm
+        N_s0 = 0
     end
     N = N_prm + N_s0
     T = eltype(X)
@@ -29,7 +29,7 @@ function setup_from_vectorized(Y, case, parameters_map, state0_map)
     if has_state0
         N_s0 = Jutul.vectorized_length(case.model, state0_map)
     else
-        N = N_prm
+        N_s0 = 0
     end
     N = N_prm + N_s0
     @assert length(Y) == N "Length of Y ($(length(Y))) does not match expected length ($N)."

@@ -119,7 +119,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         state0 = missing,
         do_prep = true,
         di_sparse = true,
-        deps = :all,
+        deps = :case,
         backend = Jutul.default_di_backend(sparse = di_sparse),
         info_level = 0,
         single_step_sparsity = true,
@@ -323,13 +323,13 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
     # Two approaches:
     # 1. F_static(X) -> Y (vector of parameters) -> F_dynamic(Y) (updated case)
     # 2. F(X) -> case directly and F_dynamic = F and F_static = identity
-    fully_dynamic = deps == :all
+    fully_dynamic = deps == :case
     prep_static = nothing
     if fully_dynamic
         F_dynamic = F
         F_static = x -> x
     else
-        deps in (:parameters, :parameters_and_state0) || error("deps must be :all, :parameters or :parameters_and_state0. Got $deps.")
+        deps in (:parameters, :parameters_and_state0) || error("deps must be :case, :parameters or :parameters_and_state0. Got $deps.")
         # cfg = optimization_config(case0, include_state0 = deps == :parameters_and_state0)
         inc_state0 = deps == :parameters_and_state0
         parameters_map, = Jutul.variable_mapper(model, :parameters)
