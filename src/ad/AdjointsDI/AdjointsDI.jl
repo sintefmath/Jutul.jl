@@ -10,4 +10,6 @@ module AdjointsDI
 
     include("adjoints.jl")
     include("utils.jl")
+    # Utilities to handle "split" generic adjoints for performance
+    include("split.jl")
 end
