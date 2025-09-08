@@ -416,11 +416,7 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, eval_model = mode
     end
 
     function diff_entity!(∂F∂x, state, i, S, ne, np, offset, symbol)
-        if !isnothing(symbol)
-            state_i = local_ad(state, i, S, symbol)
-        else
-            state_i = local_ad(state, i, S)
-        end
+        state_i = local_ad(state, i, S, symbol)
         v = F(eval_model, state_i)
         store_partials!(∂F∂x, v, i, ne, np, offset)
     end
