@@ -34,13 +34,10 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
     if info_level > 1
         jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
     end
-    dG_buf = storage[:dynamic_buffer]
-    @assert size(dG_buf) == size(∇G)
-    t_solve = @elapsed solve_adjoint_generic!(dG_buf, X, F, storage, packed_steps, G,
+    t_solve = @elapsed solve_adjoint_generic!(∇G, X, F, storage, packed_steps, G,
         info_level = info_level,
         state0 = state0,
     )
-    copyto!(∇G, dG_buf)
     if info_level > 1
         jutul_message("Adjoints", "Adjoints solved in $(Jutul.get_tstr(t_solve)).", color = :blue)
     end
@@ -83,17 +80,25 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
 
     Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward)
     # Set gradient to zero before solve starts
-    @. ∇G = 0
+    dG_dynamic = storage[:dynamic_buffer]
+    @. dG_dynamic = 0
     @tic "sensitivities" for i in N:-1:1
         if info_level > 0
             jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
         end
-        update_sensitivities_generic!(∇G, Y, H, i, G, storage, packed_steps)
+        update_sensitivities_generic!(dG_dynamic, Y, H, i, G, storage, packed_steps)
     end
     dparam = storage.dparam
     if !isnothing(dparam)
-        @. ∇G += dparam
+        @. dG_dynamic += dparam
     end
+    if storage[:F_fully_dynamic]
+        copyto!(∇G, dG_dynamic)
+    else
+        prep = storage[:dF_static_dX_prep]
+        backend = storage[:backend_di]
+    end
+
     all(isfinite, ∇G) || error("Adjoint solve resulted in non-finite gradient values.")
     return ∇G
 end
@@ -342,6 +347,8 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
     storage[:F_static] = F_static
     # Jacobian action
     storage[:dF_static_dX_prep] = prep_static
+    storage[:F_fully_dynamic] = fully_dynamic
+    storage[:deps] = deps
 
     # Switch to Y and F_dynamic(Y) as main function
     Y = F_static(X)
