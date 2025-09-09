@@ -4,7 +4,42 @@ number_of_equations_per_entity(model::SimulationModel, ::ConservationLaw{<:Any, 
 
 flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T<:ForwardDiff.Dual} = SVector{N, T}
 flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T<:AbstractFloat} = SVector{N, T}
-flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T} = MVector{N, T}
+
+@static if VERSION ≥ v"1.11"
+    struct TempVector{N, T}
+        v::Vector{T}
+    end
+
+    function TempVector(N, T)
+        return TempVector{N, T}(zeros(T, N))
+    end
+
+    Base.length(::TempVector{N, T}) where {N, T} = N
+    Base.zero(::Type{TempVector{N, T}}) where {N, T} = TempVector(N, T)
+    Base.zero(::TempVector{N, T}) where {N, T} = TempVector(N, T)
+    Base.getindex(x::TempVector, i) = x.v[i]
+
+    import Base.+
+    function (+)(x::TempVector{N, T}, y::TempVector{N, T}) where {N, T}
+        return TempVector{N, T}(x.v .+ y.v)
+    end
+
+    Base.eachindex(x::TempVector{N, T}) where {N, T} = 1:N
+
+    function Base.setindex!(x::TempVector, v, i::Integer)
+        x.v[i] = v
+        return x
+    end
+
+    function StaticArrays.setindex(x::TempVector, v, i::Integer)
+        x[i] = v
+        return  x
+    end
+
+    flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T} = TempVector{N, T}
+else
+    flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T} = MVector{N, T}
+end
 
 conserved_symbol(::ConservationLaw{C, <:Any}) where C = C
 
