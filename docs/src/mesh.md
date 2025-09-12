@@ -14,9 +14,11 @@ MRSTWrapMesh
 
 ## Plotting functions
 
-Plotting requires that a Makie backend is loaded (typically GLMakie or CairoMakie). The documentation uses `CairoMakie` to work on machines without OpenGL enabled, but if you want fast and interactive plots, `GLMakie` should be preferred.
+Plotting requires that a Makie backend is loaded (typically GLMakie or CairoMakie). For comprehensive plotting documentation and examples, see the [Plotting](plotting.md) section.
 
-### Non-mutating
+### Basic mesh plotting
+
+#### Non-mutating
 
 ```@docs
 plot_mesh
@@ -25,7 +27,7 @@ plot_mesh_edges
 plot_interactive
 ```
 
-### Mutating
+#### Mutating
 
 ```@docs
 plot_mesh!
