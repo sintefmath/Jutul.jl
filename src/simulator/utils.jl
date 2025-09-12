@@ -126,7 +126,7 @@ function Base.show(io::IO, ::MIME"text/plain", sr::SimResult)
 end
 
 function print_sim_result_timing(io, sr::SimResult)
-    fmt = raw"u. dd Y H:mm"
+    fmt = raw"u. dd Y HH:MM"
     if length(sr.reports) == 0
         t = 0.0
     else
