@@ -9,18 +9,18 @@ dict of dicts with the residual norms for each equation on the form
 
     residuals[model][equation_type][equation][norm] = res/tol
 """
-function get_multimodel_residuals(report)
+function residual_measures(report, scaled=true)
 
     models = keys(report)
 
-    residuals = Dict()
+    measures = Dict()
 
     for model in models
-        rsd = get_model_residuals(report[model])
-        residuals[model] = rsd
+        rsd = residual_measures(report[model], scaled)
+        measures[model] = rsd
     end
 
-    return residuals
+    return measures
 
 end
 
@@ -34,9 +34,9 @@ dict of dicts with the residual norms for each equation on the form
 
     residuals[equation_type][equation][norm] = res/tol
 """
-function get_model_residuals(report)
+function residual_measures(report::Vector, scaled=true)
 
-    residuals = Dict()
+    measures = Dict()
 
     for eq_report in report
 
@@ -50,7 +50,7 @@ function get_model_residuals(report)
         for res_norm in residual_norms
 
             rsd = criterions[res_norm].errors
-            tol = tolerances[res_norm]
+            scl = scaled ? tolerances[res_norm] : 1.0
             nms = criterions[res_norm].names
             for i in eachindex(rsd)
                 α, r = nms[i], rsd[i]
@@ -58,16 +58,16 @@ function get_model_residuals(report)
                 if !haskey(equation_residuals, α)
                     equation_residuals[α] = Dict()
                 end
-                equation_residuals[α][res_norm] = r/tol
+                equation_residuals[α][res_norm] = r/scl
             end
 
         end
 
-        residuals[equation] = equation_residuals
+        measures[equation] = equation_residuals
     
     end
 
-    return residuals
+    return measures
 
 end
 
@@ -92,8 +92,8 @@ are on the format `"key1<separator>key2<separator>key3"` and the values are the
 corresponding values in the dict.
 """
 function flatten_dict(input_dict::Dict, separator::String = ".", trail = [])
-    values = []
-    names = []
+    values = Float64[]
+    names = String[]
 
     for (key, value) in input_dict
         current_trail = vcat(trail, string(key))
