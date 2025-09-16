@@ -20,9 +20,9 @@ function compute_contraction_factor(distances, N)
         num .+= (k-1).*log.(δ[k,:]./δ[1,:])
         den += (k-1)^2
     end
-    θ = exp.(num./max(den,1))
+    θ = exp.(num./den)
     # Compute target contraction to converge in N iterations
-    θ_target = δ[end,:].^(-1/N)
+    θ_target = δ[end-1,:].^(-1/N)
     
     return θ, θ_target
 
@@ -40,18 +40,25 @@ returns false.
 """
 function oscillation(distance_1, distace_2, distance_3, tol=1e-6)
 
-    # # Early return if we only have two iterates
-    # (size(distance,1) < 3) ? (return falses(size(distance,2))) : nothing
-    # Get last three distances to convergence
-    δ_1, δ_2, δ_3 = distance_1, distace_2, distance_3
-    # Check if Δ1 > Δ2 < Δ3 or Δ1 < Δ2 > Δ3
+    δ1, δ2, δ3 = distance_1, distace_2, distance_3
+    # Check if δ1 > δ2 < δ3 or δ1 < δ2 > δ3
     gt_tol = (x,y) -> (x .- y) .> tol
     lt_tol = (x,y) -> gt_tol(y,x)
-    osc_1 = lt_tol(δ_2, δ_1) .&& lt_tol(δ_2, δ_3)
-    osc_2 = gt_tol(δ_2, δ_1) .&& gt_tol(δ_2, δ_3)
+    osc_1 = lt_tol(δ2, δ1) .&& lt_tol(δ2, δ3)
+    osc_2 = gt_tol(δ2, δ1) .&& gt_tol(δ2, δ3)
     osc = osc_1 .|| osc_2
-
+    # Return oscillation flags
     return osc
+
+end
+
+function oscillation(distances, tol=1e-6)
+
+    # Early return if we only have two iterates
+    (size(distances,1) < 3) ? (return falses(size(distances,2))) : nothing
+    # Get last three iterates
+    δ1, δ2, δ3 = distances[end,:], distances[end-1,:], distances[end-2,:]
+    return oscillation(δ1, δ2, δ3, tol)
 
 end
 
@@ -67,22 +74,26 @@ function iterations_left(contraction_factor, dist)
 
 end
 
-function classify_iterate(theta, theta_target, theta_slow, theta_fast, distance, oscillation=missing)
+function classify_iterate(distance, theta, theta_target, theta_slow, theta_fast, oscillation=missing)
 
     # Shorthand notation
-    θ, θ_t, θ_s, θ_f = theta, theta_target, theta_slow, theta_fast
+    θ, θt, θs, θf = theta, theta_target, theta_slow, theta_fast
     osc = ismissing(oscillation) ? false : oscillation
+
     # Check convergence for all distances
     conv = distance .<= 1.0
     # Check contraction magnitude
-    fast = (θ .<= max.(θ_t, θ_f))
-    ok = max.(θ_t, θ_f) .< θ .<= θ_s
-    div = θ .> θ_s
+    fast = θ .<= max.(θt, θf)
+    ok = max.(θt, θf) .< θ .<= θs
+    div = θ .> θs
+    prt = false
     # Exclude "diverging" distances that have converged (e.g., θ = 1/1)
     div = div .&& .!conv
-    # Classify fast contractions as ok if oscillating
-    ok = ok .|| (fast .&& osc)
-    # Classify converged distances as fast and require no oscillation
+    # Classify fast contractions and converged distances as ok if oscillating
+    ok = ok .|| (fast .|| conv) .&& osc
+    # Converged, non-oscillating contractions are classifie as fast below
+    ok = ok .&& .!(conv .&& .!osc)
+    # Classify converged distances as fast, require no oscillation
     fast = (fast .|| conv) .&& .!osc
     # Sanity check
     @assert all(fast .+ ok .+ div .== 1)
@@ -96,10 +107,10 @@ function classify_iterate(theta, theta_target, theta_slow, theta_fast, distance,
 
 end
 
-function update_violation_count!(num_violations, status; count_type=:per_measure)
+function update_violation_count!(num_violations, status; strategy=:per_measure)
 
     if isnothing(num_violations)
-        if count_type == :per_measure
+        if strategy ∈ [:per_measure, :overall]
             num_violations = zeros(length(status))
         else
             num_violations = [0]
@@ -108,21 +119,45 @@ function update_violation_count!(num_violations, status; count_type=:per_measure
 
     fast = status .== 1
     diverge = status .== -1
-    if count_type == :per_measure
+    if strategy ∈ [:per_measure, :overall]
         num_violations[fast] .-= 1
         num_violations[diverge] .+= 1
-    elseif count_type == :total
-        num_violations .+= sum(diverge) - sum(fast)
-    elseif count_type == :overall
+    elseif strategy == :overall
         if all(fast)
             num_violations .-= 1
         elseif any(diverge)
-            num_violations .+=1
+            num_violations .+= 1
         end
     end
 
     num_violations = max.(num_violations, 0)
 
     return num_violations
+
+end
+
+function analyze_step(distances, memory, target_its, theta_fast, theta_slow)
+
+    # Shorthand notation
+    θf, θs = theta_fast, theta_slow
+    # Compute contraction factors and target contraction factors
+    k = size(distances,1)
+    if k == 1
+        # Early return if we only have one iterate
+        status = fill(NaN, (size(distances,2)))
+        θ = fill(NaN, size(distances,2))
+        θt = fill(NaN, size(distances,2))
+        osc = falses(size(distances,2))
+        return status, θ, θt, osc
+    end
+    N = max(target_its-k,2)
+    δ = distances[max(k-memory,1):k, :]
+    θ, θt = compute_contraction_factor(δ, N)
+    # Check for oscillations
+    osc = oscillation(distances[max(k-2,1):k,:])
+    # Classify iterates
+    status = classify_iterate(δ[end,:], θ, θt, θs, θf, osc)
+    # Return
+    return status, θ, θt, osc
 
 end
