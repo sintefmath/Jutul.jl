@@ -5,7 +5,7 @@ number_of_equations_per_entity(model::SimulationModel, ::ConservationLaw{<:Any, 
 flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T<:ForwardDiff.Dual} = SVector{N, T}
 flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T<:AbstractFloat} = SVector{N, T}
 
-@static if VERSION ≥ v"1.11"
+@static if VERSION ≥ v"1.11" && (get(ENV, "JUTUL_TEMPVECTOR_FIX", "false") == "true" || get(ENV, "CI", "false") == "true")
     struct TempVector{N, T}
         v::Vector{T}
     end
