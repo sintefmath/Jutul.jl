@@ -9,6 +9,7 @@ module ConvergenceMonitors
 
     include("distance_functions.jl")
     include("contraction_factors.jl")
+    include("convergence_monitors.jl")
     include("cutting_criterions.jl")
     include("relaxation.jl")
     include("utils.jl")
