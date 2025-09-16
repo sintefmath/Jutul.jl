@@ -35,7 +35,7 @@ function update_violation_count!(num_violations, status; strategy=:per_measure)
 
     fast = status .== 1
     diverge = status .== -1
-    if strategy ∈ [:per_measure, :overall]
+    if strategy ∈ [:per_measure, :total]
         num_violations[fast] .-= 1
         num_violations[diverge] .+= 1
     elseif strategy == :overall
@@ -48,6 +48,25 @@ function update_violation_count!(num_violations, status; strategy=:per_measure)
     clamp!(num_violations, 0, Inf)
 
     return num_violations
+
+end
+
+function count_violations(status; strategy=:per_measure)
+    
+    if strategy ∈ [:per_measure, :total]
+        Nv = zeros(Int64, size(status))
+    else
+        Nv = zeros(Int64, size(status,1))
+    end
+    # Loop over iterates
+    Nv_k = copy(Nv[1,:])
+    for (k, sk) in enumerate(eachrow(status))
+        update_violation_count!(Nv_k, sk; strategy=strategy)
+        Nv[k,:] .= Nv_k
+        Nv_k = copy(Nv[k,:])
+    end
+
+    return Nv
 
 end
 
@@ -76,43 +95,52 @@ function analyze_step(distances, memory, target_its, theta_fast, theta_slow)
 
 end
 
-function analyze_convergence(distances;
-    memory=1, target_its=8, theta_fast=0.1, theta_slow=0.99)
+function analyze_convergence(distance;
+    memory=1, target_its=8, theta_fast=0.1, theta_slow=0.99, strategy=:per_measure)
 
     # Shorthand notation
     θf, θs = theta_fast, theta_slow
     # Preallocate
-    Nv = zeros(Int64, size(distances))
-    θ, θt = fill(NaN, size(distances)), fill(NaN, size(distances))
-    osc = falses(size(distances))
-    status = zeros(Int64, (size(distances)))
+    Nv = zeros(Int64, size(distance))
+    θ, θt = fill(NaN, size(distance)), fill(NaN, size(distance))
+    osc = falses(size(distance))
+    status = zeros(Int64, (size(distance)))
     # Loop over iterates
     Nv_k = copy(Nv[1,:])
-    for k in 1:size(distances,1)
+    for k in 1:size(distance,1)
         status[k,:], θ[k,:], θt[k,:], osc[k,:] = 
-        analyze_step(distances[1:k,:], memory, target_its, θf, θs)
-        update_violation_count!(Nv_k, status[k,:]; strategy=:per_measure)
+        analyze_step(distance[1:k,:], memory, target_its, θf, θs)
+        update_violation_count!(Nv_k, status[k,:]; strategy=strategy)
         Nv[k,:] .= Nv_k
         Nv_k = copy(Nv[k,:])
     end
+    # Make convergence monitor dict
+    cm = Dict()
+    cm[:distance] = distance
+    cm[:status] = status
+    cm[:num_violations] = Nv
+    cm[:contraction_factor] = θ
+    cm[:contraction_factor_target] = θt
+    cm[:oscillation] = osc
 
-    return status, Nv, θ, θt, osc
+    return cm
 
 end
 
 function analyze_convergence(step_reports::Vector; 
     pools = nothing, pooling_args = NamedTuple(), names = nothing, kwargs...)
 
-    distances = Vector{Vector{Float64}}(undef, length(step_reports))
+    distance = Vector{Vector{Float64}}(undef, length(step_reports))
     for (k, step) in enumerate(step_reports)
         d, n = Jutul.ConvergenceMonitors.compute_distance(step[:errors];
         pools=pools, pooling_args=pooling_args)
         names = isnothing(names) ? n : names
-        distances[k] = d
+        distance[k] = d
     end
-    println(distances)
-    distances = reduce(vcat, distances')
-    return analyze_convergence(distances; kwargs...)
+    distance = reduce(vcat, distance')
+    cm = analyze_convergence(distance; kwargs...)
+    cm[:names] = names
+    return cm
 
 end
 
@@ -123,14 +151,5 @@ function analyze_convergence(timestep_report, ministep::Int; kwargs...)
 
     step_reports = timestep_report[:ministeps][ministep][:steps]
     return analyze_convergence(step_reports; kwargs...)
-
-end
-
-function analyze_convergence(step_reports::Vector, cc::ConvergenceMonitorCuttingCriterion)
-
-    return analyze_convergence(step_reports;
-    cc.distance_function_args...,
-    memory=cc.memory, target_its=cc.target_iterations, 
-    theta_fast=cc.fast, theta_slow=cc.slow)
 
 end
