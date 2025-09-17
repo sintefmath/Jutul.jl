@@ -53,6 +53,7 @@ function pool_distances(d, names::Vector{String}, pools::Union{Vector{String}, V
     pools_int = Vector{Vector{Int64}}(undef, length(pools))
     for (k, pool) in enumerate(pools)
         ix = findall(search_fn.(names, pool))
+        @assert !isempty(ix) "No residual measures found for pool: $pool"
         pools_int[k] = ix
     end
 
