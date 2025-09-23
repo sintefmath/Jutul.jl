@@ -35,6 +35,10 @@ function grid_dims_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}) where D
     return (nx, ny, nz)
 end
 
+function cell_ijk(g)
+    return i -> cell_ijk(g, i)
+end
+
 function cell_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}, index::Integer) where D
     nx, ny, nz = grid_dims_ijk(g)
     if isnothing(g.cell_map)
