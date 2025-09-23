@@ -900,9 +900,9 @@ end
 
 function Jutul.plotting_check_interactive(; warn = true)
     backend_name = "$(Makie.current_backend())"
-    if backend_name != "GLMakie"
+    if !(backend_name in ("GLMakie", "WGLMakie"))
         if warn
-            msg = "Currently active Makie backend $backend_name may not be interactive or fully supported.\nGLMakie is recommended for Jutul's interactive plots. To install:\n\tusing Pkg; Pkg.add(\"GLMakie\")\nTo use:\n\tusing GLMakie\n\tGLMakie.activate!()\nYou can then retry your plotting command."
+            msg = "Currently active Makie backend $backend_name may not be interactive or fully supported.\nGLMakie (or WGLMakie) is recommended for Jutul's interactive plots. To install:\n\tusing Pkg; Pkg.add(\"GLMakie\")\nTo use:\n\tusing GLMakie\n\tGLMakie.activate!()\nYou can then retry your plotting command."
             @warn msg
         end
         return false
