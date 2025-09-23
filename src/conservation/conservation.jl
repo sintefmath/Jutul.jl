@@ -5,7 +5,7 @@ number_of_equations_per_entity(model::SimulationModel, ::ConservationLaw{<:Any, 
 flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T<:ForwardDiff.Dual} = SVector{N, T}
 flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T<:AbstractFloat} = SVector{N, T}
 
-@static if VERSION ≥ v"1.11"
+@static if VERSION ≥ v"1.11" && VERSION < v"1.12"
     struct TempVector{N, T}
         v::Vector{T}
     end
@@ -40,6 +40,7 @@ flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, 
 else
     flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T} = MVector{N, T}
 end
+flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, T<:ST.ADval} = MVector{N, T}
 
 conserved_symbol(::ConservationLaw{C, <:Any}) where C = C
 
