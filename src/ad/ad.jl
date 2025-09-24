@@ -340,7 +340,10 @@ Convert vector to AD vector.
 function allocate_array_ad(v::AbstractVector; kwarg...)
     # create a copy of a vector as AD
     v_AD = allocate_array_ad(length(v); kwarg...)
+    @info "BEfore" v_AD
     update_values!(v_AD, v)
+    @info "???" v_AD
+    v_AD
 end
 
 """
@@ -390,7 +393,7 @@ end
 Replace values of `x` in-place by `y`, leaving `x` with the values of y and the partials of `x`.
 """
 @inline function update_values!(v::AbstractArray{<:ForwardDiff.Dual{Tag}}, next::AbstractArray{<:Real}) where Tag
-    if Tag isa JutulEntity
+    if unpack_tag(v) isa JutulEntity
         # The ForwardDiff type is immutable, so to preserve the derivatives we
         # do this little trick if we are working with a Jutul entity tag. This
         # signifies that we are currently working with a Jutul AD variable.
@@ -416,7 +419,7 @@ Replace values (for non-Real types, direct assignment)
 end
 
 @inline function update_values!(v::AbstractArray{<:AbstractFloat}, next::AbstractArray{<:ForwardDiff.Dual{Tag}}) where Tag
-    Tag::JutulEntity
+    unpack_tag(next)::JutulEntity
     @inbounds for i in eachindex(v, next)
         next_val = next[i]
         v[i] = value(next_val)
