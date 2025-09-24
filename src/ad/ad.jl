@@ -340,9 +340,7 @@ Convert vector to AD vector.
 function allocate_array_ad(v::AbstractVector; kwarg...)
     # create a copy of a vector as AD
     v_AD = allocate_array_ad(length(v); kwarg...)
-    @info "BEfore" v_AD
     update_values!(v_AD, v)
-    @info "???" v_AD
     v_AD
 end
 
