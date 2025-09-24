@@ -1,17 +1,31 @@
-function unpack_tag(v::Type{ForwardDiff.Dual{T, F, N}}, t::Symbol = :entity) where {T, F, N}
-    if v isa Tuple
-        if t == :entity
-            out = T[2]
-        elseif t == :model
-            out = T[1]
-        else
-            out = T
-        end
-    else
-        out = T
-    end
-    return out
+# function unpack_tag(v::Type{ForwardDiff.Dual{T, F, N}}, t::Symbol = :entity) where {T, F, N}
+#     @info "???"
+#     if v isa Tuple
+#         if t == :entity
+#             out = T[2]
+#         elseif t == :model
+#             out = T[1]
+#         else
+#             out = T
+#         end
+#     else
+#         out = T
+#     end
+#     return unpack_tag(out)
+# end
+
+function unpack_tag(v::Type{ForwardDiff.Dual{T, F, N}}) where {T, F, N}
+    return unpack_tag(T)
 end
+
+function unpack_tag(v::ForwardDiff.Tag{F, T}) where {F, T}
+    if T <: JutulEntity
+        return T()
+    else
+        return nothing
+    end
+end
+
 unpack_tag(A::AbstractArray, arg...) = unpack_tag(eltype(A), arg...)
 unpack_tag(::Any, arg...) = nothing
 
