@@ -371,7 +371,15 @@ function get_ad_entity_scalar(v::T, npartials, diag_pos = nothing; diag_value = 
     if npartials > 0
         D = diag_value.*ntuple(x -> T.(x == diag_pos), npartials)
         partials = ForwardDiff.Partials{npartials, T}(D)
-        v = ForwardDiff.Dual{tag, T, npartials}(v, partials)
+        if isnothing(tag)
+            fd_tag = ForwardDiff.Tag(nothing, NoEntity)
+        else
+            if tag isa JutulEntity
+                tag = typeof(tag)
+            end
+            fd_tag = ForwardDiff.Tag(simulate, tag)
+        end
+        v = ForwardDiff.Dual{fd_tag, T, npartials}(v, partials)
     end
     return v
 end
@@ -427,13 +435,21 @@ end
 """
 Take value of AD.
 """
-@inline function value(x::ForwardDiff.Dual{Tag}) where Tag
-    if Tag isa JutulEntity
+@inline function value(x::ForwardDiff.Dual{T, V, N}) where {T, V, N}
+    if is_jutul_ad_tag(T)
         # If the tag is a Jutul entity, we know that the AD came from Jutul, so we can
         # use the ForwardDiff value function to get the value. Otherwise we leave it be.
         x = ForwardDiff.value(x)
     end
     return x
+end
+
+function is_jutul_ad_tag(::ForwardDiff.Tag{F, V}) where {F, V}
+    return V<:JutulEntity
+end
+
+function is_jutul_ad_tag(::Any)
+    return false
 end
 
 @inline function value(x)

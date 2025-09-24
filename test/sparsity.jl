@@ -49,3 +49,9 @@ using Jutul, Test
         end
     end
 end
+
+@testset "ad_tags" begin
+    v = allocate_array_ad(1, diag_pos = 1, tag = Cells())
+    @test Jutul.value(v[1]) isa Float64
+    @test Jutul.value(v) isa Vector{Float64}
+end
