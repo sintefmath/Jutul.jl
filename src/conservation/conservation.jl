@@ -8,10 +8,22 @@ flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, 
 @static if VERSION ≥ v"1.11" && VERSION < v"1.12"
     struct TempVector{N, T}
         v::Vector{T}
+        function TempVector(x::T) where {T<:AbstractVector}
+            return new{length(x), eltype(x)}(x)
+        end
     end
 
-    function TempVector(N, T)
-        return TempVector{N, T}(zeros(T, N))
+    function TempVector{N, T}(x::T) where {N, T}
+        N == 1 || error("This constructor only makes sense for scalars")
+        return TempVector([x])
+    end
+
+    function TempVector(x::T) where {T}
+        return TempVector{1, T}([x])
+    end
+
+    function TempVector(N::Int, T)
+        return TempVector(zeros(T, N))
     end
 
     Base.length(::TempVector{N, T}) where {N, T} = N
@@ -21,7 +33,17 @@ flux_vector_type(::ConservationLaw{<:Any, <:Any, <:Any, N}, ::Val{T}) where {N, 
 
     import Base.+
     function (+)(x::TempVector{N, T}, y::TempVector{N, T}) where {N, T}
-        return TempVector{N, T}(x.v .+ y.v)
+        return TempVector(x.v .+ y.v)
+    end
+
+
+    import Base.*
+    function (*)(x::TempVector{N, T}, y::Number) where {N, T}
+        return TempVector(x.v * y)
+    end
+
+    function (*)(y::Number, x::TempVector{N, T}) where {N, T}
+        return x*y
     end
 
     Base.eachindex(x::TempVector{N, T}) where {N, T} = 1:N
