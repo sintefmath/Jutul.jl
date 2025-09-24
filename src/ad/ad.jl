@@ -341,6 +341,7 @@ function allocate_array_ad(v::AbstractVector; kwarg...)
     # create a copy of a vector as AD
     v_AD = allocate_array_ad(length(v); kwarg...)
     update_values!(v_AD, v)
+    v_AD
 end
 
 """
@@ -371,7 +372,15 @@ function get_ad_entity_scalar(v::T, npartials, diag_pos = nothing; diag_value = 
     if npartials > 0
         D = diag_value.*ntuple(x -> T.(x == diag_pos), npartials)
         partials = ForwardDiff.Partials{npartials, T}(D)
-        v = ForwardDiff.Dual{tag, T, npartials}(v, partials)
+        if isnothing(tag)
+            fd_tag = ForwardDiff.Tag(nothing, NoEntity)
+        else
+            if tag isa JutulEntity
+                tag = typeof(tag)
+            end
+            fd_tag = ForwardDiff.Tag(simulate, tag)
+        end
+        v = ForwardDiff.Dual{fd_tag, T, npartials}(v, partials)
     end
     return v
 end
@@ -382,7 +391,7 @@ end
 Replace values of `x` in-place by `y`, leaving `x` with the values of y and the partials of `x`.
 """
 @inline function update_values!(v::AbstractArray{<:ForwardDiff.Dual{Tag}}, next::AbstractArray{<:Real}) where Tag
-    if Tag isa JutulEntity
+    if unpack_tag(v) isa JutulEntity
         # The ForwardDiff type is immutable, so to preserve the derivatives we
         # do this little trick if we are working with a Jutul entity tag. This
         # signifies that we are currently working with a Jutul AD variable.
@@ -408,7 +417,7 @@ Replace values (for non-Real types, direct assignment)
 end
 
 @inline function update_values!(v::AbstractArray{<:AbstractFloat}, next::AbstractArray{<:ForwardDiff.Dual{Tag}}) where Tag
-    Tag::JutulEntity
+    unpack_tag(next)::JutulEntity
     @inbounds for i in eachindex(v, next)
         next_val = next[i]
         v[i] = value(next_val)
@@ -427,13 +436,21 @@ end
 """
 Take value of AD.
 """
-@inline function value(x::ForwardDiff.Dual{Tag}) where Tag
-    if Tag isa JutulEntity
+@inline function value(x::ForwardDiff.Dual{T, V, N}) where {T, V, N}
+    if is_jutul_ad_tag(T)
         # If the tag is a Jutul entity, we know that the AD came from Jutul, so we can
         # use the ForwardDiff value function to get the value. Otherwise we leave it be.
         x = ForwardDiff.value(x)
     end
     return x
+end
+
+function is_jutul_ad_tag(::ForwardDiff.Tag{F, V}) where {F, V}
+    return V<:JutulEntity
+end
+
+function is_jutul_ad_tag(::Any)
+    return false
 end
 
 @inline function value(x)
