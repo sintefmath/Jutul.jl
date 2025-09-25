@@ -2,7 +2,7 @@ function Jutul.plot_secondary_variables(model::SimulationModel; kwarg...)
     Jutul.plot_secondary_variables(MultiModel((model = model, )); kwarg...)
 end
 
-function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 4, kwarg...)
+function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 2, kwarg...)
     data = Dict{String, Any}()
     nregmax = 1
     count = 0
@@ -87,9 +87,7 @@ function Jutul.plot_jutul_line_data(data; size = (1600, 900), linewidth = 2, reg
                 lines!(ax, x, y; color = c, linewidth = linewidth, label = lbl, kwarg...)
                 ix += 1
             end
-            if ix > 2
-                axislegend(position = :rt)
-            end
+            axislegend(position = :rt)
         end
     end
     linkaxes!(all_axes...)
