@@ -1,6 +1,5 @@
 module JutulGLMakieExt
-
-using Jutul, GLMakie
+    using Jutul, GLMakie
     include("variables.jl")
 
     function Jutul.independent_figure(fig::Figure)
