@@ -2,7 +2,7 @@ function Jutul.plot_secondary_variables(model::SimulationModel; kwarg...)
     Jutul.plot_secondary_variables(MultiModel((model = model, )); kwarg...)
 end
 
-function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 4, kwarg...)
+function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 2, kwarg...)
     data = Dict{String, Any}()
     nregmax = 1
     count = 0
@@ -51,7 +51,7 @@ function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 4, kwarg.
         reg = m2.selection[]
         begin
             function plot_by_reg(regions)
-                plot_jutul_line_data(d; regions = regions, linewidth = s.value[])
+                Jutul.plot_jutul_line_data(d; regions = regions, linewidth = s.value[])
             end
             if reg == "All"
                 plot_by_reg(axes(d, 2))
@@ -72,21 +72,24 @@ function Jutul.plot_jutul_line_data(data::JutulLinePlotData; kwarg...)
     plot_jutul_line_data([data]; kwarg...)
 end
 
-function Jutul.plot_jutul_line_data(data; resolution = (1600, 900), linewidth = 4, regions = axes(data, 2), kwarg...)
-    fig = Figure(resolution = resolution)
+function Jutul.plot_jutul_line_data(data; size = (1600, 900), linewidth = 2, regions = axes(data, 2), kwarg...)
+    fig = Figure(size = size)
     colors = Makie.wong_colors()
+    all_axes = []
     for (col, regix) in enumerate(regions)
         for i in axes(data, 1)
             d = data[i, regix]
             ax = Axis(fig[i, col], xlabel = d.xlabel, ylabel = d.ylabel, title = "$(d.title) region $regix")
+            push!(all_axes, ax)
             ix = 1
             for (x, y, lbl) in zip(d.xdata, d.ydata, d.datalabels)
                 c = colors[mod(ix, 7) + 1]
                 lines!(ax, x, y; color = c, linewidth = linewidth, label = lbl, kwarg...)
                 ix += 1
             end
-            axislegend()
+            axislegend(position = :rt)
         end
     end
+    linkaxes!(all_axes...)
     display(GLMakie.Screen(), fig)
 end
