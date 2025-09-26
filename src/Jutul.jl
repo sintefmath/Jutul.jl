@@ -148,4 +148,9 @@ module Jutul
     import Jutul.ConvergenceMonitors: set_convergence_monitor_cutting_criterion!
     import Jutul.ConvergenceMonitors: set_convergence_monitor_relaxation!
 
+    # This is to make Jutul simulators work nicely with nested ForwardDiff.
+    JutulSimulateTag = ForwardDiff.Tag{typeof(simulate), <:JutulEntity}
+    ForwardDiff.:≺(::JutulSimulateTag, ::Type{<:ForwardDiff.Tag}) = true
+    ForwardDiff.:≺(::Type{<:ForwardDiff.Tag}, ::JutulSimulateTag) = false
+
 end # module
