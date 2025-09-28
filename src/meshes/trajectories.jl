@@ -107,7 +107,6 @@ function find_enclosing_cells(G, traj;
         # Find cells via their nodes - if any node is inside BB we consider the cell
         cells_bb = cells_inside_bounding_box(G, low_bb, high_bb, atol = atol)
         cells = intersect(cells_bb, cells)
-        println("Limiting search to $(length(cells)) cells inside bounding box.")
     end
     # Start search near middle of trajectory
     mean_pt = mean(pts)
