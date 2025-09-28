@@ -27,10 +27,18 @@ of cells are treated more rigorously when picking exactly what cells are cut by
 a trajectory, but this requires that the boundary normals are oriented outwards,
 which is currently not the case for all meshes from downstream packages.
 
+`atol` is the tolerance used when checking if points are inside the bounding
+box.
+
 `limit_box` speeds up the search by limiting the search to the minimal bounding
 box that contains both the trajectory and the mesh. This can be turned off by
 passing `false`. There should be no difference in the cells tagged by changing
 this option.
+
+`cells` can be used to limit the search to a subset of cells in the mesh. By
+default all cells are used. If `limit_box` is true, the function searches among
+the cells in intersect(cells, cells inside bounding box).
+
 """
 function find_enclosing_cells(G, traj;
         geometry = missing,
@@ -38,6 +46,7 @@ function find_enclosing_cells(G, traj;
         use_boundary = false,
         atol = 0.01,
         limit_box = true,
+        cells = 1:number_of_cells(G),
         extra_out = false
     )
     G = UnstructuredMesh(G)
@@ -96,9 +105,8 @@ function find_enclosing_cells(G, traj;
         inside_bb(x) = point_in_bounding_box(x, low_bb, high_bb, atol = atol)
         pts = filter(inside_bb, pts)
         # Find cells via their nodes - if any node is inside BB we consider the cell
-        cells = cells_inside_bounding_box(G, low_bb, high_bb, atol = atol)
-    else
-        cells = 1:number_of_cells(G)
+        cells_bb = cells_inside_bounding_box(G, low_bb, high_bb, atol = atol)
+        cells = intersect(cells_bb, cells)
     end
     # Start search near middle of trajectory
     mean_pt = mean(pts)
