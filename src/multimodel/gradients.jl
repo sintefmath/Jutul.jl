@@ -105,7 +105,8 @@ function variable_mapper(model::MultiModel, arg...;
         targets = nothing,
         config = nothing,
         offset_x = 0,
-        offset_full = offset_x
+        offset_full = offset_x,
+        kwarg...
     )
     out = Dict{Symbol, Any}()
     for k in submodels_symbols(model)
@@ -123,7 +124,8 @@ function variable_mapper(model::MultiModel, arg...;
             targets = t,
             config = c,
             offset_full = offset_full,
-            offset_x = offset_x
+            offset_x = offset_x,
+            kwarg...
         )
     end
     return (out, offset_full, offset_x)

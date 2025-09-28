@@ -51,8 +51,8 @@ function HelperSimulator(model::M, T = Float64;
         storage[:r] = r
         setup_helper_equation_storage!(storage, r, model)
         # TODO: Actually use these.
-        storage[:primary_mapper] = Jutul.variable_mapper(model, :primary)
-        storage[:parameter_wrapper] = first(Jutul.variable_mapper(model, :parameters))
+        # storage[:primary_mapper] = Jutul.variable_mapper(model, :primary)
+        # storage[:parameter_wrapper] = first(Jutul.variable_mapper(model, :parameters))
         initialize_extra_state_fields!(storage.state, model, T = T)
         setup_equations_and_primary_variable_views!(storage, model, (dx_buffer = missing, r_buffer = r))
         storage = Jutul.specialize_simulator_storage(storage, model, false)

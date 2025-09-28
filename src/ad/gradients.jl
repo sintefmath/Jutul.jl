@@ -828,7 +828,13 @@ end
 gradient_vec_or_mat(n, ::Nothing) = zeros(n)
 gradient_vec_or_mat(n, m) = zeros(n, m)
 
-function variable_mapper(model::SimulationModel, type = :primary; targets = nothing, config = nothing, offset_x = 0, offset_full = offset_x)
+function variable_mapper(model::SimulationModel, type = :primary;
+        targets = nothing,
+        config = nothing,
+        offset_x = 0,
+        offset_full = offset_x,
+        use_scaling = true
+    )
     vars = get_variables_by_type(model, type)
     out = Dict{Symbol, Any}()
     for (t, var) in vars
@@ -851,13 +857,18 @@ function variable_mapper(model::SimulationModel, type = :primary; targets = noth
                 n_x = N*m
             end
         end
+        if use_scaling
+            scale = variable_scale(var)
+        else
+            scale = 1.0
+        end
         out[t] = (
             n_full = n,
             n_x = n_x,
             n_row = m,
             offset_full = offset_full,
             offset_x = offset_x,
-            scale = variable_scale(var)
+            scale = scale
         )
         offset_full += n
         offset_x += n_x
