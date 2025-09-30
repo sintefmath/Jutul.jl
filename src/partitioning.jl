@@ -129,7 +129,6 @@ function process_partition(neighbors, partition; weights = missing)
     new_p = copy(partition)
     neighbors = Jutul.convert_neighborship(neighbors)
     max_p = maximum(partition)
-    nfine = length(partition)
     for coarse in 1:max_p
         cells = findall(isequal(coarse), partition)
         if length(cells) > 0
