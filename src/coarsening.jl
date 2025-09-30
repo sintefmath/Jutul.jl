@@ -44,13 +44,11 @@ function apply_coarsening_function!(coarsevals, finevals, op, coarse::DataDomain
     ncoarse = count_entities(coarse, entity)
     if finevals isa AbstractVector
         for block in 1:ncoarse
-            # @info "Block $block / $ncoarse for $name on $entity"
             ix = block_indices(CG, block, entity)
             coarsevals[block] = inner_apply_coarsening_function(view(finevals, ix), ix, op, coarse, fine, 1, name, entity)
         end
     else
         for block in 1:ncoarse
-            #             @info "Block $block / $ncoarse for $name on $entity"
             ix = block_indices(CG, block, entity)
             for j in axes(coarsevals, 1)
                 coarsevals[j, block] = inner_apply_coarsening_function(view(finevals, j, ix), ix, op, coarse, fine, j, name, entity)
