@@ -20,6 +20,12 @@ function get_neighborship(G::UnstructuredMesh; internal = true)
     return N
 end
 
+function grid_dims_ijk(g::UnstructuredMesh)
+    # For unstructured mesh, we just return number of cells in x, and 1 in y and z
+    ncells = number_of_cells(g)
+    return (ncells, 1, 1)
+end
+
 function grid_dims_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}) where D
     dims = Tuple(g.structure)
     if D == 1
