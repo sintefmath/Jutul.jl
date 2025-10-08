@@ -26,10 +26,14 @@ function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByFi
     return finevals[1]
 end
 
-function apply_coarsening_function!(coarsevals, finevals, op, coarse::DataDomain, fine::DataDomain, name, entity::Union{Cells, Faces})
+function apply_coarsening_function!(coarsevals, finevals, op, coarse::DataDomain, fine::DataDomain, name, entity::Union{Cells, Faces}; coarse_to_cells = missing)
     CG = physical_representation(coarse)
     function block_indices(CG, block, ::Cells)
-        return findall(isequal(block), CG.partition)
+        if ismissing(coarse_to_cells)
+            return findall(isequal(block), CG.partition)
+        else
+            return coarse_to_cells[block]
+        end
     end
     function block_indices(CG, block, ::Faces)
         return CG.coarse_faces_to_fine[block]
@@ -66,16 +70,17 @@ function coarsen_data_domain(D::DataDomain, partition;
     g = physical_representation(D)
     cg = CoarseMesh(g, partition)
     cD = DataDomain(cg)
+    coarse_to_cells = map(i -> findall(isequal(i), cg.partition), 1:maximum(cg.partition))
     for name in keys(D)
         if !haskey(cD, name)
             val = D[name]
             e = Jutul.associated_entity(D, name)
             Te = eltype(val)
-            if !(e in (Cells(), Faces(), BoundaryFaces(), nothing))
+            if !(e in (Cells(), Faces(), BoundaryFaces(), NoEntity(), nothing))
                 # Other entities are not supported yet.
                 continue
             end
-            if isnothing(e)
+            if isnothing(e) || e isa NoEntity
                 # No idea about coarse dims, just copy
                 coarseval = deepcopy(val)
             elseif val isa AbstractVecOrMat
@@ -90,7 +95,7 @@ function coarsen_data_domain(D::DataDomain, partition;
                 else
                     f = get(functions, name, default_other)
                 end
-                coarseval = apply_coarsening_function!(coarseval, val, f, cD, D, name, e)
+                coarseval = apply_coarsening_function!(coarseval, val, f, cD, D, name, e, coarse_to_cells = coarse_to_cells)
             else
                 # Don't know what's going on
                 coarseval = deepcopy(val)
