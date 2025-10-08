@@ -69,7 +69,7 @@ function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 2, kwarg.
 end
 
 function Jutul.plot_jutul_line_data(data::JutulLinePlotData; kwarg...)
-    plot_jutul_line_data([data]; kwarg...)
+    Jutul.plot_jutul_line_data([data]; kwarg...)
 end
 
 function Jutul.plot_jutul_line_data(data; size = (1600, 900), linewidth = 2, regions = axes(data, 2), kwarg...)
