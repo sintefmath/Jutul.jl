@@ -94,8 +94,19 @@ end
 
 function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::Vector{SVector{3, T}}, cell_centroids, n; offset = 0) where {T}
     cell_index, face_index, pts, tri = dest
-    if n == 4
-        # TODO: Could add a 3 mesh specialization here
+    if n == 3
+        # Just add the triangle
+        for cell in neighbors
+            for i in 1:n
+                push!(cell_index, cell)
+                push!(face_index, face)
+                push!(pts, node_pts[nodes[i]])
+            end
+            push!(tri, SVector{3, Int}(offset+1, offset + 2, offset + 3))
+            offset += n
+        end
+    elseif n == 4
+        # Tesselation is known
         for cell in neighbors
             for i in 1:n
                 push!(cell_index, cell)
