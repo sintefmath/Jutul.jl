@@ -213,6 +213,35 @@ function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing
         end
         outer_sparsity[mod_k] = sparsity
     end
+    # We also add sparsity from cross terms (they can couple variables between models)
+    for ctp in model.cross_terms
+        for is_normal in (true, false)
+            ct = ctp.cross_term
+            if !is_normal && !has_symmetry(ct)
+                continue
+            end
+            if is_normal
+                modname = ctp.target
+                eqname = ctp.target_equation
+            else
+                modname = ctp.source
+                eqname = ctp.source_equation
+            end
+            m = model[modname]
+            eq = m.equations[eqname]
+            if is_normal
+                ix = cross_term_entities(ct, eq, m)
+            else
+                ix = cross_term_entities_source(ct, eq, m)
+            end
+            entityname = associated_entity(eq)
+            dest = outer_sparsity[modname][entityname]
+            for i in ix
+                push!(dest, i)
+            end
+            unique!(dest)
+        end
+    end
     return outer_sparsity
 end
 
