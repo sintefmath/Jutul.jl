@@ -235,7 +235,11 @@ function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing
                 ix = cross_term_entities_source(ct, eq, m)
             end
             entityname = associated_entity(eq)
-            dest = outer_sparsity[modname][entityname]
+            msparsity = outer_sparsity[modname]
+            if !haskey(msparsity, entityname)
+                msparsity[entityname] = Int64[]
+            end
+            dest = msparsity[entityname]
             for i in ix
                 push!(dest, i)
             end
