@@ -1,3 +1,23 @@
+"""
+    plot_solve_breakdown(allreports, names; per_it = false, include_local_solves = nothing, t_scale = ("s", 1.0))
+
+Plot a breakdown of solver performance timing for multiple simulation reports.
+
+# Arguments
+- `allreports`: Vector of simulation reports to analyze
+- `names`: Vector of names for each report (used for labeling)
+
+# Keyword Arguments
+- `per_it = false`: If `true`, show time per iteration instead of total time
+- `include_local_solves = nothing`: Whether to include local solve timing (auto-detected if `nothing`)
+- `t_scale = ("s", 1.0)`: Time scale unit and conversion factor for display
+
+# Returns
+- `(fig, D)`: Figure object and processed timing data
+
+This function creates a bar chart showing the breakdown of computational time spent
+in different parts of the simulation: assembly, local solves, linear solve, and total time.
+"""
 function Jutul.plot_solve_breakdown(allreports, names; per_it = false, include_local_solves = nothing, t_scale = ("s", 1.0))
     t_unit, t_num = t_scale
     if per_it
@@ -47,6 +67,30 @@ function Jutul.plot_solve_breakdown(allreports, names; per_it = false, include_l
     return (fig, D)
 end
 
+"""
+    plot_cumulative_solve(allreports, args...; kwarg...)
+
+Plot cumulative solver performance over time or steps for multiple simulation reports.
+
+# Arguments
+- `allreports`: Vector of simulation reports to analyze
+- `args...`: Additional arguments passed to `plot_cumulative_solve!`
+
+# Keyword Arguments
+- `use_time = false`: Plot wall time instead of iterations
+- `cumulative = true`: Show cumulative values vs individual step values
+- `x_is_time = true`: Use time on x-axis instead of step numbers
+- `legend = true`: Show legend for multiple datasets
+- `scatter_points = true`: Add scatter points to the plot
+- `linewidth = 3.5`: Line width for the plot
+- Additional keyword arguments are passed to the plotting functions
+
+# Returns
+- `(fig, ax, alldata, t)`: Figure, axis, processed data, and time vectors
+
+Creates a new figure and plots cumulative solver performance metrics, useful for
+comparing simulation efficiency across different configurations or time periods.
+"""
 function Jutul.plot_cumulative_solve(allreports, arg...; kwarg...)
     fig = Figure()
     ax, alldata, t = Jutul.plot_cumulative_solve!(fig[1, 1], allreports, arg...; kwarg...)
@@ -54,6 +98,37 @@ function Jutul.plot_cumulative_solve(allreports, arg...; kwarg...)
     return (fig, ax, alldata, t)
 end
 
+"""
+    plot_cumulative_solve!(f, allreports, dt = nothing, names = nothing; kwarg...)
+
+Mutating version of `plot_cumulative_solve` that plots into an existing figure layout.
+
+# Arguments
+- `f`: Figure or layout position to plot into
+- `allreports`: Vector of simulation reports to analyze
+- `dt = nothing`: Time step sizes (auto-detected if `nothing`)
+- `names = nothing`: Names for each dataset (auto-generated if `nothing`)
+
+# Keyword Arguments
+- `use_time = false`: Plot wall time instead of iterations
+- `use_title = true`: Show plot title
+- `linewidth = 3.5`: Line width for the plot
+- `cumulative = true`: Show cumulative values vs individual step values
+- `linestyles = missing`: Custom line styles for each dataset
+- `colormap = :tab20`: Colormap for multiple datasets
+- `t_scale = ("s", 1.0)`: Time scale unit and conversion factor
+- `x_is_time = true`: Use time on x-axis instead of step numbers
+- `legend = true`: Show legend for multiple datasets
+- `ministeps = false`: Include ministep information
+- `title = nothing`: Custom plot title
+- `scatter_points = true`: Add scatter points to the plot
+
+# Returns
+- `(ax, alldata, t)`: Axis object, processed data, and time vectors
+
+This function provides fine-grained control over cumulative performance plotting
+by allowing integration into custom figure layouts.
+"""
 function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothing; 
         use_time = false,
         use_title = true,
@@ -156,6 +231,24 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
 end
 
 
+"""
+    plot_linear_convergence(report; kwarg...)
+
+Plot the convergence history of linear solver iterations from a simulation report.
+
+# Arguments
+- `report`: Simulation report containing linear solver information
+
+# Keyword Arguments
+- Additional keyword arguments are passed to the `Axis` constructor
+
+# Returns
+- `fig`: Figure object containing the convergence plot
+
+Creates a logarithmic plot showing how the linear solver residual decreases over
+iterations. This is useful for analyzing linear solver performance and convergence
+behavior during simulation.
+"""
 function Jutul.plot_linear_convergence(report; kwarg...)
     fig = Figure()
     ax = Axis(fig[1, 1], yscale = log10; ylabel = "Residual", xlabel = "Linear iterations", kwarg...)
@@ -163,6 +256,19 @@ function Jutul.plot_linear_convergence(report; kwarg...)
     return fig
 end
 
+"""
+    plot_linear_convergence!(ax, report)
+
+Mutating version of `plot_linear_convergence` that plots into an existing axis.
+
+# Arguments
+- `ax`: Makie Axis object to plot into
+- `report`: Simulation report or vector of reports containing linear solver information
+
+This function extracts linear solver residual information from simulation reports
+and plots the convergence history. It can handle individual reports, nested report
+structures with ministeps, or vectors of multiple reports.
+"""
 function Jutul.plot_linear_convergence!(ax, report::AbstractDict)
     if haskey(report, :ministeps)
         plot_linear_convergence!(ax, report[:ministeps])
