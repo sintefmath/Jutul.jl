@@ -34,7 +34,6 @@ function tensor_mesh(bounding_box::Vector{Vector{Float64}};
         end
 
         constraints_d, removed_d = process_constraints(constraints_d)
-        
         xd = sample_coordinates(constraints_d, hd)
 
         push!(x, xd)
@@ -183,7 +182,7 @@ function sample_coordinates(constraints, h)
         frac = 1/3
         dx_t = frac*dx
         do_interpolation = true#interpolation[i] != :nothing
-        force_interpolation = true
+        force_interpolation = false
         interpolation = fill(:both, n)
         if do_interpolation && hc > dx_t
             msg = "Transition in layer $(k) not feasible (hz = $hc > dz = $dx_t)"
@@ -241,6 +240,8 @@ function interpolate(z_a::Float64, z_b::Float64, dz_a::Float64, dz_b::Float64)
     end
 
     @assert isapprox(z[1], z_a) && isapprox(z[end], z_b)
+    z[1] = z_a
+    z[end] = z_b
 
     return z
 
