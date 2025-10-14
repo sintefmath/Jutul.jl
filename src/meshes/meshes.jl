@@ -206,6 +206,7 @@ include("unstructured/unstructured.jl")
 include("coarse.jl")
 include("trajectories.jl")
 include("extruded.jl")
+include("utils/conforming_tensor_mesh.jl")
 
 function declare_entities(G::JutulMesh)
     nf = number_of_faces(G)
