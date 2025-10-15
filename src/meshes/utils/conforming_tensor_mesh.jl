@@ -12,20 +12,29 @@ function tensor_mesh(bounding_box::Vector{Vector{Float64}};
         @assert length(xb) == 2 "Bounding box in dimension $d must have length 2"
         @assert xb[1] < xb[2] "Bounding box in dimension $d must be increasing"
 
+        hfun = missing
         if ismissing(cell_size[d])
-            hd = x -> (xb[2] - xb[1])/20
+            hb = (xb[2] - xb[1])/20
         elseif isa(cell_size[d], Number)
-            hd = x -> cell_size[d]
+            hb = cell_size[d]
         else
-            hd = cell_size[d]
-            @assert isa(hd, Function) "cell_size in dimension $d must be a number or a function"
+            hfun = cell_size[d]
         end
+
         constraints_d = isnothing(constraints[d]) ? [] : constraints[d]
+        # Add boundary constraints if not already present
         for x in xb
             if !any(c -> c[1] == x && c[3] == :boundary, constraints_d)
-                push!(constraints_d, (x, hd(x), :boundary, Inf))
+                h = ismissing(hfun) ? hb : hfun(x)
+                push!(constraints_d, (x, h, :boundary, Inf))
             end
         end
+
+        # Set cell size function if not provided
+        if ismissing(hfun)
+            hfun = interpolate_cell_size(constraints_d, hb)
+        end
+        @assert hfun isa Function "cell_size in dimension $d must be missing, a scalar, or a function"
 
         c0 = copy(constraints_d)
         constraints_d = []
@@ -34,17 +43,47 @@ function tensor_mesh(bounding_box::Vector{Vector{Float64}};
         end
 
         constraints_d, removed_d = process_constraints(constraints_d)
-        xd = sample_coordinates(constraints_d, hd)
+        xd = sample_coordinates(constraints_d, hfun)
 
         push!(x, xd)
     end
-  
+
     x = Tuple(x)
     sizes = map(x->diff(x), x)
     dims = Tuple([length(s) for s in sizes])
     msh = CartesianMesh(dims, sizes, origin = minimum.(x))
 
     return msh
+
+end
+
+function interpolate_cell_size(constraints, background_size)
+
+    x = [c[1] for c in constraints]
+    h = [c[2] for c in constraints]
+    hb = background_size
+
+    n = 100
+    xv, hv = Float64[], Float64[]
+    for k in 1:(length(x)-1)
+        
+        xm = (x[k] + x[k+1])/2
+        
+        xl = range(x[k], stop = xm, length = n)
+        hl = range(h[k], stop = hb, length = n)
+        push!(xv, xl...)
+        push!(hv, hl...)
+
+        xr = range(xm, stop = x[k+1], length = n)
+        hr = range(hb, stop = h[k+1], length = n)
+        push!(xv, xr...)
+        push!(hv, hr...)
+
+    end
+
+    h = x -> hv[last(findmin(abs.(xv .- x)))]
+
+    return h
 
 end
 
@@ -150,10 +189,13 @@ function shrink_constraint(c, cp)
     return c
 end
 
-function sample_coordinates(constraints, h)
+function sample_coordinates(constraints, hfun, interpolation = :default)
 
     x = Float64[]
     n = length(constraints)
+    if interpolation isa Symbol
+        interpolation = fill(interpolation, n)
+    end
     for (k, constraint) in enumerate(constraints)
 
         (c, type, priority) = constraint
@@ -172,38 +214,47 @@ function sample_coordinates(constraints, h)
         xl = x[end]
         xr = xc[1]
         xl_t, xr_t = xl, xr
-        dx = xr - xl
-        
+        Δx = xr - xl
+
+        @assert Δx >= 0 "Constraints must be ordered and non-overlapping"
+
         hl = x[end] - x[end-1]
-        hc = h((xr + xl)/2)
+        hc = hfun((xr + xl)/2)
         hr = xc[2] - xc[1]
 
-        # frac = (1 < k < n-1) ? 1/3 : 2/3
-        frac = 1/3
-        dx_t = frac*dx
-        do_interpolation = true#interpolation[i] != :nothing
-        force_interpolation = false
-        interpolation = fill(:both, n)
-        if do_interpolation && hc > dx_t
-            msg = "Transition in layer $(k) not feasible (hz = $hc > dz = $dx_t)"
-            if force_interpolation
-                hc = dx_t/2
-                @warn msg * ". Forcing interpolation by reducing hz to $hc"
+        itp = interpolation[k]
+        gt_tol = (x, y) -> isapprox(x, y; rtol=1e-2) ? false : x > y
+        if itp == :default
+            if gt_tol(hc, hl) && gt_tol(hc, hr)
+               itp = :both
+            elseif gt_tol(hc, hl)
+               itp = :left
+            elseif gt_tol(hc, hr)
+               itp = :right
             else
-                do_interpolation = false
-                @warn msg * ". No interpolation will be done."
+               itp = :none
             end
         end
-        if do_interpolation
-            if interpolation[k] ∈ [:top, :both]
-                xl_t = xl + dx_t
-                hl = min(hl, dx_t/2)
-            end
-            if interpolation[k] ∈ [:bottom, :both]
-                xr_t = xr - dx_t
-                hr = min(hr, dx_t/2)
-            end
+
+        Δxl_t, Δxr_t = 0.0, 0.0
+        if itp == :left
+            Δxl_t = Δx/2
+        elseif itp == :right
+            Δxr_t = Δx/2
+        elseif itp == :both
+            Δxl_t = Δx/3
+            Δxr_t = Δx/3
         end
+
+        force_interpolation = true
+        if itp != :none && force_interpolation
+            hl = Δxl_t > 0 ? min(hl, Δxl_t/2) : hl
+            hc = min(hc, (Δx-Δxl_t-Δxr_t)/2)
+            hr =  Δxr_t > 0 ? min(hr, Δxr_t/2) : hr
+        end
+
+        xl_t = xl + Δxl_t
+        xr_t = xr - Δxr_t
 
         xl = interpolate(xl, xl_t, hl, hc)
         xm = interpolate(xl_t, xr_t, hc, hc)
@@ -212,36 +263,37 @@ function sample_coordinates(constraints, h)
 
         push!(x, xk...)
         unique!(x)
+
     end
 
     return x
 
 end
 
-function interpolate(z_a::Float64, z_b::Float64, dz_a::Float64, dz_b::Float64)
+function interpolate(xa::Float64, xb::Float64, da::Float64, db::Float64)
 
-    L = z_b - z_a
+    L = xb - xa
     if isapprox(L, 0.0)
-        z = [z_a, z_b]
+        z = [xa, xb]
 
-    elseif isapprox(dz_a, dz_b)
-        n = max(Int(round(L/dz_a))+1,2)
-        z = collect(range(z_a, z_b, length=n))
+    elseif isapprox(da, db)
+        n = max(Int(round(L/da))+1,2)
+        z = collect(range(xa, xb, length=n))
 
     else
-        α = (L-dz_a)/(L-dz_b)
-        K = Int(round(log(dz_b/dz_a)/log(α)))
-        α = (dz_b/dz_a)^(1/K)
-        dz = dz_a*α.^(0:K)
+        α = (L-da)/(L-db)
+        K = Int(round(log(db/da)/log(α)))
+        α = (db/da)^(1/K)
+        dz = da*α.^(0:K)
         rem = sum(dz) - L
         dz .-= rem.*dz./sum(dz)
-        z = z_a .+ cumsum(vcat(0, dz))
+        z = xa .+ cumsum(vcat(0, dz))
 
     end
 
-    @assert isapprox(z[1], z_a) && isapprox(z[end], z_b)
-    z[1] = z_a
-    z[end] = z_b
+    @assert isapprox(z[1], xa) && isapprox(z[end], xb)
+    z[1] = xa
+    z[end] = xb
 
     return z
 
