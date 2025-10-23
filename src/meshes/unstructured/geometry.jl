@@ -41,10 +41,16 @@ function face_centroid_and_measure(nodes, pts::Vector{SVector{3, Num}}) where {N
 end
 
 function face_centroid_and_measure(nodes, pts::Vector{SVector{2, Num}}) where {Num}
-    @assert length(nodes) == 2
-    l, r = nodes
-    centroid = (pts[l] + pts[r])/2.0
-    area = norm(pts[l] - pts[r], 2)
+    nn = length(nodes)
+    if nn == 0
+        centroid = NaN*zero(SVector{2, Num})
+        area = NaN*zero(Num)
+    else
+        @assert nn == 2
+        l, r = nodes
+        centroid = (pts[l] + pts[r])/2.0
+        area = norm(pts[l] - pts[r], 2)
+    end
     return (centroid, area)
 end
 
@@ -167,15 +173,19 @@ function face_normal(G::UnstructuredMesh{2}, f, e = Faces())
     get_nodes(::BoundaryFaces) = G.boundary_faces
     nodes = get_nodes(e).faces_to_nodes[f]
     pts = G.node_points
-    n = length(nodes)
-    @assert n == 2
     T = eltype(pts)
-    l, r = nodes
-    pt_l = pts[l]
-    pt_r = pts[r]
+    n = length(nodes)
+    if n == 0
+        normal = NaN .* zero(T)
+    else
+        @assert n == 2
+        l, r = nodes
+        pt_l = pts[l]
+        pt_r = pts[r]
 
-    v = pt_r - pt_l
-    normal = T(v[2], -v[1])
+        v = pt_r - pt_l
+        normal = T(v[2], -v[1])
+    end
 
     return normal/norm(normal, 2)
 end
