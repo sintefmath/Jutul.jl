@@ -34,13 +34,10 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
     if info_level > 1
         jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
     end
-    t_solve = @elapsed solve_adjoint_generic!(∇G, X, F, storage, packed_steps, G,
+    solve_adjoint_generic!(∇G, X, F, storage, packed_steps, G,
         info_level = info_level,
         state0 = state0,
     )
-    if info_level > 1
-        jutul_message("Adjoints", "Adjoints solved in $(Jutul.get_tstr(t_solve)).", color = :blue)
-    end
     Jutul.print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
     if extra_output
         return (∇G, storage)
@@ -58,54 +55,60 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         info_level = 0,
         state0 = missing
     )
-    N = length(packed_steps)
-    case = setup_case(X, F, packed_steps, state0, :all)
-    if F != storage[:F_input]
-        @warn "The function F used in the solve must be the same as the one used in the setup."
-    end
-    F_dynamic = storage[:F_dynamic]
-    F_static = storage[:F_static]
-    is_fully_dynamic = storage[:F_fully_dynamic]
-    if is_fully_dynamic
-        Y = X
-        dYdX = missing
-    else
-        prep = storage[:dF_static_dX_prep]
-        backend = storage[:backend_di]
-        Y, dYdX = value_and_jacobian(F_static, prep, backend, X)
-    end
-    G = Jutul.adjoint_wrap_objective(G, case.model)
-    Jutul.adjoint_reset_parameters!(storage, case.parameters)
-
-    packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
-    H = storage[:adjoint_objective_helper]
-    H.packed_steps = packed_steps
-
-    # Do sparsity detection if not already done.
-    if info_level > 1
-        jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
-    end
-
-    Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward)
-    # Set gradient to zero before solve starts
-    dG_dynamic = storage[:dynamic_buffer]
-    @. dG_dynamic = 0
-    @tic "sensitivities" for i in N:-1:1
-        if info_level > 0
-            jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
+    t_solve = @elapsed begin
+        N = length(packed_steps)
+        case = setup_case(X, F, packed_steps, state0, :all)
+        if F != storage[:F_input]
+            @warn "The function F used in the solve must be the same as the one used in the setup."
         end
-        update_sensitivities_generic!(dG_dynamic, Y, H, i, G, storage, packed_steps)
-    end
-    dparam = storage.dparam
-    if !isnothing(dparam)
-        @. dG_dynamic += dparam
-    end
-    if is_fully_dynamic
-        copyto!(∇G, dG_dynamic)
-    else
-        mul!(∇G, dYdX', dG_dynamic)
-    end
+        F_dynamic = storage[:F_dynamic]
+        F_static = storage[:F_static]
+        is_fully_dynamic = storage[:F_fully_dynamic]
+        if is_fully_dynamic
+            Y = X
+            dYdX = missing
+        else
+            prep = storage[:dF_static_dX_prep]
+            backend = storage[:backend_di]
+            Y, dYdX = value_and_jacobian(F_static, prep, backend, X)
+        end
+        G = Jutul.adjoint_wrap_objective(G, case.model)
+        Jutul.adjoint_reset_parameters!(storage, case.parameters)
 
+        packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
+        H = storage[:adjoint_objective_helper]
+        H.num_evals = 0
+        H.packed_steps = packed_steps
+
+        # Do sparsity detection if not already done.
+        if info_level > 1
+            jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
+        end
+
+        Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward)
+        # Set gradient to zero before solve starts
+        dG_dynamic = storage[:dynamic_buffer]
+        @. dG_dynamic = 0
+        @tic "sensitivities" for i in N:-1:1
+            if info_level > 0
+                jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
+            end
+            update_sensitivities_generic!(dG_dynamic, Y, H, i, G, storage, packed_steps)
+        end
+        dparam = storage.dparam
+        if !isnothing(dparam)
+            @. dG_dynamic += dparam
+        end
+        if is_fully_dynamic
+            copyto!(∇G, dG_dynamic)
+        else
+            mul!(∇G, dYdX', dG_dynamic)
+        end
+    end
+    if info_level > 1
+        num_evals = storage[:adjoint_objective_helper].num_evals
+        jutul_message("Adjoints", "Adjoints solved in $(Jutul.get_tstr(t_solve)) ($num_evals residual evaluations).", color = :blue)
+    end
     all(isfinite, ∇G) || error("Adjoint solve resulted in non-finite gradient values.")
     return ∇G
 end
@@ -275,8 +278,9 @@ mutable struct AdjointObjectiveHelper
     step_index::Union{Int, Missing}
     packed_steps::AdjointPackedResult
     cache::Dict{Tuple{DataType, Int64}, Any}
+    num_evals::Int64
     function AdjointObjectiveHelper(F, G, packed_steps::AdjointPackedResult)
-        new(F, G, missing, missing, packed_steps, Dict())
+        new(F, G, missing, missing, packed_steps, Dict(), 0)
     end
 end
 
@@ -297,6 +301,7 @@ function (H::AdjointObjectiveHelper)(x)
         s0, s, = Jutul.adjoint_step_state_triplet(packed, ix)
         is_sum = H.G isa Jutul.AbstractSumObjective
         H.G::Jutul.AbstractJutulObjective
+        H.num_evals += 1
         evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.objective_evaluator, packed, ix, H.cache; is_sum = is_sum)
     end
     if ismissing(H.step_index)
