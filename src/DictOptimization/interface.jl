@@ -76,6 +76,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         simulator = missing,
         config = missing,
         solution_history = false,
+        info_level = 0,
         deps::Symbol = :case,
         backend_arg = (
             use_sparsity = true,
@@ -94,7 +95,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     ub = limits.max
     lb = limits.min
     # Set up a cache for forward/backward sim
-    adj_cache = setup_optimization_cache(dopt, simulator = simulator, config = config)
+    adj_cache = setup_optimization_cache(dopt, simulator = simulator, config = config, info_level = info_level)
 
     if solution_history
         sols = []

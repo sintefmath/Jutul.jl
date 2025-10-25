@@ -35,7 +35,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             t_setup = @elapsed S = Jutul.AdjointsDI.setup_adjoint_storage_generic(
                 x, setup_from_vector, packed_steps, objective;
                 backend_arg...,
-                info_level = adj_cache[:config][:info_level]
+                info_level = adj_cache[:info_level]
             )
             jutul_message("Optimization", "Finished setup in $t_setup seconds.", color = :green)
             adj_cache[:storage] = S
@@ -62,7 +62,10 @@ function forward_simulate_for_optimization(case, adj_cache)
     end
     config = get(adj_cache, :config, missing)
     if ismissing(config)
-        config = simulator_config(sim, info_level = -1, output_substates = true)
+        config = simulator_config(sim,
+            info_level = adj_cache[:info_level],
+            output_substates = true
+        )
         adj_cache[:config] = config
     end
     return simulate!(sim, case.dt,
@@ -166,9 +169,14 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
     return (x0 = x0, x_setup = x_setup, limits = lims)
 end
 
-function setup_optimization_cache(dopt::DictParameters; simulator = missing, config = missing)
+function setup_optimization_cache(dopt::DictParameters;
+        simulator = missing,
+        config = missing,
+        info_level = 0
+    )
     # Set up a cache for forward/backward sim
     adj_cache = Dict()
+    adj_cache[:info_level] = info_level
     # Internal copy - to be used for adjoints etc
     adj_cache[:parameters] = widen_dict_copy(dopt.parameters)
     if !ismissing(simulator)
