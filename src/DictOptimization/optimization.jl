@@ -76,21 +76,15 @@ end
 function optimizer_devectorize!(prm, X, x_setup)
     if haskey(x_setup, :lumping) || haskey(x_setup, :scalers)
         X_new = similar(X, 0)
+        sizehint!(X_new, length(X))
         pos = 0
         for (i, k) in enumerate(x_setup.names)
             scaler = get(x_setup.scalers, k, missing)
             if haskey(x_setup.lumping, k)
                 L = x_setup.lumping[k]
-                first_index = L.first_index
-                N = length(first_index)
-                for v in L.lumping
-                    push!(X_new, undo_scaler(X[pos + v], scaler))
-                end
+                N = optimizer_devectorize_lumping!(X_new, X, pos, L, scaler)
             else
-                N = x_setup.offsets[i+1]-x_setup.offsets[i]
-                for i in pos+1:pos+N
-                    push!(X_new, undo_scaler(X[i], scaler))
-                end
+                N = optimizer_devectorize_scaler!(X_new, X, i, pos, x_setup.offsets, scaler)
             end
             pos += N
         end
@@ -99,6 +93,23 @@ function optimizer_devectorize!(prm, X, x_setup)
     @assert length(X) == x_setup.offsets[end]-1
     # Set the parameters from the vector
     return Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup)
+end
+
+function optimizer_devectorize_lumping!(X_new, X, pos, L, scaler)
+    first_index = L.first_index
+    N = length(first_index)
+    for v in L.lumping
+        push!(X_new, undo_scaler(X[pos + v], scaler))
+    end
+    return N
+end
+
+function optimizer_devectorize_scaler!(X_new, X, i, pos, offsets, scaler)
+    N = offsets[i+1]-offsets[i]
+    for ix in pos+1:pos+N
+        push!(X_new, undo_scaler(X[ix], scaler))
+    end
+    return N
 end
 
 function optimization_setup(dopt::DictParameters; include_limits = true)
