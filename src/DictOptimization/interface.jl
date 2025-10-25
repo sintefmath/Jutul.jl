@@ -80,7 +80,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         backend_arg = (
             use_sparsity = true,
             di_sparse = true,
-            single_step_sparsity = false,
+            single_step_sparsity = deps == :parameters || deps == :parameters_and_state0,
             do_prep = true,
             deps = deps,
         ),
