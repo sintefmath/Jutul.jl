@@ -6,14 +6,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     )
 
     prm = adj_cache[:parameters]
-    function setup_from_vector(X, step_info)
-        optimizer_devectorize!(prm, X, x_setup)
-        # Return the case setup function This is a function that sets up the
-        # case from the parameters
-        F() = setup_fn(prm, step_info)
-        return redirect_stdout(F, devnull)
-    end
-
+    setup_from_vector = (X, step_info = missing) -> setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
     case = setup_from_vector(x, missing)
     objective = Jutul.adjoint_wrap_objective(objective, case.model)
     result = forward_simulate_for_optimization(case, adj_cache)
@@ -52,6 +45,14 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         g = missing
     end
     return (f, g)
+end
+
+function setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
+    optimizer_devectorize!(prm, X, x_setup)
+    # Return the case setup function This is a function that sets up the
+    # case from the parameters
+    F() = setup_fn(prm, step_info)
+    return redirect_stdout(F, devnull)
 end
 
 function forward_simulate_for_optimization(case, adj_cache)
