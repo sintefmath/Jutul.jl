@@ -41,7 +41,8 @@ using `free_optimization_parameter!` prior to calling the optimizer.
 - `backend_arg`: Options for the autodiff backend:
   - `use_sparsity`: Enable sparsity detection for the objective function
   - `di_sparse`: Use sparse differentiation
-  - `single_step_sparsity`: Enable single step sparsity detection (if sparsity does not change during timesteps)
+  - `single_step_sparsity`: Enable single step sparsity detection (if sparsity
+    does not change during timesteps)
   - `do_prep`: Perform preparation step
 
 # Returns
@@ -103,7 +104,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         sols = missing
     end
     solve_and_differentiate(x) = solve_and_differentiate_for_optimization(x, dopt, setup_fn, objective, x_setup, adj_cache;
-        backend_arg,
+        backend_arg = backend_arg,
         solution_history = sols
     )
     if dopt.verbose
