@@ -193,20 +193,26 @@ function unit_box_bfgs(
 end
 
 
+function box_bfgs(problem; kwarg...)
+    ub = problem.limits.max
+    lb = problem.limits.min
+    return box_bfgs(problem.x0, problem, lb, ub; kwarg...)
+end
+
 function box_bfgs(x0, f, lb, ub; kwarg...)
     n = length(x0)
     length(lb) == n || throw(ArgumentError("Length of lower bound ($(length(lb))) must match length of initial guess ($n)"))
     length(ub) == n || throw(ArgumentError("Length of upper bound ($(length(ub))) must match length of initial guess ($n)"))
     # Check bounds
     for i in eachindex(x0, lb, ub)
+        if lb[i] >= ub[i]
+            throw(ArgumentError("Lower bound must be less than upper bound for index $i: lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
+        end
         if x0[i] < lb[i] || x0[i] > ub[i]
             throw(ArgumentError("Initial guess x0[$i] = $(x0[i]) is outside bounds [$(lb[i]), $(ub[i])]"))
         end
         if !isfinite(lb[i]) || !isfinite(ub[i])
             throw(ArgumentError("Bounds must be finite, got lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
-        end
-        if lb[i] >= ub[i]
-            throw(ArgumentError("Lower bound must be less than upper bound for index $i: lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
         end
     end
     δ = ub .- lb

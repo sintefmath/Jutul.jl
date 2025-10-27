@@ -74,44 +74,32 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         max_it = 25,
         opt_fun = missing,
         maximize = false,
+        backend_arg = missing,
+        info_level = 0,
+        deps::Symbol = :case,
         simulator = missing,
         config = missing,
         solution_history = false,
-        info_level = 0,
-        deps::Symbol = :case,
-        backend_arg = (
-            use_sparsity = true,
-            di_sparse = true,
-            single_step_sparsity = deps == :parameters || deps == :parameters_and_state0,
-            do_prep = true,
-            deps = deps,
-        ),
         kwarg...
     )
     if ismissing(setup_fn)
         error("Setup function was not found in DictParameters struct or as last positional argument.")
     end
-    x0, x_setup, limits = optimization_setup(dopt)
-
-    ub = limits.max
-    lb = limits.min
-    # Set up a cache for forward/backward sim
-    adj_cache = setup_optimization_cache(dopt, simulator = simulator, config = config, info_level = info_level)
-
-    if solution_history
-        sols = []
-    else
-        sols = missing
-    end
-    solve_and_differentiate(x) = solve_and_differentiate_for_optimization(x, dopt, setup_fn, objective, x_setup, adj_cache;
+    problem = JutulOptimizationProblem(dopt, objective, setup_fn;
+        simulator = simulator,
+        config = config,
+        info_level = info_level,
         backend_arg = backend_arg,
-        solution_history = sols
+        solution_history = solution_history,
+        deps = deps
     )
+
     if dopt.verbose
-        jutul_message("Optimization", "Starting calibration of $(length(x0)) parameters.", color = :green)
+        jutul_message("Optimization", "Starting calibration of $(length(problem.x0)) parameters.", color = :green)
     end
+
     t_opt = @elapsed if ismissing(opt_fun)
-        v, x, history = Jutul.LBFGS.box_bfgs(x0, solve_and_differentiate, lb, ub;
+        v, x, history = Jutul.LBFGS.box_bfgs(problem;
             print = Int(dopt.verbose),
             max_it = max_it,
             grad_tol = grad_tol,
@@ -122,7 +110,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     else
         self_cache = Dict()
         function f!(x)
-            f, g = solve_and_differentiate(x)
+            f, g = opt_cache(x)
             self_cache[:f] = f
             self_cache[:g] = g
             self_cache[:x] = x
@@ -142,12 +130,11 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         jutul_message("Optimization", "Finished in $t_opt seconds.", color = :green)
     end
     # Also remove AD from the internal ones and update them
-    prm_out = deepcopy(dopt.parameters)
-    optimizer_devectorize!(prm_out, x, x_setup)
+    prm_out = optimizer_devectorize(problem, x)
     dopt.parameters_optimized = prm_out
     dopt.history = history
     if solution_history
-        dopt.history = (history = history, solutions = sols)
+        dopt.history = (history = history, solutions = problem.solution_history)
     else
         dopt.history = history
     end

@@ -25,7 +25,7 @@ function map_X_to_Y(F, X, model, parameters_map, state0_map, cache)
     return Y
 end
 
-function setup_from_vectorized(Y, case, parameters_map, state0_map)
+function setup_from_vectorized(Y, case, parameters_map, state0_map; step_info = missing)
     has_state0 = !ismissing(state0_map)
     N_prm = Jutul.vectorized_length(case.model, parameters_map)
     if has_state0

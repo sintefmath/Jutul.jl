@@ -44,7 +44,7 @@ function objective_evaluator_from_model_and_state(G::AbstractSumObjective, model
 end
 
 function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, model, packed_steps, current_step)
-    if ismissing(current_step)
+    if current_step isa Symbol
         # Same hack as for AbstractSumObjective
         current_step = 1
     end

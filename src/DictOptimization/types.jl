@@ -100,3 +100,78 @@ function DictParametersSampler(dopt::DictParameters, output_function = (case, re
     end
     return DictParametersSampler(parameters, dopt.setup_function, output_function, objective, simulator, config, setup)
 end
+
+struct JutulOptimizationProblem
+    dict_parameters::DictParameters
+    setup_function
+    objective
+    x0
+    x_setup
+    limits
+    backend_arg::NamedTuple
+    cache
+    solution_history
+    function JutulOptimizationProblem(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
+            backend_arg = missing,
+            info_level = 0,
+            deps::Symbol = :case,
+            simulator = missing,
+            config = missing,
+            solution_history::Bool = false
+        )
+        if ismissing(backend_arg)
+            backend_arg = (
+                use_sparsity = true,
+                di_sparse = true,
+                single_step_sparsity = deps == :parameters || deps == :parameters_and_state0,
+                do_prep = true,
+                deps = deps
+            )
+        end
+        x0, x_setup, limits = optimization_setup(dopt)
+
+        # Set up a cache for forward/backward sim
+        adj_cache = setup_optimization_cache(dopt, simulator = simulator, config = config, info_level = info_level)
+
+        if solution_history
+            sols = []
+        else
+            sols = missing
+        end
+        return new(
+            dopt,
+            setup_fn,
+            objective,
+            x0,
+            x_setup,
+            limits,
+            backend_arg,
+            adj_cache,
+            sols
+        )
+    end
+end
+
+function evaluate(opt::JutulOptimizationProblem, x; gradient = true)
+    dopt = opt.dict_parameters
+    setup_fn = opt.setup_function
+    objective = opt.objective
+    x_setup = opt.x_setup
+    adj_cache = opt.cache
+    backend_arg = opt.backend_arg
+    obj, dobj_dx = solve_and_differentiate_for_optimization(x, dopt, setup_fn, objective, x_setup, adj_cache;
+        backend_arg = backend_arg,
+        gradient = gradient
+    )
+    return (obj, dobj_dx)
+end
+
+function (I::JutulOptimizationProblem)(x; gradient = true)
+    evaluate(I, x; gradient = gradient)
+end
+
+function optimizer_devectorize(P::JutulOptimizationProblem, x)
+    prm_out = deepcopy(P.dict_parameters.parameters)
+    optimizer_devectorize!(prm_out, x, P.x_setup)
+    return prm_out
+end
