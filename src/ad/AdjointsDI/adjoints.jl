@@ -361,7 +361,7 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
         end
         cache_static = Dict{Type, AbstractVector}()
         F_static = (X, step_info = missing) -> map_X_to_Y(F, X, case.model, parameters_map, state0_map, cache_static)
-        F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, case, parameters_map, state0_map; step_info)
+        F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, case, parameters_map, state0_map; step_info = step_info)
         if do_prep
             prep_static = prepare_jacobian(F_static, backend, X)
         end
