@@ -70,7 +70,10 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         else
             prep = storage[:dF_static_dX_prep]
             backend = storage[:backend_di]
+            # Y = F_static(X)
+            # dYdX = jacobian(F_static, prep, backend, X)
             Y, dYdX = value_and_jacobian(F_static, prep, backend, X)
+            # Y, dYdX = value_and_jacobian(F_static, AutoForwardDiff(), X)
         end
         G = Jutul.adjoint_wrap_objective(G, case.model)
         Jutul.adjoint_reset_parameters!(storage, case.parameters)
@@ -123,6 +126,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         do_prep = true,
         di_sparse = true,
         deps = :case,
+        deps_targets = nothing,
         backend = Jutul.default_di_backend(sparse = di_sparse),
         info_level = 0,
         single_step_sparsity = true,
@@ -138,7 +142,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             n_objective = nothing,
             info_level = info_level,
     )
-    setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, deps)
+    setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, deps_targets, deps)
     storage[:dparam] = zeros(storage[:n_dynamic])
     return storage
 end
@@ -185,6 +189,7 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed
     N = length(λ)
     push!(λ, 0.0)
     # tmp = jac'*λ
+    # @info "??" jac
     mul!(∇G, jac', λ, 1.0, 1.0)
     resize!(λ, N)
     # Gradient of partial objective to parameters
@@ -275,12 +280,12 @@ mutable struct AdjointObjectiveHelper
     F
     G
     objective_evaluator
-    step_index::Union{Int, Missing}
+    step_index::Union{Symbol, Int}
     packed_steps::AdjointPackedResult
     cache::Dict{Tuple{DataType, Int64}, Any}
     num_evals::Int64
     function AdjointObjectiveHelper(F, G, packed_steps::AdjointPackedResult)
-        new(F, G, missing, missing, packed_steps, Dict(), 0)
+        new(F, G, missing, :all, packed_steps, Dict(), 0)
     end
 end
 
@@ -289,7 +294,8 @@ function set_objective_helper_step_index!(H::AdjointObjectiveHelper, model, step
         step_index > 0 || error("Step index must be positive. Got $step_index.")
         step_index <= length(H.packed_steps) || error("Step index $step_index is larger than the number of steps $(length(H.packed_steps)).")
     else
-        ismissing(step_index) || error("Step index must be an integer or missing. Got $step_index.")
+        step_index in (:firstlast, :all) || error("If step_index is a Symbol it must be :firstlast or :all.")
+        step_index isa Symbol || error("Step index must be an integer or symbol (:firstlast, :all). Got $step_index.")
     end
     H.step_index = step_index
     H.objective_evaluator = Jutul.objective_evaluator_from_model_and_state(H.G, model, H.packed_steps, step_index)
@@ -304,14 +310,23 @@ function (H::AdjointObjectiveHelper)(x)
         H.num_evals += 1
         evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.objective_evaluator, packed, ix, H.cache; is_sum = is_sum)
     end
-    if ismissing(H.step_index)
-        # Loop over all to get the "extended sparsity". This is a bit of a hack,
-        # but it covers the case where there is some change in dynamics/controls
-        # at a later step.
-        v = evaluate(x, 1)
+    if H.step_index isa Symbol
+        # Loop over multiple steps to get the "extended sparsity". This is a bit
+        # of a hack, but it covers the case where there is some change in
+        # dynamics/controls at a later step.
+        if H.step_index == :all
+            indices_to_eval = eachindex(packed.states)
+        else
+            H.step_index == :firstlast || error("Unknown step index symbol: $(indices_to_eval).")
+            indices_to_eval = [1, length(packed.states)]
+        end
+        v = evaluate(x, indices_to_eval[1])
         @. v = abs.(v)
-        for i in 2:length(packed)
-            tmp = evaluate(x, i)
+        for (i, step) in enumerate(indices_to_eval)
+            if i == 1
+                continue
+            end
+            tmp = evaluate(x, step)
             @. v += abs.(tmp)
         end
     else
@@ -320,7 +335,7 @@ function (H::AdjointObjectiveHelper)(x)
     return v
 end
 
-function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, deps::Symbol)
+function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, targets, deps::Symbol)
     if ismissing(backend)
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
@@ -335,11 +350,12 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
         F_static = x -> x
     else
         deps in (:parameters, :parameters_and_state0) || error("deps must be :case, :parameters or :parameters_and_state0. Got $deps.")
-        # cfg = optimization_config(case0, include_state0 = deps == :parameters_and_state0)
         inc_state0 = deps == :parameters_and_state0
-        parameters_map, = Jutul.variable_mapper(model, :parameters)
+        parameters_map, = Jutul.variable_mapper(model, :parameters,
+            targets = targets,
+            config = nothing)
         if inc_state0
-            state0_map, = Jutul.variable_mapper(model, :primary)
+            state0_map, = Jutul.variable_mapper(model, :primary, targets = targets)
         else
             state0_map = missing
         end
@@ -373,9 +389,9 @@ function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backen
     # that essentially calls the same function.
     if do_prep
         if single_step_sparsity
-            step_index = 1
+            step_index = :firstlast
         else
-            step_index = missing
+            step_index = :all
         end
         set_objective_helper_step_index!(H, case.model, step_index)
         prep = prepare_jacobian(H, backend, Y)
