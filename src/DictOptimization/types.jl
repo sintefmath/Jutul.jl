@@ -152,7 +152,7 @@ struct JutulOptimizationProblem
     end
 end
 
-function evaluate(opt::JutulOptimizationProblem, x; gradient = true)
+function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true)
     dopt = opt.dict_parameters
     setup_fn = opt.setup_function
     objective = opt.objective
@@ -166,8 +166,16 @@ function evaluate(opt::JutulOptimizationProblem, x; gradient = true)
     return (obj, dobj_dx)
 end
 
-function (I::JutulOptimizationProblem)(x; gradient = true)
+function (I::JutulOptimizationProblem)(x = I.x0; gradient = true)
     evaluate(I, x; gradient = gradient)
+end
+
+function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0; index = 1, eps = 1e-6)
+    f0, _ = I(x; gradient = false)
+    xd = copy(x)
+    xd[index] += eps
+    fd, _ = I(xd; gradient = false)
+    return (fd - f0)/eps
 end
 
 function optimizer_devectorize(P::JutulOptimizationProblem, x)
