@@ -149,16 +149,21 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     # Two approaches:
     # 1. F_static(X) -> Y (vector of parameters) -> F_dynamic(Y) (updated case)
     # 2. F(X) -> case directly and F_dynamic = F and F_static = identity
+    deps in (:case, :parameters, :parameters_and_state0) || error("deps must be :case, :parameters or :parameters_and_state0. Got $deps.")
     fully_dynamic = deps == :case
     prep_static = nothing
-    if fully_dynamic
-        F_dynamic = F
-        F_static = x -> x
-        is_generic = true
-    else
-        deps in (:parameters, :parameters_and_state0) || error("deps must be :case, :parameters or :parameters_and_state0. Got $deps.")
-        inc_state0 = deps == :parameters_and_state0
-        if deps_ad == :di
+    adj_kwarg = (
+        use_sparsity = use_sparsity,
+        linear_solver = Jutul.select_linear_solver(case.model, mode = :adjoint, rtol = 1e-6),
+        n_objective = nothing,
+        info_level = info_level,
+    )
+    if fully_dynamic || deps_ad == :di
+        if fully_dynamic
+            F_dynamic = F
+            F_static = x -> x
+        else
+            inc_state0 = deps == :parameters_and_state0
             parameters_map, = Jutul.variable_mapper(model, :parameters,
                 targets = deps_targets,
                 config = nothing)
@@ -173,30 +178,19 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             if do_prep
                 prep_static = prepare_jacobian(F_static, backend, X)
             end
-            is_generic = true
-        else
-            is_generic = false
         end
-    end
-    adj_kwarg = (
-        use_sparsity = use_sparsity,
-        linear_solver = Jutul.select_linear_solver(case.model, mode = :adjoint, rtol = 1e-6),
-        n_objective = nothing,
-        info_level = info_level,
-    )
-    if is_generic
         storage = Jutul.setup_adjoint_storage_base(
-            case.model, case.state0, case.parameters,
-            use_sparsity = use_sparsity,
-            linear_solver = Jutul.select_linear_solver(case.model, mode = :adjoint, rtol = 1e-6),
-            n_objective = nothing,
-            info_level = info_level,
+            case.model, case.state0, case.parameters;
+            adj_kwarg...
         )
     else
-        storage = Jutul.setup_adjoint_storage(model,
+        inc_state0 = deps == :parameters_and_state0
+        storage = Jutul.setup_adjoint_storage(model;
             state0 = case.state0,
             parameters = case.parameters,
+            adj_kwarg...
         )
+        error("Not finished")
     end
     # Whatever was input - for checking
     storage[:F_input] = F
