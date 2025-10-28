@@ -513,7 +513,10 @@ end
 
 function update_linearized_system_equation!(nz::Missing, r, model, equation::JutulEquation, cache)
     d = get_diagonal_entries(equation, cache)
-    @. r = d
+    for i in eachindex(d, r)
+        r[i] = d[i]
+    end
+    return r
 end
 
 """

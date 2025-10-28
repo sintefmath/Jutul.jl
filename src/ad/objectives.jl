@@ -32,7 +32,7 @@ end
 
 function objective_evaluator_from_model_and_state(G::AbstractSumObjective, model, packed_steps, i)
     # (model, state; kwarg...) -> obj
-    if ismissing(i)
+    if i isa Symbol
         # This is hack for the case where we want to evaluate the objective for
         # all steps for sparsity detection but the objective is a sum. So we
         # fake it by taking the first step.
@@ -44,7 +44,7 @@ function objective_evaluator_from_model_and_state(G::AbstractSumObjective, model
 end
 
 function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, model, packed_steps, current_step)
-    if ismissing(current_step)
+    if current_step isa Symbol
         # Same hack as for AbstractSumObjective
         current_step = 1
     end
