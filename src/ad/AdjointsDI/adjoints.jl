@@ -90,7 +90,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
             dstate0 = storage[:dstate0]
             if !ismissing(dstate0)
                 dG_dynamic_state0 = storage[:dynamic_buffer_state0]
-                # dG_dynamic_state0 .= dstate0
+                dG_dynamic_state0 .= dstate0
             end
         else
             # Do sparsity detection if not already done.
@@ -176,6 +176,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         F_static = x -> x
         parameter_map = state0_map = missing
         N_prm = length(X)
+        N_state0 = 0
     else
         parameter_map, = Jutul.variable_mapper(model, :parameters,
             targets = deps_targets,
@@ -183,11 +184,11 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         )
         N_prm = Jutul.vectorized_length(case.model, parameter_map)
         if inc_state0
-            state0_map, = Jutul.variable_mapper(model, :primary,
-                targets = deps_targets
-            )
+            state0_map, = Jutul.variable_mapper(model, :primary)
+            N_state0 = Jutul.number_of_degrees_of_freedom(case.model)
         else
             state0_map = missing
+            N_state0 = 0
         end
         cache_static = Dict{Type, AbstractVector}()
         F_static = (X, step_info = missing) -> map_X_to_Y(F, X, case.model, parameter_map, state0_map, cache_static)
@@ -232,7 +233,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     dG_dyn = similar(Y)
     storage[:dynamic_buffer] = dG_dyn
     storage[:dynamic_buffer_parameters] = view(dG_dyn, 1:N_prm)
-    storage[:dynamic_buffer_state0] = view(dG_dyn, (N_prm+1):length(dG_dyn))
+    storage[:dynamic_buffer_state0] = view(dG_dyn, (N_prm+1):(N_prm+N_state0))
     H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
     # Note: strict = false is needed because we create another function on the fly
@@ -301,8 +302,6 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed
     # Add zero entry (corresponding to objective values) to avoid resizing matrix.
     N = length(λ)
     push!(λ, 0.0)
-    # tmp = jac'*λ
-    # @info "??" jac
     mul!(∇G, jac', λ, 1.0, 1.0)
     resize!(λ, N)
     # Gradient of partial objective to parameters
