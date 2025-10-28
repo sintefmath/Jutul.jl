@@ -25,7 +25,6 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
     if info_level > 1
         jutul_message("Adjoints", "Storage set up in $(Jutul.get_tstr(t_storage)).", color = :blue)
     end
-    n_param = storage[:n_dynamic]
     n_param_static = storage[:n_static]
     n_param_static == length(X) || error("Internal error: static parameter length mismatch.")
     ∇G = zeros(n_param_static)
@@ -88,7 +87,11 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
             @assert !is_fully_dynamic "Fully dynamic dependencies must use :di adjoints."
             dG_dynamic_prm = storage[:dynamic_buffer_parameters]
             Jutul.solve_adjoint_sensitivities!(dG_dynamic_prm, storage, packed_steps, G; info_level = 0)
-            dG_dynamic_state0 = storage[:dynamic_buffer_state0]
+            dstate0 = storage[:dstate0]
+            if !ismissing(dstate0)
+                dG_dynamic_state0 = storage[:dynamic_buffer_state0]
+                # dG_dynamic_state0 .= dstate0
+            end
         else
             # Do sparsity detection if not already done.
             if info_level > 1
@@ -247,7 +250,13 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     end
     storage[:prep_di] = prep
     storage[:backend_di] = backend
-    storage[:dparam] = zeros(storage[:n_dynamic])
+    if use_di
+        storage[:dparam] = zeros(storage[:n_dynamic])
+    else
+        # state0 is a bit strange
+        storage[:dparam] = zeros(N_prm)
+    end
+
     return storage
 end
 
