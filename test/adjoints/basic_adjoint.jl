@@ -209,7 +209,7 @@ function num_grad_generic(F, G, x0)
     return out
 end
 
-function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objective = false, deps = :case, kwarg...)
+function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objective = false, deps = :case, deps_ad = :jutul, kwarg...)
     # dx, dy, U0, k_val, srcval
     x = ones(5)
     case = setup_poisson_test_case_from_vector(x, dt = timesteps)
@@ -238,6 +238,7 @@ function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objectiv
     dGdx_adj = solve_adjoint_generic(x, F, states, reports, G;
         state0 = case.state0,
         forces = case.forces,
+        deps_ad = deps_ad,
         deps = deps,
         kwarg...
     )
@@ -273,8 +274,10 @@ end
                 test_for_timesteps([100.0], fmt = fmt, global_objective = global_obj)
             end
             @testset "parameters" begin
-                test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters)
-                test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters_and_state0)
+                for deps_ad in [:di, :jutul]
+                test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters, deps_ad = deps_ad)
+                test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters_and_state0, deps_ad = deps_ad)
+                end
             end
         end
     end
