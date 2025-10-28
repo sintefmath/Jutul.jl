@@ -158,23 +158,31 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         n_objective = nothing,
         info_level = info_level,
     )
+    inc_state0 = deps == :parameters_and_state0
+    if fully_dynamic
+        parameter_map = state0_map = missing
+    else
+        parameter_map, = Jutul.variable_mapper(model, :parameters,
+            targets = deps_targets,
+            config = nothing
+        )
+        if inc_state0
+            state0_map, = Jutul.variable_mapper(model, :primary,
+                targets = deps_targets
+            )
+        else
+            state0_map = missing
+        end
+    end
+
+    cache_static = Dict{Type, AbstractVector}()
     if fully_dynamic || deps_ad == :di
         if fully_dynamic
             F_dynamic = F
             F_static = x -> x
         else
-            inc_state0 = deps == :parameters_and_state0
-            parameters_map, = Jutul.variable_mapper(model, :parameters,
-                targets = deps_targets,
-                config = nothing)
-            if inc_state0
-                state0_map, = Jutul.variable_mapper(model, :primary, targets = deps_targets)
-            else
-                state0_map = missing
-            end
-            cache_static = Dict{Type, AbstractVector}()
-            F_static = (X, step_info = missing) -> map_X_to_Y(F, X, case.model, parameters_map, state0_map, cache_static)
-            F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, case, parameters_map, state0_map; step_info = step_info)
+            F_static = (X, step_info = missing) -> map_X_to_Y(F, X, case.model, parameter_map, state0_map, cache_static)
+            F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, case, parameter_map, state0_map; step_info = step_info)
             if do_prep
                 prep_static = prepare_jacobian(F_static, backend, X)
             end
@@ -184,10 +192,14 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             adj_kwarg...
         )
     else
-        inc_state0 = deps == :parameters_and_state0
+        F_static = (X, step_info = missing) -> map_X_to_Y(F, X, case.model, parameter_map, state0_map, cache_static)
+        F_dynamic = missing
         storage = Jutul.setup_adjoint_storage(model;
             state0 = case.state0,
             parameters = case.parameters,
+            include_state0 = inc_state0,
+            parameter_map = parameter_map,
+            state0_map = state0_map,
             adj_kwarg...
         )
         error("Not finished")
