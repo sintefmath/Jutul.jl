@@ -828,7 +828,12 @@ end
 gradient_vec_or_mat(n, ::Nothing) = zeros(n)
 gradient_vec_or_mat(n, m) = zeros(n, m)
 
-function variable_mapper(model::SimulationModel, type = :primary; targets = nothing, config = nothing, offset_x = 0, offset_full = offset_x)
+function variable_mapper(model::SimulationModel, type = :primary;
+        targets = nothing,
+        config = nothing,
+        offset_x = 0,
+        offset_full = offset_x
+    )
     vars = get_variables_by_type(model, type)
     out = OrderedDict{Symbol, Any}()
     for (t, var) in vars

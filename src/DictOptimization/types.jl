@@ -121,6 +121,7 @@ struct JutulOptimizationProblem
             solution_history::Bool = false
         )
         if ismissing(backend_arg)
+            deps_ad in (:di, :jutul) || error("deps_ad must be :di or :jutul. Got $deps_ad.")
             backend_arg = (
                 use_sparsity = true,
                 di_sparse = true,
