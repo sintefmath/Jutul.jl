@@ -77,6 +77,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         backend_arg = missing,
         info_level = 0,
         deps::Symbol = :case,
+        deps_ad = :jutul,
         simulator = missing,
         config = missing,
         solution_history = false,
@@ -91,7 +92,8 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         info_level = info_level,
         backend_arg = backend_arg,
         solution_history = solution_history,
-        deps = deps
+        deps = deps,
+        deps_ad = deps_ad
     )
 
     if dopt.verbose

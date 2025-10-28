@@ -115,6 +115,7 @@ struct JutulOptimizationProblem
             backend_arg = missing,
             info_level = 0,
             deps::Symbol = :case,
+            deps_ad::Symbol = :jutul,
             simulator = missing,
             config = missing,
             solution_history::Bool = false
@@ -125,7 +126,8 @@ struct JutulOptimizationProblem
                 di_sparse = true,
                 single_step_sparsity = deps == :parameters || deps == :parameters_and_state0,
                 do_prep = true,
-                deps = deps
+                deps = deps,
+                deps_ad = deps_ad
             )
         end
         x0, x_setup, limits = optimization_setup(dopt)

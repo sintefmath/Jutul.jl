@@ -126,6 +126,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         do_prep = true,
         di_sparse = true,
         deps = :case,
+        deps_ad = :jutul,
         deps_targets = nothing,
         backend = Jutul.default_di_backend(sparse = di_sparse),
         info_level = 0,
@@ -142,7 +143,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             n_objective = nothing,
             info_level = info_level,
     )
-    setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, deps_targets, deps)
+    setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, deps_targets, deps, deps_ad)
     storage[:dparam] = zeros(storage[:n_dynamic])
     return storage
 end
@@ -335,7 +336,7 @@ function (H::AdjointObjectiveHelper)(x)
     return v
 end
 
-function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, targets, deps::Symbol)
+function setup_jacobian_evaluation!(storage, X, F, G, packed_steps, case, backend, do_prep, single_step_sparsity, di_sparse, targets, deps::Symbol, deps_ad::Symbol)
     if ismissing(backend)
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
