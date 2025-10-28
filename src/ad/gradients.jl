@@ -232,8 +232,18 @@ Non-allocating version of `solve_adjoint_sensitivities`.
 """
 function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces, info_level = 0)
     G = adjoint_wrap_objective(G, storage.forward.model)
-    packed_steps = AdjointPackedResult(states, timesteps, forces)
-    packed_steps.state0 = state0
+    if states isa AdjointPackedResult
+        packed_steps = states
+    else
+        packed_steps = AdjointPackedResult(states, timesteps, forces)
+        packed_steps.state0 = state0
+    end
+    return solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPackedResult, G; info_level = info_level)
+end
+
+function solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPackedResult, G; info_level = 0)
+    state0 = packed_steps.state0
+    G = adjoint_wrap_objective(G, storage.forward.model)
     # Do sparsity detection if not already done.
     if info_level > 1
         jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
@@ -266,6 +276,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     end
     return ∇G
 end
+
 
 function adjoint_reset_parameters!(storage, parameters)
     if haskey(storage, :parameter)

@@ -82,10 +82,13 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         H = storage[:adjoint_objective_helper]
         H.num_evals = 0
         H.packed_steps = packed_steps
+        dG_dynamic = storage[:dynamic_buffer]
 
         if storage[:deps_ad] == :jutul
             @assert !is_fully_dynamic "Fully dynamic dependencies must use :di adjoints."
-            error("TODO!")
+            dG_dynamic_prm = storage[:dynamic_buffer_parameters]
+            Jutul.solve_adjoint_sensitivities!(dG_dynamic_prm, storage, packed_steps, G; info_level = 0)
+            dG_dynamic_state0 = storage[:dynamic_buffer_state0]
         else
             # Do sparsity detection if not already done.
             if info_level > 1
@@ -94,7 +97,6 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
 
             Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward)
             # Set gradient to zero before solve starts
-            dG_dynamic = storage[:dynamic_buffer]
             @. dG_dynamic = 0
             @tic "sensitivities" for i in N:-1:1
                 if info_level > 0
@@ -170,11 +172,13 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         F_dynamic = F
         F_static = x -> x
         parameter_map = state0_map = missing
+        N_prm = length(X)
     else
         parameter_map, = Jutul.variable_mapper(model, :parameters,
             targets = deps_targets,
             config = nothing
         )
+        N_prm = Jutul.vectorized_length(case.model, parameter_map)
         if inc_state0
             state0_map, = Jutul.variable_mapper(model, :primary,
                 targets = deps_targets
@@ -185,7 +189,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         cache_static = Dict{Type, AbstractVector}()
         F_static = (X, step_info = missing) -> map_X_to_Y(F, X, case.model, parameter_map, state0_map, cache_static)
         F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, case, parameter_map, state0_map; step_info = step_info)
-        if do_prep && use_di
+        if do_prep
             prep_static = prepare_jacobian(F_static, backend, X)
         end
     end
@@ -221,7 +225,11 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     Y = F_static(X)
     storage[:n_static] = length(X)
     storage[:n_dynamic] = length(Y)
-    storage[:dynamic_buffer] = similar(Y)
+    # Buffer used for dynamic gradient storage
+    dG_dyn = similar(Y)
+    storage[:dynamic_buffer] = dG_dyn
+    storage[:dynamic_buffer_parameters] = view(dG_dyn, 1:N_prm)
+    storage[:dynamic_buffer_state0] = view(dG_dyn, (N_prm+1):length(dG_dyn))
     H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
     # Note: strict = false is needed because we create another function on the fly
