@@ -109,7 +109,7 @@ function variable_mapper(model::MultiModel, arg...;
     )
     out = Dict{Symbol, Any}()
     for k in submodels_symbols(model)
-        if isnothing(targets)
+        if isnothing(targets) || !haskey(targets, k)
             t = nothing
         else
             t = targets[k]

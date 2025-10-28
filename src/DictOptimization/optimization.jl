@@ -6,14 +6,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     )
 
     prm = adj_cache[:parameters]
-    function setup_from_vector(X, step_info)
-        optimizer_devectorize!(prm, X, x_setup)
-        # Return the case setup function This is a function that sets up the
-        # case from the parameters
-        F() = setup_fn(prm, step_info)
-        return redirect_stdout(F, devnull)
-    end
-
+    setup_from_vector = (X, step_info = missing) -> setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
     case = setup_from_vector(x, missing)
     objective = Jutul.adjoint_wrap_objective(objective, case.model)
     result = forward_simulate_for_optimization(case, adj_cache)
@@ -35,7 +28,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             t_setup = @elapsed S = Jutul.AdjointsDI.setup_adjoint_storage_generic(
                 x, setup_from_vector, packed_steps, objective;
                 backend_arg...,
-                info_level = adj_cache[:config][:info_level]
+                info_level = adj_cache[:info_level]
             )
             jutul_message("Optimization", "Finished setup in $t_setup seconds.", color = :green)
             adj_cache[:storage] = S
@@ -54,6 +47,14 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     return (f, g)
 end
 
+function setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
+    optimizer_devectorize!(prm, X, x_setup)
+    # Return the case setup function This is a function that sets up the
+    # case from the parameters
+    F() = setup_fn(prm, step_info)
+    return redirect_stdout(F, devnull)
+end
+
 function forward_simulate_for_optimization(case, adj_cache)
     sim = get(adj_cache, :simulator, missing)
     if ismissing(sim)
@@ -62,7 +63,10 @@ function forward_simulate_for_optimization(case, adj_cache)
     end
     config = get(adj_cache, :config, missing)
     if ismissing(config)
-        config = simulator_config(sim, info_level = -1, output_substates = true)
+        config = simulator_config(sim,
+            info_level = adj_cache[:info_level],
+            output_substates = true
+        )
         adj_cache[:config] = config
     end
     return simulate!(sim, case.dt,
@@ -76,21 +80,15 @@ end
 function optimizer_devectorize!(prm, X, x_setup)
     if haskey(x_setup, :lumping) || haskey(x_setup, :scalers)
         X_new = similar(X, 0)
+        sizehint!(X_new, length(X))
         pos = 0
         for (i, k) in enumerate(x_setup.names)
             scaler = get(x_setup.scalers, k, missing)
             if haskey(x_setup.lumping, k)
                 L = x_setup.lumping[k]
-                first_index = L.first_index
-                N = length(first_index)
-                for v in L.lumping
-                    push!(X_new, undo_scaler(X[pos + v], scaler))
-                end
+                N = optimizer_devectorize_lumping!(X_new, X, pos, L, scaler)
             else
-                N = x_setup.offsets[i+1]-x_setup.offsets[i]
-                for i in pos+1:pos+N
-                    push!(X_new, undo_scaler(X[i], scaler))
-                end
+                N = optimizer_devectorize_scaler!(X_new, X, i, pos, x_setup.offsets, scaler)
             end
             pos += N
         end
@@ -99,6 +97,23 @@ function optimizer_devectorize!(prm, X, x_setup)
     @assert length(X) == x_setup.offsets[end]-1
     # Set the parameters from the vector
     return Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup)
+end
+
+function optimizer_devectorize_lumping!(X_new, X, pos, L, scaler)
+    first_index = L.first_index
+    N = length(first_index)
+    for v in L.lumping
+        push!(X_new, undo_scaler(X[pos + v], scaler))
+    end
+    return N
+end
+
+function optimizer_devectorize_scaler!(X_new, X, i, pos, offsets, scaler)
+    N = offsets[i+1]-offsets[i]
+    for ix in pos+1:pos+N
+        push!(X_new, undo_scaler(X[ix], scaler))
+    end
+    return N
 end
 
 function optimization_setup(dopt::DictParameters; include_limits = true)
@@ -155,9 +170,14 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
     return (x0 = x0, x_setup = x_setup, limits = lims)
 end
 
-function setup_optimization_cache(dopt::DictParameters; simulator = missing, config = missing)
+function setup_optimization_cache(dopt::DictParameters;
+        simulator = missing,
+        config = missing,
+        info_level = 0
+    )
     # Set up a cache for forward/backward sim
     adj_cache = Dict()
+    adj_cache[:info_level] = info_level
     # Internal copy - to be used for adjoints etc
     adj_cache[:parameters] = widen_dict_copy(dopt.parameters)
     if !ismissing(simulator)

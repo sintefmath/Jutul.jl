@@ -108,6 +108,8 @@ Set up storage for use with `solve_adjoint_sensitivities!`.
 function setup_adjoint_storage(model;
         state0 = setup_state(model),
         parameters = setup_parameters(model),
+        state0_map = missing,
+        parameter_map = missing,
         n_objective = nothing,
         targets = parameter_targets(model),
         include_state0 = false,
@@ -121,9 +123,13 @@ function setup_adjoint_storage(model;
     parameter_model = adjoint_parameter_model(model, targets)
     n_prm = number_of_degrees_of_freedom(parameter_model)
     # Note that primary is here because the target parameters are now the primaries for the parameter_model
-    parameter_map, = variable_mapper(parameter_model, :primary, targets = targets; kwarg...)
+    if ismissing(parameter_map)
+        parameter_map, = variable_mapper(parameter_model, :primary, targets = targets; kwarg...)
+    end
     if include_state0
-        state0_map, = variable_mapper(model, :primary)
+        if ismissing(state0_map)
+            state0_map, = variable_mapper(model, :primary)
+        end
         n_state0 = number_of_degrees_of_freedom(model)
         state0_vec = zeros(n_state0)
     else
@@ -226,8 +232,18 @@ Non-allocating version of `solve_adjoint_sensitivities`.
 """
 function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, G; forces, info_level = 0)
     G = adjoint_wrap_objective(G, storage.forward.model)
-    packed_steps = AdjointPackedResult(states, timesteps, forces)
-    packed_steps.state0 = state0
+    if states isa AdjointPackedResult
+        packed_steps = states
+    else
+        packed_steps = AdjointPackedResult(states, timesteps, forces)
+        packed_steps.state0 = state0
+    end
+    return solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPackedResult, G; info_level = info_level)
+end
+
+function solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPackedResult, G; info_level = 0)
+    state0 = packed_steps.state0
+    G = adjoint_wrap_objective(G, storage.forward.model)
     # Do sparsity detection if not already done.
     if info_level > 1
         jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
@@ -260,6 +276,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     end
     return ∇G
 end
+
 
 function adjoint_reset_parameters!(storage, parameters)
     if haskey(storage, :parameter)
@@ -828,9 +845,14 @@ end
 gradient_vec_or_mat(n, ::Nothing) = zeros(n)
 gradient_vec_or_mat(n, m) = zeros(n, m)
 
-function variable_mapper(model::SimulationModel, type = :primary; targets = nothing, config = nothing, offset_x = 0, offset_full = offset_x)
+function variable_mapper(model::SimulationModel, type = :primary;
+        targets = nothing,
+        config = nothing,
+        offset_x = 0,
+        offset_full = offset_x
+    )
     vars = get_variables_by_type(model, type)
-    out = Dict{Symbol, Any}()
+    out = OrderedDict{Symbol, Any}()
     for (t, var) in vars
         if !isnothing(targets) && !(t in targets)
             continue
