@@ -57,6 +57,8 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     t_solve = @elapsed begin
         N = length(packed_steps)
         case = setup_case(X, F, packed_steps, state0, :all)
+        G = Jutul.adjoint_wrap_objective(G, case.model)
+        Jutul.adjoint_reset_parameters!(storage, case.parameters)
         if F != storage[:F_input]
             @warn "The function F used in the solve must be the same as the one used in the setup."
         end
@@ -74,8 +76,6 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
             Y, dYdX = value_and_jacobian(F_static, prep, backend, X)
             # Y, dYdX = value_and_jacobian(F_static, AutoForwardDiff(), X)
         end
-        G = Jutul.adjoint_wrap_objective(G, case.model)
-        Jutul.adjoint_reset_parameters!(storage, case.parameters)
 
         packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
         H = storage[:adjoint_objective_helper]
@@ -143,15 +143,10 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         single_step_sparsity = true,
         use_sparsity = true
     )
+    @assert deps_ad == :di
     case = setup_case(X, F, packed_steps, state0, :all)
     G = Jutul.adjoint_wrap_objective(G, case.model)
     packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
-    adj_kwarg = (
-        use_sparsity = use_sparsity,
-        linear_solver = Jutul.select_linear_solver(case.model, mode = :adjoint, rtol = 1e-6),
-        n_objective = nothing,
-        info_level = info_level
-    )
     if ismissing(backend)
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
@@ -161,16 +156,10 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     # 2. F(X) -> case directly and F_dynamic = F and F_static = identity
     deps in (:case, :parameters, :parameters_and_state0) || error("deps must be :case, :parameters or :parameters_and_state0. Got $deps.")
     prep_static = nothing
-    adj_kwarg = (
-        use_sparsity = use_sparsity,
-        linear_solver = Jutul.select_linear_solver(case.model, mode = :adjoint, rtol = 1e-6),
-        n_objective = nothing,
-        info_level = info_level,
-    )
-    use_di = deps_ad == :di
     fully_dynamic = deps == :case
     inc_state0 = deps == :parameters_and_state0
     if fully_dynamic
+        use_di = true
         deps_ad = :di
         F_dynamic = F
         F_static = x -> x
@@ -178,6 +167,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         N_prm = length(X)
         N_state0 = 0
     else
+        use_di = deps_ad == :di
         parameter_map, = Jutul.variable_mapper(model, :parameters,
             targets = deps_targets,
             config = nothing
@@ -197,7 +187,13 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             prep_static = prepare_jacobian(F_static, backend, X)
         end
     end
-    if fully_dynamic || use_di
+    adj_kwarg = (
+        use_sparsity = use_sparsity,
+        linear_solver = Jutul.select_linear_solver(case.model, mode = :adjoint, rtol = 1e-6),
+        n_objective = nothing,
+        info_level = info_level,
+    )
+    if deps_ad == :di
         storage = Jutul.setup_adjoint_storage_base(
             case.model, case.state0, case.parameters;
             adj_kwarg...
@@ -232,8 +228,13 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     # Buffer used for dynamic gradient storage
     dG_dyn = similar(Y)
     storage[:dynamic_buffer] = dG_dyn
-    storage[:dynamic_buffer_parameters] = view(dG_dyn, 1:N_prm)
-    storage[:dynamic_buffer_state0] = view(dG_dyn, (N_prm+1):(N_prm+N_state0))
+    if N_state0 > 0
+        storage[:dynamic_buffer_parameters] = view(dG_dyn, 1:N_prm)
+        storage[:dynamic_buffer_state0] = view(dG_dyn, (N_prm+1):(N_prm+N_state0))
+    else
+        storage[:dynamic_buffer_parameters] = dG_dyn
+        storage[:dynamic_buffer_state0] = Float64[]
+    end
     H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
     # Note: strict = false is needed because we create another function on the fly
