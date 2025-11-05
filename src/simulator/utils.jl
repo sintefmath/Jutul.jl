@@ -6,6 +6,8 @@ Get formatted time string of `dT` given in seconds, limited to `lim` number of u
 function get_tstr(dT, lim = 3)
     if dT == 0
         return "start"
+    elseif isinf(dT)
+        return "steady state (∞)"
     else
         last_unit_s = TIME_UNITS_FOR_PRINTING[end][2]
         if dT < 0

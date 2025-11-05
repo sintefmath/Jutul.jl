@@ -66,3 +66,50 @@ end
     @test data_domain_with_gradients[:volumes] ≈ [0.0, 0.0, 0.0]
     @test data_domain_with_gradients[:areas] ≈ [-2/3, -1/3] rtol=1e-3
 end
+
+@testset "Termination criterion" begin
+    function setup_poisson_test_case_timedep(dx, dy, U0, k_val, srcval; dim = (2, 2), dt = [1.0], termination_criterion = Jutul.NoTerminationCriterion())
+        sys = VariablePoissonSystem(time_dependent = true)
+        # Unit square
+        g = CartesianMesh(dim, (dx, dy))
+        # Set up a model with the grid and system
+        discretization = (poisson = Jutul.PoissonDiscretization(g), )
+        D = DiscretizedDomain(g, discretization)
+        model = SimulationModel(D, sys)
+        state0 = setup_state(model, Dict(:U=>U0))
+        K = compute_face_trans(g, k_val)
+        param = setup_parameters(model, K = K)
+
+        nc = number_of_cells(g)
+        pos_src = PoissonSource(1, srcval)
+        neg_src = PoissonSource(nc, -srcval)
+        forces = setup_forces(model, sources = [pos_src, neg_src])
+        idata = Dict(:dx => dx, :dy => dy, :U0 => U0, :k_val => k_val, :srcval => srcval)
+        return JutulCase(model, dt, forces; parameters = param, state0 = state0, input_data = idata, termination_criterion = termination_criterion)
+    end
+    il = -1
+    # Test base case - no criterion
+    dt = [0.1, 0.9, 10.0, 100.0]
+    c = setup_poisson_test_case_timedep(1.0, 1.0, 1.0, 1.0, 1.0, dim = (2, 2), dt = dt)
+    states, r = simulate(c, info_level = il)
+    report_times(r)[end] == sum(c.dt)
+    # Test end time criterion
+    stop_after_1 = Jutul.EndTimeTerminationCriterion(1.0)
+    c = setup_poisson_test_case_timedep(1.0, 1.0, 1.0, 1.0, 1.0, dim = (2, 2), dt = dt)
+    states, r = simulate(c, termination_criterion = stop_after_1, info_level = il)
+    @test report_times(r)[end] ≈ 1.0
+    # Test with termination criterion in case
+    c = setup_poisson_test_case_timedep(1.0, 1.0, 1.0, 1.0, 1.0, dim = (2, 2), dt = dt,
+        termination_criterion = stop_after_1)
+    states, r = simulate(c, info_level = il)
+    @test report_times(r)[end] ≈ 1.0
+    # Test with dt = Inf and termination criterion in case
+    c = setup_poisson_test_case_timedep(1.0, 1.0, 1.0, 1.0, 1.0, dim = (2, 2), dt = [Inf],
+        termination_criterion = stop_after_1)
+
+    states, r = simulate(c, info_level = il, max_timestep = 0.01)
+    @test report_times(r)[end] ≈ 1.0
+
+    c = setup_poisson_test_case_timedep(1.0, 1.0, 1.0, 1.0, 1.0, dim = (2, 2), dt = Inf)
+    @test_throws "Infinite total time-step requested without a termination criterion" simulate(c, info_level = il, max_timestep = 0.01)
+end

@@ -81,6 +81,8 @@ function specialize_simulator_storage(storage::JutulStorage, model_or_nothing, s
     end
     return out
 end
+
+JUTUL_TSTEP_VECTOR_TYPE = Union{AbstractVector, Real}
 """
     simulate(state0, model, timesteps, parameters = setup_parameters(model))
     simulate(state0, model, timesteps, info_level = 3)
@@ -96,40 +98,52 @@ and combine it with [`simulate!`](@ref).
 # Arguments
 - `state0::Dict`: initial state, typically created using [`setup_state`](@ref) for the `model` in use.
 - `model::JutulModel`: model that describes the discretized system to solve, for example [`SimulationModel`](@ref) or [`MultiModel`](@ref).
-- `timesteps::AbstractVector`: Vector of desired report steps. The simulator will perform time integration until `sum(timesteps)`
-   is reached, providing outputs at the end of each report step.
-- `parameters=setup_parameters(model)`: Optional overrides the default parameters for the model.
-- `forces=nothing`: Either `nothing` (for no forces), a single set of forces from `setup_forces(model)` or a `Vector` of such forces with equal length to `timesteps`.
-- `restart=nothing`: If an integer is provided, the simulation will attempt to restart from that step. Requires that `output_path` is provided here or in the `config`.
-- `config=simulator_config(model)`: Configuration `Dict` that holds many fine grained settings for output, linear solver, time-steps, outputs etc.
+- `timesteps`: Vector of desired report steps. The simulator will perform time
+   integration until `sum(timesteps)`. You can also provide a single step in
+   place of a vector. is reached, providing outputs at the end of each report
+   step. If a `Inf` value is provided as any of the time-steps, the simulator
+   will either perform an infinite step (if no max_timestep is provided) or the
+   simulator will perform timestepping forever until the termination criterion
+   is met. If you pass `Inf` and no termination criterion is provided, the
+   simulator will error.
+- `parameters=setup_parameters(model)`: Optional overrides the default
+  parameters for the model.
+- `forces=nothing`: Either `nothing` (for no forces), a single set of forces
+  from `setup_forces(model)` or a `Vector` of such forces with equal length to
+  `timesteps`.
+- `restart=nothing`: If an integer is provided, the simulation will attempt to
+  restart from that step. Requires that `output_path` is provided here or in the
+  `config`.
+- `config=simulator_config(model)`: Configuration object that holds many fine
+  grained settings for output, linear solver, time-steps, outputs etc.
 
 Additional arguments are passed onto [`simulator_config`](@ref).
 
 See also [`simulate!`](@ref), [`Simulator`](@ref), [`SimulationModel`](@ref), [`simulator_config`](@ref).
 """
-function simulate(state0, model::JutulModel, timesteps::AbstractVector; parameters = setup_parameters(model), kwarg...)
+function simulate(state0, model::JutulModel, timesteps::JUTUL_TSTEP_VECTOR_TYPE; parameters = setup_parameters(model), kwarg...)
     sim = Simulator(model, state0 = state0, parameters = parameters)
     return simulate!(sim, timesteps; kwarg...)
 end
 
 function simulate(case::JutulCase; kwarg...)
     sim = Simulator(case)
-    return simulate!(sim, case.dt; forces = case.forces, kwarg...)
+    return simulate!(sim, case.dt; forces = case.forces, termination_criterion = case.termination_criterion, kwarg...)
 end
 
 """
-    simulate(state0, sim::JutulSimulator, timesteps::AbstractVector; parameters = nothing, kwarg...)
+    simulate(state0, sim::JutulSimulator, timesteps; parameters = nothing, kwarg...)
 
 Simulate a set of `timesteps` with `simulator` for the given initial `state0` and optionally specific parameters.
 """
-function simulate(state0, sim::JutulSimulator, timesteps::AbstractVector; parameters = nothing, kwarg...)
+function simulate(state0, sim::JutulSimulator, timesteps::JUTUL_TSTEP_VECTOR_TYPE; parameters = nothing, kwarg...)
     return simulate!(sim, timesteps; state0 = state0, parameters = parameters, kwarg...)
 end
 
-simulate(sim::JutulSimulator, timesteps::AbstractVector; kwarg...) = simulate!(sim, timesteps; kwarg...)
+simulate(sim::JutulSimulator, timesteps::JUTUL_TSTEP_VECTOR_TYPE; kwarg...) = simulate!(sim, timesteps; kwarg...)
 
 """
-    simulate!(sim::JutulSimulator, timesteps::AbstractVector;
+    simulate!(sim::JutulSimulator, timesteps;
         forces = nothing,
         config = nothing,
         initialize = true,
@@ -146,7 +160,7 @@ Non-allocating (or perhaps less allocating) version of [`simulate!`](@ref).
 
 See also [`simulate`](@ref) for additional supported input arguments.
 """
-function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
+function simulate!(sim::JutulSimulator, timesteps::JUTUL_TSTEP_VECTOR_TYPE;
         forces = setup_forces(sim.model),
         config = nothing,
         initialize = true,
@@ -157,6 +171,9 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
         start_date = nothing,
         kwarg...
     )
+    if timesteps isa Real
+        timesteps = [timesteps]
+    end
     rec = progress_recorder(sim)
     # Reset recorder just in case since we are starting a new simulation
     recorder_reset!(rec)
@@ -175,6 +192,10 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
     # Time-step info to keep around
     no_steps = length(timesteps)
     t_tot = sum(timesteps)
+    if isinf(t_tot) && config[:termination_criterion] isa NoTerminationCriterion
+        error("Infinite total time-step requested without a termination criterion.")
+    end
+    !isnan(t_tot) || error("NaN total time-step requested.")
     states, reports, first_step, dt = initial_setup!(
         sim,
         config,
@@ -210,6 +231,7 @@ function simulate!(sim::JutulSimulator, timesteps::AbstractVector;
         end
         t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config;
             dt = dt,
+            states = states,
             reports = reports,
             step_no = step_no,
             rec = rec,
@@ -268,10 +290,12 @@ both easier to use and performs additional validation.
 """
 function solve_timestep!(sim, dT, forces, max_its, config;
         dt = dT,
+        states = missing,
         reports = nothing,
         step_no = NaN,
         info_level = config[:info_level],
         rec = progress_recorder(sim),
+        termination_criterion = config[:termination_criterion],
         substates = missing,
         kwarg...
     )
@@ -294,6 +318,12 @@ function solve_timestep!(sim, dT, forces, max_its, config;
         push!(ministep_reports, s)
         n_so_far = length(ministep_reports)
         if ok
+            stop = timestepping_is_done(termination_criterion, sim, states, substates, reports, rec)
+            if stop
+                done = true
+                s[:stopnow] = true
+                break
+            end
             if 2 > info_level > 1
                 jutul_message("Convergence", "Ministep #$n_so_far of $(get_tstr(dt, 1)) ($(round(100.0*dt/dT, digits=1))% of report step) converged.", color = :green)
             end
