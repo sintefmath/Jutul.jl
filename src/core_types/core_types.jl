@@ -937,6 +937,10 @@ function JutulCase(model::JutulModel, dt = [1.0], forces = setup_forces(model);
     return JutulCase(model, dt, forces, state0, parameters, input_data, termination_criterion)
 end
 
+function JutulCase(model, dt, forces, state0, parameters, input_data)
+    return JutulCase(model, dt, forces; state0 = state0, parameters = parameters, input_data = input_data)
+end
+
 function Base.show(io::IO, t::MIME"text/plain", case::JutulCase)
     if case.forces isa AbstractVector
         ctrl_type = "forces for each step"
