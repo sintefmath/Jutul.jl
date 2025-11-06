@@ -3,6 +3,7 @@ export plot_mesh, plot_mesh!
 export plot_cell_data!, plot_cell_data
 export plot_solve_breakdown
 export plot_cumulative_solve, plot_cumulative_solve!
+export plot_linear_convergence, plot_linear_convergence!
 
 
 """
