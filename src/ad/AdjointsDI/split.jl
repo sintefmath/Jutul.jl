@@ -25,11 +25,11 @@ function map_X_to_Y(F, X, model, parameters_map, state0_map, cache)
     return Y
 end
 
-function setup_from_vectorized(Y, case, parameters_map, state0_map; step_info = missing)
+function setup_from_vectorized(Y, case, parameters_map, state0_map; model = case.model, step_info = missing)
     has_state0 = !ismissing(state0_map)
-    N_prm = Jutul.vectorized_length(case.model, parameters_map)
+    N_prm = Jutul.vectorized_length(model, parameters_map)
     if has_state0
-        N_s0 = Jutul.vectorized_length(case.model, state0_map)
+        N_s0 = Jutul.vectorized_length(model, state0_map)
     else
         N_s0 = 0
     end
@@ -38,11 +38,11 @@ function setup_from_vectorized(Y, case, parameters_map, state0_map; step_info = 
     if has_state0
         Y_prm = view(Y, 1:N_prm)
         Y_s0 = view(Y, (N_prm+1):(N_prm+N_s0))
-        devectorize_variables!(case.state0, case.model, Y_s0, state0_map)
+        devectorize_variables!(case.state0, model, Y_s0, state0_map)
     else
         @assert length(Y) == N_prm
         Y_prm = Y
     end
-    devectorize_variables!(case.parameters, case.model, Y_prm, parameters_map)
+    devectorize_variables!(case.parameters, model, Y_prm, parameters_map)
     return case
 end
