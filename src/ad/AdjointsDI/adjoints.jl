@@ -69,10 +69,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         else
             prep = storage[:dF_static_dX_prep]
             backend = storage[:backend_di]
-            # Y = F_static(X)
-            # dYdX = jacobian(F_static, prep, backend, X)
             Y, dYdX = value_and_jacobian(F_static, prep, backend, X)
-            # Y, dYdX = value_and_jacobian(F_static, AutoForwardDiff(), X)
         end
         G = Jutul.adjoint_wrap_objective(G, case.model)
         Jutul.adjoint_reset_parameters!(storage, case.parameters)
@@ -82,33 +79,10 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         H.num_evals = 0
         H.packed_steps = packed_steps
         dG_dynamic = storage[:dynamic_buffer]
-    
-        @info "??" Y case.parameters[:Reservoir][:Transmissibilities]
         if storage[:deps_ad] == :jutul
             @assert !is_fully_dynamic "Fully dynamic dependencies must use :di adjoints."
             dG_dynamic_prm = storage[:dynamic_buffer_parameters]
-            # dt = map(x-> x[:dt], packed_steps.step_infos)
-            # Jutul.solve_adjoint_sensitivities(case.model, packed_steps.states, dt, G,
-            #     state0 = packed_steps.state0, forces = packed_steps.forces)
             Jutul.solve_adjoint_sensitivities!(dG_dynamic_prm, storage, packed_steps, G; info_level = 0)
-
-            m = storage.parameter.model
-            # m = storage.forward.model
-            out = Jutul.store_sensitivities(m, dG_dynamic_prm, storage.parameter_map)
-            out2 = Jutul.devectorize_variables!(deepcopy(case.parameters), m, dG_dynamic_prm, storage.parameter_map)
-            @assert keys(out) == keys(out2)
-            for k in keys(out)
-                for (kk, v) in pairs(out[k])
-                    @assert v == out2[k][kk]
-                end
-            end
-            @info "All OK!?"
-            # v = Jutul.vectorize_variables(storage.parameter.model, out, storage.parameter_map)
-            # @info "??" out 
-            # @info "!" v dG_dynamic_prm
-            # @info "Trans (inner)" out[:Reservoir][:Transmissibilities]
-
-            # dG_dynamic_prm .= v
             dstate0 = storage[:dstate0]
             if !ismissing(dstate0)
                 dG_dynamic_state0 = storage[:dynamic_buffer_state0]
@@ -135,17 +109,10 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
                 @. dG_dynamic += dparam
             end
         end
-        out = Jutul.devectorize_variables!(deepcopy(case.parameters), case.model, dG_dynamic, storage.maps.parameters)
-        for (k, v) in pairs(out)
-            for (sk, sv) in pairs(v)
-                @info "Sensitivity " k sk sv
-            end
-        end
 
         if is_fully_dynamic
             copyto!(∇G, dG_dynamic)
         else
-            @info "Dyn" dG_dynamic
             mul!(∇G, dYdX', dG_dynamic)
         end
     end
@@ -193,6 +160,9 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     # Two approaches:
     # 1. F_static(X) -> Y (vector of parameters) -> F_dynamic(Y) (updated case)
     # 2. F(X) -> case directly and F_dynamic = F and F_static = identity
+    # Three different variants:
+    # Approach 1 can differentiate using DI or Jutul adjoints for the F_dynamic part
+    # Approach 2 can only differentiate using DI adjoints - uses the entire case setup at all steps
     deps in (:case, :parameters, :parameters_and_state0) || error("deps must be :case, :parameters or :parameters_and_state0. Got $deps.")
     prep_static = nothing
     adj_kwarg = (
@@ -215,14 +185,13 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             parameters = case.parameters,
             include_state0 = inc_state0,
             targets = deps_targets,
-            # parameter_map = parameter_map,
-            # state0_map = state0_map,
             adj_kwarg...
         )
-        
     end
     # Prepare Jacobian evaluation
     if fully_dynamic
+        # If we are in "fully dynamic" mode we always differentiate the entire
+        # setup function. This can be costly but covers everything.
         F_dynamic = F
         F_static = x -> x
         deps_ad = :di
@@ -230,6 +199,9 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         N_prm = length(X)
         N_state0 = 0
     else
+        # We are doing a dynamic-static split for the chain rule. Two options:
+        # DifferentiationInterface.jl (DI) for both, or DI for static (X to
+        # parameters) and Jutul adjoints for dynamic (parameters to case).
         if use_di
             parameter_map, = Jutul.variable_mapper(model, :parameters,
                 targets = deps_targets,
@@ -283,8 +255,6 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     storage[:dynamic_buffer_state0] = view(dG_dyn, (N_prm+1):(N_prm+N_state0))
     H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
-    # Note: strict = false is needed because we create another function on the fly
-    # that essentially calls the same function.
     if do_prep
         if single_step_sparsity
             step_index = :firstlast
