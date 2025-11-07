@@ -118,6 +118,7 @@ end
 
 function optimization_setup(dopt::DictParameters; include_limits = true)
     x0, x_setup = Jutul.AdjointsDI.vectorize_nested(dopt.parameters,
+        multipliers = dopt.multipliers,
         active = active_keys(dopt),
         active_type = dopt.active_type
     )
