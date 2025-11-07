@@ -28,9 +28,24 @@ function limit_name(rel::Bool, is_max::Bool)
 end
 
 function realize_limit(dopt::DictParameters, parameter_name; is_max::Bool)
-    vals = get_nested_dict_value(dopt.parameters, parameter_name)
-    lims = get_parameter_limits(dopt, parameter_name)
-    return realize_limit(vals, lims, is_max = is_max, strict = dopt.strict)
+    if haskey(dopt.multipliers, parameter_name)
+        mult = dopt.multipliers[parameter_name]
+        vals = mult.value
+        if is_max
+            l = mult.abs_max
+        else
+            l = mult.abs_min
+        end
+        if !ismissing(mult.lumping) && l isa AbstractArray
+            ix = get_lumping_first_entry(mult.lumping)
+            l = l[ix]
+        end
+    else
+        vals = get_nested_dict_value(dopt.parameters, parameter_name)
+        lims = get_parameter_limits(dopt, parameter_name)
+        l = realize_limit(vals, lims, is_max = is_max, strict = dopt.strict)
+    end
+    return l
 end
 
 function realize_limit(initial::Union{Number, Array}, lims::KeyLimits; is_max::Bool, strict::Bool = true)
