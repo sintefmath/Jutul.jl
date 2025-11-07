@@ -857,6 +857,39 @@ end
 
 export JutulLinePlotData
 
+"""
+Abstract type for termination criteria for steady-state time-stepping simulations.
+
+Subtypes should implement the method
+
+    timestepping_is_done(C::AbstractTerminationCriterion, simulator, states, substates, reports, solve_recorder)
+
+that returns a Bool indicating whether the time-stepping should terminate.
+"""
+abstract type AbstractTerminationCriterion end
+
+"""
+    timestepping_is_done(C::AbstractTerminationCriterion, simulator, states, substates, reports, solve_recorder)
+
+Check whether time-stepping should terminate according to the criterion `C`.
+Subtypes of [`AbstractTerminationCriterion`](@ref) should implement this method.
+
+The arguements are:
+- `simulator`: The simulator executing the time-stepping. The simulator holds
+  the current state after a converged time step (can be accessed in the standard
+  output format by `get_output_state(simulator)`)
+- `states`: The current states of the simulation (up to the current report step)
+- `substates`: The current substates of the simulation for the current report
+  step. May be missing if `output_substates` is false.
+- `reports`: The reports so far in the simulation.
+- `solve_recorder`: The solve recorder holding information about the current
+  time, etc. You can get the current time with `get_current_time(solve_recorder,
+  :global)`.
+""" 
+function timestepping_is_done(C::AbstractTerminationCriterion, simulator, states, substates, reports, solve_recorder)
+    error("should_terminate not implemented for criterion of type $(typeof(C))")
+end
+
 export JutulCase
 struct JutulCase
     model::JutulModel
@@ -865,6 +898,7 @@ struct JutulCase
     state0
     parameters
     input_data
+    termination_criterion::AbstractTerminationCriterion
 end
 
 """
@@ -872,7 +906,13 @@ end
 
 Set up a structure that holds the complete specification of a simulation case.
 """
-function JutulCase(model::JutulModel, dt = [1.0], forces = setup_forces(model); state0 = nothing, parameters = nothing, input_data = nothing, kwarg...)
+function JutulCase(model::JutulModel, dt = [1.0], forces = setup_forces(model);
+        state0 = nothing,
+        parameters = nothing,
+        input_data = nothing,
+        termination_criterion = NoTerminationCriterion(),
+        kwarg...
+    )
     for (k, v) in kwarg
         if k == :forces
             error("forces was passed as kwarg. It is a positional argument.")
@@ -885,13 +925,20 @@ function JutulCase(model::JutulModel, dt = [1.0], forces = setup_forces(model); 
     elseif isnothing(parameters)
         parameters = setup_parameters(model, kwarg...)
     end
+    if dt isa Real
+        dt = [dt]
+    end
     if forces isa AbstractVector
         nf = length(forces)
         nt = length(dt)
         @assert nt == nf "If forces is a vector, the length (=$nf) must match the number of time steps (=$nt)."
     end
-    @assert all(dt .> 0)
-    return JutulCase(model, dt, forces, state0, parameters, input_data)
+    all(dt .> 0) || throw(ArgumentError("All time-steps must be positive, was $dt"))
+    return JutulCase(model, dt, forces, state0, parameters, input_data, termination_criterion)
+end
+
+function JutulCase(model, dt, forces, state0, parameters, input_data)
+    return JutulCase(model, dt, forces; state0 = state0, parameters = parameters, input_data = input_data)
 end
 
 function Base.show(io::IO, t::MIME"text/plain", case::JutulCase)
@@ -1519,3 +1566,29 @@ optimization interface if they have the sum signature (five arguments).
 struct WrappedGlobalObjective{T} <: AbstractGlobalObjective
     objective::T
 end
+
+"""
+    NoTerminationCriterion()
+
+A termination criterion that never terminates prematurely, leaving all timesteps to be executed.
+"""
+struct NoTerminationCriterion <: AbstractTerminationCriterion end
+
+function timestepping_is_done(C::NoTerminationCriterion, simulator, states, substates, reports, solve_recorder)
+    return false
+end
+
+"""
+    EndTimeTerminationCriterion(end_time)
+
+A termination criterion that stops time-stepping when the global time reaches `end_time`.
+"""
+struct EndTimeTerminationCriterion <: AbstractTerminationCriterion
+    end_time::Float64
+end
+
+function timestepping_is_done(C::EndTimeTerminationCriterion, simulator, states, substates, reports, solve_recorder)
+    now = recorder_current_time(solve_recorder, :global)
+    return now >= C.end_time
+end
+
