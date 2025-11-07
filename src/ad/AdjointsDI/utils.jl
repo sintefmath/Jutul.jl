@@ -1,10 +1,19 @@
 function setup_vectorize_nested(data, active = missing; kwarg...)
-    meta = (offsets = Int[1], names = [], dims = [])
+    meta = (
+        offsets = Int[1],
+        names = [],
+        dims = [],
+        types = Symbol[]
+    )
     setup_vectorize_nested!(meta, data, active; kwarg...)
     return meta
 end
 
-function setup_vectorize_nested!(meta, data, active = missing; header = [], active_type = Float64)
+function setup_vectorize_nested!(meta, data, active = missing;
+        header = [],
+        active_type = Float64,
+        multipliers = missing
+    )
     function name_is_active(n)
         act = false
         if ismissing(active)
@@ -44,10 +53,28 @@ function setup_vectorize_nested!(meta, data, active = missing; header = [], acti
                 end
                 push!(meta.offsets, meta.offsets[end] + num)
                 push!(meta.names, name)
+                push!(meta.types, :value)
                 push!(meta.dims, d)
             end
         else
             continue
+        end
+    end
+    if !ismissing(multipliers)
+        for (name, mult) in pairs(multipliers)
+            v = mult.value
+            if v isa AbstractArray
+                d = size(v)
+                num = length(v)
+            else
+                d = nothing
+                num = 1
+            end
+            @info "????" name
+            push!(meta.names, name)
+            push!(meta.offsets, meta.offsets[end] + num)
+            push!(meta.types, :multiplier)
+            push!(meta.dims, d)
         end
     end
 end
@@ -75,11 +102,16 @@ function vectorize_nested!(x, data; setup = missing, active = missing, active_ty
         x = zeros(n)
     end
     for (i, name) in enumerate(setup.names)
+        vtype = setup.types[i]
         start = setup.offsets[i]
         stop = setup.offsets[i+1]-1
-        d = get_subdict(name)
-        lastname = name[end]
-        v = d[lastname]
+        if vtype == :value
+            d = get_subdict(name)
+            lastname = name[end]
+            v = d[lastname]
+        else
+            v = multipliers[name].value
+        end
         if v isa AbstractArray
             subx = view(x, start:stop)
             for i in eachindex(subx, v)
