@@ -110,7 +110,7 @@ function setup_adjoint_storage(model;
         parameters = setup_parameters(model),
         n_objective = nothing,
         targets = parameter_targets(model),
-        include_state0 = !ismissing(state0_map),
+        include_state0 = false,
         use_sparsity = true,
         linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-6),
         param_obj = true,
