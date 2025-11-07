@@ -214,6 +214,11 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             end
             prm_model = case.model
         else
+            # NOTE: It is important that we use the parameter model here and the
+            # corresponding map, as the gradients may otherwise be
+            # inconsistently ordered with what we are using inside the adjoint
+            # code. We do not really care about the nature of the ordering, just
+            # that it is consistent in the code.
             parameter_map = storage.parameter_map
             state0_map = storage.state0_map
             prm_model = storage.parameter.model
