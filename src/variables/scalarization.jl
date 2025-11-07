@@ -130,7 +130,7 @@ end
 """
     descalarize_primary_variables!(state, model, V, pvars::NamedTuple = (; pairs(model.primary_variables)...), ind = eachindex(V))
 
-Replace valeus in `state` by the scalarized values found in V.
+Replace values in `state` by the scalarized values found in V.
 """
 function descalarize_primary_variables!(state, model, V, pvars::NamedTuple = (; pairs(model.primary_variables)...), ind = eachindex(V))
     pvars_def = values(pvars)

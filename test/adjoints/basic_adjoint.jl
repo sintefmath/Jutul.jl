@@ -275,8 +275,8 @@ end
             end
             @testset "parameters" begin
                 for deps_ad in [:di, :jutul]
-                test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters, deps_ad = deps_ad)
-                test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters_and_state0, deps_ad = deps_ad)
+                    test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters, deps_ad = deps_ad)
+                    test_for_timesteps([100.0], fmt = :case, global_objective = global_obj, deps = :parameters_and_state0, deps_ad = deps_ad)
                 end
             end
         end
@@ -424,3 +424,60 @@ end
     @test ismissing(pr3.forces)
     @test ismissing(pr3[2].forces)
 end
+
+##
+using Jutul, Test
+
+function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = (2, 2), dt = [1.0])
+    sys = VariablePoissonSystem(time_dependent = true)
+    # Unit square
+    g = CartesianMesh(dim, (dx, dy))
+    # Set up a model with the grid and system
+    discretization = (poisson = Jutul.PoissonDiscretization(g), )
+    D = DiscretizedDomain(g, discretization)
+    model = SimulationModel(D, sys)
+    state0 = setup_state(model, Dict(:U=>U0))
+    K = compute_face_trans(g, k_val)
+    param = setup_parameters(model, K = K)
+
+    nc = number_of_cells(g)
+    pos_src = PoissonSource(1, srcval)
+    neg_src = PoissonSource(nc, -srcval)
+    forces = setup_forces(model, sources = [pos_src, neg_src])
+    idata = Dict(:dx => dx, :dy => dy, :U0 => U0, :k_val => k_val, :srcval => srcval)
+    return JutulCase(model, dt, forces; parameters = param, state0 = state0, input_data = idata)
+end
+
+function default_poisson_dict()
+    return Dict(
+        "dx" => 1.0,
+        "dy" => 1.0,
+        "U0" => 1.0,
+        "k_val" => 1.0,
+        "srcval" => 1.0
+    )
+end
+
+function setup_poisson_test_case_from_dict(d::AbstractDict, step_info = missing; fmt = :case, kwarg...)
+    return setup_poisson_test_case(d["dx"], d["dy"], d["U0"], d["k_val"], d["srcval"]; dim = (2, 2), dt = [1.0])
+end
+
+prm_truth = default_poisson_dict()
+states, = simulate(setup_poisson_test_case_from_dict(prm_truth), info_level = -1)
+function poisson_mismatch_objective(m, s, dt, step_info, forces)
+    step = step_info[:step]
+    U = s[:U]
+    U_ref = states[step][:U]
+    v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
+    return dt*v
+end
+# Perturb two parameters by a multiplier
+prm = default_poisson_dict()
+multval = 7.13
+prm["k_val"] *= multval
+prm["U0"] *= multval
+
+dprm = DictParameters(prm, setup_poisson_test_case_from_dict, verbose = false)
+Jutul.DictOptimization.add_optimization_multiplier!(dprm, "k_val", "U0", abs_min = 0.1, abs_max = 10.0)
+##
+prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25);

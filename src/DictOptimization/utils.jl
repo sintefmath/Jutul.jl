@@ -177,12 +177,12 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         end
         return str
     end
+    prm_opt = dopt.parameters_optimized
+    is_optimized = !ismissing(prm_opt) && print_opt
 
     function print_table(subkeys, t, print_opt = true)
         pt = dopt.parameter_targets
         prm = dopt.parameters
-        prm_opt = dopt.parameters_optimized
-        is_optimized = !ismissing(prm_opt) && print_opt
         header = ["Name", "Initial value", "Count", "Min", "Max"]
         alignment = [:r, :l, :r, :r, :r]
         if is_optimized
@@ -230,6 +230,36 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         else
             print_table(ikeys, "Inactive optimization parameters", false)
         end
+    end
+    multkeys = keys(dopt.multipliers)
+    nmult = length(multkeys)
+    if nmult == 0
+        println(io, "No multipliers set.")
+    else
+        header = ["Name", "Targets", "Initial value", "Count", "Min", "Max"]
+        alignment = [:r, :r, :l, :r, :r, :r]
+        if is_optimized
+            push!(header, "Optimized value")
+            push!(header, "Change")
+            push!(alignment, :l, :r)
+        end
+        tab = Matrix{Any}(undef, nmult, length(header))
+        for (i, k) in enumerate(multkeys)
+            mult = dopt.multipliers[k]
+            mval = mult.value
+            tab[i, 1] = k
+            tab[i, 2] = join(map(t -> join(t, "."), mult.targets), "; ")
+            tab[i, 3] = format_value(mval)
+            tab[i, 4] = length(mval)
+            tab[i, 5] = fmt_lim(mult.abs_min, is_max = false)
+            tab[i, 6] = fmt_lim(mult.abs_max, is_max = true)
+            if is_optimized
+                tab[i, 7] = format_value(mult.optimized_value)
+                perc = round(100*(avg(mult.optimized_value)-avg(mval))/max(avg(mval), 1e-20), sigdigits = 2)
+                tab[i, 8] = "$perc%"
+            end
+        end
+        pretty_table(io, tab, header=header, title = "Optimization multipliers", alignment = alignment)
     end
 end
 
