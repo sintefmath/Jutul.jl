@@ -188,9 +188,11 @@ end
 
 function apply_multiplier_to_targets!(data, multval, targets)
     for target in targets
-        d = get_subdict(data, target)[target[end]]
-        apply_multiplier!(d, multval)
+        name = target[end]
+        d = get_subdict(data, target)
+        d[name] = apply_multiplier!(d[name], multval)
     end
+    return data
 end
 
 function apply_multiplier!(d::AbstractArray{T, <:Any}, multval::T) where T
@@ -205,6 +207,10 @@ function apply_multiplier!(d::AbstractArray{T, <:Any}, multval::AbstractArray{T,
         d[i] *= multval[i]
     end
     return d
+end
+
+function apply_multiplier!(d::Number, multval::AbstractArray)
+    return d * only(multval)
 end
 
 function apply_multiplier!(d, multval)
