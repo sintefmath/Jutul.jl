@@ -82,17 +82,40 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         H.num_evals = 0
         H.packed_steps = packed_steps
         dG_dynamic = storage[:dynamic_buffer]
-
+    
+        @info "??" Y case.parameters[:Reservoir][:Transmissibilities]
         if storage[:deps_ad] == :jutul
             @assert !is_fully_dynamic "Fully dynamic dependencies must use :di adjoints."
             dG_dynamic_prm = storage[:dynamic_buffer_parameters]
+            # dt = map(x-> x[:dt], packed_steps.step_infos)
+            # Jutul.solve_adjoint_sensitivities(case.model, packed_steps.states, dt, G,
+            #     state0 = packed_steps.state0, forces = packed_steps.forces)
             Jutul.solve_adjoint_sensitivities!(dG_dynamic_prm, storage, packed_steps, G; info_level = 0)
+
+            m = storage.parameter.model
+            # m = storage.forward.model
+            out = Jutul.store_sensitivities(m, dG_dynamic_prm, storage.parameter_map)
+            out2 = Jutul.devectorize_variables!(deepcopy(case.parameters), m, dG_dynamic_prm, storage.parameter_map)
+            @assert keys(out) == keys(out2)
+            for k in keys(out)
+                for (kk, v) in pairs(out[k])
+                    @assert v == out2[k][kk]
+                end
+            end
+            @info "All OK!?"
+            # v = Jutul.vectorize_variables(storage.parameter.model, out, storage.parameter_map)
+            # @info "??" out 
+            # @info "!" v dG_dynamic_prm
+            # @info "Trans (inner)" out[:Reservoir][:Transmissibilities]
+
+            # dG_dynamic_prm .= v
             dstate0 = storage[:dstate0]
             if !ismissing(dstate0)
                 dG_dynamic_state0 = storage[:dynamic_buffer_state0]
                 dG_dynamic_state0 .= dstate0
             end
         else
+
             # Do sparsity detection if not already done.
             if info_level > 1
                 jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
@@ -112,9 +135,17 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
                 @. dG_dynamic += dparam
             end
         end
+        out = Jutul.devectorize_variables!(deepcopy(case.parameters), case.model, dG_dynamic, storage.maps.parameters)
+        for (k, v) in pairs(out)
+            for (sk, sv) in pairs(v)
+                @info "Sensitivity " k sk sv
+            end
+        end
+
         if is_fully_dynamic
             copyto!(∇G, dG_dynamic)
         else
+            @info "Dyn" dG_dynamic
             mul!(∇G, dYdX', dG_dynamic)
         end
     end
@@ -156,6 +187,9 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
     model = case.model
+    if isnothing(deps_targets)
+        deps_targets = Jutul.parameter_targets(model)
+    end
     # Two approaches:
     # 1. F_static(X) -> Y (vector of parameters) -> F_dynamic(Y) (updated case)
     # 2. F(X) -> case directly and F_dynamic = F and F_static = identity
@@ -170,33 +204,6 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     use_di = deps_ad == :di
     fully_dynamic = deps == :case
     inc_state0 = deps == :parameters_and_state0
-    if fully_dynamic
-        deps_ad = :di
-        F_dynamic = F
-        F_static = x -> x
-        parameter_map = state0_map = missing
-        N_prm = length(X)
-        N_state0 = 0
-    else
-        parameter_map, = Jutul.variable_mapper(model, :parameters,
-            targets = deps_targets,
-            config = nothing
-        )
-        N_prm = Jutul.vectorized_length(case.model, parameter_map)
-        if inc_state0
-            state0_map, = Jutul.variable_mapper(model, :primary)
-            N_state0 = Jutul.number_of_degrees_of_freedom(case.model)
-        else
-            state0_map = missing
-            N_state0 = 0
-        end
-        cache_static = Dict{Type, AbstractVector}()
-        F_static = (X, step_info = missing) -> map_X_to_Y(F, X, case.model, parameter_map, state0_map, cache_static)
-        F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, case, parameter_map, state0_map; step_info = step_info)
-        if do_prep
-            prep_static = prepare_jacobian(F_static, backend, X)
-        end
-    end
     if fully_dynamic || use_di
         storage = Jutul.setup_adjoint_storage_base(
             case.model, case.state0, case.parameters;
@@ -207,10 +214,50 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             state0 = case.state0,
             parameters = case.parameters,
             include_state0 = inc_state0,
-            parameter_map = parameter_map,
-            state0_map = state0_map,
+            targets = deps_targets,
+            # parameter_map = parameter_map,
+            # state0_map = state0_map,
             adj_kwarg...
         )
+        
+    end
+    # Prepare Jacobian evaluation
+    if fully_dynamic
+        F_dynamic = F
+        F_static = x -> x
+        deps_ad = :di
+        parameter_map = state0_map = missing
+        N_prm = length(X)
+        N_state0 = 0
+    else
+        if use_di
+            parameter_map, = Jutul.variable_mapper(model, :parameters,
+                targets = deps_targets,
+                config = nothing
+            )
+            if inc_state0
+                state0_map, = Jutul.variable_mapper(model, :primary)
+            else
+                state0_map = missing
+            end
+            prm_model = case.model
+        else
+            parameter_map = storage.parameter_map
+            state0_map = storage.state0_map
+            prm_model = storage.parameter.model
+        end
+        N_prm = Jutul.vectorized_length(case.model, parameter_map)
+        if inc_state0
+            N_state0 = Jutul.number_of_degrees_of_freedom(case.model)
+        else
+            N_state0 = 0
+        end
+        cache_static = Dict{Type, AbstractVector}()
+        F_static = (X, step_info = missing) -> map_X_to_Y(F, X, prm_model, parameter_map, state0_map, cache_static)
+        F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, case, parameter_map, state0_map; model = prm_model, step_info = step_info)
+        if do_prep
+            prep_static = prepare_jacobian(F_static, backend, X)
+        end
     end
     # Whatever was input - for checking
     storage[:F_input] = F

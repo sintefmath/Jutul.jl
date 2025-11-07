@@ -108,8 +108,6 @@ Set up storage for use with `solve_adjoint_sensitivities!`.
 function setup_adjoint_storage(model;
         state0 = setup_state(model),
         parameters = setup_parameters(model),
-        state0_map = missing,
-        parameter_map = missing,
         n_objective = nothing,
         targets = parameter_targets(model),
         include_state0 = !ismissing(state0_map),
@@ -123,13 +121,9 @@ function setup_adjoint_storage(model;
     parameter_model = adjoint_parameter_model(model, targets)
     n_prm = number_of_degrees_of_freedom(parameter_model)
     # Note that primary is here because the target parameters are now the primaries for the parameter_model
-    if ismissing(parameter_map)
-        parameter_map, = variable_mapper(parameter_model, :primary, targets = targets; kwarg...)
-    end
+    parameter_map, = variable_mapper(parameter_model, :primary, targets = targets; kwarg...)
     if include_state0
-        if ismissing(state0_map)
-            state0_map, = variable_mapper(model, :primary)
-        end
+        state0_map, = variable_mapper(model, :primary)
         n_state0 = number_of_degrees_of_freedom(model)
         state0_vec = zeros(n_state0)
     else
