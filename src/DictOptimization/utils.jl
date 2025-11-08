@@ -193,14 +193,14 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         return str
     end
     prm_opt = dopt.parameters_optimized
-    is_optimized = !ismissing(prm_opt) && print_opt
+    is_optimized = !ismissing(prm_opt)
 
     function print_table(subkeys, t, print_opt = true)
         pt = dopt.parameter_targets
         prm = dopt.parameters
         header = ["Name", "Initial value", "Count", "Min", "Max"]
         alignment = [:r, :l, :r, :r, :r]
-        if is_optimized
+        if is_optimized && print_opt
             push!(header, "Optimized value")
             push!(header, "Change")
             push!(alignment, :l, :r)
@@ -221,7 +221,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             tab[i, 3] = length(v0)
             tab[i, 4] = limstr_min
             tab[i, 5] = limstr_max
-            if is_optimized
+            if is_optimized  && print_opt
                 v = get_parameter_value(dopt, k, optimized = true)
                 v_avg = avg(v)
                 perc = round(100*(v_avg-v0_avg)/max(v0_avg, 1e-20), sigdigits = 2)
