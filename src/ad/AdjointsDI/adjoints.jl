@@ -89,7 +89,6 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
                 dG_dynamic_state0 .= dstate0
             end
         else
-
             # Do sparsity detection if not already done.
             if info_level > 1
                 jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)

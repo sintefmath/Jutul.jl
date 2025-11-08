@@ -48,11 +48,25 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
 end
 
 function setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
+    # Make a nested shallow dict copy? There is a kind of bug here...
+    prm = dict_shallow_copy(prm)
     optimizer_devectorize!(prm, X, x_setup)
     # Return the case setup function This is a function that sets up the
     # case from the parameters
     F() = setup_fn(prm, step_info)
     return redirect_stdout(F, devnull)
+end
+
+function dict_shallow_copy(x::T) where T<:AbstractDict
+    new_x = T()
+    for (k, v) in pairs(x)
+        new_x[k] = dict_shallow_copy(v)
+    end
+    return new_x
+end
+
+function dict_shallow_copy(x)
+    return x
 end
 
 function forward_simulate_for_optimization(case, adj_cache)
