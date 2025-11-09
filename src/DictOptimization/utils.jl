@@ -263,14 +263,15 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             mult = dopt.multipliers[k]
             mval = mult.value
             tab[i, 1] = k
-            tab[i, 2] = join(map(t -> join(t, "."), mult.targets), "; ")
+            tab[i, 2] = join(map(t -> join(t, "."), mult.targets), ", ")
             tab[i, 3] = format_value(mval)
             tab[i, 4] = length(mval)
             tab[i, 5] = fmt_lim(mult.abs_min, is_max = false)
             tab[i, 6] = fmt_lim(mult.abs_max, is_max = true)
             if is_optimized
-                tab[i, 7] = format_value(mult.optimized_value)
-                perc = round(100*(avg(mult.optimized_value)-avg(mval))/max(avg(mval), 1e-20), sigdigits = 2)
+                optval = dopt.multipliers_optimized[k].value
+                tab[i, 7] = format_value(optval)
+                perc = round(100*(avg(optval)-avg(mval))/max(avg(mval), 1e-20), sigdigits = 2)
                 tab[i, 8] = "$perc%"
             end
         end
