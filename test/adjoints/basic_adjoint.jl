@@ -407,13 +407,6 @@ import Jutul.DictOptimization as DictOptimization
         @testset "multiplier" begin
             prm_truth = default_poisson_dict()
             states, = simulate(setup_poisson_test_case_from_dict(prm_truth), info_level = -1)
-            function poisson_mismatch_objective(m, s, dt, step_info, forces)
-                step = step_info[:step]
-                U = s[:U]
-                U_ref = states[step][:U]
-                v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
-                return dt*v
-            end
             # Perturb two parameters by a multiplier
             prm = default_poisson_dict()
             multval = 7.13
