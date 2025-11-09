@@ -382,7 +382,7 @@ import Jutul.DictOptimization as DictOptimization
         # Also do one with relative limits that should not change much
         free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1)
 
-        prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25);
+        prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1);
 
         @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
         @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
@@ -415,7 +415,7 @@ import Jutul.DictOptimization as DictOptimization
             dprm = DictParameters(prm, setup_poisson_test_case_from_dict)
             add_optimization_multiplier!(dprm, "k_val", "U0", abs_min = 0.1, abs_max = 10.0)
 
-            prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25);
+            prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1);
             @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.001
             @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.001
             @test only(dprm.multipliers_optimized["multiplier_1"].value) ≈ 1.0/multval atol = 1e-6

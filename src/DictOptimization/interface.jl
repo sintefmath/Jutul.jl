@@ -349,8 +349,8 @@ function set_optimization_parameter!(dopt::DictParameters, parameter_name, value
 end
 
 """
-    add_optimization_multiplier!(dprm::DictParameters, name_of_target; min = 0.2, max = 5.0)
-    add_optimization_multiplier!(dprm, target1, target2, target3; min = 0.2, max = 5.0, initial = 2.0)
+    add_optimization_multiplier!(dprm::DictParameters, name_of_target; abs_min = 0.2, abs_max = 5.0)
+    add_optimization_multiplier!(dprm, target1, target2, target3; abs_min = 0.2, abs_max = 5.0, initial = 2.0)
 
 Add an optimization multiplier that acts on one or more targets to the
 `DictParameters` object. The multiplier will be optimized during the

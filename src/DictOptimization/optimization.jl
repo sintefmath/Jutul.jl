@@ -79,6 +79,7 @@ function forward_simulate_for_optimization(case, adj_cache)
     if ismissing(config)
         config = simulator_config(sim,
             info_level = adj_cache[:info_level],
+            end_report = false,
             output_substates = true
         )
         adj_cache[:config] = config
