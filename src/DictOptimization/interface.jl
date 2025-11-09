@@ -287,6 +287,28 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
     check_limit(parameter_name, initial, rel_max, is_max = true, is_rel = true)
     check_limit_pair(parameter_name, initial, rel_min, rel_max, is_rel = true)
     check_limit_pair(parameter_name, initial, abs_min, abs_max, is_rel = false)
+    lumping = validate_and_normalize_lumping(lumping, initial)
+    targets = dopt.parameter_targets
+    if haskey(targets, parameter_name) && dopt.verbose
+        jutul_message("Optimization", "Overwriting limits for $parameter_name.")
+    end
+    targets[parameter_name] = KeyLimits(rel_min, rel_max, abs_min, abs_max, scaler, lumping)
+    return dopt
+end
+
+function validate_and_normalize_lumping(lumping::Missing, initial)
+    return lumping
+end
+
+function validate_and_normalize_lumping(lumping::Bool, initial)
+    if lumping
+        sz = size(initial)
+        lumping = ones(Int, sz)
+    end
+    return lumping
+end
+
+function validate_and_normalize_lumping(lumping, initial)
     if !ismissing(lumping)
         size(lumping) == size(initial) || error("Lumping array must have the same size as the parameter $parameter_name.")
         eltype(lumping) == Int || error("Lumping array must be of type Int.")
@@ -306,12 +328,7 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
             end
         end
     end
-    targets = dopt.parameter_targets
-    if haskey(targets, parameter_name) && dopt.verbose
-        jutul_message("Optimization", "Overwriting limits for $parameter_name.")
-    end
-    targets[parameter_name] = KeyLimits(rel_min, rel_max, abs_min, abs_max, scaler, lumping)
-    return dopt
+    return lumping
 end
 
 function free_optimization_parameters!(dopt::DictParameters, targets = all_keys(dopt); kwarg...)
@@ -329,4 +346,51 @@ function will update the value of the parameter in the `dopt.parameters` diction
 """
 function set_optimization_parameter!(dopt::DictParameters, parameter_name, value)
     set_nested_dict_value!(dopt.parameters, parameter_name, value)
+end
+
+"""
+    add_optimization_multiplier!(dprm::DictParameters, name_of_target; abs_min = 0.2, abs_max = 5.0)
+    add_optimization_multiplier!(dprm, target1, target2, target3; abs_min = 0.2, abs_max = 5.0, initial = 2.0)
+
+Add an optimization multiplier that acts on one or more targets to the
+`DictParameters` object. The multiplier will be optimized during the
+optimization process. All parameters with the same multiplier must have the same
+dimensions.
+"""
+function add_optimization_multiplier!(dprm::DictParameters, targets...;
+        initial = missing,
+        lumping = missing,
+        name = missing,
+        abs_min = -Inf,
+        abs_max = Inf
+    )
+    length(targets) > 0 || error("At least one target parameter must be provided for multiplier.")
+    targets = map(t -> convert_key(t), targets)
+    if ismissing(name)
+        nmult = length(keys(dprm.multipliers))
+        name = "multiplier_$(nmult+1)"
+    end
+    if haskey(dprm.multipliers, name)
+        @warn "Multiplier with name $name already exists, overwriting."
+    end
+    sz = missing
+    for t in targets
+        t_val = get_nested_dict_value(dprm.parameters, t)
+        sz_t = size(t_val)
+        if ismissing(sz)
+            sz = sz_t
+        else
+            sz == sz_t || error("All target parameters must have the same size.")
+        end
+    end
+    if ismissing(initial)
+        initial = ones(sz)
+    elseif isa(initial, Number)
+        initial = fill(initial, sz)
+    else
+        size(initial) == size(sz) || error("Initial value must have the same size as the target parameters ($sz).")
+    end
+    lumping = validate_and_normalize_lumping(lumping, initial)
+    dprm.multipliers[name] = OptimizationMultiplier(abs_min, abs_max, collect(targets), lumping, initial)
+    return dprm
 end

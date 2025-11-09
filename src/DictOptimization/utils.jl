@@ -28,9 +28,24 @@ function limit_name(rel::Bool, is_max::Bool)
 end
 
 function realize_limit(dopt::DictParameters, parameter_name; is_max::Bool)
-    vals = get_nested_dict_value(dopt.parameters, parameter_name)
-    lims = get_parameter_limits(dopt, parameter_name)
-    return realize_limit(vals, lims, is_max = is_max, strict = dopt.strict)
+    if haskey(dopt.multipliers, parameter_name)
+        mult = dopt.multipliers[parameter_name]
+        vals = mult.value
+        if is_max
+            l = mult.abs_max
+        else
+            l = mult.abs_min
+        end
+        if !ismissing(mult.lumping) && l isa AbstractArray
+            ix = get_lumping_first_entry(mult.lumping)
+            l = l[ix]
+        end
+    else
+        vals = get_nested_dict_value(dopt.parameters, parameter_name)
+        lims = get_parameter_limits(dopt, parameter_name)
+        l = realize_limit(vals, lims, is_max = is_max, strict = dopt.strict)
+    end
+    return l
 end
 
 function realize_limit(initial::Union{Number, Array}, lims::KeyLimits; is_max::Bool, strict::Bool = true)
@@ -177,15 +192,15 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         end
         return str
     end
+    prm_opt = dopt.parameters_optimized
+    is_optimized = !ismissing(prm_opt)
 
     function print_table(subkeys, t, print_opt = true)
         pt = dopt.parameter_targets
         prm = dopt.parameters
-        prm_opt = dopt.parameters_optimized
-        is_optimized = !ismissing(prm_opt) && print_opt
         header = ["Name", "Initial value", "Count", "Min", "Max"]
         alignment = [:r, :l, :r, :r, :r]
-        if is_optimized
+        if is_optimized && print_opt
             push!(header, "Optimized value")
             push!(header, "Change")
             push!(alignment, :l, :r)
@@ -206,7 +221,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             tab[i, 3] = length(v0)
             tab[i, 4] = limstr_min
             tab[i, 5] = limstr_max
-            if is_optimized
+            if is_optimized  && print_opt
                 v = get_parameter_value(dopt, k, optimized = true)
                 v_avg = avg(v)
                 perc = round(100*(v_avg-v0_avg)/max(v0_avg, 1e-20), sigdigits = 2)
@@ -230,6 +245,37 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
         else
             print_table(ikeys, "Inactive optimization parameters", false)
         end
+    end
+    multkeys = keys(dopt.multipliers)
+    nmult = length(multkeys)
+    if nmult == 0
+        println(io, "No multipliers set.")
+    else
+        header = ["Name", "Targets", "Initial value", "Count", "Min", "Max"]
+        alignment = [:r, :r, :l, :r, :r, :r]
+        if is_optimized
+            push!(header, "Optimized value")
+            push!(header, "Change")
+            push!(alignment, :l, :r)
+        end
+        tab = Matrix{Any}(undef, nmult, length(header))
+        for (i, k) in enumerate(multkeys)
+            mult = dopt.multipliers[k]
+            mval = mult.value
+            tab[i, 1] = k
+            tab[i, 2] = join(map(t -> join(t, "."), mult.targets), ", ")
+            tab[i, 3] = format_value(mval)
+            tab[i, 4] = length(mval)
+            tab[i, 5] = fmt_lim(mult.abs_min, is_max = false)
+            tab[i, 6] = fmt_lim(mult.abs_max, is_max = true)
+            if is_optimized
+                optval = dopt.multipliers_optimized[k].value
+                tab[i, 7] = format_value(optval)
+                perc = round(100*(avg(optval)-avg(mval))/max(avg(mval), 1e-20), sigdigits = 2)
+                tab[i, 8] = "$perc%"
+            end
+        end
+        pretty_table(io, tab, header=header, title = "Optimization multipliers", alignment = alignment)
     end
 end
 

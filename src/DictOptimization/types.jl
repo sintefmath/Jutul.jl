@@ -10,13 +10,24 @@ Base.@kwdef mutable struct KeyLimits
     lumping::Union{Array{Int, <:Any}, Missing} = missing
 end
 
+Base.@kwdef mutable struct OptimizationMultiplier
+    abs_min::LIMIT_TYPE = -Inf
+    abs_max::LIMIT_TYPE = Inf
+    targets::Vector{Vector{KEYTYPE}} = Vector{Vector{KEYTYPE}}()
+    lumping::Union{Array{Int, <:Any}, Missing} = missing
+    value::Array{Float64, <:Any}
+end
+
 mutable struct DictParameters
+    "Initial value of parameters for optimization"
     parameters
-    ""
+    "Optimized parameters after running `optimize!`"
     parameters_optimized
     "A dictionary containing the optimization parameters and their targets. The keys are vectors of strings/symbols representing the parameter names, and the values are tuples with the initial value, lower bound, and upper bound."
     parameter_targets
     possible_targets
+    multipliers
+    multipliers_optimized
     strict::Bool
     verbose::Bool
     active_type
@@ -59,6 +70,8 @@ function DictParameters(parameters::AbstractDict, setup_function = missing;
             missing,
             Jutul.OrderedDict{Vector{KEYTYPE}, KeyLimits}(),
             pkeys,
+            Jutul.OrderedDict{KEYTYPE, OptimizationMultiplier}(),
+            Jutul.OrderedDict{KEYTYPE, Any}(),
             strict,
             verbose,
             active_type,
@@ -70,7 +83,10 @@ end
 function Base.show(io::IO, t::MIME"text/plain", dopt::DictParameters)
     active_names = active_keys(dopt)
     inactive_names = inactive_keys(dopt)
-    println(io, "DictParameters with $(length(active_names)) active parameters and $(length(inactive_names)) inactive:")
+    nmult = length(keys(dopt.multipliers))
+    nact = length(active_names)
+    ninact = length(inactive_names)
+    println(io, "DictParameters with $(nact+ninact) parameters ($nact active), and $nmult multipliers:")
     print_optimization_overview(dopt; io = io, print_inactive = true)
 end
 
@@ -183,6 +199,6 @@ end
 
 function optimizer_devectorize(P::JutulOptimizationProblem, x)
     prm_out = deepcopy(P.dict_parameters.parameters)
-    optimizer_devectorize!(prm_out, x, P.x_setup)
+    optimizer_devectorize!(prm_out, x, P.x_setup, multipliers = P.dict_parameters.multipliers_optimized)
     return prm_out
 end

@@ -48,11 +48,25 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
 end
 
 function setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
+    # Make a nested shallow dict copy? There is a kind of bug here...
+    prm = dict_shallow_copy(prm)
     optimizer_devectorize!(prm, X, x_setup)
     # Return the case setup function This is a function that sets up the
     # case from the parameters
     F() = setup_fn(prm, step_info)
     return redirect_stdout(F, devnull)
+end
+
+function dict_shallow_copy(x::T) where T<:AbstractDict
+    new_x = T()
+    for (k, v) in pairs(x)
+        new_x[k] = dict_shallow_copy(v)
+    end
+    return new_x
+end
+
+function dict_shallow_copy(x)
+    return x
 end
 
 function forward_simulate_for_optimization(case, adj_cache)
@@ -65,6 +79,7 @@ function forward_simulate_for_optimization(case, adj_cache)
     if ismissing(config)
         config = simulator_config(sim,
             info_level = adj_cache[:info_level],
+            end_report = false,
             output_substates = true
         )
         adj_cache[:config] = config
@@ -77,7 +92,7 @@ function forward_simulate_for_optimization(case, adj_cache)
     )
 end
 
-function optimizer_devectorize!(prm, X, x_setup)
+function optimizer_devectorize!(prm, X, x_setup; multipliers = missing)
     if haskey(x_setup, :lumping) || haskey(x_setup, :scalers)
         X_new = similar(X, 0)
         sizehint!(X_new, length(X))
@@ -96,7 +111,7 @@ function optimizer_devectorize!(prm, X, x_setup)
     end
     @assert length(X) == x_setup.offsets[end]-1
     # Set the parameters from the vector
-    return Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup)
+    return Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup, multipliers = multipliers)
 end
 
 function optimizer_devectorize_lumping!(X_new, X, pos, L, scaler)
@@ -118,6 +133,7 @@ end
 
 function optimization_setup(dopt::DictParameters; include_limits = true)
     x0, x_setup = Jutul.AdjointsDI.vectorize_nested(dopt.parameters,
+        multipliers = dopt.multipliers,
         active = active_keys(dopt),
         active_type = dopt.active_type
     )

@@ -1,10 +1,20 @@
 function setup_vectorize_nested(data, active = missing; kwarg...)
-    meta = (offsets = Int[1], names = [], dims = [])
+    meta = (
+        offsets = Int[1],
+        names = [],
+        dims = [],
+        types = Symbol[],
+        multiplier_targets = Dict(),
+    )
     setup_vectorize_nested!(meta, data, active; kwarg...)
     return meta
 end
 
-function setup_vectorize_nested!(meta, data, active = missing; header = [], active_type = Float64)
+function setup_vectorize_nested!(meta, data, active = missing;
+        header = [],
+        active_type = Float64,
+        multipliers = missing
+    )
     function name_is_active(n)
         act = false
         if ismissing(active)
@@ -44,10 +54,28 @@ function setup_vectorize_nested!(meta, data, active = missing; header = [], acti
                 end
                 push!(meta.offsets, meta.offsets[end] + num)
                 push!(meta.names, name)
+                push!(meta.types, :value)
                 push!(meta.dims, d)
             end
         else
             continue
+        end
+    end
+    if !ismissing(multipliers)
+        for (name, mult) in pairs(multipliers)
+            v = mult.value
+            if v isa AbstractArray
+                d = size(v)
+                num = length(v)
+            else
+                d = nothing
+                num = 1
+            end
+            push!(meta.names, name)
+            push!(meta.offsets, meta.offsets[end] + num)
+            push!(meta.types, :multiplier)
+            push!(meta.dims, d)
+            meta.multiplier_targets[name] = mult.targets
         end
     end
 end
@@ -56,30 +84,28 @@ function vectorize_nested(data; kwarg...)
     return vectorize_nested!(missing, data; kwarg...)
 end
 
-function vectorize_nested!(x, data; setup = missing, active = missing, active_type = Float64)
-    function get_subdict(name_list::Vector)
-        d = data
-        for name in name_list[1:end-1]
-            d = d[name]
-        end
-        return d
-    end
+function vectorize_nested!(x, data; setup = missing, active = missing, active_type = Float64, multipliers = missing)
     if !ismissing(active) && !ismissing(setup)
         throw(ArgumentError("Both setup and active cannot be provided."))
     end
     if ismissing(setup)
-        setup = setup_vectorize_nested(data, active, active_type = active_type)
+        setup = setup_vectorize_nested(data, active, active_type = active_type, multipliers = multipliers)
     end
     n = setup.offsets[end]-1
     if ismissing(x)
         x = zeros(n)
     end
     for (i, name) in enumerate(setup.names)
+        vtype = setup.types[i]
         start = setup.offsets[i]
         stop = setup.offsets[i+1]-1
-        d = get_subdict(name)
-        lastname = name[end]
-        v = d[lastname]
+        if vtype == :value
+            d = get_subdict(data, name)
+            lastname = name[end]
+            v = d[lastname]
+        else
+            v = multipliers[name].value
+        end
         if v isa AbstractArray
             subx = view(x, start:stop)
             for i in eachindex(subx, v)
@@ -98,38 +124,100 @@ function devectorize_nested(x, setup)
     return devectorize_nested!(data, x, setup)
 end
 
-function devectorize_nested!(data, x, setup)
-    function get_subdict(name_list::Vector)
-        d = data
-        for name in name_list[1:end-1]
-            if !haskey(d, name)
-                d[name] = Dict()
-            end
-            d = d[name]
-        end
-        return d
-    end
+function devectorize_nested!(data, x, setup; multipliers = missing)
+    # First do values, then multipliers when we know that all values are set
+    devectorize_nested_for_type!(data, x, setup, :value)
+    devectorize_nested_for_type!(data, x, setup, :multiplier; multipliers = multipliers)
+    return data
+end
 
+function get_subdict(data, name_list::Vector)
+    out = data
+    for name in name_list[1:end-1]
+        if !haskey(out, name)
+            out[name] = Dict()
+        end
+        out = out[name]
+    end
+    return out
+end
+
+
+function devectorize_nested_for_type!(data, x, setup, target_type::Symbol; multipliers = missing)
     for (i, name) in enumerate(setup.names)
         start = setup.offsets[i]
         stop = setup.offsets[i+1]-1
         dims = setup.dims[i]
-        d = get_subdict(name)
-        lastname = name[end]
-        if isnothing(dims)
-            @assert start == stop "Expected start=$start=$stop=stop for scalar $name"
-            d[lastname] = x[start]
-        else
-            if haskey(d, lastname) && eltype(d[lastname]) == eltype(x)
-                subx = view(x, start:stop)
-                v = d[lastname]
-                for i in eachindex(subx, v)
-                    v[i] = subx[i]
-                end
+        vtype = setup.types[i]
+        if vtype != target_type
+            continue
+        end
+        subx = x_subset(x, name, start, stop, dims)
+        if vtype == :value
+            d = get_subdict(data, name)
+            lastname = name[end]
+            if subx isa Number
+                d[lastname] = subx
             else
-                d[lastname] = reshape(x[start:stop], dims)
+                if haskey(d, lastname) && eltype(d[lastname]) == eltype(x)
+                    v = d[lastname]
+                    for i in eachindex(subx, v)
+                        v[i] = subx[i]
+                    end
+                else
+                    d[lastname] = reshape(collect(subx), dims)
+                end
             end
+        else
+            @assert vtype == :multiplier "Unknown type $vtype"
+            targets = setup.multiplier_targets[name]
+            if !ismissing(multipliers)
+                multipliers[name] = (value = subx, targets = targets)
+            end
+            apply_multiplier_to_targets!(data, subx, targets)
         end
     end
     return data
 end
+
+function x_subset(x, name, start, stop, dims::Nothing)
+    @assert start == stop "Expected start=$start=$stop=stop for scalar $name"
+    return x[start]
+end
+
+function x_subset(x, name, start, stop, dims)
+    return view(x, start:stop)
+end
+
+function apply_multiplier_to_targets!(data, multval, targets)
+    for target in targets
+        name = target[end]
+        d = get_subdict(data, target)
+        d[name] = apply_multiplier!(d[name], multval)
+    end
+    return data
+end
+
+function apply_multiplier!(d::AbstractArray{T, <:Any}, multval::T) where T
+    for i in eachindex(d)
+        d[i] *= multval
+    end
+    return d
+end
+
+function apply_multiplier!(d::AbstractArray{T, <:Any}, multval::AbstractArray{T, <:Any}) where T
+    for i in eachindex(d, multval)
+        d[i] *= multval[i]
+    end
+    return d
+end
+
+function apply_multiplier!(d::Number, multval::AbstractArray)
+    return d * only(multval)
+end
+
+function apply_multiplier!(d, multval)
+    d = d .* multval
+    return d
+end
+
