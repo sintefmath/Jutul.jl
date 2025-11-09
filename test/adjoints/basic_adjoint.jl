@@ -420,7 +420,7 @@ import Jutul.DictOptimization as DictOptimization
             prm["k_val"] *= multval
             prm["U0"] *= multval
             dprm = DictParameters(prm, setup_poisson_test_case_from_dict)
-            Jutul.DictOptimization.add_optimization_multiplier!(dprm, "k_val", "U0", abs_min = 0.1, abs_max = 10.0)
+            add_optimization_multiplier!(dprm, "k_val", "U0", abs_min = 0.1, abs_max = 10.0)
 
             prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25);
             @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.001

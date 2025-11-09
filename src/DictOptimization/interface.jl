@@ -348,6 +348,15 @@ function set_optimization_parameter!(dopt::DictParameters, parameter_name, value
     set_nested_dict_value!(dopt.parameters, parameter_name, value)
 end
 
+"""
+    add_optimization_multiplier!(dprm::DictParameters, name_of_target; min = 0.2, max = 5.0)
+    add_optimization_multiplier!(dprm, target1, target2, target3; min = 0.2, max = 5.0, initial = 2.0)
+
+Add an optimization multiplier that acts on one or more targets to the
+`DictParameters` object. The multiplier will be optimized during the
+optimization process. All parameters with the same multiplier must have the same
+dimensions.
+"""
 function add_optimization_multiplier!(dprm::DictParameters, targets...;
         initial = missing,
         lumping = missing,

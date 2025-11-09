@@ -38,17 +38,24 @@ Jutul.WrappedSumObjective
 
 ## Generic optimization interface
 
-The generic optimization interface is very general, handling gradients with respect to any parameter used in a function that sets up a complete simulation case from a `AbstractDict`. This makes use of [AbstractDifferentiation.jl](https://github.com/JuliaDiff/AbstractDifferentiation.jl) and the default configuration assumes that your setup function can be differentiated with the `ForwardDiff` backend. In practice, this means that you must take care when initializing arrays and other types so that they can fit the AD type (e.g. avoid use of `zeros` without a type). In addition, there may be a large number of calls to the setup function, which can sometimes be slow. Alternatively, the numerical parameter optimization interface can be used, which only differentiates with respect to numerical parameters inside the model.
+The generic optimization interface is very general, handling gradients with respect to any parameter used in a function that sets up a complete simulation case from a `AbstractDict`. This makes use of [AbstractDifferentiation.jl](https://github.com/JuliaDiff/AbstractDifferentiation.jl) and the default configuration assumes that your setup function can be differentiated with the `ForwardDiff` backend. In practice, this means that you must take care when initializing arrays and other types so that they can fit the AD type (e.g. avoid use of `zeros` without a type). In addition, there may be a large number of calls to the setup function, which can sometimes be slow. Alternatively, the numerical parameter optimization interface can be used, which only differentiates with respect to numerical parameters inside the model. A hybrid approach is also supported for the generic optimization interface by setting the `deps` and `deps_ad` arguments to `optimize`, which can be much faster, but assumes that the optimization variables only affect the numerical parameters/variables of the model (values stored in the Dicts from `setup_parameters` and `setup_state0`) and not any values that exist e.g. inside the model itself.
+
+### Defining the parameter object
 
 ```@docs
 DictParameters
 ```
 
+### Defining constraints and free parameters
+
 ```@docs
 free_optimization_parameter!
 freeze_optimization_parameter!
 set_optimization_parameter!
+add_optimization_multiplier!
 ```
+
+### Optimizing and computing gradients
 
 ```@docs
 optimize
