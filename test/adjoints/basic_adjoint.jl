@@ -403,6 +403,30 @@ import Jutul.DictOptimization as DictOptimization
         @test grad_all["dx"] ≈ 0.0 atol = 1e-8
         @test grad_all["dy"] ≈ 0.0 atol = 1e-8
         @test grad_all["srcval"] ≈ -0.105863 atol = 0.01
+
+        @testset "multiplier" begin
+            prm_truth = default_poisson_dict()
+            states, = simulate(setup_poisson_test_case_from_dict(prm_truth), info_level = -1)
+            function poisson_mismatch_objective(m, s, dt, step_info, forces)
+                step = step_info[:step]
+                U = s[:U]
+                U_ref = states[step][:U]
+                v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
+                return dt*v
+            end
+            # Perturb two parameters by a multiplier
+            prm = default_poisson_dict()
+            multval = 7.13
+            prm["k_val"] *= multval
+            prm["U0"] *= multval
+            dprm = DictParameters(prm, setup_poisson_test_case_from_dict)
+            Jutul.DictOptimization.add_optimization_multiplier!(dprm, "k_val", "U0", abs_min = 0.1, abs_max = 10.0)
+
+            prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25);
+            @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.001
+            @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.001
+            @test only(dprm.multipliers_optimized["multiplier_1"].value) ≈ 1.0/multval atol = 1e-6
+        end
     end
 end
 
@@ -461,23 +485,3 @@ end
 function setup_poisson_test_case_from_dict(d::AbstractDict, step_info = missing; fmt = :case, kwarg...)
     return setup_poisson_test_case(d["dx"], d["dy"], d["U0"], d["k_val"], d["srcval"]; dim = (2, 2), dt = [1.0])
 end
-
-prm_truth = default_poisson_dict()
-states, = simulate(setup_poisson_test_case_from_dict(prm_truth), info_level = -1)
-function poisson_mismatch_objective(m, s, dt, step_info, forces)
-    step = step_info[:step]
-    U = s[:U]
-    U_ref = states[step][:U]
-    v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
-    return dt*v
-end
-# Perturb two parameters by a multiplier
-prm = default_poisson_dict()
-multval = 7.13
-prm["k_val"] *= multval
-prm["U0"] *= multval
-
-dprm = DictParameters(prm, setup_poisson_test_case_from_dict, verbose = false)
-Jutul.DictOptimization.add_optimization_multiplier!(dprm, "k_val", "U0", abs_min = 0.1, abs_max = 10.0)
-##
-prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25);
