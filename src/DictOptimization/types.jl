@@ -16,7 +16,6 @@ Base.@kwdef mutable struct OptimizationMultiplier
     targets::Vector{Vector{KEYTYPE}} = Vector{Vector{KEYTYPE}}()
     lumping::Union{Array{Int, <:Any}, Missing} = missing
     value::Array{Float64, <:Any}
-    optimized_value::Array{Float64, <:Any}
 end
 
 mutable struct DictParameters
@@ -28,6 +27,7 @@ mutable struct DictParameters
     parameter_targets
     possible_targets
     multipliers
+    multipliers_optimized
     strict::Bool
     verbose::Bool
     active_type
@@ -71,6 +71,7 @@ function DictParameters(parameters::AbstractDict, setup_function = missing;
             Jutul.OrderedDict{Vector{KEYTYPE}, KeyLimits}(),
             pkeys,
             Jutul.OrderedDict{KEYTYPE, OptimizationMultiplier}(),
+            Jutul.OrderedDict{KEYTYPE, Any}(),
             strict,
             verbose,
             active_type,
@@ -195,6 +196,6 @@ end
 
 function optimizer_devectorize(P::JutulOptimizationProblem, x)
     prm_out = deepcopy(P.dict_parameters.parameters)
-    optimizer_devectorize!(prm_out, x, P.x_setup)
+    optimizer_devectorize!(prm_out, x, P.x_setup, multipliers = P.dict_parameters.multipliers_optimized)
     return prm_out
 end

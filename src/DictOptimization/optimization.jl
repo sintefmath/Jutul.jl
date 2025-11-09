@@ -91,7 +91,7 @@ function forward_simulate_for_optimization(case, adj_cache)
     )
 end
 
-function optimizer_devectorize!(prm, X, x_setup)
+function optimizer_devectorize!(prm, X, x_setup; multipliers = missing)
     if haskey(x_setup, :lumping) || haskey(x_setup, :scalers)
         X_new = similar(X, 0)
         sizehint!(X_new, length(X))
@@ -110,7 +110,7 @@ function optimizer_devectorize!(prm, X, x_setup)
     end
     @assert length(X) == x_setup.offsets[end]-1
     # Set the parameters from the vector
-    return Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup)
+    return Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup, multipliers = multipliers)
 end
 
 function optimizer_devectorize_lumping!(X_new, X, pos, L, scaler)

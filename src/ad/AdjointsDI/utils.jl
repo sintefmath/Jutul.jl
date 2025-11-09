@@ -124,10 +124,10 @@ function devectorize_nested(x, setup)
     return devectorize_nested!(data, x, setup)
 end
 
-function devectorize_nested!(data, x, setup)
+function devectorize_nested!(data, x, setup; multipliers = missing)
     # First do values, then multipliers when we know that all values are set
     devectorize_nested_for_type!(data, x, setup, :value)
-    devectorize_nested_for_type!(data, x, setup, :multiplier)
+    devectorize_nested_for_type!(data, x, setup, :multiplier; multipliers = multipliers)
     return data
 end
 
@@ -143,7 +143,7 @@ function get_subdict(data, name_list::Vector)
 end
 
 
-function devectorize_nested_for_type!(data, x, setup, target_type::Symbol)
+function devectorize_nested_for_type!(data, x, setup, target_type::Symbol; multipliers = missing)
     for (i, name) in enumerate(setup.names)
         start = setup.offsets[i]
         stop = setup.offsets[i+1]-1
@@ -171,6 +171,9 @@ function devectorize_nested_for_type!(data, x, setup, target_type::Symbol)
         else
             @assert vtype == :multiplier "Unknown type $vtype"
             targets = setup.multiplier_targets[name]
+            if !ismissing(multipliers)
+                multipliers[name] = (value = subx, targets = targets)
+            end
             apply_multiplier_to_targets!(data, subx, targets)
         end
     end

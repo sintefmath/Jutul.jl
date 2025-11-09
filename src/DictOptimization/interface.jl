@@ -367,7 +367,6 @@ function add_optimization_multiplier!(dprm::DictParameters, targets...;
     sz = missing
     for t in targets
         t_val = get_nested_dict_value(dprm.parameters, t)
-        @info "??" t_val size(t_val)
         sz_t = size(t_val)
         if ismissing(sz)
             sz = sz_t
@@ -383,6 +382,6 @@ function add_optimization_multiplier!(dprm::DictParameters, targets...;
         size(initial) == size(sz) || error("Initial value must have the same size as the target parameters ($sz).")
     end
     lumping = validate_and_normalize_lumping(lumping, initial)
-    dprm.multipliers[name] = OptimizationMultiplier(abs_min, abs_max, collect(targets), lumping, initial, copy(initial))
+    dprm.multipliers[name] = OptimizationMultiplier(abs_min, abs_max, collect(targets), lumping, initial)
     return dprm
 end
