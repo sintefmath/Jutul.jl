@@ -83,7 +83,10 @@ end
 function Base.show(io::IO, t::MIME"text/plain", dopt::DictParameters)
     active_names = active_keys(dopt)
     inactive_names = inactive_keys(dopt)
-    println(io, "DictParameters with $(length(active_names)) active parameters and $(length(inactive_names)) inactive:")
+    nmult = length(keys(dopt.multipliers))
+    nact = length(active_names)
+    ninact = length(inactive_names)
+    println(io, "DictParameters with $(nact+ninact) parameters ($nact active), and $nmult multipliers:")
     print_optimization_overview(dopt; io = io, print_inactive = true)
 end
 
