@@ -380,7 +380,7 @@ function unpack_setup(step_info, N, case::JutulCase; all = false)
     Ns = length(case.dt)
     if Ns > 1
         if case.forces isa Vector
-            Ns == N || error("case.forces was a vector and expected $N steps, got $Ns.")
+            ismissing(N) || Ns == N || error("case.forces was a vector and expected $N steps, got $Ns.")
         end
         if !all
             case = case[step_info[:step]]
@@ -459,7 +459,7 @@ function (H::AdjointObjectiveHelper)(x)
         end
         step_info = H.packed_steps.step_infos[1]
         F_of_x = H.F(x, step_info)
-        setup = unpack_setup(step_info, N, F_of_x)
+        setup = unpack_setup(step_info, missing, F_of_x)
         if setup isa Jutul.JutulCase
             model_0 = setup.model
         else
