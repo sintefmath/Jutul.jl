@@ -453,14 +453,16 @@ function (H::AdjointObjectiveHelper)(x)
             H.step_index == :firstlast || error("Unknown step index symbol: $(indices_to_eval).")
             indices_to_eval = [1, length(packed.states)]
         end
-        v = evaluate(x, indices_to_eval[1])
-        @. v = abs.(v)
+        # set_objective_helper_step_index!(H::AdjointObjectiveHelper, model, step_index)
+        v = missing
         for (i, step) in enumerate(indices_to_eval)
-            if i == 1
-                continue
-            end
             tmp = evaluate(x, step)
-            @. v += abs.(tmp)
+            @. tmp = abs(tmp)
+            if i == 1
+                v = tmp
+            else
+                v .+= tmp
+            end
         end
     else
         v = evaluate(x, H.step_index)
