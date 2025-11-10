@@ -37,6 +37,7 @@ function objective_evaluator_from_model_and_state(G::AbstractSumObjective, model
         # all steps for sparsity detection but the objective is a sum. So we
         # fake it by taking the first step.
         i = 1
+        error("Should not happen anymore.")
     end
     step = packed_steps[i]
     step_info = step.step_info
@@ -47,6 +48,7 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
     if current_step isa Symbol
         # Same hack as for AbstractSumObjective
         current_step = 1
+        error("Should not happen anymore.")
     end
     state0 = packed_steps.state0
     step_infos = packed_steps.step_infos
