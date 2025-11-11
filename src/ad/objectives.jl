@@ -64,6 +64,7 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
         else
             # Make sure that the current step only is AD and otherwise
             # consistent with substeps in packed_steps
+            allforces_ad = allforces_ad
             allforces = Any[]
             sizehint!(allforces, length(step_infos))
             for (i, step_info) in enumerate(step_infos)
