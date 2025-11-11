@@ -380,7 +380,7 @@ function unpack_setup(step_info, N, case::JutulCase; all = false)
     Ns = length(case.dt)
     if Ns > 1
         if case.forces isa Vector
-            Ns == N || error("case.forces was a vector and expected $N steps, got $Ns.")
+            ismissing(N) || Ns == N || error("case.forces was a vector and expected $N steps, got $Ns.")
         end
         if !all
             case = case[step_info[:step]]
@@ -426,12 +426,14 @@ function set_objective_helper_step_index!(H::AdjointObjectiveHelper, model, step
     if step_index isa Int
         step_index > 0 || error("Step index must be positive. Got $step_index.")
         step_index <= length(H.packed_steps) || error("Step index $step_index is larger than the number of steps $(length(H.packed_steps)).")
+        step_index_for_eval = step_index
     else
         step_index in (:firstlast, :all) || error("If step_index is a Symbol it must be :firstlast or :all.")
         step_index isa Symbol || error("Step index must be an integer or symbol (:firstlast, :all). Got $step_index.")
+        step_index_for_eval = 1
     end
     H.step_index = step_index
-    H.objective_evaluator = Jutul.objective_evaluator_from_model_and_state(H.G, model, H.packed_steps, step_index)
+    H.objective_evaluator = Jutul.objective_evaluator_from_model_and_state(H.G, model, H.packed_steps, step_index_for_eval)
 end
 
 function (H::AdjointObjectiveHelper)(x)
@@ -444,24 +446,38 @@ function (H::AdjointObjectiveHelper)(x)
         evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.objective_evaluator, packed, ix, H.cache; is_sum = is_sum)
     end
     if H.step_index isa Symbol
+        step_index_sym = H.step_index
         # Loop over multiple steps to get the "extended sparsity". This is a bit
         # of a hack, but it covers the case where there is some change in
         # dynamics/controls at a later step.
-        if H.step_index == :all
+        N = length(packed.states)
+        if step_index_sym == :all
             indices_to_eval = eachindex(packed.states)
         else
-            H.step_index == :firstlast || error("Unknown step index symbol: $(indices_to_eval).")
-            indices_to_eval = [1, length(packed.states)]
+            step_index_sym == :firstlast || error("Unknown step index symbol: $(indices_to_eval).")
+            indices_to_eval = [1, N]
         end
-        v = evaluate(x, indices_to_eval[1])
-        @. v = abs.(v)
-        for (i, step) in enumerate(indices_to_eval)
+        step_info = H.packed_steps.step_infos[1]
+        F_of_x = H.F(x, step_info)
+        setup = unpack_setup(step_info, missing, F_of_x)
+        if setup isa Jutul.JutulCase
+            model_0 = setup.model
+        else
+            model_0 = setup[1]
+        end
+        v = missing
+        for (i, step_index) in enumerate(indices_to_eval)
+            set_objective_helper_step_index!(H, model_0, step_index)
+            @assert H.step_index == step_index
+            tmp = evaluate(x, step_index)
+            @. tmp = abs(tmp)
             if i == 1
-                continue
+                v = tmp
+            else
+                v .+= tmp
             end
-            tmp = evaluate(x, step)
-            @. v += abs.(tmp)
         end
+        H.step_index = step_index_sym
     else
         v = evaluate(x, H.step_index)
     end
