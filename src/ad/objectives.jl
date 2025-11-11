@@ -62,9 +62,18 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
         if ismissing(allforces)
             allforces = packed_steps.forces
         else
-            allforces_ad = [allforces[step_info[:step]] for step_info in step_infos]
-            allforces = deepcopy(packed_steps.forces)
-            allforces[current_step] = allforces_ad[current_step]
+            # Make sure that the current step only is AD and otherwise
+            # consistent with substeps in packed_steps
+            allforces = Any[]
+            sizehint!(allforces, length(step_infos))
+            for (i, step_info) in enumerate(step_infos)
+                if i == current_step
+                    nextforce = allforces_ad[step_info[:step]]
+                else
+                    nextforce = packed_steps.forces[i]
+                end
+                push!(allforces, nextforce)
+            end
         end
         if ismissing(parameters)
             prm_src = state
