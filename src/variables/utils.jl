@@ -329,7 +329,8 @@ function initialize_parameter_value!(parameters, data_domain, model, param, symb
         s = "computed defaulted"
     end
     if eltype(vals)<:AbstractFloat && any(x -> !isfinite(x), vals)
-        @error "Non-finite entries in $s parameter $symb" vals
+        num_bad = count(x -> !isfinite(x), vals)
+        @error "$num_bad non-finite entries in $s parameter $symb" vals
     end
     return initialize_variable_value!(parameters, model, param, symb, vals; kwarg...)
 end
