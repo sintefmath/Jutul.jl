@@ -10,23 +10,17 @@ function classify_iterate(distance, theta, theta_target, theta_slow, theta_fast,
     fast = θ .<= max.(θt, θf)
     ok = max.(θt, θf) .< θ .<= θs
     div = θ .> θs
-    prt = false
-    # Exclude "diverging" distances that have converged (e.g., θ = 1/1)
-    div = div .&& .!conv
-    # Classify fast contractions and converged distances as ok if oscillating
-    ok = ok .|| (fast .|| conv) .&& osc
-    # Converged, non-oscillating contractions are classifie as fast below
-    ok = ok .&& .!(conv .&& .!osc)
-    # Classify converged distances as fast, require no oscillation
-    fast = (fast .|| conv) .&& .!osc
-    # Sanity check
-    @assert all(fast .+ ok .+ div .== 1)
-    # Set status
-    status = zeros(length(θ))
+    status = zeros(Int, length(θ))
     status[fast] .= 1
     status[ok] .= 0
     status[div] .= -1
-    # Return
+    # All converged measures should at least be classified as fast
+    status[conv] .= 1
+    # Oscillating measures should be at most be classified as ok
+    status[fast .&& osc] .-= 1
+    
+    @assert all([s ∈ (-1:1) for s in status])
+
     return status
 
 end
