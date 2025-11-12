@@ -175,6 +175,8 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
             offsets = x_setup.offsets,
             names = x_setup.names,
             dims = x_setup.dims,
+            types = x_setup.types,
+            multiplier_targets = x_setup.multiplier_targets,
             scalers = scalers,
             lumping = lumping
         )
