@@ -1,6 +1,6 @@
 
 """
-    Jutul.mesh_from_gmsh("path/to/file.geo", manage_gmsh = true)
+    Jutul.mesh_from_gmsh("path/to/file.geo", manage_gmsh = true, verbose = false)
 
 Convert Gmsh mesh file to Jutul mesh. If `manage_gmsh` is true, the Gmsh API is
 initialized and finalized automatically. Otherwise, the user is responsible for
@@ -11,10 +11,30 @@ To use this function, you need to have the Gmsh library installed and loaded by
 calling `using Gmsh`. Please note that, unlike Jutul, Gmsh is GPL licensed
 software, and you should comply with the license terms when using it in your
 projects.
+
+# Keyword arguments
+- `argv::Vector{String}`: Command-line arguments to pass to Gmsh during
+  initialization. Example: `["-v", "2"]` to set verbosity level to 2.
+- `manage_gmsh::Bool`: Whether to initialize and finalize Gmsh automatically.
+- `verbose::Bool`: Whether to print messages about the mesh parsing process.
+- `reverse_z::Bool`: Whether to reverse the z-coordinates of the mesh nodes.
 """
-function Jutul.mesh_from_gmsh(pth; manage_gmsh = true, kwarg...)
+function Jutul.mesh_from_gmsh(pth;
+        argv = String[],
+        manage_gmsh = true,
+        verbose = false,
+        kwarg...
+    )
+    if !("v" in argv)
+        if verbose
+            lvl = 5
+        else
+            lvl = 0
+        end
+        push!(argv, "-v", string(lvl))
+    end
     if manage_gmsh
-        Gmsh.initialize()
+        Gmsh.initialize(argv)
     end
     ext = pth |> splitext |> last
     g = missing
@@ -23,7 +43,7 @@ function Jutul.mesh_from_gmsh(pth; manage_gmsh = true, kwarg...)
         if lowercase(ext) == ".geo"
             gmsh.model.mesh.generate()
         end
-        g = Jutul.mesh_from_gmsh(; kwarg...)
+        g = Jutul.mesh_from_gmsh(; verbose = verbose, kwarg...)
     finally
         if manage_gmsh
             Gmsh.finalize()
