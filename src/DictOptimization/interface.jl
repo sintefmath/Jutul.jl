@@ -73,6 +73,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         obj_change_tol = 1e-6,
         max_it = 25,
         opt_fun = missing,
+        optimizer = :lbfgs,
         maximize = false,
         backend_arg = missing,
         info_level = 0,
@@ -101,11 +102,10 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     end
 
     t_opt = @elapsed if ismissing(opt_fun)
-        v, x, history = Jutul.LBFGS.box_bfgs(problem;
-            print = Int(dopt.verbose),
-            max_it = max_it,
+        x, history = optimize_implementation(problem, Val(optimizer); 
             grad_tol = grad_tol,
             obj_change_tol = obj_change_tol,
+            max_it = max_it,
             maximize = maximize,
             kwarg...
         )
@@ -141,6 +141,17 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         dopt.history = history
     end
     return prm_out
+end
+
+function optimize_implementation(problem, ::Val{:lbfgs}; kwarg...)
+    v, x, history = Jutul.LBFGS.box_bfgs(problem;
+        kwarg...
+    )
+    return (x, history)
+end
+
+function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where optimizer
+    error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb (requires LBFGSB.jl to be imported))")
 end
 
 """

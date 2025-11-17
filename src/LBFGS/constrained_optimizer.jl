@@ -247,18 +247,16 @@ function box_bfgs(x0, f, lb, ub; kwarg...)
 end
 
 function box_bfgs(u0, f, bounds; kwarg...)
-    
     return box_bfgs(u0, f, bounds...; kwarg...)
-    
 end
 
 function log_box_bfgs(x0, f, lb, ub; kwargs...)
 
     n = length(x0)
-    
+
     length(lb) == n || throw(ArgumentError("Length of lower bound ($(length(lb))) must match length of initial guess ($n)"))
     length(ub) == n || throw(ArgumentError("Length of upper bound ($(length(ub))) must match length of initial guess ($n)"))
-    
+
     # Check bounds and initial guess
     for i in eachindex(x0, lb, ub)
         if x0[i] ≤ 0 || lb[i] ≤ 0
@@ -275,7 +273,7 @@ function log_box_bfgs(x0, f, lb, ub; kwargs...)
     # Log-transform bounds
     log_lb = log.(lb)
     log_ub = log.(ub)
-    
+
     δ_log = log_ub .- log_lb
 
     # Transformation functions
@@ -308,20 +306,17 @@ function log_box_bfgs(x0, f, lb, ub; kwargs...)
 
     # Optimize in unit box
     v, u, history = unit_box_bfgs(u0, F; kwargs...)
-    
+
     # Transform back to original space
     x = u_to_x(u)
-    
+
     return (v, x, history)
-    
 end
 
 function log_box_bfgs(u0, f, bounds; kwargs...)
     # Unpack bounds
-    
     lb, ub = bounds
     return log_box_bfgs(u0, f, lb, ub; kwargs...)
-    
 end
 
 

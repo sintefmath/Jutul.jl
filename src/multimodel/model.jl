@@ -48,8 +48,8 @@ function number_of_models(model::MultiModel)
     return length(model.models)
 end
 
-function number_of_values(model::MultiModel)
-    return sum(number_of_values, values(model.models))
+function number_of_values(model::MultiModel, type = :primary)
+    return sum(m -> number_of_values(m, type), values(model.models))
 end
 
 has_groups(model::MultiModel) = !isnothing(model.groups)

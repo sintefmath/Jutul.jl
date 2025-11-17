@@ -1,4 +1,4 @@
-using Jutul, Test
+using Jutul, Test, LBFGSB
 
 function poisson_test_objective(model, state)
     U = state[:U]
@@ -382,10 +382,17 @@ import Jutul.DictOptimization as DictOptimization
         # Also do one with relative limits that should not change much
         free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1)
 
+        # Test with base optimizer
         prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1);
 
         @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
         @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
+
+        # Test with LBFGSB.jl optimizer
+        prm_opt2 = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1, optimizer = :lbfgsb);
+
+        @test prm_opt2["k_val"] ≈ prm_truth["k_val"] atol = 0.01
+        @test prm_opt2["U0"] ≈ prm_truth["U0"] atol = 0.01
 
         grad = parameters_gradient(dprm, poisson_mismatch_objective, setup_poisson_test_case_from_dict)
         @test grad["k_val"] ≈ 0.0276189 atol = 0.01
@@ -440,41 +447,4 @@ end
     @test length(pr3) == length(case.dt)
     @test ismissing(pr3.forces)
     @test ismissing(pr3[2].forces)
-end
-
-##
-using Jutul, Test
-
-function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = (2, 2), dt = [1.0])
-    sys = VariablePoissonSystem(time_dependent = true)
-    # Unit square
-    g = CartesianMesh(dim, (dx, dy))
-    # Set up a model with the grid and system
-    discretization = (poisson = Jutul.PoissonDiscretization(g), )
-    D = DiscretizedDomain(g, discretization)
-    model = SimulationModel(D, sys)
-    state0 = setup_state(model, Dict(:U=>U0))
-    K = compute_face_trans(g, k_val)
-    param = setup_parameters(model, K = K)
-
-    nc = number_of_cells(g)
-    pos_src = PoissonSource(1, srcval)
-    neg_src = PoissonSource(nc, -srcval)
-    forces = setup_forces(model, sources = [pos_src, neg_src])
-    idata = Dict(:dx => dx, :dy => dy, :U0 => U0, :k_val => k_val, :srcval => srcval)
-    return JutulCase(model, dt, forces; parameters = param, state0 = state0, input_data = idata)
-end
-
-function default_poisson_dict()
-    return Dict(
-        "dx" => 1.0,
-        "dy" => 1.0,
-        "U0" => 1.0,
-        "k_val" => 1.0,
-        "srcval" => 1.0
-    )
-end
-
-function setup_poisson_test_case_from_dict(d::AbstractDict, step_info = missing; fmt = :case, kwarg...)
-    return setup_poisson_test_case(d["dx"], d["dy"], d["U0"], d["k_val"], d["srcval"]; dim = (2, 2), dt = [1.0])
 end
