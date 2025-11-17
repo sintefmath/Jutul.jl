@@ -31,7 +31,14 @@ using `free_optimization_parameter!` prior to calling the optimizer.
 - `grad_tol`: Gradient tolerance for stopping criterion
 - `obj_change_tol`: Objective function change tolerance for stopping criterion
 - `max_it`: Maximum number of iterations
-- `opt_fun`: Optional custom optimization function. If missing, L-BFGS will be used
+- `optimizer`: Symbol defining the optimization algorithm to use. Available
+  options are `:lbfgs` (default) and `:lbfgsb` (requires LBFGSB.jl to be
+  imported)
+- `opt_fun`: Optional custom optimization function. If missing, L-BFGS will be
+  used. Takes in a NamedTuple containing fields `f`, `g`, `x0`, `min`, `max`.
+  Here, `f(x)` returns the objective function value at `x`, `g(dFdx, x)` fills
+  `dFdx` with the gradient at `x`, `x0` is the initial guess, and `min` and
+  `max` are the lower and upper bounds, respectively.
 - `maximize`: Set to `true` to maximize the objective instead of minimizing
 - `simulator`: Optional simulator object used in forward simulations
 - `config`: Optional configuration for the setup
@@ -110,23 +117,9 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
             kwarg...
         )
     else
-        self_cache = Dict()
-        function f!(x)
-            f, g = opt_cache(x)
-            self_cache[:f] = f
-            self_cache[:g] = g
-            self_cache[:x] = x
-            return f
-        end
-
-        function g!(z, x)
-            if self_cache[:x] !== x
-                f!(x)  # Update the cache if the vector has changed
-            end
-            g = self_cache[:g]
-            return z .= g
-        end
-        x, history = opt_fun(f!, g!, x0, lb, ub)
+        F = Jutul.DictOptimization.setup_optimzation_functions(problem, maximize = maximize)
+        x = opt_fun(F)
+        history = F.history
     end
     if dopt.verbose
         jutul_message("Optimization", "Finished in $t_opt seconds.", color = :green)
@@ -152,6 +145,46 @@ end
 
 function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where optimizer
     error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb (requires LBFGSB.jl to be imported))")
+end
+
+function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize = false)
+    # Use local variables to handle caching
+    ub = problem.limits.max
+    lb = problem.limits.min
+    x0 = problem.x0
+
+    prev_hash = NaN
+    prev_val = NaN
+    prev_grad = similar(ub)
+    history = Float64[]
+    function feval(x, dFdx = missing)
+        hash_x = hash(x)
+        if prev_hash == hash_x
+            obj = prev_val
+        else
+            f, g = problem(x; gradient = true)
+            if maximize
+                f = -f
+                @. g = -g
+            end
+            prev_val = obj = f
+            prev_grad .= g
+            prev_hash = hash_x
+            push!(history, obj)
+        end
+        if !ismissing(dFdx)
+            dFdx .= prev_grad
+        end
+        return obj
+    end
+    function f!(x)
+        return feval(x)
+    end
+    function g!(dFdx, x)
+        feval(x, dFdx)
+        return dFdx
+    end
+    return (f = f!, g = g!, history = history, min = lb, max = ub, x0 = x0)
 end
 
 """

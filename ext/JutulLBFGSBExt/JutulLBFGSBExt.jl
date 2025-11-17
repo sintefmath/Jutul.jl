@@ -13,43 +13,9 @@ module JutulLBFGSBExt
             maximize = false,
             kwarg...
         )
-        ub = problem.limits.max
-        lb = problem.limits.min
-        x0 = problem.x0
-        # Use local variables to handle caching
-        prev_hash = NaN
-        prev_val = NaN
-        prev_grad = similar(ub)
-        history = Float64[]
-        function feval(x, dFdx = missing)
-            hash_x = hash(x)
-            if prev_hash == hash_x
-                obj = prev_val
-            else
-                f, g = problem(x; gradient = true)
-                if maximize
-                    f = -f
-                    @. g = -g
-                end
-                prev_val = obj = f
-                prev_grad .= g
-                prev_hash = hash_x
-                push!(history, obj)
-            end
-            if !ismissing(dFdx)
-                dFdx .= prev_grad
-            end
-            return obj
-        end
-        function f!(x)
-            return feval(x)
-        end
-        function g!(dFdx, x)
-            feval(x, dFdx)
-            return dFdx
-        end
+        F = Jutul.DictOptimization.setup_optimzation_functions(problem, maximize = maximize)
 
-        _, x = LBFGSB.lbfgsb(f!, g!, x0; lb=lb, ub=ub,
+        _, x = LBFGSB.lbfgsb(F.f, F.g, F.x0; lb=F.min, ub=F.max,
             iprint = 0,
             factr = 1.0/obj_change_tol,
             pgtol = grad_tol,
@@ -57,6 +23,6 @@ module JutulLBFGSBExt
             maxiter = max_it,
             kwarg...
         )
-        return (x, history)
+        return (x, F.history)
     end
 end
