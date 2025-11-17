@@ -38,7 +38,11 @@ using `free_optimization_parameter!` prior to calling the optimizer.
   used. Takes in a NamedTuple containing fields `f`, `g`, `x0`, `min`, `max`.
   Here, `f(x)` returns the objective function value at `x`, `g(dFdx, x)` fills
   `dFdx` with the gradient at `x`, `x0` is the initial guess, and `min` and
-  `max` are the lower and upper bounds, respectively.
+  `max` are the lower and upper bounds, respectively. The functions `u =
+  F.scale(x)` and `x = F.descale(u)` can be used to convert between scaled and
+  unscaled variables. Nominally, the initial values are scaled to the unit cube
+  and the solution must thus be unscaled before usage. Gradients and internal
+  scaling/descaling is automatically handled.
 - `maximize`: Set to `true` to maximize the objective instead of minimizing
 - `simulator`: Optional simulator object used in forward simulations
 - `config`: Optional configuration for the setup
@@ -119,6 +123,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     else
         F = Jutul.DictOptimization.setup_optimzation_functions(problem, maximize = maximize)
         x = opt_fun(F)
+        x = F.descale(x)
         history = F.history
     end
     if dopt.verbose
@@ -147,22 +152,57 @@ function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where opti
     error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb (requires LBFGSB.jl to be imported))")
 end
 
-function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize = false)
+function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize = false, scale = false)
     # Use local variables to handle caching
     ub = problem.limits.max
     lb = problem.limits.min
-    x0 = problem.x0
 
+    δ = ub .- lb
+    function dx_to_du!(g)
+        if scale
+            for i in eachindex(g, δ)
+                g[i] = g[i] * δ[i]
+            end
+        end
+    end
+
+    function x_to_u(x)
+        if scale
+            u = (x - lb) ./ δ
+        else
+            u = x
+        end
+        return u
+    end
+
+    function u_to_x(u)
+        if scale
+            x = u .* δ + lb
+        else
+            x = u
+        end
+        return x
+    end
+
+    x0 = x_to_u(problem.x0)
     prev_hash = NaN
     prev_val = NaN
     prev_grad = similar(ub)
     history = Float64[]
-    function feval(x, dFdx = missing)
+    function F(x, dFdx = missing)
+        # Whenever this function is called, we also compute the gradient. We
+        # then leave it around for fetching next time if needed by hashing. A
+        # potential improvement would be to avoid computing the gradient if not
+        # actually needed.
         hash_x = hash(x)
         if prev_hash == hash_x
             obj = prev_val
         else
+            if scale
+                x = u_to_x(x)
+            end
             f, g = problem(x; gradient = true)
+            dx_to_du!(g)
             if maximize
                 f = -f
                 @. g = -g
@@ -177,14 +217,25 @@ function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize
         end
         return obj
     end
+    # Evaluate objective
     function f!(x)
-        return feval(x)
+        return F(x)
     end
+    # Objective and gradient
     function g!(dFdx, x)
-        feval(x, dFdx)
+        F(x, dFdx)
         return dFdx
     end
-    return (f = f!, g = g!, history = history, min = lb, max = ub, x0 = x0)
+    return (
+        f = f!,
+        g = g!,
+        history = history,
+        min = lb,
+        max = ub,
+        x0 = x0,
+        scale = x_to_u,
+        descale = u_to_x
+    )
 end
 
 """

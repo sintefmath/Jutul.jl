@@ -23,6 +23,6 @@ module JutulLBFGSBExt
             maxiter = max_it,
             kwarg...
         )
-        return (x, F.history)
+        return (F.descale(x), F.history)
     end
 end
