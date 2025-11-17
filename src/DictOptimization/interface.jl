@@ -233,15 +233,18 @@ function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize
         return dFdx
     end
     if scale
-        lb = zeros(length(lb))
-        ub = ones(length(ub))
+        lb_scaled = zeros(length(lb))
+        ub_scaled = ones(length(ub))
+    else
+        lb_scaled = lb
+        ub_scaled = ub
     end
     return (
         f = f!,
         g = g!,
         history = history,
-        min = lb,
-        max = ub,
+        min = lb_scaled,
+        max = ub_scaled,
         x0 = x0,
         scale = x_to_u,
         descale = u_to_x
