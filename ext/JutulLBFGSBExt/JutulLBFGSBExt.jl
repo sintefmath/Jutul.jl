@@ -20,8 +20,8 @@ module JutulLBFGSBExt
             iprint = 0,
             factr = 1.0/obj_change_tol,
             pgtol = grad_tol,
-            maxfun = 100,
             maxiter = max_it,
+            maxfun = 4*max_it,
             kwarg...
         )
         return (F.descale(x), F.history)

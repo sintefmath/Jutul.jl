@@ -232,6 +232,10 @@ function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize
         F(x, dFdx)
         return dFdx
     end
+    if scale
+        lb = zeros(length(lb))
+        ub = ones(length(ub))
+    end
     return (
         f = f!,
         g = g!,
