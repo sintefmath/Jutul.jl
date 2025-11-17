@@ -93,6 +93,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         simulator = missing,
         config = missing,
         solution_history = false,
+        scale = true,
         kwarg...
     )
     if ismissing(setup_fn)
@@ -118,10 +119,11 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
             obj_change_tol = obj_change_tol,
             max_it = max_it,
             maximize = maximize,
+            scale = scale,
             kwarg...
         )
     else
-        F = Jutul.DictOptimization.setup_optimzation_functions(problem, maximize = maximize)
+        F = Jutul.DictOptimization.setup_optimzation_functions(problem, maximize = maximize, scale = scale)
         x = opt_fun(F)
         x = F.descale(x)
         history = F.history
@@ -141,7 +143,10 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     return prm_out
 end
 
-function optimize_implementation(problem, ::Val{:lbfgs}; kwarg...)
+function optimize_implementation(problem, ::Val{:lbfgs}; scale = true, kwarg...)
+    if !scale
+        error("Standard lbfgs optimization without scaling is not supported.")
+    end
     v, x, history = Jutul.LBFGS.box_bfgs(problem;
         kwarg...
     )
@@ -164,6 +169,7 @@ function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize
                 g[i] = g[i] * δ[i]
             end
         end
+        return g
     end
 
     function x_to_u(x)

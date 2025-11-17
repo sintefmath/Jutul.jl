@@ -192,7 +192,6 @@ function unit_box_bfgs(
     return (v, u, history)
 end
 
-
 function box_bfgs(problem; kwarg...)
     ub = problem.limits.max
     lb = problem.limits.min
