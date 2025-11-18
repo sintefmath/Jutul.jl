@@ -31,7 +31,18 @@ using `free_optimization_parameter!` prior to calling the optimizer.
 - `grad_tol`: Gradient tolerance for stopping criterion
 - `obj_change_tol`: Objective function change tolerance for stopping criterion
 - `max_it`: Maximum number of iterations
-- `opt_fun`: Optional custom optimization function. If missing, L-BFGS will be used
+- `optimizer`: Symbol defining the optimization algorithm to use. Available
+  options are `:lbfgs` (default) and `:lbfgsb` (requires LBFGSB.jl to be
+  imported)
+- `opt_fun`: Optional custom optimization function. If missing, L-BFGS will be
+  used. Takes in a NamedTuple containing fields `f`, `g`, `x0`, `min`, `max`.
+  Here, `f(x)` returns the objective function value at `x`, `g(dFdx, x)` fills
+  `dFdx` with the gradient at `x`, `x0` is the initial guess, and `min` and
+  `max` are the lower and upper bounds, respectively. The functions `u =
+  F.scale(x)` and `x = F.descale(u)` can be used to convert between scaled and
+  unscaled variables. Nominally, the initial values are scaled to the unit cube
+  and the solution must thus be unscaled before usage. Gradients and internal
+  scaling/descaling is automatically handled.
 - `maximize`: Set to `true` to maximize the objective instead of minimizing
 - `simulator`: Optional simulator object used in forward simulations
 - `config`: Optional configuration for the setup
@@ -73,6 +84,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         obj_change_tol = 1e-6,
         max_it = 25,
         opt_fun = missing,
+        optimizer = :lbfgs,
         maximize = false,
         backend_arg = missing,
         info_level = 0,
@@ -81,6 +93,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         simulator = missing,
         config = missing,
         solution_history = false,
+        scale = true,
         kwarg...
     )
     if ismissing(setup_fn)
@@ -101,32 +114,19 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     end
 
     t_opt = @elapsed if ismissing(opt_fun)
-        v, x, history = Jutul.LBFGS.box_bfgs(problem;
-            print = Int(dopt.verbose),
-            max_it = max_it,
+        x, history = optimize_implementation(problem, Val(optimizer); 
             grad_tol = grad_tol,
             obj_change_tol = obj_change_tol,
+            max_it = max_it,
             maximize = maximize,
+            scale = scale,
             kwarg...
         )
     else
-        self_cache = Dict()
-        function f!(x)
-            f, g = opt_cache(x)
-            self_cache[:f] = f
-            self_cache[:g] = g
-            self_cache[:x] = x
-            return f
-        end
-
-        function g!(z, x)
-            if self_cache[:x] !== x
-                f!(x)  # Update the cache if the vector has changed
-            end
-            g = self_cache[:g]
-            return z .= g
-        end
-        x, history = opt_fun(f!, g!, x0, lb, ub)
+        F = Jutul.DictOptimization.setup_optimzation_functions(problem, maximize = maximize, scale = scale)
+        x = opt_fun(F)
+        x = F.descale(x)
+        history = F.history
     end
     if dopt.verbose
         jutul_message("Optimization", "Finished in $t_opt seconds.", color = :green)
@@ -141,6 +141,114 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         dopt.history = history
     end
     return prm_out
+end
+
+function optimize_implementation(problem, ::Val{:lbfgs}; scale = true, kwarg...)
+    if !scale
+        error("Standard lbfgs optimization without scaling is not supported.")
+    end
+    v, x, history = Jutul.LBFGS.box_bfgs(problem;
+        kwarg...
+    )
+    return (x, history)
+end
+
+function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where optimizer
+    error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb (requires LBFGSB.jl to be imported))")
+end
+
+function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize = false, scale = false)
+    # Use local variables to handle caching
+    ub = problem.limits.max
+    lb = problem.limits.min
+
+    δ = ub .- lb
+    function dx_to_du!(g)
+        if scale
+            for i in eachindex(g, δ)
+                g[i] = g[i] * δ[i]
+            end
+        end
+        return g
+    end
+
+    function x_to_u(x)
+        if scale
+            u = (x - lb) ./ δ
+        else
+            u = x
+        end
+        return u
+    end
+
+    function u_to_x(u)
+        if scale
+            x = u .* δ + lb
+        else
+            x = u
+        end
+        return x
+    end
+
+    x0 = x_to_u(problem.x0)
+    prev_hash = NaN
+    prev_val = NaN
+    prev_grad = similar(ub)
+    history = Float64[]
+    function F(x, dFdx = missing)
+        # Whenever this function is called, we also compute the gradient. We
+        # then leave it around for fetching next time if needed by hashing. A
+        # potential improvement would be to avoid computing the gradient if not
+        # actually needed.
+        hash_x = hash(x)
+        if prev_hash == hash_x
+            obj = prev_val
+        else
+            if scale
+                x = u_to_x(x)
+            end
+            f, g = problem(x; gradient = true)
+            dx_to_du!(g)
+            if maximize
+                f = -f
+                @. g = -g
+            end
+            prev_val = obj = f
+            prev_grad .= g
+            prev_hash = hash_x
+            push!(history, obj)
+        end
+        if !ismissing(dFdx)
+            dFdx .= prev_grad
+        end
+        return obj
+    end
+    # Evaluate objective
+    function f!(x)
+        return F(x)
+    end
+    # Objective and gradient
+    function g!(dFdx, x)
+        F(x, dFdx)
+        return dFdx
+    end
+    if scale
+        lb_scaled = zeros(length(lb))
+        ub_scaled = ones(length(ub))
+    else
+        lb_scaled = lb
+        ub_scaled = ub
+    end
+    return (
+        f = f!,
+        g = g!,
+        history = history,
+        min = lb_scaled,
+        max = ub_scaled,
+        x0 = x0,
+        scale = x_to_u,
+        descale = u_to_x
+    )
 end
 
 """

@@ -48,6 +48,7 @@ GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
 HYPRE = "b5ffcf37-a2bd-41ab-a3da-4bd9bc8ad771"
 KaHyPar = "2a6221f6-aa48-11e9-3542-2d9e0ef01880"
 LayeredLayouts = "f4a74d36-062a-4d48-97cd-1356bad1de4e"
+LBFGSB = "5be7bae1-8223-5378-bac3-9e7378a2f6e6"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
@@ -55,6 +56,7 @@ PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 
 [extensions]
 JutulAMGCLWrapExt = "AMGCLWrap"
+JutulLBFGSBExt = "LBFGSB"
 JutulGLMakieExt = "GLMakie"
 JutulGmshExt = "Gmsh"
 JutulGraphMakieExt = ["GraphMakie", "NetworkLayout", "LayeredLayouts", "Makie"]
@@ -81,6 +83,7 @@ Krylov = "0.9.1"
 LayeredLayouts = "0.2.5"
 LinearOperators = "2.3.2"
 LoopVectorization = "0.12.115"
+LBFGSB = "0.4.1"
 MAT = "0.10.3"
 Makie = "0.21, 0.22, 0.23"
 MappedArrays = "0.4.1"
@@ -110,10 +113,11 @@ GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
 HYPRE = "b5ffcf37-a2bd-41ab-a3da-4bd9bc8ad771"
 KaHyPar = "2a6221f6-aa48-11e9-3542-2d9e0ef01880"
 LayeredLayouts = "f4a74d36-062a-4d48-97cd-1356bad1de4e"
+LBFGSB = "5be7bae1-8223-5378-bac3-9e7378a2f6e6"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 
 [targets]
-test = ["KaHyPar", "HYPRE"]
+test = ["KaHyPar", "HYPRE", "LBFGSB"]
