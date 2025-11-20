@@ -99,6 +99,21 @@ function update_secondary_variables!(storage, model, is_state0::Bool)
     update_secondary_variables_state!(s, model, vars)
 end
 
+
+"""
+    evaluate_all_secondary_variables(model, state, parameters = setup_parameters(x))
+
+Convenience function to get a state with all secondary variables evaluated given
+a model and a state (not 100% necessarily efficiently).
+"""
+function evaluate_all_secondary_variables(x::SimulationModel, state, parameters = setup_parameters(x))
+    Jutul.sort_secondary_variables!(x)
+    state = setup_state!(deepcopy(state), x, state)
+    state = JutulStorage(merge!(state, parameters))
+    Jutul.update_secondary_variables_state!(state, x)
+    return Jutul.data(state)
+end
+
 function update_secondary_variables_state!(state, model, vars = model.secondary_variables)
     ctx = model.context
     var_pairs = pairs(vars)

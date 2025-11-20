@@ -845,6 +845,14 @@ function update_secondary_variables_state!(state, model::MultiModel; targets = s
     end
 end
 
+function evaluate_all_secondary_variables(m::MultiModel, state, parameters = setup_parameters(m))
+    out = JUTUL_OUTPUT_TYPE()
+    for key in submodels_symbols(m)
+        out[key] = evaluate_all_secondary_variables(m.models[key], state[key], parameters[key])
+    end
+    return out
+end
+
 function check_convergence(storage, model::MultiModel, cfg;
         tol = nothing,
         extra_out = false,
