@@ -7,16 +7,19 @@ function classify_iterate(distance, theta, theta_target, theta_slow, theta_fast,
     # Check convergence for all distances
     conv = distance .<= 1.0
     # Check contraction magnitude
-    fast = θ .<= max.(θt, θf)
-    ok = max.(θt, θf) .< θ .<= θs
-    div = θ .> θs
+    θl = max.(θt, θf)
+    θu = max.(θt, θs)
+    fast = θ .<= θl
+    ok = θl .< θ .<= θu
+    slow = θ .> θu
     status = zeros(Int, length(θ))
     status[fast] .= 1
     status[ok] .= 0
-    status[div] .= -1
-    # All converged measures should at least be classified as fast
+    status[slow] .= -1
+    # All converged measures should be at least be classified as ok
     status[conv] .= 1
     # Oscillating measures should be at most be classified as ok
+    fast = status .== 1
     status[fast .&& osc] .-= 1
     
     @assert all([s ∈ (-1:1) for s in status])
