@@ -21,6 +21,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             push!(solution_history, (x = x, states = deepcopy(states), objective = f))
         end
         S = get(adj_cache, :storage, missing)
+        # S = missing
         if ismissing(S)
             if dopt.verbose
                 jutul_message("Optimization", "Setting up adjoint storage.")
@@ -33,11 +34,14 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             jutul_message("Optimization", "Finished setup in $t_setup seconds.", color = :green)
             adj_cache[:storage] = S
         end
-        g = get(adj_cache, :dx, missing)
-        if ismissing(g)
-            g = similar(x)
-            adj_cache[:dx] = g
-        end
+        # Seems like some optimizers use the return value. So we create a new
+        # gradient array each time. Old code with caching:
+        # g = get(adj_cache, :dx, missing)
+        # if ismissing(g)
+        #     g = similar(x)
+        #     adj_cache[:dx] = g
+        # end
+        g = similar(x)
         Jutul.AdjointsDI.solve_adjoint_generic!(
             g, x, setup_from_vector, S, packed_steps, objective
         )
