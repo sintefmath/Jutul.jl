@@ -33,11 +33,10 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             jutul_message("Optimization", "Finished setup in $t_setup seconds.", color = :green)
             adj_cache[:storage] = S
         end
-        g = get(adj_cache, :dx, missing)
-        if ismissing(g)
-            g = similar(x)
-            adj_cache[:dx] = g
-        end
+        # Some optimizers use the return value beyond a single call. So we
+        # create a new gradient array each time to avoid having this be aliased
+        # with a previous output.
+        g = similar(x)
         Jutul.AdjointsDI.solve_adjoint_generic!(
             g, x, setup_from_vector, S, packed_steps, objective
         )
