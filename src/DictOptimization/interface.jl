@@ -123,7 +123,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
             kwarg...
         )
     else
-        F = Jutul.DictOptimization.setup_optimzation_functions(problem, maximize = maximize, scale = scale)
+        F = Jutul.DictOptimization.setup_optimization_functions(problem, maximize = maximize, scale = scale)
         x = opt_fun(F)
         x = F.descale(x)
         history = F.history
@@ -157,11 +157,26 @@ function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where opti
     error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb (requires LBFGSB.jl to be imported))")
 end
 
-function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize = false, scale = false)
-    # Use local variables to handle caching
+function setup_optimization_functions(problem::JutulOptimizationProblem; maximize = false, scale = false)
+    x0 = problem.x0
+    n = length(x0)
     ub = problem.limits.max
     lb = problem.limits.min
-
+    length(lb) == n || throw(ArgumentError("Length of lower bound ($(length(lb))) must match length of initial guess ($n)"))
+    length(ub) == n || throw(ArgumentError("Length of upper bound ($(length(ub))) must match length of initial guess ($n)"))
+    # Check bounds
+    for i in eachindex(x0, lb, ub)
+        if lb[i] >= ub[i]
+            throw(ArgumentError("Lower bound must be less than upper bound for index $i: lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
+        end
+        if x0[i] < lb[i] || x0[i] > ub[i]
+            throw(ArgumentError("Initial guess x0[$i] = $(x0[i]) is outside bounds [$(lb[i]), $(ub[i])]"))
+        end
+        if !isfinite(lb[i]) || !isfinite(ub[i])
+            throw(ArgumentError("Bounds must be finite, got lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
+        end
+    end
+    # Use local variables to handle caching
     δ = ub .- lb
     function dx_to_du!(g)
         if scale
@@ -190,7 +205,6 @@ function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize
         return x
     end
 
-    x0 = x_to_u(problem.x0)
     prev_hash = NaN
     prev_val = NaN
     prev_grad = similar(ub)
@@ -233,8 +247,8 @@ function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize
         return dFdx
     end
     if scale
-        lb_scaled = zeros(length(lb))
-        ub_scaled = ones(length(ub))
+        lb_scaled = zeros(n)
+        ub_scaled = ones(n)
     else
         lb_scaled = lb
         ub_scaled = ub
@@ -245,7 +259,7 @@ function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize
         history = history,
         min = lb_scaled,
         max = ub_scaled,
-        x0 = x0,
+        x0 = x_to_u(x0),
         scale = x_to_u,
         descale = u_to_x
     )
