@@ -123,7 +123,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
             kwarg...
         )
     else
-        F = Jutul.DictOptimization.setup_optimzation_functions(problem, maximize = maximize, scale = scale)
+        F = Jutul.DictOptimization.setup_optimization_functions(problem, maximize = maximize, scale = scale)
         x = opt_fun(F)
         x = F.descale(x)
         history = F.history
@@ -157,11 +157,26 @@ function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where opti
     error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb (requires LBFGSB.jl to be imported))")
 end
 
-function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize = false, scale = false)
-    # Use local variables to handle caching
+function setup_optimization_functions(problem::JutulOptimizationProblem; maximize = false, scale = false)
+    x0 = problem.x0
+    n = length(x0)
     ub = problem.limits.max
     lb = problem.limits.min
-
+    length(lb) == n || throw(ArgumentError("Length of lower bound ($(length(lb))) must match length of initial guess ($n)"))
+    length(ub) == n || throw(ArgumentError("Length of upper bound ($(length(ub))) must match length of initial guess ($n)"))
+    # Check bounds
+    for i in eachindex(x0, lb, ub)
+        if lb[i] >= ub[i]
+            throw(ArgumentError("Lower bound must be less than upper bound for index $i: lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
+        end
+        if x0[i] < lb[i] || x0[i] > ub[i]
+            throw(ArgumentError("Initial guess x0[$i] = $(x0[i]) is outside bounds [$(lb[i]), $(ub[i])]"))
+        end
+        if !isfinite(lb[i]) || !isfinite(ub[i])
+            throw(ArgumentError("Bounds must be finite, got lb[$i] = $(lb[i]), ub[$i] = $(ub[i])"))
+        end
+    end
+    # Use local variables to handle caching
     δ = ub .- lb
     function dx_to_du!(g)
         if scale
@@ -190,7 +205,6 @@ function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize
         return x
     end
 
-    x0 = x_to_u(problem.x0)
     prev_hash = NaN
     prev_val = NaN
     prev_grad = similar(ub)
@@ -233,8 +247,8 @@ function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize
         return dFdx
     end
     if scale
-        lb_scaled = zeros(length(lb))
-        ub_scaled = ones(length(ub))
+        lb_scaled = zeros(n)
+        ub_scaled = ones(n)
     else
         lb_scaled = lb
         ub_scaled = ub
@@ -245,7 +259,7 @@ function setup_optimzation_functions(problem::JutulOptimizationProblem; maximize
         history = history,
         min = lb_scaled,
         max = ub_scaled,
-        x0 = x0,
+        x0 = x_to_u(x0),
         scale = x_to_u,
         descale = u_to_x
     )
@@ -353,8 +367,19 @@ are set for all parameters.
 - `initial`: Initial value for the parameter. If not set, the current value in
   `dopt.parameters` will be used.
 - `scaler=missing`: Optional scaler for the parameter. If not set, no scaling
-  will be applied. Available scalers are `:log`, `:exp`. The scaler will be
-  applied
+  will be applied. Available scalers are:
+    - `:log`: Logarithmic scaling. This value uses shifts to avoid issues with zero
+      values.
+    - `:exp`: Exponential scaling
+    - `:linear`: Linear scaling (scaling to bounds of values, guaranteeing
+      values between between 0 and 1 for initial values.)
+    - `linear_limits`: Linear scaling with limits (scaling to bounds of values,
+      guaranteeing values between between 0 and 1 for all values within the
+      limits.)
+    - `reciprocal`: Reciprocal scaling
+    - `log10`: Base-10 logarithmic scaling
+    - `log`: Base-e logarithmic scaling without shifts
+    - A custom scaler object implementing the `DictOptimizationScaler` interface.
 - `lumping=missing`: Optional lumping array for the parameter. If not set, no
   lumping will be applied. The lumping array should have the same size as the
   parameter and contain positive integers. The lumping array defines groups of
@@ -395,7 +420,7 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
     check_limit(parameter_name, initial, rel_max, is_max = true, is_rel = true)
     check_limit_pair(parameter_name, initial, rel_min, rel_max, is_rel = true)
     check_limit_pair(parameter_name, initial, abs_min, abs_max, is_rel = false)
-    lumping = validate_and_normalize_lumping(lumping, initial)
+    lumping = validate_and_normalize_lumping(lumping, initial, parameter_name)
     targets = dopt.parameter_targets
     if haskey(targets, parameter_name) && dopt.verbose
         jutul_message("Optimization", "Overwriting limits for $parameter_name.")
@@ -404,11 +429,11 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
     return dopt
 end
 
-function validate_and_normalize_lumping(lumping::Missing, initial)
+function validate_and_normalize_lumping(lumping::Missing, initial, parameter_name)
     return lumping
 end
 
-function validate_and_normalize_lumping(lumping::Bool, initial)
+function validate_and_normalize_lumping(lumping::Bool, initial, parameter_name)
     if lumping
         sz = size(initial)
         lumping = ones(Int, sz)
@@ -416,9 +441,11 @@ function validate_and_normalize_lumping(lumping::Bool, initial)
     return lumping
 end
 
-function validate_and_normalize_lumping(lumping, initial)
+function validate_and_normalize_lumping(lumping, initial, parameter_name)
     if !ismissing(lumping)
-        size(lumping) == size(initial) || error("Lumping array must have the same size as the parameter $parameter_name.")
+        szl = size(lumping)
+        szi = size(initial)
+        szl == szi || error("Lumping array (size $szl) must have the same size as the parameter $parameter_name ($szi).")
         eltype(lumping) == Int || error("Lumping array must be of type Int.")
         minimum(lumping) >= 1 || error("Lumping array must have positive integers.")
         max_lumping = maximum(lumping)
@@ -498,7 +525,7 @@ function add_optimization_multiplier!(dprm::DictParameters, targets...;
     else
         size(initial) == size(sz) || error("Initial value must have the same size as the target parameters ($sz).")
     end
-    lumping = validate_and_normalize_lumping(lumping, initial)
+    lumping = validate_and_normalize_lumping(lumping, initial, name)
     dprm.multipliers[name] = OptimizationMultiplier(abs_min, abs_max, collect(targets), lumping, initial)
     return dprm
 end

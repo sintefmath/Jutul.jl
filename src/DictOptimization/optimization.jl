@@ -98,12 +98,16 @@ function optimizer_devectorize!(prm, X, x_setup; multipliers = missing)
         pos = 0
         for (i, k) in enumerate(x_setup.names)
             scaler = get(x_setup.scalers, k, missing)
-            if haskey(x_setup.lumping, k)
-                L = x_setup.lumping[k]
-                N = optimizer_devectorize_lumping!(X_new, X, pos, L, scaler)
+            lumping = get(x_setup.lumping, k, missing)
+            stats = x_setup.statistics[k]
+            if ismissing(x_setup.limits)
+                minlims = missing
+                maxlims = missing
             else
-                N = optimizer_devectorize_scaler!(X_new, X, i, pos, x_setup.offsets, scaler)
+                minlims = x_setup.limits.min
+                maxlims = x_setup.limits.max
             end
+            N = optimizer_devectorize_scaler!(X_new, X, i, pos, x_setup.offsets, minlims, maxlims, stats, lumping, scaler)
             pos += N
         end
         X = X_new
@@ -113,19 +117,42 @@ function optimizer_devectorize!(prm, X, x_setup; multipliers = missing)
     return Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup, multipliers = multipliers)
 end
 
-function optimizer_devectorize_lumping!(X_new, X, pos, L, scaler)
-    first_index = L.first_index
-    N = length(first_index)
-    for v in L.lumping
-        push!(X_new, undo_scaler(X[pos + v], scaler))
-    end
-    return N
-end
+# function optimizer_devectorize_lumping!(X_new, X, pos, L, scaler)
+#     first_index = L.first_index
+#     N = length(first_index)
+#     for v in L.lumping
+#         push!(X_new, undo_scaler(X[pos + v], scaler))
+#     end
+#     return N
+# end
 
-function optimizer_devectorize_scaler!(X_new, X, i, pos, offsets, scaler)
-    N = offsets[i+1]-offsets[i]
-    for ix in pos+1:pos+N
-        push!(X_new, undo_scaler(X[ix], scaler))
+function optimizer_devectorize_scaler!(X_new, X, i, pos, offsets, minlims, maxlims, stats, lumping, scaler)
+    function scaler_limits(c)
+        if ismissing(minlims)
+            min_limit = -Inf
+        else
+            min_limit = minlims[c]
+        end
+        if ismissing(maxlims)
+            max_limit = Inf
+        else
+            max_limit = maxlims[c]
+        end
+        return (min_limit, max_limit)
+    end
+    if ismissing(lumping)
+        N = offsets[i+1]-offsets[i]
+        for (i, ix) in enumerate(pos+1:pos+N)
+            min_limit, max_limit = scaler_limits(i)
+            push!(X_new, undo_scaler(X[ix], min_limit, max_limit, stats, scaler))
+        end
+    else
+        first_index = lumping.first_index
+        N = length(first_index)
+        for (i, v) in enumerate(lumping.lumping)
+            min_limit, max_limit = scaler_limits(pos + v)
+            push!(X_new, undo_scaler(X[pos + v], min_limit, max_limit, stats, scaler))
+        end
     end
     return N
 end
@@ -145,40 +172,52 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
 
     lumping = get_lumping_for_vectorize_nested(dopt)
     scalers = get_scaler_for_vectorize_nested(dopt)
+    base_limits = (min = Float64[], max = Float64[])
     if length(keys(lumping)) > 0 || length(keys(scalers)) > 0
         off = x_setup.offsets
         x0_new = similar(x0, 0)
-        function push_new!(xs, sf)
-            for xi in xs
-                push!(x0_new, apply_scaler(xi, sf))
-            end
-        end
         pos = 0
         for (i, k) in enumerate(x_setup.names)
+            stats = x_setup.statistics[k]
             x_sub = view(x0, off[i]:(off[i+1]-1))
             if haskey(lumping, k)
                 x_sub = x_sub[lumping[k].first_index]
             end
             scale = get(scalers, k, missing)
-            push_new!(x_sub, scale)
-            if include_limits && !ismissing(scale)
-                for index in (pos+1):(pos+length(x_sub))
-                    lims.min[index] = apply_scaler(lims.min[index], scale)
-                    lims.max[index] = apply_scaler(lims.max[index], scale)
+            for (j, xi) in enumerate(x_sub)
+                index = pos + j
+                if include_limits
+                    vmin = lims.min[index]
+                    vmax = lims.max[index]
+                else
+                    vmax = Inf
+                    vmin = -Inf
+                end
+                push!(base_limits.min, vmin)
+                push!(base_limits.max, vmax)
+                S(v) = apply_scaler(v, vmin, vmax, stats, scale)
+                push!(x0_new, S(xi))
+                if include_limits && !ismissing(scale)
+                    lims.min[index] = S(vmin)
+                    lims.max[index] = S(vmax)
                 end
             end
             pos += length(x_sub)
         end
         x0 = x0_new
-        x_setup = (
-            offsets = x_setup.offsets,
-            names = x_setup.names,
-            dims = x_setup.dims,
-            types = x_setup.types,
+        old_keys = keys(x_setup)
+        x_setup = Jutul.AdjointsDI.vectorize_nested_meta(
+            x_setup.offsets,
+            x_setup.names,
+            x_setup.dims,
+            x_setup.types,
             multiplier_targets = x_setup.multiplier_targets,
+            statistics = x_setup.statistics,
             scalers = scalers,
-            lumping = lumping
+            lumping = lumping,
+            limits = base_limits
         )
+        @assert keys(x_setup) == old_keys "Keys changed during optimization setup: got $(keys(x_setup)), expected $old_keys"
     end
     if include_limits
         @assert length(lims.min) == length(lims.max) "Upper bound length ($(length(lims.max))) does not match lower bound length ($(length(lims.min)))."

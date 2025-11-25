@@ -14,10 +14,10 @@ module JutulLBFGSBExt
             scale = true,
             kwarg...
         )
-        F = Jutul.DictOptimization.setup_optimzation_functions(problem, maximize = maximize, scale = scale)
+        F = Jutul.DictOptimization.setup_optimization_functions(problem, maximize = maximize, scale = scale)
 
         _, x = LBFGSB.lbfgsb(F.f, F.g, F.x0; lb=F.min, ub=F.max,
-            iprint = 0,
+            iprint = 1,
             factr = 1.0/obj_change_tol,
             pgtol = grad_tol,
             maxiter = max_it,

@@ -1,12 +1,19 @@
 KEYTYPE = Union{String, Symbol}
 LIMIT_TYPE = Union{Array{Float64, <:Any}, Float64}
 
+abstract type DictOptimizationScaler end
+
+Base.@kwdef struct BaseLogScaler <: DictOptimizationScaler
+    base_max::Float64 = Inf
+    epsilon::Float64 = 1e-12
+end
+
 Base.@kwdef mutable struct KeyLimits
     rel_min::LIMIT_TYPE = -Inf
     rel_max::LIMIT_TYPE = Inf
     abs_min::LIMIT_TYPE = -Inf
     abs_max::LIMIT_TYPE = Inf
-    scaler::Union{Symbol, Missing} = missing
+    scaler::Union{DictOptimizationScaler, Symbol, Missing} = missing
     lumping::Union{Array{Int, <:Any}, Missing} = missing
 end
 

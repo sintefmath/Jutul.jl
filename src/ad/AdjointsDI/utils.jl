@@ -1,14 +1,34 @@
 function setup_vectorize_nested(data, active = missing; kwarg...)
-    meta = (
-        offsets = Int[1],
-        names = [],
-        dims = [],
-        types = Symbol[],
-        multiplier_targets = Dict(),
-    )
+    meta = vectorize_nested_meta()
     setup_vectorize_nested!(meta, data, active; kwarg...)
     return meta
 end
+
+function vectorize_nested_meta(
+        offsets = Int[1],
+        names = [],
+        dims = [],
+        types = Symbol[];
+        statistics = Dict{Any, @NamedTuple{mean::Float64, min::Float64, max::Float64}}(),
+        multiplier_targets = Dict(),
+        scalers = Dict(),
+        lumping = Dict(),
+        limits = missing
+    )
+    meta = (
+        offsets = offsets,
+        names = names,
+        dims = dims,
+        types = types,
+        statistics = statistics,
+        multiplier_targets = multiplier_targets,
+        scalers = scalers,
+        lumping = lumping,
+        limits = limits
+    )
+    return meta
+end
+
 
 function setup_vectorize_nested!(meta, data, active = missing;
         header = [],
@@ -48,10 +68,19 @@ function setup_vectorize_nested!(meta, data, active = missing;
                 if v isa AbstractArray
                     d = size(v)
                     num = length(v)
+                    minval, maxval = extrema(v)
+                    meanval = sum(v)/num
                 else
                     d = nothing
                     num = 1
+                    std = 0.0
+                    minval = maxval = meanval = v
                 end
+                meta.statistics[name] = (
+                    mean = meanval,
+                    min = minval,
+                    max = maxval
+                )
                 push!(meta.offsets, meta.offsets[end] + num)
                 push!(meta.names, name)
                 push!(meta.types, :value)
@@ -76,6 +105,11 @@ function setup_vectorize_nested!(meta, data, active = missing;
             push!(meta.types, :multiplier)
             push!(meta.dims, d)
             meta.multiplier_targets[name] = mult.targets
+            meta.statistics[name] = (
+                mean = 1.0,
+                min = 1.0,
+                max = 1.0
+            )
         end
     end
 end
