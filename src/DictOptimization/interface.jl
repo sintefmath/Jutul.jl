@@ -409,7 +409,7 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
     check_limit(parameter_name, initial, rel_max, is_max = true, is_rel = true)
     check_limit_pair(parameter_name, initial, rel_min, rel_max, is_rel = true)
     check_limit_pair(parameter_name, initial, abs_min, abs_max, is_rel = false)
-    lumping = validate_and_normalize_lumping(lumping, initial)
+    lumping = validate_and_normalize_lumping(lumping, initial, parameter_name)
     targets = dopt.parameter_targets
     if haskey(targets, parameter_name) && dopt.verbose
         jutul_message("Optimization", "Overwriting limits for $parameter_name.")
@@ -418,11 +418,11 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
     return dopt
 end
 
-function validate_and_normalize_lumping(lumping::Missing, initial)
+function validate_and_normalize_lumping(lumping::Missing, initial, parameter_name)
     return lumping
 end
 
-function validate_and_normalize_lumping(lumping::Bool, initial)
+function validate_and_normalize_lumping(lumping::Bool, initial, parameter_name)
     if lumping
         sz = size(initial)
         lumping = ones(Int, sz)
@@ -430,9 +430,11 @@ function validate_and_normalize_lumping(lumping::Bool, initial)
     return lumping
 end
 
-function validate_and_normalize_lumping(lumping, initial)
+function validate_and_normalize_lumping(lumping, initial, parameter_name)
     if !ismissing(lumping)
-        size(lumping) == size(initial) || error("Lumping array must have the same size as the parameter $parameter_name.")
+        szl = size(lumping)
+        szi = size(initial)
+        szl == szi || error("Lumping array (size $szl) must have the same size as the parameter $parameter_name ($szi).")
         eltype(lumping) == Int || error("Lumping array must be of type Int.")
         minimum(lumping) >= 1 || error("Lumping array must have positive integers.")
         max_lumping = maximum(lumping)

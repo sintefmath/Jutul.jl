@@ -104,8 +104,8 @@ function optimizer_devectorize!(prm, X, x_setup; multipliers = missing)
                 minlims = missing
                 maxlims = missing
             else
-                minlims = x_setup.limits.min_base
-                maxlims = x_setup.limits.max_base
+                minlims = x_setup.limits.min
+                maxlims = x_setup.limits.max
             end
             N = optimizer_devectorize_scaler!(X_new, X, i, pos, x_setup.offsets, minlims, maxlims, stats, lumping, scaler)
             pos += N
@@ -150,7 +150,7 @@ function optimizer_devectorize_scaler!(X_new, X, i, pos, offsets, minlims, maxli
         first_index = lumping.first_index
         N = length(first_index)
         for (i, v) in enumerate(lumping.lumping)
-            min_limit, max_limit = scaler_limits(i)
+            min_limit, max_limit = scaler_limits(pos + v)
             push!(X_new, undo_scaler(X[pos + v], min_limit, max_limit, stats, scaler))
         end
     end
