@@ -148,11 +148,6 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
     if length(keys(lumping)) > 0 || length(keys(scalers)) > 0
         off = x_setup.offsets
         x0_new = similar(x0, 0)
-        function push_new!(xs, sf)
-            for xi in xs
-                push!(x0_new, apply_scaler(xi, sf))
-            end
-        end
         pos = 0
         for (i, k) in enumerate(x_setup.names)
             x_sub = view(x0, off[i]:(off[i+1]-1))
@@ -160,7 +155,9 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
                 x_sub = x_sub[lumping[k].first_index]
             end
             scale = get(scalers, k, missing)
-            push_new!(x_sub, scale)
+            for xi in x_sub
+                push!(x0_new, apply_scaler(xi, scale))
+            end
             if include_limits && !ismissing(scale)
                 for index in (pos+1):(pos+length(x_sub))
                     lims.min[index] = apply_scaler(lims.min[index], scale)
