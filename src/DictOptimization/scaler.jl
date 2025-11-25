@@ -13,6 +13,9 @@ function apply_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
         x = 1.0/(x + 1e-20)
     elseif s == :linear_limits
         x = (x - lower_limit)/(upper_limit - lower_limit)
+    elseif s == :linear
+        minv, maxv, = stats_bounds(stats)
+        x = (x - minv)/(maxv - minv)
     else
         error("Unknown scaler $s")
     end
@@ -36,6 +39,9 @@ function undo_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
         x = 10^x
     elseif s == :linear_limits
         x = x*(upper_limit - lower_limit) + lower_limit
+    elseif s == :linear
+        minv, maxv, = stats_bounds(stats)
+        x = x*(maxv - minv) + minv
     elseif s == :reciprocal
         x = 1.0/x - 1e-20
     else
@@ -58,7 +64,7 @@ end
 
 function stats_bounds(stats, ϵ::Float64 = 1e-12, base_max::Float64 = Inf)
     x_min = stats.min
-    x_max = stats.max
+    x_max = max(stats.max, x_min + ϵ)
     if abs(x_max - x_min) < ϵ || x_min < ϵ
         base = 10000
     end
@@ -74,6 +80,7 @@ function apply_scaler(x, lower_limit, upper_limit, stats, s::BaseLogScaler)
     m, M, base = stats_bounds(stats, s.epsilon)
     x = (x - m)/(M - m)
     x = log((base-1)*x + 1)/log(base)
+    return x
 end
 
 function undo_scaler(x, lower_limit, upper_limit, stats, s::BaseLogScaler)

@@ -449,104 +449,116 @@ end
     @test ismissing(pr3[2].forces)
 end
 
-##
-using Jutul, Test, LBFGSB
-
-function poisson_test_objective(model, state)
-    U = state[:U]
-    return 2.5*(U[end] - U[1])
-end
-
-function poisson_test_objective_vec(model, state)
-    return [poisson_test_objective(model, state), poisson_test_objective(model, state)]
-end
-
-function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = (2, 2), dt = [1.0])
-    sys = VariablePoissonSystem(time_dependent = true)
-    # Unit square
-    g = CartesianMesh(dim, (dx, dy))
-    # Set up a model with the grid and system
-    discretization = (poisson = Jutul.PoissonDiscretization(g), )
-    D = DiscretizedDomain(g, discretization)
-    model = SimulationModel(D, sys)
-    state0 = setup_state(model, Dict(:U=>U0))
-    K = compute_face_trans(g, k_val)
-    param = setup_parameters(model, K = K)
-
-    nc = number_of_cells(g)
-    pos_src = PoissonSource(1, srcval)
-    neg_src = PoissonSource(nc, -srcval)
-    forces = setup_forces(model, sources = [pos_src, neg_src])
-    idata = Dict(:dx => dx, :dy => dy, :U0 => U0, :k_val => k_val, :srcval => srcval)
-    return JutulCase(model, dt, forces; parameters = param, state0 = state0, input_data = idata)
-end
-
-function default_poisson_dict_vec(n)
-    return Dict(
-        "dx" => 1.0,
-        "dy" => 1.0,
-        "U0" => fill(1.0, n),
-        "k_val" => fill(1.0, n),
-        "srcval" => 1.0
-    )
-end
-
-function setup_poisson_test_case_from_dict_vec(d::AbstractDict, step_info = missing; fmt = :case, kwarg...)
-    return setup_poisson_test_case(d["dx"], d["dy"], d["U0"], d["k_val"], d["srcval"]; dim = (2, 2), dt = [1.0])
-end
-
-
-function test_for_scaler(scaler)
-    prm_truth = default_poisson_dict_vec(4)
-    states, = simulate(setup_poisson_test_case_from_dict_vec(prm_truth), info_level = -1)
-    function poisson_mismatch_objective(m, s, dt, step_info, forces)
-        step = step_info[:step]
-        U = s[:U]
-        U_ref = states[step][:U]
-        v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
-        return dt*v
+@testset "DictOptimization with vectors, scalars and lumping" begin
+    function poisson_test_objective(model, state)
+        U = state[:U]
+        return 2.5*(U[end] - U[1])
     end
-    # Perturb a parameter
-    prm = default_poisson_dict_vec(4)
-    prm["k_val"] .= 3.333
 
-    dprm = DictParameters(prm, setup_poisson_test_case_from_dict_vec, verbose = false)
-    free_optimization_parameter!(dprm, "k_val", abs_max = 10.0, abs_min = 0.1, lumping = [1, 1, 1, 1])
-    # Also do one with relative limits that should not change much
-    free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1, scaler = scaler, lumping = [1, 1, 1, 1])
+    function poisson_test_objective_vec(model, state)
+        return [poisson_test_objective(model, state), poisson_test_objective(model, state)]
+    end
 
-    # Test with base optimizer
-    prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1, optimizer = :lbfgsb);
+    function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = (2, 2), dt = [1.0])
+        sys = VariablePoissonSystem(time_dependent = true)
+        # Unit square
+        g = CartesianMesh(dim, (dx, dy))
+        # Set up a model with the grid and system
+        discretization = (poisson = Jutul.PoissonDiscretization(g), )
+        D = DiscretizedDomain(g, discretization)
+        model = SimulationModel(D, sys)
+        state0 = setup_state(model, Dict(:U=>U0))
+        K = compute_face_trans(g, k_val)
+        param = setup_parameters(model, K = K)
 
-    @info "??" prm_opt
-    @test all(isapprox.(prm_opt["k_val"], prm_truth["k_val"], atol = 0.01))
-    @test all(isapprox.(prm_opt["U0"], prm_truth["U0"], atol = 0.01))
-end
+        nc = number_of_cells(g)
+        pos_src = PoissonSource(1, srcval)
+        neg_src = PoissonSource(nc, -srcval)
+        forces = setup_forces(model, sources = [pos_src, neg_src])
+        idata = Dict(:dx => dx, :dy => dy, :U0 => U0, :k_val => k_val, :srcval => srcval)
+        return JutulCase(model, dt, forces; parameters = param, state0 = state0, input_data = idata)
+    end
 
-baselog = Jutul.DictOptimization.BaseLogScaler()
-baselog_trunc = Jutul.DictOptimization.BaseLogScaler(base_max = 50.0)
-
-test_for_scaler(:log)
-test_for_scaler(:log)
-
-# test_for_scaler(baselog_trunc)
-##
-for scaler in [:log, :exp, :standard_log, :linear_limits, :log10, :reciprocal, Jutul.DictOptimization.BaseLogScaler()]
-    for val in [0.1, 1.0, 10.0, 12.0]
-        @info "Testing scaler $scaler with value $val"
-        lower_limit = 0.01
-        upper_limit = 1000.0
-        stats = (
-            mean = 10.0,
-            std = 5.0,
-            max = 100.0,
-            min = 0.01
+    function default_poisson_dict_vec(n)
+        return Dict(
+            "dx" => 1.0,
+            "dy" => 1.0,
+            "U0" => fill(1.0, n),
+            "k_val" => fill(1.0, n),
+            "srcval" => 1.0
         )
-        scaled = Jutul.DictOptimization.apply_scaler(val, lower_limit, upper_limit, stats, scaler)
-        recovered = Jutul.DictOptimization.undo_scaler(scaled, lower_limit, upper_limit, stats, scaler)
-        @test isapprox(recovered, val; rtol = 1e-8)
+    end
+
+    function setup_poisson_test_case_from_dict_vec(d::AbstractDict, step_info = missing; fmt = :case, kwarg...)
+        return setup_poisson_test_case(d["dx"], d["dy"], d["U0"], d["k_val"], d["srcval"]; dim = (2, 2), dt = [1.0])
+    end
+
+
+    function test_for_scaler(scaler; test_vals = true, lumping = [1, 1, 1, 1], kwarg...)
+        prm_truth = default_poisson_dict_vec(4)
+        states, = simulate(setup_poisson_test_case_from_dict_vec(prm_truth), info_level = -1)
+        function poisson_mismatch_objective(m, s, dt, step_info, forces)
+            step = step_info[:step]
+            U = s[:U]
+            U_ref = states[step][:U]
+            v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
+            return dt*v
+        end
+        # Perturb a parameter
+        prm = default_poisson_dict_vec(4)
+        prm["k_val"] .= 3.333
+
+        dprm = DictParameters(prm, setup_poisson_test_case_from_dict_vec, verbose = false)
+        free_optimization_parameter!(dprm, "k_val", abs_max = 10.0, abs_min = 0.1, lumping = lumping)
+        # Also do one with relative limits that should not change much
+        free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1, scaler = scaler, lumping = lumping)
+
+        # Test with base optimizer
+        prm_opt = optimize(dprm, poisson_mismatch_objective; max_it = 25, info_level = -1, optimizer = :lbfgsb, kwarg...);
+        @test dprm.history[end]/dprm.history[1] < 1e-6
+
+        if test_vals
+            @test all(isapprox.(prm_opt["k_val"], prm_truth["k_val"], atol = 0.01))
+            @test all(isapprox.(prm_opt["U0"], prm_truth["U0"], atol = 0.01))
+        end
+    end
+
+    baselog = Jutul.DictOptimization.BaseLogScaler()
+    baselog_trunc = Jutul.DictOptimization.BaseLogScaler(base_max = 50.0)
+
+    test_for_scaler(:log)
+    test_for_scaler(baselog)
+    test_for_scaler(:linear, scale = false)
+    test_for_scaler(:log, test_vals = false, lumping = [2, 2, 1, 1])
+    test_for_scaler(:log, test_vals = false, lumping = [3, 2, 1, 4])
+
+    # Missing value in lumping array
+    @test_throws "Lumping array must contain all integers from 1 to 4." test_for_scaler(:log, test_vals = false, lumping = [3, 3, 1, 4])
+    for scaler in [
+            :log,
+            :exp,
+            :standard_log,
+            :linear_limits,
+            :linear,
+            :log10,
+            :reciprocal,
+            baselog,
+            baselog_trunc
+        ]
+        for val in [0.1, 1.0, 10.0, 12.0]
+            # @info "Testing scaler $scaler with value $val"
+            lower_limit = 0.01
+            upper_limit = 1000.0
+            stats = (
+                mean = 10.0,
+                std = 5.0,
+                max = 100.0,
+                min = 0.01
+            )
+            scaled = Jutul.DictOptimization.apply_scaler(val, lower_limit, upper_limit, stats, scaler)
+            recovered = Jutul.DictOptimization.undo_scaler(scaled, lower_limit, upper_limit, stats, scaler)
+            @test isapprox(recovered, val; rtol = 1e-8)
+        end
     end
 end
-
-##
 
