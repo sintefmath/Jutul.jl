@@ -514,7 +514,7 @@ function add_optimization_multiplier!(dprm::DictParameters, targets...;
     else
         size(initial) == size(sz) || error("Initial value must have the same size as the target parameters ($sz).")
     end
-    lumping = validate_and_normalize_lumping(lumping, initial)
+    lumping = validate_and_normalize_lumping(lumping, initial, name)
     dprm.multipliers[name] = OptimizationMultiplier(abs_min, abs_max, collect(targets), lumping, initial)
     return dprm
 end
