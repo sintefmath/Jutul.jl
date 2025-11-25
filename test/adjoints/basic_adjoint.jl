@@ -524,7 +524,7 @@ function test_for_scaler(scaler)
 end
 
 baselog = Jutul.DictOptimization.BaseLogScaler()
-baselog_trunc = Jutul.DictOptimization.BaseLogScaler(50.0)
+baselog_trunc = Jutul.DictOptimization.BaseLogScaler(base_max = 50.0)
 
 test_for_scaler(:log)
 test_for_scaler(:log)
@@ -549,8 +549,4 @@ for scaler in [:log, :exp, :standard_log, :linear_limits, :log10, :reciprocal, J
 end
 
 ##
-        s = BaseLogScaler()
-        x = apply_scaler(x, lower_limit, upper_limit, stats, s)
 
-        s = BaseLogScaler()
-        x = undo_scaler(x, lower_limit, upper_limit, stats, s)

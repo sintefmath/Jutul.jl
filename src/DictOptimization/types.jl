@@ -5,6 +5,7 @@ abstract type DictOptimizationScaler end
 
 Base.@kwdef struct BaseLogScaler <: DictOptimizationScaler
     base_max::Float64 = Inf
+    epsilon::Float64 = 1e-12
 end
 
 Base.@kwdef mutable struct KeyLimits
