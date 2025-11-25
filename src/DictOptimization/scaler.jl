@@ -1,4 +1,4 @@
-function apply_scaler(x::Real, s::Symbol)
+function apply_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
     if s == :log
         base = 1e5
         x = log((base-1)*x + 1)/log(base)
@@ -15,15 +15,15 @@ function apply_scaler(x::Real, s::Symbol)
     return x
 end
 
-function apply_scaler(x, s::Missing)
+function apply_scaler(x, lower_limit, upper_limit, stats, s::Missing)
     return x
 end
 
-function apply_scaler(x::AbstractArray, s::Symbol)
-    return map(v -> apply_scaler(v, s), x)
-end
+# function apply_scaler(x::AbstractArray, s::Symbol)
+#     return map(v -> apply_scaler(v, s), x)
+# end
 
-function undo_scaler(x::Real, s::Symbol)
+function undo_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
     if s == :log
         base = 1e5
         x = (base^x - 1)/(base - 1)
@@ -42,10 +42,10 @@ function undo_scaler(x::Real, s::Symbol)
     return x
 end
 
-function undo_scaler(x, s::Missing)
+function undo_scaler(x, lower_limit, upper_limit, stats, s::Missing)
     return x
 end
 
-function undo_scaler(x::AbstractArray, s::Symbol)
-    return map(v -> undo_scaler(v, s), x)
-end
+# function undo_scaler(x::AbstractArray, s::Symbol)
+#     return map(v -> undo_scaler(v, s), x)
+# end
