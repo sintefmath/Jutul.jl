@@ -367,8 +367,19 @@ are set for all parameters.
 - `initial`: Initial value for the parameter. If not set, the current value in
   `dopt.parameters` will be used.
 - `scaler=missing`: Optional scaler for the parameter. If not set, no scaling
-  will be applied. Available scalers are `:log`, `:exp`. The scaler will be
-  applied
+  will be applied. Available scalers are:
+    - `:log`: Logarithmic scaling. This value uses shifts to avoid issues with zero
+      values.
+    - `:exp`: Exponential scaling
+    - `:linear`: Linear scaling (scaling to bounds of values, guaranteeing
+      values between between 0 and 1 for initial values.)
+    - `linear_limits`: Linear scaling with limits (scaling to bounds of values,
+      guaranteeing values between between 0 and 1 for all values within the
+      limits.)
+    - `reciprocal`: Reciprocal scaling
+    - `log10`: Base-10 logarithmic scaling
+    - `log`: Base-e logarithmic scaling without shifts
+    - A custom scaler object implementing the `DictOptimizationScaler` interface.
 - `lumping=missing`: Optional lumping array for the parameter. If not set, no
   lumping will be applied. The lumping array should have the same size as the
   parameter and contain positive integers. The lumping array defines groups of
