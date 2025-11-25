@@ -105,6 +105,11 @@ function setup_vectorize_nested!(meta, data, active = missing;
             push!(meta.types, :multiplier)
             push!(meta.dims, d)
             meta.multiplier_targets[name] = mult.targets
+            meta.statistics[name] = (
+                mean = 1.0,
+                min = 1.0,
+                max = 1.0
+            )
         end
     end
 end
