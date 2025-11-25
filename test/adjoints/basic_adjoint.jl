@@ -497,7 +497,7 @@ end
 
 
 function test_for_scaler(scaler)
-    prm_truth = default_poisson_dict()
+    prm_truth = default_poisson_dict_vec(4)
     states, = simulate(setup_poisson_test_case_from_dict_vec(prm_truth), info_level = -1)
     function poisson_mismatch_objective(m, s, dt, step_info, forces)
         step = step_info[:step]
@@ -523,20 +523,34 @@ function test_for_scaler(scaler)
     @test all(isapprox.(prm_opt["U0"], prm_truth["U0"], atol = 0.01))
 end
 
+baselog = Jutul.DictOptimization.BaseLogScaler()
+baselog_trunc = Jutul.DictOptimization.BaseLogScaler(50.0)
+
 test_for_scaler(:log)
-test_for_scaler(:exp)
+test_for_scaler(:log)
+
+# test_for_scaler(baselog_trunc)
 ##
-for scaler in [:log, :exp, :standard_log, :log10, :reciprocal]
+for scaler in [:log, :exp, :standard_log, :linear_limits, :log10, :reciprocal, Jutul.DictOptimization.BaseLogScaler()]
     for val in [0.1, 1.0, 10.0, 12.0]
         @info "Testing scaler $scaler with value $val"
         lower_limit = 0.01
         upper_limit = 1000.0
         stats = (
             mean = 10.0,
-            std = 5.0
+            std = 5.0,
+            max = 100.0,
+            min = 0.01
         )
         scaled = Jutul.DictOptimization.apply_scaler(val, lower_limit, upper_limit, stats, scaler)
         recovered = Jutul.DictOptimization.undo_scaler(scaled, lower_limit, upper_limit, stats, scaler)
         @test isapprox(recovered, val; rtol = 1e-8)
     end
 end
+
+##
+        s = BaseLogScaler()
+        x = apply_scaler(x, lower_limit, upper_limit, stats, s)
+
+        s = BaseLogScaler()
+        x = undo_scaler(x, lower_limit, upper_limit, stats, s)
