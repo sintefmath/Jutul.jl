@@ -9,6 +9,8 @@ function apply_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
         x = log(x)
     elseif s == :log10
         x = log10(x)
+    elseif s == :reciprocal
+        x = 1.0/(x + 1e-20)
     else
         error("Unknown scaler $s")
     end
@@ -18,10 +20,6 @@ end
 function apply_scaler(x, lower_limit, upper_limit, stats, s::Missing)
     return x
 end
-
-# function apply_scaler(x::AbstractArray, s::Symbol)
-#     return map(v -> apply_scaler(v, s), x)
-# end
 
 function undo_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
     if s == :log
@@ -45,7 +43,3 @@ end
 function undo_scaler(x, lower_limit, upper_limit, stats, s::Missing)
     return x
 end
-
-# function undo_scaler(x::AbstractArray, s::Symbol)
-#     return map(v -> undo_scaler(v, s), x)
-# end

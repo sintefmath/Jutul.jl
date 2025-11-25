@@ -495,26 +495,48 @@ function setup_poisson_test_case_from_dict_vec(d::AbstractDict, step_info = miss
     return setup_poisson_test_case(d["dx"], d["dy"], d["U0"], d["k_val"], d["srcval"]; dim = (2, 2), dt = [1.0])
 end
 
-prm_truth = default_poisson_dict()
-states, = simulate(setup_poisson_test_case_from_dict_vec(prm_truth), info_level = -1)
-function poisson_mismatch_objective(m, s, dt, step_info, forces)
-    step = step_info[:step]
-    U = s[:U]
-    U_ref = states[step][:U]
-    v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
-    return dt*v
+
+function test_for_scaler(scaler)
+    prm_truth = default_poisson_dict()
+    states, = simulate(setup_poisson_test_case_from_dict_vec(prm_truth), info_level = -1)
+    function poisson_mismatch_objective(m, s, dt, step_info, forces)
+        step = step_info[:step]
+        U = s[:U]
+        U_ref = states[step][:U]
+        v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
+        return dt*v
+    end
+    # Perturb a parameter
+    prm = default_poisson_dict_vec(4)
+    prm["k_val"] .= 3.333
+
+    dprm = DictParameters(prm, setup_poisson_test_case_from_dict_vec, verbose = false)
+    free_optimization_parameter!(dprm, "k_val", abs_max = 10.0, abs_min = 0.1, lumping = [1, 1, 1, 1])
+    # Also do one with relative limits that should not change much
+    free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1, scaler = scaler, lumping = [1, 1, 1, 1])
+
+    # Test with base optimizer
+    prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1, optimizer = :lbfgsb);
+
+    @info "??" prm_opt
+    @test all(isapprox.(prm_opt["k_val"], prm_truth["k_val"], atol = 0.01))
+    @test all(isapprox.(prm_opt["U0"], prm_truth["U0"], atol = 0.01))
 end
-# Perturb a parameter
-prm = default_poisson_dict_vec(4)
-prm["k_val"] .= 3.333
 
-dprm = DictParameters(prm, setup_poisson_test_case_from_dict_vec, verbose = false)
-free_optimization_parameter!(dprm, "k_val", abs_max = 10.0, abs_min = 0.1, lumping = [1, 1, 1, 1])
-# Also do one with relative limits that should not change much
-free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1, scaler = :log, lumping = [1, 1, 1, 1])
-
-# Test with base optimizer
-prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1, optimizer = :lbfgsb);
-
-@test all(isapprox.(prm_opt["k_val"], prm_truth["k_val"], atol = 0.01))
-@test all(isapprox.(prm_opt["U0"], prm_truth["U0"], atol = 0.01))
+test_for_scaler(:log)
+test_for_scaler(:exp)
+##
+for scaler in [:log, :exp, :standard_log, :log10, :reciprocal]
+    for val in [0.1, 1.0, 10.0, 12.0]
+        @info "Testing scaler $scaler with value $val"
+        lower_limit = 0.01
+        upper_limit = 1000.0
+        stats = (
+            mean = 10.0,
+            std = 5.0
+        )
+        scaled = Jutul.DictOptimization.apply_scaler(val, lower_limit, upper_limit, stats, scaler)
+        recovered = Jutul.DictOptimization.undo_scaler(scaled, lower_limit, upper_limit, stats, scaler)
+        @test isapprox(recovered, val; rtol = 1e-8)
+    end
+end
