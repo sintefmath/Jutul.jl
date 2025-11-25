@@ -155,13 +155,14 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
                 x_sub = x_sub[lumping[k].first_index]
             end
             scale = get(scalers, k, missing)
-            for xi in x_sub
+            for (j, xi) in enumerate(x_sub)
+                index = pos + j
+                vmin = lims.min[index]
+                vmax = lims.max[index]
                 push!(x0_new, apply_scaler(xi, scale))
-            end
-            if include_limits && !ismissing(scale)
-                for index in (pos+1):(pos+length(x_sub))
-                    lims.min[index] = apply_scaler(lims.min[index], scale)
-                    lims.max[index] = apply_scaler(lims.max[index], scale)
+                if include_limits && !ismissing(scale)
+                    lims.min[index] = apply_scaler(vmin, scale)
+                    lims.max[index] = apply_scaler(vmax, scale)
                 end
             end
             pos += length(x_sub)
