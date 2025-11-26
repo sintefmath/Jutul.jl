@@ -117,48 +117,56 @@ function optimizer_devectorize!(prm, X, x_setup; multipliers = missing)
     return Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup, multipliers = multipliers)
 end
 
-# function optimizer_devectorize_lumping!(X_new, X, pos, L, scaler)
-#     first_index = L.first_index
-#     N = length(first_index)
-#     for v in L.lumping
-#         push!(X_new, undo_scaler(X[pos + v], scaler))
-#     end
-#     return N
-# end
-
 function optimizer_devectorize_scaler!(X_new, X, i, pos, offsets, minlims, maxlims, stats, lumping, scaler)
-    function scaler_limits(c)
-        if ismissing(minlims)
-            min_limit = -Inf
-        else
-            min_limit = minlims[c]
-        end
-        if ismissing(maxlims)
-            max_limit = Inf
-        else
-            max_limit = maxlims[c]
-        end
-        return (min_limit, max_limit)
-    end
     if ismissing(lumping)
         N = offsets[i+1]-offsets[i]
-        min_limit = minimum(minlims[pos+1:pos+N])
-        max_limit = maximum(maxlims[pos+1:pos+N])
-        for (i, ix) in enumerate(pos+1:pos+N)
-            #min_limit, max_limit = scaler_limits(i)
-            push!(X_new, undo_scaler(X[ix], min_limit, max_limit, stats, scaler))
+        ind = pos+1:pos+N
+        lim_bnds = group_limits(minlims, maxlims, ind)
+        for (i, ix) in enumerate(ind)
+            lim_val = scaler_limits(minlims, maxlims, i)
+            bnds = LimitBounds(lim_val, lim_bnds)
+            push!(X_new, undo_scaler(X[ix], bnds, stats, scaler))
         end
     else
         first_index = lumping.first_index
         N = length(first_index)
-        min_limit = minimum(minlims[pos+1:pos+N])
-        max_limit = maximum(maxlims[pos+1:pos+N])
+        ind = pos+1:pos+N
+        lim_bnds = group_limits(minlims, maxlims, ind)
         for (i, v) in enumerate(lumping.lumping)
-            #min_limit, max_limit = scaler_limits(pos + v)
-            push!(X_new, undo_scaler(X[pos + v], min_limit, max_limit, stats, scaler))
+            lim_val = scaler_limits(minlims, maxlims, pos + v)
+            bnds = LimitBounds(lim_val, lim_bnds)
+            push!(X_new, undo_scaler(X[pos + v], bnds, stats, scaler))
         end
     end
     return N
+end
+
+function scaler_limits(minlims, maxlims, c)
+    if ismissing(minlims)
+        min_limit = -Inf
+    else
+        min_limit = minlims[c]
+    end
+    if ismissing(maxlims)
+        max_limit = Inf
+    else
+        max_limit = maxlims[c]
+    end
+    return (min = min_limit, max = max_limit)
+end
+
+function group_limits(minlims, maxlims, ind)
+    if ismissing(minlims)
+        min_limit = -Inf
+    else
+        min_limit = minimum(minlims[ind])
+    end
+    if ismissing(maxlims)
+        max_limit = -Inf
+    else
+        max_limit = minimum(minlims[ind])
+    end
+    return (min = min_limit, max = max_limit)
 end
 
 function optimization_setup(dopt::DictParameters; include_limits = true)
@@ -189,24 +197,20 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
             end
             scale = get(scalers, k, missing)
             N = length(x_sub)
-            vmin_global = minimum(lims.min[pos+1:pos+N])
-            vmax_global = maximum(lims.max[pos+1:pos+N])
+            lim_bnds = group_limits(lims.min, lims.max, pos+1:pos+N)
             for (j, xi) in enumerate(x_sub)
                 index = pos + j
-                if include_limits
-                    vmin = lims.min[index]
-                    vmax = lims.max[index]
-                else
-                    vmax = Inf
-                    vmin = -Inf
-                end
-                push!(base_limits.min, vmin)
-                push!(base_limits.max, vmax)
-                S(v) = apply_scaler(v, vmin_global, vmax_global, stats, scale)
+                lim_val = scaler_limits(lims.min, lims.max, index)
+                # Store the limits for this variable and the group for use in
+                # scaling
+                bnds = LimitBounds(lim_val, lim_bnds)
+                push!(base_limits.min, bnds.min)
+                push!(base_limits.max, bnds.max)
+                S(v) = apply_scaler(v, bnds, stats, scale)
                 push!(x0_new, S(xi))
                 if include_limits && !ismissing(scale)
-                    lims.min[index] = S(vmin)
-                    lims.max[index] = S(vmax)
+                    lims.min[index] = S(bnds.min)
+                    lims.max[index] = S(bnds.max)
                 end
             end
             pos += length(x_sub)

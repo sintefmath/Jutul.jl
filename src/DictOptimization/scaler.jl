@@ -1,9 +1,7 @@
-function apply_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
+function apply_scaler(x::Real, bnds::LimitBounds, stats, s::Symbol)
     if s == :log
-        #s = BaseLogScaler()
-        #x = apply_scaler(x, lower_limit, upper_limit, stats, s)
-        x = (x - lower_limit)/(upper_limit - lower_limit)
-        base = min(1e4, upper_limit/lower_limit)
+        x = (x - bnds.min_group)/(bnds.max_group - bnds.min_group)
+        base = min(1e4, bnds.max_group/bnds.min_group)
         x = log((base-1)*x + 1)/log(base)
     elseif s == :exp
         base = 1e5
@@ -15,7 +13,9 @@ function apply_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
     elseif s == :reciprocal
         x = 1.0/(x + 1e-20)
     elseif s == :linear_limits
-        x = (x - lower_limit)/(upper_limit - lower_limit)
+        x = (x - bnds.min)/(bnds.max - bnds.min)
+    elseif s == :linear_limits_group
+        x = (x - bnds.min_group)/(bnds.max_group - bnds.min_group)
     elseif s == :linear
         minv, maxv, = stats_bounds(stats)
         x = (x - minv)/(maxv - minv)
@@ -25,17 +25,15 @@ function apply_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
     return x
 end
 
-function apply_scaler(x, lower_limit, upper_limit, stats, s::Missing)
+function apply_scaler(x, limit_bounds::LimitBounds, stats, s::Missing)
     return x
 end
 
-function undo_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
+function undo_scaler(x::Real, bnds::LimitBounds, stats, s::Symbol)
     if s == :log
-        #s = BaseLogScaler()
-        #x = undo_scaler(x, lower_limit, upper_limit, stats, s)
-        base = min(1e4, upper_limit/lower_limit)
+        base = min(1e4, bnds.max_group/bnds.min_group)
         x = (base^x - 1)/(base - 1)
-        x = x*(upper_limit - lower_limit) + lower_limit
+        x = x*(bnds.max_group - bnds.min_group) + bnds.min_group
     elseif s == :exp
         base = 1e5
         x = log((base-1)*x + 1)/log(base)
@@ -44,7 +42,9 @@ function undo_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
     elseif s == :log10
         x = 10^x
     elseif s == :linear_limits
-        x = x*(upper_limit - lower_limit) + lower_limit
+        x = x*(bnds.max - bnds.min) + bnds.min
+    elseif s == :linear_limits_group
+        x = x*(bnds.max_group - bnds.min_group) + bnds.min_group
     elseif s == :linear
         minv, maxv, = stats_bounds(stats)
         x = x*(maxv - minv) + minv
@@ -56,15 +56,15 @@ function undo_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
     return x
 end
 
-function undo_scaler(x, lower_limit, upper_limit, stats, s::Missing)
+function undo_scaler(x, limit_bounds::LimitBounds, stats, s::Missing)
     return x
 end
 
-function apply_scaler(x, lower_limit, upper_limit, stats, s::DictOptimizationScaler)
+function apply_scaler(x, limit_bounds::LimitBounds, stats, s::DictOptimizationScaler)
     error("Scaler of type $(typeof(s)) not implemented. You need to implement apply_scaler and undo_scaler for this type.")
 end
 
-function undo_scaler(x, lower_limit, upper_limit, stats, s::DictOptimizationScaler)
+function undo_scaler(x, limit_bounds::LimitBounds, stats, s::DictOptimizationScaler)
     error("Scaler of type $(typeof(s)) not implemented. You need to implement apply_scaler and undo_scaler for this type.")
 end
 
@@ -82,14 +82,14 @@ function stats_bounds(stats, s::BaseLogScaler)
     return stats_bounds(stats, s.epsilon, s.base_max)
 end
 
-function apply_scaler(x, lower_limit, upper_limit, stats, s::BaseLogScaler)
+function apply_scaler(x, limit_bounds::LimitBounds, stats, s::BaseLogScaler)
     m, M, base = stats_bounds(stats, s.epsilon)
     x = (x - m)/(M - m)
     x = log((base-1)*x + 1)/log(base)
     return x
 end
 
-function undo_scaler(x, lower_limit, upper_limit, stats, s::BaseLogScaler)
+function undo_scaler(x, limit_bounds::LimitBounds, stats, s::BaseLogScaler)
     m, M, base = stats_bounds(stats, s.epsilon)
     x = (base^x - 1)/(base - 1)
     x = x*(M - m) + m
