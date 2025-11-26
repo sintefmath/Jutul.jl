@@ -31,7 +31,7 @@ end
 
 function undo_scaler(x::Real, bnds::LimitBounds, stats, s::Symbol)
     if s == :log
-        base = min(1e4, bnds.max_group/bnds.min_group)
+        base = clamp(bnds.max_group/bnds.min_group, 1.01, 1e4)
         x = (base^x - 1)/(base - 1)
         x = x*(bnds.max_group - bnds.min_group) + bnds.min_group
     elseif s == :exp
