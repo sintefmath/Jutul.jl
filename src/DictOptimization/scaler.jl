@@ -1,7 +1,10 @@
 function apply_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
     if s == :log
-        s = BaseLogScaler()
-        x = apply_scaler(x, lower_limit, upper_limit, stats, s)
+        #s = BaseLogScaler()
+        #x = apply_scaler(x, lower_limit, upper_limit, stats, s)
+        x = (x - lower_limit)/(upper_limit - lower_limit)
+        base = min(1e4, upper_limit/lower_limit)
+        x = log((base-1)*x + 1)/log(base)
     elseif s == :exp
         base = 1e5
         x = (base^x - 1)/(base - 1)
@@ -28,8 +31,11 @@ end
 
 function undo_scaler(x::Real, lower_limit, upper_limit, stats, s::Symbol)
     if s == :log
-        s = BaseLogScaler()
-        x = undo_scaler(x, lower_limit, upper_limit, stats, s)
+        #s = BaseLogScaler()
+        #x = undo_scaler(x, lower_limit, upper_limit, stats, s)
+        base = min(1e4, upper_limit/lower_limit)
+        x = (base^x - 1)/(base - 1)
+        x = x*(upper_limit - lower_limit) + lower_limit
     elseif s == :exp
         base = 1e5
         x = log((base-1)*x + 1)/log(base)

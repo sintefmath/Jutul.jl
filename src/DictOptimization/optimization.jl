@@ -142,15 +142,19 @@ function optimizer_devectorize_scaler!(X_new, X, i, pos, offsets, minlims, maxli
     end
     if ismissing(lumping)
         N = offsets[i+1]-offsets[i]
+        min_limit = minimum(minlims[pos+1:pos+N])
+        max_limit = maximum(maxlims[pos+1:pos+N])
         for (i, ix) in enumerate(pos+1:pos+N)
-            min_limit, max_limit = scaler_limits(i)
+            #min_limit, max_limit = scaler_limits(i)
             push!(X_new, undo_scaler(X[ix], min_limit, max_limit, stats, scaler))
         end
     else
         first_index = lumping.first_index
         N = length(first_index)
+        min_limit = minimum(minlims[pos+1:pos+N])
+        max_limit = maximum(maxlims[pos+1:pos+N])
         for (i, v) in enumerate(lumping.lumping)
-            min_limit, max_limit = scaler_limits(pos + v)
+            #min_limit, max_limit = scaler_limits(pos + v)
             push!(X_new, undo_scaler(X[pos + v], min_limit, max_limit, stats, scaler))
         end
     end
@@ -184,6 +188,9 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
                 x_sub = x_sub[lumping[k].first_index]
             end
             scale = get(scalers, k, missing)
+            N = length(x_sub)
+            vmin_global = minimum(lims.min[pos+1:pos+N])
+            vmax_global = maximum(lims.max[pos+1:pos+N])
             for (j, xi) in enumerate(x_sub)
                 index = pos + j
                 if include_limits
@@ -195,7 +202,7 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
                 end
                 push!(base_limits.min, vmin)
                 push!(base_limits.max, vmax)
-                S(v) = apply_scaler(v, vmin, vmax, stats, scale)
+                S(v) = apply_scaler(v, vmin_global, vmax_global, stats, scale)
                 push!(x0_new, S(xi))
                 if include_limits && !ismissing(scale)
                     lims.min[index] = S(vmin)
