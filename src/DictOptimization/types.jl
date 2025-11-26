@@ -30,10 +30,10 @@ struct LimitBounds
     min::Float64
     "Upper bound - for specific variable"
     max::Float64
-    "Lower bound - for group of variables the variable belongs to"
-    max_group::Float64
     "Upper bound - for group of variables the variable belongs to"
     min_group::Float64
+    "Lower bound - for group of variables the variable belongs to"
+    max_group::Float64
     function LimitBounds(min_val, max_val, min_group, max_group)
         return new(
             convert(Float64, min_val),

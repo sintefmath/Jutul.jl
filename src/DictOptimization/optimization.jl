@@ -211,8 +211,15 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
                 S(v) = apply_scaler(v, bnds, stats, scale)
                 push!(x0_new, S(xi))
                 if include_limits && !ismissing(scale)
-                    lims.min[index] = S(bnds.min)
-                    lims.max[index] = S(bnds.max)
+                    scale_min = S(bnds.min)
+                    scale_max = S(bnds.max)
+                    if scale_min > scale_max
+                        error("Inconsistent limits after scaling for parameter $k at index $index: ($(bnds.min), $(bnds.max)) scaled to ($scale_min, $scale_max) with $scale: Bounds = $bnds")
+                    elseif !isfinite(scale_min) || !isfinite(scale_max)
+                        error("Non-finite limits after scaling for parameter $k at index $index: ($(bnds.min), $(bnds.max)) scaled to ($scale_min, $scale_max) with $scale: Bounds = $bnds")
+                    end
+                    lims.min[index] = scale_min
+                    lims.max[index] = scale_max
                 end
             end
             pos += length(x_sub)

@@ -1,7 +1,7 @@
 function apply_scaler(x::Real, bnds::LimitBounds, stats, s::Symbol)
     if s == :log
         x = (x - bnds.min_group)/(bnds.max_group - bnds.min_group)
-        base = min(1e4, bnds.max_group/bnds.min_group)
+        base = clamp(bnds.max_group/bnds.min_group, 1.01, 1e4)
         x = log((base-1)*x + 1)/log(base)
     elseif s == :exp
         base = 1e5

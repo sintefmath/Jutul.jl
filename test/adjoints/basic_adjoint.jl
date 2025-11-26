@@ -562,4 +562,12 @@ end
             @test isapprox(recovered, val; rtol = 1e-8)
         end
     end
+    low = 0.09999999999999998
+    hi = 10.0
+    bnds = Jutul.DictOptimization.LimitBounds(low, hi, low, hi)
+    scaled_low = Jutul.DictOptimization.apply_scaler(low, bnds, missing, :log)
+    scaled_high = Jutul.DictOptimization.apply_scaler(hi, bnds, missing, :log)
+    @test scaled_low < scaled_high
+    @test isfinite(scaled_low)
+    @test isfinite(scaled_high)
 end
