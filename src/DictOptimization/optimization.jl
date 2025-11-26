@@ -159,12 +159,14 @@ function group_limits(minlims, maxlims, ind)
     if ismissing(minlims)
         min_limit = -Inf
     else
-        min_limit = minimum(minlims[ind])
+        min_subv = view(minlims, ind)
+        min_limit = minimum(min_subv)
     end
     if ismissing(maxlims)
         max_limit = -Inf
     else
-        max_limit = minimum(minlims[ind])
+        max_subv = view(maxlims, ind)
+        max_limit = maximum(max_subv)
     end
     return (min = min_limit, max = max_limit)
 end

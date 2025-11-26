@@ -34,9 +34,7 @@ struct LimitBounds
     max_group::Float64
     "Upper bound - for group of variables the variable belongs to"
     min_group::Float64
-    function LimitBounds(min_val, max_val, min_group, max_group; epsilon = 1e-16)
-        min_group = max(min_group, min_group + epsilon)
-        max_group = min(max_group, max_group - epsilon)
+    function LimitBounds(min_val, max_val, min_group, max_group)
         return new(
             convert(Float64, min_val),
             convert(Float64, max_val),
