@@ -448,7 +448,7 @@ end
     @test ismissing(pr3.forces)
     @test ismissing(pr3[2].forces)
 end
-
+##
 @testset "DictOptimization with vectors, scalars and lumping" begin
     function poisson_test_objective(model, state)
         U = state[:U]
@@ -539,6 +539,7 @@ end
             :exp,
             :standard_log,
             :linear_limits,
+            :linear_limits_group,
             :linear,
             :log10,
             :reciprocal,
@@ -555,10 +556,18 @@ end
                 max = 100.0,
                 min = 0.01
             )
-            scaled = Jutul.DictOptimization.apply_scaler(val, lower_limit, upper_limit, stats, scaler)
-            recovered = Jutul.DictOptimization.undo_scaler(scaled, lower_limit, upper_limit, stats, scaler)
+            bnds = Jutul.DictOptimization.LimitBounds(lower_limit, upper_limit, 0.1*lower_limit, 10*upper_limit)
+            scaled = Jutul.DictOptimization.apply_scaler(val, bnds, stats, scaler)
+            recovered = Jutul.DictOptimization.undo_scaler(scaled, bnds, stats, scaler)
             @test isapprox(recovered, val; rtol = 1e-8)
         end
     end
+    low = 0.09999999999999998
+    hi = 10.0
+    bnds = Jutul.DictOptimization.LimitBounds(low, hi, low, hi)
+    scaled_low = Jutul.DictOptimization.apply_scaler(low, bnds, missing, :log)
+    scaled_high = Jutul.DictOptimization.apply_scaler(hi, bnds, missing, :log)
+    @test scaled_low < scaled_high
+    @test isfinite(scaled_low)
+    @test isfinite(scaled_high)
 end
-

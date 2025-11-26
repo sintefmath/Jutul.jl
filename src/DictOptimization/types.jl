@@ -25,6 +25,29 @@ Base.@kwdef mutable struct OptimizationMultiplier
     value::Array{Float64, <:Any}
 end
 
+struct LimitBounds
+    "Lower bound - for specific variable"
+    min::Float64
+    "Upper bound - for specific variable"
+    max::Float64
+    "Upper bound - for group of variables the variable belongs to"
+    min_group::Float64
+    "Lower bound - for group of variables the variable belongs to"
+    max_group::Float64
+    function LimitBounds(min_val, max_val, min_group, max_group)
+        return new(
+            convert(Float64, min_val),
+            convert(Float64, max_val),
+            convert(Float64, min_group),
+            convert(Float64, max_group)
+        )
+    end
+end
+
+function LimitBounds(val, group)
+    return LimitBounds(val.min, val.max, group.min, group.max)
+end
+
 mutable struct DictParameters
     "Initial value of parameters for optimization"
     parameters
