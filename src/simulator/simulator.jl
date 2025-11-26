@@ -128,7 +128,11 @@ end
 
 function simulate(case::JutulCase; kwarg...)
     sim = Simulator(case)
-    return simulate!(sim, case.dt; forces = case.forces, termination_criterion = case.termination_criterion, kwarg...)
+    return simulate!(sim, case.dt;
+        forces = case.forces,
+        termination_criterion = case.termination_criterion,
+        start_date = case.start_date,
+        kwarg...)
 end
 
 """

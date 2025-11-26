@@ -899,6 +899,7 @@ struct JutulCase
     parameters
     input_data
     termination_criterion::AbstractTerminationCriterion
+    start_date::Union{Nothing, DateTime}
 end
 
 """
@@ -911,6 +912,7 @@ function JutulCase(model::JutulModel, dt = [1.0], forces = setup_forces(model);
         parameters = nothing,
         input_data = nothing,
         termination_criterion = NoTerminationCriterion(),
+        start_date = nothing,
         kwarg...
     )
     for (k, v) in kwarg
@@ -934,10 +936,11 @@ function JutulCase(model::JutulModel, dt = [1.0], forces = setup_forces(model);
         @assert nt == nf "If forces is a vector, the length (=$nf) must match the number of time steps (=$nt)."
     end
     all(dt .> 0) || throw(ArgumentError("All time-steps must be positive, was $dt"))
-    return JutulCase(model, dt, forces, state0, parameters, input_data, termination_criterion)
+    return JutulCase(model, dt, forces, state0, parameters, input_data, termination_criterion, start_date)
 end
 
 function JutulCase(model, dt, forces, state0, parameters, input_data)
+    # This is a backwards compatibility constructor
     return JutulCase(model, dt, forces; state0 = state0, parameters = parameters, input_data = input_data)
 end
 
@@ -958,7 +961,7 @@ function duplicate(case::JutulCase; copy_model = false)
     if copy_model
         model = deepcopy(model)
     end
-    return JutulCase(model, deepcopy(dt), deepcopy(forces), deepcopy(state0), deepcopy(parameters), deepcopy(input_data))
+    return JutulCase(model, deepcopy(dt), deepcopy(forces), deepcopy(state0), deepcopy(parameters), deepcopy(input_data), case.termination_criterion, case.start_date)
 end
 
 function Base.getindex(case::JutulCase, ix::Int)
@@ -975,13 +978,18 @@ function Base.lastindex(case::JutulCase, d::Int)
 end
 
 function Base.getindex(case::JutulCase, ix)
-    (; model, dt, forces, state0, parameters, input_data) = case
+    (; model, dt, forces, state0, parameters, input_data, termination_criterion, start_date) = case
     if forces isa AbstractVector
         @assert length(forces) == length(dt)
         forces = forces[ix]
     end
     dt = dt[ix]
-    return JutulCase(model, dt, forces, state0, parameters, input_data)
+    if ix isa AbstractRange || ix isa AbstractVector || ix isa Int
+        if first(ix) != 1
+            jutul_message("JutulCase", "Subsetting case beyond starting index does not update state0 and start_date.")
+        end
+    end
+    return JutulCase(model, dt, forces, state0, parameters, input_data, termination_criterion, start_date)
 end
 
 export NoRelaxation, SimpleRelaxation
