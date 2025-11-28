@@ -501,24 +501,16 @@ function unstructured_from_cart(g, ::Val{3}; kwarg...)
     Float_T = promote_type(eltype(dx), eltype(dy), eltype(dz), eltype(X0), eltype(Y0), eltype(Z0))
     node_points = Vector{SVector{3, Float_T}}()
 
-    function get_point(D::T, i) where {T<:Real}
-        newpt = (i-1)*D
-        return newpt::T
-    end
-    function get_point(D::Union{NTuple{N, T}, Vector{T}}, i) where {T<:Real, N}
-        pt = zero(T)
-        for j in 1:(i-1)
-            pt += D[j]
-        end
-        return pt::T
-    end
-
+    sizehint!(node_points, num_nodes_x*num_nodes_y*num_nodes_z)
+    xpts = get_cartesian_points(dx, num_nodes_x)
+    ypts = get_cartesian_points(dy, num_nodes_y)
+    zpts = get_cartesian_points(dz, num_nodes_z)
     for k in 1:num_nodes_z
-        Z = get_point(dz, k)
+        Z = zpts[k]
         for j in 1:num_nodes_y
-            Y = get_point(dy, j)
+            Y = ypts[j]
             for i in 1:num_nodes_x
-                X = get_point(dx, i)
+                X = xpts[i]
                 XYZ = SVector{3, Float_T}(X + X0, Y + Y0, Z + Z0)
                 push!(node_points, XYZ)
             end
@@ -695,6 +687,21 @@ function unstructured_from_cart(g, ::Val{3}; kwarg...)
     )
 end
 
+function get_cartesian_points(D::T, n) where {T<:Real}
+    return map(i -> (i-1)*D, 1:n)
+end
+
+function get_cartesian_points(D::Union{NTuple{N, T}, Vector{T}}, n) where {T<:Real, N}
+    points = Vector{T}(undef, n)
+    pt = zero(T)
+    for i in 1:n
+        points[i] = pt
+        if i < n
+            pt += D[i]
+        end
+    end
+    return points
+end
 
 function UnstructuredMesh(g::MRSTWrapMesh; kwarg...)
     G_raw = g.data
