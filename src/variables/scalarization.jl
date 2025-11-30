@@ -50,14 +50,19 @@ function scalarize_primary_variable(model, source_vec, var::Jutul.ScalarVariable
     return value(source_vec[index])
 end
 
+
+function descalarize_variable!(dest_array, model, V, var, index; F = identity)
+    return descalarize_primary_variable!(dest_array, model, V, var, index, F = F)
+end
+
 """
     descalarize_primary_variable!(dest_array, model, V, var::Jutul.ScalarVariable, index)
 
 Descalarize a primary variable, overwriting dest_array at entity `index`. The AD
 status of entries in `dest_array` will be retained.
 """
-function descalarize_primary_variable!(dest_array, model, V, var::Jutul.ScalarVariable, index)
-    dest_array[index] = Jutul.replace_value(dest_array[index], V)
+function descalarize_primary_variable!(dest_array, model, V, var::Jutul.ScalarVariable, index; F = identity)
+    dest_array[index] = Jutul.replace_value(dest_array[index], F(V))
 end
 
 function scalarized_primary_variable_type(model, var::Jutul.FractionVariables)
@@ -84,10 +89,10 @@ function scalarize_primary_variable(model, source_mat, var::Jutul.FractionVariab
     return scalar_v
 end
 
-function descalarize_primary_variable!(dest_array, model, V, var::Jutul.FractionVariables, index)
+function descalarize_primary_variable!(dest_array, model, V, var::Jutul.FractionVariables, index; F = identity)
     rem = Jutul.maximum_value(var) - sum(V)
     for i in eachindex(V)
-        dest_array[i, index] = Jutul.replace_value(dest_array[i, index], V[i])
+        dest_array[i, index] = Jutul.replace_value(dest_array[i, index], F(V[i]))
     end
     dest_array[end, index] = Jutul.replace_value(dest_array[end, index], rem)
 end
