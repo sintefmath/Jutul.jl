@@ -86,16 +86,20 @@ function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary; 
             c = config[k]
         end
         F = opt_scaler_function(config, k, inv = true)
-        devectorize_variable!(state_or_prm, V, k, v, F, config = c)
+        devectorize_variable!(state_or_prm, model, V, k, v, F, config = c)
     end
     return state_or_prm
 end
 
-function devectorize_variable!(state, V, k, info, F_inv; config = nothing)
+function devectorize_variable!(state, model, V, k, info, F_inv; config = nothing)
     (; n_full, n_x, offset_full, offset_x) = info
     state_val = state[k]
+    vardef = model[k]
+    el = scalarize_variable(model, state_val, vardef, 1, numeric = true)
+    T_state = eltype(el)
+    # Uh oh, this needs to be fixed for BO
     T = eltype(V)
-    if eltype(state_val) != T
+    if T_state != T
         state_val = similar(state_val, T)
         state[k] = state_val
     end
