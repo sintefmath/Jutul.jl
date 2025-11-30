@@ -964,8 +964,8 @@ function duplicate(case::JutulCase; copy_model = false)
     return JutulCase(model, deepcopy(dt), deepcopy(forces), deepcopy(state0), deepcopy(parameters), deepcopy(input_data), case.termination_criterion, case.start_date)
 end
 
-function Base.getindex(case::JutulCase, ix::Int)
-    return case[ix:ix]
+function Base.getindex(case::JutulCase, ix::Int; kwarg...)
+    return Base.getindex(case, ix:ix; kwarg...)
 end
 
 function Base.lastindex(case::JutulCase)
@@ -977,7 +977,7 @@ function Base.lastindex(case::JutulCase, d::Int)
     return Base.lastindex(case)
 end
 
-function Base.getindex(case::JutulCase, ix)
+function Base.getindex(case::JutulCase, ix; check::Bool = true)
     (; model, dt, forces, state0, parameters, input_data, termination_criterion, start_date) = case
     if forces isa AbstractVector
         @assert length(forces) == length(dt)
@@ -985,7 +985,7 @@ function Base.getindex(case::JutulCase, ix)
     end
     dt = dt[ix]
     if ix isa AbstractRange || ix isa AbstractVector || ix isa Int
-        if first(ix) != 1
+        if check && first(ix) != 1
             jutul_message("JutulCase", "Subsetting case beyond starting index does not update state0 and start_date.")
         end
     end
