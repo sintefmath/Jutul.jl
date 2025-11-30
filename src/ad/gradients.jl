@@ -855,8 +855,8 @@ function variable_mapper(model::SimulationModel, type = :primary;
         if var isa Pair
             var = last(var)
         end
-        n = number_of_values(model, var)
-        m = values_per_entity(model, var)
+        n = number_of_degrees_of_freedom(model, var)
+        m = degrees_of_freedom_per_entity(model, var)
         n_x = n
         if !isnothing(config)
             lumping = config[t][:lumping]

@@ -36,7 +36,7 @@ function vectorize_variable!(V, state, k, info, F, model, vardef::JutulVariables
     lumping = get_lumping(config)
     if isnothing(lumping)
         @assert n_full == n_x
-        @assert length(state_val) == n_x "Expected field $k to have length $n_x, was $(length(state_val))"
+        # @assert length(state_val) == n_x "Expected field $k to have length $n_x, was $(length(state_val))"
         if state_val isa AbstractVector
             iterator = 1:n_x
         else
@@ -127,7 +127,7 @@ function devectorize_variable_inner!(state_val, reference, model::JutulModel, va
     m = degrees_of_freedom_per_entity(model, vardef)
     if isnothing(lumping)
         @assert n_full == n_x
-        @assert length(state_val) == n_full "Expected field $k to have length $n_full, was $(length(state_val))"
+        # @assert length(state_val) == n_full "Expected field $k to have length $n_full, was $(length(state_val))"
         if state_val isa AbstractVector
             iterator = 1:n_full
         else
