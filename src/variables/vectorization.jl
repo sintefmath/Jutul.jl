@@ -177,23 +177,17 @@ function devectorize_variable_inner!(state_val, reference, model::JutulModel, va
 end
 
 function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x::AbstractVector, model::JutulModel, variable_def::ScalarVariable, idx_dest::Int = idx)
-    # m = degrees_of_freedom_per_entity(model, variable_def)
     descalarize_variable!(dest, model, x[offset_x + idx], variable_def, idx_dest, reference, F = F_inv)
-    # dest[idx] = F_inv(x[offset_x + idx])
     return dest
 end
 
-# function devectorize_variable_values!(state_val, idx, dest_offset, F, src::AbstractVector, model::JutulModel, variable_def::JutulVariables)
-#     # el = scalarize_variable(model, state_val, variable_def, idx, numeric = true)
-#     # m = length(el)
-#     # for j in 1:m
-#     #     dest[dest_offset + j] = F_inv(el[m])
-#     # end
-#     return m
-    # for j in 1:m
-    #     dest[dest_offset + (idx - 1)*m + j] = F(el[j])
-    # end
-# end
+function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x::AbstractMatrix, model::JutulModel, variable_def::ScalarVariable, idx_dest::Int = idx)
+    m = degrees_of_freedom_per_entity(model, variable_def)
+    for j in 1:m
+        descalarize_variable!(dest, model, x[offset_x + (idx - 1)*m + j], variable_def, (idx_dest - 1)*m + j, reference, F = F_inv)
+    end
+    return dest
+end
 
 function devectorize_state_and_parameters!(state, parameters, model, V, mapper, config)
     state_and_parameters = merge(state, parameters)
