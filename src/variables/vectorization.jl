@@ -114,23 +114,25 @@ function devectorize_variable!(state, model, V, k, info, F_inv; reference = miss
         # el = scalarize_variable(model, state_val, vardef, 1, numeric = true)
         # T_state_el = eltype(el)
         T_updated = scalarized_primary_variable_type(model, vardef, T)
-        @info "Not real" k T_state T_updated T
         if T_state != T_updated
             state_val = zeros(T_updated, size(state_val))
             state[k] = state_val
         end
-        # vectorize_variable!(state_val, state, k, info, x -> x, model, vardef; config = config, offset_x = 0)
+        if !ismissing(reference)
+            @info "Not real" k T_state T_updated T typeof(state[k])
+            # vectorize_variable!(state_val, state, k, info, x -> x, model, vardef; config = config, offset_x = 0)
+        end
     end
     # Need to have both values and destination - separately!
     # TODO: Make this conditional
     # state_val = vectorize_variable!(state_val, state, k, info, x -> x, model, vardef; config = config, offset_x = 0)
 
     lumping = get_lumping(config)
-    devectorize_variable_inner!(state_val, model, vardef, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
+    devectorize_variable_inner!(state_val, reference, model, vardef, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
     return state
 end
 
-function devectorize_variable_inner!(state_val, model::JutulModel, vardef::JutulVariables, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
+function devectorize_variable_inner!(state_val, reference, model::JutulModel, vardef::JutulVariables, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
     m = degrees_of_freedom_per_entity(model, vardef)
     if isnothing(lumping)
         @assert n_full == n_x
@@ -141,7 +143,7 @@ function devectorize_variable_inner!(state_val, model::JutulModel, vardef::Jutul
             iterator = axes(state_val, 1)
         end
         for idx in iterator
-            devectorize_variable_values!(state_val, idx, offset_x, F_inv, V, model, vardef)
+            devectorize_variable_values!(state_val, reference, idx, offset_x, F_inv, V, model, vardef)
         end
         
         # if state_val isa AbstractVector
@@ -177,9 +179,9 @@ function devectorize_variable_inner!(state_val, model::JutulModel, vardef::Jutul
     end
 end
 
-function devectorize_variable_values!(dest, idx, offset_x, F_inv, x::AbstractVector, model::JutulModel, variable_def::ScalarVariable)
+function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x::AbstractVector, model::JutulModel, variable_def::ScalarVariable)
     # m = degrees_of_freedom_per_entity(model, variable_def)
-    descalarize_variable!(dest, model, x[offset_x + idx], variable_def, idx, F = F_inv)
+    descalarize_variable!(dest, model, x[offset_x + idx], variable_def, idx, reference, F = F_inv)
     # dest[idx] = F_inv(x[offset_x + idx])
     return dest
 end

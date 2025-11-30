@@ -51,8 +51,8 @@ function scalarize_primary_variable(model, source_vec, var::Jutul.ScalarVariable
 end
 
 
-function descalarize_variable!(dest_array, model, V, var, index; F = identity)
-    return descalarize_primary_variable!(dest_array, model, V, var, index, F = F)
+function descalarize_variable!(dest_array, model, V, var, index, reference = missing; F = identity)
+    return descalarize_primary_variable!(dest_array, model, V, var, index, reference, F = F)
 end
 
 """
@@ -61,7 +61,7 @@ end
 Descalarize a primary variable, overwriting dest_array at entity `index`. The AD
 status of entries in `dest_array` will be retained.
 """
-function descalarize_primary_variable!(dest_array, model, V, var::Jutul.ScalarVariable, index; F = identity)
+function descalarize_primary_variable!(dest_array, model, V, var::Jutul.ScalarVariable, index, ref = missing; F = identity)
     dest_array[index] = Jutul.replace_value(dest_array[index], F(V))
 end
 
