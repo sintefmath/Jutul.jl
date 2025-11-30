@@ -369,7 +369,7 @@ function Base.copy(m::SimulationModel{O, S, C, F}) where {O, S, C, F}
 end
 
 function Base.getindex(model::SimulationModel, s::Symbol)
-    return get_variables(model)[s]
+    return get_variables_and_parameters(model)[s]
 end
 
 function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
