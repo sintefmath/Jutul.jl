@@ -131,7 +131,7 @@ function devectorize_variable_inner!(state_val, reference, model::JutulModel, va
         if state_val isa AbstractVector
             iterator = 1:n_full
         else
-            iterator = axes(state_val, 1)
+            iterator = axes(state_val, 2)
         end
         for idx in iterator
             devectorize_variable_values!(state_val, reference, idx, offset_x, F_inv, V, model, vardef)
