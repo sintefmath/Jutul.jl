@@ -77,6 +77,12 @@ function descalarize_primary_variable!(dest_array, model, V, var::Jutul.ScalarVa
     dest_array[index] = Jutul.replace_value(dest_array[index], F(V))
 end
 
+function descalarize_primary_variable!(dest_array, model, V, var::Jutul.JutulVariables, index, ref = missing; F = identity)
+    for i in eachindex(V)
+        dest_array[i, index] = Jutul.replace_value(dest_array[i, index], F(V[i]))
+    end
+end
+
 function scalarized_primary_variable_type(model, var::Jutul.FractionVariables, T_num = Float64)
     N = degrees_of_freedom_per_entity(model, var)
     if N == 1
