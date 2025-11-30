@@ -152,27 +152,33 @@ function devectorize_variable_inner!(state_val, reference, model::JutulModel, va
         #     end
         # end
     else
-        if state_val isa AbstractVector
-            for (i, lump) in enumerate(lumping)
-                state_val[i] = F_inv(V[offset_x+lump])
-            end
-        else
-            lumping::AbstractVector
-            m, ncell = size(state_val)
-            nlump = length(lumping)
-            @assert ncell == nlump "Lumping must be given as a vector with one value per column ($ncell) for matrix, was $nlump"
-            for (i, lump) in enumerate(lumping)
-                for j in 1:m
-                    state_val[j, i] = F_inv(V[offset_x+(lump-1)*m+j])
+
+        for (i, lump) in enumerate(lumping)
+            devectorize_variable_values!(state_val, reference, lump, offset_x, F_inv, V, model, vardef, i)
+        end
+        if false
+            if state_val isa AbstractVector
+                for (i, lump) in enumerate(lumping)
+                    state_val[i] = F_inv(V[offset_x+lump])
+                end
+            else
+                lumping::AbstractVector
+                m, ncell = size(state_val)
+                nlump = length(lumping)
+                @assert ncell == nlump "Lumping must be given as a vector with one value per column ($ncell) for matrix, was $nlump"
+                for (i, lump) in enumerate(lumping)
+                    for j in 1:m
+                        state_val[j, i] = F_inv(V[offset_x+(lump-1)*m+j])
+                    end
                 end
             end
         end
     end
 end
 
-function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x::AbstractVector, model::JutulModel, variable_def::ScalarVariable)
+function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x::AbstractVector, model::JutulModel, variable_def::ScalarVariable, idx_dest::Int = idx)
     # m = degrees_of_freedom_per_entity(model, variable_def)
-    descalarize_variable!(dest, model, x[offset_x + idx], variable_def, idx, reference, F = F_inv)
+    descalarize_variable!(dest, model, x[offset_x + idx], variable_def, idx_dest, reference, F = F_inv)
     # dest[idx] = F_inv(x[offset_x + idx])
     return dest
 end
