@@ -21,53 +21,57 @@ function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary; co
         else
             c = config[k]
         end
-        vectorize_variable!(V, state_or_prm, k, v, F, config = c)
+        vardef = model[k]
+        vectorize_variable!(V, state_or_prm, k, v, F, vardef, config = c)
     end
     return V
 end
 
-function vectorize_variable!(V, state, k, info, F; config = nothing)
+function vectorize_variable!(V, state, k, info, F, vardef::JutulVariables; config = nothing)
     (; n_full, n_x, offset_full, offset_x) = info
     state_val = state[k]
     lumping = get_lumping(config)
     if isnothing(lumping)
         @assert n_full == n_x
         @assert length(state_val) == n_x "Expected field $k to have length $n_x, was $(length(state_val))"
+        local_offset = 0
         if state_val isa AbstractVector
-            for i in 1:n_x
-                V[offset_x+i] = F(state_val[i])
-            end
+            iterator = 1:n_x
         else
-            l, m = size(state_val)
-            ctr = 0
-            for i in 1:l
-                for j in 1:m
-                    ctr += 1
-                    V[offset_x+ctr] = F(state_val[i, j])
-                end
-            end
-            @assert ctr == n_full
+            iterator = axes(state_val, 1)
+        end
+        for i in iterator
+            added = vectorize_variable_values!(V, i, offset_x + local_offset, F, state_val, vardef)
+            local_offset += added
         end
     else
         lumping::AbstractVector
         if state_val isa AbstractVector
-            @assert length(state_val) == length(lumping)
-            for i in 1:maximum(lumping)
-                # Take the first lumped value as they must be equal by assumption
-                ix = findfirst(isequal(i), lumping)
-                V[offset_x+i] = F(state_val[ix])
-            end
+            @assert length(state_val) == length(lumping) "Lumping must be given as a vector with one value per column for vector, was $(length(lumping))"
         else
-            @assert size(state_val, 2) == length(lumping) "Lumping must be given as a vector with one value per column for matrix"
-            m = size(state_val, 1)
-            for i in 1:maximum(lumping)
-                ix = findfirst(isequal(i), lumping)
-                for j in 1:m
-                    V[offset_x+(i-1)*m+j] = F(state_val[j, ix])
-                end
-            end
+            @assert size(state_val, 2) == length(lumping) "Lumping must be given as a vector with one value per column for matrix, was $(length(lumping))"
+        end
+        iterator = 1:maximum(lumping)
+        local_offset = 0
+        for i in iterator
+            ix = findfirst(isequal(i), lumping)
+            added = vectorize_variable_values!(V, ix, offset_x + local_offset, F, state_val, vardef)
+            local_offset += added
         end
     end
+end
+
+function vectorize_variable_values!(dest, idx, dest_offset, F, state_val::AbstractArray, variable_def::JutulVariables)
+    dest[dest_offset + idx] = F(state_val[idx])
+    return 1
+end
+
+function vectorize_variable_values!(dest, idx, dest_offset, F, state_val::AbstractVector, variable_def::JutulVariables)
+    m = size(state_val, 2)
+    for j in 1:m
+        dest[dest_offset + j] = F(state_val[idx, j])
+    end
+    return m
 end
 
 function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary; config = nothing)
