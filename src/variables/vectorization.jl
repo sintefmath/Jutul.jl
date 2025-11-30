@@ -181,11 +181,10 @@ function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x::
     return dest
 end
 
-function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x::AbstractMatrix, model::JutulModel, variable_def, idx_dest::Int = idx)
+function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x, model::JutulModel, variable_def, idx_dest::Int = idx)
     m = degrees_of_freedom_per_entity(model, variable_def)
-    for j in 1:m
-        descalarize_variable!(dest, model, x[offset_x + (idx - 1)*m + j], variable_def, (idx_dest - 1)*m + j, reference, F = F_inv)
-    end
+    x_sub = view(x, offset_x + 1, offset_x + m)
+    descalarize_variable!(dest, model, x_sub, variable_def, idx_dest, reference, F = F_inv)
     return dest
 end
 
