@@ -383,7 +383,7 @@ function unpack_setup(step_info, N, case::JutulCase; all = false)
             ismissing(N) || Ns == N || error("case.forces was a vector and expected $N steps, got $Ns.")
         end
         if !all
-            case = case[step_info[:step]]
+            case = Base.getindex(case, step_info[:step], check = false)
         end
     end
     return case
