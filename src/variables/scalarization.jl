@@ -37,12 +37,16 @@ function scalarized_primary_variable_type(model, var::AbstractDict)
     return scalarized_primary_variable_type(model, tuple(values(var)...))
 end
 
+function scalarize_variable(model, source_vec, var, index; numeric::Bool = false)
+    return scalarize_primary_variable(model, source_vec, var, index; numeric = numeric)
+end
+
 """
     scalarize_primary_variable(model, source_vec, var::Jutul.ScalarVariable, index)
 
 Scalarize a primary variable. For scalars, this means getting the value itself.
 """
-function scalarize_primary_variable(model, source_vec, var::Jutul.ScalarVariable, index)
+function scalarize_primary_variable(model, source_vec, var::Jutul.ScalarVariable, index; numeric::Bool = false)
     return value(source_vec[index])
 end
 
@@ -66,7 +70,7 @@ function scalarized_primary_variable_type(model, var::Jutul.FractionVariables)
     return T
 end
 
-function scalarize_primary_variable(model, source_mat, var::Jutul.FractionVariables, index)
+function scalarize_primary_variable(model, source_mat, var::Jutul.FractionVariables, index; numeric::Bool = false)
     N = degrees_of_freedom_per_entity(model, var)
     if N == 1
         scalar_v = value(source_mat[1, index])

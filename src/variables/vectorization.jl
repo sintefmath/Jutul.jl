@@ -22,12 +22,12 @@ function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary; co
             c = config[k]
         end
         vardef = model[k]
-        vectorize_variable!(V, state_or_prm, k, v, F, vardef, config = c)
+        vectorize_variable!(V, state_or_prm, k, v, F, model, vardef, config = c)
     end
     return V
 end
 
-function vectorize_variable!(V, state, k, info, F, vardef::JutulVariables; config = nothing)
+function vectorize_variable!(V, state, k, info, F, model, vardef::JutulVariables; config = nothing)
     (; n_full, n_x, offset_full, offset_x) = info
     state_val = state[k]
     lumping = get_lumping(config)
@@ -41,7 +41,7 @@ function vectorize_variable!(V, state, k, info, F, vardef::JutulVariables; confi
             iterator = axes(state_val, 1)
         end
         for i in iterator
-            added = vectorize_variable_values!(V, i, offset_x + local_offset, F, state_val, vardef)
+            added = vectorize_variable_values!(V, i, offset_x + local_offset, F, state_val, model, vardef)
             local_offset += added
         end
     else
@@ -55,21 +55,24 @@ function vectorize_variable!(V, state, k, info, F, vardef::JutulVariables; confi
         local_offset = 0
         for i in iterator
             ix = findfirst(isequal(i), lumping)
-            added = vectorize_variable_values!(V, ix, offset_x + local_offset, F, state_val, vardef)
+            added = vectorize_variable_values!(V, ix, offset_x + local_offset, F, state_val, model, vardef)
             local_offset += added
         end
     end
+    return V
 end
 
-function vectorize_variable_values!(dest, idx, dest_offset, F, state_val::AbstractArray, variable_def::JutulVariables)
-    dest[dest_offset + idx] = F(state_val[idx])
+function vectorize_variable_values!(dest, idx, dest_offset, F, state_val::AbstractArray, model::JutulModel, variable_def::JutulVariables)
+    el = scalarize_variable(model, state_val, variable_def, idx, numeric = true)
+    dest[dest_offset + idx] = F(el)
     return 1
 end
 
-function vectorize_variable_values!(dest, idx, dest_offset, F, state_val::AbstractVector, variable_def::JutulVariables)
-    m = size(state_val, 2)
+function vectorize_variable_values!(dest, idx, dest_offset, F, state_val::AbstractVector, model::JutulModel, variable_def::JutulVariables)
+    el = scalarize_variable(model, state_val, variable_def, idx, numeric = true)
+    m = length(el)
     for j in 1:m
-        dest[dest_offset + j] = F(state_val[idx, j])
+        dest[dest_offset + j] = F(el[m])
     end
     return m
 end
