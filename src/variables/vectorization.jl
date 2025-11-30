@@ -40,7 +40,7 @@ function vectorize_variable!(V, state, k, info, F, model, vardef::JutulVariables
         if state_val isa AbstractVector
             iterator = 1:n_x
         else
-            iterator = axes(state_val, 1)
+            iterator = axes(state_val, 2)
         end
         for i in iterator
             vectorize_variable_values!(V, i, offset_x, F, state_val, model, vardef)
@@ -181,7 +181,7 @@ function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x::
     return dest
 end
 
-function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x::AbstractMatrix, model::JutulModel, variable_def::ScalarVariable, idx_dest::Int = idx)
+function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x::AbstractMatrix, model::JutulModel, variable_def, idx_dest::Int = idx)
     m = degrees_of_freedom_per_entity(model, variable_def)
     for j in 1:m
         descalarize_variable!(dest, model, x[offset_x + (idx - 1)*m + j], variable_def, (idx_dest - 1)*m + j, reference, F = F_inv)

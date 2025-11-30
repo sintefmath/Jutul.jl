@@ -50,6 +50,18 @@ function scalarize_primary_variable(model, source_vec, var::Jutul.ScalarVariable
     return value(source_vec[index])
 end
 
+function scalarize_primary_variable(model, source_vec, var::Jutul.JutulVariables, index; numeric::Bool = false)
+    num = degrees_of_freedom_per_entity(model, var)
+    if num == 1
+        scalar_v = value(source_vec[1, index])
+    else
+        tmp = @MVector zeros(num)
+        for i in 1:num
+            tmp[i] = value(source_vec[i, index])
+        end
+        scalar_v = SVector{num, Float64}(tmp)
+    end
+end
 
 function descalarize_variable!(dest_array, model, V, var, index, reference = missing; F = identity)
     return descalarize_primary_variable!(dest_array, model, V, var, index, reference, F = F)
@@ -89,7 +101,7 @@ function scalarize_primary_variable(model, source_mat, var::Jutul.FractionVariab
     return scalar_v
 end
 
-function descalarize_primary_variable!(dest_array, old_dest_val, model, V, var::Jutul.FractionVariables, index; F = identity)
+function descalarize_primary_variable!(dest_array, model, V, var::Jutul.FractionVariables, index, ref = missing; F = identity)
     rem = Jutul.maximum_value(var) - sum(V)
     for i in eachindex(V)
         dest_array[i, index] = Jutul.replace_value(dest_array[i, index], F(V[i]))
