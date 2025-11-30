@@ -110,23 +110,14 @@ function devectorize_variable!(state, model, V, k, info, F_inv; reference = miss
             state[k] = state_val
         end
     else
-        # Need to allocate blackoil x...
-        # el = scalarize_variable(model, state_val, vardef, 1, numeric = true)
-        # T_state_el = eltype(el)
+        # These are complex types (e.g. containing multiple numbers). We have to
+        # be a bit careful.
         T_updated = scalarized_primary_variable_type(model, vardef, T)
         if T_state != T_updated
             state_val = zeros(T_updated, size(state_val))
             state[k] = state_val
         end
-        if !ismissing(reference)
-            @info "Not real" k T_state T_updated T typeof(state[k])
-            # vectorize_variable!(state_val, state, k, info, x -> x, model, vardef; config = config, offset_x = 0)
-        end
     end
-    # Need to have both values and destination - separately!
-    # TODO: Make this conditional
-    # state_val = vectorize_variable!(state_val, state, k, info, x -> x, model, vardef; config = config, offset_x = 0)
-
     lumping = get_lumping(config)
     devectorize_variable_inner!(state_val, reference, model, vardef, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
     return state
