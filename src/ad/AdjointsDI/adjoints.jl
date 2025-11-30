@@ -57,10 +57,10 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
     t_solve = @elapsed begin
         N = length(packed_steps)
         case = setup_case(X, F, packed_steps, state0, :all)
+        storage[:case_without_ad][] = case
         if F != storage[:F_input]
             @warn "The function F used in the solve must be the same as the one used in the setup."
         end
-        # F_dynamic = storage[:F_dynamic]
         F_static = storage[:F_static]
         is_fully_dynamic = storage[:F_fully_dynamic]
         if is_fully_dynamic
@@ -188,6 +188,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         )
     end
     # Prepare Jacobian evaluation
+    storage[:case_without_ad] = Ref{JutulCase}(case)
     if fully_dynamic
         # If we are in "fully dynamic" mode we always differentiate the entire
         # setup function. This can be costly but covers everything.
@@ -228,9 +229,10 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         else
             N_state0 = 0
         end
+        case_no_ad = storage[:case_without_ad]
         cache_static = Dict{Type, AbstractVector}()
         F_static = (X, step_info = missing) -> map_X_to_Y(F, X, prm_model, parameter_map, state0_map, cache_static)
-        F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, case, parameter_map, state0_map; model = prm_model, step_info = step_info)
+        F_dynamic = (Y, step_info = missing) -> setup_from_vectorized(Y, case, parameter_map, state0_map, case_no_ad; model = prm_model, step_info = step_info)
         if do_prep
             prep_static = prepare_jacobian(F_static, backend, X)
         end
@@ -482,10 +484,6 @@ function (H::AdjointObjectiveHelper)(x)
         v = evaluate(x, H.step_index)
     end
     return v
-end
-
-function setup_outer_chain_rule(F, case, deps::Symbol)
-    return (F_dynamic, F_static, dF_static_dX)
 end
 
 function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, substep_index::Int, cache = missing; is_sum = true)

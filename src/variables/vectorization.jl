@@ -27,8 +27,11 @@ function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary; co
     return V
 end
 
-function vectorize_variable!(V, state, k, info, F, model, vardef::JutulVariables; config = nothing)
-    (; n_full, n_x, offset_full, offset_x) = info
+function vectorize_variable!(V, state, k, info, F, model, vardef::JutulVariables;
+        config = nothing,
+        offset_x = info.offset_x
+    )
+    (; n_full, n_x) = info
     state_val = state[k]
     lumping = get_lumping(config)
     if isnothing(lumping)
@@ -75,7 +78,7 @@ function vectorize_variable_values!(dest, idx, dest_offset, F, state_val::Abstra
     return dest
 end
 
-function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary; config = nothing)
+function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary; reference = missing, config = nothing)
     mapper = get_mapper_internal(model, type_or_map)
     for (k, v) in mapper
         if isnothing(config)
@@ -84,23 +87,44 @@ function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary; 
             c = config[k]
         end
         F = opt_scaler_function(config, k, inv = true)
-        devectorize_variable!(state_or_prm, model, V, k, v, F, config = c)
+        if ismissing(reference)
+            ref = missing
+        else
+            ref = reference[k]
+        end
+        devectorize_variable!(state_or_prm, model, V, k, v, F, reference = ref, config = c)
     end
     return state_or_prm
 end
 
-function devectorize_variable!(state, model, V, k, info, F_inv; config = nothing)
+function devectorize_variable!(state, model, V, k, info, F_inv; reference = missing, config = nothing)
     (; n_full, n_x, offset_full, offset_x) = info
     state_val = state[k]
     vardef = model[k]
-    el = scalarize_variable(model, state_val, vardef, 1, numeric = true)
-    T_state = eltype(el)
-    # Uh oh, this needs to be fixed for BO
+    T_state = eltype(state_val)
     T = eltype(V)
-    if T_state != T
-        state_val = similar(state_val, T)
-        state[k] = state_val
+    # old_state_val = state[k]
+    if T_state<:Real
+        if T_state != T
+            state_val = zeros(T, size(state_val))
+            state[k] = state_val
+        end
+    else
+        # Need to allocate blackoil x...
+        # el = scalarize_variable(model, state_val, vardef, 1, numeric = true)
+        # T_state_el = eltype(el)
+        T_updated = scalarized_primary_variable_type(model, vardef, T)
+        @info "Not real" k T_state T_updated T
+        if T_state != T_updated
+            state_val = zeros(T_updated, size(state_val))
+            state[k] = state_val
+        end
+        # vectorize_variable!(state_val, state, k, info, x -> x, model, vardef; config = config, offset_x = 0)
     end
+    # Need to have both values and destination - separately!
+    # TODO: Make this conditional
+    # state_val = vectorize_variable!(state_val, state, k, info, x -> x, model, vardef; config = config, offset_x = 0)
+
     lumping = get_lumping(config)
     devectorize_variable_inner!(state_val, model, vardef, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
     return state

@@ -20,21 +20,21 @@ end
 Get the type of a scalarized numerical variable (=Float64 for variables that are
 already represented as scalars)
 """
-function scalarized_primary_variable_type(model, var::Jutul.ScalarVariable)
-    return Float64
+function scalarized_primary_variable_type(model, var::Jutul.ScalarVariable, T = Float64)
+    return T
 end
 
-function scalarized_primary_variable_type(model, vars::Tuple)
-    types = map(x -> scalarized_primary_variable_type(model, x), vars)
+function scalarized_primary_variable_type(model, vars::Tuple, T = Float64)
+    types = map(x -> scalarized_primary_variable_type(model, x), vars, T)
     return ScalarizedJutulVariables{Tuple{types...}}
 end
 
-function scalarized_primary_variable_type(model, var::NamedTuple)
-    return scalarized_primary_variable_type(model, values(var))
+function scalarized_primary_variable_type(model, var::NamedTuple, T = Float64)
+    return scalarized_primary_variable_type(model, values(var), T)
 end
 
-function scalarized_primary_variable_type(model, var::AbstractDict)
-    return scalarized_primary_variable_type(model, tuple(values(var)...))
+function scalarized_primary_variable_type(model, var::AbstractDict, T = Float64)
+    return scalarized_primary_variable_type(model, tuple(values(var)...), T)
 end
 
 function scalarize_variable(model, source_vec, var, index; numeric::Bool = false)
@@ -65,12 +65,12 @@ function descalarize_primary_variable!(dest_array, model, V, var::Jutul.ScalarVa
     dest_array[index] = Jutul.replace_value(dest_array[index], F(V))
 end
 
-function scalarized_primary_variable_type(model, var::Jutul.FractionVariables)
+function scalarized_primary_variable_type(model, var::Jutul.FractionVariables, T_num = Float64)
     N = degrees_of_freedom_per_entity(model, var)
     if N == 1
-        T = Float64
+        T = T_num
     else
-        T = SVector{N, Float64}
+        T = SVector{N, T_num}
     end
     return T
 end
@@ -89,7 +89,7 @@ function scalarize_primary_variable(model, source_mat, var::Jutul.FractionVariab
     return scalar_v
 end
 
-function descalarize_primary_variable!(dest_array, model, V, var::Jutul.FractionVariables, index; F = identity)
+function descalarize_primary_variable!(dest_array, old_dest_val, model, V, var::Jutul.FractionVariables, index; F = identity)
     rem = Jutul.maximum_value(var) - sum(V)
     for i in eachindex(V)
         dest_array[i, index] = Jutul.replace_value(dest_array[i, index], F(V[i]))
