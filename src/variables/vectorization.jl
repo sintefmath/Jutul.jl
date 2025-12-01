@@ -55,7 +55,7 @@ function vectorize_variable!(V, state, k, info, F, model, vardef::JutulVariables
         iterator = 1:maximum(lumping)
         for i in iterator
             ix = findfirst(isequal(i), lumping)
-            vectorize_variable_values!(V, ix, offset_x, F, state_val, model, vardef)
+            vectorize_variable_values!(V, i, ix, offset_x, F, state_val, model, vardef)
         end
     end
     return V
@@ -68,8 +68,8 @@ end
 #     return dest
 # end
 
-function vectorize_variable_values!(dest, idx, dest_offset, F, state_val::AbstractArray, model::JutulModel, variable_def::JutulVariables)
-    el = scalarize_variable(model, state_val, variable_def, idx, numeric = true)
+function vectorize_variable_values!(dest, idx, idx_state, dest_offset, F, state_val::AbstractArray, model::JutulModel, variable_def::JutulVariables)
+    el = scalarize_variable(model, state_val, variable_def, idx_state, numeric = true)
     m = length(el)
     @assert degrees_of_freedom_per_entity(model, variable_def) == m
     for j in 1:m
