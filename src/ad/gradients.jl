@@ -122,15 +122,6 @@ function setup_adjoint_storage(model;
     n_prm = number_of_degrees_of_freedom(parameter_model)
     # Note that primary is here because the target parameters are now the primaries for the parameter_model
     parameter_map, = variable_mapper(parameter_model, :primary, targets = targets; kwarg...)
-    if include_state0
-        state0_map, = variable_mapper(model, :primary)
-        n_state0 = number_of_degrees_of_freedom(model)
-        state0_vec = zeros(n_state0)
-    else
-        state0_map = missing
-        state0_vec = missing
-        n_state0 = 0
-    end
     # Transfer over parameters and state0 variables since many parameters are now variables
     state0_p = swap_variables(state0, parameters, parameter_model, variables = true)
     parameters_p = swap_variables(state0, parameters, parameter_model, variables = false)
@@ -151,6 +142,15 @@ function setup_adjoint_storage(model;
             n_objective = n_objective,
             info_level = info_level,
     )
+    if include_state0
+        state0_model = storage.backward.model
+        state0_map, = variable_mapper(state0_model, :primary)
+        n_state0 = number_of_degrees_of_freedom(state0_model)
+        state0_vec = zeros(n_state0)
+    else
+        state0_map = missing
+        state0_vec = missing
+    end
     storage[:dparam] = dobj_dparam
     storage[:param_buf] = param_buf
     storage[:parameter] = parameter_sim
