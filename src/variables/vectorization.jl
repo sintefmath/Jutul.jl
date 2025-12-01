@@ -43,7 +43,7 @@ function vectorize_variable!(V, state, k, info, F, model, vardef::JutulVariables
             iterator = axes(state_val, 2)
         end
         for i in iterator
-            vectorize_variable_values!(V, i, offset_x, F, state_val, model, vardef)
+            vectorize_variable_values!(V, i, i, offset_x, F, state_val, model, vardef)
         end
     else
         lumping::AbstractVector
