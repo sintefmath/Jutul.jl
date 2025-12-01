@@ -78,6 +78,7 @@ function descalarize_primary_variable!(dest_array, model, V, var::Jutul.ScalarVa
 end
 
 function descalarize_primary_variable!(dest_array, model, V, var::Jutul.JutulVariables, index, ref = missing; F = identity)
+    @assert size(dest_array, 1) == length(V)
     for i in eachindex(V)
         dest_array[i, index] = Jutul.replace_value(dest_array[i, index], F(V[i]))
     end
@@ -112,6 +113,7 @@ function descalarize_primary_variable!(dest_array, model, V, var::Jutul.Fraction
     for i in eachindex(V)
         dest_array[i, index] = Jutul.replace_value(dest_array[i, index], F(V[i]))
     end
+    @assert size(dest_array, 1) == length(V) + 1
     dest_array[end, index] = Jutul.replace_value(dest_array[end, index], rem)
 end
 

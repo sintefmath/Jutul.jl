@@ -134,56 +134,25 @@ function devectorize_variable_inner!(state_val, reference, model::JutulModel, va
             iterator = axes(state_val, 2)
         end
         for idx in iterator
-            devectorize_variable_values!(state_val, reference, idx, offset_x, F_inv, V, model, vardef)
+            devectorize_variable_values!(state_val, reference, idx, idx, offset_x, F_inv, V, model, vardef)
         end
-        
-        # if state_val isa AbstractVector
-        #     for i in 1:n_full
-        #         state_val[i] = F_inv(V[offset_x+i])
-        #     end
-        # else
-        #     l, m = size(state_val)
-        #     ctr = 1
-        #     for i in 1:l
-        #         for j in 1:m
-        #             state_val[i, j] = F_inv(V[offset_x+ctr])
-        #             ctr += 1
-        #         end
-        #     end
-        # end
     else
-
         for (i, lump) in enumerate(lumping)
-            devectorize_variable_values!(state_val, reference, lump, offset_x, F_inv, V, model, vardef, i)
-        end
-        if false
-            if state_val isa AbstractVector
-                for (i, lump) in enumerate(lumping)
-                    state_val[i] = F_inv(V[offset_x+lump])
-                end
-            else
-                lumping::AbstractVector
-                m, ncell = size(state_val)
-                nlump = length(lumping)
-                @assert ncell == nlump "Lumping must be given as a vector with one value per column ($ncell) for matrix, was $nlump"
-                for (i, lump) in enumerate(lumping)
-                    for j in 1:m
-                        state_val[j, i] = F_inv(V[offset_x+(lump-1)*m+j])
-                    end
-                end
-            end
+            devectorize_variable_values!(state_val, reference, lump, i, offset_x, F_inv, V, model, vardef)
         end
     end
 end
 
-function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x::AbstractVector, model::JutulModel, variable_def::ScalarVariable, idx_dest::Int = idx)
-    descalarize_variable!(dest, model, x[offset_x + idx], variable_def, idx_dest, reference, F = F_inv)
+function devectorize_variable_values!(dest, reference, idx, idx_dest, offset_x, F_inv, x::AbstractVector, model::JutulModel, variable_def::ScalarVariable)
+    x_sub = x[offset_x + idx]
+    descalarize_variable!(dest, model, x_sub, variable_def, idx_dest, reference, F = F_inv)
     return dest
 end
 
-function devectorize_variable_values!(dest, reference, idx, offset_x, F_inv, x, model::JutulModel, variable_def, idx_dest::Int = idx)
+function devectorize_variable_values!(dest, reference, idx, idx_dest, offset_x, F_inv, x, model::JutulModel, variable_def)
     m = degrees_of_freedom_per_entity(model, variable_def)
-    x_sub = view(x, (offset_x + 1):(offset_x + m))
+    base_offset = offset_x + (idx - 1)*m
+    x_sub = view(x, (base_offset + 1):(base_offset + m))
     descalarize_variable!(dest, model, x_sub, variable_def, idx_dest, reference, F = F_inv)
     return dest
 end
