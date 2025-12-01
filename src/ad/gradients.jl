@@ -147,9 +147,11 @@ function setup_adjoint_storage(model;
         state0_map, = variable_mapper(state0_model, :primary)
         n_state0 = number_of_degrees_of_freedom(state0_model)
         state0_vec = zeros(n_state0)
+        state0_buf = similar(state0_vec)
     else
         state0_map = missing
         state0_vec = missing
+        state0_buf = missing
     end
     storage[:dparam] = dobj_dparam
     storage[:param_buf] = param_buf
@@ -157,6 +159,7 @@ function setup_adjoint_storage(model;
     storage[:parameter_map] = parameter_map
     storage[:state0_map] = state0_map
     storage[:dstate0] = state0_vec
+    storage[:state0_buf] = state0_buf
     storage[:n] = n_prm
 
     return storage
@@ -976,35 +979,21 @@ function update_state0_sensitivities!(storage)
     if !ismissing(state0_map)
         sim = storage.backward
         model = sim.model
-        # model = storage.forward.model
         # Assume that this gets called at the end when everything has been set
         # up in terms of the simulators
         λ = storage.lagrange # has canonical order
-        @info "???" model[:Reservoir].context
-        if !haskey(storage, :state0_renum) && false
-            # order = collect(eachindex(λ))
-            renum = similar(order) # use for reordering λ and scaling
-            # renum = collect(eachindex(order))
-            adjoint_transfer_canonical_order!(renum, order, model)
-            λ_renum = similar(λ)
-            storage[:state0_renum] = renum
-            storage[:state0_lagrange] = λ_renum
-        end
-        # renum = storage.state0_renum
-        # λ_renum = storage.state0_lagrange
-        # @. λ_renum[renum] = λ
-        # @info "???" renum
-        # λ_renum = λ
         lsys_b = sim.storage.LinearizedSystem
         op_b = linear_operator(lsys_b, skip_red = true)
         ∇x = storage.dstate0
-        @. ∇x = 0.0
-        λ_renum = similar(λ)
+        buf = storage.state0_buf
+        @. buf = 0.0
+        λ_renum = storage.lagrange_buffer
+        # Transfer from canonical order
         adjoint_transfer_canonical_order!(λ_renum, λ, model, to_canonical = false)
-        sens_add_mult!(∇x, op_b, λ_renum)
-        tmp = copy(∇x)
-        adjoint_transfer_canonical_order!(∇x, tmp, model, to_canonical = true)
-        rescale_sensitivities!(∇x, model, storage.state0_map)#, renum = renum)
+        sens_add_mult!(buf, op_b, λ_renum)
+        # Transfer back to canonical order before return usage
+        adjoint_transfer_canonical_order!(∇x, buf, model, to_canonical = true)
+        rescale_sensitivities!(∇x, model, storage.state0_map)
     end
 end
 
