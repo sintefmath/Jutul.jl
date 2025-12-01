@@ -976,20 +976,35 @@ function update_state0_sensitivities!(storage)
     if !ismissing(state0_map)
         sim = storage.backward
         model = sim.model
+        # model = storage.forward.model
         # Assume that this gets called at the end when everything has been set
         # up in terms of the simulators
         λ = storage.lagrange # has canonical order
-        order = collect(eachindex(λ))
-        renum = similar(order) # use for reordering λ and scaling
-        adjoint_transfer_canonical_order!(renum, order, model)
-        λ_renum = similar(λ)
-        @. λ_renum[renum] = λ
+        @info "???" model[:Reservoir].context
+        if !haskey(storage, :state0_renum) && false
+            # order = collect(eachindex(λ))
+            renum = similar(order) # use for reordering λ and scaling
+            # renum = collect(eachindex(order))
+            adjoint_transfer_canonical_order!(renum, order, model)
+            λ_renum = similar(λ)
+            storage[:state0_renum] = renum
+            storage[:state0_lagrange] = λ_renum
+        end
+        # renum = storage.state0_renum
+        # λ_renum = storage.state0_lagrange
+        # @. λ_renum[renum] = λ
+        # @info "???" renum
+        # λ_renum = λ
         lsys_b = sim.storage.LinearizedSystem
         op_b = linear_operator(lsys_b, skip_red = true)
         ∇x = storage.dstate0
         @. ∇x = 0.0
+        λ_renum = similar(λ)
+        adjoint_transfer_canonical_order!(λ_renum, λ, model, to_canonical = false)
         sens_add_mult!(∇x, op_b, λ_renum)
-        rescale_sensitivities!(∇x, model, storage.state0_map, renum = renum)
+        tmp = copy(∇x)
+        adjoint_transfer_canonical_order!(∇x, tmp, model, to_canonical = true)
+        rescale_sensitivities!(∇x, model, storage.state0_map)#, renum = renum)
     end
 end
 
