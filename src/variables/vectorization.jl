@@ -42,8 +42,9 @@ function vectorize_variable!(V, state, k, info, F, model, vardef::JutulVariables
         else
             iterator = axes(state_val, 2)
         end
+        n_dest = length(iterator)
         for i in iterator
-            vectorize_variable_values!(V, i, i, offset_x, F, state_val, model, vardef)
+            vectorize_variable_values!(V, i, i, offset_x, n_dest, F, state_val, model, vardef)
         end
     else
         lumping::AbstractVector
@@ -53,9 +54,10 @@ function vectorize_variable!(V, state, k, info, F, model, vardef::JutulVariables
             @assert size(state_val, 2) == length(lumping) "Lumping must be given as a vector with one value per column for matrix, was $(length(lumping))"
         end
         iterator = 1:maximum(lumping)
+        n_dest = length(iterator)
         for i in iterator
             ix = findfirst(isequal(i), lumping)
-            vectorize_variable_values!(V, i, ix, offset_x, F, state_val, model, vardef)
+            vectorize_variable_values!(V, i, ix, offset_x, n_dest, F, state_val, model, vardef)
         end
     end
     return V
@@ -68,12 +70,13 @@ end
 #     return dest
 # end
 
-function vectorize_variable_values!(dest, idx, idx_state, dest_offset, F, state_val::AbstractArray, model::JutulModel, variable_def::JutulVariables)
+function vectorize_variable_values!(dest, idx, idx_state, dest_offset, n_dest, F, state_val::AbstractArray, model::JutulModel, variable_def::JutulVariables)
     el = scalarize_variable(model, state_val, variable_def, idx_state, numeric = true)
     m = length(el)
     @assert degrees_of_freedom_per_entity(model, variable_def) == m
     for j in 1:m
-        dest[dest_offset + (idx - 1)*m + j] = F(el[j])
+        # dest[dest_offset + (idx - 1)*m + j] = F(el[j])
+        dest[dest_offset + (j - 1)*n_dest + idx] = F(el[j])
     end
     return dest
 end
@@ -133,26 +136,30 @@ function devectorize_variable_inner!(state_val, reference, model::JutulModel, va
         else
             iterator = axes(state_val, 2)
         end
+        ndest = length(iterator)
         for idx in iterator
-            devectorize_variable_values!(state_val, reference, idx, idx, offset_x, F_inv, V, model, vardef)
+            devectorize_variable_values!(state_val, reference, idx, idx, offset_x, ndest, F_inv, V, model, vardef)
         end
     else
+        ndest = maximum(lumping)
         for (i, lump) in enumerate(lumping)
-            devectorize_variable_values!(state_val, reference, lump, i, offset_x, F_inv, V, model, vardef)
+            devectorize_variable_values!(state_val, reference, lump, i, offset_x, ndest, F_inv, V, model, vardef)
         end
     end
 end
 
-function devectorize_variable_values!(dest, reference, idx, idx_dest, offset_x, F_inv, x::AbstractVector, model::JutulModel, variable_def::ScalarVariable)
+function devectorize_variable_values!(dest, reference, idx, idx_dest, offset_x, ndest, F_inv, x::AbstractVector, model::JutulModel, variable_def::ScalarVariable)
     x_sub = x[offset_x + idx]
     descalarize_variable!(dest, model, x_sub, variable_def, idx_dest, reference, F = F_inv)
     return dest
 end
 
-function devectorize_variable_values!(dest, reference, idx, idx_dest, offset_x, F_inv, x, model::JutulModel, variable_def)
+function devectorize_variable_values!(dest, reference, idx, idx_dest, offset_x, ndest, F_inv, x, model::JutulModel, variable_def)
     m = degrees_of_freedom_per_entity(model, variable_def)
-    base_offset = offset_x + (idx - 1)*m
-    x_sub = view(x, (base_offset + 1):(base_offset + m))
+    # base_offset = offset_x + (idx - 1)*m
+    # x_sub = view(x, (base_offset + 1):(base_offset + m))
+    base_offset = offset_x + idx
+    x_sub = x[base_offset .+ ndest*(0:(m-1))]
     descalarize_variable!(dest, model, x_sub, variable_def, idx_dest, reference, F = F_inv)
     return dest
 end
