@@ -929,6 +929,12 @@ function internal_swapper!(out, A, B, keep, skip)
     end
 end
 
+function adjoint_transfer_canonical_order(dx, model; to_canonical = true)
+    out = similar(dx)
+    adjoint_transfer_canonical_order!(out, dx, model; to_canonical = to_canonical)
+    return out
+end
+
 function adjoint_transfer_canonical_order!(λ, dx, model::MultiModel; to_canonical = true)
     offset = 0
     for (k, m) in pairs(model.models)
