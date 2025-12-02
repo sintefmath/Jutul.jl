@@ -31,14 +31,14 @@ end
 function update_violation_count!(num_violations, status; strategy=:per_measure)
 
     fast = status .== 1
-    diverge = status .== -1
+    slow = status .== -1
     if strategy ∈ [:per_measure, :total]
         num_violations[fast] .-= 1
-        num_violations[diverge] .+= 1
+        num_violations[slow] .+= 1
     elseif strategy == :overall
         if all(fast)
             num_violations .-= 1
-        elseif any(diverge)
+        elseif any(slow)
             num_violations .+= 1
         end
     end
