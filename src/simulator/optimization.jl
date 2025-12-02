@@ -85,8 +85,26 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         variables = parameters
         type = :parameters
     end
+    data = Dict()
 
-    mapper, = variable_mapper(model, type, targets = targets, config = opt_cfg)
+    if grad_type == :adjoint
+        adj_storage = setup_adjoint_storage(model,
+            state0 = state0,
+            parameters = variables,
+            targets = targets,
+            config = opt_cfg,
+            use_sparsity = use_sparsity,
+            param_obj = param_obj,
+            include_state0 = include_state0
+        )
+        data[:adjoint_storage] = adj_storage
+        grad_adj = zeros(adj_storage.n)
+        mapper = adj_storage[:parameter_map]
+    else
+        grad_adj = similar(x0)
+        mapper, = variable_mapper(model, type, targets = targets, config = opt_cfg)
+    end
+
     lims = optimization_limits(opt_cfg, mapper, variables, model)
     if verbose
         print_parameter_optimization_config(targets, opt_cfg, model)
@@ -98,7 +116,6 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
         @assert low <= x0[k] "Computed lower limit $low for parameter #$k was larger than provided x0[k]=$(x0[k])"
         @assert high >= x0[k] "Computer upper limit $high for parameter #$k was smaller than provided x0[k]=$(x0[k])"
     end
-    data = Dict()
     data[:n_objective] = 1
     data[:n_gradient] = 1
     data[:obj_hist] = zeros(0)
@@ -117,20 +134,6 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     data[:sim] = sim
     data[:sim_config] = config
 
-    if grad_type == :adjoint
-        adj_storage = setup_adjoint_storage(model,
-            state0 = state0,
-            parameters = variables,
-            targets = targets,
-            use_sparsity = use_sparsity,
-            param_obj = param_obj,
-            include_state0 = include_state0
-        )
-        data[:adjoint_storage] = adj_storage
-        grad_adj = zeros(adj_storage.n)
-    else
-        grad_adj = similar(x0)
-    end
     data[:case] = case
     data[:grad_adj] = grad_adj
     data[:mapper] = mapper
@@ -545,7 +548,7 @@ function transfer_gradient!(dGdy, dGdx, y, mapper, config, model)
             m_x = n_x ÷ n_row
             m_full = n_full ÷ n_row
             @assert m_x == maximum(lumping) "Lumping group $varname has $m_x groups, but $n_x variables"
-            indx(j, lump) = offset_x + (lump - 1)*n_row + j
+            indx(j, lump) = offset_x + m_x*(j-1) + lump
             for lump in 1:m_x
                 for j in 1:n_row
                     dGdy[indx(j, lump)] = 0.0

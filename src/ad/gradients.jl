@@ -122,15 +122,6 @@ function setup_adjoint_storage(model;
     n_prm = number_of_degrees_of_freedom(parameter_model)
     # Note that primary is here because the target parameters are now the primaries for the parameter_model
     parameter_map, = variable_mapper(parameter_model, :primary, targets = targets; kwarg...)
-    if include_state0
-        state0_map, = variable_mapper(model, :primary)
-        n_state0 = number_of_degrees_of_freedom(model)
-        state0_vec = zeros(n_state0)
-    else
-        state0_map = missing
-        state0_vec = missing
-        n_state0 = 0
-    end
     # Transfer over parameters and state0 variables since many parameters are now variables
     state0_p = swap_variables(state0, parameters, parameter_model, variables = true)
     parameters_p = swap_variables(state0, parameters, parameter_model, variables = false)
@@ -151,12 +142,24 @@ function setup_adjoint_storage(model;
             n_objective = n_objective,
             info_level = info_level,
     )
+    if include_state0
+        state0_model = storage.backward.model
+        state0_map, = variable_mapper(state0_model, :primary)
+        n_state0 = number_of_degrees_of_freedom(state0_model)
+        state0_vec = zeros(n_state0)
+        state0_buf = similar(state0_vec)
+    else
+        state0_map = missing
+        state0_vec = missing
+        state0_buf = missing
+    end
     storage[:dparam] = dobj_dparam
     storage[:param_buf] = param_buf
     storage[:parameter] = parameter_sim
     storage[:parameter_map] = parameter_map
     storage[:state0_map] = state0_map
     storage[:dstate0] = state0_vec
+    storage[:state0_buf] = state0_buf
     storage[:n] = n_prm
 
     return storage
@@ -407,31 +410,6 @@ end
 
 function state_gradient_inner!(∂F∂x, F, model, state, tag, eval_model = model; sparsity = nothing, symbol = nothing)
     layout = matrix_layout(model.context)
-    get_partial(x::AbstractFloat, i) = 0.0
-    get_partial(x::ForwardDiff.Dual, i) = x.partials[i]
-
-    function store_partials!(∂F∂x::AbstractVector, v, i, ne, np, offset)
-        for p_i in 1:np
-            ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
-            ∂F∂x[ix] = get_partial(v, p_i)
-        end
-    end
-
-    function store_partials!(∂F∂x::AbstractMatrix, v, i, ne, np, offset)
-        for j in 1:size(∂F∂x, 2)
-            for p_i in 1:np
-                ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
-                ∂F∂x[ix, j] = get_partial(v[j], p_i)
-            end
-        end
-    end
-
-    function diff_entity!(∂F∂x, state, i, S, ne, np, offset, symbol)
-        state_i = local_ad(state, i, S, symbol)
-        v = F(eval_model, state_i)
-        store_partials!(∂F∂x, v, i, ne, np, offset)
-    end
-
     offset = 0
     for e in get_primary_variable_ordered_entities(model)
         np = number_of_partials_per_entity(model, e)
@@ -444,12 +422,42 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, eval_model = mode
         if length(it_rng) > 0
             ltag = get_entity_tag(tag, e)
             S = typeof(get_ad_entity_scalar(1.0, np, tag = ltag))
-            for i in it_rng
-                diff_entity!(∂F∂x, state, i, S, ne, np, offset, symbol)
-            end
+            state_gradient_inner_diff!(∂F∂x, F, eval_model, it_rng, state, Val(S), Val(ne), Val(np), offset, symbol, layout)
         end
         offset += ne*np
     end
+end
+
+function state_gradient_inner_diff!(∂F∂x, F, eval_model, it_rng, state, S, ne, np, offset, symbol, layout)
+    for i in it_rng
+        state_gradient_inner_diff_entity!(∂F∂x, eval_model, F, state, i, S, ne, np, offset, symbol, layout)
+    end
+    return ∂F∂x
+end
+
+function state_gradient_inner_diff_entity!(∂F∂x, eval_model, F, state, i, ::Val{S}, ::Val{ne}, ::Val{np}, offset, symbol, layout) where {ne, np, S}
+    state_gradient_get_partial(x::AbstractFloat, i) = 0.0
+    state_gradient_get_partial(x::ForwardDiff.Dual, i) = x.partials[i]
+
+    function store_partials!(∂F∂x::AbstractVector, v, i, ne, np, offset)
+        for p_i in 1:np
+            ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
+            ∂F∂x[ix] = state_gradient_get_partial(v, p_i)
+        end
+    end
+
+    function store_partials!(∂F∂x::AbstractMatrix, v, i, ne, np, offset)
+        for j in 1:size(∂F∂x, 2)
+            for p_i in 1:np
+                ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
+                ∂F∂x[ix, j] = state_gradient_get_partial(v[j], p_i)
+            end
+        end
+    end
+
+    state_i = local_ad(state, i, S, symbol)
+    v = F(eval_model, state_i)
+    store_partials!(∂F∂x, v, i, ne, np, offset)
 end
 
 function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, packed_steps::AdjointPackedResult)
@@ -855,8 +863,8 @@ function variable_mapper(model::SimulationModel, type = :primary;
         if var isa Pair
             var = last(var)
         end
-        n = number_of_values(model, var)
-        m = values_per_entity(model, var)
+        n = number_of_degrees_of_freedom(model, var)
+        m = degrees_of_freedom_per_entity(model, var)
         n_x = n
         if !isnothing(config)
             lumping = config[t][:lumping]
@@ -926,6 +934,12 @@ function internal_swapper!(out, A, B, keep, skip)
     end
 end
 
+function adjoint_transfer_canonical_order(dx, model; to_canonical = true)
+    out = similar(dx)
+    adjoint_transfer_canonical_order!(out, dx, model; to_canonical = to_canonical)
+    return out
+end
+
 function adjoint_transfer_canonical_order!(λ, dx, model::MultiModel; to_canonical = true)
     offset = 0
     for (k, m) in pairs(model.models)
@@ -979,17 +993,18 @@ function update_state0_sensitivities!(storage)
         # Assume that this gets called at the end when everything has been set
         # up in terms of the simulators
         λ = storage.lagrange # has canonical order
-        order = collect(eachindex(λ))
-        renum = similar(order) # use for reordering λ and scaling
-        adjoint_transfer_canonical_order!(renum, order, model)
-        λ_renum = similar(λ)
-        @. λ_renum[renum] = λ
         lsys_b = sim.storage.LinearizedSystem
         op_b = linear_operator(lsys_b, skip_red = true)
         ∇x = storage.dstate0
-        @. ∇x = 0.0
-        sens_add_mult!(∇x, op_b, λ_renum)
-        rescale_sensitivities!(∇x, model, storage.state0_map, renum = renum)
+        buf = storage.state0_buf
+        @. buf = 0.0
+        λ_renum = storage.lagrange_buffer
+        # Transfer from canonical order
+        adjoint_transfer_canonical_order!(λ_renum, λ, model, to_canonical = false)
+        sens_add_mult!(buf, op_b, λ_renum)
+        # Transfer back to canonical order before return usage
+        adjoint_transfer_canonical_order!(∇x, buf, model, to_canonical = true)
+        rescale_sensitivities!(∇x, model, storage.state0_map)
     end
 end
 

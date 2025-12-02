@@ -1,6 +1,21 @@
 export vectorize_variables, vectorize_variables!, devectorize_variables!, devectorize_state_and_parameters!
 
 
+"""
+    vectorize_variables(model, state_or_prm, type_or_map = :primary; config = nothing, T = Float64)
+
+Vectorize (flatten) the variables in `state_or_prm` according to the mapping
+given by `type_or_map`. The result is a vector of type `T`. Optionally, `config`
+can be passed to allow for variable exclusion, lumping or scaling.
+
+The vectorized variables are stored in canonical order (i.e., all values for
+each variable are stored contiguously). For example, a model with variables p, x
+where p is scalar and x has two components a, b per entity will be stored as
+
+    [p_1, p_2, ..., p_N, x_a_1, x_a_1, ..., x_a_N, x_b_1, x_b_2, ..., x_b_N]
+
+where N is the number of entities.
+"""
 function vectorize_variables(model, state_or_prm, type_or_map = :primary; config = nothing, T = Float64)
     mapper = get_mapper_internal(model, type_or_map)
     n = vectorized_length(model, mapper)
@@ -21,56 +36,67 @@ function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary; co
         else
             c = config[k]
         end
-        vectorize_variable!(V, state_or_prm, k, v, F, config = c)
+        vardef = model[k]
+        vectorize_variable!(V, state_or_prm, k, v, F, model, vardef, config = c)
     end
     return V
 end
 
-function vectorize_variable!(V, state, k, info, F; config = nothing)
-    (; n_full, n_x, offset_full, offset_x) = info
+function vectorize_variable!(V, state, k, info, F, model, vardef::JutulVariables;
+        config = nothing,
+        offset_x = info.offset_x
+    )
+    (; n_full, n_x) = info
     state_val = state[k]
     lumping = get_lumping(config)
     if isnothing(lumping)
         @assert n_full == n_x
-        @assert length(state_val) == n_x "Expected field $k to have length $n_x, was $(length(state_val))"
+        # @assert length(state_val) == n_x "Expected field $k to have length $n_x, was $(length(state_val))"
         if state_val isa AbstractVector
-            for i in 1:n_x
-                V[offset_x+i] = F(state_val[i])
-            end
+            iterator = 1:n_x
         else
-            l, m = size(state_val)
-            ctr = 0
-            for i in 1:l
-                for j in 1:m
-                    ctr += 1
-                    V[offset_x+ctr] = F(state_val[i, j])
-                end
-            end
-            @assert ctr == n_full
+            iterator = axes(state_val, 2)
+        end
+        n_dest = length(iterator)
+        for i in iterator
+            vectorize_variable_values!(V, i, i, offset_x, n_dest, F, state_val, model, vardef)
         end
     else
         lumping::AbstractVector
         if state_val isa AbstractVector
-            @assert length(state_val) == length(lumping)
-            for i in 1:maximum(lumping)
-                # Take the first lumped value as they must be equal by assumption
-                ix = findfirst(isequal(i), lumping)
-                V[offset_x+i] = F(state_val[ix])
-            end
+            @assert length(state_val) == length(lumping) "Lumping must be given as a vector with one value per column for vector, was $(length(lumping))"
         else
-            @assert size(state_val, 2) == length(lumping) "Lumping must be given as a vector with one value per column for matrix"
-            m = size(state_val, 1)
-            for i in 1:maximum(lumping)
-                ix = findfirst(isequal(i), lumping)
-                for j in 1:m
-                    V[offset_x+(i-1)*m+j] = F(state_val[j, ix])
-                end
-            end
+            @assert size(state_val, 2) == length(lumping) "Lumping must be given as a vector with one value per column for matrix, was $(length(lumping))"
+        end
+        iterator = 1:maximum(lumping)
+        n_dest = length(iterator)
+        for i in iterator
+            ix = findfirst(isequal(i), lumping)
+            vectorize_variable_values!(V, i, ix, offset_x, n_dest, F, state_val, model, vardef)
         end
     end
+    return V
 end
 
-function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary; config = nothing)
+# function vectorize_variable_values!(dest, idx, dest_offset, F, state_val::AbstractVector, model::JutulModel, variable_def::JutulVariables)
+#     el = scalarize_variable(model, state_val, variable_def, idx, numeric = true)
+#     @assert length(el) == 1 "Expected scalar value when vectorizing variable values, got $(length(el))"
+#     dest[dest_offset + idx] = F(el)
+#     return dest
+# end
+
+function vectorize_variable_values!(dest, idx, idx_state, dest_offset, n_dest, F, state_val::AbstractArray, model::JutulModel, variable_def::JutulVariables)
+    el = scalarize_variable(model, state_val, variable_def, idx_state, numeric = true)
+    m = length(el)
+    @assert degrees_of_freedom_per_entity(model, variable_def) == m
+    for j in 1:m
+        # dest[dest_offset + (idx - 1)*m + j] = F(el[j])
+        dest[dest_offset + (j - 1)*n_dest + idx] = F(el[j])
+    end
+    return dest
+end
+
+function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary; reference = missing, config = nothing)
     mapper = get_mapper_internal(model, type_or_map)
     for (k, v) in mapper
         if isnothing(config)
@@ -79,59 +105,80 @@ function devectorize_variables!(state_or_prm, model, V, type_or_map = :primary; 
             c = config[k]
         end
         F = opt_scaler_function(config, k, inv = true)
-        devectorize_variable!(state_or_prm, V, k, v, F, config = c)
+        if ismissing(reference)
+            ref = missing
+        else
+            ref = reference[k]
+        end
+        devectorize_variable!(state_or_prm, model, V, k, v, F, reference = ref, config = c)
     end
     return state_or_prm
 end
 
-function devectorize_variable!(state, V, k, info, F_inv; config = nothing)
+function devectorize_variable!(state, model, V, k, info, F_inv; reference = missing, config = nothing)
     (; n_full, n_x, offset_full, offset_x) = info
     state_val = state[k]
+    vardef = model[k]
+    T_state = eltype(state_val)
     T = eltype(V)
-    if eltype(state_val) != T
-        state_val = similar(state_val, T)
-        state[k] = state_val
+    # old_state_val = state[k]
+    if T_state<:Real
+        if T_state != T
+            state_val = zeros(T, size(state_val))
+            state[k] = state_val
+        end
+    else
+        # These are complex types (e.g. containing multiple numbers). We have to
+        # be a bit careful.
+        T_updated = scalarized_primary_variable_type(model, vardef, T)
+        if T_state != T_updated
+            state_val = zeros(T_updated, size(state_val))
+            state[k] = state_val
+        end
     end
     lumping = get_lumping(config)
-    devectorize_variable_inner!(state_val, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
+    devectorize_variable_inner!(state_val, reference, model, vardef, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
     return state
 end
 
-function devectorize_variable_inner!(state_val, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
+function devectorize_variable_inner!(state_val, reference, model::JutulModel, vardef::JutulVariables, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
+    m = degrees_of_freedom_per_entity(model, vardef)
     if isnothing(lumping)
         @assert n_full == n_x
-        @assert length(state_val) == n_full "Expected field $k to have length $n_full, was $(length(state_val))"
+        # @assert length(state_val) == n_full "Expected field $k to have length $n_full, was $(length(state_val))"
         if state_val isa AbstractVector
-            for i in 1:n_full
-                state_val[i] = F_inv(V[offset_x+i])
-            end
+            iterator = 1:n_full
         else
-            l, m = size(state_val)
-            ctr = 1
-            for i in 1:l
-                for j in 1:m
-                    state_val[i, j] = F_inv(V[offset_x+ctr])
-                    ctr += 1
-                end
-            end
+            iterator = axes(state_val, 2)
+        end
+        ndest = length(iterator)
+        for idx in iterator
+            devectorize_variable_values!(state_val, reference, idx, idx, offset_x, ndest, F_inv, V, model, vardef)
         end
     else
-        if state_val isa AbstractVector
-            for (i, lump) in enumerate(lumping)
-                state_val[i] = F_inv(V[offset_x+lump])
-            end
-        else
-            lumping::AbstractVector
-            m, ncell = size(state_val)
-            nlump = length(lumping)
-            @assert ncell == nlump "Lumping must be given as a vector with one value per column ($ncell) for matrix, was $nlump"
-            for (i, lump) in enumerate(lumping)
-                for j in 1:m
-                    state_val[j, i] = F_inv(V[offset_x+(lump-1)*m+j])
-                end
-            end
+        ndest = maximum(lumping)
+        for (i, lump) in enumerate(lumping)
+            devectorize_variable_values!(state_val, reference, lump, i, offset_x, ndest, F_inv, V, model, vardef)
         end
     end
+end
+
+function devectorize_variable_values!(dest, reference, idx, idx_dest, offset_x, ndest, F_inv, x::AbstractVector, model::JutulModel, variable_def::ScalarVariable)
+    x_sub = x[offset_x + idx]
+    descalarize_variable!(dest, model, x_sub, variable_def, idx_dest, reference, F = F_inv)
+    return dest
+end
+
+function devectorize_variable_values!(dest, reference, idx, idx_dest, offset_x, ndest, F_inv, x, model::JutulModel, variable_def)
+    m = degrees_of_freedom_per_entity(model, variable_def)
+    # base_offset = offset_x + (idx - 1)*m
+    # x_sub = view(x, (base_offset + 1):(base_offset + m))
+    base_offset = offset_x + idx
+    subs = base_offset .+ ndest*(0:(m-1))
+    # x_sub = x[base_offset .+ ndest*(0:(m-1))]
+    x_sub = view(x, subs)
+    descalarize_variable!(dest, model, x_sub, variable_def, idx_dest, reference, F = F_inv)
+    return dest
 end
 
 function devectorize_state_and_parameters!(state, parameters, model, V, mapper, config)

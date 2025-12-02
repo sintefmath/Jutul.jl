@@ -19,7 +19,7 @@ function vectorize_variables!(V, model::MultiModel, state_or_prm, type_or_map = 
     return V
 end
 
-function devectorize_variables!(state_or_prm, model::MultiModel, V, type_or_map = :primary; config = nothing)
+function devectorize_variables!(state_or_prm, model::MultiModel, V, type_or_map = :primary; config = nothing, reference = missing)
     mapper = get_mapper_internal(model, type_or_map)
     for (k, submodel) in pairs(model.models)
         if isnothing(config)
@@ -27,7 +27,12 @@ function devectorize_variables!(state_or_prm, model::MultiModel, V, type_or_map 
         else
             c = config[k]
         end
-        devectorize_variables!(state_or_prm[k], submodel, V, mapper[k], config = c)
+        if ismissing(reference)
+            ref = missing
+        else
+            ref = reference[k]
+        end
+        devectorize_variables!(state_or_prm[k], submodel, V, mapper[k], config = c, reference = ref)
     end
     return state_or_prm
 end

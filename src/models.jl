@@ -38,6 +38,17 @@ function get_variables(model::SimulationModel)
 end
 
 """
+    get_variables_and_parameters(model::SimulationModel)
+
+Get all variable definitions (as `OrderedDict`) for a given `model`.
+
+This is the union of [`get_secondary_variables`](@ref),  [`get_primary_variables`](@ref) and [`get_parameters`](@ref).
+"""
+function get_variables_and_parameters(model::SimulationModel)
+    return merge(get_primary_variables(model), get_secondary_variables(model), get_parameters(model))
+end
+
+"""
     get_parameters(model::SimulationModel)
 
 Get the parameter definitions (as `OrderedDict`) for a given `model`.

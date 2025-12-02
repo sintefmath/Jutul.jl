@@ -30,7 +30,9 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
                 backend_arg...,
                 info_level = adj_cache[:info_level]
             )
-            jutul_message("Optimization", "Finished setup in $t_setup seconds.", color = :green)
+            if dopt.verbose
+                jutul_message("Optimization", "Finished setup in $t_setup seconds.", color = :green)
+            end
             adj_cache[:storage] = S
         end
         # Some optimizers use the return value beyond a single call. So we

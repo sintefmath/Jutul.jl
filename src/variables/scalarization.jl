@@ -20,21 +20,25 @@ end
 Get the type of a scalarized numerical variable (=Float64 for variables that are
 already represented as scalars)
 """
-function scalarized_primary_variable_type(model, var::Jutul.ScalarVariable)
-    return Float64
+function scalarized_primary_variable_type(model, var::Jutul.ScalarVariable, T = Float64)
+    return T
 end
 
-function scalarized_primary_variable_type(model, vars::Tuple)
-    types = map(x -> scalarized_primary_variable_type(model, x), vars)
+function scalarized_primary_variable_type(model, vars::Tuple, T = Float64)
+    types = map(x -> scalarized_primary_variable_type(model, x), vars, T)
     return ScalarizedJutulVariables{Tuple{types...}}
 end
 
-function scalarized_primary_variable_type(model, var::NamedTuple)
-    return scalarized_primary_variable_type(model, values(var))
+function scalarized_primary_variable_type(model, var::NamedTuple, T = Float64)
+    return scalarized_primary_variable_type(model, values(var), T)
 end
 
-function scalarized_primary_variable_type(model, var::AbstractDict)
-    return scalarized_primary_variable_type(model, tuple(values(var)...))
+function scalarized_primary_variable_type(model, var::AbstractDict, T = Float64)
+    return scalarized_primary_variable_type(model, tuple(values(var)...), T)
+end
+
+function scalarize_variable(model, source_vec, var, index; numeric::Bool = false)
+    return scalarize_primary_variable(model, source_vec, var, index; numeric = numeric)
 end
 
 """
@@ -42,8 +46,35 @@ end
 
 Scalarize a primary variable. For scalars, this means getting the value itself.
 """
-function scalarize_primary_variable(model, source_vec, var::Jutul.ScalarVariable, index)
+function scalarize_primary_variable(model, source_vec, var::Jutul.ScalarVariable, index; numeric::Bool = false)
     return value(source_vec[index])
+end
+
+function scalarize_primary_variable(model, source_vec, var::Jutul.JutulVariables, index; numeric::Bool = false)
+    num = degrees_of_freedom_per_entity(model, var)
+    T = eltype(source_vec)
+    T_isbits = isbitstype(T)
+    if num == 1
+        scalar_v = value(source_vec[1, index])
+    else
+        if T_isbits
+            tmp = @MVector zeros(T, num)
+            for i in 1:num
+                tmp[i] = value(source_vec[i, index])
+            end
+            scalar_v = SVector{num, T}(tmp)
+        else
+            scalar_v = zeros(T, num)
+            for i in 1:num
+                scalar_v[i] = value(source_vec[i, index])
+            end
+        end
+    end
+    return scalar_v
+end
+
+function descalarize_variable!(dest_array, model, V, var, index, reference = missing; F = identity)
+    return descalarize_primary_variable!(dest_array, model, V, var, index, reference, F = F)
 end
 
 """
@@ -52,21 +83,32 @@ end
 Descalarize a primary variable, overwriting dest_array at entity `index`. The AD
 status of entries in `dest_array` will be retained.
 """
-function descalarize_primary_variable!(dest_array, model, V, var::Jutul.ScalarVariable, index)
-    dest_array[index] = Jutul.replace_value(dest_array[index], V)
+function descalarize_primary_variable!(dest_array, model, V, var::Jutul.ScalarVariable, index, ref = missing;
+        F = identity
+    )
+    dest_array[index] = Jutul.replace_value(dest_array[index], F(V))
 end
 
-function scalarized_primary_variable_type(model, var::Jutul.FractionVariables)
+function descalarize_primary_variable!(dest_array, model, V, var::Jutul.JutulVariables, index, ref = missing;
+        F = identity
+    )
+    @assert size(dest_array, 1) == length(V)
+    for i in eachindex(V)
+        dest_array[i, index] = Jutul.replace_value(dest_array[i, index], F(V[i]))
+    end
+end
+
+function scalarized_primary_variable_type(model, var::Jutul.FractionVariables, T_num = Float64)
     N = degrees_of_freedom_per_entity(model, var)
     if N == 1
-        T = Float64
+        T = T_num
     else
-        T = SVector{N, Float64}
+        T = SVector{N, T_num}
     end
     return T
 end
 
-function scalarize_primary_variable(model, source_mat, var::Jutul.FractionVariables, index)
+function scalarize_primary_variable(model, source_mat, var::Jutul.FractionVariables, index; numeric::Bool = false)
     N = degrees_of_freedom_per_entity(model, var)
     if N == 1
         scalar_v = value(source_mat[1, index])
@@ -80,11 +122,14 @@ function scalarize_primary_variable(model, source_mat, var::Jutul.FractionVariab
     return scalar_v
 end
 
-function descalarize_primary_variable!(dest_array, model, V, var::Jutul.FractionVariables, index)
+function descalarize_primary_variable!(dest_array, model, V, var::Jutul.FractionVariables, index, ref = missing;
+        F = identity
+    )
     rem = Jutul.maximum_value(var) - sum(V)
     for i in eachindex(V)
-        dest_array[i, index] = Jutul.replace_value(dest_array[i, index], V[i])
+        dest_array[i, index] = Jutul.replace_value(dest_array[i, index], F(V[i]))
     end
+    @assert size(dest_array, 1) == length(V) + 1
     dest_array[end, index] = Jutul.replace_value(dest_array[end, index], rem)
 end
 
