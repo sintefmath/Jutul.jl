@@ -1,6 +1,21 @@
 export vectorize_variables, vectorize_variables!, devectorize_variables!, devectorize_state_and_parameters!
 
 
+"""
+    vectorize_variables(model, state_or_prm, type_or_map = :primary; config = nothing, T = Float64)
+
+Vectorize (flatten) the variables in `state_or_prm` according to the mapping
+given by `type_or_map`. The result is a vector of type `T`. Optionally, `config`
+can be passed to allow for variable exclusion, lumping or scaling.
+
+The vectorized variables are stored in canonical order (i.e., all values for
+each variable are stored contiguously). For example, a model with variables p, x
+where p is scalar and x has two components a, b per entity will be stored as
+
+    [p_1, p_2, ..., p_N, x_a_1, x_a_1, ..., x_a_N, x_b_1, x_b_2, ..., x_b_N]
+
+where N is the number of entities.
+"""
 function vectorize_variables(model, state_or_prm, type_or_map = :primary; config = nothing, T = Float64)
     mapper = get_mapper_internal(model, type_or_map)
     n = vectorized_length(model, mapper)
