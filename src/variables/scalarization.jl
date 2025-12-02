@@ -52,15 +52,25 @@ end
 
 function scalarize_primary_variable(model, source_vec, var::Jutul.JutulVariables, index; numeric::Bool = false)
     num = degrees_of_freedom_per_entity(model, var)
+    T = eltype(source_vec)
+    T_isbits = isbitstype(T)
     if num == 1
         scalar_v = value(source_vec[1, index])
     else
-        tmp = @MVector zeros(num)
-        for i in 1:num
-            tmp[i] = value(source_vec[i, index])
+        if T_isbits
+            tmp = @MVector zeros(T, num)
+            for i in 1:num
+                tmp[i] = value(source_vec[i, index])
+            end
+            scalar_v = SVector{num, T}(tmp)
+        else
+            scalar_v = zeros(T, num)
+            for i in 1:num
+                scalar_v[i] = value(source_vec[i, index])
+            end
         end
-        scalar_v = SVector{num, Float64}(tmp)
     end
+    return scalar_v
 end
 
 function descalarize_variable!(dest_array, model, V, var, index, reference = missing; F = identity)
