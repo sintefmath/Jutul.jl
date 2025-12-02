@@ -159,7 +159,9 @@ function devectorize_variable_values!(dest, reference, idx, idx_dest, offset_x, 
     # base_offset = offset_x + (idx - 1)*m
     # x_sub = view(x, (base_offset + 1):(base_offset + m))
     base_offset = offset_x + idx
-    x_sub = x[base_offset .+ ndest*(0:(m-1))]
+    subs = base_offset .+ ndest*(0:(m-1))
+    # x_sub = x[base_offset .+ ndest*(0:(m-1))]
+    x_sub = view(x, subs)
     descalarize_variable!(dest, model, x_sub, variable_def, idx_dest, reference, F = F_inv)
     return dest
 end
