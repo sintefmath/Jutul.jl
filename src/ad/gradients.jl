@@ -410,31 +410,6 @@ end
 
 function state_gradient_inner!(∂F∂x, F, model, state, tag, eval_model = model; sparsity = nothing, symbol = nothing)
     layout = matrix_layout(model.context)
-    get_partial(x::AbstractFloat, i) = 0.0
-    get_partial(x::ForwardDiff.Dual, i) = x.partials[i]
-
-    function store_partials!(∂F∂x::AbstractVector, v, i, ne, np, offset)
-        for p_i in 1:np
-            ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
-            ∂F∂x[ix] = get_partial(v, p_i)
-        end
-    end
-
-    function store_partials!(∂F∂x::AbstractMatrix, v, i, ne, np, offset)
-        for j in 1:size(∂F∂x, 2)
-            for p_i in 1:np
-                ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
-                ∂F∂x[ix, j] = get_partial(v[j], p_i)
-            end
-        end
-    end
-
-    function diff_entity!(∂F∂x, state, i, S, ne, np, offset, symbol)
-        state_i = local_ad(state, i, S, symbol)
-        v = F(eval_model, state_i)
-        store_partials!(∂F∂x, v, i, ne, np, offset)
-    end
-
     offset = 0
     for e in get_primary_variable_ordered_entities(model)
         np = number_of_partials_per_entity(model, e)
@@ -447,12 +422,42 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, eval_model = mode
         if length(it_rng) > 0
             ltag = get_entity_tag(tag, e)
             S = typeof(get_ad_entity_scalar(1.0, np, tag = ltag))
-            for i in it_rng
-                diff_entity!(∂F∂x, state, i, S, ne, np, offset, symbol)
-            end
+            state_gradient_inner_diff!(∂F∂x, F, eval_model, it_rng, state, Val(S), Val(ne), Val(np), offset, symbol, layout)
         end
         offset += ne*np
     end
+end
+
+function state_gradient_inner_diff!(∂F∂x, F, eval_model, it_rng, state, S, ne, np, offset, symbol, layout)
+    for i in it_rng
+        state_gradient_inner_diff_entity!(∂F∂x, eval_model, F, state, i, S, ne, np, offset, symbol, layout)
+    end
+    return ∂F∂x
+end
+
+function state_gradient_inner_diff_entity!(∂F∂x, eval_model, F, state, i, ::Val{S}, ::Val{ne}, ::Val{np}, offset, symbol, layout) where {ne, np, S}
+    state_gradient_get_partial(x::AbstractFloat, i) = 0.0
+    state_gradient_get_partial(x::ForwardDiff.Dual, i) = x.partials[i]
+
+    function store_partials!(∂F∂x::AbstractVector, v, i, ne, np, offset)
+        for p_i in 1:np
+            ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
+            ∂F∂x[ix] = state_gradient_get_partial(v, p_i)
+        end
+    end
+
+    function store_partials!(∂F∂x::AbstractMatrix, v, i, ne, np, offset)
+        for j in 1:size(∂F∂x, 2)
+            for p_i in 1:np
+                ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
+                ∂F∂x[ix, j] = state_gradient_get_partial(v[j], p_i)
+            end
+        end
+    end
+
+    state_i = local_ad(state, i, S, symbol)
+    v = F(eval_model, state_i)
+    store_partials!(∂F∂x, v, i, ne, np, offset)
 end
 
 function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, packed_steps::AdjointPackedResult)
