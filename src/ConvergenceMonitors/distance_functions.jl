@@ -28,7 +28,7 @@ function compute_distance(report;
 
 end
 
-function pool_distances(d, names::Vector{String}, pools::Vector{Vector{Int64}}, p=Inf; check_coverage=true)
+function pool_distances(d, names::Vector{String}, pools::Vector{Vector{Int64}}, p=Inf; check_coverage=true, pool_names=nothing)
 
     if check_coverage
         pix = unique(vcat(pools...))
@@ -41,6 +41,11 @@ function pool_distances(d, names::Vector{String}, pools::Vector{Vector{Int64}}, 
         mp = norm(max.(d[pool].-1, 0.0), p) .+ 1
         m_pooled[k] = mp
         pools_str[k] = names[pool]
+    end
+
+    if pool_names !== nothing
+        @assert length(pool_names) == length(pools) "Number of pool names must match number of pools"
+        pools_str = pool_names
     end
 
     return m_pooled, pools_str
@@ -58,5 +63,14 @@ function pool_distances(d, names::Vector{String}, pools::Union{Vector{String}, V
     end
 
     return pool_distances(d, names, pools_int, args...; kwargs...)
+
+end
+
+function pool_distances(d, names::Vector{String}, pools::Symbol, args...; kwargs...)
+
+    pools == :all || error("This version only supports :all, got: $pools")
+    pools_int = [collect(1:length(names))]
+    pool_names = ["AllMeasures"]
+    return pool_distances(d, names, pools_int, args...;  pool_names=pool_names, kwargs...)
 
 end
