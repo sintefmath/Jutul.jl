@@ -2,7 +2,7 @@
 
     # Function to compute the distance from convergence
     distance_function_args = NamedTuple()
-    # Count viloations per residual
+    # Count viloations per residual measure, overall, or total
     strategy = :per_measure
     # Dict for storing contraction factor history
     history = nothing
@@ -13,7 +13,7 @@
     # Max number of estimated iterations left for iterate to be classified as ok
     max_iterations_left = 4*target_iterations
     # Contraction factor parameters
-    slow = 0.99
+    slow = 0.9
     fast = 0.1
     # Violation counter and limit for timestep cut
     num_violations::Vector{Int} = [0]
@@ -160,7 +160,7 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, na
     Nv = cc.num_violations
     Nv0 = cc.history[:num_violations][max(it-1,1),:]
     # Find index of worst-offending residual
-    Δθ = abs.(θ .- θt)
+    Δθ = θ .- θt
     Δθ[conv] .= 0
     _, worst_ix = findmax(Δθ)
     θ, θt = θ[worst_ix], θt[worst_ix]
