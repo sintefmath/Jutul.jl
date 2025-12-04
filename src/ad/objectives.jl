@@ -12,7 +12,7 @@ function adjoint_wrap_objective(G, model)
         if is_global_obj
             obj = WrappedGlobalObjective(G)
         else
-            error("Objective function must be a sum of scalar objectives or....")
+            error("Objective function must be a sum of scalar objectives or a global objective")
         end
     end
     return obj

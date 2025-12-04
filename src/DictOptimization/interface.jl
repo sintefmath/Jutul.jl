@@ -282,7 +282,7 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.se
         output_cache = false,
         deps = :case,
         backend_arg = (
-            use_sparsity = false,
+            use_sparsity = true,
             di_sparse = true,
             single_step_sparsity = deps != :case,
             do_prep = true,
