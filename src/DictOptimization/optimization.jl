@@ -183,7 +183,7 @@ function optimization_setup(dopt::DictParameters; include_limits = true)
     if include_limits
         lims = realize_limits(dopt, x_setup)
     else
-        lims = missing
+        lims = (min = missing, max = missing)
     end
 
     lumping = get_lumping_for_vectorize_nested(dopt)
