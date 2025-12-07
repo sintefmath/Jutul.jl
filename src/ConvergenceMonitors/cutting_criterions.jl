@@ -82,7 +82,7 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
         early_cut = sum(cc.num_violations) > cc.num_violations_cut
     end
     # Generate convergence monitor report and store in step report
-    cm_report = make_report(names, θ, θ_target, osc, status)
+    cm_report = make_report(names, dist, θ, θ_target, osc, status)
     step_reports[end][:convergence_monitor] = cm_report
     # Print status of convergence monitoring
     (cfg[:info_level] >= 2) ? print_convergence_status(cc, it, names) : nothing
@@ -132,10 +132,11 @@ end
 
 Utility for generating a report from the convergence monitor.
 """
-function make_report(names, θ, θ_target, oscillation, status)
+function make_report(names, distance, θ, θ_target, oscillation, status)
 
     report = Dict()
     report[:names] = names
+    report[:distance] = distance
     report[:contraction_factor] = θ
     report[:contraction_factor_target] = θ_target
     report[:oscillation] = oscillation
