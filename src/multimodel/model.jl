@@ -516,6 +516,9 @@ function setup_linearized_system!(storage, model::MultiModel)
             ctx = models[t[1]].context
             layout = matrix_layout(ctx)
             sparse_arg = get_sparse_arguments(storage, model, t, t, ctx, ctx)
+            if represented_as_adjoint(layout)
+                sparse_arg = sparse_arg'
+            end
 
             block_sizes[dpos] = sparse_arg.block_n
             global_subs = (base_pos+1):(base_pos+local_size)
