@@ -104,12 +104,15 @@ end
 function realize_limits(dopt::DictParameters, x_setup::NamedTuple)
     lb = Float64[]
     ub = Float64[]
-    for parameter_name in x_setup.names
+    for (pos, parameter_name) in enumerate(x_setup.names)
         lims = realize_limits(dopt, parameter_name)
         if lims.min isa Number
+            n = x_setup.offsets[pos+1] - x_setup.offsets[pos]
             lims.max::Number
-            push!(lb, lims.min)
-            push!(ub, lims.max)
+            for _ in 1:n
+                push!(lb, lims.min)
+                push!(ub, lims.max)
+            end
         else
             for i in eachindex(lims.min, lims.max)
                 push!(lb, lims.min[i])
@@ -118,6 +121,7 @@ function realize_limits(dopt::DictParameters, x_setup::NamedTuple)
         end
     end
     @assert length(lb) == length(ub)
+    @assert length(lb) == x_setup.offsets[end] - 1
     return (min = lb, max = ub)
 end
 
