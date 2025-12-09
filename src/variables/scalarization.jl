@@ -25,7 +25,7 @@ function scalarized_primary_variable_type(model, var::Jutul.ScalarVariable, T = 
 end
 
 function scalarized_primary_variable_type(model, vars::Tuple, T = Float64)
-    types = map(x -> scalarized_primary_variable_type(model, x), vars, T)
+    types = map(x -> scalarized_primary_variable_type(model, x, T), vars)
     return ScalarizedJutulVariables{Tuple{types...}}
 end
 
