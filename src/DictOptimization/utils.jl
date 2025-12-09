@@ -121,7 +121,6 @@ function realize_limits(dopt::DictParameters, x_setup::NamedTuple)
         end
     end
     @assert length(lb) == length(ub)
-    @assert length(lb) == x_setup.offsets[end] - 1
     return (min = lb, max = ub)
 end
 
