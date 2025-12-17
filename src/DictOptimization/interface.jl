@@ -94,6 +94,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         config = missing,
         solution_history = false,
         scale = true,
+        check_gradient = false,
         kwarg...
     )
     if ismissing(setup_fn)
@@ -108,6 +109,11 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         deps = deps,
         deps_ad = deps_ad
     )
+
+    if check_gradient
+        println("Checking gradient...")
+        run_gradient_check(problem, maximize = maximize, scale = scale)
+    end
 
     if dopt.verbose
         jutul_message("Optimization", "Starting calibration of $(length(problem.x0)) parameters.", color = :green)
@@ -141,6 +147,33 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         dopt.history = history
     end
     return prm_out
+end
+
+function run_gradient_check(problem::JutulOptimizationProblem; maximize = false, scale = false)
+    F = Jutul.DictOptimization.setup_optimization_functions(problem, maximize = maximize, scale = scale)
+    x0 = copy(F.x0)
+    f0 = F.f(x0)
+    g0 = similar(x0)
+    gp = similar(x0) # for gradient of perturbed x0
+    F.g(g0, x0)
+    # perturbation direction is here gradient direction, can be set 
+    p = copy(g0) 
+    # Select ϵ0 st max 1% change wrt bounds
+    ϵ = 0.01 / maximum(p ./ (F.max .- F.min)) # 
+    # project perturbation to be within bounds
+    gpert = max.(min.(ϵ .* p, F.max .- x0), F.min .- x0)
+    dirgrad = transpose(g0)*gpert
+    println("Projected directional gradient: ", dirgrad)
+    for i in 1:6
+        fp = F.f(x0 .+ (ϵ .* gpert))
+        F.g(gp, x0 .+ (ϵ .* gpert))
+        dirgradp = transpose(gp)*gpert
+        ga = (fp - f0) / ϵ
+        err = abs(ga - dirgrad)/abs(dirgrad)
+        errp = abs(ga - dirgradp)/abs(dirgradp)
+        println("Step size ϵ = $ϵ, Finite difference gradient = $ga, Relative error 1 = $err, Relative error 2 = $errp")
+        ϵ /= 10.0
+    end
 end
 
 function optimize_implementation(problem, ::Val{:lbfgs}; scale = true, kwarg...)
