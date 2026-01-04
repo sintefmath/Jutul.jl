@@ -31,6 +31,8 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
                 backend_arg...,
                 info_level = adj_cache[:info_level]
             )
+            # Make sure that tolerances match between forward and adjoint configs
+            S[:forward_config][:tolerances] = adj_cache[:config][:tolerances]
             if dopt.verbose
                 jutul_message("Optimization", "Finished setup in $t_setup seconds.", color = :green)
             end
