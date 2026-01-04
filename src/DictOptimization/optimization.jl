@@ -10,6 +10,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     case = setup_from_vector(x, missing)
     objective = Jutul.adjoint_wrap_objective(objective, case.model)
     result = forward_simulate_for_optimization(case, adj_cache)
+    adj_cache[:last_forward_result] = result
     packed_steps = Jutul.AdjointPackedResult(result, case)
     packed_steps = Jutul.AdjointsDI.set_packed_result_dynamic_values!(packed_steps, case)
 
@@ -50,7 +51,8 @@ end
 
 function setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
     # Make a nested shallow dict copy? There is a kind of bug here...
-    prm = dict_shallow_copy(prm)
+    # prm = dict_shallow_copy(prm)
+    prm = deepcopy(prm)
     optimizer_devectorize!(prm, X, x_setup)
     # Return the case setup function This is a function that sets up the
     # case from the parameters
