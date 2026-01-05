@@ -16,6 +16,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
 
     # Evaluate the objective function
     f = Jutul.evaluate_objective(objective, case.model, packed_steps)
+    adj_cache[:forward_count] += 1
     # Solve adjoints
     if gradient
         if !ismissing(solution_history)
@@ -24,13 +25,15 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         S = get(adj_cache, :storage, missing)
         if ismissing(S)
             if dopt.verbose
-                jutul_message("Optimization", "Setting up adjoint storage.")
+                jutul_message("Optimization", "Setting up adjoint storage.", color = :green)
             end
             t_setup = @elapsed S = Jutul.AdjointsDI.setup_adjoint_storage_generic(
                 x, setup_from_vector, packed_steps, objective;
                 backend_arg...,
                 info_level = adj_cache[:info_level]
             )
+            # Make sure that tolerances match between forward and adjoint configs
+            S[:forward_config][:tolerances] = adj_cache[:config][:tolerances]
             if dopt.verbose
                 jutul_message("Optimization", "Finished setup in $t_setup seconds.", color = :green)
             end
@@ -43,8 +46,21 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         Jutul.AdjointsDI.solve_adjoint_generic!(
             g, x, setup_from_vector, S, packed_steps, objective
         )
+        adj_cache[:backward_count] += 1
     else
         g = missing
+    end
+    if dopt.verbose
+        num_f = adj_cache[:forward_count]
+        fmt = x -> @sprintf("%2.3e", x)
+        if gradient
+            dg = sqrt(sum(abs2, g))
+            gstr = ", gradient 2-norm: $(fmt(dg))"
+        else
+            gstr = " (no gradient evaluated)"
+        end
+        println("")
+        jutul_message("Optimization", "Objective #$num_f: $(fmt(f))$gstr", color = :green)
     end
     return (f, g)
 end
@@ -257,6 +273,8 @@ function setup_optimization_cache(dopt::DictParameters;
     )
     # Set up a cache for forward/backward sim
     adj_cache = Dict()
+    adj_cache[:forward_count] = 0
+    adj_cache[:backward_count] = 0
     adj_cache[:info_level] = info_level
     # Internal copy - to be used for adjoints etc
     adj_cache[:parameters] = widen_dict_copy(dopt.parameters)

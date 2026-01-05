@@ -1,4 +1,5 @@
-import Jutul: AdjointPackedResult
+import Jutul: AdjointPackedResult, JUTUL_IS_CI
+import ProgressMeter: @showprogress
 
 function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
         # n_objective = nothing,
@@ -82,7 +83,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         if storage[:deps_ad] == :jutul
             @assert !is_fully_dynamic "Fully dynamic dependencies must use :di adjoints."
             dG_dynamic_prm = storage[:dynamic_buffer_parameters]
-            Jutul.solve_adjoint_sensitivities!(dG_dynamic_prm, storage, packed_steps, G; info_level = 0)
+            Jutul.solve_adjoint_sensitivities!(dG_dynamic_prm, storage, packed_steps, G; info_level = info_level)
             dstate0 = storage[:dstate0]
             if !ismissing(dstate0)
                 dG_dynamic_state0 = storage[:dynamic_buffer_state0]
@@ -97,11 +98,21 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
             Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward)
             # Set gradient to zero before solve starts
             @. dG_dynamic = 0
-            @tic "sensitivities" for i in N:-1:1
-                if info_level > 0
-                    jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
+            @tic "sensitivities" begin
+                if info_level == 0 && !JUTUL_IS_CI
+                    jutul_message("Jutul", "Solving $N adjoint steps")
+                    p = Progress(N, color = :blue, desc = "Progress")
+                else
+                    p = missing
                 end
-                update_sensitivities_generic!(dG_dynamic, Y, H, i, G, storage, packed_steps)
+                for i in N:-1:1
+                    if info_level > 0
+                        jutul_message("Step $i/$N", "Solving adjoint system.", color = :blue)
+                    elseif !ismissing(p)
+                        next!(p)
+                    end
+                    update_sensitivities_generic!(dG_dynamic, Y, H, i, G, storage, packed_steps)
+                end
             end
             dparam = storage.dparam
             if !isnothing(dparam)

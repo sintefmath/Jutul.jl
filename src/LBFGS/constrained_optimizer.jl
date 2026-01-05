@@ -148,7 +148,7 @@ function unit_box_bfgs(
                         V = sparse(1:nu, 1:nu, 1) - r * dg * du'
                         Hi = V' * Hi * V + r * (du * du')
                     end
-                else
+                elseif it > 1
                     print_msg("Hessian not updated during iteration $it", :yellow)
                 end
             end
