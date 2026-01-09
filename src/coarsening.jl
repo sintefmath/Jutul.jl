@@ -26,6 +26,24 @@ function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByFi
     return finevals[1]
 end
 
+struct CoarsenBySum <: AbstractCoarseningFunction end
+
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenBySum, coarse, fine, row, name, entity)
+    return sum(finevals)
+end
+
+struct CoarsenByMaximum <: AbstractCoarseningFunction end
+
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByMaximum, coarse, fine, row, name, entity)
+    return maximum(finevals)
+end
+
+struct CoarsenByMinimum <: AbstractCoarseningFunction end
+
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByMinimum, coarse, fine, row, name, entity)
+    return minimum(finevals)
+end
+
 function apply_coarsening_function!(coarsevals, finevals, op, coarse::DataDomain, fine::DataDomain, name, entity::Union{Cells, Faces}; coarse_to_cells = missing)
     CG = physical_representation(coarse)
     function block_indices(CG, block, ::Cells)
