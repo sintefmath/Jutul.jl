@@ -14,9 +14,9 @@ function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByHa
     return length(invvals)/sum(invvals)
 end
 
-struct CoarsenByArithemticAverage <: AbstractCoarseningFunction end
+struct CoarsenByArithmeticAverage <: AbstractCoarseningFunction end
 
-function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByArithemticAverage, coarse, fine, row, name, entity)
+function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByArithmeticAverage, coarse, fine, row, name, entity)
     return sum(finevals)/length(finevals)
 end
 
@@ -60,7 +60,7 @@ end
 
 function coarsen_data_domain(D::DataDomain, partition;
         functions = Dict(),
-        default = CoarsenByArithemticAverage(),
+        default = CoarsenByArithmeticAverage(),
         default_other = CoarsenByFirstValue(),
         kwarg...
     )
