@@ -84,12 +84,12 @@ function realize_limit_inner(initial::Number, rel_lim::Number, abs_lim::Number; 
     if is_max
         l = min(abs_lim, initial + rel_delta)
         if strict
-            @assert initial <= l
+            @assert initial <= l "Expected initial value $initial to be <= limit $l"
         end
     else
         l = max(abs_lim, initial - rel_delta)
         if strict
-            @assert initial >= l
+            @assert initial >= l "Expected initial value $initial to be >= limit $l"
         end
     end
     return l
