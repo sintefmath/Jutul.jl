@@ -43,16 +43,16 @@ function realize_limit(dopt::DictParameters, parameter_name; is_max::Bool)
     else
         vals = get_nested_dict_value(dopt.parameters, parameter_name)
         lims = get_parameter_limits(dopt, parameter_name)
-        l = realize_limit(vals, lims, is_max = is_max, strict = dopt.strict)
+        l = realize_limit(vals, lims, parameter_name, is_max = is_max, strict = dopt.strict)
     end
     return l
 end
 
-function realize_limit(initial::Union{Number, Array}, lims::KeyLimits; is_max::Bool, strict::Bool = true)
+function realize_limit(initial::Union{Number, Array}, lims::KeyLimits, name; is_max::Bool, strict::Bool = true)
     if is_max
-        l = realize_limit_inner(initial, lims.rel_max, lims.abs_max, is_max = true, strict = strict)
+        l = realize_limit_inner(initial, lims.rel_max, lims.abs_max, name, is_max = true, strict = strict)
     else
-        l = realize_limit_inner(initial, lims.rel_min, lims.abs_min, is_max = false, strict = strict)
+        l = realize_limit_inner(initial, lims.rel_min, lims.abs_min, name, is_max = false, strict = strict)
     end
     if !ismissing(lims.lumping) && l isa AbstractArray
         ix = get_lumping_first_entry(lims.lumping)
@@ -69,27 +69,27 @@ function limit_getindex(x::Array, I)
     return x[I]
 end
 
-function realize_limit_inner(initial::Array, rel, abs; is_max::Bool, strict = true)
+function realize_limit_inner(initial::Array, rel, abs, name; is_max::Bool, strict = true)
     out = similar(initial)
     for (i, v) in enumerate(initial)
         r = limit_getindex(rel, i)
         a = limit_getindex(abs, i)
-        out[i] = realize_limit_inner(v, r, a, is_max = is_max, strict = strict)
+        out[i] = realize_limit_inner(v, r, a, name, is_max = is_max, strict = strict)
     end
     return out
 end
 
-function realize_limit_inner(initial::Number, rel_lim::Number, abs_lim::Number; is_max::Bool, strict::Bool = true)
+function realize_limit_inner(initial::Number, rel_lim::Number, abs_lim::Number, name; is_max::Bool, strict::Bool = true)
     rel_delta = abs(initial*(rel_lim-1.0))
     if is_max
         l = min(abs_lim, initial + rel_delta)
         if strict && initial <= l
-            error("Expected initial value $initial to be <= limit $l (absolute limit: $abs_lim, relative limit: $rel_lim)")
+            error("$name: Expected initial value $initial to be <= max limit $l (absolute limit: $abs_lim, relative limit: $rel_lim)")
         end
     else
         l = max(abs_lim, initial - rel_delta)
         if strict && initial >= l
-            error("Expected initial value $initial to be >= limit $l (absolute limit: $abs_lim, relative limit: $rel_lim)")
+            error("$name Expected initial value $initial to be >= min limit $l (absolute limit: $abs_lim, relative limit: $rel_lim)")
         end
     end
     return l
