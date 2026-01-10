@@ -83,13 +83,13 @@ function realize_limit_inner(initial::Number, rel_lim::Number, abs_lim::Number; 
     rel_delta = abs(initial*(rel_lim-1.0))
     if is_max
         l = min(abs_lim, initial + rel_delta)
-        if strict
-            @assert initial <= l "Expected initial value $initial to be <= limit $l"
+        if strict && initial <= l
+            error("Expected initial value $initial to be <= limit $l (absolute limit: $abs_lim, relative limit: $rel_lim)")
         end
     else
         l = max(abs_lim, initial - rel_delta)
-        if strict
-            @assert initial >= l "Expected initial value $initial to be >= limit $l"
+        if strict && initial >= l
+            error("Expected initial value $initial to be >= limit $l (absolute limit: $abs_lim, relative limit: $rel_lim)")
         end
     end
     return l
