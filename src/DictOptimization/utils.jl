@@ -240,7 +240,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
                 tab[i, 7] = "$perc%"
             end
         end
-        PrettyTables.pretty_table(io, tab, header=header, title = t, alignment = alignment)
+        PrettyTables.pretty_table(io, tab, header=header, title = t, alignment = alignment, crop = :horizontal)
     end
 
     pkeys = active_keys(dopt)
@@ -286,7 +286,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
                 tab[i, 8] = "$perc%"
             end
         end
-        pretty_table(io, tab, header=header, title = "Optimization multipliers", alignment = alignment)
+        pretty_table(io, tab, header=header, title = "Optimization multipliers", alignment = alignment, crop = :horizontal)
     end
 end
 
