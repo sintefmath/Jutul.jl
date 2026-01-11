@@ -92,7 +92,7 @@ function realize_limit_inner(initial::Number, rel_lim::Number, abs_lim::Number, 
         end
     else
         if isfinite(rel_lim)
-            l = min(abs_lim, initial - rel_delta)
+            l = max(abs_lim, initial - rel_delta)
         else
             l = abs_lim
         end
