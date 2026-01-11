@@ -82,12 +82,20 @@ end
 function realize_limit_inner(initial::Number, rel_lim::Number, abs_lim::Number, name; is_max::Bool, strict::Bool = true)
     rel_delta = abs(initial*(rel_lim-1.0))
     if is_max
-        l = min(abs_lim, initial + rel_delta)
+        if isfinite(rel_lim)
+            l = min(abs_lim, initial + rel_delta)
+        else
+            l = abs_lim
+        end
         if strict && initial > l
             error("$name: Expected initial value $initial to be <= max limit $l (absolute limit: $abs_lim, relative limit: $rel_lim)")
         end
     else
-        l = max(abs_lim, initial - rel_delta)
+        if isfinite(rel_lim)
+            l = min(abs_lim, initial - rel_delta)
+        else
+            l = abs_lim
+        end
         if strict && initial < l
             error("$name Expected initial value $initial to be >= min limit $l (absolute limit: $abs_lim, relative limit: $rel_lim)")
         end
