@@ -88,9 +88,12 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             # create a new gradient array each time to avoid having this be aliased
             # with a previous output.
             g = similar(x)
-            Jutul.AdjointsDI.solve_adjoint_generic!(
+            t_reverse = @elapsed Jutul.AdjointsDI.solve_adjoint_generic!(
                 g, x, setup_from_vector, S, packed_steps, objective
             )
+            if dopt.verbose
+                jutul_message("Optimization", "Adjoint solve took $t_reverse seconds.", color = :green)
+            end
             adj_cache[:backward_count] += 1
             adj_cache[:last_forward_result] = result
             adj_cache[:last_gradient] = g
