@@ -298,7 +298,7 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.se
     end
 
     f, g = solve_and_differentiate_for_optimization(x0, dopt, setup_fn, objective, x_setup, cache;
-        backend_arg
+        backend_arg = backend_arg
     )
     if raw_output
         if output_cache

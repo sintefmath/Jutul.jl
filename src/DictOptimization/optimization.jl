@@ -3,7 +3,8 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         backend_arg = NamedTuple(),
         gradient = true,
         solution_history = missing,
-        print_parameters = false
+        print_parameters = false,
+        allow_errors = false
     )
     prm = adj_cache[:parameters]
     setup_from_vector = (X, step_info = missing) -> setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
@@ -15,8 +16,33 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         dopt.parameters_optimized = prm_opt
         print_optimization_overview(dopt)
     end
-    result = forward_simulate_for_optimization(case, adj_cache)
-    adj_cache[:last_forward_result] = result
+    result = missing
+    solve_failure = false
+    if allow_errors
+        try
+            result = forward_simulate_for_optimization(case, adj_cache)
+            reps = result.reports
+            if length(reps) == 0
+                solve_failure = true
+            else
+                solve_failure = result.reports[end][:ministeps][end][:success] == false
+            end
+        catch excpt
+            jutul_message("Optimization", "Error during forward simulation: $(excpt). Returning large objective.", color = :red)
+            solve_failure = true
+        end
+    else
+        result = forward_simulate_for_optimization(case, adj_cache)
+    end
+    if solve_failure
+        result = get(adj_cache, :last_forward_result, missing)
+        if ismissing(result)
+            error("First simulation failed. Unable to proceed, even with allow_errors=true.")
+        end
+    else
+        adj_cache[:last_forward_result] = result
+    end
+
     packed_steps = Jutul.AdjointPackedResult(result, case)
     packed_steps = Jutul.AdjointsDI.set_packed_result_dynamic_values!(packed_steps, case)
 
@@ -67,6 +93,12 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         end
         println("")
         jutul_message("Optimization", "Objective #$num_f: $(fmt(f))$gstr", color = :green)
+    end
+    if solve_failure
+        f = 1e20
+        if gradient
+            @. g *= 100
+        end
     end
     return (f, g)
 end

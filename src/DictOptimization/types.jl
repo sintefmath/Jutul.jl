@@ -216,7 +216,9 @@ function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true)
     backend_arg = opt.backend_arg
     obj, dobj_dx = solve_and_differentiate_for_optimization(x, dopt, setup_fn, objective, x_setup, adj_cache;
         backend_arg = backend_arg,
-        gradient = gradient
+        gradient = gradient,
+        print_parameters = opt.print_parameters,
+        allow_errors = opt.allow_errors
     )
     return (obj, dobj_dx)
 end
