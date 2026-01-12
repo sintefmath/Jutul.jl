@@ -15,6 +15,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         optimizer_devectorize!(prm_opt, x, x_setup)
         dopt.parameters_optimized = prm_opt
         print_optimization_overview(dopt)
+        dopt.parameters_optimized = missing
     end
     result = missing
     solve_failure = false
