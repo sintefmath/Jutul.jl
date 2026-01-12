@@ -28,11 +28,8 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             else
                 solve_failure = result.reports[end][:ministeps][end][:success] == false
             end
-            if solve_failure
-                jutul_message("Optimization", "Incomplete results in forward simulation. Returning large objective.", color = :red)
-            end
         catch excpt
-            jutul_message("Optimization", "Error during forward simulation: $(excpt). Returning large objective.", color = :red)
+            jutul_message("Optimization", "Error during forward simulation: $(excpt).", color = :red)
             solve_failure = true
         end
     else
@@ -101,18 +98,28 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             g = missing
         end
     end
-
-    if dopt.verbose
-        num_f = adj_cache[:forward_count]
-        fmt = x -> @sprintf("%2.3e", x)
-        if gradient
-            dg = sqrt(sum(abs2, g))
-            gstr = ", gradient 2-norm: $(fmt(dg))"
+    if solve_failure
+        jutul_message("Optimization", "Simulation failed, returning objective = $f", color = :red)
+    else
+        if ismissing(gradient)
+            dg = NaN
         else
-            gstr = " (no gradient evaluated)"
+            dg = sqrt(sum(abs2, g))
         end
-        println("")
-        jutul_message("Optimization", "Objective #$num_f: $(fmt(f))$gstr", color = :green)
+        push!(adj_cache[:gradient_norms], dg)
+        push!(adj_cache[:objectives], f)
+
+        if dopt.verbose
+            num_f = adj_cache[:forward_count]
+            fmt = x -> @sprintf("%2.3e", x)
+            if gradient
+                gstr = ", gradient 2-norm: $(fmt(dg))"
+            else
+                gstr = " (no gradient evaluated)"
+            end
+            println("")
+            jutul_message("Optimization", "Objective #$num_f: $(fmt(f))$gstr", color = :green)
+        end
     end
     return (f, g)
 end
@@ -336,5 +343,7 @@ function setup_optimization_cache(dopt::DictParameters;
     if !ismissing(config)
         adj_cache[:config] = config
     end
+    adj_cache[:gradient_norms] = Float64[]
+    adj_cache[:objectives] = Float64[]
     return adj_cache
 end
