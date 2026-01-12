@@ -27,6 +27,9 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             else
                 solve_failure = result.reports[end][:ministeps][end][:success] == false
             end
+            if solve_failure
+                jutul_message("Optimization", "Incomplete results in forward simulation. Returning large objective.", color = :red)
+            end
         catch excpt
             jutul_message("Optimization", "Error during forward simulation: $(excpt). Returning large objective.", color = :red)
             solve_failure = true
