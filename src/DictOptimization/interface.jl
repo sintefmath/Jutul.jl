@@ -93,6 +93,8 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         simulator = missing,
         config = missing,
         solution_history = false,
+        print_parameters = false,
+        allow_errors = false,
         scale = true,
         kwarg...
     )
@@ -106,7 +108,9 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         backend_arg = backend_arg,
         solution_history = solution_history,
         deps = deps,
-        deps_ad = deps_ad
+        deps_ad = deps_ad,
+        print_parameters = print_parameters,
+        allow_errors = allow_errors
     )
 
     if dopt.verbose

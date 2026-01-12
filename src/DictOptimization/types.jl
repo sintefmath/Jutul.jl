@@ -157,6 +157,8 @@ struct JutulOptimizationProblem
     backend_arg::NamedTuple
     cache
     solution_history
+    print_parameters::Bool
+    allow_errors::Bool
     function JutulOptimizationProblem(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
             backend_arg = missing,
             info_level = 0,
@@ -164,7 +166,9 @@ struct JutulOptimizationProblem
             deps_ad::Symbol = :jutul,
             simulator = missing,
             config = missing,
-            solution_history::Bool = false
+            solution_history::Bool = false,
+            print_parameters::Bool = false,
+            allow_errors::Bool = false
         )
         if ismissing(backend_arg)
             deps_ad in (:di, :jutul) || error("deps_ad must be :di or :jutul. Got $deps_ad.")
@@ -196,7 +200,9 @@ struct JutulOptimizationProblem
             limits,
             backend_arg,
             adj_cache,
-            sols
+            sols,
+            print_parameters,
+            allow_errors
         )
     end
 end

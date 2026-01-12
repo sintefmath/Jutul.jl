@@ -232,7 +232,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             tab[i, 3] = length(v0)
             tab[i, 4] = limstr_min
             tab[i, 5] = limstr_max
-            if is_optimized  && print_opt
+            if is_optimized && print_opt
                 v = get_parameter_value(dopt, k, optimized = true)
                 v_avg = avg(v)
                 perc = round(100*(v_avg-v0_avg)/max(v0_avg, 1e-20), sigdigits = 2)
@@ -279,7 +279,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             tab[i, 4] = length(mval)
             tab[i, 5] = fmt_lim(mult.abs_min, is_max = false)
             tab[i, 6] = fmt_lim(mult.abs_max, is_max = true)
-            if is_optimized
+            if is_optimized && !ismissing(dopt.multipliers_optimized)
                 optval = dopt.multipliers_optimized[k].value
                 tab[i, 7] = format_value(optval)
                 perc = round(100*(avg(optval)-avg(mval))/max(avg(mval), 1e-20), sigdigits = 2)

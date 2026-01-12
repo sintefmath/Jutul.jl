@@ -2,13 +2,19 @@
 function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup_fn, objective, x_setup, adj_cache;
         backend_arg = NamedTuple(),
         gradient = true,
-        solution_history = missing
+        solution_history = missing,
+        print_parameters = false
     )
-
     prm = adj_cache[:parameters]
     setup_from_vector = (X, step_info = missing) -> setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
     case = setup_from_vector(x, missing)
     objective = Jutul.adjoint_wrap_objective(objective, case.model)
+    if print_parameters
+        prm_opt = deepcopy(prm)
+        optimizer_devectorize!(prm_opt, x, x_setup)
+        dopt.parameters_optimized = prm_opt
+        print_optimization_overview(dopt)
+    end
     result = forward_simulate_for_optimization(case, adj_cache)
     adj_cache[:last_forward_result] = result
     packed_steps = Jutul.AdjointPackedResult(result, case)
