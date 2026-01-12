@@ -560,10 +560,11 @@ function check_feasible(u, c, enforce = false; nm = :Vector_u)
     if It == max_it
         print_msg("Failed attempt to fix feasibility of $nm, continuing anyway ...", :yellow)
     elseif !flag
-        if !enforce
-            print_msg("$nm is not feasible within tollerance. Consider running with option: enforce_feasible = true", :yellow)
-        else
+        if enforce
+            u = Vector{eltype(u)}(u)
             print_msg("$nm was not feasible, fixed feasibility in $(It - 1) iteration(s)", :yellow)
+        else
+            print_msg("$nm is not feasible within tollerance. Consider running with option: enforce_feasible = true", :yellow)
         end
     end
     return (u, flag, fixed)
