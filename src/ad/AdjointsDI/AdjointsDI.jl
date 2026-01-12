@@ -5,6 +5,7 @@ module AdjointsDI
     using DifferentiationInterface
     using SparseConnectivityTracer
     using SparseMatrixColorings
+    using ProgressMeter
 
     timeit_debug_enabled() = Jutul.timeit_debug_enabled()
 
