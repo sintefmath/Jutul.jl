@@ -62,7 +62,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         case = setup_case(X, F, packed_steps, state0, :all)
         storage[:case_without_ad][] = case
         if F != storage[:F_input]
-            @warn "The function F used in the solve must be the same as the one used in the setup."
+            @warn "The function F used in the solve should be the same as the one used in the setup."
         end
         F_static = storage[:F_static]
         is_fully_dynamic = storage[:F_fully_dynamic]
