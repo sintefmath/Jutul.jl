@@ -207,7 +207,7 @@ struct JutulOptimizationProblem
     end
 end
 
-function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true)
+function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true, extra_timing = false)
     dopt = opt.dict_parameters
     setup_fn = opt.setup_function
     objective = opt.objective
@@ -218,13 +218,14 @@ function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true)
         backend_arg = backend_arg,
         gradient = gradient,
         print_parameters = opt.print_parameters,
-        allow_errors = opt.allow_errors
+        allow_errors = opt.allow_errors,
+        extra_timing = extra_timing
     )
     return (obj, dobj_dx)
 end
 
-function (I::JutulOptimizationProblem)(x = I.x0; gradient = true)
-    evaluate(I, x; gradient = gradient)
+function (I::JutulOptimizationProblem)(x = I.x0; kwarg...)
+    return evaluate(I, x; kwarg...)
 end
 
 function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0; index = 1, eps = 1e-6)

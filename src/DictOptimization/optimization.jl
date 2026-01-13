@@ -4,7 +4,8 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         gradient = true,
         solution_history = missing,
         print_parameters = false,
-        allow_errors = false
+        allow_errors = false,
+        extra_timing = false
     )
     prm = adj_cache[:parameters]
     setup_from_vector = (X, step_info = missing) -> setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
@@ -33,7 +34,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             solve_failure = true
         end
     else
-        result = forward_simulate_for_optimization(case, adj_cache)
+        result = forward_simulate_for_optimization(case, adj_cache, extra_timing = extra_timing)
     end
     if solve_failure
         f = get(adj_cache, :last_objective, missing)
@@ -86,7 +87,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             # with a previous output.
             g = similar(x)
             t_reverse = @elapsed Jutul.AdjointsDI.solve_adjoint_generic!(
-                g, x, setup_from_vector, S, packed_steps, objective
+                g, x, setup_from_vector, S, packed_steps, objective, extra_timing = extra_timing
             )
             if dopt.verbose
                 jutul_message("Optimization", "Adjoint solve took $t_reverse seconds.", color = :green)
@@ -147,7 +148,7 @@ function dict_shallow_copy(x)
     return x
 end
 
-function forward_simulate_for_optimization(case, adj_cache)
+function forward_simulate_for_optimization(case, adj_cache; extra_timing = false)
     sim = get(adj_cache, :simulator, missing)
     if ismissing(sim)
         sim = Jutul.Simulator(case)
@@ -166,7 +167,8 @@ function forward_simulate_for_optimization(case, adj_cache)
         config = config,
         state0 = case.state0,
         parameters = case.parameters,
-        forces = case.forces
+        forces = case.forces,
+        extra_timing = extra_timing
     )
 end
 

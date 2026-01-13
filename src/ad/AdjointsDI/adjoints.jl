@@ -53,8 +53,10 @@ end
 
 function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPackedResult, G;
         info_level = 0,
-        state0 = missing
+        state0 = missing,
+        extra_timing = false
     )
+    Jutul.set_global_timer!(extra_timing)
     t_solve = @elapsed begin
         N = length(packed_steps)
         case = setup_case(X, F, packed_steps, state0, :all)
@@ -130,6 +132,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         num_evals = storage[:adjoint_objective_helper].num_evals
         jutul_message("Adjoints", "Adjoints solved in $(Jutul.get_tstr(t_solve)) ($num_evals residual evaluations).", color = :blue)
     end
+    Jutul.print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
     all(isfinite, ∇G) || error("Adjoint solve resulted in non-finite gradient values.")
     return ∇G
 end
