@@ -269,10 +269,10 @@ function solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPacked
     if !isnothing(dparam)
         @. ∇G += dparam
     end
-    rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
+    @tic "rescale" rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
     @assert all(isfinite, ∇G)
     # Finally deal with initial state gradients
-    if !ismissing(storage.state0_map)
+    @tic "state0_jacobian" if !ismissing(storage.state0_map)
         ps1 = packed_steps[1]
         forces1 = ps1.forces
         dt1 = ps1.step_info[:dt]
