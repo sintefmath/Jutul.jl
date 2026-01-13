@@ -48,7 +48,7 @@ function realize_limit(dopt::DictParameters, parameter_name; is_max::Bool)
     return l
 end
 
-function realize_limit(initial::Union{Number, Array}, lims::KeyLimits, name; is_max::Bool, strict::Bool = true)
+function realize_limit(initial::Union{Number, Array}, lims::KeyLimits, name = missing; is_max::Bool, strict::Bool = true)
     if is_max
         l = realize_limit_inner(initial, lims.rel_max, lims.abs_max, name, is_max = true, strict = strict)
     else

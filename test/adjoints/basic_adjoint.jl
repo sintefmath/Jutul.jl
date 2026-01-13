@@ -346,8 +346,8 @@ import Jutul.DictOptimization as DictOptimization
     @test DictOptimization.realize_limit(1.0, l, is_max = true) ≈ 1.5
     @test DictOptimization.realize_limit(100.0, l, is_max = true) ≈ 150.0
 
-    @test DictOptimization.realize_limit_inner(-1.0, Inf, 4.0, is_max = true) ≈ 4.0
-    @test DictOptimization.realize_limit_inner(-1.0, 2.0, 4.0, is_max = true) ≈ 0.0
+    @test DictOptimization.realize_limit_inner(-1.0, Inf, 4.0, missing, is_max = true) ≈ 4.0
+    @test DictOptimization.realize_limit_inner(-1.0, 2.0, 4.0, missing, is_max = true) ≈ 0.0
 
     @testset "optimizer" begin
         function default_poisson_dict()
