@@ -515,7 +515,7 @@ end
 
         # Test with base optimizer
         prm_opt = optimize(dprm, poisson_mismatch_objective; max_it = 25, info_level = -1, optimizer = :lbfgsb, kwarg...);
-        @test dprm.history[end]/dprm.history[1] < 1e-6
+        @test dprm.history.objectives[end]/dprm.history.objectives[1] < 1e-6
 
         if test_vals
             @test all(isapprox.(prm_opt["k_val"], prm_truth["k_val"], atol = 0.01))
