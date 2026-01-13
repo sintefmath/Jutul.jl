@@ -46,6 +46,7 @@ function Jutul.mesh_from_gmsh(pth;
         g = Jutul.mesh_from_gmsh(; verbose = verbose, kwarg...)
     finally
         if manage_gmsh
+            Gmsh.gmsh.clear()
             Gmsh.finalize()
         end
     end
