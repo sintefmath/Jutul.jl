@@ -30,6 +30,9 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
                 solve_failure = result.reports[end][:ministeps][end][:success] == false
             end
         catch excpt
+            if excpt isa InterruptException
+                rethrow(excpt)
+            end
             jutul_message("Optimization", "Error during forward simulation: $(excpt).", color = :red)
             solve_failure = true
         end
