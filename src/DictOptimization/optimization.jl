@@ -2,65 +2,125 @@
 function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup_fn, objective, x_setup, adj_cache;
         backend_arg = NamedTuple(),
         gradient = true,
-        solution_history = missing
+        solution_history = missing,
+        print_parameters = false,
+        allow_errors = false,
+        extra_timing = false
     )
-
     prm = adj_cache[:parameters]
     setup_from_vector = (X, step_info = missing) -> setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
     case = setup_from_vector(x, missing)
     objective = Jutul.adjoint_wrap_objective(objective, case.model)
-    result = forward_simulate_for_optimization(case, adj_cache)
-    adj_cache[:last_forward_result] = result
-    packed_steps = Jutul.AdjointPackedResult(result, case)
-    packed_steps = Jutul.AdjointsDI.set_packed_result_dynamic_values!(packed_steps, case)
-
-    # Evaluate the objective function
-    f = Jutul.evaluate_objective(objective, case.model, packed_steps)
-    adj_cache[:forward_count] += 1
-    # Solve adjoints
-    if gradient
-        if !ismissing(solution_history)
-            push!(solution_history, (x = x, states = deepcopy(states), objective = f))
-        end
-        S = get(adj_cache, :storage, missing)
-        if ismissing(S)
-            if dopt.verbose
-                jutul_message("Optimization", "Setting up adjoint storage.", color = :green)
-            end
-            t_setup = @elapsed S = Jutul.AdjointsDI.setup_adjoint_storage_generic(
-                x, setup_from_vector, packed_steps, objective;
-                backend_arg...,
-                info_level = adj_cache[:info_level]
-            )
-            # Make sure that tolerances match between forward and adjoint configs
-            S[:forward_config][:tolerances] = adj_cache[:config][:tolerances]
-            if dopt.verbose
-                jutul_message("Optimization", "Finished setup in $t_setup seconds.", color = :green)
-            end
-            adj_cache[:storage] = S
-        end
-        # Some optimizers use the return value beyond a single call. So we
-        # create a new gradient array each time to avoid having this be aliased
-        # with a previous output.
-        g = similar(x)
-        Jutul.AdjointsDI.solve_adjoint_generic!(
-            g, x, setup_from_vector, S, packed_steps, objective
-        )
-        adj_cache[:backward_count] += 1
-    else
-        g = missing
+    if print_parameters
+        prm_opt = deepcopy(prm)
+        optimizer_devectorize!(prm_opt, x, x_setup)
+        dopt.parameters_optimized = prm_opt
+        print_optimization_overview(dopt)
+        dopt.parameters_optimized = missing
     end
-    if dopt.verbose
-        num_f = adj_cache[:forward_count]
-        fmt = x -> @sprintf("%2.3e", x)
-        if gradient
-            dg = sqrt(sum(abs2, g))
-            gstr = ", gradient 2-norm: $(fmt(dg))"
-        else
-            gstr = " (no gradient evaluated)"
+    result = missing
+    solve_failure = false
+    if allow_errors
+        try
+            result = forward_simulate_for_optimization(case, adj_cache)
+            reps = result.reports
+            if length(reps) == 0
+                solve_failure = true
+            else
+                solve_failure = result.reports[end][:ministeps][end][:success] == false
+            end
+        catch excpt
+            jutul_message("Optimization", "Error during forward simulation: $(excpt).", color = :red)
+            solve_failure = true
         end
-        println("")
-        jutul_message("Optimization", "Objective #$num_f: $(fmt(f))$gstr", color = :green)
+    else
+        result = forward_simulate_for_optimization(case, adj_cache, extra_timing = extra_timing)
+    end
+    if solve_failure
+        f = get(adj_cache, :last_objective, missing)
+        if ismissing(f)
+            error("First simulation failed. Unable to proceed, even with allow_errors=true.")
+        end
+        f *= 100
+        if gradient
+            if haskey(adj_cache, :last_gradient)
+                g = adj_cache[:last_gradient].*100
+            else
+                g = similar(x)
+                fill!(g, 1e16)
+            end
+        else
+            g = missing
+        end
+    else
+        packed_steps = Jutul.AdjointPackedResult(result, case)
+        packed_steps = Jutul.AdjointsDI.set_packed_result_dynamic_values!(packed_steps, case)
+
+        # Evaluate the objective function
+        f = Jutul.evaluate_objective(objective, case.model, packed_steps)
+        adj_cache[:forward_count] += 1
+        adj_cache[:last_objective] = f
+        # Solve adjoints
+        if gradient
+            if !ismissing(solution_history)
+                push!(solution_history, (x = x, states = deepcopy(states), objective = f))
+            end
+            S = get(adj_cache, :storage, missing)
+            if ismissing(S)
+                if dopt.verbose
+                    jutul_message("Optimization", "Setting up adjoint storage.", color = :green)
+                end
+                t_setup = @elapsed S = Jutul.AdjointsDI.setup_adjoint_storage_generic(
+                    x, setup_from_vector, packed_steps, objective;
+                    backend_arg...,
+                    info_level = adj_cache[:info_level]
+                )
+                # Make sure that tolerances match between forward and adjoint configs
+                S[:forward_config][:tolerances] = adj_cache[:config][:tolerances]
+                if dopt.verbose
+                    jutul_message("Optimization", "Finished setup in $t_setup seconds.", color = :green)
+                end
+                adj_cache[:storage] = S
+            end
+            # Some optimizers use the return value beyond a single call. So we
+            # create a new gradient array each time to avoid having this be aliased
+            # with a previous output.
+            g = similar(x)
+            t_reverse = @elapsed Jutul.AdjointsDI.solve_adjoint_generic!(
+                g, x, setup_from_vector, S, packed_steps, objective, extra_timing = extra_timing
+            )
+            if dopt.verbose
+                jutul_message("Optimization", "Adjoint solve took $t_reverse seconds.", color = :green)
+            end
+            adj_cache[:backward_count] += 1
+            adj_cache[:last_forward_result] = result
+            adj_cache[:last_gradient] = g
+        else
+            g = missing
+        end
+    end
+    if solve_failure
+        jutul_message("Optimization", "Simulation failed, returning objective = $f", color = :red)
+    else
+        if ismissing(gradient)
+            dg = NaN
+        else
+            dg = sqrt(sum(abs2, g))
+        end
+        push!(adj_cache[:gradient_norms], dg)
+        push!(adj_cache[:objectives], f)
+
+        if dopt.verbose
+            num_f = adj_cache[:forward_count]
+            fmt = x -> @sprintf("%2.3e", x)
+            if gradient
+                gstr = ", gradient 2-norm: $(fmt(dg))"
+            else
+                gstr = " (no gradient evaluated)"
+            end
+            println("")
+            jutul_message("Optimization", "Objective #$num_f: $(fmt(f))$gstr", color = :green)
+        end
     end
     return (f, g)
 end
@@ -88,7 +148,7 @@ function dict_shallow_copy(x)
     return x
 end
 
-function forward_simulate_for_optimization(case, adj_cache)
+function forward_simulate_for_optimization(case, adj_cache; extra_timing = false)
     sim = get(adj_cache, :simulator, missing)
     if ismissing(sim)
         sim = Jutul.Simulator(case)
@@ -107,7 +167,8 @@ function forward_simulate_for_optimization(case, adj_cache)
         config = config,
         state0 = case.state0,
         parameters = case.parameters,
-        forces = case.forces
+        forces = case.forces,
+        extra_timing = extra_timing
     )
 end
 
@@ -284,5 +345,7 @@ function setup_optimization_cache(dopt::DictParameters;
     if !ismissing(config)
         adj_cache[:config] = config
     end
+    adj_cache[:gradient_norms] = Float64[]
+    adj_cache[:objectives] = Float64[]
     return adj_cache
 end

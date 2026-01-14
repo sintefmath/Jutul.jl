@@ -93,6 +93,8 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         simulator = missing,
         config = missing,
         solution_history = false,
+        print_parameters = false,
+        allow_errors = false,
         scale = true,
         kwarg...
     )
@@ -106,7 +108,9 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         backend_arg = backend_arg,
         solution_history = solution_history,
         deps = deps,
-        deps_ad = deps_ad
+        deps_ad = deps_ad,
+        print_parameters = print_parameters,
+        allow_errors = allow_errors
     )
 
     if dopt.verbose
@@ -114,7 +118,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     end
 
     t_opt = @elapsed if ismissing(opt_fun)
-        x, history = optimize_implementation(problem, Val(optimizer); 
+        x, solver_history = optimize_implementation(problem, Val(optimizer); 
             grad_tol = grad_tol,
             obj_change_tol = obj_change_tol,
             max_it = max_it,
@@ -126,7 +130,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         F = Jutul.DictOptimization.setup_optimization_functions(problem, maximize = maximize, scale = scale)
         x = opt_fun(F)
         x = F.descale(x)
-        history = F.history
+        solver_history = F.history
     end
     if dopt.verbose
         jutul_message("Optimization", "Finished in $t_opt seconds.", color = :green)
@@ -134,12 +138,17 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     # Also remove AD from the internal ones and update them
     prm_out = optimizer_devectorize(problem, x)
     dopt.parameters_optimized = prm_out
-    dopt.history = history
+
+    # Store information about the solver progress in the history
+    history = Dict()
+    history[:objectives] = problem.cache[:objectives]
+    history[:gradient_norms] = problem.cache[:gradient_norms]
+    history[:solver_history] = solver_history
     if solution_history
-        dopt.history = (history = history, solutions = problem.solution_history)
-    else
-        dopt.history = history
+        history[:solutions] = problem.solution_history
     end
+    dopt.history = NamedTuple(history)
+
     return prm_out
 end
 
@@ -294,7 +303,7 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.se
     end
 
     f, g = solve_and_differentiate_for_optimization(x0, dopt, setup_fn, objective, x_setup, cache;
-        backend_arg
+        backend_arg = backend_arg
     )
     if raw_output
         if output_cache

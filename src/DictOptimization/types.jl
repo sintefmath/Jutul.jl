@@ -157,6 +157,8 @@ struct JutulOptimizationProblem
     backend_arg::NamedTuple
     cache
     solution_history
+    print_parameters::Bool
+    allow_errors::Bool
     function JutulOptimizationProblem(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
             backend_arg = missing,
             info_level = 0,
@@ -164,7 +166,9 @@ struct JutulOptimizationProblem
             deps_ad::Symbol = :jutul,
             simulator = missing,
             config = missing,
-            solution_history::Bool = false
+            solution_history::Bool = false,
+            print_parameters::Bool = false,
+            allow_errors::Bool = false
         )
         if ismissing(backend_arg)
             deps_ad in (:di, :jutul) || error("deps_ad must be :di or :jutul. Got $deps_ad.")
@@ -196,12 +200,14 @@ struct JutulOptimizationProblem
             limits,
             backend_arg,
             adj_cache,
-            sols
+            sols,
+            print_parameters,
+            allow_errors
         )
     end
 end
 
-function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true)
+function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true, extra_timing = false)
     dopt = opt.dict_parameters
     setup_fn = opt.setup_function
     objective = opt.objective
@@ -210,13 +216,16 @@ function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true)
     backend_arg = opt.backend_arg
     obj, dobj_dx = solve_and_differentiate_for_optimization(x, dopt, setup_fn, objective, x_setup, adj_cache;
         backend_arg = backend_arg,
-        gradient = gradient
+        gradient = gradient,
+        print_parameters = opt.print_parameters,
+        allow_errors = opt.allow_errors,
+        extra_timing = extra_timing
     )
     return (obj, dobj_dx)
 end
 
-function (I::JutulOptimizationProblem)(x = I.x0; gradient = true)
-    evaluate(I, x; gradient = gradient)
+function (I::JutulOptimizationProblem)(x = I.x0; kwarg...)
+    return evaluate(I, x; kwarg...)
 end
 
 function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0; index = 1, eps = 1e-6)

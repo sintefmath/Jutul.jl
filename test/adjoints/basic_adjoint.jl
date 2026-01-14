@@ -346,8 +346,8 @@ import Jutul.DictOptimization as DictOptimization
     @test DictOptimization.realize_limit(1.0, l, is_max = true) ≈ 1.5
     @test DictOptimization.realize_limit(100.0, l, is_max = true) ≈ 150.0
 
-    @test DictOptimization.realize_limit_inner(-1.0, Inf, 4.0, is_max = true) ≈ 4.0
-    @test DictOptimization.realize_limit_inner(-1.0, 2.0, 4.0, is_max = true) ≈ 0.0
+    @test DictOptimization.realize_limit_inner(-1.0, Inf, 4.0, missing, is_max = true) ≈ 4.0
+    @test DictOptimization.realize_limit_inner(-1.0, 2.0, 4.0, missing, is_max = true) ≈ 0.0
 
     @testset "optimizer" begin
         function default_poisson_dict()
@@ -515,7 +515,7 @@ end
 
         # Test with base optimizer
         prm_opt = optimize(dprm, poisson_mismatch_objective; max_it = 25, info_level = -1, optimizer = :lbfgsb, kwarg...);
-        @test dprm.history[end]/dprm.history[1] < 1e-6
+        @test dprm.history.objectives[end]/dprm.history.objectives[1] < 1e-6
 
         if test_vals
             @test all(isapprox.(prm_opt["k_val"], prm_truth["k_val"], atol = 0.01))
