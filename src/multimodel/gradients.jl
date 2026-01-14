@@ -193,7 +193,7 @@ function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing
     for mod_k in submodels_symbols(model)
         model_k = model[mod_k]
         if ismissing(variant)
-            subkeys = missing
+            subkeys = nothing
         else
             if variant == :parameters
                 subkeys = keys(get_parameters(model_k))

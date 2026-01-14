@@ -165,7 +165,7 @@ function determine_sparsity_simple(F, model, state, state0 = nothing; variant = 
     entities = ad_entities(state)
     sparsity = Dict()
     if ismissing(variant)
-        subkeys = missing
+        subkeys = nothing
     else
         if variant == :parameters
             subkeys = keys(get_parameters(model))
