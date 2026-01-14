@@ -42,16 +42,19 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     if solve_failure
         f = get(adj_cache, :last_objective, missing)
         if ismissing(f)
-            error("First simulation failed. Unable to proceed, even with allow_errors=true.")
+            error("First simulation failed. Unable to proceed, even with allow_errors=true. The initial setup must be possible to simulate.")
         end
         f *= 100
         if gradient
-            if haskey(adj_cache, :last_gradient)
-                g = adj_cache[:last_gradient].*100
-            else
-                g = similar(x)
-                fill!(g, 1e16)
-            end
+            g = similar(x)
+            fill!(g, 1e16)
+            # g .= 0.0
+            # if haskey(adj_cache, :last_gradient) && false
+            #     g = adj_cache[:last_gradient].*100
+            # else
+            #     g = similar(x)
+            #     fill!(g, 1e16)
+            # end
         else
             g = missing
         end
