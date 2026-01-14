@@ -101,12 +101,15 @@ function as_tracer(x, leaf_init)
     return x
 end
 
-function create_mock_state(state, tag, entities = ad_entities(state))
+function create_mock_state(state, tag, entities = ad_entities(state); subkeys = nothing)
+    no_provided_keys = isnothing(subkeys)
     mock_state = JutulStorage()
     n = entities[tag].n
     for k in keys(state)
         v = state[k]
-        if unpack_tag(v) == tag
+        tag_matches = unpack_tag(v) == tag
+        key_matches = no_provided_keys || (k in subkeys)
+        if tag_matches && key_matches
             # Assign mock value with tracer
             new_v = SparsityTracingWrapper(v)
         else
@@ -158,15 +161,25 @@ function determine_sparsity(F!, n, state, state0, tag, entities, N = entities[ta
     return J
 end
 
-function determine_sparsity_simple(F, model, state, state0 = nothing)
+function determine_sparsity_simple(F, model, state, state0 = nothing; variant = missing)
     entities = ad_entities(state)
     sparsity = Dict()
+    if ismissing(variant)
+        subkeys = missing
+    else
+        if variant == :parameters
+            subkeys = keys(get_parameters(model))
+        else
+            @assert variant == :variables
+            subkeys = keys(get_variables(model))
+        end
+    end
     for (k, v) in entities
-        mstate = create_mock_state(state, k, entities)
+        mstate = create_mock_state(state, k, entities, subkeys = subkeys)
         if isnothing(state0)
             f_ad = F(mstate)
         else
-            mstate0 = create_mock_state(state0, k, entities)
+            mstate0 = create_mock_state(state0, k, entities, subkeys = subkeys)
             f_ad = F(mstate, mstate0)
         end
         V = sum(f_ad)

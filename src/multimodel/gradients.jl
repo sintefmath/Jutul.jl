@@ -185,10 +185,21 @@ function print_parameter_optimization_config(targets, config, model::MultiModel)
     end
 end
 
-function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing)
+function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing; variant = missing)
     @assert isnothing(state0) "Not implemented."
     outer_sparsity = Dict()
     for mod_k in submodels_symbols(model)
+        model_k = model[mod_k]
+        if ismissing(variant)
+            subkeys = missing
+        else
+            if variant == :parameters
+                subkeys = keys(get_parameters(model_k))
+            else
+                variant == :variables || error("variant must be :parameters or :variables, was $variant")
+                subkeys = keys(get_variables(model_k))
+            end
+        end
         sparsity = Dict()
         substate = state[mod_k]
         entities = ad_entities(substate)
@@ -198,7 +209,7 @@ function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing
             for (statek, statev) in pairs(state)
                 outer_state[statek] = as_value(statev)
             end
-            outer_state[mod_k] = create_mock_state(state[mod_k], k, entities)
+            outer_state[mod_k] = create_mock_state(state[mod_k], k, entities, subkeys = subkeys)
             # Apply the function
             f_ad = F(outer_state)
 
