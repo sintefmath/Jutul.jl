@@ -42,16 +42,19 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     if solve_failure
         f = get(adj_cache, :last_objective, missing)
         if ismissing(f)
-            error("First simulation failed. Unable to proceed, even with allow_errors=true.")
+            error("First simulation failed. Unable to proceed, even with allow_errors=true. The initial setup must be possible to simulate.")
         end
         f *= 100
         if gradient
-            if haskey(adj_cache, :last_gradient)
-                g = adj_cache[:last_gradient].*100
-            else
-                g = similar(x)
-                fill!(g, 1e16)
-            end
+            g = similar(x)
+            fill!(g, 1e16)
+            # g .= 0.0
+            # if haskey(adj_cache, :last_gradient) && false
+            #     g = adj_cache[:last_gradient].*100
+            # else
+            #     g = similar(x)
+            #     fill!(g, 1e16)
+            # end
         else
             g = missing
         end
@@ -110,19 +113,28 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         else
             dg = sqrt(sum(abs2, g))
         end
-        push!(adj_cache[:gradient_norms], dg)
-        push!(adj_cache[:objectives], f)
+        objectives = adj_cache[:objectives]
+        push!(objectives, f)
+        gnorms = adj_cache[:gradient_norms]
+        push!(gnorms, dg)
 
         if dopt.verbose
             num_f = adj_cache[:forward_count]
-            fmt = x -> @sprintf("%2.3e", x)
+            fmt = x -> @sprintf("%2.5e", x)
+            fmt_ratio = x -> @sprintf("%1.3e", x)
             if gradient
                 gstr = ", gradient 2-norm: $(fmt(dg))"
             else
                 gstr = " (no gradient evaluated)"
             end
+            if length(objectives) == 1
+                ratio_str = ""
+            else
+                f0 = objectives[1]
+                ratio_str = " (f/f0=$(fmt_ratio(f/f0)))"
+            end
             println("")
-            jutul_message("Optimization", "Objective #$num_f: $(fmt(f))$gstr", color = :green)
+            jutul_message("Optimization", "Objective #$num_f: $(fmt(f))$ratio_str$gstr", color = :green)
         end
     end
     return (f, g)
