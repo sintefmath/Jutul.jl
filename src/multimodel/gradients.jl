@@ -185,6 +185,8 @@ function print_parameter_optimization_config(targets, config, model::MultiModel)
     end
 end
 
+objective_depends_on_crossterms(F) = false
+
 function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing; variant = missing)
     @assert isnothing(state0) "Not implemented."
     outer_sparsity = Dict()
@@ -225,36 +227,38 @@ function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing
         outer_sparsity[mod_k] = sparsity
     end
     # We also add sparsity from cross terms (they can couple variables between models)
-    for ctp in model.cross_terms
-        for is_normal in (true, false)
-            ct = ctp.cross_term
-            if !is_normal && !has_symmetry(ct)
-                continue
+    if objective_depends_on_crossterms(F)
+        for ctp in model.cross_terms
+            for is_normal in (true, false)
+                ct = ctp.cross_term
+                if !is_normal && !has_symmetry(ct)
+                    continue
+                end
+                if is_normal
+                    modname = ctp.target
+                    eqname = ctp.target_equation
+                else
+                    modname = ctp.source
+                    eqname = ctp.source_equation
+                end
+                m = model[modname]
+                eq = m.equations[eqname]
+                if is_normal
+                    ix = cross_term_entities(ct, eq, m)
+                else
+                    ix = cross_term_entities_source(ct, eq, m)
+                end
+                entityname = associated_entity(eq)
+                msparsity = outer_sparsity[modname]
+                if !haskey(msparsity, entityname)
+                    msparsity[entityname] = Int64[]
+                end
+                dest = msparsity[entityname]
+                for i in ix
+                    push!(dest, i)
+                end
+                unique!(dest)
             end
-            if is_normal
-                modname = ctp.target
-                eqname = ctp.target_equation
-            else
-                modname = ctp.source
-                eqname = ctp.source_equation
-            end
-            m = model[modname]
-            eq = m.equations[eqname]
-            if is_normal
-                ix = cross_term_entities(ct, eq, m)
-            else
-                ix = cross_term_entities_source(ct, eq, m)
-            end
-            entityname = associated_entity(eq)
-            msparsity = outer_sparsity[modname]
-            if !haskey(msparsity, entityname)
-                msparsity[entityname] = Int64[]
-            end
-            dest = msparsity[entityname]
-            for i in ix
-                push!(dest, i)
-            end
-            unique!(dest)
         end
     end
     return outer_sparsity
