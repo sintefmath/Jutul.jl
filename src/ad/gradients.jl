@@ -314,6 +314,7 @@ function adjoint_step_state_triplet(packed_steps::AdjointPackedResult, i::Int)
 end
 
 function update_objective_sparsity!(storage, G, packed_steps::AdjointPackedResult, k = :forward)
+    k in (:forward, :parameter) || error("Invalid sparsity key $k")
     obj_sparsity = storage.objective_sparsity
     if isnothing(obj_sparsity) || (k == :parameter && isnothing(storage.dparam))
         return
@@ -321,7 +322,8 @@ function update_objective_sparsity!(storage, G, packed_steps::AdjointPackedResul
         sparsity = obj_sparsity[k]
         if isnothing(sparsity)
             sim = storage[k]
-            obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, packed_steps)
+            # Note: Variables here may be parameters or variables depending in the "outer" context
+            obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, packed_steps, :variables)
         end
     end
 end
@@ -336,7 +338,7 @@ function get_objective_sparsity(storage, k)
     return S
 end
 
-function determine_objective_sparsity(sim, model, G::AbstractSumObjective, packed_steps::AdjointPackedResult)
+function determine_objective_sparsity(sim, model, G::AbstractSumObjective, packed_steps::AdjointPackedResult, variant = missing)
     update_secondary_variables!(sim.storage, sim.model)
     state = sim.storage.state
 
@@ -348,13 +350,13 @@ function determine_objective_sparsity(sim, model, G::AbstractSumObjective, packe
     end
     sparsity = missing
     for i in 1:length(packed_steps)
-        s_new = determine_sparsity_simple(s -> F_outer(s, i), model, state)
+        s_new = determine_sparsity_simple(s -> F_outer(s, i), model, state, variant = variant)
         sparsity = merge_sparsity!(sparsity, s_new)
     end
     return sparsity
 end
 
-function determine_objective_sparsity(sim, model, G::AbstractGlobalObjective, packed_steps::AdjointPackedResult)
+function determine_objective_sparsity(sim, model, G::AbstractGlobalObjective, packed_steps::AdjointPackedResult, variant = missing)
     update_secondary_variables!(sim.storage, sim.model)
     state = sim.storage.state
     function F_outer(state)
@@ -363,7 +365,7 @@ function determine_objective_sparsity(sim, model, G::AbstractGlobalObjective, pa
         states = [state for _ in 1:length(packed_steps.states)]
         return G(model, state, states, si, f, packed_steps.input_data)
     end
-    sparsity = determine_sparsity_simple(F_outer, model, state)
+    sparsity = determine_sparsity_simple(F_outer, model, state, variant = variant)
     return sparsity
 end
 
