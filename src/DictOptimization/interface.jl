@@ -44,6 +44,10 @@ using `free_optimization_parameter!` prior to calling the optimizer.
   and the solution must thus be unscaled before usage. Gradients and internal
   scaling/descaling is automatically handled.
 - `maximize`: Set to `true` to maximize the objective instead of minimizing
+- `gradient_scaling`: If `true`, internally scales the objective gradient
+  according to the initial 2-norm of the gradient. If a `Float64` value is
+  provided, that value is used as a global scaling factor for the gradient. The
+  internal gradient and objective value is divided by the chosen scaling.
 - `simulator`: Optional simulator object used in forward simulations
 - `config`: Optional configuration for the setup
 - `solution_history`: If `true`, stores all intermediate solutions
@@ -96,6 +100,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         print_parameters = false,
         allow_errors = false,
         scale = true,
+        gradient_scaling = true,
         kwarg...
     )
     if ismissing(setup_fn)
@@ -110,7 +115,8 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         deps = deps,
         deps_ad = deps_ad,
         print_parameters = print_parameters,
-        allow_errors = allow_errors
+        allow_errors = allow_errors,
+        gradient_scaling = gradient_scaling
     )
 
     if dopt.verbose

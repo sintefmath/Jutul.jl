@@ -5,8 +5,17 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         solution_history = missing,
         print_parameters = false,
         allow_errors = false,
-        extra_timing = false
+        extra_timing = false,
+        gradient_scaling = false
     )
+    objectives = adj_cache[:objectives]
+    gnorms = adj_cache[:gradient_norms]
+    is_first_iteration = length(objectives) == 0
+    # We always compute the gradient on the first iteration for scaling purposes
+    use_gradient_norm_scaling = gradient_scaling === true
+    use_gradient_numeric_scaling = gradient_scaling isa Float64
+    gradient = gradient || (is_first_iteration && use_gradient_norm_scaling)
+
     prm = adj_cache[:parameters]
     setup_from_vector = (X, step_info = missing) -> setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
     case = setup_from_vector(x, missing)
@@ -40,21 +49,20 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         result = forward_simulate_for_optimization(case, adj_cache, extra_timing = extra_timing)
     end
     if solve_failure
-        f = adj_cache[:previous][:objective]
-        if ismissing(f)
+        if is_first_iteration
             error("First simulation failed. Unable to proceed, even with allow_errors=true. The initial setup must be possible to simulate.")
         end
-        f *= 100
+        f = objectives[1]*100.0
         if gradient
             g = similar(x)
-            fill!(g, 1e16)
-            # g .= 0.0
-            # if haskey(adj_cache, :last_gradient) && false
-            #     g = adj_cache[:last_gradient].*100
-            # else
-            #     g = similar(x)
-            #     fill!(g, 1e16)
-            # end
+            if use_gradient_norm_scaling
+                # 1.0 is a huge value
+                fill!(g, 1.0)
+            else
+                # We don't know if the gradient is large or small, so return a
+                # very large value
+                fill!(g, 1e16)
+            end
         else
             g = missing
         end
@@ -113,11 +121,8 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         else
             dg = sqrt(sum(abs2, g))
         end
-        objectives = adj_cache[:objectives]
         push!(objectives, f)
-        gnorms = adj_cache[:gradient_norms]
         push!(gnorms, dg)
-
         if dopt.verbose
             num_f = adj_cache[:forward_count]
             fmt = x -> @sprintf("%2.5e", x)
@@ -135,6 +140,19 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             end
             println("")
             jutul_message("Optimization", "Objective #$num_f: $(fmt(f))$ratio_str$gstr", color = :green)
+        end
+        if use_gradient_numeric_scaling || use_gradient_norm_scaling
+            if use_gradient_norm_scaling
+                scale_factor = gnorms[1]
+            else
+                scale_factor = gradient_scaling
+            end
+            f = f/scale_factor
+            if gradient
+                for (i, gi) in enumerate(g)
+                    g[i] = gi/scale_factor
+                end
+            end
         end
     end
     return (f, g)
@@ -349,7 +367,7 @@ function setup_optimization_cache(dopt::DictParameters;
     )
     # Set up a cache for forward/backward sim
     adj_cache = Dict()
-    reset_optimization_cache!!(adj_cache)
+    reset_optimization_cache!(adj_cache)
     adj_cache[:info_level] = info_level
     # Internal copy - to be used for adjoints etc
     adj_cache[:parameters] = widen_dict_copy(dopt.parameters)
