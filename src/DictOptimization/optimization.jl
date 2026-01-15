@@ -40,7 +40,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         result = forward_simulate_for_optimization(case, adj_cache, extra_timing = extra_timing)
     end
     if solve_failure
-        f = get(adj_cache, :last_objective, missing)
+        f = adj_cache[:previous][:objective]
         if ismissing(f)
             error("First simulation failed. Unable to proceed, even with allow_errors=true. The initial setup must be possible to simulate.")
         end
@@ -65,7 +65,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         # Evaluate the objective function
         f = Jutul.evaluate_objective(objective, case.model, packed_steps)
         adj_cache[:forward_count] += 1
-        adj_cache[:last_objective] = f
+        adj_cache[:previous][:objective] = f
         # Solve adjoints
         if gradient
             if !ismissing(solution_history)
@@ -99,8 +99,8 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
                 jutul_message("Optimization", "Adjoint solve took $t_reverse seconds.", color = :green)
             end
             adj_cache[:backward_count] += 1
-            adj_cache[:last_forward_result] = result
-            adj_cache[:last_gradient] = g
+            adj_cache[:previous][:result] = result
+            adj_cache[:previous][:gradient] = g
         else
             g = missing
         end
@@ -349,8 +349,7 @@ function setup_optimization_cache(dopt::DictParameters;
     )
     # Set up a cache for forward/backward sim
     adj_cache = Dict()
-    adj_cache[:forward_count] = 0
-    adj_cache[:backward_count] = 0
+    reset_optimization_cache!!(adj_cache)
     adj_cache[:info_level] = info_level
     # Internal copy - to be used for adjoints etc
     adj_cache[:parameters] = widen_dict_copy(dopt.parameters)
@@ -360,7 +359,17 @@ function setup_optimization_cache(dopt::DictParameters;
     if !ismissing(config)
         adj_cache[:config] = config
     end
+    return adj_cache
+end
+
+function reset_optimization_cache!(adj_cache::Dict)
+    adj_cache[:forward_count] = 0
+    adj_cache[:backward_count] = 0
     adj_cache[:gradient_norms] = Float64[]
     adj_cache[:objectives] = Float64[]
-    return adj_cache
+    adj_cache[:previous] = prev = Dict()
+    prev[:objective] = missing
+    prev[:gradient] = missing
+    prev[:result] = missing
+    return nothing
 end
