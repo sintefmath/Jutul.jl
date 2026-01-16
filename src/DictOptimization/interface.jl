@@ -64,8 +64,10 @@ using `free_optimization_parameter!` prior to calling the optimizer.
 The optimized parameters as a dictionary.
 
 # Notes
-- The function stores the optimization history and optimized parameters in the input `dopt` object.
-- If `solution_history` is `true`, intermediate solutions are stored in `dopt.history.solutions`.
+- The function stores the optimization history and optimized parameters in the
+  input `dopt` object.
+- If `solution_history` is `true`, intermediate solutions are stored in
+  `dopt.history.solutions`.
 - The default optimization algorithm is L-BFGS with box constraints.
 
 ## Type of dependencies in `deps`

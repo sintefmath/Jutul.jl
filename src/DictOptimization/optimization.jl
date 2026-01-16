@@ -116,10 +116,10 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     if solve_failure
         jutul_message("Optimization", "Simulation failed, returning objective = $f", color = :red)
     else
-        if ismissing(gradient)
-            dg = NaN
-        else
+        if gradient
             dg = sqrt(sum(abs2, g))
+        else
+            dg = NaN
         end
         push!(objectives, f)
         push!(gnorms, dg)
