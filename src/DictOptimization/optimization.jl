@@ -31,7 +31,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     solve_failure = false
     if allow_errors
         try
-            result = forward_simulate_for_optimization(case, adj_cache)
+            result = forward_simulate_for_optimization(case, adj_cache, extra_timing = extra_timing)
             reps = result.reports
             if length(reps) == 0
                 solve_failure = true
