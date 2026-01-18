@@ -359,6 +359,7 @@ function update_model_post_selection!(model)
     return model
 end
 
+import Base: copy
 function Base.copy(m::SimulationModel{O, S, C, F}) where {O, S, C, F}
     pvar = copy(m.primary_variables)
     svar = copy(m.secondary_variables)
@@ -1468,7 +1469,7 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
             if N_forces == N_report_step
                 forces = forces[step_index]
             else
-                error("Forces must have the same length as either states or timesteps, was $(N_forces), $(N_mini_step) and $(N_report_step)")
+                error("Forces must have the same length as either states ($(N_mini_step)) or report steps ($(N_report_step)), was $(N_forces).")
             end
         end
     end
