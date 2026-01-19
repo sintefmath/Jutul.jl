@@ -67,4 +67,19 @@ using Jutul, Test
     block_y_ref = [1.0, 0.1, 0.3, 10, 30, 50, 70, 2.0, 0.2, 0.4, 20, 40, 60, 80]
     @test block_y == block_y_ref
     @test Jutul.adjoint_transfer_canonical_order(block_y, block_model; to_canonical = true) == block_x
+
+    x = Dict(
+        "a" => Dict("b" => Dict(:c => 42)),
+        :d => Dict(:e => Dict(:f => 3.14))
+    )
+
+    @test Jutul.DictOptimization.convert_key("a.b.c", x) == ["a", "b", :c]
+    @test Jutul.DictOptimization.convert_key(:d, x) == [:d]
+    @test Jutul.DictOptimization.convert_key("d.e.f", x) == [:d, :e, :f]
+
+    x = Dict(
+        "a" => Dict("b" => Dict("cd" => 42)),
+    )
+
+    @test Jutul.DictOptimization.convert_key("a.b.cd", x) == ["a", "b", "cd"]
 end

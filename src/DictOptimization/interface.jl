@@ -340,7 +340,7 @@ provided. Any limits/lumping/scaling settings for this parameter will be
 removed.
 """
 function freeze_optimization_parameter!(dopt::DictParameters, parameter_name, val = missing)
-    parameter_name = convert_key(parameter_name)
+    parameter_name = convert_key(parameter_name, dopt.parameters)
     if !ismissing(val)
         set_optimization_parameter!(vc, parameter_name, val)
     end
@@ -415,7 +415,7 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
         scaler = missing,
         lumping = missing
     )
-    parameter_name = convert_key(parameter_name)
+    parameter_name = convert_key(parameter_name, dopt.parameters)
     if dopt.strict
         if !all(isfinite, rel_max) && !all(isfinite, abs_max)
             throw(ArgumentError("$parameter_name: At least one of the upper bounds (abs_max/rel_max) must be set for free parameters when strict = true"))
@@ -517,7 +517,7 @@ function add_optimization_multiplier!(dprm::DictParameters, targets...;
         abs_max = Inf
     )
     length(targets) > 0 || error("At least one target parameter must be provided for multiplier.")
-    targets = map(t -> convert_key(t), targets)
+    targets = map(t -> convert_key(t, dprm.parameters), targets)
     if ismissing(name)
         nmult = length(keys(dprm.multipliers))
         name = "multiplier_$(nmult+1)"
