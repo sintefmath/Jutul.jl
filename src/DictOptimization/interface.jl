@@ -44,6 +44,10 @@ using `free_optimization_parameter!` prior to calling the optimizer.
   and the solution must thus be unscaled before usage. Gradients and internal
   scaling/descaling is automatically handled.
 - `maximize`: Set to `true` to maximize the objective instead of minimizing
+- `gradient_scaling`: If `true`, internally scales the objective gradient
+  according to the initial 2-norm of the gradient. If a `Float64` value is
+  provided, that value is used as a global scaling factor for the gradient. The
+  internal gradient and objective value is divided by the chosen scaling.
 - `simulator`: Optional simulator object used in forward simulations
 - `config`: Optional configuration for the setup
 - `solution_history`: If `true`, stores all intermediate solutions
@@ -60,8 +64,10 @@ using `free_optimization_parameter!` prior to calling the optimizer.
 The optimized parameters as a dictionary.
 
 # Notes
-- The function stores the optimization history and optimized parameters in the input `dopt` object.
-- If `solution_history` is `true`, intermediate solutions are stored in `dopt.history.solutions`.
+- The function stores the optimization history and optimized parameters in the
+  input `dopt` object.
+- If `solution_history` is `true`, intermediate solutions are stored in
+  `dopt.history.solutions`.
 - The default optimization algorithm is L-BFGS with box constraints.
 
 ## Type of dependencies in `deps`
@@ -96,6 +102,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         print_parameters = false,
         allow_errors = false,
         scale = true,
+        gradient_scaling = true,
         kwarg...
     )
     if ismissing(setup_fn)
@@ -110,7 +117,8 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         deps = deps,
         deps_ad = deps_ad,
         print_parameters = print_parameters,
-        allow_errors = allow_errors
+        allow_errors = allow_errors,
+        gradient_scaling = gradient_scaling
     )
 
     if dopt.verbose
@@ -332,7 +340,7 @@ provided. Any limits/lumping/scaling settings for this parameter will be
 removed.
 """
 function freeze_optimization_parameter!(dopt::DictParameters, parameter_name, val = missing)
-    parameter_name = convert_key(parameter_name)
+    parameter_name = convert_key(parameter_name, dopt.parameters)
     if !ismissing(val)
         set_optimization_parameter!(vc, parameter_name, val)
     end
@@ -407,7 +415,7 @@ function free_optimization_parameter!(dopt::DictParameters, parameter_name;
         scaler = missing,
         lumping = missing
     )
-    parameter_name = convert_key(parameter_name)
+    parameter_name = convert_key(parameter_name, dopt.parameters)
     if dopt.strict
         if !all(isfinite, rel_max) && !all(isfinite, abs_max)
             throw(ArgumentError("$parameter_name: At least one of the upper bounds (abs_max/rel_max) must be set for free parameters when strict = true"))
@@ -509,7 +517,7 @@ function add_optimization_multiplier!(dprm::DictParameters, targets...;
         abs_max = Inf
     )
     length(targets) > 0 || error("At least one target parameter must be provided for multiplier.")
-    targets = map(t -> convert_key(t), targets)
+    targets = map(t -> convert_key(t, dprm.parameters), targets)
     if ismissing(name)
         nmult = length(keys(dprm.multipliers))
         name = "multiplier_$(nmult+1)"

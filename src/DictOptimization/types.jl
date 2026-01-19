@@ -159,6 +159,7 @@ struct JutulOptimizationProblem
     solution_history
     print_parameters::Bool
     allow_errors::Bool
+    gradient_scaling::Union{Bool, Float64}
     function JutulOptimizationProblem(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
             backend_arg = missing,
             info_level = 0,
@@ -168,7 +169,8 @@ struct JutulOptimizationProblem
             config = missing,
             solution_history::Bool = false,
             print_parameters::Bool = false,
-            allow_errors::Bool = false
+            allow_errors::Bool = false,
+            gradient_scaling = false
         )
         if ismissing(backend_arg)
             deps_ad in (:di, :jutul) || error("deps_ad must be :di or :jutul. Got $deps_ad.")
@@ -202,7 +204,8 @@ struct JutulOptimizationProblem
             adj_cache,
             sols,
             print_parameters,
-            allow_errors
+            allow_errors,
+            gradient_scaling
         )
     end
 end
@@ -219,6 +222,7 @@ function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true, ex
         gradient = gradient,
         print_parameters = opt.print_parameters,
         allow_errors = opt.allow_errors,
+        gradient_scaling = opt.gradient_scaling,
         extra_timing = extra_timing
     )
     return (obj, dobj_dx)

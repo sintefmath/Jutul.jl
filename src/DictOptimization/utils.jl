@@ -291,7 +291,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
 end
 
 function get_parameter_limits(x::DictParameters, key; throw = true)
-    key = convert_key(key)
+    key = convert_key(key, x.parameter_targets)
     val = get(x.parameter_targets, key, missing)
     if throw && ismissing(val)
         error("$key not found in limits")
@@ -327,7 +327,7 @@ function get_lumping_first_entry(lumping)
 end
 
 function get_nested_dict_value(x::AbstractDict, key)
-    key = convert_key(key)
+    key = convert_key(key, x)
     for k in key
         x = x[k]
     end
@@ -335,7 +335,7 @@ function get_nested_dict_value(x::AbstractDict, key)
 end
 
 function set_nested_dict_value!(x::AbstractDict, key, value)
-    key = convert_key(key)
+    key = convert_key(key, x)
     for k in key[1:end-1]
         x = x[k]
     end
@@ -348,11 +348,33 @@ function set_nested_dict_value!(x::AbstractDict, key, value)
     return x
 end
 
-function convert_key(x::KEYTYPE)
-    return convert_key([x])
+function convert_key(x::KEYTYPE, d::AbstractDict)
+    return convert_key([x], d)
 end
 
-function convert_key(x::Vector)
+function convert_key(x::String, d::AbstractDict)
+    new_key = KEYTYPE[]
+    if !haskey(d, x) && contains(x, '.')
+        # Could maybe be x.y.z format, try to convert and match keys in dict.
+        parts = split(x, '.')
+        subdict = d
+        for p in parts
+            sp = Symbol(p)
+            if haskey(subdict, sp)
+                push!(new_key, sp)
+                subdict = subdict[sp]
+            else
+                push!(new_key, String(p))
+                subdict = subdict[p]
+            end
+        end
+    else
+        new_key = convert_key([x], d)
+    end
+    return new_key
+end
+
+function convert_key(x::Vector, d::AbstractDict)
     eltype(x)<:KEYTYPE
     return x
 end
