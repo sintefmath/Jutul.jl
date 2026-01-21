@@ -15,6 +15,11 @@ module JutulHYPREExt
         return prec
     end
 
+    function Jutul.set_hypre_threads(nt = Threads.nthreads())
+        HYPRE.Init()
+        HYPRE.SetNumThreads(nt)
+    end
+
     function Jutul.generate_hypre_assembly_helper(J::AbstractSparseMatrix, executor, ilower = 1, iupper = size(J, 1); column_major = isa(J, SparseMatrixCSC))
         max_width = 0
         min_width = 1_000_000
