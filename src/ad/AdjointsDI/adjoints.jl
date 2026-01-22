@@ -277,7 +277,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
     if do_prep
-        if single_step_sparsity
+        if single_step_sparsity == true
             step_index = :firstlast
         else
             step_index = sparsity_step_type::Symbol
