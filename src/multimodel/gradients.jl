@@ -185,8 +185,6 @@ function print_parameter_optimization_config(targets, config, model::MultiModel)
     end
 end
 
-objective_depends_on_crossterms(F) = false
-
 function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing; variant = missing)
     @assert isnothing(state0) "Not implemented."
     outer_sparsity = Dict()

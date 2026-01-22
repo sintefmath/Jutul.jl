@@ -81,11 +81,13 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
         else
             prm_src = parameters
         end
-        for i in 1:length(packed_steps)
-            if i == current_step
-                continue
+        if objective_depends_on_parameters(G)
+            for i in 1:length(packed_steps)
+                if i == current_step
+                    continue
+                end
+                allstates[i] = objective_state_reference_parameters(allstates[i], prm_src, model)
             end
-            allstates[i] = objective_state_reference_parameters(allstates[i], prm_src, model)
         end
         allstates[current_step] = state
         return G(model, state0, allstates, step_infos, allforces, input_data)
