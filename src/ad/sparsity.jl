@@ -82,8 +82,9 @@ function Base.getindex(A::SparsityTracingWrapper{T, 1, D}, i::Int) where {T, D}
 end
 
 function traced_value(baseval, A, idx)
-    bval = value(baseval)
-    return sign(bval)*max(abs(bval), 1e-8)*A.advec[idx]
+    # bval = value(baseval)
+    return value(baseval)*A.advec[idx]
+    # return sign(bval)*(abs(bval) + idx*1e-3)*A.advec[idx]
 end
 
 function create_mock_state(state, tag, X_tracer::AbstractVector; subkeys = nothing)
@@ -96,8 +97,11 @@ function create_mock_state(state, tag, X_tracer::AbstractVector; subkeys = nothi
         if tag_matches && key_matches
             # Assign mock value with tracer
             new_v = SparsityTracingWrapper(v, X_tracer)
+        elseif eltype(v) <: Real
+            n = size(v)[end]
+            new_v = SparsityTracingWrapper(v, ones(n))
         else
-            # Assign mock value as doubles
+            # Probably not a numeric array, just use value wrapper
             new_v = as_value(v)
         end
         mock_state[k] = new_v
@@ -160,7 +164,6 @@ function determine_sparsity(F!, n, state, state0, count_of_tag, tag, entities, N
     for (row, col) in zip(rows, cols)
         push!(J[row], col)
     end
-    @info "Sparsity" tag J
     return J
 end
 
@@ -189,32 +192,12 @@ function determine_sparsity_simple(F, model, state, state0 = nothing; variant = 
             return sum(f_ad)
         end
         ne = count_entities(model.domain, k)
-        dtct = TracerLocalSparsityDetector()
-        # dtct = TracerSparsityDetector()
+        # dtct = TracerLocalSparsityDetector()
+        dtct = TracerSparsityDetector()
         js = jacobian_sparsity(trace_entity, ones(ne), dtct)
         S = findnz(js)[2]
-        @info "???" S k v
         sparsity[k] = S
     end
 
-    # for (k, v) in entities
-    #     ne = count_entities(model.domain, k)
-    #     @info "??" ne
-    #     mstate = create_mock_state(state, k, X, subkeys = subkeys)
-    #     if isnothing(state0)
-    #         f_ad = F(mstate)
-    #     else
-    #         mstate0 = create_mock_state(state0, k, X, subkeys = subkeys)
-    #         f_ad = F(mstate, mstate0)
-    #     end
-    #     V = sum(f_ad)
-    #     if V isa AbstractFloat || V isa Integer
-    #         S = zeros(Int64, 0)
-    #     else
-    #         D = ST.deriv(V)
-    #         S = D.nzind
-    #     end
-    #     sparsity[k] = S
-    # end
     return sparsity
 end
