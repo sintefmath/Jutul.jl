@@ -467,17 +467,7 @@ function (H::AdjointObjectiveHelper)(x)
         # Loop over multiple steps to get the "extended sparsity". This is a bit
         # of a hack, but it covers the case where there is some change in
         # dynamics/controls at a later step.
-        N = length(packed.states)
-        if step_index_sym == :all
-            indices_to_eval = eachindex(packed.states)
-        elseif step_index_sym == :unique_forces
-            dt = [step_info[:dt] for step_info in packed.step_infos]
-            fmap = Jutul.unique_forces_and_mapping(packed.forces, dt)
-            indices_to_eval = map(first, fmap.forces_to_timesteps)
-        else
-            step_index_sym == :firstlast || error("Unknown step index symbol: $(indices_to_eval).")
-            indices_to_eval = [1, N]
-        end
+        indices_to_eval = get_objective_sparsity_evaluation_steps(packed, step_index_sym)
         step_info = packed.step_infos[1]
         F_of_x = H.F(x, step_info)
         setup = unpack_setup(step_info, missing, F_of_x)
@@ -503,6 +493,21 @@ function (H::AdjointObjectiveHelper)(x)
         v = evaluate(x, H.step_index)
     end
     return v
+end
+
+function get_objective_sparsity_evaluation_steps(packed::AdjointPackedResult, step_index_sym)
+    if step_index_sym == :all
+        indices_to_eval = eachindex(packed.states)
+    elseif step_index_sym == :unique_forces
+        dt = [step_info[:dt] for step_info in packed.step_infos]
+        fmap = Jutul.unique_forces_and_mapping(packed.forces, dt)
+        indices_to_eval = map(first, fmap.forces_to_timesteps)
+    else
+        step_index_sym == :firstlast || error("Unknown step index symbol: $(indices_to_eval).")
+        N = length(packed.states)
+        indices_to_eval = [1, N]
+    end
+    return indices_to_eval
 end
 
 function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, substep_index::Int, cache = missing; is_sum = true)
