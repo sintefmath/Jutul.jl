@@ -1622,3 +1622,4 @@ function timestepping_is_done(C::EndTimeTerminationCriterion, simulator, states,
     return now >= C.end_time
 end
 
+JutulReal = Union{Float64, ForwardDiff.Dual}
