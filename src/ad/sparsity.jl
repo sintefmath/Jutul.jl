@@ -27,7 +27,7 @@ SparsityTracing seeded value with seed equal to the column index (if matrix) or
 linear index (if vector).
 """
 function SparsityTracingWrapper(x::AbstractArray{T, N}, advec) where {T, N}
-    size(x)[end] == length(advec) || error("Length of advec must match last dimension of x")
+    size(x)[end] == length(advec) || error("Length of advec ($(length(advec)) must match last dimension of x (size(x)=$(size(x)))")
     return SparsityTracingWrapper{Float64, N, T, typeof(advec)}(x, advec)
 end
 
@@ -126,7 +126,10 @@ function ad_entities(state)
     return out
 end
 
-function determine_sparsity(F!, n, state, state0, tag, entities, N = entities[tag].n)
+function determine_sparsity(F!, n, state, state0, count_of_tag, tag, entities, N = entities[tag].n)
+    # n: number of equations per entity
+    # N: number of entities where the equation lies (output size)
+    # count_of_tag: number of variables with the given tag (input size)
     function x_to_evaluated(X::AbstractVector{T}) where T
         out = zeros(T, N)
         eq_buf = zeros(T, n)
@@ -145,7 +148,7 @@ function determine_sparsity(F!, n, state, state0, tag, entities, N = entities[ta
 
     dtct = TracerSparsityDetector()
     dtct = TracerLocalSparsityDetector()
-    S = jacobian_sparsity(x_to_evaluated, ones(N), dtct)
+    S = jacobian_sparsity(x_to_evaluated, ones(count_of_tag), dtct)
 
     J = [Vector{Int64}() for _ in 1:N]
     rows, cols, = findnz(S)

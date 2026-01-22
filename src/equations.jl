@@ -205,7 +205,8 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
         for (e, epack) in entities
             is_self = e == self_entity
             self_entity_found = self_entity_found || is_self
-            @tic "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, e, entities, number_of_entities)
+            num_e = count_entities(model.domain, e)
+            @tic "sparsity detection" S = determine_sparsity(F!, equations_per_entity, state, state0, num_e, e, entities, number_of_entities)
             if !isnothing(extra_sparsity)
                 # We have some extra sparsity, need to merge that in
                 S_e = extra_sparsity[entity_as_symbol(e)]
