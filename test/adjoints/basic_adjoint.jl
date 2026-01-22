@@ -383,7 +383,13 @@ import Jutul.DictOptimization as DictOptimization
         free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1)
 
         # Test with base optimizer
-        prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1);
+        prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1, solution_history = true);
+
+        @test length(dprm.history.solutions) > 0
+        @test haskey(dprm.history.solutions[1], :x)
+        @test haskey(dprm.history.solutions[1], :parameters)
+        @test haskey(dprm.history.solutions[1], :objective)
+
 
         @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
         @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01

@@ -156,7 +156,7 @@ struct JutulOptimizationProblem
     limits
     backend_arg::NamedTuple
     cache
-    solution_history
+    solution_history::Union{Bool, Symbol}
     print_parameters::Bool
     allow_errors::Bool
     gradient_scaling::Union{Bool, Float64}
@@ -167,7 +167,7 @@ struct JutulOptimizationProblem
             deps_ad::Symbol = :jutul,
             simulator = missing,
             config = missing,
-            solution_history::Bool = false,
+            solution_history::Union{Bool, Symbol} = false,
             print_parameters::Bool = false,
             allow_errors::Bool = false,
             gradient_scaling = false
@@ -188,10 +188,8 @@ struct JutulOptimizationProblem
         # Set up a cache for forward/backward sim
         adj_cache = setup_optimization_cache(dopt, simulator = simulator, config = config, info_level = info_level)
 
-        if solution_history
-            sols = []
-        else
-            sols = missing
+        if solution_history isa Symbol
+            solution_history in (:full, :x) || error("solution_history must be :full or :x if a Symbol. Got $solution_history.")
         end
         return new(
             dopt,
@@ -202,7 +200,7 @@ struct JutulOptimizationProblem
             limits,
             backend_arg,
             adj_cache,
-            sols,
+            solution_history,
             print_parameters,
             allow_errors,
             gradient_scaling
@@ -222,6 +220,7 @@ function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true, ex
         gradient = gradient,
         print_parameters = opt.print_parameters,
         allow_errors = opt.allow_errors,
+        solution_history = opt.solution_history,
         gradient_scaling = opt.gradient_scaling,
         extra_timing = extra_timing
     )
