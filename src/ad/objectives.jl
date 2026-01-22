@@ -52,7 +52,11 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
     end
     state0 = packed_steps.state0
     step_infos = packed_steps.step_infos
-    allstates = Any[objective_state_shallow_copy(s, model) for s in packed_steps.states]
+    if objective_depends_on_parameters(G)
+        allstates = Any[objective_state_shallow_copy(s, model) for s in packed_steps.states]
+    else
+        allstates = Vector{Any}(copy(packed_steps.states))
+    end
     function obj_eval(model, state;
             parameters = missing, # Parameters - if not in state.
             allforces = missing, # Forces for all steps
@@ -81,11 +85,13 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
         else
             prm_src = parameters
         end
-        for i in 1:length(packed_steps)
-            if i == current_step
-                continue
+        if objective_depends_on_parameters(G)
+            for i in 1:length(packed_steps)
+                if i == current_step
+                    continue
+                end
+                allstates[i] = objective_state_reference_parameters(allstates[i], prm_src, model)
             end
-            allstates[i] = objective_state_reference_parameters(allstates[i], prm_src, model)
         end
         allstates[current_step] = state
         return G(model, state0, allstates, step_infos, allforces, input_data)

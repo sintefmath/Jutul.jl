@@ -1530,6 +1530,9 @@ Abstract type for Jutul objectives.
 """
 abstract type AbstractJutulObjective end
 
+objective_depends_on_crossterms(F) = false
+objective_depends_on_parameters(F) = true
+
 """
 Abstract type for objective as a sum of function values on the form:
 
@@ -1563,6 +1566,11 @@ arguments).
 """
 struct WrappedSumObjective{T} <: AbstractSumObjective
     objective::T
+    depends_on_crossterms::Bool
+    depends_on_parameters::Bool
+    function WrappedSumObjective(objective::T; depends_on_crossterms = false, depends_on_parameters = true) where T
+        return new{T}(objective, depends_on_crossterms, depends_on_parameters)
+    end
 end
 
 """
@@ -1574,6 +1582,19 @@ optimization interface if they have the sum signature (five arguments).
 """
 struct WrappedGlobalObjective{T} <: AbstractGlobalObjective
     objective::T
+    depends_on_crossterms::Bool
+    depends_on_parameters::Bool
+    function WrappedGlobalObjective(objective::T; depends_on_crossterms = false, depends_on_parameters = true) where T
+        return new{T}(objective, depends_on_crossterms, depends_on_parameters)
+    end
+end
+
+function objective_depends_on_crossterms(O::Union{WrappedGlobalObjective, WrappedSumObjective})
+    return O.depends_on_crossterms
+end
+
+function objective_depends_on_parameters(O::Union{WrappedGlobalObjective, WrappedSumObjective})
+    return O.depends_on_parameters
 end
 
 """

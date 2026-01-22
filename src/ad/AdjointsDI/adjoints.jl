@@ -82,10 +82,14 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         H.num_evals = 0
         H.packed_steps = packed_steps
         dG_dynamic = storage[:dynamic_buffer]
+        idx_for_sparsity = get_objective_sparsity_evaluation_steps(packed_steps, storage[:sparsity_step_type])
         if storage[:deps_ad] == :jutul
             @assert !is_fully_dynamic "Fully dynamic dependencies must use :di adjoints."
             dG_dynamic_prm = storage[:dynamic_buffer_parameters]
-            @tic "jutul_adjoint" Jutul.solve_adjoint_sensitivities!(dG_dynamic_prm, storage, packed_steps, G; info_level = info_level)
+            @tic "jutul_adjoint" Jutul.solve_adjoint_sensitivities!(dG_dynamic_prm, storage, packed_steps, G;
+                info_level = info_level,
+                objective_sparsity_steps = idx_for_sparsity
+            )
             dstate0 = storage[:dstate0]
             if !ismissing(dstate0)
                 dG_dynamic_state0 = storage[:dynamic_buffer_state0]
@@ -97,7 +101,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
                 jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
             end
 
-            @tic "objective_sparsity" Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward)
+            @tic "objective_sparsity" Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward, idx_for_sparsity)
             # Set gradient to zero before solve starts
             @. dG_dynamic = 0.0
             @tic "sensitivities" begin
@@ -152,6 +156,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         backend = Jutul.default_di_backend(sparse = di_sparse),
         info_level = 0,
         single_step_sparsity = true,
+        sparsity_step_type::Symbol = :unique_forces,
         use_sparsity = true
     )
     case = setup_case(X, F, packed_steps, state0, :all)
@@ -263,6 +268,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     # Hints about what type of dependencies are used
     storage[:deps] = deps
     storage[:deps_ad] = deps_ad
+    storage[:sparsity_step_type] = sparsity_step_type
 
     # Switch to Y and F_dynamic(Y) as main function
     Y = F_static(X)
@@ -276,10 +282,10 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
     if do_prep
-        if single_step_sparsity
+        if single_step_sparsity == true
             step_index = :firstlast
         else
-            step_index = :all
+            step_index = sparsity_step_type::Symbol
         end
         set_objective_helper_step_index!(H, case.model, step_index)
         prep = prepare_jacobian(H, backend, Y)
@@ -444,7 +450,7 @@ function set_objective_helper_step_index!(H::AdjointObjectiveHelper, model, step
         step_index <= length(H.packed_steps) || error("Step index $step_index is larger than the number of steps $(length(H.packed_steps)).")
         step_index_for_eval = step_index
     else
-        step_index in (:firstlast, :all) || error("If step_index is a Symbol it must be :firstlast or :all.")
+        step_index in (:firstlast, :all, :unique_forces) || error("If step_index is a Symbol it must be :firstlast or :all.")
         step_index isa Symbol || error("Step index must be an integer or symbol (:firstlast, :all). Got $step_index.")
         step_index_for_eval = 1
     end
@@ -453,7 +459,7 @@ function set_objective_helper_step_index!(H::AdjointObjectiveHelper, model, step
 end
 
 function (H::AdjointObjectiveHelper)(x)
-    packed = H.packed_steps
+    packed = H.packed_steps::AdjointPackedResult
     function evaluate(x, ix)
         s0, s, = Jutul.adjoint_step_state_triplet(packed, ix)
         is_sum = H.G isa Jutul.AbstractSumObjective
@@ -466,14 +472,8 @@ function (H::AdjointObjectiveHelper)(x)
         # Loop over multiple steps to get the "extended sparsity". This is a bit
         # of a hack, but it covers the case where there is some change in
         # dynamics/controls at a later step.
-        N = length(packed.states)
-        if step_index_sym == :all
-            indices_to_eval = eachindex(packed.states)
-        else
-            step_index_sym == :firstlast || error("Unknown step index symbol: $(indices_to_eval).")
-            indices_to_eval = [1, N]
-        end
-        step_info = H.packed_steps.step_infos[1]
+        indices_to_eval = get_objective_sparsity_evaluation_steps(packed, step_index_sym)
+        step_info = packed.step_infos[1]
         F_of_x = H.F(x, step_info)
         setup = unpack_setup(step_info, missing, F_of_x)
         if setup isa Jutul.JutulCase
@@ -498,6 +498,21 @@ function (H::AdjointObjectiveHelper)(x)
         v = evaluate(x, H.step_index)
     end
     return v
+end
+
+function get_objective_sparsity_evaluation_steps(packed::AdjointPackedResult, step_index_sym)
+    if step_index_sym == :all
+        indices_to_eval = eachindex(packed.states)
+    elseif step_index_sym == :unique_forces
+        dt = [step_info[:dt] for step_info in packed.step_infos]
+        fmap = Jutul.unique_forces_and_mapping(packed.forces, dt)
+        indices_to_eval = map(first, fmap.forces_to_timesteps)
+    else
+        step_index_sym == :firstlast || error("Unknown step index symbol: $(indices_to_eval).")
+        N = length(packed.states)
+        indices_to_eval = [1, N]
+    end
+    return indices_to_eval
 end
 
 function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, objective_eval::Function, packed_steps::AdjointPackedResult, substep_index::Int, cache = missing; is_sum = true)
