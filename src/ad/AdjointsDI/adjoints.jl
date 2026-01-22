@@ -82,10 +82,14 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         H.num_evals = 0
         H.packed_steps = packed_steps
         dG_dynamic = storage[:dynamic_buffer]
+        idx_for_sparsity = get_objective_sparsity_evaluation_steps(packed_steps, storage[:sparsity_step_type])
         if storage[:deps_ad] == :jutul
             @assert !is_fully_dynamic "Fully dynamic dependencies must use :di adjoints."
             dG_dynamic_prm = storage[:dynamic_buffer_parameters]
-            @tic "jutul_adjoint" Jutul.solve_adjoint_sensitivities!(dG_dynamic_prm, storage, packed_steps, G; info_level = info_level)
+            @tic "jutul_adjoint" Jutul.solve_adjoint_sensitivities!(dG_dynamic_prm, storage, packed_steps, G;
+                info_level = info_level,
+                objective_sparsity_steps = idx_for_sparsity
+            )
             dstate0 = storage[:dstate0]
             if !ismissing(dstate0)
                 dG_dynamic_state0 = storage[:dynamic_buffer_state0]
@@ -97,7 +101,7 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
                 jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
             end
 
-            @tic "objective_sparsity" Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward)
+            @tic "objective_sparsity" Jutul.update_objective_sparsity!(storage, G, packed_steps, :forward, idx_for_sparsity)
             # Set gradient to zero before solve starts
             @. dG_dynamic = 0.0
             @tic "sensitivities" begin
@@ -264,6 +268,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     # Hints about what type of dependencies are used
     storage[:deps] = deps
     storage[:deps_ad] = deps_ad
+    storage[:sparsity_step_type] = sparsity_step_type
 
     # Switch to Y and F_dynamic(Y) as main function
     Y = F_static(X)

@@ -238,7 +238,7 @@ function solve_adjoint_sensitivities!(∇G, storage, states, state0, timesteps, 
     return solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPackedResult, G; info_level = info_level)
 end
 
-function solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPackedResult, G; info_level = 0)
+function solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPackedResult, G; objective_sparsity_steps = missing, info_level = 0)
     state0 = packed_steps.state0
     G = adjoint_wrap_objective(G, storage.forward.model)
     # Do sparsity detection if not already done.
@@ -246,8 +246,8 @@ function solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPacked
         jutul_message("Adjoints", "Updating sparsity patterns.", color = :blue)
     end
     N = length(packed_steps)
-    update_objective_sparsity!(storage, G, packed_steps, :forward)
-    update_objective_sparsity!(storage, G, packed_steps, :parameter)
+    update_objective_sparsity!(storage, G, packed_steps, :forward, objective_sparsity_steps)
+    update_objective_sparsity!(storage, G, packed_steps, :parameter, objective_sparsity_steps)
     # Set gradient to zero before solve starts
     @. ∇G = 0
     if info_level == 0 && !JUTUL_IS_CI
@@ -313,7 +313,7 @@ function adjoint_step_state_triplet(packed_steps::AdjointPackedResult, i::Int)
     return (s0, s, s_next)
 end
 
-function update_objective_sparsity!(storage, G, packed_steps::AdjointPackedResult, k = :forward)
+function update_objective_sparsity!(storage, G, packed_steps::AdjointPackedResult, k = :forward, steps = missing)
     k in (:forward, :parameter) || error("Invalid sparsity key $k")
     obj_sparsity = storage.objective_sparsity
     if isnothing(obj_sparsity) || (k == :parameter && isnothing(storage.dparam))
@@ -323,7 +323,7 @@ function update_objective_sparsity!(storage, G, packed_steps::AdjointPackedResul
         if isnothing(sparsity)
             sim = storage[k]
             # Note: Variables here may be parameters or variables depending in the "outer" context
-            obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, packed_steps, :variables)
+            obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, packed_steps, :variables, steps)
         end
     end
 end
@@ -338,7 +338,7 @@ function get_objective_sparsity(storage, k)
     return S
 end
 
-function determine_objective_sparsity(sim, model, G::AbstractSumObjective, packed_steps::AdjointPackedResult, variant = missing)
+function determine_objective_sparsity(sim, model, G::AbstractSumObjective, packed_steps::AdjointPackedResult, variant = missing, steps = missing)
     update_secondary_variables!(sim.storage, sim.model)
     state = sim.storage.state
 
@@ -349,14 +349,18 @@ function determine_objective_sparsity(sim, model, G::AbstractSumObjective, packe
         return G(model, state, si[:dt], si, f)
     end
     sparsity = missing
-    for i in 1:length(packed_steps)
+    if ismissing(steps)
+        steps = 1:length(packed_steps)
+    end
+    @info "?????? sparsity" steps
+    for i in steps
         s_new = determine_sparsity_simple(s -> F_outer(s, i), model, state, variant = variant)
         sparsity = merge_sparsity!(sparsity, s_new)
     end
     return sparsity
 end
 
-function determine_objective_sparsity(sim, model, G::AbstractGlobalObjective, packed_steps::AdjointPackedResult, variant = missing)
+function determine_objective_sparsity(sim, model, G::AbstractGlobalObjective, packed_steps::AdjointPackedResult, variant = missing, steps = missing)
     update_secondary_variables!(sim.storage, sim.model)
     state = sim.storage.state
     function F_outer(state)
