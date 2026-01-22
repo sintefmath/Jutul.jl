@@ -9,6 +9,10 @@ function setup_hypre_precond
 
 end
 
+function set_hypre_threads
+
+end
+
 export BoomerAMGPreconditioner
 
 function BoomerAMGPreconditioner(;
