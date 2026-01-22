@@ -1,19 +1,3 @@
-# function unpack_tag(v::Type{ForwardDiff.Dual{T, F, N}}, t::Symbol = :entity) where {T, F, N}
-#     @info "???"
-#     if v isa Tuple
-#         if t == :entity
-#             out = T[2]
-#         elseif t == :model
-#             out = T[1]
-#         else
-#             out = T
-#         end
-#     else
-#         out = T
-#     end
-#     return unpack_tag(out)
-# end
-
 function unpack_tag(v::Type{ForwardDiff.Dual{T, F, N}}) where {T, F, N}
     return unpack_tag(T)
 end
@@ -29,8 +13,9 @@ end
 unpack_tag(A::AbstractArray, arg...) = unpack_tag(eltype(A), arg...)
 unpack_tag(::Any, arg...) = nothing
 
-struct SparsityTracingWrapper{T, N, D} <: AbstractArray{T, N}
+struct SparsityTracingWrapper{T, N, D, AD<:AbstractVector} <: AbstractArray{T, N}
     data::Array{D, N}
+    advec::AD
 end
 
 """
@@ -41,8 +26,9 @@ produces outputs that have the same value as the wrapped type, but contains a
 SparsityTracing seeded value with seed equal to the column index (if matrix) or
 linear index (if vector).
 """
-function SparsityTracingWrapper(x::AbstractArray{T, N}) where {T, N}
-    return SparsityTracingWrapper{Float64, N, T}(x)
+function SparsityTracingWrapper(x::AbstractArray{T, N}, advec) where {T, N}
+    size(x)[end] == length(advec) || error("Length of advec must match last dimension of x")
+    return SparsityTracingWrapper{Float64, N, T, typeof(advec)}(x, advec)
 end
 
 Base.parent(A::SparsityTracingWrapper) = A.data
@@ -78,40 +64,31 @@ function Base.getindex(A::SparsityTracingWrapper{T, D, <:Any}, I, J) where {T, D
 end
 
 function Base.getindex(A::SparsityTracingWrapper, i::Int, j::Int)
-    return as_tracer(A.data[i, j], j)
+    return A.data[i, j]*A.advec[j]
 end
 
 function Base.getindex(A::SparsityTracingWrapper{T, 2, D}, ix::Int) where {T, D}
-    n, m = size(A)
+    m = size(A)[2]
     zero_ix = ix - 1
     i = (zero_ix ÷ m) + 1
     j = mod(zero_ix, m) + 1
-    return as_tracer(A.data[i, j], j)
+    return A.data[i, j]*A.advec[j]
 end
 
 function Base.getindex(A::SparsityTracingWrapper{T, 1, D}, i::Int) where {T, D}
-    return as_tracer(A.data[i], i)
+    return A.data[i]*A.advec[i]
 end
 
-function as_tracer(x::Real, leaf_init)
-    return Jutul.ST.ADval{Float64}(value(x), Jutul.ST.DerivLeaf(leaf_init))
-end
-
-function as_tracer(x, leaf_init)
-    return x
-end
-
-function create_mock_state(state, tag, entities = ad_entities(state); subkeys = nothing)
+function create_mock_state(state, tag, X_tracer::AbstractVector; subkeys = nothing)
     no_provided_keys = isnothing(subkeys)
     mock_state = JutulStorage()
-    n = entities[tag].n
     for k in keys(state)
         v = state[k]
         tag_matches = unpack_tag(v) == tag
         key_matches = no_provided_keys || (k in subkeys)
         if tag_matches && key_matches
             # Assign mock value with tracer
-            new_v = SparsityTracingWrapper(v)
+            new_v = SparsityTracingWrapper(v, X_tracer)
         else
             # Assign mock value as doubles
             new_v = as_value(v)
@@ -144,8 +121,29 @@ function ad_entities(state)
 end
 
 function determine_sparsity(F!, n, state, state0, tag, entities, N = entities[tag].n)
-    mstate = create_mock_state(state, tag, entities)
-    mstate0 = create_mock_state(state0, tag, entities)
+    # ne = count_entities(model.domain, k)
+    @info "??" N tag
+    function x_to_evaluated(X::AbstractVector{T}) where T
+        out = zeros(T, N)
+        eq_buf = zeros(T, n)
+        mstate = create_mock_state(state, tag, X)
+        mstate0 = create_mock_state(state0, tag, X)
+
+        for i in 1:N
+            @inbounds F!(eq_buf, mstate, mstate0, i)
+            # Take the sum over all return values to reduce to scalar.
+            # This should accumulate the full "entity" pattern if some
+            # equations have a different stencil.
+            out[i] = sum(eq_buf)
+        end
+        return out
+    end
+
+    S = jacobian_sparsity(x_to_evaluated, ones(N), TracerLocalSparsityDetector())
+
+    @info S
+    error("Not implemented yet.")
+
 
     out = ST.create_advec(zeros(n))
     J = [Vector{Int64}() for i in 1:N]
@@ -175,6 +173,8 @@ function determine_sparsity_simple(F, model, state, state0 = nothing; variant = 
         end
     end
     for (k, v) in entities
+        ne = count_entities(model.domain, k)
+        @info "??" ne
         mstate = create_mock_state(state, k, entities, subkeys = subkeys)
         if isnothing(state0)
             f_ad = F(mstate)
