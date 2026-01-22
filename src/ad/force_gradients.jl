@@ -164,10 +164,11 @@ function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
         for i in 1:num_unique_forces
             force_map[i] = Int[]
         end
-        for (i, uf) in enumerate(unique_forces)
-            for (j, f) in enumerate(forces)
+        for (j, f) in enumerate(forces)
+            for (i, uf) in enumerate(unique_forces)
                 if f == uf
                     push!(force_map[i], j)
+                    break
                 end
             end
         end
