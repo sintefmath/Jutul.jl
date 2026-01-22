@@ -64,7 +64,7 @@ function Base.getindex(A::SparsityTracingWrapper{T, D, <:Any}, I, J) where {T, D
 end
 
 function Base.getindex(A::SparsityTracingWrapper, i::Int, j::Int)
-    return A.data[i, j]*A.advec[j]
+    return value(A.data[i, j])*A.advec[j]
 end
 
 function Base.getindex(A::SparsityTracingWrapper{T, 2, D}, ix::Int) where {T, D}
@@ -72,11 +72,11 @@ function Base.getindex(A::SparsityTracingWrapper{T, 2, D}, ix::Int) where {T, D}
     zero_ix = ix - 1
     i = (zero_ix ÷ m) + 1
     j = mod(zero_ix, m) + 1
-    return A.data[i, j]*A.advec[j]
+    return value(A.data[i, j])*A.advec[j]
 end
 
 function Base.getindex(A::SparsityTracingWrapper{T, 1, D}, i::Int) where {T, D}
-    return A.data[i]*A.advec[i]
+    return value(A.data[i])*A.advec[i]
 end
 
 function create_mock_state(state, tag, X_tracer::AbstractVector; subkeys = nothing)
