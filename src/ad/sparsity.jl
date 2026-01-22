@@ -82,7 +82,8 @@ function Base.getindex(A::SparsityTracingWrapper{T, 1, D}, i::Int) where {T, D}
 end
 
 function traced_value(baseval, A, idx)
-    return max(value(baseval), 1e-8)*A.advec[idx]
+    bval = value(baseval)
+    return sign(bval)*max(abs(bval), 1e-8)*A.advec[idx]
 end
 
 function create_mock_state(state, tag, X_tracer::AbstractVector; subkeys = nothing)
@@ -141,7 +142,11 @@ function determine_sparsity(F!, n, state, state0, count_of_tag, tag, entities, N
             # Take the sum over all return values to reduce to scalar.
             # This should accumulate the full "entity" pattern if some
             # equations have a different stencil.
-            out[i] = sum(eq_buf)
+            v = zero(T)
+            for j in 1:n
+                v += abs(eq_buf[j])
+            end
+            out[i] = v
         end
         return out
     end
