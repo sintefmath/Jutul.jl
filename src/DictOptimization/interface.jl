@@ -57,7 +57,13 @@ using `free_optimization_parameter!` prior to calling the optimizer.
   - `use_sparsity`: Enable sparsity detection for the objective function
   - `di_sparse`: Use sparse differentiation
   - `single_step_sparsity`: Enable single step sparsity detection (if sparsity
-    does not change during timesteps)
+    does not change during timesteps). This means that the solver will assume
+    that the sparsity pattern will be determined entirely by the first and last
+    steps of the simulation. Alternatively, this can be set to `:unique_forces`
+    to use the sparsity pattern determined by all unique force terms in the
+    solve, `:firstlast` to only use the first and last time steps or `:allsteps`
+    to use all time steps (the latter is equivalent to setting `use_sparsity` to
+    `true`).
   - `do_prep`: Perform preparation step
 
 # Returns
