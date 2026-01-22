@@ -51,7 +51,7 @@ function Base.getindex(A::SparsityTracingWrapper{T, D, <:Any}, I, J) where {T, D
     if J isa Colon
         J = axes(A, 2)
     end
-    Ts = Jutul.ST.ADval{T}
+    Ts = eltype(A.advec)
     n = length(I)
     m = length(J)
     out = Matrix{Ts}(undef, n, m)
@@ -64,7 +64,8 @@ function Base.getindex(A::SparsityTracingWrapper{T, D, <:Any}, I, J) where {T, D
 end
 
 function Base.getindex(A::SparsityTracingWrapper, i::Int, j::Int)
-    return value(A.data[i, j])*A.advec[j]
+    return traced_value(A.data[i, j], A, j)
+    # return value(A.data[i, j])*A.advec[j]
 end
 
 function Base.getindex(A::SparsityTracingWrapper{T, 2, D}, ix::Int) where {T, D}
@@ -72,11 +73,16 @@ function Base.getindex(A::SparsityTracingWrapper{T, 2, D}, ix::Int) where {T, D}
     zero_ix = ix - 1
     i = (zero_ix ÷ m) + 1
     j = mod(zero_ix, m) + 1
-    return value(A.data[i, j])*A.advec[j]
+    return traced_value(A.data[i, j], A, j)
+    # return value(A.data[i, j])*A.advec[j]
 end
 
 function Base.getindex(A::SparsityTracingWrapper{T, 1, D}, i::Int) where {T, D}
-    return value(A.data[i])*A.advec[i]
+    return traced_value(A.data[i], A, i)
+end
+
+function traced_value(baseval, A, idx)
+    return max(value(baseval), 1e-8)*A.advec[idx]
 end
 
 function create_mock_state(state, tag, X_tracer::AbstractVector; subkeys = nothing)
@@ -121,8 +127,6 @@ function ad_entities(state)
 end
 
 function determine_sparsity(F!, n, state, state0, tag, entities, N = entities[tag].n)
-    # ne = count_entities(model.domain, k)
-    @info "??" N tag
     function x_to_evaluated(X::AbstractVector{T}) where T
         out = zeros(T, N)
         eq_buf = zeros(T, n)
@@ -139,22 +143,14 @@ function determine_sparsity(F!, n, state, state0, tag, entities, N = entities[ta
         return out
     end
 
-    S = jacobian_sparsity(x_to_evaluated, ones(N), TracerLocalSparsityDetector())
+    dtct = TracerSparsityDetector()
+    dtct = TracerLocalSparsityDetector()
+    S = jacobian_sparsity(x_to_evaluated, ones(N), dtct)
 
-    @info S
-    error("Not implemented yet.")
-
-
-    out = ST.create_advec(zeros(n))
-    J = [Vector{Int64}() for i in 1:N]
-    for i in 1:N
-        @inbounds F!(out, mstate, mstate0, i)
-        # Take the sum over all return values to reduce to scalar.
-        # This should accumulate the full "entity" pattern if some
-        # equations have a different stencil.
-        V = sum(out)
-        D = ST.deriv(V)
-        J[i] = D.nzind
+    J = [Vector{Int64}() for _ in 1:N]
+    rows, cols, = findnz(S)
+    for (row, col) in zip(rows, cols)
+        push!(J[row], col)
     end
     return J
 end
