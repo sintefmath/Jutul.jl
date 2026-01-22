@@ -352,7 +352,6 @@ function determine_objective_sparsity(sim, model, G::AbstractSumObjective, packe
     if ismissing(steps)
         steps = 1:length(packed_steps)
     end
-    @info "?????? sparsity" steps
     for i in steps
         s_new = determine_sparsity_simple(s -> F_outer(s, i), model, state, variant = variant)
         sparsity = merge_sparsity!(sparsity, s_new)
@@ -366,7 +365,14 @@ function determine_objective_sparsity(sim, model, G::AbstractGlobalObjective, pa
     function F_outer(state)
         si = packed_steps.step_infos
         f = packed_steps.forces
-        states = [state for _ in 1:length(packed_steps.states)]
+        if ismissing(steps)
+            states = [state for _ in 1:length(packed_steps.states)]
+        else
+            states = Vector{Any}(copy(packed_steps.states))
+            for i in steps
+                states[i] = state
+            end
+        end
         return G(model, state, states, si, f, packed_steps.input_data)
     end
     sparsity = determine_sparsity_simple(F_outer, model, state, variant = variant)
