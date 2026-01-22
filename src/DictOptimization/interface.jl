@@ -66,8 +66,10 @@ The optimized parameters as a dictionary.
 # Notes
 - The function stores the optimization history and optimized parameters in the
   input `dopt` object.
-- If `solution_history` is `true`, intermediate solutions are stored in
-  `dopt.history.solutions`.
+- If `solution_history` is `true` or :x, intermediate solutions are stored in
+  `dopt.history.solutions`. If it is set to `:full`, the full states are also
+  copied and stored for each iteration. This can use a lot of memory for large
+  simulations.
 - The default optimization algorithm is L-BFGS with box constraints.
 
 ## Type of dependencies in `deps`
@@ -151,10 +153,8 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     history = Dict()
     history[:objectives] = problem.cache[:objectives]
     history[:gradient_norms] = problem.cache[:gradient_norms]
+    history[:solutions] = problem.cache[:solutions]
     history[:solver_history] = solver_history
-    if solution_history
-        history[:solutions] = problem.solution_history
-    end
     dopt.history = NamedTuple(history)
 
     return prm_out

@@ -2,7 +2,7 @@
 function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup_fn, objective, x_setup, adj_cache;
         backend_arg = NamedTuple(),
         gradient = true,
-        solution_history = missing,
+        solution_history = false,
         print_parameters = false,
         allow_errors = false,
         extra_timing = false,
@@ -74,11 +74,22 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         f = Jutul.evaluate_objective(objective, case.model, packed_steps)
         adj_cache[:forward_count] += 1
         adj_cache[:previous][:objective] = f
+        if solution_history != false
+            dest = adj_cache[:solutions]
+            prm_opt = deepcopy(prm)
+            optimizer_devectorize!(prm_opt, x, x_setup)
+            next = Dict{Symbol, Any}()
+            next[:objective] = f
+            next[:parameters] = prm_opt
+            next[:x] = x
+            if solution_history == :full
+                states = result.states
+                next[:states] = deepcopy(states)
+            end
+            push!(dest, NamedTuple(next))
+        end
         # Solve adjoints
         if gradient
-            if !ismissing(solution_history)
-                push!(solution_history, (x = x, states = deepcopy(states), objective = f))
-            end
             S = get(adj_cache, :storage, missing)
             if ismissing(S)
                 if dopt.verbose
@@ -385,6 +396,7 @@ function reset_optimization_cache!(adj_cache::Dict)
     adj_cache[:backward_count] = 0
     adj_cache[:gradient_norms] = Float64[]
     adj_cache[:objectives] = Float64[]
+    adj_cache[:solutions] = Any[]
     adj_cache[:previous] = prev = Dict()
     prev[:objective] = missing
     prev[:gradient] = missing
