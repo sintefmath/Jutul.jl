@@ -335,6 +335,11 @@ end
 
 export upw_flux
 function upw_flux(v, l, r)
+    # Take both branches - could involve sparsity
+    return ifelse(v > 0, l, r)
+end
+
+function upw_flux(v::JutulReal, l::JutulReal, r::JutulReal)
     if v > 0
         # Flow l -> r
         out = l
@@ -344,11 +349,7 @@ function upw_flux(v, l, r)
     return out
 end
 
-function upw_flux(v, l::T, r::T) where {T<:ST.ADval}
-    if v > 0
-        out = l + r*0
-    else
-        out = r + l*0
-    end
-    return out
+function upw_flux(v, l::JutulReal, r::JutulReal)
+    flag = v > 0
+    return flag*l + (1.0 - flag)*r
 end
