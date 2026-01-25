@@ -101,6 +101,7 @@ module Jutul
 
     include("meshes/meshes.jl")
     include("discretization/discretization.jl")
+    include("meshes/EmbeddedMeshes/EmbeddedMeshes.jl")
 
     # Coarsening utilities
     include("coarsening.jl")
@@ -149,6 +150,9 @@ module Jutul
     import Jutul.ConvergenceMonitors: ConvergenceMonitorCuttingCriterion
     import Jutul.ConvergenceMonitors: set_convergence_monitor_cutting_criterion!
     import Jutul.ConvergenceMonitors: set_convergence_monitor_relaxation!
+
+    # Embedded meshes
+    import Jutul.EmbeddedMeshes: EmbeddedMesh
 
     # This is to make Jutul simulators work nicely with nested ForwardDiff.
     JutulSimulateTag = ForwardDiff.Tag{typeof(simulate), <:JutulEntity}
