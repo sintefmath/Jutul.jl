@@ -758,6 +758,7 @@ function argmax_cubic(p1::NamedTuple, p2::NamedTuple)
     c = zeros(4)
     # Attention!!
     # Both the coefficients of polynomial and its derivatives are in reverse order in contrast to Matlab
+    # Indexing of polynomial starts at 0 (hence poly = poly[0] + ... + poly[3]*x^3)
     c[4:-1:3] .= [a^3 a^2; 3 * a^2 2 * a] \ [p2.v - p1.dv * a - p1.v; p2.dv - p1.dv]
     c[2:-1:1] .= [p1.dv; p1.v]
     poly = Polynomial(c)
@@ -767,9 +768,9 @@ function argmax_cubic(p1::NamedTuple, p2::NamedTuple)
     elseif any(imag(xe) .!= 0)
         xe = Inf
     elseif xe[1] == xe[end]
-        if poly[4] != 0
+        if poly[3] != 0
             xe = Inf
-        elseif poly[3] < 0
+        elseif poly[2] < 0
             xe = xe[1]
         else
             xe = -Inf
