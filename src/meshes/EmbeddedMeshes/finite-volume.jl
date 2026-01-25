@@ -113,11 +113,22 @@ function half_face_normal(mesh::EmbeddedMesh, face, cell, cn)
 end
 
 function compute_face_trans_dfm(T_hf, N, intersections)
-    T = Jutul.compute_face_trans(T_hf, N)
+    T = compute_face_trans(T_hf, N)
+    T_ix, ix_faces = compute_intersection_trans_dfm(T_hf, N, intersections)
+    for (f, T_val) in zip(ix_faces, T_ix)
+        T[f] = T_val
+    end
+    return T
+end
+
+function compute_intersection_trans_dfm(T_hf, N, intersections)
     # Adjust transmissibilities for intersection faces
     faces, face_pos = get_facepos(N)
     nf = diff(face_pos)
     cells = vcat([fill(i, nf[i]) for i in 1:length(nf)]...)
+
+    T = Float64[]
+    intersection_faces = Int[]
     for ix_cells in intersections
         # Find all faces belonging to this intersection
         ix_faces = Int[]
@@ -128,6 +139,7 @@ function compute_face_trans_dfm(T_hf, N, intersections)
         end
         den = 0.0
         T_ix = zeros(Float64, length(ix_faces))
+        counted = Set{Int64}()
         for (fno, f) in enumerate(ix_faces)
             ci = N[1, f]
             cj = N[2, f]
@@ -135,13 +147,20 @@ function compute_face_trans_dfm(T_hf, N, intersections)
             jj = faces .== f .&& cells .== cj
             @assert sum(ii) == 1 && sum(jj) == 1
             ii, jj = findfirst(ii), findfirst(jj)
-            T_ix[fno] = T_hf[ii].*T_hf[jj]
-            den += T_hf[ii] + T_hf[jj]
+            T_ix[fno] = T_hf[ii]*T_hf[jj]
+            if !(ci in counted)
+                den += T_hf[ii]
+                push!(counted, ci)
+            end
+            if !(cj in counted)
+                den += T_hf[jj]
+                push!(counted, cj)
+            end
         end
+        den = sum(values(den))
         T_ix ./= den
-        for (f, T_val) in zip(ix_faces, T_ix)
-            T[f] = T_val
-        end
+        append!(T, T_ix)
+        append!(intersection_faces, ix_faces)
     end
-    return T
+    return T, intersection_faces
 end
