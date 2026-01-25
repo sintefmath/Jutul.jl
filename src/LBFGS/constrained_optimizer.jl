@@ -104,7 +104,7 @@ function unit_box_bfgs(
         end
         # Initial Hessian-approximation
         if limited_memory
-            Hi = LimitedMemoryHessian(; init_scale = step, m = lbfgs_num, init_strategy = lbfgs_strategy)
+            Hi = LimitedMemoryHessianLegacy(; init_scale = step, m = lbfgs_num, init_strategy = lbfgs_strategy)
         else
             Hi = step
         end
@@ -140,7 +140,7 @@ function unit_box_bfgs(
                 dg[.!isfinite.(dg)] .= 0
                 if du' * dg > sqrt(eps()) * norm(du) * norm(dg)
                     HiPrev = deepcopy(Hi)
-                    if isa(Hi, LimitedMemoryHessian)
+                    if isa(Hi, LimitedMemoryHessianLegacy)
                         Hi = update(Hi, du, dg)
                     else
                         r = 1 / (du' * dg)
@@ -327,7 +327,7 @@ function get_search_direction(u0, g0, Hi, HiPrev, c)
         if k == 2
             Hi = deepcopy(HiPrev)
         elseif k == 3
-            if isa(Hi, LimitedMemoryHessian)
+            if isa(Hi, LimitedMemoryHessianLegacy)
                 Hi = reset(Hi)
             else
                 Hi = 1
@@ -442,7 +442,7 @@ function project_Q(v, Q, H = nothing)
     if isempty(Q)
         w = H * v
     else
-        if !isa(H, LimitedMemoryHessian)
+        if !isa(H, LimitedMemoryHessianLegacy)
             tmp = H * (v - Q * (Q' * v))
             w = tmp - Q * (Q' * tmp)
         else

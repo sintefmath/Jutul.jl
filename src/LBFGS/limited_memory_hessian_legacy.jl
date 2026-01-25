@@ -1,5 +1,11 @@
+"""
+Limited-memory BFGS (L-BFGS) Hessian approximation (legacy implementation).
+NOTE: This interfaces the *inverse* of the Hessian approximation, i.e., 
+    H * v = (∇²f)⁻¹ * v.
+"""
 
-function update(H::LimitedMemoryHessian, s, y)
+
+function update(H::LimitedMemoryHessianLegacy, s, y)
     # store new vectors
     H.it_count += 1
     pix = (:)
@@ -23,7 +29,7 @@ function update(H::LimitedMemoryHessian, s, y)
     return H
 end
 
-function reset(H::LimitedMemoryHessian)
+function reset(H::LimitedMemoryHessianLegacy)
     H.S = []
     H.Y = []
     H.it_count = 0
@@ -32,9 +38,9 @@ function reset(H::LimitedMemoryHessian)
 end
 
 import Base.*
-function *(H::LimitedMemoryHessian, v::Vector)
+function *(H::LimitedMemoryHessianLegacy, v::Vector)
     # apply mulitplication H*v
-    if isa(v, LimitedMemoryHessian)
+    if isa(v, LimitedMemoryHessianLegacy)
         error("Only right-multiplciation is supported")
     end
     if H.it_count == 0
@@ -73,12 +79,12 @@ function *(H::LimitedMemoryHessian, v::Vector)
 end
 
 import Base.-
-function -(H::LimitedMemoryHessian)
+function -(H::LimitedMemoryHessianLegacy)
     H.sign = -H.sign
     return H
 end
 
-function apply_initial!(H::LimitedMemoryHessian, v)
+function apply_initial!(H::LimitedMemoryHessianLegacy, v)
     if H.init_strategy == :static
         r = H.sign * H.init_scale * v
     elseif H.init_strategy == :dynamic
@@ -91,7 +97,7 @@ function apply_initial!(H::LimitedMemoryHessian, v)
     return r
 end
 
-function set_nullspace!(H::LimitedMemoryHessian, Q = nothing)
+function set_nullspace!(H::LimitedMemoryHessianLegacy, Q = nothing)
     if isnothing(Q)
         H.nullspace = []
     else
