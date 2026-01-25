@@ -9,6 +9,16 @@ mutable struct LimitedMemoryHessianLegacy{T}
     sign::T
 end
 
+mutable struct LimitedMemoryHessian{T}
+    init_scale::Float64
+    init_strategy::Symbol
+    m::T
+    S
+    Y
+    it_count::T
+    sign::T
+end
+
 function LimitedMemoryHessianLegacy(;
         init_scale = 1.0,
         init_strategy = :static,
@@ -17,4 +27,14 @@ function LimitedMemoryHessianLegacy(;
         sign = 1
     )
     return LimitedMemoryHessianLegacy(init_scale, init_strategy, m, [], [], [], it_count, sign)
+end
+
+function LimitedMemoryHessian(;
+        init_scale = 1.0,
+        init_strategy = :static,
+        m = 5,
+        it_count = 0,
+        sign = 1
+    )
+    return LimitedMemoryHessian(init_scale, init_strategy, m, [], [], it_count, sign)
 end
