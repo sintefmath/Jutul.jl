@@ -268,7 +268,6 @@ function get_search_direction_qp(u, g, H, H_prev, lb, ub, grad_tol, max_it_qp, a
             # rough QP solve did not converge, repair last part using active-set method
             d_qp, g_qp, success, active_set_info = solve_active_set_qp(u .+ d, g_rough, H, lb, ub, max_it_qp, active_chunk_tol)
             d = d .+ d_qp
-            println("Norm of search direction: ", norm(d, Inf), ", norm of qp correction: ", norm(d_qp, Inf))
         else
             active_set_info  = (nits = 0, conv = true, nactive = rough_solve_info.nactive, nrelease = 0)
         end
