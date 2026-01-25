@@ -28,3 +28,12 @@ function Jutul.cell_dims(g::EmbeddedMesh, pos)
     # @assert all(x -> x > 0, Δ) "Cell dimensions were zero? Computed $Δ for cell $index."
     return Tuple(Δ)
 end
+
+function Jutul.plot_primitives(mesh::EmbeddedMesh, plot_type; kwarg...)
+    if plot_type == :mesh
+        out = triangulate_mesh(mesh; outer=false, kwarg...)
+    else
+        out = nothing
+    end
+    return out
+end
