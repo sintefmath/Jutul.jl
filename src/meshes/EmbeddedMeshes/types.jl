@@ -1,6 +1,6 @@
 struct EmbeddedMesh <: Jutul.FiniteVolumeMesh
     unstructured_mesh::UnstructuredMesh
-    intersection_faces::Vector{Vector{Int}}
+    intersections::Vector{Vector{Int}}
 end
 
 function EmbeddedMesh(mesh::UnstructuredMesh, faces)
