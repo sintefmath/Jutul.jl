@@ -165,7 +165,7 @@ function optimize_bound_constrained(
             lb_cur, ub_cur = incorporate_trust_region(u0, r_trust, lb, ub)
         end
         # Get search direction by solving QP problem
-        d, H, pg, max_step, qpinfo = get_search_direction_qp(
+        d, H, H_prev, pg, max_step, qpinfo = get_search_direction_qp!(
             u0, g0, H, H_prev, lb_cur, ub_cur,
             grad_tol, max_it_qp, active_chunk_tol
         )
@@ -240,7 +240,7 @@ end
 """
 Get search direction by solving QP problem iteratively
 """
-function get_search_direction_qp(u, g, H, H_prev, lb, ub, grad_tol, max_it_qp, active_chunk_tol)
+function get_search_direction_qp!(u, g, H, H_prev, lb, ub, grad_tol, max_it_qp, active_chunk_tol)
     # Check whether projected gradient is below threshold
     active = get_active_bounds(u, -g, lb, ub)
     pg = g[.!active]
@@ -261,6 +261,7 @@ function get_search_direction_qp(u, g, H, H_prev, lb, ub, grad_tol, max_it_qp, a
         elseif trial_no == 3
             # reset to scaled identity (results in gradient direction)
             H = reset!(H)
+            H_prev = reset!(H_prev)
         end
         # do the rough QP solve first
         d, g_rough, success, rough_solve_info = solve_rough_qp(u, g, H, lb, ub, 10)
@@ -301,7 +302,7 @@ function get_search_direction_qp(u, g, H, H_prev, lb, ub, grad_tol, max_it_qp, a
         end
     end
     qpinfo = (rough_solve = rough_solve_info, active_set = active_set_info, success = success)
-    return (d, H, pg, max_step, qpinfo)
+    return (d, H, H_prev, pg, max_step, qpinfo)
 end
 
 function solve_active_set_qp(u0, g0, H, lb, ub, max_it, active_chunk_tol)
