@@ -1,10 +1,10 @@
 """
     optimize_bound_constrained(u0, f, lb, ub; kwargs...)
 
-Iterative line search optimization using L-BFGS intended for scaled problems
-where 0 ≤ u ≤ 1 and f ~ O(1).
+Iterative line search optimization using L-BFGS for bound constrained problems using 
+exact qp-solves for the search direction.
 
-This is a Julia translation of the MATLAB function `optimizeBoundConstrained`.
+Partial translation/improvement of the MRST function `optimizeBoundConstrained`.
 
 # Arguments
 - `u0`: Initial guess vector of length n with 0 ≤ u0 ≤ 1, must be feasible
@@ -85,7 +85,7 @@ function optimize_bound_constrained(
         radius_increase = 2.0,
         radius_decrease = 0.25,
         ratio_thresholds = [0.25, 0.75],
-        scale_to_unit_box = false,
+        scale = false,
         output_hessian = false,
         history = nothing
     )
@@ -101,7 +101,7 @@ function optimize_bound_constrained(
     # handle bounds
     lb, ub = handle_bounds!(lb, ub, length(u0))
     # Potential scaling
-    if scale_to_unit_box
+    if scale
         f! = (u) -> f_scale(u, f!, lb, ub)
         u0 = (u0 .- lb) ./ (ub .- lb)
         lb, ub = zeros(length(u0)), ones(length(u0))
@@ -230,11 +230,17 @@ function optimize_bound_constrained(
         print_info_step(info)
     end
     
-    if scale_to_unit_box
+    if scale
         u = u .* (ub .- lb) .+ lb
     end
     
     return (v, u, info)
+end
+
+function optimize_bound_constrained(problem; kwarg...)
+    ub = problem.limits.max
+    lb = problem.limits.min
+    return optimize_bound_constrained(problem.x0, problem, lb, ub; kwarg...)
 end
 
 """
