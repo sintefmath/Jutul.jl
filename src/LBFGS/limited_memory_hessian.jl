@@ -9,7 +9,7 @@ restricted to given subspaces.
 H::LimitedMemoryHessian represents the L-BFGS Hessian approximation, i.e., H ≈ ∇²f(x)
 """
 
-function update(H::LimitedMemoryHessian, s, y)
+function update!(H::LimitedMemoryHessian, s, y)
     # store new vectors
     @assert length(s) == length(y) "Dimension mismatch between s and y"
     @assert length(s) == size(H.S, 1) || H.it_count == 0 "Dimension mismatch with stored vectors"
@@ -35,7 +35,7 @@ function update(H::LimitedMemoryHessian, s, y)
     return H
 end
 
-function reset(H::LimitedMemoryHessian)
+function reset!(H::LimitedMemoryHessian)
     # reset to scaled identity (keep initial scaling)
     H.S = []
     H.Y = []
@@ -64,7 +64,7 @@ function \(H::LimitedMemoryHessian, v::Vector)
     end
     @assert size(v) == (size(H.S, 1),) "Dimension mismatch of vector"
     # we use subspace version with empty nullspace
-    th = apply_initial!(H, 1.0)
+    th = apply_initial(H, 1.0)
     null_space = falses(size(v, 1))
     return subspace_product_inverse(H.S, H.Y, th, null_space, v, true)
     # below is for reference the standard recursion for L-BFGS, but this is slightly less 
@@ -93,7 +93,7 @@ function apply_reduced_hessian_inverse(H::LimitedMemoryHessian, v::Vector, null_
         r[null_space] .= 0.0
     else
         @assert size(v) == (size(H.S, 1),) "Dimension mismatch"
-        th = apply_initial!(H, 1.0)
+        th = apply_initial(H, 1.0)
         r = subspace_product_inverse(H.S, H.Y, th, null_space, v, true)
     end
     return r
@@ -110,7 +110,7 @@ function apply_reduced_hessian_inverse(H::LimitedMemoryHessian, v::Vector, null_
         r = r - null_space * (null_space' * r)
     else
         @assert length(v) == size(H.S, 1) "Dimension mismatch"
-        th = apply_initial!(H, 1.0)
+        th = apply_initial(H, 1.0)
         r = subspace_product_inverse(H.S, H.Y, th, null_space, v, false)
     end
     return r
@@ -131,7 +131,7 @@ function *(H::LimitedMemoryHessian, v::Vector)
     end
     @assert length(v) == size(H.S, 1) "Dimension mismatch"
      # use subspace version with empty nullspace
-    th = apply_initial!(H, 1.0)
+    th = apply_initial(H, 1.0)
     null_space = falses(size(v, 1))
     return subspace_product(H.S, H.Y, th, null_space, v, true)
 end
@@ -145,7 +145,7 @@ function apply_reduced_hessian(H::LimitedMemoryHessian, v::Vector, null_space::U
         r[null_space] .= 0.0
     else
         @assert length(v) == size(H.S, 1) "Dimension mismatch"
-        th = apply_initial!(H, 1.0)
+        th = apply_initial(H, 1.0)
         r = subspace_product(H.S, H.Y, th, null_space, v, true)
     end
     return r
@@ -161,7 +161,7 @@ function apply_reduced_hessian(H::LimitedMemoryHessian, v::Vector, null_space)
         r = r - null_space * (null_space' * r)
     else
         @assert length(v) == size(H.S, 1) "Dimension mismatch"
-        th = apply_initial!(H, 1.0)
+        th = apply_initial(H, 1.0)
         r = subspace_product(H.S, H.Y, th, null_space, v, false)
     end
     return r
@@ -169,11 +169,12 @@ end
 
 import Base.-
 function -(H::LimitedMemoryHessian)
-    H.sign = -H.sign
-    return H
+    Hm = deepcopy(H)
+    Hm.sign = -H.sign
+    return Hm
 end
 
-function apply_initial!(H::LimitedMemoryHessian, v)
+function apply_initial(H::LimitedMemoryHessian, v)
     if H.init_strategy == :static
         r = H.sign * H.init_scale * v
     elseif H.init_strategy == :dynamic

@@ -1,5 +1,5 @@
 """
-    optimize_bound_constrained(u0, f; kwargs...)
+    optimize_bound_constrained(u0, f, lb, ub; kwargs...)
 
 Iterative line search optimization using L-BFGS intended for scaled problems
 where 0 ≤ u ≤ 1 and f ~ O(1).
@@ -15,13 +15,14 @@ This is a Julia translation of the MATLAB function `optimizeBoundConstrained`.
 - `ub`: Upper bound(s) on u 
 
 # Keywords
-- `maximize::Bool=true`: Set to true to maximize objective (default), false to minimize
-- `step_init::Float64=NaN`: Initial step (gradient scaling). If NaN, uses `max_initial_update/max(|initial gradient|)`
-- `max_initial_update::Float64=0.05`: Maximum initial update step
+- `maximize::Bool=false`: Set to true to maximize objective, false to minimize (default)
+- `step_init::Float64=NaN`: Initial step (gradient scaling). If NaN, uses `max_initial_update/max(|initial gradient .* (ub-lb)|)`
+- `max_initial_update::Float64=0.1`: Relative maximal initial update step
 - `history::Any=nothing`: For warm starting based on previous optimization (requires `output_hessian=true`)
 
 ## Stopping Criteria
 - `grad_tol::Float64=1e-3`: Absolute tolerance of inf-norm of projected gradient
+- `grad_rel_tol::Float64=-Inf`: Relative gradient tolerance
 - `obj_change_tol::Float64=5e-4`: Absolute objective update tolerance
 - `obj_change_tol_rel::Float64=-Inf`: Relative objective change tolerance
 - `max_it::Int=25`: Maximum number of iterations
@@ -39,7 +40,7 @@ This is a Julia translation of the MATLAB function `optimizeBoundConstrained`.
 - `lbfgs_require_wolfe::Bool=false`: Require Wolfe conditions for BFGS update
 
 ## QP Solve Options
-- `max_it_qp::Int=250`: Maximum iterations for solving QP problem
+- `max_it_qp::Int=50`: Maximum iterations for solving QP problem
 - `active_chunk_tol::Float64=sqrt(eps())`: Tolerance for chunking active constraints
 
 ## Trust Region Options
@@ -47,11 +48,10 @@ This is a Julia translation of the MATLAB function `optimizeBoundConstrained`.
 - `radius_increase::Float64=2.0`: Update factor for 'good' approximations
 - `radius_decrease::Float64=0.25`: Update factor for 'bad' approximations
 - `ratio_thresholds::Vector{Float64}=[0.25, 0.75]`: Thresholds for trust region updates
-- `trust_region_init::Float64=NaN`: Initial trust region radius (defaults to `step_init`)
+- `trust_region_init::Float64=NaN`: Initial trust region radius (defaults to `max_initial_update`)
 
-## Output Options
-- `plot_evolution::Bool=true`: Plot optimization progress
-- `log_plot::Bool=false`: Use logarithmic y-axis for objective plotting
+## Other Options
+- `scale_to_unit_box::Bool=false`: Scale problem to unit box [0, 1]
 - `output_hessian::Bool=false`: Include Hessian approximation in history output
 
 # Returns
@@ -75,7 +75,7 @@ function optimize_bound_constrained(
         wolfe2 = 0.9,
         safeguard_fac = 1.0e-5,
         step_increase_tol = 10.0,
-        max_it_qp = 50,
+        max_it_qp = 250,
         active_chunk_tol = sqrt(eps()),
         lbfgs_num = 5,
         lbfgs_strategy = :dynamic,
@@ -99,7 +99,7 @@ function optimize_bound_constrained(
         f! = (u) -> f(u)
     end
     # handle bounds
-    lb, ub = handle_bounds(lb, ub, length(u0))
+    lb, ub = handle_bounds!(lb, ub, length(u0))
     # Potential scaling
     if scale_to_unit_box
         f! = (u) -> f_scale(u, f!, lb, ub)
@@ -120,7 +120,7 @@ function optimize_bound_constrained(
         # If not provided, set initial step
         step = step_init
         if isnan(step) || step <= 0
-            step = max_initial_update / maximum(abs.(g0))
+            step = max_initial_update / maximum(abs.(g0 .* (ub .- lb)))
         end
         # Update absolute stopping tolerances based on relative
         if isfinite(obj_change_tol_rel) && obj_change_tol_rel > 0
@@ -150,7 +150,7 @@ function optimize_bound_constrained(
         r_trust = history.r[it]
     end
     # Print info for iteration 0
-    info = update_info(nothing; obj_info = (v = obj_sign * v0, pg = norm(g0, Inf), n_active = 0))
+    info = update_info!(nothing; obj_info = (v = obj_sign * v0, pg = norm(g0, Inf), n_active = 0))
     print_info_step(info)
     
     v, u, g = v0, copy(u0), copy(g0)
@@ -188,8 +188,8 @@ function optimize_bound_constrained(
             rho = dobj_true / dobj_est
             # Update trust region radius
             if use_trust_region
-                r_trust = update_trust_region(r_trust, rho, norm(u - u0, Inf), lsinfo.step, 
-                                             radius_increase, radius_decrease, ratio_thresholds)
+                r_trust = update_trust_region!(r_trust, rho, norm(u - u0, Inf), lsinfo.step, 
+                                               radius_increase, radius_decrease, ratio_thresholds)
             else
                 r_trust = NaN
             end
@@ -205,7 +205,7 @@ function optimize_bound_constrained(
                 # If any of the gradient entries are not defined, set difference to zero
                 dg[.!isfinite.(dg)] .= 0
                 H_prev = deepcopy(H)
-                H = update(H, du, dg)
+                H = update!(H, du, dg)
             else
                 @printf("Hessian not updated during iteration %d.\n", it)
             end
@@ -220,7 +220,7 @@ function optimize_bound_constrained(
             lsinfo = qp_info = tr_info = nothing
         end
         obj_info = (v = obj_sign * v, pg = norm(pg, Inf), n_active = n_active)
-        info = update_info(info; obj_info = obj_info, qp_info = qpinfo, ls_info = lsinfo, tr_info = tr_info)
+        info = update_info!(info; obj_info = obj_info, qp_info = qpinfo, ls_info = lsinfo, tr_info = tr_info)
         # Check stopping criteria
         success = (it >= max_it) || 
                   (norm(pg, Inf) < grad_tol) || 
@@ -260,7 +260,7 @@ function get_search_direction_qp(u, g, H, H_prev, lb, ub, grad_tol, max_it_qp, a
             H = deepcopy(H_prev)
         elseif trial_no == 3
             # reset to scaled identity (results in gradient direction)
-            H = reset(H)
+            H = reset!(H)
         end
         # do the rough QP solve first
         d, g_rough, success, rough_solve_info = solve_rough_qp(u, g, H, lb, ub, 10)
@@ -450,7 +450,7 @@ function f_scale(u, f, lb, ub)
     return (v, g)
 end
 
-function handle_bounds(lb, ub, n)
+function handle_bounds!(lb, ub, n)
     if length(lb) == 1
         lb = fill(lb, n)
     elseif length(lb) != n
@@ -472,7 +472,7 @@ function incorporate_trust_region(u, r_trust, lb, ub)
     return (lb_cur, ub_cur)
 end
 
-function update_trust_region(r, rho, update, step, radius_increase, radius_decrease, ratio_thresholds)
+function update_trust_region!(r, rho, update, step, radius_increase, radius_decrease, ratio_thresholds)
     if rho < ratio_thresholds[1]
         r = radius_decrease * step * r
     elseif rho > ratio_thresholds[2] && r < update * step * (1 + sqrt(eps()))
@@ -481,7 +481,7 @@ function update_trust_region(r, rho, update, step, radius_increase, radius_decre
     return r
 end
 
-function update_info(info; obj_info = nothing, qp_info = nothing,
+function update_info!(info; obj_info = nothing, qp_info = nothing,
                      ls_info = nothing, tr_info = nothing
                     )
     if isnothing(obj_info)
