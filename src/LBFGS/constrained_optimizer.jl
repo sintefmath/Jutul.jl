@@ -104,7 +104,7 @@ function unit_box_bfgs(
         end
         # Initial Hessian-approximation
         if limited_memory
-            Hi = LimitedMemoryHessian(; init_scale = step, m = lbfgs_num, init_strategy = lbfgs_strategy)
+            Hi = LimitedMemoryHessianLegacy(; init_scale = step, m = lbfgs_num, init_strategy = lbfgs_strategy)
         else
             Hi = step
         end
@@ -140,7 +140,7 @@ function unit_box_bfgs(
                 dg[.!isfinite.(dg)] .= 0
                 if du' * dg > sqrt(eps()) * norm(du) * norm(dg)
                     HiPrev = deepcopy(Hi)
-                    if isa(Hi, LimitedMemoryHessian)
+                    if isa(Hi, LimitedMemoryHessianLegacy)
                         Hi = update(Hi, du, dg)
                     else
                         r = 1 / (du' * dg)
@@ -327,7 +327,7 @@ function get_search_direction(u0, g0, Hi, HiPrev, c)
         if k == 2
             Hi = deepcopy(HiPrev)
         elseif k == 3
-            if isa(Hi, LimitedMemoryHessian)
+            if isa(Hi, LimitedMemoryHessianLegacy)
                 Hi = reset(Hi)
             else
                 Hi = 1
@@ -442,7 +442,7 @@ function project_Q(v, Q, H = nothing)
     if isempty(Q)
         w = H * v
     else
-        if !isa(H, LimitedMemoryHessian)
+        if !isa(H, LimitedMemoryHessianLegacy)
             tmp = H * (v - Q * (Q' * v))
             w = tmp - Q * (Q' * tmp)
         else
@@ -758,6 +758,7 @@ function argmax_cubic(p1::NamedTuple, p2::NamedTuple)
     c = zeros(4)
     # Attention!!
     # Both the coefficients of polynomial and its derivatives are in reverse order in contrast to Matlab
+    # Indexing of polynomial starts at 0 (hence poly = poly[0] + ... + poly[3]*x^3)
     c[4:-1:3] .= [a^3 a^2; 3 * a^2 2 * a] \ [p2.v - p1.dv * a - p1.v; p2.dv - p1.dv]
     c[2:-1:1] .= [p1.dv; p1.v]
     poly = Polynomial(c)
@@ -767,9 +768,9 @@ function argmax_cubic(p1::NamedTuple, p2::NamedTuple)
     elseif any(imag(xe) .!= 0)
         xe = Inf
     elseif xe[1] == xe[end]
-        if poly[4] != 0
+        if poly[3] != 0
             xe = Inf
-        elseif poly[3] < 0
+        elseif poly[2] < 0
             xe = xe[1]
         else
             xe = -Inf

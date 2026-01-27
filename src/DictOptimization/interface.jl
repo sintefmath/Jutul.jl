@@ -176,6 +176,13 @@ function optimize_implementation(problem, ::Val{:lbfgs}; scale = true, kwarg...)
     return (x, history)
 end
 
+function optimize_implementation(problem, ::Val{:lbfgsb_qp}; kwarg...)
+    v, x, history = Jutul.LBFGS.optimize_bound_constrained(problem;
+        kwarg...
+    )
+    return (x, history)
+end
+
 function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where optimizer
     error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb (requires LBFGSB.jl to be imported))")
 end
