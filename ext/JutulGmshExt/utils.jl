@@ -125,7 +125,6 @@ function parse_cells(remaps, faces, face_lookup; verbose = false)
                 @assert length(pt_range) == numpts
                 pts = map(i -> node_remap[enodetags[i]], pt_range)
                 cell = Tuple{Int, Int}[]
-                cellno = length(cells)
                 for face_t in (tris, quads)
                     for (fno, face) in enumerate(face_t)
                         face_pts = map(i -> pts[i+1], face)
@@ -143,6 +142,7 @@ function parse_cells(remaps, faces, face_lookup; verbose = false)
                         push!(cell, (faceno, sgn))
                     end
                 end
+                cell_remap[etag] = length(cells) + 1
                 push!(cells, cell)
             end
             print_message("Added $(length(etags)) new cells of type $name and $nadded new faces.", verbose)

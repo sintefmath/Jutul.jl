@@ -56,11 +56,18 @@ function Jutul.mesh_from_gmsh(pth;
     return g
 end
 
-function Jutul.mesh_from_gmsh(; verbose = false, reverse_z = false, kwarg...)
+function Jutul.mesh_from_gmsh(;
+        verbose = false,
+        reverse_z = false,
+        remove_duplicate_nodes = true,
+        preserve_tags = false,
+        kwarg...
+    )
     dim = gmsh.model.getDimension()
     dim == 3 || error("Only 3D models are supported")
-
-    gmsh.model.mesh.removeDuplicateNodes()
+    if remove_duplicate_nodes
+        gmsh.model.mesh.removeDuplicateNodes()
+    end
     if reverse_z
         # Note: Gmsh API lets us send only the first 3 rows of the 4 by 4 matrix
         # which is sufficient here.
@@ -115,6 +122,30 @@ function Jutul.mesh_from_gmsh(; verbose = false, reverse_z = false, kwarg...)
     end
     bnd_neighbors, bnd_faces_to_nodes, bnd_cells_to_faces = split_boundary(neighbors, faces_to_nodes, cells_to_faces, bnd_faces, boundary = true)
     int_neighbors, int_faces_to_nodes, int_cells_to_faces = split_boundary(neighbors, faces_to_nodes, cells_to_faces, int_faces, boundary = false)
+
+
+    if preserve_tags
+        cell_tags = keys(remaps.cells)
+        nc = length(int_cells_to_faces)
+        if length(cell_tags) == nc
+            cell_tags_sorted = sort(collect(cell_tags))
+            cell_idx_to_new_idx = zeros(Int, nc)
+            new_idx_to_cell_idx = zeros(Int, nc)
+            for (new_cell_idx, tag) in enumerate(cell_tags_sorted)
+                current_cell_idx = remaps.cells[tag]
+                # println("Remapping cell tag $tag from old index $current_cell_idx to new index $new_cell_idx")
+                cell_idx_to_new_idx[current_cell_idx] = new_cell_idx
+                new_idx_to_cell_idx[new_cell_idx] = current_cell_idx
+            end
+            int_cells_to_faces = int_cells_to_faces[new_idx_to_cell_idx]
+            bnd_cells_to_faces = bnd_cells_to_faces[new_idx_to_cell_idx]
+            bnd_neighbors = cell_idx_to_new_idx[bnd_neighbors]
+            int_neighbors = map(lr -> (cell_idx_to_new_idx[lr[1]], cell_idx_to_new_idx[lr[2]]), int_neighbors)
+        else
+            # Warn about missing tags
+            @warn "Number of cell tags ($(length(cell_tags))) does not match number of cells ($nc), cannot preserve cell tags."
+        end
+    end
 
     c2f = IndirectionMap(int_cells_to_faces)
     c2b = IndirectionMap(bnd_cells_to_faces)
