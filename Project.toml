@@ -66,7 +66,7 @@ JutulMakieExt = "Makie"
 JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
 
 [compat]
-AMGCLWrap = "=0.3.2"
+AMGCLWrap = "=0.3.2, 0.4"
 AlgebraicMultigrid = "0.5.1"
 Crayons = "4.1.1"
 DataStructures = "0.18.13"
