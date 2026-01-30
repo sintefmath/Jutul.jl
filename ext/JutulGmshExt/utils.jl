@@ -1,4 +1,3 @@
-
 function add_next!(faces, remap, tags, numpts, offset)
     vals = Int[]
     for j in 1:numpts
@@ -112,9 +111,8 @@ function parse_cells(remaps, faces, face_lookup; verbose = false)
         elemTypes, elemTags, elemNodeTags = gmsh.model.mesh.getElements(dim, tag)
         # * Type and name of the entity:
         type = gmsh.model.getType(dim, tag)
-        ename = gmsh.model.getEntityName(dim, tag)
         for (etypes, etags, enodetags) in zip(elemTypes, elemTags, elemNodeTags)
-            name, dim, order, numv, parv, _ = gmsh.model.mesh.getElementProperties(etypes)
+            name, dim, _, _, _, _ = gmsh.model.mesh.getElementProperties(etypes)
             tris, quads, numpts = get_cell_decomposition(name)
             print_message("Cells: Processing $(length(etags)) tags of type $name", verbose)
             @assert length(enodetags) == numpts*length(etags)
@@ -149,6 +147,26 @@ function parse_cells(remaps, faces, face_lookup; verbose = false)
         end
     end
     return cells
+end
+
+function get_cell_tags()
+    tags = Dict{UInt64, Int}()
+    cellno = 0
+    for (dim, tag) in gmsh.model.getEntities()
+        if dim != 3
+            continue
+        end
+        elemTags = gmsh.model.mesh.getElements(dim, tag)[2]
+        for etags in elemTags
+            for etag in etags
+                @assert !haskey(tags, etag)
+                cellno += 1
+                tags[etag] = cellno
+            end
+        end
+    end
+    # @assert sort(collect(values(tags))) == 1:cellno
+    return tags
 end
 
 function build_neighbors(cells, faces, face_lookup)

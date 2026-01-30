@@ -18,6 +18,11 @@ projects.
 - `manage_gmsh::Bool`: Whether to initialize and finalize Gmsh automatically.
 - `verbose::Bool`: Whether to print messages about the mesh parsing process.
 - `reverse_z::Bool`: Whether to reverse the z-coordinates of the mesh nodes.
+- `z_is_depth::Bool`: Whether the z-coordinates represent depth (positive
+  downwards), passed onto the mesh constructor.
+- `remove_duplicate_nodes::Bool`: Whether to remove duplicate nodes in the mesh.
+- `preserve_order::Bool`: Whether to preserve the original cell ordering based
+  on the Gmsh tags.
 """
 function Jutul.mesh_from_gmsh(pth;
         argv = String[],
@@ -60,11 +65,17 @@ function Jutul.mesh_from_gmsh(;
         verbose = false,
         reverse_z = false,
         remove_duplicate_nodes = true,
-        preserve_tags = false,
+        preserve_order = false,
         kwarg...
     )
     dim = gmsh.model.getDimension()
     dim == 3 || error("Only 3D models are supported")
+    if preserve_order
+        # Grab initial cell tags to preserve order later.
+        tag2cell = get_cell_tags()
+    else
+        tag2cell = missing
+    end
     if remove_duplicate_nodes
         gmsh.model.mesh.removeDuplicateNodes()
     end
@@ -123,17 +134,18 @@ function Jutul.mesh_from_gmsh(;
     bnd_neighbors, bnd_faces_to_nodes, bnd_cells_to_faces = split_boundary(neighbors, faces_to_nodes, cells_to_faces, bnd_faces, boundary = true)
     int_neighbors, int_faces_to_nodes, int_cells_to_faces = split_boundary(neighbors, faces_to_nodes, cells_to_faces, int_faces, boundary = false)
 
-
-    if preserve_tags
+    if preserve_order
+        # We have to remap cells here based on the original tags.
         cell_tags = keys(remaps.cells)
         nc = length(int_cells_to_faces)
         if length(cell_tags) == nc
             cell_tags_sorted = sort(collect(cell_tags))
             cell_idx_to_new_idx = zeros(Int, nc)
             new_idx_to_cell_idx = zeros(Int, nc)
-            for (new_cell_idx, tag) in enumerate(cell_tags_sorted)
+            for tag in cell_tags_sorted
+                new_cell_idx = tag2cell[tag]
+                @assert new_cell_idx > 0 && new_cell_idx <= nc
                 current_cell_idx = remaps.cells[tag]
-                # println("Remapping cell tag $tag from old index $current_cell_idx to new index $new_cell_idx")
                 cell_idx_to_new_idx[current_cell_idx] = new_cell_idx
                 new_idx_to_cell_idx[new_cell_idx] = current_cell_idx
             end
