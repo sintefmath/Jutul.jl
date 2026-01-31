@@ -156,7 +156,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         backend = Jutul.default_di_backend(sparse = di_sparse),
         info_level = 0,
         single_step_sparsity = true,
-        sparsity_step_type::Symbol = :unique_forces,
+        sparsity_step_type::Symbol = :all,
         use_sparsity = true
     )
     case = setup_case(X, F, packed_steps, state0, :all)

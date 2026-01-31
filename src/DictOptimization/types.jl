@@ -173,16 +173,9 @@ struct JutulOptimizationProblem
             gradient_scaling = false
         )
         if ismissing(backend_arg)
-            deps_ad in (:di, :jutul) || error("deps_ad must be :di or :jutul. Got $deps_ad.")
-            backend_arg = (
-                use_sparsity = true,
-                di_sparse = true,
-                single_step_sparsity = deps == :parameters || deps == :parameters_and_state0,
-                do_prep = true,
-                deps = deps,
-                deps_ad = deps_ad
-            )
+            backend_arg = NamedTuple()
         end
+        backend_arg = setup_optimization_backend_kwarg(; deps = deps, deps_ad = deps_ad, backend_arg...)
         x0, x_setup, limits = optimization_setup(dopt)
 
         # Set up a cache for forward/backward sim
@@ -206,6 +199,36 @@ struct JutulOptimizationProblem
             gradient_scaling
         )
     end
+end
+
+function setup_optimization_backend_kwarg(;
+        deps::Symbol = :case,
+        deps_ad::Symbol = :jutul,
+        sparsity_step_type = missing,
+        kwarg...
+    )
+    deps_ad in (:di, :jutul) || error("deps_ad must be :di or :jutul. Got $deps_ad.")
+    is_outer = deps == :parameters || deps == :parameters_and_state0
+    if ismissing(sparsity_step_type)
+        if is_outer
+            sparsity_step_type = :unique_forces
+        else
+            sparsity_step_type = :all
+        end
+    end
+    backend_arg = Dict{Symbol, Any}(
+        :use_sparsity => true,
+        :di_sparse => true,
+        :single_step_sparsity => is_outer,
+        :do_prep => true,
+        :deps => deps,
+        :deps_ad => deps_ad,
+        :sparsity_step_type => sparsity_step_type
+    )
+    for (k, v) in pairs(kwarg)
+        backend_arg[k] = v
+    end
+    return NamedTuple(backend_arg)
 end
 
 function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true, extra_timing = false)
