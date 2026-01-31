@@ -211,6 +211,7 @@ function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
         state0 = setup_state(model),
         parameters = setup_parameters(model),
         single_step_sparsity = false,
+        sparsity_step_type = :all, # Note: We could be differentiating each step instead of unique forces, override default
         di_sparse = use_sparsity
     )
     if ismissing(forces_map)
@@ -240,7 +241,11 @@ function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
     X, = get_adjoint_forces_vectors(model, storage, allforces)
     F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
     packed_steps = AdjointPackedResult(states, timesteps, allforces)
-    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, packed_steps, G, single_step_sparsity = single_step_sparsity, di_sparse = di_sparse)
+    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, packed_steps, G,
+        single_step_sparsity = single_step_sparsity,
+        sparsity_step_type = sparsity_step_type,
+        di_sparse = di_sparse
+    )
     return storage
 end
 
