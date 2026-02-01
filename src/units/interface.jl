@@ -11,7 +11,13 @@ julia> convert_to_si(1.0, :hour) # Get 1 hour represented as seconds
 ```
 """
 function convert_to_si(value, unit_name::String)
-    return convert_to_si(value, Symbol(unit_name))
+    ssym = Val(Symbol(unit_name))
+    if ssym isa Jutul.CelsiusType || ssym isa Jutul.FahrenheitType
+        ret = convert_to_si(value, ssym)
+    else
+        ret = value*si_unit(unit_name)
+    end
+    return ret
 end
 
 function convert_to_si(value, unit_name::Symbol)
@@ -157,7 +163,14 @@ end
 
 function unit_convert(s::String; to_si::Bool = true)
     ex = Meta.parse(s)
-    return unit_convert(ex, to_si = to_si)
+    if ex isa Symbol
+        ret = si_unit(ex)
+    elseif ex isa Number
+        ret = ex
+    else
+        ret = unit_convert(ex, to_si = to_si)
+    end
+    return ret
 end
 
 function unit_convert(ex::Expr; to_si::Bool = true)

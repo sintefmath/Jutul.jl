@@ -25,18 +25,23 @@ using Jutul, Test
     F = 100.0
     @test convert_to_si(F, :Fahrenheit) ≈ K
     @test convert_from_si(K, :Fahrenheit) ≈ F
+    @test convert_from_si(K, "Fahrenheit") ≈ F
     C = 37.777777777500035
 
     @test convert_to_si(C, :Celsius) ≈ K
     @test convert_from_si(K, :Celsius) ≈ C
+    @test convert_from_si(K, "Celsius") ≈ C
 
     R = 559.67
     @test convert_to_si(R, :Rankine) ≈ K
     @test convert_from_si(K, :Rankine) ≈ R
+    @test convert_from_si(K, "Rankine") ≈ R
 
     @test convert_to_si(1.0, :milliday) ≈ 86.4
     @test convert_to_si(1.0, :kilogram) ≈ 1.0
     @test convert_to_si(1.0, :kilokelvin) ≈ 1000.0
+    @test convert_to_si(1.0, :micrometer) ≈ 1.0e-6
+    @test convert_to_si(1.0, "micrometer") ≈ 1.0e-6
 
     @test_throws "Unknown unit" si_unit(:millierror)
 
@@ -58,5 +63,7 @@ using Jutul, Test
         @test si_unit("millimeter/second^2") == si_unit(:millimeter)/si_unit(:second)^2
         @test si_unit("kilometer/hour^2") == si_unit(:kilometer)/si_unit(:hour)^2
         @test si_unit("kilo*meter*hour^2/meter") == (si_unit(:kilometer)*si_unit(:hour)^2)/si_unit(:meter)
+        @test convert_to_si(1.0, "millimeter/second^2") == 0.001
+        @test_throws "Cannot convert relative" convert_to_si(1.0, "Celsius/day")
     end
 end
