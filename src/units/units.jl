@@ -1,33 +1,7 @@
 export convert_from_si, convert_to_si, si_unit, si_units
 
-const UNIT_PREFIXES = (
-    quetta = 1e30,
-    ronna  = 1e27,
-    yotta  = 1e24,
-    zetta  = 1e21,
-    exa    = 1e18,
-    peta   = 1e15,
-    tera   = 1e12,
-    giga   = 1e9,
-    mega   = 1e6,
-    kilo   = 1e3,
-    hecto  = 1e2,
-    deca   = 1e1,
-    deci   = 1e-1,
-    centi  = 1e-2,
-    milli  = 1e-3,
-    micro  = 1e-6,
-    nano   = 1e-9,
-    pico   = 1e-12,
-    femto  = 1e-15,
-    atto   = 1e-18,
-    zepto  = 1e-21,
-    yocto  = 1e-24,
-    ronto  = 1e-27,
-    quecto = 1e-30
-)
+include("internals.jl")
 
-include("interface.jl")
 # Specific units follows
 include("electrochemistry.jl")
 include("energy.jl")
@@ -40,3 +14,51 @@ include("temperature.jl")
 include("time.jl")
 include("viscosity.jl")
 include("volume.jl")
+# Main interface
+include("interface.jl")
+
+const TIME_UNITS_FOR_PRINTING = (
+    (si_unit(:year), :year),
+    (7*si_unit(:day), :week),
+    (si_unit(:day), :day),
+    (si_unit(:hour), :hour),
+    (si_unit(:minute), :minute),
+    (si_unit(:second), :second),
+    (si_unit(:milli)*si_unit(:second), :millisecond),
+    (si_unit(:micro)*si_unit(:second), :microsecond),
+    (si_unit(:nano)*si_unit(:second), :nanosecond),
+)
+
+
+"""
+    convert_to_si(value, unit_name::String)
+
+Convert `value` to SI representation from value in the unit given by `unit_symbol`.
+
+# Available units
+You can get a list of all available units via `Jutul.available_units()`. The
+values in Jutul itself are:
+
+$(join(sort(collect(keys(Jutul.all_units()))), ", ")).
+
+In addition units can be prefixed with standard SI prefixes. Available prefixes are:
+
+$(join([string(k) for k in keys(Jutul.UNIT_PREFIXES)], ", ")).
+
+This utility can also handle composite units, e.g. `"kilometer/hour"` or
+`"meter/second^2"`. Note that relative temperature units (Celsius and Fahrenheit) must be
+converted to absolute units (Kelvin or Rankine) before being used in composite units.
+
+# Examples
+```jldoctest
+julia> convert_to_si(1.0, :hour) # Get 1 hour represented as seconds
+3600.0
+julia> convert_to_si(5.0, "kilometer/hour") # Get 5 kilometers per hour represented as seconds
+1.3888888888888888
+julia> convert_to_si(1.0, "milligram") # Get 1 milligram represented as kilograms
+1.0e-6
+```
+"""
+function convert_to_si
+    # Place docs here to avoid docstring duplication
+end

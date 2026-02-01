@@ -1,32 +1,3 @@
-"""
-    convert_to_si(value, unit_name::String)
-
-Convert `value` to SI representation from value in the unit given by `unit_symbol`.
-
-# Available units
-You can get a list of all available units via `Jutul.available_units()`. The
-values in Jutul itself are:
-
-$(join(sort(collect(keys(Jutul.all_units()))), ", ")).
-
-In addition units can be prefixed with standard SI prefixes. Available prefixes are:
-
-$(join([string(k) for k in keys(Jutul.UNIT_PREFIXES)], ", ")).
-
-This utility can also handle composite units, e.g. `"kilometer/hour"` or
-`"meter/second^2"`. Note that relative temperature units (Celsius and Fahrenheit) must be
-converted to absolute units (Kelvin or Rankine) before being used in composite units.
-
-# Examples
-```jldoctest
-julia> convert_to_si(1.0, :hour) # Get 1 hour represented as seconds
-3600.0
-julia> convert_to_si(5.0, "kilometer/hour") # Get 5 kilometers per hour represented as seconds
-1.3888888888888888
-julia> convert_to_si(1.0, "milligram") # Get 1 milligram represented as kilograms
-1.0e-6
-```
-"""
 function convert_to_si(value, unit_name::String)
     ssym = Val(Symbol(unit_name))
     if ssym isa Jutul.CelsiusType || ssym isa Jutul.FahrenheitType
@@ -139,44 +110,6 @@ function si_unit(::Val{uname}) where uname
         end
     end
     return prefix
-end
-
-function all_units()
-    d = Dict{Symbol, Float64}()
-    for k in available_units()
-        d[k] = si_unit(k)
-    end
-    return d
-end
-
-function available_units()
-    unpack(::Val{T}) where T = [T]
-    unpack(::Any) = []
-    unpack(::Type{Tuple{V, T}}) where {V, T} = unpack(T)
-
-    function unpack(::Type{T}) where T
-        out = []
-        if T isa Union
-            push!(out, T.a)
-            append!(out, unpack(T.b))
-        else
-            push!(out, T)
-        end
-        return out
-    end
-    unpack_val(x) = nothing
-    unpack_val(::Type{Val{T}}) where T = T
-
-    retval = Symbol[]
-    for m in methods(si_unit)
-        for el in unpack(m.sig)
-            v = unpack_val(el)
-            if v isa Symbol
-                push!(retval, v)
-            end
-        end
-    end
-    return retval
 end
 
 function unit_convert(s::String; to_si::Bool = true)
