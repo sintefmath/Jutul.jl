@@ -65,5 +65,7 @@ using Jutul, Test
         @test si_unit("kilo*meter*hour^2/meter") == (si_unit(:kilometer)*si_unit(:hour)^2)/si_unit(:meter)
         @test convert_to_si(1.0, "millimeter/second^2") == 0.001
         @test_throws "Cannot convert relative" convert_to_si(1.0, "Celsius/day")
+
+        @test si"3.14*kilometer/hour" == 3.14 * si_unit(:kilometer) / si_unit(:hour)
     end
 end

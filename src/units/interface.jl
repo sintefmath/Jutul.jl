@@ -3,11 +3,28 @@
 
 Convert `value` to SI representation from value in the unit given by `unit_symbol`.
 
+# Available units
+You can get a list of all available units via `Jutul.available_units()`. The
+values in Jutul itself are:
+
+$(join(sort(collect(keys(Jutul.all_units()))), ", ")).
+
+In addition units can be prefixed with standard SI prefixes. Available prefixes are:
+
+$(join([string(k) for k in keys(Jutul.UNIT_PREFIXES)], ", ")).
+
+This utility can also handle composite units, e.g. `"kilometer/hour"` or
+`"meter/second^2"`. Note that relative temperature units (Celsius and Fahrenheit) must be
+converted to absolute units (Kelvin or Rankine) before being used in composite units.
 
 # Examples
 ```jldoctest
 julia> convert_to_si(1.0, :hour) # Get 1 hour represented as seconds
 3600.0
+julia> convert_to_si(5.0, "kilometer/hour") # Get 5 kilometers per hour represented as seconds
+1.3888888888888888
+julia> convert_to_si(1.0, "milligram") # Get 1 milligram represented as kilograms
+1.0e-6
 ```
 """
 function convert_to_si(value, unit_name::String)
@@ -83,7 +100,8 @@ end
 
 Get the multiplicative SI unit conversion factor for a single unit. The return
 value is given so that `x*si_unit(:name)` will convert `x` to the SI
-representation of the unit with the given name.
+representation of the unit with the given name. Composite units are also supported via
+strings, e.g. `si_unit("feet^3/second")`.
 
 # Examples
 ```jldoctest
@@ -204,6 +222,14 @@ function unit_convert(ex::Expr; to_si::Bool = true)
     return eval(ex)
 end
 
+export @si_str
+
+"""
+    si"kg/meter"
+
+A string macro to convert unit strings to SI conversion factors. Convenience
+function for `si_unit`.
+"""
 macro si_str(p)
-    unit_convert(p)
+    return si_unit(p)
 end
