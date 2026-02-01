@@ -6,9 +6,16 @@ using Jutul, Test
     @test convert_to_si(0.0, "°C") ≈ 273.15
     @test convert_to_si(26.85, "°C") ≈ 300.0
     @test convert_from_si(300.0, "°C") ≈ 26.85
-
-    for u in Jutul.available_units()
+    for (u, v) in pairs(Jutul.UNIT_PREFIXES)
         x = si_unit(u)
+        @test x == v
+        @test x isa Float64
+        @test convert_to_si(convert_from_si(1.0, u), u) ≈ 1.0
+    end
+
+    for (u, uval) in pairs(Jutul.all_units())
+        x = si_unit(u)
+        @test x == uval
         @test x > 0
         @test x isa Float64
         @test convert_to_si(convert_from_si(1.0, u), u) ≈ 1.0
@@ -18,12 +25,47 @@ using Jutul, Test
     F = 100.0
     @test convert_to_si(F, :Fahrenheit) ≈ K
     @test convert_from_si(K, :Fahrenheit) ≈ F
+    @test convert_from_si(K, "Fahrenheit") ≈ F
     C = 37.777777777500035
 
     @test convert_to_si(C, :Celsius) ≈ K
     @test convert_from_si(K, :Celsius) ≈ C
+    @test convert_from_si(K, "Celsius") ≈ C
 
     R = 559.67
     @test convert_to_si(R, :Rankine) ≈ K
     @test convert_from_si(K, :Rankine) ≈ R
+    @test convert_from_si(K, "Rankine") ≈ R
+
+    @test convert_to_si(1.0, :milliday) ≈ 86.4
+    @test convert_to_si(1.0, :kilogram) ≈ 1.0
+    @test convert_to_si(1.0, :kilokelvin) ≈ 1000.0
+    @test convert_to_si(1.0, :micrometer) ≈ 1.0e-6
+    @test convert_to_si(1.0, "micrometer") ≈ 1.0e-6
+
+    @test_throws "Unknown unit" si_unit(:millierror)
+
+    @testset "composite units" begin
+        teststr = "meter/second"
+        @test si_unit(teststr) == 1.0
+
+        @test si_unit("10*meter/second") == 10.0
+        @test si_unit("10meter/second") == 10.0
+
+        @test_throws "Cannot convert relative temperature" si_unit("Fahrenheit/second")
+        @test_throws "Cannot convert relative temperature" si_unit("Celsius/second")
+
+        @test si_unit("rankine/hour") == si_unit(:rankine)/si_unit(:hour)
+        @test si_unit("feet/second") == si_unit(:feet)/si_unit(:second)
+
+        teststr = "meter/second^2"
+        @test si_unit(teststr) == 1.0
+        @test si_unit("millimeter/second^2") == si_unit(:millimeter)/si_unit(:second)^2
+        @test si_unit("kilometer/hour^2") == si_unit(:kilometer)/si_unit(:hour)^2
+        @test si_unit("kilo*meter*hour^2/meter") == (si_unit(:kilometer)*si_unit(:hour)^2)/si_unit(:meter)
+        @test convert_to_si(1.0, "millimeter/second^2") == 0.001
+        @test_throws "Cannot convert relative" convert_to_si(1.0, "Celsius/day")
+
+        @test si"3.14*kilometer/hour" == 3.14 * si_unit(:kilometer) / si_unit(:hour)
+    end
 end
