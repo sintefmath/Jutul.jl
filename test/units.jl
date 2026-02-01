@@ -7,8 +7,9 @@ using Jutul, Test
     @test convert_to_si(26.85, "°C") ≈ 300.0
     @test convert_from_si(300.0, "°C") ≈ 26.85
 
-    for u in Jutul.available_units()
+    for (u, uval) in pairs(Jutul.all_units())
         x = si_unit(u)
+        @test x == uval
         @test x > 0
         @test x isa Float64
         @test convert_to_si(convert_from_si(1.0, u), u) ≈ 1.0
