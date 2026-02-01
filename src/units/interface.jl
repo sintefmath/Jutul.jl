@@ -192,7 +192,7 @@ function unit_convert(s::String; to_si::Bool = true)
 end
 
 function unit_convert(ex::Expr; to_si::Bool = true)
-    ops = (:/, :*, :^)
+    ops = (:/, :*, :^, :+, :-)
     for (idx, val) in enumerate(ex.args)
         if val in ops
             continue
@@ -229,6 +229,18 @@ export @si_str
 
 A string macro to convert unit strings to SI conversion factors. Convenience
 function for `si_unit`.
+
+# Examples
+```jldoctest
+julia> si"day" # Get days represented as seconds
+86400.0
+julia> si"kilometer/hour" # Get kilometers per hour represented as seconds
+0.2777777777777778
+julia> si"3.14*kilometer/hour" # Get 3.14 kilometers per hour represented as seconds
+0.8722222222222222
+julia> si"100gram + 0.1kilogram" # Get 100 grams + 0.1 kilogram represented as kilograms
+0.2
+```
 """
 macro si_str(p)
     return si_unit(p)
