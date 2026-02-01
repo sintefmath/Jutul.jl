@@ -166,7 +166,7 @@ function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
         end
         for (j, f) in enumerate(forces)
             for (i, uf) in enumerate(unique_forces)
-                if f == uf
+                if isequal(f, uf) || hash(f) == hash(uf)
                     push!(force_map[i], j)
                     break
                 end
