@@ -96,7 +96,23 @@ end
 function si_unit(::Val{uname}) where uname
     prefix = get(UNIT_PREFIXES, uname, missing)
     if ismissing(prefix)
-        error("Unknown unit: $uname")
+        # Could be a prefixed unit, e.g. millimeter
+        base_unit = missing
+        prefix_value = missing
+        for (k, v) in pairs(UNIT_PREFIXES)
+            ustr = string(uname)
+            prefix_str = string(k)
+            if startswith(ustr, prefix_str)
+                base_unit = Symbol(replace(ustr, prefix_str => ""))
+                prefix_value = v
+                break
+            end
+        end
+        if ismissing(base_unit)
+            error("Unknown unit: $uname")
+        else
+            return prefix_value * si_unit(Val(base_unit))
+        end
     end
     return prefix
 end

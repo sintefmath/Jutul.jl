@@ -33,4 +33,10 @@ using Jutul, Test
     R = 559.67
     @test convert_to_si(R, :Rankine) ≈ K
     @test convert_from_si(K, :Rankine) ≈ R
+
+    @test convert_to_si(1.0, :milliday) ≈ 86.4
+    @test convert_to_si(1.0, :kilogram) ≈ 1.0
+    @test convert_to_si(1.0, :kilokelvin) ≈ 1000.0
+
+    @test_throws "Unknown unit" si_unit(:millierror)
 end
