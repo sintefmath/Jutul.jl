@@ -90,7 +90,7 @@ function si_unit(uname::Symbol)
 end
 
 function si_unit(uname::String)
-    return si_unit(Symbol(uname))
+    return unit_convert(uname, to_si = true)
 end
 
 function si_unit(::Val{uname}) where uname
@@ -153,4 +153,44 @@ function available_units()
         end
     end
     return retval
+end
+
+function unit_convert(s::String; to_si::Bool = true)
+    ex = Meta.parse(s)
+    return unit_convert(ex, to_si = to_si)
+end
+
+function unit_convert(ex::Expr; to_si::Bool = true)
+    ops = (:/, :*, :^)
+    for (idx, val) in enumerate(ex.args)
+        if val in ops
+            continue
+        elseif val isa Number
+            continue
+        elseif val isa Symbol
+            if Val(val) isa Jutul.CelsiusType || Val(val) isa Jutul.FahrenheitType
+                msg = """
+                "Cannot convert relative temperature units ($val) in expressions.
+                Use convert_to_si and convert_from_si functions to convert the temperature unit to absolute units (Rankine or Kelvin) before using it in a composite expression.
+                """
+                error(msg)
+            end
+            u = si_unit(val)
+            if to_si
+                f = u
+            else
+                f = 1.0/u
+            end
+            ex.args[idx] = f
+        elseif val isa Expr
+            ex.args[idx] = unit_convert(val; to_si = to_si)
+        else
+            error("Unknown expression part: $val")
+        end
+    end
+    return eval(ex)
+end
+
+macro si_str(p)
+    unit_convert(p)
 end

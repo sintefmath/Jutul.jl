@@ -39,4 +39,24 @@ using Jutul, Test
     @test convert_to_si(1.0, :kilokelvin) ≈ 1000.0
 
     @test_throws "Unknown unit" si_unit(:millierror)
+
+    @testset "composite units" begin
+        teststr = "meter/second"
+        @test si_unit(teststr) == 1.0
+
+        @test si_unit("10*meter/second") == 10.0
+        @test si_unit("10meter/second") == 10.0
+
+        @test_throws "Cannot convert relative temperature" si_unit("Fahrenheit/second")
+        @test_throws "Cannot convert relative temperature" si_unit("Celsius/second")
+
+        @test si_unit("rankine/hour") == si_unit(:rankine)/si_unit(:hour)
+        @test si_unit("feet/second") == si_unit(:feet)/si_unit(:second)
+
+        teststr = "meter/second^2"
+        @test si_unit(teststr) == 1.0
+        @test si_unit("millimeter/second^2") == si_unit(:millimeter)/si_unit(:second)^2
+        @test si_unit("kilometer/hour^2") == si_unit(:kilometer)/si_unit(:hour)^2
+        @test si_unit("kilo*meter*hour^2/meter") == (si_unit(:kilometer)*si_unit(:hour)^2)/si_unit(:meter)
+    end
 end
