@@ -32,8 +32,8 @@ using `free_optimization_parameter!` prior to calling the optimizer.
 - `obj_change_tol`: Objective function change tolerance for stopping criterion
 - `max_it`: Maximum number of iterations
 - `optimizer`: Symbol defining the optimization algorithm to use. Available
-  options are `:lbfgs` (default) and `:lbfgsb` (requires LBFGSB.jl to be
-  imported)
+  options are `:lbfgs` (default), `:lbfgsb_qp` and `:lbfgsb` (requires LBFGSB.jl
+  to be imported)
 - `opt_fun`: Optional custom optimization function. If missing, L-BFGS will be
   used. Takes in a NamedTuple containing fields `f`, `g`, `x0`, `min`, `max`.
   Here, `f(x)` returns the objective function value at `x`, `g(dFdx, x)` fills
@@ -109,7 +109,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         solution_history = false,
         print_parameters = false,
         allow_errors = false,
-        scale = true,
+        scale = optimizer != :lbfgsb_qp,
         gradient_scaling = true,
         kwarg...
     )
