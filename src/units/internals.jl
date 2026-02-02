@@ -26,10 +26,15 @@ const UNIT_PREFIXES = (
     quecto = 1e-30
 )
 
-function all_units()
+function all_units(; prefix = true)
     d = Dict{Symbol, Float64}()
     for k in available_units()
         d[k] = si_unit(k)
+    end
+    if prefix
+        for (k, v) in pairs(UNIT_PREFIXES)
+            d[k] = v
+        end
     end
     return d
 end
