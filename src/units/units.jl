@@ -39,7 +39,7 @@ Convert `value` to SI representation from value in the unit given by `unit_symbo
 You can get a list of all available units via `Jutul.available_units()`. The
 values in Jutul itself are:
 
-$(join(sort(collect(keys(Jutul.all_units()))), ", ")).
+$(join(sort(collect(keys(Jutul.all_units(prefix = false)))), ", ")).
 
 In addition units can be prefixed with standard SI prefixes. Available prefixes are:
 
