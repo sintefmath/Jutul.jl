@@ -109,7 +109,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         solution_history = false,
         print_parameters = false,
         allow_errors = false,
-        scale = optimizer == :lbfgsb_qp,
+        scale = optimizer != :lbfgsb_qp,
         gradient_scaling = true,
         kwarg...
     )
