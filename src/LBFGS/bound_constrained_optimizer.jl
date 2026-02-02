@@ -102,7 +102,8 @@ function optimize_bound_constrained(
     lb, ub = handle_bounds!(lb, ub, length(u0))
     # Potential scaling
     if scale
-        f! = (u) -> f_scale(u, f!, lb, ub)
+        f_old! = f!
+        f! = (u) -> f_scale(u, f_old!, lb, ub)
         u0 = (u0 .- lb) ./ (ub .- lb)
         lb, ub = zeros(length(u0)), ones(length(u0))
     end
