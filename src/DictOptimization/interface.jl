@@ -176,11 +176,12 @@ function optimize_implementation(problem, ::Val{:lbfgs}; scale = true, kwarg...)
     return (x, history)
 end
 
-function optimize_implementation(problem, ::Val{:lbfgsb_qp}; kwarg...)
-    v, x, history = Jutul.LBFGS.optimize_bound_constrained(problem;
+function optimize_implementation(problem, ::Val{:lbfgsb_qp}; maximize = false, scale = false, kwarg...)
+    F = Jutul.DictOptimization.setup_optimization_functions(problem, maximize = maximize, scale = scale)
+    _, x, history = Jutul.LBFGS.optimize_bound_constrained(F.x0, F.g_both, F.min, F.max;
         kwarg...
     )
-    return (x, history)
+    return (F.descale(x), history)
 end
 
 function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where optimizer
@@ -276,6 +277,11 @@ function setup_optimization_functions(problem::JutulOptimizationProblem; maximiz
         F(x, dFdx)
         return dFdx
     end
+    function g_both!(x)
+        dFdx = similar(x)
+        obj = F(x, dFdx)
+        return (obj, dFdx)
+    end
     if scale
         lb_scaled = zeros(n)
         ub_scaled = ones(n)
@@ -286,6 +292,7 @@ function setup_optimization_functions(problem::JutulOptimizationProblem; maximiz
     return (
         f = f!,
         g = g!,
+        g_both = g_both!,
         history = history,
         min = lb_scaled,
         max = ub_scaled,

@@ -8,7 +8,7 @@ Partial translation/improvement of the MRST function `optimizeBoundConstrained`.
 
 # Arguments
 - `u0`: Initial guess vector of length n with 0 ≤ u0 ≤ 1, must be feasible
-- `f`: Function handle that returns tuple `(v, g)` where:
+- `f`: Function handle `f(x)` that returns tuple `(v, g)` where:
     * `v`: objective value
     * `g`: objective gradient vector of length n
 - `lb`: Lower bound(s) on u
