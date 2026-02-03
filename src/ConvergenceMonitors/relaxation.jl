@@ -14,7 +14,7 @@ Relaxation strategy based on convergence monitoring. Requires that the
 that the convergence status is available in the reports. See corresponding
 iplementation of `select_nonlinear_relaxation_model` below for details.
 """
-function ConvergenceMonitorRelaxation(; w_min = 0.1, dw = 0.2, dw_increase = nothing, dw_decrease = nothing, w_max = 1.0, warmup_iterations = 5)
+function ConvergenceMonitorRelaxation(; w_min = 0.1, dw = 0.2, dw_increase = nothing, dw_decrease = nothing, w_max = 1.0, warmup_iterations = 4)
     if isnothing(dw_increase)
         dw_increase = dw/2
     end
@@ -57,33 +57,27 @@ during the cutting criterion check and stored in the reports.
 """
 function Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMonitorRelaxation, reports, ω)
 
-    if length(reports) > rel_type.warmup_iterations
+    n = length(reports)-1
+
+    if n > rel_type.warmup_iterations
         (; dw_decrease, dw_increase, w_max, w_min) = rel_type
-        
-        report = reports[end-1]
-        @assert haskey(report, :convergence_monitor)
-        distance = report[:convergence_monitor][:distance]
-        status = report[:convergence_monitor][:status]
-        oscillating = report[:convergence_monitor][:oscillation]
-        oscillating = any(oscillating .&& (distance .> 1.0))
-        if any(status .== -1)
-            status = :bad
-        elseif all(status .== 1)
-            status = :good
-        else
-            status = :ok
+
+        d, _ = compute_distance(reports[1][:errors]; pools=:all)
+        distances = zeros(Float64, length(reports)-1, length(d))
+        for k in 1:(length(reports)-1)
+            d, _ = compute_distance(reports[k][:errors]; pools=:all)
+            distances[k, :] .= d
         end
+        status, _, _, oscillating = analyze_step(distances, 1, 8, 0.1, 0.9)
+        status = status[1]
+        oscillating = oscillating[1]
 
         if oscillating
             ω = ω - dw_decrease
-            println("Relaxation factor decreased to $ω due to oscillations.")
-        elseif status ∈ [:good, :ok]
+        elseif status >= 0
             ω = ω + dw_increase
-            println("Relaxation factor increased to $ω.")
-        elseif status == :none
-            # No change
         else
-            @assert status == :bad "Unknown status: $status"
+            @assert status == -1 "Unknown status: $status"
         end
         ω = clamp(ω, w_min, w_max)
 
