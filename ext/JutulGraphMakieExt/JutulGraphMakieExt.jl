@@ -130,10 +130,10 @@ module JutulGraphMakieExt
         end
 
         for ctp in model.cross_terms
-            (; cross_term, target, source, equation) = ctp
-            add_cross_term_edge!(cross_term, target, source, equation)
+            (; cross_term, target, source, target_equation, source_equation) = ctp
+            add_cross_term_edge!(cross_term, target, source, target_equation)
             if Jutul.has_symmetry(cross_term) && directed
-                add_cross_term_edge!(cross_term, source, target, equation)
+                add_cross_term_edge!(cross_term, source, target, source_equation)
             end
         end
         layout = SFDP(Ptype=Float32, tol=0.01, C=0.01, K=1)

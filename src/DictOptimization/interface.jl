@@ -65,6 +65,9 @@ using `free_optimization_parameter!` prior to calling the optimizer.
     to use all time steps (the latter is equivalent to setting `use_sparsity` to
     `true`).
   - `do_prep`: Perform preparation step
+  - `output_path`: If provided, the optimization results will be stored in the
+    given path as a JLD2 file named `final.jld2`, with intermediate steps being
+    stored as `step_1.jld2`, `step_2.jld2`, etc if `solution_history` is enabled.
 
 # Returns
 The optimized parameters as a dictionary.
@@ -111,6 +114,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         allow_errors = false,
         scale = optimizer != :lbfgsb_qp,
         gradient_scaling = true,
+        output_path = nothing,
         kwarg...
     )
     if ismissing(setup_fn)
@@ -126,7 +130,8 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         deps_ad = deps_ad,
         print_parameters = print_parameters,
         allow_errors = allow_errors,
-        gradient_scaling = gradient_scaling
+        gradient_scaling = gradient_scaling,
+        output_path = output_path
     )
 
     if dopt.verbose
@@ -163,6 +168,18 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     history[:solver_history] = solver_history
     dopt.history = NamedTuple(history)
 
+    if !isnothing(output_path)
+        to_disk = Dict{String, Any}()
+        to_disk["parameters"] = prm_out
+        to_disk["objectives"] = history[:objectives]
+        to_disk["gradient_norms"] = history[:gradient_norms]
+        to_disk["x"] = x
+        if !isnothing(output_path)
+            mkpath(output_path)
+            filename = joinpath(output_path, "final.jld2")
+            save(filename, to_disk)
+        end
+    end
     return prm_out
 end
 
@@ -176,11 +193,12 @@ function optimize_implementation(problem, ::Val{:lbfgs}; scale = true, kwarg...)
     return (x, history)
 end
 
-function optimize_implementation(problem, ::Val{:lbfgsb_qp}; kwarg...)
-    v, x, history = Jutul.LBFGS.optimize_bound_constrained(problem;
+function optimize_implementation(problem, ::Val{:lbfgsb_qp}; maximize = false, scale = false, kwarg...)
+    F = Jutul.DictOptimization.setup_optimization_functions(problem, maximize = maximize, scale = scale)
+    _, x, history = Jutul.LBFGS.optimize_bound_constrained(F.x0, F.g_both, F.min, F.max;
         kwarg...
     )
-    return (x, history)
+    return (F.descale(x), history)
 end
 
 function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where optimizer
@@ -276,6 +294,11 @@ function setup_optimization_functions(problem::JutulOptimizationProblem; maximiz
         F(x, dFdx)
         return dFdx
     end
+    function g_both!(x)
+        dFdx = similar(x)
+        obj = F(x, dFdx)
+        return (obj, dFdx)
+    end
     if scale
         lb_scaled = zeros(n)
         ub_scaled = ones(n)
@@ -286,6 +309,7 @@ function setup_optimization_functions(problem::JutulOptimizationProblem; maximiz
     return (
         f = f!,
         g = g!,
+        g_both = g_both!,
         history = history,
         min = lb_scaled,
         max = ub_scaled,

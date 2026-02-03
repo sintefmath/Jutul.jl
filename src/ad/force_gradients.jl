@@ -158,20 +158,23 @@ function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
 
     function force_steps(forces::Vector, dt)
         length(allforces) == length(dt) || error("Mismatch in length of forces $(length(allforces)) and dt ($(length(dt)))")
-        unique_forces = unique(forces)
-        num_unique_forces = length(unique_forces)
-        force_map = Vector{Vector{Int}}(undef, num_unique_forces)
-        for i in 1:num_unique_forces
-            force_map[i] = Int[]
-        end
+        force_map = Vector{Int}[]
+        unique_forces = []
         for (j, f) in enumerate(forces)
+            found = false
             for (i, uf) in enumerate(unique_forces)
                 if isequal(f, uf) || hash(f) == hash(uf)
                     push!(force_map[i], j)
+                    found = true
                     break
                 end
             end
+            if !found
+                push!(unique_forces, f)
+                push!(force_map, [j])
+            end
         end
+        num_unique_forces = length(unique_forces)
         @assert sum(length, force_map) == length(forces) "Expected all forces to be accounted for ($(sum(length, force_map)) ≠ $(length(forces)))."
         return (unique_forces, force_map, num_unique_forces)
     end
