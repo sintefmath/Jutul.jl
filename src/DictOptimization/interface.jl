@@ -65,6 +65,9 @@ using `free_optimization_parameter!` prior to calling the optimizer.
     to use all time steps (the latter is equivalent to setting `use_sparsity` to
     `true`).
   - `do_prep`: Perform preparation step
+  - `output_path`: If provided, the optimization results will be stored in the
+    given path as a JLD2 file named `final.jld2`, with intermediate steps being
+    stored as `step_1.jld2`, `step_2.jld2`, etc if `solution_history` is enabled.
 
 # Returns
 The optimized parameters as a dictionary.
@@ -111,6 +114,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         allow_errors = false,
         scale = optimizer != :lbfgsb_qp,
         gradient_scaling = true,
+        output_path = nothing,
         kwarg...
     )
     if ismissing(setup_fn)
@@ -126,7 +130,8 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         deps_ad = deps_ad,
         print_parameters = print_parameters,
         allow_errors = allow_errors,
-        gradient_scaling = gradient_scaling
+        gradient_scaling = gradient_scaling,
+        output_path = output_path
     )
 
     if dopt.verbose
@@ -163,6 +168,18 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     history[:solver_history] = solver_history
     dopt.history = NamedTuple(history)
 
+    if !isnothing(output_path)
+        to_disk = Dict{String, Any}()
+        to_disk["parameters"] = prm_out
+        to_disk["objectives"] = history[:objectives]
+        to_disk["gradient_norms"] = history[:gradient_norms]
+        to_disk["x"] = x
+        if !isnothing(output_path)
+            mkpath(output_path)
+            filename = joinpath(output_path, "final.jld2")
+            save(filename, to_disk)
+        end
+    end
     return prm_out
 end
 

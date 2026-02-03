@@ -394,6 +394,29 @@ import Jutul.DictOptimization as DictOptimization
         @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
         @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
 
+        # Test with lbfgsb_qp optimizer
+        outpth = tempname()
+        prm_opt = optimize(dprm, poisson_mismatch_objective,
+            max_it = 25,
+            info_level = -1,
+            solution_history = :full,
+            optimizer = :lbfgsb_qp,
+            output_path = outpth
+        );
+
+        @test isdir(outpth)
+        @test length(readdir(outpth)) > 0
+        @test "final.jld2" in readdir(outpth)
+        @test "optimizer_step_1.jld2" in readdir(outpth)
+        @test "simulation_states_step_1" in readdir(outpth)
+        @test length(dprm.history.solutions) > 0
+        @test haskey(dprm.history.solutions[1], :x)
+        @test haskey(dprm.history.solutions[1], :parameters)
+        @test haskey(dprm.history.solutions[1], :objective)
+
+        @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
+        @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
+
         # Test with LBFGSB.jl optimizer
         prm_opt2 = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1, optimizer = :lbfgsb);
 
@@ -434,9 +457,8 @@ import Jutul.DictOptimization as DictOptimization
             @test only(dprm.multipliers_optimized["multiplier_1"].value) ≈ 1.0/multval atol = 1e-3
         end
     end
-end
+end;
 
-##
 @testset "AdjointPackedResult" begin
     dt_test = [1.0, 2.0, 3.0]
     case = setup_poisson_test_case(1.0, 1.0, 1.0, 1.0, 1.0, dt = dt_test)

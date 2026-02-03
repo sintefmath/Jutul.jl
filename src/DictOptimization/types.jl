@@ -160,6 +160,7 @@ struct JutulOptimizationProblem
     print_parameters::Bool
     allow_errors::Bool
     gradient_scaling::Union{Bool, Float64}
+    output_path::Union{Nothing, String}
     function JutulOptimizationProblem(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
             backend_arg = missing,
             info_level = 0,
@@ -170,8 +171,12 @@ struct JutulOptimizationProblem
             solution_history::Union{Bool, Symbol} = false,
             print_parameters::Bool = false,
             allow_errors::Bool = false,
-            gradient_scaling = false
+            gradient_scaling = false,
+            output_path = nothing
         )
+        if !isnothing(output_path)
+            mkpath(output_path)
+        end
         if ismissing(backend_arg)
             backend_arg = NamedTuple()
         end
@@ -196,7 +201,8 @@ struct JutulOptimizationProblem
             solution_history,
             print_parameters,
             allow_errors,
-            gradient_scaling
+            gradient_scaling,
+            output_path
         )
     end
 end
@@ -245,7 +251,8 @@ function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true, ex
         allow_errors = opt.allow_errors,
         solution_history = opt.solution_history,
         gradient_scaling = opt.gradient_scaling,
-        extra_timing = extra_timing
+        extra_timing = extra_timing,
+        output_path = opt.output_path
     )
     return (obj, dobj_dx)
 end

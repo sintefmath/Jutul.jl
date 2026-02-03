@@ -6,7 +6,8 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         print_parameters = false,
         allow_errors = false,
         extra_timing = false,
-        gradient_scaling = false
+        gradient_scaling = false,
+        output_path = nothing
     )
     objectives = adj_cache[:objectives]
     gnorms = adj_cache[:gradient_norms]
@@ -29,9 +30,16 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     end
     result = missing
     solve_failure = false
+    if !isnothing(output_path) && solution_history == :full
+        # User requested everything to be stored
+        output_path_sim = joinpath(output_path, "simulation_states_step_$(length(objectives)+1)")
+        mkpath(output_path_sim)
+    else
+        output_path_sim = nothing
+    end
     if allow_errors
         try
-            result = forward_simulate_for_optimization(case, adj_cache, extra_timing = extra_timing)
+            result = forward_simulate_for_optimization(case, adj_cache, extra_timing = extra_timing, output_path = output_path_sim)
             reps = result.reports
             if length(reps) == 0
                 solve_failure = true
@@ -46,7 +54,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             solve_failure = true
         end
     else
-        result = forward_simulate_for_optimization(case, adj_cache, extra_timing = extra_timing)
+        result = forward_simulate_for_optimization(case, adj_cache, extra_timing = extra_timing, output_path = output_path_sim)
     end
     if solve_failure
         if is_first_iteration
@@ -109,7 +117,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         end
     end
     # Store the results
-    store_solution_history!(adj_cache, f, g, prm, x, x_setup, result, solution_history, solve_failure)
+    store_solution_history!(adj_cache, f, g, prm, x, x_setup, result, solution_history, solve_failure, output_path)
 
     if solve_failure
         jutul_message("Optimization", "Simulation failed, returning objective = $f", color = :red)
@@ -149,7 +157,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     return (f, g)
 end
 
-function store_solution_history!(adj_cache, f, g, prm, x, x_setup, result, solution_history, solve_failure::Bool)
+function store_solution_history!(adj_cache, f, g, prm, x, x_setup, result, solution_history, solve_failure::Bool, output_path)
     if solve_failure
         f = dg = NaN
     else
@@ -176,6 +184,16 @@ function store_solution_history!(adj_cache, f, g, prm, x, x_setup, result, solut
         next[:objective] = f
         next[:parameters] = prm_opt
         next[:x] = x
+        if !isnothing(output_path)
+            n = length(dest) + 1
+            mkpath(output_path)
+            filename = joinpath(output_path, "optimizer_step_$n.jld2")
+            to_file = Dict{String, Any}()
+            for (k, v) in pairs(next)
+                to_file[String(k)] = v
+            end
+            save(filename, to_file)
+        end
         if solution_history == :full && !solve_failure
             states = result.states
             next[:states] = deepcopy(states)
@@ -208,7 +226,7 @@ function dict_shallow_copy(x)
     return x
 end
 
-function forward_simulate_for_optimization(case, adj_cache; extra_timing = false)
+function forward_simulate_for_optimization(case, adj_cache; extra_timing = false, output_path = nothing)
     sim = get(adj_cache, :simulator, missing)
     if ismissing(sim)
         sim = Jutul.Simulator(case)
@@ -223,13 +241,20 @@ function forward_simulate_for_optimization(case, adj_cache; extra_timing = false
         )
         adj_cache[:config] = config
     end
-    return simulate!(sim, case.dt,
+    if !isnothing(output_path)
+        config[:output_path] = output_path
+    end
+    out = simulate!(sim, case.dt,
         config = config,
         state0 = case.state0,
         parameters = case.parameters,
         forces = case.forces,
         extra_timing = extra_timing
     )
+    if !isnothing(output_path)
+        config[:output_path] = nothing
+    end
+    return out
 end
 
 function optimizer_devectorize!(prm, X, x_setup; multipliers = missing)
