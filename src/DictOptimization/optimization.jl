@@ -72,22 +72,6 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
 
         # Evaluate the objective function
         f = Jutul.evaluate_objective(objective, case.model, packed_steps)
-        adj_cache[:forward_count] += 1
-        adj_cache[:previous][:objective] = f
-        if solution_history != false
-            dest = adj_cache[:solutions]
-            prm_opt = deepcopy(prm)
-            optimizer_devectorize!(prm_opt, x, x_setup)
-            next = Dict{Symbol, Any}()
-            next[:objective] = f
-            next[:parameters] = prm_opt
-            next[:x] = x
-            if solution_history == :full
-                states = result.states
-                next[:states] = deepcopy(states)
-            end
-            push!(dest, NamedTuple(next))
-        end
         # Solve adjoints
         if gradient
             S = get(adj_cache, :storage, missing)
@@ -124,22 +108,18 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             g = missing
         end
     end
+    # Store the results
+    store_solution_history!(adj_cache, f, g, prm, x, x_setup, result, solution_history, solve_failure)
+
     if solve_failure
         jutul_message("Optimization", "Simulation failed, returning objective = $f", color = :red)
     else
-        if gradient
-            dg = sqrt(sum(abs2, g))
-        else
-            dg = NaN
-        end
-        push!(objectives, f)
-        push!(gnorms, dg)
         if dopt.verbose
             num_f = adj_cache[:forward_count]
             fmt = x -> @sprintf("%2.5e", x)
             fmt_ratio = x -> @sprintf("%1.3e", x)
             if gradient
-                gstr = ", gradient 2-norm: $(fmt(dg))"
+                gstr = ", gradient 2-norm: $(fmt(gnorms[end]))"
             else
                 gstr = " (no gradient evaluated)"
             end
@@ -167,6 +147,42 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         end
     end
     return (f, g)
+end
+
+function store_solution_history!(adj_cache, f, g, prm, x, x_setup, result, solution_history, solve_failure::Bool)
+    if solve_failure
+        f = dg = NaN
+    else
+        if ismissing(g)
+            dg = NaN
+        else
+            dg = sqrt(sum(abs2, g))
+        end
+        adj_cache[:forward_count] += 1
+        adj_cache[:previous][:objective] = f
+    end
+    objectives = adj_cache[:objectives]
+    gnorms = adj_cache[:gradient_norms]
+
+    push!(objectives, f)
+    push!(gnorms, dg)
+
+    if solution_history != false
+        dest = adj_cache[:solutions]
+        prm_opt = deepcopy(prm)
+        optimizer_devectorize!(prm_opt, x, x_setup)
+        next = Dict{Symbol, Any}()
+        next[:failure] = solve_failure
+        next[:objective] = f
+        next[:parameters] = prm_opt
+        next[:x] = x
+        if solution_history == :full && !solve_failure
+            states = result.states
+            next[:states] = deepcopy(states)
+        end
+        push!(dest, NamedTuple(next))
+    end
+    return adj_cache
 end
 
 function setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
