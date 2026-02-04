@@ -7,7 +7,7 @@ iterates, the contraction factor is estimated using least-squares assuming the
 iterates follow a geometric series: rₙ = Θⁿr₀. The function also computes the
 target contraction factor under this assumption assuming N iterations left.
 """
-function compute_contraction_factor(distances, N)
+function compute_contraction_factor(distances, N_target)
 
     # Number of iterates used to estimate contraction factor
     δ = distances
@@ -22,9 +22,10 @@ function compute_contraction_factor(distances, N)
     end
     θ = exp.(num./den)
     # Compute target contraction to converge in N iterations
-    θ_target = δ[end-1,:].^(-1/N)
+    θ_target = δ[end-1,:].^(-1/N_target)
+    N = -log(δ[end-1,:])./log(θ)
     
-    return θ, θ_target
+    return θ, N, θ_target
 
 end
 
