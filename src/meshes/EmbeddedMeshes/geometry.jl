@@ -1,3 +1,13 @@
+"""
+Geometric computations for embedded meshes.
+
+This file implements specialized geometric calculations for embedded mesh
+structures, including face normals, centroids, and volume calculations. Most
+functions simply extract relevant data from the underlying unstructured mesh
+and delegate the computations accordingly.
+"""
+
+# Face normal calculations - delegate to underlying mesh
 Jutul.face_normal(mesh::EmbeddedMesh, f, e::Jutul.Faces) = Jutul.face_normal(mesh.unstructured_mesh, f, e)
 Jutul.face_normal(mesh::EmbeddedMesh, f, e::Jutul.BoundaryFaces) = Jutul.face_normal(mesh.unstructured_mesh, f, e)
 

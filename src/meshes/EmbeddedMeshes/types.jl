@@ -1,8 +1,34 @@
+"""
+    EmbeddedMesh <: FiniteVolumeMesh
+
+A mesh type for representing embedded lower-dimensional features (such as
+fractures or faults) within a computational domain. The mesh consists of
+interconnected faces.
+
+# Fields
+- `unstructured_mesh::UnstructuredMesh`: The underlying unstructured mesh representation
+- `intersections::Vector{Vector{Int}}`: Indices of embedded mesh cells that are part of intersections
+"""
 struct EmbeddedMesh <: Jutul.FiniteVolumeMesh
     unstructured_mesh::UnstructuredMesh
     intersections::Vector{Vector{Int}}
 end
 
+"""
+    EmbeddedMesh(mesh::UnstructuredMesh, faces)
+
+Construct an embedded mesh from selected faces of an unstructured mesh.
+
+# Arguments
+- `mesh::UnstructuredMesh`: Parent mesh containing the faces
+- `faces`: Collection of face indices to include in the embedded mesh
+
+# Returns
+- `EmbeddedMesh`: Embedded mesh made up of the specified faces. Instances of
+  three or more faces intersecting at an edge is split into pairwise
+  connections.
+
+"""
 function EmbeddedMesh(mesh::UnstructuredMesh, faces)
     embedded_mesh, intersections = make_mesh_from_faces(mesh, faces)
     return EmbeddedMesh(embedded_mesh, intersections)
@@ -12,6 +38,11 @@ function Jutul.UnstructuredMesh(mesh::EmbeddedMesh)
     return mesh.unstructured_mesh
 end
 
+"""
+    make_mesh_from_faces(mesh, faces)
+
+Helper for EmbeddedMesh constructor.
+"""
 function make_mesh_from_faces(mesh, faces)
 
     # Make edges

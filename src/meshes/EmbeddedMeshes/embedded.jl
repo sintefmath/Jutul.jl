@@ -1,3 +1,11 @@
+"""
+Interface implementations for EmbeddedMesh to integrate with Jutul's mesh
+framework. Most geometric and topological queries are delegated to the
+underlying UnstructuredMesh, ensuring compatibility with the finite volume
+framework.
+"""
+
+# Basic mesh properties - delegate to underlying mesh
 Jutul.dim(mesh::EmbeddedMesh) = Jutul.dim(mesh.unstructured_mesh)
 Jutul.number_of_cells(mesh::EmbeddedMesh) = Jutul.number_of_cells(mesh.unstructured_mesh)
 Jutul.number_of_faces(mesh::EmbeddedMesh) = Jutul.number_of_faces(mesh.unstructured_mesh)

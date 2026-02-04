@@ -1,3 +1,11 @@
+"""
+Plotting utilities for embedded meshes.
+ 
+ This file provides functions to triangulate embedded meshes for visualization
+ purposes, converting embedded faces into triangular representations suitable
+ for plotting libraries.
+"""
+
 function Jutul.triangulate_mesh(mesh::EmbeddedMesh; outer = false, flatten = true)
     m = mesh.unstructured_mesh
     D = Jutul.dim(mesh)

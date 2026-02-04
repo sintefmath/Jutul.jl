@@ -1,3 +1,9 @@
+"""
+    Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_centroids, face_areas, perm, faces, facepos)
+
+Compute half-face transmissibilities for finite volume discretization in
+embedded meshes.
+"""
 function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_centroids, face_areas, perm, faces, facepos)
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
