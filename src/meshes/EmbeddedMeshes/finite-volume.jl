@@ -157,7 +157,6 @@ function compute_intersection_trans_dfm(T_hf, N, intersections)
                 push!(counted, cj)
             end
         end
-        den = sum(values(den))
         T_ix ./= den
         append!(T, T_ix)
         append!(intersection_faces, ix_faces)
