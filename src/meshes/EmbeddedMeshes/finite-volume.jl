@@ -62,16 +62,12 @@ end
 function cell_normal(mesh::EmbeddedMesh, c)
     # TODO: check that faces are not paralell, consider using 
 
-    function get_face_vectors(mesh, face_u, face_v, cell)
-
-        nodes_u = mesh.faces.faces_to_nodes[face_u]
-        flip = umesh.faces.neighbors[face_u][1] != cell
-        nodes_u = flip ? reverse(nodes_u) : nodes_u
+    function get_face_vectors(mesh, face_u, entity_u, face_v, entity_v, cell)
+        nodes_u = get_face_nodes(mesh, face_u, entity_u, cell, true)
+        nodes_v = get_face_nodes(mesh, face_v, entity_v, cell)
+        pts = mesh.node_points
         u = pts[nodes_u[2]] - pts[nodes_u[1]]
-
-        nodes_v = mesh.faces.faces_to_nodes[face_v]
         nodes_v = setdiff(nodes_v, nodes_u)
-        
         if !isempty(nodes_v)
             v = pts[nodes_v[1]] - pts[nodes_u[1]] 
         else
@@ -82,14 +78,34 @@ function cell_normal(mesh::EmbeddedMesh, c)
 
     end
 
+    function get_face_nodes(mesh, face, entity::Faces, cell, check_dir=false)
+        nodes = mesh.faces.faces_to_nodes[face]
+        if check_dir
+            flip = mesh.faces.neighbors[face][1] != cell
+            flip ? reverse(nodes) : nodes
+        end
+        return nodes
+    end
+
+    function get_face_nodes(mesh, face, entity::BoundaryFaces, cell, check_dir=false)
+        nodes = mesh.boundary_faces.faces_to_nodes[face]
+        if check_dir
+            flip = mesh.boundary_faces.neighbors[face][1] != cell
+            flip ? reverse(nodes) : nodes
+        end
+        return nodes
+    end
+
     umesh = mesh.unstructured_mesh
     faces = umesh.faces.cells_to_faces[c]
-    @assert length(faces) >= 2
+    bfaces = umesh.boundary_faces.cells_to_faces[c]
+    @assert length(faces) + length(bfaces) >= 2
 
-    pts = umesh.node_points
+    entities = vcat(fill(Faces(), length(faces)), fill(BoundaryFaces(), length(bfaces)))
+    faces = vcat(faces, bfaces)
     num_faces = length(faces)
     for i = 1:num_faces-1
-        u,v = get_face_vectors(umesh, faces[i], faces[i+1], c)
+        u,v = get_face_vectors(umesh, faces[i], entities[i], faces[i+1], entities[i+1], c)
         if v === missing
             continue
         end
