@@ -87,7 +87,8 @@ function optimize_bound_constrained(
         ratio_thresholds = [0.25, 0.75],
         scale = false,
         output_hessian = false,
-        history = nothing
+        history = nothing,
+        use_new_line_search = true
     )
     
     # Negate f if we are maximizing
@@ -172,16 +173,34 @@ function optimize_bound_constrained(
         )
 
         if max_step > 0.0
-            # Perform line-search (from constrained_optimizer.jl)
-            u, v, g, lsinfo = line_search(
-                u0, v0, g0, d, f!;
-                wolfe1 = wolfe1,
-                wolfe2 = wolfe2,
-                safeguardFac = safeguard_fac,
-                stepIncreaseTol = step_increase_tol,
-                line_searchmax_it = line_searchmax_it,
-                maxStep = max_step
-            )
+            if !use_new_line_search
+                # Perform line-search (from constrained_optimizer.jl)
+                u, v, g, lsinfo = line_search(
+                    u0, v0, g0, d, f!;
+                    wolfe1 = wolfe1,
+                    wolfe2 = wolfe2,
+                    safeguardFac = safeguard_fac,
+                    stepIncreaseTol = step_increase_tol,
+                    line_searchmax_it = line_searchmax_it,
+                    maxStep = max_step
+                )
+            else
+                # Perform line-search (from inexact_line_search.jl)
+                success, u, v, g, lsinfo = inexact_line_search(
+                        u0, v0, g0, d, f!;
+                        max_it = line_searchmax_it,
+                        wolfe1 = wolfe1,
+                        wolfe2 = wolfe2,
+                        max_step_increase = step_increase_tol,
+                        max_step = max_step,
+                        step_diff_tol = safeguard_fac,
+                        verbosity = 1
+                )
+                if !success
+                    @warn("Line search not able to find improved objective value, ending optimization.")
+                    continue
+                end
+            end
             # predicted reduction in objective
             dobj_est = (u-u0)' * g0 + 0.5 * (u-u0)' * (H * (u-u0))
             dobj_true = v - v0

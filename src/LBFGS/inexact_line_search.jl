@@ -162,7 +162,7 @@ function inexact_line_search(u0, v0, g0, d, f;
         @warn("Line-search: No improvement found, returning initial point.")
     end
     print_end_message(verbosity, it, best_eval, wolfe_ok, at_max_step, max_it, msg)
-    info = (flag = wolfe_ok, step = best_eval.a, nits = it, values = values)
+    info = (flag = wolfe_ok, step = best_eval.a, nits = it, objVals = values)
     return (found_improvement, best_eval.u, best_eval.v, best_eval.g, info)
 end
 

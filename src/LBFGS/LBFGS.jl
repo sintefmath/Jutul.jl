@@ -6,4 +6,5 @@ module LBFGS
     include("limited_memory_hessian_legacy.jl")
     include("constrained_optimizer.jl")
     include("bound_constrained_optimizer.jl")
+    include("inexact_line_search.jl")
 end
