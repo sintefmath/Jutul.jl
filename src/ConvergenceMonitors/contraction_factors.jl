@@ -23,7 +23,7 @@ function compute_contraction_factor(distances, N_target)
     θ = exp.(num./den)
     # Compute target contraction to converge in N iterations
     θ_target = δ[end-1,:].^(-1/N_target)
-    N = -log(δ[end-1,:])./log(θ)
+    N = -log.(δ[end-1,:])./log.(θ)
     
     return θ, N, θ_target
 
