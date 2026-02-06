@@ -68,7 +68,7 @@ function Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMon
             d, _ = compute_distance(reports[k][:errors]; pools=:all)
             distances[k, :] .= d
         end
-        status, _, _, oscillating = analyze_step(distances, 1, 8, 0.1, 0.9)
+        status, _, _, oscillating = analyze_step(distances, 1, 8, 8, 0.1, 0.9, Inf)
         status = status[1]
         oscillating = oscillating[1]
 
