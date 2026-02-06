@@ -1,10 +1,9 @@
 function classify_iterate(distance, theta, theta_target, theta_slow, theta_fast;
-    oscillation=missing, N_left=missing)
+    oscillation=false, N_left=missing)
 
     # Shorthand notation
     θ, θt, θs, θf = theta, theta_target, theta_slow, theta_fast
-    osc = ismissing(oscillation) ? false : oscillation
-    its_ok = ismissing(N_left) ? true : N_left[1] <= N_left[2]
+    its_ok = ismissing(N_left) ? true : N_left[1] .<= N_left[2]
 
     # Check convergence for all distances
     conv = distance .<= 1.0
@@ -22,10 +21,10 @@ function classify_iterate(distance, theta, theta_target, theta_slow, theta_fast;
     status[conv] .= 1
     # Oscillating measures should be at most be classified as ok
     fast = status .== 1
-    status[fast .&& osc] .-= 1
+    status[fast .&& oscillation] .-= 1
     # If approximated number of iterations left is larger than prescribed max,
     # the corresponding measure shold be classified as bad
-    status[ok .&& .!its_ok] .+= 1
+    status[ok .&& .!its_ok] .-= 1
     
     @assert all([s ∈ (-1:1) for s in status])
 
@@ -72,7 +71,7 @@ function count_violations(status; strategy=:per_measure)
 
 end
 
-function analyze_step(distances, memory, target_its, theta_fast, theta_slow, N_max)
+function analyze_step(distances, memory, its_target, its_buffer, theta_fast, theta_slow, N_max)
 
     # Shorthand notation
     θf, θs = theta_fast, theta_slow
@@ -85,13 +84,14 @@ function analyze_step(distances, memory, target_its, theta_fast, theta_slow, N_m
         status = zeros(Int64, size(distances,2))
         return status, θ, θt, osc
     end
-    N_target = max(target_its-k,2)
+    N_target = max(its_target-k, its_buffer)
     δ = distances[max(k-memory,1):k, :]
     θ, N, θt = compute_contraction_factor(δ, N_target)
     # Check for oscillations
     osc = oscillation(distances[max(k-2,1):k,:])
     # Classify iterates
-    status = classify_iterate(δ[end,:], θ, θt, θs, θf, osc, (N, N_max))
+    status = classify_iterate(δ[end,:], θ, θt, θs, θf;
+        oscillation=osc, N_left=(N, N_max))
     # Return
     return status, θ, θt, osc
 
