@@ -9,9 +9,10 @@
     # Number of iterations to use for computing contraction factor metrics
     memory = 1
     # Target number of nonlinear iterations for the timestep
-    target_iterations = 8
+    iteration_target = 8
+    iteration_buffer = 2
     # Max number of estimated iterations left for iterate to be classified as ok
-    max_iterations_left = 2*target_iterations
+    max_iterations_left = 2*iteration_target
     # Contraction factor parameters
     slow = 0.9
     fast = 0.1
@@ -30,15 +31,15 @@ config. The function also adjusts the maximum number of nonlinear iterations (to
 """
 function set_convergence_monitor_cutting_criterion!(config; max_nonlinear_iterations = 50, kwargs...)
 
-    target_iterations = 8
+    iteration_target = 8
     for sel in config[:timestep_selectors]
         if sel isa IterationTimestepSelector
-            target_iterations = sel.target
+            iteration_target = sel.target
             break
         end
     end
     cc = ConvergenceMonitorCuttingCriterion(; 
-    target_iterations = target_iterations, kwargs...)
+    iteration_target = iteration_target, kwargs...)
     config[:cutting_criterion] = cc
     config[:max_nonlinear_iterations] = max_nonlinear_iterations
 
@@ -94,7 +95,7 @@ end
 
 function analyze_step(distances, cc::ConvergenceMonitorCuttingCriterion)
 
-    return analyze_step(distances, cc.memory, cc.target_iterations, cc.fast, cc.slow, cc.max_iterations_left)
+    return analyze_step(distances, cc.memory, cc.iteration_target, cc.iteration_buffer, cc.fast, cc.slow, cc.max_iterations_left)
 
 end
 
