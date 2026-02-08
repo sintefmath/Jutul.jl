@@ -21,18 +21,26 @@ Partial translation/improvement of the MRST function `optimizeBoundConstrained`.
 - `history::Any=nothing`: For warm starting based on previous optimization (requires `output_hessian=true`)
 
 ## Stopping Criteria
-- `grad_tol::Float64=1e-3`: Absolute tolerance of inf-norm of projected gradient
-- `grad_rel_tol::Float64=-Inf`: Relative gradient tolerance
-- `obj_change_tol::Float64=5e-4`: Absolute objective update tolerance
-- `obj_change_tol_rel::Float64=-Inf`: Relative objective change tolerance
+- `grad_tol::Float64=-Inf`: Absolute tolerance of inf-norm of projected gradient
+- `grad_rel_tol::Float64=1.0e-4`: Relative gradient tolerance (sets `grad_tol` if finite)
+- `obj_tol::Float64=-Inf`: Absolute tolerance on objective value (returns if abs(objective) < tol)
+- `obj_rel_tol::Float64=1e-4`: Relative tolerance on objective value (sets `obj_tol` if finite)
+- `obj_change_tol::Float64=-Inf`: Absolute tolerance on objective change between iterations
+- `obj_change_tol_rel::Float64=1.0e-7`: Relative tolerance on objective change (sets `obj_change_tol` if finite)
 - `max_it::Int=25`: Maximum number of iterations
+- Line search failure also triggers termination (after Hessian reset attempts)
 
-## Line Search Options
-- `line_searchmax_it::Int=5`: Maximum number of line-search iterations
-- `step_increase_tol::Float64=10.0`: Maximum step increase factor between line search iterations
-- `wolfe1::Float64=1e-4`: Objective improvement condition
-- `wolfe2::Float64=0.9`: Gradient reduction condition
-- `safeguard_fac::Float64=1e-5`: Safeguard factor for line search
+## Line Search Options)
+- `use_new_line_search::Bool=false`: Whether to use new line search implementation (from inexact_line_search.jl) 
+   or old one (from constrained_optimizer.jl). Some options are only relevant for the new line search.
+- `ls_max_it::Int=5`: Maximum number of line-search iterations
+- `ls_wolfe1::Float64=1e-4`: Objective improvement condition (Wolfe condition 1)
+- `ls_wolfe2::Float64=0.9`: Gradient reduction condition (Wolfe condition 2)
+- `ls_max_step_increase::Float64=10.0`: Maximum step increase factor between line search iterations
+- `ls_step_diff_tol::Float64=1e-3`: Step difference tolerance for line search
+- `ls_reduction_factor_failure::Float64=0.3`: Reduction factor applied on line search failure
+- `ls_verbosity::Int=1`: Verbosity level for line search output
+- `ls_safeguard_fac::Float64=1e-5`: Safeguard factor for line search
 
 ## Hessian Approximation (L-BFGS)
 - `lbfgs_num::Int=5`: Number of vector-pairs stored for L-BFGS
@@ -65,16 +73,21 @@ function optimize_bound_constrained(
         maximize = false,
         step_init = NaN,
         max_initial_update = 0.1,
-        grad_tol = 1.0e-3,
-        grad_rel_tol = -Inf,
-        obj_change_tol = 5.0e-4,
-        obj_change_tol_rel = -Inf,
+        obj_tol = -Inf,
+        obj_rel_tol = 1e-4,
+        grad_tol = -Inf,
+        grad_rel_tol = 1.0e-4,
+        obj_change_tol = -Inf,
+        obj_change_tol_rel = 1.0e-7,
         max_it = 25,
-        line_searchmax_it = 5,
-        wolfe1 = 1.0e-4,
-        wolfe2 = 0.9,
-        safeguard_fac = 1.0e-5,
-        step_increase_tol = 10.0,
+        ls_max_it = 5,
+        ls_wolfe1 = 1.0e-4,
+        ls_wolfe2 = 0.9,
+        ls_max_step_increase = 10.0,
+        ls_step_diff_tol = 1.0e-4,
+        ls_reduction_factor_failure = 0.3,
+        ls_verbosity = 1,
+        ls_safeguard_fac = 1.0e-5,
         max_it_qp = 250,
         active_chunk_tol = sqrt(eps()),
         lbfgs_num = 5,
@@ -88,7 +101,7 @@ function optimize_bound_constrained(
         scale = false,
         output_hessian = false,
         history = nothing,
-        use_new_line_search = true
+        use_new_line_search = false
     )
     
     # Negate f if we are maximizing
@@ -131,6 +144,9 @@ function optimize_bound_constrained(
         if isfinite(grad_rel_tol) && grad_rel_tol > 0
             grad_tol = min(grad_rel_tol * norm(g0, Inf), grad_tol)
         end
+        if isfinite(obj_rel_tol) && obj_rel_tol > 0
+            obj_tol = min(obj_rel_tol * abs(v0), obj_tol)
+        end
         # Initialize trust region radius
         r_trust = trust_region_init
         if use_trust_region && isnan(r_trust)
@@ -158,7 +174,11 @@ function optimize_bound_constrained(
     v, u, g = v0, copy(u0), copy(g0)
     n_active = 0
     success = false
-    while !success
+    stop_flags = Dict(:grad => false, :obj_change => false, :obj => false,
+                      :ls_fail => false, :maxit => false)
+    stop_tols = (grad = grad_tol, obj_change = obj_change_tol, obj = obj_tol, 
+                 ls_fail = true, maxit = max_it)
+    while !any(values(stop_flags))
         it += 1
         # Determine current bounds based on trust region
         if !use_trust_region
@@ -167,39 +187,47 @@ function optimize_bound_constrained(
             lb_cur, ub_cur = incorporate_trust_region(u0, r_trust, lb, ub)
         end
         # Get search direction by solving QP problem
-        d, H, H_prev, pg, max_step, qpinfo = get_search_direction_qp!(
+        d, H, H_prev, pg, ls_max_step, qpinfo = get_search_direction_qp!(
             u0, g0, H, H_prev, lb_cur, ub_cur,
             grad_tol, max_it_qp, active_chunk_tol
         )
 
-        if max_step > 0.0
+        if ls_max_step > 0.0
             if !use_new_line_search
                 # Perform line-search (from constrained_optimizer.jl)
                 u, v, g, lsinfo = line_search(
                     u0, v0, g0, d, f!;
-                    wolfe1 = wolfe1,
-                    wolfe2 = wolfe2,
-                    safeguardFac = safeguard_fac,
-                    stepIncreaseTol = step_increase_tol,
-                    line_searchmax_it = line_searchmax_it,
-                    maxStep = max_step
+                    wolfe1 = ls_wolfe1,
+                    wolfe2 = ls_wolfe2,
+                    safeguardFac = ls_safeguard_fac,
+                    stepIncreaseTol = ls_max_step_increase,
+                    line_searchmax_it  = ls_max_it,
+                    maxStep = ls_max_step
                 )
+                ls_success = v < v0*(1 - 100*eps()) # somewhat ad-hoc
             else
                 # Perform line-search (from inexact_line_search.jl)
-                success, u, v, g, lsinfo = inexact_line_search(
+                ls_success, u, v, g, lsinfo = inexact_line_search(
                         u0, v0, g0, d, f!;
-                        max_it = line_searchmax_it,
-                        wolfe1 = wolfe1,
-                        wolfe2 = wolfe2,
-                        max_step_increase = step_increase_tol,
-                        max_step = max_step,
-                        step_diff_tol = safeguard_fac,
-                        verbosity = 1
+                        max_it = ls_max_it,
+                        wolfe1 = ls_wolfe1,
+                        wolfe2 = ls_wolfe2,
+                        max_step_increase = ls_max_step_increase,
+                        max_step = ls_max_step,
+                        step_diff_tol = ls_step_diff_tol,
+                        verbosity = ls_verbosity,
+                        reduction_factor_failure = ls_reduction_factor_failure
                 )
-                if !success
-                    @warn("Line search not able to find improved objective value, ending optimization.")
-                    continue
+            end
+            if !ls_success
+                # reset hessian approximation (if we haven't already tried this) and retry line search
+                if !(H.it_count == 0)
+                    H = reset!(H)
+                    @warn("Line search failed, resetting Hessian approximation and restarting iteration.")
+                else
+                    stop_flags[:ls_fail] = true
                 end
+                continue
             end
             # predicted reduction in objective
             dobj_est = (u-u0)' * g0 + 0.5 * (u-u0)' * (H * (u-u0))
@@ -241,19 +269,23 @@ function optimize_bound_constrained(
         end
         obj_info = (v = obj_sign * v, pg = norm(pg, Inf), n_active = n_active)
         info = update_info!(info; obj_info = obj_info, qp_info = qpinfo, ls_info = lsinfo, tr_info = tr_info)
+        
         # Check stopping criteria
-        success = (it >= max_it) || 
-                  (norm(pg, Inf) < grad_tol) || 
-                  (abs(v - v0) < obj_change_tol)
+        stop_flags[:grad] = norm(pg, Inf) < stop_tols.grad
+        stop_flags[:obj] = abs(v) < stop_tols.obj
+        stop_flags[:obj_change] = abs(v - v0) < stop_tols.obj_change
+        stop_flags[:maxit] = it >= stop_tols.maxit
+        stop_flags[:ls_fail] = !ls_success
         # Reset for next iteration
         v0, u0, g0 = v, copy(u), copy(g)
+        
         print_info_step(info)
     end
     
     if scale
         u = u .* (ub .- lb) .+ lb
     end
-    
+    print_end_message(stop_flags, stop_tols, info)
     return (v, u, info)
 end
 
@@ -454,9 +486,12 @@ function find_next_bounds(u, d, active, lb, ub, tol)
     # Find maximum step size before hitting next bound
     s_max, ix_min = findmin(s)
     # Check for other bounds hitting at same time (within tolerance)
-    if s_max <= 1
-        ix = findall(s .<= s_max * (1 + tol))
+    if s_max <= 1 && isfinite(s_max)
+        ix = findall(s .<= (s_max + tol))
         # Select maximum (i.e., all become active/violated)
+        if isempty(ix)
+            println("s_max: ", s_max, "ix_min: ", ix_min)
+        end
         s_max = maximum(s[ix])
     else
         ix = [ix_min]
@@ -547,6 +582,31 @@ function print_info_step(info; it = length(info)-1)
             obj_info.pg, tr_info.rho, qp_info.rough_solve.nits, qp_info.active_set.nits , obj_info.n_active)
 end
 
+function print_end_message(stop_flags, stop_tols, info)
+    @printf("\n*** Optimization stopped: ")
+    if stop_flags[:maxit]
+        @printf("maximum iterations (%d) reached. ***\n\n", stop_tols.maxit)
+    elseif stop_flags[:grad]
+        pg = info[end].obj_info.pg
+        pg0 = info[1].obj_info.pg
+        @printf("projected gradient norm %.2e < %.2e (relative %.2e < %.2e). ***\n\n", 
+                pg, stop_tols.grad, pg/pg0, stop_tols.grad/pg0)
+    elseif stop_flags[:obj_change]
+        dobj = abs(info[end].obj_info.v - info[end-1].obj_info.v)
+        obj0 = info[1].obj_info.v
+        @printf("objective change %.2e < %.2e (relative %.2e < %.2e). ***\n\n", 
+                dobj, stop_tols.obj_change, dobj/obj0, stop_tols.obj_change/obj0    )
+    elseif stop_flags[:obj]
+        obj0 = info[1].obj_info.v
+        obj = info[end].obj_info.v
+        @printf("objective value %.2e < %.2e (relative %.2e < %.2e). ***\n\n", 
+                obj, stop_tols.obj, obj/obj0, stop_tols.obj/obj0)
+    elseif stop_flags[:ls_fail]
+        @printf("line search failed to find improvement in objective. ***\n\n")
+    else
+        @printf("??? unknown reason ??? *** \n\n")
+    end
+end
 
 """
 Only for testing purposes with general (non-BFGS) Hessians 
