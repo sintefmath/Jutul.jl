@@ -22,11 +22,11 @@ moderately noisy/inaccurate function values/gradients.
                         trial step is forced to be step_diff_tol away from existing evaluated points.
                         Function will return if bracketing interval becomes smaller 2x this tolerance.
 - `value_diff_tol=sqrt(eps())`: Relative tolerance for considering function values equal
-- `reduction_factor_failure=0.25`: Factor by which to reduce step size on failed a evaluation
+- `reduction_factor_failure=0.25`: Factor by which to reduce step size on failed evaluation
                                    NOTE: if failure occurs after successful improvement, we return 
                                    the best found evaluation instead of reducing step size
-- `verbosity=2`: Verbosity level : 0=silent, 
-                                   1=minimal : only prints output from iteration 2 and onwards
+- `verbosity=1`: Verbosity level : 0=silent, only prints warnings
+                                   1=minimal : only prints warnings and output from iteration 2 and onwards
                                    2=detailed : prints all iterations and line-search messages
 
 # Returns
@@ -41,22 +41,22 @@ moderately noisy/inaccurate function values/gradients.
   - `values`: Vector of all objective values evaluated
 
 # Description
-The algorithm attempts to find a step size α satisfying the strong Wolfe conditions:
-1. Sufficient decrease: f(u0 + α*d) ≤ f(u0) + wolfe1*α*d'*g0
-2. Curvature: |d'*g(u0 + α*d)| ≤ wolfe2*|d'*g0|
+The algorithm attempts to find a step size a satisfying the strong Wolfe conditions:
+1. Sufficient decrease: f(u0 + a*d) ≤ f(u0) + wolfe1*a*d'*g0
+2. Curvature: |d'*g(u0 + a*d)| ≤ wolfe2*|d'*g0|
 
 The search uses bracketing with cubic and/or quadratic polynomial interpolation/extrapolation
-roughly following (More & Thuente 94) to efficiently locate acceptable step sizes. 
-If function evaluations fail or Wolfe conditions cannot be satisfied within max_it, 
-the algorithm returns the best evaluation found so far.
+roughly following (More & Thuente, 94) to efficiently locate acceptable step sizes. 
+If function evaluations fail or Wolfe conditions cannot be satisfied within [0, max_step] or
+within max_it iterations, the best evaluation found so far is returned.
 
 # Notes
 - The search direction d must satisfy d'*g0 < 0 (descent direction)
-- If no improvement is found, returns the initial point with found_improvement=false
+- If no improvement is found, initial point is returned with found_improvement=false
 - Handles non-finite function values by reducing step size or returning early if
-  improvement has already been found.
+  improvement has already been found for another step size.
 - The algorithm is hopefully quite robust wrt slightly noisy/inaccurate function evaluations
-  and gradients
+  and gradients, but this can be investigated further
 """
 
 function inexact_line_search(u0, v0, g0, d, f;
@@ -111,9 +111,10 @@ function inexact_line_search(u0, v0, g0, d, f;
             # update p_max with v, g
             p_max = p
         end
-        print_iteration(verbosity, it, p; wolfe = [w1(p), w2(p)])
+        is_wolfe1, is_wolfe2 = w1(p), w2(p)
+        print_iteration(verbosity, it, p; wolfe = [is_wolfe1, is_wolfe2])
         # check Wolfe conditions
-        if w1(p) && w2(p)
+        if is_wolfe1 && is_wolfe2
             ls_done, wolfe_ok = true, true
             continue
         end
@@ -125,7 +126,7 @@ function inexact_line_search(u0, v0, g0, d, f;
         end
         # update bracketing points
         if p.a > p2.a + step_diff_tol
-            # extrapolation (p2 has been evaluated)
+            # extrapolation (p2 has been evaluated and p2.v < p1.v)
             p1, p2 = p2, p
         elseif p.v > p1.v || !isfinite(p2.v)
             # if p2 not evaluated yet, always set p2 = p so we can interpolate/extrapolate
@@ -168,7 +169,7 @@ end
 
 
 function next_step(p1, p2, p_max, step_diff_tol)
-    # assumes both p1 and p2 have been evaluated successfully, not p_max unless p2 == p_max
+    # assumes both p1 and p2 have been evaluated successfully, not neccarily p_max
     @assert isfinite(p1.v) && isfinite(p2.v) "Line search: next_step called with unevaluated points."
     # we scale to O(1):
     # g(s) = (f(a1 + s*(a2-a1)) - f(a1)) / ((a2-a1)|g1|), s in [0,1]
@@ -181,7 +182,7 @@ function next_step(p1, p2, p_max, step_diff_tol)
     if ps2.v >= 0 || ps2.g >= 0
         # interpolation within p1 and p2
         if ps2.v >= 0 
-            a = unscale_arg( min(cubicmin(ps2), quadmin1(ps2)) )
+            a = unscale_arg( max(cubicmin(ps2), quadmin1(ps2)) )
         else #ps2.g >= 0 && ps2.v < 0
             a = unscale_arg( max(cubicmin(ps2), quadmin2(ps2)) )
         end
@@ -193,12 +194,12 @@ function next_step(p1, p2, p_max, step_diff_tol)
             end
         end
     else
-        # extrapolation above p2, be more careful (p2 has been evaluated, but not p_max)
+        # extrapolation above p2, be more careful (p2 has been evaluated, but probably not p_max)
         if ps2.g > -1 + sqrt(eps())
             # flattening out, might have cubic minimum, but choose to trust quadratic more
             a = unscale_arg(quadmin2(ps2))
         else 
-            # gradient is getting steeper, take maximal allowed step
+            # gradient is getting steeper, try maximal allowed step
             a = p_max.a
         end
         if a > p_max.a - step_diff_tol || !isfinite(a)
@@ -213,7 +214,7 @@ function next_step(p1, p2, p_max, step_diff_tol)
                 a = p_max.a
             end
         else
-            # check if we're too close to p2 
+            # check that we're not too close to p2 
             if a < p2.a + step_diff_tol
                 a, msg = ad_hoc_step(p2, p_max, step_diff_tol)
                 if !isfinite(a)
@@ -312,9 +313,9 @@ function print_iteration(verbosity, it, p; wolfe = [nothing, nothing])
         return
     end
     if isnothing(wolfe[1]) || isnothing(wolfe[2])
-        @printf("  Line-search - %2d | step = %6.3f | v = %11.3e | dvdd = %11.3e \n", it, p.a, p.v, p.g)
+        @printf("  Line-search - %2d | step = %6.3e | v = %11.3e | dvdd = %11.3e \n", it, p.a, p.v, p.g)
     else
-        @printf("  Line-search - %2d | step = %6.3f | v = %11.3e | dvdd = %11.3e | wolfe ( %1d, %1d)\n", it, p.a, p.v, p.g, wolfe[1], wolfe[2])
+        @printf("  Line-search - %2d | step = %6.3e | v = %11.3e | dvdd = %11.3e | wolfe ( %1d, %1d)\n", it, p.a, p.v, p.g, wolfe[1], wolfe[2])
     end
 end
 
