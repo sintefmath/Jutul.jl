@@ -71,17 +71,13 @@ function find_jac_position(
         number_of_equations_for_entity = eqs_per_entity
     ) where T<:BlockMajorLayout
 
-    @assert source_entity_offset == 0
     # TODO: The use of N needs reworking if backend is to be used for
     # rectangular blocks.
     N = partials_per_entity
 
-    row = target_entity_index + row_offset
-    col = source_entity_index + column_offset
+    row = target_entity_index + target_entity_offset + row_offset
+    col = source_entity_index + source_entity_offset + column_offset
     inner_layout = EntityMajorLayout()
-    
-    partial_index += (source_entity_offset ÷ nentities_source)
-    equation_index += (target_entity_offset ÷ nentities_target)
 
     adjoint_layout = represented_as_adjoint(row_layout)
     if adjoint_layout
