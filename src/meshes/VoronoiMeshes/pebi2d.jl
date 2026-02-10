@@ -283,7 +283,14 @@ function _clip_polygon_by_line_2d(vertices, line_p1, line_p2, center)
     normal = SVector{2, Float64}(-line_dir[2], line_dir[1])  # Perpendicular to line
     
     # Determine which side of the line the center is on
-    center_side = dot(center - line_p1, normal)
+    center_dist = dot(center - line_p1, normal)
+    
+    # If center is very close to or on the constraint line, don't clip
+    # These are the constraint points themselves
+    tol = 1e-10
+    if abs(center_dist) < tol
+        return vertices
+    end
     
     # Clip polygon using Sutherland-Hodgman algorithm
     clipped = SVector{2, Float64}[]
@@ -298,8 +305,9 @@ function _clip_polygon_by_line_2d(vertices, line_p1, line_p2, center)
         d2 = dot(v2 - line_p1, normal)
         
         # Check if vertices are on the same side as center
-        v1_inside = (d1 * center_side >= 0)
-        v2_inside = (d2 * center_side >= 0)
+        # Allow vertices to be exactly on the line (within tolerance)
+        v1_inside = (d1 * center_dist >= -tol * abs(center_dist))
+        v2_inside = (d2 * center_dist >= -tol * abs(center_dist))
         
         if v1_inside
             push!(clipped, v1)
