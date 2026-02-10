@@ -53,6 +53,53 @@ using Jutul
         @test number_of_cells(mesh) >= 15
     end
     
+    @testset "2D PEBI mesh constraint enforcement" begin
+        # Test that constraints are actually enforced
+        # Create points on both sides of a vertical line at x=0.5
+        points = [0.2 0.8 0.2 0.8;
+                  0.2 0.2 0.8 0.8]
+        constraint = ([0.5, 0.0], [0.5, 1.0])  # Vertical line at x=0.5
+        
+        mesh = Jutul.VoronoiMeshes.PEBIMesh2D(points, constraints=[constraint])
+        
+        @test mesh isa UnstructuredMesh
+        
+        # Get geometry
+        geo = tpfv_geometry(mesh)
+        
+        # Check that no cell straddles the constraint line
+        # All cell vertices should be on one side of x=0.5 or the other
+        for cell_idx in 1:number_of_cells(mesh)
+            # Get cell vertices by collecting vertices from all faces
+            cell_vertices = Set{Int}()
+            
+            # Internal faces
+            for face_idx in mesh.faces.cells_to_faces[cell_idx]
+                for node_idx in mesh.faces.faces_to_nodes[face_idx]
+                    push!(cell_vertices, node_idx)
+                end
+            end
+            
+            # Boundary faces
+            for face_idx in mesh.boundary_faces.cells_to_faces[cell_idx]
+                for node_idx in mesh.boundary_faces.faces_to_nodes[face_idx]
+                    push!(cell_vertices, node_idx)
+                end
+            end
+            
+            # Check x-coordinates of all vertices
+            x_coords = [mesh.node_points[v][1] for v in cell_vertices]
+            
+            # All vertices should be on one side of 0.5, or exactly on 0.5
+            tol = 1e-8
+            all_left = all(x <= 0.5 + tol for x in x_coords)
+            all_right = all(x >= 0.5 - tol for x in x_coords)
+            
+            # At least one should be true (cell doesn't straddle the constraint)
+            @test all_left || all_right
+        end
+    end
+    
     @testset "2D PEBI mesh with high coordinate variation" begin
         # Test with points that have high coordinate variation
         points = [0.0 1000.0 500.0 250.0; 

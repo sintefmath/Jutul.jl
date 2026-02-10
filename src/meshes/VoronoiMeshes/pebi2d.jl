@@ -135,7 +135,7 @@ function _generate_voronoi_2d(pts, bb, constraint_edges)
     cells = []
     
     for i in 1:npts
-        cell_vertices = _compute_voronoi_cell_2d(i, pts, bb)
+        cell_vertices = _compute_voronoi_cell_2d(i, pts, bb, constraint_edges)
         if !isempty(cell_vertices)
             push!(cells, (center_idx=i, vertices=cell_vertices))
         end
@@ -147,7 +147,7 @@ end
 """
 Compute the Voronoi cell for a single point
 """
-function _compute_voronoi_cell_2d(idx, pts, bb)
+function _compute_voronoi_cell_2d(idx, pts, bb, constraint_edges)
     ((xmin, xmax), (ymin, ymax)) = bb
     center = pts[idx]
     
@@ -165,6 +165,17 @@ function _compute_voronoi_cell_2d(idx, pts, bb)
             continue
         end
         vertices = _clip_polygon_by_bisector_2d(vertices, center, pts[j])
+        if isempty(vertices)
+            break
+        end
+    end
+    
+    # Clip by constraint lines
+    # Constraints act as hard boundaries that cells cannot cross
+    for (idx1, idx2) in constraint_edges
+        p1 = pts[idx1]
+        p2 = pts[idx2]
+        vertices = _clip_polygon_by_line_2d(vertices, p1, p2, center)
         if isempty(vertices)
             break
         end
@@ -251,6 +262,62 @@ function _clip_polygon_by_bisector_2d(vertices, p1, p2)
             t = d1 / (d1 - d2)
             intersection = v1 + t * (v2 - v1)
             push!(clipped, intersection)
+        end
+    end
+    
+    return clipped
+end
+
+"""
+Clip a polygon by a constraint line
+The polygon is clipped to keep only the part on the same side as the center point
+"""
+function _clip_polygon_by_line_2d(vertices, line_p1, line_p2, center)
+    if isempty(vertices)
+        return vertices
+    end
+    
+    # Define the constraint line using point and normal
+    # Normal points to the left of the line direction (p1 -> p2)
+    line_dir = line_p2 - line_p1
+    normal = SVector{2, Float64}(-line_dir[2], line_dir[1])  # Perpendicular to line
+    
+    # Determine which side of the line the center is on
+    center_side = dot(center - line_p1, normal)
+    
+    # Clip polygon using Sutherland-Hodgman algorithm
+    clipped = SVector{2, Float64}[]
+    n = length(vertices)
+    
+    for i in 1:n
+        v1 = vertices[i]
+        v2 = vertices[mod1(i + 1, n)]
+        
+        # Distance from line (positive on same side as normal, negative on other side)
+        d1 = dot(v1 - line_p1, normal)
+        d2 = dot(v2 - line_p1, normal)
+        
+        # Check if vertices are on the same side as center
+        v1_inside = (d1 * center_side >= 0)
+        v2_inside = (d2 * center_side >= 0)
+        
+        if v1_inside
+            push!(clipped, v1)
+        end
+        
+        # If edge crosses the constraint line, add intersection point
+        if v1_inside != v2_inside
+            # Compute intersection with line
+            # Parametric line: v1 + t*(v2 - v1)
+            # Line equation: dot(point - line_p1, normal) = 0
+            # Solve: dot(v1 + t*(v2-v1) - line_p1, normal) = 0
+            denom = dot(v2 - v1, normal)
+            if abs(denom) > 1e-14
+                t = dot(line_p1 - v1, normal) / denom
+                t = clamp(t, 0.0, 1.0)  # Ensure t is in [0, 1]
+                intersection = v1 + t * (v2 - v1)
+                push!(clipped, intersection)
+            end
         end
     end
     
