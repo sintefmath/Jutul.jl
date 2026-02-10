@@ -19,8 +19,9 @@ The 3D PEBI mesh is a 3D Voronoi diagram where each input point becomes a cell c
 The mesh is bounded by the specified or computed bounding box. Each Voronoi cell is computed
 by intersecting half-spaces defined by perpendicular bisector planes between neighboring points.
 
-This implementation uses a simplified algorithm that works well for moderate point counts (< 100 points).
-For larger or more complex meshes, consider using specialized Voronoi libraries.
+This implementation uses half-space intersection with proper edge-plane intersection handling.
+It works well for point counts up to several hundred points. For very large or complex meshes,
+consider using specialized Voronoi libraries for better performance.
 
 # Examples
 ```julia
@@ -30,8 +31,8 @@ points = [0.0 1.0 0.0 1.0 0.0 1.0 0.0 1.0;
           0.0 0.0 0.0 0.0 1.0 1.0 1.0 1.0]
 mesh = Jutul.VoronoiMeshes.PEBIMesh3D(points)
 
-# Random points (keep count moderate for best performance)
-points = rand(3, 20)
+# Random points (works well up to several hundred points)
+points = rand(3, 100)
 mesh = Jutul.VoronoiMeshes.PEBIMesh3D(points)
 ```
 """
@@ -199,29 +200,53 @@ end
 """
 Clip a convex polyhedron by a half-space (keep side where (v - point) · normal >= 0).
 
-Note: This is a simplified implementation that only keeps vertices on the correct side.
-A full implementation would also add edge-plane intersection points, but that requires
-maintaining edge connectivity which is complex for arbitrary polyhedra. This simplified
-version works well for PEBI mesh generation where we start with a simple cube and
-iteratively clip it.
+This implementation properly handles edge-plane intersections to ensure vertices
+are added where edges cross the clipping plane. This is essential for correctness
+when clipping by many planes (e.g., 100 points means 99 clips per cell).
 """
 function _clip_polyhedron_by_halfspace_3d(vertices, point, normal)
     if isempty(vertices)
         return vertices
     end
     
-    # Simplified approach: keep only vertices on the correct side of the plane
-    # This works because:
-    # 1. We start with a simple cube (8 vertices, well-defined edges)
-    # 2. Each clip operation removes some vertices
-    # 3. The intersection of half-spaces still produces a convex polyhedron
-    # 4. The remaining vertices define the clipped polyhedron
+    # Classify vertices as inside (>=0) or outside (<0) the half-space
+    distances = [dot(v - point, normal) for v in vertices]
     
+    # Keep vertices on the correct side
     kept_vertices = SVector{3, Float64}[]
-    
-    for v in vertices
-        if dot(v - point, normal) >= -GEOMETRIC_TOLERANCE_3D
+    for (i, v) in enumerate(vertices)
+        if distances[i] >= -GEOMETRIC_TOLERANCE_3D
             push!(kept_vertices, v)
+        end
+    end
+    
+    # For convex polyhedra, we need to add intersection points where edges cross the plane
+    # Generate all possible edges by checking pairs (this is a simple but O(n²) approach)
+    # For a convex polyhedron with n vertices, we check all pairs as potential edges
+    n = length(vertices)
+    for i in 1:n
+        for j in (i+1):n
+            d_i = distances[i]
+            d_j = distances[j]
+            
+            # Check if edge crosses the plane (one vertex inside, one outside)
+            if (d_i >= -GEOMETRIC_TOLERANCE_3D && d_j < -GEOMETRIC_TOLERANCE_3D) ||
+               (d_i < -GEOMETRIC_TOLERANCE_3D && d_j >= -GEOMETRIC_TOLERANCE_3D)
+                
+                # Compute intersection point
+                # Edge: v_i + t * (v_j - v_i)
+                # Plane: dot((v_i + t * (v_j - v_i)) - point, normal) = 0
+                # Solving for t: t = -d_i / (d_j - d_i)
+                t = -d_i / (d_j - d_i)
+                t = clamp(t, 0.0, 1.0)  # Ensure t is in [0, 1]
+                
+                intersection = vertices[i] + t * (vertices[j] - vertices[i])
+                
+                # Only add if not already present (within tolerance)
+                if !any(v -> norm(v - intersection) < GEOMETRIC_TOLERANCE_3D, kept_vertices)
+                    push!(kept_vertices, intersection)
+                end
+            end
         end
     end
     

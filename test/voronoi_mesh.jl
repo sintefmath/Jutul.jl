@@ -215,6 +215,21 @@ using Random
         @test all(geo.volumes .> 0)
     end
     
+    @testset "3D larger point set (100 points)" begin
+        # Test with 100 points to ensure algorithm handles larger sets
+        Random.seed!(125)
+        points = rand(3, 100)
+        
+        mesh = PEBIMesh3D(points)
+        
+        @test mesh isa UnstructuredMesh
+        @test number_of_cells(mesh) == 100
+        
+        # Verify positive volumes
+        geo = tpfv_geometry(mesh)
+        @test all(geo.volumes .> 0)
+    end
+    
     @testset "3D Custom bbox" begin
         points = rand(3, 5) .* 100 .+ 500
         bbox = ((490.0, 610.0), (490.0, 610.0), (490.0, 610.0))
