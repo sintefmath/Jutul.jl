@@ -1,3 +1,7 @@
+# Module-level constants for geometric operations
+const GEOMETRIC_TOLERANCE = 1e-9
+const EDGE_MIDPOINT_THRESHOLD = 0.5
+
 """
     PEBIMesh2D(points; bbox=nothing)
 
@@ -804,9 +808,6 @@ function _split_cell_two_points(vertices, int_pt1, int_pt2)
         return []
     end
     
-    # Threshold for determining if intersection is past edge midpoint
-    const EDGE_MIDPOINT_THRESHOLD = 0.5
-    
     # Find where int_pt1 and int_pt2 lie on the cell boundary
     n = length(vertices)
     idx1 = -1
@@ -814,7 +815,7 @@ function _split_cell_two_points(vertices, int_pt1, int_pt2)
     t1 = 0.0
     t2 = 0.0
     
-    tol = 1e-9
+    tol = GEOMETRIC_TOLERANCE
     
     for i in 1:n
         v1 = vertices[i]
