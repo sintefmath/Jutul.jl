@@ -590,23 +590,324 @@ Cells with only 1 edge intersection require special handling and are split into 
 The line segment becomes interior faces in the resulting mesh (not boundary faces).
 """
 function insert_line_segment(mesh::UnstructuredMesh, line_p1, line_p2)
-    # TODO: Implement full cell splitting logic
-    # For now, return a placeholder that shows the intersected faces
+    # Convert line points to SVectors
+    p1 = SVector{2, Float64}(line_p1[1], line_p1[2])
+    p2 = SVector{2, Float64}(line_p2[1], line_p2[2])
     
-    intersections = find_intersected_faces(mesh, line_p1, line_p2)
+    # Find all faces intersected by the line segment
+    intersections = find_intersected_faces(mesh, p1, p2)
     
     if isempty(intersections)
         @info "No faces intersected by line segment"
         return mesh
     end
     
-    @info "Found $(length(intersections)) intersected faces"
-    for (i, inter) in enumerate(intersections)
-        @info "  Face $(i): idx=$(inter.face_idx), t=$(inter.t), boundary=$(inter.is_boundary)"
+    # Extract mesh data
+    cells_to_faces = mesh.faces.cells_to_faces
+    faces_to_nodes = mesh.faces.faces_to_nodes
+    face_neighbors = mesh.faces.neighbors
+    boundary_cells_to_faces = mesh.boundary_faces.cells_to_faces
+    boundary_faces_to_nodes = mesh.boundary_faces.faces_to_nodes
+    boundary_cells = mesh.boundary_faces.neighbors
+    node_points = mesh.node_points
+    
+    # Identify cells that are crossed by the line segment
+    crossed_cells = Set{Int}()
+    for inter in intersections
+        if !inter.is_boundary
+            l, r = face_neighbors[inter.face_idx]
+            push!(crossed_cells, l)
+            push!(crossed_cells, r)
+        else
+            # Boundary face - only one cell
+            push!(crossed_cells, boundary_cells[inter.face_idx])
+        end
+    end
+    crossed_cells = sort(collect(crossed_cells))
+    
+    # Build new mesh with split cells
+    new_cells_data = []
+    old_to_new_cells = Dict{Int, Vector{Int}}()
+    
+    nc = length(cells_to_faces)
+    next_cell_idx = 1
+    
+    for cell_idx in 1:nc
+        if cell_idx in crossed_cells
+            # Split this cell
+            split_cells = _split_cell_by_line_segment(
+                cell_idx, mesh, p1, p2, intersections
+            )
+            old_to_new_cells[cell_idx] = collect(next_cell_idx:(next_cell_idx + length(split_cells) - 1))
+            for split_cell in split_cells
+                push!(new_cells_data, split_cell)
+            end
+            next_cell_idx += length(split_cells)
+        else
+            # Keep original cell
+            old_to_new_cells[cell_idx] = [next_cell_idx]
+            # Extract cell vertices
+            vertices = _get_cell_vertices(cell_idx, mesh)
+            cell_data = (vertices = vertices, center = _compute_centroid(vertices))
+            push!(new_cells_data, cell_data)
+            next_cell_idx += 1
+        end
     end
     
-    # TODO: Implement actual cell splitting
-    @warn "insert_line_segment is not yet fully implemented - returning original mesh"
+    # Build new UnstructuredMesh from split cells
+    return _build_unstructured_mesh_2d(new_cells_data, node_points)
+end
+
+"""
+Get vertices of a cell from the mesh in order
+"""
+function _get_cell_vertices(cell_idx, mesh)
+    cells_to_faces = mesh.faces.cells_to_faces
+    faces_to_nodes = mesh.faces.faces_to_nodes
+    face_neighbors = mesh.faces.neighbors
+    boundary_cells_to_faces = mesh.boundary_faces.cells_to_faces
+    boundary_faces_to_nodes = mesh.boundary_faces.faces_to_nodes
+    node_points = mesh.node_points
     
-    return mesh
+    # Collect all edges (faces) of this cell
+    interior_faces = cells_to_faces[cell_idx]
+    boundary_faces = boundary_cells_to_faces[cell_idx]
+    
+    # Build edge list with nodes
+    edges = Tuple{Int, Int}[]
+    
+    for face_idx in interior_faces
+        nodes = faces_to_nodes[face_idx]
+        l, r = face_neighbors[face_idx]
+        # Determine orientation based on which cell we are
+        if l == cell_idx
+            # Use forward direction
+            for i in 1:(length(nodes)-1)
+                push!(edges, (nodes[i], nodes[i+1]))
+            end
+        else
+            # Use reverse direction
+            for i in length(nodes):-1:2
+                push!(edges, (nodes[i], nodes[i-1]))
+            end
+        end
+    end
+    
+    for face_idx in boundary_faces
+        nodes = boundary_faces_to_nodes[face_idx]
+        # Boundary faces are oriented correctly for the cell
+        for i in 1:(length(nodes)-1)
+            push!(edges, (nodes[i], nodes[i+1]))
+        end
+    end
+    
+    # Build ordered vertex list from edges
+    if isempty(edges)
+        return SVector{2, Float64}[]
+    end
+    
+    vertices_idx = Int[]
+    current_edge = edges[1]
+    push!(vertices_idx, current_edge[1])
+    used = Set([1])
+    
+    while length(used) < length(edges)
+        next_node = current_edge[2]
+        push!(vertices_idx, next_node)
+        
+        # Find next edge that starts with next_node
+        found = false
+        for (idx, edge) in enumerate(edges)
+            if idx ∉ used && edge[1] == next_node
+                current_edge = edge
+                push!(used, idx)
+                found = true
+                break
+            end
+        end
+        
+        if !found
+            break
+        end
+    end
+    
+    # Remove last vertex if it's the same as first
+    if !isempty(vertices_idx) && vertices_idx[end] == vertices_idx[1]
+        pop!(vertices_idx)
+    end
+    
+    # Convert to SVector points
+    return [node_points[v] for v in vertices_idx]
+end
+
+"""
+Split a cell by a line segment
+"""
+function _split_cell_by_line_segment(cell_idx, mesh, line_p1, line_p2, intersections)
+    # Get cell vertices
+    vertices = _get_cell_vertices(cell_idx, mesh)
+    
+    if isempty(vertices) || length(vertices) < 3
+        # Invalid cell, return empty
+        return []
+    end
+    
+    # Find which edges of this cell are intersected
+    cell_intersections = []
+    face_neighbors = mesh.faces.neighbors
+    boundary_cells = mesh.boundary_faces.neighbors
+    
+    for inter in intersections
+        if inter.is_boundary
+            if boundary_cells[inter.face_idx] == cell_idx
+                push!(cell_intersections, inter)
+            end
+        else
+            l, r = face_neighbors[inter.face_idx]
+            if l == cell_idx || r == cell_idx
+                push!(cell_intersections, inter)
+            end
+        end
+    end
+    
+    if isempty(cell_intersections)
+        # No intersections for this cell (shouldn't happen)
+        center = _compute_centroid(vertices)
+        return [(vertices = vertices, center = center)]
+    end
+    
+    # Sort intersections by parameter t along line segment
+    sort!(cell_intersections, by = x -> x.t)
+    
+    # Determine split type based on number of intersections
+    n_intersections = length(cell_intersections)
+    
+    if n_intersections == 1
+        # Special case: line enters/exits through same edge
+        # For now, don't split (conservative approach)
+        center = _compute_centroid(vertices)
+        return [(vertices = vertices, center = center)]
+    else
+        # Standard case: line crosses cell (2 or more intersections)
+        # Use first and last intersection points
+        int_pt1 = cell_intersections[1].intersection_point
+        int_pt2 = cell_intersections[end].intersection_point
+        return _split_cell_two_points(vertices, int_pt1, int_pt2)
+    end
+end
+
+"""
+Split cell into two parts using two intersection points on the boundary
+"""
+function _split_cell_two_points(vertices, int_pt1, int_pt2)
+    if isempty(vertices)
+        return []
+    end
+    
+    # Find where int_pt1 and int_pt2 lie on the cell boundary
+    n = length(vertices)
+    idx1 = -1
+    idx2 = -1
+    t1 = 0.0
+    t2 = 0.0
+    
+    tol = 1e-9
+    
+    for i in 1:n
+        v1 = vertices[i]
+        v2 = vertices[mod1(i + 1, n)]
+        edge_vec = v2 - v1
+        edge_len = norm(edge_vec)
+        
+        if edge_len < tol
+            continue
+        end
+        
+        # Check if int_pt1 is on this edge
+        proj1 = dot(int_pt1 - v1, edge_vec) / (edge_len * edge_len)
+        if proj1 >= -tol && proj1 <= 1.0 + tol
+            dist1 = norm(int_pt1 - (v1 + proj1 * edge_vec))
+            if dist1 < tol
+                idx1 = i
+                t1 = clamp(proj1, 0.0, 1.0)
+            end
+        end
+        
+        # Check if int_pt2 is on this edge
+        proj2 = dot(int_pt2 - v1, edge_vec) / (edge_len * edge_len)
+        if proj2 >= -tol && proj2 <= 1.0 + tol
+            dist2 = norm(int_pt2 - (v1 + proj2 * edge_vec))
+            if dist2 < tol
+                idx2 = i
+                t2 = clamp(proj2, 0.0, 1.0)
+            end
+        end
+    end
+    
+    if idx1 == -1 || idx2 == -1
+        # Couldn't find intersection points on boundary
+        # Return original cell
+        center = _compute_centroid(vertices)
+        return [(vertices = vertices, center = center)]
+    end
+    
+    # Build two new cells
+    # Cell 1: from int_pt1 to int_pt2 going one way
+    # Cell 2: from int_pt2 to int_pt1 going the other way
+    
+    cell1_verts = SVector{2, Float64}[]
+    cell2_verts = SVector{2, Float64}[]
+    
+    # Add int_pt1 to both cells
+    push!(cell1_verts, int_pt1)
+    
+    # Walk from idx1+1 to idx2, adding vertices to cell1
+    i = mod1(idx1 + 1, n)
+    while i != idx2
+        if t1 > 0.5 || i != idx1  # Skip start vertex if we're partway along edge
+            push!(cell1_verts, vertices[i])
+        end
+        i = mod1(i + 1, n)
+    end
+    
+    # Add remaining part of edge idx2 if needed
+    if t2 > tol
+        push!(cell1_verts, vertices[idx2])
+    end
+    
+    # Add int_pt2
+    push!(cell1_verts, int_pt2)
+    
+    # Build cell2: from int_pt2 back to int_pt1 the other way
+    push!(cell2_verts, int_pt2)
+    
+    # Walk from idx2+1 to idx1
+    i = mod1(idx2 + 1, n)
+    while i != idx1
+        if t2 > 0.5 || i != idx2
+            push!(cell2_verts, vertices[i])
+        end
+        i = mod1(i + 1, n)
+    end
+    
+    # Add remaining part of edge idx1 if needed
+    if t1 > tol
+        push!(cell2_verts, vertices[idx1])
+    end
+    
+    push!(cell2_verts, int_pt1)
+    
+    # Clean up vertices
+    cell1_verts = _clean_polygon_vertices(cell1_verts)
+    cell2_verts = _clean_polygon_vertices(cell2_verts)
+    
+    result = []
+    if length(cell1_verts) >= 3
+        push!(result, (vertices = cell1_verts, center = _compute_centroid(cell1_verts)))
+    end
+    if length(cell2_verts) >= 3
+        push!(result, (vertices = cell2_verts, center = _compute_centroid(cell2_verts)))
+    end
+    
+    return result
 end

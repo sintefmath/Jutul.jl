@@ -66,36 +66,54 @@ using Random
         end
     end
     
-    @testset "insert_line_segment stub" begin
-        # Test the insert_line_segment stub (not yet fully implemented)
+    @testset "insert_line_segment function" begin
+        # Test that insert_line_segment actually splits cells
+        Random.seed!(789)
         points = rand(2, 10)
         mesh = Jutul.VoronoiMeshes.PEBIMesh2D(points)
         
-        # This should return the original mesh with warnings
+        original_ncells = number_of_cells(mesh)
+        
+        # Insert a vertical line segment
         mesh2 = Jutul.VoronoiMeshes.insert_line_segment(mesh, [0.5, 0.0], [0.5, 1.0])
         
         @test mesh2 isa UnstructuredMesh
-        # For now, should return same mesh
-        @test number_of_cells(mesh2) == number_of_cells(mesh)
+        # Cell count should increase due to splitting
+        @test number_of_cells(mesh2) > original_ncells
     end
     
-    # TODO: Add tests for full insert_line_segment implementation when complete
-    # @testset "Cell splitting by single constraint" begin
-    #     # Test that a cell crossing a constraint is split into two cells
-    #     points = [0.5; 0.5]'
-    #     mesh = Jutul.VoronoiMeshes.PEBIMesh2D(points)
-    #     mesh = Jutul.VoronoiMeshes.insert_line_segment(mesh, [0.0, 0.5], [1.0, 0.5])
-    #     @test number_of_cells(mesh) >= 2
-    # end
+    @testset "Cell splitting by single constraint" begin
+        # Test that cells crossing a constraint are split
+        points = [0.25 0.75 0.25 0.75;
+                  0.25 0.25 0.75 0.75]
+        mesh = Jutul.VoronoiMeshes.PEBIMesh2D(points)
+        original_ncells = number_of_cells(mesh)
+        
+        # Insert horizontal constraint
+        mesh2 = Jutul.VoronoiMeshes.insert_line_segment(mesh, [0.0, 0.5], [1.0, 0.5])
+        
+        @test number_of_cells(mesh2) > original_ncells
+    end
     
-    # @testset "Cell splitting by multiple constraints" begin
-    #     # Test multiple constraints splitting a cell into 4 parts
-    #     points = [0.5; 0.5]'
-    #     mesh = Jutul.VoronoiMeshes.PEBIMesh2D(points)
-    #     mesh = Jutul.VoronoiMeshes.insert_line_segment(mesh, [0.0, 0.5], [1.0, 0.5])
-    #     mesh = Jutul.VoronoiMeshes.insert_line_segment(mesh, [0.5, 0.0], [0.5, 1.0])
-    #     @test number_of_cells(mesh) >= 4
-    # end
+    @testset "Cell splitting by multiple constraints" begin
+        # Test multiple constraints
+        Random.seed!(999)
+        points = rand(2, 20)
+        mesh = Jutul.VoronoiMeshes.PEBIMesh2D(points)
+        original_ncells = number_of_cells(mesh)
+        
+        # Insert vertical constraint
+        mesh2 = Jutul.VoronoiMeshes.insert_line_segment(mesh, [0.5, 0.2], [0.5, 0.8])
+        mid_ncells = number_of_cells(mesh2)
+        
+        # Insert horizontal constraint
+        mesh3 = Jutul.VoronoiMeshes.insert_line_segment(mesh2, [0.2, 0.5], [0.8, 0.5])
+        final_ncells = number_of_cells(mesh3)
+        
+        @test mid_ncells > original_ncells
+        @test final_ncells > mid_ncells
+    end
+    
         # The mesh has ~29 interior boundary faces that should be interior faces
         # This will be fixed in a future update
     end
