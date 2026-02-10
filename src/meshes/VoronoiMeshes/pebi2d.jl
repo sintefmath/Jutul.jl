@@ -253,87 +253,13 @@ function _clean_polygon_vertices(vertices)
 end
 
 """
-Pre-compute all intersection points between cell edges and constraint lines
-Returns a dictionary mapping (constraint_idx, vertex_key) -> intersection_point
-This ensures all cells share the same vertex objects along constraints
-"""
-function _precompute_constraint_intersections(cells_data, pts, constraint_edges)
-    # Dictionary to store intersection points
-    # Key: (constraint_idx, edge_key) where edge_key uniquely identifies an edge crossing
-    # Value: The intersection point (SVector)
-    intersections = Dict{Tuple{Int, Tuple{Float64, Float64}}, SVector{2, Float64}}()
-    
-    for (constraint_idx, (idx1, idx2)) in enumerate(constraint_edges)
-        line_p1 = pts[idx1]
-        line_p2 = pts[idx2]
-        line_dir = line_p2 - line_p1
-        normal = SVector{2, Float64}(-line_dir[2], line_dir[1])
-        
-        tol = 1e-10
-        
-        # Check all cell edges for intersections with this constraint
-        for cell in cells_data
-            vertices = cell.vertices
-            n = length(vertices)
-            
-            for i in 1:n
-                v1 = vertices[i]
-                v2 = vertices[mod1(i + 1, n)]
-                
-                # Check if edge crosses the constraint line
-                d1 = dot(v1 - line_p1, normal)
-                d2 = dot(v2 - line_p1, normal)
-                
-                if (d1 > tol && d2 < -tol) || (d1 < -tol && d2 > tol)
-                    # Edge crosses - compute intersection
-                    denom = dot(v2 - v1, normal)
-                    if abs(denom) > 1e-14
-                        t = dot(line_p1 - v1, normal) / denom
-                        t = clamp(t, 0.0, 1.0)
-                        intersection = v1 + t * (v2 - v1)
-                        
-                        # Project intersection onto constraint line to get a consistent key
-                        # Parameter along constraint line
-                        s = dot(intersection - line_p1, line_dir) / dot(line_dir, line_dir)
-                        s = clamp(s, 0.0, 1.0)
-                        
-                        # Use rounded s value as key (ensures nearby intersections map to same key)
-                        key_s = round(s * 1e10) / 1e10
-                        
-                        # Compute exact intersection on constraint line
-                        exact_intersection = line_p1 + s * line_dir
-                        
-                        # Create key from constraint index and position along constraint
-                        # Use rounded coordinates for robust matching
-                        coord_key = (round(exact_intersection[1] * 1e10) / 1e10,
-                                    round(exact_intersection[2] * 1e10) / 1e10)
-                        key = (constraint_idx, coord_key)
-                        
-                        # Store the intersection (only once per unique location)
-                        if !haskey(intersections, key)
-                            intersections[key] = exact_intersection
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    return intersections
-end
-
-"""
 Split cells that are crossed by constraints into multiple cells
 Each cell that intersects a constraint is split into separate cells on each side
-Uses pre-computed constraint intersection vertices for exact sharing
 """
 function _split_cells_by_constraints(cells_data, pts, constraint_edges)
     if isempty(constraint_edges)
         return cells_data
     end
-    
-    # Pre-compute all constraint intersection vertices
-    intersection_lookup = _precompute_constraint_intersections(cells_data, pts, constraint_edges)
     
     split_cells = []
     
@@ -343,17 +269,14 @@ function _split_cells_by_constraints(cells_data, pts, constraint_edges)
         current_cells = [(vertices=cell.vertices, center_idx=cell.center_idx)]
         
         # Apply each constraint, potentially splitting cells multiple times
-        for (constraint_idx, (idx1, idx2)) in enumerate(constraint_edges)
+        for (idx1, idx2) in constraint_edges
             p1 = pts[idx1]
             p2 = pts[idx2]
             
             next_cells = []
             for sub_cell in current_cells
                 # Try to split this sub-cell by this constraint
-                # Pass constraint index and lookup to use pre-computed vertices
-                split_result = _split_polygon_by_line_2d(
-                    sub_cell.vertices, p1, p2, constraint_idx, intersection_lookup
-                )
+                split_result = _split_polygon_by_line_2d(sub_cell.vertices, p1, p2)
                 
                 if length(split_result) == 1
                     # Cell not split by this constraint - keep as is
@@ -386,9 +309,8 @@ end
 """
 Split a polygon by a line into two parts (one on each side of the line)
 Returns a vector of polygons (1 if no split, 2 if split occurs)
-Uses pre-computed intersection vertices from lookup for exact vertex sharing
 """
-function _split_polygon_by_line_2d(vertices, line_p1, line_p2, constraint_idx, intersection_lookup)
+function _split_polygon_by_line_2d(vertices, line_p1, line_p2)
     if isempty(vertices) || length(vertices) < 3
         return [vertices]
     end
@@ -434,33 +356,23 @@ function _split_polygon_by_line_2d(vertices, line_p1, line_p2, constraint_idx, i
         
         # If edge crosses the line, add intersection to both polygons
         if (d1 > tol && d2 < -tol) || (d1 < -tol && d2 > tol)
-            # Look up pre-computed intersection vertex
+            # Compute intersection
             denom = dot(v2 - v1, normal)
             if abs(denom) > 1e-14
                 t = dot(line_p1 - v1, normal) / denom
                 t = clamp(t, 0.0, 1.0)
                 intersection = v1 + t * (v2 - v1)
                 
-                # Project onto constraint line to find lookup key
-                s = dot(intersection - line_p1, line_dir) / dot(line_dir, line_dir)
-                s = clamp(s, 0.0, 1.0)
-                exact_intersection = line_p1 + s * line_dir
+                # Round to ensure consistency across cells
+                # This ensures vertices are bitwise identical
+                scale = 1e10
+                intersection = SVector{2, Float64}(
+                    round(intersection[1] * scale) / scale,
+                    round(intersection[2] * scale) / scale
+                )
                 
-                # Create lookup key
-                coord_key = (round(exact_intersection[1] * 1e10) / 1e10,
-                            round(exact_intersection[2] * 1e10) / 1e10)
-                key = (constraint_idx, coord_key)
-                
-                # Use pre-computed vertex if available, otherwise compute it
-                if haskey(intersection_lookup, key)
-                    shared_vertex = intersection_lookup[key]
-                else
-                    # Fallback: use the computed intersection
-                    shared_vertex = exact_intersection
-                end
-                
-                push!(left_poly, shared_vertex)
-                push!(right_poly, shared_vertex)
+                push!(left_poly, intersection)
+                push!(right_poly, intersection)
             end
         end
     end
@@ -595,11 +507,59 @@ end
 """
 Fix interior boundaries by converting them to interior faces
 Interior boundaries are boundary faces that are not on the actual bounding box
-With Solution 1 (pre-computed vertices), this should not find any interior boundaries
 """
 function _fix_interior_boundaries(mesh::UnstructuredMesh)
-    # With Solution 1, interior boundaries should not exist
-    # This function is kept for validation purposes
+    # Determine actual bounding box
+    bbox_xmin, bbox_xmax = extrema([p[1] for p in mesh.node_points])
+    bbox_ymin, bbox_ymax = extrema([p[2] for p in mesh.node_points])
+    tol = 1e-6
+    
+    # Identify boundary faces that are actually in the interior
+    interior_boundary_faces = Int[]
+    
+    for bface_idx in 1:number_of_boundary_faces(mesh)
+        nodes = [mesh.boundary_faces.faces_to_nodes[bface_idx]...]
+        
+        # Check if all nodes are on the actual boundary
+        all_on_boundary = true
+        for node_idx in nodes
+            pt = mesh.node_points[node_idx]
+            on_boundary = (abs(pt[1] - bbox_xmin) < tol || abs(pt[1] - bbox_xmax) < tol ||
+                          abs(pt[2] - bbox_ymin) < tol || abs(pt[2] - bbox_ymax) < tol)
+            if !on_boundary
+                all_on_boundary = false
+                break
+            end
+        end
+        
+        if !all_on_boundary
+            push!(interior_boundary_faces, bface_idx)
+        end
+    end
+    
+    # If no interior boundaries, return mesh as is
+    if isempty(interior_boundary_faces)
+        return mesh
+    end
+    
+    # Match interior boundary faces by their node pairs
+    # Two boundary faces with the same nodes should become one interior face
+    face_pairs = Dict{Set{Int}, Vector{Int}}()
+    
+    for bface_idx in interior_boundary_faces
+        nodes = [mesh.boundary_faces.faces_to_nodes[bface_idx]...]
+        node_set = Set(nodes)
+        
+        if !haskey(face_pairs, node_set)
+            face_pairs[node_set] = []
+        end
+        push!(face_pairs[node_set], bface_idx)
+    end
+    
+    # For now, just warn and return the original mesh
+    # Properly fixing this requires rebuilding the entire mesh structure
+    @warn "Interior boundaries detected: $(length(interior_boundary_faces)) faces not on bounding box. Mesh has holes at constraint intersections."
+    
     return mesh
 end
 
