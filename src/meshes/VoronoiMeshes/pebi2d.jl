@@ -804,6 +804,9 @@ function _split_cell_two_points(vertices, int_pt1, int_pt2)
         return []
     end
     
+    # Threshold for determining if intersection is past edge midpoint
+    const EDGE_MIDPOINT_THRESHOLD = 0.5
+    
     # Find where int_pt1 and int_pt2 lie on the cell boundary
     n = length(vertices)
     idx1 = -1
@@ -864,7 +867,8 @@ function _split_cell_two_points(vertices, int_pt1, int_pt2)
     # Walk from idx1+1 to idx2, adding vertices to cell1
     i = mod1(idx1 + 1, n)
     while i != idx2
-        if t1 > 0.5 || i != idx1  # Skip start vertex if we're partway along edge
+        # Skip start vertex if intersection is past edge midpoint
+        if t1 > EDGE_MIDPOINT_THRESHOLD || i != idx1
             push!(cell1_verts, vertices[i])
         end
         i = mod1(i + 1, n)
@@ -884,7 +888,8 @@ function _split_cell_two_points(vertices, int_pt1, int_pt2)
     # Walk from idx2+1 to idx1
     i = mod1(idx2 + 1, n)
     while i != idx1
-        if t2 > 0.5 || i != idx2
+        # Skip start vertex if intersection is past edge midpoint
+        if t2 > EDGE_MIDPOINT_THRESHOLD || i != idx2
             push!(cell2_verts, vertices[i])
         end
         i = mod1(i + 1, n)

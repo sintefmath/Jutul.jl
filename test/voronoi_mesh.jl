@@ -114,10 +114,6 @@ using Random
         @test final_ncells > mid_ncells
     end
     
-        # The mesh has ~29 interior boundary faces that should be interior faces
-        # This will be fixed in a future update
-    end
-    
     @testset "2D PEBI mesh with high coordinate variation" begin
         # Test with points that have high coordinate variation
         points = [0.0 1000.0 500.0 250.0; 
