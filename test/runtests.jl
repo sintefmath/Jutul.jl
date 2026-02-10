@@ -2,6 +2,7 @@ using Jutul
 # include("linalg/linear_operators.jl")
 include("test_systems/runtests.jl")
 include("mesh.jl")
+include("voronoi_mesh.jl")
 include("embedded_meshes.jl")
 include("adjoints/utils.jl")
 include("adjoints/basic_adjoint.jl")
