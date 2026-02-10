@@ -183,4 +183,68 @@ using Random
         geo = tpfv_geometry(mesh)
         @test all(geo.volumes .> 0)  # All cells should have positive volume
     end
+    
+    @testset "Basic 3D PEBI mesh" begin
+        # Simple 8-point mesh (cube corners)
+        points = [0.0 1.0 0.0 1.0 0.0 1.0 0.0 1.0;
+                  0.0 0.0 1.0 1.0 0.0 0.0 1.0 1.0;
+                  0.0 0.0 0.0 0.0 1.0 1.0 1.0 1.0]
+        
+        mesh = PEBIMesh3D(points)
+        
+        @test mesh isa UnstructuredMesh
+        @test number_of_cells(mesh) == 8
+        
+        # Verify mesh has positive volumes
+        geo = tpfv_geometry(mesh)
+        @test all(geo.volumes .> 0)
+    end
+    
+    @testset "Random 3D points" begin
+        # Random points
+        Random.seed!(124)
+        points = rand(3, 10)
+        
+        mesh = PEBIMesh3D(points)
+        
+        @test mesh isa UnstructuredMesh
+        @test number_of_cells(mesh) == 10
+        
+        # Verify positive volumes
+        geo = tpfv_geometry(mesh)
+        @test all(geo.volumes .> 0)
+    end
+    
+    @testset "3D Custom bbox" begin
+        points = rand(3, 5) .* 100 .+ 500
+        bbox = ((490.0, 610.0), (490.0, 610.0), (490.0, 610.0))
+        
+        mesh = PEBIMesh3D(points, bbox=bbox)
+        
+        @test mesh isa UnstructuredMesh
+        @test number_of_cells(mesh) == 5
+        
+        # Verify volumes
+        geo = tpfv_geometry(mesh)
+        @test all(geo.volumes .> 0)
+    end
+    
+    @testset "3D Point format conversion" begin
+        # Test different input formats
+        
+        # 3×n matrix
+        points_3n = rand(3, 4)
+        mesh1 = PEBIMesh3D(points_3n)
+        @test number_of_cells(mesh1) == 4
+        
+        # n×3 matrix
+        points_n3 = permutedims(points_3n, (2, 1))
+        mesh2 = PEBIMesh3D(points_n3)
+        @test number_of_cells(mesh2) == 4
+        
+        # Vector of tuples
+        points_vec = [(points_3n[1, i], points_3n[2, i], points_3n[3, i]) for i in 1:4]
+        mesh3 = PEBIMesh3D(points_vec)
+        @test number_of_cells(mesh3) == 4
+    end
 end
