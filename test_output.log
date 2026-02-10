@@ -1,0 +1,22 @@
+ERROR: FieldError: type Pkg.Types.Context has no field `test_file`, available fields: `env`, `io`, `use_git_for_all_downloads`, `use_only_tarballs_for_downloads`, `num_concurrent_downloads`, `registries`, `julia_version`
+Stacktrace:
+  [1] Context!(ctx::Pkg.Types.Context; kwargs::@Kwargs{test_file::String, verbose::Bool, io::IOContext{IO}})
+    @ Pkg.Types /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Pkg/src/Types.jl:620
+  [2] test(ctx::Pkg.Types.Context, pkgs::Vector{PackageSpec}; coverage::Bool, test_fn::Nothing, julia_args::Cmd, test_args::Cmd, force_latest_compatible_version::Bool, allow_earlier_backwards_compatible_versions::Bool, allow_reresolve::Bool, kwargs::@Kwargs{test_file::String, verbose::Bool, io::IOContext{IO}})
+    @ Pkg.API /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Pkg/src/API.jl:527
+  [3] test(pkgs::Vector{PackageSpec}; io::IOContext{IO}, kwargs::@Kwargs{test_file::String, verbose::Bool})
+    @ Pkg.API /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Pkg/src/API.jl:169
+  [4] test(pkgs::Vector{String}; kwargs::@Kwargs{test_file::String, verbose::Bool})
+    @ Pkg.API /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Pkg/src/API.jl:157
+  [5] test
+    @ /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Pkg/src/API.jl:157 [inlined]
+  [6] #test#81
+    @ /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Pkg/src/API.jl:156 [inlined]
+  [7] top-level scope
+    @ none:1
+  [8] eval(m::Module, e::Any)
+    @ Core ./boot.jl:489
+  [9] exec_options(opts::Base.JLOptions)
+    @ Base ./client.jl:283
+ [10] _start()
+    @ Base ./client.jl:550
