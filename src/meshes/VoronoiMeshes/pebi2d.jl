@@ -17,6 +17,16 @@ Each input point becomes a cell center in the resulting mesh. Linear constraints
 represented as faces in the mesh, ensuring the mesh respects these constraints.
 The mesh is bounded by the specified or computed bounding box.
 
+When constraints are specified, cells that intersect the constraint lines are split
+into multiple cells (one on each side of the constraint). This means the final mesh
+will typically have MORE cells than input points.
+
+# Note on Constraint Endpoints
+Constraint endpoints are added as temporary points to structure the mesh. Voronoi cells
+centered at these endpoints are created during mesh generation but are filtered out from
+the final mesh. This is expected behavior - these temporary cells ensure proper constraint
+representation but should not appear as separate cells in the result.
+
 # Examples
 ```julia
 # Simple mesh with 4 points
@@ -27,6 +37,7 @@ mesh = PEBIMesh2D(points)
 points = rand(2, 20)
 constraint = ([0.5, 0.0], [0.5, 1.0])  # Vertical line at x=0.5
 mesh = PEBIMesh2D(points, constraints=[constraint])
+# Result will have > 20 cells due to splitting
 ```
 """
 function PEBIMesh2D(points; constraints=[], bbox=nothing)
@@ -37,18 +48,24 @@ function PEBIMesh2D(points; constraints=[], bbox=nothing)
     bb = _compute_bbox_2d(pts, bbox)
     
     # Add constraint points to generate refined mesh along constraints
+    # This adds constraint endpoints as temporary points to the point set
     pts_with_constraints, constraint_edges, constraint_point_indices = _add_constraint_points_2d(pts, constraints, bb)
     
     # Generate Voronoi diagram - this creates base cells before splitting
+    # Cells will be created for ALL points, including the temporary constraint endpoints
     cells_data = _generate_voronoi_2d(pts_with_constraints, bb, constraint_edges)
     
-    # Filter out cells that are on the constraint (constraint endpoint cells)
-    # These cells should not appear in the final mesh as separate cells
+    # Filter out cells that are centered at constraint endpoints
+    # These cells should not appear in the final mesh as separate cells.
+    # They are temporary artifacts from adding constraint endpoints to structure the mesh.
+    # Note: This filtering is EXPECTED and does not remove any user-provided cells.
+    # Only cells with center_idx > original_npts are removed (i.e., constraint endpoint cells).
     original_npts = length(pts)
     filtered_cells_data = [cell for (i, cell) in enumerate(cells_data) if cell.center_idx <= original_npts]
     
     # Split cells that are crossed by constraints
     # This is the key change: instead of just clipping, we split into multiple cells
+    # Result: The final mesh will have MORE cells than original points due to splitting
     split_cells_data = _split_cells_by_constraints(filtered_cells_data, pts_with_constraints, constraint_edges)
     
     # Build UnstructuredMesh from the Voronoi cells (now including split cells)
