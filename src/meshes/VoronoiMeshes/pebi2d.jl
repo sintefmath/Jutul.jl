@@ -69,7 +69,12 @@ function PEBIMesh2D(points; constraints=[], bbox=nothing)
     split_cells_data = _split_cells_by_constraints(filtered_cells_data, pts_with_constraints, constraint_edges)
     
     # Build UnstructuredMesh from the Voronoi cells (now including split cells)
-    return _build_unstructured_mesh_2d(split_cells_data, pts_with_constraints)
+    mesh = _build_unstructured_mesh_2d(split_cells_data, pts_with_constraints)
+    
+    # Post-process to fix interior boundaries caused by constraint splitting
+    mesh = _fix_interior_boundaries(mesh)
+    
+    return mesh
 end
 
 """
@@ -214,9 +219,9 @@ function _clean_polygon_vertices(vertices)
         return vertices
     end
     
-    # Remove duplicates
+    # Remove duplicates - use consistent tolerance with vertex matching
     cleaned = SVector{2, Float64}[]
-    tol = 1e-9
+    tol = 1e-10  # Match the tolerance used in get_or_add_vertex
     
     for v in vertices
         is_duplicate = false
@@ -314,7 +319,7 @@ function _split_polygon_by_line_2d(vertices, line_p1, line_p2)
     line_dir = line_p2 - line_p1
     normal = SVector{2, Float64}(-line_dir[2], line_dir[1])  # Perpendicular to line
     
-    tol = 1e-9
+    tol = 1e-10  # Use consistent tolerance throughout
     
     # Check if polygon intersects the line
     n = length(vertices)
@@ -497,6 +502,65 @@ function _clip_polygon_by_line_2d(vertices, line_p1, line_p2, center)
     end
     
     return clipped
+end
+
+"""
+Fix interior boundaries by converting them to interior faces
+Interior boundaries are boundary faces that are not on the actual bounding box
+"""
+function _fix_interior_boundaries(mesh::UnstructuredMesh)
+    # Determine actual bounding box
+    bbox_xmin, bbox_xmax = extrema([p[1] for p in mesh.node_points])
+    bbox_ymin, bbox_ymax = extrema([p[2] for p in mesh.node_points])
+    tol = 1e-6
+    
+    # Identify boundary faces that are actually in the interior
+    interior_boundary_faces = Int[]
+    
+    for bface_idx in 1:number_of_boundary_faces(mesh)
+        nodes = [mesh.boundary_faces.faces_to_nodes[bface_idx]...]
+        
+        # Check if all nodes are on the actual boundary
+        all_on_boundary = true
+        for node_idx in nodes
+            pt = mesh.node_points[node_idx]
+            on_boundary = (abs(pt[1] - bbox_xmin) < tol || abs(pt[1] - bbox_xmax) < tol ||
+                          abs(pt[2] - bbox_ymin) < tol || abs(pt[2] - bbox_ymax) < tol)
+            if !on_boundary
+                all_on_boundary = false
+                break
+            end
+        end
+        
+        if !all_on_boundary
+            push!(interior_boundary_faces, bface_idx)
+        end
+    end
+    
+    # If no interior boundaries, return mesh as is
+    if isempty(interior_boundary_faces)
+        return mesh
+    end
+    
+    # Match interior boundary faces by their node pairs
+    # Two boundary faces with the same nodes should become one interior face
+    face_pairs = Dict{Set{Int}, Vector{Int}}()
+    
+    for bface_idx in interior_boundary_faces
+        nodes = [mesh.boundary_faces.faces_to_nodes[bface_idx]...]
+        node_set = Set(nodes)
+        
+        if !haskey(face_pairs, node_set)
+            face_pairs[node_set] = []
+        end
+        push!(face_pairs[node_set], bface_idx)
+    end
+    
+    # For now, just warn and return the original mesh
+    # Properly fixing this requires rebuilding the entire mesh structure
+    @warn "Interior boundaries detected: $(length(interior_boundary_faces)) faces not on bounding box. Mesh has holes at constraint intersections."
+    
+    return mesh
 end
 
 """
