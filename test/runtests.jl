@@ -3,6 +3,7 @@ using Jutul
 include("test_systems/runtests.jl")
 include("mesh.jl")
 include("embedded_meshes.jl")
+include("cut_cell_meshes.jl")
 include("adjoints/utils.jl")
 include("adjoints/basic_adjoint.jl")
 include("adjoints/lbfgs.jl")
