@@ -156,4 +156,31 @@ using Random
         mesh3 = Jutul.VoronoiMeshes.PEBIMesh2D(points3)
         @test number_of_cells(mesh3) == 2
     end
+    
+    @testset "Usage example from docstring" begin
+        # Test the exact usage example from PEBIMesh2D docstring
+        
+        # Example 1: Simple mesh with 4 points
+        points = [0.0 1.0 0.0 1.0; 0.0 0.0 1.0 1.0]
+        mesh = Jutul.VoronoiMeshes.PEBIMesh2D(points)
+        @test mesh isa UnstructuredMesh
+        @test number_of_cells(mesh) == 4
+        
+        # Example 2: Mesh with constraint line (use post-processing)
+        Random.seed!(42)
+        points = rand(2, 20)
+        mesh = Jutul.VoronoiMeshes.PEBIMesh2D(points)
+        @test number_of_cells(mesh) == 20
+        
+        # Add vertical constraint
+        mesh = Jutul.VoronoiMeshes.insert_line_segment(mesh, [0.5, 0.0], [0.5, 1.0])
+        
+        # Result should have > 20 cells due to splitting
+        @test number_of_cells(mesh) > 20
+        @test mesh isa UnstructuredMesh
+        
+        # Verify mesh is still valid
+        geo = tpfv_geometry(mesh)
+        @test all(geo.volumes .> 0)  # All cells should have positive volume
+    end
 end

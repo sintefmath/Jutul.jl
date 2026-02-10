@@ -98,6 +98,61 @@ function _compute_bbox_2d(pts, bbox)
 end
 
 """
+    _compute_centroid(vertices)
+
+Compute the centroid of a 2D polygon given its vertices.
+
+Uses the signed area method which works for both convex and non-convex polygons.
+Assumes vertices are ordered (either clockwise or counter-clockwise).
+
+# Arguments
+- `vertices`: Vector of SVector{2, Float64} representing polygon vertices in order
+
+# Returns
+- SVector{2, Float64} representing the centroid coordinates
+"""
+function _compute_centroid(vertices::AbstractVector{SVector{2, T}}) where T
+    n = length(vertices)
+    if n < 3
+        # Degenerate polygon - return mean of vertices
+        return sum(vertices) / n
+    end
+    
+    # Use signed area formula for polygon centroid
+    # Cx = (1 / 6A) * Σ(xi + xi+1)(xi * yi+1 - xi+1 * yi)
+    # Cy = (1 / 6A) * Σ(yi + yi+1)(xi * yi+1 - xi+1 * yi)
+    # where A = (1/2) * Σ(xi * yi+1 - xi+1 * yi)
+    
+    signed_area = zero(T)
+    cx = zero(T)
+    cy = zero(T)
+    
+    for i in 1:n
+        j = i < n ? i + 1 : 1  # Next vertex (wrap around)
+        xi, yi = vertices[i][1], vertices[i][2]
+        xj, yj = vertices[j][1], vertices[j][2]
+        
+        cross = xi * yj - xj * yi
+        signed_area += cross
+        cx += (xi + xj) * cross
+        cy += (yi + yj) * cross
+    end
+    
+    signed_area *= 0.5
+    
+    # Handle degenerate case where area is zero
+    if abs(signed_area) < 1e-14
+        # Fall back to simple mean
+        return sum(vertices) / n
+    end
+    
+    cx /= (6.0 * signed_area)
+    cy /= (6.0 * signed_area)
+    
+    return SVector{2, T}(cx, cy)
+end
+
+"""
 Generate Voronoi cells using a simple box-clipping approach
 """
 function _generate_voronoi_2d(pts, bb)
