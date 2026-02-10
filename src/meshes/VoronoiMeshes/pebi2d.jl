@@ -135,7 +135,7 @@ function _generate_voronoi_2d(pts, bb, constraint_edges)
     cells = []
     
     for i in 1:npts
-        cell_vertices = _compute_voronoi_cell_2d(i, pts, bb, constraint_edges)
+        cell_vertices = _compute_voronoi_cell_2d(i, pts, bb)
         if !isempty(cell_vertices)
             push!(cells, (center_idx=i, vertices=cell_vertices))
         end
@@ -147,7 +147,7 @@ end
 """
 Compute the Voronoi cell for a single point
 """
-function _compute_voronoi_cell_2d(idx, pts, bb, constraint_edges)
+function _compute_voronoi_cell_2d(idx, pts, bb)
     ((xmin, xmax), (ymin, ymax)) = bb
     center = pts[idx]
     
@@ -170,7 +170,51 @@ function _compute_voronoi_cell_2d(idx, pts, bb, constraint_edges)
         end
     end
     
+    # Remove duplicate vertices and ensure proper ordering
+    vertices = _clean_polygon_vertices(vertices)
+    
     return vertices
+end
+
+"""
+Clean polygon vertices by removing duplicates and ensuring CCW ordering
+"""
+function _clean_polygon_vertices(vertices)
+    if isempty(vertices)
+        return vertices
+    end
+    
+    # Remove duplicates
+    cleaned = SVector{2, Float64}[]
+    tol = 1e-10
+    
+    for v in vertices
+        is_duplicate = false
+        for existing in cleaned
+            if norm(v - existing) < tol
+                is_duplicate = true
+                break
+            end
+        end
+        if !is_duplicate
+            push!(cleaned, v)
+        end
+    end
+    
+    # Ensure we have at least 3 vertices for a valid polygon
+    if length(cleaned) < 3
+        return SVector{2, Float64}[]
+    end
+    
+    # Ensure counter-clockwise ordering
+    # Compute centroid
+    centroid = sum(cleaned) / length(cleaned)
+    
+    # Sort by angle from centroid
+    angles = [atan(v[2] - centroid[2], v[1] - centroid[1]) for v in cleaned]
+    perm = sortperm(angles)
+    
+    return cleaned[perm]
 end
 
 """
