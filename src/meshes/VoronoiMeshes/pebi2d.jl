@@ -132,14 +132,14 @@ function _add_constraint_points_2d(pts, constraints, bb)
         p2_sv = SVector{2, Float64}(p2[1], p2[2])
         
         # Add constraint endpoints if not already present
-        idx1 = findfirst(p -> norm(p - p1_sv) < 1e-10, pts_all)
+        idx1 = findfirst(p -> norm(p - p1_sv) < 1e-9, pts_all)
         if idx1 === nothing
             push!(pts_all, p1_sv)
             idx1 = length(pts_all)
             push!(constraint_point_indices, idx1)
         end
         
-        idx2 = findfirst(p -> norm(p - p2_sv) < 1e-10, pts_all)
+        idx2 = findfirst(p -> norm(p - p2_sv) < 1e-9, pts_all)
         if idx2 === nothing
             push!(pts_all, p2_sv)
             idx2 = length(pts_all)
@@ -216,7 +216,7 @@ function _clean_polygon_vertices(vertices)
     
     # Remove duplicates
     cleaned = SVector{2, Float64}[]
-    tol = 1e-10
+    tol = 1e-9
     
     for v in vertices
         is_duplicate = false
@@ -314,7 +314,7 @@ function _split_polygon_by_line_2d(vertices, line_p1, line_p2)
     line_dir = line_p2 - line_p1
     normal = SVector{2, Float64}(-line_dir[2], line_dir[1])  # Perpendicular to line
     
-    tol = 1e-10
+    tol = 1e-9
     
     # Check if polygon intersects the line
     n = length(vertices)
@@ -445,7 +445,7 @@ function _clip_polygon_by_line_2d(vertices, line_p1, line_p2, center)
     
     # If center is very close to or on the constraint line, don't clip
     # These are the constraint points themselves
-    tol = 1e-10
+    tol = 1e-9
     if abs(center_dist) < tol
         return vertices
     end
@@ -500,11 +500,17 @@ function _build_unstructured_mesh_2d(cells_data, all_pts)
     
     function get_or_add_vertex(v)
         # Find existing vertex within tolerance
-        for (existing_v, idx) in vertex_map
-            if norm(v - existing_v) < 1e-10
-                return idx
+        # Use a more robust tolerance and check against all vertices
+        tol = 5e-9  # Increased tolerance for better matching
+        
+        # Check all existing vertices (not relying on Dict order)
+        for i in 1:length(all_vertices)
+            if norm(v - all_vertices[i]) < tol
+                return i
             end
         end
+        
+        # Not found - add new vertex
         push!(all_vertices, v)
         idx = length(all_vertices)
         vertex_map[v] = idx
