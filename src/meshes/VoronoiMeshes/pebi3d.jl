@@ -333,6 +333,210 @@ function _clean_polyhedron_vertices_3d(vertices)
 end
 
 """
+Extract faces from a convex polyhedron using Gift Wrapping (Jarvis March) algorithm.
+
+This algorithm finds all faces on the convex hull surface by:
+1. Finding a starting edge on the hull
+2. For each edge, finding the next vertex that forms a face
+3. Continuing until all faces are found
+
+Returns a vector of faces, where each face is a vector of vertex indices (in order).
+"""
+function _extract_convex_hull_faces_3d(vertices::Vector{SVector{3, T}}) where T
+    n = length(vertices)
+    if n < 4
+        return Vector{Int}[]
+    end
+    
+    faces = Vector{Vector{Int}}[]
+    processed_edges = Set{Tuple{Int, Int}}()
+    
+    # Find a starting edge that's definitely on the hull
+    start_edge = nothing
+    for i in 1:n
+        for j in (i+1):n
+            if _is_edge_on_hull(vertices[i], vertices[j], vertices)
+                start_edge = (i, j)
+                break
+            end
+        end
+        if start_edge !== nothing
+            break
+        end
+    end
+    
+    if start_edge === nothing
+        # Fallback: just use first two vertices
+        start_edge = (1, 2)
+    end
+    
+    # Queue of edges to process
+    edges_to_process = [start_edge]
+    
+    while !isempty(edges_to_process)
+        v1_idx, v2_idx = pop!(edges_to_process)
+        
+        # Skip if already processed
+        edge_key = v1_idx < v2_idx ? (v1_idx, v2_idx) : (v2_idx, v1_idx)
+        if edge_key in processed_edges
+            continue
+        end
+        
+        # Find the face containing this edge
+        face_vertices = [v1_idx, v2_idx]
+        current_edge = (v1_idx, v2_idx)
+        
+        # Build the face by finding next vertices
+        max_iterations = n  # Prevent infinite loops
+        for _ in 1:max_iterations
+            v_next = _find_next_vertex_on_face(
+                vertices[current_edge[1]], 
+                vertices[current_edge[2]], 
+                vertices, 
+                face_vertices
+            )
+            
+            if v_next === nothing || v_next == v1_idx
+                # Face is complete
+                break
+            end
+            
+            push!(face_vertices, v_next)
+            current_edge = (current_edge[2], v_next)
+        end
+        
+        # Add this face if it has at least 3 vertices
+        if length(face_vertices) >= 3
+            push!(faces, face_vertices)
+            
+            # Mark all edges of this face as processed and add unprocessed ones to queue
+            for i in 1:length(face_vertices)
+                j = mod1(i + 1, length(face_vertices))
+                vi, vj = face_vertices[i], face_vertices[j]
+                edge = vi < vj ? (vi, vj) : (vj, vi)
+                
+                if !(edge in processed_edges)
+                    push!(processed_edges, edge)
+                    # Add the edge in opposite direction for processing
+                    push!(edges_to_process, (vj, vi))
+                end
+            end
+        else
+            push!(processed_edges, edge_key)
+        end
+    end
+    
+    return faces
+end
+
+"""
+Check if an edge is on the convex hull.
+
+An edge (v1, v2) is on the hull if all other vertices are on one side of any plane containing the edge.
+"""
+function _is_edge_on_hull(v1::SVector{3, T}, v2::SVector{3, T}, vertices::Vector{SVector{3, T}}) where T
+    edge_vec = v2 - v1
+    
+    # Try to find a reference vertex not on the edge
+    ref_vertex = nothing
+    for v in vertices
+        if norm(v - v1) > GEOMETRIC_TOLERANCE_3D && norm(v - v2) > GEOMETRIC_TOLERANCE_3D
+            ref_vertex = v
+            break
+        end
+    end
+    
+    if ref_vertex === nothing
+        return true  # Not enough vertices to check
+    end
+    
+    # Create a plane through the edge and reference vertex
+    normal = cross(edge_vec, ref_vertex - v1)
+    if norm(normal) < GEOMETRIC_TOLERANCE_3D
+        return true  # Degenerate case
+    end
+    normal = normalize(normal)
+    
+    # Check if all vertices are on one side
+    all_positive = true
+    all_negative = true
+    
+    for v in vertices
+        dist = dot(v - v1, normal)
+        if dist > GEOMETRIC_TOLERANCE_3D
+            all_negative = false
+        elseif dist < -GEOMETRIC_TOLERANCE_3D
+            all_positive = false
+        end
+    end
+    
+    return all_positive || all_negative
+end
+
+"""
+Find the next vertex on a face during convex hull construction.
+
+Given edge (v1, v2) and current face vertices, find the vertex that maximizes
+the turning angle to stay on the convex hull.
+"""
+function _find_next_vertex_on_face(
+    v1::SVector{3, T}, 
+    v2::SVector{3, T}, 
+    vertices::Vector{SVector{3, T}},
+    face_verts::Vector{Int}
+) where T
+    edge_vec = v2 - v1
+    
+    # Use first three vertices to determine face normal
+    if length(face_verts) >= 3
+        v0 = vertices[face_verts[1]]
+        normal = normalize(cross(v2 - v0, v1 - v0))
+    else
+        # For initial edge, use any perpendicular direction
+        normal = normalize(cross(edge_vec, SVector(1.0, 0.0, 0.0)))
+        if norm(normal) < GEOMETRIC_TOLERANCE_3D
+            normal = normalize(cross(edge_vec, SVector(0.0, 1.0, 0.0)))
+        end
+    end
+    
+    best_vertex = nothing
+    best_angle = -Inf
+    
+    for (i, v) in enumerate(vertices)
+        # Skip if already in face or too close to edge vertices
+        if i in face_verts || norm(v - v1) < GEOMETRIC_TOLERANCE_3D || norm(v - v2) < GEOMETRIC_TOLERANCE_3D
+            continue
+        end
+        
+        # Calculate angle
+        to_vertex = normalize(v - v2)
+        backward = normalize(v1 - v2)
+        
+        # Project onto plane perpendicular to normal
+        to_vertex_proj = to_vertex - dot(to_vertex, normal) * normal
+        backward_proj = backward - dot(backward, normal) * normal
+        
+        if norm(to_vertex_proj) < GEOMETRIC_TOLERANCE_3D || norm(backward_proj) < GEOMETRIC_TOLERANCE_3D
+            continue
+        end
+        
+        to_vertex_proj = normalize(to_vertex_proj)
+        backward_proj = normalize(backward_proj)
+        
+        # Calculate turning angle
+        cos_angle = dot(to_vertex_proj, backward_proj)
+        angle = acos(clamp(cos_angle, -1.0, 1.0))
+        
+        if angle > best_angle
+            best_angle = angle
+            best_vertex = i
+        end
+    end
+    
+    return best_vertex
+end
+
+"""
 Build UnstructuredMesh from 3D Voronoi cells.
 
 This function converts the Voronoi cell data into the format required by UnstructuredMesh constructor,
@@ -366,30 +570,26 @@ function _build_unstructured_mesh_3d(cells, all_nodes)
         end
         
         cell_faces = Int[]
-        vert_indices = [node_to_idx[v] for v in cell_verts]
-        n_verts = length(vert_indices)
         
-        # Use tetrahedral decomposition for face extraction (O(n²) instead of O(n³))
-        # This is much faster and still produces valid faces for convex polyhedra
-        # Each face is a triangle connecting the first vertex to pairs of other vertices
+        # Extract convex hull faces for this cell
+        hull_faces = _extract_convex_hull_faces_3d(cell_verts)
         
-        for i in 2:(n_verts-1)
-            for j in (i+1):n_verts
-                # Create triangular face: [v1, vi, vj]
-                face_node_set = Set([vert_indices[1], vert_indices[i], vert_indices[j]])
-                
-                if !haskey(face_dict, face_node_set)
-                    face_dict[face_node_set] = next_face_id
-                    push!(all_faces_to_nodes, sort(collect(face_node_set)))
-                    push!(face_neighbors_vec, (cell_idx, 0))
-                    push!(cell_faces, next_face_id)
-                    next_face_id += 1
-                else
-                    face_id = face_dict[face_node_set]
-                    old_neighbor = face_neighbors_vec[face_id]
-                    face_neighbors_vec[face_id] = (old_neighbor[1], cell_idx)
-                    push!(cell_faces, face_id)
-                end
+        for face_vert_local in hull_faces
+            # Convert local indices to global node indices
+            face_vert_global = [node_to_idx[cell_verts[i]] for i in face_vert_local]
+            face_node_set = Set(face_vert_global)
+            
+            if !haskey(face_dict, face_node_set)
+                face_dict[face_node_set] = next_face_id
+                push!(all_faces_to_nodes, sort(collect(face_node_set)))
+                push!(face_neighbors_vec, (cell_idx, 0))
+                push!(cell_faces, next_face_id)
+                next_face_id += 1
+            else
+                face_id = face_dict[face_node_set]
+                old_neighbor = face_neighbors_vec[face_id]
+                face_neighbors_vec[face_id] = (old_neighbor[1], cell_idx)
+                push!(cell_faces, face_id)
             end
         end
         
