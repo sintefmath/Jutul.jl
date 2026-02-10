@@ -357,6 +357,15 @@ function _split_polygon_by_line_2d(vertices, line_p1, line_p2)
                 t = dot(line_p1 - v1, normal) / denom
                 t = clamp(t, 0.0, 1.0)
                 intersection = v1 + t * (v2 - v1)
+                
+                # Round to ensure consistency across cells
+                # This ensures vertices are bitwise identical
+                scale = 1e10
+                intersection = SVector{2, Float64}(
+                    round(intersection[1] * scale) / scale,
+                    round(intersection[2] * scale) / scale
+                )
+                
                 push!(left_poly, intersection)
                 push!(right_poly, intersection)
             end
@@ -500,10 +509,9 @@ function _build_unstructured_mesh_2d(cells_data, all_pts)
     
     function get_or_add_vertex(v)
         # Find existing vertex within tolerance
-        # Use a more robust tolerance and check against all vertices
-        tol = 5e-9  # Increased tolerance for better matching
+        tol = 1e-10  # Standard geometric tolerance
         
-        # Check all existing vertices (not relying on Dict order)
+        # Check all existing vertices
         for i in 1:length(all_vertices)
             if norm(v - all_vertices[i]) < tol
                 return i
