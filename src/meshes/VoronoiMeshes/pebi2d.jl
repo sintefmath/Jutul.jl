@@ -1,11 +1,10 @@
 """
-    PEBIMesh2D(points; constraints=[], bbox=nothing)
+    PEBIMesh2D(points; bbox=nothing)
 
 Create a 2D PEBI (Perpendicular Bisector) / Voronoi mesh from a set of points.
 
 # Arguments
 - `points`: A matrix of size (2, n) or vector of 2-tuples/vectors containing the x,y coordinates of cell centers
-- `constraints`: Vector of line constraints, each given as a tuple of two points (p1, p2) where each point is a 2-element vector/tuple
 - `bbox`: Optional bounding box as ((xmin, xmax), (ymin, ymax)). If not provided, computed from points with margin
 
 # Returns
@@ -13,19 +12,11 @@ Create a 2D PEBI (Perpendicular Bisector) / Voronoi mesh from a set of points.
 
 # Description
 The PEBI mesh is a Perpendicular Bisector mesh, also known as a Voronoi diagram.
-Each input point becomes a cell center in the resulting mesh. Linear constraints are 
-represented as faces in the mesh, ensuring the mesh respects these constraints.
+Each input point becomes a cell center in the resulting mesh.
 The mesh is bounded by the specified or computed bounding box.
 
-When constraints are specified, cells that intersect the constraint lines are split
-into multiple cells (one on each side of the constraint). This means the final mesh
-will typically have MORE cells than input points.
-
-# Note on Constraint Endpoints
-Constraint endpoints are added as temporary points to structure the mesh. Voronoi cells
-centered at these endpoints are created during mesh generation but are filtered out from
-the final mesh. This is expected behavior - these temporary cells ensure proper constraint
-representation but should not appear as separate cells in the result.
+To add line segment constraints to the mesh, use the `insert_line_segment` function
+after creating the basic mesh.
 
 # Examples
 ```julia
@@ -33,46 +24,25 @@ representation but should not appear as separate cells in the result.
 points = [0.0 1.0 0.0 1.0; 0.0 0.0 1.0 1.0]
 mesh = PEBIMesh2D(points)
 
-# Mesh with a constraint line
+# Mesh with constraint line (use post-processing)
 points = rand(2, 20)
-constraint = ([0.5, 0.0], [0.5, 1.0])  # Vertical line at x=0.5
-mesh = PEBIMesh2D(points, constraints=[constraint])
+mesh = PEBIMesh2D(points)
+mesh = insert_line_segment(mesh, [0.5, 0.0], [0.5, 1.0])  # Add vertical constraint
 # Result will have > 20 cells due to splitting
 ```
 """
-function PEBIMesh2D(points; constraints=[], bbox=nothing)
+function PEBIMesh2D(points; bbox=nothing)
     # Convert points to standard format
     pts, npts = _convert_points_2d(points)
     
     # Compute or validate bounding box
     bb = _compute_bbox_2d(pts, bbox)
     
-    # Add constraint points to generate refined mesh along constraints
-    # This adds constraint endpoints as temporary points to the point set
-    pts_with_constraints, constraint_edges, constraint_point_indices = _add_constraint_points_2d(pts, constraints, bb)
+    # Generate Voronoi diagram
+    cells_data = _generate_voronoi_2d(pts, bb)
     
-    # Generate Voronoi diagram - this creates base cells before splitting
-    # Cells will be created for ALL points, including the temporary constraint endpoints
-    cells_data = _generate_voronoi_2d(pts_with_constraints, bb, constraint_edges)
-    
-    # Filter out cells that are centered at constraint endpoints
-    # These cells should not appear in the final mesh as separate cells.
-    # They are temporary artifacts from adding constraint endpoints to structure the mesh.
-    # Note: This filtering is EXPECTED and does not remove any user-provided cells.
-    # Only cells with center_idx > original_npts are removed (i.e., constraint endpoint cells).
-    original_npts = length(pts)
-    filtered_cells_data = [cell for (i, cell) in enumerate(cells_data) if cell.center_idx <= original_npts]
-    
-    # Split cells that are crossed by constraints
-    # This is the key change: instead of just clipping, we split into multiple cells
-    # Result: The final mesh will have MORE cells than original points due to splitting
-    split_cells_data = _split_cells_by_constraints(filtered_cells_data, pts_with_constraints, constraint_edges)
-    
-    # Build UnstructuredMesh from the Voronoi cells (now including split cells)
-    mesh = _build_unstructured_mesh_2d(split_cells_data, pts_with_constraints)
-    
-    # Post-process to fix interior boundaries caused by constraint splitting
-    mesh = _fix_interior_boundaries(mesh)
+    # Build UnstructuredMesh from the Voronoi cells
+    mesh = _build_unstructured_mesh_2d(cells_data, pts)
     
     return mesh
 end
@@ -124,44 +94,9 @@ function _compute_bbox_2d(pts, bbox)
 end
 
 """
-Add constraint points to ensure constraints are respected in the mesh
-"""
-function _add_constraint_points_2d(pts, constraints, bb)
-    pts_all = copy(pts)
-    constraint_edges = []
-    constraint_point_indices = []
-    
-    for constraint in constraints
-        p1, p2 = constraint
-        p1_sv = SVector{2, Float64}(p1[1], p1[2])
-        p2_sv = SVector{2, Float64}(p2[1], p2[2])
-        
-        # Add constraint endpoints if not already present
-        idx1 = findfirst(p -> norm(p - p1_sv) < 1e-9, pts_all)
-        if idx1 === nothing
-            push!(pts_all, p1_sv)
-            idx1 = length(pts_all)
-            push!(constraint_point_indices, idx1)
-        end
-        
-        idx2 = findfirst(p -> norm(p - p2_sv) < 1e-9, pts_all)
-        if idx2 === nothing
-            push!(pts_all, p2_sv)
-            idx2 = length(pts_all)
-            push!(constraint_point_indices, idx2)
-        end
-        
-        push!(constraint_edges, (idx1, idx2))
-    end
-    
-    return pts_all, constraint_edges, constraint_point_indices
-end
-
-"""
 Generate Voronoi cells using a simple box-clipping approach
-Note: This does NOT clip by constraints - that's handled in splitting phase
 """
-function _generate_voronoi_2d(pts, bb, constraint_edges)
+function _generate_voronoi_2d(pts, bb)
     npts = length(pts)
     ((xmin, xmax), (ymin, ymax)) = bb
     
@@ -250,154 +185,6 @@ function _clean_polygon_vertices(vertices)
     perm = sortperm(angles)
     
     return cleaned[perm]
-end
-
-"""
-Split cells that are crossed by constraints into multiple cells
-Each cell that intersects a constraint is split into separate cells on each side
-"""
-function _split_cells_by_constraints(cells_data, pts, constraint_edges)
-    if isempty(constraint_edges)
-        return cells_data
-    end
-    
-    split_cells = []
-    
-    for cell in cells_data
-        # Try to split this cell by all constraints
-        # Start with the original cell as a list of candidate cells to split
-        current_cells = [(vertices=cell.vertices, center_idx=cell.center_idx)]
-        
-        # Apply each constraint, potentially splitting cells multiple times
-        for (idx1, idx2) in constraint_edges
-            p1 = pts[idx1]
-            p2 = pts[idx2]
-            
-            next_cells = []
-            for sub_cell in current_cells
-                # Try to split this sub-cell by this constraint
-                split_result = _split_polygon_by_line_2d(sub_cell.vertices, p1, p2)
-                
-                if length(split_result) == 1
-                    # Cell not split by this constraint - keep as is
-                    push!(next_cells, sub_cell)
-                else
-                    # Cell was split - add both parts with computed centroids
-                    for poly_verts in split_result
-                        if !isempty(poly_verts)
-                            # Compute centroid for this split piece
-                            centroid = sum(poly_verts) / length(poly_verts)
-                            push!(next_cells, (vertices=poly_verts, center_idx=cell.center_idx, centroid=centroid))
-                        end
-                    end
-                end
-            end
-            current_cells = next_cells
-        end
-        
-        # Add all resulting cells (original or split versions)
-        for final_cell in current_cells
-            if !isempty(final_cell.vertices)
-                push!(split_cells, final_cell)
-            end
-        end
-    end
-    
-    return split_cells
-end
-
-"""
-Split a polygon by a line into two parts (one on each side of the line)
-Returns a vector of polygons (1 if no split, 2 if split occurs)
-"""
-function _split_polygon_by_line_2d(vertices, line_p1, line_p2)
-    if isempty(vertices) || length(vertices) < 3
-        return [vertices]
-    end
-    
-    # Define the constraint line using point and normal
-    line_dir = line_p2 - line_p1
-    normal = SVector{2, Float64}(-line_dir[2], line_dir[1])  # Perpendicular to line
-    
-    tol = 1e-10  # Use consistent tolerance throughout
-    
-    # Check if polygon intersects the line
-    n = length(vertices)
-    distances = [dot(v - line_p1, normal) for v in vertices]
-    
-    # Count vertices on each side
-    n_positive = count(d > tol for d in distances)
-    n_negative = count(d < -tol for d in distances)
-    
-    # If all vertices on one side, no split needed
-    if n_positive == 0 || n_negative == 0
-        return [vertices]
-    end
-    
-    # Polygon crosses the line - need to split
-    # Use Sutherland-Hodgman to clip to each side
-    left_poly = SVector{2, Float64}[]
-    right_poly = SVector{2, Float64}[]
-    
-    for i in 1:n
-        v1 = vertices[i]
-        v2 = vertices[mod1(i + 1, n)]
-        
-        d1 = distances[i]
-        d2 = distances[mod1(i + 1, n)]
-        
-        # Add v1 to appropriate polygon(s)
-        if d1 >= -tol  # On or to the left (positive side)
-            push!(left_poly, v1)
-        end
-        if d1 <= tol  # On or to the right (negative side)
-            push!(right_poly, v1)
-        end
-        
-        # If edge crosses the line, add intersection to both polygons
-        if (d1 > tol && d2 < -tol) || (d1 < -tol && d2 > tol)
-            # Compute intersection
-            denom = dot(v2 - v1, normal)
-            if abs(denom) > 1e-14
-                t = dot(line_p1 - v1, normal) / denom
-                t = clamp(t, 0.0, 1.0)
-                intersection = v1 + t * (v2 - v1)
-                
-                # Round to ensure consistency across cells
-                # This ensures vertices are bitwise identical
-                scale = 1e10
-                intersection = SVector{2, Float64}(
-                    round(intersection[1] * scale) / scale,
-                    round(intersection[2] * scale) / scale
-                )
-                
-                push!(left_poly, intersection)
-                push!(right_poly, intersection)
-            end
-        end
-    end
-    
-    # Clean up the polygons
-    left_poly = _clean_polygon_vertices(left_poly)
-    right_poly = _clean_polygon_vertices(right_poly)
-    
-    # Only add non-empty polygons to result
-    # _clean_polygon_vertices returns empty array if < 3 vertices
-    result = []
-    if !isempty(left_poly) && length(left_poly) >= 3
-        push!(result, left_poly)
-    end
-    if !isempty(right_poly) && length(right_poly) >= 3
-        push!(result, right_poly)
-    end
-    
-    # If both polygons are empty/invalid, return the original vertices
-    # This can happen with very small polygons or degenerate cases
-    if isempty(result)
-        return [vertices]
-    end
-    
-    return result
 end
 
 """
@@ -502,65 +289,6 @@ function _clip_polygon_by_line_2d(vertices, line_p1, line_p2, center)
     end
     
     return clipped
-end
-
-"""
-Fix interior boundaries by converting them to interior faces
-Interior boundaries are boundary faces that are not on the actual bounding box
-"""
-function _fix_interior_boundaries(mesh::UnstructuredMesh)
-    # Determine actual bounding box
-    bbox_xmin, bbox_xmax = extrema([p[1] for p in mesh.node_points])
-    bbox_ymin, bbox_ymax = extrema([p[2] for p in mesh.node_points])
-    tol = 1e-6
-    
-    # Identify boundary faces that are actually in the interior
-    interior_boundary_faces = Int[]
-    
-    for bface_idx in 1:number_of_boundary_faces(mesh)
-        nodes = [mesh.boundary_faces.faces_to_nodes[bface_idx]...]
-        
-        # Check if all nodes are on the actual boundary
-        all_on_boundary = true
-        for node_idx in nodes
-            pt = mesh.node_points[node_idx]
-            on_boundary = (abs(pt[1] - bbox_xmin) < tol || abs(pt[1] - bbox_xmax) < tol ||
-                          abs(pt[2] - bbox_ymin) < tol || abs(pt[2] - bbox_ymax) < tol)
-            if !on_boundary
-                all_on_boundary = false
-                break
-            end
-        end
-        
-        if !all_on_boundary
-            push!(interior_boundary_faces, bface_idx)
-        end
-    end
-    
-    # If no interior boundaries, return mesh as is
-    if isempty(interior_boundary_faces)
-        return mesh
-    end
-    
-    # Match interior boundary faces by their node pairs
-    # Two boundary faces with the same nodes should become one interior face
-    face_pairs = Dict{Set{Int}, Vector{Int}}()
-    
-    for bface_idx in interior_boundary_faces
-        nodes = [mesh.boundary_faces.faces_to_nodes[bface_idx]...]
-        node_set = Set(nodes)
-        
-        if !haskey(face_pairs, node_set)
-            face_pairs[node_set] = []
-        end
-        push!(face_pairs[node_set], bface_idx)
-    end
-    
-    # For now, just warn and return the original mesh
-    # Properly fixing this requires rebuilding the entire mesh structure
-    @warn "Interior boundaries detected: $(length(interior_boundary_faces)) faces not on bounding box. Mesh has holes at constraint intersections."
-    
-    return mesh
 end
 
 """
