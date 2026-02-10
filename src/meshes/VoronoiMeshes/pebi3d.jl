@@ -253,6 +253,9 @@ end
 
 """
 Build UnstructuredMesh from 3D Voronoi cells.
+
+This function converts the Voronoi cell data into the format required by UnstructuredMesh constructor,
+which needs 11 positional arguments with specific interior/boundary separation.
 """
 function _build_unstructured_mesh_3d(cells, all_nodes)
     if isempty(cells)
@@ -269,12 +272,10 @@ function _build_unstructured_mesh_3d(cells, all_nodes)
     end
     
     # Extract faces and build connectivity
-    # This is simplified - a full implementation would extract all polyhedron faces
-    # For now, create a basic tetrahedralization of each cell
-    
-    cells_to_faces = Vector{Vector{Int}}()
-    faces_to_nodes = Vector{Vector{Int}}()
-    face_neighbors = Vector{Tuple{Int, Int}}()
+    # This is simplified - creates triangular faces from cell vertices
+    cells_to_faces_vec = Vector{Vector{Int}}()
+    all_faces_to_nodes = Vector{Vector{Int}}()
+    face_neighbors_vec = Vector{Tuple{Int, Int}}()
     
     face_dict = Dict{Set{Int}, Int}()
     next_face_id = 1
@@ -285,9 +286,6 @@ function _build_unstructured_mesh_3d(cells, all_nodes)
         end
         
         cell_faces = Int[]
-        
-        # Create faces for this cell (simplified - just use triangulation approach)
-        # In a full implementation, would extract actual polyhedron faces
         n_verts = length(cell_verts)
         vert_indices = [node_to_idx[v] for v in cell_verts]
         
@@ -298,14 +296,13 @@ function _build_unstructured_mesh_3d(cells, all_nodes)
                 
                 if !haskey(face_dict, face_nodes)
                     face_dict[face_nodes] = next_face_id
-                    push!(faces_to_nodes, sort(collect(face_nodes)))
-                    push!(face_neighbors, (cell_idx, 0))
+                    push!(all_faces_to_nodes, sort(collect(face_nodes)))
+                    push!(face_neighbors_vec, (cell_idx, 0))
                     next_face_id += 1
                 else
                     face_id = face_dict[face_nodes]
-                    # Update neighbor
-                    old_neighbor = face_neighbors[face_id]
-                    face_neighbors[face_id] = (old_neighbor[1], cell_idx)
+                    old_neighbor = face_neighbors_vec[face_id]
+                    face_neighbors_vec[face_id] = (old_neighbor[1], cell_idx)
                 end
                 
                 face_id = face_dict[face_nodes]
@@ -315,36 +312,97 @@ function _build_unstructured_mesh_3d(cells, all_nodes)
             end
         end
         
-        push!(cells_to_faces, cell_faces)
+        push!(cells_to_faces_vec, cell_faces)
     end
     
-    # Mark boundary faces
-    boundary_faces = Int[]
-    for (i, (n1, n2)) in enumerate(face_neighbors)
+    # Separate interior and boundary faces
+    interior_face_indices = Int[]
+    boundary_face_indices = Int[]
+    
+    for (i, (n1, n2)) in enumerate(face_neighbors_vec)
         if n2 == 0
-            push!(boundary_faces, i)
+            push!(boundary_face_indices, i)
+        else
+            push!(interior_face_indices, i)
         end
     end
     
-    # Build neighbor matrix
-    neighbor_matrix = zeros(Int, length(faces_to_nodes), 2)
-    for (i, (n1, n2)) in enumerate(face_neighbors)
-        neighbor_matrix[i, 1] = n1
-        neighbor_matrix[i, 2] = n2
+    # Build flat arrays for cells_to_faces
+    cells_faces = Int[]
+    cells_facepos = [1]
+    boundary_cells_faces = Int[]
+    boundary_cells_facepos = [1]
+    
+    for cell_faces in cells_to_faces_vec
+        # Add interior faces
+        for face_id in cell_faces
+            if face_id in interior_face_indices
+                push!(cells_faces, findfirst(==(face_id), interior_face_indices))
+            end
+        end
+        push!(cells_facepos, length(cells_faces) + 1)
+        
+        # Add boundary faces  
+        for face_id in cell_faces
+            if face_id in boundary_face_indices
+                push!(boundary_cells_faces, findfirst(==(face_id), boundary_face_indices))
+            end
+        end
+        push!(boundary_cells_facepos, length(boundary_cells_faces) + 1)
     end
     
-    # Convert to required format
-    node_points_matrix = zeros(3, length(node_points))
+    # Build flat arrays for interior faces_to_nodes
+    faces_nodes_flat = Int[]
+    internal_faces_nodespos = [1]
+    for face_idx in interior_face_indices
+        for node_idx in all_faces_to_nodes[face_idx]
+            push!(faces_nodes_flat, node_idx)
+        end
+        push!(internal_faces_nodespos, length(faces_nodes_flat) + 1)
+    end
+    
+    # Build flat arrays for boundary faces_to_nodes
+    boundary_faces_nodes_flat = Int[]
+    boundary_faces_nodespos = [1]
+    for face_idx in boundary_face_indices
+        for node_idx in all_faces_to_nodes[face_idx]
+            push!(boundary_faces_nodes_flat, node_idx)
+        end
+        push!(boundary_faces_nodespos, length(boundary_faces_nodes_flat) + 1)
+    end
+    
+    # Build neighbor arrays
+    internal_neighbors = zeros(Int, length(interior_face_indices), 2)
+    for (i, face_idx) in enumerate(interior_face_indices)
+        n1, n2 = face_neighbors_vec[face_idx]
+        internal_neighbors[i, 1] = n1
+        internal_neighbors[i, 2] = n2
+    end
+    
+    boundary_neighbors = Int[]
+    for face_idx in boundary_face_indices
+        n1, _ = face_neighbors_vec[face_idx]
+        push!(boundary_neighbors, n1)
+    end
+    
+    # Convert node points to matrix format
+    all_vertices = zeros(3, length(node_points))
     for (i, pt) in enumerate(node_points)
-        node_points_matrix[:, i] = pt
+        all_vertices[:, i] = pt
     end
     
-    # Create UnstructuredMesh
+    # Call UnstructuredMesh with all 11 positional arguments
     return UnstructuredMesh(
-        cells_to_faces,
-        faces_to_nodes,
-        node_points_matrix,
-        neighbors = neighbor_matrix,
-        boundary_faces = boundary_faces
+        cells_faces,
+        cells_facepos,
+        boundary_cells_faces,
+        boundary_cells_facepos,
+        faces_nodes_flat,
+        internal_faces_nodespos,
+        boundary_faces_nodes_flat,
+        boundary_faces_nodespos,
+        all_vertices,
+        internal_neighbors,
+        boundary_neighbors
     )
 end
