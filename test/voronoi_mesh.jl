@@ -100,6 +100,37 @@ using Random
         end
     end
     
+    @testset "Cell splitting by single constraint" begin
+        # Test that a cell crossing a constraint is split into two cells
+        # Create a single point that will have a cell crossing the constraint
+        points = [0.5; 0.5]'  # Single point at center (as 2×1 matrix)
+        constraint = ([0.0, 0.5], [1.0, 0.5])  # Horizontal line through center
+        
+        # Mesh without constraint should have 1 cell
+        mesh_no_constraint = Jutul.VoronoiMeshes.PEBIMesh2D(points)
+        @test number_of_cells(mesh_no_constraint) == 1
+        
+        # Mesh with constraint should split the cell
+        mesh_with_constraint = Jutul.VoronoiMeshes.PEBIMesh2D(points, constraints=[constraint])
+        # The single cell should be split into 2 cells
+        @test number_of_cells(mesh_with_constraint) >= 2
+    end
+    
+    @testset "Cell splitting by multiple constraints" begin
+        # Test that a cell can be split by multiple constraints
+        # Single point with two perpendicular constraints
+        points = [0.5; 0.5]'  # Single point at center (as 2×1 matrix)
+        constraints = [
+            ([0.0, 0.5], [1.0, 0.5]),  # Horizontal line
+            ([0.5, 0.0], [0.5, 1.0])   # Vertical line
+        ]
+        
+        # Mesh with two perpendicular constraints should split into 4 cells
+        mesh = Jutul.VoronoiMeshes.PEBIMesh2D(points, constraints=constraints)
+        # The cell should be split into 4 quadrants
+        @test number_of_cells(mesh) >= 4
+    end
+    
     @testset "2D PEBI mesh with high coordinate variation" begin
         # Test with points that have high coordinate variation
         points = [0.0 1000.0 500.0 250.0; 

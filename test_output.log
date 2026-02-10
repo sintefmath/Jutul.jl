@@ -1,0 +1,674 @@
+  Activating project at `~/work/Jutul.jl/Jutul.jl`
+  Installing known registries into `~/.julia`
+┌ Warning: could not download https://pkg.julialang.org/registries
+│   exception = RequestError: Could not resolve host: pkg.julialang.org while requesting https://pkg.julialang.org/registries
+└ @ Pkg.Registry /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Pkg/src/Registry/Registry.jl:83
+┌ Warning: could not download https://pkg.julialang.org/registries
+│   exception = RequestError: Could not resolve host: pkg.julialang.org while requesting https://pkg.julialang.org/registries
+└ @ Pkg.Registry /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Pkg/src/Registry/Registry.jl:83
+     Cloning registry from "https://github.com/JuliaRegistries/General.git"
+       Added registry `General` to `~/.julia/registries/General`
+┌ Warning: could not download https://pkg.julialang.org/registries
+│   exception = RequestError: Could not resolve host: pkg.julialang.org while requesting https://pkg.julialang.org/registries
+└ @ Pkg.Registry /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Pkg/src/Registry/Registry.jl:83
+    Updating registry at `~/.julia/registries/General`
+┌ Info: The General registry is installed via git. Consider reinstalling it via
+│ the newer faster direct from tarball format by running:
+│   pkg> registry rm General; registry add General
+└ 
+    Updating git-repo `https://github.com/JuliaRegistries/General.git`
+┌ Warning: could not download https://pkg.julialang.org/registries
+│   exception = RequestError: Could not resolve host: pkg.julialang.org while requesting https://pkg.julialang.org/registries
+└ @ Pkg.Registry /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Pkg/src/Registry/Registry.jl:83
+     Cloning [b552c78f-8df3-52c6-915a-8e097449b14b] DiffRules from https://github.com/JuliaDiff/DiffRules.jl.git
+   Installed DiffRules ──────────────────────── v1.15.1
+     Cloning [033835bb-8acc-5ee8-8aae-3f567f8a3819] JLD2 from https://github.com/JuliaIO/JLD2.jl.git
+   Installed JLD2 ───────────────────────────── v0.6.3
+     Cloning [a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f] Crayons from https://github.com/KristofferC/Crayons.jl.git
+   Installed Crayons ────────────────────────── v4.1.1
+     Cloning [477f73a3-ac25-53e9-8cc3-50b2fa2566f0] libaec_jll from https://github.com/JuliaBinaryWrappers/libaec_jll.jl.git
+   Installed libaec_jll ─────────────────────── v1.1.5+0
+     Cloning [92d709cd-6900-40b7-9082-c6be49f344b6] IrrationalConstants from https://github.com/JuliaMath/IrrationalConstants.jl.git
+   Installed IrrationalConstants ────────────── v0.2.6
+     Cloning [7cb0a576-ebde-5e09-9194-50597f1243b4] MPICH_jll from https://github.com/JuliaBinaryWrappers/MPICH_jll.jl.git
+   Installed MPICH_jll ──────────────────────── v4.3.2+0
+     Cloning [94e857df-77ce-4151-89e5-788b33177be4] SIMDTypes from https://github.com/JuliaSIMD/SIMDTypes.jl.git
+   Installed SIMDTypes ──────────────────────── v0.1.0
+     Cloning [62783981-4cbd-42fc-bca8-16325de8dc4b] BitTwiddlingConvenienceFunctions from https://github.com/JuliaSIMD/BitTwiddlingConvenienceFunctions.jl.git
+   Installed BitTwiddlingConvenienceFunctions ─ v0.1.6
+     Cloning [79e6a3ab-5dfb-504d-930d-738a2a938a0e] Adapt from https://github.com/JuliaGPU/Adapt.jl.git
+   Installed Adapt ──────────────────────────── v4.4.0
+     Cloning [6fe1bfb0-de20-5000-8ca7-80f57d26f881] OffsetArrays from https://github.com/JuliaArrays/OffsetArrays.jl.git
+   Installed OffsetArrays ───────────────────── v1.17.0
+     Cloning [7792a7ef-975c-4747-a70f-980b88e8d1da] StrideArraysCore from https://github.com/JuliaSIMD/StrideArraysCore.jl.git
+   Installed StrideArraysCore ───────────────── v0.5.8
+     Cloning [3d5dd08c-fd9d-11e8-17fa-ed2836048c2f] VectorizationBase from https://github.com/JuliaSIMD/VectorizationBase.jl.git
+   Installed VectorizationBase ──────────────── v0.21.72
+     Cloning [08abe8d2-0d0c-5749-adfa-8a2ac140af0d] PrettyTables from https://github.com/ronisbr/PrettyTables.jl.git
+   Installed PrettyTables ───────────────────── v2.4.0
+     Cloning [ec485272-7323-5ecc-a04f-4719b315124d] ArnoldiMethod from https://github.com/JuliaLinearAlgebra/ArnoldiMethod.jl.git
+   Installed ArnoldiMethod ──────────────────── v0.4.0
+     Cloning [02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a] XML2_jll from https://github.com/JuliaBinaryWrappers/XML2_jll.jl.git
+   Installed XML2_jll ───────────────────────── v2.13.9+0
+     Cloning [10f19ff3-798f-405d-979b-55457f8fc047] LayoutPointers from https://github.com/JuliaSIMD/LayoutPointers.jl.git
+   Installed LayoutPointers ─────────────────── v0.1.17
+     Cloning [431bcebd-1456-4ced-9d72-93c2757fff0b] SciMLPublic from https://github.com/SciML/SciMLPublic.jl.git
+   Installed SciMLPublic ────────────────────── v1.0.1
+     Cloning [a65dc6b1-eb27-53a1-bb3e-dea574b5389e] Xorg_libpciaccess_jll from https://github.com/JuliaBinaryWrappers/Xorg_libpciaccess_jll.jl.git
+   Installed Xorg_libpciaccess_jll ──────────── v0.18.1+0
+     Cloning [adafc99b-e345-5852-983c-f28acb93d879] CpuId from https://github.com/m-j-w/CpuId.jl.git
+   Installed CpuId ──────────────────────────── v0.3.1
+     Cloning [21216c6a-2e73-6563-6e65-726566657250] Preferences from https://github.com/JuliaPackaging/Preferences.jl.git
+   Installed Preferences ────────────────────── v1.5.1
+     Cloning [3161d3a3-bdf6-5164-811a-617609db77b4] Zstd_jll from https://github.com/JuliaBinaryWrappers/Zstd_jll.jl.git
+   Installed Zstd_jll ───────────────────────── v1.5.7+1
+     Cloning [2169fc97-5a83-5252-b627-83903c6c433c] AlgebraicMultigrid from https://github.com/JuliaLinearAlgebra/AlgebraicMultigrid.jl.git
+   Installed AlgebraicMultigrid ─────────────── v0.5.1
+     Cloning [3783bdb8-4a98-5b6b-af9a-565f29a5fe9c] TableTraits from https://github.com/queryverse/TableTraits.jl.git
+   Installed TableTraits ────────────────────── v1.0.1
+     Cloning [163ba53b-c6d8-5494-b064-1a9d43ac40c5] DiffResults from https://github.com/JuliaDiff/DiffResults.jl.git
+   Installed DiffResults ────────────────────── v1.1.0
+     Cloning [d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9] Inflate from https://github.com/GunnarFarneback/Inflate.jl.git
+   Installed Inflate ────────────────────────── v0.1.5
+     Cloning [bc48ee85-29a4-5162-ae0b-a64e1601d4bc] Tullio from https://github.com/mcabbott/Tullio.jl.git
+   Installed Tullio ─────────────────────────── v0.3.8
+     Cloning [47edcb42-4c32-4615-8424-f2b9edc5f35b] ADTypes from https://github.com/SciML/ADTypes.jl.git
+   Installed ADTypes ────────────────────────── v1.21.0
+     Cloning [4c0bbee4-addc-4d73-81a0-b6caacae83c8] ChunkCodecLibZlib from https://github.com/JuliaIO/ChunkCodecs.jl.git
+   Installed ChunkCodecLibZlib ──────────────── v1.0.0
+     Cloning [e33a78d0-f292-5ffc-b300-72abe9b543c8] Hwloc_jll from https://github.com/JuliaBinaryWrappers/Hwloc_jll.jl.git
+   Installed Hwloc_jll ──────────────────────── v2.12.2+0
+     Cloning [bd369af6-aec1-5ad0-b16a-f7cc5008161c] Tables from https://github.com/JuliaData/Tables.jl.git
+   Installed Tables ─────────────────────────── v1.12.1
+     Cloning [276daf66-3868-5448-9aa4-cd146d93841b] SpecialFunctions from https://github.com/JuliaMath/SpecialFunctions.jl.git
+   Installed SpecialFunctions ───────────────── v2.6.1
+     Cloning [2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9] CPUSummary from https://github.com/JuliaSIMD/CPUSummary.jl.git
+   Installed CPUSummary ─────────────────────── v0.2.7
+     Cloning [076d061b-32b6-4027-95e0-9a2c6f6d7e74] HashArrayMappedTries from https://github.com/vchuravy/HashArrayMappedTries.jl.git
+   Installed HashArrayMappedTries ───────────── v0.2.0
+     Cloning [bdcacae8-1622-11e9-2a5c-532679323890] LoopVectorization from https://github.com/JuliaSIMD/LoopVectorization.jl.git
+   Installed LoopVectorization ──────────────── v0.12.173
+     Cloning [9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a] DataAPI from https://github.com/JuliaData/DataAPI.jl.git
+   Installed DataAPI ────────────────────────── v1.16.0
+     Cloning [efcf1570-3423-57d1-acb7-fd33fddbac46] Setfield from https://github.com/jw3126/Setfield.jl.git
+   Installed Setfield ───────────────────────── v1.1.2
+     Cloning [615f187c-cbe4-4ef1-ba3b-2fcf58d6d173] IfElse from https://github.com/SciML/IfElse.jl.git
+   Installed IfElse ─────────────────────────── v0.1.1
+     Cloning [9237b28f-5490-5468-be7b-bb81f5f5e6cf] MicrosoftMPI_jll from https://github.com/JuliaBinaryWrappers/MicrosoftMPI_jll.jl.git
+   Installed MicrosoftMPI_jll ───────────────── v10.1.4+3
+     Cloning [fe0851c0-eecd-5654-98d4-656369965a5c] OpenMPI_jll from https://github.com/JuliaBinaryWrappers/OpenMPI_jll.jl.git
+   Installed OpenMPI_jll ────────────────────── v5.0.9+0
+     Cloning [2dfb63ee-cc39-5dd5-95bd-886bf059d720] PooledArrays from https://github.com/JuliaData/PooledArrays.jl.git
+   Installed PooledArrays ───────────────────── v1.4.3
+     Cloning [a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f] TimerOutputs from https://github.com/KristofferC/TimerOutputs.jl.git
+   Installed TimerOutputs ───────────────────── v0.5.29
+     Cloning [3cdcf5f2-1ef4-517c-9805-6587b60abb01] RecipesBase from https://github.com/JuliaPlots/Plots.jl.git
+   Installed RecipesBase ────────────────────── v1.3.4
+     Cloning [692b3bcd-3c85-4b1f-b108-f13ce0eb3210] JLLWrappers from https://github.com/JuliaPackaging/JLLWrappers.jl.git
+   Installed JLLWrappers ────────────────────── v1.7.1
+     Cloning [92933f4c-e287-5a05-a399-4b506db050ca] ProgressMeter from https://github.com/timholy/ProgressMeter.jl.git
+   Installed ProgressMeter ──────────────────── v1.11.0
+     Cloning [90137ffa-7385-5640-81b9-e52037218182] StaticArrays from https://github.com/JuliaArrays/StaticArrays.jl.git
+   Installed StaticArrays ───────────────────── v1.9.16
+     Cloning [55437552-ac27-4d47-9aa3-63184e8fd398] ChunkCodecLibZstd from https://github.com/JuliaIO/ChunkCodecs.jl.git
+   Installed ChunkCodecLibZstd ──────────────── v1.0.0
+     Cloning [77ba4419-2d1f-58cd-9bb1-8ffee604a2e3] NaNMath from https://github.com/JuliaMath/NaNMath.jl.git
+   Installed NaNMath ────────────────────────── v1.1.3
+     Cloning [69024149-9ee7-55f6-a4c4-859efe599b68] StringEncodings from https://github.com/JuliaStrings/StringEncodings.jl.git
+   Installed StringEncodings ────────────────── v0.3.7
+     Cloning [1e83bf80-4336-4d27-bf5d-d5a4f845583c] StaticArraysCore from https://github.com/JuliaArrays/StaticArraysCore.jl.git
+   Installed StaticArraysCore ───────────────── v1.4.4
+     Cloning [f517fe37-dbe3-4b94-8317-1923a5111588] Polyester from https://github.com/JuliaSIMD/Polyester.jl.git
+   Installed Polyester ──────────────────────── v0.7.19
+     Cloning [82899510-4779-5014-852e-03e436cf321d] IteratorInterfaceExtensions from https://github.com/queryverse/IteratorInterfaceExtensions.jl.git
+   Installed IteratorInterfaceExtensions ────── v1.0.0
+     Cloning [aea7be01-6a6a-4083-8856-8a6e6704d82a] PrecompileTools from https://github.com/JuliaLang/PrecompileTools.jl.git
+   Installed PrecompileTools ────────────────── v1.3.3
+     Cloning [94ce4f54-9a6c-5748-9c1c-f9c7231a4531] Libiconv_jll from https://github.com/JuliaBinaryWrappers/Libiconv_jll.jl.git
+   Installed Libiconv_jll ───────────────────── v1.18.0+0
+     Cloning [187b0558-2788-49d3-abe0-74a17ed4e7c9] ConstructionBase from https://github.com/JuliaObjects/ConstructionBase.jl.git
+   Installed ConstructionBase ───────────────── v1.6.0
+     Cloning [3e5b6fbb-0976-4d2c-9146-d79de83f2fb0] HostCPUFeatures from https://github.com/JuliaSIMD/HostCPUFeatures.jl.git
+   Installed HostCPUFeatures ────────────────── v0.1.18
+     Cloning [86223c79-3864-5bf0-83f7-82e725a168b6] Graphs from https://github.com/JuliaGraphs/Graphs.jl.git
+   Installed Graphs ─────────────────────────── v1.13.1
+     Cloning [e2d170a0-9d28-54be-80f0-106bbe20a464] DataValueInterfaces from https://github.com/queryverse/DataValueInterfaces.jl.git
+   Installed DataValueInterfaces ────────────── v1.0.0
+     Cloning [bac558e1-5e72-5ebc-8fee-abe8a469f55d] OrderedCollections from https://github.com/JuliaCollections/OrderedCollections.jl.git
+   Installed OrderedCollections ─────────────── v1.8.1
+     Cloning [88f59080-6952-5380-9ea5-54057fb9a43f] ILUZero from https://github.com/mcovalt/ILUZero.jl.git
+   Installed ILUZero ────────────────────────── v0.2.0
+     Cloning [0b6fb165-00bc-4d37-ab8b-79f91016dbe1] ChunkCodecCore from https://github.com/JuliaIO/ChunkCodecs.jl.git
+   Installed ChunkCodecCore ─────────────────── v1.0.1
+     Cloning [8290d209-cae3-49c0-8002-c8c24d57dab5] ThreadingUtilities from https://github.com/JuliaSIMD/ThreadingUtilities.jl.git
+   Installed ThreadingUtilities ─────────────── v0.5.5
+     Cloning [3bb67fe8-82b1-5028-8e26-92a6c54297fa] TranscodingStreams from https://github.com/JuliaIO/TranscodingStreams.jl.git
+   Installed TranscodingStreams ─────────────── v0.11.3
+     Cloning [b964fa9f-0449-5b57-a5c2-d3ea65f4040f] LaTeXStrings from https://github.com/JuliaStrings/LaTeXStrings.jl.git
+   Installed LaTeXStrings ───────────────────── v1.4.0
+     Cloning [9f842d2f-2579-4b1d-911e-f412cf18a3f5] SparseConnectivityTracer from https://github.com/adrhill/SparseConnectivityTracer.jl.git
+   Installed SparseConnectivityTracer ───────── v1.2.0
+     Cloning [7e506255-f358-4e82-b7e4-beb19740aa63] ScopedValues from https://github.com/JuliaLang/ScopedValues.jl.git
+   Installed ScopedValues ───────────────────── v1.5.0
+     Cloning [f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f] HDF5 from https://github.com/JuliaIO/HDF5.jl.git
+   Installed HDF5 ───────────────────────────── v0.17.2
+     Cloning [2679e427-3c69-5b7f-982b-ece356f1e94b] Metis from https://github.com/JuliaSparse/Metis.jl.git
+   Installed Metis ──────────────────────────── v1.5.0
+     Cloning [d125e4d3-2237-4719-b19c-fa641b8a4667] ManualMemory from https://github.com/JuliaSIMD/ManualMemory.jl.git
+   Installed ManualMemory ───────────────────── v0.1.8
+     Cloning [0a514795-09f3-496d-8182-132a7b665d35] SparseMatrixColorings from https://github.com/gdalle/SparseMatrixColorings.jl.git
+   Installed SparseMatrixColorings ──────────── v0.4.23
+     Cloning [5789e2e9-d7fb-5bc7-8068-2c6fae9b9549] FileIO from https://github.com/JuliaIO/FileIO.jl.git
+   Installed FileIO ─────────────────────────── v1.18.0
+     Cloning [1d0040c9-8b98-4ee7-8388-3f51789ca0ad] PolyesterWeave from https://github.com/JuliaSIMD/PolyesterWeave.jl.git
+   Installed PolyesterWeave ─────────────────── v0.2.2
+     Cloning [fa961155-64e5-5f13-b03f-caf6b980ea82] CEnum from https://github.com/JuliaInterop/CEnum.jl.git
+   Installed CEnum ──────────────────────────── v0.5.0
+     Cloning [9aa1b823-49e4-5ca5-8b0f-3971ec8bab6a] FastClosures from https://github.com/c42f/FastClosures.jl.git
+   Installed FastClosures ───────────────────── v0.3.2
+     Cloning [5c8ed15e-5a4c-59e4-a42b-c7e8811fb125] LinearOperators from https://github.com/JuliaSmoothOptimizers/LinearOperators.jl.git
+   Installed LinearOperators ────────────────── v2.12.0
+     Cloning [23992714-dd62-5051-b70f-ba57cb901cac] MAT from https://github.com/JuliaIO/MAT.jl.git
+   Installed MAT ────────────────────────────── v0.11.5
+     Cloning [f6369f11-7733-5829-9624-2563aa707210] ForwardDiff from https://github.com/JuliaDiff/ForwardDiff.jl.git
+   Installed ForwardDiff ────────────────────── v1.3.2
+     Cloning [4fba245c-0d91-5ea0-9b3e-6abc04ee57a9] ArrayInterface from https://github.com/JuliaArrays/ArrayInterface.jl.git
+   Installed ArrayInterface ─────────────────── v7.22.0
+     Cloning [1a297f60-69ca-5386-bcde-b61e274b549b] FillArrays from https://github.com/JuliaArrays/FillArrays.jl.git
+   Installed FillArrays ─────────────────────── v1.16.0
+     Cloning [286e6d88-80af-4590-acc9-0001b223b9bd] SymRCM from https://github.com/PetrKryslUCSD/SymRCM.jl.git
+   Installed SymRCM ─────────────────────────── v0.2.2
+     Cloning [3da0fdf6-3ccc-4f1b-acd9-58baa6c99267] MPIPreferences from https://github.com/JuliaParallel/MPI.jl.git
+   Installed MPIPreferences ─────────────────── v0.1.11
+     Cloning [189a3867-3050-52da-a836-e630ba90ab69] Reexport from https://github.com/simonster/Reexport.jl.git
+   Installed Reexport ───────────────────────── v1.2.2
+     Cloning [10745b16-79ce-11e8-11f9-7d13ad32a3b2] Statistics from https://github.com/JuliaStats/Statistics.jl.git
+   Installed Statistics ─────────────────────── v1.11.1
+     Cloning [f1f71cc9-e9ae-5b93-9b94-4fe0e1ad3748] MPItrampoline_jll from https://github.com/JuliaBinaryWrappers/MPItrampoline_jll.jl.git
+   Installed MPItrampoline_jll ──────────────── v5.5.4+0
+     Cloning [f27b6e38-b328-58d1-80ce-0feddd5e7a45] Polynomials from https://github.com/JuliaMath/Polynomials.jl.git
+   Installed Polynomials ────────────────────── v4.1.0
+     Cloning [ba0b0d4f-ebba-5204-a429-3ac8c609bfb7] Krylov from https://github.com/JuliaSmoothOptimizers/Krylov.jl.git
+   Installed Krylov ─────────────────────────── v0.9.10
+     Cloning [06eadbd4-12ad-4cbc-ab6e-10f8370940a5] SparsityTracing from https://github.com/PALEOtoolkit/SparsityTracing.jl.git
+   Installed SparsityTracing ────────────────── v0.2.6
+     Cloning [864edb3b-99cc-5e75-8d2d-829cb0a9cfe8] DataStructures from https://github.com/JuliaCollections/DataStructures.jl.git
+   Installed DataStructures ─────────────────── v0.18.22
+     Cloning [bbf7d656-a473-5ed7-a52c-81e309532950] CommonSubexpressions from https://github.com/rdeits/CommonSubexpressions.jl.git
+   Installed CommonSubexpressions ───────────── v0.3.1
+     Cloning [2ab3a3ac-af41-5b50-aa03-7779005ae688] LogExpFunctions from https://github.com/JuliaStats/LogExpFunctions.jl.git
+   Installed LogExpFunctions ────────────────── v0.3.29
+     Cloning [dbb5928d-eab1-5f90-85c2-b9b0edb7c900] MappedArrays from https://github.com/JuliaArrays/MappedArrays.jl.git
+   Installed MappedArrays ───────────────────── v0.4.3
+     Cloning [ae029012-a4dd-5104-9daa-d747884805df] Requires from https://github.com/JuliaPackaging/Requires.jl.git
+   Installed Requires ───────────────────────── v1.3.1
+     Cloning [fb6a15b2-703c-40df-9091-08a04967cfa9] CloseOpenIntervals from https://github.com/JuliaSIMD/CloseOpenIntervals.jl.git
+   Installed CloseOpenIntervals ─────────────── v0.1.13
+     Cloning [e2ba6199-217a-4e67-a87a-7c52f15ade04] ExprTools from https://github.com/JuliaTesting/ExprTools.jl.git
+   Installed ExprTools ──────────────────────── v0.1.10
+     Cloning [1914dd2f-81c6-5fcd-8719-6d5c9610ff09] MacroTools from https://github.com/FluxML/MacroTools.jl.git
+   Installed MacroTools ─────────────────────── v0.5.16
+     Cloning [aedffcd0-7271-4cad-89d0-dc628f76c6d3] Static from https://github.com/SciML/Static.jl.git
+   Installed Static ─────────────────────────── v1.3.1
+     Cloning [476501e8-09a2-5ece-8869-fb82de89a1fa] SLEEFPirates from https://github.com/JuliaSIMD/SLEEFPirates.jl.git
+   Installed SLEEFPirates ───────────────────── v0.6.43
+     Cloning [34da2185-b29b-5c13-b0c7-acf172513d20] Compat from https://github.com/JuliaLang/Compat.jl.git
+   Installed Compat ─────────────────────────── v4.18.1
+     Cloning [3a884ed6-31ef-47d7-9d2a-63182c4928ed] UnPack from https://github.com/mauro3/UnPack.jl.git
+   Installed UnPack ─────────────────────────── v1.0.2
+     Cloning [efe28fd5-8261-553b-a9e1-b2916fc3738e] OpenSpecFun_jll from https://github.com/JuliaBinaryWrappers/OpenSpecFun_jll.jl.git
+   Installed OpenSpecFun_jll ────────────────── v0.5.6+0
+     Cloning [f70d9fcc-98c5-4d4a-abd7-e4cdeebd8ca8] CommonWorldInvalidations from https://github.com/SciML/CommonWorldInvalidations.jl.git
+   Installed CommonWorldInvalidations ───────── v1.0.0
+     Cloning [d00139f3-1899-568f-a2f0-47f597d42d70] METIS_jll from https://github.com/JuliaBinaryWrappers/METIS_jll.jl.git
+   Installed METIS_jll ──────────────────────── v5.1.3+0
+     Cloning [a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63] DifferentiationInterface from https://github.com/JuliaDiff/DifferentiationInterface.jl.git
+   Installed DifferentiationInterface ───────── v0.7.16
+     Cloning [38540f10-b2f7-11e9-35d8-d573e4eb0ff2] CommonSolve from https://github.com/SciML/CommonSolve.jl.git
+   Installed CommonSolve ────────────────────── v0.2.6
+     Cloning [0d7ed370-da01-4f52-bd93-41d350b8b718] StaticArrayInterface from https://github.com/JuliaArrays/StaticArrayInterface.jl.git
+   Installed StaticArrayInterface ───────────── v1.9.0
+     Cloning [0234f1f7-429e-5d53-9886-15a909be8d59] HDF5_jll from https://github.com/JuliaBinaryWrappers/HDF5_jll.jl.git
+   Installed HDF5_jll ───────────────────────── v1.14.6+0
+     Cloning [892a3eda-7b42-436c-8928-eab12a02cf0e] StringManipulation from https://github.com/ronisbr/StringManipulation.jl.git
+   Installed StringManipulation ─────────────── v0.4.2
+     Cloning [ffbed154-4ef7-542d-bbb7-c09d3a79fcae] DocStringExtensions from https://github.com/JuliaDocs/DocStringExtensions.jl.git
+   Installed DocStringExtensions ────────────── v0.9.5
+     Cloning [944b1d66-785c-5afd-91f1-9de20f533193] CodecZlib from https://github.com/JuliaIO/CodecZlib.jl.git
+   Installed CodecZlib ──────────────────────── v0.7.8
+     Cloning [699a6c99-e7fa-54fc-8d76-47d257e15c1d] SimpleTraits from https://github.com/mauro3/SimpleTraits.jl.git
+   Installed SimpleTraits ───────────────────── v0.9.5
+  Installing 10 artifacts
+   Installed artifact libaec            49.6 KiB
+   Installed artifact OpenSpecFun       194.6 KiB
+   Installed artifact Xorg_libpciaccess 24.8 KiB
+   Installed artifact METIS             1.1 MiB
+   Installed artifact XML2              2.5 MiB
+   Installed artifact Libiconv          1.9 MiB
+   Installed artifact MPICH             3.3 MiB
+   Installed artifact HDF5              5.7 MiB
+   Installed artifact Zstd              646.4 KiB
+   Installed artifact Hwloc             3.5 MiB
+    Updating `~/work/Jutul.jl/Jutul.jl/Project.toml`
+⌅ [2169fc97] + AlgebraicMultigrid v0.5.1
+  [a8cc5b0e] + Crayons v4.1.1
+⌅ [864edb3b] + DataStructures v0.18.22
+  [a0c0ee7d] + DifferentiationInterface v0.7.16
+  [e2ba6199] + ExprTools v0.1.10
+  [f6369f11] + ForwardDiff v1.3.2
+⌃ [86223c79] + Graphs v1.13.1
+  [88f59080] + ILUZero v0.2.0
+  [033835bb] + JLD2 v0.6.3
+⌅ [ba0b0d4f] + Krylov v0.9.10
+  [5c8ed15e] + LinearOperators v2.12.0
+  [bdcacae8] + LoopVectorization v0.12.173
+  [23992714] + MAT v0.11.5
+  [dbb5928d] + MappedArrays v0.4.3
+  [2679e427] + Metis v1.5.0
+  [bac558e1] + OrderedCollections v1.8.1
+  [f517fe37] + Polyester v0.7.19
+  [1d0040c9] + PolyesterWeave v0.2.2
+  [f27b6e38] + Polynomials v4.1.0
+⌅ [08abe8d2] + PrettyTables v2.4.0
+  [92933f4c] + ProgressMeter v1.11.0
+  [9f842d2f] + SparseConnectivityTracer v1.2.0
+  [0a514795] + SparseMatrixColorings v0.4.23
+  [06eadbd4] + SparsityTracing v0.2.6
+  [90137ffa] + StaticArrays v1.9.16
+  [10745b16] + Statistics v1.11.1
+  [286e6d88] + SymRCM v0.2.2
+  [a759f4b9] + TimerOutputs v0.5.29
+  [bc48ee85] + Tullio v0.3.8
+  [ade2ca70] ~ Dates ⇒ v1.11.0
+  [37e2e46d] ~ LinearAlgebra ⇒ v1.12.0
+  [56ddb016] ~ Logging ⇒ v1.11.0
+  [de0858da] ~ Printf ⇒ v1.11.0
+  [2f01184e] ~ SparseArrays ⇒ v1.12.0
+  [8dfed614] ~ Test ⇒ v1.11.0
+    Updating `~/work/Jutul.jl/Jutul.jl/Manifest.toml`
+  [47edcb42] + ADTypes v1.21.0
+  [79e6a3ab] + Adapt v4.4.0
+⌅ [2169fc97] + AlgebraicMultigrid v0.5.1
+  [ec485272] + ArnoldiMethod v0.4.0
+  [4fba245c] + ArrayInterface v7.22.0
+  [62783981] + BitTwiddlingConvenienceFunctions v0.1.6
+  [fa961155] + CEnum v0.5.0
+  [2a0fbf3d] + CPUSummary v0.2.7
+  [0b6fb165] + ChunkCodecCore v1.0.1
+  [4c0bbee4] + ChunkCodecLibZlib v1.0.0
+  [55437552] + ChunkCodecLibZstd v1.0.0
+  [fb6a15b2] + CloseOpenIntervals v0.1.13
+  [944b1d66] + CodecZlib v0.7.8
+  [38540f10] + CommonSolve v0.2.6
+  [bbf7d656] + CommonSubexpressions v0.3.1
+  [f70d9fcc] + CommonWorldInvalidations v1.0.0
+  [34da2185] + Compat v4.18.1
+  [187b0558] + ConstructionBase v1.6.0
+  [adafc99b] + CpuId v0.3.1
+  [a8cc5b0e] + Crayons v4.1.1
+  [9a962f9c] + DataAPI v1.16.0
+⌅ [864edb3b] + DataStructures v0.18.22
+  [e2d170a0] + DataValueInterfaces v1.0.0
+  [163ba53b] + DiffResults v1.1.0
+  [b552c78f] + DiffRules v1.15.1
+  [a0c0ee7d] + DifferentiationInterface v0.7.16
+  [ffbed154] + DocStringExtensions v0.9.5
+  [e2ba6199] + ExprTools v0.1.10
+  [9aa1b823] + FastClosures v0.3.2
+  [5789e2e9] + FileIO v1.18.0
+  [1a297f60] + FillArrays v1.16.0
+  [f6369f11] + ForwardDiff v1.3.2
+⌃ [86223c79] + Graphs v1.13.1
+  [f67ccb44] + HDF5 v0.17.2
+  [076d061b] + HashArrayMappedTries v0.2.0
+  [3e5b6fbb] + HostCPUFeatures v0.1.18
+  [88f59080] + ILUZero v0.2.0
+  [615f187c] + IfElse v0.1.1
+  [d25df0c9] + Inflate v0.1.5
+  [92d709cd] + IrrationalConstants v0.2.6
+  [82899510] + IteratorInterfaceExtensions v1.0.0
+  [033835bb] + JLD2 v0.6.3
+  [692b3bcd] + JLLWrappers v1.7.1
+⌅ [ba0b0d4f] + Krylov v0.9.10
+  [b964fa9f] + LaTeXStrings v1.4.0
+  [10f19ff3] + LayoutPointers v0.1.17
+  [5c8ed15e] + LinearOperators v2.12.0
+  [2ab3a3ac] + LogExpFunctions v0.3.29
+  [bdcacae8] + LoopVectorization v0.12.173
+  [23992714] + MAT v0.11.5
+  [3da0fdf6] + MPIPreferences v0.1.11
+  [1914dd2f] + MacroTools v0.5.16
+  [d125e4d3] + ManualMemory v0.1.8
+  [dbb5928d] + MappedArrays v0.4.3
+  [2679e427] + Metis v1.5.0
+  [77ba4419] + NaNMath v1.1.3
+  [6fe1bfb0] + OffsetArrays v1.17.0
+  [bac558e1] + OrderedCollections v1.8.1
+  [f517fe37] + Polyester v0.7.19
+  [1d0040c9] + PolyesterWeave v0.2.2
+  [f27b6e38] + Polynomials v4.1.0
+  [2dfb63ee] + PooledArrays v1.4.3
+  [aea7be01] + PrecompileTools v1.3.3
+  [21216c6a] + Preferences v1.5.1
+⌅ [08abe8d2] + PrettyTables v2.4.0
+  [92933f4c] + ProgressMeter v1.11.0
+  [3cdcf5f2] + RecipesBase v1.3.4
+  [189a3867] + Reexport v1.2.2
+  [ae029012] + Requires v1.3.1
+  [94e857df] + SIMDTypes v0.1.0
+  [476501e8] + SLEEFPirates v0.6.43
+  [431bcebd] + SciMLPublic v1.0.1
+  [7e506255] + ScopedValues v1.5.0
+  [efcf1570] + Setfield v1.1.2
+  [699a6c99] + SimpleTraits v0.9.5
+  [9f842d2f] + SparseConnectivityTracer v1.2.0
+  [0a514795] + SparseMatrixColorings v0.4.23
+  [06eadbd4] + SparsityTracing v0.2.6
+  [276daf66] + SpecialFunctions v2.6.1
+  [aedffcd0] + Static v1.3.1
+  [0d7ed370] + StaticArrayInterface v1.9.0
+  [90137ffa] + StaticArrays v1.9.16
+  [1e83bf80] + StaticArraysCore v1.4.4
+  [10745b16] + Statistics v1.11.1
+  [7792a7ef] + StrideArraysCore v0.5.8
+  [69024149] + StringEncodings v0.3.7
+  [892a3eda] + StringManipulation v0.4.2
+  [286e6d88] + SymRCM v0.2.2
+  [3783bdb8] + TableTraits v1.0.1
+  [bd369af6] + Tables v1.12.1
+  [8290d209] + ThreadingUtilities v0.5.5
+  [a759f4b9] + TimerOutputs v0.5.29
+  [3bb67fe8] + TranscodingStreams v0.11.3
+  [bc48ee85] + Tullio v0.3.8
+  [3a884ed6] + UnPack v1.0.2
+  [3d5dd08c] + VectorizationBase v0.21.72
+⌅ [0234f1f7] + HDF5_jll v1.14.6+0
+  [e33a78d0] + Hwloc_jll v2.12.2+0
+  [94ce4f54] + Libiconv_jll v1.18.0+0
+  [d00139f3] + METIS_jll v5.1.3+0
+⌅ [7cb0a576] + MPICH_jll v4.3.2+0
+  [f1f71cc9] + MPItrampoline_jll v5.5.4+0
+  [9237b28f] + MicrosoftMPI_jll v10.1.4+3
+  [fe0851c0] + OpenMPI_jll v5.0.9+0
+  [efe28fd5] + OpenSpecFun_jll v0.5.6+0
+⌅ [02c8fc9c] + XML2_jll v2.13.9+0
+  [a65dc6b1] + Xorg_libpciaccess_jll v0.18.1+0
+  [3161d3a3] + Zstd_jll v1.5.7+1
+  [477f73a3] + libaec_jll v1.1.5+0
+  [0dad84c5] + ArgTools v1.1.2
+  [56f22d72] + Artifacts v1.11.0
+  [2a0f44e3] + Base64 v1.11.0
+  [ade2ca70] ~ Dates ⇒ v1.11.0
+  [8ba89e20] + Distributed v1.11.0
+  [f43a241f] + Downloads v1.7.0
+  [7b1f6079] + FileWatching v1.11.0
+  [9fa8497b] + Future v1.11.0
+  [b77e0a4c] + InteractiveUtils v1.11.0
+  [ac6e5ff7] + JuliaSyntaxHighlighting v1.12.0
+  [4af54fe1] + LazyArtifacts v1.11.0
+  [b27032c2] + LibCURL v0.6.4
+  [76f85450] + LibGit2 v1.11.0
+  [8f399da3] + Libdl v1.11.0
+  [37e2e46d] ~ LinearAlgebra ⇒ v1.12.0
+  [56ddb016] ~ Logging ⇒ v1.11.0
+  [d6f4376e] + Markdown v1.11.0
+  [a63ad114] + Mmap v1.11.0
+  [ca575930] + NetworkOptions v1.3.0
+  [44cfe95a] + Pkg v1.12.1
+  [de0858da] ~ Printf ⇒ v1.11.0
+  [9a3f8284] + Random v1.11.0
+  [ea8e919c] + SHA v0.7.0
+  [9e88b42a] + Serialization v1.11.0
+  [1a1011a3] + SharedArrays v1.11.0
+  [6462fe0b] + Sockets v1.11.0
+  [2f01184e] ~ SparseArrays ⇒ v1.12.0
+  [f489334b] + StyledStrings v1.11.0
+  [fa267f1f] + TOML v1.0.3
+  [a4e569a6] + Tar v1.10.0
+  [8dfed614] ~ Test ⇒ v1.11.0
+  [cf7118a7] + UUIDs v1.11.0
+  [4ec0a83e] + Unicode v1.11.0
+  [e66e0078] + CompilerSupportLibraries_jll v1.3.0+1
+  [deac9b47] + LibCURL_jll v8.15.0+0
+  [e37daf67] + LibGit2_jll v1.9.0+0
+  [29816b5a] + LibSSH2_jll v1.11.3+1
+  [14a3606d] + MozillaCACerts_jll v2025.11.4
+  [4536629a] + OpenBLAS_jll v0.3.29+0
+  [05823500] + OpenLibm_jll v0.8.7+0
+  [458c3c95] + OpenSSL_jll v3.5.4+0
+  [bea87d4a] + SuiteSparse_jll v7.8.3+2
+  [83775a58] + Zlib_jll v1.3.1+2
+  [8e850b90] + libblastrampoline_jll v5.15.0+0
+  [8e850ede] + nghttp2_jll v1.64.0+1
+  [3f19e933] + p7zip_jll v17.7.0+0
+        Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`
+Precompiling packages...
+   1289.7 ms  ✓ IteratorInterfaceExtensions
+   1292.7 ms  ✓ LaTeXStrings
+   1290.9 ms  ✓ ExprTools
+   1285.1 ms  ✓ ChunkCodecCore
+   1288.5 ms  ✓ ADTypes
+    670.4 ms  ✓ UnPack
+    926.1 ms  ✓ Statistics
+    652.3 ms  ✓ CommonSolve
+   1753.7 ms  ✓ FillArrays
+   1847.9 ms  ✓ OffsetArrays
+    881.3 ms  ✓ ManualMemory
+   2619.6 ms  ✓ CEnum
+    712.8 ms  ✓ DataValueInterfaces
+    765.2 ms  ✓ Reexport
+   1542.8 ms  ✓ Requires
+    820.8 ms  ✓ SIMDTypes
+   1105.0 ms  ✓ DocStringExtensions
+   1028.3 ms  ✓ TranscodingStreams
+   3059.4 ms  ✓ OrderedCollections
+    715.1 ms  ✓ HashArrayMappedTries
+    814.9 ms  ✓ Inflate
+    631.9 ms  ✓ IfElse
+    718.4 ms  ✓ CommonWorldInvalidations
+   6342.5 ms  ✓ MacroTools
+    840.1 ms  ✓ DataAPI
+   3259.5 ms  ✓ NaNMath
+   4683.8 ms  ✓ IrrationalConstants
+    759.3 ms  ✓ FastClosures
+   2836.3 ms  ✓ ConstructionBase
+    696.5 ms  ✓ SciMLPublic
+    787.6 ms  ✓ StaticArraysCore
+    841.3 ms  ✓ MappedArrays
+   1050.4 ms  ✓ ILUZero
+   1467.8 ms  ✓ ProgressMeter
+   1229.2 ms  ✓ CpuId
+   1048.2 ms  ✓ Preferences
+   3787.5 ms  ✓ Crayons
+   1137.1 ms  ✓ SymRCM
+    618.1 ms  ✓ TableTraits
+    782.3 ms  ✓ ChunkCodecLibZlib
+   2893.8 ms  ✓ Compat
+   1010.4 ms  ✓ Statistics → SparseArraysExt
+    694.3 ms  ✓ FillArrays → FillArraysStatisticsExt
+   1144.0 ms  ✓ FillArrays → FillArraysSparseArraysExt
+   3681.5 ms  ✓ DifferentiationInterface
+   1139.0 ms  ✓ Adapt
+   3508.0 ms  ✓ ThreadingUtilities
+   3814.7 ms  ✓ AlgebraicMultigrid
+    967.2 ms  ✓ CodecZlib
+   7459.5 ms  ✓ TimerOutputs
+    813.4 ms  ✓ ScopedValues
+    990.7 ms  ✓ CommonSubexpressions
+    848.8 ms  ✓ PooledArrays
+   1433.9 ms  ✓ SimpleTraits
+   1018.9 ms  ✓ LogExpFunctions
+  11879.2 ms  ✓ Krylov
+    634.2 ms  ✓ ConstructionBase → ConstructionBaseLinearAlgebraExt
+    709.8 ms  ✓ ADTypes → ADTypesConstructionBaseExt
+    610.7 ms  ✓ DiffResults
+    909.0 ms  ✓ MPIPreferences
+   1017.8 ms  ✓ JLLWrappers
+    705.2 ms  ✓ PrecompileTools
+    742.9 ms  ✓ Compat → CompatLinearAlgebraExt
+   1039.6 ms  ✓ DifferentiationInterface → DifferentiationInterfaceSparseArraysExt
+   1267.9 ms  ✓ Adapt → AdaptSparseArraysExt
+    934.2 ms  ✓ OffsetArrays → OffsetArraysAdaptExt
+   7919.5 ms  ✓ FileIO
+   3725.8 ms  ✓ Tables
+   3328.9 ms  ✓ ArrayInterface
+   1327.9 ms  ✓ Xorg_libpciaccess_jll
+   1997.0 ms  ✓ Setfield
+   2613.2 ms  ✓ LinearOperators
+   1417.1 ms  ✓ libaec_jll
+   1355.4 ms  ✓ METIS_jll
+   1704.1 ms  ✓ MPItrampoline_jll
+    964.0 ms  ✓ MicrosoftMPI_jll
+   1047.2 ms  ✓ Libiconv_jll
+   1606.9 ms  ✓ Zstd_jll
+   1083.5 ms  ✓ OpenSpecFun_jll
+  10068.8 ms  ✓ SparseConnectivityTracer
+   3213.6 ms  ✓ RecipesBase
+   3890.0 ms  ✓ StringManipulation
+   1029.2 ms  ✓ ArrayInterface → ArrayInterfaceSparseArraysExt
+    557.9 ms  ✓ ArrayInterface → ArrayInterfaceStaticArraysCoreExt
+   3110.1 ms  ✓ DataStructures
+    939.9 ms  ✓ StringEncodings
+   1994.1 ms  ✓ Metis
+   1245.1 ms  ✓ XML2_jll
+    965.3 ms  ✓ ChunkCodecLibZstd
+   1946.1 ms  ✓ SparseConnectivityTracer → SparseConnectivityTracerNaNMathExt
+   9357.1 ms  ✓ Static
+   2259.0 ms  ✓ SparseConnectivityTracer → SparseConnectivityTracerLogExpFunctionsExt
+   5390.4 ms  ✓ SpecialFunctions
+   1492.2 ms  ✓ DifferentiationInterface → DifferentiationInterfaceSparseConnectivityTracerExt
+   1453.6 ms  ✓ Hwloc_jll
+  16301.2 ms  ✓ SparseMatrixColorings
+    903.0 ms  ✓ BitTwiddlingConvenienceFunctions
+  19042.4 ms  ✓ StaticArrays
+   2004.8 ms  ✓ CPUSummary
+   1059.7 ms  ✓ DiffRules
+   2478.4 ms  ✓ SparseConnectivityTracer → SparseConnectivityTracerSpecialFunctionsExt
+   2010.8 ms  ✓ OpenMPI_jll
+   2567.4 ms  ✓ MPICH_jll
+   1354.2 ms  ✓ DifferentiationInterface → DifferentiationInterfaceSparseMatrixColoringsExt
+   1731.5 ms  ✓ HostCPUFeatures
+   4564.2 ms  ✓ ArnoldiMethod
+   1014.3 ms  ✓ StaticArrays → StaticArraysStatisticsExt
+   1046.3 ms  ✓ FillArrays → FillArraysStaticArraysExt
+    925.5 ms  ✓ ConstructionBase → ConstructionBaseStaticArraysExt
+    940.8 ms  ✓ DifferentiationInterface → DifferentiationInterfaceStaticArraysExt
+   1205.6 ms  ✓ Adapt → AdaptStaticArraysExt
+   1415.5 ms  ✓ PolyesterWeave
+  45463.4 ms  ✓ PrettyTables
+   6539.8 ms  ✓ SparsityTracing
+  55148.9 ms  ✓ Polynomials
+  31036.5 ms  ✓ Tullio
+   6293.3 ms  ✓ HDF5_jll
+  56103.6 ms  ✓ StaticArrayInterface
+   1011.6 ms  ✓ Tullio → TullioFillArraysExt
+   1292.5 ms  ✓ StaticArrayInterface → StaticArrayInterfaceStaticArraysExt
+    913.5 ms  ✓ StaticArrayInterface → StaticArrayInterfaceOffsetArraysExt
+  11627.4 ms  ✓ ForwardDiff
+   1128.0 ms  ✓ CloseOpenIntervals
+   1240.8 ms  ✓ LayoutPointers
+   1384.6 ms  ✓ ForwardDiff → ForwardDiffStaticArraysExt
+   4048.6 ms  ✓ DifferentiationInterface → DifferentiationInterfaceForwardDiffExt
+  11293.4 ms  ✓ Graphs
+   1987.3 ms  ✓ StrideArraysCore
+   1652.4 ms  ✓ Polyester
+   2134.3 ms  ✓ Metis → MetisGraphs
+  75425.0 ms  ✓ JLD2
+  16096.8 ms  ✓ HDF5
+   1618.8 ms  ✓ JLD2 → UnPackExt
+   2720.2 ms  ✓ MAT
+  14609.8 ms  ✓ VectorizationBase
+   1749.7 ms  ✓ SLEEFPirates
+  26822.1 ms  ✓ LoopVectorization
+    833.6 ms  ✓ LoopVectorization → SpecialFunctionsExt
+  16731.1 ms  ✓ Jutul
+  139 dependencies successfully precompiled in 172 seconds. 37 already precompiled.
+Cell splitting by single constraint: Error During Test at /home/runner/work/Jutul.jl/Jutul.jl/test/voronoi_mesh.jl:103
+  Got exception outside of a @test
+  BoundsError: attempt to access Float64 at index [2]
+  Stacktrace:
+    [1] getindex
+      @ ./number.jl:98 [inlined]
+    [2] #_convert_points_2d##4
+      @ ./none:-1 [inlined]
+    [3] iterate
+      @ ./generator.jl:48 [inlined]
+    [4] collect(itr::Base.Generator{Vector{Float64}, Jutul.VoronoiMeshes.var"#_convert_points_2d##4#_convert_points_2d##5"})
+      @ Base ./array.jl:790
+    [5] _convert_points_2d
+      @ ~/work/Jutul.jl/Jutul.jl/src/meshes/VoronoiMeshes/pebi2d.jl:78 [inlined]
+    [6] PEBIMesh2D(points::Vector{Float64}; constraints::Vector{Any}, bbox::Nothing)
+      @ Jutul.VoronoiMeshes ~/work/Jutul.jl/Jutul.jl/src/meshes/VoronoiMeshes/pebi2d.jl:34
+    [7] PEBIMesh2D(points::Vector{Float64})
+      @ Jutul.VoronoiMeshes ~/work/Jutul.jl/Jutul.jl/src/meshes/VoronoiMeshes/pebi2d.jl:32
+    [8] top-level scope
+      @ ~/work/Jutul.jl/Jutul.jl/test/voronoi_mesh.jl:6
+    [9] macro expansion
+      @ /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Test/src/Test.jl:1776 [inlined]
+   [10] macro expansion
+      @ ~/work/Jutul.jl/Jutul.jl/test/voronoi_mesh.jl:106 [inlined]
+   [11] macro expansion
+      @ /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Test/src/Test.jl:1776 [inlined]
+   [12] macro expansion
+      @ ~/work/Jutul.jl/Jutul.jl/test/voronoi_mesh.jl:110 [inlined]
+   [13] include(mapexpr::Function, mod::Module, _path::String)
+      @ Base ./Base.jl:307
+   [14] top-level scope
+      @ none:1
+   [15] eval(m::Module, e::Any)
+      @ Core ./boot.jl:489
+   [16] exec_options(opts::Base.JLOptions)
+      @ Base ./client.jl:283
+   [17] _start()
+      @ Base ./client.jl:550
+Cell splitting by multiple constraints: Error During Test at /home/runner/work/Jutul.jl/Jutul.jl/test/voronoi_mesh.jl:119
+  Got exception outside of a @test
+  BoundsError: attempt to access Float64 at index [2]
+  Stacktrace:
+    [1] getindex
+      @ ./number.jl:98 [inlined]
+    [2] #_convert_points_2d##4
+      @ ./none:-1 [inlined]
+    [3] iterate
+      @ ./generator.jl:48 [inlined]
+    [4] collect(itr::Base.Generator{Vector{Float64}, Jutul.VoronoiMeshes.var"#_convert_points_2d##4#_convert_points_2d##5"})
+      @ Base ./array.jl:790
+    [5] _convert_points_2d
+      @ ~/work/Jutul.jl/Jutul.jl/src/meshes/VoronoiMeshes/pebi2d.jl:78 [inlined]
+    [6] PEBIMesh2D(points::Vector{Float64}; constraints::Vector{Tuple{Vector{Float64}, Vector{Float64}}}, bbox::Nothing)
+      @ Jutul.VoronoiMeshes ~/work/Jutul.jl/Jutul.jl/src/meshes/VoronoiMeshes/pebi2d.jl:34
+    [7] top-level scope
+      @ ~/work/Jutul.jl/Jutul.jl/test/voronoi_mesh.jl:6
+    [8] macro expansion
+      @ /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Test/src/Test.jl:1776 [inlined]
+    [9] macro expansion
+      @ ~/work/Jutul.jl/Jutul.jl/test/voronoi_mesh.jl:122 [inlined]
+   [10] macro expansion
+      @ /usr/local/julia1.12.4/share/julia/stdlib/v1.12/Test/src/Test.jl:1776 [inlined]
+   [11] macro expansion
+      @ ~/work/Jutul.jl/Jutul.jl/test/voronoi_mesh.jl:129 [inlined]
+   [12] include(mapexpr::Function, mod::Module, _path::String)
+      @ Base ./Base.jl:307
+   [13] top-level scope
+      @ none:1
+   [14] eval(m::Module, e::Any)
+      @ Core ./boot.jl:489
+   [15] exec_options(opts::Base.JLOptions)
+      @ Base ./client.jl:283
+   [16] _start()
+      @ Base ./client.jl:550
+Test Summary:                                 | Pass  Error  Total  Time
+PEBI/Voronoi Mesh Tests                       |   25      2     27  8.3s
+  Basic 2D PEBI mesh                          |    4             4  2.2s
+  2D PEBI mesh with random points             |    3             3  0.3s
+  2D PEBI mesh with custom bbox               |    2             2  0.1s
+  2D PEBI mesh with constraints               |    2             2  0.5s
+  2D PEBI mesh constraint enforcement         |    5             5  1.6s
+  Cell splitting by single constraint         |           1      1  3.4s
+  Cell splitting by multiple constraints      |           1      1  0.0s
+  2D PEBI mesh with high coordinate variation |    5             5  0.1s
+  3D PEBI mesh placeholder                    |    1             1  0.1s
+  Point format conversion                     |    3             3  0.1s
+RNG of the outermost testset: Xoshiro(0x2d9249d823b19e99, 0xc2603c878d8f9626, 0xaaa7eab464f6a4ab, 0x3a5869a78bbf43f6, 0x62657889976c741c)
+ERROR: LoadError: Some tests did not pass: 25 passed, 0 failed, 2 errored, 0 broken.
+in expression starting at /home/runner/work/Jutul.jl/Jutul.jl/test/voronoi_mesh.jl:5
