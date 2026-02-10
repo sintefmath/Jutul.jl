@@ -37,13 +37,18 @@ function PEBIMesh2D(points; constraints=[], bbox=nothing)
     bb = _compute_bbox_2d(pts, bbox)
     
     # Add constraint points to generate refined mesh along constraints
-    pts_with_constraints, constraint_edges = _add_constraint_points_2d(pts, constraints, bb)
+    pts_with_constraints, constraint_edges, constraint_point_indices = _add_constraint_points_2d(pts, constraints, bb)
     
     # Generate Voronoi diagram using Delaunay triangulation
     cells_data = _generate_voronoi_2d(pts_with_constraints, bb, constraint_edges)
     
+    # Filter out cells that are on the constraint (constraint endpoint cells)
+    # These cells should not appear in the final mesh as separate cells
+    original_npts = length(pts)
+    filtered_cells_data = [cell for (i, cell) in enumerate(cells_data) if cell.center_idx <= original_npts]
+    
     # Build UnstructuredMesh from the Voronoi cells
-    return _build_unstructured_mesh_2d(cells_data, pts_with_constraints)
+    return _build_unstructured_mesh_2d(filtered_cells_data, pts_with_constraints)
 end
 
 """
@@ -98,6 +103,7 @@ Add constraint points to ensure constraints are respected in the mesh
 function _add_constraint_points_2d(pts, constraints, bb)
     pts_all = copy(pts)
     constraint_edges = []
+    constraint_point_indices = []
     
     for constraint in constraints
         p1, p2 = constraint
@@ -109,18 +115,20 @@ function _add_constraint_points_2d(pts, constraints, bb)
         if idx1 === nothing
             push!(pts_all, p1_sv)
             idx1 = length(pts_all)
+            push!(constraint_point_indices, idx1)
         end
         
         idx2 = findfirst(p -> norm(p - p2_sv) < 1e-10, pts_all)
         if idx2 === nothing
             push!(pts_all, p2_sv)
             idx2 = length(pts_all)
+            push!(constraint_point_indices, idx2)
         end
         
         push!(constraint_edges, (idx1, idx2))
     end
     
-    return pts_all, constraint_edges
+    return pts_all, constraint_edges, constraint_point_indices
 end
 
 """
