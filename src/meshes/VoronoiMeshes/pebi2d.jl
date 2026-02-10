@@ -3,13 +3,14 @@ const GEOMETRIC_TOLERANCE = 1e-9
 const EDGE_MIDPOINT_THRESHOLD = 0.5
 
 """
-    PEBIMesh2D(points; bbox=nothing)
+    PEBIMesh2D(points; bbox=nothing, verbose=false)
 
 Create a 2D PEBI (Perpendicular Bisector) / Voronoi mesh from a set of points.
 
 # Arguments
 - `points`: A matrix of size (2, n) or vector of 2-tuples/vectors containing the x,y coordinates of cell centers
 - `bbox`: Optional bounding box as ((xmin, xmax), (ymin, ymax)). If not provided, computed from points with margin
+- `verbose`: If true, prints progress information during mesh generation
 
 # Returns
 - An `UnstructuredMesh` instance representing the PEBI mesh
@@ -28,6 +29,10 @@ after creating the basic mesh.
 points = [0.0 1.0 0.0 1.0; 0.0 0.0 1.0 1.0]
 mesh = PEBIMesh2D(points)
 
+# Larger mesh with progress output
+points = rand(2, 1000)
+mesh = PEBIMesh2D(points, verbose=true)
+
 # Mesh with constraint line (use post-processing)
 points = rand(2, 20)
 mesh = PEBIMesh2D(points)
@@ -35,18 +40,30 @@ mesh = insert_line_segment(mesh, [0.5, 0.0], [0.5, 1.0])  # Add vertical constra
 # Result will have > 20 cells due to splitting
 ```
 """
-function PEBIMesh2D(points; bbox=nothing)
+function PEBIMesh2D(points; bbox=nothing, verbose=false)
     # Convert points to standard format
     pts, npts = _convert_points_2d(points)
+    
+    if verbose
+        @info "Creating 2D PEBI mesh with $npts points"
+    end
     
     # Compute or validate bounding box
     bb = _compute_bbox_2d(pts, bbox)
     
     # Generate Voronoi diagram
-    cells_data = _generate_voronoi_2d(pts, bb)
+    cells_data = _generate_voronoi_2d(pts, bb, verbose=verbose)
+    
+    if verbose
+        @info "Building UnstructuredMesh..."
+    end
     
     # Build UnstructuredMesh from the Voronoi cells
     mesh = _build_unstructured_mesh_2d(cells_data, pts)
+    
+    if verbose
+        @info "Mesh generation complete"
+    end
     
     return mesh
 end
@@ -155,19 +172,31 @@ end
 """
 Generate Voronoi cells using a simple box-clipping approach
 """
-function _generate_voronoi_2d(pts, bb)
+function _generate_voronoi_2d(pts, bb; verbose=false)
     npts = length(pts)
     ((xmin, xmax), (ymin, ymax)) = bb
+    
+    if verbose
+        @info "Generating $npts Voronoi cells..."
+    end
     
     # For each point, create its Voronoi cell by computing perpendicular bisectors
     # to all other points and intersecting with bounding box
     cells = []
     
     for i in 1:npts
+        if verbose && (i == 1 || i % 100 == 0 || i == npts)
+            @info "Processing cell $i of $npts"
+        end
+        
         cell_vertices = _compute_voronoi_cell_2d(i, pts, bb)
         if !isempty(cell_vertices)
             push!(cells, (center_idx=i, vertices=cell_vertices))
         end
+    end
+    
+    if verbose
+        @info "Generated $(length(cells)) valid cells"
     end
     
     return cells
