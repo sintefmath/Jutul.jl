@@ -56,6 +56,7 @@ function polygon_normal(poly::Vector{SVector{3, T}}) where T
     end
     nn = norm(n)
     if nn < eps(T)
+        # Degenerate polygon: fallback to z-axis normal
         return SVector{3, T}(0, 0, 1)
     end
     return n / nn

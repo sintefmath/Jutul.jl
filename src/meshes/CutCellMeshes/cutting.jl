@@ -478,7 +478,7 @@ function build_cut_mesh(
         if length(info.cut_face_nodes) >= 3
             pos_cell = old_to_new[c][1]
             neg_cell = old_to_new[c][2]
-            add_interior_face!(copy(info.cut_face_nodes), neg_cell, pos_cell)
+            add_interior_face!(info.cut_face_nodes, neg_cell, pos_cell)
         end
     end
 
