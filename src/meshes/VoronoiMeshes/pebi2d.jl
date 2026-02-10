@@ -367,12 +367,20 @@ function _split_polygon_by_line_2d(vertices, line_p1, line_p2)
     left_poly = _clean_polygon_vertices(left_poly)
     right_poly = _clean_polygon_vertices(right_poly)
     
+    # Only add non-empty polygons to result
+    # _clean_polygon_vertices returns empty array if < 3 vertices
     result = []
-    if !isempty(left_poly)
+    if !isempty(left_poly) && length(left_poly) >= 3
         push!(result, left_poly)
     end
-    if !isempty(right_poly)
+    if !isempty(right_poly) && length(right_poly) >= 3
         push!(result, right_poly)
+    end
+    
+    # If both polygons are empty/invalid, return the original vertices
+    # This can happen with very small polygons or degenerate cases
+    if isempty(result)
+        return [vertices]
     end
     
     return result

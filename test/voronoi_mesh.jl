@@ -131,6 +131,30 @@ using Random
         @test number_of_cells(mesh) >= 4
     end
     
+    @testset "Intersecting constraints with many points" begin
+        # Test that intersecting constraints work correctly with many points
+        # This tests the fix for holes appearing at constraint intersections
+        Random.seed!(42)
+        points = rand(2, 100)
+        constraints = [
+            ([0.5, 0.2], [0.5, 0.8]),  # Vertical line
+            ([0.2, 0.5], [0.8, 0.5])   # Horizontal line (forms cross)
+        ]
+        
+        mesh = Jutul.VoronoiMeshes.PEBIMesh2D(points, constraints=constraints)
+        
+        # Should have more cells than original points due to splitting
+        @test number_of_cells(mesh) > 100
+        
+        # Check for mesh validity - no holes
+        geo = tpfv_geometry(mesh)
+        @test all(geo.volumes .> 0)  # All cells should have positive volume
+        
+        # Check no degenerate cells
+        very_small = count(v -> v < 1e-12, geo.volumes)
+        @test very_small == 0  # Should not have essentially zero-volume cells
+    end
+    
     @testset "2D PEBI mesh with high coordinate variation" begin
         # Test with points that have high coordinate variation
         points = [0.0 1000.0 500.0 250.0; 
