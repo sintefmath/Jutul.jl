@@ -39,7 +39,7 @@ function PEBIMesh2D(points; constraints=[], bbox=nothing)
     # Add constraint points to generate refined mesh along constraints
     pts_with_constraints, constraint_edges, constraint_point_indices = _add_constraint_points_2d(pts, constraints, bb)
     
-    # Generate Voronoi diagram using Delaunay triangulation
+    # Generate Voronoi diagram - this creates base cells before splitting
     cells_data = _generate_voronoi_2d(pts_with_constraints, bb, constraint_edges)
     
     # Filter out cells that are on the constraint (constraint endpoint cells)
@@ -47,8 +47,12 @@ function PEBIMesh2D(points; constraints=[], bbox=nothing)
     original_npts = length(pts)
     filtered_cells_data = [cell for (i, cell) in enumerate(cells_data) if cell.center_idx <= original_npts]
     
-    # Build UnstructuredMesh from the Voronoi cells
-    return _build_unstructured_mesh_2d(filtered_cells_data, pts_with_constraints)
+    # Split cells that are crossed by constraints
+    # This is the key change: instead of just clipping, we split into multiple cells
+    split_cells_data = _split_cells_by_constraints(filtered_cells_data, pts_with_constraints, constraint_edges)
+    
+    # Build UnstructuredMesh from the Voronoi cells (now including split cells)
+    return _build_unstructured_mesh_2d(split_cells_data, pts_with_constraints)
 end
 
 """
@@ -133,6 +137,7 @@ end
 
 """
 Generate Voronoi cells using a simple box-clipping approach
+Note: This does NOT clip by constraints - that's handled in splitting phase
 """
 function _generate_voronoi_2d(pts, bb, constraint_edges)
     npts = length(pts)
@@ -143,7 +148,7 @@ function _generate_voronoi_2d(pts, bb, constraint_edges)
     cells = []
     
     for i in 1:npts
-        cell_vertices = _compute_voronoi_cell_2d(i, pts, bb, constraint_edges)
+        cell_vertices = _compute_voronoi_cell_2d(i, pts, bb)
         if !isempty(cell_vertices)
             push!(cells, (center_idx=i, vertices=cell_vertices))
         end
@@ -153,9 +158,9 @@ function _generate_voronoi_2d(pts, bb, constraint_edges)
 end
 
 """
-Compute the Voronoi cell for a single point
+Compute the Voronoi cell for a single point (without constraint clipping)
 """
-function _compute_voronoi_cell_2d(idx, pts, bb, constraint_edges)
+function _compute_voronoi_cell_2d(idx, pts, bb)
     ((xmin, xmax), (ymin, ymax)) = bb
     center = pts[idx]
     
@@ -173,17 +178,6 @@ function _compute_voronoi_cell_2d(idx, pts, bb, constraint_edges)
             continue
         end
         vertices = _clip_polygon_by_bisector_2d(vertices, center, pts[j])
-        if isempty(vertices)
-            break
-        end
-    end
-    
-    # Clip by constraint lines
-    # Constraints act as hard boundaries that cells cannot cross
-    for (idx1, idx2) in constraint_edges
-        p1 = pts[idx1]
-        p2 = pts[idx2]
-        vertices = _clip_polygon_by_line_2d(vertices, p1, p2, center)
         if isempty(vertices)
             break
         end
@@ -234,6 +228,137 @@ function _clean_polygon_vertices(vertices)
     perm = sortperm(angles)
     
     return cleaned[perm]
+end
+
+"""
+Split cells that are crossed by constraints into multiple cells
+Each cell that intersects a constraint is split into separate cells on each side
+"""
+function _split_cells_by_constraints(cells_data, pts, constraint_edges)
+    if isempty(constraint_edges)
+        return cells_data
+    end
+    
+    split_cells = []
+    
+    for cell in cells_data
+        # Try to split this cell by all constraints
+        # Start with the original cell as a list of candidate cells to split
+        current_cells = [(vertices=cell.vertices, center_idx=cell.center_idx)]
+        
+        # Apply each constraint, potentially splitting cells multiple times
+        for (idx1, idx2) in constraint_edges
+            p1 = pts[idx1]
+            p2 = pts[idx2]
+            
+            next_cells = []
+            for sub_cell in current_cells
+                # Try to split this sub-cell by this constraint
+                split_result = _split_polygon_by_line_2d(sub_cell.vertices, p1, p2)
+                
+                if length(split_result) == 1
+                    # Cell not split by this constraint - keep as is
+                    push!(next_cells, sub_cell)
+                else
+                    # Cell was split - add both parts with computed centroids
+                    for poly_verts in split_result
+                        if !isempty(poly_verts)
+                            # Compute centroid for this split piece
+                            centroid = sum(poly_verts) / length(poly_verts)
+                            push!(next_cells, (vertices=poly_verts, center_idx=cell.center_idx, centroid=centroid))
+                        end
+                    end
+                end
+            end
+            current_cells = next_cells
+        end
+        
+        # Add all resulting cells (original or split versions)
+        for final_cell in current_cells
+            if !isempty(final_cell.vertices)
+                push!(split_cells, final_cell)
+            end
+        end
+    end
+    
+    return split_cells
+end
+
+"""
+Split a polygon by a line into two parts (one on each side of the line)
+Returns a vector of polygons (1 if no split, 2 if split occurs)
+"""
+function _split_polygon_by_line_2d(vertices, line_p1, line_p2)
+    if isempty(vertices) || length(vertices) < 3
+        return [vertices]
+    end
+    
+    # Define the constraint line using point and normal
+    line_dir = line_p2 - line_p1
+    normal = SVector{2, Float64}(-line_dir[2], line_dir[1])  # Perpendicular to line
+    
+    tol = 1e-10
+    
+    # Check if polygon intersects the line
+    n = length(vertices)
+    distances = [dot(v - line_p1, normal) for v in vertices]
+    
+    # Count vertices on each side
+    n_positive = count(d > tol for d in distances)
+    n_negative = count(d < -tol for d in distances)
+    
+    # If all vertices on one side, no split needed
+    if n_positive == 0 || n_negative == 0
+        return [vertices]
+    end
+    
+    # Polygon crosses the line - need to split
+    # Use Sutherland-Hodgman to clip to each side
+    left_poly = SVector{2, Float64}[]
+    right_poly = SVector{2, Float64}[]
+    
+    for i in 1:n
+        v1 = vertices[i]
+        v2 = vertices[mod1(i + 1, n)]
+        
+        d1 = distances[i]
+        d2 = distances[mod1(i + 1, n)]
+        
+        # Add v1 to appropriate polygon(s)
+        if d1 >= -tol  # On or to the left (positive side)
+            push!(left_poly, v1)
+        end
+        if d1 <= tol  # On or to the right (negative side)
+            push!(right_poly, v1)
+        end
+        
+        # If edge crosses the line, add intersection to both polygons
+        if (d1 > tol && d2 < -tol) || (d1 < -tol && d2 > tol)
+            # Compute intersection
+            denom = dot(v2 - v1, normal)
+            if abs(denom) > 1e-14
+                t = dot(line_p1 - v1, normal) / denom
+                t = clamp(t, 0.0, 1.0)
+                intersection = v1 + t * (v2 - v1)
+                push!(left_poly, intersection)
+                push!(right_poly, intersection)
+            end
+        end
+    end
+    
+    # Clean up the polygons
+    left_poly = _clean_polygon_vertices(left_poly)
+    right_poly = _clean_polygon_vertices(right_poly)
+    
+    result = []
+    if !isempty(left_poly)
+        push!(result, left_poly)
+    end
+    if !isempty(right_poly)
+        push!(result, right_poly)
+    end
+    
+    return result
 end
 
 """

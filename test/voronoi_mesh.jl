@@ -1,5 +1,6 @@
 using Test
 using Jutul
+using Random
 
 @testset "PEBI/Voronoi Mesh Tests" begin
     @testset "Basic 2D PEBI mesh" begin
@@ -19,7 +20,6 @@ using Jutul
     
     @testset "2D PEBI mesh with random points" begin
         # Test with random points
-        using Random
         Random.seed!(1234)
         points = rand(2, 10)
         
