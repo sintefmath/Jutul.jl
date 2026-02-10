@@ -452,12 +452,11 @@ function _build_unstructured_mesh_3d(cells, all_nodes)
         push!(boundary_faces_nodespos, length(boundary_faces_nodes_flat) + 1)
     end
     
-    # Build neighbor arrays
-    internal_neighbors = zeros(Int, length(interior_face_indices), 2)
-    for (i, face_idx) in enumerate(interior_face_indices)
+    # Build neighbor arrays (as vector of tuples, matching 2D implementation)
+    internal_neighbors = Tuple{Int, Int}[]
+    for face_idx in interior_face_indices
         n1, n2 = face_neighbors_vec[face_idx]
-        internal_neighbors[i, 1] = n1
-        internal_neighbors[i, 2] = n2
+        push!(internal_neighbors, (n1, n2))
     end
     
     boundary_neighbors = Int[]
