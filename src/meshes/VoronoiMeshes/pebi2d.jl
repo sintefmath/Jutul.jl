@@ -445,3 +445,168 @@ function _build_unstructured_mesh_2d(cells_data, all_pts)
         boundary_neighbors
     )
 end
+
+"""
+    find_intersected_faces(mesh, line_p1, line_p2)
+
+Find all faces (edges) in the mesh that are intersected by a line segment.
+
+# Arguments
+- `mesh`: An UnstructuredMesh
+- `line_p1`: Start point of line segment as 2-element vector/tuple
+- `line_p2`: End point of line segment as 2-element vector/tuple
+
+# Returns
+A vector of named tuples `(face_idx, intersection_point, t)` where:
+- `face_idx`: Index of the intersected face
+- `intersection_point`: The intersection point on the face
+- `t`: Parameter along line segment (0 at line_p1, 1 at line_p2)
+
+Faces are sorted by parameter `t` (order along line segment).
+"""
+function find_intersected_faces(mesh::UnstructuredMesh, line_p1, line_p2)
+    p1 = SVector{2, Float64}(line_p1[1], line_p1[2])
+    p2 = SVector{2, Float64}(line_p2[1], line_p2[2])
+    line_dir = p2 - p1
+    line_length_sq = dot(line_dir, line_dir)
+    
+    if line_length_sq < 1e-20
+        error("Line segment is degenerate (zero length)")
+    end
+    
+    intersections = []
+    tol = 1e-10
+    
+    # Check all interior faces
+    nf_internal = number_of_faces(mesh)
+    for face_idx in 1:nf_internal
+        # Get nodes of this face
+        face_nodes = mesh.faces.faces_to_nodes[face_idx]
+        if length(face_nodes) != 2
+            continue  # Skip non-edge faces
+        end
+        
+        # Get node coordinates
+        n1_idx, n2_idx = face_nodes
+        n1 = SVector{2, Float64}(mesh.node_points[n1_idx]...)
+        n2 = SVector{2, Float64}(mesh.node_points[n2_idx]...)
+        
+        # Check if line segment intersects this edge
+        intersection, t_line, t_edge = _line_segment_intersection_2d(p1, p2, n1, n2, tol)
+        
+        if intersection !== nothing
+            # Valid intersection found
+            push!(intersections, (face_idx=face_idx, intersection_point=intersection, t=t_line, 
+                                 is_boundary=false, edge_t=t_edge))
+        end
+    end
+    
+    # Check boundary faces
+    nf_boundary = number_of_boundary_faces(mesh)
+    for bface_idx in 1:nf_boundary
+        # Get nodes of this boundary face
+        face_nodes = mesh.boundary_faces.faces_to_nodes[bface_idx]
+        if length(face_nodes) != 2
+            continue
+        end
+        
+        n1_idx, n2_idx = face_nodes
+        n1 = SVector{2, Float64}(mesh.node_points[n1_idx]...)
+        n2 = SVector{2, Float64}(mesh.node_points[n2_idx]...)
+        
+        intersection, t_line, t_edge = _line_segment_intersection_2d(p1, p2, n1, n2, tol)
+        
+        if intersection !== nothing
+            push!(intersections, (face_idx=bface_idx, intersection_point=intersection, t=t_line,
+                                 is_boundary=true, edge_t=t_edge))
+        end
+    end
+    
+    # Sort by parameter t (order along line segment)
+    sort!(intersections, by = x -> x.t)
+    
+    return intersections
+end
+
+"""
+Check if two line segments intersect and return intersection point and parameters
+Returns (intersection_point, t1, t2) where:
+- t1 is parameter along first segment (0 to 1)
+- t2 is parameter along second segment (0 to 1)
+Returns (nothing, nothing, nothing) if no intersection
+"""
+function _line_segment_intersection_2d(p1, p2, q1, q2, tol)
+    # Parametric form: P(t) = p1 + t*(p2-p1), Q(s) = q1 + s*(q2-q1)
+    # Solve: p1 + t*d1 = q1 + s*d2
+    # Where d1 = p2-p1, d2 = q2-q1
+    
+    d1 = p2 - p1
+    d2 = q2 - q1
+    d_start = q1 - p1
+    
+    # Cross product in 2D: d1 × d2 = d1.x * d2.y - d1.y * d2.x
+    cross_d1_d2 = d1[1] * d2[2] - d1[2] * d2[1]
+    
+    # Check if lines are parallel
+    if abs(cross_d1_d2) < 1e-14
+        return nothing, nothing, nothing
+    end
+    
+    # Solve for parameters
+    t = (d_start[1] * d2[2] - d_start[2] * d2[1]) / cross_d1_d2
+    s = (d_start[1] * d1[2] - d_start[2] * d1[1]) / cross_d1_d2
+    
+    # Check if intersection is within both segments
+    if t >= -tol && t <= 1.0 + tol && s >= -tol && s <= 1.0 + tol
+        # Clamp to [0, 1]
+        t = clamp(t, 0.0, 1.0)
+        s = clamp(s, 0.0, 1.0)
+        intersection = p1 + t * d1
+        return intersection, t, s
+    end
+    
+    return nothing, nothing, nothing
+end
+
+"""
+    insert_line_segment(mesh, line_p1, line_p2)
+
+Insert a line segment into the mesh by splitting cells that are crossed by the line.
+Creates new interior faces along the line segment.
+
+# Arguments
+- `mesh`: An UnstructuredMesh to modify
+- `line_p1`: Start point of line segment as 2-element vector/tuple  
+- `line_p2`: End point of line segment as 2-element vector/tuple
+
+# Returns
+A new UnstructuredMesh with cells split along the line segment and new interior faces added.
+
+# Description
+This function finds all cells that are crossed by the line segment and splits them.
+Cells with 2+ edge intersections are split into left/right parts.
+Cells with only 1 edge intersection require special handling and are split into 3+ parts.
+
+The line segment becomes interior faces in the resulting mesh (not boundary faces).
+"""
+function insert_line_segment(mesh::UnstructuredMesh, line_p1, line_p2)
+    # TODO: Implement full cell splitting logic
+    # For now, return a placeholder that shows the intersected faces
+    
+    intersections = find_intersected_faces(mesh, line_p1, line_p2)
+    
+    if isempty(intersections)
+        @info "No faces intersected by line segment"
+        return mesh
+    end
+    
+    @info "Found $(length(intersections)) intersected faces"
+    for (i, inter) in enumerate(intersections)
+        @info "  Face $(i): idx=$(inter.face_idx), t=$(inter.t), boundary=$(inter.is_boundary)"
+    end
+    
+    # TODO: Implement actual cell splitting
+    @warn "insert_line_segment is not yet fully implemented - returning original mesh"
+    
+    return mesh
+end
