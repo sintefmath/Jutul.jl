@@ -149,7 +149,7 @@ Generate 3D Voronoi cells using half-space intersections.
 function _generate_voronoi_3d(pts::AbstractMatrix, bbox, verbose::Bool, edge_window_size::Int)
     n_points = size(pts, 2)
     cells = Vector{Vector{SVector{3, Float64}}}()
-    all_nodes = Set{SVector{3, Float64}}()
+    all_nodes = Vector{SVector{3, Float64}}()
     
     if verbose
         @info "Generating $n_points Voronoi cells..."
@@ -164,11 +164,24 @@ function _generate_voronoi_3d(pts::AbstractMatrix, bbox, verbose::Bool, edge_win
         cell_vertices = _compute_voronoi_cell_3d(i, pts, bbox, edge_window_size)
         if !isempty(cell_vertices)
             push!(cells, cell_vertices)
-            union!(all_nodes, cell_vertices)
+            # Add vertices with tolerance-based matching
+            for v in cell_vertices
+                # Check if vertex already exists (within tolerance)
+                found = false
+                for existing_v in all_nodes
+                    if norm(v - existing_v) < GEOMETRIC_TOLERANCE_3D
+                        found = true
+                        break
+                    end
+                end
+                if !found
+                    push!(all_nodes, v)
+                end
+            end
         end
     end
     
-    return cells, collect(all_nodes)
+    return cells, all_nodes
 end
 
 """
@@ -547,13 +560,18 @@ function _build_unstructured_mesh_3d(cells, all_nodes)
         error("No valid cells generated")
     end
     
-    # Create node index mapping
-    node_to_idx = Dict{SVector{3, Float64}, Int}()
-    node_points = Vector{SVector{3, Float64}}()
+    # Create node index mapping using tolerance-based lookup
+    node_points = copy(all_nodes)
     
-    for (i, node) in enumerate(all_nodes)
-        node_to_idx[node] = i
-        push!(node_points, node)
+    # Helper function to find node index with tolerance
+    function find_node_index(v::SVector{3, Float64})
+        for (i, node) in enumerate(node_points)
+            if norm(v - node) < GEOMETRIC_TOLERANCE_3D
+                return i
+            end
+        end
+        # Should not happen if all_nodes was built correctly
+        error("Vertex not found in node list")
     end
     
     # Extract faces and build connectivity
@@ -575,8 +593,8 @@ function _build_unstructured_mesh_3d(cells, all_nodes)
         hull_faces = _extract_convex_hull_faces_3d(cell_verts)
         
         for face_vert_local in hull_faces
-            # Convert local indices to global node indices
-            face_vert_global = [node_to_idx[cell_verts[i]] for i in face_vert_local]
+            # Convert local indices to global node indices using tolerance-based matching
+            face_vert_global = [find_node_index(cell_verts[i]) for i in face_vert_local]
             face_node_set = Set(face_vert_global)
             
             if !haskey(face_dict, face_node_set)
