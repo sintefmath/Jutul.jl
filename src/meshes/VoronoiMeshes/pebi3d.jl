@@ -348,7 +348,7 @@ function _extract_convex_hull_faces_3d(vertices::Vector{SVector{3, T}}) where T
         return Vector{Int}[]
     end
     
-    faces = Vector{Vector{Int}}[]
+    faces = Vector{Int}[]
     processed_edges = Set{Tuple{Int, Int}}()
     
     # Find a starting edge that's definitely on the hull
@@ -407,7 +407,7 @@ function _extract_convex_hull_faces_3d(vertices::Vector{SVector{3, T}}) where T
         
         # Add this face if it has at least 3 vertices
         if length(face_vertices) >= 3
-            push!(faces, face_vertices)
+            push!(faces, copy(face_vertices))
             
             # Mark all edges of this face as processed and add unprocessed ones to queue
             for i in 1:length(face_vertices)
