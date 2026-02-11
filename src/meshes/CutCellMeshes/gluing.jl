@@ -458,22 +458,25 @@ function _compute_residual_face(
 end
 
 """
-    mesh_fault_slip(mesh::UnstructuredMesh{3}, plane::PlaneCut;
+    cut_and_displace_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut;
         constant = 0.0, slope = 0.0, side = :positive, kwargs...)
 
-Cut a 3D mesh along a plane using `cut_mesh`, shift one side along the plane
-direction, and glue the two sides back together.
+Cut a 3D mesh along a plane using `cut_mesh`, displace one side perpendicular
+to the plane, and glue the two sides back together. The constant part produces
+a uniform normal offset; the slope part produces a rotation about an axis in the
+plane passing through `plane.point`, so the shifted half is rotated rather than
+shrunk or distorted.
 
-The displacement along the plane is parametrised as
+The displacement perpendicular to the plane is parametrised as
 
     dz = constant + (x - x₀) * slope
 
-where `x` is the projection of each node onto the plane tangent direction and
-`x₀` is the projection of `plane.point`.
+where `x` is the projection of each node onto a tangent direction in the plane
+and `x₀` is the same projection applied to `plane.point`.
 
 # Keyword arguments
-- `constant::Real = 0.0`: Constant shift along the plane.
-- `slope::Real = 0.0`: Linear slope of the shift.
+- `constant::Real = 0.0`: Constant shift perpendicular to the plane.
+- `slope::Real = 0.0`: Linear slope of the shift (produces a rotation).
 - `side::Symbol = :positive`: Which side to shift (`:positive` or `:negative`).
 - `tol::Real = 1e-6`: Node-merge tolerance for gluing.
 - `face_tol::Real = 1e-4`: Face centroid proximity tolerance.
@@ -481,10 +484,21 @@ where `x` is the projection of each node onto the plane tangent direction and
 - `min_cut_fraction::Real = 0.05`: Passed to `cut_mesh`.
 - `extra_out::Bool = false`: Return mapping information.
 
+When `extra_out=true` the returned `Dict` contains:
+- `"cell_index"` – maps each new cell to its original cell index in the input
+  `mesh` (composed through `cut_mesh` and `extract_submesh`).
+- `"cell_side"` – per cell, `:positive` or `:negative` indicating which side
+  of the cut plane it belongs to.
+- `"face_index_a"`, `"face_index_b"` – per interior face, index in the
+  positive-side or negative-side sub-mesh (0 otherwise).
+- `"boundary_face_index_a"`, `"boundary_face_index_b"` – same for boundary
+  faces.
+- `"new_faces"` – indices of newly created interior faces from gluing.
+
 Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` when
 `extra_out=true`.
 """
-function mesh_fault_slip(
+function cut_and_displace_mesh(
     mesh::UnstructuredMesh{3},
     plane::PlaneCut{Tp};
     constant::Real = 0.0,
@@ -537,13 +551,15 @@ function mesh_fault_slip(
         throw(ArgumentError("side must be :positive or :negative, got $side"))
     end
 
-    # Shift node points in-place on a copy
+    # Shift node points perpendicular to the plane (along the normal).
+    # The constant part is a uniform offset; the slope part is equivalent to
+    # a rotation about an axis in the plane, preserving in-plane distances.
     shifted_nodes = copy(target_mesh.node_points)
     for i in eachindex(shifted_nodes)
         pt = shifted_nodes[i]
         x = dot(pt, tangent)
         dz = constant + (x - x0) * slope
-        shifted_nodes[i] = pt + dz * tangent
+        shifted_nodes[i] = pt + dz * n
     end
 
     # Reconstruct mesh with shifted nodes
@@ -551,18 +567,64 @@ function mesh_fault_slip(
 
     # 5. Glue the two halves together
     if side == :positive
-        result = glue_mesh(shifted_mesh, mesh_neg;
+        glue_result = glue_mesh(shifted_mesh, mesh_neg;
             tol = tol, face_tol = face_tol, area_tol = area_tol,
-            extra_out = extra_out
+            extra_out = true
         )
     else
-        result = glue_mesh(mesh_pos, shifted_mesh;
+        glue_result = glue_mesh(mesh_pos, shifted_mesh;
             tol = tol, face_tol = face_tol, area_tol = area_tol,
-            extra_out = extra_out
+            extra_out = true
         )
     end
+    glued_mesh, glue_info = glue_result
 
-    return result
+    if extra_out
+        nc_a = number_of_cells(side == :positive ? shifted_mesh : mesh_pos)
+
+        # Compose mappings back to the original mesh:
+        # cut_info["cell_index"] maps cut-mesh cell → original cell.
+        # pos_cells / neg_cells map sub-mesh cells → cut-mesh cell.
+        nc_glued = number_of_cells(glued_mesh)
+        cell_index = Vector{Int}(undef, nc_glued)
+        cell_side = Vector{Symbol}(undef, nc_glued)
+        for c in 1:nc_glued
+            ia = glue_info["cell_index_a"][c]
+            ib = glue_info["cell_index_b"][c]
+            if ia > 0
+                # This cell comes from mesh_a (positive side in the glue)
+                if side == :positive
+                    cut_cell = pos_cells[ia]
+                    cell_side[c] = :positive
+                else
+                    cut_cell = pos_cells[ia]
+                    cell_side[c] = :positive
+                end
+            else
+                # This cell comes from mesh_b (negative side in the glue)
+                if side == :positive
+                    cut_cell = neg_cells[ib]
+                    cell_side[c] = :negative
+                else
+                    cut_cell = neg_cells[ib]
+                    cell_side[c] = :negative
+                end
+            end
+            cell_index[c] = cut_info["cell_index"][cut_cell]
+        end
+
+        info = Dict{String, Any}(
+            "cell_index"            => cell_index,
+            "cell_side"             => cell_side,
+            "face_index_a"          => glue_info["face_index_a"],
+            "face_index_b"          => glue_info["face_index_b"],
+            "boundary_face_index_a" => glue_info["boundary_face_index_a"],
+            "boundary_face_index_b" => glue_info["boundary_face_index_b"],
+            "new_faces"             => glue_info["new_faces"]
+        )
+        return (glued_mesh, info)
+    end
+    return glued_mesh
 end
 
 """

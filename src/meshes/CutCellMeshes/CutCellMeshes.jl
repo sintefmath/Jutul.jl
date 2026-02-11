@@ -8,5 +8,5 @@ module CutCellMeshes
     include("cutting.jl")
     include("gluing.jl")
 
-    export cut_mesh, glue_mesh, mesh_fault_slip
+    export cut_mesh, glue_mesh, cut_and_displace_mesh
 end

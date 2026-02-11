@@ -3,7 +3,7 @@ using Test
 using LinearAlgebra
 using StaticArrays
 
-import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, mesh_fault_slip, classify_cell
+import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh, classify_cell
 
 @testset "Mesh Gluing" begin
     @testset "glue_mesh basic - cut and rejoin" begin
@@ -164,14 +164,14 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, mesh_fault_slip, clas
     end
 end
 
-@testset "Mesh Fault Slip" begin
-    @testset "mesh_fault_slip zero displacement" begin
+@testset "cut_and_displace_mesh" begin
+    @testset "zero displacement" begin
         g = CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0))
         mesh = UnstructuredMesh(g)
         vol_orig = sum(tpfv_geometry(mesh).volumes)
 
         plane = PlaneCut([0.5, 0.5, 0.5], [0.0, 0.0, 1.0])
-        result = mesh_fault_slip(mesh, plane;
+        result = cut_and_displace_mesh(mesh, plane;
             constant = 0.0, slope = 0.0, side = :positive,
             tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
         )
@@ -181,15 +181,15 @@ end
         @test sum(geo.volumes) ≈ vol_orig rtol = 1e-8
     end
 
-    @testset "mesh_fault_slip constant displacement" begin
-        g = CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0))
+    @testset "large constant displacement" begin
+        g = CartesianMesh((3, 3, 3), (3.0, 3.0, 3.0))
         mesh = UnstructuredMesh(g)
         vol_orig = sum(tpfv_geometry(mesh).volumes)
 
-        plane = PlaneCut([0.5, 0.5, 0.5], [0.0, 0.0, 1.0])
-        result = mesh_fault_slip(mesh, plane;
-            constant = 0.1, slope = 0.0, side = :positive,
-            tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
+        plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
+        result = cut_and_displace_mesh(mesh, plane;
+            constant = 0.5, slope = 0.0, side = :positive,
+            tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01
         )
 
         @test number_of_cells(result) > number_of_cells(mesh)
@@ -197,14 +197,14 @@ end
         @test all(geo.volumes .> 0)
     end
 
-    @testset "mesh_fault_slip negative side" begin
-        g = CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0))
+    @testset "negative side displacement" begin
+        g = CartesianMesh((3, 3, 3), (3.0, 3.0, 3.0))
         mesh = UnstructuredMesh(g)
 
-        plane = PlaneCut([0.5, 0.5, 0.5], [0.0, 0.0, 1.0])
-        result = mesh_fault_slip(mesh, plane;
-            constant = 0.1, slope = 0.0, side = :negative,
-            tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
+        plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
+        result = cut_and_displace_mesh(mesh, plane;
+            constant = 0.5, slope = 0.0, side = :negative,
+            tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01
         )
 
         @test number_of_cells(result) > number_of_cells(mesh)
@@ -212,29 +212,160 @@ end
         @test all(geo.volumes .> 0)
     end
 
-    @testset "mesh_fault_slip linear displacement" begin
-        g = CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0))
+    @testset "slope preserves cell volumes" begin
+        # The slope displacement shifts each node perpendicular to the plane by
+        # dz = (x - x0) * slope.  This is equivalent to a shear transform which
+        # preserves volumes of the shifted half.
+        g = CartesianMesh((4, 4, 4), (4.0, 4.0, 4.0))
         mesh = UnstructuredMesh(g)
 
-        plane = PlaneCut([0.5, 0.5, 0.5], [0.0, 0.0, 1.0])
-        result = mesh_fault_slip(mesh, plane;
-            constant = 0.05, slope = 0.1, side = :positive,
-            tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
-        )
+        plane = PlaneCut([2.0, 2.0, 2.5], [0.0, 0.0, 1.0])
+        # First cut and extract to get the half that will be shifted
+        cut, cut_info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
+        pos_cells = Int[]
+        neg_cells = Int[]
+        for c in 1:number_of_cells(cut)
+            cl = classify_cell(cut, c, plane; tol = 1e-6)
+            if cl == :positive
+                push!(pos_cells, c)
+            else
+                push!(neg_cells, c)
+            end
+        end
+        mesh_pos = extract_submesh(cut, pos_cells)
+        vol_pos_before = sum(tpfv_geometry(mesh_pos).volumes)
 
-        @test number_of_cells(result) > number_of_cells(mesh)
+        # Apply the same shear transform that cut_and_displace_mesh uses
+        n = plane.normal
+        ref = abs(n[1]) < 0.9 ? SVector{3, Float64}(1, 0, 0) : SVector{3, Float64}(0, 1, 0)
+        tangent = normalize(cross(n, ref))
+        x0 = dot(plane.point, tangent)
+
+        shifted_nodes = copy(mesh_pos.node_points)
+        for i in eachindex(shifted_nodes)
+            pt = shifted_nodes[i]
+            x = dot(pt, tangent)
+            dz = (x - x0) * 0.5
+            shifted_nodes[i] = pt + dz * n
+        end
+        import Jutul.CutCellMeshes: _rebuild_mesh_with_nodes
+        shifted_mesh = _rebuild_mesh_with_nodes(mesh_pos, shifted_nodes)
+        vol_pos_after = sum(tpfv_geometry(shifted_mesh).volumes)
+
+        # Volume of the shifted half must be exactly preserved (shear transform)
+        @test vol_pos_after ≈ vol_pos_before rtol = 1e-12
+
+        # Also run the full pipeline
+        result = cut_and_displace_mesh(mesh, plane;
+            constant = 0.0, slope = 0.5, side = :positive,
+            tol = 1e-6, face_tol = 5.0, min_cut_fraction = 0.01
+        )
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
     end
 
-    @testset "mesh_fault_slip extra_out" begin
-        g = CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0))
+    @testset "large slope does not shrink mesh" begin
+        # With a large slope, a tangent-direction shift would shrink/stretch the
+        # mesh. The normal-direction shift (shear) should preserve volumes.
+        g = CartesianMesh((3, 3, 3), (3.0, 3.0, 3.0))
         mesh = UnstructuredMesh(g)
 
-        plane = PlaneCut([0.5, 0.5, 0.5], [0.0, 0.0, 1.0])
-        result, info = mesh_fault_slip(mesh, plane;
+        plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
+
+        # Extract the shifted half and verify volume is preserved
+        cut, _ = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
+        pos_cells = Int[]
+        for c in 1:number_of_cells(cut)
+            cl = classify_cell(cut, c, plane; tol = 1e-6)
+            if cl == :positive
+                push!(pos_cells, c)
+            end
+        end
+        mesh_pos = extract_submesh(cut, pos_cells)
+        vol_pos_before = sum(tpfv_geometry(mesh_pos).volumes)
+
+        # Apply shear with large slope
+        n = plane.normal
+        ref = abs(n[1]) < 0.9 ? SVector{3, Float64}(1, 0, 0) : SVector{3, Float64}(0, 1, 0)
+        tangent = normalize(cross(n, ref))
+        x0 = dot(plane.point, tangent)
+
+        shifted_nodes = copy(mesh_pos.node_points)
+        for i in eachindex(shifted_nodes)
+            pt = shifted_nodes[i]
+            x = dot(pt, tangent)
+            dz = (x - x0) * 1.0
+            shifted_nodes[i] = pt + dz * n
+        end
+        shifted_mesh = _rebuild_mesh_with_nodes(mesh_pos, shifted_nodes)
+        vol_pos_after = sum(tpfv_geometry(shifted_mesh).volumes)
+
+        # Volume of the shifted half must be preserved
+        @test vol_pos_after ≈ vol_pos_before rtol = 1e-12
+
+        # Full pipeline should produce valid geometry
+        result = cut_and_displace_mesh(mesh, plane;
+            constant = 0.0, slope = 1.0, side = :positive,
+            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01
+        )
+        geo = tpfv_geometry(result)
+        @test all(geo.volumes .> 0)
+    end
+
+    @testset "combined constant and large slope" begin
+        g = CartesianMesh((4, 4, 4), (4.0, 4.0, 4.0))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([2.0, 2.0, 2.5], [0.0, 0.0, 1.0])
+
+        # Extract shifted half for volume check
+        cut, _ = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
+        pos_cells = Int[]
+        for c in 1:number_of_cells(cut)
+            cl = classify_cell(cut, c, plane; tol = 1e-6)
+            if cl == :positive
+                push!(pos_cells, c)
+            end
+        end
+        mesh_pos = extract_submesh(cut, pos_cells)
+        vol_pos_before = sum(tpfv_geometry(mesh_pos).volumes)
+
+        n = plane.normal
+        ref = abs(n[1]) < 0.9 ? SVector{3, Float64}(1, 0, 0) : SVector{3, Float64}(0, 1, 0)
+        tangent = normalize(cross(n, ref))
+        x0 = dot(plane.point, tangent)
+
+        shifted_nodes = copy(mesh_pos.node_points)
+        for i in eachindex(shifted_nodes)
+            pt = shifted_nodes[i]
+            x = dot(pt, tangent)
+            dz = 0.3 + (x - x0) * 0.8
+            shifted_nodes[i] = pt + dz * n
+        end
+        shifted_mesh = _rebuild_mesh_with_nodes(mesh_pos, shifted_nodes)
+        vol_pos_after = sum(tpfv_geometry(shifted_mesh).volumes)
+
+        # Volume of the shifted half must be preserved (constant + shear both
+        # preserve volume when applied in normal direction)
+        @test vol_pos_after ≈ vol_pos_before rtol = 1e-12
+
+        result = cut_and_displace_mesh(mesh, plane;
+            constant = 0.3, slope = 0.8, side = :positive,
+            tol = 1e-6, face_tol = 5.0, min_cut_fraction = 0.01
+        )
+        geo = tpfv_geometry(result)
+        @test all(geo.volumes .> 0)
+    end
+
+    @testset "extra_out maps back to original mesh" begin
+        g = CartesianMesh((3, 3, 3), (3.0, 3.0, 3.0))
+        mesh = UnstructuredMesh(g)
+        nc_orig = number_of_cells(mesh)
+
+        plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
+        result, info = cut_and_displace_mesh(mesh, plane;
             constant = 0.0, slope = 0.0, side = :positive,
-            tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01,
+            tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01,
             extra_out = true
         )
 
@@ -242,23 +373,54 @@ end
         nf = number_of_faces(result)
         nb = number_of_boundary_faces(result)
 
-        @test length(info["cell_index_a"]) == nc
-        @test length(info["cell_index_b"]) == nc
+        # cell_index maps every new cell back to an original cell
+        @test length(info["cell_index"]) == nc
+        @test all(1 .<= info["cell_index"] .<= nc_orig)
+
+        # cell_side tells us which side each cell is on
+        @test length(info["cell_side"]) == nc
+        @test all(s -> s == :positive || s == :negative, info["cell_side"])
+
+        # Both sides must be present
+        @test any(s -> s == :positive, info["cell_side"])
+        @test any(s -> s == :negative, info["cell_side"])
+
+        # face/boundary tracking arrays have correct lengths
         @test length(info["face_index_a"]) == nf
         @test length(info["face_index_b"]) == nf
         @test length(info["boundary_face_index_a"]) == nb
         @test length(info["boundary_face_index_b"]) == nb
     end
 
-    @testset "mesh_fault_slip x-normal plane" begin
-        g = CartesianMesh((4, 3, 3), (2.0, 1.5, 1.5))
+    @testset "extra_out with displacement" begin
+        g = CartesianMesh((3, 3, 3), (3.0, 3.0, 3.0))
+        mesh = UnstructuredMesh(g)
+        nc_orig = number_of_cells(mesh)
+
+        plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
+        result, info = cut_and_displace_mesh(mesh, plane;
+            constant = 0.5, slope = 0.5, side = :positive,
+            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01,
+            extra_out = true
+        )
+
+        nc = number_of_cells(result)
+        @test length(info["cell_index"]) == nc
+        @test all(1 .<= info["cell_index"] .<= nc_orig)
+        @test length(info["cell_side"]) == nc
+        @test any(s -> s == :positive, info["cell_side"])
+        @test any(s -> s == :negative, info["cell_side"])
+    end
+
+    @testset "x-normal plane" begin
+        g = CartesianMesh((4, 3, 3), (4.0, 3.0, 3.0))
         mesh = UnstructuredMesh(g)
         vol_orig = sum(tpfv_geometry(mesh).volumes)
 
-        plane = PlaneCut([0.6, 0.75, 0.75], [1.0, 0.0, 0.0])
-        result = mesh_fault_slip(mesh, plane;
+        plane = PlaneCut([1.2, 1.5, 1.5], [1.0, 0.0, 0.0])
+        result = cut_and_displace_mesh(mesh, plane;
             constant = 0.0, slope = 0.0, side = :positive,
-            tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
+            tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01
         )
 
         geo = tpfv_geometry(result)
@@ -266,16 +428,15 @@ end
         @test sum(geo.volumes) ≈ vol_orig rtol = 1e-8
     end
 
-    @testset "mesh_fault_slip tolerances" begin
-        g = CartesianMesh((2, 2, 2), (1.0, 1.0, 1.0))
+    @testset "tolerances" begin
+        g = CartesianMesh((2, 2, 2), (2.0, 2.0, 2.0))
         mesh = UnstructuredMesh(g)
 
-        plane = PlaneCut([0.5, 0.5, 0.5], [0.0, 0.0, 1.0])
+        plane = PlaneCut([1.0, 1.0, 1.0], [0.0, 0.0, 1.0])
 
-        # Use different tolerances and verify it still works
-        result = mesh_fault_slip(mesh, plane;
+        result = cut_and_displace_mesh(mesh, plane;
             constant = 0.0, slope = 0.0, side = :positive,
-            tol = 1e-8, face_tol = 0.5, min_cut_fraction = 0.01,
+            tol = 1e-8, face_tol = 1.5, min_cut_fraction = 0.01,
             area_tol = 1e-12
         )
 
