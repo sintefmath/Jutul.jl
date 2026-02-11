@@ -33,34 +33,47 @@ of the plane.
 
 Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` if `extra_out=true`.
 """
-function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface; extra_out::Bool = false, kwarg...)
+function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface; extra_out::Bool = false, kwargs...)
     result = mesh
-    for (i, poly) in enumerate(surface.polygons)
-        n = surface.normals[i]
-        c = sum(poly) / length(poly)
-        plane = PlaneCut(c, n)
-        if extra_out
-            result, _ = cut_mesh(result, plane; extra_out = true, kwarg...)
-        else
-            result = cut_mesh(result, plane; extra_out = false, kwarg...)
-        end
-    end
     if extra_out
-        # Recompute full mapping from the final result relative to original
-        # For PolygonalSurface, only the final state matters; we do a simple
-        # identity mapping since sequential cuts already compound.
-        nc = number_of_cells(result)
-        nf = number_of_faces(result)
-        nb = number_of_boundary_faces(result)
+        nc = number_of_cells(mesh)
+        nf = number_of_faces(mesh)
+        nb = number_of_boundary_faces(mesh)
+        # Initialize with identity mappings
+        cell_idx = collect(1:nc)
+        face_idx = collect(1:nf)
+        bface_idx = collect(1:nb)
+
+        for (i, poly) in enumerate(surface.polygons)
+            n = surface.normals[i]
+            c = sum(poly) / length(poly)
+            plane = PlaneCut(c, n)
+            result, step_info = cut_mesh(result, plane; extra_out = true, kwargs...)
+            # Compose mappings: new cell → intermediate cell → original cell
+            cell_idx = [cell_idx[j] for j in step_info["cell_index"]]
+            face_idx = [j == 0 ? 0 : face_idx[j] for j in step_info["face_index"]]
+            bface_idx = [j == 0 ? 0 : bface_idx[j] for j in step_info["boundary_face_index"]]
+        end
+
+        # new_faces: all faces with no original face (face_index == 0)
+        all_new_faces = findall(==(0), face_idx)
+
         info = Dict{String, Any}(
-            "cell_index" => collect(1:nc),
-            "face_index" => collect(1:nf),
-            "boundary_face_index" => collect(1:nb),
-            "new_faces" => Int[]
+            "cell_index" => cell_idx,
+            "face_index" => face_idx,
+            "boundary_face_index" => bface_idx,
+            "new_faces" => all_new_faces
         )
         return (result, info)
+    else
+        for (i, poly) in enumerate(surface.polygons)
+            n = surface.normals[i]
+            c = sum(poly) / length(poly)
+            plane = PlaneCut(c, n)
+            result = cut_mesh(result, plane; extra_out = false, kwargs...)
+        end
+        return result
     end
-    return result
 end
 
 function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
