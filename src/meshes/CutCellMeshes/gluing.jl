@@ -766,7 +766,8 @@ Approximate centroid of a cell from all its unique node coordinates.
 """
 function _cell_centroid_from_nodes(mesh::UnstructuredMesh{3}, cell::Int)
     nodes = cell_nodes(mesh, cell)
-    c = zero(SVector{3, Float64})
+    T = eltype(eltype(mesh.node_points))
+    c = zero(SVector{3, T})
     for n in nodes
         c += mesh.node_points[n]
     end
@@ -781,7 +782,8 @@ Approximate centroid of a cell from mesh_b using combined node coordinates.
 function _cell_centroid_from_nodes_b(mesh_b::UnstructuredMesh{3}, cell_b::Int,
                                      combined_nodes, node_map_b)
     nodes = cell_nodes(mesh_b, cell_b)
-    c = zero(SVector{3, Float64})
+    T = eltype(eltype(combined_nodes))
+    c = zero(SVector{3, T})
     for n in nodes
         c += combined_nodes[node_map_b[n]]
     end
