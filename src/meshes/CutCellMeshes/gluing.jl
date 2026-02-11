@@ -107,40 +107,66 @@ function glue_mesh(
         bnd_b_nodes_combined[bf] = [node_map_b[n] for n in mesh_b.boundary_faces.faces_to_nodes[bf]]
     end
 
-    # Find candidate pairs by centroid proximity
-    # A boundary face from mesh_a can match multiple from mesh_b and vice versa
-    # matched_a[bf_a] = list of bf_b indices that overlap
-    matched_a = Dict{Int, Vector{Int}}()
-    matched_b = Dict{Int, Vector{Int}}()
+    # Find candidate pairs by centroid proximity.
+    # Unlike the node-sharing approach, this works even when the two meshes
+    # have been displaced so that no nodes coincide.
+    # Additionally, require that face normals are approximately anti-parallel
+    # (facing each other), to avoid gluing exterior boundary faces that happen
+    # to be close but are on the same side of the domain.
+    bnd_normals_a = Vector{SVector{3, T}}(undef, nb_a)
+    for bf in 1:nb_a
+        pts = SVector{3,T}[mesh_a.node_points[n] for n in mesh_a.boundary_faces.faces_to_nodes[bf]]
+        n_raw = _polygon_normal_from_pts(pts)
+        # Orient outward: the normal should point away from the cell
+        cell = mesh_a.boundary_faces.neighbors[bf]
+        cell_c = _cell_centroid_from_nodes(mesh_a, cell)
+        face_c = sum(pts) / length(pts)
+        if dot(n_raw, face_c - cell_c) < 0
+            n_raw = -n_raw
+        end
+        bnd_normals_a[bf] = n_raw
+    end
+    bnd_normals_b = Vector{SVector{3, T}}(undef, nb_b)
+    for bf in 1:nb_b
+        pts = SVector{3,T}[mesh_b.node_points[n] for n in mesh_b.boundary_faces.faces_to_nodes[bf]]
+        n_raw = _polygon_normal_from_pts(pts)
+        cell = mesh_b.boundary_faces.neighbors[bf]
+        cell_c = _cell_centroid_from_nodes(mesh_b, cell)
+        face_c = sum(pts) / length(pts)
+        if dot(n_raw, face_c - cell_c) < 0
+            n_raw = -n_raw
+        end
+        bnd_normals_b[bf] = n_raw
+    end
 
+    candidate_pairs = Tuple{Int,Int}[]
     for bf_a in 1:nb_a
         for bf_b in 1:nb_b
             if norm(bnd_centroids_a[bf_a] - bnd_centroids_b[bf_b]) < face_tol
-                # Check if faces share nodes (in combined numbering)
-                nodes_a = Set(bnd_a_nodes_combined[bf_a])
-                nodes_b = Set(bnd_b_nodes_combined[bf_b])
-                shared = intersect(nodes_a, nodes_b)
-                if length(shared) >= 2  # Need at least 2 shared nodes for a face intersection
-                    if !haskey(matched_a, bf_a)
-                        matched_a[bf_a] = Int[]
+                # Require normals to be approximately anti-parallel
+                # (dot product < 0 means they face each other)
+                if dot(bnd_normals_a[bf_a], bnd_normals_b[bf_b]) < 0
+                    # Require faces to be approximately coplanar:
+                    # the distance between centroids projected onto the face
+                    # normal should be small compared to the in-plane distance.
+                    n_avg = normalize(bnd_normals_a[bf_a] - bnd_normals_b[bf_b])
+                    dp = bnd_centroids_a[bf_a] - bnd_centroids_b[bf_b]
+                    normal_dist = abs(dot(dp, n_avg))
+                    tangent_dist = norm(dp - dot(dp, n_avg) * n_avg)
+                    # Accept if the normal separation is at most half the face_tol
+                    # (faces that are far apart in the normal direction are on
+                    # opposite sides of the domain, not at the gluing interface)
+                    if normal_dist < face_tol / 2
+                        push!(candidate_pairs, (bf_a, bf_b))
                     end
-                    push!(matched_a[bf_a], bf_b)
-                    if !haskey(matched_b, bf_b)
-                        matched_b[bf_b] = Int[]
-                    end
-                    push!(matched_b[bf_b], bf_a)
                 end
             end
         end
     end
 
     # ----------------------------------------------------------------
-    # 4. Process face intersections
+    # 4. Process face intersections using geometric polygon clipping
     # ----------------------------------------------------------------
-    # For matched boundary face pairs, compute the intersection polygon.
-    # The intersection becomes a new interior face. Remaining parts of each
-    # boundary face stay as boundary faces.
-
     # Result accumulators
     all_face_nodes = Vector{Vector{Int}}()       # interior face node lists
     all_face_neighbors = Vector{Tuple{Int,Int}}() # interior face neighbors
@@ -178,6 +204,17 @@ function glue_mesh(
         return bi
     end
 
+    # Helper: find or add a node in combined_nodes
+    function find_or_add_node!(pt)
+        for i in eachindex(combined_nodes)
+            if norm(combined_nodes[i] - pt) <= tol
+                return i
+            end
+        end
+        push!(combined_nodes, pt)
+        return length(combined_nodes)
+    end
+
     # ---- 4a. Copy interior faces from mesh_a ----
     for f in 1:nf_a
         l, r = mesh_a.faces.neighbors[f]
@@ -192,117 +229,169 @@ function glue_mesh(
         add_interior_face!(nodes, l + cell_offset_b, r + cell_offset_b; old_b = f)
     end
 
-    # ---- 4c. Process boundary faces ----
-    # Track which boundary faces have been fully consumed
-    consumed_a = falses(nb_a)
-    consumed_b = falses(nb_b)
-
-    # For each matched pair, create interior face from shared nodes
-    processed_pairs = Set{Tuple{Int,Int}}()
-
-    for (bf_a, bf_b_list) in matched_a
-        cell_a = mesh_a.boundary_faces.neighbors[bf_a]
-        nodes_a_set = Set(bnd_a_nodes_combined[bf_a])
-
-        for bf_b in bf_b_list
-            pair = minmax(bf_a, bf_b)
-            if pair in processed_pairs
-                continue
-            end
-            push!(processed_pairs, pair)
-
-            cell_b = mesh_b.boundary_faces.neighbors[bf_b]
-            nodes_b_set = Set(bnd_b_nodes_combined[bf_b])
-            shared_nodes = collect(intersect(nodes_a_set, nodes_b_set))
-
-            if length(shared_nodes) >= 3
-                # Order the shared nodes as a polygon
-                pts = [combined_nodes[n] for n in shared_nodes]
-                # Compute face normal from mesh_a boundary face
-                face_a_pts = [combined_nodes[n] for n in bnd_a_nodes_combined[bf_a]]
-                face_normal = _polygon_normal_from_pts(face_a_pts)
-                ordered_pts = order_polygon_points(pts, face_normal)
-                ordered_nodes = Int[]
-                for pt in ordered_pts
-                    for n in shared_nodes
-                        if norm(combined_nodes[n] - pt) < tol
-                            push!(ordered_nodes, n)
-                            break
-                        end
-                    end
-                end
-
-                if length(ordered_nodes) >= 3
-                    area = polygon_area([combined_nodes[n] for n in ordered_nodes])
-                    if area > area_tol
-                        fi = add_interior_face!(ordered_nodes, cell_a, cell_b + cell_offset_b)
-                        push!(new_faces_list, fi)
-                        # Check if faces are fully consumed
-                        if nodes_a_set == nodes_b_set
-                            consumed_a[bf_a] = true
-                            consumed_b[bf_b] = true
-                        elseif issubset(nodes_a_set, nodes_b_set)
-                            consumed_a[bf_a] = true
-                        elseif issubset(nodes_b_set, nodes_a_set)
-                            consumed_b[bf_b] = true
-                        end
-                    end
-                end
-            end
-        end
-
-        # If boundary face from mesh_a still has remaining nodes (partial overlap),
-        # compute the residual boundary face
-        if !consumed_a[bf_a]
-            # Collect all shared nodes with any matched bf_b
-            all_shared = Set{Int}()
-            for bf_b in bf_b_list
-                nodes_b_set = Set(bnd_b_nodes_combined[bf_b])
-                union!(all_shared, intersect(nodes_a_set, nodes_b_set))
-            end
-            # Remaining nodes: only those exclusively in mesh_a face
-            remaining = setdiff(nodes_a_set, all_shared)
-            # If remaining forms a valid face (with shared boundary nodes),
-            # reconstruct the residual boundary polygon
-            residual_nodes = _compute_residual_face(bnd_a_nodes_combined[bf_a], all_shared, remaining, combined_nodes, tol)
-            if length(residual_nodes) >= 3
-                area = polygon_area([combined_nodes[n] for n in residual_nodes])
-                if area > area_tol
-                    add_boundary_face!(residual_nodes, cell_a; old_a = bf_a)
-                    consumed_a[bf_a] = true
-                end
-            end
-            if !consumed_a[bf_a]
-                # Keep original boundary face
-            end
-        end
+    # ---- 4c. Process boundary face pairs ----
+    # For each boundary face, accumulate the intersection polygons that have
+    # been carved out of it.  Whatever remains becomes a residual boundary face.
+    consumed_area_a = zeros(T, nb_a)  # total intersection area carved from bf_a
+    consumed_area_b = zeros(T, nb_b)
+    original_area_a = zeros(T, nb_a)
+    original_area_b = zeros(T, nb_b)
+    for bf in 1:nb_a
+        original_area_a[bf] = polygon_area([combined_nodes[n] for n in bnd_a_nodes_combined[bf]])
+    end
+    for bf in 1:nb_b
+        original_area_b[bf] = polygon_area([combined_nodes[n] for n in bnd_b_nodes_combined[bf]])
     end
 
-    # Handle partially consumed mesh_b boundary faces
-    for (bf_b, bf_a_list) in matched_b
-        if consumed_b[bf_b]
+    # For residual computation, track which intersection polygons were carved
+    # from each boundary face.
+    carved_from_a = Dict{Int, Vector{Vector{SVector{3,T}}}}()
+    carved_from_b = Dict{Int, Vector{Vector{SVector{3,T}}}}()
+
+    for (bf_a, bf_b) in candidate_pairs
+        cell_a = mesh_a.boundary_faces.neighbors[bf_a]
+        cell_b = mesh_b.boundary_faces.neighbors[bf_b]
+
+        # Get 3D polygon vertices for both faces
+        pts_a = SVector{3,T}[combined_nodes[n] for n in bnd_a_nodes_combined[bf_a]]
+        pts_b = SVector{3,T}[combined_nodes[n] for n in bnd_b_nodes_combined[bf_b]]
+
+        # Compute face normal from mesh_a boundary face for projection
+        normal_a = _polygon_normal_from_pts(pts_a)
+        face_normal = normal_a
+
+        # Build a local 2D coordinate system on the projection plane
+        centroid_ab = (sum(pts_a)/length(pts_a) + sum(pts_b)/length(pts_b)) / 2
+        u, v = _build_tangent_basis(face_normal)
+
+        # Project both polygons to 2D
+        poly_a_2d = [SVector{2,T}(dot(p - centroid_ab, u), dot(p - centroid_ab, v)) for p in pts_a]
+        poly_b_2d = [SVector{2,T}(dot(p - centroid_ab, u), dot(p - centroid_ab, v)) for p in pts_b]
+
+        # Compute 2D polygon intersection via Sutherland-Hodgman
+        isect_2d = _polygon_intersection_2d(poly_a_2d, poly_b_2d)
+
+        if length(isect_2d) < 3
             continue
         end
-        cell_b = mesh_b.boundary_faces.neighbors[bf_b]
-        nodes_b_set = Set(bnd_b_nodes_combined[bf_b])
-
-        all_shared = Set{Int}()
-        for bf_a in bf_a_list
-            nodes_a_set = Set(bnd_a_nodes_combined[bf_a])
-            union!(all_shared, intersect(nodes_b_set, nodes_a_set))
+        # Compute area of intersection
+        isect_3d = [centroid_ab + p[1] * u + p[2] * v for p in isect_2d]
+        isect_area = polygon_area(isect_3d)
+        if isect_area <= area_tol
+            continue
         end
-        remaining = setdiff(nodes_b_set, all_shared)
-        residual_nodes = _compute_residual_face(bnd_b_nodes_combined[bf_b], all_shared, remaining, combined_nodes, tol)
-        if length(residual_nodes) >= 3
-            area = polygon_area([combined_nodes[n] for n in residual_nodes])
-            if area > area_tol
-                add_boundary_face!(residual_nodes, cell_b + cell_offset_b; old_b = bf_b)
-                consumed_b[bf_b] = true
+
+        # Project intersection points onto the average plane between the
+        # two face planes so the new interior face lies between the two cells.
+        d_a = sum(dot(p, face_normal) for p in pts_a) / length(pts_a)
+        d_b = sum(dot(p, face_normal) for p in pts_b) / length(pts_b)
+        d_mid = (d_a + d_b) / 2
+
+        isect_3d_mid = SVector{3,T}[]
+        for p2d in isect_2d
+            pt3 = centroid_ab + p2d[1] * u + p2d[2] * v
+            d_pt = dot(pt3, face_normal)
+            pt3 = pt3 + (d_mid - d_pt) * face_normal
+            push!(isect_3d_mid, pt3)
+        end
+
+        # Order the intersection polygon and add nodes
+        isect_ordered = order_polygon_points(isect_3d_mid, face_normal)
+        face_node_ids = Int[find_or_add_node!(pt) for pt in isect_ordered]
+
+        # Determine correct left/right orientation.
+        # The face normal (from Newell on ordered nodes) should point from
+        # left to right.  Compute cell centroids and check.
+        face_centroid = sum(isect_ordered) / length(isect_ordered)
+        cell_a_centroid = _cell_centroid_from_nodes(mesh_a, cell_a)
+        cell_b_centroid = _cell_centroid_from_nodes_b(mesh_b, cell_b, combined_nodes, node_map_b)
+        new_normal = _polygon_normal_from_pts(isect_ordered)
+
+        # The normal should point from left to right. If it points away
+        # from cell_a toward cell_b, then left=cell_a, right=cell_b.
+        dir_a_to_b = cell_b_centroid - cell_a_centroid
+        if dot(new_normal, dir_a_to_b) >= 0
+            fi = add_interior_face!(face_node_ids, cell_a, cell_b + cell_offset_b)
+        else
+            fi = add_interior_face!(reverse(face_node_ids), cell_b + cell_offset_b, cell_a)
+        end
+        push!(new_faces_list, fi)
+
+        consumed_area_a[bf_a] += isect_area
+        consumed_area_b[bf_b] += isect_area
+
+        # Track carved polygons for residual computation
+        if !haskey(carved_from_a, bf_a)
+            carved_from_a[bf_a] = Vector{SVector{3,T}}[]
+        end
+        push!(carved_from_a[bf_a], isect_3d)
+        if !haskey(carved_from_b, bf_b)
+            carved_from_b[bf_b] = Vector{SVector{3,T}}[]
+        end
+        push!(carved_from_b[bf_b], isect_3d)
+    end
+
+    # ---- 4d. Handle boundary faces ----
+    # A boundary face is "fully consumed" if the intersection area covers
+    # (nearly) all of its original area.  Otherwise it remains as a boundary
+    # face (possibly with residual geometry, but we keep the original polygon
+    # for robustness, as the residual clipping is complex).
+    consumed_a = falses(nb_a)
+    consumed_b = falses(nb_b)
+    for bf in 1:nb_a
+        if original_area_a[bf] > area_tol && consumed_area_a[bf] >= original_area_a[bf] * (1 - 1e-4)
+            consumed_a[bf] = true
+        end
+    end
+    for bf in 1:nb_b
+        if original_area_b[bf] > area_tol && consumed_area_b[bf] >= original_area_b[bf] * (1 - 1e-4)
+            consumed_b[bf] = true
+        end
+    end
+
+    # For partially consumed faces, compute residual boundary polygons
+    for bf in 1:nb_a
+        if consumed_a[bf]
+            continue
+        end
+        cell = mesh_a.boundary_faces.neighbors[bf]
+        if haskey(carved_from_a, bf)
+            residuals = _compute_residual_polygons(
+                SVector{3,T}[combined_nodes[n] for n in bnd_a_nodes_combined[bf]],
+                carved_from_a[bf],
+                area_tol
+            )
+            if !isempty(residuals)
+                for rpoly in residuals
+                    rnodes = Int[find_or_add_node!(pt) for pt in rpoly]
+                    add_boundary_face!(rnodes, cell; old_a = bf)
+                end
+                consumed_a[bf] = true
+            end
+        end
+    end
+    for bf in 1:nb_b
+        if consumed_b[bf]
+            continue
+        end
+        cell = mesh_b.boundary_faces.neighbors[bf]
+        if haskey(carved_from_b, bf)
+            residuals = _compute_residual_polygons(
+                SVector{3,T}[combined_nodes[n] for n in bnd_b_nodes_combined[bf]],
+                carved_from_b[bf],
+                area_tol
+            )
+            if !isempty(residuals)
+                for rpoly in residuals
+                    rnodes = Int[find_or_add_node!(pt) for pt in rpoly]
+                    add_boundary_face!(rnodes, cell + cell_offset_b; old_b = bf)
+                end
+                consumed_b[bf] = true
             end
         end
     end
 
-    # ---- 4d. Copy unmatched / unconsumed boundary faces ----
+    # Copy unmatched / unconsumed boundary faces
     for bf in 1:nb_a
         if !consumed_a[bf]
             cell = mesh_a.boundary_faces.neighbors[bf]
@@ -411,50 +500,292 @@ function _polygon_normal_from_pts(pts::AbstractVector{SVector{3, T}}) where T
 end
 
 """
-    _compute_residual_face(original_nodes, shared_nodes, remaining_nodes, node_points, tol)
+    _build_tangent_basis(normal)
 
-Compute the residual polygon from a boundary face after removing the interior
-intersection region. The residual includes nodes unique to this face plus the
-shared nodes on the boundary of the intersection.
+Build an orthonormal (u, v) basis in the plane perpendicular to `normal`.
 """
-function _compute_residual_face(
-    original_nodes::Vector{Int},
-    shared_nodes::Set{Int},
-    remaining_nodes::Set{Int},
-    node_points::Vector{SVector{3, T}},
-    tol::Real
+function _build_tangent_basis(normal::SVector{3, T}) where T
+    ref = abs(normal[1]) < T(0.9) ? SVector{3,T}(1, 0, 0) : SVector{3,T}(0, 1, 0)
+    u = normalize(cross(normal, ref))
+    v = cross(normal, u)
+    return (u, v)
+end
+
+"""
+    _ensure_ccw_2d(poly)
+
+Ensure a 2D polygon has counter-clockwise winding order.
+Uses the signed area (shoelace formula).
+"""
+function _ensure_ccw_2d(poly::Vector{SVector{2, T}}) where T
+    n = length(poly)
+    if n < 3
+        return poly
+    end
+    # Signed area: positive for CCW, negative for CW
+    area2 = zero(T)
+    for i in 1:n
+        j = mod1(i + 1, n)
+        area2 += poly[i][1] * poly[j][2] - poly[j][1] * poly[i][2]
+    end
+    if area2 < 0
+        return reverse(poly)
+    end
+    return poly
+end
+
+"""
+    _polygon_intersection_2d(subject, clip)
+
+Compute the intersection of two 2D convex polygons using the
+Sutherland-Hodgman algorithm. Both polygons are reoriented to
+counter-clockwise winding before clipping. Returns a vector of 2D vertices.
+"""
+function _polygon_intersection_2d(
+    subject::Vector{SVector{2, T}},
+    clip::Vector{SVector{2, T}}
 ) where T
-    if isempty(remaining_nodes)
-        return Int[]
-    end
-    # The residual face keeps the original ordering but only includes
-    # nodes that are either unique to this face or on the shared boundary.
-    # We walk around the original face and include nodes that are NOT
-    # exclusively interior shared nodes (nodes shared but not on the boundary
-    # of the intersection region).
-    residual = Int[]
-    for n in original_nodes
-        if n in remaining_nodes || n in shared_nodes
-            push!(residual, n)
+    output = _ensure_ccw_2d(subject)
+    clip_ccw = _ensure_ccw_2d(clip)
+    nc = length(clip_ccw)
+    for i in 1:nc
+        if isempty(output)
+            return SVector{2,T}[]
         end
-    end
-    if length(residual) < 3
-        return Int[]
-    end
-    # Order the residual polygon
-    pts = [node_points[n] for n in residual]
-    face_normal = _polygon_normal_from_pts([node_points[n] for n in original_nodes])
-    ordered_pts = order_polygon_points(pts, face_normal)
-    ordered_nodes = Int[]
-    for pt in ordered_pts
-        for n in residual
-            if norm(node_points[n] - pt) < tol
-                push!(ordered_nodes, n)
-                break
+        input = output
+        output = SVector{2,T}[]
+        edge_start = clip_ccw[i]
+        edge_end = clip_ccw[mod1(i + 1, nc)]
+        # Edge direction and inward normal
+        edge_dir = edge_end - edge_start
+        # Inward normal (pointing into the clip polygon)
+        inward = SVector{2,T}(-edge_dir[2], edge_dir[1])
+
+        n_in = length(input)
+        for j in 1:n_in
+            current = input[j]
+            next = input[mod1(j + 1, n_in)]
+            d_curr = dot(current - edge_start, inward)
+            d_next = dot(next - edge_start, inward)
+            if d_curr >= 0  # current inside
+                push!(output, current)
+                if d_next < 0  # next outside
+                    # Compute intersection
+                    t = d_curr / (d_curr - d_next)
+                    push!(output, current + t * (next - current))
+                end
+            elseif d_next >= 0  # current outside, next inside
+                t = d_curr / (d_curr - d_next)
+                push!(output, current + t * (next - current))
             end
         end
     end
-    return ordered_nodes
+    return output
+end
+
+"""
+    _compute_residual_polygons(face_poly, carved_polys, area_tol)
+
+Compute the residual boundary polygon(s) after subtracting intersection regions
+from a face polygon. For each carved polygon, clips the remaining pieces against
+the complement of the carved polygon. Returns a list of residual convex polygons,
+or empty if the face is fully consumed.
+"""
+function _compute_residual_polygons(
+    face_poly::Vector{SVector{3, T}},
+    carved_polys::Vector{Vector{SVector{3, T}}},
+    area_tol::Real
+) where T
+    face_area = polygon_area(face_poly)
+    carved_area = sum(polygon_area(cp) for cp in carved_polys)
+    if carved_area >= face_area * (1 - 1e-4)
+        return Vector{SVector{3,T}}[]
+    end
+
+    # Project everything to 2D for clipping
+    face_normal = _polygon_normal_from_pts(face_poly)
+    centroid = sum(face_poly) / length(face_poly)
+    u, v = _build_tangent_basis(face_normal)
+
+    face_2d = [SVector{2,T}(dot(p - centroid, u), dot(p - centroid, v)) for p in face_poly]
+    face_2d = _ensure_ccw_2d(face_2d)
+
+    # Start with the full face as the set of residual pieces
+    pieces = [face_2d]
+
+    for carved in carved_polys
+        carved_2d = [SVector{2,T}(dot(p - centroid, u), dot(p - centroid, v)) for p in carved]
+        carved_2d = _ensure_ccw_2d(carved_2d)
+
+        new_pieces = Vector{SVector{2,T}}[]
+        for piece in pieces
+            # Subtract carved_2d from piece by clipping against each edge's exterior
+            remaining = _subtract_convex_2d(piece, carved_2d)
+            for r in remaining
+                if _polygon_area_2d(r) > area_tol
+                    push!(new_pieces, r)
+                end
+            end
+        end
+        pieces = new_pieces
+    end
+
+    # Back-project to 3D
+    result = Vector{SVector{3,T}}[]
+    # Use the average normal-distance of the original face
+    d_face = sum(dot(p, face_normal) for p in face_poly) / length(face_poly)
+    for piece in pieces
+        poly_3d = SVector{3,T}[]
+        for p2 in piece
+            p3 = centroid + p2[1] * u + p2[2] * v
+            d_pt = dot(p3, face_normal)
+            p3 = p3 + (d_face - d_pt) * face_normal
+            push!(poly_3d, p3)
+        end
+        push!(result, poly_3d)
+    end
+    return result
+end
+
+"""
+    _subtract_convex_2d(subject, clip)
+
+Subtract convex polygon `clip` from convex polygon `subject`.
+Returns a list of convex polygon pieces that cover subject \\ clip.
+Uses successive clipping against the complement of each edge of clip.
+"""
+function _subtract_convex_2d(
+    subject::Vector{SVector{2, T}},
+    clip::Vector{SVector{2, T}}
+) where T
+    nc = length(clip)
+    # Successively subtract: we clip the subject against the OUTSIDE of each
+    # edge of clip.  After subtracting the inside of edge i, any remaining
+    # piece that's inside edge i+1..n needs further subtraction.
+    # pieces_to_process = subject (fully inside of no edges yet removed)
+    # For each edge, split each piece into (inside edge, outside edge).
+    # "outside edge" pieces go directly to the result (they're outside clip).
+    # "inside edge" pieces continue to the next edge for further processing.
+    # After all edges, any remaining "inside all edges" pieces are fully
+    # inside clip and are discarded.
+    pieces = [subject]
+    result = Vector{SVector{2,T}}[]
+
+    for i in 1:nc
+        j = mod1(i + 1, nc)
+        edge_start = clip[i]
+        edge_end = clip[j]
+        edge_dir = edge_end - edge_start
+        # Inward normal (pointing into the clip polygon for CCW winding)
+        inward = SVector{2,T}(-edge_dir[2], edge_dir[1])
+
+        new_pieces = Vector{SVector{2,T}}[]
+        for piece in pieces
+            inside, outside = _split_polygon_by_line_2d(piece, edge_start, inward)
+            # "outside" pieces are outside this edge → they're outside clip → result
+            if length(outside) >= 3
+                push!(result, outside)
+            end
+            # "inside" pieces need to be checked against remaining edges
+            if length(inside) >= 3
+                push!(new_pieces, inside)
+            end
+        end
+        pieces = new_pieces
+    end
+    # Remaining pieces are inside ALL edges → inside clip → discard
+    return result
+end
+
+"""
+    _split_polygon_by_line_2d(poly, point_on_line, inward_normal)
+
+Split a 2D polygon by a line defined by a point and an inward normal.
+Returns (inside, outside) where inside is the part on the inward side
+and outside is the part on the outward side.
+"""
+function _split_polygon_by_line_2d(
+    poly::Vector{SVector{2, T}},
+    point_on_line::SVector{2, T},
+    inward_normal::SVector{2, T}
+) where T
+    n = length(poly)
+    inside = SVector{2,T}[]
+    outside = SVector{2,T}[]
+
+    for i in 1:n
+        j = mod1(i + 1, n)
+        pi = poly[i]
+        pj = poly[j]
+        di = dot(pi - point_on_line, inward_normal)
+        dj = dot(pj - point_on_line, inward_normal)
+
+        if di >= 0  # pi is inside
+            push!(inside, pi)
+            if dj < 0  # pj is outside → crossing
+                t = di / (di - dj)
+                inter = pi + t * (pj - pi)
+                push!(inside, inter)
+                push!(outside, inter)
+            end
+        else  # pi is outside
+            push!(outside, pi)
+            if dj >= 0  # pj is inside → crossing
+                t = di / (di - dj)
+                inter = pi + t * (pj - pi)
+                push!(outside, inter)
+                push!(inside, inter)
+            end
+        end
+    end
+    return (inside, outside)
+end
+
+"""
+    _polygon_area_2d(poly)
+
+Compute the area of a 2D polygon using the shoelace formula.
+"""
+function _polygon_area_2d(poly::Vector{SVector{2, T}}) where T
+    n = length(poly)
+    if n < 3
+        return zero(T)
+    end
+    area2 = zero(T)
+    for i in 1:n
+        j = mod1(i + 1, n)
+        area2 += poly[i][1] * poly[j][2] - poly[j][1] * poly[i][2]
+    end
+    return abs(area2) / 2
+end
+
+"""
+    _cell_centroid_from_nodes(mesh, cell)
+
+Approximate centroid of a cell from all its unique node coordinates.
+"""
+function _cell_centroid_from_nodes(mesh::UnstructuredMesh{3}, cell::Int)
+    nodes = cell_nodes(mesh, cell)
+    c = zero(SVector{3, Float64})
+    for n in nodes
+        c += mesh.node_points[n]
+    end
+    return c / length(nodes)
+end
+
+"""
+    _cell_centroid_from_nodes_b(mesh_b, cell_b, combined_nodes, node_map_b)
+
+Approximate centroid of a cell from mesh_b using combined node coordinates.
+"""
+function _cell_centroid_from_nodes_b(mesh_b::UnstructuredMesh{3}, cell_b::Int,
+                                     combined_nodes, node_map_b)
+    nodes = cell_nodes(mesh_b, cell_b)
+    c = zero(SVector{3, Float64})
+    for n in nodes
+        c += combined_nodes[node_map_b[n]]
+    end
+    return c / length(nodes)
 end
 
 """
