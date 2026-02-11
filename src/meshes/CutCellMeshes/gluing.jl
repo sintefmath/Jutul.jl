@@ -472,8 +472,8 @@ Two in-plane tangent directions are defined automatically:
     t₂ = cross(n, t₁)
 
 where `n` is the plane normal and `ref` is a reference vector chosen to avoid
-degeneracy.  Think of `t₁` as the "up-down" direction and `t₂` as the
-"left-right" direction within the cutting plane.
+degeneracy.  `t₁` and `t₂` are orthogonal tangent directions within the cutting
+plane.
 
 The displacement applied to each node is the combination of:
 
