@@ -154,6 +154,10 @@ module Jutul
     # Embedded meshes
     import Jutul.EmbeddedMeshes: EmbeddedMesh
 
+    # Cut-cell meshes
+    include("meshes/CutCellMeshes/CutCellMeshes.jl")
+    import Jutul.CutCellMeshes: cut_mesh, PlaneCut, PolygonalSurface
+
     # This is to make Jutul simulators work nicely with nested ForwardDiff.
     JutulSimulateTag = ForwardDiff.Tag{typeof(simulate), <:JutulEntity}
     ForwardDiff.:≺(::JutulSimulateTag, ::Type{<:ForwardDiff.Tag}) = true
