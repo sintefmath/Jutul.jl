@@ -462,9 +462,7 @@ end
         constant = 0.0, slope = 0.0, tilt = 0.0, side = :positive, kwargs...)
 
 Cut a 3D mesh along a plane using `cut_mesh`, displace one side, and glue the
-two sides back together. All displacement components keep the cut interface in
-contact: nodes on the cut surface (`d = 0`) receive no `slope` or `tilt`
-contribution.
+two sides back together.
 
 Two in-plane tangent directions are defined automatically:
 
@@ -476,25 +474,30 @@ degeneracy.
 
 The displacement applied to each node is
 
-    displacement = constant · t₁ + tilt · d · t₁ + slope · d · t₂
+    displacement = constant · t₁ + tilt · d · t₁ + slope · x₁ · n
 
-where `d = dot(pt - plane.point, n)` is the signed distance from the plane.
+where `d = dot(pt - plane.point, n)` is the signed distance from the plane and
+`x₁ = dot(pt - plane.point, t₁)` is the in-plane coordinate along `t₁`.
 
-- `constant`: uniform slide along `t₁`.
+- `constant`: uniform slide along `t₁` (keeps the cut interface in contact).
 - `tilt`: additional `t₁` shift proportional to `d` — a shear that produces a
-  rotation about `t₂` (i.e. tilting the shifted half).
-- `slope`: `t₂` shift proportional to `d` — a shear that produces a rotation
-  about `t₁` (i.e. a slope / rotation around the plane normal).
+  rotation about `t₂`.  Nodes on the plane (`d = 0`) get no contribution, so
+  the interface stays in contact.
+- `slope`: normal displacement proportional to `x₁` — rotates the shifted block
+  around `t₂` so that the resulting interface slopes upward (or downward) along
+  the plane.  The rotation pivots at `plane.point` (`x₁ = 0` there).  This
+  **does** move nodes on the cut surface, producing a tilted (sloped) interface.
 
-All three preserve cell volumes (shear transforms) and keep the cut interface in
-contact (`d = 0` on the surface ⇒ zero `tilt`/`slope` contribution).
+Both `constant` and `tilt` preserve the interface contact.  `slope` intentionally
+breaks it by tilting the interface.  All three are volume-preserving shear
+transforms.
 
 # Keyword arguments
 - `constant::Real = 0.0`: Uniform tangential shift along the plane (`t₁`).
-- `slope::Real = 0.0`: Tangential shift along `t₂` per unit distance from the
-  plane (rotation around the plane normal).
+- `slope::Real = 0.0`: Normal displacement per unit in-plane distance along `t₁`
+  — tilts the interface so it slopes along the plane, pivoting at `plane.point`.
 - `tilt::Real = 0.0`: Tangential shift along `t₁` per unit distance from the
-  plane (rotation around `t₂`, tilting the shifted half).
+  plane (rotation around `t₂`, keeps interface in contact).
 - `side::Symbol = :positive`: Which side to shift (`:positive` or `:negative`).
 - `tol::Real = 1e-6`: Node-merge tolerance for gluing.
 - `face_tol::Real = 1e-4`: Face centroid proximity tolerance.
@@ -569,18 +572,21 @@ function cut_and_displace_mesh(
         throw(ArgumentError("side must be :positive or :negative, got $side"))
     end
 
-    # Shift node points tangentially along the plane.
+    # Shift node points.
     # constant: uniform slide along t1 (keeps interface in contact).
     # tilt: additional t1 shift proportional to signed distance d from the
-    #   cut plane → rotation about t2.
-    # slope: t2 shift proportional to d → rotation around the plane normal.
-    # Nodes on the plane (d = 0) receive no tilt/slope contribution, so the
-    # interface stays in contact.  Both shears preserve cell volumes.
+    #   cut plane → rotation about t2.  Nodes on the plane (d = 0) get no
+    #   contribution, so the interface stays in contact.
+    # slope: normal displacement proportional to the in-plane coordinate x1.
+    #   This tilts the interface (nodes on the plane DO move), producing a
+    #   sloped fault surface that pivots at plane.point.
+    # All three are volume-preserving shear transforms.
     shifted_nodes = copy(target_mesh.node_points)
     for i in eachindex(shifted_nodes)
         pt = shifted_nodes[i]
-        d = dot(pt - plane.point, n)   # signed distance from the plane
-        shifted_nodes[i] = pt + (constant + tilt * d) * t1 + slope * d * t2
+        d = dot(pt - plane.point, n)    # signed distance from the plane
+        x1 = dot(pt - plane.point, t1)  # in-plane coordinate along t1
+        shifted_nodes[i] = pt + (constant + tilt * d) * t1 + slope * x1 * n
     end
 
     # Reconstruct mesh with shifted nodes
