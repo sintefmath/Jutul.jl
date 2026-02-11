@@ -205,7 +205,7 @@ function glue_mesh(
         nodes_a_set = Set(bnd_a_nodes_combined[bf_a])
 
         for bf_b in bf_b_list
-            pair = bf_a < bf_b ? (bf_a, bf_b) : (bf_b, bf_a)
+            pair = minmax(bf_a, bf_b)
             if pair in processed_pairs
                 continue
             end
