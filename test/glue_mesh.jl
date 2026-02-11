@@ -172,7 +172,7 @@ end
 
         plane = PlaneCut([0.5, 0.5, 0.5], [0.0, 0.0, 1.0])
         result = cut_and_displace_mesh(mesh, plane;
-            constant = 0.0, slope = 0.0, side = :positive,
+            constant = 0.0, side = :positive,
             tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
         )
 
@@ -188,7 +188,7 @@ end
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
         result = cut_and_displace_mesh(mesh, plane;
-            constant = 0.5, slope = 0.0, side = :positive,
+            constant = 0.5, side = :positive,
             tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01
         )
 
@@ -203,7 +203,7 @@ end
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
         result = cut_and_displace_mesh(mesh, plane;
-            constant = 0.5, slope = 0.0, side = :negative,
+            constant = 0.5, side = :negative,
             tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01
         )
 
@@ -212,8 +212,8 @@ end
         @test all(geo.volumes .> 0)
     end
 
-    @testset "slope preserves cell volumes" begin
-        # The slope displacement shifts each node tangentially by an amount
+    @testset "tilt preserves cell volumes" begin
+        # The tilt displacement shifts each node along t1 by an amount
         # proportional to its signed distance from the cut plane.  This is a
         # shear transform that preserves volumes of the shifted half.
         g = CartesianMesh((4, 4, 4), (4.0, 4.0, 4.0))
@@ -238,13 +238,13 @@ end
         # Apply the same shear transform that cut_and_displace_mesh uses
         n = plane.normal
         ref = abs(n[1]) < 0.9 ? SVector{3, Float64}(1, 0, 0) : SVector{3, Float64}(0, 1, 0)
-        tangent = normalize(cross(n, ref))
+        t1 = normalize(cross(n, ref))
 
         shifted_nodes = copy(mesh_pos.node_points)
         for i in eachindex(shifted_nodes)
             pt = shifted_nodes[i]
             d = dot(pt - plane.point, n)
-            shifted_nodes[i] = pt + 0.5 * d * tangent
+            shifted_nodes[i] = pt + 0.5 * d * t1
         end
         import Jutul.CutCellMeshes: _rebuild_mesh_with_nodes
         shifted_mesh = _rebuild_mesh_with_nodes(mesh_pos, shifted_nodes)
@@ -255,15 +255,15 @@ end
 
         # Also run the full pipeline
         result = cut_and_displace_mesh(mesh, plane;
-            constant = 0.0, slope = 0.5, side = :positive,
+            constant = 0.0, tilt = 0.5, side = :positive,
             tol = 1e-6, face_tol = 5.0, min_cut_fraction = 0.01
         )
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
     end
 
-    @testset "large slope does not shrink mesh" begin
-        # With a large slope, the displacement is still tangential and
+    @testset "large tilt does not shrink mesh" begin
+        # With a large tilt, the displacement is still tangential and
         # proportional to distance from the plane, preserving volumes.
         g = CartesianMesh((3, 3, 3), (3.0, 3.0, 3.0))
         mesh = UnstructuredMesh(g)
@@ -282,16 +282,16 @@ end
         mesh_pos = extract_submesh(cut, pos_cells)
         vol_pos_before = sum(tpfv_geometry(mesh_pos).volumes)
 
-        # Apply shear with large slope
+        # Apply shear with large tilt
         n = plane.normal
         ref = abs(n[1]) < 0.9 ? SVector{3, Float64}(1, 0, 0) : SVector{3, Float64}(0, 1, 0)
-        tangent = normalize(cross(n, ref))
+        t1 = normalize(cross(n, ref))
 
         shifted_nodes = copy(mesh_pos.node_points)
         for i in eachindex(shifted_nodes)
             pt = shifted_nodes[i]
             d = dot(pt - plane.point, n)
-            shifted_nodes[i] = pt + 1.0 * d * tangent
+            shifted_nodes[i] = pt + 1.0 * d * t1
         end
         shifted_mesh = _rebuild_mesh_with_nodes(mesh_pos, shifted_nodes)
         vol_pos_after = sum(tpfv_geometry(shifted_mesh).volumes)
@@ -301,14 +301,14 @@ end
 
         # Full pipeline should produce valid geometry
         result = cut_and_displace_mesh(mesh, plane;
-            constant = 0.0, slope = 1.0, side = :positive,
+            constant = 0.0, tilt = 1.0, side = :positive,
             tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01
         )
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
     end
 
-    @testset "combined constant and large slope" begin
+    @testset "combined constant and large tilt" begin
         g = CartesianMesh((4, 4, 4), (4.0, 4.0, 4.0))
         mesh = UnstructuredMesh(g)
 
@@ -328,24 +328,88 @@ end
 
         n = plane.normal
         ref = abs(n[1]) < 0.9 ? SVector{3, Float64}(1, 0, 0) : SVector{3, Float64}(0, 1, 0)
-        tangent = normalize(cross(n, ref))
+        t1 = normalize(cross(n, ref))
 
-        # Both constant and slope are applied in the tangent direction
+        # Both constant and tilt are applied in the t1 direction
         shifted_nodes = copy(mesh_pos.node_points)
         for i in eachindex(shifted_nodes)
             pt = shifted_nodes[i]
             d = dot(pt - plane.point, n)
-            shifted_nodes[i] = pt + (0.3 + 0.8 * d) * tangent
+            shifted_nodes[i] = pt + (0.3 + 0.8 * d) * t1
         end
         shifted_mesh = _rebuild_mesh_with_nodes(mesh_pos, shifted_nodes)
         vol_pos_after = sum(tpfv_geometry(shifted_mesh).volumes)
 
-        # Volume of the shifted half must be preserved (tangent translation +
-        # tangent shear both preserve volume)
+        # Volume of the shifted half must be preserved
         @test vol_pos_after ≈ vol_pos_before rtol = 1e-12
 
         result = cut_and_displace_mesh(mesh, plane;
-            constant = 0.3, slope = 0.8, side = :positive,
+            constant = 0.3, tilt = 0.8, side = :positive,
+            tol = 1e-6, face_tol = 5.0, min_cut_fraction = 0.01
+        )
+        geo = tpfv_geometry(result)
+        @test all(geo.volumes .> 0)
+    end
+
+    @testset "tilt keeps cut interface in contact" begin
+        # Tilt-only displacement must not create a gap or intersection.
+        # Nodes on the cut surface have d=0, so they get zero tilt
+        # displacement and the interface stays in contact.
+        g = CartesianMesh((3, 3, 3), (3.0, 3.0, 3.0))
+        mesh = UnstructuredMesh(g)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+
+        plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
+        result = cut_and_displace_mesh(mesh, plane;
+            constant = 0.0, tilt = 0.5, side = :positive,
+            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01
+        )
+
+        geo = tpfv_geometry(result)
+        @test all(geo.volumes .> 0)
+        # Volume must be conserved: tilt displacement is tangential and nodes
+        # on the cut surface don't move, so no gap or overlap is created.
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
+    end
+
+    @testset "slope preserves cell volumes" begin
+        # The slope displacement shifts each node along t2 by an amount
+        # proportional to its signed distance from the cut plane.  This is a
+        # shear transform that preserves volumes of the shifted half.
+        g = CartesianMesh((4, 4, 4), (4.0, 4.0, 4.0))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([2.0, 2.0, 2.5], [0.0, 0.0, 1.0])
+        cut, _ = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
+        pos_cells = Int[]
+        for c in 1:number_of_cells(cut)
+            cl = classify_cell(cut, c, plane; tol = 1e-6)
+            if cl == :positive
+                push!(pos_cells, c)
+            end
+        end
+        mesh_pos = extract_submesh(cut, pos_cells)
+        vol_pos_before = sum(tpfv_geometry(mesh_pos).volumes)
+
+        n = plane.normal
+        ref = abs(n[1]) < 0.9 ? SVector{3, Float64}(1, 0, 0) : SVector{3, Float64}(0, 1, 0)
+        t1 = normalize(cross(n, ref))
+        t2 = cross(n, t1)
+
+        shifted_nodes = copy(mesh_pos.node_points)
+        for i in eachindex(shifted_nodes)
+            pt = shifted_nodes[i]
+            d = dot(pt - plane.point, n)
+            shifted_nodes[i] = pt + 0.5 * d * t2
+        end
+        shifted_mesh = _rebuild_mesh_with_nodes(mesh_pos, shifted_nodes)
+        vol_pos_after = sum(tpfv_geometry(shifted_mesh).volumes)
+
+        @test vol_pos_after ≈ vol_pos_before rtol = 1e-12
+
+        # Full pipeline
+        result = cut_and_displace_mesh(mesh, plane;
+            constant = 0.0, slope = 0.5, side = :positive,
             tol = 1e-6, face_tol = 5.0, min_cut_fraction = 0.01
         )
         geo = tpfv_geometry(result)
@@ -368,9 +432,23 @@ end
 
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
-        # Volume must be conserved: slope displacement is tangential and nodes
-        # on the cut surface don't move, so no gap or overlap is created.
         @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
+    end
+
+    @testset "combined constant, slope and tilt" begin
+        # All three parameters together: displacement is
+        # (constant + tilt * d) * t1 + slope * d * t2
+        g = CartesianMesh((3, 3, 3), (3.0, 3.0, 3.0))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
+        result = cut_and_displace_mesh(mesh, plane;
+            constant = 0.3, slope = 0.5, tilt = 0.4, side = :positive,
+            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01
+        )
+
+        geo = tpfv_geometry(result)
+        @test all(geo.volumes .> 0)
     end
 
     @testset "oblique plane constant displacement preserves volume" begin
@@ -384,7 +462,6 @@ end
         plane = PlaneCut([0.5, 0.5, 0.5], [1.0, 0.2, 0.1])
         result = cut_and_displace_mesh(mesh, plane;
             constant = 0.4, side = :positive,
-            slope = 0.0,
             tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
         )
 
@@ -402,7 +479,7 @@ end
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
         result, info = cut_and_displace_mesh(mesh, plane;
-            constant = 0.0, slope = 0.0, side = :positive,
+            constant = 0.0, side = :positive,
             tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01,
             extra_out = true
         )
@@ -437,7 +514,7 @@ end
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
         result, info = cut_and_displace_mesh(mesh, plane;
-            constant = 0.5, slope = 0.5, side = :positive,
+            constant = 0.5, tilt = 0.5, side = :positive,
             tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01,
             extra_out = true
         )
@@ -457,7 +534,7 @@ end
 
         plane = PlaneCut([1.2, 1.5, 1.5], [1.0, 0.0, 0.0])
         result = cut_and_displace_mesh(mesh, plane;
-            constant = 0.0, slope = 0.0, side = :positive,
+            constant = 0.0, side = :positive,
             tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01
         )
 
@@ -473,7 +550,7 @@ end
         plane = PlaneCut([1.0, 1.0, 1.0], [0.0, 0.0, 1.0])
 
         result = cut_and_displace_mesh(mesh, plane;
-            constant = 0.0, slope = 0.0, side = :positive,
+            constant = 0.0, side = :positive,
             tol = 1e-8, face_tol = 1.5, min_cut_fraction = 0.01,
             area_tol = 1e-12
         )

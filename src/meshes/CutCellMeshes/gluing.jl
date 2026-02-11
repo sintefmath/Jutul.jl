@@ -459,29 +459,42 @@ end
 
 """
     cut_and_displace_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut;
-        constant = 0.0, slope = 0.0, side = :positive, kwargs...)
+        constant = 0.0, slope = 0.0, tilt = 0.0, side = :positive, kwargs...)
 
 Cut a 3D mesh along a plane using `cut_mesh`, displace one side, and glue the
-two sides back together. Both the constant and slope parts produce displacements
-in a tangent direction of the plane, keeping the cut interface in contact (nodes
-on the cut surface are not pushed away from it).
+two sides back together. All displacement components keep the cut interface in
+contact: nodes on the cut surface (`d = 0`) receive no `slope` or `tilt`
+contribution.
+
+Two in-plane tangent directions are defined automatically:
+
+    t₁ = normalize(cross(n, ref))
+    t₂ = cross(n, t₁)
+
+where `n` is the plane normal and `ref` is a reference vector chosen to avoid
+degeneracy.
 
 The displacement applied to each node is
 
-    displacement = (constant + slope · d) · t
+    displacement = constant · t₁ + tilt · d · t₁ + slope · d · t₂
 
-where `t` is a tangent direction in the plane, and `d` is the signed distance of
-the node from the plane: `d = dot(pt - plane.point, n)`.
+where `d = dot(pt - plane.point, n)` is the signed distance from the plane.
 
-The constant part gives a uniform tangential slide. The slope part adds an
-additional tangential shift proportional to the distance from the plane, producing
-a rotation (shear) that preserves cell volumes and keeps the cut interface in
-contact (nodes on the plane have `d = 0` and receive no slope contribution).
+- `constant`: uniform slide along `t₁`.
+- `tilt`: additional `t₁` shift proportional to `d` — a shear that produces a
+  rotation about `t₂` (i.e. tilting the shifted half).
+- `slope`: `t₂` shift proportional to `d` — a shear that produces a rotation
+  about `t₁` (i.e. a slope / rotation around the plane normal).
+
+All three preserve cell volumes (shear transforms) and keep the cut interface in
+contact (`d = 0` on the surface ⇒ zero `tilt`/`slope` contribution).
 
 # Keyword arguments
-- `constant::Real = 0.0`: Uniform tangential shift along the plane.
-- `slope::Real = 0.0`: Additional tangential shift per unit distance from the
-  plane (produces a rotation / shear).
+- `constant::Real = 0.0`: Uniform tangential shift along the plane (`t₁`).
+- `slope::Real = 0.0`: Tangential shift along `t₂` per unit distance from the
+  plane (rotation around the plane normal).
+- `tilt::Real = 0.0`: Tangential shift along `t₁` per unit distance from the
+  plane (rotation around `t₂`, tilting the shifted half).
 - `side::Symbol = :positive`: Which side to shift (`:positive` or `:negative`).
 - `tol::Real = 1e-6`: Node-merge tolerance for gluing.
 - `face_tol::Real = 1e-4`: Face centroid proximity tolerance.
@@ -508,6 +521,7 @@ function cut_and_displace_mesh(
     plane::PlaneCut{Tp};
     constant::Real = 0.0,
     slope::Real = 0.0,
+    tilt::Real = 0.0,
     side::Symbol = :positive,
     tol::Real = 1e-6,
     face_tol::Real = 1e-4,
@@ -541,10 +555,11 @@ function cut_and_displace_mesh(
     mesh_neg = extract_submesh(cut, neg_cells)
 
     # 4. Apply displacement to one side
-    # Build tangent direction: pick a direction in the plane
+    # Build two orthogonal tangent directions in the plane
     n = plane.normal
     ref = abs(n[1]) < 0.9 ? SVector{3, Tp}(1, 0, 0) : SVector{3, Tp}(0, 1, 0)
-    tangent = normalize(cross(n, ref))
+    t1 = normalize(cross(n, ref))
+    t2 = cross(n, t1)
 
     if side == :positive
         target_mesh = mesh_pos
@@ -555,16 +570,17 @@ function cut_and_displace_mesh(
     end
 
     # Shift node points tangentially along the plane.
-    # constant: uniform tangential slide (keeps interface in contact).
-    # slope: additional tangential shift proportional to the signed distance
-    #   from the cut plane.  Nodes on the plane (d = 0) get no slope
-    #   contribution, so the interface stays in contact and the two halves
-    #   cannot intersect.  The shear preserves cell volumes.
+    # constant: uniform slide along t1 (keeps interface in contact).
+    # tilt: additional t1 shift proportional to signed distance d from the
+    #   cut plane → rotation about t2.
+    # slope: t2 shift proportional to d → rotation around the plane normal.
+    # Nodes on the plane (d = 0) receive no tilt/slope contribution, so the
+    # interface stays in contact.  Both shears preserve cell volumes.
     shifted_nodes = copy(target_mesh.node_points)
     for i in eachindex(shifted_nodes)
         pt = shifted_nodes[i]
         d = dot(pt - plane.point, n)   # signed distance from the plane
-        shifted_nodes[i] = pt + (constant + slope * d) * tangent
+        shifted_nodes[i] = pt + (constant + tilt * d) * t1 + slope * d * t2
     end
 
     # Reconstruct mesh with shifted nodes
