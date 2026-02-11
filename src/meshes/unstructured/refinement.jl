@@ -11,12 +11,12 @@ and at the cell centroid.
 - `m`: The mesh to refine.
 - `cells`: Collection of cell indices to refine.
 - `factor`: Refinement factor (default 2). Can be:
-  - An integer: uniform refinement factor for all selected cells. Factors > 2 are
-    handled by iterating factor-2 refinement (`ceil(Int, log2(factor))` passes).
+  - An integer `f`: uniform refinement factor for all selected cells. For `f > 2`
+    the refinement is applied by iterating `ceil(Int, log2(f))` passes of
+    factor-2 refinement.
   - A `Tuple` (e.g. `(2, 2, 1)` for 3D or `(2, 1)` for 2D): per-direction
-    refinement factors. Each direction is refined independently by iterating
-    factor-2 refinement `ceil(Int, log2(f_d))` times for that direction. Implemented
-    by repeated isotropic factor-2 passes equal to `max(ceil(log2(f_d))...)`.
+    refinement factors. Implemented by applying isotropic factor-2 passes equal
+    to the maximum number of passes needed across all directions.
   - A `Vector{Int}`: one factor per cell in `cells`.
 - `extra_out`: If `true`, also return a named tuple that includes:
   - `cell_map`: `Vector{Int}` mapping each new cell to its parent cell in the
