@@ -335,18 +335,18 @@ end
         tangent = normalize(cross(n, ref))
         x0 = dot(plane.point, tangent)
 
+        # constant goes as tangent, slope goes as normal
         shifted_nodes = copy(mesh_pos.node_points)
         for i in eachindex(shifted_nodes)
             pt = shifted_nodes[i]
             x = dot(pt, tangent)
-            dz = 0.3 + (x - x0) * 0.8
-            shifted_nodes[i] = pt + dz * n
+            shifted_nodes[i] = pt + 0.3 * tangent + (x - x0) * 0.8 * n
         end
         shifted_mesh = _rebuild_mesh_with_nodes(mesh_pos, shifted_nodes)
         vol_pos_after = sum(tpfv_geometry(shifted_mesh).volumes)
 
-        # Volume of the shifted half must be preserved (constant + shear both
-        # preserve volume when applied in normal direction)
+        # Volume of the shifted half must be preserved (tangent translation +
+        # normal shear both preserve volume)
         @test vol_pos_after ≈ vol_pos_before rtol = 1e-12
 
         result = cut_and_displace_mesh(mesh, plane;
@@ -355,6 +355,28 @@ end
         )
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
+    end
+
+    @testset "oblique plane constant displacement preserves volume" begin
+        # This is the case from the problem statement: an oblique cut plane
+        # with a constant displacement should slide along the plane (not away),
+        # keeping the interface in contact and preserving volume.
+        g = CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0))
+        mesh = UnstructuredMesh(g)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+
+        plane = PlaneCut([0.5, 0.5, 0.5], [1.0, 0.2, 0.1])
+        result = cut_and_displace_mesh(mesh, plane;
+            constant = 0.4, side = :positive,
+            slope = 0.0,
+            tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
+        )
+
+        geo = tpfv_geometry(result)
+        @test all(geo.volumes .> 0)
+        # Volume must be conserved: tangential shift keeps the interface in
+        # contact, so no gap is created.
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
     end
 
     @testset "extra_out maps back to original mesh" begin

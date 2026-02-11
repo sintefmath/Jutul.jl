@@ -461,22 +461,24 @@ end
     cut_and_displace_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut;
         constant = 0.0, slope = 0.0, side = :positive, kwargs...)
 
-Cut a 3D mesh along a plane using `cut_mesh`, displace one side perpendicular
-to the plane, and glue the two sides back together. The constant part produces
-a uniform normal offset; the slope part produces a rotation about an axis in the
-plane passing through `plane.point`, so the shifted half is rotated rather than
-shrunk or distorted.
+Cut a 3D mesh along a plane using `cut_mesh`, displace one side, and glue the
+two sides back together. The constant part slides the shifted half along the
+plane (tangentially), keeping the cut interface in contact. The slope part
+tilts the shifted half perpendicular to the plane, producing a rotation about
+an axis in the plane through `plane.point`.
 
-The displacement perpendicular to the plane is parametrised as
+The displacement is parametrised as
 
-    dz = constant + (x - x₀) * slope
+    displacement = constant · t + (x - x₀) · slope · n
 
-where `x` is the projection of each node onto a tangent direction in the plane
-and `x₀` is the same projection applied to `plane.point`.
+where `t` is a tangent direction in the plane, `n` is the plane normal, `x` is
+the projection of each node onto `t`, and `x₀` is the same projection applied
+to `plane.point`.
 
 # Keyword arguments
-- `constant::Real = 0.0`: Constant shift perpendicular to the plane.
-- `slope::Real = 0.0`: Linear slope of the shift (produces a rotation).
+- `constant::Real = 0.0`: Tangential shift along the plane (keeps interface in
+  contact).
+- `slope::Real = 0.0`: Linear tilt perpendicular to the plane (rotation).
 - `side::Symbol = :positive`: Which side to shift (`:positive` or `:negative`).
 - `tol::Real = 1e-6`: Node-merge tolerance for gluing.
 - `face_tol::Real = 1e-4`: Face centroid proximity tolerance.
@@ -551,15 +553,14 @@ function cut_and_displace_mesh(
         throw(ArgumentError("side must be :positive or :negative, got $side"))
     end
 
-    # Shift node points perpendicular to the plane (along the normal).
-    # The constant part is a uniform offset; the slope part is equivalent to
-    # a rotation about an axis in the plane, preserving in-plane distances.
+    # Shift node points: the constant part slides along the plane (tangent
+    # direction) keeping the cut interface in contact; the slope part tilts
+    # perpendicular to the plane (normal direction) producing a rotation.
     shifted_nodes = copy(target_mesh.node_points)
     for i in eachindex(shifted_nodes)
         pt = shifted_nodes[i]
         x = dot(pt, tangent)
-        dz = constant + (x - x0) * slope
-        shifted_nodes[i] = pt + dz * n
+        shifted_nodes[i] = pt + constant * tangent + (x - x0) * slope * n
     end
 
     # Reconstruct mesh with shifted nodes
