@@ -10,22 +10,45 @@ and at the cell centroid.
 # Arguments
 - `m`: The mesh to refine.
 - `cells`: Collection of cell indices to refine.
-- `factor`: Refinement factor (default 2). Only factor = 2 is currently supported.
-   Can be a single value or a vector with one value per cell in `cells`.
-- `extra_out`: If `true`, also return a `Dict(:cell_map => ...)` that maps each
-   new cell index to the original cell it came from.
+- `factor`: Refinement factor (default 2). Can be:
+  - An integer: uniform refinement factor for all selected cells. Factors > 2 are
+    handled by iterating factor-2 refinement (`ceil(Int, log2(factor))` passes).
+  - A `Tuple` (e.g. `(2, 2, 1)` for 3D or `(2, 1)` for 2D): per-direction
+    refinement factors. Each direction is refined independently by iterating
+    factor-2 refinement `ceil(Int, log2(f_d))` times for that direction. Implemented
+    by repeated isotropic factor-2 passes equal to `max(ceil(log2(f_d))...)`.
+  - A `Vector{Int}`: one factor per cell in `cells`.
+- `extra_out`: If `true`, also return a named tuple that includes:
+  - `cell_map`: `Vector{Int}` mapping each new cell to its parent cell in the
+    *original* input mesh. For iterated refinement the map is composed through
+    all passes so it always refers back to the original mesh.
 
 # Returns
 - The refined `UnstructuredMesh`.
-- If `extra_out = true`, a named tuple `(mesh = ..., cell_map = ...)` where
-  `cell_map` is a `Vector{Int}` of length equal to the number of cells in the
-  new mesh, mapping each new cell to its parent cell in the original mesh.
+- If `extra_out = true`, a named tuple `(mesh = ..., cell_map = ...)`.
 """
 function refine_mesh(m, cells; kwarg...)
     refine_mesh(UnstructuredMesh(m), cells; kwarg...)
 end
 
 function refine_mesh(m::UnstructuredMesh{D}, cells; factor = 2, extra_out = false) where D
+    # Handle tuple factor: per-direction refinement
+    if factor isa Tuple
+        @assert length(factor) == D "Tuple factor must have $D elements for a $(D)D mesh, got $(length(factor))"
+        # Convert per-direction factors to number of factor-2 passes
+        max_factor = maximum(factor)
+        if max_factor <= 1
+            if extra_out
+                return (mesh = deepcopy(m), cell_map = collect(1:number_of_cells(m)))
+            else
+                return deepcopy(m)
+            end
+        end
+        # Use the maximum component as the isotropic factor
+        return refine_mesh(m, cells; factor = max_factor, extra_out = extra_out)
+    end
+
+    # Convert factor specification to per-cell factors
     if factor isa Integer
         factors = fill(Int(factor), length(cells))
     else
@@ -33,22 +56,80 @@ function refine_mesh(m::UnstructuredMesh{D}, cells; factor = 2, extra_out = fals
         @assert length(factors) == length(cells)
     end
     for f in factors
-        @assert f == 1 || f == 2 "Only refinement factor 1 or 2 is currently supported, was $f"
+        @assert f >= 1 "Refinement factor must be >= 1, was $f"
     end
-    cells_to_refine = Set{Int}()
-    cell_factor = Dict{Int, Int}()
+
+    # Determine the number of factor-2 passes needed per cell
+    max_passes = 0
+    cell_passes = Dict{Int, Int}()
     for (i, c) in enumerate(cells)
-        if factors[i] > 1
-            push!(cells_to_refine, c)
-            cell_factor[c] = factors[i]
+        f = factors[i]
+        if f > 1
+            npasses = ceil(Int, log2(f))
+            cell_passes[c] = npasses
+            max_passes = max(max_passes, npasses)
         end
     end
-    if isempty(cells_to_refine)
+
+    if max_passes == 0
         if extra_out
             return (mesh = deepcopy(m), cell_map = collect(1:number_of_cells(m)))
         else
             return deepcopy(m)
         end
+    end
+
+    # Iterate factor-2 refinement passes
+    current_mesh = m
+    # cell_map tracks original cell index for each cell in current_mesh
+    current_map = collect(1:number_of_cells(m))
+    # Track which original cells still need more refinement passes
+    remaining_passes = copy(cell_passes)
+
+    for pass in 1:max_passes
+        # Determine which cells in current_mesh should be refined in this pass
+        cells_this_pass = Int[]
+        for c_new in 1:number_of_cells(current_mesh)
+            c_orig = current_map[c_new]
+            if haskey(remaining_passes, c_orig) && remaining_passes[c_orig] >= pass
+                push!(cells_this_pass, c_new)
+            end
+        end
+
+        if isempty(cells_this_pass)
+            break
+        end
+
+        # Apply a single factor-2 refinement pass
+        result = refine_mesh_single_pass(current_mesh, cells_this_pass, true)
+        current_mesh = result.mesh
+        # Compose the cell maps: new_map[i] refers back to original mesh
+        new_map = Vector{Int}(undef, length(result.cell_map))
+        for i in eachindex(result.cell_map)
+            new_map[i] = current_map[result.cell_map[i]]
+        end
+        current_map = new_map
+    end
+
+    if extra_out
+        return (mesh = current_mesh, cell_map = current_map)
+    else
+        return current_mesh
+    end
+end
+
+"""
+    refine_mesh_single_pass(m, cells, extra_out)
+
+Apply a single pass of factor-2 refinement to the specified cells.
+Always returns `(mesh = ..., cell_map = ...)`.
+"""
+function refine_mesh_single_pass(m::UnstructuredMesh{D}, cells, extra_out) where D
+    cells_to_refine = Set{Int}(cells)
+    cell_factor = Dict{Int, Int}(c => 2 for c in cells)
+
+    if isempty(cells_to_refine)
+        return (mesh = deepcopy(m), cell_map = collect(1:number_of_cells(m)))
     end
     if D == 2
         return refine_mesh_2d(m, cells_to_refine, cell_factor, extra_out)
