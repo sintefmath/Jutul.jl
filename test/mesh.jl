@@ -342,3 +342,118 @@ end
         @test get_mesh_entity_tag(m3d, Cells(), :test_tag, :tag2) == [2, 4, 6, 8]
     end
 end
+
+@testset "refine_mesh" begin
+    function check_normals(m_refined)
+        geo = tpfv_geometry(m_refined)
+        for f in 1:number_of_faces(m_refined)
+            l, r = m_refined.faces.neighbors[f]
+            cl = geo.cell_centroids[:, l]
+            cr = geo.cell_centroids[:, r]
+            N = geo.normals[:, f]
+            @test dot(N, cr - cl) > 0
+        end
+        for f in 1:number_of_boundary_faces(m_refined)
+            c = m_refined.boundary_faces.neighbors[f]
+            cc = geo.cell_centroids[:, c]
+            fc = geo.boundary_centroids[:, f]
+            N = geo.boundary_normals[:, f]
+            @test dot(N, fc - cc) > 0
+        end
+    end
+
+    @testset "2D refinement" begin
+        @testset "refine all cells" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [1, 2, 3, 4]; extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test number_of_cells(m2) == 16
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test length(result.cell_map) == number_of_cells(m2)
+            check_normals(m2)
+        end
+        @testset "refine single cell" begin
+            m = UnstructuredMesh(CartesianMesh((3, 3)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [5]; extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test number_of_cells(m2) == 12
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test count(==(5), result.cell_map) == 4
+            check_normals(m2)
+        end
+        @testset "refine with variable deltas" begin
+            m = UnstructuredMesh(CartesianMesh((3, 2), ([1.0, 3.0, 4.0], [1.0, 2.0])))
+            geo_orig = tpfv_geometry(m)
+            m2 = refine_mesh(m, [1, 6])
+            geo = tpfv_geometry(m2)
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            check_normals(m2)
+        end
+    end
+
+    @testset "3D refinement" begin
+        @testset "refine all cells" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2, 2)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, 1:8; extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test number_of_cells(m2) == 64
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test length(result.cell_map) == 64
+            check_normals(m2)
+        end
+        @testset "refine single cell" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2, 2)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [1]; extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test number_of_cells(m2) == 15
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test count(==(1), result.cell_map) == 8
+            check_normals(m2)
+        end
+        @testset "refine with variable deltas" begin
+            m = UnstructuredMesh(CartesianMesh((3, 2, 2), ((1.0, 3.0, 4.0), (1.0, 2.0), 1.0)))
+            geo_orig = tpfv_geometry(m)
+            m2 = refine_mesh(m, [1, 12])
+            geo = tpfv_geometry(m2)
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            check_normals(m2)
+        end
+    end
+
+    @testset "cell_map output" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        result = refine_mesh(m, [1, 3]; extra_out = true)
+        cell_map = result.cell_map
+        # Cells 1 and 3 each produce 4 sub-cells, cells 2 and 4 stay
+        @test length(cell_map) == number_of_cells(result.mesh)
+        @test count(==(1), cell_map) == 4
+        @test count(==(2), cell_map) == 1
+        @test count(==(3), cell_map) == 4
+        @test count(==(4), cell_map) == 1
+    end
+
+    @testset "factor = 1 (no-op)" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        m2 = refine_mesh(m, [1, 2]; factor = 1)
+        @test number_of_cells(m2) == number_of_cells(m)
+    end
+
+    @testset "per-cell factors" begin
+        m = UnstructuredMesh(CartesianMesh((3, 3)))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh(m, [1, 5, 9]; factor = [2, 1, 2])
+        geo = tpfv_geometry(m2)
+        # Cell 1 and 9 refined (4 sub each), cell 5 stays = 4 + 1 + 4 + 6 unrefined = 15
+        @test number_of_cells(m2) == 15
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_normals(m2)
+    end
+end
