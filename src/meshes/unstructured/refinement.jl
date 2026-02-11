@@ -33,7 +33,6 @@ function refine_mesh(m::UnstructuredMesh{D}, cells; factor = 2, extra_out = fals
         @assert length(factors) == length(cells)
     end
     for f in factors
-        @assert f >= 1 "Refinement factor must be >= 1, was $f"
         @assert f == 1 || f == 2 "Only refinement factor 1 or 2 is currently supported, was $f"
     end
     cells_to_refine = Set{Int}()
@@ -354,7 +353,7 @@ function get_ordered_edges_2d(m::UnstructuredMesh{2}, cell)
     end
 
     # Order the edges so they form a loop
-    ordered = typeof(edges)(undef, 0)
+    ordered = empty(edges)
     push!(ordered, popat!(edges, 1))
     while !isempty(edges)
         last_n2 = ordered[end][2]
@@ -596,6 +595,9 @@ function refine_mesh_3d(m::UnstructuredMesh{3}, cells_to_refine, cell_factor, ex
                 fc1, fc2 = face_centroid_nodes_list
                 internal_face_nodes = [emid, fc1, cc_node, fc2]
             else
+                # Non-standard case: edge is shared by more than 2 faces of this
+                # cell (e.g. degenerate or non-manifold geometry). Create a fan of
+                # quad faces through the edge midpoint and cell centroid.
                 for i in 1:length(face_centroid_nodes_list)
                     j = i == length(face_centroid_nodes_list) ? 1 : i + 1
                     fn = [emid, face_centroid_nodes_list[i], cc_node, face_centroid_nodes_list[j]]
