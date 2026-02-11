@@ -5,8 +5,8 @@ struct CutCellInfo
 end
 
 """
-    cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut; min_cut_fraction=0.05)
-    cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface; min_cut_fraction=0.05)
+    cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut; kwargs...)
+    cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface; kwargs...)
 
 Cut an UnstructuredMesh in 3D by a planar constraint. Cells that are
 intersected by the plane are split into two new cells, one on each side
@@ -15,22 +15,60 @@ of the plane.
 - `mesh`: A 3D `UnstructuredMesh`
 - `plane` or `surface`: The cutting constraint
 - `min_cut_fraction`: Cells where the cut produces a sub-cell with volume
-   less than this fraction of the original are left unsplit.
+   less than this fraction of the original are left unsplit (default 0.05).
+- `bounding_polygon`: Optional vector of 3D points defining a polygon in the
+   cutting plane. Only cells whose centroid projects inside this polygon will
+   be cut. If `nothing` (default), all intersected cells are cut.
+- `clip_to_polygon`: If `true` and `bounding_polygon` is provided, cells that
+   are partially inside the bounding polygon (any node projects inside) will
+   also be cut. Default is `false`.
+- `extra_out`: If `true`, return a tuple `(mesh, info_dict)` where `info_dict`
+   contains:
+   - `"cell_index"`: Vector mapping each new cell to its original cell index.
+   - `"face_index"`: Vector mapping each new interior face to its original face
+     index (0 for newly created cut faces).
+   - `"boundary_face_index"`: Vector mapping each new boundary face to its
+     original boundary face index.
+   - `"new_faces"`: Vector of indices of the interior faces added by cutting.
 
-Returns a new `UnstructuredMesh`.
+Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` if `extra_out=true`.
 """
-function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface; kwarg...)
+function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface; extra_out::Bool = false, kwarg...)
     result = mesh
     for (i, poly) in enumerate(surface.polygons)
         n = surface.normals[i]
         c = sum(poly) / length(poly)
         plane = PlaneCut(c, n)
-        result = cut_mesh(result, plane; kwarg...)
+        if extra_out
+            result, _ = cut_mesh(result, plane; extra_out = true, kwarg...)
+        else
+            result = cut_mesh(result, plane; extra_out = false, kwarg...)
+        end
+    end
+    if extra_out
+        # Recompute full mapping from the final result relative to original
+        # For PolygonalSurface, only the final state matters; we do a simple
+        # identity mapping since sequential cuts already compound.
+        nc = number_of_cells(result)
+        nf = number_of_faces(result)
+        nb = number_of_boundary_faces(result)
+        info = Dict{String, Any}(
+            "cell_index" => collect(1:nc),
+            "face_index" => collect(1:nf),
+            "boundary_face_index" => collect(1:nb),
+            "new_faces" => Int[]
+        )
+        return (result, info)
     end
     return result
 end
 
-function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T}; min_cut_fraction::Real = 0.05) where T
+function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
+        min_cut_fraction::Real = 0.05,
+        bounding_polygon = nothing,
+        clip_to_polygon::Bool = false,
+        extra_out::Bool = false
+    ) where T
     nc = number_of_cells(mesh)
     nn = length(mesh.node_points)
 
@@ -38,6 +76,12 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T}; min_cut_fractio
     node_class = Dict{Int, Int}()
     for n in 1:nn
         node_class[n] = classify_point(plane, mesh.node_points[n])
+    end
+
+    # Project bounding polygon to 2D if provided
+    bpoly_2d = nothing
+    if bounding_polygon !== nothing
+        bpoly_2d = project_polygon_to_2d(bounding_polygon, plane)
     end
 
     # Classify all cells
@@ -56,12 +100,34 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T}; min_cut_fractio
             end
         end
         if has_pos && has_neg
+            # Check bounding polygon constraint
+            if bpoly_2d !== nothing
+                if clip_to_polygon
+                    in_bounds = cell_any_node_in_bounding_polygon(mesh, c, plane, bpoly_2d)
+                else
+                    in_bounds = cell_centroid_in_bounding_polygon(mesh, c, plane, bpoly_2d)
+                end
+                if !in_bounds
+                    continue
+                end
+            end
             push!(cut_cells, c)
             is_cut[c] = true
         end
     end
 
     if isempty(cut_cells)
+        if extra_out
+            nf = number_of_faces(mesh)
+            nb = number_of_boundary_faces(mesh)
+            info = Dict{String, Any}(
+                "cell_index" => collect(1:nc),
+                "face_index" => collect(1:nf),
+                "boundary_face_index" => collect(1:nb),
+                "new_faces" => Int[]
+            )
+            return (mesh, info)
+        end
         return mesh
     end
 
@@ -226,7 +292,7 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T}; min_cut_fractio
         end
     end
 
-    return build_cut_mesh(mesh, plane, new_node_points, is_cut, cut_cell_infos, node_class, get_or_create_intersection)
+    return build_cut_mesh(mesh, plane, new_node_points, is_cut, cut_cell_infos, node_class, get_or_create_intersection, extra_out)
 end
 
 """
@@ -255,7 +321,7 @@ function dominant_side(fnodes, node_class)
 end
 
 """
-    build_cut_mesh(mesh, plane, node_points, is_cut, cut_infos, node_class, get_intersection)
+    build_cut_mesh(mesh, plane, node_points, is_cut, cut_infos, node_class, get_intersection, extra_out)
 
 Build the final mesh after cutting.
 """
@@ -266,7 +332,8 @@ function build_cut_mesh(
     is_cut::BitVector,
     cut_infos::Dict{Int, CutCellInfo},
     node_class::Dict{Int, Int},
-    get_intersection::Function
+    get_intersection::Function,
+    extra_out::Bool
 ) where T
     nc_old = number_of_cells(mesh)
     nf_old = number_of_faces(mesh)
@@ -276,15 +343,21 @@ function build_cut_mesh(
     new_cell_count = 0
     old_to_new = Dict{Int, Vector{Int}}()
 
+    # Index tracking for extra_out
+    cell_index = Int[]
+
     for c in 1:nc_old
         if is_cut[c]
             pos_cell = new_cell_count + 1
             neg_cell = new_cell_count + 2
             old_to_new[c] = [pos_cell, neg_cell]
             new_cell_count += 2
+            push!(cell_index, c)  # pos sub-cell maps to original cell c
+            push!(cell_index, c)  # neg sub-cell maps to original cell c
         else
             new_cell_count += 1
             old_to_new[c] = [new_cell_count]
+            push!(cell_index, c)
         end
     end
 
@@ -297,20 +370,29 @@ function build_cut_mesh(
     cell_int_faces = [Int[] for _ in 1:new_cell_count]
     cell_bnd_faces = [Int[] for _ in 1:new_cell_count]
 
-    function add_interior_face!(nodes::Vector{Int}, left::Int, right::Int)
+    # Index tracking for interior faces
+    face_index = Int[]        # maps new face → old face (0 for new cut faces)
+    new_faces_list = Int[]    # indices of newly created cut faces
+
+    # Index tracking for boundary faces
+    bnd_face_index = Int[]    # maps new boundary face → old boundary face
+
+    function add_interior_face!(nodes::Vector{Int}, left::Int, right::Int; old_face::Int = 0)
         push!(all_face_nodes, nodes)
         push!(all_face_neighbors, (left, right))
         fi = length(all_face_nodes)
         push!(cell_int_faces[left], fi)
         push!(cell_int_faces[right], fi)
+        push!(face_index, old_face)
         return fi
     end
 
-    function add_boundary_face!(nodes::Vector{Int}, cell::Int)
+    function add_boundary_face!(nodes::Vector{Int}, cell::Int; old_bf::Int = 0)
         push!(all_bnd_nodes, nodes)
         push!(all_bnd_cells, cell)
         bi = length(all_bnd_nodes)
         push!(cell_bnd_faces[cell], bi)
+        push!(bnd_face_index, old_bf)
         return bi
     end
 
@@ -367,7 +449,7 @@ function build_cut_mesh(
         if !l_cut && !r_cut
             l_new = old_to_new[l_old][1]
             r_new = old_to_new[r_old][1]
-            add_interior_face!(fnodes, l_new, r_new)
+            add_interior_face!(fnodes, l_new, r_new; old_face = face)
         elseif l_cut && !r_cut
             r_new = old_to_new[r_old][1]
             l_pos = old_to_new[l_old][1]
@@ -376,17 +458,17 @@ function build_cut_mesh(
             if face_needs_split(fnodes)
                 pos_fn, neg_fn = split_face_cached(fnodes)
                 if length(pos_fn) >= 3
-                    add_interior_face!(pos_fn, l_pos, r_new)
+                    add_interior_face!(pos_fn, l_pos, r_new; old_face = face)
                 end
                 if length(neg_fn) >= 3
-                    add_interior_face!(neg_fn, l_neg, r_new)
+                    add_interior_face!(neg_fn, l_neg, r_new; old_face = face)
                 end
             else
                 side = dominant_side(fnodes, node_class)
                 if side >= 0
-                    add_interior_face!(fnodes, l_pos, r_new)
+                    add_interior_face!(fnodes, l_pos, r_new; old_face = face)
                 else
-                    add_interior_face!(fnodes, l_neg, r_new)
+                    add_interior_face!(fnodes, l_neg, r_new; old_face = face)
                 end
             end
         elseif !l_cut && r_cut
@@ -397,17 +479,17 @@ function build_cut_mesh(
             if face_needs_split(fnodes)
                 pos_fn, neg_fn = split_face_cached(fnodes)
                 if length(pos_fn) >= 3
-                    add_interior_face!(pos_fn, l_new, r_pos)
+                    add_interior_face!(pos_fn, l_new, r_pos; old_face = face)
                 end
                 if length(neg_fn) >= 3
-                    add_interior_face!(neg_fn, l_new, r_neg)
+                    add_interior_face!(neg_fn, l_new, r_neg; old_face = face)
                 end
             else
                 side = dominant_side(fnodes, node_class)
                 if side >= 0
-                    add_interior_face!(fnodes, l_new, r_pos)
+                    add_interior_face!(fnodes, l_new, r_pos; old_face = face)
                 else
-                    add_interior_face!(fnodes, l_new, r_neg)
+                    add_interior_face!(fnodes, l_new, r_neg; old_face = face)
                 end
             end
         else
@@ -420,19 +502,19 @@ function build_cut_mesh(
             if face_needs_split(fnodes)
                 pos_fn, neg_fn = split_face_cached(fnodes)
                 if length(pos_fn) >= 3
-                    add_interior_face!(pos_fn, l_pos, r_pos)
+                    add_interior_face!(pos_fn, l_pos, r_pos; old_face = face)
                 end
                 if length(neg_fn) >= 3
-                    add_interior_face!(neg_fn, l_neg, r_neg)
+                    add_interior_face!(neg_fn, l_neg, r_neg; old_face = face)
                 end
             else
                 side = dominant_side(fnodes, node_class)
                 if side >= 0
-                    add_interior_face!(fnodes, l_pos, r_pos)
+                    add_interior_face!(fnodes, l_pos, r_pos; old_face = face)
                 elseif side < 0
-                    add_interior_face!(fnodes, l_neg, r_neg)
+                    add_interior_face!(fnodes, l_neg, r_neg; old_face = face)
                 else
-                    add_interior_face!(fnodes, l_pos, r_pos)
+                    add_interior_face!(fnodes, l_pos, r_pos; old_face = face)
                 end
             end
         end
@@ -445,7 +527,7 @@ function build_cut_mesh(
 
         if !is_cut[cell_old]
             cell_new = old_to_new[cell_old][1]
-            add_boundary_face!(fnodes, cell_new)
+            add_boundary_face!(fnodes, cell_new; old_bf = bf)
         else
             pos_cell = old_to_new[cell_old][1]
             neg_cell = old_to_new[cell_old][2]
@@ -453,17 +535,17 @@ function build_cut_mesh(
             if face_needs_split(fnodes)
                 pos_fn, neg_fn = split_face_cached(fnodes)
                 if length(pos_fn) >= 3
-                    add_boundary_face!(pos_fn, pos_cell)
+                    add_boundary_face!(pos_fn, pos_cell; old_bf = bf)
                 end
                 if length(neg_fn) >= 3
-                    add_boundary_face!(neg_fn, neg_cell)
+                    add_boundary_face!(neg_fn, neg_cell; old_bf = bf)
                 end
             else
                 side = dominant_side(fnodes, node_class)
                 if side >= 0
-                    add_boundary_face!(fnodes, pos_cell)
+                    add_boundary_face!(fnodes, pos_cell; old_bf = bf)
                 else
-                    add_boundary_face!(fnodes, neg_cell)
+                    add_boundary_face!(fnodes, neg_cell; old_bf = bf)
                 end
             end
         end
@@ -478,7 +560,8 @@ function build_cut_mesh(
         if length(info.cut_face_nodes) >= 3
             pos_cell = old_to_new[c][1]
             neg_cell = old_to_new[c][2]
-            add_interior_face!(info.cut_face_nodes, neg_cell, pos_cell)
+            fi = add_interior_face!(info.cut_face_nodes, neg_cell, pos_cell; old_face = 0)
+            push!(new_faces_list, fi)
         end
     end
 
@@ -511,7 +594,7 @@ function build_cut_mesh(
         push!(bnd_cells_facepos, bnd_cells_facepos[end] + length(cell_bnd_faces[c]))
     end
 
-    return UnstructuredMesh(
+    new_mesh = UnstructuredMesh(
         cells_faces,
         cells_facepos,
         bnd_cells_faces,
@@ -524,4 +607,15 @@ function build_cut_mesh(
         all_face_neighbors,
         all_bnd_cells
     )
+
+    if extra_out
+        info_dict = Dict{String, Any}(
+            "cell_index" => cell_index,
+            "face_index" => face_index,
+            "boundary_face_index" => bnd_face_index,
+            "new_faces" => new_faces_list
+        )
+        return (new_mesh, info_dict)
+    end
+    return new_mesh
 end

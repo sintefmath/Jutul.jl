@@ -237,4 +237,221 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         @test total_vol_orig ≈ total_vol_cut rtol=1e-8
         @test t < 30.0  # Should complete in reasonable time
     end
+
+    @testset "extra_out basic" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+        nc_orig = number_of_cells(mesh)
+        nf_orig = number_of_faces(mesh)
+        nb_orig = number_of_boundary_faces(mesh)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
+
+        nc_new = number_of_cells(cut)
+        nf_new = number_of_faces(cut)
+        nb_new = number_of_boundary_faces(cut)
+
+        # cell_index has correct length
+        @test length(info["cell_index"]) == nc_new
+        # face_index has correct length
+        @test length(info["face_index"]) == nf_new
+        # boundary_face_index has correct length
+        @test length(info["boundary_face_index"]) == nb_new
+        # new_faces is non-empty (cells were cut)
+        @test length(info["new_faces"]) > 0
+    end
+
+    @testset "extra_out cell_index mapping" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+        nc_orig = number_of_cells(mesh)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
+
+        ci = info["cell_index"]
+        # All indices should be valid original cell indices
+        @test all(1 .<= ci .<= nc_orig)
+        # Cut cells should have two entries mapping to the same original cell
+        # Count how many new cells map to each original cell
+        counts = zeros(Int, nc_orig)
+        for c in ci
+            counts[c] += 1
+        end
+        # Uncut cells have exactly 1 new cell, cut cells have exactly 2
+        @test all(c -> c == 1 || c == 2, counts)
+        n_cut = count(c -> c == 2, counts)
+        @test n_cut == 9  # 9 cells in the middle z-layer
+    end
+
+    @testset "extra_out face_index mapping" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+        nf_orig = number_of_faces(mesh)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
+
+        fi = info["face_index"]
+        nf = info["new_faces"]
+        # New cut faces should have face_index == 0
+        for f in nf
+            @test fi[f] == 0
+        end
+        # Non-new faces should reference a valid original face
+        for (i, idx) in enumerate(fi)
+            if !(i in nf)
+                @test 1 <= idx <= nf_orig
+            end
+        end
+    end
+
+    @testset "extra_out boundary_face_index mapping" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+        nb_orig = number_of_boundary_faces(mesh)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
+
+        bfi = info["boundary_face_index"]
+        # All boundary face indices should reference valid original boundary faces
+        @test all(1 .<= bfi .<= nb_orig)
+    end
+
+    @testset "extra_out new_faces" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
+
+        nf = info["new_faces"]
+        # 9 cut cells should create 9 new faces
+        @test length(nf) == 9
+        # All new face indices should be valid
+        @test all(1 .<= nf .<= number_of_faces(cut))
+    end
+
+    @testset "extra_out no-cut case" begin
+        g = CartesianMesh((2, 2, 2))
+        mesh = UnstructuredMesh(g)
+        nc_orig = number_of_cells(mesh)
+
+        plane = PlaneCut([0.0, 0.0, -1.0], [0.0, 0.0, 1.0])
+        result, info = cut_mesh(mesh, plane; extra_out = true)
+
+        @test result === mesh
+        @test info["cell_index"] == collect(1:nc_orig)
+        @test info["face_index"] == collect(1:number_of_faces(mesh))
+        @test info["boundary_face_index"] == collect(1:number_of_boundary_faces(mesh))
+        @test isempty(info["new_faces"])
+    end
+
+    @testset "Bounding polygon - centroid mode" begin
+        # 3x3x3 mesh, cut at z=0.5, but only within x=[0, 0.5], y=[0, 0.5]
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+        nc_orig = number_of_cells(mesh)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+
+        # Bounding polygon covers first column only (x < 0.5, y < 0.5)
+        # Cell centroids in x,y are at (1/6, 1/6), (1/2, 1/6), (5/6, 1/6), etc.
+        # Only the cell at (1/6, 1/6) in the cut layer should be cut
+        bpoly = [
+            SVector{3, Float64}(0.0, 0.0, 0.5),
+            SVector{3, Float64}(0.25, 0.0, 0.5),
+            SVector{3, Float64}(0.25, 0.25, 0.5),
+            SVector{3, Float64}(0.0, 0.25, 0.5)
+        ]
+
+        cut_bounded = cut_mesh(mesh, plane; min_cut_fraction = 0.01, bounding_polygon = bpoly)
+        cut_unbounded = cut_mesh(mesh, plane; min_cut_fraction = 0.01)
+
+        # Bounded cut should produce fewer new cells
+        @test nc_orig < number_of_cells(cut_bounded) < number_of_cells(cut_unbounded)
+
+        # Geometry should still be valid
+        geo = tpfv_geometry(cut_bounded)
+        @test all(geo.volumes .> 0)
+        total_vol_orig = sum(tpfv_geometry(mesh).volumes)
+        total_vol_cut = sum(geo.volumes)
+        @test total_vol_orig ≈ total_vol_cut rtol=1e-10
+    end
+
+    @testset "Bounding polygon - clip_to_polygon mode" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+
+        # Bounding polygon covers roughly the first cell centroid region
+        # Use a larger polygon that excludes some centroids but includes
+        # some nodes from additional cells when clip_to_polygon=true
+        bpoly = [
+            SVector{3, Float64}(-0.01, -0.01, 0.5),
+            SVector{3, Float64}(0.20, -0.01, 0.5),
+            SVector{3, Float64}(0.20, 0.20, 0.5),
+            SVector{3, Float64}(-0.01, 0.20, 0.5)
+        ]
+
+        cut_centroid = cut_mesh(mesh, plane; min_cut_fraction = 0.01, bounding_polygon = bpoly)
+        # A larger polygon that includes nodes from neighboring cells
+        bpoly_large = [
+            SVector{3, Float64}(-0.01, -0.01, 0.5),
+            SVector{3, Float64}(0.40, -0.01, 0.5),
+            SVector{3, Float64}(0.40, 0.40, 0.5),
+            SVector{3, Float64}(-0.01, 0.40, 0.5)
+        ]
+        cut_centroid_large = cut_mesh(mesh, plane; min_cut_fraction = 0.01, bounding_polygon = bpoly_large)
+        cut_clip_large = cut_mesh(mesh, plane; min_cut_fraction = 0.01, bounding_polygon = bpoly_large, clip_to_polygon = true)
+
+        # clip_to_polygon should include at least as many cells as centroid mode
+        @test number_of_cells(cut_clip_large) >= number_of_cells(cut_centroid_large)
+
+        # Geometry should still be valid
+        geo = tpfv_geometry(cut_clip_large)
+        @test all(geo.volumes .> 0)
+    end
+
+    @testset "Bounding polygon - no cells in bounds" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+
+        # Bounding polygon completely outside the mesh
+        bpoly = [
+            SVector{3, Float64}(5.0, 5.0, 0.5),
+            SVector{3, Float64}(6.0, 5.0, 0.5),
+            SVector{3, Float64}(6.0, 6.0, 0.5),
+            SVector{3, Float64}(5.0, 6.0, 0.5)
+        ]
+
+        cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01, bounding_polygon = bpoly)
+        @test cut === mesh
+    end
+
+    @testset "extra_out with bounding_polygon" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        bpoly = [
+            SVector{3, Float64}(0.0, 0.0, 0.5),
+            SVector{3, Float64}(0.25, 0.0, 0.5),
+            SVector{3, Float64}(0.25, 0.25, 0.5),
+            SVector{3, Float64}(0.0, 0.25, 0.5)
+        ]
+
+        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01,
+            bounding_polygon = bpoly, extra_out = true)
+
+        @test length(info["cell_index"]) == number_of_cells(cut)
+        @test length(info["face_index"]) == number_of_faces(cut)
+        @test length(info["boundary_face_index"]) == number_of_boundary_faces(cut)
+        @test length(info["new_faces"]) > 0
+    end
 end

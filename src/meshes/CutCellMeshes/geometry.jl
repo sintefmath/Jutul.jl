@@ -263,3 +263,95 @@ function order_polygon_points(pts::Vector{SVector{3, T}}, normal::SVector{3, T})
     perm = sortperm(angles)
     return pts[perm]
 end
+
+"""
+    project_to_plane(pt, plane)
+
+Project a 3D point onto the cutting plane, returning 2D coordinates (u, v)
+in a local coordinate system on the plane.
+"""
+function project_to_plane(pt::SVector{3, T}, plane::PlaneCut) where T
+    n = plane.normal
+    # Pick a reference direction not parallel to normal
+    ref = abs(n[1]) < 0.9 ? SVector{3, T}(1, 0, 0) : SVector{3, T}(0, 1, 0)
+    u = normalize(cross(n, ref))
+    v = cross(n, u)
+    d = pt - plane.point
+    return SVector{2, T}(dot(d, u), dot(d, v))
+end
+
+"""
+    project_polygon_to_2d(polygon, plane)
+
+Project a 3D bounding polygon onto the cutting plane, returning 2D coordinates.
+"""
+function project_polygon_to_2d(polygon::Vector{SVector{3, T}}, plane::PlaneCut) where T
+    return [project_to_plane(pt, plane) for pt in polygon]
+end
+
+"""
+    point_in_polygon_2d(pt, polygon)
+
+Check whether a 2D point lies inside a 2D polygon using the ray-casting algorithm.
+"""
+function point_in_polygon_2d(pt::SVector{2, T}, polygon::Vector{SVector{2, T}}) where T
+    n = length(polygon)
+    inside = false
+    j = n
+    for i in 1:n
+        xi, yi = polygon[i]
+        xj, yj = polygon[j]
+        if ((yi > pt[2]) != (yj > pt[2])) &&
+           (pt[1] < (xj - xi) * (pt[2] - yi) / (yj - yi) + xi)
+            inside = !inside
+        end
+        j = i
+    end
+    return inside
+end
+
+"""
+    cell_centroid_in_bounding_polygon(mesh, cell, plane, bounding_polygon_2d)
+
+Check whether a cell's centroid, when projected onto the cutting plane,
+falls inside the 2D bounding polygon.
+"""
+function cell_centroid_in_bounding_polygon(
+    mesh::UnstructuredMesh{3},
+    cell::Int,
+    plane::PlaneCut,
+    bounding_polygon_2d::Vector{SVector{2, T}}
+) where T
+    # Compute approximate cell centroid from all cell nodes
+    nodes = cell_nodes(mesh, cell)
+    centroid = zero(SVector{3, T})
+    for n in nodes
+        centroid += mesh.node_points[n]
+    end
+    centroid /= length(nodes)
+    pt2d = project_to_plane(centroid, plane)
+    return point_in_polygon_2d(pt2d, bounding_polygon_2d)
+end
+
+"""
+    cell_any_node_in_bounding_polygon(mesh, cell, plane, bounding_polygon_2d)
+
+Check whether any of a cell's nodes, when projected onto the cutting plane,
+falls inside the 2D bounding polygon. Used for the `clip_to_polygon` option
+to include partially-inside cells.
+"""
+function cell_any_node_in_bounding_polygon(
+    mesh::UnstructuredMesh{3},
+    cell::Int,
+    plane::PlaneCut,
+    bounding_polygon_2d::Vector{SVector{2, T}}
+) where T
+    nodes = cell_nodes(mesh, cell)
+    for n in nodes
+        pt2d = project_to_plane(mesh.node_points[n], plane)
+        if point_in_polygon_2d(pt2d, bounding_polygon_2d)
+            return true
+        end
+    end
+    return false
+end
