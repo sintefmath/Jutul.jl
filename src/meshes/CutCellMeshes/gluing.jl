@@ -592,23 +592,16 @@ function cut_and_displace_mesh(
             ia = glue_info["cell_index_a"][c]
             ib = glue_info["cell_index_b"][c]
             if ia > 0
-                # This cell comes from mesh_a (positive side in the glue)
-                if side == :positive
-                    cut_cell = pos_cells[ia]
-                    cell_side[c] = :positive
-                else
-                    cut_cell = pos_cells[ia]
-                    cell_side[c] = :positive
-                end
+                # This cell comes from mesh_a in the glue.
+                # mesh_a is always the positive-side submesh (either shifted
+                # or unshifted), so it maps through pos_cells.
+                cut_cell = pos_cells[ia]
+                cell_side[c] = :positive
             else
-                # This cell comes from mesh_b (negative side in the glue)
-                if side == :positive
-                    cut_cell = neg_cells[ib]
-                    cell_side[c] = :negative
-                else
-                    cut_cell = neg_cells[ib]
-                    cell_side[c] = :negative
-                end
+                # This cell comes from mesh_b in the glue.
+                # mesh_b is always the negative-side submesh.
+                cut_cell = neg_cells[ib]
+                cell_side[c] = :negative
             end
             cell_index[c] = cut_info["cell_index"][cut_cell]
         end
