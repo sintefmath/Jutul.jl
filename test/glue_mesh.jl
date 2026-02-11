@@ -432,6 +432,8 @@ end
 
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
+        # Volume must be conserved: slope displacement is tangential and nodes
+        # on the cut surface don't move, so no gap or overlap is created.
         @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
     end
 
