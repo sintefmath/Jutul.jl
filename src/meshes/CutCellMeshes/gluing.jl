@@ -584,8 +584,9 @@ function cut_and_displace_mesh(
     shifted_nodes = copy(target_mesh.node_points)
     for i in eachindex(shifted_nodes)
         pt = shifted_nodes[i]
-        d = dot(pt - plane.point, n)    # signed distance from the plane
-        x1 = dot(pt - plane.point, t1)  # in-plane coordinate along t1
+        dp = pt - plane.point
+        d = dot(dp, n)    # signed distance from the plane
+        x1 = dot(dp, t1)  # in-plane coordinate along t1
         shifted_nodes[i] = pt + (constant + tilt * d) * t1 + slope * x1 * n
     end
 
