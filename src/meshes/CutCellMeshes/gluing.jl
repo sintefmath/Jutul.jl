@@ -459,10 +459,12 @@ end
 
 """
     cut_and_displace_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut;
-        constant = 0.0, slope = 0.0, tilt = 0.0, side = :positive, kwargs...)
+        constant = 0.0, shift_lr = 0.0, angle = 0.0,
+        side = :positive, kwargs...)
 
 Cut a 3D mesh along a plane using `cut_mesh`, displace one side, and glue the
-two sides back together.
+two sides back together.  All three displacement operations act **in the plane**,
+so the cut interface remains in contact (no gap, no collision).
 
 Two in-plane tangent directions are defined automatically:
 
@@ -470,34 +472,24 @@ Two in-plane tangent directions are defined automatically:
     t₂ = cross(n, t₁)
 
 where `n` is the plane normal and `ref` is a reference vector chosen to avoid
-degeneracy.
+degeneracy.  Think of `t₁` as the "up-down" direction and `t₂` as the
+"left-right" direction within the cutting plane.
 
-The displacement applied to each node is
+The displacement applied to each node is the combination of:
 
-    displacement = constant · t₁ + tilt · d · t₁ + slope · x₁ · n
+1. A uniform shift along `t₁` (up-down):  `constant · t₁`
+2. A uniform shift along `t₂` (left-right):  `shift_lr · t₂`
+3. An in-plane rotation by `angle` (radians) around the plane normal `n`,
+   pivoting at `plane.point`.
 
-where `d = dot(pt - plane.point, n)` is the signed distance from the plane and
-`x₁ = dot(pt - plane.point, t₁)` is the in-plane coordinate along `t₁`.
-
-- `constant`: uniform slide along `t₁` (keeps the cut interface in contact).
-- `tilt`: additional `t₁` shift proportional to `d` — a shear that produces a
-  rotation about `t₂`.  Nodes on the plane (`d = 0`) get no contribution, so
-  the interface stays in contact.
-- `slope`: normal displacement proportional to `x₁` — rotates the shifted block
-  around `t₂` so that the resulting interface slopes upward (or downward) along
-  the plane.  The rotation pivots at `plane.point` (`x₁ = 0` there).  This
-  **does** move nodes on the cut surface, producing a tilted (sloped) interface.
-
-Both `constant` and `tilt` preserve the interface contact.  `slope` intentionally
-breaks it by tilting the interface.  All three are volume-preserving shear
-transforms.
+All three operations preserve the cut-surface contact (they slide points within
+the plane but never move them out of it) and preserve cell volumes.
 
 # Keyword arguments
-- `constant::Real = 0.0`: Uniform tangential shift along the plane (`t₁`).
-- `slope::Real = 0.0`: Normal displacement per unit in-plane distance along `t₁`
-  — tilts the interface so it slopes along the plane, pivoting at `plane.point`.
-- `tilt::Real = 0.0`: Tangential shift along `t₁` per unit distance from the
-  plane (rotation around `t₂`, keeps interface in contact).
+- `constant::Real = 0.0`: Uniform shift along `t₁` (up-down direction).
+- `shift_lr::Real = 0.0`: Uniform shift along `t₂` (left-right direction).
+- `angle::Real = 0.0`: In-plane rotation (radians) around the plane normal `n`,
+  pivoting at `plane.point`.
 - `side::Symbol = :positive`: Which side to shift (`:positive` or `:negative`).
 - `tol::Real = 1e-6`: Node-merge tolerance for gluing.
 - `face_tol::Real = 1e-4`: Face centroid proximity tolerance.
@@ -523,8 +515,8 @@ function cut_and_displace_mesh(
     mesh::UnstructuredMesh{3},
     plane::PlaneCut{Tp};
     constant::Real = 0.0,
-    slope::Real = 0.0,
-    tilt::Real = 0.0,
+    shift_lr::Real = 0.0,
+    angle::Real = 0.0,
     side::Symbol = :positive,
     tol::Real = 1e-6,
     face_tol::Real = 1e-4,
@@ -572,22 +564,30 @@ function cut_and_displace_mesh(
         throw(ArgumentError("side must be :positive or :negative, got $side"))
     end
 
-    # Shift node points.
-    # constant: uniform slide along t1 (keeps interface in contact).
-    # tilt: additional t1 shift proportional to signed distance d from the
-    #   cut plane → rotation about t2.  Nodes on the plane (d = 0) get no
-    #   contribution, so the interface stays in contact.
-    # slope: normal displacement proportional to the in-plane coordinate x1.
-    #   This tilts the interface (nodes on the plane DO move), producing a
-    #   sloped fault surface that pivots at plane.point.
-    # All three are volume-preserving shear transforms.
+    # Shift node points — all operations are in-plane, keeping the cut
+    # interface in contact.
+    # constant: uniform slide along t1 (up-down).
+    # shift_lr: uniform slide along t2 (left-right).
+    # angle:    in-plane rotation around n, pivoting at plane.point.
+    #           For a point with in-plane coordinates (x1, x2) relative to
+    #           plane.point, the rotated position is
+    #             x1' = x1·cos(θ) - x2·sin(θ)
+    #             x2' = x1·sin(θ) + x2·cos(θ)
+    #           The out-of-plane component d is unchanged.
+    cosθ = cos(angle)
+    sinθ = sin(angle)
     shifted_nodes = copy(target_mesh.node_points)
     for i in eachindex(shifted_nodes)
         pt = shifted_nodes[i]
         dp = pt - plane.point
-        d = dot(dp, n)    # signed distance from the plane
         x1 = dot(dp, t1)  # in-plane coordinate along t1
-        shifted_nodes[i] = pt + (constant + tilt * d) * t1 + slope * x1 * n
+        x2 = dot(dp, t2)  # in-plane coordinate along t2
+        d  = dot(dp, n)   # out-of-plane (normal) distance
+        # Rotate in-plane, then shift
+        x1_new = x1 * cosθ - x2 * sinθ + constant
+        x2_new = x1 * sinθ + x2 * cosθ + shift_lr
+        # Reconstruct the point
+        shifted_nodes[i] = plane.point + x1_new * t1 + x2_new * t2 + d * n
     end
 
     # Reconstruct mesh with shifted nodes
