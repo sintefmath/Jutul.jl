@@ -14,6 +14,13 @@ may be split when only partially overlapping.
 - `coplanar_tol::Real = 1e-3`: Maximum allowed normal-direction distance between
    two face planes for them to be considered coplanar and eligible for gluing.
 - `area_tol::Real = 1e-10`: Minimum area for a face to be kept.
+- `interface_point::Union{Nothing, AbstractVector} = nothing`: When provided
+   together with `interface_normal`, only boundary faces whose centroids lie
+   within `coplanar_tol` of the interface plane are considered for gluing.
+   This prevents spurious matches between boundary faces far from the
+   intended gluing interface.
+- `interface_normal::Union{Nothing, AbstractVector} = nothing`: Unit normal
+   of the interface plane (see `interface_point`).
 - `extra_out::Bool = false`: If `true`, return `(mesh, info)` where `info` is
    a `Dict` with:
   - `"cell_index_a"` – maps new cell indices to original cell indices in
@@ -40,9 +47,18 @@ function glue_mesh(
     face_tol::Real = 1e-4,
     coplanar_tol::Real = 1e-3,
     area_tol::Real = 1e-10,
+    interface_point::Union{Nothing, AbstractVector} = nothing,
+    interface_normal::Union{Nothing, AbstractVector} = nothing,
     extra_out::Bool = false
 )
     T = Float64
+
+    # Pre-compute interface plane filter if provided
+    has_interface = !isnothing(interface_point) && !isnothing(interface_normal)
+    if has_interface
+        ipt = SVector{3, T}(interface_point...)
+        inrm = SVector{3, T}(normalize(interface_normal)...)
+    end
 
     nc_a = number_of_cells(mesh_a)
     nf_a = number_of_faces(mesh_a)
@@ -101,13 +117,24 @@ function glue_mesh(
     end
 
     # For each boundary face, compute its node set in combined numbering
+    # and remove consecutive duplicate nodes introduced by node merging.
     bnd_a_nodes_combined = Vector{Vector{Int}}(undef, nb_a)
+    degenerate_a = falses(nb_a)
     for bf in 1:nb_a
-        bnd_a_nodes_combined[bf] = [node_map_a[n] for n in mesh_a.boundary_faces.faces_to_nodes[bf]]
+        raw = [node_map_a[n] for n in mesh_a.boundary_faces.faces_to_nodes[bf]]
+        bnd_a_nodes_combined[bf] = _deduplicate_face_nodes(raw)
+        if length(unique(bnd_a_nodes_combined[bf])) < 3
+            degenerate_a[bf] = true
+        end
     end
     bnd_b_nodes_combined = Vector{Vector{Int}}(undef, nb_b)
+    degenerate_b = falses(nb_b)
     for bf in 1:nb_b
-        bnd_b_nodes_combined[bf] = [node_map_b[n] for n in mesh_b.boundary_faces.faces_to_nodes[bf]]
+        raw = [node_map_b[n] for n in mesh_b.boundary_faces.faces_to_nodes[bf]]
+        bnd_b_nodes_combined[bf] = _deduplicate_face_nodes(raw)
+        if length(unique(bnd_b_nodes_combined[bf])) < 3
+            degenerate_b[bf] = true
+        end
     end
 
     # Find candidate pairs by centroid proximity.
@@ -144,7 +171,26 @@ function glue_mesh(
 
     candidate_pairs = Tuple{Int,Int}[]
     for bf_a in 1:nb_a
+        if degenerate_a[bf_a]
+            continue
+        end
+        # If an interface plane is given, skip faces far from it
+        if has_interface
+            da = abs(dot(bnd_centroids_a[bf_a] - ipt, inrm))
+            if da > coplanar_tol
+                continue
+            end
+        end
         for bf_b in 1:nb_b
+            if degenerate_b[bf_b]
+                continue
+            end
+            if has_interface
+                db = abs(dot(bnd_centroids_b[bf_b] - ipt, inrm))
+                if db > coplanar_tol
+                    continue
+                end
+            end
             if norm(bnd_centroids_a[bf_a] - bnd_centroids_b[bf_b]) < face_tol
                 # Require normals to be approximately anti-parallel
                 # (dot product < 0 means they face each other)
@@ -332,17 +378,24 @@ function glue_mesh(
     consumed_a = falses(nb_a)
     consumed_b = falses(nb_b)
     for bf in 1:nb_a
-        if original_area_a[bf] > area_tol && consumed_area_a[bf] >= original_area_a[bf] * (1 - 1e-4)
+        if degenerate_a[bf]
+            consumed_a[bf] = true
+        elseif original_area_a[bf] > area_tol && consumed_area_a[bf] >= original_area_a[bf] * (1 - 1e-4)
             consumed_a[bf] = true
         end
     end
     for bf in 1:nb_b
-        if original_area_b[bf] > area_tol && consumed_area_b[bf] >= original_area_b[bf] * (1 - 1e-4)
+        if degenerate_b[bf]
+            consumed_b[bf] = true
+        elseif original_area_b[bf] > area_tol && consumed_area_b[bf] >= original_area_b[bf] * (1 - 1e-4)
             consumed_b[bf] = true
         end
     end
 
     # For partially consumed faces, compute residual boundary polygons
+    # Use an effective area tolerance that is never smaller than a reasonable
+    # minimum to avoid keeping near-zero-area slivers from polygon subtraction.
+    effective_area_tol = max(area_tol, 1e-12)
     for bf in 1:nb_a
         if consumed_a[bf]
             continue
@@ -352,12 +405,14 @@ function glue_mesh(
             residuals = _compute_residual_polygons(
                 SVector{3,T}[combined_nodes[n] for n in bnd_a_nodes_combined[bf]],
                 carved_from_a[bf],
-                area_tol
+                effective_area_tol
             )
             if !isempty(residuals)
                 for rpoly in residuals
-                    rnodes = Int[find_or_add_node!(pt) for pt in rpoly]
-                    add_boundary_face!(rnodes, cell; old_a = bf)
+                    rnodes = _deduplicate_face_nodes(Int[find_or_add_node!(pt) for pt in rpoly])
+                    if length(unique(rnodes)) >= 3
+                        add_boundary_face!(rnodes, cell; old_a = bf)
+                    end
                 end
                 consumed_a[bf] = true
             end
@@ -372,31 +427,39 @@ function glue_mesh(
             residuals = _compute_residual_polygons(
                 SVector{3,T}[combined_nodes[n] for n in bnd_b_nodes_combined[bf]],
                 carved_from_b[bf],
-                area_tol
+                effective_area_tol
             )
             if !isempty(residuals)
                 for rpoly in residuals
-                    rnodes = Int[find_or_add_node!(pt) for pt in rpoly]
-                    add_boundary_face!(rnodes, cell + cell_offset_b; old_b = bf)
+                    rnodes = _deduplicate_face_nodes(Int[find_or_add_node!(pt) for pt in rpoly])
+                    if length(unique(rnodes)) >= 3
+                        add_boundary_face!(rnodes, cell + cell_offset_b; old_b = bf)
+                    end
                 end
                 consumed_b[bf] = true
             end
         end
     end
 
-    # Copy unmatched / unconsumed boundary faces
+    # Copy unmatched / unconsumed boundary faces, skipping near-zero-area faces
     for bf in 1:nb_a
         if !consumed_a[bf]
-            cell = mesh_a.boundary_faces.neighbors[bf]
             nodes = bnd_a_nodes_combined[bf]
-            add_boundary_face!(nodes, cell; old_a = bf)
+            face_area = polygon_area([combined_nodes[n] for n in nodes])
+            if face_area > effective_area_tol
+                cell = mesh_a.boundary_faces.neighbors[bf]
+                add_boundary_face!(nodes, cell; old_a = bf)
+            end
         end
     end
     for bf in 1:nb_b
         if !consumed_b[bf]
-            cell = mesh_b.boundary_faces.neighbors[bf]
             nodes = bnd_b_nodes_combined[bf]
-            add_boundary_face!(nodes, cell + cell_offset_b; old_b = bf)
+            face_area = polygon_area([combined_nodes[n] for n in nodes])
+            if face_area > effective_area_tol
+                cell = mesh_b.boundary_faces.neighbors[bf]
+                add_boundary_face!(nodes, cell + cell_offset_b; old_b = bf)
+            end
         end
     end
 
@@ -735,6 +798,31 @@ function _split_polygon_by_line_2d(
 end
 
 """
+    _deduplicate_face_nodes(nodes)
+
+Remove consecutive duplicate node indices from a face node list, including
+wrap-around (last == first). Returns a new vector. Faces with fewer than 3
+unique nodes after deduplication are degenerate.
+"""
+function _deduplicate_face_nodes(nodes::Vector{Int})
+    n = length(nodes)
+    if n == 0
+        return nodes
+    end
+    result = Int[nodes[1]]
+    for i in 2:n
+        if nodes[i] != result[end]
+            push!(result, nodes[i])
+        end
+    end
+    # Check wrap-around: if last == first, remove the last
+    while length(result) > 1 && result[end] == result[1]
+        pop!(result)
+    end
+    return result
+end
+
+"""
     _polygon_area_2d(poly)
 
 Compute the area of a 2D polygon using the shoelace formula.
@@ -922,15 +1010,23 @@ function cut_and_displace_mesh(
     shifted_mesh = _rebuild_mesh_with_nodes(target_mesh, shifted_nodes)
 
     # 5. Glue the two halves together
+    # Pass the cut plane info so glue_mesh only matches faces near the interface
+    n_hat = normalize(plane.normal)
     if side == :positive
         glue_result = glue_mesh(shifted_mesh, mesh_neg;
             tol = tol, face_tol = face_tol, coplanar_tol = coplanar_tol,
-            area_tol = area_tol, extra_out = true
+            area_tol = area_tol,
+            interface_point = plane.point,
+            interface_normal = n_hat,
+            extra_out = true
         )
     else
         glue_result = glue_mesh(mesh_pos, shifted_mesh;
             tol = tol, face_tol = face_tol, coplanar_tol = coplanar_tol,
-            area_tol = area_tol, extra_out = true
+            area_tol = area_tol,
+            interface_point = plane.point,
+            interface_normal = n_hat,
+            extra_out = true
         )
     end
     glued_mesh, glue_info = glue_result

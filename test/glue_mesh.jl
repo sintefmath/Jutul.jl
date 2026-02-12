@@ -3,7 +3,7 @@ using Test
 using LinearAlgebra
 using StaticArrays
 
-import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh, classify_cell, _rebuild_mesh_with_nodes
+import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh, classify_cell, _rebuild_mesh_with_nodes, polygon_area
 
 @testset "Mesh Gluing" begin
     @testset "glue_mesh basic - cut and rejoin" begin
@@ -618,6 +618,92 @@ end
             cr = geo.cell_centroids[:, r]
             N = geo.normals[:, f]
             @test dot(N, cr - cl) > 0
+        end
+    end
+
+    @testset "no degenerate sliver faces with close nodes" begin
+        # Regression test: oblique plane + angle + constant displacement
+        # could produce degenerate boundary faces (duplicate nodes from
+        # node merging) when two meshes have points close to each other.
+        # These specific angle and displacement values were found to trigger
+        # the bug where node merging collapsed distinct face nodes.
+        angle = 1.641552918091964
+        cc = 0.12882882882882882
+        g = CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.5, 0.5, 0.5], [1.0, 0.2, 0.1])
+        result, info = cut_and_displace_mesh(mesh, plane;
+            constant = cc,
+            side = :positive,
+            face_tol = 100.0,
+            coplanar_tol = 1e-2,
+            area_tol = 0.0,
+            angle = angle,
+            extra_out = true,
+            min_cut_fraction = 0.0
+        )
+
+        geo = tpfv_geometry(result)
+        @test all(geo.volumes .> 0)
+
+        # No boundary face should have fewer than 3 unique nodes
+        for f in 1:number_of_boundary_faces(result)
+            nodes_idx = collect(result.boundary_faces.faces_to_nodes[f])
+            @test length(unique(nodes_idx)) >= 3
+        end
+
+        # No interior face should have fewer than 3 unique nodes
+        for f in 1:number_of_faces(result)
+            nodes_idx = collect(result.faces.faces_to_nodes[f])
+            @test length(unique(nodes_idx)) >= 3
+        end
+    end
+
+    @testset "no off-plane faces or tiny slivers" begin
+        # Regression test: with large face_tol, boundary faces far from the
+        # cut plane could be spuriously matched, creating new interior faces
+        # floating in space above the model. Also, near-zero-area boundary
+        # face slivers on the plane should be removed.
+        g = CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0))
+        mesh = UnstructuredMesh(g)
+        plane = PlaneCut([0.5, 0.5, 0.5], [1.0, 0.2, 0.1])
+        n_hat = normalize(plane.normal)
+
+        for (angle, cc) in [
+            (0.4339737599553468, 0.12442442442442442),
+            (1.641552918091964,  0.12882882882882882)
+        ]
+            result, info = cut_and_displace_mesh(mesh, plane;
+                constant = cc,
+                side = :positive,
+                face_tol = 100.0,
+                coplanar_tol = 1e-2,
+                area_tol = 0.0,
+                angle = angle,
+                extra_out = true,
+                min_cut_fraction = 0.0
+            )
+            geo = tpfv_geometry(result)
+            @test all(geo.volumes .> 0)
+            @test sum(geo.volumes) ≈ 1.0 rtol = 1e-6
+
+            # All new interior faces must lie on the cut plane
+            for f in info["new_faces"]
+                nodes_idx = result.faces.faces_to_nodes[f]
+                pts = [result.node_points[n] for n in nodes_idx]
+                fc = sum(pts) / length(pts)
+                d = abs(dot(fc - plane.point, n_hat))
+                @test d < 1e-10
+            end
+
+            # No boundary face should have near-zero area
+            for f in 1:number_of_boundary_faces(result)
+                nodes_idx = collect(result.boundary_faces.faces_to_nodes[f])
+                pts = [result.node_points[n] for n in nodes_idx]
+                area = polygon_area(pts)
+                @test area > 1e-10
+            end
         end
     end
 end
