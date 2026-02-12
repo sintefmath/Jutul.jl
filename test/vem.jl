@@ -31,6 +31,76 @@ using SparseArrays
         end
     end
 
+    @testset "Displacement output shape" begin
+        @testset "3D output" begin
+            mesh = UnstructuredMesh(CartesianMesh((2, 2, 2), (1.0, 1.0, 1.0)))
+            nc = number_of_cells(mesh)
+            nn = length(mesh.node_points)
+            setup = VEMElasticitySetup(mesh)
+            dp = [Float64(i) * 1e5 for i in 1:nc]
+            result = solve_vem_elasticity(setup, fill(1e9, nc), fill(0.3, nc), dp)
+            @test size(result.displacement) == (3, nn)
+        end
+
+        @testset "2D output" begin
+            mesh = UnstructuredMesh(CartesianMesh((3, 3), (1.0, 1.0)))
+            nc = number_of_cells(mesh)
+            nn = length(mesh.node_points)
+            setup = VEMElasticitySetup(mesh)
+            dp = [Float64(i) * 1e5 for i in 1:nc]
+            result = solve_vem_elasticity(setup, fill(1e9, nc), fill(0.3, nc), dp)
+            @test size(result.displacement) == (2, nn)
+        end
+    end
+
+    @testset "Boundary node helpers" begin
+        @testset "3D boundary helpers" begin
+            mesh = UnstructuredMesh(CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0)))
+            setup = VEMElasticitySetup(mesh)
+            pts = mesh.node_points
+
+            bnodes = boundary_nodes(setup)
+            @test length(bnodes) == length(setup.boundary_nodes)
+            @test bnodes == setup.boundary_nodes
+
+            # Test each side
+            for (dir, dim_idx, cmp) in [
+                (:xmin, 1, 0.0), (:xmax, 1, 1.0),
+                (:ymin, 2, 0.0), (:ymax, 2, 1.0),
+                (:zmin, 3, 0.0), (:zmax, 3, 1.0)
+            ]
+                side = boundary_nodes_on_side(setup, dir)
+                @test length(side) > 0
+                for n in side
+                    @test n in bnodes
+                    @test abs(pts[n][dim_idx] - cmp) < 1e-10
+                end
+            end
+
+            # xmin and xmax should not overlap
+            xmin_nodes = boundary_nodes_on_side(setup, :xmin)
+            xmax_nodes = boundary_nodes_on_side(setup, :xmax)
+            @test isempty(intersect(xmin_nodes, xmax_nodes))
+        end
+
+        @testset "2D boundary helpers" begin
+            mesh = UnstructuredMesh(CartesianMesh((3, 3), (1.0, 1.0)))
+            setup = VEMElasticitySetup(mesh)
+            pts = mesh.node_points
+
+            for (dir, dim_idx, cmp) in [
+                (:xmin, 1, 0.0), (:xmax, 1, 1.0),
+                (:ymin, 2, 0.0), (:ymax, 2, 1.0)
+            ]
+                side = boundary_nodes_on_side(setup, dir)
+                @test length(side) > 0
+                for n in side
+                    @test abs(pts[n][dim_idx] - cmp) < 1e-10
+                end
+            end
+        end
+    end
+
     @testset "Assembly and solve 3D" begin
         mesh = UnstructuredMesh(CartesianMesh((2, 2, 2), (1.0, 1.0, 1.0)))
         nc = number_of_cells(mesh)
@@ -55,10 +125,9 @@ using SparseArrays
         @testset "Zero displacement at boundaries" begin
             result = solve_vem_elasticity(setup, E, nu, dp)
             u = result.displacement
-            for node in setup.boundary_nodes
+            for node in boundary_nodes(setup)
                 for d in 1:3
-                    dof = 3 * (node - 1) + d
-                    @test abs(u[dof]) < 1e-14
+                    @test abs(u[d, node]) < 1e-14
                 end
             end
         end
@@ -107,10 +176,9 @@ using SparseArrays
 
         @testset "Zero displacement at boundaries" begin
             result = solve_vem_elasticity(setup, E, nu, dp)
-            for node in setup.boundary_nodes
+            for node in boundary_nodes(setup)
                 for d in 1:2
-                    dof = 2 * (node - 1) + d
-                    @test abs(result.displacement[dof]) < 1e-14
+                    @test abs(result.displacement[d, node]) < 1e-14
                 end
             end
         end
@@ -154,6 +222,7 @@ using SparseArrays
     @testset "Convenience function (mesh input)" begin
         mesh = UnstructuredMesh(CartesianMesh((2, 2, 2), (1.0, 1.0, 1.0)))
         nc = number_of_cells(mesh)
+        nn = length(mesh.node_points)
         E = fill(1e9, nc)
         nu = fill(0.3, nc)
         dp = [Float64(i) * 1e5 for i in 1:nc]
@@ -163,7 +232,7 @@ using SparseArrays
         @test hasproperty(result, :setup)
         @test hasproperty(result, :K)
         @test hasproperty(result, :rhs)
-        @test length(result.displacement) == 3 * length(mesh.node_points)
+        @test size(result.displacement) == (3, nn)
     end
 
     @testset "Biot coefficient" begin
@@ -183,38 +252,41 @@ using SparseArrays
     end
 
     @testset "Linear displacement patch test 3D" begin
-        # Prescribe u(x) = Ax + b on boundary, verify interior follows
+        # Prescribe u(x) = Ax + b on boundary nodes only, verify interior follows
         mesh = UnstructuredMesh(CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0)))
         nc = number_of_cells(mesh)
         nn = length(mesh.node_points)
         setup = VEMElasticitySetup(mesh)
         E = fill(1e9, nc)
         nu = fill(0.3, nc)
+        bnodes = boundary_nodes(setup)
 
-        # Test 1: u_x = 0.001*x, u_y = 0, u_z = 0
+        # u_x = 0.001*x, u_y = 0, u_z = 0 — set only on boundary nodes
         bc = zeros(3 * nn)
-        for (i, pt) in enumerate(mesh.node_points)
-            bc[3*(i-1)+1] = 0.001 * pt[1]
+        for n in bnodes
+            pt = mesh.node_points[n]
+            bc[3*(n-1)+1] = 0.001 * pt[1]
         end
         result = solve_vem_elasticity(setup, E, nu, zeros(nc), boundary_displacement = bc)
         for (i, pt) in enumerate(mesh.node_points)
-            @test abs(result.displacement[3*(i-1)+1] - 0.001 * pt[1]) < 1e-14
-            @test abs(result.displacement[3*(i-1)+2]) < 1e-14
-            @test abs(result.displacement[3*(i-1)+3]) < 1e-14
+            @test abs(result.displacement[1, i] - 0.001 * pt[1]) < 1e-14
+            @test abs(result.displacement[2, i]) < 1e-14
+            @test abs(result.displacement[3, i]) < 1e-14
         end
 
-        # Mixed linear displacement: u_x = 0.001*y, u_y = 0.002*z, u_z = 0.0005*x
+        # Mixed linear displacement — set only on boundary nodes
         bc2 = zeros(3 * nn)
-        for (i, pt) in enumerate(mesh.node_points)
-            bc2[3*(i-1)+1] = 0.001 * pt[2]
-            bc2[3*(i-1)+2] = 0.002 * pt[3]
-            bc2[3*(i-1)+3] = 0.0005 * pt[1]
+        for n in bnodes
+            pt = mesh.node_points[n]
+            bc2[3*(n-1)+1] = 0.001 * pt[2]
+            bc2[3*(n-1)+2] = 0.002 * pt[3]
+            bc2[3*(n-1)+3] = 0.0005 * pt[1]
         end
         result2 = solve_vem_elasticity(setup, E, nu, zeros(nc), boundary_displacement = bc2)
         for (i, pt) in enumerate(mesh.node_points)
-            @test abs(result2.displacement[3*(i-1)+1] - 0.001 * pt[2]) < 1e-13
-            @test abs(result2.displacement[3*(i-1)+2] - 0.002 * pt[3]) < 1e-13
-            @test abs(result2.displacement[3*(i-1)+3] - 0.0005 * pt[1]) < 1e-13
+            @test abs(result2.displacement[1, i] - 0.001 * pt[2]) < 1e-13
+            @test abs(result2.displacement[2, i] - 0.002 * pt[3]) < 1e-13
+            @test abs(result2.displacement[3, i] - 0.0005 * pt[1]) < 1e-13
         end
     end
 
@@ -225,17 +297,39 @@ using SparseArrays
         setup = VEMElasticitySetup(mesh)
         E = fill(1e9, nc)
         nu = fill(0.3, nc)
+        bnodes = boundary_nodes(setup)
 
-        # u_x = 0.001*x, u_y = 0.0005*y
+        # u_x = 0.001*x, u_y = 0.0005*y — set only on boundary nodes
         bc = zeros(2 * nn)
-        for (i, pt) in enumerate(mesh.node_points)
-            bc[2*(i-1)+1] = 0.001 * pt[1]
-            bc[2*(i-1)+2] = 0.0005 * pt[2]
+        for n in bnodes
+            pt = mesh.node_points[n]
+            bc[2*(n-1)+1] = 0.001 * pt[1]
+            bc[2*(n-1)+2] = 0.0005 * pt[2]
         end
         result = solve_vem_elasticity(setup, E, nu, zeros(nc), boundary_displacement = bc)
         for (i, pt) in enumerate(mesh.node_points)
-            @test abs(result.displacement[2*(i-1)+1] - 0.001 * pt[1]) < 1e-13
-            @test abs(result.displacement[2*(i-1)+2] - 0.0005 * pt[2]) < 1e-13
+            @test abs(result.displacement[1, i] - 0.001 * pt[1]) < 1e-13
+            @test abs(result.displacement[2, i] - 0.0005 * pt[2]) < 1e-13
+        end
+    end
+
+    @testset "Boundary side helpers with solve" begin
+        mesh = UnstructuredMesh(CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0)))
+        nc = number_of_cells(mesh)
+        nn = length(mesh.node_points)
+        setup = VEMElasticitySetup(mesh)
+        pts = mesh.node_points
+
+        xmin_nodes = boundary_nodes_on_side(setup, :xmin)
+        @test length(xmin_nodes) > 0
+        for n in xmin_nodes
+            @test abs(pts[n][1]) < 1e-10
+        end
+
+        xmax_nodes = boundary_nodes_on_side(setup, :xmax)
+        @test length(xmax_nodes) > 0
+        for n in xmax_nodes
+            @test abs(pts[n][1] - 1.0) < 1e-10
         end
     end
 end

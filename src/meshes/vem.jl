@@ -1,4 +1,5 @@
 export solve_vem_elasticity, VEMElasticitySetup, assemble_vem_elasticity
+export boundary_nodes, boundary_nodes_on_side
 
 """
     VEMCellData
@@ -213,7 +214,7 @@ displacement at the boundaries (or prescribed nonzero boundary displacement).
 
 # Returns
 A named tuple `(displacement, setup, K, rhs)` where:
-- `displacement`: nodal displacement vector of length `D * num_nodes`.
+- `displacement`: nodal displacement matrix of size `D × num_nodes` (e.g. `3 × N` in 3D).
 - `setup`: the `VEMElasticitySetup` for reuse.
 - `K`: the assembled sparse stiffness matrix.
 - `rhs`: the right-hand side vector.
@@ -228,7 +229,7 @@ result = solve_vem_elasticity(
     fill(0.3, nc),    # Poisson's ratio
     fill(1e6, nc)     # Pressure change
 )
-u = result.displacement
+u = result.displacement  # 3 × num_nodes matrix
 ```
 """
 function solve_vem_elasticity(
@@ -250,16 +251,17 @@ end
 Solve with a precomputed `VEMElasticitySetup` (useful for repeated solves).
 """
 function solve_vem_elasticity(
-    setup::VEMElasticitySetup,
+    setup::VEMElasticitySetup{D},
     youngs_modulus::AbstractVector,
     poisson_ratio::AbstractVector,
     pressure_change::AbstractVector;
     biot_coefficient::Union{Real, AbstractVector} = 1.0,
     boundary_displacement::Union{Nothing, AbstractVector} = nothing
-)
+) where {D}
     K, rhs = assemble_vem_elasticity(setup, youngs_modulus, poisson_ratio, pressure_change;
         biot_coefficient = biot_coefficient, boundary_displacement = boundary_displacement)
-    displacement = K \ rhs
+    u_vec = K \ rhs
+    displacement = reshape(u_vec, D, setup.num_nodes)
     return (displacement = displacement, setup = setup, K = K, rhs = rhs)
 end
 
@@ -534,6 +536,61 @@ function _find_boundary_nodes(mesh::UnstructuredMesh)
         end
     end
     return sort(collect(boundary_nodes))
+end
+
+"""
+    boundary_nodes(setup::VEMElasticitySetup)
+
+Return a sorted vector of global node indices that lie on the boundary of the mesh.
+
+# Example
+```julia
+setup = VEMElasticitySetup(mesh)
+bnodes = boundary_nodes(setup)
+```
+"""
+boundary_nodes(setup::VEMElasticitySetup) = setup.boundary_nodes
+
+"""
+    boundary_nodes_on_side(setup::VEMElasticitySetup, direction::Symbol; tol=1e-10)
+
+Return a sorted vector of boundary node indices that lie on a specific side of
+the bounding box of the mesh. The `direction` symbol must be one of:
+`:xmin`, `:xmax`, `:ymin`, `:ymax` (2D/3D), `:zmin`, `:zmax` (3D only).
+
+An optional tolerance `tol` is used for the coordinate comparison.
+
+# Example
+```julia
+setup = VEMElasticitySetup(mesh)
+# Get boundary nodes on the x=0 face
+left_nodes = boundary_nodes_on_side(setup, :xmin)
+# Get boundary nodes on the y=ymax face
+top_nodes = boundary_nodes_on_side(setup, :ymax)
+```
+"""
+function boundary_nodes_on_side(setup::VEMElasticitySetup{D}, direction::Symbol; tol::Real = 1e-10) where {D}
+    dir_map = Dict(
+        :xmin => (1, minimum),
+        :xmax => (1, maximum),
+        :ymin => (2, minimum),
+        :ymax => (2, maximum),
+        :zmin => (3, minimum),
+        :zmax => (3, maximum)
+    )
+
+    @assert haskey(dir_map, direction) "Unknown direction $direction. Use one of: :xmin, :xmax, :ymin, :ymax" * (D == 3 ? ", :zmin, :zmax" : "")
+    dim_idx, extremum_fn = dir_map[direction]
+    @assert dim_idx <= D "Direction $direction not valid for $(D)D mesh"
+
+    pts = setup.mesh.node_points
+    bnd = setup.boundary_nodes
+
+    # Find the extreme value among boundary nodes in the given dimension
+    ext_val = extremum_fn(pts[n][dim_idx] for n in bnd)
+
+    # Filter boundary nodes that are at this extreme value
+    return sort([n for n in bnd if abs(pts[n][dim_idx] - ext_val) <= tol])
 end
 
 # ============================================================================
