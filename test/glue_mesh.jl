@@ -625,6 +625,8 @@ end
         # Regression test: oblique plane + angle + constant displacement
         # could produce degenerate boundary faces (duplicate nodes from
         # node merging) when two meshes have points close to each other.
+        # These specific angle and displacement values were found to trigger
+        # the bug where node merging collapsed distinct face nodes.
         angle = 1.641552918091964
         cc = 0.12882882882882882
         g = CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0))
