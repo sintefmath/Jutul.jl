@@ -724,12 +724,26 @@ function UnstructuredMesh(G_raw::AbstractDict; kwarg...)
     return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw; kwarg...)
 end
 
-function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = dim(m) == 3)
+function mesh_linesegments(m;
+        cells = nothing,
+        faces = nothing,
+        boundary_faces = nothing,
+        outer = dim(m) == 3 && isnothing(faces) && isnothing(boundary_faces)
+    )
+    if isnothing(cells)
+        cells = 1:number_of_cells(m)
+    end
+    if isnothing(faces)
+        faces = 1:number_of_faces(m)
+    end
+    if isnothing(boundary_faces)
+        boundary_faces = 1:number_of_boundary_faces(m)
+    end
     if !(m isa UnstructuredMesh)
         m = UnstructuredMesh(m)
     end
     nodes = Vector{Tuple{Int, Int}}()
-    for face in 1:number_of_faces(m)
+    for face in faces
         l, r = m.faces.neighbors[face]
         if l > r
             r, l = l, r
@@ -751,7 +765,7 @@ function mesh_linesegments(m; cells = 1:number_of_cells(m), outer = dim(m) == 3)
         end
     end
 
-    for bf in 1:number_of_boundary_faces(m)
+    for bf in boundary_faces
         c = m.boundary_faces.neighbors[bf]
         if c in cells
             prev_node = missing
