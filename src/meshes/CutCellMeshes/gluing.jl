@@ -11,6 +11,8 @@ may be split when only partially overlapping.
 - `tol::Real = 1e-6`: Distance tolerance for merging nodes.
 - `face_tol::Real = 1e-4`: Tolerance for determining if two boundary face
    centroids are close enough to attempt intersection.
+- `coplanar_tol::Real = 1e-3`: Maximum allowed normal-direction distance between
+   two face planes for them to be considered coplanar and eligible for gluing.
 - `area_tol::Real = 1e-10`: Minimum area for a face to be kept.
 - `extra_out::Bool = false`: If `true`, return `(mesh, info)` where `info` is
    a `Dict` with:
@@ -36,6 +38,7 @@ function glue_mesh(
     mesh_b::UnstructuredMesh{3};
     tol::Real = 1e-6,
     face_tol::Real = 1e-4,
+    coplanar_tol::Real = 1e-3,
     area_tol::Real = 1e-10,
     extra_out::Bool = false
 )
@@ -153,10 +156,10 @@ function glue_mesh(
                     dp = bnd_centroids_a[bf_a] - bnd_centroids_b[bf_b]
                     normal_dist = abs(dot(dp, n_avg))
                     tangent_dist = norm(dp - dot(dp, n_avg) * n_avg)
-                    # Accept if the normal separation is at most half the face_tol
+                    # Accept if the normal separation is at most coplanar_tol
                     # (faces that are far apart in the normal direction are on
                     # opposite sides of the domain, not at the gluing interface)
-                    if normal_dist < face_tol / 2
+                    if normal_dist < coplanar_tol
                         push!(candidate_pairs, (bf_a, bf_b))
                     end
                 end
@@ -281,22 +284,8 @@ function glue_mesh(
             continue
         end
 
-        # Project intersection points onto the average plane between the
-        # two face planes so the new interior face lies between the two cells.
-        d_a = sum(dot(p, face_normal) for p in pts_a) / length(pts_a)
-        d_b = sum(dot(p, face_normal) for p in pts_b) / length(pts_b)
-        d_mid = (d_a + d_b) / 2
-
-        isect_3d_mid = SVector{3,T}[]
-        for p2d in isect_2d
-            pt3 = centroid_ab + p2d[1] * u + p2d[2] * v
-            d_pt = dot(pt3, face_normal)
-            pt3 = pt3 + (d_mid - d_pt) * face_normal
-            push!(isect_3d_mid, pt3)
-        end
-
         # Order the intersection polygon and add nodes
-        isect_ordered = order_polygon_points(isect_3d_mid, face_normal)
+        isect_ordered = order_polygon_points(isect_3d, face_normal)
         face_node_ids = Int[find_or_add_node!(pt) for pt in isect_ordered]
 
         # Determine correct left/right orientation.
@@ -826,6 +815,7 @@ the plane but never move them out of it) and preserve cell volumes.
 - `side::Symbol = :positive`: Which side to shift (`:positive` or `:negative`).
 - `tol::Real = 1e-6`: Node-merge tolerance for gluing.
 - `face_tol::Real = 1e-4`: Face centroid proximity tolerance.
+- `coplanar_tol::Real = 1e-3`: Normal-direction coplanarity tolerance for face matching.
 - `area_tol::Real = 1e-10`: Minimum face area to keep.
 - `min_cut_fraction::Real = 0.05`: Passed to `cut_mesh`.
 - `extra_out::Bool = false`: Return mapping information.
@@ -853,6 +843,7 @@ function cut_and_displace_mesh(
     side::Symbol = :positive,
     tol::Real = 1e-6,
     face_tol::Real = 1e-4,
+    coplanar_tol::Real = 1e-3,
     area_tol::Real = 1e-10,
     min_cut_fraction::Real = 0.05,
     extra_out::Bool = false
@@ -929,13 +920,13 @@ function cut_and_displace_mesh(
     # 5. Glue the two halves together
     if side == :positive
         glue_result = glue_mesh(shifted_mesh, mesh_neg;
-            tol = tol, face_tol = face_tol, area_tol = area_tol,
-            extra_out = true
+            tol = tol, face_tol = face_tol, coplanar_tol = coplanar_tol,
+            area_tol = area_tol, extra_out = true
         )
     else
         glue_result = glue_mesh(mesh_pos, shifted_mesh;
-            tol = tol, face_tol = face_tol, area_tol = area_tol,
-            extra_out = true
+            tol = tol, face_tol = face_tol, coplanar_tol = coplanar_tol,
+            area_tol = area_tol, extra_out = true
         )
     end
     glued_mesh, glue_info = glue_result

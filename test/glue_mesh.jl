@@ -581,4 +581,42 @@ end
         end
         @test length(info["new_faces"]) > 0
     end
+
+    @testset "oblique plane: new faces lie on the cut plane" begin
+        # Regression test: with loose coplanarity tolerance, exterior boundary
+        # faces could be wrongly matched, creating faces far from the cut plane.
+        g = CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0))
+        mesh = UnstructuredMesh(g)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+
+        plane = PlaneCut([0.5, 0.5, 0.5], [1.0, 0.2, 0.1])
+        n_hat = normalize(plane.normal)
+        result, info = cut_and_displace_mesh(mesh, plane;
+            constant = 0.3, side = :positive,
+            extra_out = true,
+            tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
+        )
+
+        geo = tpfv_geometry(result)
+        @test all(geo.volumes .> 0)
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
+
+        # All new interface faces must be very close to the cut plane
+        for f in info["new_faces"]
+            nodes_idx = result.faces.faces_to_nodes[f]
+            pts = [result.node_points[n] for n in nodes_idx]
+            face_center = sum(pts) / length(pts)
+            d_plane = dot(face_center - plane.point, n_hat)
+            @test abs(d_plane) < 1e-10
+        end
+
+        # Normal consistency
+        for f in 1:number_of_faces(result)
+            l, r = result.faces.neighbors[f]
+            cl = geo.cell_centroids[:, l]
+            cr = geo.cell_centroids[:, r]
+            N = geo.normals[:, f]
+            @test dot(N, cr - cl) > 0
+        end
+    end
 end
