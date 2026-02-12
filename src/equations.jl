@@ -72,7 +72,21 @@ function find_jac_position(
     ) where T<:BlockMajorLayout
 
     N = partials_per_entity
-    @assert eqs_per_entity == partials_per_entity "For block major layout, number of equations per entity must be equal to number of partials per entity. eqs_per_entity = $eqs_per_entity, partials_per_entity = $partials_per_entity"
+    if eqs_per_entity < partials_per_entity
+        if target_entity_offset != 0
+            # This happens when we have a block layout with several equation
+            # groups making up the block but some of the groups have fewer
+            # equations than the number of partials per entity. In that case, we
+            # need to adjust the offsets and indices to make sure we are looking
+            # at the right block. TODO: This needs some double checking...
+            n, _ = fldmod1(target_entity_offset + 1, nentities_target)
+            # Now we are really inside the block! Reset the target entity offset
+            # and adjust the equation index to point to the right place inside
+            # the block.
+            target_entity_offset = 0
+            equation_index = equation_index + n - 1
+        end
+    end
 
     row_base = row_offset
     col_base = column_offset
