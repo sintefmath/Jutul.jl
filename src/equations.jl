@@ -79,12 +79,12 @@ function find_jac_position(
             # equations than the number of partials per entity. In that case, we
             # need to adjust the offsets and indices to make sure we are looking
             # at the right block. TODO: This needs some double checking...
-            n, _ = fldmod1(target_entity_offset + 1, nentities_target)
+            n = fld(target_entity_offset, nentities_target)
             # Now we are really inside the block! Reset the target entity offset
             # and adjust the equation index to point to the right place inside
             # the block.
             target_entity_offset = 0
-            equation_index = equation_index + n - 1
+            equation_index = equation_index + n
         end
     end
 
