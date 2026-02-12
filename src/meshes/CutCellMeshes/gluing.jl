@@ -101,13 +101,24 @@ function glue_mesh(
     end
 
     # For each boundary face, compute its node set in combined numbering
+    # and remove consecutive duplicate nodes introduced by node merging.
     bnd_a_nodes_combined = Vector{Vector{Int}}(undef, nb_a)
+    degenerate_a = falses(nb_a)
     for bf in 1:nb_a
-        bnd_a_nodes_combined[bf] = [node_map_a[n] for n in mesh_a.boundary_faces.faces_to_nodes[bf]]
+        raw = [node_map_a[n] for n in mesh_a.boundary_faces.faces_to_nodes[bf]]
+        bnd_a_nodes_combined[bf] = _deduplicate_face_nodes(raw)
+        if length(unique(bnd_a_nodes_combined[bf])) < 3
+            degenerate_a[bf] = true
+        end
     end
     bnd_b_nodes_combined = Vector{Vector{Int}}(undef, nb_b)
+    degenerate_b = falses(nb_b)
     for bf in 1:nb_b
-        bnd_b_nodes_combined[bf] = [node_map_b[n] for n in mesh_b.boundary_faces.faces_to_nodes[bf]]
+        raw = [node_map_b[n] for n in mesh_b.boundary_faces.faces_to_nodes[bf]]
+        bnd_b_nodes_combined[bf] = _deduplicate_face_nodes(raw)
+        if length(unique(bnd_b_nodes_combined[bf])) < 3
+            degenerate_b[bf] = true
+        end
     end
 
     # Find candidate pairs by centroid proximity.
@@ -144,7 +155,13 @@ function glue_mesh(
 
     candidate_pairs = Tuple{Int,Int}[]
     for bf_a in 1:nb_a
+        if degenerate_a[bf_a]
+            continue
+        end
         for bf_b in 1:nb_b
+            if degenerate_b[bf_b]
+                continue
+            end
             if norm(bnd_centroids_a[bf_a] - bnd_centroids_b[bf_b]) < face_tol
                 # Require normals to be approximately anti-parallel
                 # (dot product < 0 means they face each other)
@@ -332,12 +349,16 @@ function glue_mesh(
     consumed_a = falses(nb_a)
     consumed_b = falses(nb_b)
     for bf in 1:nb_a
-        if original_area_a[bf] > area_tol && consumed_area_a[bf] >= original_area_a[bf] * (1 - 1e-4)
+        if degenerate_a[bf]
+            consumed_a[bf] = true
+        elseif original_area_a[bf] > area_tol && consumed_area_a[bf] >= original_area_a[bf] * (1 - 1e-4)
             consumed_a[bf] = true
         end
     end
     for bf in 1:nb_b
-        if original_area_b[bf] > area_tol && consumed_area_b[bf] >= original_area_b[bf] * (1 - 1e-4)
+        if degenerate_b[bf]
+            consumed_b[bf] = true
+        elseif original_area_b[bf] > area_tol && consumed_area_b[bf] >= original_area_b[bf] * (1 - 1e-4)
             consumed_b[bf] = true
         end
     end
@@ -356,8 +377,10 @@ function glue_mesh(
             )
             if !isempty(residuals)
                 for rpoly in residuals
-                    rnodes = Int[find_or_add_node!(pt) for pt in rpoly]
-                    add_boundary_face!(rnodes, cell; old_a = bf)
+                    rnodes = _deduplicate_face_nodes(Int[find_or_add_node!(pt) for pt in rpoly])
+                    if length(unique(rnodes)) >= 3
+                        add_boundary_face!(rnodes, cell; old_a = bf)
+                    end
                 end
                 consumed_a[bf] = true
             end
@@ -376,8 +399,10 @@ function glue_mesh(
             )
             if !isempty(residuals)
                 for rpoly in residuals
-                    rnodes = Int[find_or_add_node!(pt) for pt in rpoly]
-                    add_boundary_face!(rnodes, cell + cell_offset_b; old_b = bf)
+                    rnodes = _deduplicate_face_nodes(Int[find_or_add_node!(pt) for pt in rpoly])
+                    if length(unique(rnodes)) >= 3
+                        add_boundary_face!(rnodes, cell + cell_offset_b; old_b = bf)
+                    end
                 end
                 consumed_b[bf] = true
             end
@@ -732,6 +757,31 @@ function _split_polygon_by_line_2d(
         end
     end
     return (inside, outside)
+end
+
+"""
+    _deduplicate_face_nodes(nodes)
+
+Remove consecutive duplicate node indices from a face node list, including
+wrap-around (last == first). Returns a new vector. Faces with fewer than 3
+unique nodes after deduplication are degenerate.
+"""
+function _deduplicate_face_nodes(nodes::Vector{Int})
+    n = length(nodes)
+    if n == 0
+        return nodes
+    end
+    result = Int[nodes[1]]
+    for i in 2:n
+        if nodes[i] != result[end]
+            push!(result, nodes[i])
+        end
+    end
+    # Check wrap-around: if last == first, remove the last
+    while length(result) > 1 && result[end] == result[1]
+        pop!(result)
+    end
+    return result
 end
 
 """

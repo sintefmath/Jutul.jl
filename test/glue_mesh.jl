@@ -620,4 +620,41 @@ end
             @test dot(N, cr - cl) > 0
         end
     end
+
+    @testset "no degenerate sliver faces with close nodes" begin
+        # Regression test: oblique plane + angle + constant displacement
+        # could produce degenerate boundary faces (duplicate nodes from
+        # node merging) when two meshes have points close to each other.
+        angle = 1.641552918091964
+        cc = 0.12882882882882882
+        g = CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.5, 0.5, 0.5], [1.0, 0.2, 0.1])
+        result, info = cut_and_displace_mesh(mesh, plane;
+            constant = cc,
+            side = :positive,
+            face_tol = 100.0,
+            coplanar_tol = 1e-2,
+            area_tol = 0.0,
+            angle = angle,
+            extra_out = true,
+            min_cut_fraction = 0.0
+        )
+
+        geo = tpfv_geometry(result)
+        @test all(geo.volumes .> 0)
+
+        # No boundary face should have fewer than 3 unique nodes
+        for f in 1:number_of_boundary_faces(result)
+            nodes_idx = collect(result.boundary_faces.faces_to_nodes[f])
+            @test length(unique(nodes_idx)) >= 3
+        end
+
+        # No interior face should have fewer than 3 unique nodes
+        for f in 1:number_of_faces(result)
+            nodes_idx = collect(result.faces.faces_to_nodes[f])
+            @test length(unique(nodes_idx)) >= 3
+        end
+    end
 end
