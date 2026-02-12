@@ -195,14 +195,14 @@ function Jutul.plot_mesh_edges_impl!(ax, m;
         transparency = true,
         color = :black,
         cells = nothing,
-        outer = dim(m) == 3,
+        faces = nothing,
+        boundary_faces = nothing,
+        outer = dim(m) == 3 && isnothing(faces) && isnothing(boundary_faces),
         linewidth = 0.3,
-        kwarg...)
+        kwarg...
+    )
     m = physical_representation(m)
-    if isnothing(cells)
-        cells = 1:number_of_cells(m)
-    end
-    s = Jutul.mesh_linesegments(m, cells = cells, outer = outer)
+    s = Jutul.mesh_linesegments(m, cells = cells, faces = faces, boundary_faces = boundary_faces, outer = outer)
     f = linesegments!(ax, s; linewidth = linewidth, transparency = transparency, color = color, kwarg...)
     return f
 end
