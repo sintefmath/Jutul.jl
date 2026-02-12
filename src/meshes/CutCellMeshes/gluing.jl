@@ -284,7 +284,11 @@ function glue_mesh(
             continue
         end
 
-        # Order the intersection polygon and add nodes
+        # Order the intersection polygon and add nodes.
+        # The 3D reconstruction via centroid_ab + u,v is already at the
+        # correct height: centroid_ab lies on the average of the two face
+        # planes, and the coplanar_tol check guarantees those planes are
+        # nearly identical, so no further projection is needed.
         isect_ordered = order_polygon_points(isect_3d, face_normal)
         face_node_ids = Int[find_or_add_node!(pt) for pt in isect_ordered]
 

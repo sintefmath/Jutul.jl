@@ -488,7 +488,8 @@ end
 
         result = cut_and_displace_mesh(mesh, plane;
             constant = 0.0, side = :positive,
-            tol = 1e-8, face_tol = 1.5, min_cut_fraction = 0.01,
+            tol = 1e-8, face_tol = 1.5, coplanar_tol = 1e-4,
+            min_cut_fraction = 0.01,
             area_tol = 1e-12
         )
 
