@@ -96,23 +96,17 @@ function find_jac_position(
 
     row = target_entity_offset + target_entity_index + row_base
     col = source_entity_offset + source_entity_index + col_base
-    
-    inner_layout = EntityMajorLayout()
-    
-    # partial_index += (source_entity_offset ÷ nentities_source)
-    # equation_index += (target_entity_offset ÷ nentities_target)
 
     adjoint_layout = represented_as_adjoint(row_layout)
     block_matrix_length = N*N
     if adjoint_layout
         @assert represented_as_adjoint(col_layout)
-        inner_layout = adjoint(inner_layout)
-        pos = find_sparse_position(A, row, col)#, inner_layout)
+        pos = find_sparse_position(A, row, col)
         base_ix = (pos-1)*block_matrix_length
         # TODO: Check this.
         ix = base_ix + N*(equation_index-1) + partial_index# + offset
     else
-        pos = find_sparse_position(A, row, col)#, inner_layout)
+        pos = find_sparse_position(A, row, col)
         base_ix = (pos-1)*block_matrix_length
         ix = base_ix + N*(partial_index-1) + equation_index# + offset
     end
