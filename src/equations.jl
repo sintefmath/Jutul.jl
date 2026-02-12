@@ -71,21 +71,17 @@ function find_jac_position(
         number_of_equations_for_entity = eqs_per_entity
     ) where T<:BlockMajorLayout
 
-    # @assert source_entity_offset == 0 "Expected source_entity_offset == 0 for BlockMajorLayout, got $source_entity_offset"
-    # TODO: The use of N needs reworking if backend is to be used for
-    # rectangular blocks.
     N = partials_per_entity
+    @assert eqs_per_entity == partials_per_entity "For block major layout, number of equations per entity must be equal to number of partials per entity. eqs_per_entity = $eqs_per_entity, partials_per_entity = $partials_per_entity"
 
-    # source_entity_offset = target_entity_offset = 0
-
-    row_base = target_entity_offset + row_offset
-    col_base = source_entity_offset + column_offset
+    row_base = row_offset
+    col_base = column_offset
 
     row_base = row_base ÷ N
     col_base = col_base ÷ N
 
-    row = target_entity_index + row_base
-    col = source_entity_index + col_base
+    row = target_entity_offset + target_entity_index + row_base
+    col = source_entity_offset + source_entity_index + col_base
     
     inner_layout = EntityMajorLayout()
     
