@@ -239,8 +239,24 @@ function box_bfgs(x0, f, lb, ub; kwarg...)
         return (obj, g)
     end
 
+    function transform_constraints(constraints)
+        A_transformed = constraints.A .* reshape(δ, 1, :)
+        b_transformed = constraints.b .- constraints.A * lb
+        return (A = A_transformed, b = b_transformed)
+    end
+
+    # Transform linear constraints to unit box
+    modified_kwarg = Dict()
+    if haskey(kwarg, :lin_eq)
+        modified_kwarg[:lin_eq] = transform_constraints(kwarg[:lin_eq])
+    end
+    if haskey(kwarg, :lin_ineq)
+        modified_kwarg[:lin_ineq] = transform_constraints(kwarg[:lin_ineq])
+    end
+    modified_kwarg = merge(kwarg, modified_kwarg)
+
     u0 = x_to_u(x0)
-    v, u, history = unit_box_bfgs(u0, F; kwarg...)
+    v, u, history = unit_box_bfgs(u0, F; modified_kwarg...)
     x = u_to_x(u)
     return (v, x, history)
 end

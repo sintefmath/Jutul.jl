@@ -58,3 +58,41 @@ end
     v, x, history = box_bfgs(x0, f!, lb, ub; maximize = true, print = 0)
     @test history.val[end] < 160
 end
+
+@testset "LBFGS linear constraints" begin
+    # Equality constraint
+    n = 4
+    lb = repeat([-100.0], n)
+    ub = repeat([100.0], n)
+    x0 = [3.0, 1.0, 1.0, 1.0]
+    A = [1.0, -1.0, -1.0, -1.0]'
+    lin_eq = (A = A, b = [0.0])
+    f! = (u) -> Rosenbrock(u, lb, ub, n, scale = false)
+    v, x, history = box_bfgs(x0, f!, lb, ub; lin_eq = lin_eq, maximize = false, print = 0)
+    @test x[1] ≈ sum(x[2:end])
+
+    x0 = [3.0, 3.0, 2.0, 1.0]
+    A = [1.0 -1.0 0.0 0.0;
+         0.0 0.0 1.0 -1.0]
+    lin_eq = (A = A, b = [0.0, 1.0])
+    v, x, history = box_bfgs(x0, f!, lb, ub; lin_eq = lin_eq, maximize = false, print = 0)
+    @test x[1] ≈ x[2]
+    @test x[3] ≈ x[4] + lin_eq.b[2]
+
+    # Inequality constraint
+    n = 2
+    lb = repeat([-100.0], n)
+    ub = repeat([100.0], n)
+    x0 = [1.0, 5.0]
+    A = [0.8, -1.0]'
+    lin_ineq = (A = A, b = [0.0])
+    f! = (u) -> Rosenbrock(u, lb, ub, n, scale = false)
+    v, x, history = box_bfgs(x0, f!, lb, ub; lin_ineq = lin_ineq, maximize = false, print = 0)
+    @test 0.8 * x[1] - x[2] <= 1e-5
+
+    x0 = [10.0, 2.0]
+    A = [-1.0, 2.0]'
+    lin_ineq = (A = A, b = [-5.0])
+    v, x, history = box_bfgs(x0, f!, lb, ub; lin_ineq = lin_ineq, maximize = false, print = 0)
+    @test -1.0 * x[1] + 2.0 * x[2] <= lin_ineq.b[1] + 1e-5
+end
