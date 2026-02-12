@@ -270,16 +270,13 @@ function align_equations_subgroup!(storage, models, model_keys, dims, J, equatio
     end
 end
 
-function local_group_offset(keys, target_key, ndofs, bz = nothing)
+function local_group_offset(keys, target_key, ndofs)
     offset = 0
     for k in keys
         if k == target_key
             return offset
         end
         ndof = ndofs[k]
-        if !isnothing(bz)
-            ndof = Int(ndof/bz[k])
-        end
         offset += ndof
     end
     error("Should not happen")

@@ -372,10 +372,9 @@ function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source
     target_model = model[target]
     ndofs = sub_number_of_degrees_of_freedom(model)
     neqs = sub_number_of_equations(model)
-    bz = sub_block_sizes(model)
     # Diagonal part: Into target equation, and with respect to target variables
-    row_offset = local_group_offset(target_keys, target, neqs, bz)
-    column_offset = local_group_offset(target_keys, target, ndofs, bz)
+    row_offset = local_group_offset(target_keys, target, neqs)
+    column_offset = local_group_offset(target_keys, target, ndofs)
 
     equation_offset += get_equation_offset(target_model, eq_label)
     for target_e in get_primary_variable_ordered_entities(target_model)
@@ -394,12 +393,9 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     J = lsys.jac
     ndofs = sub_number_of_degrees_of_freedom(model)
     neqs = sub_number_of_equations(model)
-    bz = sub_block_sizes(model)
     # Diagonal part: Into target equation, and with respect to target variables
-    # equation_offset += local_group_offset(target_keys, target, neqs, bz)
-    # variable_offset += local_group_offset(source_keys, source, ndofs, bz)
-    row_offset = local_group_offset(target_keys, target, neqs, bz)
-    column_offset = local_group_offset(source_keys, source, ndofs, bz)
+    row_offset = local_group_offset(target_keys, target, neqs)
+    column_offset = local_group_offset(source_keys, source, ndofs)
 
     target_model = model[target]
     source_model = model[source]

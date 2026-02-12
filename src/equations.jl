@@ -71,29 +71,43 @@ function find_jac_position(
         number_of_equations_for_entity = eqs_per_entity
     ) where T<:BlockMajorLayout
 
-    @assert source_entity_offset == 0
-    # TODO: The use of N needs reworking if backend is to be used for
-    # rectangular blocks.
     N = partials_per_entity
+    if eqs_per_entity < partials_per_entity
+        if target_entity_offset != 0
+            # This happens when we have a block layout with several equation
+            # groups making up the block but some of the groups have fewer
+            # equations than the number of partials per entity. In that case, we
+            # need to adjust the offsets and indices to make sure we are looking
+            # at the right block. TODO: This needs some double checking...
+            n = fld(target_entity_offset, nentities_target)
+            # Now we are really inside the block! Reset the target entity offset
+            # and adjust the equation index to point to the right place inside
+            # the block.
+            target_entity_offset = 0
+            equation_index = equation_index + n
+        end
+    end
 
-    row = target_entity_index + row_offset
-    col = source_entity_index + column_offset
-    inner_layout = EntityMajorLayout()
-    
-    partial_index += (source_entity_offset ÷ nentities_source)
-    equation_index += (target_entity_offset ÷ nentities_target)
+    row_base = row_offset
+    col_base = column_offset
+
+    row_base = row_base ÷ N
+    col_base = col_base ÷ N
+
+    row = target_entity_offset + target_entity_index + row_base
+    col = source_entity_offset + source_entity_index + col_base
 
     adjoint_layout = represented_as_adjoint(row_layout)
+    block_matrix_length = N*N
     if adjoint_layout
         @assert represented_as_adjoint(col_layout)
-        inner_layout = adjoint(inner_layout)
-        pos = find_sparse_position(A, row, col, inner_layout)
-        base_ix = (pos-1)*N*N
+        pos = find_sparse_position(A, row, col)
+        base_ix = (pos-1)*block_matrix_length
         # TODO: Check this.
         ix = base_ix + N*(equation_index-1) + partial_index# + offset
     else
-        pos = find_sparse_position(A, row, col, inner_layout)
-        base_ix = (pos-1)*N*N
+        pos = find_sparse_position(A, row, col)
+        base_ix = (pos-1)*block_matrix_length
         ix = base_ix + N*(partial_index-1) + equation_index# + offset
     end
 
