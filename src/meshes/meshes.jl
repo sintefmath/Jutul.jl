@@ -313,3 +313,6 @@ end
 
 include("RadialMeshes/RadialMeshes.jl")
 
+# Virtual Element Method for linear elasticity
+include("vem.jl")
+
