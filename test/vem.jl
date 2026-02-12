@@ -203,7 +203,7 @@ using SparseArrays
             @test abs(result.displacement[3*(i-1)+3]) < 1e-14
         end
 
-        # Test 2: u_x = 0.001*y, u_y = 0.002*z, u_z = 0.0005*x (mixed linear)
+        # Mixed linear displacement: u_x = 0.001*y, u_y = 0.002*z, u_z = 0.0005*x
         bc2 = zeros(3 * nn)
         for (i, pt) in enumerate(mesh.node_points)
             bc2[3*(i-1)+1] = 0.001 * pt[2]

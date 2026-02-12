@@ -1045,7 +1045,7 @@ function _add_face_pressure_contribution!(rhs, node_indices, pts, area_normal_ve
         end
         fc ./= nfn
 
-        # Unit normal direction (for weighting)
+        # Unit normal direction
         nn = norm(area_normal_vec)
         if nn < eps(Float64)
             return
