@@ -27,7 +27,7 @@ end
 Precomputed setup data for VEM linear elasticity. Created once from a mesh
 and reused for multiple solves with different material parameters.
 """
-struct VEMElasticitySetup{D}
+struct VEMElasticitySetup{D, M}
     "Spatial dimension"
     dim::Int
     "Number of nodes in the mesh"
@@ -38,6 +38,8 @@ struct VEMElasticitySetup{D}
     cell_data::Vector{VEMCellData}
     "Indices of boundary nodes (unique, sorted)"
     boundary_nodes::Vector{Int}
+    "Reference to the mesh (needed for face-based pressure RHS assembly)"
+    mesh::M
 end
 
 """
@@ -61,24 +63,30 @@ function VEMElasticitySetup(mesh::UnstructuredMesh)
     # Identify boundary nodes
     boundary_nodes = _find_boundary_nodes(mesh)
 
-    return VEMElasticitySetup{D}(D, nn, nc, cell_data, boundary_nodes)
+    return VEMElasticitySetup{D, typeof(mesh)}(D, nn, nc, cell_data, boundary_nodes, mesh)
 end
 
 """
-    assemble_vem_elasticity(setup, youngs_modulus, poisson_ratio, pressure_change; biot_coefficient=1.0)
+    assemble_vem_elasticity(setup, youngs_modulus, poisson_ratio, pressure_change; biot_coefficient=1.0, boundary_displacement=nothing)
 
 Assemble the VEM linear elasticity system (stiffness matrix and RHS) for given
 per-cell material properties and pressure change.
 
 Returns `(K, rhs)` where `K` is the sparse stiffness matrix and `rhs` is the
 right-hand side vector, both with boundary conditions applied.
+
+# Keyword arguments
+- `biot_coefficient`: Biot coefficient (scalar or per-cell vector), default 1.0.
+- `boundary_displacement`: If `nothing` (default), zero displacement on all boundary nodes.
+  If a vector of length `D * num_nodes`, the values at boundary DOFs are used as prescribed displacement.
 """
 function assemble_vem_elasticity(
     setup::VEMElasticitySetup{D},
     youngs_modulus::AbstractVector,
     poisson_ratio::AbstractVector,
     pressure_change::AbstractVector;
-    biot_coefficient::Union{Real, AbstractVector} = 1.0
+    biot_coefficient::Union{Real, AbstractVector} = 1.0,
+    boundary_displacement::Union{Nothing, AbstractVector} = nothing
 ) where {D}
     nc = setup.num_cells
     nn = setup.num_nodes
@@ -120,17 +128,44 @@ function assemble_vem_elasticity(
                 end
             end
         end
-
-        # Compute body force from pressure change and scatter to global RHS
-        # Body force = -biot * grad(p) ≈ distributed via VEM face integration
-        _add_pressure_bodyforce!(rhs, cd, biot[cell] * pressure_change[cell], D)
     end
 
-    # Determine boundary DOFs
+    # Assemble pressure RHS using face-based approach
+    _assemble_pressure_rhs!(rhs, setup, pressure_change, biot, D)
+
+    # Determine boundary DOFs and prescribed values
     bnd_dof_set = Set{Int}()
+    bnd_dof_vals = Dict{Int, Float64}()
     for node in setup.boundary_nodes
         for d in 1:D
-            push!(bnd_dof_set, D * (node - 1) + d)
+            dof = D * (node - 1) + d
+            push!(bnd_dof_set, dof)
+            if boundary_displacement !== nothing
+                bnd_dof_vals[dof] = boundary_displacement[dof]
+            else
+                bnd_dof_vals[dof] = 0.0
+            end
+        end
+    end
+
+    # Build the full (unconstrained) stiffness matrix first to compute
+    # RHS modification for nonzero BC
+    K_full = sparse(I_idx, J_idx, V_val, ndof, ndof)
+
+    # Modify RHS for nonzero boundary displacement:
+    # For each boundary DOF j with prescribed value u_j,
+    # subtract K[:,j] * u_j from the RHS for interior DOFs
+    for (dof, val) in bnd_dof_vals
+        if val != 0.0
+            col = K_full[:, dof]
+            rows = rowvals(col)
+            vals = nonzeros(col)
+            for k in eachindex(rows)
+                row = rows[k]
+                if !(row in bnd_dof_set)
+                    rhs[row] -= vals[k] * val
+                end
+            end
         end
     end
 
@@ -147,12 +182,12 @@ function assemble_vem_elasticity(
             push!(V_final, V_val[k])
         end
     end
-    # Add identity for boundary DOFs
-    for dof in bnd_dof_set
+    # Add identity for boundary DOFs with prescribed values
+    for (dof, val) in bnd_dof_vals
         push!(I_final, dof)
         push!(J_final, dof)
         push!(V_final, 1.0)
-        rhs[dof] = 0.0
+        rhs[dof] = val
     end
 
     # Assemble sparse matrix
@@ -162,10 +197,10 @@ function assemble_vem_elasticity(
 end
 
 """
-    solve_vem_elasticity(mesh, youngs_modulus, poisson_ratio, pressure_change; biot_coefficient=1.0)
+    solve_vem_elasticity(mesh, youngs_modulus, poisson_ratio, pressure_change; biot_coefficient=1.0, boundary_displacement=nothing)
 
 Solve the VEM linear elasticity problem on an UnstructuredMesh with zero
-displacement at the boundaries.
+displacement at the boundaries (or prescribed nonzero boundary displacement).
 
 # Arguments
 - `mesh::UnstructuredMesh`: The mesh to solve on.
@@ -173,6 +208,8 @@ displacement at the boundaries.
 - `poisson_ratio::AbstractVector`: Poisson's ratio per cell.
 - `pressure_change::AbstractVector`: Pressure change per cell.
 - `biot_coefficient`: Biot coefficient (scalar or per-cell vector), default 1.0.
+- `boundary_displacement`: If `nothing` (default), zero displacement on all boundary nodes.
+  If a vector of length `D * num_nodes`, the values at boundary DOFs are used as prescribed displacement.
 
 # Returns
 A named tuple `(displacement, setup, K, rhs)` where:
@@ -199,14 +236,16 @@ function solve_vem_elasticity(
     youngs_modulus::AbstractVector,
     poisson_ratio::AbstractVector,
     pressure_change::AbstractVector;
-    biot_coefficient::Union{Real, AbstractVector} = 1.0
+    biot_coefficient::Union{Real, AbstractVector} = 1.0,
+    boundary_displacement::Union{Nothing, AbstractVector} = nothing
 )
     setup = VEMElasticitySetup(mesh)
-    return solve_vem_elasticity(setup, youngs_modulus, poisson_ratio, pressure_change; biot_coefficient = biot_coefficient)
+    return solve_vem_elasticity(setup, youngs_modulus, poisson_ratio, pressure_change;
+        biot_coefficient = biot_coefficient, boundary_displacement = boundary_displacement)
 end
 
 """
-    solve_vem_elasticity(setup, youngs_modulus, poisson_ratio, pressure_change; biot_coefficient=1.0)
+    solve_vem_elasticity(setup, youngs_modulus, poisson_ratio, pressure_change; biot_coefficient=1.0, boundary_displacement=nothing)
 
 Solve with a precomputed `VEMElasticitySetup` (useful for repeated solves).
 """
@@ -215,9 +254,11 @@ function solve_vem_elasticity(
     youngs_modulus::AbstractVector,
     poisson_ratio::AbstractVector,
     pressure_change::AbstractVector;
-    biot_coefficient::Union{Real, AbstractVector} = 1.0
+    biot_coefficient::Union{Real, AbstractVector} = 1.0,
+    boundary_displacement::Union{Nothing, AbstractVector} = nothing
 )
-    K, rhs = assemble_vem_elasticity(setup, youngs_modulus, poisson_ratio, pressure_change; biot_coefficient = biot_coefficient)
+    K, rhs = assemble_vem_elasticity(setup, youngs_modulus, poisson_ratio, pressure_change;
+        biot_coefficient = biot_coefficient, boundary_displacement = boundary_displacement)
     displacement = K \ rhs
     return (displacement = displacement, setup = setup, K = K, rhs = rhs)
 end
@@ -329,25 +370,21 @@ function _compute_outward_normals_3d!(normals, face_nodes, coords, mesh, cell)
         normals[:, fi] .= normal
     end
 
-    # Check orientation: normals should point outward
-    # Compute cell center (average of all face centroids)
+    # Check orientation per face: each normal should point outward from the cell
+    # Compute cell center (average of all node coordinates)
+    num_nodes = size(coords, 2)
     cell_center = zeros(3)
-    for fi in 1:nfaces
-        cell_center .+= face_centroids[:, fi]
+    for i in 1:num_nodes
+        cell_center .+= coords[:, i]
     end
-    cell_center ./= nfaces
+    cell_center ./= num_nodes
 
-    # Check if normals point outward by checking dot product with vector from
-    # cell center to face centroid
-    dot_sum = 0.0
+    # Flip individual normals that point inward
     for fi in 1:nfaces
         v = face_centroids[:, fi] .- cell_center
-        dot_sum += dot(v, normals[:, fi])
-    end
-
-    # If the sum is negative, flip all normals
-    if dot_sum < 0
-        normals .*= -1
+        if dot(v, normals[:, fi]) < 0
+            normals[:, fi] .*= -1
+        end
     end
 end
 
@@ -375,20 +412,19 @@ function _compute_outward_normals_2d!(normals, face_nodes, coords, mesh, cell)
         normals[:, fi] .= normal
     end
 
-    # Check orientation
+    # Check orientation per face
+    num_nodes = size(coords, 2)
     cell_center = zeros(2)
-    for fi in 1:nfaces
-        cell_center .+= face_centroids[:, fi]
+    for i in 1:num_nodes
+        cell_center .+= coords[:, i]
     end
-    cell_center ./= nfaces
+    cell_center ./= num_nodes
 
-    dot_sum = 0.0
     for fi in 1:nfaces
         v = face_centroids[:, fi] .- cell_center
-        dot_sum += dot(v, normals[:, fi])
-    end
-    if dot_sum < 0
-        normals .*= -1
+        if dot(v, normals[:, fi]) < 0
+            normals[:, fi] .*= -1
+        end
     end
 end
 
@@ -537,24 +573,27 @@ end
 Compute q-values for 2D (related to VBF integrals over edges).
 q_i = 1/(2A) ∫_∂E φ_i n dA
 
-For 2D: q is a (num_nodes × 2) matrix stored as flat vector.
+For 2D: q is a (num_nodes × 2) matrix.
+For each edge, ∫_edge φ_i n dA = (edge_length/2) * n for each of the 2 endpoint nodes.
 """
-function _compute_q_2d(coords, face_nodes, volume)
+function _compute_q_2d(coords, face_nodes, outward_normals, volume)
     num_nodes = size(coords, 2)
     q = zeros(num_nodes, 2)
-    fac = 1.0 / (4.0 * volume)  # 1/(2*2*area) since we distribute to two nodes
+    fac = 1.0 / (2.0 * volume)
 
     for fi in eachindex(face_nodes)
         fn = face_nodes[fi]
         @assert length(fn) == 2
         i = fn[1]
         inext = fn[2]
-        # Scaled normal (not unit normal, but edge-length scaled)
-        scaled_normal = [coords[2, inext] - coords[2, i],
-                        -(coords[1, inext] - coords[1, i])]
+        # Edge length
+        edge_len = norm(coords[:, inext] .- coords[:, i])
+        # Area-weighted normal = edge_length * unit_outward_normal
+        # Each endpoint gets half the integral
         for d in 1:2
-            q[i, d] += fac * scaled_normal[d]
-            q[inext, d] += fac * scaled_normal[d]
+            contrib = fac * (edge_len / 2.0) * outward_normals[d, fi]
+            q[i, d] += contrib
+            q[inext, d] += contrib
         end
     end
     return q
@@ -803,7 +842,7 @@ function _assemble_local_stiffness(cd::VEMCellData, young::Float64, poisson::Flo
 
     # Compute q-values
     if D_dim == 2
-        q = _compute_q_2d(coords, face_nodes, volume)
+        q = _compute_q_2d(coords, face_nodes, outward_normals, volume)
     else
         q = _compute_q_3d(coords, face_nodes, outward_normals, volume)
     end
@@ -840,117 +879,204 @@ function _assemble_local_stiffness(cd::VEMCellData, young::Float64, poisson::Flo
 end
 
 """
-Distribute the body force from pressure change to the global RHS vector.
-For a cell with pressure change dp and Biot coefficient α:
-  body_force = -α * ∇p → distributed to nodes via VEM face integration
+Assemble the pressure contribution to the RHS using face-based approach.
 
-The contribution from a cell to node i in direction d is:
-  f_d = α * dp * (volume of region associated with node i in direction d)
+For piecewise-constant pressure, the weak form contribution is:
+  rhs_i = −∑_f α·(p_L − p_R)·∫_f φ_i n dA     (interior faces)
+        − ∑_f α·p·∫_f φ_i n dA                   (boundary faces)
 
-Using VEM: this is equivalent to -α * dp * 2 * q_i[d] * volume
-(since q_i = 1/(2V) ∫ φ_i n dA, the integral ∫ φ_i dV in direction d
-relates to the face integrals).
+This correctly gives zero RHS when pressure is uniform, because p_L == p_R
+on every interior face cancels exactly, and boundary face contributions 
+cancel by the divergence theorem (∑_bnd_faces ∫_f n dA = 0 for each node's
+"share" when pressure is constant).
 
-More precisely, the pressure gradient contribution is:
-  rhs_id = -biot * dp * ∫_∂E φ_i n_d dA = -biot * dp * 2V * q_id
+Actually for the VEM formulation with piecewise-constant pressure in cells,
+the body force from pressure in a cell is:
+  f = -α * ∇p * V ≈ -α * ∑_faces (p_face * n * A_face)
+where the sum is over cell faces with outward normals.
+
+The face-based assembly distributes -α*p*∫_f φ_i n dA for each face,
+where the sign accounts for which cell "owns" the normal direction.
+For interior faces shared by cells L and R:
+  - Cell L sees outward normal n_f, contributes -α_L * p_L * ∫_f φ_i n dA
+  - Cell R sees outward normal -n_f, contributes +α_R * p_R * ∫_f φ_i n dA
+  => net = -∫_f φ_i n dA * (α_L * p_L - α_R * p_R)
+When p_L == p_R and α_L == α_R, this is zero.
+
+For boundary faces, only one cell contributes.
 """
-function _add_pressure_bodyforce!(rhs, cd::VEMCellData, biot_dp, D_dim)
-    if biot_dp == 0.0
-        return
-    end
+function _assemble_pressure_rhs!(rhs, setup::VEMElasticitySetup{D}, pressure_change, biot, D_dim) where {D}
+    mesh = setup.mesh
+    pts = mesh.node_points
 
-    coords = cd.coordinates
-    face_nodes = cd.face_nodes
-    outward_normals = cd.outward_normals
-    volume = cd.volume
-    num_nodes = length(cd.node_indices)
+    # Process interior faces
+    nf = number_of_faces(mesh)
+    for face in 1:nf
+        L, R = mesh.faces.neighbors[face]
+        biot_dp_L = biot[L] * pressure_change[L]
+        biot_dp_R = biot[R] * pressure_change[R]
+        dp_jump = biot_dp_L - biot_dp_R
+        if dp_jump == 0.0
+            continue
+        end
 
-    # Compute the face integral ∫_∂E φ_i n dA for each node and direction
-    # This equals 2V * q_i (since q_i = 1/(2V) * ∫ φ_i n dA)
-    # The body force from uniform pressure is distributed as:
-    # f_id = -biot * dp * ∫_∂E φ_i n_d dA
-    #
-    # We compute z_id = ∫_∂E φ_i n_d dA directly (which is 2V * q_id)
-    # and set rhs contribution to -biot * dp * z_id
+        # Get face nodes (global indices)
+        face_node_indices = collect(mesh.faces.faces_to_nodes[face])
 
-    if D_dim == 2
-        z = _compute_z_2d(coords, face_nodes)
-    else
-        z = _compute_z_3d(coords, face_nodes, outward_normals)
-    end
+        # Compute face normal (oriented from L to R by convention in Jutul)
+        face_normal_vec = _compute_face_normal_from_nodes(face_node_indices, pts, D_dim)
 
-    # Add to global RHS: note the NEGATIVE sign because pressure acts as compression
-    for i in 1:num_nodes
-        gi = cd.node_indices[i]
+        # Orient: Jutul stores normals pointing from L to R (first to second neighbor)
+        # We need outward normal from L, which is face_normal_vec
+        # Verify orientation using cell centroids
+        cL = setup.cell_data[L].centroid
+        cR = setup.cell_data[R].centroid
+        LR = zeros(D_dim)
         for d in 1:D_dim
-            rhs[D_dim * (gi - 1) + d] -= biot_dp * z[i, d]
+            LR[d] = cR[d] - cL[d]
         end
+        if dot(face_normal_vec, LR) < 0
+            face_normal_vec = -face_normal_vec
+        end
+
+        # Compute ∫_f φ_i n dA for each face node
+        # For the contribution: rhs -= dp_jump * ∫_f φ_i n dA
+        _add_face_pressure_contribution!(rhs, face_node_indices, pts, face_normal_vec, dp_jump, D_dim)
+    end
+
+    # Process boundary faces
+    nbf = number_of_boundary_faces(mesh)
+    for bf in 1:nbf
+        cell = mesh.boundary_faces.neighbors[bf]
+        biot_dp = biot[cell] * pressure_change[cell]
+        if biot_dp == 0.0
+            continue
+        end
+
+        face_node_indices = collect(mesh.boundary_faces.faces_to_nodes[bf])
+        face_normal_vec = _compute_face_normal_from_nodes(face_node_indices, pts, D_dim)
+
+        # Orient outward from cell
+        cc = setup.cell_data[cell].centroid
+        fc = zeros(D_dim)
+        for ni in face_node_indices
+            for d in 1:D_dim
+                fc[d] += pts[ni][d]
+            end
+        end
+        fc ./= length(face_node_indices)
+        outward = fc .- cc
+        if dot(face_normal_vec, outward) < 0
+            face_normal_vec = -face_normal_vec
+        end
+
+        # Boundary face: only one cell contributes
+        # rhs -= biot_dp * ∫_f φ_i n dA
+        _add_face_pressure_contribution!(rhs, face_node_indices, pts, face_normal_vec, biot_dp, D_dim)
     end
 end
 
 """
-Compute z_id = ∫_∂E φ_i n_d dA for 2D (the unnormalized q values).
+Compute face normal vector (unnormalized, area-weighted) from global node indices.
 """
-function _compute_z_2d(coords, face_nodes)
-    num_nodes = size(coords, 2)
-    z = zeros(num_nodes, 2)
-
-    for fi in eachindex(face_nodes)
-        fn = face_nodes[fi]
-        @assert length(fn) == 2
-        i = fn[1]
-        inext = fn[2]
-        # Scaled normal (edge-length × outward normal direction)
-        # This is the same as the outer normal weighted by edge length / 2
-        scaled_normal = [coords[2, inext] - coords[2, i],
-                        -(coords[1, inext] - coords[1, i])]
-        for d in 1:2
-            z[i, d] += 0.5 * scaled_normal[d]
-            z[inext, d] += 0.5 * scaled_normal[d]
-        end
-    end
-    return z
-end
-
-"""
-Compute z_id = ∫_∂E φ_i n_d dA for 3D.
-"""
-function _compute_z_3d(coords, face_nodes, outward_normals)
-    num_nodes = size(coords, 2)
-    z = zeros(num_nodes, 3)
-
-    for fi in eachindex(face_nodes)
-        fn = face_nodes[fi]
-        nfn = length(fn)
-        normal = outward_normals[:, fi]
-
+function _compute_face_normal_from_nodes(node_indices, pts, D_dim)
+    if D_dim == 2
+        @assert length(node_indices) == 2
+        p1 = pts[node_indices[1]]
+        p2 = pts[node_indices[2]]
+        edge = [p2[1] - p1[1], p2[2] - p1[2]]
+        return [edge[2], -edge[1]]  # unnormalized normal (length = edge length)
+    else
+        # 3D: compute normal via cross-product sum over polygon
+        nfn = length(node_indices)
         fc = zeros(3)
-        for ni in fn
-            fc .+= coords[:, ni]
+        for ni in node_indices
+            for d in 1:3
+                fc[d] += pts[ni][d]
+            end
         end
         fc ./= nfn
 
+        normal = zeros(3)
+        for i in 1:nfn
+            prev_i = i == 1 ? nfn : i - 1
+            next_i = i == nfn ? 1 : i + 1
+            pp = [pts[node_indices[prev_i]][d] for d in 1:3]
+            pc = [pts[node_indices[i]][d] for d in 1:3]
+            pn = [pts[node_indices[next_i]][d] for d in 1:3]
+            a = pp .- pc
+            c = pn .- pc
+            normal .+= cross(c, a)
+        end
+        # This gives 2 * area * unit_normal
+        # We want area-weighted normal, so divide by 2
+        return normal ./ 2.0
+    end
+end
+
+"""
+Add the face pressure contribution −dp_jump * ∫_f φ_i n_d dA to the RHS
+for each node on the face and each direction d.
+
+For 2D faces (edges): ∫_f φ_i n dA = (edge_length / 2) * unit_normal for each of the 2 nodes
+  = (1/2) * area_normal_vec (since area_normal_vec = edge_length * unit_normal)
+
+For 3D faces: we tessellate into triangles from face centroid and distribute
+to nodes proportional to their sub-triangle areas.
+"""
+function _add_face_pressure_contribution!(rhs, node_indices, pts, area_normal_vec, dp_jump, D_dim)
+    nfn = length(node_indices)
+
+    if D_dim == 2
+        # 2D edge: equal distribution to 2 nodes, each gets half the face integral
+        for ni in node_indices
+            for d in 1:D_dim
+                rhs[D_dim * (ni - 1) + d] -= dp_jump * 0.5 * area_normal_vec[d]
+            end
+        end
+    else
+        # 3D face: tessellate into triangles from face centroid
+        # Each node's share is proportional to the sub-triangle areas adjacent to it
+        fc = zeros(3)
+        for ni in node_indices
+            for d in 1:3
+                fc[d] += pts[ni][d]
+            end
+        end
+        fc ./= nfn
+
+        # Unit normal direction (for weighting)
+        nn = norm(area_normal_vec)
+        if nn < eps(Float64)
+            return
+        end
+        unit_normal = area_normal_vec ./ nn
+
+        # Compute sub-triangle areas for each node
+        node_areas = zeros(nfn)
+        total_area = 0.0
         for e in 1:nfn
             enext = e == nfn ? 1 : e + 1
-            p1 = coords[:, fn[e]]
-            p2 = coords[:, fn[enext]]
-            mid = (p1 .+ p2) ./ 2.0
-
+            p1 = [pts[node_indices[e]][d] for d in 1:3]
+            p2 = [pts[node_indices[enext]][d] for d in 1:3]
+            # Triangle: fc, p1, p2
             v1 = p1 .- fc
-            v2 = mid .- fc
-            area1 = norm(cross(v1, v2)) / 2.0
-
-            v1 = mid .- fc
             v2 = p2 .- fc
-            area2 = norm(cross(v1, v2)) / 2.0
+            tri_area = norm(cross(v1, v2)) / 2.0
+            # Split between the two edge nodes
+            node_areas[e] += tri_area / 2.0
+            node_areas[enext] += tri_area / 2.0
+            total_area += tri_area
+        end
 
-            for d in 1:3
-                z[fn[e], d] += area1 * normal[d]
-                z[fn[enext], d] += area2 * normal[d]
+        # Each node gets its share of the face area times the unit normal
+        for (li, ni) in enumerate(node_indices)
+            weight = node_areas[li]
+            for d in 1:D_dim
+                rhs[D_dim * (ni - 1) + d] -= dp_jump * weight * unit_normal[d]
             end
         end
     end
-    return z
 end
 
 

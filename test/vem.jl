@@ -37,7 +37,8 @@ using SparseArrays
         nn = length(mesh.node_points)
         E = fill(1e9, nc)
         nu = fill(0.3, nc)
-        dp = fill(1e6, nc)
+        # Non-uniform pressure to get nonzero displacement
+        dp = [Float64(i) * 1e5 for i in 1:nc]
 
         setup = VEMElasticitySetup(mesh)
         K, rhs = assemble_vem_elasticity(setup, E, nu, dp)
@@ -67,9 +68,15 @@ using SparseArrays
             @test norm(result0.displacement) < 1e-14
         end
 
+        @testset "Uniform pressure gives zero displacement" begin
+            result_unif = solve_vem_elasticity(setup, E, nu, fill(1e6, nc))
+            @test norm(result_unif.displacement) < 1e-14
+        end
+
         @testset "Linear scaling with pressure" begin
             result1 = solve_vem_elasticity(setup, E, nu, dp)
             result2 = solve_vem_elasticity(setup, E, nu, 2 .* dp)
+            @test norm(result1.displacement) > 0
             @test norm(result2.displacement) / norm(result1.displacement) ≈ 2.0 atol=1e-10
         end
 
@@ -87,7 +94,8 @@ using SparseArrays
         nn = length(mesh.node_points)
         E = fill(1e9, nc)
         nu = fill(0.3, nc)
-        dp = fill(1e6, nc)
+        # Non-uniform pressure
+        dp = [Float64(i) * 1e5 for i in 1:nc]
 
         setup = VEMElasticitySetup(mesh)
 
@@ -112,9 +120,15 @@ using SparseArrays
             @test norm(result0.displacement) < 1e-14
         end
 
+        @testset "Uniform pressure gives zero displacement" begin
+            result_unif = solve_vem_elasticity(setup, E, nu, fill(1e6, nc))
+            @test norm(result_unif.displacement) < 1e-14
+        end
+
         @testset "Linear scaling with pressure" begin
             result1 = solve_vem_elasticity(setup, E, nu, dp)
             result2 = solve_vem_elasticity(setup, E, nu, 3 .* dp)
+            @test norm(result1.displacement) > 0
             @test norm(result2.displacement) / norm(result1.displacement) ≈ 3.0 atol=1e-10
         end
     end
@@ -128,7 +142,8 @@ using SparseArrays
         E1 = fill(1e9, nc)
         E2 = fill(2e9, nc)
         nu = fill(0.25, nc)
-        dp = fill(1e6, nc)
+        # Non-uniform pressure
+        dp = [Float64(i) * 1e5 for i in 1:nc]
 
         result1 = solve_vem_elasticity(setup, E1, nu, dp)
         result2 = solve_vem_elasticity(setup, E2, nu, dp)
@@ -141,7 +156,7 @@ using SparseArrays
         nc = number_of_cells(mesh)
         E = fill(1e9, nc)
         nu = fill(0.3, nc)
-        dp = fill(1e6, nc)
+        dp = [Float64(i) * 1e5 for i in 1:nc]
 
         result = solve_vem_elasticity(mesh, E, nu, dp)
         @test hasproperty(result, :displacement)
@@ -157,11 +172,70 @@ using SparseArrays
         setup = VEMElasticitySetup(mesh)
         E = fill(1e9, nc)
         nu = fill(0.3, nc)
-        dp = fill(1e6, nc)
+        # Non-uniform pressure
+        dp = [Float64(i) * 1e5 for i in 1:nc]
 
         result_biot1 = solve_vem_elasticity(setup, E, nu, dp, biot_coefficient = 1.0)
         result_biot05 = solve_vem_elasticity(setup, E, nu, dp, biot_coefficient = 0.5)
 
+        @test norm(result_biot1.displacement) > 0
         @test norm(result_biot1.displacement) / norm(result_biot05.displacement) ≈ 2.0 atol=1e-10
+    end
+
+    @testset "Linear displacement patch test 3D" begin
+        # Prescribe u(x) = Ax + b on boundary, verify interior follows
+        mesh = UnstructuredMesh(CartesianMesh((3, 3, 3), (1.0, 1.0, 1.0)))
+        nc = number_of_cells(mesh)
+        nn = length(mesh.node_points)
+        setup = VEMElasticitySetup(mesh)
+        E = fill(1e9, nc)
+        nu = fill(0.3, nc)
+
+        # Test 1: u_x = 0.001*x, u_y = 0, u_z = 0
+        bc = zeros(3 * nn)
+        for (i, pt) in enumerate(mesh.node_points)
+            bc[3*(i-1)+1] = 0.001 * pt[1]
+        end
+        result = solve_vem_elasticity(setup, E, nu, zeros(nc), boundary_displacement = bc)
+        for (i, pt) in enumerate(mesh.node_points)
+            @test abs(result.displacement[3*(i-1)+1] - 0.001 * pt[1]) < 1e-14
+            @test abs(result.displacement[3*(i-1)+2]) < 1e-14
+            @test abs(result.displacement[3*(i-1)+3]) < 1e-14
+        end
+
+        # Test 2: u_x = 0.001*y, u_y = 0.002*z, u_z = 0.0005*x (mixed linear)
+        bc2 = zeros(3 * nn)
+        for (i, pt) in enumerate(mesh.node_points)
+            bc2[3*(i-1)+1] = 0.001 * pt[2]
+            bc2[3*(i-1)+2] = 0.002 * pt[3]
+            bc2[3*(i-1)+3] = 0.0005 * pt[1]
+        end
+        result2 = solve_vem_elasticity(setup, E, nu, zeros(nc), boundary_displacement = bc2)
+        for (i, pt) in enumerate(mesh.node_points)
+            @test abs(result2.displacement[3*(i-1)+1] - 0.001 * pt[2]) < 1e-13
+            @test abs(result2.displacement[3*(i-1)+2] - 0.002 * pt[3]) < 1e-13
+            @test abs(result2.displacement[3*(i-1)+3] - 0.0005 * pt[1]) < 1e-13
+        end
+    end
+
+    @testset "Linear displacement patch test 2D" begin
+        mesh = UnstructuredMesh(CartesianMesh((4, 4), (1.0, 1.0)))
+        nc = number_of_cells(mesh)
+        nn = length(mesh.node_points)
+        setup = VEMElasticitySetup(mesh)
+        E = fill(1e9, nc)
+        nu = fill(0.3, nc)
+
+        # u_x = 0.001*x, u_y = 0.0005*y
+        bc = zeros(2 * nn)
+        for (i, pt) in enumerate(mesh.node_points)
+            bc[2*(i-1)+1] = 0.001 * pt[1]
+            bc[2*(i-1)+2] = 0.0005 * pt[2]
+        end
+        result = solve_vem_elasticity(setup, E, nu, zeros(nc), boundary_displacement = bc)
+        for (i, pt) in enumerate(mesh.node_points)
+            @test abs(result.displacement[2*(i-1)+1] - 0.001 * pt[1]) < 1e-13
+            @test abs(result.displacement[2*(i-1)+2] - 0.0005 * pt[2]) < 1e-13
+        end
     end
 end
