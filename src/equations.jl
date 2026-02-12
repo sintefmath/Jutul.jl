@@ -71,29 +71,39 @@ function find_jac_position(
         number_of_equations_for_entity = eqs_per_entity
     ) where T<:BlockMajorLayout
 
-    @assert source_entity_offset == 0
+    # @assert source_entity_offset == 0 "Expected source_entity_offset == 0 for BlockMajorLayout, got $source_entity_offset"
     # TODO: The use of N needs reworking if backend is to be used for
     # rectangular blocks.
     N = partials_per_entity
 
-    row = target_entity_index + row_offset
-    col = source_entity_index + column_offset
+    # source_entity_offset = target_entity_offset = 0
+
+    row_base = target_entity_offset + row_offset
+    col_base = source_entity_offset + column_offset
+
+    row_base = row_base ÷ N
+    col_base = col_base ÷ N
+
+    row = target_entity_index + row_base
+    col = source_entity_index + col_base
+    
     inner_layout = EntityMajorLayout()
     
-    partial_index += (source_entity_offset ÷ nentities_source)
-    equation_index += (target_entity_offset ÷ nentities_target)
+    # partial_index += (source_entity_offset ÷ nentities_source)
+    # equation_index += (target_entity_offset ÷ nentities_target)
 
     adjoint_layout = represented_as_adjoint(row_layout)
+    block_matrix_length = N*N
     if adjoint_layout
         @assert represented_as_adjoint(col_layout)
         inner_layout = adjoint(inner_layout)
-        pos = find_sparse_position(A, row, col, inner_layout)
-        base_ix = (pos-1)*N*N
+        pos = find_sparse_position(A, row, col)#, inner_layout)
+        base_ix = (pos-1)*block_matrix_length
         # TODO: Check this.
         ix = base_ix + N*(equation_index-1) + partial_index# + offset
     else
-        pos = find_sparse_position(A, row, col, inner_layout)
-        base_ix = (pos-1)*N*N
+        pos = find_sparse_position(A, row, col)#, inner_layout)
+        base_ix = (pos-1)*block_matrix_length
         ix = base_ix + N*(partial_index-1) + equation_index# + offset
     end
 
