@@ -144,10 +144,10 @@ using SparseArrays
         dp = fill(1e6, nc)
 
         result = solve_vem_elasticity(mesh, E, nu, dp)
-        @test haskey(pairs(result) |> Dict, :displacement)
-        @test haskey(pairs(result) |> Dict, :setup)
-        @test haskey(pairs(result) |> Dict, :K)
-        @test haskey(pairs(result) |> Dict, :rhs)
+        @test hasproperty(result, :displacement)
+        @test hasproperty(result, :setup)
+        @test hasproperty(result, :K)
+        @test hasproperty(result, :rhs)
         @test length(result.displacement) == 3 * length(mesh.node_points)
     end
 

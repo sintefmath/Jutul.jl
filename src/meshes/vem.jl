@@ -768,7 +768,13 @@ function _compute_S(Nc, D_mat, num_nodes, volume, D_dim)
     lsdim = D_dim == 2 ? 3 : 6
     r = D_dim * num_nodes
     NtN = Nc' * Nc
-    alpha = volume * tr(D_mat) / tr(NtN)
+    trNtN = tr(NtN)
+    if trNtN < eps(Float64)
+        # Fallback for degenerate geometry
+        alpha = volume * tr(D_mat)
+    else
+        alpha = volume * tr(D_mat) / trNtN
+    end
     return alpha * I(r)
 end
 
@@ -947,24 +953,4 @@ function _compute_z_3d(coords, face_nodes, outward_normals)
     return z
 end
 
-"""
-Apply zero displacement Dirichlet boundary conditions.
-Sets rows and columns of boundary DOFs to identity.
-"""
-function _apply_zero_dirichlet!(K, rhs, boundary_nodes, D_dim)
-    # For zero displacement: just set boundary rows to identity and rhs to zero
-    ndof = length(rhs)
-    for node in boundary_nodes
-        for d in 1:D_dim
-            dof = D_dim * (node - 1) + d
-            # Zero out the row
-            K[dof, :] .= 0.0
-            # Zero out the column (move known values to RHS - here all zero so no change)
-            K[:, dof] .= 0.0
-            # Set diagonal
-            K[dof, dof] = 1.0
-            # Set RHS to prescribed value (zero)
-            rhs[dof] = 0.0
-        end
-    end
-end
+
