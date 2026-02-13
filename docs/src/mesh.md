@@ -312,3 +312,89 @@ end
 fig
 ```
 
+### PEBI/Voronoi meshes
+
+PEBI (Perpendicular Bisector) meshes, also known as Voronoi diagrams, can be generated from a set of points. Each point becomes a cell center in the resulting mesh.
+
+```@docs
+Jutul.VoronoiMeshes.PEBIMesh2D
+```
+
+#### Basic PEBI mesh example
+
+```@example pebi
+using Jutul, CairoMakie
+import Jutul.VoronoiMeshes: PEBIMesh2D
+
+# Create a simple PEBI mesh from 4 points
+points = [0.0 1.0 0.0 1.0; 
+          0.0 0.0 1.0 1.0]
+
+mesh = PEBIMesh2D(points)
+
+# Plot the mesh
+fig, ax, plt = plot_mesh(mesh)
+plot_mesh_edges!(ax, mesh)
+scatter!(ax, mesh.node_points, color = :red, markersize = 10)
+fig
+```
+
+#### PEBI mesh with random points
+
+```@example pebi
+using Random
+Random.seed!(42)
+
+# Generate random points
+npts = 20
+points = rand(2, npts)
+
+# Create mesh
+mesh = PEBIMesh2D(points)
+
+# Plot with cell numbers
+fig, ax, plt = plot_cell_data(mesh, 1:number_of_cells(mesh))
+plot_mesh_edges!(ax, mesh)
+fig
+```
+
+#### PEBI mesh with custom bounding box
+
+```@example pebi
+# Create points in a specific region
+points = rand(2, 15) .* [100.0; 50.0]  # Scale to 100x50 domain
+
+# Specify custom bounding box
+bbox = ((0.0, 100.0), (0.0, 50.0))
+
+mesh = PEBIMesh2D(points, bbox=bbox)
+
+fig, ax, plt = plot_mesh(mesh)
+plot_mesh_edges!(ax, mesh)
+fig
+```
+
+#### PEBI mesh with constraints
+
+Linear constraints can be added to ensure certain edges are respected in the mesh:
+
+```@example pebi
+# Create points
+points = rand(2, 25)
+
+# Add a vertical constraint line at x=0.5
+constraint = ([0.5, 0.0], [0.5, 1.0])
+
+mesh = PEBIMesh2D(points, constraints=[constraint])
+
+fig, ax, plt = plot_mesh(mesh)
+plot_mesh_edges!(ax, mesh, color = :blue)
+# Highlight the constraint
+lines!(ax, [0.5, 0.5], [0.0, 1.0], color = :red, linewidth = 3)
+fig
+```
+
+```@docs
+Jutul.VoronoiMeshes.PEBIMesh3D
+```
+
