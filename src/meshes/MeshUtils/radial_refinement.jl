@@ -1,13 +1,9 @@
 """
-    refine_mesh_radial(m::UnstructuredMesh{2}, cells; n_sectors = 4, extra_out = false)
+    refine_mesh_radial(m::UnstructuredMesh{2}, cells; n_sectors = 4, n_rings = 1, center_cell = false, extra_out = false)
 
 Refine selected cells of a 2D `UnstructuredMesh` by splitting each selected cell
-into radial (pie-slice) sectors around its centroid. Each original edge of the
-cell becomes one triangular sub-cell with vertices at the centroid and the
-edge endpoints.
-
-If `n_sectors` is larger than the number of edges, edges are split at their
-midpoints to create additional sectors.
+into radial sectors and concentric rings around its centroid, producing a
+cylinder-like sub-mesh pattern.
 
 # Arguments
 - `m`: The 2D mesh to refine.
@@ -15,6 +11,13 @@ midpoints to create additional sectors.
 - `n_sectors`: Minimum number of radial sectors per cell (default 4).
   If the cell already has at least `n_sectors` edges, one sector per edge
   is created (no edge splitting).
+- `n_rings`: Number of concentric rings (default 1). With `n_rings = 1` each
+  sector is a single triangle from the cell edge to the centroid. With
+  `n_rings > 1`, intermediate rings create quad cells between consecutive
+  radial levels and the innermost ring contains triangles to the centroid
+  (or a single center cell if `center_cell = true`).
+- `center_cell`: If `true`, the innermost region becomes a single polygonal
+  cell instead of individual triangular sectors (default `false`).
 - `extra_out`: If `true`, return `(mesh = ..., cell_map = ...)`.
 
 # Returns
@@ -26,7 +29,8 @@ function refine_mesh_radial(m, cells; kwarg...)
     refine_mesh_radial(UnstructuredMesh(m), cells; kwarg...)
 end
 
-function refine_mesh_radial(m::UnstructuredMesh{2}, cells; n_sectors = 4, extra_out = false)
+function refine_mesh_radial(m::UnstructuredMesh{2}, cells;
+        n_sectors = 4, n_rings = 1, center_cell = false, extra_out = false)
     cells_to_refine = Set{Int}(cells)
 
     if isempty(cells_to_refine)
@@ -46,9 +50,12 @@ function refine_mesh_radial(m::UnstructuredMesh{2}, cells; n_sectors = 4, extra_
 
     # Precompute cell centroid nodes for refined cells
     cell_centroid_node = Dict{Int, Int}()
+    cell_centroid_pt = Dict{Int, PT}()
     for c in cells_to_refine
         centroid, _ = compute_centroid_and_measure(m, Cells(), c)
-        push!(new_node_points, PT(centroid))
+        cpt = PT(centroid)
+        cell_centroid_pt[c] = cpt
+        push!(new_node_points, cpt)
         cell_centroid_node[c] = length(new_node_points)
     end
 
@@ -86,6 +93,58 @@ function refine_mesh_radial(m::UnstructuredMesh{2}, cells; n_sectors = 4, extra_
         end
     end
 
+    # For multi-ring: create intermediate ring nodes for each refined cell
+    # ring_nodes[c][(sector_idx, ring_level)] = node index
+    # ring_level 0 = outer boundary (original nodes), ring_level n_rings = centroid
+    # We need intermediate nodes at ring levels 1..n_rings-1
+    cell_ring_nodes = Dict{Int, Dict{Tuple{Int,Int}, Int}}()
+
+    for c in cells_to_refine
+        edges = get_ordered_edges_2d(m, c)
+        needs_split = cell_needs_split[c]
+        centroid = cell_centroid_pt[c]
+
+        ring_nodes = Dict{Tuple{Int,Int}, Int}()
+
+        if needs_split
+            # Expanded nodes: n1, mid, n1, mid, ...
+            outer_nodes = Int[]
+            for (n1, n2, _, face_idx, is_bnd) in edges
+                push!(outer_nodes, n1)
+                if is_bnd
+                    push!(outer_nodes, bnd_midnode[face_idx])
+                else
+                    push!(outer_nodes, face_midnode[face_idx])
+                end
+            end
+        else
+            outer_nodes = [e[1] for e in edges]
+        end
+
+        nsec = length(outer_nodes)
+
+        # Ring level 0 = outer boundary nodes (already exist)
+        for s in 1:nsec
+            ring_nodes[(s, 0)] = outer_nodes[s]
+        end
+        # Ring level n_rings = centroid
+        for s in 1:nsec
+            ring_nodes[(s, n_rings)] = cell_centroid_node[c]
+        end
+        # Intermediate ring levels: interpolate between outer node and centroid
+        for ring in 1:(n_rings - 1)
+            t = ring / n_rings  # fraction toward centroid
+            for s in 1:nsec
+                outer_pt = new_node_points[outer_nodes[s]]
+                intermediate_pt = (1 - t) * outer_pt + t * centroid
+                push!(new_node_points, PT(intermediate_pt))
+                ring_nodes[(s, ring)] = length(new_node_points)
+            end
+        end
+
+        cell_ring_nodes[c] = ring_nodes
+    end
+
     # Build new mesh structures
     new_faces_nodes = Int[]
     new_faces_nodespos = Int[1]
@@ -116,64 +175,147 @@ function refine_mesh_radial(m::UnstructuredMesh{2}, cells; n_sectors = 4, extra_
         return length(new_bnd_cells)
     end
 
-    # First pass: create sub-cells
+    # Cell layout for each refined cell with S sectors and R rings:
+    # sub_cells[(sector, ring)] for ring 1..R-1 (or R if no center_cell)
+    # sub_cells[(0, 0)] for center_cell if applicable
+    # Ring 1 = outermost (adjacent to original boundary), ring R = innermost
+
+    # Mapping: (sector, ring) -> sub-cell index within this cell's sub-cells
+    cell_subcell_map = Dict{Int, Dict{Tuple{Int,Int}, Int}}()
+
     for c in 1:nc
         if c in cells_to_refine
             edges = get_ordered_edges_2d(m, c)
-            n_edges = length(edges)
-            centroid_node = cell_centroid_node[c]
             needs_split = cell_needs_split[c]
+            nsec = needs_split ? 2 * length(edges) : length(edges)
 
-            if needs_split
-                actual_sectors = 2 * n_edges
-            else
-                actual_sectors = n_edges
-            end
-
+            subcell_map = Dict{Tuple{Int,Int}, Int}()
             sub_cell_ids = Int[]
-            for _ in 1:actual_sectors
+
+            if center_cell
+                # Rings 1..n_rings-1 have S cells each, plus 1 center cell
+                for ring in 1:(n_rings - 1)
+                    for s in 1:nsec
+                        new_cell_count += 1
+                        push!(sub_cell_ids, new_cell_count)
+                        push!(cells_to_faces_list, Int[])
+                        push!(cells_to_bnd_list, Int[])
+                        push!(cell_map, c)
+                        subcell_map[(s, ring)] = new_cell_count
+                    end
+                end
+                # Center cell
                 new_cell_count += 1
                 push!(sub_cell_ids, new_cell_count)
                 push!(cells_to_faces_list, Int[])
                 push!(cells_to_bnd_list, Int[])
                 push!(cell_map, c)
-            end
-            old_cell_to_new[c] = sub_cell_ids
-
-            if needs_split
-                # Build expanded node list: n1, mid, n1, mid, ...
-                expanded_nodes = Int[]
-                for (n1, n2, _, face_idx, is_bnd) in edges
-                    push!(expanded_nodes, n1)
-                    if is_bnd
-                        push!(expanded_nodes, bnd_midnode[face_idx])
-                    else
-                        push!(expanded_nodes, face_midnode[face_idx])
+                subcell_map[(0, 0)] = new_cell_count
+            else
+                # All rings have S cells each
+                for ring in 1:n_rings
+                    for s in 1:nsec
+                        new_cell_count += 1
+                        push!(sub_cell_ids, new_cell_count)
+                        push!(cells_to_faces_list, Int[])
+                        push!(cells_to_bnd_list, Int[])
+                        push!(cell_map, c)
+                        subcell_map[(s, ring)] = new_cell_count
                     end
                 end
+            end
 
-                # Create radial faces between adjacent sectors
-                for i in 1:actual_sectors
-                    i_next = mod1(i + 1, actual_sectors)
-                    node_between = expanded_nodes[i_next]
-                    sc_left = sub_cell_ids[i]
-                    sc_right = sub_cell_ids[i_next]
-                    fi = add_interior_face!(node_between, centroid_node, sc_left, sc_right)
-                    push!(cells_to_faces_list[sc_left], fi)
-                    push!(cells_to_faces_list[sc_right], fi)
+            old_cell_to_new[c] = sub_cell_ids
+            cell_subcell_map[c] = subcell_map
+
+            ring_nodes = cell_ring_nodes[c]
+
+            # Create internal faces:
+            # 1) Radial faces: between adjacent sectors in the same ring
+            # 2) Circumferential faces: between adjacent rings in the same sector
+
+            # Radial faces (spoke lines from outer to inner)
+            if center_cell
+                # Radial faces exist for rings 1..n_rings-1
+                for ring in 1:(n_rings - 1)
+                    for s in 1:nsec
+                        s_next = mod1(s + 1, nsec)
+                        # The spoke between sector s and sector s_next at this ring
+                        # goes from ring_nodes[(s_next, ring-1)] to ring_nodes[(s_next, ring)]
+                        # But actually spokes separate sectors, so spoke for sector boundary
+                        # between s and s+1 uses the node at position s+1
+                        n_outer = ring_nodes[(s_next, ring - 1)]
+                        n_inner = ring_nodes[(s_next, ring)]
+                        left_cell = subcell_map[(s, ring)]
+                        right_cell = subcell_map[(s_next, ring)]
+                        fi = add_interior_face!(n_outer, n_inner, left_cell, right_cell)
+                        push!(cells_to_faces_list[left_cell], fi)
+                        push!(cells_to_faces_list[right_cell], fi)
+                    end
                 end
             else
-                # No splitting: one sector per edge
-                corner_nodes = [e[1] for e in edges]
+                # Radial faces for all rings 1..n_rings
+                for ring in 1:n_rings
+                    for s in 1:nsec
+                        s_next = mod1(s + 1, nsec)
+                        if ring == n_rings
+                            # Innermost ring: spokes go from ring boundary to centroid
+                            n_outer = ring_nodes[(s_next, ring - 1)]
+                            n_inner = cell_centroid_node[c]
+                        else
+                            n_outer = ring_nodes[(s_next, ring - 1)]
+                            n_inner = ring_nodes[(s_next, ring)]
+                        end
+                        left_cell = subcell_map[(s, ring)]
+                        right_cell = subcell_map[(s_next, ring)]
+                        fi = add_interior_face!(n_outer, n_inner, left_cell, right_cell)
+                        push!(cells_to_faces_list[left_cell], fi)
+                        push!(cells_to_faces_list[right_cell], fi)
+                    end
+                end
+            end
 
-                for i in 1:n_edges
-                    i_next = mod1(i + 1, n_edges)
-                    node_between = corner_nodes[i_next]
-                    sc_left = sub_cell_ids[i]
-                    sc_right = sub_cell_ids[i_next]
-                    fi = add_interior_face!(node_between, centroid_node, sc_left, sc_right)
-                    push!(cells_to_faces_list[sc_left], fi)
-                    push!(cells_to_faces_list[sc_right], fi)
+            # Circumferential (ring) faces: between ring r and ring r+1 in same sector
+            # Node order is reversed (n2, n1) so the face normal points inward
+            # (from outer cell toward inner cell / centroid).
+            if center_cell
+                # Faces between ring r and r+1 for rings 1..n_rings-2
+                for ring in 1:(n_rings - 2)
+                    for s in 1:nsec
+                        s_next = mod1(s + 1, nsec)
+                        n1 = ring_nodes[(s, ring)]
+                        n2 = ring_nodes[(s_next, ring)]
+                        outer_cell = subcell_map[(s, ring)]
+                        inner_cell = subcell_map[(s, ring + 1)]
+                        fi = add_interior_face!(n2, n1, outer_cell, inner_cell)
+                        push!(cells_to_faces_list[outer_cell], fi)
+                        push!(cells_to_faces_list[inner_cell], fi)
+                    end
+                end
+                # Faces between innermost ring (n_rings-1) and center cell
+                center_id = subcell_map[(0, 0)]
+                for s in 1:nsec
+                    s_next = mod1(s + 1, nsec)
+                    n1 = ring_nodes[(s, n_rings - 1)]
+                    n2 = ring_nodes[(s_next, n_rings - 1)]
+                    outer_cell = subcell_map[(s, n_rings - 1)]
+                    fi = add_interior_face!(n2, n1, outer_cell, center_id)
+                    push!(cells_to_faces_list[outer_cell], fi)
+                    push!(cells_to_faces_list[center_id], fi)
+                end
+            else
+                # Faces between ring r and r+1 for rings 1..n_rings-1
+                for ring in 1:(n_rings - 1)
+                    for s in 1:nsec
+                        s_next = mod1(s + 1, nsec)
+                        n1 = ring_nodes[(s, ring)]
+                        n2 = ring_nodes[(s_next, ring)]
+                        outer_cell = subcell_map[(s, ring)]
+                        inner_cell = subcell_map[(s, ring + 1)]
+                        fi = add_interior_face!(n2, n1, outer_cell, inner_cell)
+                        push!(cells_to_faces_list[outer_cell], fi)
+                        push!(cells_to_faces_list[inner_cell], fi)
+                    end
                 end
             end
         else
@@ -182,35 +324,33 @@ function refine_mesh_radial(m::UnstructuredMesh{2}, cells; n_sectors = 4, extra_
             push!(cells_to_faces_list, Int[])
             push!(cells_to_bnd_list, Int[])
             push!(cell_map, c)
+            cell_subcell_map[c] = Dict{Tuple{Int,Int}, Int}()
         end
     end
 
-    # Helper: find which sub-cell of a split-refined cell contains a given node
-    function find_subcell_for_node_split(cell, node)
+    # Helper: find outer subcell for a given node on the boundary of a refined cell
+    function find_outer_subcell_for_node(cell, node)
+        ring_nodes = cell_ring_nodes[cell]
+        subcell_map = cell_subcell_map[cell]
         edges = get_ordered_edges_2d(m, cell)
-        sub_ids = old_cell_to_new[cell]
-        idx = 0
-        for (n1, n2, _, face_idx, is_bnd) in edges
-            idx += 1
-            if n1 == node
-                return sub_ids[idx]
-            end
-            idx += 1
-            mid = is_bnd ? bnd_midnode[face_idx] : face_midnode[face_idx]
-            if mid == node
-                return sub_ids[idx]
+        needs_split = cell_needs_split[cell]
+        nsec = needs_split ? 2 * length(edges) : length(edges)
+
+        for s in 1:nsec
+            if ring_nodes[(s, 0)] == node
+                return subcell_map[(s, 1)]
             end
         end
-        error("Node $node not found in split-refined cell $cell")
+        error("Node $node not found on outer boundary of cell $cell")
     end
 
-    # Helper: find which sub-cell owns a full edge (for non-split cells)
-    function find_subcell_for_edge(cell, face_idx, is_boundary)
+    # Helper: find outer subcell that owns a full edge (for non-split cells)
+    function find_outer_subcell_for_edge(cell, face_idx, is_boundary)
         edges = get_ordered_edges_2d(m, cell)
-        sub_ids = old_cell_to_new[cell]
+        subcell_map = cell_subcell_map[cell]
         for (i, (_, _, _, fi, isbnd)) in enumerate(edges)
             if fi == face_idx && isbnd == is_boundary
-                return sub_ids[i]
+                return subcell_map[(i, 1)]
             end
         end
         error("Edge (face=$face_idx, bnd=$is_boundary) not found in cell $cell")
@@ -236,17 +376,15 @@ function refine_mesh_radial(m::UnstructuredMesh{2}, cells; n_sectors = 4, extra_
             r_split = r_refined && cell_needs_split[r]
 
             if l_split || r_split
-                # At least one side needs edge splitting
                 mid = face_midnode[face]
 
                 function get_sc_half(cell, node, refined, split)
                     if !refined
                         return old_cell_to_new[cell][1]
                     elseif split
-                        return find_subcell_for_node_split(cell, node)
+                        return find_outer_subcell_for_node(cell, node)
                     else
-                        # Non-split side: the full edge belongs to one sub-cell
-                        return find_subcell_for_edge(cell, face, false)
+                        return find_outer_subcell_for_edge(cell, face, false)
                     end
                 end
 
@@ -262,14 +400,13 @@ function refine_mesh_radial(m::UnstructuredMesh{2}, cells; n_sectors = 4, extra_
                 push!(cells_to_faces_list[sc_l2], fi2)
                 push!(cells_to_faces_list[sc_r2], fi2)
             else
-                # No edge splitting on either side
                 if l_refined
-                    new_l = find_subcell_for_edge(l, face, false)
+                    new_l = find_outer_subcell_for_edge(l, face, false)
                 else
                     new_l = old_cell_to_new[l][1]
                 end
                 if r_refined
-                    new_r = find_subcell_for_edge(r, face, false)
+                    new_r = find_outer_subcell_for_edge(r, face, false)
                 else
                     new_r = old_cell_to_new[r][1]
                 end
@@ -291,14 +428,14 @@ function refine_mesh_radial(m::UnstructuredMesh{2}, cells; n_sectors = 4, extra_
 
             if needs_split
                 mid = bnd_midnode[bf]
-                sc1 = find_subcell_for_node_split(c, n1)
-                sc2 = find_subcell_for_node_split(c, mid)
+                sc1 = find_outer_subcell_for_node(c, n1)
+                sc2 = find_outer_subcell_for_node(c, mid)
                 bi1 = add_boundary_face!(n1, mid, sc1)
                 push!(cells_to_bnd_list[sc1], bi1)
                 bi2 = add_boundary_face!(mid, n2, sc2)
                 push!(cells_to_bnd_list[sc2], bi2)
             else
-                sc = find_subcell_for_edge(c, bf, true)
+                sc = find_outer_subcell_for_edge(c, bf, true)
                 bi = add_boundary_face!(n1, n2, sc)
                 push!(cells_to_bnd_list[sc], bi)
             end
