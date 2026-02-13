@@ -3,7 +3,7 @@ using Test
 using LinearAlgebra
 using StaticArrays
 
-import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
+import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh, layered_mesh, depth_grid_to_surface
 
 @testset "CutCellMeshes" begin
     @testset "PlaneCut construction" begin
@@ -453,5 +453,215 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         @test length(info["face_index"]) == number_of_faces(cut)
         @test length(info["boundary_face_index"]) == number_of_boundary_faces(cut)
         @test length(info["new_faces"]) > 0
+    end
+
+    @testset "partial_cut negative" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+        nc_orig = number_of_cells(mesh)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01, partial_cut = :negative)
+
+        # Keeping negative side (below z=0.5): 9 bottom cells + 9 cut half-cells = 18
+        @test number_of_cells(cut) == 18
+        geo = tpfv_geometry(cut)
+        @test all(geo.volumes .> 0)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+        vol_cut = sum(geo.volumes)
+        @test vol_cut < vol_orig
+        @test vol_cut ≈ 0.5 rtol=1e-8
+    end
+
+    @testset "partial_cut positive" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut_pos = cut_mesh(mesh, plane; min_cut_fraction = 0.01, partial_cut = :positive)
+        cut_neg = cut_mesh(mesh, plane; min_cut_fraction = 0.01, partial_cut = :negative)
+
+        geo_pos = tpfv_geometry(cut_pos)
+        geo_neg = tpfv_geometry(cut_neg)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+
+        @test all(geo_pos.volumes .> 0)
+        @test all(geo_neg.volumes .> 0)
+        # Volumes of positive and negative sides should sum to original
+        @test sum(geo_pos.volumes) + sum(geo_neg.volumes) ≈ vol_orig rtol=1e-8
+    end
+
+    @testset "partial_cut geometry consistency" begin
+        g = CartesianMesh((4, 4, 4))
+        mesh = UnstructuredMesh(g)
+        plane = PlaneCut([0.5, 0.5, 0.55], [0.0, 0.0, 1.0])
+
+        for side in [:negative, :positive]
+            cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01, partial_cut = side)
+            geo = tpfv_geometry(cut)
+            @test all(geo.volumes .> 0)
+
+            # Interior normals point from left to right cell
+            for f in 1:number_of_faces(cut)
+                l, r = cut.faces.neighbors[f]
+                cl = geo.cell_centroids[:, l]
+                cr = geo.cell_centroids[:, r]
+                N = geo.normals[:, f]
+                @test dot(N, cr - cl) > 0
+            end
+
+            # Boundary normals point outward
+            for f in 1:number_of_boundary_faces(cut)
+                c = cut.boundary_faces.neighbors[f]
+                cc = geo.cell_centroids[:, c]
+                fc = geo.boundary_centroids[:, f]
+                N = geo.boundary_normals[:, f]
+                @test dot(N, fc - cc) > 0
+            end
+        end
+    end
+
+    @testset "partial_cut extra_out" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+
+        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01,
+            partial_cut = :negative, extra_out = true)
+
+        @test length(info["cell_index"]) == number_of_cells(cut)
+        @test length(info["face_index"]) == number_of_faces(cut)
+        @test length(info["boundary_face_index"]) == number_of_boundary_faces(cut)
+    end
+
+    @testset "partial_cut no-cut case" begin
+        g = CartesianMesh((2, 2, 2))
+        mesh = UnstructuredMesh(g)
+
+        # Plane outside mesh on negative side — all cells are positive
+        plane = PlaneCut([0.0, 0.0, -1.0], [0.0, 0.0, 1.0])
+
+        # partial_cut = :positive should keep all cells (they're all positive)
+        cut_pos = cut_mesh(mesh, plane; partial_cut = :positive)
+        @test number_of_cells(cut_pos) == number_of_cells(mesh)
+
+        # Plane outside mesh on positive side — all cells are negative
+        plane2 = PlaneCut([0.0, 0.0, 5.0], [0.0, 0.0, 1.0])
+
+        # partial_cut = :negative should keep all cells (they're all negative)
+        cut_neg = cut_mesh(mesh, plane2; partial_cut = :negative)
+        @test number_of_cells(cut_neg) == number_of_cells(mesh)
+    end
+
+    @testset "depth_grid_to_surface basic" begin
+        xs = collect(range(0.0, 1.0, length=4))
+        ys = collect(range(0.0, 1.0, length=4))
+        depths = fill(0.5, 4, 4)
+        surface = depth_grid_to_surface(xs, ys, depths)
+        @test length(surface.polygons) == 18  # 3x3 grid = 9 quads = 18 triangles
+        @test length(surface.normals) == 18
+    end
+
+    @testset "depth_grid_to_surface with NaN" begin
+        xs = collect(range(0.0, 1.0, length=3))
+        ys = collect(range(0.0, 1.0, length=3))
+        depths = fill(0.5, 3, 3)
+        depths[2, 2] = NaN
+        surface = depth_grid_to_surface(xs, ys, depths)
+        @test length(surface.polygons) < 8  # Less than full grid
+        @test length(surface.polygons) > 0
+    end
+
+    @testset "layered_mesh flat surfaces" begin
+        g = CartesianMesh((3, 3, 4), (1.0, 1.0, 1.0))
+        mesh = UnstructuredMesh(g)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+
+        xs = collect(range(0.0, 1.0, length=4))
+        ys = collect(range(0.0, 1.0, length=4))
+        d1 = fill(0.3, 4, 4)
+        d2 = fill(0.7, 4, 4)
+        s1 = depth_grid_to_surface(xs, ys, d1)
+        s2 = depth_grid_to_surface(xs, ys, d2)
+
+        result, info = layered_mesh(mesh, [s1, s2])
+
+        geo = tpfv_geometry(result)
+        @test all(geo.volumes .> 0)
+        @test sum(geo.volumes) ≈ vol_orig rtol=1e-8
+
+        layer_vals = sort(unique(info["layer_indices"]))
+        @test length(layer_vals) == 3  # layers 0, 1, 2
+        @test layer_vals == [0, 1, 2]
+
+        @test length(info["layer_indices"]) == number_of_cells(result)
+        @test length(info["cell_index"]) == number_of_cells(result)
+    end
+
+    @testset "layered_mesh single surface" begin
+        g = CartesianMesh((3, 3, 4), (1.0, 1.0, 1.0))
+        mesh = UnstructuredMesh(g)
+
+        xs = collect(range(0.0, 1.0, length=4))
+        ys = collect(range(0.0, 1.0, length=4))
+        d = fill(0.5, 4, 4)
+        s = depth_grid_to_surface(xs, ys, d)
+
+        result, info = layered_mesh(mesh, [s])
+        layer_vals = sort(unique(info["layer_indices"]))
+        @test layer_vals == [0, 1]
+
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+        vol_result = sum(tpfv_geometry(result).volumes)
+        @test vol_result ≈ vol_orig rtol=1e-8
+    end
+
+    @testset "layered_mesh tilted surface" begin
+        g = CartesianMesh((4, 4, 6), (100.0, 100.0, 60.0))
+        mesh = UnstructuredMesh(g)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+
+        xs = collect(range(0.0, 100.0, length=5))
+        ys = collect(range(0.0, 100.0, length=5))
+        d1 = [15.0 + (i - 1) * 2.5 for i in 1:5, j in 1:5]
+        d2 = fill(40.0, 5, 5)
+        s1 = depth_grid_to_surface(xs, ys, d1)
+        s2 = depth_grid_to_surface(xs, ys, d2)
+
+        result, info = layered_mesh(mesh, [s1, s2])
+
+        geo = tpfv_geometry(result)
+        @test all(geo.volumes .> 0)
+        @test sum(geo.volumes) ≈ vol_orig rtol=1e-6
+
+        layer_vals = sort(unique(info["layer_indices"]))
+        @test length(layer_vals) == 3
+    end
+
+    @testset "layered_mesh volume per layer" begin
+        g = CartesianMesh((3, 3, 4), (1.0, 1.0, 1.0))
+        mesh = UnstructuredMesh(g)
+
+        xs = collect(range(0.0, 1.0, length=4))
+        ys = collect(range(0.0, 1.0, length=4))
+        d1 = fill(0.3, 4, 4)
+        d2 = fill(0.7, 4, 4)
+        s1 = depth_grid_to_surface(xs, ys, d1)
+        s2 = depth_grid_to_surface(xs, ys, d2)
+
+        result, info = layered_mesh(mesh, [s1, s2])
+        geo = tpfv_geometry(result)
+        nc = number_of_cells(result)
+
+        # Layer 0: above z=0.3 → volume ≈ 0.3
+        # Layer 1: between z=0.3 and z=0.7 → volume ≈ 0.4
+        # Layer 2: below z=0.7 → volume ≈ 0.3
+        vol0 = sum(geo.volumes[i] for i in 1:nc if info["layer_indices"][i] == 0)
+        vol1 = sum(geo.volumes[i] for i in 1:nc if info["layer_indices"][i] == 1)
+        vol2 = sum(geo.volumes[i] for i in 1:nc if info["layer_indices"][i] == 2)
+
+        @test vol0 ≈ 0.3 rtol=1e-6
+        @test vol1 ≈ 0.4 rtol=1e-6
+        @test vol2 ≈ 0.3 rtol=1e-6
     end
 end

@@ -140,7 +140,7 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
         end
     end
 
-    if isempty(cut_cells)
+    if isempty(cut_cells) && partial_cut == :none
         if extra_out
             nf = number_of_faces(mesh)
             nb = number_of_boundary_faces(mesh)
@@ -153,6 +153,36 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
             return (mesh, info)
         end
         return mesh
+    end
+
+    if isempty(cut_cells) && partial_cut != :none
+        # No cells are cut.  Check whether any cells would be discarded.
+        discard = partial_cut == :positive ? :negative : :positive
+        any_discarded = false
+        for c in 1:nc
+            side = classify_cell(mesh, c, plane)
+            if side == discard
+                any_discarded = true
+                break
+            end
+        end
+        if !any_discarded
+            # All cells are on the kept side → return unchanged mesh
+            if extra_out
+                nf = number_of_faces(mesh)
+                nb = number_of_boundary_faces(mesh)
+                info = Dict{String, Any}(
+                    "cell_index" => collect(1:nc),
+                    "face_index" => collect(1:nf),
+                    "boundary_face_index" => collect(1:nb),
+                    "new_faces" => Int[]
+                )
+                return (mesh, info)
+            end
+            return mesh
+        end
+        # Otherwise fall through to build_cut_mesh which will remove
+        # cells on the discarded side.
     end
 
     # Create mutable node list and edge intersection cache
@@ -685,11 +715,18 @@ function build_cut_mesh(
                 # Both sub-cells exist: cut face is interior between them
                 fi = add_interior_face!(info.cut_face_nodes, neg_cell, pos_cell; old_face = 0)
                 push!(new_faces_list, fi)
+            elseif partial_cut == :negative
+                # Keeping neg sub-cell: outward normal should point neg→pos
+                # (the original ordering already gives that)
+                if neg_cell != 0
+                    bi = add_boundary_face!(info.cut_face_nodes, neg_cell; old_bf = 0)
+                    push!(new_faces_list, bi)
+                end
             else
-                # Only one sub-cell: cut face becomes boundary
-                kept = partial_cut == :positive ? pos_cell : neg_cell
-                if kept != 0
-                    bi = add_boundary_face!(info.cut_face_nodes, kept; old_bf = 0)
+                # Keeping pos sub-cell: outward normal should point pos→neg,
+                # i.e. the reverse of the original neg→pos ordering
+                if pos_cell != 0
+                    bi = add_boundary_face!(reverse(info.cut_face_nodes), pos_cell; old_bf = 0)
                     push!(new_faces_list, bi)
                 end
             end
