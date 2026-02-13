@@ -33,7 +33,10 @@ of the plane.
 
 Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` if `extra_out=true`.
 """
-function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface; extra_out::Bool = false, kwargs...)
+function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface;
+        extra_out::Bool = false,
+        min_cut_fraction::Real = 0.05,
+        partial_cut::Symbol = :none)
     result = mesh
     if extra_out
         nc = number_of_cells(mesh)
@@ -48,7 +51,13 @@ function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface; extra_ou
             n = surface.normals[i]
             c = sum(poly) / length(poly)
             plane = PlaneCut(c, n)
-            result, step_info = cut_mesh(result, plane; extra_out = true, kwargs...)
+            bpoly = _expand_polygon(poly)
+            result, step_info = cut_mesh(result, plane;
+                extra_out = true,
+                min_cut_fraction = min_cut_fraction,
+                partial_cut = partial_cut,
+                bounding_polygon = bpoly,
+                clip_to_polygon = true)
             # Compose mappings: new cell → intermediate cell → original cell
             cell_idx = [cell_idx[j] for j in step_info["cell_index"]]
             face_idx = [j == 0 ? 0 : face_idx[j] for j in step_info["face_index"]]
@@ -70,10 +79,29 @@ function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface; extra_ou
             n = surface.normals[i]
             c = sum(poly) / length(poly)
             plane = PlaneCut(c, n)
-            result = cut_mesh(result, plane; extra_out = false, kwargs...)
+            bpoly = _expand_polygon(poly)
+            result = cut_mesh(result, plane;
+                extra_out = false,
+                min_cut_fraction = min_cut_fraction,
+                partial_cut = partial_cut,
+                bounding_polygon = bpoly,
+                clip_to_polygon = true)
         end
         return result
     end
+end
+
+"""
+    _expand_polygon(poly, frac=0.02)
+
+Expand a polygon slightly outward from its centroid.  Each vertex is pushed
+away from the centroid by `frac` times the centroid-to-vertex distance.  This
+ensures that the point-in-polygon test reliably includes cells at shared edges
+and vertices of adjacent polygons.
+"""
+function _expand_polygon(poly::Vector{SVector{3, T}}, frac = 0.02) where T
+    c = sum(poly) / length(poly)
+    return [p + T(frac) * (p - c) for p in poly]
 end
 
 """
@@ -278,6 +306,16 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
                 if side <= 0
                     push!(neg_faces, fnodes)
                 end
+                # Collect on-plane nodes even from non-split faces so that
+                # the cut face polygon is complete.  This matters when a
+                # neighbor was already split by a previous cut: the shared
+                # face may have nodes exactly on the plane that belong to
+                # the cut face boundary.
+                for n in fnodes
+                    if get(node_class, n, 0) == 0
+                        push!(all_plane_nodes, n)
+                    end
+                end
             end
         end
 
@@ -300,6 +338,11 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
                 end
                 if side <= 0
                     push!(neg_faces, fnodes)
+                end
+                for n in fnodes
+                    if get(node_class, n, 0) == 0
+                        push!(all_plane_nodes, n)
+                    end
                 end
             end
         end

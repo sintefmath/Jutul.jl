@@ -664,4 +664,31 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh, layered_mesh, 
         @test vol1 ≈ 0.4 rtol=1e-6
         @test vol2 ≈ 0.3 rtol=1e-6
     end
+
+    @testset "layered_mesh perturbed surface performance" begin
+        # Regression test: this scenario used to hang or produce far too many
+        # cells because each polygon's cut plane extended to infinity.
+        g = CartesianMesh((10, 10, 10), (1000.0, 1000.0, 100.0))
+        mesh = UnstructuredMesh(g)
+
+        xs = collect(range(0.0, 1000.0, length=11))
+        ys = collect(range(0.0, 1000.0, length=11))
+        d1 = [33.0 + 5.0 * sin(0.1 * i + 0.2 * j) for i in 1:11, j in 1:11]
+        d2 = fill(61.5, 11, 11)
+        s1 = depth_grid_to_surface(xs, ys, d1)
+        s2 = depth_grid_to_surface(xs, ys, d2)
+
+        t = @elapsed begin
+            result, info = layered_mesh(mesh, [s1, s2])
+        end
+
+        geo = tpfv_geometry(result)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+        vol_result = sum(geo.volumes)
+
+        @test all(geo.volumes .> 0)
+        @test vol_result ≈ vol_orig rtol=1e-6
+        @test sort(unique(info["layer_indices"])) == [0, 1, 2]
+        @test t < 60.0  # Must complete in reasonable time
+    end
 end

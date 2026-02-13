@@ -101,20 +101,14 @@ function layered_mesh(
     cell_map = collect(1:nc_orig)  # maps new cell → original cell
 
     for (si, surface) in enumerate(surfaces)
-        for (pi, poly) in enumerate(surface.polygons)
-            n = surface.normals[pi]
-            c = sum(poly) / length(poly)
-            plane = PlaneCut(c, n)
+        result, step_info = cut_mesh(current_mesh, surface;
+            extra_out = true,
+            min_cut_fraction = min_cut_fraction
+        )
 
-            result, step_info = cut_mesh(current_mesh, plane;
-                extra_out = true,
-                min_cut_fraction = min_cut_fraction
-            )
-
-            # Compose cell maps
-            cell_map = [cell_map[j] for j in step_info["cell_index"]]
-            current_mesh = result
-        end
+        # Compose cell maps
+        cell_map = [cell_map[j] for j in step_info["cell_index"]]
+        current_mesh = result
     end
 
     # ----------------------------------------------------------------
