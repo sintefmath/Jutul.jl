@@ -80,6 +80,7 @@ function optimize_bound_constrained(
         obj_change_tol = -Inf,
         obj_change_tol_rel = 1.0e-7,
         max_it = 25,
+        use_new_line_search = true,
         ls_max_it = 5,
         ls_wolfe1 = 1.0e-4,
         ls_wolfe2 = 0.9,
@@ -100,8 +101,7 @@ function optimize_bound_constrained(
         ratio_thresholds = [0.25, 0.75],
         scale = false,
         output_hessian = false,
-        history = nothing,
-        use_new_line_search = false
+        history = nothing
     )
     
     # Negate f if we are maximizing
