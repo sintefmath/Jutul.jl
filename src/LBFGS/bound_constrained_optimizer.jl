@@ -489,9 +489,6 @@ function find_next_bounds(u, d, active, lb, ub, tol)
     if s_max <= 1 && isfinite(s_max)
         ix = findall(s .<= (s_max + tol))
         # Select maximum (i.e., all become active/violated)
-        if isempty(ix)
-            println("s_max: ", s_max, "ix_min: ", ix_min)
-        end
         s_max = maximum(s[ix])
     else
         ix = [ix_min]
