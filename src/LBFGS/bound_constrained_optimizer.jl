@@ -139,13 +139,13 @@ function optimize_bound_constrained(
         end
         # Update absolute stopping tolerances based on relative
         if isfinite(obj_change_tol_rel) && obj_change_tol_rel > 0
-            obj_change_tol = min(obj_change_tol_rel * abs(v0), obj_change_tol)
+            obj_change_tol = max(obj_change_tol_rel * abs(v0), obj_change_tol)
         end
         if isfinite(grad_rel_tol) && grad_rel_tol > 0
-            grad_tol = min(grad_rel_tol * norm(g0, Inf), grad_tol)
+            grad_tol = max(grad_rel_tol * norm(g0, Inf), grad_tol)
         end
         if isfinite(obj_rel_tol) && obj_rel_tol > 0
-            obj_tol = min(obj_rel_tol * abs(v0), obj_tol)
+            obj_tol = max(obj_rel_tol * abs(v0), obj_tol)
         end
         # Initialize trust region radius
         r_trust = trust_region_init
