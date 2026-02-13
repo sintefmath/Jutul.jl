@@ -6,6 +6,7 @@ module CutCellMeshes
     include("types.jl")
     include("geometry.jl")
     include("cutting.jl")
+    include("merge_faces.jl")
     include("gluing.jl")
     include("layered.jl")
 

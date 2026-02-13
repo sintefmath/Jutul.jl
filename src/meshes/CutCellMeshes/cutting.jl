@@ -36,7 +36,8 @@ Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` if `extra_out=tr
 function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface;
         extra_out::Bool = false,
         min_cut_fraction::Real = 0.05,
-        partial_cut::Symbol = :none)
+        partial_cut::Symbol = :none,
+        merge_faces::Bool = true)
     result = mesh
     if extra_out
         nc = number_of_cells(mesh)
@@ -57,7 +58,8 @@ function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface;
                 min_cut_fraction = min_cut_fraction,
                 partial_cut = partial_cut,
                 bounding_polygon = bpoly,
-                clip_to_polygon = true)
+                clip_to_polygon = true,
+                merge_faces = merge_faces)
             # Compose mappings: new cell → intermediate cell → original cell
             cell_idx = [cell_idx[j] for j in step_info["cell_index"]]
             face_idx = [j == 0 ? 0 : face_idx[j] for j in step_info["face_index"]]
@@ -85,7 +87,8 @@ function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface;
                 min_cut_fraction = min_cut_fraction,
                 partial_cut = partial_cut,
                 bounding_polygon = bpoly,
-                clip_to_polygon = true)
+                clip_to_polygon = true,
+                merge_faces = merge_faces)
         end
         return result
     end
@@ -118,7 +121,8 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
         bounding_polygon = nothing,
         clip_to_polygon::Bool = false,
         extra_out::Bool = false,
-        partial_cut::Symbol = :none
+        partial_cut::Symbol = :none,
+        merge_faces::Bool = true
     ) where T
     @assert partial_cut in (:none, :positive, :negative) "partial_cut must be :none, :positive, or :negative"
     nc = number_of_cells(mesh)
@@ -389,7 +393,7 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
         end
     end
 
-    return build_cut_mesh(mesh, plane, new_node_points, is_cut, cut_cell_infos, node_class, get_or_create_intersection, extra_out, partial_cut)
+    return build_cut_mesh(mesh, plane, new_node_points, is_cut, cut_cell_infos, node_class, get_or_create_intersection, extra_out, partial_cut, merge_faces)
 end
 
 """
@@ -418,7 +422,7 @@ function dominant_side(fnodes, node_class)
 end
 
 """
-    build_cut_mesh(mesh, plane, node_points, is_cut, cut_infos, node_class, get_intersection, extra_out, partial_cut)
+    build_cut_mesh(mesh, plane, node_points, is_cut, cut_infos, node_class, get_intersection, extra_out, partial_cut, do_merge_faces)
 
 Build the final mesh after cutting.
 
@@ -426,6 +430,10 @@ When `partial_cut` is `:positive` or `:negative`, only cells on the specified
 side are kept.  Cut cells lose the sub-cell on the discarded side and the cut
 face becomes a boundary face.  Uncut cells entirely on the discarded side are
 removed.
+
+When `do_merge_faces` is `true`, coplanar faces that share the same cell pair
+(or same cell for boundary faces) and share at least two nodes are merged into
+a single face.
 """
 function build_cut_mesh(
     mesh::UnstructuredMesh{3},
@@ -436,7 +444,8 @@ function build_cut_mesh(
     node_class::Dict{Int, Int},
     get_intersection::Function,
     extra_out::Bool,
-    partial_cut::Symbol = :none
+    partial_cut::Symbol = :none,
+    do_merge_faces::Bool = true
 ) where T
     nc_old = number_of_cells(mesh)
     nf_old = number_of_faces(mesh)
@@ -814,6 +823,10 @@ function build_cut_mesh(
         all_face_neighbors,
         all_bnd_cells
     )
+
+    if do_merge_faces
+        new_mesh = merge_coplanar_faces(new_mesh)
+    end
 
     if extra_out
         info_dict = Dict{String, Any}(

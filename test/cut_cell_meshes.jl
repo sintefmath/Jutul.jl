@@ -691,4 +691,142 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh, layered_mesh, 
         @test sort(unique(info["layer_indices"])) == [0, 1, 2]
         @test t < 30.0  # Must complete in reasonable time (was hanging before fix)
     end
+
+    @testset "merge_faces default on" begin
+        # Verify merge_faces=true is the default and produces valid meshes
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01)  # default merge_faces=true
+
+        geo = tpfv_geometry(cut)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+        vol_cut = sum(geo.volumes)
+
+        @test all(geo.volumes .> 0)
+        @test vol_cut ≈ vol_orig rtol=1e-10
+
+        # Interior normals consistency
+        for f in 1:number_of_faces(cut)
+            l, r = cut.faces.neighbors[f]
+            cl = geo.cell_centroids[:, l]
+            cr = geo.cell_centroids[:, r]
+            N = geo.normals[:, f]
+            @test dot(N, cr - cl) > 0
+        end
+
+        # Boundary normals consistency
+        for f in 1:number_of_boundary_faces(cut)
+            c = cut.boundary_faces.neighbors[f]
+            cc = geo.cell_centroids[:, c]
+            fc = geo.boundary_centroids[:, f]
+            N = geo.boundary_normals[:, f]
+            @test dot(N, fc - cc) > 0
+        end
+    end
+
+    @testset "merge_faces=false produces valid mesh" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01, merge_faces = false)
+
+        geo = tpfv_geometry(cut)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+        vol_cut = sum(geo.volumes)
+
+        @test all(geo.volumes .> 0)
+        @test vol_cut ≈ vol_orig rtol=1e-10
+    end
+
+    @testset "merge_faces with PolygonalSurface" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        poly = [
+            SVector{3, Float64}(-1.0, -1.0, 0.5),
+            SVector{3, Float64}(2.0, -1.0, 0.5),
+            SVector{3, Float64}(2.0, 2.0, 0.5),
+            SVector{3, Float64}(-1.0, 2.0, 0.5)
+        ]
+        surface = PolygonalSurface([poly])
+
+        cut_merged = cut_mesh(mesh, surface; min_cut_fraction = 0.01, merge_faces = true)
+        cut_nomerge = cut_mesh(mesh, surface; min_cut_fraction = 0.01, merge_faces = false)
+
+        # Both should have valid geometry
+        geo_m = tpfv_geometry(cut_merged)
+        geo_n = tpfv_geometry(cut_nomerge)
+        @test all(geo_m.volumes .> 0)
+        @test all(geo_n.volumes .> 0)
+        # Same cell count
+        @test number_of_cells(cut_merged) == number_of_cells(cut_nomerge)
+        # Merged should have <= faces (equal if no merges possible)
+        @test number_of_faces(cut_merged) <= number_of_faces(cut_nomerge)
+        @test number_of_boundary_faces(cut_merged) <= number_of_boundary_faces(cut_nomerge)
+    end
+
+    @testset "merge_coplanar_faces on synthetic mesh" begin
+        import Jutul.CutCellMeshes: merge_coplanar_faces
+
+        # Create a simple mesh, then manually verify merge_coplanar_faces works
+        # on a Cartesian mesh (which has no mergeable faces — it's a no-op test)
+        g = CartesianMesh((2, 2, 2))
+        mesh = UnstructuredMesh(g)
+        merged = merge_coplanar_faces(mesh)
+
+        @test number_of_cells(merged) == number_of_cells(mesh)
+        @test number_of_faces(merged) == number_of_faces(mesh)
+        @test number_of_boundary_faces(merged) == number_of_boundary_faces(mesh)
+
+        # Verify geometry is preserved
+        geo_orig = tpfv_geometry(mesh)
+        geo_merged = tpfv_geometry(merged)
+        @test sum(geo_orig.volumes) ≈ sum(geo_merged.volumes) rtol=1e-10
+    end
+
+    @testset "merge_coplanar_faces orientation" begin
+        import Jutul.CutCellMeshes: merge_coplanar_faces
+
+        # Use a cut mesh where merging occurs, then verify normals
+        g = CartesianMesh((4, 4, 4))
+        mesh = UnstructuredMesh(g)
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01, merge_faces = false)
+        merged = merge_coplanar_faces(cut)
+
+        geo = tpfv_geometry(merged)
+
+        # Interior normals should point from left to right cell
+        for f in 1:number_of_faces(merged)
+            l, r = merged.faces.neighbors[f]
+            cl = geo.cell_centroids[:, l]
+            cr = geo.cell_centroids[:, r]
+            N = geo.normals[:, f]
+            @test dot(N, cr - cl) > 0
+        end
+
+        # Boundary normals should point outward
+        for f in 1:number_of_boundary_faces(merged)
+            c = merged.boundary_faces.neighbors[f]
+            cc = geo.cell_centroids[:, c]
+            fc = geo.boundary_centroids[:, f]
+            N = geo.boundary_normals[:, f]
+            @test dot(N, fc - cc) > 0
+        end
+    end
+
+    @testset "merge_faces with extra_out" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true, merge_faces = true)
+
+        # Info dict should still work (cell_index refers to pre-merge cell counts)
+        @test length(info["cell_index"]) > 0
+        @test all(1 .<= info["cell_index"] .<= number_of_cells(mesh))
+    end
 end
