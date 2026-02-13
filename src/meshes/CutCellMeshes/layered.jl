@@ -51,7 +51,7 @@ function depth_grid_to_surface(
     return PolygonalSurface(polygons)
 end
 
-_depth_valid(z::Real) = isfinite(z) && !isnan(z)
+_depth_valid(z::Real) = isfinite(z)
 _depth_valid(::Missing) = false
 
 """
@@ -130,8 +130,10 @@ function layered_mesh(
         cz = geo.cell_centroids[3, c]
         centroid = SVector{3, T}(cx, cy, cz)
 
-        # Find the first surface this cell is above (positive side)
-        # layer = number of surfaces that the centroid is below
+        # Determine layer by counting how many surfaces the centroid is below.
+        # Surfaces are ordered by increasing depth, so once the centroid is
+        # above a surface we can stop: it cannot be below any deeper surface
+        # without contradicting the ordering requirement.
         layer = 0
         for (si, surface) in enumerate(surfaces)
             if _point_below_surface(centroid, surface)

@@ -693,10 +693,6 @@ function build_cut_mesh(
                     add_boundary_face!(fnodes, pos_cell; old_bf = bf)
                 elseif side < 0 && neg_cell != 0
                     add_boundary_face!(fnodes, neg_cell; old_bf = bf)
-                elseif side >= 0 && neg_cell != 0
-                    # Face is on positive side but only negative cell kept - skip
-                elseif side < 0 && pos_cell != 0
-                    # Face is on negative side but only positive cell kept - skip
                 end
             end
         end
