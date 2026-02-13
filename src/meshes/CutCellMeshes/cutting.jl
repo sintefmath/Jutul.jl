@@ -76,12 +76,23 @@ function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface; extra_ou
     end
 end
 
+"""
+    cut_mesh(mesh, plane; partial_cut=:none, ...)
+
+When `partial_cut` is `:positive` or `:negative`, only cells on the specified
+side of the cutting plane are kept after cutting.  Cut cells lose their
+sub-cell on the discarded side and the cut face becomes a new boundary face.
+Uncut cells that lie entirely on the discarded side are removed.  When
+`partial_cut=:none` (default), both sub-cells are kept (standard behaviour).
+"""
 function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
         min_cut_fraction::Real = 0.05,
         bounding_polygon = nothing,
         clip_to_polygon::Bool = false,
-        extra_out::Bool = false
+        extra_out::Bool = false,
+        partial_cut::Symbol = :none
     ) where T
+    @assert partial_cut in (:none, :positive, :negative) "partial_cut must be :none, :positive, or :negative"
     nc = number_of_cells(mesh)
     nn = length(mesh.node_points)
 
@@ -305,7 +316,7 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
         end
     end
 
-    return build_cut_mesh(mesh, plane, new_node_points, is_cut, cut_cell_infos, node_class, get_or_create_intersection, extra_out)
+    return build_cut_mesh(mesh, plane, new_node_points, is_cut, cut_cell_infos, node_class, get_or_create_intersection, extra_out, partial_cut)
 end
 
 """
@@ -334,9 +345,14 @@ function dominant_side(fnodes, node_class)
 end
 
 """
-    build_cut_mesh(mesh, plane, node_points, is_cut, cut_infos, node_class, get_intersection, extra_out)
+    build_cut_mesh(mesh, plane, node_points, is_cut, cut_infos, node_class, get_intersection, extra_out, partial_cut)
 
 Build the final mesh after cutting.
+
+When `partial_cut` is `:positive` or `:negative`, only cells on the specified
+side are kept.  Cut cells lose the sub-cell on the discarded side and the cut
+face becomes a boundary face.  Uncut cells entirely on the discarded side are
+removed.
 """
 function build_cut_mesh(
     mesh::UnstructuredMesh{3},
@@ -346,11 +362,36 @@ function build_cut_mesh(
     cut_infos::Dict{Int, CutCellInfo},
     node_class::Dict{Int, Int},
     get_intersection::Function,
-    extra_out::Bool
+    extra_out::Bool,
+    partial_cut::Symbol = :none
 ) where T
     nc_old = number_of_cells(mesh)
     nf_old = number_of_faces(mesh)
     nb_old = number_of_boundary_faces(mesh)
+
+    # ------------------------------------------------------------------
+    # For partial_cut, classify uncut cells and decide which to discard
+    # ------------------------------------------------------------------
+    # cell_side[c]: :positive, :negative, or :cut
+    cell_side = Vector{Symbol}(undef, nc_old)
+    for c in 1:nc_old
+        if is_cut[c]
+            cell_side[c] = :cut
+        else
+            cell_side[c] = classify_cell(mesh, c, plane)
+        end
+    end
+
+    # keep_cell[c] - whether this old cell produces at least one new cell
+    keep_cell = trues(nc_old)
+    if partial_cut != :none
+        discard = partial_cut == :positive ? :negative : :positive
+        for c in 1:nc_old
+            if !is_cut[c] && cell_side[c] == discard
+                keep_cell[c] = false
+            end
+        end
+    end
 
     # Compute new cell numbering
     new_cell_count = 0
@@ -360,13 +401,27 @@ function build_cut_mesh(
     cell_index = Int[]
 
     for c in 1:nc_old
+        if !keep_cell[c]
+            old_to_new[c] = Int[]
+            continue
+        end
         if is_cut[c]
-            pos_cell = new_cell_count + 1
-            neg_cell = new_cell_count + 2
-            old_to_new[c] = [pos_cell, neg_cell]
-            new_cell_count += 2
-            push!(cell_index, c)  # pos sub-cell maps to original cell c
-            push!(cell_index, c)  # neg sub-cell maps to original cell c
+            if partial_cut == :none
+                pos_cell = new_cell_count + 1
+                neg_cell = new_cell_count + 2
+                old_to_new[c] = [pos_cell, neg_cell]
+                new_cell_count += 2
+                push!(cell_index, c)  # pos sub-cell
+                push!(cell_index, c)  # neg sub-cell
+            elseif partial_cut == :positive
+                new_cell_count += 1
+                old_to_new[c] = [new_cell_count, 0]  # [pos, no neg]
+                push!(cell_index, c)
+            else  # :negative
+                new_cell_count += 1
+                old_to_new[c] = [0, new_cell_count]  # [no pos, neg]
+                push!(cell_index, c)
+            end
         else
             new_cell_count += 1
             old_to_new[c] = [new_cell_count]
@@ -452,6 +507,22 @@ function build_cut_mesh(
         return has_pos && has_neg
     end
 
+    # Helper: get the new cell index for a given old cell and side
+    # For cut cells in partial_cut mode, old_to_new has [pos, neg] where one is 0
+    # For cut cells in normal mode, old_to_new has [pos, neg]
+    # For uncut cells, old_to_new has [cell]
+    function get_new_cell(old_cell::Int, side::Symbol)
+        mapping = old_to_new[old_cell]
+        if length(mapping) == 0
+            return 0  # cell was removed
+        elseif length(mapping) == 1
+            return mapping[1]  # uncut cell - single new cell
+        else
+            # Cut cell: mapping = [pos, neg]
+            return side == :positive ? mapping[1] : mapping[2]
+        end
+    end
+
     # Process interior faces
     for face in 1:nf_old
         l_old, r_old = mesh.faces.neighbors[face]
@@ -459,75 +530,102 @@ function build_cut_mesh(
         l_cut = is_cut[l_old]
         r_cut = is_cut[r_old]
 
+        if !keep_cell[l_old] && !keep_cell[r_old]
+            continue  # both cells removed
+        end
+
         if !l_cut && !r_cut
-            l_new = old_to_new[l_old][1]
-            r_new = old_to_new[r_old][1]
-            add_interior_face!(fnodes, l_new, r_new; old_face = face)
+            l_new = get_new_cell(l_old, cell_side[l_old])
+            r_new = get_new_cell(r_old, cell_side[r_old])
+            if l_new == 0 && r_new == 0
+                continue
+            elseif l_new == 0
+                # Left cell removed → face becomes boundary on right cell
+                add_boundary_face!(fnodes, r_new; old_bf = 0)
+            elseif r_new == 0
+                # Right cell removed → face becomes boundary on left cell
+                add_boundary_face!(fnodes, l_new; old_bf = 0)
+            else
+                add_interior_face!(fnodes, l_new, r_new; old_face = face)
+            end
         elseif l_cut && !r_cut
-            r_new = old_to_new[r_old][1]
-            l_pos = old_to_new[l_old][1]
-            l_neg = old_to_new[l_old][2]
+            r_new = get_new_cell(r_old, cell_side[r_old])
+            l_pos = get_new_cell(l_old, :positive)
+            l_neg = get_new_cell(l_old, :negative)
 
             if face_needs_split(fnodes)
                 pos_fn, neg_fn = split_face_cached(fnodes)
                 if length(pos_fn) >= 3
-                    add_interior_face!(pos_fn, l_pos, r_new; old_face = face)
+                    _add_face_or_bnd!(pos_fn, l_pos, r_new, face,
+                        add_interior_face!, add_boundary_face!)
                 end
                 if length(neg_fn) >= 3
-                    add_interior_face!(neg_fn, l_neg, r_new; old_face = face)
+                    _add_face_or_bnd!(neg_fn, l_neg, r_new, face,
+                        add_interior_face!, add_boundary_face!)
                 end
             else
                 side = dominant_side(fnodes, node_class)
                 if side >= 0
-                    add_interior_face!(fnodes, l_pos, r_new; old_face = face)
+                    _add_face_or_bnd!(fnodes, l_pos, r_new, face,
+                        add_interior_face!, add_boundary_face!)
                 else
-                    add_interior_face!(fnodes, l_neg, r_new; old_face = face)
+                    _add_face_or_bnd!(fnodes, l_neg, r_new, face,
+                        add_interior_face!, add_boundary_face!)
                 end
             end
         elseif !l_cut && r_cut
-            l_new = old_to_new[l_old][1]
-            r_pos = old_to_new[r_old][1]
-            r_neg = old_to_new[r_old][2]
+            l_new = get_new_cell(l_old, cell_side[l_old])
+            r_pos = get_new_cell(r_old, :positive)
+            r_neg = get_new_cell(r_old, :negative)
 
             if face_needs_split(fnodes)
                 pos_fn, neg_fn = split_face_cached(fnodes)
                 if length(pos_fn) >= 3
-                    add_interior_face!(pos_fn, l_new, r_pos; old_face = face)
+                    _add_face_or_bnd!(pos_fn, l_new, r_pos, face,
+                        add_interior_face!, add_boundary_face!)
                 end
                 if length(neg_fn) >= 3
-                    add_interior_face!(neg_fn, l_new, r_neg; old_face = face)
+                    _add_face_or_bnd!(neg_fn, l_new, r_neg, face,
+                        add_interior_face!, add_boundary_face!)
                 end
             else
                 side = dominant_side(fnodes, node_class)
                 if side >= 0
-                    add_interior_face!(fnodes, l_new, r_pos; old_face = face)
+                    _add_face_or_bnd!(fnodes, l_new, r_pos, face,
+                        add_interior_face!, add_boundary_face!)
                 else
-                    add_interior_face!(fnodes, l_new, r_neg; old_face = face)
+                    _add_face_or_bnd!(fnodes, l_new, r_neg, face,
+                        add_interior_face!, add_boundary_face!)
                 end
             end
         else
             # Both sides cut
-            l_pos = old_to_new[l_old][1]
-            l_neg = old_to_new[l_old][2]
-            r_pos = old_to_new[r_old][1]
-            r_neg = old_to_new[r_old][2]
+            l_pos = get_new_cell(l_old, :positive)
+            l_neg = get_new_cell(l_old, :negative)
+            r_pos = get_new_cell(r_old, :positive)
+            r_neg = get_new_cell(r_old, :negative)
 
             if face_needs_split(fnodes)
                 pos_fn, neg_fn = split_face_cached(fnodes)
                 if length(pos_fn) >= 3
-                    add_interior_face!(pos_fn, l_pos, r_pos; old_face = face)
+                    _add_face_or_bnd!(pos_fn, l_pos, r_pos, face,
+                        add_interior_face!, add_boundary_face!)
                 end
                 if length(neg_fn) >= 3
-                    add_interior_face!(neg_fn, l_neg, r_neg; old_face = face)
+                    _add_face_or_bnd!(neg_fn, l_neg, r_neg, face,
+                        add_interior_face!, add_boundary_face!)
                 end
             else
                 side = dominant_side(fnodes, node_class)
                 if side >= 0
-                    add_interior_face!(fnodes, l_pos, r_pos; old_face = face)
+                    _add_face_or_bnd!(fnodes, l_pos, r_pos, face,
+                        add_interior_face!, add_boundary_face!)
                 elseif side < 0
-                    add_interior_face!(fnodes, l_neg, r_neg; old_face = face)
+                    _add_face_or_bnd!(fnodes, l_neg, r_neg, face,
+                        add_interior_face!, add_boundary_face!)
                 else
-                    add_interior_face!(fnodes, l_pos, r_pos; old_face = face)
+                    _add_face_or_bnd!(fnodes, l_pos, r_pos, face,
+                        add_interior_face!, add_boundary_face!)
                 end
             end
         end
@@ -538,43 +636,63 @@ function build_cut_mesh(
         cell_old = mesh.boundary_faces.neighbors[bf]
         fnodes = collect(mesh.boundary_faces.faces_to_nodes[bf])
 
+        if !keep_cell[cell_old]
+            continue  # cell removed
+        end
+
         if !is_cut[cell_old]
-            cell_new = old_to_new[cell_old][1]
-            add_boundary_face!(fnodes, cell_new; old_bf = bf)
+            cell_new = get_new_cell(cell_old, cell_side[cell_old])
+            if cell_new != 0
+                add_boundary_face!(fnodes, cell_new; old_bf = bf)
+            end
         else
-            pos_cell = old_to_new[cell_old][1]
-            neg_cell = old_to_new[cell_old][2]
+            pos_cell = get_new_cell(cell_old, :positive)
+            neg_cell = get_new_cell(cell_old, :negative)
 
             if face_needs_split(fnodes)
                 pos_fn, neg_fn = split_face_cached(fnodes)
-                if length(pos_fn) >= 3
+                if length(pos_fn) >= 3 && pos_cell != 0
                     add_boundary_face!(pos_fn, pos_cell; old_bf = bf)
                 end
-                if length(neg_fn) >= 3
+                if length(neg_fn) >= 3 && neg_cell != 0
                     add_boundary_face!(neg_fn, neg_cell; old_bf = bf)
                 end
             else
                 side = dominant_side(fnodes, node_class)
-                if side >= 0
+                if side >= 0 && pos_cell != 0
                     add_boundary_face!(fnodes, pos_cell; old_bf = bf)
-                else
+                elseif side < 0 && neg_cell != 0
                     add_boundary_face!(fnodes, neg_cell; old_bf = bf)
+                elseif side >= 0 && neg_cell != 0
+                    # Face is on positive side but only negative cell kept - skip
+                elseif side < 0 && pos_cell != 0
+                    # Face is on negative side but only positive cell kept - skip
                 end
             end
         end
     end
 
-    # Add cut faces (internal faces between pos and neg sub-cells)
+    # Add cut faces
     for c in 1:nc_old
         if !is_cut[c]
             continue
         end
         info = cut_infos[c]
         if length(info.cut_face_nodes) >= 3
-            pos_cell = old_to_new[c][1]
-            neg_cell = old_to_new[c][2]
-            fi = add_interior_face!(info.cut_face_nodes, neg_cell, pos_cell; old_face = 0)
-            push!(new_faces_list, fi)
+            pos_cell = get_new_cell(c, :positive)
+            neg_cell = get_new_cell(c, :negative)
+            if partial_cut == :none
+                # Both sub-cells exist: cut face is interior between them
+                fi = add_interior_face!(info.cut_face_nodes, neg_cell, pos_cell; old_face = 0)
+                push!(new_faces_list, fi)
+            else
+                # Only one sub-cell: cut face becomes boundary
+                kept = partial_cut == :positive ? pos_cell : neg_cell
+                if kept != 0
+                    bi = add_boundary_face!(info.cut_face_nodes, kept; old_bf = 0)
+                    push!(new_faces_list, bi)
+                end
+            end
         end
     end
 
@@ -631,4 +749,21 @@ function build_cut_mesh(
         return (new_mesh, info_dict)
     end
     return new_mesh
+end
+
+"""
+    _add_face_or_bnd!(nodes, left, right, old_face, add_int!, add_bnd!)
+
+Helper: if both `left` and `right` are valid (non-zero) cell indices, add an
+interior face; if only one is valid, add a boundary face on that cell; if
+neither is valid, skip.
+"""
+function _add_face_or_bnd!(nodes, left, right, old_face, add_int!, add_bnd!)
+    if left != 0 && right != 0
+        add_int!(nodes, left, right; old_face = old_face)
+    elseif left != 0
+        add_bnd!(nodes, left; old_bf = 0)
+    elseif right != 0
+        add_bnd!(nodes, right; old_bf = 0)
+    end
 end

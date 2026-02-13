@@ -7,6 +7,8 @@ module CutCellMeshes
     include("geometry.jl")
     include("cutting.jl")
     include("gluing.jl")
+    include("layered.jl")
 
     export cut_mesh, glue_mesh, cut_and_displace_mesh
+    export layered_mesh, depth_grid_to_surface
 end
