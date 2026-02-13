@@ -94,9 +94,8 @@ function refine_mesh_radial(m::UnstructuredMesh{2}, cells;
     end
 
     # For multi-ring: create intermediate ring nodes for each refined cell
-    # ring_nodes[c][(sector_idx, ring_level)] = node index
+    # cell_ring_nodes[c][(sector_idx, ring_level)] = node index
     # ring_level 0 = outer boundary (original nodes), ring_level n_rings = centroid
-    # We need intermediate nodes at ring levels 1..n_rings-1
     cell_ring_nodes = Dict{Int, Dict{Tuple{Int,Int}, Int}}()
 
     for c in cells_to_refine
@@ -240,10 +239,7 @@ function refine_mesh_radial(m::UnstructuredMesh{2}, cells;
                 for ring in 1:(n_rings - 1)
                     for s in 1:nsec
                         s_next = mod1(s + 1, nsec)
-                        # The spoke between sector s and sector s_next at this ring
-                        # goes from ring_nodes[(s_next, ring-1)] to ring_nodes[(s_next, ring)]
-                        # But actually spokes separate sectors, so spoke for sector boundary
-                        # between s and s+1 uses the node at position s+1
+                        # Spoke at the boundary between sectors s and s_next
                         n_outer = ring_nodes[(s_next, ring - 1)]
                         n_inner = ring_nodes[(s_next, ring)]
                         left_cell = subcell_map[(s, ring)]

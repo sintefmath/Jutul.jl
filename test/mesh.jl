@@ -631,6 +631,110 @@ end
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
         check_mesh_normals(m2)
     end
+
+    @testset "n_rings = 2" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1]; n_rings = 2, extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        # 4 sectors × 2 rings = 8 sub-cells + 3 unrefined = 11
+        @test number_of_cells(m2) == 11
+        @test count(==(1), result.cell_map) == 8
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "n_rings = 2 all cells" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh_radial(m, [1, 2, 3, 4]; n_rings = 2)
+        geo = tpfv_geometry(m2)
+        @test number_of_cells(m2) == 32
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "n_rings = 3" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1]; n_rings = 3, extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        # 4 sectors × 3 rings = 12 + 3 unrefined = 15
+        @test number_of_cells(m2) == 15
+        @test count(==(1), result.cell_map) == 12
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "center_cell with n_rings = 2" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1]; n_rings = 2, center_cell = true, extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        # 4 sectors × 1 ring + 1 center = 5 + 3 unrefined = 8
+        @test number_of_cells(m2) == 8
+        @test count(==(1), result.cell_map) == 5
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "center_cell with n_rings = 3" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1]; n_rings = 3, center_cell = true, extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        # 4 sectors × 2 rings + 1 center = 9 + 3 = 12
+        @test number_of_cells(m2) == 12
+        @test count(==(1), result.cell_map) == 9
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "center_cell all cells" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh_radial(m, [1, 2, 3, 4]; n_rings = 2, center_cell = true)
+        geo = tpfv_geometry(m2)
+        # 4 cells × (4 sectors × 1 ring + 1 center) = 20
+        @test number_of_cells(m2) == 20
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "n_sectors = 8 with n_rings = 2 and center_cell" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1]; n_sectors = 8, n_rings = 2, center_cell = true, extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        # 8 sectors × 1 ring + 1 center = 9 + 3 = 12
+        @test number_of_cells(m2) == 12
+        @test count(==(1), result.cell_map) == 9
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "variable deltas with n_rings" begin
+        m = UnstructuredMesh(CartesianMesh((3, 2), ([1.0, 3.0, 4.0], [1.0, 2.0])))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh_radial(m, [1, 6]; n_rings = 2)
+        geo = tpfv_geometry(m2)
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "variable deltas with center_cell" begin
+        m = UnstructuredMesh(CartesianMesh((3, 2), ([1.0, 3.0, 4.0], [1.0, 2.0])))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh_radial(m, [1, 6]; n_rings = 2, center_cell = true)
+        geo = tpfv_geometry(m2)
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
 end
 
 @testset "merge_cells" begin
