@@ -343,24 +343,25 @@ end
     end
 end
 
-@testset "refine_mesh" begin
-    function check_normals(m_refined)
-        geo = tpfv_geometry(m_refined)
-        for f in 1:number_of_faces(m_refined)
-            l, r = m_refined.faces.neighbors[f]
-            cl = geo.cell_centroids[:, l]
-            cr = geo.cell_centroids[:, r]
-            N = geo.normals[:, f]
-            @test dot(N, cr - cl) > 0
-        end
-        for f in 1:number_of_boundary_faces(m_refined)
-            c = m_refined.boundary_faces.neighbors[f]
-            cc = geo.cell_centroids[:, c]
-            fc = geo.boundary_centroids[:, f]
-            N = geo.boundary_normals[:, f]
-            @test dot(N, fc - cc) > 0
-        end
+function check_mesh_normals(m_refined)
+    geo = tpfv_geometry(m_refined)
+    for f in 1:number_of_faces(m_refined)
+        l, r = m_refined.faces.neighbors[f]
+        cl = geo.cell_centroids[:, l]
+        cr = geo.cell_centroids[:, r]
+        N = geo.normals[:, f]
+        @test dot(N, cr - cl) > 0
     end
+    for f in 1:number_of_boundary_faces(m_refined)
+        c = m_refined.boundary_faces.neighbors[f]
+        cc = geo.cell_centroids[:, c]
+        fc = geo.boundary_centroids[:, f]
+        N = geo.boundary_normals[:, f]
+        @test dot(N, fc - cc) > 0
+    end
+end
+
+@testset "refine_mesh" begin
 
     @testset "2D refinement" begin
         @testset "refine all cells" begin
@@ -372,7 +373,7 @@ end
             @test number_of_cells(m2) == 16
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
             @test length(result.cell_map) == number_of_cells(m2)
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
         @testset "refine single cell" begin
             m = UnstructuredMesh(CartesianMesh((3, 3)))
@@ -383,7 +384,7 @@ end
             @test number_of_cells(m2) == 12
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
             @test count(==(5), result.cell_map) == 4
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
         @testset "refine with variable deltas" begin
             m = UnstructuredMesh(CartesianMesh((3, 2), ([1.0, 3.0, 4.0], [1.0, 2.0])))
@@ -391,7 +392,7 @@ end
             m2 = refine_mesh(m, [1, 6])
             geo = tpfv_geometry(m2)
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
     end
 
@@ -405,7 +406,7 @@ end
             @test number_of_cells(m2) == 64
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
             @test length(result.cell_map) == 64
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
         @testset "refine single cell" begin
             m = UnstructuredMesh(CartesianMesh((2, 2, 2)))
@@ -416,7 +417,7 @@ end
             @test number_of_cells(m2) == 15
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
             @test count(==(1), result.cell_map) == 8
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
         @testset "refine with variable deltas" begin
             m = UnstructuredMesh(CartesianMesh((3, 2, 2), ((1.0, 3.0, 4.0), (1.0, 2.0), 1.0)))
@@ -424,7 +425,7 @@ end
             m2 = refine_mesh(m, [1, 12])
             geo = tpfv_geometry(m2)
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
     end
 
@@ -454,7 +455,7 @@ end
         # Cell 1 and 9 refined (4 sub each), cell 5 stays = 4 + 1 + 4 + 6 unrefined = 15
         @test number_of_cells(m2) == 15
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
-        check_normals(m2)
+        check_mesh_normals(m2)
     end
 
     @testset "higher factors by iteration" begin
@@ -469,7 +470,7 @@ end
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
             @test length(result.cell_map) == 64
             @test all(c -> 1 <= c <= 4, result.cell_map)
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
         @testset "factor=4 single cell 2D" begin
             m = UnstructuredMesh(CartesianMesh((3, 3)))
@@ -479,7 +480,7 @@ end
             geo = tpfv_geometry(m2)
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
             @test count(==(5), result.cell_map) == 16
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
         @testset "factor=3 2D (rounds up to 2 passes)" begin
             m = UnstructuredMesh(CartesianMesh((2, 2)))
@@ -490,7 +491,7 @@ end
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
             # ceil(log2(3)) = 2 passes → 16 sub-cells for the refined cell
             @test count(==(1), result.cell_map) == 16
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
         @testset "factor=4 single cell 3D" begin
             m = UnstructuredMesh(CartesianMesh((2, 2, 2)))
@@ -500,7 +501,7 @@ end
             geo = tpfv_geometry(m2)
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
             @test count(==(1), result.cell_map) == 64
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
         @testset "per-cell mixed high factors" begin
             m = UnstructuredMesh(CartesianMesh((3, 3)))
@@ -512,7 +513,7 @@ end
             @test count(==(1), result.cell_map) == 16
             @test count(==(5), result.cell_map) == 4
             @test count(==(9), result.cell_map) == 1
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
     end
 
@@ -525,7 +526,7 @@ end
             geo = tpfv_geometry(m2)
             @test number_of_cells(m2) == 16
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
         @testset "2D tuple factor (2,1)" begin
             m = UnstructuredMesh(CartesianMesh((2, 2)))
@@ -533,7 +534,7 @@ end
             m2 = refine_mesh(m, [1, 2, 3, 4]; factor = (2, 1))
             geo = tpfv_geometry(m2)
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
         @testset "3D tuple factor (2,2,1)" begin
             m = UnstructuredMesh(CartesianMesh((2, 2, 2)))
@@ -542,7 +543,7 @@ end
             m2 = result.mesh
             geo = tpfv_geometry(m2)
             @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
-            check_normals(m2)
+            check_mesh_normals(m2)
         end
         @testset "tuple factor (1,1) is no-op" begin
             m = UnstructuredMesh(CartesianMesh((2, 2)))
@@ -569,23 +570,6 @@ end
 end
 
 @testset "refine_mesh_radial" begin
-    function check_normals(m_refined)
-        geo = tpfv_geometry(m_refined)
-        for f in 1:number_of_faces(m_refined)
-            l, r = m_refined.faces.neighbors[f]
-            cl = geo.cell_centroids[:, l]
-            cr = geo.cell_centroids[:, r]
-            N = geo.normals[:, f]
-            @test dot(N, cr - cl) > 0
-        end
-        for f in 1:number_of_boundary_faces(m_refined)
-            c = m_refined.boundary_faces.neighbors[f]
-            cc = geo.cell_centroids[:, c]
-            fc = geo.boundary_centroids[:, f]
-            N = geo.boundary_normals[:, f]
-            @test dot(N, fc - cc) > 0
-        end
-    end
 
     @testset "default sectors (no edge splitting)" begin
         m = UnstructuredMesh(CartesianMesh((2, 2)))
@@ -596,7 +580,7 @@ end
         @test number_of_cells(m2) == 16
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
         @test length(result.cell_map) == 16
-        check_normals(m2)
+        check_mesh_normals(m2)
     end
 
     @testset "single cell" begin
@@ -608,7 +592,7 @@ end
         @test number_of_cells(m2) == 12
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
         @test count(==(5), result.cell_map) == 4
-        check_normals(m2)
+        check_mesh_normals(m2)
     end
 
     @testset "n_sectors = 8 (with edge splitting)" begin
@@ -619,7 +603,7 @@ end
         geo = tpfv_geometry(m2)
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
         @test count(==(1), result.cell_map) == 8
-        check_normals(m2)
+        check_mesh_normals(m2)
     end
 
     @testset "n_sectors = 3 (fewer than edges)" begin
@@ -630,7 +614,7 @@ end
         # 4 edges > 3 sectors, so 4 sectors per cell
         @test number_of_cells(m2) == 16
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
-        check_normals(m2)
+        check_mesh_normals(m2)
     end
 
     @testset "empty cells" begin
@@ -645,28 +629,11 @@ end
         m2 = refine_mesh_radial(m, [1, 6])
         geo = tpfv_geometry(m2)
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
-        check_normals(m2)
+        check_mesh_normals(m2)
     end
 end
 
 @testset "merge_cells" begin
-    function check_normals(m_refined)
-        geo = tpfv_geometry(m_refined)
-        for f in 1:number_of_faces(m_refined)
-            l, r = m_refined.faces.neighbors[f]
-            cl = geo.cell_centroids[:, l]
-            cr = geo.cell_centroids[:, r]
-            N = geo.normals[:, f]
-            @test dot(N, cr - cl) > 0
-        end
-        for f in 1:number_of_boundary_faces(m_refined)
-            c = m_refined.boundary_faces.neighbors[f]
-            cc = geo.cell_centroids[:, c]
-            fc = geo.boundary_centroids[:, f]
-            N = geo.boundary_normals[:, f]
-            @test dot(N, fc - cc) > 0
-        end
-    end
 
     @testset "merge two adjacent cells in 1D" begin
         m = UnstructuredMesh(CartesianMesh((3, 1)))
@@ -678,7 +645,7 @@ end
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
         @test result.cell_map[1] == [1, 2]
         @test result.cell_map[2] == [3]
-        check_normals(m2)
+        check_mesh_normals(m2)
     end
 
     @testset "merge all cells" begin
@@ -689,7 +656,7 @@ end
         geo = tpfv_geometry(m2)
         @test number_of_cells(m2) == 1
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
-        check_normals(m2)
+        check_mesh_normals(m2)
     end
 
     @testset "merge multiple groups" begin
@@ -702,7 +669,7 @@ end
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
         @test result.cell_map[1] == [1, 2]
         @test result.cell_map[2] == [3, 4]
-        check_normals(m2)
+        check_mesh_normals(m2)
     end
 
     @testset "merge 2x2 block in 3x3" begin
@@ -713,7 +680,7 @@ end
         geo = tpfv_geometry(m2)
         @test number_of_cells(m2) == 6
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
-        check_normals(m2)
+        check_mesh_normals(m2)
     end
 
     @testset "merge in 3D" begin
@@ -724,7 +691,7 @@ end
         geo = tpfv_geometry(m2)
         @test number_of_cells(m2) == 7
         @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
-        check_normals(m2)
+        check_mesh_normals(m2)
     end
 
     @testset "empty merge" begin
