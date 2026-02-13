@@ -689,6 +689,6 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh, layered_mesh, 
         @test all(geo.volumes .> 0)
         @test vol_result ≈ vol_orig rtol=1e-6
         @test sort(unique(info["layer_indices"])) == [0, 1, 2]
-        @test t < 60.0  # Must complete in reasonable time
+        @test t < 30.0  # Must complete in reasonable time (was hanging before fix)
     end
 end

@@ -92,7 +92,7 @@ function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface;
 end
 
 """
-    _expand_polygon(poly, frac=0.02)
+    _expand_polygon(poly, frac=0.02) -> Vector{SVector{3, T}}
 
 Expand a polygon slightly outward from its centroid.  Each vertex is pushed
 away from the centroid by `frac` times the centroid-to-vertex distance.  This
