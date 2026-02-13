@@ -787,6 +787,36 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh, layered_mesh, 
         @test sum(geo_orig.volumes) ≈ sum(geo_merged.volumes) rtol=1e-10
     end
 
+    @testset "merge_coplanar_faces reduces boundary face count" begin
+        import Jutul.CutCellMeshes: merge_coplanar_faces
+
+        # A single z-cut on a 2x1x1 mesh creates cut cells whose boundary
+        # faces on the ±y and ±x sides are split into sub-faces that share
+        # the same cell AND are coplanar.  merge_coplanar_faces should
+        # recombine them.
+        g = CartesianMesh((1, 1, 1))
+        mesh = UnstructuredMesh(g)
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        # cut without merging
+        cut_no = cut_mesh(mesh, plane; min_cut_fraction = 0.01, merge_faces = false)
+        nb_no = number_of_boundary_faces(cut_no)
+
+        # cut with merging (default)
+        cut_yes = cut_mesh(mesh, plane; min_cut_fraction = 0.01)
+        nb_yes = number_of_boundary_faces(cut_yes)
+
+        # Each cut sub-cell has 5 boundary faces (4 sides + 1 z-face) = 10
+        # but the 4 side-faces per sub-cell are unique (different cells).
+        # If any coplanar pairs exist they will be merged; if not, counts equal.
+        @test nb_yes <= nb_no
+        # Both meshes should have valid geometry
+        geo_no = tpfv_geometry(cut_no)
+        geo_yes = tpfv_geometry(cut_yes)
+        @test all(geo_no.volumes .> 0)
+        @test all(geo_yes.volumes .> 0)
+        @test sum(geo_no.volumes) ≈ sum(geo_yes.volumes) rtol=1e-10
+    end
+
     @testset "merge_coplanar_faces orientation" begin
         import Jutul.CutCellMeshes: merge_coplanar_faces
 

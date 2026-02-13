@@ -123,15 +123,15 @@ function _merge_face_group!(
 
     # Union-Find clustering: merge faces that are coplanar AND share ≥ 2 nodes
     parent = collect(1:nf)
-    function find(x)
+    function uf_find(x)
         while parent[x] != x
             parent[x] = parent[parent[x]]
             x = parent[x]
         end
         return x
     end
-    function unite(a, b)
-        ra, rb = find(a), find(b)
+    function uf_unite(a, b)
+        ra, rb = uf_find(a), uf_find(b)
         if ra != rb
             parent[ra] = rb
         end
@@ -145,7 +145,7 @@ function _merge_face_group!(
                 n1 = face_normals[i]
                 n2 = face_normals[j]
                 if abs(abs(dot(n1, n2)) - 1) < tol
-                    unite(i, j)
+                    uf_unite(i, j)
                 end
             end
         end
@@ -154,7 +154,7 @@ function _merge_face_group!(
     # Group faces by cluster root
     clusters = Dict{Int, Vector{Int}}()
     for i in 1:nf
-        r = find(i)
+        r = uf_find(i)
         push!(get!(clusters, r, Int[]), i)
     end
 
@@ -209,13 +209,23 @@ function _merge_face_group!(
         avg_normal = normalize(sum(face_normals[idx] for idx in cluster))
         ordered_pts = order_polygon_points(pts, avg_normal)
 
-        # Map ordered points back to node indices
+        # Map ordered points back to node indices using a point→node dictionary
+        pt_to_node = Dict{SVector{3, T}, Int}()
+        for n in merged_nodes
+            pt_to_node[node_points[n]] = n
+        end
         ordered_nodes = Int[]
         for pt in ordered_pts
-            for n in merged_nodes
-                if node_points[n] ≈ pt
-                    push!(ordered_nodes, n)
-                    break
+            n = get(pt_to_node, pt, 0)
+            if n != 0
+                push!(ordered_nodes, n)
+            else
+                # Fallback: linear scan with approximate match
+                for mn in merged_nodes
+                    if node_points[mn] ≈ pt
+                        push!(ordered_nodes, mn)
+                        break
+                    end
                 end
             end
         end
