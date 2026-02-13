@@ -312,4 +312,7 @@ function cellmap_to_posmap(x, num_cells = length(x))
 end
 
 include("RadialMeshes/RadialMeshes.jl")
+include("MeshUtils/MeshUtils.jl")
+using .MeshUtils
+export refine_mesh, refine_mesh_radial, merge_cells
 
