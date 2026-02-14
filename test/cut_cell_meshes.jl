@@ -859,4 +859,172 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh, layered_mesh, 
         @test length(info["cell_index"]) > 0
         @test all(1 .<= info["cell_index"] .<= number_of_cells(mesh))
     end
+
+    # ==================================================================
+    # embed_mesh tests
+    # ==================================================================
+    @testset "embed_mesh grid-aligned" begin
+        import Jutul.CutCellMeshes: embed_mesh
+
+        # B is entirely inside A and aligns with A's grid lines
+        g_a = CartesianMesh((4, 4, 4), (4.0, 4.0, 4.0))
+        mesh_a = UnstructuredMesh(g_a)
+
+        g_b = CartesianMesh((2, 2, 2), (2.0, 2.0, 2.0))
+        mesh_b_raw = UnstructuredMesh(g_b)
+        offset = SVector{3, Float64}(1.0, 1.0, 1.0)
+        new_points = [p + offset for p in mesh_b_raw.node_points]
+        mesh_b = Jutul.CutCellMeshes._rebuild_mesh_with_nodes(mesh_b_raw, new_points)
+
+        result, info = embed_mesh(mesh_a, mesh_b; extra_out = true)
+        geo = tpfv_geometry(result)
+
+        vol_a = sum(tpfv_geometry(mesh_a).volumes)
+        vol_result = sum(geo.volumes)
+
+        # Volume conservation
+        @test vol_result ≈ vol_a rtol=1e-8
+
+        # All volumes positive
+        @test all(geo.volumes .> 0)
+
+        # B cells preserved
+        n_b = count(x -> x == :mesh_b, info["cell_origin"])
+        @test n_b == number_of_cells(mesh_b)
+
+        # Total cells: 56 from A + 8 from B = 64
+        n_a = count(x -> x == :mesh_a, info["cell_origin"])
+        @test n_a + n_b == number_of_cells(result)
+
+        # Cell indices valid
+        for c in 1:number_of_cells(result)
+            if info["cell_origin"][c] == :mesh_a
+                @test 1 <= info["cell_index_a"][c] <= number_of_cells(mesh_a)
+                @test info["cell_index_b"][c] == 0
+            else
+                @test info["cell_index_a"][c] == 0
+                @test 1 <= info["cell_index_b"][c] <= number_of_cells(mesh_b)
+            end
+        end
+    end
+
+    @testset "embed_mesh misaligned" begin
+        import Jutul.CutCellMeshes: embed_mesh
+
+        # B does NOT align with A's grid lines, causing cells to be split
+        g_a = CartesianMesh((4, 4, 4), (4.0, 4.0, 4.0))
+        mesh_a = UnstructuredMesh(g_a)
+
+        g_b = CartesianMesh((2, 2, 2), (1.0, 1.0, 1.0))
+        mesh_b_raw = UnstructuredMesh(g_b)
+        offset = SVector{3, Float64}(0.5, 0.5, 0.5)
+        new_points = [p + offset for p in mesh_b_raw.node_points]
+        mesh_b = Jutul.CutCellMeshes._rebuild_mesh_with_nodes(mesh_b_raw, new_points)
+
+        result, info = embed_mesh(mesh_a, mesh_b; extra_out = true)
+        geo = tpfv_geometry(result)
+
+        vol_a = sum(tpfv_geometry(mesh_a).volumes)
+        vol_result = sum(geo.volumes)
+
+        # Volume conservation
+        @test vol_result ≈ vol_a rtol=1e-6
+
+        # All volumes positive
+        @test all(geo.volumes .> 0)
+
+        # B cells preserved exactly
+        n_b = count(x -> x == :mesh_b, info["cell_origin"])
+        @test n_b == number_of_cells(mesh_b)
+
+        # More A cells than original (splitting occurred)
+        n_a = count(x -> x == :mesh_a, info["cell_origin"])
+        @test n_a > number_of_cells(mesh_a) - number_of_cells(mesh_b)
+
+        # Interior normals consistency
+        for f in 1:number_of_faces(result)
+            l, r = result.faces.neighbors[f]
+            cl = geo.cell_centroids[:, l]
+            cr = geo.cell_centroids[:, r]
+            N = geo.normals[:, f]
+            @test dot(N, cr - cl) > 0
+        end
+    end
+
+    @testset "embed_mesh B protruding" begin
+        import Jutul.CutCellMeshes: embed_mesh
+
+        # B extends outside A on one side
+        g_a = CartesianMesh((4, 4, 4), (4.0, 4.0, 4.0))
+        mesh_a = UnstructuredMesh(g_a)
+
+        g_b = CartesianMesh((2, 2, 2), (2.0, 2.0, 2.0))
+        mesh_b_raw = UnstructuredMesh(g_b)
+        offset = SVector{3, Float64}(3.0, 1.0, 1.0)
+        new_points = [p + offset for p in mesh_b_raw.node_points]
+        mesh_b = Jutul.CutCellMeshes._rebuild_mesh_with_nodes(mesh_b_raw, new_points)
+
+        result, info = embed_mesh(mesh_a, mesh_b; extra_out = true)
+        geo = tpfv_geometry(result)
+
+        vol_a = sum(tpfv_geometry(mesh_a).volumes)
+        vol_b = sum(tpfv_geometry(mesh_b).volumes)
+        vol_result = sum(geo.volumes)
+
+        # Volume should be A + part of B outside A
+        expected_vol = vol_a + vol_b / 2
+        @test vol_result ≈ expected_vol rtol=1e-6
+
+        # All volumes positive
+        @test all(geo.volumes .> 0)
+
+        # B cells preserved exactly
+        n_b = count(x -> x == :mesh_b, info["cell_origin"])
+        @test n_b == number_of_cells(mesh_b)
+    end
+
+    @testset "embed_mesh without extra_out" begin
+        import Jutul.CutCellMeshes: embed_mesh
+
+        g_a = CartesianMesh((3, 3, 3), (3.0, 3.0, 3.0))
+        mesh_a = UnstructuredMesh(g_a)
+
+        g_b = CartesianMesh((1, 1, 1), (1.0, 1.0, 1.0))
+        mesh_b_raw = UnstructuredMesh(g_b)
+        offset = SVector{3, Float64}(1.0, 1.0, 1.0)
+        new_points = [p + offset for p in mesh_b_raw.node_points]
+        mesh_b = Jutul.CutCellMeshes._rebuild_mesh_with_nodes(mesh_b_raw, new_points)
+
+        # Without extra_out should just return mesh
+        result = embed_mesh(mesh_a, mesh_b)
+        @test isa(result, UnstructuredMesh)
+
+        vol_a = sum(tpfv_geometry(mesh_a).volumes)
+        vol_result = sum(tpfv_geometry(result).volumes)
+        @test vol_result ≈ vol_a rtol=1e-6
+    end
+
+    @testset "embed_mesh B fully outside A" begin
+        import Jutul.CutCellMeshes: embed_mesh
+
+        # B is completely outside A -- should just add B's cells
+        g_a = CartesianMesh((2, 2, 2), (2.0, 2.0, 2.0))
+        mesh_a = UnstructuredMesh(g_a)
+
+        g_b = CartesianMesh((2, 2, 2), (1.0, 1.0, 1.0))
+        mesh_b_raw = UnstructuredMesh(g_b)
+        offset = SVector{3, Float64}(5.0, 5.0, 5.0)
+        new_points = [p + offset for p in mesh_b_raw.node_points]
+        mesh_b = Jutul.CutCellMeshes._rebuild_mesh_with_nodes(mesh_b_raw, new_points)
+
+        result, info = embed_mesh(mesh_a, mesh_b; extra_out = true)
+
+        # Total cells = A cells + B cells (no overlap)
+        @test number_of_cells(result) == number_of_cells(mesh_a) + number_of_cells(mesh_b)
+
+        vol_a = sum(tpfv_geometry(mesh_a).volumes)
+        vol_b = sum(tpfv_geometry(mesh_b).volumes)
+        vol_result = sum(tpfv_geometry(result).volumes)
+        @test vol_result ≈ vol_a + vol_b rtol=1e-8
+    end
 end
