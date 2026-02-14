@@ -141,11 +141,20 @@ function _merge_face_group!(
         for j in (i+1):nf
             shared = length(intersect(face_node_sets[i], face_node_sets[j]))
             if shared >= 2
-                # Check coplanarity
+                # Check coplanarity: normals must be parallel AND faces
+                # must lie on the same plane (a shared node's position
+                # relative to the other face's plane must be near-zero).
                 n1 = face_normals[i]
                 n2 = face_normals[j]
                 if abs(abs(dot(n1, n2)) - 1) < tol
-                    uf_unite(i, j)
+                    # Verify same-plane: pick a node from face j and
+                    # check its distance from face i's plane.
+                    ref_pt = node_points[face_node_lists[i][1]]
+                    test_pt = node_points[face_node_lists[j][1]]
+                    plane_dist = abs(dot(n1, test_pt - ref_pt))
+                    if plane_dist < tol * max(1.0, norm(test_pt))
+                        uf_unite(i, j)
+                    end
                 end
             end
         end
@@ -168,13 +177,6 @@ function _merge_face_group!(
             union!(all_nodes, face_node_sets[idx])
         end
 
-        # Mark source faces as done
-        for idx in cluster
-            done[fgroup[idx]] = true
-        end
-
-        # Find interior nodes (shared by ≥ 2 faces in this cluster) that are
-        # not on the boundary of the merged polygon.
         # The boundary of the merged polygon consists of edges that appear
         # exactly once across all faces in the cluster.
         edge_count = Dict{Tuple{Int,Int}, Int}()
@@ -220,7 +222,6 @@ function _merge_face_group!(
             if n != 0
                 push!(ordered_nodes, n)
             else
-                # Fallback: linear scan with approximate match
                 for mn in merged_nodes
                     if node_points[mn] ≈ pt
                         push!(ordered_nodes, mn)
@@ -228,6 +229,16 @@ function _merge_face_group!(
                     end
                 end
             end
+        end
+
+        # Only merge if the resulting polygon is convex on its plane
+        if !_is_convex_polygon([node_points[n] for n in ordered_nodes], avg_normal)
+            continue  # leave faces un-merged for the fallback loop
+        end
+
+        # Mark source faces as done
+        for idx in cluster
+            done[fgroup[idx]] = true
         end
 
         # Fix orientation for interior faces: normal should point from left to right
@@ -444,4 +455,35 @@ function _rebuild_mesh(
         face_neighbors,
         bnd_cells
     )
+end
+
+"""
+    _is_convex_polygon(pts, normal; tol=1e-10)
+
+Check whether a 3D planar polygon (given as ordered vertices) is convex when
+projected onto its plane.  `normal` is the face normal used to define the
+winding direction.  All cross products of consecutive edge pairs must point
+in the same direction as `normal` (or be zero for collinear edges).
+"""
+function _is_convex_polygon(
+    pts::Vector{SVector{3, T}},
+    normal::SVector{3, T};
+    tol::Real = 1e-10
+) where T
+    n = length(pts)
+    if n <= 3
+        return true  # triangles are always convex
+    end
+    for i in 1:n
+        j = mod1(i + 1, n)
+        k = mod1(i + 2, n)
+        e1 = pts[j] - pts[i]
+        e2 = pts[k] - pts[j]
+        c = cross(e1, e2)
+        d = dot(c, normal)
+        if d < -tol
+            return false
+        end
+    end
+    return true
 end

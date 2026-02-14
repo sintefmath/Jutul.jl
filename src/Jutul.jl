@@ -156,7 +156,7 @@ module Jutul
 
     # Cut-cell meshes
     include("meshes/CutCellMeshes/CutCellMeshes.jl")
-    import Jutul.CutCellMeshes: cut_mesh, PlaneCut, PolygonalSurface, glue_mesh, cut_and_displace_mesh, layered_mesh, depth_grid_to_surface, embed_mesh
+    import Jutul.CutCellMeshes: cut_mesh, PlaneCut, PolygonalSurface, glue_mesh, cut_and_displace_mesh, layered_mesh, depth_grid_to_surface, embed_mesh, merge_split_cells, merge_small_cells
 
     # This is to make Jutul simulators work nicely with nested ForwardDiff.
     JutulSimulateTag = ForwardDiff.Tag{typeof(simulate), <:JutulEntity}

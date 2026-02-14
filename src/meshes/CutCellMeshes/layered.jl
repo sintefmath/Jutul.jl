@@ -88,7 +88,8 @@ below).
 function layered_mesh(
     mesh::UnstructuredMesh{3},
     surfaces::Vector{<:PolygonalSurface};
-    min_cut_fraction::Real = 0.01
+    min_cut_fraction::Real = 0.01,
+    merge_cells::Bool = true
 )
     T = Float64
     n_surfaces = length(surfaces)
@@ -143,6 +144,16 @@ function layered_mesh(
         "layer_indices" => layer_indices,
         "cell_index" => cell_map
     )
+
+    # ----------------------------------------------------------------
+    # 3. Optionally merge cells that came from the same original cell
+    #    and ended up in the same layer (unnecessarily split).
+    # ----------------------------------------------------------------
+    if merge_cells
+        current_mesh, info = merge_split_cells(current_mesh, info;
+            category_key = "layer_indices"
+        )
+    end
 
     return (current_mesh, info)
 end
