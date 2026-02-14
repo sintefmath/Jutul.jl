@@ -91,7 +91,7 @@ function embed_mesh(
     end
 
     # ------------------------------------------------------------------
-    # 4. Remove all cells whose centroids are inside B
+    # 3. Remove all cells whose centroids are inside B
     # ------------------------------------------------------------------
     nc_cut = number_of_cells(current_mesh)
     geo = tpfv_geometry(current_mesh)
@@ -122,7 +122,7 @@ function embed_mesh(
     end
 
     # ------------------------------------------------------------------
-    # 5. Glue trimmed A with B
+    # 4. Glue trimmed A with B
     # ------------------------------------------------------------------
     result, glue_info = glue_mesh(trimmed_a, mesh_b;
         tol = tol,
@@ -189,8 +189,9 @@ function _point_inside_mesh(
 
         # Ray-plane intersection: t = dot(n, centroid - pt) / dot(n, ray_dir)
         denom = dot(n, ray_dir)
-        if abs(denom) < eps(T) * 100
-            continue  # Ray is parallel to face
+        # Skip faces nearly parallel to the ray (scaled epsilon for robustness)
+        if abs(denom) < 100 * eps(T)
+            continue
         end
 
         t = dot(n, centroids[i] - pt) / denom
