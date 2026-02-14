@@ -148,11 +148,15 @@ function _merge_face_group!(
                 n2 = face_normals[j]
                 if abs(abs(dot(n1, n2)) - 1) < tol
                     # Verify same-plane: pick a node from face j and
-                    # check its distance from face i's plane.
+                    # check its distance from face i's plane.  Scale
+                    # tolerance by the face diagonal to be independent
+                    # of the coordinate system origin.
                     ref_pt = node_points[face_node_lists[i][1]]
                     test_pt = node_points[face_node_lists[j][1]]
                     plane_dist = abs(dot(n1, test_pt - ref_pt))
-                    if plane_dist < tol * max(1.0, norm(test_pt))
+                    diag = norm(test_pt - ref_pt)
+                    char_len = max(one(T), diag)
+                    if plane_dist < tol * char_len
                         uf_unite(i, j)
                     end
                 end
