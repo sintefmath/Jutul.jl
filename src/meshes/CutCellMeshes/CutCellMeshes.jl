@@ -9,7 +9,9 @@ module CutCellMeshes
     include("merge_faces.jl")
     include("gluing.jl")
     include("layered.jl")
+    include("embedding.jl")
 
     export cut_mesh, glue_mesh, cut_and_displace_mesh
     export layered_mesh, depth_grid_to_surface
+    export embed_mesh
 end
