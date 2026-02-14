@@ -1027,4 +1027,179 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh, layered_mesh, 
         vol_result = sum(tpfv_geometry(result).volumes)
         @test vol_result ≈ vol_a + vol_b rtol=1e-8
     end
+
+    # ==================================================================
+    # merge_split_cells tests
+    # ==================================================================
+    @testset "merge_split_cells basic" begin
+        import Jutul.CutCellMeshes: merge_split_cells
+
+        g = CartesianMesh((1, 1, 1), (100.0, 100.0, 100.0))
+        mesh = UnstructuredMesh(g)
+
+        N = 2
+        xs = range(0.0, 100.0, length=N)
+        ys = range(0.0, 100.0, length=N)
+        # Non-flat surface that causes over-splitting
+        s1 = depth_grid_to_surface(xs, ys, [50.0 50.0; 55.0 50.0])
+
+        result_no, info_no = layered_mesh(mesh, [s1]; merge_cells=false)
+        @test number_of_cells(result_no) > 2  # over-split
+
+        result_yes, info_yes = layered_mesh(mesh, [s1]; merge_cells=true)
+        @test number_of_cells(result_yes) == 2  # correctly merged
+
+        # Volume preserved
+        geo_orig = tpfv_geometry(mesh)
+        geo_yes = tpfv_geometry(result_yes)
+        @test sum(geo_yes.volumes) ≈ sum(geo_orig.volumes) rtol=1e-8
+        @test all(geo_yes.volumes .> 0)
+
+        # Info has correct keys
+        @test haskey(info_yes, "cell_index")
+        @test haskey(info_yes, "layer_indices")
+        @test length(info_yes["cell_index"]) == 2
+        @test length(info_yes["layer_indices"]) == 2
+    end
+
+    @testset "merge_split_cells reduces cells on perturbed surface" begin
+        import Jutul.CutCellMeshes: merge_split_cells
+
+        g = CartesianMesh((3, 3, 3), (100.0, 100.0, 100.0))
+        mesh = UnstructuredMesh(g)
+        N = 4
+        xs = range(0.0, 100.0, length=N)
+        ys = range(0.0, 100.0, length=N)
+        depths = [50.0 50.0 50.0 50.0;
+                  53.0 48.0 55.0 50.0;
+                  50.0 52.0 47.0 54.0;
+                  50.0 50.0 50.0 50.0]
+        s1 = depth_grid_to_surface(xs, ys, depths)
+
+        result_no, _ = layered_mesh(mesh, [s1]; merge_cells=false)
+        result_yes, info = layered_mesh(mesh, [s1]; merge_cells=true)
+
+        # Merge should significantly reduce cell count
+        @test number_of_cells(result_yes) < number_of_cells(result_no)
+
+        # Geometry is valid
+        geo = tpfv_geometry(result_yes)
+        geo_orig = tpfv_geometry(mesh)
+        @test sum(geo.volumes) ≈ sum(geo_orig.volumes) rtol=1e-6
+        @test all(geo.volumes .> 0)
+
+        # Interior normals point from L to R
+        for f in 1:number_of_faces(result_yes)
+            l, r = result_yes.faces.neighbors[f]
+            cl = geo.cell_centroids[:, l]
+            cr = geo.cell_centroids[:, r]
+            N_f = geo.normals[:, f]
+            @test dot(N_f, cr - cl) > 0
+        end
+    end
+
+    @testset "merge_split_cells no-op on flat surface" begin
+        import Jutul.CutCellMeshes: merge_split_cells
+
+        # Flat surface: all triangles are coplanar, so no over-splitting
+        g = CartesianMesh((3, 3, 3), (100.0, 100.0, 100.0))
+        mesh = UnstructuredMesh(g)
+        N = 4
+        xs = range(0.0, 100.0, length=N)
+        ys = range(0.0, 100.0, length=N)
+        s1 = depth_grid_to_surface(xs, ys, fill(50.0, N, N))
+
+        result_no, _ = layered_mesh(mesh, [s1]; merge_cells=false)
+        result_yes, _ = layered_mesh(mesh, [s1]; merge_cells=true)
+
+        # No change because no over-splitting
+        @test number_of_cells(result_yes) == number_of_cells(result_no)
+    end
+
+    # ==================================================================
+    # merge_small_cells tests
+    # ==================================================================
+    @testset "merge_small_cells basic" begin
+        import Jutul.CutCellMeshes: merge_small_cells
+
+        g = CartesianMesh((5, 5, 5), (100.0, 100.0, 100.0))
+        mesh = UnstructuredMesh(g)
+        N = 6
+        xs = range(0.0, 100.0, length=N)
+        ys = range(0.0, 100.0, length=N)
+        depths = fill(50.0, N, N)
+        for i in 1:N, j in 1:N
+            depths[i,j] += sin(i*0.5) * 5.0 + cos(j*0.3) * 3.0
+        end
+        s1 = depth_grid_to_surface(xs, ys, depths)
+
+        result, info = layered_mesh(mesh, [s1]; merge_cells=true)
+        merged, minfo = merge_small_cells(result, mesh, info; threshold=0.5)
+
+        # Should reduce cell count
+        @test number_of_cells(merged) <= number_of_cells(result)
+
+        # Volume preserved
+        geo_orig = tpfv_geometry(mesh)
+        geo_merged = tpfv_geometry(merged)
+        @test sum(geo_merged.volumes) ≈ sum(geo_orig.volumes) rtol=1e-6
+        @test all(geo_merged.volumes .> 0)
+
+        # Info has correct keys
+        @test haskey(minfo, "cell_index")
+        @test haskey(minfo, "layer_indices")
+    end
+
+    @testset "merge_small_cells does nothing with low threshold" begin
+        import Jutul.CutCellMeshes: merge_small_cells
+
+        g = CartesianMesh((3, 3, 3), (100.0, 100.0, 100.0))
+        mesh = UnstructuredMesh(g)
+        N = 4
+        xs = range(0.0, 100.0, length=N)
+        ys = range(0.0, 100.0, length=N)
+        s1 = depth_grid_to_surface(xs, ys, fill(50.0, N, N))
+
+        result, info = layered_mesh(mesh, [s1])
+        merged, _ = merge_small_cells(result, mesh, info; threshold=0.001)
+
+        # Very low threshold: nothing to merge
+        @test number_of_cells(merged) == number_of_cells(result)
+    end
+
+    # ==================================================================
+    # merge_coplanar_faces convexity check
+    # ==================================================================
+    @testset "merge_coplanar_faces convexity check" begin
+        import Jutul.CutCellMeshes: merge_coplanar_faces, _is_convex_polygon
+
+        # Test the convexity checker directly
+        # Convex square
+        pts_convex = [
+            SVector{3, Float64}(0.0, 0.0, 0.0),
+            SVector{3, Float64}(1.0, 0.0, 0.0),
+            SVector{3, Float64}(1.0, 1.0, 0.0),
+            SVector{3, Float64}(0.0, 1.0, 0.0)
+        ]
+        @test _is_convex_polygon(pts_convex, SVector{3, Float64}(0.0, 0.0, 1.0))
+
+        # Non-convex (L-shape approximation)
+        pts_nonconvex = [
+            SVector{3, Float64}(0.0, 0.0, 0.0),
+            SVector{3, Float64}(2.0, 0.0, 0.0),
+            SVector{3, Float64}(2.0, 1.0, 0.0),
+            SVector{3, Float64}(1.0, 1.0, 0.0),
+            SVector{3, Float64}(1.0, 2.0, 0.0),
+            SVector{3, Float64}(0.0, 2.0, 0.0)
+        ]
+        @test !_is_convex_polygon(pts_nonconvex, SVector{3, Float64}(0.0, 0.0, 1.0))
+
+        # Triangle is always convex
+        pts_tri = [
+            SVector{3, Float64}(0.0, 0.0, 0.0),
+            SVector{3, Float64}(1.0, 0.0, 0.0),
+            SVector{3, Float64}(0.5, 1.0, 0.0)
+        ]
+        @test _is_convex_polygon(pts_tri, SVector{3, Float64}(0.0, 0.0, 1.0))
+    end
 end
