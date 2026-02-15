@@ -203,11 +203,24 @@ function _merge_face_group!(
             end
         end
 
-        # Extract the boundary polygon by chaining boundary edges
+        # Check that the boundary forms a simple polygon: every boundary
+        # node must have exactly two boundary edges.  If any node has a
+        # different degree the merged outline is non-simple and cannot be
+        # represented as a single convex polygon.
+        bnd_deg = Dict{Int, Int}()
+        for (a, b) in boundary_edges
+            bnd_deg[a] = get(bnd_deg, a, 0) + 1
+            bnd_deg[b] = get(bnd_deg, b, 0) + 1
+        end
+        if any(d != 2 for d in values(bnd_deg))
+            continue  # non-simple boundary; leave faces un-merged
+        end
+
+        # Extract the boundary polygon by chaining boundary edges.
         merged_nodes = _chain_boundary_edges(boundary_edges)
-        if isempty(merged_nodes)
-            # Fallback: use all nodes sorted by angle
-            merged_nodes = collect(all_nodes)
+        if isempty(merged_nodes) || length(merged_nodes) != length(bnd_deg)
+            # Chain did not cover all boundary nodes
+            continue  # leave faces un-merged
         end
 
         # Order the polygon nodes correctly
