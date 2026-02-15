@@ -89,7 +89,7 @@ function layered_mesh(
     mesh::UnstructuredMesh{3},
     surfaces::Vector{<:PolygonalSurface};
     min_cut_fraction::Real = 0.01,
-    merge_cells::Bool = true
+    merge_cells::Bool = false
 )
     T = Float64
     n_surfaces = length(surfaces)

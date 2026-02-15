@@ -848,6 +848,43 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh, layered_mesh, 
         end
     end
 
+    @testset "merge_coplanar_faces after layered_mesh preserves volume" begin
+        import Jutul.CutCellMeshes: merge_coplanar_faces
+
+        # Reproduce a bug where merge_coplanar_faces created holes
+        # when applied after layered_mesh with a non-planar surface.  The root
+        # cause was non-simple polygon boundaries (nodes with degree != 2) that
+        # the greedy chain algorithm could not trace correctly.
+        L = 1000.0
+        g = CartesianMesh((3, 3, 3), (L, L, 100.0))
+        mesh = UnstructuredMesh(g)
+
+        N = 4
+        xs = range(0.0, L, length = N)
+        ys = range(0.0, L, length = N)
+
+        # Use a deterministic non-planar surface that exercises the fix
+        zvals = [50.0 + 5.0 * sin(2π * (i - 1) / (N - 1)) * cos(2π * (j - 1) / (N - 1))
+                 for i in 1:N, j in 1:N]
+        surf = depth_grid_to_surface(xs, ys, zvals)
+        result, _ = layered_mesh(mesh, [surf])
+
+        geo_before = tpfv_geometry(result)
+        vol_before = sum(geo_before.volumes)
+
+        merged = merge_coplanar_faces(result)
+        geo_after = tpfv_geometry(merged)
+        vol_after = sum(geo_after.volumes)
+
+        # Volume must be preserved (tight tolerance)
+        @test vol_after ≈ vol_before rtol = 1e-6
+        # All cell volumes must remain positive
+        @test all(geo_after.volumes .> 0)
+        # Face count must not increase
+        @test number_of_faces(merged) <= number_of_faces(result)
+        @test number_of_boundary_faces(merged) <= number_of_boundary_faces(result)
+    end
+
     @testset "merge_faces with extra_out" begin
         g = CartesianMesh((3, 3, 3))
         mesh = UnstructuredMesh(g)
