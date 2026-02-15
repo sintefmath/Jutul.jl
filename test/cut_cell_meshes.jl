@@ -851,7 +851,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh, layered_mesh, 
     @testset "merge_coplanar_faces after layered_mesh preserves volume" begin
         import Jutul.CutCellMeshes: merge_coplanar_faces
 
-        # Reproduce the issue from GitHub: merge_coplanar_faces created holes
+        # Reproduce a bug where merge_coplanar_faces created holes
         # when applied after layered_mesh with a non-planar surface.  The root
         # cause was non-simple polygon boundaries (nodes with degree != 2) that
         # the greedy chain algorithm could not trace correctly.

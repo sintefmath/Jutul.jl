@@ -206,7 +206,7 @@ function _merge_face_group!(
         # Check that the boundary forms a simple polygon: every boundary
         # node must have exactly two boundary edges.  If any node has a
         # different degree the merged outline is non-simple and cannot be
-        # represented as a single convex polygon.
+        # properly chained into a single polygon.
         bnd_deg = Dict{Int, Int}()
         for (a, b) in boundary_edges
             bnd_deg[a] = get(bnd_deg, a, 0) + 1
