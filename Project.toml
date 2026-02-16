@@ -69,7 +69,7 @@ JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
 AMGCLWrap = "=0.3.2"
 AlgebraicMultigrid = "0.5.1"
 Crayons = "4.1.1"
-DataStructures = "0.18.13"
+DataStructures = "0.18.13, 0.19"
 DifferentiationInterface = "0.7.0"
 ExprTools = "0.1.8"
 ForwardDiff = "0.10.30, 1"
