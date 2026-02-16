@@ -78,8 +78,10 @@ right-hand side vector, both with boundary conditions applied.
 
 # Keyword arguments
 - `biot_coefficient`: Biot coefficient (scalar or per-cell vector), default 1.0.
-- `boundary_displacement`: If `nothing` (default), zero displacement on all boundary nodes.
-  If a vector of length `D * num_nodes`, the values at boundary DOFs are used as prescribed displacement.
+- `boundary_displacement`: If `nothing` (default), zero displacement on all
+  boundary nodes. If a vector of length `D * num_nodes`, the values at boundary
+  DOFs are used as prescribed displacement. Insert NaN if a boundary DOF should
+  be free (not prescribed).
 """
 function assemble_vem_elasticity(
     setup::VEMElasticitySetup{D},
@@ -141,10 +143,13 @@ function assemble_vem_elasticity(
         for d in 1:D
             dof = D * (node - 1) + d
             push!(bnd_dof_set, dof)
-            if boundary_displacement !== nothing
-                bnd_dof_vals[dof] = boundary_displacement[dof]
-            else
+            if isnothing(boundary_displacement)
                 bnd_dof_vals[dof] = 0.0
+            else
+                disp = boundary_displacement[dof]
+                if isfinite(disp)
+                    bnd_dof_vals[dof] = disp
+                end
             end
         end
     end
