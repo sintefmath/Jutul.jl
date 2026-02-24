@@ -357,6 +357,36 @@ function SimulationModel(domain, system;
     return model
 end
 
+function SimulationModel{D,S,F,C}(
+        domain,
+        system,
+        context,
+        formulation,
+        data_domain,
+        primary_variables,
+        secondary_variables,
+        parameters,
+        equations,
+        outputs,
+        extra
+    )
+    # Backward compatibility constructor
+    return SimulationModel{D,S,F,C}(
+        domain,
+        system,
+        context,
+        formulation,
+        data_domain,
+        primary_variables,
+        secondary_variables,
+        parameters,
+        equations,
+        outputs,
+        extra,
+        1
+    )
+end
+
 """
     physical_representation(m::SimulationModel)
 
