@@ -254,6 +254,7 @@ struct SimulationModel{O<:JutulDomain,
     equations::OrderedDict{Symbol, Any}
     output_variables::Vector{Symbol}
     extra::OrderedDict{Symbol, Any}
+    optimization_level::Int
 end
 
 """
@@ -272,6 +273,7 @@ function SimulationModel(domain, system;
                             secondary_variables = missing,
                             parameters = missing,
                             equations = missing,
+                            optimization_level = 1,
                             outputs = Vector{Symbol}(),
                             kwarg...
                         )
@@ -306,12 +308,24 @@ function SimulationModel(domain, system;
     if need_equations
         equations = OrderedDict{Symbol,JutulEquation}()
     end
-    outputs = Vector{Symbol}()
     D = typeof(domain)
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, data_domain, primary_variables, secondary_variables, parameters, equations, outputs, extra)
+    model = SimulationModel{D,S,F,C}(
+        domain,
+        system,
+        context,
+        formulation,
+        data_domain,
+        primary_variables,
+        secondary_variables,
+        parameters,
+        equations,
+        outputs,
+        extra,
+        optimization_level
+    )
     update_model_pre_selection!(model)
     if need_primary
         select_primary_variables!(model)
@@ -341,6 +355,36 @@ function SimulationModel(domain, system;
     select_output_variables!(model, output_level)
     update_model_post_selection!(model)
     return model
+end
+
+function SimulationModel{D,S,F,C}(
+        domain,
+        system,
+        context,
+        formulation,
+        data_domain,
+        primary_variables,
+        secondary_variables,
+        parameters,
+        equations,
+        outputs,
+        extra
+    ) where {D,S,F,C}
+    # Backward compatibility constructor
+    return SimulationModel{D,S,F,C}(
+        domain,
+        system,
+        context,
+        formulation,
+        data_domain,
+        primary_variables,
+        secondary_variables,
+        parameters,
+        equations,
+        outputs,
+        extra,
+        1
+    )
 end
 
 """
@@ -531,7 +575,8 @@ import Base: getindex, @propagate_inbounds, parent, size, axes
 
 struct JutulStorage{K}
     data::Union{JUTUL_OUTPUT_TYPE, K}
-    function JutulStorage(S = JUTUL_OUTPUT_TYPE(); kwarg...)
+    always_mutable::Bool
+    function JutulStorage(S = JUTUL_OUTPUT_TYPE(); always_mutable = false, kwarg...)
         if isa(S, AbstractDict)
             K = Nothing
             for (k, v) in kwarg
@@ -545,11 +590,14 @@ struct JutulStorage{K}
             K = typeof(S)
             @assert length(kwarg) == 0
         end
-        return new{K}(S)
+        return new{K}(S, always_mutable)
     end
 end
 
 function convert_to_immutable_storage(S::JutulStorage)
+    if getfield(S, :always_mutable)
+        return S
+    end
     tup = convert_to_immutable_storage(data(S))
     return JutulStorage(tup)
 end
