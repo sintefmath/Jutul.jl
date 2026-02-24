@@ -500,7 +500,7 @@ function setup_storage_model(storage, model)
         end
         push!(extra_keys, k)
     end
-    mutable_references = model.optimization_level > 0
+    mutable_references = model.optimization_level < 1
     vars = JutulStorage(always_mutable = mutable_references)
     if !mutable_references
         primary = NamedTuple(pairs(primary))
