@@ -531,7 +531,8 @@ import Base: getindex, @propagate_inbounds, parent, size, axes
 
 struct JutulStorage{K}
     data::Union{JUTUL_OUTPUT_TYPE, K}
-    function JutulStorage(S = JUTUL_OUTPUT_TYPE(); kwarg...)
+    always_mutable::Bool
+    function JutulStorage(S = JUTUL_OUTPUT_TYPE(); always_mutable = false, kwarg...)
         if isa(S, AbstractDict)
             K = Nothing
             for (k, v) in kwarg
@@ -545,11 +546,14 @@ struct JutulStorage{K}
             K = typeof(S)
             @assert length(kwarg) == 0
         end
-        return new{K}(S)
+        return new{K}(S, always_mutable)
     end
 end
 
 function convert_to_immutable_storage(S::JutulStorage)
+    if getfield(S, :always_mutable)
+        return S
+    end
     tup = convert_to_immutable_storage(data(S))
     return JutulStorage(tup)
 end
