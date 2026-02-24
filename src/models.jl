@@ -484,7 +484,6 @@ end
 function setup_storage_model(storage, model)
     # Reference the variable definitions used for the model.
     # These are immutable, unlike the model definitions.
-    vars = JutulStorage()
     primary = get_primary_variables(model)
     secondary = get_secondary_variables(model)
     parameters = get_parameters(model)
@@ -501,9 +500,16 @@ function setup_storage_model(storage, model)
         end
         push!(extra_keys, k)
     end
-    vars[:primary_variables] = NamedTuple(pairs(primary))
-    vars[:secondary_variables] = NamedTuple(pairs(secondary))
-    vars[:parameters] = NamedTuple(pairs(parameters))
+    mutable_references = model.optimization_level > 0
+    vars = JutulStorage(always_mutable = mutable_references)
+    if !mutable_references
+        primary = NamedTuple(pairs(primary))
+        secondary = NamedTuple(pairs(secondary))
+        parameters = NamedTuple(pairs(parameters))
+    end
+    vars[:primary_variables] = primary
+    vars[:secondary_variables] = secondary
+    vars[:parameters] = parameters
     vars[:extra_variable_fields] = extra_keys
     storage[:variable_definitions] = vars
     # Allow for dispatch specific to model's constitutive parts.

@@ -254,6 +254,7 @@ struct SimulationModel{O<:JutulDomain,
     equations::OrderedDict{Symbol, Any}
     output_variables::Vector{Symbol}
     extra::OrderedDict{Symbol, Any}
+    optimization_level::Int
 end
 
 """
@@ -272,6 +273,7 @@ function SimulationModel(domain, system;
                             secondary_variables = missing,
                             parameters = missing,
                             equations = missing,
+                            optimization_level = 1,
                             outputs = Vector{Symbol}(),
                             kwarg...
                         )
@@ -306,12 +308,24 @@ function SimulationModel(domain, system;
     if need_equations
         equations = OrderedDict{Symbol,JutulEquation}()
     end
-    outputs = Vector{Symbol}()
     D = typeof(domain)
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(domain, system, context, formulation, data_domain, primary_variables, secondary_variables, parameters, equations, outputs, extra)
+    model = SimulationModel{D,S,F,C}(
+        domain,
+        system,
+        context,
+        formulation,
+        data_domain,
+        primary_variables,
+        secondary_variables,
+        parameters,
+        equations,
+        outputs,
+        extra,
+        optimization_level
+    )
     update_model_pre_selection!(model)
     if need_primary
         select_primary_variables!(model)
