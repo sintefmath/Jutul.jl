@@ -369,7 +369,7 @@ function SimulationModel{D,S,F,C}(
         equations,
         outputs,
         extra
-    )
+    ) where {D,S,F,C}
     # Backward compatibility constructor
     return SimulationModel{D,S,F,C}(
         domain,
