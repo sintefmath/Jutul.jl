@@ -96,9 +96,9 @@ function find_jac_position(
 
     row = target_entity_offset + target_entity_index + row_base
     col = source_entity_offset + source_entity_index + col_base
-    inner_layout = EntityMajorLayout()
 
     adjoint_layout = represented_as_adjoint(row_layout)
+    inner_layout = EntityMajorLayout(adjoint_layout)
     block_matrix_length = N*N
     if adjoint_layout
         @assert represented_as_adjoint(col_layout)
