@@ -58,11 +58,17 @@ function store_output!(states, reports, step, sim, config, report; substates = m
     # We always keep reports in memory since they are used for timestepping logic
     push!(reports, report)
     t_out = @elapsed if mem_out || file_out
-        @tic "output state" state = get_output_state(sim)
-        if !ismissing(substates)
-            state[:substates] = substates
+        @tic "output state" begin
+            state = get_output_state(sim)
+            if !ismissing(substates)
+                state[:substates] = substates
+            end
         end
         @tic "output report" out_report = get_output_report(sim, report, config[:report_level])
+        F = config[:output_function]
+        if !ismissing(F)
+            state = F(state, out_report)
+        end
         @tic "write" if file_out
             write_result_jld2(path, state, out_report, step)
             for i in 1:(step-config[:in_memory_reports])
