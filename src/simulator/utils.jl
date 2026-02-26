@@ -47,9 +47,14 @@ function get_tstr(dT, lim = 3)
     end
 end
 
-function Base.show(io::IO, t::MIME"text/plain", sim::JutulSimulator)
-    T = typeof(sim)
-    println(io, "$T:")
+function Base.show(io::IO, t::MIME"text/plain", @nospecialize(sim::JutulSimulator))
+    nn = :JutulSimulator
+    try
+        nn = typeof(sim).name.name
+    catch
+
+    end
+    println(io, "$nn\n")
     for f in fieldnames(typeof(sim))
         p = getfield(sim, f)
         print(io, "  $f:\n")
