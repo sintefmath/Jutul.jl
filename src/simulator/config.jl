@@ -51,6 +51,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :in_memory_reports, 10, "Limit for number of reports kept in memory if output_path is provided.", types = Int)
     add_option!(cfg, :report_level, 0, "Level of information stored in reports when written to disk.", types = Int)
     add_option!(cfg, :output_substates, false, "Store substates (between report steps) as field on each state.", types = Bool)
+    add_option!(cfg, :output_function, missing, "Function on the form (state, report) -> state that is run before output is written to disk or returned. This can be used to remove fields or add data. Note that it is easy to break the restart functionality if you modify the state in a non-compatible way. Use with care.")
 
     # Hooks
     add_option!(cfg, :post_ministep_hook, missing, "Hook to run after each ministep (successful or not) on format (done, report, sim, dt, forces, max_iter, cfg) -> (done, report)")
