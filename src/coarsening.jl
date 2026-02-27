@@ -94,6 +94,7 @@ function coarsen_data_domain(D::DataDomain, partition;
         functions = Dict(),
         default = CoarsenByArithmeticAverage(),
         default_other = CoarsenByLargestCount(),
+        verbose = false,
         kwarg...
     )
     for (k, v) in pairs(kwarg)
@@ -126,6 +127,9 @@ function coarsen_data_domain(D::DataDomain, partition;
                     f = get(functions, name, default)
                 else
                     f = get(functions, name, default_other)
+                end
+                if verbose
+                    jutul_message("Coarsening", "$name ($Te) coarsening using function $f")
                 end
                 coarseval = apply_coarsening_function!(coarseval, val, f, cD, D, name, e, coarse_to_cells = coarse_to_cells)
             else
