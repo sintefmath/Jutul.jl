@@ -206,10 +206,11 @@ function update_equation_in_entity!(eq_buf::AbstractVector{T_e}, self_cell, stat
         @inbounds eq_buf[i] = accumulation_term(M, M₀, Δt, i, self_cell)
     end
     # Compute ∇⋅V
-    if length(ldisc) > 0
+    nfaces = length(ldisc)
+    if nfaces > 0
         flux(ld) = face_flux(ld.self, ld.other, ld.face, ld.face_sign, eq, state, model, Δt, eq.flow_discretization, Val(T_e))
         div_v = flux(ldisc[1])
-        for i in 2:length(ldisc)
+        for i in 2:nfaces
             ld = ldisc[i]
             q_i = flux(ld)
             div_v += q_i
