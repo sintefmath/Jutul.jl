@@ -739,7 +739,7 @@ function mesh_linesegments(m;
     if isnothing(boundary_faces)
         boundary_faces = 1:number_of_boundary_faces(m)
     end
-    if !(m isa UnstructuredMesh)
+    if !(m isa UnstructuredMesh || m isa CoarseMesh)
         m = UnstructuredMesh(m)
     end
     nodes = Vector{Tuple{Int, Int}}()
@@ -753,32 +753,33 @@ function mesh_linesegments(m;
         a = outer && ((l_in && !r_in) || (r_in && !l_in))
         b = !outer && (l_in || r_in)
         if a || b
-            prev_node = missing
-            f2n = m.faces.faces_to_nodes[face]
-            for node in f2n
-                if !ismissing(prev_node)
-                    push!(nodes, (prev_node, node))
-                end
-                prev_node = node
-            end
-            push!(nodes, (first(f2n), f2n[end]))
+            add_mesh_linesegments_for_face!(nodes, m, face, boundary = false)
         end
     end
 
     for bf in boundary_faces
         c = m.boundary_faces.neighbors[bf]
         if c in cells
-            prev_node = missing
-            f2n = m.boundary_faces.faces_to_nodes[bf]
-            for node in f2n
-                if !ismissing(prev_node)
-                    push!(nodes, (prev_node, node))
-                end
-                prev_node = node
-            end
-            push!(nodes, (first(f2n), f2n[end]))
+            add_mesh_linesegments_for_face!(nodes, m, bf; boundary = true)
         end
     end
     pts = map(x -> (m.node_points[x[1]], m.node_points[x[2]]), nodes)
     return pts
+end
+
+function add_mesh_linesegments_for_face!(nodes, m::UnstructuredMesh, face::Int; boundary::Bool = false)
+    if boundary
+        f2n = m.boundary_faces.faces_to_nodes[face]
+    else
+        f2n = m.faces.faces_to_nodes[face]
+    end
+    prev_node = missing
+    for node in f2n
+        if !ismissing(prev_node)
+            push!(nodes, (prev_node, node))
+        end
+        prev_node = node
+    end
+    push!(nodes, (first(f2n), f2n[end]))
+    return nodes
 end
