@@ -744,7 +744,12 @@ function mesh_linesegments(m;
     end
     nodes = Vector{Tuple{Int, Int}}()
     for face in faces
-        l, r = m.faces.neighbors[face]
+        if m isa UnstructuredMesh
+            l, r = m.faces.neighbors[face]
+        else
+            # CoarseMesh
+            l, r = m.face_neighbors[face]
+        end
         if l > r
             r, l = l, r
         end
@@ -758,12 +763,22 @@ function mesh_linesegments(m;
     end
 
     for bf in boundary_faces
-        c = m.boundary_faces.neighbors[bf]
+        if m isa UnstructuredMesh
+            c = m.boundary_faces.neighbors[bf]
+        else
+            # CoarseMesh
+            c = m.boundary_cells[bf]
+        end
         if c in cells
             add_mesh_linesegments_for_face!(nodes, m, bf; boundary = true)
         end
     end
-    pts = map(x -> (m.node_points[x[1]], m.node_points[x[2]]), nodes)
+    if m isa UnstructuredMesh
+        node_points = m.node_points
+    else
+        node_points = m.parent.node_points
+    end
+    pts = map(x -> (node_points[x[1]], node_points[x[2]]), nodes)
     return pts
 end
 
@@ -781,5 +796,38 @@ function add_mesh_linesegments_for_face!(nodes, m::UnstructuredMesh, face::Int; 
         prev_node = node
     end
     push!(nodes, (first(f2n), f2n[end]))
+    return nodes
+end
+
+function add_mesh_linesegments_for_face!(nodes, m::CoarseMesh, face::Int; boundary::Bool = false)
+    if boundary
+        faces = m.coarse_boundary_to_fine[face]
+    else
+        faces = m.coarse_faces_to_fine[face]
+    end
+    # Segments that only appear once are true edges
+    seg_count = Dict{Tuple{Int, Int}, Int}()
+    segments = Tuple{Int, Int}[]
+    for fine_face in faces
+        add_mesh_linesegments_for_face!(segments, m.parent, fine_face, boundary = boundary)
+        for (i, seg) in enumerate(segments)
+            l, r = seg
+            # Sort pairs
+            if l < r
+                l, r = r, l
+            end
+            k = (l, r)
+            if !haskey(seg_count, k)
+                seg_count[k] = 0
+            end
+            seg_count[k] += 1
+        end
+        empty!(segments)
+    end
+    for (k, v) in pairs(seg_count)
+        if v == 1
+            push!(nodes, k)
+        end
+    end
     return nodes
 end
