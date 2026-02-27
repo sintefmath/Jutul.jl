@@ -417,7 +417,7 @@ function Base.getindex(model::SimulationModel, s::Symbol)
     return get_variables_and_parameters(model)[s]
 end
 
-function Base.show(io::IO, t::MIME"text/plain", model::SimulationModel)
+function Base.show(io::IO, t::MIME"text/plain", @nospecialize(model::SimulationModel))
     println(io, "SimulationModel:\n")
     ne = number_of_equations(model)
     np = number_of_degrees_of_freedom(model)
@@ -678,7 +678,7 @@ function Base.keys(S::JutulStorage{NamedTuple{K, V}}) where {K, V}
     return K
 end
 
-function Base.show(io::IO, t::MIME"text/plain", storage::JutulStorage)
+function Base.show(io::IO, t::MIME"text/plain", @nospecialize(storage::JutulStorage))
     D = data(storage)
     if isa(D, AbstractDict)
         println(io, "JutulStorage (mutable) with fields:")
