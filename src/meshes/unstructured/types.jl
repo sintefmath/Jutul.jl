@@ -801,19 +801,18 @@ end
 
 function add_mesh_linesegments_for_face!(nodes, m::CoarseMesh, face::Int; boundary::Bool = false)
     if boundary
-        faces = m.coarse_boundary_to_fine[face]
+        fine_faces = m.coarse_boundary_to_fine[face]
     else
-        faces = m.coarse_faces_to_fine[face]
+        fine_faces = m.coarse_faces_to_fine[face]
     end
     # Segments that only appear once are true edges
     seg_count = Dict{Tuple{Int, Int}, Int}()
     segments = Tuple{Int, Int}[]
-    for fine_face in faces
+    for fine_face in fine_faces
         add_mesh_linesegments_for_face!(segments, m.parent, fine_face, boundary = boundary)
-        for (i, seg) in enumerate(segments)
-            l, r = seg
+        for (l, r) in segments
             # Sort pairs
-            if l < r
+            if l > r
                 l, r = r, l
             end
             k = (l, r)
