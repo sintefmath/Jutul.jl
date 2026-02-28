@@ -419,4 +419,7 @@ function add_mesh_linesegments_for_face!(nodes, m::CoarseMesh, face::Int; bounda
 end
 
 include("RadialMeshes/RadialMeshes.jl")
+include("MeshUtils/MeshUtils.jl")
+using .MeshUtils
+export refine_mesh, refine_mesh_radial, merge_cells
 
