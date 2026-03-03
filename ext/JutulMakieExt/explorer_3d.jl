@@ -112,15 +112,15 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     lscene = LScene(fig[1:N, 1:N], scenekw = scene_arg, show_axis=show_axis)
 
     left_grid_layout = GridLayout(fig[:, 2:5], 10, 5)
-    right_grid_layout = GridLayout(fig[:, N-3:N-1], 14, 5)
+    right_grid_layout = GridLayout(fig[:, N-3:N-1], 20, 5)
     idx_right_gl = 2
     step_grid_layout = GridLayout(fig[N-3:N, 6:16])
     idx_stepgl = 1
 
     if HAS_DYNAMIC_DATA
-        histrng = 12
+        histrng = 16:18
     else
-        histrng = 10:12
+        histrng = 16:18
     end
     ax_hist = Axis(right_grid_layout[histrng, 1:5],
         titlecolor = main_color,
@@ -209,7 +209,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
         prev = Button(step_grid_layout[idx_stepgl, 2], label = "Previous", width = wb)
         play = Button(step_grid_layout[idx_stepgl, 3], label = "Play", width = wb)
         next = Button(step_grid_layout[idx_stepgl, 4], label = "Next", width = wb)
-        last = Button(step_grid_layout[idx_stepgl, 5], label = "Last", width = wb)
+        lasts = Button(step_grid_layout[idx_stepgl, 5], label = "Last", width = wb)
         on(next.clicks) do _
             step_idx[] = min(step_idx[] + 1, Nstep)
             notify(step_idx)
@@ -222,7 +222,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
             step_idx[] = 1
             notify(step_idx)
         end
-        on(last.clicks) do _
+        on(lasts.clicks) do _
             step_idx[] = Nstep
             notify(step_idx)
         end
@@ -261,10 +261,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     # Toggle mesh itself
     # transparency_toggle = add_toggle!("Transparency", false)
     hist_toggle = add_toggle!("Histogram", true)
+    symlog_toggle = add_toggle!("Symlog10", false)
     cell_to_vertex = tri.mapper.indices.Cells
     val_buffer = zeros(nc)
     face_val_buffer = zeros(length(cell_to_vertex))
-    function get_mesh_plot(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_glob; do_map = true, trunc = do_map)
+    function get_mesh_plot(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_glob, to_symlog; do_map = true, trunc = do_map)
         if ismissing(dynamic_data)
             dyn_values = missing
         else
@@ -278,11 +279,14 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
         end
         @. val_buffer = v
         if trunc
-            bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob)
-            bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob)
+            bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
+            bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
             truncate_values!(val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip)
         end
 
+        if to_symlog
+            @. val_buffer = symlog10(val_buffer)
+        end
         if do_map
             # out = tri.mapper.Cells(val_buffer)
             out = face_val_buffer
@@ -293,12 +297,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
         return out
     end
 
-    active = Tri_T[]
+    # active = Tri_T[]
 
-
-    cdata_face = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, do_map = true)
-    cdata_cells = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, do_map = false, trunc = false)
-    lims = @lift get_limits(static_lims, dynamic_lims, $sel, $sel_dyn, $is_dynamic, $step_idx, $is_global_limit)
+    use_symlog = symlog_toggle.checked
+    cdata_face = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog, do_map = true)
+    cdata_cells = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog, do_map = false, trunc = false)
+    lims = @lift get_limits(static_lims, dynamic_lims, $sel, $sel_dyn, $is_dynamic, $step_idx, $is_global_limit, $use_symlog)
     if use_highclip
         mesh_arg = (highclip = :transparent, )
     else
@@ -315,7 +319,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     # plot_faults!(lscene, m, colormap = cmap)
 
 
-    Colorbar(right_grid_layout[13, 1:5], mplt,
+    Colorbar(right_grid_layout[last(histrng)+1, 1:5], mplt,
         vertical = false,
         ticklabelsize = 12,
         flipaxis = false,
@@ -569,7 +573,7 @@ function setup_limits(static, dynamic)
     return (static_lims, dynamic_lims)
 end
 
-function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, is_global_limit)
+function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, is_global_limit, to_symlog)
     if is_dynamic
         key = key_dynamic
     else
@@ -583,6 +587,9 @@ function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, 
         end
     else
         lims = get(static, key, missing)
+    end
+    if !ismissing(lims) && to_symlog
+        lims = (symlog10(lims[1]), symlog10(lims[2]))
     end
     return lims
 end
