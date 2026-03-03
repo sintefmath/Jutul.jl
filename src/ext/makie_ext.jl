@@ -22,9 +22,16 @@ function plot_interactive_impl
 end
 
 """
-    plot_explorer(mesh)
+    plot_explorer(mesh::JutulMesh)
+    plot_explorer(d::DataDomain)
+    plot_explorer(mesh, static::Dict)
+    plot_explorer(mesh, static::Dict, dynamic::Vector{Dict})
+    plot_explorer(mesh, static = somedict, dynamic = vectorofdicts)
 
-Fancy plotter
+An interactive 3D plot of a mesh with static and dynamic data that is well
+suited for interactive exploration and full screen usage. It also has prettier
+defaults than `plot_interactive` and is the recommended way to quickly visualize
+a mesh and its data.
 """
 function plot_explorer(arg...; kwarg...)
     check_plotting_availability(interactive = true)
