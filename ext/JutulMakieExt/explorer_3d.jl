@@ -61,6 +61,19 @@ function preset_colors(name::Symbol)
         background_colormap = :gist_yarg
         textcolor = :black
         background_color = :lightgray
+    elseif name == :seaborn_icefire_gradient
+        colormap = :seaborn_icefire_gradient
+        background_colormap = :linear_ternary_blue_0_44_c57_n256
+        textcolor = :white
+    elseif name == :batlow
+        colormap = :batlow
+        background_colormap = :linear_ternary_blue_0_44_c57_n256
+        textcolor = :white
+    elseif name == :turbo
+        colormap = :turbo
+        background_colormap = :linear_ternary_blue_0_44_c57_n256
+        background_color = :white
+        textcolor = :black
     else
         error("Unknown preset: $name")
     end
@@ -107,6 +120,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
             plot_data["Volumes"] = geo.volumes
         end
         plot_data["Cell ID"] = 1:number_of_cells(m)
+        if Jutul.grid_dims_ijk(m) != (nc, 1, 1)
+            ijk = map(i -> Jutul.cell_ijk(m, i), 1:nc)
+            plot_data["I"] = map(x -> x[1], ijk)
+            plot_data["J"] = map(x -> x[2], ijk)
+            plot_data["K"] = map(x -> x[3], ijk)
+        end
     end
     if HAS_DYNAMIC_DATA
         dynamic_data = [convert_dict(d, nc) for d in dynamic_data]
@@ -114,7 +133,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     background_colormap = to_colormap(background_colormap)
     if !ismissing(aspect)
         length(aspect) == 3 || error("Aspect ratio must be a tuple of three values (scale_x, scale_y, scale_z)")
-        backgroundcolor = 0.5*(background_colormap[1] + background_colormap[end])
+        if ismissing(backgroundcolor)
+            backgroundcolor = 0.5*(background_colormap[1] + background_colormap[end])
+        end
     end
     use_gradient = ismissing(backgroundcolor)
     if use_gradient
