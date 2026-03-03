@@ -1,4 +1,4 @@
-export plot_interactive, plot_multimodel_interactive
+export plot_interactive, plot_multimodel_interactive, plot_explorer
 export plot_mesh, plot_mesh!
 export plot_cell_data!, plot_cell_data
 export plot_solve_breakdown
