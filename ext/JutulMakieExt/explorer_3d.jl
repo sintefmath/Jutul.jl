@@ -1,6 +1,13 @@
 using Jutul.StaticArrays
 using OrderedCollections
 
+struct PlotExplorer
+    fig
+    lscene
+end
+
+Base.display(pe::PlotExplorer) = display(pe.fig)
+
 function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}; static = missing, dynamic = missing, kwarg...)
     if ismissing(static)
         if m isa DataDomain
@@ -530,7 +537,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
             draw_bg()
         end
     end
-    fig
+    return PlotExplorer(fig, lscene)
 end
 
 function mesh_as_static(m)
