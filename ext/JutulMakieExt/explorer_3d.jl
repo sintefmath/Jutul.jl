@@ -69,8 +69,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
     step_grid_layout = GridLayout(fig[N-3:N, 6:16])
     idx_stepgl = 1
 
-    ax_hist = Axis(right_grid_layout[12, 1:5],
-        title = "Histogram",
+    if HAS_DYNAMIC_DATA
+        histrng = 12
+    else
+        histrng = 10:12
+    end
+    ax_hist = Axis(right_grid_layout[histrng, 1:5],
         titlecolor = main_color,
         ygridvisible = false,
         xgridvisible = false,
@@ -278,6 +282,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
         visible = hist_toggle.checked
     )
     hidespines!(ax_hist)
+    on(hist_toggle.checked) do checked
+        ax_hist.xticksvisible[] = checked
+        ax_hist.yticksvisible[] = checked
+        ax_hist.xticklabelsvisible[] = checked
+        ax_hist.yticklabelsvisible[] = checked
+    end
 
     # Axis fixes
     on(menu_cell.selection) do s
