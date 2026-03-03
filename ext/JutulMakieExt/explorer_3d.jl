@@ -357,13 +357,16 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
         autolimits!(ax_hist)
     end
     if HAS_DYNAMIC_DATA
-        on(menu_dyn.selection) do s
+        on(menu_dyn.selection) do _
             toggle_dyn.active[] = true
             autolimits!(ax_hist)
         end
-        on(toggle_dyn.active) do active
+        on(toggle_dyn.active) do _
             autolimits!(ax_hist)
         end
+    end
+    on(symlog_toggle.checked) do _
+        autolimits!(ax_hist)
     end
 
 
