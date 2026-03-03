@@ -28,7 +28,7 @@ end
 function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}, plot_data::AbstractDict, dynamic::Union{Missing, Vector} = missing; kwarg...)
     m = physical_representation(m)
     points, ttri, tri = mesh_as_static(m)
-    return Jutul.plot_explorer_impl(m, points, ttri, tri, plot_data, dynamic)
+    return Jutul.plot_explorer_impl(m, points, ttri, tri, plot_data, dynamic; kwarg...)
 end
 
 function convert_dict(d::AbstractDict, nc::Int)
@@ -50,10 +50,23 @@ function convert_dict(d::AbstractDict, nc::Int)
     return out
 end
 
+function preset_colors(name::Symbol)
+    background_color = missing
+    if name == :viridis_dark
+        cmap = :viridis
+        background_colormap = :linear_ternary_blue_0_44_c57_n256
+        textcolor = :white
+    else
+        error("Unknown preset: $name")
+    end
+    return (colormap = cmap, background_colormap = background_colormap, textcolor = textcolor, backgroundcolor = background_color)
+end
+
 function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynamic_data;
-        textcolor = :white,
-        background_colormap = :linear_ternary_blue_0_44_c57_n256,
-        colormap = :seaborn_mako_gradient,
+        preset = :viridis_dark,
+        textcolor = missing,
+        background_colormap = missing,
+        colormap = missing,
         use_highclip = Sys.isapple(),
         backgroundcolor = missing,
         extra_static = true,
@@ -63,6 +76,19 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
         show_axis = false,
         aspect = missing
     )
+    default_colors = preset_colors(preset)
+    if ismissing(colormap)
+        colormap = default_colors.colormap
+    end
+    if ismissing(background_colormap)
+        background_colormap = default_colors.background_colormap
+    end
+    if ismissing(textcolor)
+        textcolor = default_colors.textcolor
+    end
+    if ismissing(backgroundcolor)
+        backgroundcolor = default_colors.backgroundcolor
+    end
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     # Data conversion
     nc = number_of_cells(m)
@@ -83,7 +109,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     background_colormap = to_colormap(background_colormap)
     if !ismissing(aspect)
         length(aspect) == 3 || error("Aspect ratio must be a tuple of three values (scale_x, scale_y, scale_z)")
-        backgroundcolor = background_colormap[end]
+        backgroundcolor = 0.5*(background_colormap[1] + background_colormap[end])
     end
     use_gradient = ismissing(backgroundcolor)
     if use_gradient
@@ -506,19 +532,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     _ = @lift sideplot_timeseries($selected_cells, $sel_dyn, $is_dynamic)
     Label(left_grid_layout[2, 1:5], clicklabel, halign = :left, color = main_color, justification = :left)
     @assert idx_right_gl < first(histrng) "Not enough space for click label, increase subgl rows or reduce controls"
-    # if aspect != (1.0, 1.0, 1.0)
-        # @info "Scaling..." aspect
-        # scale!(lscene.scene, aspect...)
-    # end
-    # @info "=" objectid(bgscene) objectid(scene_outer)
+
     if !ismissing(aspect)
         scale!(lscene.scene, aspect...)
     end
-    # scale!(bgscene, 1.0, 1.0, zscale)
-    # @info "???" lscene.scene.clear
-    # delete!(bgscene, bg_plt)
-    # draw_bg()
-    # bgscene = Scene(lscene.scene)
+
     if use_gradient
         bgscene = Scene(lscene.scene)
         bg_plt = missing
