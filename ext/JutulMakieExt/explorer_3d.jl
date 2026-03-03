@@ -201,10 +201,10 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     if HAS_DYNAMIC_DATA
         dyn_keys = keys(first(dynamic_data))
         Nstep = length(dynamic_data)
-        toggle_dyn = add_toggle!("Show dynamic values", false, type = :toggle)
-        toggle_dyn_limits = add_toggle!("Dynamic limits", false, type = :toggle)
+        toggle_dyn = add_toggle!("Show dynamic values", true, type = :toggle)
+        toggle_static_limits = add_toggle!("Static color range", true, type = :toggle)
         is_dynamic = toggle_dyn.active
-        is_global_limit = toggle_dyn_limits.active
+        is_global_limit = toggle_static_limits.active
     else
         dyn_keys = ["No dynamic data"]
         is_global_limit = Observable(false)
