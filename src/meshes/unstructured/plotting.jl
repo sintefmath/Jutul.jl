@@ -24,11 +24,11 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten =
     end
 
     add_points!(e, e_def, offset, face_offset) = triangulate_and_add_faces!(dest, m, e, e_def, cell_centroids, offset = offset, face_offset = face_offset)
+    # Put boundary first for rendering performance in Makie
+    offset = add_points!(BoundaryFaces(), m.boundary_faces, offset, 0)
     if !outer
-        offset = add_points!(Faces(), m.faces, offset, 0)
+        offset = add_points!(Faces(), m.faces, offset, number_of_boundary_faces(m))
     end
-    face_offset = number_of_faces(m)
-    offset = add_points!(BoundaryFaces(), m.boundary_faces, offset, face_offset)
 
     if flatten
         pts = plot_flatten_helper(pts)
