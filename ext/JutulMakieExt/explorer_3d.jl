@@ -99,7 +99,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
 
     function add_menu!(title, options)
         options = collect(options)
-        labels = map(o -> "$o ($title)", options)
+        if HAS_DYNAMIC_DATA
+            labels = map(o -> "$o ($title)", options)
+        else
+            labels = options
+        end
         new_menu = Menu(right_grid_layout[idx_right_gl, 1:5],
             options = zip(labels, options),
             selection_cell_color_inactive = RGBAf(1, 1, 1, menu_alpha),
@@ -127,12 +131,18 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
     slider_static = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
     idx_right_gl += 1
 
-    menu_dyn = add_menu!("dynamic", dyn_keys)
-
-    slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
-    idx_right_gl += 1
+    sel = menu_cell.selection
+    value_static = slider_static.interval
 
     if HAS_DYNAMIC_DATA
+        menu_dyn = add_menu!("dynamic", dyn_keys)
+
+        slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
+        idx_right_gl += 1
+
+        sel_dyn = menu_dyn.selection
+        value_dynamic = slider_dynamic.interval
+
         lpos_tstep = idx_stepgl
         idx_stepgl += 1
         step_slider = Slider(step_grid_layout[idx_stepgl, 1:5], range = 1:Nstep, startvalue = 1, horizontal = true)
@@ -171,7 +181,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
                 start = 1
             end
             previndex = start
-            for i in start:Nstep
+            for _ in start:Nstep
                 current = step_idx.val
                 newindex = current + 1
                 if newindex > Nstep || previndex != newindex-1
@@ -185,10 +195,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
         on(play.clicks) do _
             @async playback()
         end
-
     else
         is_dynamic = Observable(false)
         step_idx = Observable(1)
+        sel_dyn = Observable("No dynamic data")
+        value_dynamic = Observable((0.0, 1.0))
     end
     # Toggle mesh lines
     toggle_edge = add_toggle!("Mesh lines")
@@ -231,10 +242,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
 
     active = Tri_T[]
 
-    sel = menu_cell.selection
-    sel_dyn = menu_dyn.selection
-    value_static = slider_static.interval
-    value_dynamic = slider_dynamic.interval
 
     cdata_face = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, do_map = true)
     cdata_cells = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, do_map = false, trunc = false)
@@ -277,11 +284,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
         toggle_dyn.active[] = false
         autolimits!(ax_hist)
     end
-    on(menu_dyn.selection) do s
-        toggle_dyn.active[] = true
-        autolimits!(ax_hist)
-    end
     if HAS_DYNAMIC_DATA
+        on(menu_dyn.selection) do s
+            toggle_dyn.active[] = true
+            autolimits!(ax_hist)
+        end
         on(toggle_dyn.active) do active
             autolimits!(ax_hist)
         end
