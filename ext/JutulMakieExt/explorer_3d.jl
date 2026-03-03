@@ -23,6 +23,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
         show_axis = false,
         aspect = missing
     )
+    HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     background_colormap = to_colormap(background_colormap)
     if !ismissing(aspect)
         length(aspect) == 3 || error("Aspect ratio must be a tuple of three values (scale_x, scale_y, scale_z)")
@@ -108,16 +109,16 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
         return new_menu
     end
 
-    if ismissing(dynamic_data)
-        dyn_keys = ["No dynamic data"]
-        is_global_limit = Observable(false)
-    else
+    if HAS_DYNAMIC_DATA
         dyn_keys = keys(first(dynamic_data))
         Nstep = length(dynamic_data)
         toggle_dyn = add_toggle!("Show dynamic values", false, type = :toggle)
         toggle_dyn_limits = add_toggle!("Dynamic limits", false, type = :toggle)
         is_dynamic = toggle_dyn.active
         is_global_limit = toggle_dyn_limits.active
+    else
+        dyn_keys = ["No dynamic data"]
+        is_global_limit = Observable(false)
     end
 
 
@@ -131,7 +132,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
     slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
     idx_right_gl += 1
 
-    if !ismissing(dynamic_data)
+    if HAS_DYNAMIC_DATA
         lpos_tstep = idx_stepgl
         idx_stepgl += 1
         step_slider = Slider(step_grid_layout[idx_stepgl, 1:5], range = 1:Nstep, startvalue = 1, horizontal = true)
@@ -280,8 +281,10 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
         toggle_dyn.active[] = true
         autolimits!(ax_hist)
     end
-    on(toggle_dyn.active) do active
-        autolimits!(ax_hist)
+    if HAS_DYNAMIC_DATA
+        on(toggle_dyn.active) do active
+            autolimits!(ax_hist)
+        end
     end
 
 
@@ -504,10 +507,14 @@ function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, 
     else
         key = key_static
     end
-    if is_dynamic && !is_global_limit && !ismissing(dynamic)
-        lims = dynamic[key][step]
+    if is_dynamic && !is_global_limit
+        if ismissing(dynamic)
+            lims = missing
+        else
+            lims = dynamic[key][step]
+        end
     else
-        lims = static[key]
+        lims = get(static, key, missing)
     end
     return lims
 end
@@ -515,12 +522,22 @@ end
 function truncate_values!(val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, use_highclip)
     # val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip
     ϵ = 1e-6
-    bnd_dyn = (bnd_dyn[1], max(bnd_dyn[2], bnd_dyn[1] + ϵ))
+    has_dynamic = !ismissing(dyn_values)
+    if ismissing(bnd_dyn)
+        @assert !has_dynamic
+        bnd_dyn = (0.0, 1.0)
+    else
+        bnd_dyn = (bnd_dyn[1], max(bnd_dyn[2], bnd_dyn[1] + ϵ))
+    end
     bnd_static = (bnd_static[1], max(bnd_static[2], bnd_static[1] + ϵ))
     is_outside(x, rng) = x < rng[1] || x > rng[2]
     to_inner(x, bnds) = (x - bnds[1])/(bnds[2] - bnds[1])
-    for i in eachindex(dyn_values, static_values)
-        dyn_norm = to_inner(dyn_values[i], bnd_dyn)
+    for i in eachindex(static_values)
+        if has_dynamic
+            dyn_norm = to_inner(dyn_values[i], bnd_dyn)
+        else
+            dyn_norm = 0.5
+        end
         static_norm = to_inner(static_values[i], bnd_static)
         if is_outside(dyn_norm, limiter_dynamic) || is_outside(static_norm, limiter_static)
             if use_highclip
