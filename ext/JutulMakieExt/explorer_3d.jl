@@ -53,13 +53,18 @@ end
 function preset_colors(name::Symbol)
     background_color = missing
     if name == :viridis_dark
-        cmap = :viridis
+        colormap = :viridis
         background_colormap = :linear_ternary_blue_0_44_c57_n256
         textcolor = :white
+    elseif name == :gist_yarg
+        colormap = :coolwarm
+        background_colormap = :gist_yarg
+        textcolor = :black
+        background_color = :lightgray
     else
         error("Unknown preset: $name")
     end
-    return (colormap = cmap, background_colormap = background_colormap, textcolor = textcolor, backgroundcolor = background_color)
+    return (colormap = colormap, background_colormap = background_colormap, textcolor = textcolor, backgroundcolor = background_color)
 end
 
 function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynamic_data;
