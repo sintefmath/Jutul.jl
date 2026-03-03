@@ -1,29 +1,77 @@
 using Jutul.StaticArrays
+using OrderedCollections
 
 function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}; static = missing, dynamic = missing, kwarg...)
     if ismissing(static)
-        
+        if m isa DataDomain
+            static = convert_dict(m.data, number_of_cells(m))
+            if haskey(m, :cell_centroids)
+                static["X"] = m[:cell_centroids][1, :]
+                static["Y"] = m[:cell_centroids][2, :]
+                static["Z"] = m[:cell_centroids][3, :]
+                static["Volumes"] = m[:volumes]
+            end
+        else
+            static = OrderedDict{String, Vector}()
+        end
     end
     return Jutul.plot_explorer_impl(m, static, dynamic; kwarg...)
 end
 
 function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}, plot_data::AbstractDict, dynamic::Union{Missing, Vector} = missing; kwarg...)
+    m = physical_representation(m)
     points, ttri, tri = mesh_as_static(m)
     return Jutul.plot_explorer_impl(m, points, ttri, tri, plot_data, dynamic)
 end
 
-function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dynamic_data;
+function convert_dict(d::AbstractDict, nc::Int)
+    out = OrderedDict{String, Vector}()
+    for (k, v) in pairs(d)
+        if v isa Tuple
+            # Handle internal data domain keys
+            v = first(v)
+        end
+        sk = String(k)
+        if v isa Vector && length(v) == nc && eltype(v) <: Number
+            out[sk] = v
+        elseif v isa Matrix && size(v, 2) == nc
+            for row in axes(v, 1)
+                out["$sk row $row"] = v[row, :]
+            end
+        end
+    end
+    return out
+end
+
+function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynamic_data;
         textcolor = :white,
         background_colormap = :linear_ternary_blue_0_44_c57_n256,
         colormap = :seaborn_mako_gradient,
         use_highclip = Sys.isapple(),
         backgroundcolor = missing,
+        extra_static = true,
         zreversed = Jutul.mesh_z_is_depth(m),
         camarg = NamedTuple(),
         show_axis = false,
         aspect = missing
     )
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
+    # Data conversion
+    nc = number_of_cells(m)
+    plot_data = convert_dict(static, nc)
+    if extra_static || length(keys(plot_data)) == 0
+        if !haskey(plot_data, "X")
+            geo = tpfv_geometry(m)
+            plot_data["X"] = geo.cell_centroids[1, :]
+            plot_data["Y"] = geo.cell_centroids[2, :]
+            plot_data["Z"] = geo.cell_centroids[3, :]
+            plot_data["Volumes"] = geo.volumes
+        end
+        plot_data["Cell ID"] = 1:number_of_cells(m)
+    end
+    if HAS_DYNAMIC_DATA
+        dynamic_data = [convert_dict(d, nc) for d in dynamic_data]
+    end
     background_colormap = to_colormap(background_colormap)
     if !ismissing(aspect)
         length(aspect) == 3 || error("Aspect ratio must be a tuple of three values (scale_x, scale_y, scale_z)")
@@ -35,7 +83,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
     else
         scene_arg = (clear = true, backgroundcolor = backgroundcolor)
     end
-    nc = number_of_cells(m)
     static_lims, dynamic_lims = setup_limits(plot_data, dynamic_data)
     menu_alpha = 0.1
     main_color = textcolor
@@ -291,7 +338,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, plot_data, dy
 
     # Axis fixes
     on(menu_cell.selection) do s
-        toggle_dyn.active[] = false
+        if HAS_DYNAMIC_DATA
+            toggle_dyn.active[] = false
+        end
         autolimits!(ax_hist)
     end
     if HAS_DYNAMIC_DATA
