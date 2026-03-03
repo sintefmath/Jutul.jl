@@ -51,6 +51,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
         backgroundcolor = missing,
         extra_static = true,
         zreversed = Jutul.mesh_z_is_depth(m),
+        edges = false,
         camarg = NamedTuple(),
         show_axis = false,
         aspect = missing
@@ -253,9 +254,10 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
         value_dynamic = Observable((0.0, 1.0))
     end
     # Toggle mesh lines
-    toggle_edge = add_toggle!("Mesh lines")
+    toggle_edge = add_toggle!("Mesh lines", edges)
     # Toggle mesh itself
     toggle_mesh = add_toggle!("Mesh cells")
+    
     # Toggle mesh itself
     # transparency_toggle = add_toggle!("Transparency", false)
     hist_toggle = add_toggle!("Histogram", true)
@@ -488,8 +490,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     end
 
     _ = @lift sideplot_timeseries($selected_cells, $sel_dyn, $is_dynamic)
-    Label(right_grid_layout[idx_right_gl, 1:5], clicklabel, halign = :left, color = main_color, justification = :left)
-    @assert idx_right_gl < 12 "Not enough space for click label, increase subgl rows or reduce controls"
+    Label(left_grid_layout[2, 1:5], clicklabel, halign = :left, color = main_color, justification = :left)
+    @assert idx_right_gl < first(histrng) "Not enough space for click label, increase subgl rows or reduce controls"
     # if aspect != (1.0, 1.0, 1.0)
         # @info "Scaling..." aspect
         # scale!(lscene.scene, aspect...)
