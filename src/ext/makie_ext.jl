@@ -21,6 +21,20 @@ function plot_interactive_impl
 
 end
 
+"""
+    plot_explorer(mesh)
+
+Fancy plotter
+"""
+function plot_explorer(arg...; kwarg...)
+    check_plotting_availability(interactive = true)
+    plot_explorer_impl(arg...; kwarg...)
+end
+
+function plot_explorer_impl
+
+end
+
 function plot_multimodel_interactive(arg...; kwarg...)
     check_plotting_availability(interactive = true)
     plot_multimodel_interactive_impl(arg...; kwarg...)
