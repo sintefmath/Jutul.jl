@@ -165,7 +165,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     lights = []
 
     fig = Figure(size = (1600, 800), figure_padding = 0.0)
-    lscene = LScene(fig[1:N, 1:N], scenekw = (clear = false, ), show_axis=false)
+    lscene = LScene(fig[1:N, 1:N], scenekw = (clear = false, ), show_axis = show_axis)
     mesh_scene = Scene(lscene.scene, scenekw = scene_arg)
 
     left_grid_layout = GridLayout(fig[:, 2:5], 10, 5)
