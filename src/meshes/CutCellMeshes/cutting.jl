@@ -332,7 +332,7 @@ All other keyword arguments are passed to individual cut operations.
 
 Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` if `extra_out=true`.
 """
-function cut_mesh(mesh::UnstructuredMesh{3}, cuts::Vector{Any}; 
+function cut_mesh(mesh::UnstructuredMesh{3}, cuts::Vector; 
                   extra_out::Bool = false, kwargs...)
     if isempty(cuts)
         if extra_out
