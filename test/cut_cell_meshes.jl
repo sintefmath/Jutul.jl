@@ -511,13 +511,13 @@ end
         mesh = UnstructuredMesh(g)
         
         # Define a plane cut and a polygonal surface
-        plane = PlaneCut([0.5, 0.0, 0.0], [1.0, 0.0, 0.0])
+        plane = PlaneCut([0.25, 0.0, 0.0], [1.0, 0.0, 0.0])
         
         poly = [
-            SVector{3, Float64}(0.0, 0.0, 0.5),
-            SVector{3, Float64}(1.0, 0.0, 0.5),
-            SVector{3, Float64}(1.0, 1.0, 0.5),
-            SVector{3, Float64}(0.0, 1.0, 0.5)
+            SVector{3, Float64}(0.0, 0.0, 0.25),
+            SVector{3, Float64}(1.0, 0.0, 0.25),
+            SVector{3, Float64}(1.0, 1.0, 0.25),
+            SVector{3, Float64}(0.0, 1.0, 0.25)
         ]
         surface = PolygonalSurface([poly])
         
